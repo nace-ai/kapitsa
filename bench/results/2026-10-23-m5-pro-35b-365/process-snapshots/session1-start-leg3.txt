@@ -1,0 +1,10 @@
+19902   2.3 1953728 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+88271   2.1  69232 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  148   1.5  23184 /usr/libexec/locationd
+56378   1.4   4416 /usr/bin/dig +time=1 +retries=3 +trace .
+  165   1.0  22064 /usr/sbin/bluetoothd
+56387   0.6   2272 /bin/bash /tmp/kap-35b-run/inner.sh 3
+  640   0.6   6400 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.octarin/cowork/watch.py --watch
+  143   0.6   6512 /System/Library/CoreServices/launchservicesd
+  140   0.6  49216 /usr/libexec/xprotectd
+  365   0.5  43232 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha

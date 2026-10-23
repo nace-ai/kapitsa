@@ -1,0 +1,10 @@
+99583  99.3   7232 /usr/bin/perl /usr/bin/shasum -a 256 ~/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf
+  386  98.7  66992 build/kapitsa doctor --json --model ~/Documents/nace/kapitsa-m5pro/models/qwen3.8-27b-4bit-mtp
+14175   2.8   2400 /bin/bash ~/.agents/bin/mem-guard.sh
+  640   1.8   6400 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.octarin/cowork/watch.py --watch
+85480   0.8  16752 /System/Library/PrivateFrameworks/TCC.framework/Support/tccd system
+29520   0.7  13632 /System/Library/PrivateFrameworks/TCC.framework/Support/tccd
+19902   0.6 2006096 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+    1   0.4  14032 /sbin/launchd
+  365   0.3  48128 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+  321   0.2 388032 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores

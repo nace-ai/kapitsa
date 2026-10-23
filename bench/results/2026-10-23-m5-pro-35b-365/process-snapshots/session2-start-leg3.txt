@@ -1,0 +1,10 @@
+ 3549  99.8  85152 build/kapitsa doctor --json --model ~/Documents/nace/kapitsa-m5pro/models/lightning-mlx-4bit
+ 3777   2.2  41136 gh pr view 376 -R nace-ai/kapitsa --json statusCheckRollup -q [.statusCheckRollup[]|select((.conclusion // .status)!="SUCCESS")|"\(.name // .context)=\(.conclusion // .status)"]|joi
+  365   1.1  43168 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+19902   0.9 2129040 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+91245   0.4  17392 /usr/libexec/PerfPowerServices
+  146   0.4   6304 /usr/sbin/securityd -i
+  140   0.4  15808 /usr/libexec/xprotectd
+  321   0.2  15776 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores
+  104   0.2   4976 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd
+35783   0.1  24992 /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal

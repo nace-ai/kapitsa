@@ -52,11 +52,14 @@ launch 2 (201.09), so the median does not hinge on it.
 | Median of the three counted | 195.07 | 214.50 | 2,842 / 2,505 | 0.05 / 0.07 | | |
 
 No flags either. Another session's model conversion (`conv.py convert --conns 8 --stream`, CPU and internal-SSD writes,
-6-9% CPU in the snapshot) was in the process list at the start of launches 0, 1 and 2 and not launch 3, which decoded
+5.9-9% CPU in the snapshots) was in the process list at the start of launches 0, 1 and 2 and not launch 3, which decoded
 fastest. The harness's contention check watches the GPU only, so it did not flag this. The first three launches
 compiled the kernels (2.8-2.9 s, tensor kernels 592-621 ms); the compiler's CPU never passed 2% in a measured phase.
 
-The runs are in `results/`, the server logs in `logs/`.
+The runs are in `results/`, the server logs in `logs/`. The harness's results do not record other processes, so the
+foreign jobs above are evidenced by `process-snapshots/`: the ten busiest processes (`ps`, by CPU) at the start of every
+launch, and in session 2 also at its end (home paths anonymized). `conv.py` is in session 1's launches 0-2 and not 3;
+`hf download` is in session 2's launches 0 and 1 only.
 
 ### What changed on the poster
 

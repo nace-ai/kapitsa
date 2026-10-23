@@ -1,0 +1,10 @@
+48731  90.7  29968 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.agents/skills/session-orchestra
+  365  11.2  43504 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+24999   8.9 540480 /tmp/kap-ssd-scratch/.venv/bin/python -u /tmp/kap-ssd-scratch/conv.py convert --conns 8 --out ~/Documents/nace/models/flash-next-q20 --table sparse --stream --ro
+48859   8.7   3984 (zstd)
+19902   3.1 2053456 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+  140   1.4  48640 /usr/libexec/xprotectd
+35783   0.4  43248 /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal
+  269   0.4  17936 /usr/libexec/syspolicyd
+  321   0.2 1016528 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores
+88618   0.1  52432 /Applications/Utilities/LogiPluginService.app/Contents/MacOS/LogiPluginService

@@ -1,0 +1,10 @@
+85359  99.7  47584 build/kapitsa doctor --json --model ~/Documents/nace/kapitsa-m5pro/models/qwen3.5-4b-4bit-mtp
+  365   8.6  49680 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+67356   4.1 3945168 ~/.cache/uv/archive-v0/QmOIGVlLmoscQCpkRzS2r/bin/python ~/.cache/uv/archive-v0/QmOIGVlLmoscQCpkRzS2r/bin/hf download ISTA-DASLab/Qwen3.8-Fla
+88271   2.8  69296 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  143   1.0   6352 /System/Library/CoreServices/launchservicesd
+ 1268   0.4  31136 /Library/Application Support/Logitech.localized/LogiOptionsPlus/logioptionsplus_agent.app/Contents/MacOS/logioptionsplus_agent --launchd
+  165   0.2  20816 /usr/sbin/bluetoothd
+19902   0.1 1873136 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+  140   0.1  48368 /usr/libexec/xprotectd
+99637   0.0   5152 /System/Library/PrivateFrameworks/ProtectedCloudStorage.framework/Helpers/ProtectedCloudKeySyncing

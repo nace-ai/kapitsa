@@ -1,0 +1,10 @@
+19902   6.3 2033056 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+24999   5.9 526064 /tmp/kap-ssd-scratch/.venv/bin/python -u /tmp/kap-ssd-scratch/conv.py convert --conns 8 --out ~/Documents/nace/models/flash-next-q20 --table sparse --stream --ro
+88170   2.6   4096 /usr/libexec/sysmond
+88271   1.3  67744 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  365   0.9  45664 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+14175   0.6   2416 /bin/bash ~/.agents/bin/mem-guard.sh
+ 1268   0.4  34496 /Library/Application Support/Logitech.localized/LogiOptionsPlus/logioptionsplus_agent.app/Contents/MacOS/logioptionsplus_agent --launchd
+  143   0.3   6832 /System/Library/CoreServices/launchservicesd
+42518   0.2  32544 ~/.cache/uv/archive-v0/LsE_ZW3pQMjZkkbGEkaJL/bin/python ~/.cache/uv/archive-v0/LsE_ZW3pQMjZkkbGEkaJL/bin/modal run --detach --env naceDM-test
+  140   0.2  46880 /usr/libexec/xprotectd

@@ -1,0 +1,10 @@
+88271  13.9  68064 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+24999   6.6 596288 /tmp/kap-ssd-scratch/.venv/bin/python -u /tmp/kap-ssd-scratch/conv.py convert --conns 8 --out ~/Documents/nace/models/flash-next-q20 --table sparse --stream --ro
+88170   3.7   3856 /usr/libexec/sysmond
+  269   1.9  23120 /usr/libexec/syspolicyd
+  640   1.8   6400 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.octarin/cowork/watch.py --watch
+  365   1.2  43840 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+19902   1.1 698352 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+23220   0.6   2272 /bin/bash /tmp/kap-35b-run/inner.sh 0
+  140   0.6  43536 /usr/libexec/xprotectd
+23221   0.4   1312 lockf -k -t 14400 /tmp/kapitsa-gpu.lock /tmp/kap-g6-leg.sh B1

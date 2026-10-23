@@ -1,0 +1,10 @@
+84153  96.1  66128 build/kapitsa doctor --json --model ~/Documents/nace/kapitsa-m5pro/models/qwen3.5-4b-4bit-mtp --context 131072
+  365  13.3  47568 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+67356   5.2 4392880 ~/.cache/uv/archive-v0/QmOIGVlLmoscQCpkRzS2r/bin/python ~/.cache/uv/archive-v0/QmOIGVlLmoscQCpkRzS2r/bin/hf download ISTA-DASLab/Qwen3.8-Fla
+84203   0.6   2272 /bin/bash /tmp/kap-35b-run/inner.sh 1
+88271   0.5  68528 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+ 1268   0.5  31616 /Library/Application Support/Logitech.localized/LogiOptionsPlus/logioptionsplus_agent.app/Contents/MacOS/logioptionsplus_agent --launchd
+  140   0.5  48400 /usr/libexec/xprotectd
+  143   0.4   6272 /System/Library/CoreServices/launchservicesd
+85480   0.3  16672 /System/Library/PrivateFrameworks/TCC.framework/Support/tccd system
+84204   0.3   1264 lockf -k -t 14400 /tmp/kapitsa-gpu.lock /tmp/kap-g6-leg2.sh A2

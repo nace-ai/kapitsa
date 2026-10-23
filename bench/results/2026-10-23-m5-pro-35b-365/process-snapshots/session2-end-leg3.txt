@@ -1,0 +1,10 @@
+19902 209.9 2109808 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+ 5115  98.1  85184 build/kapitsa doctor --json --model ~/Documents/nace/kapitsa-m5pro/models/lightning-mlx-4bit --context 131072
+  140   0.9  16480 /usr/libexec/xprotectd
+ 5314   0.6  12656 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+ 5313   0.6  12656 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+ 5311   0.5  12720 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+ 5310   0.5  12768 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+ 5309   0.5  12720 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+ 5308   0.5  12752 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+ 5307   0.5  12816 /System/Library/Frameworks/Contacts.framework/Support/contactsd

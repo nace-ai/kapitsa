@@ -1,0 +1,10 @@
+80557  98.9  64672 build/kapitsa doctor --json --model ~/Documents/nace/kapitsa-m5pro/models/qwen3.5-4b-4bit-mtp --context 98304
+  365  12.5  49136 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+67356   6.1 4710448 ~/.cache/uv/archive-v0/QmOIGVlLmoscQCpkRzS2r/bin/python ~/.cache/uv/archive-v0/QmOIGVlLmoscQCpkRzS2r/bin/hf download ISTA-DASLab/Qwen3.8-Fla
+24082   3.3  12128 /usr/libexec/trustd
+  269   1.2  18384 /usr/libexec/syspolicyd
+19902   0.4 1898864 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+  236   0.3  25040 /usr/libexec/airportd
+  104   0.2   4800 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd
+88271   0.1  68656 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  256   0.1  13152 /usr/libexec/symptomsd
