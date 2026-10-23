@@ -1089,6 +1089,10 @@ void disk_wait_unit() {
   // nothing measured yet
   check(!decide(1e8, 500, 0, 0).wait, "disk wait: unmeasured, a short gain is not waited for");
   check(decide(1e8, 4000, 0, 0).wait, "disk wait: unmeasured, a long gain is waited for");
+  // first wait after a start: the queued bytes are weighed at the floor write speed (400 MB/s), so 1 GiB (2.7 s) waits
+  // but 2.2 GB (5.5 s, over the cap) does not
+  check(decide(1.0737e9, 17000, 0, 0).wait && !decide(2.2e9, 17000, 0, 0).wait,
+        "disk wait: unmeasured write speed: bounded by the queued bytes at the floor speed");
   check(!decide(1e8, 0, 3e6, 3).wait, "disk wait: nothing saved: no wait");
 }
 
