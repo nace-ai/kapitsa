@@ -5,7 +5,10 @@
 // The contract an implementation keeps:
 //  - Order: every call is applied by the other Macs after every pass() made before it.
 //  - pass() waits for the other Macs' result: it returns once their rows are back in the model's buffers, or once
-//    they are lost (false; the rows are then garbage and lost() says why), never later than a timeout. The GPU never
+//    they are lost (false; the rows are then garbage and lost() says why), never later than a timeout. The timeout
+//    covers only the wait for the other Macs' answer, counted from the moment `ready` is reached: waiting for `ready`
+//    (the local GPU still running the head's layers) has no deadline of its own, or one scaled to the GPU's progress,
+//    so a slow local chunk is never reported as lost Macs (lost() is permanent). The GPU never
 //    waits for the network: a command buffer that waits on an event for about 5 s is killed with a GPU timeout
 //    (measured on macOS 27.0.1), and a Wi-Fi network can stall that long.
 //  - grow() waits for the answer too (-1 once the Macs are lost); every other call returns at once.
