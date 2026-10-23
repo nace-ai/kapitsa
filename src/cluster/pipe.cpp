@@ -242,15 +242,29 @@ bool query_stage(const std::string& addr, const json& hello, StageInfo* out, std
     *why = r.value("error", addr + " refused");
     return false;
   }
-  out->addr = addr;
-  out->name = r.value("name", addr);
-  out->mem = r.value("mem", 0.0);
-  out->gbs = r.value("gbs", 0.0);
-  out->rows = r.value("rows", 0);
-  out->fixed = r.value("fixed", false);
-  out->lo = r.value("lo", 0);
-  out->hi = r.value("hi", 0);
+  try {  // (fields of another type than this Kapitsa's: a garbled answer, not an exception out of connect)
+    out->addr = addr;
+    out->name = r.value("name", addr);
+    out->mem = r.value("mem", 0.0);
+    out->gbs = r.value("gbs", 0.0);
+    out->rows = r.value("rows", 0);
+    out->fixed = r.value("fixed", false);
+    out->lo = r.value("lo", 0);
+    out->hi = r.value("hi", 0);
+  } catch (const json::exception&) {
+    *why = addr + ": a garbled answer to the handshake";
+    return false;
+  }
   return true;
+}
+
+// 32 random hex digits
+std::string random_token() {
+  uint8_t b[16];
+  arc4random_buf(b, sizeof b);
+  std::string s;
+  for (uint8_t x : b) s += "0123456789abcdef"[x >> 4], s += "0123456789abcdef"[x & 15];
+  return s;
 }
 }  // namespace
 
@@ -324,11 +338,17 @@ std::shared_ptr<Link> Link::connect(const std::vector<std::string>& addrs, const
   if (d.up < 0) return nullptr;
   int lfd = -1;
   std::string ret;
-  if (addrs.size() > 1) {
-    lfd = listen_on("", 0, why);
+  if (addrs.size() > 1) {  // on the address the first stage reached this Mac at
+    std::string here = local_addr(d.up);
+    if (here.size() > 2 && here.front() == '[') here = here.substr(1, here.size() - 2);
+    lfd = listen_on(here, 0, why);
     if (lfd < 0) return nullptr;
     ret = local_addr(d.up) + ":" + std::to_string(bound_port(lfd));
   }
+  // the stages pass the hello on as it is, so the answer brings the token back: the ring's return port takes only the
+  // connection whose answer carries it (anyone on the network could connect to it first)
+  const std::string token = random_token();
+  hello["token"] = token;
   json assign = json::array();
   for (const StageInfo& s : L->stages_) assign.push_back({s.lo, s.hi});
   hello["chain"] = std::vector<std::string>(addrs.begin() + 1, addrs.end());
@@ -340,39 +360,75 @@ std::shared_ptr<Link> Link::connect(const std::vector<std::string>& addrs, const
   const std::string body = hello.dump();
   if (!write_msg(d.up, h, body.data(), body.size())) {
     *why = addrs[0] + ": " + strerror(errno);
+    if (lfd >= 0) close(lfd);
     return nullptr;
   }
   // (a stage loads the layers given it before it answers: up to minutes for a share of tens of GB)
   constexpr int kLoadMs = 15 * 60 * 1000;
+  // the answer (on the return port with more than one stage, else back the same way), with this connect's token
+  auto answer = [&](int fd, int wait_ms, std::string* out) {
+    return readable(fd, wait_ms) && read_all(fd, &h, sizeof h) && h.magic == kMagic && h.op == kHello &&
+           read_payload(fd, h, out, 1 << 20);
+  };
+  auto carries = [&](const std::string& reply) {
+    const json j = json::parse(reply, nullptr, false);
+    return j.is_object() && j.contains("token") && j["token"].is_string() && j["token"].get<std::string>() == token;
+  };
+  std::string reply;
   if (lfd >= 0) {
-    if (!readable(lfd, kLoadMs)) {
-      *why = "the last stage (" + addrs.back() + ") did not connect back";
-      close(lfd);
-      return nullptr;
+    // the last stage connects back once every stage has loaded its layers. Meanwhile the first stage's end closing
+    // (it died, or could not reach the next one) ends the wait with that reason, not after the 15 minutes
+    const double until = now_ms() + kLoadMs;
+    while (d.back < 0 && now_ms() < until) {
+      pollfd p[2] = {{lfd, POLLIN, 0}, {d.up, POLLIN, 0}};
+      if (poll(p, 2, int(std::min(until - now_ms(), 10000.0))) < 0 && errno != EINTR) break;
+      if (p[1].revents) {
+        *why = "the first stage (" + addrs[0] + ") closed the connection while the split was set up";
+        close(lfd);
+        return nullptr;
+      }
+      if (!(p[0].revents & POLLIN)) continue;
+      const int fd = accept(lfd, nullptr, nullptr);
+      if (fd < 0) continue;
+      std::string got;
+      if (answer(fd, 10000, &got) && carries(got)) {  // (the answer follows the connection at once)
+        d.back = fd;
+        reply = got;
+        break;
+      }
+      logi("split: a connection to the ring's return port without the split's token, turned away");
+      close(fd);
     }
-    d.back = accept(lfd, nullptr, nullptr);
     close(lfd);
     if (d.back < 0) {
-      *why = std::string("accept: ") + strerror(errno);
+      *why = "the last stage (" + addrs.back() + ") did not connect back";
       return nullptr;
     }
     tune(d.back);
   } else {
     d.back = d.up;
-  }
-  std::string reply;
-  if (!readable(d.back, kLoadMs) || !read_all(d.back, &h, sizeof h) || h.magic != kMagic || h.op != kHello ||
-      !read_payload(d.back, h, &reply)) {
-    *why = "no answer from the stages";
-    return nullptr;
+    if (!answer(d.back, kLoadMs, &reply)) {
+      *why = "no answer from the stages";
+      return nullptr;
+    }
   }
   const json r = json::parse(reply, nullptr, false);
-  if (h.flags & kFail || !r.is_object()) {
-    *why = r.is_object() ? r.value("error", std::string("the stages refused")) : "a garbled answer from the stages";
+  if (!r.is_object()) {
+    *why = "a garbled answer from the stages";
     return nullptr;
   }
-  for (size_t i = 0; i < L->stages_.size() && i < r["stages"].size(); ++i)
-    L->stages_[i].rows = r["stages"][i].value("rows", L->stages_[i].rows);
+  if (h.flags & kFail) {
+    *why = r.contains("error") && r["error"].is_string() ? r["error"].get<std::string>() : "the stages refused";
+    return nullptr;
+  }
+  if (!carries(reply)) {
+    *why = "an answer from the stages without the split's token";
+    return nullptr;
+  }
+  const json st = r.contains("stages") && r["stages"].is_array() ? r["stages"] : json::array();
+  for (size_t i = 0; i < L->stages_.size() && i < st.size(); ++i)
+    if (st[i].is_object() && st[i].contains("rows") && st[i]["rows"].is_number_integer())
+      L->stages_[i].rows = st[i]["rows"].get<int>();
   // an empty message around the ring, five times
   std::vector<double> rt;
   for (int i = 0; i < 5; ++i) {
