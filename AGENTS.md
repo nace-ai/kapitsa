@@ -100,7 +100,11 @@ model's prefill attention (`qattn_t_g8s4k16`, the 35B's default on the M5 from 2
 `attn_prefill11r`), passes `--reorder` too (prefill 3.8e-4, decode 5.6e-4 mean KL) but is 1.10x the floor's gate
 rather than inside it: the user accepted that departure for the default on the same reassociation evidence, and the
 35B's floor on an M5-class GPU is to be re-measured with `tools/logit_floor.py` in a PR of its own, because the file
-is an M4 Pro measurement of the kernels before both changes. The drift was dumped on the 4-bit pack only; the 35B's 5/6/8-bit
+is an M4 Pro measurement of the kernels before these changes. The third, the same attention with the head dim split
+over a pair of simdgroups (`qattn_t_g8d2s8`, the 35B's default on the M5 from 2026-10-23, #365; `NI_QATTN_D2=0` keeps
+`qattn_t_g8s4k16`), only reassociates the score sum over the head dim (two halves of 128) and passes `--reorder`
+against `qattn_t_g8s4k16` (prefill 1.1e-4, decode 6.2-6.5e-4 mean KL, one near-tie flip in 192 rows) but is 1.27x the
+floor's gate: accepted for the default on the same terms. The drift was dumped on the 4-bit pack only; the 35B's 5/6/8-bit
 and bf16 packs take the same attention path (it does not read the weights) and were not dumped.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.

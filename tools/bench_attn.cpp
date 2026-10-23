@@ -154,6 +154,23 @@ int main(int argc, char** argv) {
           else err = std::max(err, e);
         }
     if (nan) err = NAN;
+    // vs the first kernel named: each output's distance from that kernel's, in half-precision steps at the reference's
+    // magnitude (one step: the spacing of halfs around |ref|), max and the count past one step
+    static std::vector<float> first_out;
+    double vs_max = 0;
+    size_t vs_over = 0;
+    const size_t nout = size_t(T) * Hq * D;
+    if (first_out.empty()) {
+      first_out.assign(out.as<float>(), out.as<float>() + nout);
+    } else {
+      for (size_t i = 0; i < nout; ++i) {
+        const double a = out.as<float>()[i], b = first_out[i], m = std::max(std::fabs(b), 6.1e-5);
+        const double step = std::ldexp(1.0, std::ilogb(m) - 10);
+        const double d = std::fabs(a - b) / step;
+        vs_max = std::max(vs_max, d);
+        vs_over += d > 1.0;
+      }
+    }
     // median of 9 trials of 8 calls each (BENCH_ATTN_REPS overrides the 8)
     static const int nrep = getenv("BENCH_ATTN_REPS") ? atoi(getenv("BENCH_ATTN_REPS")) : 8;
     std::vector<double> tv;
@@ -165,7 +182,8 @@ int main(int argc, char** argv) {
     uint64_t hash = 1469598103934665603ull;  // FNV-1a over every output bit: equal hashes = bitwise-equal outputs
     const uint8_t* ob = (const uint8_t*)out.ptr();
     for (size_t i = 0; i < size_t(T) * Hq * D * 4; ++i) hash = (hash ^ ob[i]) * 1099511628211ull;
-    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.3f ms  %5.2f TFLOP/s  err=%.2e  checksum=%.4f  bits=%016llx\n", name.c_str(),
-           T, L, Hq, Hkv, best, pairs * Hq * 1024 / (best * 1e-3) / 1e12, err / ref_max, cs, (unsigned long long)hash);
+    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.3f ms  %5.2f TFLOP/s  err=%.2e  checksum=%.4f  bits=%016llx  vs first: max %.2f"
+           " half steps, %zu of %zu past one\n", name.c_str(), T, L, Hq, Hkv, best, pairs * Hq * 1024 / (best * 1e-3) / 1e12,
+           err / ref_max, cs, (unsigned long long)hash, vs_max, vs_over, nout);
   }
 }
