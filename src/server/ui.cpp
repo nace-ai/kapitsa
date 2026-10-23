@@ -542,10 +542,38 @@ void card(std::vector<std::string>& o, const std::vector<std::string>& rows, int
   o.push_back("  " + dim("╰" + repeat("─", inner + 4) + "╯"));
 }
 
+// The card's addresses: the chat page and the APIs on this Mac, where the other Macs reach it, the API key
+void addresses(std::vector<std::string>& rows, const std::string& base, const Network& net, const std::string& key_note) {
+  auto row = [&](const std::string& k, const std::string& v) { rows.push_back(left(dim(k), 11) + v); };
+  rows.push_back("");
+  row("Chat", accent(base));
+  row("OpenAI", accent(base + "/v1"));
+  row("Anthropic", accent(base));
+  if (net.visible && !net.url.empty()) row("Network", accent(net.url));
+  if (!key_note.empty()) row("API key", key_note);
+}
+
+// Under the card: the server on the network
+void network_lines(std::vector<std::string>& o, const Network& n, int W) {
+  const std::string s = network_line(n);
+  if (s.empty()) return;  // --private: as before
+  const auto ls = wrap(s, std::max(30, W - 5));
+  for (size_t i = 0; i < ls.size(); ++i) o.push_back("  " + dim(std::string(i ? " " : kArrow) + " " + ls[i]));
+}
+
+// The card's last lines
+void closing(std::vector<std::string>& o, const std::string& log) {
+  o.push_back("  " + dim(std::string(kArrow) + " ") + bold("kapitsa claude") + dim(" in another terminal codes with it"));
+  o.push_back("  " + dim(std::string(kArrow) + " " + (log.empty() ? "" : "Log " + hub::tilde(log) + "  " + kDot + "  ") +
+                         "Ctrl+C stops"));
+  o.push_back("");
+}
+
 std::atomic<bool> g_serve_ui{false};
 std::mutex g_req_mu;
-bool g_req_header = false;
+bool g_req_header = false, g_fwd_header = false;
 bool g_show_first = true, g_show_read = true;  // --timing
+std::atomic<double> g_rate{0};                 // the latest request's decode rate (recent_tok_s)
 
 }  // namespace
 
@@ -670,18 +698,55 @@ void ready(const Ready& r) {
     if (r.context_fit > 0 && r.context_fit < r.context) c += dim(" (" + count(r.context_fit) + " fit in memory)");
     row("Context", c);
   }
-  rows.push_back("");
-  row("Chat", accent(r.base));
-  row("OpenAI", accent(r.base + "/v1"));
-  row("Anthropic", accent(r.base));
-  if (!r.api_key_note.empty()) row("API key", r.api_key_note);
+  addresses(rows, r.base, r.net, r.api_key_note);
   std::vector<std::string> o;
   o.push_back("");
   card(o, rows, inner);
-  o.push_back("  " + dim(std::string(kArrow) + " ") + bold("kapitsa claude") + dim(" in another terminal codes with it"));
-  o.push_back("  " + dim(std::string(kArrow) + " " + (r.log.empty() ? "" : "Log " + hub::tilde(r.log) + "  " + kDot + "  ") +
-                         "Ctrl+C stops"));
+  network_lines(o, r.net, W);
+  closing(o, r.log);
+  std::lock_guard<std::mutex> lk(g_req_mu);
+  for (const auto& l : o) line(l);
+}
+
+std::string network_line(const Network& n) {
+  if (!n.visible) return "";
+  return "Visible to Kapitsa on this network as " + n.name +
+         (n.api_key ? " (its API needs the key; --private hides it)" : " (no password; --private hides it)");
+}
+
+std::string route_line(const std::string& model, const cluster::MacInfo& mac) {
+  const std::string where = mac.this_mac() ? "the server on port " + std::to_string(mac.port) + " of this Mac"
+                                           : cluster::describe(mac) + " " + kDot + " " + cluster::link_text(mac);
+  return cluster::model_base(model) + " runs on " + where + ": this Mac sends its requests there. --local runs it here.";
+}
+
+void routed(const Routed& r) {
+  const int W = layout_width();
+  const int inner = std::max(36, std::min(W - 8, 68));
+  std::vector<std::string> rows;
+  auto row = [&](const std::string& k, const std::string& v) { rows.push_back(left(dim(k), 11) + v); };
+  {
+    const std::string status = accent(kOn) + " ready", name = bold(r.model);
+    const int gap = inner - width(name) - width(status);
+    rows.push_back(gap >= 2 ? name + std::string(size_t(gap), ' ') + status : name);
+  }
+  rows.push_back("");
+  row("Runs on", (r.mac.this_mac() ? "this Mac, port " + std::to_string(r.mac.port) : cluster::describe(r.mac)) +
+                     dim(", " + cluster::how_it_runs(r.mac)));
+  if (!r.mac.this_mac()) row("Link", cluster::link_text(r.mac));
+  if (r.mac.tok_s > 0) {
+    char b[48];
+    snprintf(b, sizeof b, "%.0f tok/s", r.mac.tok_s);
+    row("Speed", std::string(b) + dim(" lately"));
+  }
+  addresses(rows, r.base, r.net, r.api_key_note);
+  std::vector<std::string> o;
   o.push_back("");
+  card(o, rows, inner);
+  const auto rl = wrap(route_line(r.model, r.mac), std::max(30, W - 5));
+  for (size_t i = 0; i < rl.size(); ++i) o.push_back("  " + dim(std::string(i ? " " : kArrow) + " " + rl[i]));
+  network_lines(o, r.net, W);
+  closing(o, r.log);
   std::lock_guard<std::mutex> lk(g_req_mu);
   for (const auto& l : o) line(l);
 }
@@ -921,6 +986,7 @@ void token(const std::shared_ptr<Meter>& m) {
 }
 
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
+  if (r.completion_tokens > 1 && r.decode_ms > 0) g_rate = (r.completion_tokens - 1) / (r.decode_ms / 1000);
   if (!m) return;
   dash_remove(m);
   const time_t now = time(nullptr);
@@ -964,5 +1030,30 @@ bool set_timing(const std::string& mode) {
   g_show_read = mode != "ttft";
   return true;
 }
+
+void forwarded(const httplib::Request& req, int status, double secs, const std::string& mac) {
+  const std::string what = req.method + " " + req.path;
+  logi("forwarded %s to %s: %d in %.2f s", what.c_str(), mac.empty() ? "no Mac (none serves the model now)" : mac.c_str(),
+       status, secs);
+  if (!g_serve_ui) return;
+  const time_t now = time(nullptr);
+  char at[16];
+  strftime(at, sizeof at, "%H:%M:%S", localtime(&now));
+  const std::string st = status < 400 ? std::to_string(status) : status == 499 ? warn("gone") : red(std::to_string(status));
+  const std::string client = client_of(req.get_header_value("User-Agent"));
+  std::lock_guard<std::mutex> lk(g_req_mu);
+  if (!g_fwd_header) {
+    g_fwd_header = true;
+    line(section("Requests") + dim("  sent on to the Mac that runs the model"));
+    line(dim("  " + left("time", 8) + "  " + left("client", 9) + "  " + left("request", 28) + "  " + left("status", 6) + "  " +
+             right("time", 6)));
+  }
+  line(clip("  " + dim(at) + "  " + left(clip(client.empty() ? dim("–") : client, 9), 9) + "  " + left(clip(what, 28), 28) +
+                "  " + left(st, 6) + "  " + right(duration(secs), 6) +
+                (mac.empty() ? "" : "  " + dim(std::string(kArrow) + " " + mac)),
+            columns() - 1));
+}
+
+double recent_tok_s() { return g_rate.load(); }
 
 }  // namespace ni::ui

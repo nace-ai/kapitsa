@@ -1,9 +1,12 @@
 // kapitsa: Kapitsa's command line, and its server: OpenAI chat completions and Responses, Anthropic Messages
 // (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
-//   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 127.0.0.1] [--port 8000]
+//   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 0.0.0.0] [--port 8000]
+//                 [--private] [--local]
 //                 [--ctx 32768] [--slots N] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
 //                 [--api-key K] [--mem-budget GB] [--image-max-pixels N] [--timing ttft|prefill|both]
-//                 no --model: the best catalog model for this Mac's memory
+//                 no --model: the best catalog model for this Mac's memory. Visible to Kapitsa on the other Macs of
+//                 the network (src/cluster/), and sends its requests to one that runs the model whole when this Mac
+//                 would not (route.h)
 //   kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
@@ -20,6 +23,7 @@
 #include "api/anthropic.h"
 #include "api/chat_completions.h"
 #include "api/responses.h"
+#include "cluster/discovery.h"
 #include "engine/doctor.h"
 #include "engine/engine.h"
 #include "gguf/gguf.h"
@@ -29,6 +33,7 @@
 #include "server/cli.h"
 #include "server/model_manager.h"
 #include "server/picker.h"
+#include "server/route.h"
 #include "server/ui.h"
 #include "util/log.h"
 #include "util/term.h"
@@ -45,9 +50,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <csignal>
@@ -304,13 +311,20 @@ static void print_serve_help() {
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
          "                         once: kapitsa import). Default: the best model for this Mac. Downloaded on first use.\n"
-         "  --host HOST            listen address (default 127.0.0.1; 0.0.0.0 serves your network)\n"
+         "  --host HOST            listen address (default 0.0.0.0: this Mac and its network; 127.0.0.1: this Mac\n"
+         "                         only, like --private)\n"
          "  --port PORT            default 8000\n"
+         "  --private              this Mac only: listen on 127.0.0.1, stay out of sight of Kapitsa on the other Macs\n"
+         "                         and never send them requests. By default the server is visible on the network\n"
+         "                         (Bonjour), with no password\n"
+         "  --local                run the model here even when another Mac on the network runs it whole. By default a\n"
+         "                         Mac that would not hold the model whole (it does not fit, or streams experts from\n"
+         "                         the SSD) sends its requests to one that does, which kapitsa serve finds by itself\n"
          "  --api-key KEY          require \"Authorization: Bearer KEY\" or \"x-api-key: KEY\" (the chat page asks for\n"
          "                         it once)\n"
          "  --allow-switch         a request naming another model, or POST /v1/models/switch, loads it (may download\n"
          "                         gigabytes; 503 + Retry-After meanwhile). Default off: the \"model\" field is ignored.\n"
-         "                         On a network address it needs --api-key\n"
+         "                         Without --api-key it keeps the server on this Mac, as --private does\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
          "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
@@ -340,7 +354,8 @@ static void print_serve_help() {
          "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
          "                         more keeps finer detail and takes longer; 0 = the model's own limit)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
-         "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
+         "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health, GET /cluster (what\n"
+         "the server tells the other Macs).\n"
          "Images (every catalog model reads them): OpenAI image_url parts, Anthropic image blocks and Responses\n"
          "input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n", hub::tilde(hub::home_dir()).c_str());
@@ -391,6 +406,18 @@ std::string ni::port_problem(const std::string& host, int port) {
     close(fd);
   }
   freeaddrinfo(res);
+  // every address: a server on 127.0.0.1 alone takes this Mac's own requests whatever binds the port beside it
+  if (why.empty() && (host == "0.0.0.0" || host == "::")) {
+    const int s = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(uint16_t(port));
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (s >= 0 && connect(s, reinterpret_cast<sockaddr*>(&a), sizeof a) == 0)
+      why = "Port " + p + " is already in use (another kapitsa or another server). Stop it, or pass --port " +
+            std::to_string(port + 1) + ".";
+    if (s >= 0) close(s);
+  }
   return why;
 }
 
@@ -624,13 +651,167 @@ static bool reject_while_switching(const ModelManager& mgr, httplib::Response& r
   return true;
 }
 
+// What every server answers, with a model here or not: the API key's check (the chat page, /health and /cluster need
+// none), GET /health, the chat page, and GET /cluster: what it tells the other Macs (src/cluster/)
+static void common_routes(httplib::Server& srv, const std::string& api_key, const std::string& timing,
+                          std::function<cluster::MacInfo()> info) {
+  srv.set_pre_routing_handler([api_key](const httplib::Request& req, httplib::Response& res) {
+    // the chat page asks for the key once and sends it with its API calls
+    if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
+        (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
+      return httplib::Server::HandlerResponse::Unhandled;
+    // OpenAI clients send "Authorization: Bearer KEY", Anthropic ones "x-api-key: KEY" (Claude Code may send both,
+    // with an Anthropic key of its own in x-api-key)
+    if (req.get_header_value("Authorization") == "Bearer " + api_key || req.get_header_value("x-api-key") == api_key)
+      return httplib::Server::HandlerResponse::Unhandled;
+    res.status = 401;
+    if (req.path.rfind("/v1/messages", 0) == 0)
+      res.set_content(api::dump(api::messages_error("authentication_error", "invalid api key")), "application/json");
+    else
+      res.set_content(R"({"error":{"message":"invalid api key","type":"auth_error"}})", "application/json");
+    return httplib::Server::HandlerResponse::Handled;
+  });
+  srv.Get("/health", [](const httplib::Request&, httplib::Response& res) {
+    res.set_content(R"({"status":"ok"})", "application/json");
+  });
+  // the chat page: one embedded file, no requests anywhere but this server's API
+  srv.Get("/", [timing](const httplib::Request&, httplib::Response& res) {
+    res.set_header("Content-Security-Policy",
+                   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; "
+                   "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+    res.set_header("X-Content-Type-Options", "nosniff");
+    res.set_header("Referrer-Policy", "no-referrer");
+    res.set_header("Cache-Control", "no-cache");
+    static const std::string page = [&] {
+      std::string s = kChatPage;
+      const std::string key = "\"__TIMING__\"";
+      if (const size_t at = s.find(key); at != std::string::npos) s.replace(at, key.size(), "\"" + timing + "\"");
+      return s;
+    }();
+    res.set_content(page, "text/html; charset=utf-8");
+  });
+  srv.Get("/favicon.ico", [](const httplib::Request&, httplib::Response& res) { res.status = 204; });
+  srv.Get("/cluster", [info](const httplib::Request&, httplib::Response& res) {
+    res.set_content(cluster::to_json(info()).dump(), "application/json");
+  });
+}
+
+// Binds the server: "" or why it cannot. A busy port is an error: httplib's default SO_REUSEPORT would let a second
+// server bind it too.
+static std::string bind_server(httplib::Server& srv, const std::string& host, int port) {
+  srv.set_socket_options([](socket_t sock) {
+    int one = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+  });
+  if (srv.bind_to_port(host, port)) return "";
+  return "Can't listen on " + host + ":" + std::to_string(port) + ": " + port_problem(host, port) + " Pass another --port.";
+}
+
+// What a server tells the other Macs: this Mac, the server, and `fill`'s model fields (GB rounded to tenths)
+static std::function<cluster::MacInfo()> server_info(int port, size_t budget,
+                                                     std::function<void(cluster::MacInfo&)> fill) {
+  const std::string id = cluster::new_id();
+  const cluster::MacInfo here = cluster::this_mac();
+  return [=] {
+    cluster::MacInfo m = here;
+    m.id = id, m.version = kVersion, m.port = port, m.host = cluster::lan_address(), m.link.clear();
+    m.budget_gb = m.free_gb = std::round(double(budget) / 1e8) / 10;
+    fill(m);
+    return m;
+  };
+}
+
+// The server on the network, for its ready card
+static ui::Network network_of(bool visible, int port, bool api_key) {
+  ui::Network n;
+  n.visible = visible;
+  if (!visible) return n;
+  n.name = cluster::this_mac().name;
+  if (const std::string a = cluster::lan_address(); !a.empty()) n.url = "http://" + a + ":" + std::to_string(port);
+  n.api_key = api_key;
+  return n;
+}
+
+// The plain line about it (not a terminal; stdout keeps the Ready line alone)
+static void print_network(const ui::Network& n) {
+  if (n.visible)
+    fprintf(stderr, "Visible to Kapitsa on this network as %s%s (%s; --private hides it).\n", n.name.c_str(),
+            n.url.empty() ? "" : (" at " + n.url).c_str(), n.api_key ? "its API needs the key" : "no password");
+}
+
+// Sends every request to the Mac `route` names (route.h): nothing loads here. Bound, advertised (unless private), then
+// served until a signal stops it; says when that Mac goes away and comes back.
+static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster::MacInfo& route, const std::string& key,
+                        const std::string& host, int port, const std::string& api_key, const std::string& timing,
+                        bool visible, bool tui, const std::string& log_path, size_t budget) {
+  auto router = std::make_shared<Router>(browser, key);
+  router->peer();
+  auto info = server_info(port, budget, [router, route, key](cluster::MacInfo& m) {
+    const auto p = router->peer();
+    m.model = key;
+    m.routes_to = p ? p->name : route.name;
+    m.tok_s = p ? p->tok_s : 0;
+  });
+  httplib::Server srv;
+  srv.set_payload_max_length(256u << 20);
+  srv.set_tcp_nodelay(!getenv("NI_TCP_NODELAY") || env_on("NI_TCP_NODELAY"));
+  common_routes(srv, api_key, timing, info);
+  router->add_routes(srv, ui::forwarded);
+  if (const std::string why = bind_server(srv, host, port); !why.empty()) return fail(why);
+  logi("listening on http://%s:%d, sending requests for %s to %s (%s:%d)", host.c_str(), port, key.c_str(),
+       route.name.c_str(), route.host.c_str(), route.port);
+  std::unique_ptr<cluster::Advertiser> ad;
+  if (visible) ad = std::make_unique<cluster::Advertiser>(port, info);
+  const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
+  const std::string base =
+      "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
+  const ui::Network net = network_of(visible, port, !api_key.empty());
+  if (tui) {
+    ui::Routed r;
+    r.model = route.model, r.mac = route, r.base = base, r.log = log_path, r.net = net;
+    r.api_key_note = api_key.empty() ? "" : "required (--api-key)";
+    ui::routed(r);
+  } else {
+    fprintf(stderr, "%s\n", ui::route_line(route.model, route).c_str());
+    print_network(net);
+    printf("Ready: chat at %s, API at %s/v1 (model \"%s\", served by %s at %s:%d%s). Ctrl+C stops.\n", base.c_str(),
+           base.c_str(), route.model.c_str(), route.name.c_str(), route.host.c_str(), route.port,
+           api_key.empty() ? "" : ", API key required");
+  }
+  fflush(stdout);
+  // the Mac's comings and goings, as seen every second
+  std::thread([router, tui] {
+    cluster::MacInfo was = router->last();
+    bool there = true;
+    for (;;) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      const auto p = router->peer();
+      if (p && there && p->id == was.id) continue;
+      if (!p && !there) continue;
+      std::string say;
+      if (!p) say = was.name + " does not answer: requests get 503 until it is back or another Mac serves " +
+                    cluster::model_base(router->model()) + " whole. This server keeps looking.";
+      else if (!there && p->name == was.name) say = was.name + " is back: requests go there again.";
+      else say = "Requests now go to " + cluster::describe(*p) + ".";
+      logi("cluster: %s", say.c_str());
+      if (tui && !p) ui::warning(say);
+      else if (tui) ui::ok(say);
+      else fprintf(stderr, "%s\n", say.c_str());
+      there = p.has_value();
+      if (p) was = *p;
+    }
+  }).detach();
+  srv.listen_after_bind();
+  return 0;
+}
+
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
   EngineOptions opt;
   int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
-  std::string host = "127.0.0.1", api_key, model;
+  std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
   int port = 8000;
-  bool verbose = false, yes = false, allow_switch = false;
+  bool verbose = false, yes = false, allow_switch = false, priv = false, local = false;
   std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
@@ -646,6 +827,8 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--model-id") opt.model_id = next();
     else if (a == "--host") host = next();
     else if (a == "--port") port = to_int(a, next(), help);
+    else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
+    else if (a == "--local") local = true;   // never routed: the model runs here
     else if (a == "--context" || a == "--ctx") {
       std::string why;
       context_req = parse_context(next(), &why);
@@ -695,11 +878,24 @@ static int serve(int argc, char** argv, int first) {
     if (!opt.loop_kv.empty()) parse_loop_kv(opt.loop_kv, &kv);
     Dory::set_serving(opt.loops, kv);
   }
-  if (allow_switch && api_key.empty() && host != "127.0.0.1" && host != "localhost" && host != "::1")
+  // on the network by default (several Macs, docs/usage.md): visible to Kapitsa on the other Macs, with no password,
+  // and sending its requests to one that runs the model whole when this Mac would not. --private (or a loopback --host,
+  // as scripts give it) keeps the server to this Mac; --local keeps the model here. --allow-switch lets any client
+  // load models, so without --api-key it keeps the server to this Mac as well (a network --host then needs the key).
+  const bool switch_here = allow_switch && api_key.empty() && host.empty() && !priv;
+  if (host.empty()) host = priv || switch_here ? "127.0.0.1" : "0.0.0.0";
+  const bool loopback = host == "127.0.0.1" || host == "localhost" || host == "::1";
+  const bool visible = !priv && !loopback, may_route = visible && !local;
+  if (allow_switch && api_key.empty() && !loopback)
     usage_error("--allow-switch on a network address needs --api-key (any client could load models)", help);
   const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
   if (tui) ui::serve_begin(verbose);
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
+  if (switch_here) {
+    const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
+    if (tui) notes.push_back(say);
+    else fprintf(stderr, "%s\n", say.c_str());
+  }
   if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {  // a GGUF: its conversion, made on first use
     if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);  // before a long conversion
     try {
@@ -759,7 +955,26 @@ static int serve(int argc, char** argv, int first) {
   } catch (const hub::Error& e) {
     return fail(e.what(), 2);
   }
-  if (ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
+  // several Macs: one that would not hold the model whole sends its requests to a Mac on the network that runs it whole
+  // (route.h), before anything downloads or loads here; NI_CLUSTER_ROUTE=1 does whenever one serves it (tests: two
+  // servers on one Mac)
+  std::shared_ptr<cluster::Browser> browser;  // the other Macs running Kapitsa
+  std::optional<cluster::MacInfo> route;
+  if (may_route && (env_on("NI_CLUSTER_ROUTE") || !runs_whole_here(ref, opt, budget))) {
+    browser = std::make_shared<cluster::Browser>();
+    std::unique_ptr<term::Spinner> sp;
+    if (tui) sp = std::make_unique<term::Spinner>("Looking for a Mac on this network that runs " +
+                                                  bold_name(cluster::model_base(model_key(ref))) + " whole");
+    browser->wait(1.5);
+    if (sp) sp->done();
+    route = cluster::pick_server(browser->peers(), model_key(ref), false);
+  }
+  const std::string nobody = !browser ? ""
+                             : browser->error().empty()
+                                 ? " No Mac on this network runs it whole either."
+                                 : " Kapitsa could not look for another Mac that runs it: " + browser->error() + ".";
+  if (!route) browser.reset();  // (it looked for a Mac to send requests to)
+  if (!route && ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
     // before a long download: the engine's own start check on the model's headers; a model that would not start
     // here is refused, with the one that fits
     if (const std::string dir = hub::plan_dir(ref); !dir.empty()) {
@@ -785,10 +1000,11 @@ static int serve(int argc, char** argv, int first) {
                    "would not start.%s%s", ref.name.c_str(), need.bytes / 1e9, need.parts.c_str(), ram_gb(),
                    budget / 1e9, other ? " This one fits: kapitsa serve --model " : "",
                    other ? hub::short_name(*alt.model, *alt.variant).c_str() : "");
-        return fail(msg);
+        return fail(msg + nobody);
       }
     }
   }
+  if (route) last_fallback = false;  // (nothing starts here)
   if (last_fallback && tui)
     notes.push_back(bold_name(ref.name) + ", the smallest variant of " + model + " (the default, " +
                     ref.model->default_variant + ", does not fit this Mac's " + strf("%.0f GB", ram_gb()) +
@@ -798,7 +1014,7 @@ static int serve(int argc, char** argv, int first) {
     fprintf(stderr, "%s on this Mac (%.0f GB): %s, the smallest of its variants (the default, %s, does not fit; this "
             "one starts, with less room for a conversation). --model %s:<variant> picks another.\n", model.c_str(),
             ram_gb(), ref.name.c_str(), ref.model->default_variant.c_str(), hub::short_name(*ref.model).c_str());
-  if (ref.kind == hub::ModelRef::kLocal) {
+  if (!route && ref.kind == hub::ModelRef::kLocal) {
     struct stat st;
     if (stat((ref.dir + "/config.json").c_str(), &st) != 0)
       return fail(ref.dir + " has no config.json. --model takes a model folder (config.json, *.safetensors, "
@@ -812,6 +1028,7 @@ static int serve(int argc, char** argv, int first) {
     if (!header) ui::serve_header(KAPITSA_VERSION);
     for (const auto& n : notes) ui::note(n);
   }
+  if (route) return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
   try {
     hub::PullOptions po;
     if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
@@ -878,41 +1095,17 @@ static int serve(int argc, char** argv, int first) {
   // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
   // the previous one (the client's delayed ACK), which can hold the first token of a fast request.
   srv.set_tcp_nodelay(!getenv("NI_TCP_NODELAY") || env_on("NI_TCP_NODELAY"));
-  srv.set_pre_routing_handler([&](const httplib::Request& req, httplib::Response& res) {
-    // the chat page needs no key (it asks for one and sends it with its API calls), nor does /health
-    if (api_key.empty() || req.path == "/health" || (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
-      return httplib::Server::HandlerResponse::Unhandled;
-    // OpenAI clients send "Authorization: Bearer KEY", Anthropic ones "x-api-key: KEY" (Claude Code may send both,
-    // with an Anthropic key of its own in x-api-key)
-    if (req.get_header_value("Authorization") == "Bearer " + api_key || req.get_header_value("x-api-key") == api_key)
-      return httplib::Server::HandlerResponse::Unhandled;
-    res.status = 401;
-    if (req.path.rfind("/v1/messages", 0) == 0)
-      res.set_content(api::dump(api::messages_error("authentication_error", "invalid api key")), "application/json");
-    else
-      res.set_content(R"({"error":{"message":"invalid api key","type":"auth_error"}})", "application/json");
-    return httplib::Server::HandlerResponse::Handled;
+  // what this server tells the other Macs (GET /cluster, its Bonjour record): the model it serves and how
+  auto info = server_info(port, budget, [model_mgr, budget](cluster::MacInfo& m) {
+    const auto eng = model_mgr->current_engine();
+    if (!eng) return;
+    m.model = model_key(model_mgr->current_ref());
+    m.whole = !eng->streams_experts();
+    const size_t used = Gpu::get().allocated_bytes();
+    m.free_gb = std::round(double(budget > used ? budget - used : 0) / 1e8) / 10;
+    m.tok_s = std::round(ui::recent_tok_s() * 10) / 10;
   });
-  srv.Get("/health", [](const httplib::Request&, httplib::Response& res) {
-    res.set_content(R"({"status":"ok"})", "application/json");
-  });
-  // the chat page: one embedded file, no requests anywhere but this server's API
-  srv.Get("/", [timing](const httplib::Request&, httplib::Response& res) {
-    res.set_header("Content-Security-Policy",
-                   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; "
-                   "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
-    res.set_header("X-Content-Type-Options", "nosniff");
-    res.set_header("Referrer-Policy", "no-referrer");
-    res.set_header("Cache-Control", "no-cache");
-    static const std::string page = [&] {
-      std::string s = kChatPage;
-      const std::string key = "\"__TIMING__\"";
-      if (const size_t at = s.find(key); at != std::string::npos) s.replace(at, key.size(), "\"" + timing + "\"");
-      return s;
-    }();
-    res.set_content(page, "text/html; charset=utf-8");
-  });
-  srv.Get("/favicon.ico", [](const httplib::Request&, httplib::Response& res) { res.status = 204; });
+  common_routes(srv, api_key, timing, info);
   srv.Get("/v1/models", [model_mgr](const httplib::Request&, httplib::Response& res) {
     res.set_content(model_mgr->list_models_json().dump(), "application/json");
   });
@@ -1191,15 +1384,11 @@ static int serve(int argc, char** argv, int first) {
         meter);
   });
 
-  // A busy port is an error: httplib's default SO_REUSEPORT would let a second server bind it too.
-  srv.set_socket_options([](socket_t sock) {
-    int one = 1;
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
-  });
-  if (!srv.bind_to_port(host, port))
-    return fail("Can't listen on " + host + ":" + std::to_string(port) + ": " + port_problem(host, port) +
-                " Pass another --port.");
+  if (const std::string why = bind_server(srv, host, port); !why.empty()) return fail(why);
   logi("listening on http://%s:%d", host.c_str(), port);
+  std::unique_ptr<cluster::Advertiser> ad;  // visible to Kapitsa on the other Macs while it serves
+  if (visible) ad = std::make_unique<cluster::Advertiser>(port, info);
+  const ui::Network net = network_of(visible, port, !api_key.empty());
   const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
   const std::string base =
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
@@ -1216,8 +1405,10 @@ static int serve(int argc, char** argv, int first) {
     card.context = model_mgr->current_context_length();
     card.context_fit = model_mgr->current_context_fit();
     card.slots = model_mgr->current_slots();  // as the engine started (auto_slots when --slots is not given)
+    card.net = net;
     ui::ready(card);
   } else {
+    print_network(net);
     printf("Ready: chat at %s, API at %s/v1 (model \"%s\"%s). Ctrl+C stops.\n", base.c_str(), base.c_str(),
            model_mgr->current_model_id().c_str(), api_key.empty() ? "" : ", API key required");
   }
