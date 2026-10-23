@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-23T10:58:24Z",
+  "kapitsa": {
+    "version": "0.2.12",
+    "commit": "e8bfb4b"
+  },
+  "mac": {
+    "identifier": "Mac16,11",
+    "name": "Mac mini (2024)",
+    "year": 2024,
+    "chip": "Apple M4 Pro",
+    "cpu_cores": 14,
+    "gpu_cores": 20,
+    "memory_gb": 64,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "flint",
+    "title": "Recursive Flint 40B-A2.5B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "3b93f90",
+    "decoding": "plain",
+    "decoding_detail": "plain decoding",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 1.0
+  },
+  "results": {
+    "decode": {
+      "median_tps": 138.33,
+      "runs_tps": [
+        139.95,
+        138.33,
+        136.32,
+        136.77,
+        138.39
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 125.5,
+      "runs_tps": [
+        125.51,
+        125.6,
+        125.39,
+        125.5,
+        124.91
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 3872,
+        "ttft_s": 4.0063,
+        "tps": 966.5,
+        "followup_s": [
+          0.142,
+          0.215,
+          0.1274
+        ],
+        "followup_median_s": 0.142,
+        "followup_suffix_tps": 69.8
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 15065,
+        "ttft_s": 18.3755,
+        "tps": 819.8,
+        "followup_s": [
+          0.1695,
+          0.2952,
+          0.1011
+        ],
+        "followup_median_s": 0.1695,
+        "followup_suffix_tps": 59.0
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.32
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.46,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
