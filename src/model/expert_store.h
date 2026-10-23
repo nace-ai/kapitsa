@@ -83,7 +83,7 @@ inline AutoStore auto_store_size(const AutoStoreIn& in) {
   }
   return r;
 }
-// The system's available memory now (free, inactive, speculative and purgeable pages), 0 if unknown. Inactive pages
+// The system's available memory now (free, inactive and purgeable pages; free_count already includes the speculative ones), 0 if unknown. Inactive pages
 // include file cache, so the automatic store size depends on what the page cache held at launch: back-to-back launches
 // can pick different sizes.
 size_t available_memory();

@@ -656,8 +656,9 @@ run `kapitsa doctor`.
 A Flash-Next folder whose routed experts are in Q2_0 (2.25 bits a weight; `tools/qwen4_exp_q20.py` builds one from
 ISTA-DASLab's GSQ-RCO GGUF and Nace AI's 4-bit pack: 38.3 GB of model files, plus the 32 GB n-gram table) does not
 need them all in memory: it keeps as many as the budget leaves after its other weights, its buffers, the slots'
-state and one conversation's KV cache of up to 32K tokens, with the process's GPU memory within 40% of the RAM, and
-reads the others from the SSD when a token routes them (`src/model/expert_store.h`). Why 40%: such a store waits on
+state and one conversation's KV cache of up to 32K tokens, with the process's GPU memory within 40% of the RAM before the
+M5 (no such cap on it) and no more than the system's available memory less max(4 GB, RAM/12), and reads the others from
+the SSD when a token routes them (`src/model/expert_store.h`). Why 40% before the M5: such a store waits on
 the CPU at every layer, and on a 48 GB M4 Pro every command buffer took 0.5-3.5 s longer once the process's GPU memory
 passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full speed.
 `kapitsa doctor` counts the smallest such store (2.1 GB) in its weights and lists the rest as streamed.
