@@ -494,12 +494,14 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // (NI_BATCH=1 batches them too)
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
                     (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
-  if (kflash_wrap_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) {
-    // what an extra row of a pass costs in decode steps (NI_KFLASH_ROW_COST overrides): Flint's 6-of-256 experts per row
-    // make it 0.6 (an M4 Pro: 2 / 4 / 8 rows = 1.6 / 2.8 / 5.2 steps); Nemotron's dense layers 0.25
+  if (kflash_budget_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) {
+    // what an extra row of a pass costs in decode steps (NI_KFLASH_ROW_COST overrides): Flint 0.6 (an M4 Pro: 2 / 4 / 8
+    // rows = 1.6 / 2.8 / 5.2 steps); Nemotron 0.25 is NOT measured here: calibrate it from the request log's "row x
+    // steps" line before relying on it
     const char* v = getenv("NI_KFLASH_ROW_COST");
-    const double r = v && *v && atof(v) > 0 ? atof(v) : flint_ngram_ > 0 ? 0.6 : 0.25;
-    kf_lookup_ = std::make_unique<KfLookup>(std::max(nh_ngram_, flint_ngram_), r);
+    kf_row_cost_ = v && *v && atof(v) > 0 ? atof(v) : flint_ngram_ > 0 ? 0.6 : 0.25;
+    kf_lookup_k_ = std::max(nh_ngram_, flint_ngram_);
+    logi("KFlash: prompt-lookup budget on (extra row %.2f steps)", kf_row_cost_);
   }
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
@@ -2710,7 +2712,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   const int depth = spec_ ? opts_.spec_depth : 0;
   KfWrap kfw;  // this request's KFlash: its decode loop asks it for the rows of a cycle and tells it what the cycle wrote
   kfw.source = kflash_source();
-  kfw.lookup = kf_lookup_.get();
+  if (kf_lookup_k_ > 0) kfw.lookup.emplace(kf_lookup_k_, kf_row_cost_);  // (per request: the rows are a function of its own tokens)
   int kf_rows = 1;  // rows of the cycle in flight (cycle_done's report)
   auto cycle_done = [live, &kfw, &kf_rows](int m) {  // a decode cycle wrote m tokens (for a display)
     kfw.cycle(m, kf_rows);
@@ -3523,9 +3525,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   char cyc[64] = "";
   if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
-  if (kf_lookup_ && kf_lookup_->c1() > 0 && kf_lookup_->s() > 0) {  // the measured row cost, to calibrate NI_KFLASH_ROW_COST
+  if (kfw.lookup && kfw.lookup->c1() > 0 && kfw.lookup->s() > 0) {  // the measured row cost, to calibrate NI_KFLASH_ROW_COST
     const size_t n0 = strlen(cyc);
-    snprintf(cyc + n0, sizeof cyc - n0, ", row %.2f steps (budget %.2f)", kf_lookup_->s() / kf_lookup_->c1(), kf_lookup_->row_cost());
+    snprintf(cyc + n0, sizeof cyc - n0, ", row %.2f steps (budget %.2f)", kfw.lookup->s() / kfw.lookup->c1(), kfw.lookup->row_cost());
   }
   // requests in flight at once: the slot, the wait for it, the turns given to the others (prefill, decode)
   char conc[256] = "";

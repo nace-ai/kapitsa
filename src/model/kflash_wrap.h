@@ -10,13 +10,14 @@
 //  - KfLookup: the budget of the prompt-lookup source (Nemotron Nano, Flint with --spec): how many of the proposed
 //    tokens a cycle verifies, from the acceptance the verifies recorded and the model's cost of an extra row, so that
 //    where a verify's extra rows cost more than the tokens they win, the cycle verifies the pending token alone.
-// KfLookup only ever lowers the drafts a cycle verifies from the source's own count (never raises it), so a model
-// whose drafts pay keeps the cycles it had. NI_KFLASH=0 or NI_KFLASH_WRAP=0 turns the wrapper off (the cycles are the
-// source's own, as before; nothing is reported).
+// KfLookup only ever lowers the drafts a cycle verifies from the source's own count (never raises it), and is off
+// unless NI_KFLASH_BUDGET=1. NI_KFLASH=0 or NI_KFLASH_WRAP=0 turns the wrapper off: nothing is reported and the budget is
+// off too (every proposal is verified, as before KFlash).
 #pragma once
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <optional>
 #include <string>
 
 namespace ni {
@@ -33,6 +34,16 @@ inline bool kflash_wrap_on() {
   return on;
 }
 
+// The prompt-lookup budget is opt-in (NI_KFLASH_BUDGET=1) and needs the wrapper on: a pass of 2+ rows rounds differently
+// from decode steps, so a budget that picks other rows than the source's own would change a default model's text.
+inline bool kflash_budget_on() {
+  static const bool on = [] {
+    const char* v = getenv("NI_KFLASH_BUDGET");
+    return kflash_wrap_on() && v && *v && atoi(v) != 0;
+  }();
+  return on;
+}
+
 // The budget of prompt lookup. A cycle with `avail` proposed tokens verifies d of them (0 .. avail) in a pass of d + 1
 // rows. Verifying d gives 1 + sum over j <= d of (the chance that the first j proposals were accepted) tokens and
 // costs 1 + r d steps (r: what each extra row costs in decode steps, a constant of the model: 0.6 on Flint, where a
@@ -40,7 +51,7 @@ inline bool kflash_wrap_on() {
 // The chances are the recorded acceptance by position (a decaying count, a prior of 0.5 worth 2 proposals). Nothing
 // in the choice reads a clock, so the rows of a cycle, and with them the text of a pass of 2+ rows, are a function of
 // the tokens: the same request decodes the same text under load. Until 16 proposals were verified it takes the
-// source's own count. A d of 0 records nothing about the proposals, so one cycle in 64 with proposals verifies them
+// source's own count. A d of 0 records nothing about the proposals, so one cycle in 16 with proposals verifies them
 // all. observe() also keeps the measured cost of a one-row pass (c1) and of an extra row (s) in ms, for the log, to
 // calibrate r.
 class KfLookup {
@@ -54,7 +65,7 @@ class KfLookup {
     if (avail <= 0) return 0;
     ++asked_;
     if (tried_ < 16) return avail;
-    if (asked_ % 64 == 0) return avail;  // the probe: keeps the acceptance fresh when the budget stopped drafting
+    if (asked_ % kProbe == 0) return avail;  // the probe: keeps the acceptance fresh when the budget stopped drafting
     int best = 0;
     double best_rate = 1.0;
     double e = 1, path = 1;
@@ -98,8 +109,9 @@ class KfLookup {
   }
 
  private:
+  static constexpr long kProbe = 16;  // one cycle in 16 with proposals verifies them all
   static constexpr double kA = 0.1;   // the cost means' weight for a new cycle
-  static constexpr double kD = 0.98;  // the acceptance counts' decay per proposal
+  static constexpr double kD = 0.95;  // the acceptance counts' decay per proposal
   int k_;
   double r_;
   double hit_[kMax + 1] = {}, try_[kMax + 1] = {};
@@ -111,11 +123,13 @@ class KfLookup {
 // rows the next cycle verifies given the `avail` tokens its source proposed (the pending token's row plus the drafts
 // worth their rows); cycle(m, rows) records what the cycle wrote. A source with no proposals (a plain model: avail 0)
 // gets 1 row, which the loop runs as its existing step, so a model that decodes plain is bit-identical to before. The
-// drafter models and the MTP head keep their own budgets (kflash_budget.h) and report their cycles here. `lookup` is the
-// prompt-lookup budget (null where the source has none, or with the wrapper off: then plan() is the source's own count).
+// drafter models and the MTP head keep their own budgets (kflash_budget.h) and report their cycles here.
+// `lookup` is the prompt-lookup budget, built per request when it is asked for (NI_KFLASH_BUDGET=1: kflash_budget_on()),
+// so what a request decodes does not depend on the requests before it. Without it plan() is the source's own count: every
+// proposal is verified, as before KFlash.
 struct KfWrap {
   std::string source = "none";  // "DFlash2", "LiLiCorr", "MTP", "prompt lookup", ... or "none" (plain decoding)
-  KfLookup* lookup = nullptr;
+  std::optional<KfLookup> lookup;
   long cycles = 0, tokens = 0, rows = 0;  // decode cycles, the tokens they wrote, the rows the plain and prompt-lookup ones verified
 
   int plan(int avail) { return (lookup ? lookup->pick(avail) : std::max(avail, 0)) + 1; }

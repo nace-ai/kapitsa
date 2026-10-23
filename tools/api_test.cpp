@@ -1078,14 +1078,13 @@ void kflash_lookup_unit() {
         "kflash wrap: counts cycles, tokens and rows");
   check(w.plan(0) == 1 && w.plan(3) == 4, "kflash wrap: with no budget a cycle verifies the source's proposals (none: 1 row, the plain step)");
   {  // through a lookup budget: unmeasured it takes the proposals, rejected ones stop being verified
-    KfLookup lk(4, 0.6);
     KfWrap x;
-    x.lookup = &lk;
+    x.lookup.emplace(4, 0.6);
     check(x.plan(0) == 1 && x.plan(3) == 4, "kflash wrap: a lookup budget unmeasured takes the proposals");
     for (int i = 0; i < 40; ++i) x.observe(4, 0, 16.0);
     int one = 0;
-    for (int i = 0; i < 63; ++i) one += x.plan(4) == 1;
-    check(one >= 60, "kflash wrap: rejected proposals are 1 row");
+    for (int i = 0; i < 64; ++i) one += x.plan(4) == 1;
+    check(one >= 58 && one < 64, "kflash wrap: rejected proposals are 1 row, bar the periodic probe", std::to_string(one));
   }
   {  // unmeasured: the source's own count, never more than it proposed
     KfLookup b(4, 0.6);
@@ -1115,13 +1114,43 @@ void kflash_lookup_unit() {
     for (int i = 0; i < 20; ++i) b.observe(4, 0, 16.0);
     int zero = 0, full = 0;
     for (int i = 0; i < 128; ++i) (b.pick(4) == 0 ? zero : full)++;
-    check(zero >= 124 && full >= 1 && full <= 3, "kflash lookup: rejected drafts are skipped, one cycle in 64 probes");
+    check(zero >= 116 && full >= 4 && full <= 12, "kflash lookup: rejected drafts are skipped, one cycle in 16 probes", std::to_string(full));
   }
-  {  // two of four accepted: a middle count that pays beats both extremes
+  {  // two of four accepted: p(1) = p(2) = 0.97, p(3) = 0.03, so 3 rows (d = 2) win: 2.9 tokens for 2.2 steps, against 1.97 for
+     // d = 1 and 3.0 for 3.4 steps at d = 4
     KfLookup b(4, 0.6);
     for (int i = 0; i < 40; ++i) b.observe(4, 2, 11.0);
     const int d = b.pick(4);
-    check(d >= 1 && d <= 4, "kflash lookup: a partly accepted draft is budgeted", std::to_string(d));
+    check(d == 2, "kflash lookup: a partly accepted draft is budgeted at the count that pays", std::to_string(d));
+  }
+  {  // a request's budget starts fresh: the same cycles give the same rows after a request that left it skipping
+    KfWrap first, second;
+    first.lookup.emplace(4, 0.6);
+    for (int i = 0; i < 80; ++i) first.observe(4, 0, 16.0), first.plan(4);
+    second.lookup.emplace(4, 0.6);
+    KfWrap third;
+    third.lookup.emplace(4, 0.6);
+    const bool starts_full = second.plan(4) == 5 && third.plan(4) == 5;  // (the source's own count: 4 drafts and the pending row)
+    bool same = true;
+    for (int i = 0; i < 100; ++i) {
+      const int a = second.plan(4), c = third.plan(4);
+      same = same && a == c;
+      second.observe(a - 1, i % 2 ? a - 1 : 0, 11.0), third.observe(c - 1, i % 2 ? c - 1 : 0, 11.0);
+    }
+    check(same && starts_full, "kflash lookup: a request's budget is its own: it starts with the source's count");
+  }
+  {  // the regime changes (prose, then a copy): the budget skipped, then probed, accepted and re-enabled
+    KfLookup b(4, 0.6);
+    for (int i = 0; i < 40; ++i) b.observe(4, 0, 16.0);
+    int back = -1, run = 0;
+    for (int i = 0; i < 1000 && back < 0; ++i) {
+      const int d = b.pick(4);
+      if (d == 0) b.observe(0, 0, 10.0);
+      else b.observe(d, d, 11.0);
+      run = d >= 1 ? run + 1 : 0;
+      if (run >= 4) back = i;
+    }
+    check(back >= 0 && back <= 400, "kflash lookup: accepted probes re-enable the drafts within 400 cycles", std::to_string(back));
   }
 }
 

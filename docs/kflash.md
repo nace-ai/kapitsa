@@ -466,7 +466,8 @@ KFlash is on by default for every block drafter. To compare it with the chain, o
 | `NI_KFLASH=0` (environment) | chains on every model |
 | `NI_DFLASH_TREE=0` (environment) | chains on the Qwen models only (overrides `NI_KFLASH` there) |
 | `--spec 0` (`kapitsa serve` option) | plain decoding, no drafter |
-| `NI_KFLASH_WRAP=0` (environment) | no KFlash label or accounting around models without a drafter (decoding is unchanged either way) |
+| `NI_KFLASH_WRAP=0` (environment) | no KFlash label or accounting, and no prompt-lookup budget (also off by default, see below): prompt lookup verifies every draft it finds. Decoding is otherwise unchanged |
+| `NI_KFLASH_BUDGET=1` (environment) | the prompt-lookup budget (Nemotron Nano, Flint with `--spec`): a cycle verifies only the drafts that pay for their rows. Off by default, so prompt lookup verifies every draft as before; a pass of 2+ rows rounds differently from decode steps, so turning it on can change the text. `NI_KFLASH_ROW_COST=<steps>` sets the cost of an extra row (Flint 0.6, Nano 0.25 unmeasured) |
 
 Every decode runs as a KFlash cycle: the proposal source gives 0 or more guesses and the pass verifies the pending token plus
 the guesses the budget keeps. The source is a drafter (DFlash2, LiLiCorr, DSpark), the MTP head, prompt lookup, Dory's

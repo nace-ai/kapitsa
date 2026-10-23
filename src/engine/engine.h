@@ -565,8 +565,10 @@ class Engine {
   bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
   bool think_ws_ = true;      // the whitespace before </think> stays in the reasoning (Nemotron-H, Dory)
   int nh_ngram_ = 0;          // a dense Nemotron-H model without a block drafter: prompt-lookup drafts per cycle
-  // KFlash's budget of the prompt-lookup sources (nh_ngram_, flint_ngram_): drafts verified per cycle (under the turn)
-  std::unique_ptr<KfLookup> kf_lookup_;
+  // KFlash's budget of the prompt-lookup sources (nh_ngram_, flint_ngram_), when NI_KFLASH_BUDGET=1: a request's KfLookup
+  // is built from these (max drafts, and the cost of an extra row in decode steps); 0 rows: no budget
+  int kf_lookup_k_ = 0;
+  double kf_row_cost_ = 0;
   // the proposal source KFlash wraps ("none": plain decoding; "" when the wrapper is off)
   std::string kflash_source() const;
   std::vector<int> stop_ids_;  // the config's eos ids plus the tokenizer's eos token (chat turn end)
