@@ -495,7 +495,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
                     (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
   if (kflash_wrap_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) kf_lookup_ = std::make_unique<KfLookup>(std::max(nh_ngram_, flint_ngram_));
-  const std::string mode0 = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
+  const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
                                                   " drafts per cycle)"
                          : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
@@ -512,7 +512,6 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                  : std::string("plain decoding");
   // KFlash wraps every decode (src/model/kflash_wrap.h): the source it takes proposals from is named in the line
   const std::string kf_src = kflash_source();
-  const std::string& mode = mode0;
   const std::string looped = dory_ ? ", " + std::to_string(dory_->default_loops()) + " loops by default (requests take 1-" +
                                          std::to_string(Dory::kMaxLoops) + "), " + loop_kv_name(dory_->kv_mode()) +
                                          " KV"

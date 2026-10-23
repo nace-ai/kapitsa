@@ -1069,9 +1069,6 @@ void reasoning_memory(const TmplModel& m, const std::string& tag) {
         tag + "reasoning memory: a turn the server did not write gets no reasoning");
 }
 
-// A float tool argument keeps its text through the Qwen3.5 / Nemotron templates' `| string` (without a model folder: a
-// minimal template with their argument line, so CI runs it).
-// Engine::disk_lookup's wait for a conversation's SSD copy still being written: bounded by the write and by the prefill
 // KFlash around prompt lookup (src/model/kflash_wrap.h): the budget verifies the source's drafts until it has measured,
 // then only as many as pay for their rows
 void kflash_lookup_unit() {
@@ -1107,6 +1104,9 @@ void kflash_lookup_unit() {
   }
 }
 
+// A float tool argument keeps its text through the Qwen3.5 / Nemotron templates' `| string` (without a model folder: a
+// minimal template with their argument line, so CI runs it).
+// Engine::disk_lookup's wait for a conversation's SSD copy still being written: bounded by the write and by the prefill
 void disk_wait_unit() {
   using namespace disk_wait;
   // 27B/35B scale: 1.5 GB queued at 3 GB/s = 500 ms; 17k rows at 0.5 rows/ms = 34 s: wait
