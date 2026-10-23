@@ -25,6 +25,7 @@
 #include "api/chat_completions.h"
 #include "api/responses.h"
 #include "cluster/discovery.h"
+#include "cluster/pipe.h"
 #include "engine/doctor.h"
 #include "engine/engine.h"
 #include "gguf/gguf.h"
@@ -352,6 +353,9 @@ static void print_serve_help() {
          "  --timing WHAT          what the request log and the chat page show of the wait before the first token:\n"
          "                         ttft (time to the first token), prefill (prompt tokens read per second, the\n"
          "                         uncached ones only: a cache hit counts just its new tokens) or both (default)\n"
+         "  --split HOST:PORT,...  Qwen3.8-Flash-Next split across Macs by layers: this Mac holds the first ones and\n"
+         "                         takes the requests, each `kapitsa stage` listed holds the layers after them, in\n"
+         "                         order (kapitsa stage --help)\n"
          "  --image-max-pixels N   images: resize larger ones to about N pixels (default 1200000, about what\n"
          "                         Anthropic's API sends Claude: a 2880x1800 screenshot becomes 1376x864, 1.2K\n"
          "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
@@ -819,6 +823,7 @@ static int serve(int argc, char** argv, int first) {
   EngineOptions opt;
   int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
+  std::vector<std::string> split;  // --split: the stages' addresses, in the order of their layers
   int port = 8000;
   bool verbose = false, yes = false, allow_switch = false, priv = false, local = false;
   std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
@@ -868,6 +873,15 @@ static int serve(int argc, char** argv, int first) {
       LoopKv kv;
       opt.loop_kv = next();
       if (!parse_loop_kv(opt.loop_kv, &kv)) usage_error("--loop-kv: last-loop or per-loop", help);
+    }
+    else if (a == "--split") {
+      const std::string v = next();
+      for (size_t at = 0; at <= v.size();) {
+        const size_t comma = std::min(v.find(',', at), v.size());
+        if (comma > at) split.push_back(v.substr(at, comma - at));
+        at = comma + 1;
+      }
+      if (split.empty()) usage_error("--split takes the stages' host:port, comma-separated", help);
     }
     else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
     else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
@@ -978,7 +992,7 @@ static int serve(int argc, char** argv, int first) {
   // (route.h), before anything downloads or loads here; NI_CLUSTER_ROUTE=1 does whenever one serves it (tests: two
   // servers on one Mac)
   std::optional<cluster::MacInfo> route;
-  if (may_route && (env_on("NI_CLUSTER_ROUTE") || !runs_whole_here(ref, opt, budget))) {
+  if (may_route && split.empty() && (env_on("NI_CLUSTER_ROUTE") || !runs_whole_here(ref, opt, budget))) {
     if (!browser) browser = std::make_shared<cluster::Browser>();
     std::unique_ptr<term::Spinner> sp;
     if (tui) sp = std::make_unique<term::Spinner>("Looking for a Mac on this network that runs " +
@@ -991,9 +1005,9 @@ static int serve(int argc, char** argv, int first) {
                              : browser->error().empty()
                                  ? " No Mac on this network runs it whole either (kapitsa cluster lists them)."
                                  : " Kapitsa could not look for another Mac that runs it: " + browser->error() + ".";
-  if (!route && ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
+  if (!route && split.empty() && ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
     // before a long download: the engine's own start check on the model's headers; a model that would not start
-    // here is refused, with the one that fits
+    // here is refused, with the one that fits (a split's share is known once its stages answer, after the download)
     if (const std::string dir = hub::plan_dir(ref); !dir.empty()) {
       EngineOptions po = opt;  // a context past the model's limit runs at the limit
       po.context = context_within_limit(dir, opt.context);
@@ -1056,6 +1070,43 @@ static int serve(int argc, char** argv, int first) {
     return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
+  }
+  // --split: the stages hold the layers after this Mac's (src/cluster/pipe.h); every plan of the model and the engine's
+  // Qwen4Exp then take this Mac's share
+  if (!split.empty()) {
+    if (!Qwen4Exp::is_model(opt.model_dir))
+      return fail("--split: only Qwen3.8-Flash-Next splits across Macs so far, not " + ref.name + ".");
+    std::string why;
+    cluster::HeadInfo me;
+    {
+      char host[256] = "";
+      me.name = gethostname(host, sizeof host) == 0 && *host ? host : "the head";
+      if (me.name.size() > 6 && me.name.compare(me.name.size() - 6, 6, ".local") == 0) me.name.resize(me.name.size() - 6);
+    }
+    me.mem = double(budget);
+    me.gbs = bandwidth_gbs(Gpu::get().name(), Gpu::get().core_count());
+    me.chunk = opt.prefill_chunk > 0 ? opt.prefill_chunk : 2048;
+    if (tui) ui::note("Splitting " + ref.name + " with " + std::to_string(split.size()) + " other Mac" +
+                      (split.size() > 1 ? "s" : "") + ": asking them for their memory and speed...");
+    auto link = cluster::Link::connect(split, opt.model_dir, me, &why);
+    if (!link) return fail("--split: " + why);
+    if (opt.prefill_chunk > link->rows())
+      return fail("--prefill-chunk " + std::to_string(opt.prefill_chunk) + ": the stages take at most " +
+                  std::to_string(link->rows()) + " rows a pass (kapitsa stage --prefill-chunk).");
+    if (opt.prefill_chunk <= 0 && link->rows() < prefill_chunk_room(2048)) opt.prefill_chunk = link->rows();
+    Qwen4Exp::set_split({0, link->first(), link});
+    std::string where;
+    for (const cluster::StageInfo& s : link->stages())
+      where += (where.empty() ? "" : ", ") + std::to_string(s.lo + 1) + "-" + std::to_string(s.hi) + " on " + s.name;
+    char rtt[64];
+    snprintf(rtt, sizeof rtt, " (a pass's round trip without the work: %.1f ms)", link->rtt_ms());
+    const std::string say = ref.name + " is split across Macs: layers 1-" + std::to_string(link->first()) +
+                            " here, " + where + rtt + "." +
+                            (link->streams() ? " Their memory does not hold all of its experts: each Mac streams "
+                                               "the ones it does not hold from its SSD."
+                                             : "");
+    if (tui) ui::note(say);
+    else fprintf(stderr, "%s\n", say.c_str());
   }
   // the context: the one asked for, within what the model was trained for, else the default for this Mac
   {
@@ -1734,6 +1785,7 @@ int main(int argc, char** argv) {
   if (cmd == "bench") return run_bench(argc, argv, 2);
   if (cmd == "update") return run_update(argc, argv, 2);
   if (cmd == "cluster" || cmd == "macs") return run_cluster(argc, argv, 2);
+  if (cmd == "stage") return run_stage(argc, argv, 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }

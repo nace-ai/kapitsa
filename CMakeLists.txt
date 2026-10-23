@@ -130,7 +130,8 @@ add_custom_command(
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/route.cpp ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${KAPITSA_CHAT})
+  ${CMAKE_SOURCE_DIR}/src/server/stage_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/route.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${KAPITSA_CHAT})
 target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
 target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
