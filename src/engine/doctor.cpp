@@ -50,7 +50,8 @@ uint64_t ram_bytes() {
   return m;
 }
 
-// Memory bandwidth (GB/s) by chip, from Apple's specifications; 0 = unknown. Max chips by GPU cores.
+}  // namespace
+
 double bandwidth_gbs(const std::string& chip, int cores) {
   struct B {
     const char* name;
@@ -66,6 +67,8 @@ double bandwidth_gbs(const std::string& chip, int cores) {
     if (chip == b.name) return b.gbs;
   return 0;
 }
+
+namespace {
 
 bool is_model_dir(const std::string& d) {
   std::ifstream f(d + "/config.json");
