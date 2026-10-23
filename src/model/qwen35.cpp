@@ -108,6 +108,14 @@ static int moe_qmr() {
 // dense NI_QMT path) and the model keeps the 35B's shapes (below): 4K prefill 2,135 -> 1,574 ms and 16K 10,810 ->
 // 8,570 ms on the M5 Pro. `NI_MOE_QTM=0` keeps the qrm path; every other Mac defaults to qrm.
 static bool qmt_on();
+// NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
+// memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
+// bitwise; 0 runs the *_o instantiations with main's stores (the kill switch). M5 Pro, 35B ni_run prefill (chunk
+// 4096, ABBA): 4K 1,355 -> 1,247 ms, 16K 6,270 -> 5,896 ms.
+static const char* moe_stage_sfx() {
+  static const bool on = env_int("NI_MOE_STAGE", 1) != 0;
+  return on ? "" : "_o";
+}
 static bool moe_qtm() {
   // The tile sums each output's K reduction in a different association order, so it does not reproduce the
   // simdgroup path's logits to the bit: it moves the 35B's logits by ~1.1e-3 mean KL, 1.3x the 8.1e-4 the shipped
@@ -2788,7 +2796,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), uint32_t(size_t(G.N) * G.row_bytes() / 4),
                G.dense() ? 0u : G.N * (G.K / G.gs), uint32_t(E)};
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U;
-    e.use(pipe(qtm ? "qmtm_gu_m64_n64"
+    e.use(pipe(qtm ? std::string("qmtm_gu_m64_n64") + moe_stage_sfx()
                : gen ? "qrmf_gu_" + G.fmt() + "_m32_n64"
                : qrm ? "qrm_gu" + qm + "_n" + std::to_string(kBnGu) : "qmm_moe_gu" + m + "_n" + std::to_string(kBnGu)));
     e.buf(0, xh_);
@@ -2806,7 +2814,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4),
                Dn.dense() ? 0u : Dn.N * (Dn.K / Dn.gs), uint32_t(E)};
     const QLinear& SD = fold ? L.sd : Dn;
-    e.use(pipe(qtm ? "qmtm_dn_m64_n64"
+    e.use(pipe(qtm ? std::string("qmtm_dn_m64_n64") + moe_stage_sfx()
                : gen ? "qrmf_dn_" + Dn.fmt() + "_m32_n128"
                : qrm ? "qrm_dn" + qm + "_n" + std::to_string(kBnDn) : "qmm_moe_dn" + m + "_n" + std::to_string(kBnDn)));
     e.buf(0, hhalf_);

@@ -15,7 +15,8 @@ using namespace mpp::tensor_ops;
 //  * the shared expert can ride along as expert index p.shared_e with its own weight buffers, as in qmm_moe_gu_*.
 // Per output element the arithmetic is qrm's (same dequantized halfs, fp32 MMA accumulation over K); the halfs are
 // rounded once as qmt does (fma in fp32, one rounding to half).
-// Requirements (host): 4-bit weights, gs 64 (checked by the caller), K % 64 == 0, N % BN == 0, x_ld % 8 == 0.
+// Requirements (host): 4-bit weights, gs 64 (checked by the caller), K % 64 == 0, N % BN == 0, x_ld % 8 == 0,
+// y_ld % 8 == 0.
 
 struct QtmParams {
   uint N, K, x_ld, y_ld, gs, w_es, s_es, shared_e;
@@ -49,7 +50,7 @@ NI_INLINE void qtm_dec(const QtmRaw r, threadgroup half* dst) {
 // One bucket tile (rows = the tile's live rows, m0 = its first sorted row) at output columns n0:
 // NP = 2 writes half(silu(g) * u) to H row m0 + m; NP = 1 writes fp32 Y[yrows[m0 + m]]. xrows == nullptr: the tile's
 // X rows are contiguous (down); otherwise xrows maps them to token rows (gate/up).
-template <int NP, int BM, int BN, int BK>
+template <int NP, int BM, int BN, int BK, bool STG = true>
 NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* W, const device bfloat* const thread* S,
                         const device bfloat* const thread* B, device void* Y, constant QtmParams& p, uint m0,
                         uint rows, uint n0, const device uint* xrows, const device uint* yrows, uint tid, uint sg,
@@ -110,11 +111,15 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
   store(0);
   threadgroup_barrier(mem_flags::mem_threadgroup);
   const uint steps = p.K / BK;
+  // a simdgroup whose SM rows are all past the tile's live rows skips its products (its outputs are never stored)
+  const bool live = sm * SM < rows;
   for (uint st = 0; st < steps; ++st) {
     const bool more = st + 1 < steps;
     if (more) load((st + 1) * BK);
-    if (st & 1) op.run(tX1, tW1, acc);
-    else op.run(tX0, tW0, acc);
+    if (live) {
+      if (st & 1) op.run(tX1, tW1, acc);
+      else op.run(tX0, tW0, acc);
+    }
     if (more) store((st + 1) & 1);
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
@@ -124,31 +129,72 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
     if (sn == 1)
       for (uint16_t i = 0; i < acc.get_capacity(); ++i) ex[i] = acc[i];
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (sn == 0) {
-      const uint nh = n0;  // already tg.x * (BN / 2)
+    if (!STG) {  // main's element stores (NI_MOE_STAGE=0)
+      if (sn == 0)
+        for (uint16_t i = 0; i < acc.get_capacity(); ++i) {
+          if (!acc.is_valid_element(i)) continue;
+          const auto ix = acc.get_multidimensional_index(i);
+          const uint n = n0 + ix[0], r = sm * SM + ix[1];
+          if (r >= rows || n >= p.N) continue;
+          ((device half*)Y)[size_t(m0 + r) * p.y_ld + n] = half(silu(acc[i]) * ex[i]);
+        }
+      return;
+    }
+    // H goes out as whole rows (SN halfs each) through xs, as the down tile's fp32 rows do
+    static_assert(BM * SN * 2 <= 2 * BM * BK * 2 && (SN * 2) % 16 == 0, "qtmm_tile: H staging");
+    threadgroup half* hs = xs;
+    if (sn == 0)
       for (uint16_t i = 0; i < acc.get_capacity(); ++i) {
         if (!acc.is_valid_element(i)) continue;
         const auto ix = acc.get_multidimensional_index(i);
-        const uint n = nh + ix[0], r = sm * SM + ix[1];
-        if (r >= rows || n >= p.N) continue;
-        ((device half*)Y)[size_t(m0 + r) * p.y_ld + n] = half(silu(acc[i]) * ex[i]);
+        hs[(sm * SM + ix[1]) * SN + ix[0]] = half(silu(acc[i]) * ex[i]);
       }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    constexpr int Q = SN / 8;  // uint4 (8 halfs) per row
+    _Pragma("clang loop unroll(full)")
+    for (int i = 0; i < (BM * Q + 127) / 128; ++i) {
+      const uint j = tid + 128 * i, r = j / Q, c = (j % Q) * 8;
+      if (j >= BM * Q || r >= rows) continue;
+      *(device uint4*)((device half*)Y + size_t(m0 + r) * p.y_ld + n0 + c) = *(const threadgroup uint4*)(hs + r * SN + c);
     }
     return;
   }
+  // the fp32 tile goes out through threadgroup memory as whole rows of float4 (xs and ws are free after the last
+  // barrier; each holds SM rows x BN floats): the cooperative tensor's own element stores were scattered, 35% of
+  // qmtm_dn_m64_n64's time on the M5 Pro. Same values, written once each.
+  static_assert(SM * BN * 4 <= 2 * BM * BK * 2 && SM * BN * 4 <= 2 * BN * BK * 2, "qtmm_tile: staging buffer");
+  if (!STG) {  // main's element stores (NI_MOE_STAGE=0)
+    _Pragma("clang loop unroll(full)")
+    for (uint16_t i = 0; i < acc.get_capacity(); ++i) {
+      if (!acc.is_valid_element(i)) continue;
+      const auto ix = acc.get_multidimensional_index(i);
+      const uint n = n0 + sn * SN + ix[0], r = sm * SM + ix[1];
+      if (r >= rows || n >= p.N) continue;
+      ((device float*)Y)[size_t(yrows[m0 + r]) * p.y_ld + n] = acc[i];
+    }
+    return;
+  }
+  threadgroup float* st = (threadgroup float*)(sm ? xs : ws);
   _Pragma("clang loop unroll(full)")
   for (uint16_t i = 0; i < acc.get_capacity(); ++i) {
     if (!acc.is_valid_element(i)) continue;
     const auto ix = acc.get_multidimensional_index(i);
-    const uint n = n0 + sn * SN + ix[0], r = sm * SM + ix[1];
-    if (r >= rows || n >= p.N) continue;
-    ((device float*)Y)[size_t(yrows[m0 + r]) * p.y_ld + n] = acc[i];
+    st[ix[1] * BN + sn * SN + ix[0]] = acc[i];
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  constexpr int Q = BN / 4;  // float4 per row
+  _Pragma("clang loop unroll(full)")
+  for (int i = 0; i < BM * Q / 128; ++i) {
+    const uint j = tid + 128 * i, r = j / Q, c = (j % Q) * 4;
+    if (r >= rows) continue;
+    const threadgroup float* src = (const threadgroup float*)(r < SM ? ws : xs) + (r % SM) * BN + c;
+    *(device float4*)((device float*)Y + size_t(yrows[m0 + r]) * p.y_ld + n0 + c) = *(const threadgroup float4*)src;
   }
 }
 
 // Fused expert gate/up (+ SwiGLU) on moe_bucket2 tiles: buffers as qrm_gu_* (the shared expert rides along as
 // expert index p.shared_e with its own weights). grid (N / (BN / 2), max tiles), 128 threads.
-#define NI_QTM_GU(NAME, BM, BN, BK)                                                                                \
+#define NI_QTM_GU(NAME, BM, BN, BK, STG)                                                                           \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
       const device half* X [[buffer(0)]], const device uint* Wg [[buffer(1)]], const device bfloat* Sg [[buffer(2)]], \
       const device bfloat* Bg [[buffer(3)]], const device uint* Wu [[buffer(4)]], const device bfloat* Su [[buffer(5)]], \
@@ -168,11 +214,11 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
     const device uint* W[2] = {(sh ? SWg : Wg) + wo, (sh ? SWu : Wu) + wo};                                        \
     const device bfloat* S[2] = {(sh ? SSg : Sg) + so, (sh ? SSu : Su) + so};                                      \
     const device bfloat* B[2] = {(sh ? SBg : Bg) + so, (sh ? SBu : Bu) + so};                                      \
-    qtmm_tile<2, BM, BN, BK>(X, W, S, B, H, p, m0, rows, tg.x * (BN / 2), xrows, nullptr, tid, sg, xs, ws);         \
+    qtmm_tile<2, BM, BN, BK, STG>(X, W, S, B, H, p, m0, rows, tg.x * (BN / 2), xrows, nullptr, tid, sg, xs, ws);       \
   }
 
 // Grouped down GEMM to fp32 rows by pair: buffers as qrm_dn_*. grid (N / BN, max tiles), 128 threads.
-#define NI_QTM_DN(NAME, BM, BN, BK)                                                                                \
+#define NI_QTM_DN(NAME, BM, BN, BK, STG)                                                                           \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
       const device half* X [[buffer(0)]], const device uint* Wd [[buffer(1)]], const device bfloat* Sd [[buffer(2)]], \
       const device bfloat* Bd [[buffer(3)]], device float* Y [[buffer(4)]], constant QtmParams& p [[buffer(5)]],     \
@@ -190,13 +236,13 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
     const device uint* W[1] = {(sh ? SWd : Wd) + wo};                                                              \
     const device bfloat* S[1] = {(sh ? SSd : Sd) + so};                                                            \
     const device bfloat* B[1] = {(sh ? SBd : Bd) + so};                                                            \
-    qtmm_tile<1, BM, BN, BK>(X, W, S, B, Y, p, m0, rows, tg.x * BN, nullptr, yrows, tid, sg, xs, ws);               \
+    qtmm_tile<1, BM, BN, BK, STG>(X, W, S, B, Y, p, m0, rows, tg.x * BN, nullptr, yrows, tid, sg, xs, ws);             \
   }
 
 // One grouped GEMM to fp32 rows on moe_bucket tiles, both sides indexed: Y[yrows[m]] = X[xrows[m]] W_e^T (Flint's
 // routed experts: gate and up by pair id from token rows, down by pair id from pair rows, qmm_moe_b4_m16_n64's
 // interface: buffers 0-9, QtmParams with shared_e = no expert). grid (N / BN, max tiles), 128 threads.
-#define NI_QTM_G(NAME, BM, BN, BK)                                                                                 \
+#define NI_QTM_G(NAME, BM, BN, BK, STG)                                                                            \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
       const device half* X [[buffer(0)]], const device uint* Wd [[buffer(1)]], const device bfloat* Sd [[buffer(2)]], \
       const device bfloat* Bd [[buffer(3)]], device float* Y [[buffer(4)]], constant QtmParams& p [[buffer(5)]],     \
@@ -211,11 +257,15 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
     const device uint* W[1] = {Wd + e * p.w_es};                                                                   \
     const device bfloat* S[1] = {Sd + e * p.s_es};                                                                 \
     const device bfloat* B[1] = {Bd + e * p.s_es};                                                                 \
-    qtmm_tile<1, BM, BN, BK>(X, W, S, B, Y, p, m0, rows, tg.x * BN, xrows, yrows, tid, sg, xs, ws);                 \
+    qtmm_tile<1, BM, BN, BK, STG>(X, W, S, B, Y, p, m0, rows, tg.x * BN, xrows, yrows, tid, sg, xs, ws);               \
   }
 
 // BN 64 / BK 32 is the measured best; the BN 128 and BK 64 variants of the same tile ran slower on the M5 Pro
 // (dn BN 128 566 -> 221 ms for the 4K layer, BK 64 422 -> 492 ms at 1024 rows), so they are not built.
-NI_QTM_GU(qmtm_gu_m64_n64, 64, 64, 32)
-NI_QTM_DN(qmtm_dn_m64_n64, 64, 64, 32)
-NI_QTM_G(qmtm_g_m64_n64, 64, 64, 32)
+NI_QTM_GU(qmtm_gu_m64_n64, 64, 64, 32, true)
+NI_QTM_DN(qmtm_dn_m64_n64, 64, 64, 32, true)
+NI_QTM_G(qmtm_g_m64_n64, 64, 64, 32, true)
+// NI_MOE_STAGE=0: the same tiles with main's element stores (the kill switch; same values, bitwise)
+NI_QTM_GU(qmtm_gu_m64_n64_o, 64, 64, 32, false)
+NI_QTM_DN(qmtm_dn_m64_n64_o, 64, 64, 32, false)
+NI_QTM_G(qmtm_g_m64_n64_o, 64, 64, 32, false)

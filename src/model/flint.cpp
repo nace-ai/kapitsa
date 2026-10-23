@@ -1178,7 +1178,9 @@ void Flint::enc_moe_prefill(Encoder& e, const FlintLayer& L, int T) {
       const uint32_t w_es = uint32_t(size_t(W.N) * W.row_bytes() / 4), s_es = W.N * (W.K / uint32_t(W.gs));
       if (qtm) {
         const kp::Qmm2 p{W.N, W.K, W.K, W.N, uint32_t(W.gs), w_es, s_es, 0xffffffffu};
-        e.use(pipe("qmtm_g_m64_n64"));
+        // NI_MOE_STAGE=0: main's element stores (qwen35.cpp's NI_MOE_STAGE; same values either way)
+        static const bool stage = !(getenv("NI_MOE_STAGE") && atoi(getenv("NI_MOE_STAGE")) == 0);
+        e.use(pipe(stage ? "qmtm_g_m64_n64" : "qmtm_g_m64_n64_o"));
         e.val(5, p);
       } else {
         const kp::Qmm p{P, W.N, W.K, W.K, W.N, 0, uint32_t(W.gs), w_es, s_es};
