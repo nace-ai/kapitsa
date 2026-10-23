@@ -521,12 +521,16 @@ std::string after(const std::string& s, const std::string& key) {
 std::string decoding(const std::string& ready) {
   std::string mode = after(ready, " slots, ");
   if (const size_t p = mode.find(", images on"); p != std::string::npos) mode.resize(p);
+  // KFlash wraps every decode: ", KFlash (<source>)" ends the mode (the engine's wrapper; absent with NI_KFLASH=0)
+  std::string kflash;
+  if (const size_t p = mode.rfind(", KFlash ("); p != std::string::npos) kflash = mode.substr(p + 2), mode.resize(p);
+  if (!kflash.empty() && mode.rfind("plain", 0) == 0) return kflash + " " + dim("(1 row per cycle: plain decoding)");
   if (mode.rfind("DFlash2", 0) == 0) return "DFlash2 drafter " + dim("(speculative decoding)");
   if (mode.rfind("LiLiCorr", 0) == 0) return "LiLiCorr drafter " + dim("(speculative decoding)");
   if (mode.rfind("DSpark", 0) == 0) return "DSpark drafter " + dim("(speculative decoding)");
   if (mode.rfind("MTP", 0) == 0) return "MTP head " + dim("(speculative decoding, " + after(mode, "depth ") + " ahead)");
   if (mode.rfind("plain", 0) == 0) return "plain " + dim("(no speculative decoding)");
-  return mode;
+  return kflash.empty() ? mode : mode + ", " + kflash;
 }
 
 std::string repeat(const char* g, int n) {

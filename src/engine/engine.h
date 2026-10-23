@@ -10,6 +10,7 @@
 #include "model/dory.h"
 #include "model/flint.h"
 #include "model/kflash_budget.h"
+#include "model/kflash_wrap.h"
 #include "model/lilicorr.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
@@ -268,6 +269,10 @@ struct ChatResult {
   int yields = 0;
   int batched = 0;  // decode cycles it ran in one pass with other requests' (batched decode)
   int loops = 0;    // looped models: the loop count the request ran (0: not a looped model)
+  // KFlash around the decode (src/model/kflash_wrap.h): the proposal source ("DFlash2", "MTP", "prompt lookup", "none":
+  // plain decoding, 1 row per cycle) and the cycles it ran; empty source: the wrapper is off (NI_KFLASH=0)
+  std::string kflash_source;
+  int kflash_cycles = 0;
 };
 
 // The engine's GPU turn: one request at a time encodes and runs model work. FIFO (a ticket lock): a request that gives
@@ -560,6 +565,10 @@ class Engine {
   bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
   bool think_ws_ = true;      // the whitespace before </think> stays in the reasoning (Nemotron-H, Dory)
   int nh_ngram_ = 0;          // a dense Nemotron-H model without a block drafter: prompt-lookup drafts per cycle
+  // KFlash's budget of the prompt-lookup sources (nh_ngram_, flint_ngram_): drafts verified per cycle (under the turn)
+  std::unique_ptr<KfLookup> kf_lookup_;
+  // the proposal source KFlash wraps ("none": plain decoding; "" when the wrapper is off)
+  std::string kflash_source() const;
   std::vector<int> stop_ids_;  // the config's eos ids plus the tokenizer's eos token (chat turn end)
   bool spec_ = false;
   size_t budget_ = 0;    // GPU memory budget (bytes)

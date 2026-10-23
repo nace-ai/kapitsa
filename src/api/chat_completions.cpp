@@ -16,6 +16,9 @@ ojson chat_usage(const ChatResult& res) {
   // one while prefilling: the time is then not the time to read those tokens
   if (res.prefill_exact && res.prefill_ms > 0 && res.finish_reason != "cancelled" && res.finish_reason != "error")
     u["kapitsa"]["prefill_ms"] = std::round(res.prefill_ms * 10) / 10;
+  // KFlash around the decode: the proposal source and the cycles the request ran
+  if (!res.kflash_source.empty() && res.kflash_cycles > 0)
+    u["kapitsa"]["kflash"] = {{"source", res.kflash_source}, {"cycles", res.kflash_cycles}};
   return u;
 }
 

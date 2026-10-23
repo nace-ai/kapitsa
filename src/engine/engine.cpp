@@ -494,7 +494,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // (NI_BATCH=1 batches them too)
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
                     (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
-  const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
+  if (kflash_wrap_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) kf_lookup_ = std::make_unique<KfLookup>(std::max(nh_ngram_, flint_ngram_));
+  const std::string mode0 = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
                                                   " drafts per cycle)"
                          : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
@@ -509,16 +510,32 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                                     ", " + (dory_spec_auto_ ? std::string("2-3") : std::to_string(dory_spec_)) +
                                                     " per cycle)"
                                  : std::string("plain decoding");
+  // KFlash wraps every decode (src/model/kflash_wrap.h): the source it takes proposals from is named in the line
+  const std::string kf_src = kflash_source();
+  const std::string& mode = mode0;
   const std::string looped = dory_ ? ", " + std::to_string(dory_->default_loops()) + " loops by default (requests take 1-" +
                                          std::to_string(Dory::kMaxLoops) + "), " + loop_kv_name(dory_->kv_mode()) +
                                          " KV"
                                    : std::string();
-  logi("engine ready: %s, context %d, %d slots, %s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
-       mode.c_str(), looped.c_str(), vision_ ? ", images on" : "");
+  logi("engine ready: %s, context %d, %d slots, %s%s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
+       mode.c_str(), looped.c_str(), kf_src.empty() ? "" : (", KFlash (" + kf_src + ")").c_str(), vision_ ? ", images on" : "");
   disk_start();  // the SSD prefix cache (engine_disk.cpp): its files open in the background
 }
 
 Engine::~Engine() { save_disk_cache(); }
+
+// The proposal source KFlash takes rows from: a drafter model, the MTP head, prompt lookup, Dory's drafts, or none (a
+// cycle of 1 row: plain decoding). Empty with the wrapper off (NI_KFLASH=0 / NI_KFLASH_WRAP=0).
+std::string Engine::kflash_source() const {
+  if (!kflash_wrap_on()) return "";
+  if (lili_) return lili_->name();
+  if (dfl_) return "DFlash2";
+  if (flint_ngram_ > 0 || nh_ngram_ > 0) return "prompt lookup";
+  if (spec_) return "MTP";
+  if (dory_spec_ > 0)
+    return dory_spec_kind() == "ngram" ? "prompt lookup" : dory_spec_kind() == "self" ? "1-loop drafts" : "prompt lookup, 1-loop drafts";
+  return "none";
+}
 
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();
@@ -2686,7 +2703,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   int fed_until = n;  // exclusive: tokens whose effect is in the live state
   int req_cycles = 0;  // DFlash2 cycles of this request
   const int depth = spec_ ? opts_.spec_depth : 0;
-  auto cycle_done = [live](int m) {  // a decode cycle wrote m tokens (for a display)
+  int kf_cycles = 0;  // decode cycles of this request (KFlash's: a plain step is a cycle of 1 row)
+  auto cycle_done = [live, &kf_cycles](int m) {  // a decode cycle wrote m tokens (for a display)
+    ++kf_cycles;
     if (!live) return;
     live->last.store(m, std::memory_order_relaxed);
     live->cycles.fetch_add(1, std::memory_order_relaxed);
@@ -3147,6 +3166,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
       ngram_drafts(s.tokens(), P, nh_ngram_, nd);
+      if (kf_lookup_) nd.resize(size_t(kf_lookup_->pick(int(nd.size()))));  // KFlash's budget: the drafts worth their rows
+      const double kf_t0 = now_ms();
       int* tw = s.tokens();
       for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
       const int R = int(nd.size()) + 1;
@@ -3155,6 +3176,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       nh_->encode_accept(*e2, s, P, R, R - 1, sp);
       e2->commit_and_wait();
       const int a = nh_->accepted();
+      if (kf_lookup_) kf_lookup_->observe(int(nd.size()), a, now_ms() - kf_t0);
       const int* tk = s.tokens();
       int m = 0;
       while (m < a + 1) {
@@ -3199,6 +3221,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
       ngram_drafts(s.tokens(), P, flint_ngram_, nd);
+      if (kf_lookup_) nd.resize(size_t(kf_lookup_->pick(int(nd.size()))));  // KFlash's budget: the drafts worth their rows
+      const double kf_t0 = now_ms();
       int* tw = s.tokens();
       for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
       const int R = int(nd.size()) + 1;
@@ -3207,6 +3231,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       flint_->encode_accept(*e2, s, P, R, R - 1, sp);
       e2->commit_and_wait();
       const int a = flint_->accepted();
+      if (kf_lookup_) kf_lookup_->observe(int(nd.size()), a, now_ms() - kf_t0);
       const int* tk = s.tokens();
       int m = 0;
       while (m < a + 1) {
@@ -3455,6 +3480,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
   if (mmp) std::copy(keys.begin(), keys.end(), slot.tokens.begin());  // image rows: their keys
   res.completion_tokens = gen;
+  res.kflash_source = kflash_source();
+  res.kflash_cycles = kf_cycles;
   if ((dfl_ || lili_) && spec_cycles_ > 0)
     logd("%s: %.2f tokens/cycle over %ld cycles", lili_ ? lili_->name() : "dflash", double(spec_accepted_) / spec_cycles_,
          spec_cycles_);

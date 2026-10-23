@@ -17,6 +17,7 @@
 #include "engine/output_parser.h"
 #include "engine/disk_wait.h"
 #include "engine/reasoning_memory.h"
+#include "model/kflash_wrap.h"
 #include "tokenizer/tokenizer.h"
 
 #include <minja/chat-template.hpp>
@@ -1071,6 +1072,41 @@ void reasoning_memory(const TmplModel& m, const std::string& tag) {
 // A float tool argument keeps its text through the Qwen3.5 / Nemotron templates' `| string` (without a model folder: a
 // minimal template with their argument line, so CI runs it).
 // Engine::disk_lookup's wait for a conversation's SSD copy still being written: bounded by the write and by the prefill
+// KFlash around prompt lookup (src/model/kflash_wrap.h): the budget verifies the source's drafts until it has measured,
+// then only as many as pay for their rows
+void kflash_lookup_unit() {
+  KfWrap w;
+  w.cycle(1), w.cycle(3);
+  check(w.cycles == 2 && w.tokens == 4 && w.tokens_per_cycle() == 2.0 && w.source == "none", "kflash wrap: counts cycles and tokens");
+  {  // unmeasured: the source's own count, never more than it proposed
+    KfLookup b(4);
+    check(b.pick(0) == 0 && b.pick(3) == 3 && b.pick(9) == 4, "kflash lookup: unmeasured, takes the source's count up to its maximum");
+  }
+  {  // drafts always accepted and rows cheap: all of them
+    KfLookup b(4);
+    for (int i = 0; i < 20; ++i) b.observe(0, 0, 10.0);
+    for (int i = 0; i < 20; ++i) b.observe(4, 4, 11.0);
+    int skipped = 0, all = 0;
+    for (int i = 0; i < 63; ++i) (b.pick(4) == 4 ? all : skipped)++;
+    check(all == 63 && skipped == 0, "kflash lookup: accepted drafts on cheap rows are all verified");
+  }
+  {  // drafts never accepted and rows costly: the pending token alone, except the periodic probe
+    KfLookup b(4);
+    for (int i = 0; i < 20; ++i) b.observe(0, 0, 10.0);
+    for (int i = 0; i < 20; ++i) b.observe(4, 0, 16.0);
+    int zero = 0, full = 0;
+    for (int i = 0; i < 128; ++i) (b.pick(4) == 0 ? zero : full)++;
+    check(zero >= 124 && full >= 1 && full <= 3, "kflash lookup: rejected drafts on costly rows are skipped, one cycle in 64 probes");
+  }
+  {  // two of four accepted: a middle count that pays beats both extremes
+    KfLookup b(4);
+    for (int i = 0; i < 30; ++i) b.observe(0, 0, 10.0);
+    for (int i = 0; i < 40; ++i) b.observe(4, 2, 11.0);
+    const int d = b.pick(4);
+    check(d >= 1 && d <= 4, "kflash lookup: a partly accepted draft is budgeted", std::to_string(d));
+  }
+}
+
 void disk_wait_unit() {
   using namespace disk_wait;
   // 27B/35B scale: 1.5 GB queued at 3 GB/s = 500 ms; 17k rows at 0.5 rows/ms = 34 s: wait
@@ -1323,6 +1359,7 @@ int main(int argc, char** argv) {
   reasoning_memory_unit();
   float_arguments_text();
   disk_wait_unit();
+  kflash_lookup_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);

@@ -466,6 +466,18 @@ KFlash is on by default for every block drafter. To compare it with the chain, o
 | `NI_KFLASH=0` (environment) | chains on every model |
 | `NI_DFLASH_TREE=0` (environment) | chains on the Qwen models only (overrides `NI_KFLASH` there) |
 | `--spec 0` (`kapitsa serve` option) | plain decoding, no drafter |
+| `NI_KFLASH_WRAP=0` (environment) | no KFlash label or accounting around models without a drafter (decoding is unchanged either way) |
+
+Every decode runs as a KFlash cycle: the proposal source gives 0 or more guesses and the pass verifies the pending token plus
+the guesses the budget keeps. The source is a drafter (DFlash2, LiLiCorr, DSpark), the MTP head, prompt lookup, Dory's
+drafts, or none (a cycle of one row, which is plain decoding). The startup line ends with `KFlash (<source>)`, and each
+reply reports `usage.kapitsa.kflash` as `{"source": ..., "cycles": N}`.
+
+Where the source has a cost to weigh, the budget decides. Prompt lookup (Nemotron Nano 4B by default, Flint with
+`NI_FLINT_NGRAM`) used to verify every draft it found; it now measures the cost of a row and the acceptance of each draft
+position, and verifies only the drafts that pay for their rows (`src/model/kflash_wrap.h`), probing all of them once in
+64 cycles. Plain decoding stays on its pipelined loop: sending it through a verify pass would make it slower, and Flint
+and the MTP models are bit-identical to their plain steps only on that loop.
 
 After each request, the server's log prints the budget: rows per cycle, the cycles at each tree size, the tokens per
 cycle it expected and got, the cost table and the calibration. Deleting its file in `~/.cache/kapitsa/kflash/` makes it
