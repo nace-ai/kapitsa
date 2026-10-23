@@ -1325,6 +1325,20 @@ void tool_arguments_spelling() {
     mem.restore(other);
     check(!other[1]["tool_calls"][0]["function"].contains("arguments_raw"), "tool arguments: a call after another conversation gets no spelling");
   }
+  {  // a turn with no reasoning (thinking off): the spellings are kept anyway, and win over a client's own re-dump of the arguments
+    ReasoningMemory mem;
+    const ojson before = J(R"([{"role": "user", "content": "go"}])");
+    mem.remember(before, "", {{"f", written}}, "");
+    ojson msgs = before;
+    ojson fn = {{"name", "f"}, {"arguments", parsed_args}, {"arguments_raw", {{"a", "[1, 2]"}, {"t", "True"}}}};  // the client's re-dump
+    msgs.push_back({{"role", "assistant"}, {"content", ""}, {"tool_calls", ojson::array({{{"id", "1"}, {"type", "function"}, {"function", fn}}})}});
+    check(mem.restore(msgs) == 1 && !msgs[1].contains("reasoning_content"),
+          "tool arguments: a turn written without reasoning gets its spellings back and no reasoning");
+    ChatRequest r;
+    r.messages = ojson::array({msgs[1]});
+    const std::string out = render_chat(tmpl, r, false);
+    check(out == expect, "tool arguments: the model's spelling wins over a client's re-dump (memory, no reasoning)", first_diff(out, expect));
+  }
 }
 
 // An OpenAI chat client's tool loop (what `kapitsa serve` is mostly driven by): the reply's tool call goes back as

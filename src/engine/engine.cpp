@@ -1986,7 +1986,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // assistant turns the client sent back without their reasoning get it again (see restore_reasoning)
   ChatRequest r_restored = r_in;
   const int restored = restore_reasoning(r_restored);
-  if (restored > 0) logd("chat: reasoning put back into %d assistant turn(s) the client sent without it", restored);
+  if (restored > 0) logd("chat: reasoning or argument spelling put back into %d assistant turn(s) the client sent without it", restored);
   const ChatRequest& r = restored > 0 ? r_restored : r_in;
   // images: fetched, decoded and resized before the GPU turn (a slow download holds up no other request)
   std::vector<vision::Source> img_src;
