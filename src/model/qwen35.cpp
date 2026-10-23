@@ -529,6 +529,8 @@ void Qwen35::load_config(const std::string& dir) {
   json root = read_json(dir + "/config.json");
   quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();
   parse_config(root, cfg_);
+  if (hi_ <= 0) hi_ = cfg_.layers;
+  if (lo_ < 0 || lo_ >= hi_ || hi_ > cfg_.layers) fatal("layers %d:%d of a %d-layer model", lo_, hi_, cfg_.layers);
 }
 
 // Tensor name in the checkpoint for a canonical (MLX) name "model.layers.3.mlp.gate_proj.weight", "lm_head.weight":
@@ -1160,7 +1162,7 @@ std::unique_ptr<Seq> Qwen35::new_seq(int limit, int initial) {
     // attention caches: allocated by grow_kv below (or later, by reserve)
     s->kc.push_back(Buffer{});
     s->vc.push_back(Buffer{});
-    if (cfg_.is_linear[i]) {
+    if (cfg_.is_linear[i] && local(i)) {
       s->conv.push_back(g.alloc(size_t(3) * C * 4, "conv_state"));
       s->rec.push_back(g.alloc(size_t(cfg_.lin_hv) * cfg_.lin_dv * cfg_.lin_dk * 4, "gdn_state"));
       bytes += s->conv.back().size + s->rec.back().size;
@@ -1189,7 +1191,7 @@ std::unique_ptr<Seq> Qwen35::new_seq(int limit, int initial) {
 
 size_t Qwen35::kv_bytes_per_pos() const {
   int att = 0;
-  for (int i = 0; i < cfg_.layers; ++i) att += !cfg_.is_linear[i];
+  for (int i = lo_; i < hi_; ++i) att += !cfg_.is_linear[i];
   return size_t(att + (mtp_loaded_ ? 1 : 0)) * 2 * cfg_.hkv * cfg_.head_dim * 2;
 }
 
@@ -1208,7 +1210,7 @@ void Qwen35::grow_kv(Seq& s, int cap) {
   Gpu& g = Gpu::get();
   const int old = s.cap;
   std::vector<std::pair<Buffer*, const char*>> bufs;  // every attention cache of the sequence
-  for (int i = 0; i < cfg_.layers; ++i)
+  for (int i = lo_; i < hi_; ++i)
     if (!cfg_.is_linear[i]) {
       bufs.push_back({&s.kc[i], "k_cache"});
       bufs.push_back({&s.vc[i], "v_cache"});
@@ -1326,7 +1328,7 @@ Checkpoint Qwen35::new_checkpoint() {
   Checkpoint c;
   const int C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   for (int i = 0; i < cfg_.layers; ++i) {
-    bool lin = cfg_.is_linear[i];
+    bool lin = cfg_.is_linear[i] && local(i);
     c.conv.push_back(lin ? g.alloc(size_t(3) * C * 4, "ckpt_conv") : Buffer{});
     c.rec.push_back(lin ? g.alloc(size_t(cfg_.lin_hv) * cfg_.lin_dv * cfg_.lin_dk * 4, "ckpt_rec") : Buffer{});
   }
@@ -1344,7 +1346,7 @@ void Qwen35::enc_copy(Encoder& e, const Buffer& src, const Buffer& dst) {
 }
 
 void Qwen35::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
-  for (int i = 0; i < cfg_.layers; ++i)
+  for (int i = lo_; i < hi_; ++i)
     if (cfg_.is_linear[i]) {
       enc_copy(e, s.conv[i], c.conv[i]);
       enc_copy(e, s.rec[i], c.rec[i]);
@@ -1353,7 +1355,7 @@ void Qwen35::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
 }
 
 void Qwen35::restore(Encoder& e, Seq& s, const Checkpoint& c) {
-  for (int i = 0; i < cfg_.layers; ++i)
+  for (int i = lo_; i < hi_; ++i)
     if (cfg_.is_linear[i]) {
       enc_copy(e, c.conv[i], s.conv[i]);
       enc_copy(e, c.rec[i], s.rec[i]);
@@ -1651,6 +1653,7 @@ void Qwen35::test_transforms() {
     bytes += w.size + sc.size;
   };
   auto apply = [&](QLinear& q, const char* role, int layer) {
+    if (!q) return;  // a layer another Mac holds (a split model)
     if (!dspec.empty() && spec_match(dspec, role, layer)) dequant(q);
     else if (rbits && spec_match(rspec, role, layer)) requant(q);
   };

@@ -1043,7 +1043,7 @@ void Qwen35::encode_flush(Encoder& e, Seq& s) {
   const bool pt = s.pend_tree;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   kp::GdnVerify gv{0, uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps, 0u, pt ? 1u : 0u};
-  for (int i = 0; i < cfg_.layers; ++i) {
+  for (int i = lo_; i < hi_; ++i) {
     if (!cfg_.is_linear[i]) continue;
     const Layer& L = layers_[i];
     e.use(pipe2(pt ? "gdn_prep_verify_tree" : "gdn_prep_verify"));
