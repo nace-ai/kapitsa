@@ -212,6 +212,42 @@ void check_sums(const StoreStats& s, const char* what) {
         (unsigned long long)s.prefetch_used, (unsigned long long)s.prefetches);
 }
 
+// The automatic store size (q20::auto_store_size) with Flash-Next's numbers on a 48 GB Mac: 24576 experts of 1.39 MB
+// (34.2 GB), the budget leaving 29.9 GB, 5.3 GB of GPU memory in use, a 1.5 GB reserve.
+void case_auto_size() {
+  const size_t GB = 1000000000ull, slot = 1392640, ram = size_t(48) << 30;
+  AutoStoreIn in;
+  in.all = 24576 * slot, in.least = 3 * 512 * slot, in.left = size_t(29.9 * GB), in.used = size_t(5.3 * GB);
+  in.keep = size_t(1.5 * GB), in.ram = ram, in.avail = size_t(40 * GB), in.cap = 0;
+  AutoStore r = auto_store_size(in);  // Apple10: no cap, nothing else resident -> what the budget leaves
+  CHECK(r.why == AutoStoreWhy::Budget && r.bytes == in.left, "auto: M5 budget %zu why %d", r.bytes, int(r.why));
+  CHECK(r.headroom == size_t(4) << 30, "auto: headroom %zu", r.headroom);
+  in.cap = 0.40;  // before Apple10: 40% of 48 GiB = 20.6 GB less used and reserve -> 13.8 GB
+  r = auto_store_size(in);
+  CHECK(r.why == AutoStoreWhy::Cap && r.bytes == size_t(0.40 * double(ram)) - in.used - in.keep, "auto: cap %zu",
+        r.bytes);
+  in.cap = 0, in.avail = size_t(13 * GB);  // a 17.8 GB model resident: 13 GB available -> 8.7 GB
+  r = auto_store_size(in);
+  CHECK(r.why == AutoStoreWhy::Avail && r.bytes == in.avail - (size_t(4) << 30), "auto: avail %zu", r.bytes);
+  in.avail = size_t(5 * GB);  // nearly nothing available: no less than three layers' experts
+  r = auto_store_size(in);
+  CHECK(r.why == AutoStoreWhy::Avail && r.bytes == in.least, "auto: least %zu", r.bytes);
+  in.avail = 0;  // unknown: the guard is off
+  r = auto_store_size(in);
+  CHECK(r.why == AutoStoreWhy::Budget && r.bytes == in.left, "auto: avail unknown %zu", r.bytes);
+  in.left = size_t(60 * GB), in.avail = size_t(70 * GB), in.cap = 0.40;  // a 96 GB-class budget: every expert,
+  r = auto_store_size(in);                                               // the cap never applies to a full store
+  CHECK(r.why == AutoStoreWhy::All && r.bytes == in.all, "auto: all %zu why %d", r.bytes, int(r.why));
+  in.avail = size_t(30 * GB);  // ... unless memory is short: then the store streams, and the cap applies again
+  r = auto_store_size(in);
+  CHECK(r.bytes < in.all && r.why == AutoStoreWhy::Cap, "auto: all, short memory %zu why %d", r.bytes, int(r.why));
+  in.ram = size_t(128) << 30, in.cap = 0.40;
+  r = auto_store_size(in);
+  CHECK(r.headroom == (size_t(128) << 30) / 12 && r.why == AutoStoreWhy::Avail, "auto: 128 GB headroom %zu why %d",
+        r.headroom, int(r.why));
+  printf("auto store size: ok\n");
+}
+
 void case_decode(const Pack& p, bool direct) {
   const uint32_t L = uint32_t(p.layers.size()), E = p.E, k = 8;
   const uint32_t nslots = 3 * E + 17;  // well below the L * E experts: evictions on most turns
@@ -398,6 +434,7 @@ int main(int argc, char** argv) {
   case_verify_prefill(p);
   case_scan(p);
   case_complete(p);
+  case_auto_size();
   if (keep.empty()) {
     for (const std::string& f : p.files) unlink(f.c_str());
     rmdir(dir.c_str());

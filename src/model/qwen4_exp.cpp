@@ -643,23 +643,46 @@ void Qwen4Exp::init_store(const std::string& dir) {
       keep = kv_bytes_per_pos() * 16384 + (size_t(3) << 29);
     }
     const size_t used = Gpu::get().allocated_bytes();
-    o.bytes = budget > used + keep ? budget - used - keep : 0;
-    // A store short of all the experts waits on the CPU every layer. On a 48 GB M4 Pro (macOS 27) every command buffer
-    // then took 0.5-3 s longer (its submission blocked in IOGPU) once the process's GPU allocations passed ~45% of the
-    // RAM (15-24 GB stores), while 4-12 GB stores (39%) ran at full speed; so the automatic size keeps the allocations
-    // within 40% of the RAM, and no smaller than three layers' experts (NI_EXPERT_STORE=<GB> sets any size)
-    if (o.bytes < all) {
-      uint64_t ram = 0;
-      size_t len = sizeof ram;
-      sysctlbyname("hw.memsize", &ram, &len, nullptr, 0);
-      const size_t cap = size_t(0.40 * double(ram)), least = size_t(3) * E * lay.bytes;
-      const size_t lim = std::max(least, cap > used + keep ? cap - used - keep : 0);
-      if (lim < o.bytes) {
-        logi("expert store: %.1f GB rather than the %.1f GB the budget leaves (the process's GPU memory within 40%% of "
-             "the RAM: beyond ~45%%, every command buffer of a streamed store took seconds longer on a 48 GB Mac)",
-             lim / 1e9, o.bytes / 1e9);
-        o.bytes = lim;
-      }
+    const size_t left = budget > used + keep ? budget - used - keep : 0;
+    uint64_t ram = 0;
+    size_t len = sizeof ram;
+    sysctlbyname("hw.memsize", &ram, &len, nullptr, 0);
+    // A store short of all the experts waits on the CPU every layer. On a 48 GB M4 Pro (macOS 27, PR #213) every
+    // command buffer then took 0.5-3 s longer (its submission blocked in IOGPU) once the process's GPU allocations
+    // passed ~45% of the RAM (15-24 GB stores), so the automatic size kept them within 40% of the RAM. A 48 GB M5 Pro
+    // (macOS 26.5) ran 12-30 GB stores (peak footprint up to 71% of the RAM) at full speed, the larger the faster
+    // (85-token prompt 29.9 -> 120.6 tok/s, decode 24.5 -> 31.9 at 12 -> 30 GB), so the cap stays for chips before
+    // Apple10 only. NI_EXPERT_CAP=<share of the RAM> sets it on any chip (0 = none). The available-memory guard
+    // (q20::auto_store_size) applies on every chip: the budget assumes the Mac to itself.
+    const char* cv = getenv("NI_EXPERT_CAP");
+    q20::AutoStoreIn in;
+    in.all = all, in.least = size_t(3) * E * lay.bytes, in.left = left, in.used = used, in.keep = keep;
+    in.ram = size_t(ram), in.avail = q20::available_memory();
+    in.cap = cv && *cv ? atof(cv) : Gpu::get().apple10() ? 0.0 : 0.40;
+    const q20::AutoStore st = q20::auto_store_size(in);
+    o.bytes = st.bytes;
+    const double pct = ram ? 100.0 * double(used + st.bytes) / double(ram) : 0;
+    switch (st.why) {
+      case q20::AutoStoreWhy::All:
+        logi("expert store: all %.1f GB of experts fit the %.1f GB the budget leaves: resident, no SSD reads",
+             all / 1e9, left / 1e9);
+        break;
+      case q20::AutoStoreWhy::Budget:
+        logi("expert store: %.1f GB of the %.1f GB of experts, what the budget leaves (%s; the process's GPU memory "
+             "%.0f%% of the RAM)",
+             st.bytes / 1e9, all / 1e9, in.cap > 0 ? "within the RAM-share cap" : "no RAM-share cap on this chip", pct);
+        break;
+      case q20::AutoStoreWhy::Avail:
+        logi("expert store: %.1f GB rather than the %.1f GB the budget leaves (the system's available memory %.1f GB "
+             "less %.1f GB headroom: other processes hold the rest)",
+             st.bytes / 1e9, std::min(left, all) / 1e9, in.avail / 1e9, st.headroom / 1e9);
+        break;
+      case q20::AutoStoreWhy::Cap:
+        logi("expert store: %.1f GB rather than the %.1f GB the budget leaves (the process's GPU memory within %.0f%% "
+             "of the RAM: beyond ~45%%, every command buffer of a streamed store took seconds longer on a 48 GB M4 "
+             "Pro; NI_EXPERT_CAP=0 lifts it)",
+             st.bytes / 1e9, std::min(left, all) / 1e9, in.cap * 100);
+        break;
     }
   }
   o.bytes = std::min(o.bytes, all);

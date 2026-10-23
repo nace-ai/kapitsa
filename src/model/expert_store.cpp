@@ -4,6 +4,7 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <fcntl.h>
+#include <mach/mach.h>
 #include <pthread.h>
 #include <sys/qos.h>
 #include <sys/stat.h>
@@ -42,6 +43,14 @@ void pread_all(int fd, uint8_t* dst, size_t n, uint64_t off, size_t need) {
 }
 
 }  // namespace
+
+size_t available_memory() {
+  vm_statistics64_data_t v;
+  mach_msg_type_number_t n = HOST_VM_INFO64_COUNT;
+  if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&v, &n) != KERN_SUCCESS) return 0;
+  const uint64_t pages = uint64_t(v.free_count) + v.inactive_count + v.speculative_count + v.purgeable_count;
+  return size_t(pages * vm_kernel_page_size);
+}
 
 // ---- ExpertCache ----
 

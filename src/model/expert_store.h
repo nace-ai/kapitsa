@@ -21,6 +21,7 @@
 #include "metal/gpu.h"
 #include "model/moe_q20.h"
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -47,6 +48,43 @@ struct StoreStats {
   double stall_ms = 0;         // the turn thread's time from a ready signal to its go (the GPU waits that long)
   double read_wait_ms = 0;     // ... of which waiting for reads
 };
+
+// The automatic store size (NI_EXPERT_STORE unset), a pure function of its inputs (bytes):
+//   all: every expert; least: three layers' experts; left: what the memory budget leaves the store;
+//   used / keep: the process's GPU memory so far / the budget's reserve (KV, tools); ram: hw.memsize;
+//   avail: the system's available memory now (0 = unknown); cap: the process's GPU memory as a share of the RAM
+//   (0 = no cap).
+// Steps: min(left, all); then no more than avail less max(4 GB, RAM/12) of headroom (another resident model shrinks
+// the store rather than raising memory pressure); then, for a store short of all the experts, the RAM-share cap.
+// Neither guard goes below least.
+struct AutoStoreIn {
+  size_t all = 0, least = 0, left = 0, used = 0, keep = 0, ram = 0, avail = 0;
+  double cap = 0;
+};
+enum class AutoStoreWhy { Budget, All, Avail, Cap };
+struct AutoStore {
+  size_t bytes = 0;
+  AutoStoreWhy why = AutoStoreWhy::Budget;
+  size_t headroom = 0;  // the avail guard's
+};
+inline AutoStore auto_store_size(const AutoStoreIn& in) {
+  AutoStore r;
+  r.bytes = std::min(in.left, in.all);
+  r.why = in.left >= in.all ? AutoStoreWhy::All : AutoStoreWhy::Budget;
+  r.headroom = std::max<size_t>(size_t(4) << 30, in.ram / 12);
+  if (in.avail) {
+    const size_t lim = std::max(in.least, in.avail > r.headroom ? in.avail - r.headroom : 0);
+    if (lim < r.bytes) r.bytes = lim, r.why = AutoStoreWhy::Avail;
+  }
+  if (r.bytes < in.all && in.cap > 0) {
+    const size_t c = size_t(in.cap * double(in.ram));
+    const size_t lim = std::max(in.least, c > in.used + in.keep ? c - in.used - in.keep : 0);
+    if (lim < r.bytes) r.bytes = lim, r.why = AutoStoreWhy::Cap;
+  }
+  return r;
+}
+// The system's available memory (free, inactive, speculative and purgeable pages), 0 if unknown
+size_t available_memory();
 
 // One plane of a layer's stacked experts in a pack file: expert e's bytes at off + e * stride, len of them
 struct PlaneSrc {
