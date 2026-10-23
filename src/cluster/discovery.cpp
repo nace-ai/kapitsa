@@ -138,10 +138,11 @@ struct Wake {
 };
 
 // One server read over HTTP at the first of `addrs` that answers best: its GET /cluster, and the median of three
-// GET /health round trips on the same connection. A server on this Mac is read at 127.0.0.1. The body of an
-// unauthenticated peer is capped (cluster.h's parse_cluster) and so is the time it takes to come (kReadLimit; httplib's
-// timeouts are per recv: a peer could drip it).
+// GET /health round trips on the same connection. A server on this Mac is read at 127.0.0.1. What an unauthenticated
+// peer sends is capped: /cluster's body at kMaxClusterBody (cluster.h's parse_cluster), each /health body at 4 KiB, and
+// all of it at kReadLimit from the start (httplib's timeouts are per recv: a peer could drip it).
 std::optional<MacInfo> read_server(const std::vector<std::string>& addrs, int port) {
+  const double t0 = now_ms();
   const auto own = own_addresses();
   std::optional<MacInfo> best;
   for (const auto& a : addrs) {
@@ -152,7 +153,6 @@ std::optional<MacInfo> read_server(const std::vector<std::string>& addrs, int po
       c.set_read_timeout(2, 0);
       c.set_write_timeout(2, 0);
       c.set_keep_alive(true);
-      const double t0 = now_ms();
       std::string body;
       const auto r = c.Get("/cluster", [&](const char* d, size_t n) {
         if (body.size() + n > kMaxClusterBody || now_ms() - t0 > kReadLimit) return false;
@@ -166,7 +166,11 @@ std::optional<MacInfo> read_server(const std::vector<std::string>& addrs, int po
       std::vector<double> ms;
       for (int k = 0; k < 3; ++k) {
         const double t = now_ms();
-        const auto h = c.Get("/health");
+        size_t got = 0;
+        const auto h = c.Get("/health", [&](const char*, size_t n) {
+          got += n;
+          return got <= 4096 && now_ms() - t0 <= kReadLimit;
+        });
         if (h && h->status == 200) ms.push_back(now_ms() - t);
       }
       if (ms.empty()) continue;

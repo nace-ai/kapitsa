@@ -294,11 +294,11 @@ void live_checks() {
     check(route && route->id == me.id, "live: pick_server routes to it");
     printf("     lan address %s; link to it: %s\n", lan_address().c_str(), lan_address().empty() ? "-" : link_to(lan_address()).c_str());
   }
-  // a peer that drips its body, and one nested deeper than allowed: shown as not answering within ~8 s, while a
-  // healthy server is read again all the same (its speed changed meanwhile)
-  httplib::Server drip, deep;
-  MacInfo slow = me, nest = me;
-  slow.id = new_id(), nest.id = new_id();
+  // a peer that drips its body, one nested deeper than allowed, and one whose /health never ends: shown as not
+  // answering within ~8 s, while a healthy server is read again all the same (its speed changed meanwhile)
+  httplib::Server drip, deep, flood;
+  MacInfo slow = me, nest = me, endless = me;
+  slow.id = new_id(), nest.id = new_id(), endless.id = new_id();
   drip.Get("/cluster", [&](const httplib::Request&, httplib::Response& res) {
     res.set_chunked_content_provider("application/json", [&](size_t off, httplib::DataSink& sink) {
       std::this_thread::sleep_for(std::chrono::milliseconds(off == 0 ? 0 : 700));
@@ -309,35 +309,51 @@ void live_checks() {
     std::string b = R"({"proto":1,"x":)" + std::string(20000, '[') + std::string(20000, ']') + "}";
     res.set_content(b, "application/json");
   });
+  flood.Get("/cluster", [&](const httplib::Request&, httplib::Response& res) {
+    res.set_content(to_json(endless).dump(), "application/json");
+  });
+  flood.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+    res.set_chunked_content_provider("application/json", [&](size_t, httplib::DataSink& sink) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      return sink.write(std::string(1024, ' ').data(), 1024);
+    });
+  });
   for (httplib::Server* s : {&drip, &deep})
     s->Get("/health", [](const httplib::Request&, httplib::Response& res) { res.set_content("{}", "application/json"); });
   slow.port = drip.bind_to_any_port("0.0.0.0");
   nest.port = deep.bind_to_any_port("0.0.0.0");
-  std::thread td([&] { drip.listen_after_bind(); }), te([&] { deep.listen_after_bind(); });
+  endless.port = flood.bind_to_any_port("0.0.0.0");
+  std::thread td([&] { drip.listen_after_bind(); }), te([&] { deep.listen_after_bind(); }),
+      tf([&] { flood.listen_after_bind(); });
   {
-    Advertiser a1(port, [&] { return me; }), a2(slow.port, [&] { return slow; }), a3(nest.port, [&] { return nest; });
+    Advertiser a1(port, [&] { return me; }), a2(slow.port, [&] { return slow; }), a3(nest.port, [&] { return nest; }),
+        a4(endless.port, [&] { return endless; });
     Browser b;
     b.wait(3);
     me.tok_s = 77;  // read again within kReadEvery plus a read
     const double t0 = now_ms();
-    bool fresh = false, slow_out = false, nest_out = false;
-    while (now_ms() - t0 < 12000 && !(fresh && slow_out && nest_out)) {
+    bool fresh = false, slow_out = false, nest_out = false, flood_out = false;
+    while (now_ms() - t0 < 12000 && !(fresh && slow_out && nest_out && flood_out)) {
       std::this_thread::sleep_for(std::chrono::milliseconds(250));
       for (const auto& p : b.peers()) {
         if (p.port == port && p.tok_s == 77) fresh = true;
         if (p.port == slow.port && p.rtt_ms < 0) slow_out = true;
         if (p.port == nest.port && p.rtt_ms < 0) nest_out = true;
+        if (p.port == endless.port && p.rtt_ms < 0) flood_out = true;
       }
     }
     check(fresh, "live: a healthy server read again beside one that drips its body");
-    check(slow_out && nest_out, "live: a dripping and a too-deep server shown as not answering");
+    check(slow_out && nest_out && flood_out,
+          "live: a dripping, a too-deep and an endless-/health server shown as not answering");
   }
   srv.stop();
   drip.stop();
   deep.stop();
+  flood.stop();
   th.join();
   td.join();
   te.join();
+  tf.join();
 }
 
 }  // namespace
