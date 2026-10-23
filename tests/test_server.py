@@ -416,6 +416,13 @@ def cli_checks(kapitsa):
               new.get("prefill_chunk") == old.get("prefill_chunk") and old.get("prefill_chunk"),
               json.dumps([dflt[b].get("default_context"), old.get("slots"), new.get("slots"), old.get("prefill_chunk"),
                           new.get("prefill_chunk")]))
+    # an explicit --slots keeps nothing: on a tight Mac (13 GB: two slots hold 57344 tokens) `--slots 1` takes what one
+    # slot holds (65536), not the 32K floor
+    one = model(doctor("13", "--slots", "1"))
+    two = model(doctor("13"))
+    check("cli: doctor, a 35B-shaped model on 13 GB with --slots 1: the context one slot holds, more than the default's",
+          one.get("default_context", 0) > two.get("default_context", 1 << 30) >= 32768 and one.get("slots") == 1,
+          json.dumps([one.get("default_context"), one.get("slots"), two.get("default_context")]))
     check("cli: doctor, 48 GB: the default context is the model's whole limit (256K)",
           dflt["48"].get("default_context") == dflt["48"].get("context_limit") == 262144, json.dumps(dflt["48"])[:300])
     check("cli: doctor, 14.8 GB: the default context stops at 128K, where 1024-row buffers would take the chunk down",

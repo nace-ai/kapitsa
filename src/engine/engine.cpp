@@ -846,13 +846,13 @@ int default_context(const std::string& model_dir, const EngineOptions& opt, size
   const int limit = model_context_limit(model_dir);
   // the model's own limit where it states one (256K, 1M), else kDefaultContext: memory then takes it down
   const int top = limit > 0 ? limit : kDefaultContext;
-  int want = 2;
+  int want = fit_slots(opt.slots);  // (explicit --slots: nothing to keep, the check is skipped)
   int old_c = 0;
   if (top > kDefaultContext) {
     // A context past 128K must not cost what the 128K default had: the slots (auto_slots gives 3 or 4 only where a full
     // conversation also fits beside them; without --slots) and the prefill chunk (without --prefill-chunk). Both are
     // kept, and so is that context itself as the least.
-    old_c = default_context_up_to(model_dir, opt, budget, kDefaultContext, 2, 0, false, nullptr);
+    old_c = default_context_up_to(model_dir, opt, budget, kDefaultContext, want, 0, false, nullptr);
     if (opt.slots == 0) {
       EngineOptions at = opt;
       at.context = old_c;
