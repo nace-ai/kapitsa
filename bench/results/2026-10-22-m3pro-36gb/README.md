@@ -154,7 +154,8 @@ Peak memory: Kapitsa 8.4 GB, rival 12.4 GB.
 | 16K (16,311 tok) | 106 | 94 | 1.13× | 27.3 | 17.0 | 1.61× |
 | 32K (31,550 tok) | 99 | 87 | 1.13× | 20.6 | 13.0 | 1.58× |
 
-Peak memory: Kapitsa 19.7 GB, rival 31.6 GB.
+Peak memory: Kapitsa 19.7 GB, rival 31.6 GB. The Ollama sweep swapped (the harness flags 28,700 pages swapped out
+during it, peak 31.6 GB on this 36 GB Mac); its protocol run above did not.
 
 **Qwen3.6 35B-A3B**: Kapitsa (e86dea7) against Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth) (0.40.8); records [sw-q36-35b-kapitsa-20261023-015915](results/sw-q36-35b-kapitsa-20261023-015915.json), [q36-35b-ollama-mlx-q4-20261023-031417](results/q36-35b-ollama-mlx-q4-20261023-031417.json)
 
@@ -254,6 +255,20 @@ against llama.cpp b11804: prefill 653 / 527 at 1K, 742 / 768 at 4K, 516 / 502 at
 
 Nano 9B v2 × mlx-lm: its sweep record passed the harness's checks, but it is the same thinking answer as above, so its
 prefill is not shown; its decode is.
+
+## Flags on the cells used
+
+The harness's soft flags (the record stays valid) on the records in the tables above:
+
+- **Repetition loop** in one or more of the five T = 0.6 answers (distinct-4-gram below 0.5), on both sides:
+  Kapitsa on the 4B (`sw-q35-4b-kapitsa-20261022-232718`, 0.45) and Dory (`sw-dory-kapitsa-20261023-032253`, 0.45);
+  Ollama on the 4B (decode 0.38 and greedy 0.47) and the 35B-A3B (0.47), MTPLX on the 4B (0.49), llama.cpp on the 9B
+  (0.45), mlx-lm on Dory (0.50). The Nano 4B's `kapitsa bench` result carries two (0.03 and 0.45).
+- **`sw-nano-9b-kapitsa-20261023-033155`**: one of the five T = 0.6 answers stopped at 84 tokens (`finish_reason=stop`,
+  not 512, at 21.02 tok/s); the median of the five is 20.85, of the four 512-token answers 20.84.
+- **Nano 9B v2 × mlx-lm**: its follow-up turns hit the length limit (`finish_reason=length`), part of the thinking
+  answer above; its prefill is not shown.
+- **The 27B × Ollama sweep** swapped (28,700 pages), see its table.
 
 ## Records set aside
 

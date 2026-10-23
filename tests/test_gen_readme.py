@@ -20,6 +20,18 @@ except KeyError:
 else:
     raise SystemExit("a record without model_name must raise KeyError")
 
+# a prefill size the harness marked INVALID is shown as a dash (with its TTFT), the other size still shows
+pts = [{"target": 4000, "prefill_tps": 250.0, "ttft_s": 16.7}, {"target": 16000, "prefill_tps": 244.0, "ttft_s": 68.0}]
+assert g.prefill({"prefill": pts}, 4000)["prefill_tps"] == 250.0
+r = {"prefill": pts, "invalid": ["prefill_4000: prompt_tokens 4181 outside ±1% of 4133", "cached_16000: follow-up"]}
+assert g.prefill(r, 4000) == {}
+assert g.prefill(r, 16000)["prefill_tps"] == 244.0
+rec = {"when": "2026-10-23T01:29:55", "engine": "mlx-lm", "label": "x", "model_name": "Qwen3.5-4B", "display": "mlx-lm",
+       "version": "mlx_lm 0.32.2", "provenance": {"system_start": {"cpu": "Apple M3 Pro", "memsize": str(36 << 30)}},
+       **r}
+cells = g.row("/x/bench/results/a/b.json", rec, "a")
+assert cells[9:12] == (g.DASH, "244", g.DASH), cells[9:12]
+
 a = "| 2026-10-21 | jdoe | M5 Pro, 48 GB | Qwen3.5 4B | 4-bit | Kapitsa | 617f6a2 | 1 |\n"
 b = "| 2026-10-21 | John Doe | M5 Pro, 48 GB | Qwen3.5 4B | 4-bit | Kapitsa | 617f6a2 | 1 |\n"
 c = "| 2026-10-21 | jdoe | M5 Pro, 48 GB | Qwen3.5 4B | 4-bit | Kapitsa | 617f6a2 | 2 |\n"

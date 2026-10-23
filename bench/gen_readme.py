@@ -83,6 +83,10 @@ def cell(s):
 
 
 def prefill(r, target):
+    """The record's prefill point at this size, or {} when it has none or the harness marked it INVALID (an entry
+    "prefill_<size>: ..." in the record's invalid list): a number the record calls invalid is not shown."""
+    if any(str(i).startswith(f"prefill_{target}:") for i in r.get("invalid") or []):
+        return {}
     for p in r.get("prefill") or []:
         if p.get("target") == target:
             return p
