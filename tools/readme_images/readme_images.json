@@ -26,7 +26,7 @@
    "Qwen at 4-bit (Q4_K_M on llama.cpp) · Nemotron as NVIDIA's own checkpoints · Flint at 4-bit (Q4_1 on llama.cpp), decoding at its card's T 1.0 · 2-bit: unsloth's GGUFs"
   ],
   "footer": [
-   "Grey: share of the fastest decode in that row · small type: the decoding method (no spec: no speculative decoding) · the first number is prefill, the second decode (same size: both matter)",
+   "Grey: share of the fastest decode in that row · small type: the decoding method (none: no speculative decoding) · the first number is prefill, the second decode (same size: both matter)",
    "× can't run that model on that Mac (Splash: only the 27B and 35B, on an M3 or newer; rec: only Flint; M3 Pro, macOS 14: no mlx-serve, oMLX, Splash) · — not measured (before the slash: no prefill run for that engine)",
    "The numbers come from bench/results (llama.cpp b11804 for Flint 4-bit and the M3 Pro, d772569 for 2-bit)"
   ],

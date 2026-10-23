@@ -28,7 +28,7 @@ Everything is in `readme_images.json`:
 - **`engines`:** column order (Kapitsa first), logo, tile color, and the version shown under the name. A `\n`
   splits a version onto two lines.
 - **`poster.macs[].rows[].cells`:** one cell per engine. It is one of:
-  - `{"value": tok/s, "method": "KFlash" | "DFlash2" | "MTP" | "no spec" | ...}`; a cell can add
+  - `{"value": tok/s, "method": "KFlash" | "DFlash2" | "MTP" | "no spec" | ...}` (`"no spec"`, plain decoding, draws no method label, on every engine); a cell can add
     `"prefill": tok/s` (a 4K prompt, the same engine's stored run); when any cell has it, every cell reads `prefill / decode` in one size
     (Kapitsa's column is wider), and a cell without it shows a dash before the slash;
   - `null`, drawn as a dash: not measured;

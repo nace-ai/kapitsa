@@ -10,7 +10,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## 🔥 What's new
 
-- [2026/10] 🪶 **Flint on a 16 GB Mac: 1.4× llama.cpp's decode on the same 2-bit GGUF.** `--model flint` takes unsloth's 2-bit GGUF on 16-24 GB Macs: its routed experts run as stored, the rest requantized to 3-6 bits. 61 tok/s decode on an M1 Pro, in 11.6 GB ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
+- [2026/10] 🪶 **Flint on a 16 GB Mac: decodes at 61 tok/s vs llama.cpp's 43 on the same 2-bit GGUF.** `--model flint` takes unsloth's 2-bit GGUF on 16-24 GB Macs: its routed experts run as stored, the rest requantized to 3-6 bits. 61 tok/s decode on an M1 Pro, in 11.6 GB ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: Kapitsa reads prompts faster than Recursive's own engine and decodes faster than llama.cpp.** On the M4 Pro and the M5 Pro, every Kapitsa run read 4K and 16K prompts faster than every run of rec 0.1.0 and decoded faster than llama.cpp; on the M5 Pro it also reads prompts faster than llama.cpp ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
 - [2026/10] 🏆 **Kapitsa: the fastest decode in 32 of 36 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
@@ -71,19 +71,19 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 The catalog models measured on each Mac, against the engines that run them: one collapsed section per Mac, with a table for each model family. Decode is a 512-token coding answer at T 0.6 (Flint at its card's T 1.0), prefill a 4K-token prompt. Under each model's name are the weights Kapitsa ran; the other engines' weights and how each number was measured are in [docs/benchmarks.md](docs/benchmarks.md#the-readmes-tables).
 
-<sub>Each cell: prefill / decode, tokens/s (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · small type: the decoding method · × can't run on that Mac · — not measured</sub>
+<sub>Each cell: prefill / decode, tokens/s (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured</sub>
 
 <details>
 <summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 7 models</summary>
 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1, llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 459 / **140**<br><sub>KFlash</sub> | 690 / 130<br><sub>DFlash2</sub> | 761 / 93<br><sub>DFlash2</sub> | 898 / 116<br><sub>DFlash2</sub> | 739 / 68 | 733 / 69<br><sub>MTP</sub> | 784 / 54<br><sub>MTP</sub> | 516 / 51<br><sub>MTP</sub> | 217 / 32<br><sub>no spec</sub> |
-| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 4702 / **325**<br><sub>KFlash</sub> | 3818 / 264<br><sub>MTP</sub> | 2968 / 232<br><sub>DFlash2</sub> | 6640 / 290<br><sub>DFlash2</sub> | 3690 / 166 | 4328 / 123<br><sub>MTP</sub> | 4271 / 132<br><sub>DFlash2</sub> | 2881 / 171<br><sub>MTP</sub> | 1873 / 127<br><sub>no spec</sub> |
+| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 459 / **140**<br><sub>KFlash</sub> | 690 / 130<br><sub>DFlash2</sub> | 761 / 93<br><sub>DFlash2</sub> | 898 / 116<br><sub>DFlash2</sub> | 739 / 68 | 733 / 69<br><sub>MTP</sub> | 784 / 54<br><sub>MTP</sub> | 516 / 51<br><sub>MTP</sub> | 217 / 32 |
+| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 4702 / **325**<br><sub>KFlash</sub> | 3818 / 264<br><sub>MTP</sub> | 2968 / 232<br><sub>DFlash2</sub> | 6640 / 290<br><sub>DFlash2</sub> | 3690 / 166 | 4328 / 123<br><sub>MTP</sub> | 4271 / 132<br><sub>DFlash2</sub> | 2881 / 171<br><sub>MTP</sub> | 1873 / 127 |
 | **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · 4-bit, 105.9 GB</sub> | 1165 / 106<br><sub>MTP</sub> | 🟩 1720 / **108** | 1260 / 107<br><sub>MTP</sub> | × | 60 | 1263 / 88<br><sub>MTP</sub> | 1030 / 77<br><sub>MTP</sub> | 842 / 96 | × |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **119**<br><sub>loops</sub> | × | × | × | × | × | 76 | 9 | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 **267**<br><sub>KFlash</sub> | 190 | 190 | × | 153 | 131 | 139 | 159 | 110 |
-| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 1016 / **153**<br><sub>KFlash</sub> | × | 913 / 69<br><sub>no spec</sub> | × | × | × | 941 / 69 | × | × |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 1016 / **153**<br><sub>KFlash</sub> | × | 913 / 69 | × | × | × | 941 / 69 | × | × |
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid MoE, 12B active · NVFP4, 76.4 GB</sub> | 🟩 **94**<br><sub>KFlash</sub> | × | 52 | × | 64 | 44 | 46 | 66 | 61 |
 
 </details>
@@ -95,17 +95,17 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1, llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 649 / **81**<br><sub>KFlash</sub> | 464 / **≈78**<br><sub>DFlash2</sub> | 446 / 51<br><sub>DFlash2</sub> | 674 / 72<br><sub>DFlash2</sub> | 470 / 40<br><sub>MTP</sub> | 462 / 41<br><sub>MTP</sub> | 421 / 32<br><sub>MTP</sub> | 322 / 30<br><sub>MTP</sub> | 118 / 17<br><sub>no spec</sub> |
-| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 2802 / **201**<br><sub>KFlash</sub> | 2494 / 156<br><sub>MTP</sub> | 1619 / 144<br><sub>DFlash2</sub> | 3514 / 181<br><sub>DFlash2</sub> | 1518 / 102<br><sub>MTP</sub> | 2569 / 89<br><sub>MTP</sub> | 2474 / 98<br><sub>DFlash2</sub> | 1755 / 107<br><sub>MTP</sub> | 997 / 96<br><sub>no spec</sub> |
+| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 649 / **81**<br><sub>KFlash</sub> | 464 / **≈78**<br><sub>DFlash2</sub> | 446 / 51<br><sub>DFlash2</sub> | 674 / 72<br><sub>DFlash2</sub> | 470 / 40<br><sub>MTP</sub> | 462 / 41<br><sub>MTP</sub> | 421 / 32<br><sub>MTP</sub> | 322 / 30<br><sub>MTP</sub> | 118 / 17 |
+| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 2802 / **201**<br><sub>KFlash</sub> | 2494 / 156<br><sub>MTP</sub> | 1619 / 144<br><sub>DFlash2</sub> | 3514 / 181<br><sub>DFlash2</sub> | 1518 / 102<br><sub>MTP</sub> | 2569 / 89<br><sub>MTP</sub> | 2474 / 98<br><sub>DFlash2</sub> | 1755 / 107<br><sub>MTP</sub> | 997 / 96 |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **70**<br><sub>loops</sub> | × | × | × | × | × | 53 | 13 | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 3141 / **159**<br><sub>KFlash</sub> | 1728 / 115<br><sub>MTP</sub> | 1938 / 124<br><sub>MTP</sub> | × | 2369 / 92 | 1743 / 101 | 1881 / 94 | 1915 / 101<br><sub>MTP</sub> | 1479 / 72 |
-| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 **79**<br><sub>LiLiCorr</sub> | × | 39<br><sub>no spec</sub> | × | × | × | 41 | × | × |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 **79**<br><sub>LiLiCorr</sub> | × | 39 | × | × | × | 41 | × | × |
 
 **Recursive Flint**
 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>b11804</sub> | <sub>rec<br>0.1.0</sub> |
 | --- | ---: | ---: | ---: |
-| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2691 / **149**<br><sub>no spec</sub> | 2072 / 92<br><sub>no spec</sub> | 2138 / 145<br><sub>no spec</sub> |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2691 / **149** | 2072 / 92 | 2138 / 145 |
 
 </details>
 
@@ -116,18 +116,18 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1, llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 1930 / **201**<br><sub>KFlash</sub> | 874 / 137<br><sub>MTP</sub> | 803 / 102<br><sub>MTP</sub> | × | 758 / 109<br><sub>MTP</sub> | 780 / 104<br><sub>MTP</sub> | 843 / 88<br><sub>MTP</sub> | 650 / 70<br><sub>MTP</sub> | 801 / 81<br><sub>no spec</sub> |
-| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 396 / **63**<br><sub>KFlash</sub> | 129 / 54<br><sub>DFlash2</sub> | 136 / 45<br><sub>DFlash2</sub> | 53<br><sub>DFlash2</sub> | 124 / 32<br><sub>MTP</sub> | 126 / 36<br><sub>MTP</sub> | 131 / 28<br><sub>MTP</sub> | 84 / 18<br><sub>MTP</sub> | 127 / 15<br><sub>no spec</sub> |
-| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 1168 / **161**<br><sub>KFlash</sub> | 986 / 124<br><sub>MTP</sub> | 1035 / 127<br><sub>DFlash2</sub> | 135<br><sub>DFlash2</sub> | 892 / 89<br><sub>MTP</sub> | 918 / 80<br><sub>MTP</sub> | 985 / 86<br><sub>DFlash2</sub> | 663 / 69<br><sub>MTP</sub> | 957 / 86<br><sub>no spec</sub> |
-| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **64**<br><sub>loops</sub> | × | × | × | × | × | 48<br><sub>no spec</sub> | 6<br><sub>no spec</sub> | × |
+| **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 1930 / **201**<br><sub>KFlash</sub> | 874 / 137<br><sub>MTP</sub> | 803 / 102<br><sub>MTP</sub> | × | 758 / 109<br><sub>MTP</sub> | 780 / 104<br><sub>MTP</sub> | 843 / 88<br><sub>MTP</sub> | 650 / 70<br><sub>MTP</sub> | 801 / 81 |
+| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 396 / **63**<br><sub>KFlash</sub> | 129 / 54<br><sub>DFlash2</sub> | 136 / 45<br><sub>DFlash2</sub> | 53<br><sub>DFlash2</sub> | 124 / 32<br><sub>MTP</sub> | 126 / 36<br><sub>MTP</sub> | 131 / 28<br><sub>MTP</sub> | 84 / 18<br><sub>MTP</sub> | 127 / 15 |
+| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 1168 / **161**<br><sub>KFlash</sub> | 986 / 124<br><sub>MTP</sub> | 1035 / 127<br><sub>DFlash2</sub> | 135<br><sub>DFlash2</sub> | 892 / 89<br><sub>MTP</sub> | 918 / 80<br><sub>MTP</sub> | 985 / 86<br><sub>DFlash2</sub> | 663 / 69<br><sub>MTP</sub> | 957 / 86 |
+| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **64**<br><sub>loops</sub> | × | × | × | × | × | 48 | 6 | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 945 / **112**<br><sub>KFlash</sub> | — | — | × | — | — | 721 / 65<br><sub>DSpark</sub> | — | — |
-| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 519 / **69**<br><sub>KFlash</sub> | — | 298 / 35<br><sub>no spec</sub> | × | — | — | 300 / 32<br><sub>no spec</sub> | × | — |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 519 / **69**<br><sub>KFlash</sub> | — | 298 / 35 | × | — | — | 300 / 32 | × | — |
 
 **Recursive Flint**
 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>b11804</sub> | <sub>rec<br>0.1.0</sub> |
 | --- | ---: | ---: | ---: |
-| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 968 / **128**<br><sub>no spec</sub> | 977 / 80<br><sub>no spec</sub> | 796 / 127<br><sub>no spec</sub> |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 968 / **128** | 977 / 80 | 796 / 127 |
 
 </details>
 
@@ -139,12 +139,12 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | Model | <mark>**Kapitsa**</mark> | <sub>Ollama<br>0.40.8</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 703 / **120**<br><sub>KFlash</sub> | 600 / 67<br><sub>MTP</sub> | 612 / 64<br><sub>MTP</sub> | 642 / 56<br><sub>MTP</sub> | 512 / 50<br><sub>MTP · b11804</sub> |
-| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 381 / **77**<br><sub>KFlash</sub> | — | — | 353 / 27<br><sub>no spec</sub> | 307 / 23<br><sub>no spec · b11804</sub> |
+| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 381 / **77**<br><sub>KFlash</sub> | — | — | 353 / 27 | 307 / 23<br><sub>b11804</sub> |
 | **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 110 / **40**<br><sub>KFlash</sub> | 99 / 23<br><sub>MTP</sub> | 99 / 22<br><sub>MTP</sub> | 102 / 18<br><sub>MTP</sub> | 86 / 16<br><sub>MTP · b11804</sub> |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 855 / **106**<br><sub>KFlash</sub> | 681 / 58<br><sub>MTP</sub> | 671 / 53<br><sub>MTP</sub> | 695 / 53<br><sub>DFlash2</sub> | 578 / 53<br><sub>MTP · b11804</sub> |
-| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 450 / **36**<br><sub>no spec</sub> | × | × | 344 / 30<br><sub>no spec</sub> | — |
-| **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 765 / 34<br><sub>prompt lookup</sub> | — | — | — | 🟩 413 / **35**<br><sub>no spec · Q4_K_M, b11804</sub> |
-| **Nemotron Nano 9B v2** · `nano-9b`<br><sub>hybrid Mamba-2 · NVFP4, 7.9 GB</sub> | 330 / 21<br><sub>no spec</sub> | — | — | 🟩 **25**<br><sub>no spec · 4-bit</sub> | — |
+| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 450 / **36** | × | × | 344 / 30 | — |
+| **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 765 / 34<br><sub>prompt lookup</sub> | — | — | — | 🟩 413 / **35**<br><sub>Q4_K_M, b11804</sub> |
+| **Nemotron Nano 9B v2** · `nano-9b`<br><sub>hybrid Mamba-2 · NVFP4, 7.9 GB</sub> | 330 / 21 | — | — | 🟩 **25**<br><sub>4-bit</sub> | — |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 788 / **75**<br><sub>KFlash</sub> | — | — | 514 / 39<br><sub>DSpark</sub> | — |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 256 / **50**<br><sub>LiLiCorr</sub> | — | — | — | — |
 
@@ -152,7 +152,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>b11804</sub> |
 | --- | ---: | ---: |
-| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 801 / **74**<br><sub>no spec</sub> | 772 / 51<br><sub>no spec</sub> |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 801 / **74** | 772 / 51 |
 
 <sub>macOS 14.1, on AC power: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). mlx-serve, oMLX and Splash need a newer macOS (×); LM Studio was not installed; rec 0.1.0 refuses this Mac: it requires 48 GiB. Each cell but Flint's is one run of the M4 Pro's protocol (Flint's is the mean of two runs, #341), the other engines in the M4 Pro's setup (not re-tuned here). Nano 4B and 9B v2: Kapitsa runs NVIDIA's published checkpoints, which keep some layers in BF16/FP8, so it reads more per token than the 4-bit files: the 4B's FP8 is ~1 byte per weight against Q4_K_M's ~0.6, the 9B's NVFP4 ~6.11 GB per token against 4.67 GB for mlx-lm's 4-bit. Nano 9B v2 on mlx-lm: no prefill shown, because its template ignores enable_thinking and the timed first token is a thinking token.</sub>
 
@@ -165,18 +165,18 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1, llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 401 / **97**<br><sub>KFlash</sub> | 286 / 62<br><sub>MTP</sub> | 281 / 55<br><sub>MTP</sub> | 298 / 55<br><sub>MTP</sub> | 305 / 42<br><sub>MTP</sub> | 308 / 46<br><sub>no spec</sub> | 315 / 38<br><sub>MTP</sub> | 308 / 47<br><sub>no spec</sub> |
-| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 217 / **57**<br><sub>KFlash</sub> | 159 / 37<br><sub>MTP</sub> | — | — | — | 170 / 30<br><sub>no spec</sub> | — | — |
-| **Qwen3.6-35B-A3B** · `35b:16gb`<br><sub>MoE, 3B active · 2-bit experts (unsloth's GGUF), 10.8 GB</sub> | 🟩 462 / **52**<br><sub>no spec</sub> | × | × | — | × | × | 38 | — |
-| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **39**<br><sub>no spec</sub> | × | × | × | × | 30<br><sub>no spec</sub> | 4<br><sub>no spec</sub> | × |
+| **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 401 / **97**<br><sub>KFlash</sub> | 286 / 62<br><sub>MTP</sub> | 281 / 55<br><sub>MTP</sub> | 298 / 55<br><sub>MTP</sub> | 305 / 42<br><sub>MTP</sub> | 308 / 46 | 315 / 38<br><sub>MTP</sub> | 308 / 47 |
+| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 217 / **57**<br><sub>KFlash</sub> | 159 / 37<br><sub>MTP</sub> | — | — | — | 170 / 30 | — | — |
+| **Qwen3.6-35B-A3B** · `35b:16gb`<br><sub>MoE, 3B active · 2-bit experts (unsloth's GGUF), 10.8 GB</sub> | 🟩 462 / **52** | × | × | — | × | × | 38 | — |
+| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **39** | × | × | × | × | 30 | 4 | × |
 | **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 🟩 **37**<br><sub>prompt lookup</sub> | — | — | — | — | 21<br><sub>BF16</sub> | 28<br><sub>Q4_K_M</sub> | — |
-| **Nemotron Nano 9B v2** · `nano-9b`<br><sub>hybrid Mamba-2 · NVFP4, 7.9 GB</sub> | 🟩 **25**<br><sub>no spec</sub> | — | — | — | — | 18 | 14<br><sub>Q4_K_M</sub> | — |
+| **Nemotron Nano 9B v2** · `nano-9b`<br><sub>hybrid Mamba-2 · NVFP4, 7.9 GB</sub> | 🟩 **25** | — | — | — | — | 18 | 14<br><sub>Q4_K_M</sub> | — |
 
 **Recursive Flint**
 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>d772569</sub> |
 | --- | ---: | ---: |
-| **Recursive Flint 40B-A2.5B** · `flint:16gb`<br><sub>MoE, 2.5B active · 2-bit experts (unsloth's GGUF), 11.9 GB</sub> | 🟩 414 / **61**<br><sub>no spec</sub> | 43<br><sub>no spec</sub> |
+| **Recursive Flint 40B-A2.5B** · `flint:16gb`<br><sub>MoE, 2.5B active · 2-bit experts (unsloth's GGUF), 11.9 GB</sub> | 🟩 414 / **61** | 43 |
 
 </details>
 

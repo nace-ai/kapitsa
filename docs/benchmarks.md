@@ -189,7 +189,7 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
 
 ## How the README poster was measured
 
-Tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). Every cell reads prefill / decode: prefill on a 4K-token prompt, decode of a 512-token coding answer. × cannot run that model on that Mac · — not measured (a dash before the slash: no prefill run for that engine). The poster shows the models that differ most per Mac; the README's per-Mac tables under Models, the [details](#the-readmes-tables) and [bench/README.md](../bench/README.md) have every cell.
+Tokens per second, each engine in its fastest setup, its decoding method under each value (none: no speculative decoding). Every cell reads prefill / decode: prefill on a 4K-token prompt, decode of a 512-token coding answer. × cannot run that model on that Mac · — not measured (a dash before the slash: no prefill run for that engine). The poster shows the models that differ most per Mac; the README's per-Mac tables under Models, the [details](#the-readmes-tables) and [bench/README.md](../bench/README.md) have every cell.
 
 Kapitsa's method label is the setup the run used: KFlash (the drafter's best-first tree, on by default since [#187](https://github.com/nace-ai/kapitsa/pull/187)) on the M5 Max, M5 Pro and M4 Pro, whose runs are builds from 2026-10-21 on (b50f1fc, a13f8fd; the M5 Max's fd85910), with the DFlash2, DSpark or LiLiCorr drafter named in each run's config, and on the M1 Pro, whose Kapitsa cells are the 0.2.6 release (`76a4970`) on 2026-10-22 ([details](#macbook-pro-m1-pro-16-gb-kapitsa-026-2026-10-22); its Flint 2-bit row: `2b5ab35`, below); Flash-Next keeps MTP.
 
