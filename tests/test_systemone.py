@@ -196,6 +196,10 @@ def online(url):
         hit = tm_hit.get("cached_tokens") or 0
         check("cache: a re-sent state reports the positions it restored",
               hit > 0 and hit <= (again.get("usage") or {}).get("input_tokens", 0), tm_hit)
+        # OpenAI-shaped clients read the same number out of usage.input_tokens_details.cached_tokens.
+        details = ((again.get("usage") or {}).get("input_tokens_details") or {}).get("cached_tokens")
+        check("cache: usage.input_tokens_details.cached_tokens matches timings.cached_tokens",
+              details == hit, (again.get("usage"), tm_hit))
         st_novel, novel = post(url, {"state": "A state the server has never seen: %s." % os.getpid(),
                                      "questions": {"n": noul}})
         check("cache: a state never sent is cold (cached_tokens 0)",

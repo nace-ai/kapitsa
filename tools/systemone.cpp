@@ -344,7 +344,9 @@ class SystemOne {
     ojson reply = ojson::object();
     reply["model"] = name_;
     reply["answers"] = std::move(answers);
-    reply["usage"] = ojson{{"input_tokens", input_tokens_}, {"output_tokens", output_tokens}};
+    reply["usage"] = ojson{{"input_tokens", input_tokens_},
+                             {"output_tokens", output_tokens},
+                             {"input_tokens_details", ojson{{"cached_tokens", tm.cached_tokens}}}};
     reply["latency_ms"] = ms(tm.get());
     reply["timings"] = ojson{{"state_ms", ms(tm.state_ms)},
                              {"branch_ms", ms(tm.branch_ms)},

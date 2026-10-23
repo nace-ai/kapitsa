@@ -36,7 +36,7 @@ questions. A question is one of three types:
                            "criteria": ["unclear", "usable", "clear"]}}}
 ```
 
-The reply is `{model, answers, usage: {input_tokens, output_tokens}, latency_ms, timings}`; probabilities are rounded to
+The reply is `{model, answers, usage: {input_tokens, input_tokens_details: {cached_tokens}, output_tokens}, latency_ms, timings}`; probabilities are rounded to
 four decimals, `confidence` is the separation of the best option from a flat distribution, and `output_tokens`
 counts the tokens of the answer JSON, as in the reference server. A `{"requests": [...]}` list scores up to 1024
 states in one call with one model in memory.
@@ -68,7 +68,8 @@ The protocol's usual shape is one state and several rounds of questions on it (a
 every request re-sends the whole state. The server keeps the states it has prefilled in a bounded cache, keyed by
 the model's files and the state's tokens: a request whose state it holds restores that state's recurrent checkpoint
 and attention rows instead of prefilling it, so what is left is the branch pass. `timings.cached_tokens` reports how
-many positions came from the cache (0: the request prefilled its state).
+many positions came from the cache (0: the request prefilled its state), under `timings` and as
+`usage.input_tokens_details.cached_tokens`, the name an OpenAI-shaped client reads.
 
 - `--cache-mb` (default 1024) is the cache's byte cap; `0`, or `NI_SYS_CACHE=0`, turns it off and serves every
   request cold. Least-recently-used states are evicted for a new one, and a state larger than the whole cap is served
