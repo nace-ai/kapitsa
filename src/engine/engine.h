@@ -253,6 +253,9 @@ struct ChatResult {
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   int reasoning_tokens = 0;   // completion tokens inside the think block
   double prefill_ms = 0, decode_ms = 0;
+  // prefill_ms is the time to read the uncached prompt tokens: no image rows (their encoder runs before the clock
+  // starts) and no turn given to another request in between (--slots > 1); a rate from it is shown only then
+  bool prefill_exact = false;
   // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply, the
   // request's images (what the processor made of them, without pixels)
   int slot = -1;

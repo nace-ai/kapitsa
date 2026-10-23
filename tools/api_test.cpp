@@ -618,9 +618,13 @@ void chat_events() {
   {
     ChatResult r = result("stop");
     r.prefill_ms = 250.04;
+    ChatResult inexact = r;  // images, or a turn given to another request: the time is not the read of those tokens
+    r.prefill_exact = true;
     check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(r) ==
               chunk("{}", R"("stop")", usage.substr(0, usage.size() - 1) + R"(,"kapitsa":{"prefill_ms":250.0}})") + done,
           "chat stream: the engine's prefill time in usage, for a client's prefill tok/s on the uncached tokens");
+    check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(inexact) == chunk("{}", R"("stop")", usage) + done,
+          "chat stream: no prefill time in usage when it holds image encoding or turns given to other requests");
   }
   {
     ChatResult big = result("error");

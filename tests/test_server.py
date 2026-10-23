@@ -467,6 +467,13 @@ def cli_checks(kapitsa):
         check(f"cli: serve --context {bad!r} is refused", rc == 2 and "--context takes tokens" in err, err)
         rc, _, err = run("claude", "--context", bad)
         check(f"cli: claude --context {bad!r} is refused", rc == 2 and "--context takes tokens" in err, err)
+    # --timing: ttft, prefill or both; anything else is refused before the model is looked at
+    for ok in ["ttft", "prefill", "both"]:
+        rc, _, err = run("serve", "--model", folder, "--port", str(busy), "--timing", ok)
+        check(f"cli: serve --timing {ok} is taken", rc == 1 and "already in use" in err, err)
+    for bad in ["bogus", "", "TTFT", "prefill,ttft"]:
+        rc, _, err = run("serve", "--model", folder, "--timing", bad)
+        check(f"cli: serve --timing {bad!r} is refused", rc == 2 and "--timing takes ttft, prefill or both" in err, err)
     rc, _, err = run("doctor", "--context", "max")
     check("cli: doctor --context max asks for a size", rc == 2 and "--context 256k" in err, err)
     s.close()
@@ -497,6 +504,9 @@ check("chat page is self-contained (no external requests)",
       not re.search(r"""(src|href)\s*=\s*["']?(https?:)?//|@import|url\(\s*["']?(https?:)?//""", html, re.I) and
       "default-src 'none'" in hd.get("Content-Security-Policy", "") and len(page) < 64 * 1024,
       hd.get("Content-Security-Policy", "") + f" ({len(page)} bytes)")
+m = re.search(r'const TIMING = "(\w+)"', html)
+check("chat page carries the server's --timing (ttft, prefill or both; the placeholder is filled in)",
+      bool(m) and m.group(1) in ("ttft", "prefill", "both") and "__TIMING__" not in html, m and m.group(0))
 st, _, body = get("/v1/models", auth())
 models_ok = st == 200 and json.loads(body)["data"][0]["id"]
 check("/v1/models lists the model" + (f" as {MODEL_ID}" if MODEL_ID else ""),

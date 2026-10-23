@@ -931,7 +931,7 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   std::string ttft = "–", tps = "–", cached = "–", step = "–", pf = "–";
   if (first > 0) snprintf(b, sizeof b, "%.2fs", (first - m->t0) / 1000), ttft = b;
   // prefill tok/s: the prompt tokens read (not the cached ones) over the time it took
-  if (const int fresh = r.prompt_tokens - r.cached_tokens; fresh > 0 && r.prefill_ms > 0 && r.finish_reason != "cancelled" &&
+  if (const int fresh = r.prompt_tokens - r.cached_tokens; fresh > 0 && r.prefill_exact && r.prefill_ms > 0 && r.finish_reason != "cancelled" &&
                                                            r.finish_reason != "error")
     snprintf(b, sizeof b, "%.0f", fresh / (r.prefill_ms / 1000)), pf = b;
   if (r.completion_tokens > 1 && r.decode_ms > 0)
