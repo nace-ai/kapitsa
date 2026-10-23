@@ -24,6 +24,7 @@ struct Placement {
   std::vector<int> lo;  // member i holds layers [lo[i], lo[i + 1]); lo has members + 1 entries, the last the layers
   double ms = 0;        // a decode step's weight reads: every member's share over its bandwidth, network excluded
   std::vector<double> held;  // bytes each member holds
+  bool streams = false;      // the Macs stream the routed experts their memory does not hold (plan_split's may_stream)
 };
 
 // layers: each trunk layer's cost; head: the head's own tensors; min_head: layers the head must hold (the n-gram
@@ -35,11 +36,15 @@ Placement place(const std::vector<LayerCost>& layers, const LayerCost& head, int
 // The ms a decode step's weights take on one Mac that held them all (its bandwidth), for comparing a split with it
 double whole_ms(const std::vector<LayerCost>& layers, const LayerCost& head, double gbs);
 
-// The Flash-Next model in model_dir over `members` (budgets in mem): each layer counts its weights and its share of
-// what the conversations need (two slots' states, two 32K-token conversations' caches), each Mac's budget less its
-// prefill buffers for `prefill_chunk` rows (what a stage checks before it loads its share); the head holds the n-gram
-// block's layers. From the headers alone; call it before the process's split is set (Qwen4Exp::set_split), which
-// would plan only a share.
-Placement plan_split(const std::string& model_dir, std::vector<Member> members, int prefill_chunk);
+// The Flash-Next model in model_dir over `members` (budgets in mem): each layer counts its weights and what the
+// conversations need of it (a linear-attention layer two slots' states, a full-attention one two 32K-token
+// conversations' caches), each Mac's budget less its prefill buffers for `prefill_chunk` rows (what a stage checks
+// before it loads its share); the head holds the n-gram block's layers. Every layer in memory when the Macs hold the
+// model between them. When they do not, with may_stream and a Q2_0 pack: each Mac holds its layers' dense weights and
+// a store of 3 layers' experts (Qwen4Exp::plan's rule) and streams the rest of its experts from its SSD (streams set;
+// the pass time then leaves the SSD out). From the headers alone; call it before the process's split is set
+// (Qwen4Exp::set_split), which would plan only a share.
+Placement plan_split(const std::string& model_dir, std::vector<Member> members, int prefill_chunk,
+                     bool may_stream = true);
 
 }  // namespace ni::cluster

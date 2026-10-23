@@ -74,16 +74,21 @@ double whole_ms(const std::vector<LayerCost>& layers, const LayerCost& head, dou
   return gbs > 0 ? r / (gbs * 1e6) : 0;
 }
 
-Placement plan_split(const std::string& dir, std::vector<Member> members, int chunk) {
+Placement plan_split(const std::string& dir, std::vector<Member> members, int chunk, bool may_stream) {
   Qwen4Exp::LayerBytes hb;
   const std::vector<Qwen4Exp::LayerBytes> lb = Qwen4Exp::layer_bytes(dir, &hb);
   const MemPlan mp = Qwen4Exp::plan(dir, chunk);  // the whole model's (no split set yet)
-  const double L = double(std::max<size_t>(lb.size(), 1));
-  // what a stage checks before it loads its share (pipe.cpp's load_share): two slots' states and two 32K-token
-  // conversations' caches, spread over the layers; the prefill buffers, and half a GB beside a streamed pack's store
-  const double per_layer = (2.0 * double(mp.slot_state) + double(mp.kv_per_pos) * 65536) / L;
+  // what a stage checks before it loads its share (stage.cpp's load_share): two slots' states on the linear-attention
+  // layers, two 32K-token conversations' caches on the full-attention ones (the MTP head's with the head); the prefill
+  // buffers, and half a GB beside a streamed pack's store
+  int lin = 0, att = 0;
+  for (const auto& l : lb) (l.linear ? lin : att) += 1;
+  const int mtp = mp.mtp > 0 ? 1 : 0;
+  const double kv = double(mp.kv_per_pos) * 65536 / std::max(att + mtp, 1);  // a full-attention layer's caches
+  const double state = 2.0 * double(mp.slot_state) / std::max(lin, 1);       // a linear-attention layer's states
   std::vector<LayerCost> layers;
-  for (const auto& l : lb) layers.push_back({l.weights + per_layer, l.decode});
+  for (const auto& l : lb) layers.push_back({l.weights + (l.linear ? state : kv), l.decode});
+  const LayerCost head{hb.weights + mtp * kv, hb.decode};
   for (Member& m : members) m.mem -= double(mp.activations) + (mp.streamed ? 0.5e9 : 0);
   // the n-gram block's layer and the ones before it stay with the head (it reads the tokens)
   int min_head = 1;
@@ -94,7 +99,16 @@ Placement plan_split(const std::string& dir, std::vector<Member> members, int ch
     if (t.is_object() && t.contains("ple_layer_ids") && t["ple_layer_ids"].is_array() && !t["ple_layer_ids"].empty())
       min_head = std::max(1, t["ple_layer_ids"][0].get<int>());  // (one-indexed: the block before layer id - 1)
   }
-  return place(layers, {hb.weights, hb.decode}, min_head, members);
+  Placement p = place(layers, head, min_head, members);
+  if (p.fits || !may_stream || !mp.streamed) return p;
+  // the Macs do not hold the experts between them: each keeps its dense weights and a store of 3 layers' experts in
+  // memory, and streams the rest of its experts from its SSD
+  for (size_t i = 0; i < layers.size(); ++i) layers[i].weights -= lb[i].experts;
+  const double store = 3 * Qwen4Exp::store_layer_bytes(dir);
+  for (Member& m : members) m.mem -= store;
+  p = place(layers, head, min_head, members);
+  p.streams = p.fits;
+  return p;
 }
 
 }  // namespace ni::cluster
