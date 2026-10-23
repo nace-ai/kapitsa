@@ -10,7 +10,7 @@
 //    (the local GPU still running the head's layers) has no deadline of its own, or one scaled to the GPU's progress,
 //    so a slow local chunk is never reported as lost Macs (lost() is permanent). The GPU never
 //    waits for the network: a command buffer that waits on an event for about 5 s is killed with a GPU timeout
-//    (measured on macOS 27.0.1), and a Wi-Fi network can stall that long.
+//    (tools/event_wait_probe.cpp, macOS 27.0.1), and a Wi-Fi network can stall that long.
 //  - grow() waits for the answer too (-1 once the Macs are lost); every other call returns at once.
 #pragma once
 #include "metal/gpu.h"
