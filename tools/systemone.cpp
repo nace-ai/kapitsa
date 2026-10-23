@@ -263,13 +263,23 @@ class SystemOne {
       // the checkpoint, and the KV rows above n_state stay masked by position, so the KV caches need no reset.
       model_->reset(*seq_);
       // A chunk per encoder, as every other prefill caller does: commit() ends the encoder, and the Neural Engine split
-      // is begun and finished per chunk.
+      // is begun and finished per chunk. A split that gives up (a Neural Engine job that never reports, or output that
+      // is not finite) fails ane_finish_chunk(), is retired for the rest of the process (FfnSplit::splits()) and leaves
+      // part of the chunk behind, so the state is prefilled again from an empty one on the GPU alone. The engine reruns
+      // the chunk the same way (src/engine/engine.cpp); a server outlives the request, so it must not fatal() here.
+      bool reran = false;
       for (int pos = 0; pos < n_state;) {
         const int T = std::min(chunk, n_state - pos);
         auto e = g.begin();
         model_->encode_prefill(*e, *seq_, pos, T, sp, 0, false);
         e->commit_and_wait();
-        if (!model_->ane_finish_chunk()) fatal("the Neural Engine prefill split failed; rerun with NI_ANE=0");
+        if (!model_->ane_finish_chunk()) {
+          if (reran) throw std::runtime_error("the Neural Engine prefill split failed with it retired");
+          reran = true;
+          model_->reset(*seq_);
+          pos = 0;
+          continue;
+        }
         pos += T;
       }
       {
@@ -294,6 +304,9 @@ class SystemOne {
       std::copy(b.tokens.begin(), b.tokens.end(), seq_->tokens() + n_state);
       decide_row.clear();
       option_rows.assign(b.group.options.size(), {});
+      // A failed split reruns this question's row from its checkpoint on the GPU alone, as the state pass does; the
+      // rows already read from the earlier chunks are read again, so nothing is kept from the failed pass.
+      bool reran = false;
       for (int off = 0; off < T;) {
         const int rows = std::min(chunk, T - off);
         // One encoder per chunk: commit() ends the encoder and releases it, so a second chunk through the same one
@@ -303,7 +316,14 @@ class SystemOne {
         if (off == 0) model_->restore(*e, *seq_, *ck);
         model_->encode_prefill(*e, *seq_, n_state + off, rows, sp, 0, false);
         e->commit_and_wait();
-        if (!model_->ane_finish_chunk()) fatal("the Neural Engine prefill split failed; rerun with NI_ANE=0");
+        if (!model_->ane_finish_chunk()) {
+          if (reran) throw std::runtime_error("the Neural Engine prefill split failed with it retired");
+          reran = true;
+          decide_row.clear();
+          option_rows.assign(b.group.options.size(), {});
+          off = 0;
+          continue;
+        }
         const float* x = model_->hidden_rows().as<float>();
         auto take = [&](int index, std::vector<float>* out) {
           if (index < off || index >= off + rows) return;
