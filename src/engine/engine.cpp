@@ -788,12 +788,12 @@ int context_within_limit(const std::string& model_dir, int context) {
   return limit > 0 ? std::min(context, limit) : context;
 }
 
-int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why) {
-  const int limit = model_context_limit(model_dir);
-  // the model's own limit where it states one (256K, 1M), else kDefaultContext: memory then takes it down
-  const int top = limit > 0 ? limit : kDefaultContext;
+// The largest default context up to `top` that memory holds (see default_context); `want_slots` above 2: also one at
+// which auto_slots still gives that many slots.
+static int default_context_up_to(const std::string& model_dir, const EngineOptions& opt, size_t budget, int top,
+                                 int want_slots, bool top_is_limit, ContextWhy* why) {
   const int floor = std::min(kMinDefaultContext, top);
-  ContextWhy w = limit > 0 ? ContextWhy::kModelLimit : ContextWhy::kDefault;
+  ContextWhy w = top_is_limit ? ContextWhy::kModelLimit : ContextWhy::kDefault;
   int c = top;
   try {
     const int slots = fit_slots(opt.slots);
@@ -802,8 +802,13 @@ int default_context(const std::string& model_dir, const EngineOptions& opt, size
     const std::string keep = plan_load(model_dir, opt.dflash, spec_off, floor, slots, budget, opt.prefill_chunk).dflash;
     auto keeps = [&](int ctx) {
       const LoadPlan lp = plan_load(model_dir, opt.dflash, spec_off, ctx, slots, budget, opt.prefill_chunk);
-      return lp.dflash == keep &&
-             conversation_fits(model_dir, ctx, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0);
+      if (lp.dflash != keep ||
+          !conversation_fits(model_dir, ctx, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0))
+        return false;
+      if (want_slots <= slots) return true;
+      EngineOptions at = opt;  // the slots the engine will start with at this context
+      at.context = ctx;
+      return auto_slots(model_dir, at, budget) >= want_slots;
     };
     if (!keeps(top)) {
       // the largest 8K step between that does (a longer context only takes more): found by halving, a few plans
@@ -825,7 +830,29 @@ int default_context(const std::string& model_dir, const EngineOptions& opt, size
     }
   } catch (const std::exception&) {  // headers that cannot be planned: the engine reports it when it loads them
     c = floor;
+    w = ContextWhy::kMemory;  // (not "all the model takes": nothing was planned)
   }
+  if (why) *why = w;
+  return c;
+}
+
+int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why) {
+  const int limit = model_context_limit(model_dir);
+  // the model's own limit where it states one (256K, 1M), else kDefaultContext: memory then takes it down
+  const int top = limit > 0 ? limit : kDefaultContext;
+  int want = 2;
+  int old_c = 0;
+  if (opt.slots == 0 && top > kDefaultContext) {
+    // A context past 128K must not cost the slots the 128K default had: auto_slots gives 3 or 4 slots only where a full
+    // conversation also fits beside them. The slots that default (the old one) would get are kept.
+    old_c = default_context_up_to(model_dir, opt, budget, kDefaultContext, 2, false, nullptr);
+    EngineOptions at = opt;
+    at.context = old_c;
+    want = auto_slots(model_dir, at, budget);
+  }
+  ContextWhy w;
+  int c = default_context_up_to(model_dir, opt, budget, top, want, limit > 0, &w);
+  if (c < old_c) c = old_c, w = ContextWhy::kMemory;  // never less than the default before
   if (why) *why = w;
   return c;
 }

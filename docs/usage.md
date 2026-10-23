@@ -296,7 +296,8 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 serve` and the coding-agent commands take the model's own limit (256K for the Qwen models, 1M for Lightning and
 Super-VL; 128K for a model that states none), or less where this Mac's memory is tight (the GPU's working set less a 4%
 margin, or `--mem-budget`): the most, in 8K steps down to 32K, that keeps the draft model the model has at 32K, with one full
-conversation beside it (below 32K only where one slot cannot hold 32K tokens: Flint's `16gb` on a 16 GB Mac takes 8K).
+conversation beside it and, without `--slots`, the slots (3 or 4) the old 128K default would have got (so a longer default never costs slots; a context
+between 128K and the limit is taken only where it keeps them, and never less than 128K's own fit) (below 32K only where one slot cannot hold 32K tokens: Flint's `16gb` on a 16 GB Mac takes 8K).
 The server says which context it took and why. A context costs no memory until a conversation fills it (the KV cache
 grows with it), so the default only sizes what memory is kept for.
 
