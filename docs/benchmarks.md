@@ -91,7 +91,8 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   [#369](https://github.com/nace-ai/kapitsa/pull/369)): Kapitsa built from main (`e86dea7` for the four Qwen,
   `c490f81` for Lightning, Dory, both Nanos and Bolt), each in its catalog default; the other engines in the M4 Pro's
   setup, not re-tuned on this Mac (Ollama 0.40.8's MLX runner, MTPLX 2.12.2, mlx-lm / mlx-vlm, llama.cpp b11804). Each
-  cell's prefill and decode are the same run. The same folder's `kapitsa bench` records read differently (the
+  cell's prefill and decode are the same run. The same runs' `kapitsa bench` records
+  (`bench/community/results/kapitsa-bench-2026-10-22-m3-pro-*.json`) read differently (the
   35B-A3B's 4K prefill 911 there against the harness's 855), so the two are not mixed in a row: the cells are the
   harness's only.
 - mlx-serve, oMLX and Splash do not run on macOS 14.1 (×); LM Studio was not installed (—).
