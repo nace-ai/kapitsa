@@ -1,7 +1,7 @@
 # System One: decisions instead of tokens
 
-Drex v2.0 and Drex Max are decision models: they read a state and a set of questions and answer with a
-probability per option, not with generated text. `build/systemone` serves that protocol on Kapitsa, so a Drex
+Drex v2.0 is a decision model: it reads a state and a set of questions and answers with a probability
+per option, not with generated text. `build/systemone` serves that protocol on Kapitsa, so a Drex
 release GGUF can be run natively on the Mac instead of through llama.cpp's server: the state is encoded once,
 each question is scored from it, and the answer comes back as calibrated probabilities.
 
