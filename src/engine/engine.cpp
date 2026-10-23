@@ -3535,9 +3535,14 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   disk_filled(slot, start, fed_until);
   slot.live_ok = finish == "tool_calls";
   ++slot.version;  // (a state the SSD prefix cache does not have yet)
-  char cyc[64] = "";
+  char cyc[192] = "";
   if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
+  if (kfw.cycles > 0) {  // KFlash's account of the request: rows verified, and the drafts among them that were accepted
+    const size_t n0 = strlen(cyc);
+    snprintf(cyc + n0, sizeof cyc - n0, ", KFlash (%s): %ld cycles, %ld rows, %ld drafts accepted", kfw.source.c_str(), kfw.cycles,
+             kfw.rows, kfw.tokens - kfw.cycles);
+  }
   if (kfw.lookup && kfw.lookup->c1() > 0 && kfw.lookup->s() > 0) {  // the measured row cost, to calibrate NI_KFLASH_ROW_COST
     const size_t n0 = strlen(cyc);
     snprintf(cyc + n0, sizeof cyc - n0, ", row %.2f steps (budget %.2f)", kfw.lookup->s() / kfw.lookup->c1(), kfw.lookup->row_cost());
