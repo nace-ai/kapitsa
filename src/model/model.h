@@ -57,6 +57,7 @@ struct Seq {
   void* mask_event = nullptr;
   uint64_t mask_value = 0;
   int rid = -1;  // a model split across Macs (src/cluster/pipe.h): this sequence's id on the other Macs
+  int rcap = 0;  // ... and the positions their caches hold (they round growth by their own rule: not always cap)
 };
 
 // Structured output: logits rows [0, rows) of `logits` (ld floats apart, vocab of them tokens) take s's mask rows

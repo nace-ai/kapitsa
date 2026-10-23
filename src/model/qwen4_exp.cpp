@@ -503,7 +503,7 @@ std::unique_ptr<Seq> Qwen4Exp::new_seq(int limit, int initial) {
   memset(s->pconv.ptr(), 0, s->pconv.size);
   if (remote_) s->rid = remote_->new_seq(limit);
   const int cap = initial < 0 ? limit : std::min(initial, limit);
-  if (cap > 0 && remote_ && !remote_->grow(s->rid, cap))
+  if (cap > 0 && remote_ && !remote_reserve(*remote_, *s, cap))
     fatal("the other Macs of this split have no room for a %d-token conversation%s", cap,
           remote_->lost().empty() ? "" : (": " + remote_->lost()).c_str());
   if (cap > 0) grow_kv(*s, cap);
@@ -511,8 +511,9 @@ std::unique_ptr<Seq> Qwen4Exp::new_seq(int limit, int initial) {
 }
 
 bool Qwen4Exp::reserve(Seq& s, int need) {
-  // the other Macs' layers first (they hold the same positions of their own caches, by their own budgets)
-  if (remote_ && need > s.cap && need <= s.limit && !remote_->grow(s.rid, need)) return false;
+  // the other Macs' layers first: they hold the same positions of their own caches, grown by their own budgets and
+  // rounding, so what they hold (rcap) is tracked apart from this Mac's cap
+  if (remote_ && !remote_reserve(*remote_, s, need)) return false;
   return Qwen35::reserve(s, need);
 }
 
@@ -555,6 +556,7 @@ void Qwen4Exp::drop_kv(Seq& s) {
   g.release(s.mtp_ixk);
   g.release(s.mtp_ixb);
   if (remote_ && s.rid >= 0) remote_->drop_kv(s.rid);
+  s.rcap = 0;
 }
 
 size_t Qwen4Exp::kv_bytes_per_pos() const {
