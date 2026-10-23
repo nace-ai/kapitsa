@@ -107,7 +107,7 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
   }
   // streamed experts: the next layer's router on the same rows too (its top-k is read ahead during this layer)
   const int li = layer_index(L);
-  const bool pred = L.eg.q20 && store_ && !store_->complete() && li >= 0 && li + 1 < cfg_.layers;
+  const bool pred = L.eg.q20 && store_ && !store_->complete() && li >= 0 && li + 1 < hi_;
   std::vector<RowSeg> segs = {{&L.router, rlog_}, {&L.shared_gate, slog_}};
   if (pred) segs.push_back({&layers_[size_t(li + 1)].router, plog_});
   enc_rows(e, segs, xrn_, R);
@@ -280,21 +280,8 @@ void Qwen4Exp::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingP
   }
   enc_embed(e, s.tok, pos, R, yb_);
   enc_expand(e, R);
-  for (int i = 0; i < cfg_.layers; ++i) {
-    const Layer& L = layers_[size_t(i)];
-    const Qwen4Layer& F = l4_[size_t(i)];
-    if (i == c4_.ple_layer) {
-      if (i > 0) enc_inject(e, R, x_, injM_);
-      e.wait_event(ple_ev_, ticket);
-      enc_ple_rows(e, s, R, pos, rows);
-    }
-    enc_gr_rows(e, F.ga, R, x_, 0, i > 0 && i != c4_.ple_layer, injM_, injA_, xrn_, uint32_t(D));
-    if (L.linear) enc_gdn4_rows(e, s, i, L, R);
-    else enc_attn4_rows(e, s, L, F, s.kc[size_t(i)], s.vc[size_t(i)], s.ixk[size_t(i)], s.ixb[size_t(i)], pos, R);
-    enc_gr_rows(e, F.gm, R, x_, 0, true, injA_, injM_, xrn_, uint32_t(D));
-    enc_moe4_rows(e, L, R, false);
-    enc_capture4(e, i, pos, R);
-  }
+  enc_verify_layers(e, s, pos, R, rows, ticket);
+  enc_hop(e, Remote::Kind::verify, s, pos, R);
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   enc_gr_rows(e, mix_, R, x_, 0, true, injM_, injA_, xrn_, uint32_t(D));
   enc_rows(e, {{&lm_head_, logits_}}, xrn_, R);
@@ -312,7 +299,30 @@ void Qwen4Exp::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingP
   e.dispatch(uint32_t(R), 1, 1, 1024);
 }
 
-void Qwen4Exp::encode_flush(Encoder& e, Seq& s) { Qwen35::encode_flush(e, s); }
+void Qwen4Exp::enc_verify_layers(Encoder& e, Seq& s, int pos, int R, const Buffer& rows, uint64_t ticket) {
+  const int D = cfg_.hidden;
+  for (int i = lo_; i < hi_; ++i) {
+    const Layer& L = layers_[size_t(i)];
+    const Qwen4Layer& F = l4_[size_t(i)];
+    if (i == c4_.ple_layer) {
+      if (i > 0) enc_inject(e, R, x_, injM_);
+      e.wait_event(ple_ev_, ticket);
+      enc_ple_rows(e, s, R, pos, rows);
+    }
+    enc_gr_rows(e, F.ga, R, x_, 0, i > 0 && i != c4_.ple_layer, injM_, injA_, xrn_, uint32_t(D));
+    if (L.linear) enc_gdn4_rows(e, s, i, L, R);
+    else enc_attn4_rows(e, s, L, F, s.kc[size_t(i)], s.vc[size_t(i)], s.ixk[size_t(i)], s.ixb[size_t(i)], pos, R);
+    enc_gr_rows(e, F.gm, R, x_, 0, true, injA_, injM_, xrn_, uint32_t(D));
+    enc_moe4_rows(e, L, R, false);
+    enc_capture4(e, i, pos, R);
+  }
+}
+
+void Qwen4Exp::encode_flush(Encoder& e, Seq& s) {
+  const int n = s.n_pend;  // (the flush zeroes it)
+  Qwen35::encode_flush(e, s);
+  if (remote_ && n > 0) remote_->flush(s.rid, n);
+}
 
 // The MTP layer over R rows of mtpX_ (positions mpos0..): attention on its own caches, then (moe) its MoE; the
 // injections leave the layer's output in mtpX_ (with moe) or the attention's (without: history passes only fill the

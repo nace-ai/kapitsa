@@ -56,6 +56,8 @@ struct Seq {
   int mask_rows = 0, mask_words = 0;
   void* mask_event = nullptr;
   uint64_t mask_value = 0;
+  int rid = -1;  // a model split across Macs (src/cluster/pipe.h): this sequence's id on the other Macs
+  int rcap = 0;  // ... and the positions their caches hold (they round growth by their own rule: not always cap)
 };
 
 // Structured output: logits rows [0, rows) of `logits` (ld floats apart, vocab of them tokens) take s's mask rows
@@ -69,6 +71,7 @@ struct Checkpoint {
   int pos = -1;
   std::vector<Buffer> conv, rec;
   Buffer pconv;  // Qwen3.8-Flash-Next: the n-gram embedding's conv window
+  int rid = -1;  // a model split across Macs: this checkpoint's id on the other Macs
 };
 
 // An attention cache as the SSD prefix cache keeps it (src/engine/prefix_cache.h): [heads][s.cap][row_bytes], of which a
@@ -146,6 +149,9 @@ class Model {
                               bool sample, Checkpoint* snap = nullptr, int snap_row = 0) = 0;
   virtual int prefill_chunk() const = 0;
   virtual bool can_snapshot() const = 0;
+  // A model split across Macs (src/cluster/pipe.h): why its other Macs no longer answer ("" while they do). Once it is
+  // set, passes still complete but their outputs are garbage: the engine ends the request with it.
+  virtual std::string lost() const { return ""; }
 
   // ---- GPU + Neural Engine split of the dense prefill FFN (Qwen35); none elsewhere ----
   virtual bool ane_splits(int) const { return false; }

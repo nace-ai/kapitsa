@@ -1874,6 +1874,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
                         const std::function<bool()>& cancelled,
                         const std::function<bool(const ChatResult&)>& on_accepted) {
   const uint64_t arrival = ++requests_;
+  // a model split across Macs whose other Macs stopped answering runs nothing more (the server needs a restart)
+  if (std::string why = model_->lost(); !why.empty()) {
+    ChatResult res;
+    res.finish_reason = "error";
+    res.error = "the model is split across Macs and " + why + "; restart the server once they are back";
+    return res;
+  }
   // assistant turns the client sent back without their reasoning get it again (see restore_reasoning)
   ChatRequest r_restored = r_in;
   const int restored = restore_reasoning(r_restored);
@@ -2630,6 +2637,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   auto handle = [&](int t) -> bool {
     if (cancelled && cancelled()) {
       finish = "cancelled";
+      return false;
+    }
+    // a model split across Macs whose other Macs stopped answering: this token's pass did not run there
+    if (std::string why = model_->lost(); !why.empty()) {
+      finish = "error";
+      res.error = "the model is split across Macs and " + why;
       return false;
     }
     ++gen;
