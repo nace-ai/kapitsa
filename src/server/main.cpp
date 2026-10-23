@@ -322,6 +322,8 @@ static void print_serve_help() {
          "  --private              this Mac only: listen on 127.0.0.1, stay out of sight of Kapitsa on the other Macs\n"
          "                         and never send them requests. By default the server is visible on the network\n"
          "                         (Bonjour), with no password: kapitsa cluster on any Mac lists it\n"
+         "  --peer HOST[:PORT]     another Mac's Kapitsa server, for networks that block Bonjour between Macs (most\n"
+         "                         office Wi-Fi): read as the Macs Bonjour finds (also KAPITSA_PEERS, ~/.cache/kapitsa/peers)\n"
          "  --local                run the model here even when another Mac on the network runs it whole. By default a\n"
          "                         Mac that would not hold the model whole (it does not fit, or streams experts from\n"
          "                         the SSD) sends its requests to one that does, which kapitsa serve finds by itself\n"
@@ -882,6 +884,7 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--port") port = to_int(a, next(), help);
     else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
     else if (a == "--local") local = true;   // never routed: the model runs here
+    else if (a == "--peer") cluster::add_peer(next());  // another Mac's server, where Bonjour does not reach
     else if (a == "--context" || a == "--ctx") {
       std::string why;
       context_req = parse_context(next(), &why);

@@ -9,12 +9,15 @@
 // answering, and shows as such until Bonjour forgets it.
 #include "cluster/discovery.h"
 
+#include "hub/hub.h"
+
 #include "util/log.h"
 
 #include <httplib/httplib.h>
 
 #include <SystemConfiguration/SystemConfiguration.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <dns_sd.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -29,6 +32,7 @@
 #include <condition_variable>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -206,6 +210,31 @@ MacInfo this_mac() {
   m.ram_gb = std::round(double(mem) / 1073741824.0);
   m.link = "this Mac";
   return m;
+}
+
+std::vector<std::string> named_peers() {
+  std::vector<std::string> out;
+  auto add = [&](std::string a) {
+    a.erase(0, a.find_first_not_of(" \t"));
+    if (const size_t h = a.find('#'); h != std::string::npos) a.resize(h);
+    while (!a.empty() && (a.back() == ' ' || a.back() == '\t' || a.back() == '\r')) a.pop_back();
+    if (!a.empty() && std::find(out.begin(), out.end(), a) == out.end()) out.push_back(a);
+  };
+  if (const char* v = getenv("KAPITSA_PEERS"))
+    for (std::string s = v; !s.empty();) {
+      const size_t c = s.find(',');
+      add(s.substr(0, c));
+      s = c == std::string::npos ? "" : s.substr(c + 1);
+    }
+  std::ifstream f(hub::home_dir() + "/peers");
+  for (std::string line; std::getline(f, line);) add(line);
+  return out;
+}
+
+void add_peer(const std::string& addr) {
+  const char* v = getenv("KAPITSA_PEERS");
+  const std::string all = v && *v ? std::string(v) + "," + addr : addr;
+  setenv("KAPITSA_PEERS", all.c_str(), 1);
 }
 
 std::string new_id() {
@@ -478,7 +507,10 @@ struct Browser::Impl {
     conn = nullptr;
     std::lock_guard<std::mutex> lk(mu);
     for (auto& [name, en] : entries) en.resolving = en.addressing = nullptr;
-    if (forget) entries.clear(), bump();
+    if (forget) {  // (the servers named by address stay: Bonjour did not find them)
+      for (auto it = entries.begin(); it != entries.end();) it = it->first[0] == '@' ? std::next(it) : entries.erase(it);
+      bump();
+    }
   }
 
   void start_resolve(const std::string& name) {
@@ -606,6 +638,27 @@ struct Browser::Impl {
 
 Browser::Browser(const std::string& type) : impl_(std::make_shared<Impl>()) {
   impl_->type = type;
+  for (const std::string& p : named_peers()) {  // read as Bonjour's are, under a name Bonjour never gives ("@...")
+    std::string host = p, port = "8000";
+    if (const size_t c = p.rfind(':'); c != std::string::npos && p.find(':') == c) host = p.substr(0, c), port = p.substr(c + 1);
+    addrinfo hints{}, *res = nullptr;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(host.c_str(), port.c_str(), &hints, &res) != 0 || !res) {
+      logi("cluster: %s does not resolve", p.c_str());
+      continue;
+    }
+    Impl::Entry en;
+    char b[INET_ADDRSTRLEN] = "";
+    inet_ntop(AF_INET, &reinterpret_cast<sockaddr_in*>(res->ai_addr)->sin_addr, b, sizeof b);
+    freeaddrinfo(res);
+    en.resolved = true;
+    en.port = atoi(port.c_str());
+    en.addrs.insert(b);
+    en.txt.proto = kProto;
+    en.txt.name = host;
+    impl_->entries["@" + p] = en;
+  }
   std::thread([s = impl_] { s->events(); }).detach();
   std::thread([s = impl_] { s->reader(s); }).detach();
 }
@@ -620,9 +673,10 @@ Browser::~Browser() {
 std::vector<MacInfo> Browser::peers() const {
   std::lock_guard<std::mutex> lk(impl_->mu);
   std::vector<MacInfo> out;
+  std::set<std::string> ids;  // a server Bonjour finds and also named by address: once
   for (const auto& [name, en] : impl_->entries) {
     if (en.read && en.fails < 2) {
-      out.push_back(en.info);
+      if (en.info.id.empty() || ids.insert(en.info.id).second) out.push_back(en.info);
       continue;
     }
     if (!en.resolved || en.txt.proto != kProto || (!en.read && en.fails == 0)) continue;  // not read yet

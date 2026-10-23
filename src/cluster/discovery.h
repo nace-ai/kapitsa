@@ -25,6 +25,12 @@ std::string lan_address();
 std::string link_to(const std::string& ipv4);
 // What a Bonjour error means, for a message
 std::string bonjour_error(int code);
+// Kapitsa servers named by address, for a network that does not carry Bonjour between Macs (many office Wi-Fi networks
+// do not): "host[:port]" (port 8000 unless given) from KAPITSA_PEERS (comma-separated) and the lines of
+// <Kapitsa's home>/peers (# starts a comment). Every Browser reads them as it reads the servers Bonjour finds.
+std::vector<std::string> named_peers();
+// Adds one to KAPITSA_PEERS for this process and the ones it starts (--peer)
+void add_peer(const std::string& addr);
 
 // Registers a server as `type` on every interface while it lives, under this Mac's computer name (with a number added
 // on a conflict: two servers on one Mac). `info` is read at once and every few seconds after, on the advertiser's own
