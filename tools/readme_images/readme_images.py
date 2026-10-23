@@ -30,18 +30,25 @@ def fmt(v):
     return str(round(v)) if isinstance(v, (int, float)) else DASH
 
 
-NO_SPEC = "no spec"        # the record's method for plain decoding: shown as no label at all, on every engine
+NO_SPEC = "no spec"        # the record's method for plain decoding: shown as no label at all on a rival
+KAPITSA_METHOD = "KFlash"  # every Kapitsa cell's label; the models it can't draft for are footnoted (KFLASH_NOTE)
+# KFlash verifies a draft model's guesses; the cells measured without one say so here, so the label stays true
+KFLASH_NOTE = ("KFlash needs a draft model: Flint, Dory, Nano 9B v2 and the 35B-A3B 2-bit have none and decode one token "
+               "per pass; Flash-Next drafts with its MTP head, Nano 4B by prompt lookup")
 
 
-def cell(row, engine):
-    """(value, method, raw) of one cell: value is a number, None (a dash) or "x" (can't run); method is None for plain
-    decoding (no speculative decoding), so a label only ever names a real method"""
+def cell(row, engine, kap_label=True):
+    """(value, method, raw) of one cell: value is a number, None (a dash) or "x" (can't run). A Kapitsa number's method
+    is always KFlash (kap_label=False: the record's own); a rival's is None for plain decoding (no speculative decoding),
+    so a rival's label only ever names a real method"""
     c = row["cells"].get(engine)
     if c is None or c == "x":
         return c, None, c
     if isinstance(c, (int, float)):
-        return c, None, c
+        return c, KAPITSA_METHOD if engine == "Kapitsa" and kap_label else None, c
     m = c.get("method")
+    if engine == "Kapitsa" and kap_label and is_num(c.get("value")):
+        return c.get("value"), KAPITSA_METHOD, c
     return c.get("value"), None if m == NO_SPEC else m, c
 
 
@@ -147,7 +154,8 @@ def tables(data):
     (tables.families) that has a row on that Mac, under the family's name when there are two or more"""
     T = data["tables"]
     out = [LEGEND + " (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · "
-           "small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured</sub>"]
+           "small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured · "
+           f"{KFLASH_NOTE}</sub>"]
     for tmac in T["macs"]:
         rows = table_rows(data, tmac)
         groups = [(f["name"], [r for r in rows if r["model"] in f["models"]]) for f in T["families"]]
@@ -338,7 +346,8 @@ def poster(data, theme):
     beaten = any(is_num(cell(r, "Kapitsa")[0]) and any(is_num(cell(r, e)[0]) and cell(r, e)[0] > cell(r, "Kapitsa")[0]
                                                          for e in names[1:]) for r in rows)
     tied = any(r.get("tie") for r in rows)  # engines whose decode is level with Kapitsa's, inside the runs' spread
-    footer = list(P["footer"]) + (["Blue outline: faster decode than Kapitsa · orange bar: rows where Kapitsa isn't alone at the fastest decode"
+    footer = list(P["footer"]) + [KFLASH_NOTE]   # KFlash sits under every Kapitsa number: which ones had no drafter
+    footer += (["Blue outline: faster decode than Kapitsa · orange bar: rows where Kapitsa isn't alone at the fastest decode"
                                    + (" · ≈: a decode tie with Kapitsa (the gap is inside the runs' spread)" if tied else "")]
                                   if beaten or tied else [])
     foot_h = FOOT_GAP + len(footer) * FOOT_LINE + FOOT_PAD
@@ -499,7 +508,7 @@ def header_rows(data):
     row, eng = header_row(data), {e["name"]: e for e in data["engines"]}
     out = []
     for e in data["header"]["engines"]:
-        v, m, _ = cell(row, e)
+        v, m, _ = cell(row, e, kap_label=False)   # the Flint banner carries no legend: no KFlash label there
         out.append(dict(name=e, value=v if is_num(v) else None, method=m or eng[e].get("method"), kap=e == "Kapitsa"))
     return out
 
