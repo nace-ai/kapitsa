@@ -17,12 +17,14 @@ namespace ni {
 namespace {
 
 const char* const kHelp =
-    "kapitsa cluster [--json] [--watch]\n\n"
+    "kapitsa cluster [--json] [--watch] [--peer HOST[:PORT]]\n\n"
     "The Macs on this network that run Kapitsa, found in about 2 seconds: this Mac first, then the others, each with\n"
     "its chip and memory, the model it serves, how it runs it (in memory, streaming experts from the SSD, or as a proxy\n"
     "to another Mac), its recent decode speed, and the link to it with the round trip.\n\n"
     "  --json    the same as JSON: this Mac, and each server as its GET /cluster describes it, with the link\n"
-    "  --watch   keep it up to date until Ctrl+C\n\n"
+    "  --watch   keep it up to date until Ctrl+C\n"
+    "  --peer    another Mac's server by address, where the network blocks Bonjour between Macs (office Wi-Fi);\n"
+    "            also KAPITSA_PEERS (comma-separated) and ~/.cache/kapitsa/peers (one per line)\n\n"
     "Every kapitsa serve is visible to the other Macs on its network, with no password (--private hides it). A Mac that\n"
     "would not hold a model whole sends its requests to a Mac listed here that runs it whole (--local runs it on the Mac\n"
     "itself). kapitsa macs is the same command.\n";
@@ -89,6 +91,7 @@ int run_cluster(int argc, char** argv, int first) {
     }
     if (a == "--json") json = true;
     else if (a == "--watch" || a == "-w") watch = true;
+    else if (a == "--peer" && i + 1 < argc) cluster::add_peer(argv[++i]);
     else usage_error("unknown option " + a, "kapitsa cluster --help");
   }
   const bool fancy = term::fancy() && !json;

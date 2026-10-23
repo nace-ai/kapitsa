@@ -341,6 +341,11 @@ class Qwen35 : public Model {
   Buffer hidden_rows() { return x_; }
   // bytes of one hidden_rows() row as encode_mtp reads it (Qwen3.8-Flash-Next's rows hold its 4 streams)
   virtual size_t hidden_row_bytes() const { return size_t(cfg_.hidden) * 4; }
+  // The final RMSNorm as loaded (HF checkpoints' zero-centred weights already folded as 1 + w), so that a host-side
+  // reader can turn a hidden_rows() residual row into the post-final-norm row an LM head or a Drex pointer head reads.
+  std::vector<float> final_norm_weights() const;
+  float rms_eps() const { return cfg_.eps; }
+  int hidden_width() const { return cfg_.hidden; }
   Buffer mtp_post() { return mtp_post_; }
   // GPU copy of src into dst (the smaller of the two sizes, a multiple of 16 bytes), in order with the work in `e`
   // (the engine keeps a sequence's MTP hidden rows aside while another request's passes reuse hidden_rows())

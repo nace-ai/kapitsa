@@ -18,6 +18,8 @@
 #include <thread>
 #include <vector>
 
+#include <unistd.h>
+
 using namespace ni;
 using namespace ni::cluster;
 using ojson = nlohmann::ordered_json;
@@ -69,6 +71,30 @@ MacInfo server(const std::string& name, const std::string& model, bool whole, do
 std::string picked(const std::vector<MacInfo>& peers, const std::string& model, bool whole_here = false) {
   const auto p = pick_server(peers, model, whole_here);
   return p ? p->name : "(none)";
+}
+
+// Servers named by address (--peer, KAPITSA_PEERS, <home>/peers), for networks that block Bonjour between Macs
+void peer_checks() {
+  char tmpl[] = "/tmp/cluster_test.XXXXXX";
+  const std::string home = mkdtemp(tmpl);
+  setenv("KAPITSA_HOME", home.c_str(), 1);
+  setenv("KAPITSA_PEERS", " studio.local:8001, 10.0.0.5 ,studio.local:8001", 1);
+  FILE* f = fopen((home + "/peers").c_str(), "w");
+  fputs("# office Macs\n10.0.0.7:8000   # the M3\n\n10.0.0.5\n", f);
+  fclose(f);
+  auto all = [] {
+    std::string s;
+    for (const auto& p : named_peers()) s += p + ";";
+    return s;
+  };
+  check(all() == "studio.local:8001;10.0.0.5;10.0.0.7:8000;", "peers: the variable's and the file's, trimmed, once each",
+        all());
+  add_peer("10.0.0.9:8002");
+  check(all() == "studio.local:8001;10.0.0.5;10.0.0.9:8002;10.0.0.7:8000;", "peers: --peer adds to the variable", all());
+  unsetenv("KAPITSA_PEERS");
+  remove((home + "/peers").c_str());
+  rmdir(home.c_str());
+  unsetenv("KAPITSA_HOME");
 }
 
 void txt_checks() {
@@ -414,6 +440,7 @@ void live_checks() {
 
 int main(int argc, char** argv) {
   const bool live = argc > 1 && !strcmp(argv[1], "--live");
+  peer_checks();
   txt_checks();
   json_checks();
   parse_checks();

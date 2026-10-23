@@ -661,6 +661,12 @@ Wi-Fi, Ethernet or Thunderbolt, from the interface that reaches it) with the med
 Bonjour lists but that does not answer is shown as `not answering`. `--json` gives the same as JSON, `--watch` keeps it
 up to date until Ctrl+C.
 
+Many office and campus Wi-Fi networks do not pass Bonjour between computers: there `kapitsa cluster` shows no other Mac
+although the Macs reach each other. Name the other Macs' servers by address instead: `--peer 10.10.50.111` (port 8000
+unless given, `HOST:PORT` otherwise) on `kapitsa serve` or `kapitsa cluster`, `KAPITSA_PEERS=host[:port],...` for any
+command (`kapitsa claude` too), or one per line in `~/.cache/kapitsa/peers`. Those servers are read as the Macs Bonjour
+finds, so routing and pairing work the same; a server found both ways counts once.
+
 macOS asks once whether the app that runs `kapitsa` (the terminal, or the app that starts the server) may find devices
 on the local network. Refused, nothing is found or advertised, and `kapitsa cluster` says so: allow it in System
 Settings > Privacy & Security > Local Network, on each Mac. With the macOS firewall on, allow `kapitsa`'s incoming

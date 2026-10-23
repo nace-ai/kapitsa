@@ -1323,6 +1323,25 @@ void Qwen35::reset(Seq& s) {
     if (b) memset(b.ptr(), 0, b.size);
 }
 
+std::vector<float> Qwen35::final_norm_weights() const {
+  if (!final_norm_) fatal("final norm weights are missing");
+  const size_t n = size_t(cfg_.hidden);
+  std::vector<float> out(n);
+  if (final_norm_->dtype == DType::BF16) {
+    const uint16_t* w = final_norm_->buf.as<uint16_t>();
+    for (size_t i = 0; i < n; ++i) out[i] = bf16_to_f32(w[i]);
+  } else if (final_norm_->dtype == DType::F32) {
+    const float* w = final_norm_->buf.as<float>();
+    for (size_t i = 0; i < n; ++i) out[i] = w[i];
+  } else if (final_norm_->dtype == DType::F16) {
+    const _Float16* w = final_norm_->buf.as<_Float16>();
+    for (size_t i = 0; i < n; ++i) out[i] = float(w[i]);
+  } else {
+    fatal("final norm weights have an unsupported dtype");
+  }
+  return out;
+}
+
 Checkpoint Qwen35::new_checkpoint() {
   Gpu& g = Gpu::get();
   Checkpoint c;
