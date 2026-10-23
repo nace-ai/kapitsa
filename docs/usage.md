@@ -406,6 +406,7 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `POST /v1/responses` | OpenAI Responses: reasoning items, function and custom tools, `usage.input_tokens_details.cached_tokens`. `previous_response_id` continues one of the last 64 stored responses (unknown ids are a 400). Built-in tools such as web search are left out. Supports on-demand model switching via `model`. |
 | `POST /v1/messages` | Anthropic Messages: thinking blocks, `tool_use` and `tool_result`; `usage.input_tokens` counts the uncached prompt, `cache_read_input_tokens` the cached part. Server tools are left out. Supports on-demand model switching via `model`. |
 | `POST /v1/messages/count_tokens` | Anthropic's token count of a request. |
+| `POST /v1/draft` | Reads the user's draft of a conversation's next message ahead while they type, so the request, once sent, prefills only what was typed since: `{"model", "after", "text"}` ([below](#reading-ahead-while-the-user-types)). |
 | `GET /v1/models` | Available models (active model first, downloaded models, and catalog models); includes `active`, `downloaded`, `context_fit`, and `slots`. |
 | `GET /v1/models/:model` | Information about a specific model. |
 | `POST /v1/models/switch` | With `--allow-switch`: switches the active model, `{"model": "<name>"}` (403 without the flag). While it loads, other requests get 503 with `Retry-After`. A model that fails to load leaves the previous one serving. |
@@ -425,6 +426,71 @@ curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/jso
 curl http://127.0.0.1:8000/v1/messages -H 'Content-Type: application/json' -d '{"model": "qwen3.5-4b",
   "max_tokens": 1024, "messages": [{"role": "user", "content": "Write a haiku about unified memory."}]}'
 ```
+
+### Reading ahead while the user types
+
+An app can send the draft of a conversation's next message to `POST /v1/draft` at each pause in the typing. The
+server then prefills the next request's prompt as far as the draft goes, so that the request, once sent, prefills only
+what was typed after the last draft: a long paste is read while the user finishes the question under it. The idea is
+MAFDET's ([TheLastOxygen/mafdet](https://github.com/TheLastOxygen/mafdet), on llama.cpp); the Qwen3.5 family's
+recurrent layers cannot be cut back to any token, so Kapitsa keeps a checkpoint at the start of the user's turn instead.
+
+```bash
+curl http://127.0.0.1:8000/v1/draft -H 'Content-Type: application/json' -d '{"model": "qwen3.5-4b",
+  "after": "<the text of the last assistant reply>", "text": "<a 2,000-token paste, and the question typed under it>"}'
+{"status":"prefilled","prompt_tokens":5255,"cached_tokens":3186,"prefilled_tokens":2068,"ms":2545.2}
+```
+
+- **Which conversation.** The most recent of the last 32 replies the server ended with `stop` (any API) whose text
+  equals `after`, both trimmed: the app sends no conversation id, only the reply and the draft.
+- **What is read.** The next request as the server will render it (the conversation, that reply as clients send it
+  back), then the user's turn holding the draft up to its last whitespace (the word being typed can still grow), less
+  its last token. First a checkpoint is kept where the user's turn starts (where a request without drafts starts),
+  with the drafter's context: a draft that extends the last one continues it, one edited anywhere or deleted goes back
+  to that checkpoint and reads what one draft of its text would. The request continues the drafts' state when its
+  prompt extends it (`usage.prompt_tokens_details.cached_tokens` counts what the drafts read), else resumes from the
+  checkpoint.
+- **Never in the way.** Read only while the server is idle (`busy` with a request in flight); a request that arrives
+  stops the reading at the next prefill chunk, keeping what was read. Its KV cache grows within the slot's memory.
+- **The same reply?** On a dense model's GPU path, yes: the Qwen3.5 4B writes the same tokens with drafts as without
+  (`tests/test_draft.py`). A draft cuts the new message into other prefill passes, and on a MoE model a row's logits
+  depend on how many rows its short pass holds, so the Qwen3.6 35B-A3B's reply can take the other word where two
+  nearly tie, as it already does when a follow-up arrives before the history prefill (within its 250 ms idle wait, or
+  with `NI_HISTORY_PREFILL=0`: the answer and the message read in one pass). On a MacBook Pro 16-inch (M4 Pro, 48 GB),
+  on a 3,234-token follow-up, all six of the 35B-A3B's short-message draft cases took another word, at the token where
+  the one-pass history path does or later (the paste's reply stayed the same); over the reply tokens before it, the
+  gap between the two best logits moved 0.007-0.045 on average with drafts against 0.038 for the one-pass path (at
+  most 0.29 against 0.14, at one token; with an image 0.081 against 0.080), and where a reply parts, the no-draft gap
+  was 0.021-0.107: the one-pass path parts at 0.107 too, beyond the 0.060 the model's noise floor counts as a near
+  tie. The cause is how the last rows are cut into short prefill passes, not speculative decoding (plain decoding and
+  MTP flip too). A dense model's Neural Engine split (the 4B's default for chunks of 512 rows or more) computes the
+  FFN in 8 bits, so after a long draft the request's last rows are the GPU's: in one series on the 4B a paste's reply
+  changed, in the table's rounds it did not. `NI_ANE=0` keeps the prompt on the GPU.
+- **Models.** The Qwen3.5 family with its drafters, the MTP head or none. Nemotron-H models, Dory and Flint answer
+  `unsupported`. Text without spaces (Chinese, Japanese) is read only up to its last whitespace.
+
+The reply is always 200 (400: a body without `after` and `text` as strings; `"think": true`, not supported yet):
+
+| Field | |
+| --- | --- |
+| `status` | `prefilled` (read), `unchanged` (nothing new), `interrupted` (a request arrived: stopped at a chunk, the part read kept), `busy` (a request in flight: nothing done), `no_conversation` (no recent reply is `after`, or its slot has since gone to another conversation), `unsupported` (this model, or an image in the conversation not yet read), `no_room` (beyond the context or the memory for its KV cache) |
+| `prompt_tokens` | The prompt as far as the draft can be read; the slot holds all of it but its last token once read |
+| `cached_tokens` | Of those, what the slot held before (the live state, or the checkpoint it went back to) |
+| `prefilled_tokens` | Read by this call |
+| `ms` | The call's time in the engine |
+
+Measured on a MacBook Pro 16-inch (M4 Pro, 20-core GPU, 48 GB), macOS 27.0.1, by `tests/test_draft.py --measure
+--rounds 3` (greedy, thinking off, the DFlash drafters, servers as by default, each case on a fresh server): a 5,315-
+token first turn and its answer, then the next message with no draft, right after a draft of all of it (read up to its
+last word), or of all but its last word; the time to the request's first token, sent right after a one-token request
+of another conversation (the GPU awake). The replies were the same in all three cases, every round:
+
+| Model | Next message | No draft | After a draft of all of it | Of all but its last word | The draft's own time |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Qwen3.5 4B | ~40 tokens (prompt 5,425) | 0.072-0.073 s (5,381 cached) | 0.028-0.030 s (5,413) | 0.028-0.029 s (5,412) | 50-54 ms |
+| Qwen3.5 4B | a ~2,000-token paste (prompt 7,461) | 1.27-1.28 s (5,381 cached) | 0.029 s (7,449) | 0.029-0.031 s (7,448) | 1.32-1.34 s |
+| Qwen3.6 35B-A3B | ~40 tokens (prompt 5,407) | 0.076-0.078 s (5,363 cached) | 0.032-0.034 s (5,395) | 0.035-0.036 s (5,394) | 59-91 ms |
+| Qwen3.6 35B-A3B | a ~2,000-token paste (prompt 7,443) | 2.02-2.11 s (5,363 cached) | 0.033-0.045 s (7,431) | 0.036 s (7,430) | 2.12-2.18 s |
 
 ### Thinking
 
