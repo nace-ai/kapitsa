@@ -152,13 +152,14 @@ int parse_context(const std::string& s, std::string* why);
 int model_context_limit(const std::string& model_dir);
 // `context` within the model's limit, if it states one
 int context_within_limit(const std::string& model_dir, int context);
-// The context `kapitsa serve` and `kapitsa claude|codex|opencode|pi` take when none is given: kDefaultContext (128K),
-// or the model's limit where that is less, or less where this Mac's memory is tight: the largest, in 8K steps down to
-// kMinDefaultContext (32K), that keeps the drafter the model has at 32K, with one full conversation beside it (below
-// 32K, in 8K steps and 1K steps below 8K, only for a model one slot cannot hold 32K tokens in: Flint with 2-bit experts
-// on 16 GB, 8K). The
-// model and its precision are picked at 32K, and a context costs no memory until a conversation fills it (the KV
-// cache grows with it). *why, if given: why it is less than kDefaultContext.
+// The context `kapitsa serve` and `kapitsa claude|codex|opencode|pi` take when none is given: the model's limit
+// (model_context_limit: 256K, 1M), or kDefaultContext (128K) for a model that does not state one, or less where this
+// Mac's memory is tight: the largest, in 8K steps down to kMinDefaultContext (32K), that keeps the drafter the model
+// has at 32K, with one full conversation beside it (below 32K, in 8K steps and 1K steps below 8K, only for a model one
+// slot cannot hold 32K tokens in: Flint with 2-bit experts on 16 GB, 8K). The memory is the budget (default_mem_budget:
+// the GPU's working set less a 4% margin, 512 MB at least, or --mem-budget). The model and its precision are picked at
+// 32K, and a context costs no memory until a conversation fills it (the KV cache grows with it). *why, if given: why
+// it is not the model's limit (kModelLimit: it is; kDefault: the model states none).
 constexpr int kDefaultContext = 131072, kMinDefaultContext = 32768;
 enum class ContextWhy { kDefault, kModelLimit, kMemory, kMemoryWithDrafter };
 int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why = nullptr);

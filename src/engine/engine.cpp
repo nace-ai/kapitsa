@@ -790,9 +790,10 @@ int context_within_limit(const std::string& model_dir, int context) {
 
 int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why) {
   const int limit = model_context_limit(model_dir);
-  const int top = limit > 0 ? std::min(kDefaultContext, limit) : kDefaultContext;
+  // the model's own limit where it states one (256K, 1M), else kDefaultContext: memory then takes it down
+  const int top = limit > 0 ? limit : kDefaultContext;
   const int floor = std::min(kMinDefaultContext, top);
-  ContextWhy w = top < kDefaultContext ? ContextWhy::kModelLimit : ContextWhy::kDefault;
+  ContextWhy w = limit > 0 ? ContextWhy::kModelLimit : ContextWhy::kDefault;
   int c = top;
   try {
     const int slots = fit_slots(opt.slots);

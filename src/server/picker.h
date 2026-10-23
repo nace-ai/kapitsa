@@ -2,7 +2,7 @@
 // The model first (arrow keys or j/k, Enter; Esc or Ctrl+C cancels), then its precision (Esc goes back; a model with
 // one precision skips it). Each choice shows its download size, whether it is downloaded, the context it would run with
 // and whether it fits this Mac with its draft model (the engine's own plan, offline, as the home screen's ★). Tab
-// (Shift+Tab back) changes the context on both screens: the default (128K, less where memory is tight), 32K, 128K,
+// (Shift+Tab back) changes the context on both screens: the default (the model's limit, less where memory is tight), 32K, 128K,
 // 256K or max, the model's own limit. The last choice comes first, so Enter twice repeats the last run: it is kept,
 // with its context, in state.json in Kapitsa's home (~/.cache/kapitsa, KAPITSA_HOME moves it), and a --model naming a
 // catalog model updates it too; with no history, the best model for this Mac at the default context.

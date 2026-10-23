@@ -28,7 +28,7 @@ Run in a terminal without `--model`, `kapitsa serve` and the coding-agent comman
 with their download size, ✓ where downloaded and ★ on the best for this Mac, then the chosen model's precisions with
 their sizes and whether each fits this Mac's memory (the engine's own plan of its headers; a model or precision that
 does not fit is marked too big and can still be chosen, with a warning). Each shows the context it would run with: Tab
-(Shift+Tab back) changes it on both screens, between the default ([Context](#context)), 32K, 128K, 256K and max, the
+(Shift+Tab back) changes it on both screens, between the default ([Context](#context): the model's limit where memory holds it), 32K, 128K, 256K and max, the
 model's own limit, and a model or precision that would run without its draft model at that context says so. ↑ and ↓
 (or j and k) move, Enter chooses, Esc goes back or cancels, Ctrl+C cancels. A model not downloaded yet says how much it
 downloads, then downloads as usual.
@@ -277,7 +277,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--api-key KEY` | none | Require `Authorization: Bearer KEY` or `x-api-key: KEY`. |
 | `--allow-switch` | off | Let a request naming another model, or `POST /v1/models/switch`, load that model (it may download gigabytes). Off, the `model` field is ignored, as clients send names of their own. On a network `--host` it needs `--api-key`. |
 | `--model-id ID` | the model's name | The model's name in the API. |
-| `--context N` | `128k`, less where memory is tight | Context per conversation: tokens (`131072`), `k` or `m` of them (`128k`, `1m`), or `max`, the model's own limit ([Context](#context)). `--ctx N` works too. |
+| `--context N` | the model's limit (256K, 1M), less where memory is tight | Context per conversation: tokens (`131072`), `k` or `m` of them (`128k`, `1m`), or `max`, the model's own limit ([Context](#context)). `--ctx N` works too. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--context` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
 | `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). Dense Nemotron-H (Nemotron Nano): prompt lookup's drafts per cycle (by default 4 with BF16 or FP8 MLP layers, off with NVFP4). Flint: prompt lookup's drafts per cycle (off by default). |
@@ -293,8 +293,9 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 ### Context
 
 `--context` sets how long one conversation can get: its prompt, its history and the reply share it. Without it, `kapitsa
-serve` and the coding-agent commands take 128K tokens, or the model's own limit where that is less, or less where this
-Mac's memory is tight: the most, in 8K steps down to 32K, that keeps the draft model the model has at 32K, with one full
+serve` and the coding-agent commands take the model's own limit (256K for the Qwen models, 1M for Lightning and
+Super-VL; 128K for a model that states none), or less where this Mac's memory is tight (the GPU's working set less a 4%
+margin, or `--mem-budget`): the most, in 8K steps down to 32K, that keeps the draft model the model has at 32K, with one full
 conversation beside it (below 32K only where one slot cannot hold 32K tokens: Flint's `16gb` on a 16 GB Mac takes 8K).
 The server says which context it took and why. A context costs no memory until a conversation fills it (the KV cache
 grows with it), so the default only sizes what memory is kept for.
@@ -550,7 +551,7 @@ kapitsa pi -p "list the TODOs in this repo"
 Each command checks that the agent is installed (else it says how to install it). If Kapitsa is serving on `127.0.0.1:P`
 (`--port P`, default 8000), the agent uses that server, its model and its context (a `--model` naming another model is
 an error). Otherwise the command downloads the model if needed, starts `kapitsa serve` with serve's default context
-([Context](#context): 128K, less where memory is tight; `--context N` sets it), logging to
+([Context](#context): the model's limit, less where memory is tight; `--context N` sets it), logging to
 `~/.cache/kapitsa/logs/serve-P.log`, and stops it when the agent exits or the command is killed.
 
 Without `--model` in a terminal, the command asks which model to start ([Which model](#which-model)); `--yes` skips
