@@ -44,7 +44,7 @@ questions. A question is one of three types:
 The reply is `{model, answers, usage: {input_tokens, input_tokens_details: {cached_tokens}, output_tokens}, latency_ms, timings}`; probabilities are rounded to
 four decimals, `confidence` is the separation of the best option from a flat distribution, and `output_tokens`
 counts the tokens of the answer JSON, as in the reference server. A `{"requests": [...]}` list scores up to 1024
-states in one call with one model in memory.
+states in one call with one model in memory, and its `usage` sums the elements'.
 
 ## How it runs on Kapitsa
 

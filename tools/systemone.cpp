@@ -362,7 +362,6 @@ class SystemOne {
     ojson out = ni::systemone::format_answers(logits, enc.meta);
     tm->head_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t2).count();
     scored_input_tokens_ = (int) enc.total_tokens();
-    input_tokens_ = scored_input_tokens_;
     return out;
   }
 
@@ -389,6 +388,7 @@ class SystemOne {
       }
     } else {
       answers = score(body, &tm);
+      input_tokens_ = scored_input_tokens_;
       output_tokens = ni::systemone::output_tokens(tok_, answers);
     }
     const auto ms = [](double v) { return std::round(v * 100.0) / 100.0; };

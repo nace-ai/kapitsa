@@ -299,8 +299,14 @@ def online(url):
                   answer_value(batch["answers"]["n"]) is not None and
                   answer_value(batch["answers"]["n"]) == answer_value(answers.get("n")),
                   (batch["answers"].get("n"), answers.get("n")))
-            check("batch: usage adds up the requests' tokens",
-                  batch["usage"]["input_tokens"] > body["usage"]["input_tokens"], (batch.get("usage"), body.get("usage")))
+            # usage.input_tokens is every position the call scored, so a batch sums its elements' (a cache hit moves
+            # cached_tokens, not input_tokens): the same numbers the elements report when they are sent alone.
+            _, n_alone = post(url, {"state": state, "questions": {"n": noul}})
+            _, q_alone = post(url, {"state": "The flag is disabled.",
+                                    "questions": {"q": {"type": "noul", "instructions": "Is it on?"}}})
+            want = n_alone["usage"]["input_tokens"] + q_alone["usage"]["input_tokens"]
+            check("batch: usage adds up the requests' tokens", batch["usage"]["input_tokens"] == want,
+                  (batch.get("usage"), want))
 
         # A question's row can be longer than the 2048-row prefill chunk: it is encoded in chunks and each chunk needs
         # its own encoder (a second chunk through a committed one aborted the GPU and killed the server).
