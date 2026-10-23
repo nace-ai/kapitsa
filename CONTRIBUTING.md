@@ -216,8 +216,11 @@ outside authors.
 ### The `TAP_GITHUB_TOKEN` secret (Homebrew tap)
 
 Without this repository secret the workflow cannot push the formula to
-[nace-ai/homebrew-tap](https://github.com/nace-ai/homebrew-tap): its job summary shows the formula and someone commits it
-there by hand. To make the tap update automatic, an owner of the `nace-ai` organization sets it up once:
+[nace-ai/homebrew-tap](https://github.com/nace-ai/homebrew-tap), and a stable release's `Homebrew formula` step fails
+instead of passing quietly: `brew install nace-ai/tap/kapitsa` is an install path (README, docs/usage.md, and what
+`kapitsa update` tells Homebrew users to run), so a green release has to mean the tap serves that version. Its job
+summary then holds the formula to commit there by hand. To make the tap update automatic, an owner of the `nace-ai`
+organization sets it up once:
 
 1. Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) (for a shared
    machine user rather than a person, where the organization has one). Resource owner: `nace-ai`. Repository access:
@@ -226,9 +229,10 @@ there by hand. To make the tap update automatic, an owner of the `nace-ai` organ
    under Organization settings, Personal access tokens.
 2. Add it to this repository: Settings, Secrets and variables, Actions, New repository secret, name `TAP_GITHUB_TOKEN`,
    the token as the value. Or: `gh secret set TAP_GITHUB_TOKEN -R nace-ai/kapitsa` and paste it.
-3. Check it on the next release: the `Homebrew formula` step should end with a `kapitsa X.Y.Z` commit by
-   `github-actions[bot]` in the tap instead of the formula in the job summary. If the push fails with a 403, the token
-   lacks Contents write on the tap, has expired, or is waiting for organization approval.
+3. Check it on the next release: the `Homebrew formula` step should end with `nace-ai/homebrew-tap serves X.Y.Z` and a
+   `kapitsa X.Y.Z` commit by `github-actions[bot]` in the tap. It fails if the push does not land on the tap's default
+   branch or the committed formula's sha256 is not the release's. If the push fails with a 403, the token lacks
+   Contents write on the tap, has expired, or is waiting for organization approval.
 
 When the token expires, create a new one the same way and replace the secret. Never commit the token or paste it into an
 issue or pull request.

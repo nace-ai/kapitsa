@@ -2,8 +2,9 @@
 # publishes it on the GitHub release (install.sh downloads it from there) and updates the formula in
 # nace-ai/homebrew-tap. Optional secrets: MACOS_CERTIFICATE (base64 .p12 of a Developer ID
 # Application certificate) and MACOS_CERTIFICATE_PASSWORD sign it; NOTARY_KEY (an App Store Connect API .p8 key),
-# NOTARY_KEY_ID and NOTARY_ISSUER_ID also notarize it; TAP_GITHUB_TOKEN pushes the formula to the tap (without it,
-# the job summary shows the formula to commit there).
+# NOTARY_KEY_ID and NOTARY_ISSUER_ID also notarize it; TAP_GITHUB_TOKEN pushes the formula to the tap, and a stable
+# release fails without it (its job summary then shows the formula to commit there by hand): `brew install
+# nace-ai/tap/kapitsa` is an install path (README, docs/usage.md), so a green release has to mean the tap serves it.
 name: Release
 
 on:
@@ -94,12 +95,18 @@ jobs:
           brew uninstall kapitsa-release/check/kapitsa
           brew untap kapitsa-release/check
           if [ -z "$TAP_GITHUB_TOKEN" ]; then
-            { echo "No TAP_GITHUB_TOKEN secret: commit this as Formula/kapitsa.rb in nace-ai/homebrew-tap."
+            # A release that leaves the tap on an older version has not shipped what its notes say it shipped, and the
+            # run must not be green: `brew install nace-ai/tap/kapitsa` is an install path (README, docs/usage.md), and
+            # `kapitsa update` tells Homebrew users to run `brew upgrade nace-ai/tap/kapitsa`.
+            { echo "No TAP_GITHUB_TOKEN secret, so nace-ai/homebrew-tap still serves the previous version. Commit this as"
+              echo "Formula/kapitsa.rb there by hand; with the secret added, later releases update the tap themselves:"
               echo '```ruby'; cat "$RUNNER_TEMP/kapitsa.rb"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "::error::No TAP_GITHUB_TOKEN secret: Formula/kapitsa.rb was not committed to nace-ai/homebrew-tap, which still serves the previous version (the formula to commit is in the job summary). Commit it there by hand; with the secret added (CONTRIBUTING.md, Releasing) the next release updates the tap itself."
+            exit 1
           fi
           git clone "https://x-access-token:$TAP_GITHUB_TOKEN@github.com/nace-ai/homebrew-tap.git" "$RUNNER_TEMP/tap"
           cd "$RUNNER_TEMP/tap"
+          branch=$(git symbolic-ref --short HEAD)
           mkdir -p Formula
           cp "$RUNNER_TEMP/kapitsa.rb" Formula/kapitsa.rb
           git add Formula/kapitsa.rb
@@ -107,3 +114,18 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "kapitsa $v"
           git push origin HEAD
+          # A push returning is not the tap serving this version, and the working copy above is not what `brew install
+          # nace-ai/tap/kapitsa` reads: fetch the branch again and check the formula the tap actually holds.
+          pushed=$(git rev-parse HEAD)
+          git fetch --quiet origin "$branch"
+          on_tap=$(git rev-parse FETCH_HEAD)
+          if [ "$on_tap" != "$pushed" ]; then
+            echo "::error::nace-ai/homebrew-tap $branch is at $on_tap, not at the commit just pushed ($pushed), so it does not serve $v."
+            exit 1
+          fi
+          served=$(git show "FETCH_HEAD:Formula/kapitsa.rb" | sed -nE 's/^  sha256 "([0-9a-f]{64})".*/\1/p')
+          if [ "$served" != "$sha" ]; then
+            echo "::error::The formula nace-ai/homebrew-tap serves as $branch has sha256 ${served:-no sha256 line}, not this release's $sha."
+            exit 1
+          fi
+          echo "nace-ai/homebrew-tap serves $v (sha256 $sha)."
