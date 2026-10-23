@@ -385,6 +385,24 @@ void Gpu::release(Buffer& b) {
   b = Buffer{};
 }
 
+void Gpu::release_all_buffers() {
+  begin()->commit_and_wait();
+  @autoreleasepool {
+    std::lock_guard<std::mutex> lk(impl_->mu);
+#if NI_SDK_MACOS15
+    if (residency_) {
+      if (@available(macOS 15.0, *)) {
+        std::lock_guard<std::mutex> rl(impl_->rs_mu);
+        id<MTLResidencySet> rs = (__bridge id<MTLResidencySet>)residency_;
+        [rs removeAllAllocations];
+        [rs commit];
+      }
+    }
+#endif
+    [impl_->retained removeAllObjects];
+  }
+}
+
 static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, bool wf, double* ms,
                                       bool metal32 = false, bool metal4 = false) {
   MTLCompileOptions* o = [MTLCompileOptions new];

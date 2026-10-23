@@ -70,22 +70,17 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
   // Acquire active engine for a request, switching on demand if another valid model is requested and --allow-switch.
   std::shared_ptr<RequestGuard> acquire_request(const std::string& requested_model, std::string* error_out = nullptr) {
-    std::shared_ptr<Engine> eng;
     {
       std::shared_lock<std::shared_mutex> lk(rw_mu_);
       if (!allow_switch_ || is_current_model_unlocked(requested_model)) {
-        eng = engine_;
+        return std::make_shared<RequestGuard>(shared_from_this(), engine_);
       }
     }
-    if (!eng) {
-      eng = switch_to(requested_model, error_out);
-      if (!eng) return nullptr;
-    }
-    return std::make_shared<RequestGuard>(shared_from_this(), eng);
+    return switch_to(requested_model, error_out);
   }
 
   // Explicitly switch the active model
-  std::shared_ptr<Engine> switch_to(const std::string& target_model, std::string* error_out = nullptr) {
+  std::shared_ptr<RequestGuard> switch_to(const std::string& target_model, std::string* error_out = nullptr) {
     if (!allow_switch_) {
       if (error_out) *error_out = "model switching is off (start the server with --allow-switch)";
       return nullptr;
@@ -105,7 +100,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
     std::unique_lock<std::shared_mutex> lk(rw_mu_);
     if (is_current_model_unlocked(target_model)) {
-      return engine_;
+      return std::make_shared<RequestGuard>(shared_from_this(), engine_);
     }
 
     hub::ModelRef new_ref;
@@ -168,6 +163,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
     // Release old engine to free GPU memory
     engine_.reset();
+    Gpu::get().release_all_buffers();
 
     if (tui_) ui::loading_begin(new_ref.name);
     try {
@@ -178,6 +174,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       // the old model comes back, so a failed switch (memory, a bad checkpoint) leaves the server serving
       logi("switch to %s failed (%s); reloading %s", new_ref.name.c_str(), e.what(), ref_.name.c_str());
       if (tui_) ui::loading_begin(ref_.name);
+      Gpu::get().release_all_buffers();
       try {
         engine_ = std::make_shared<Engine>(opt_);
       } catch (const std::exception& e2) {
@@ -192,7 +189,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     ref_ = new_ref;
     opt_ = new_opt;
     logi("switched model to %s (id: %s, context: %d)", ref_.name.c_str(), opt_.model_id.c_str(), opt_.context);
-    return engine_;
+    return std::make_shared<RequestGuard>(shared_from_this(), engine_);
   }
 
   // On a stop signal: the serving engine's KFlash state and SSD prefix cache conversations. A switch in progress
@@ -438,6 +435,7 @@ inline RequestGuard::RequestGuard(std::shared_ptr<ModelManager> mgr, std::shared
 }
 
 inline RequestGuard::~RequestGuard() {
+  eng_.reset();
   if (mgr_) mgr_->remove_in_flight();
 }
 

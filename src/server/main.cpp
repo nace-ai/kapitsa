@@ -950,11 +950,11 @@ static int serve(int argc, char** argv, int first) {
     }
     json j{
       {"status", "ok"},
-      {"model", eng->model_id()},
+      {"model", eng->engine().model_id()},
       {"previous_model", prev},
-      {"context_length", eng->context_length()},
-      {"context_fit", eng->context_fit()},
-      {"slots", eng->slots()}
+      {"context_length", eng->engine().context_length()},
+      {"context_fit", eng->engine().context_fit()},
+      {"slots", eng->engine().slots()}
     };
     res.set_content(j.dump(), "application/json");
   });
