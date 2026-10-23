@@ -4,6 +4,7 @@
 #pragma once
 #include "engine/grammar.h"
 #include "engine/prefix_cache.h"
+#include "engine/reasoning_memory.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
 #include "model/dory.h"
@@ -334,6 +335,9 @@ class Engine {
   // template keeps the think block and the live state already matches the next request).
   // With DFlash2 the prefilled rows also enter the slot's drafter context ring, as prompt rows do.
   void prefill_history(const ChatRequest& r, const ChatResult& res);
+  // The reasoning of a turn this engine wrote, put back into the same turn when a client sends it without (reasoning_memory.h)
+  void remember_reasoning(const ChatResult& res);
+  int restore_reasoning(ChatRequest& r);
   // KFlash: the budgets' cost tables and calibrations (KfBudget) to their cache files now. They are saved when the
   // engine ends and every KfBudget::kSaveEvery cycles between requests; a server stopped by a signal ends no
   // destructor, so it calls this. From any thread, with requests running.
@@ -543,6 +547,7 @@ class Engine {
   std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
+  ReasoningMemory reasoning_;  // remember_reasoning / restore_reasoning
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
   TextTags text_tags_;        // the tags written as text (no such tokens; Nemotron Nano 9B v2)
   bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
