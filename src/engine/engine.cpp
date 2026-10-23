@@ -3546,7 +3546,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   char cyc[192] = "";
   if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
-  if (kfw.cycles > 0) {  // KFlash's account of the request: rows verified, and the drafts among them that were accepted
+  if (kfw.cycles > 0 && !kfw.source.empty()) {  // (not with the wrapper off) KFlash's account of the request: rows verified, and the drafts among them that were accepted
     const size_t n0 = strlen(cyc);
     if (kfw.planned > 0)  // (rows only where KFlash's plan() chose them: a drafter's or MTP's cycle verifies several, counted elsewhere)
       snprintf(cyc + n0, sizeof cyc - n0, ", KFlash (%s): %ld cycles, %ld rows, %ld drafts accepted", kfw.source.c_str(), kfw.cycles,
