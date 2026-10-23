@@ -11,6 +11,7 @@
 // when the server stops (save_disk_cache). Read: when a prompt matches a stored state deeper than its slot holds,
 // before the prefill, which then starts there.
 #include "engine/engine.h"
+#include "engine/disk_wait.h"
 #include "util/log.h"
 
 #include <sys/stat.h>
@@ -219,7 +220,19 @@ struct Engine::Disk {
   // the tokens of every capture not yet on the SSD (queued or being written), so a request whose prompt continues one
   // waits for it rather than reading its prompt again (a short side request takes a slot and the conversation's next
   // request follows within the time its copy takes to write)
-  std::list<std::vector<int32_t>> unwritten;
+  struct Unwritten {
+    std::vector<int32_t> tokens;
+    uint64_t bytes = 0;
+  };
+  std::list<Unwritten> unwritten;
+  // what the wait is weighed against: how fast captures reach the SSD (bytes/ms, smoothed over writes of 8 MB or more)
+  // and how fast the engine reads uncached prompt rows (tokens/ms, smoothed over prefills of 256 rows or more); 0 until
+  // measured
+  std::atomic<double> write_bpms{0}, prefill_tpms{0};
+  static void smooth(std::atomic<double>& v, double x) {
+    const double o = v.load();
+    v = o > 0 ? 0.7 * o + 0.3 * x : x;
+  }
   std::atomic<bool> no_room_said{false};
 
   // whether the cache has room at all (a volume with less free space than the floor leaves it none: said once)
@@ -265,6 +278,7 @@ struct Engine::Disk {
   }
 
   bool write_captured(Captured& c) {
+    const double w0 = now_ms();
     uint64_t bytes = 0;
     for (Piece& pc : c.pieces) {
       const uint8_t* src = pc.data.get();
@@ -280,6 +294,7 @@ struct Engine::Disk {
       pc.data.reset();
     }
     if (!store.put(*c.job, c.plan->entry)) return false;
+    if (bytes >= (8u << 20)) smooth(write_bpms, double(bytes) / std::max(now_ms() - w0, 1.0));
     logi("SSD cache: saved the conversation slot %d held (%zu tokens, %.0f MB written) in %.0f ms", c.plan->slot,
          c.plan->entry.tokens.size(), bytes / 1e6, now_ms() - c.at);
     return true;
@@ -536,7 +551,7 @@ void Engine::disk_leaving(Slot& slot, int start) {
   slot.disk_version = slot.version;
   {
     std::lock_guard<std::mutex> lk(d.mu);
-    d.unwritten.push_back(c->plan->entry.tokens);
+    d.unwritten.push_back({c->plan->entry.tokens, bytes});
     d.captured.push_back(std::move(c));
   }
   d.cv.notify_all();
@@ -655,6 +670,10 @@ void Engine::save_disk_cache(double budget_ms) {
 
 // ---- reads ----
 
+void Engine::disk_note_prefill(int rows, double ms) {
+  if (disk_ && rows >= 256) Disk::smooth(disk_->prefill_tpms, rows / std::max(ms, 1.0));
+}
+
 pcache::Hit Engine::disk_lookup(const std::vector<int>& keys, int n, int ram, uint32_t tag, const vision::Prompt* mm) {
   if (!disk_ || !disk_->ready) return {};
   // a prompt with images: every image in the reused prefix the same image as stored (span and digest), as in RAM
@@ -666,26 +685,47 @@ pcache::Hit Engine::disk_lookup(const std::vector<int>& keys, int n, int ram, ui
       dc::images_from(e.attach, &spans, &digests);
       return std::min(l, vision::common_prefix(e.tokens, spans, digests, *mm));
     };
-  // a capture of the conversation this prompt continues that is still being written: wait for it (bounded) with the GPU
-  // turn given up, as a read does
+  // a capture of the conversation this prompt continues that is still being written: wait for it, with the GPU turn
+  // given up as a read does, when that is quicker than reading the rows again. The wait is the bytes queued up to and
+  // including that capture at the measured write speed (a state too large for capture_max is never queued), against
+  // the rows the SSD copy would save at the measured prefill speed; it is cut off at that time and at 3 s. Before
+  // either is measured, a copy that saves fewer than 2048 rows is not waited for.
   {
     Disk& d = *disk_;
-    auto continues = [&] {
-      for (const std::vector<int32_t>& t : d.unwritten) {
+    std::unique_lock<std::mutex> lk(d.mu);
+    auto continues = [&](double* ahead_bytes, int* saved_rows) {
+      uint64_t ahead = 0;
+      for (const Disk::Unwritten& u : d.unwritten) {
+        ahead += u.bytes;
         size_t l = 0;
-        while (l < t.size() && l < keys.size() && t[l] == keys[l]) ++l;
-        if (int(l) > ram && int(l) >= d.min_pos) return true;
+        while (l < u.tokens.size() && l < keys.size() && u.tokens[l] == keys[l]) ++l;
+        if (int(l) > ram && int(l) >= d.min_pos) {
+          if (ahead_bytes) *ahead_bytes = double(ahead);
+          if (saved_rows) *saved_rows = int(l) - ram;
+          return true;
+        }
       }
       return false;
     };
-    std::unique_lock<std::mutex> lk(d.mu);
-    if (continues()) {
-      const double t0 = now_ms();
-      turn_.unlock();
-      d.cv.wait_for(lk, std::chrono::milliseconds(3000), [&] { return d.quit.load() || !continues(); });
-      lk.unlock();
-      turn_.lock();
-      logi("SSD cache: the request waited %.0f ms for the copy of its conversation to be written", now_ms() - t0);
+    double ahead = 0;
+    int rows = 0;
+    if (continues(&ahead, &rows)) {
+      const disk_wait::Decision dec = disk_wait::decide(ahead, rows, d.write_bpms, d.prefill_tpms);
+      const double limit = dec.limit_ms;
+      const bool wait = dec.wait;
+      if (!wait && dec.write_ms > 0)
+        logi("SSD cache: the request does not wait for the copy of its conversation (%.0f MB queued, about %.0f ms; "
+             "its %d rows read again in about %.0f ms)", ahead / 1e6, dec.write_ms, rows, dec.prefill_ms);
+      if (wait) {
+        const double t0 = now_ms();
+        turn_.unlock();
+        d.cv.wait_for(lk, std::chrono::milliseconds(int64_t(limit)),
+                      [&] { return d.quit.load() || !continues(nullptr, nullptr); });
+        lk.unlock();
+        turn_.lock();
+        logi("SSD cache: the request waited %.0f ms for the copy of its conversation to be written (limit %.0f ms, %d "
+             "rows saved)", now_ms() - t0, limit, rows);
+      }
     }
   }
   const pcache::Hit h = disk_->store.lookup(keys.data(), int(keys.size()), n, tag, same_images);

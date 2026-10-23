@@ -3,7 +3,7 @@
 
 usage: tool_loop_ttft.py [--base http://127.0.0.1:8097/v1] [--sizes 4000,16000] [--calls 1,2,3] [--reps 1]
                          [--seed S] [--think] [--echo-reasoning] [--temp T] [--tool-tokens 600]
-                         [--no-warmup] [--tag T] [--out results.jsonl]
+                         [--no-warmup] [--side N] [--tag T] [--out results.jsonl]
 
 Per (size, calls, rep), one conversation in the agent pattern
   system ("[session <nonce>] SYS + repository context", frozen corpus, 4.25 chars per token) + tools,

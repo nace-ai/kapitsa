@@ -2582,6 +2582,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
   res.prefill_exact = images.empty() && res.yields == 0;
+  if (res.prefill_exact) disk_note_prefill(n - start, res.prefill_ms);
   const std::string store_prompt = store_note(model_.get(), "prompt", n - start);
   // Neural Engine split: how busy the ANE was over the prefill. Near 100% it, not the GPU, is the bottleneck (a
   // smaller share would be faster: ane_calib --wave --write); the share is set for the GPU to be the bottleneck.

@@ -372,7 +372,9 @@ class Engine {
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
-    int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
+    // requests of the conversation it holds. 1: its first turn so far; a short one that a request arrived beside is a
+    // one-off (a title, a summary), a longer one (over 1024 tokens and 4x that prompt) is a conversation (pick_slot)
+    int turns = 0;
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
     int loops = 0;                    // looped models: the loop count its cached state (KV) was computed with
     bool busy = false;                // a request runs on it (its state and KV cache are that request's)
@@ -441,6 +443,7 @@ class Engine {
   // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
   // state must match (Dory: the request's loop count); mm: the prompt's images (null for text), the same as stored
   pcache::Hit disk_lookup(const std::vector<int>& keys, int n, int ram, uint32_t tag, const vision::Prompt* mm);
+  void disk_note_prefill(int rows, double ms);  // the prefill speed a request's wait for an SSD copy is weighed against
   // Reads a stored state into slot (KV rows, recurrent state, drafter ring) and makes it the slot's live state; false
   // (the slot then holds nothing) when it cannot. With the GPU turn held (given up while reading).
   bool disk_restore(Slot& slot, const pcache::Hit& hit);
