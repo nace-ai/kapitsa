@@ -40,7 +40,10 @@ they decode.
    experts (and running the recurrent step and the sampler) for those rows alone. Plain generation is available with
    `--spec 0`.
 5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
-   retains the slot for follow-ups and can prefill the rendered assistant history while idle.
+   retains the slot for follow-ups and can prefill the rendered assistant history while idle. While the user types
+   the next message, `POST /v1/draft` reads the draft ahead the same way (`Engine::draft`): a checkpoint at the user
+   turn's start, then the live state extended with the draft up to its last whitespace, so the request, once sent,
+   continues that state and prefills only what was typed since (an edited draft restores the checkpoint).
 
 Requests sent at once each run on a slot of their own and take turns on the GPU (a first-come-first-served turn lock):
 between prefill chunks, and between decode cycles once a request has held the GPU for 30 ms. Before it gives its turn

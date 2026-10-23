@@ -362,8 +362,8 @@ static void print_serve_help() {
          "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
          "                         more keeps finer detail and takes longer; 0 = the model's own limit)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
-         "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health, GET /cluster (what\n"
-         "the server tells the other Macs).\n"
+         "POST /v1/messages and /v1/messages/count_tokens (Anthropic), POST /v1/draft (read a user's draft ahead),\n"
+         "GET /v1/models, GET /health, GET /cluster (what the server tells the other Macs).\n"
          "Images (every catalog model reads them): OpenAI image_url parts, Anthropic image blocks and Responses\n"
          "input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n", hub::tilde(hub::home_dir()).c_str());
@@ -494,6 +494,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
           raw->cv.wait(lk, [&] { return raw->sent || raw->cancelled.load(); });
           return !raw->cancelled.load();
         });
+    guard->engine().remember_reply(r, out);  // before the stream ends: a draft (POST /v1/draft) may follow at once
     std::lock_guard<std::mutex> lk(raw->mu);
     if (raw->started && out.finish_reason != "cancelled") raw->out.push_back(w->end(out));
     raw->result = std::move(out);
@@ -1527,6 +1528,49 @@ static int serve(int argc, char** argv, int first) {
           prefill_after(q->chat, out);
         },
         meter);
+  });
+
+  // Read ahead while the user types (Engine::draft): {"model", "after": the conversation's last reply, "text": the
+  // draft}; always 200 with what was done (docs/usage.md, "Reading ahead"), but for a malformed body (400). It never
+  // switches models: a draft for another model has no conversation here.
+  srv.Post("/v1/draft", [&](const httplib::Request& req, httplib::Response& res) {
+    auto bad = [&](const std::string& why) {
+      res.status = 400;
+      res.set_content(api::dump(api::chat_error(why)), "application/json");
+    };
+    json body;
+    try {
+      body = json::parse(req.body);
+    } catch (const std::exception& ex) {
+      return bad(std::string("bad request: ") + ex.what());
+    }
+    if (!body.is_object() || !body.contains("after") || !body["after"].is_string() || !body.contains("text") ||
+        !body["text"].is_string())
+      return bad("a draft needs \"after\" (the conversation's last assistant reply) and \"text\" (the draft), as "
+                 "strings");
+    if (body.contains("think") && !(body["think"].is_boolean() && !body["think"].get<bool>()))
+      return bad("\"think\" (reasoning ahead) is not supported yet");
+    auto reply = [&](const DraftResult& d) {
+      json j{{"status", d.status},
+             {"prompt_tokens", d.prompt_tokens},
+             {"cached_tokens", d.cached_tokens},
+             {"prefilled_tokens", d.prefilled_tokens},
+             {"ms", std::round(d.ms * 10) / 10}};
+      res.set_content(j.dump(), "application/json");
+    };
+    DraftResult d;
+    if (model_mgr->switching()) {
+      d.status = "busy";
+      return reply(d);
+    }
+    const std::string req_model =
+        body.contains("model") && body["model"].is_string() ? body["model"].get<std::string>() : "";
+    auto guard = model_mgr->acquire_current(req_model);
+    if (!guard) {
+      d.status = "no_conversation";
+      return reply(d);
+    }
+    reply(guard->engine().draft(body["after"].get<std::string>(), body["text"].get<std::string>()));
   });
 
   if (const std::string why = bind_server(srv, host, port); !why.empty()) return fail(why);

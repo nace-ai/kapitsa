@@ -7,6 +7,8 @@
 //  - with a model folder (its chat template and tokenizer): tool loops through the template, the generated turns parsed
 //    as the engine parses them, streamed, read back as each client reads them and sent back: the next request's prompt
 //    must continue the previous prompt and the generated tokens exactly (the engine then reuses its cache).
+//  - with a model folder: what a draft read ahead (POST /v1/draft) reads, at every point of typing a message, is a
+//    prefix of the request's prompt once the message is sent;
 //   api_test [--dump DIR] [model_dir ...]   (default: the catalog's 35B and 27B folders in ~/.cache/kapitsa/models that
 //   exist; --dump writes each scenario's replies for tests/sdk_check.py)
 //   exit status 1 if any check fails
@@ -1218,6 +1220,85 @@ void template_checks(const TmplModel& m, const std::string& tag) {
         p.substr(p.size() > 400 ? p.size() - 400 : 0));
 }
 
+// Read ahead (Engine::draft, POST /v1/draft): what a draft reads is a prefix of the request's prompt once the message
+// is sent, token for token, at every point of typing it (so the request continues the state the drafts left), and its
+// history part is the text prefill_history reads.
+void draft_checks(const TmplModel& m, const std::string& tag) {
+  const std::vector<std::string> messages = {
+      "Thanks! Now make it handle three numbers, and explain why, in one sentence.",
+      "Here is my code:\n\n```python\nclass Stack:\n    def __init__(self):\n        self.items = []\n\n    "
+      "def push(self, x):\n        self.items.append(x)\n```\n\nWhat is wrong with it?   ",
+      "Numbers: 12345, 3.14159 and 2,718 -- a URL https://example.com/a?b=c&d=e.\n\n\n  Indented.\tTabbed (it's "
+      "\"quoted\"), done...",
+      "Unicode: café, naïve, 日本語のテキスト, emoji 🙂👍🏽 and Ελληνικά done.",
+      "  leading spaces and trailing ones   ",
+      "one",
+  };
+  const std::string answer =
+      "Here it is:\n\n```python\ndef add(a, b):\n    return a + b\n```\n\nCall it as `add(2, 3)`.";
+  struct Conf {
+    const char* name;
+    const char* kwargs;
+    std::string reasoning;
+  };
+  const std::vector<Conf> confs = {{"thinking off", R"({"enable_thinking": false})", ""},
+                                   {"thinking on", R"({"enable_thinking": true})", "The user wants an add function."},
+                                   {"preserve_thinking", R"({"enable_thinking": true, "preserve_thinking": true})",
+                                    "The user wants an add function."}};
+  auto render = [&](const ChatRequest& q) { return render_chat(*m.tmpl, q, false); };
+  for (const Conf& c : confs) {
+    ChatRequest r;
+    r.messages = J(R"([{"role": "system", "content": "You are a helpful assistant."},
+                       {"role": "user", "content": "Write a function that adds two numbers."}])");
+    r.template_kwargs = ojson::parse(c.kwargs);
+    // prefill_history's text: the conversation up to a placeholder user turn's start
+    ChatRequest h = with_answer(r, answer, c.reasoning);
+    h.messages.push_back({{"role", "user"}, {"content", "\x01nace-history-marker\x01"}});
+    std::string hist = render_chat(*m.tmpl, h, false);
+    hist.resize(hist.rfind("<|im_start|>", hist.rfind("\x01nace-history-marker\x01")));
+    std::string bad, gap;
+    int prefixes = 0;
+    for (size_t i = 0; i < messages.size(); ++i) {
+      const std::string& msg = messages[i];
+      ChatRequest fin = with_answer(r, answer, c.reasoning);
+      fin.messages.push_back({{"role", "user"}, {"content", msg}});
+      const std::vector<int> want = m.tok.encode(render_chat(*m.tmpl, fin, true));
+      for (size_t k = 0; k <= msg.size(); ++k) {
+        if (k < msg.size() && (uint8_t(msg[k]) & 0xC0) == 0x80) continue;  // prefixes at character boundaries
+        ++prefixes;
+        const DraftPrompt dp = draft_prompt(with_answer(r, answer, c.reasoning), msg.substr(0, k), render);
+        std::string why;
+        int user_at = -1;
+        std::vector<int> ids;
+        if (dp.user_at == std::string::npos) {
+          why = "no user turn";
+        } else {
+          ids = m.tok.encode(dp.text, dp.user_at, &user_at);
+          ids.pop_back();  // the last token is left for the request
+          if (dp.text.compare(0, dp.user_at, hist) != 0 || dp.user_at != hist.size()) why = "the history differs";
+          else if (user_at != int(m.tok.encode(hist).size())) why = "the user turn's row differs";
+          else if (ids.size() > want.size() || !std::equal(ids.begin(), ids.end(), want.begin()))
+            why = "not a prefix of the request's prompt";
+        }
+        if (!why.empty() && bad.size() < 600)
+          bad += "message " + std::to_string(i) + " at " + std::to_string(k) + " " + ojson(msg.substr(0, k)).dump() +
+                 ": " + why + "; ";
+        // the whole message: the request reads its last word and the end of the turn, no more
+        if (k == msg.size() && why.empty()) {
+          const std::vector<int> word = m.tok.encode(msg.substr(draft_readable(msg).size()));
+          const size_t left = want.size() - ids.size();
+          if (i == 0 && left > word.size() + 12)
+            gap += "message 0 leaves " + std::to_string(left) + " tokens to the request; ";
+        }
+      }
+    }
+    check(bad.empty() && gap.empty(),
+          tag + "draft (" + c.name + "): each of " + std::to_string(prefixes) +
+              " drafts reads a prefix of the request's prompt, after the text prefill_history reads",
+          bad + gap);
+  }
+}
+
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs
 // parse them from a fake server): <name>.sse (a stream, with keepalives), <name>.json (a response body), <name>.status
 // (an error's)
@@ -1347,6 +1428,7 @@ int main(int argc, char** argv) {
     responses_round_trip(m, tag, true);
     openai_tool_arguments(m, tag);
     template_checks(m, tag);
+    draft_checks(m, tag);
   }
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

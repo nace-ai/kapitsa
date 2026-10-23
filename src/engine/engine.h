@@ -176,6 +176,25 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
                         bool images = false, bool native = false);
 // Flint's chat template rewritten for minja (engine.cpp)
 std::string flint_template(std::string src);
+// A request followed by its answer as the client sends it back (content, and the reasoning when the client sends
+// reasoning back: it asks to keep every turn's thinking, or an earlier assistant turn came back with it), as the next
+// request starts: what Engine::prefill_history and Engine::draft render. `restore`, if given, runs on it first (the
+// engine's reasoning memory, as chat() puts back reasoning a client leaves out).
+ChatRequest with_answer(const ChatRequest& r, const std::string& content, const std::string& reasoning,
+                        const std::function<void(ChatRequest&)>& restore = nullptr);
+// What of a user's draft can be read ahead: the text before its last run of whitespace (the word after it may still
+// grow, and a token can change with it), "" when it has no whitespace.
+std::string draft_readable(const std::string& text);
+// The next request's prompt as far as a draft goes (Engine::draft; CPU only, tools/api_test checks it): `answered` (a
+// request with its answer: with_answer), then a user turn holding draft_readable(draft), rendered by `render` (without
+// a generation prompt) and cut where the draft ends. user_at: the character offset of the user turn's start (where the history
+// ends); npos when the template renders no such turn.
+struct DraftPrompt {
+  std::string text;
+  size_t user_at = std::string::npos;
+};
+DraftPrompt draft_prompt(const ChatRequest& answered, const std::string& draft,
+                         const std::function<std::string(const ChatRequest&)>& render);
 
 // One request's progress while it runs, for a live display (`kapitsa serve`'s dashboard in a terminal): the caller
 // passes it in ChatRequest::live and reads it from any thread; the engine writes it with relaxed atomic stores between
@@ -270,6 +289,15 @@ struct ChatResult {
   int loops = 0;    // looped models: the loop count the request ran (0: not a looped model)
 };
 
+// What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).
+struct DraftResult {
+  std::string status;  // prefilled unchanged interrupted busy no_conversation unsupported no_room
+  int prompt_tokens = 0;     // the prompt as far as the draft can be read; the slot holds all but its last token
+  int cached_tokens = 0;     // of them, what the slot held before (its live state, or the checkpoint it restored)
+  int prefilled_tokens = 0;  // read by this call
+  double ms = 0;             // wall time in the engine
+};
+
 // The engine's GPU turn: one request at a time encodes and runs model work. FIFO (a ticket lock): a request that gives
 // up its turn between two steps of its own (prefill chunks, decode cycles) goes behind every request waiting, so the
 // requests in flight take turns step by step. Events (a slot or memory freed, a request ended) wake requests that wait
@@ -347,6 +375,20 @@ class Engine {
   // The reasoning of a turn this engine wrote, put back into the same turn when a client sends it without (reasoning_memory.h)
   void remember_reasoning(const ChatRequest& r, const ChatResult& res);
   int restore_reasoning(ChatRequest& r);
+  // A reply the server sent (before the reply ends, and again before prefill_history: kept once): the last kAnswered
+  // that ended with "stop" are the conversations draft() can read ahead in.
+  void remember_reply(const ChatRequest& r, const ChatResult& res);
+  // Read ahead (POST /v1/draft): while the user types the next message of a conversation, its prompt is read as far
+  // as the draft goes, so that the request, once sent, prefills only what was typed since. `after`: the text of the
+  // conversation's last assistant reply (the most recent remembered reply whose content equals it, both trimmed);
+  // `text`: the draft so far. The prompt is draft_prompt's, read less its last token (as after prefill_history, the
+  // request's own prefill reads that one). A checkpoint where the user's turn starts (the conversation as the history
+  // prefill leaves it: where a request without drafts starts; with the drafter's context) is kept first, so a draft
+  // edited anywhere restores it and reads what the one draft of its text would; then the live state is extended with
+  // the draft, continued by a later draft or by the request whose prompt extends it (chat()). Only while the server
+  // is idle; a request that arrives stops it at the next chunk boundary. The Qwen3.5 family (DFlash2, DFlash, the MTP
+  // head or none); other models answer "unsupported".
+  DraftResult draft(const std::string& after, const std::string& text);
   // KFlash: the budgets' cost tables and calibrations (KfBudget) to their cache files now. They are saved when the
   // engine ends and every KfBudget::kSaveEvery cycles between requests; a server stopped by a signal ends no
   // destructor, so it calls this. From any thread, with requests running.
@@ -557,6 +599,18 @@ class Engine {
   std::mutex bmu_;                // a waiting member's job state / runner flag
   std::condition_variable bcv_;
   std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)
+  // remember_reply: the recent replies that ended with "stop" (newest last), for draft()
+  struct Answered {
+    ChatRequest r;                 // the request (its image parts without their data)
+    std::string content, reasoning;
+    std::string reply;             // content, trimmed (what `after` is compared with)
+    int slot = -1;
+    uint64_t slot_gen = 0;         // the slot's use count at the reply: another request on it since changes it
+    std::shared_ptr<const std::vector<vision::Prepared>> images;
+  };
+  static constexpr size_t kAnswered = 32;
+  std::deque<std::shared_ptr<const Answered>> answered_;
+  std::mutex answered_mu_;
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   ReasoningMemory reasoning_;  // remember_reasoning / restore_reasoning

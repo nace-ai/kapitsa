@@ -48,7 +48,7 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | `build/fn_dflash_test [--gpu]` | Qwen3.8-Flash-Next's DFlash2 plumbing: the target's streams from `hc_count`, the drafts' `target_hidden_reduction` checks; `--gpu`: the `stream_mean` capture kernel against the CPU (GPU lock) | nothing |
 | `python3 tools/qwen4_exp_q20_test.py` | The Q2_0 Flash-Next converter on a tiny synthetic GGUF and pack: planes, dequantization, config, index, sparse table | numpy |
 | `build/fn_q2_bench check --small`, `build/fn_q2_bench store` | The Q2_0 expert kernels at small shapes against a CPU reference in double (and through the slot table, bit for bit), and through the expert store mid-pass; run them under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` and the GPU lock | the GPU |
-| `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; the Chat Completions stream's bytes, keepalive and errors; with a model folder, tool loops through its chat template | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
+| `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; the Chat Completions stream's bytes, keepalive and errors; with a model folder, tool loops through its chat template, and what a draft read ahead (`POST /v1/draft`) reads at every point of typing a message: a prefix of the request's prompt | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
 | `venv/bin/python tests/sdk_check.py build/api_test` | The official `anthropic` and `openai` Python SDKs parse every recorded reply | a venv: `python3 -m venv venv && venv/bin/pip install anthropic openai` |
 | `build/parser_test MODEL_DIR` | The streaming parser (reasoning, content, tool calls) on real token ids; with a Flint folder, its GLM-format tool calls too | a Qwen or Flint model folder |
 | `build/tokenizer_test` | Flint's pre-tokenizer split against the pieces Hugging Face tokenizers 0.23.3 makes of the same texts (a synthetic tokenizer.json, one token per piece) | nothing |
@@ -71,6 +71,12 @@ kill %1
 The SSD prefix cache across restarts (starts its own servers, takes the GPU lock; a temporary `KAPITSA_HOME`, a 2 GiB
 cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit`
 (`--ttft` also times the follow-up cold, from the SSD and from memory).
+
+Reading a user's draft ahead (`POST /v1/draft`; starts its own servers, takes the GPU lock):
+`python3 tests/test_draft.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit` checks that a follow-up writes the
+same tokens with and without drafts before it (drafts extended, edited in the middle, deleted, a paste, a reading a
+request interrupts) and that the request continues the drafts' state; `--measure` times the follow-up's first token
+without and after a draft.
 
 ## Layout
 

@@ -406,6 +406,7 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `POST /v1/responses` | OpenAI Responses: reasoning items, function and custom tools, `usage.input_tokens_details.cached_tokens`. `previous_response_id` continues one of the last 64 stored responses (unknown ids are a 400). Built-in tools such as web search are left out. Supports on-demand model switching via `model`. |
 | `POST /v1/messages` | Anthropic Messages: thinking blocks, `tool_use` and `tool_result`; `usage.input_tokens` counts the uncached prompt, `cache_read_input_tokens` the cached part. Server tools are left out. Supports on-demand model switching via `model`. |
 | `POST /v1/messages/count_tokens` | Anthropic's token count of a request. |
+| `POST /v1/draft` | Reads the user's draft of a conversation's next message ahead while they type, so the request, once sent, prefills only what was typed since: `{"model", "after", "text"}` ([below](#reading-ahead-while-the-user-types)). |
 | `GET /v1/models` | Available models (active model first, downloaded models, and catalog models); includes `active`, `downloaded`, `context_fit`, and `slots`. |
 | `GET /v1/models/:model` | Information about a specific model. |
 | `POST /v1/models/switch` | With `--allow-switch`: switches the active model, `{"model": "<name>"}` (403 without the flag). While it loads, other requests get 503 with `Retry-After`. A model that fails to load leaves the previous one serving. |
@@ -425,6 +426,78 @@ curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/jso
 curl http://127.0.0.1:8000/v1/messages -H 'Content-Type: application/json' -d '{"model": "qwen3.5-4b",
   "max_tokens": 1024, "messages": [{"role": "user", "content": "Write a haiku about unified memory."}]}'
 ```
+
+### Reading ahead while the user types
+
+An app can send the draft of a conversation's next message to `POST /v1/draft` at each pause in the typing. The
+server then reads the next request's prompt as far as the draft goes (prefills it), so that when the message is sent
+its request prefills only what was typed after the last draft: a long paste is read while the user finishes the
+question under it. The idea is MAFDET's ([TheLastOxygen/mafdet](https://github.com/TheLastOxygen/mafdet), on
+llama.cpp); the Qwen3.5 family's recurrent layers cannot be cut back to any token, so Kapitsa keeps a checkpoint at
+the start of the user's turn instead and extends the conversation's live state from there.
+
+```bash
+curl http://127.0.0.1:8000/v1/draft -H 'Content-Type: application/json' -d '{"model": "qwen3.5-4b",
+  "after": "<the text of the last assistant reply>", "text": "<a 2,000-token paste, and the question typed under it>"}'
+{"status":"prefilled","prompt_tokens":5255,"cached_tokens":3186,"prefilled_tokens":2068,"ms":2545.2}
+```
+
+- **Which conversation.** `after` is the text of the conversation's last assistant reply, as the app shows it: the
+  draft continues the most recent of the last 32 replies the server ended with `stop` (any of the three APIs) whose
+  text equals it, both trimmed. The app needs no conversation id, and sends nothing but the reply and the draft.
+- **What is read.** The next request as the server will render it: the conversation, that reply as clients send it
+  back (its reasoning too when the client sends reasoning back), then the user's turn holding the draft up to its
+  last whitespace (the word being typed can still grow, and its tokens with it), less its last token, which the
+  request reads itself. Before the draft the server keeps a checkpoint where the user's turn starts (the conversation
+  as it is read after a reply, where a request without drafts starts), with the drafter's context; a later draft
+  that extends the last one continues it, and a draft edited anywhere (or deleted) goes back to that checkpoint, never
+  to the conversation before it, and reads what one draft of its text would. The request, once sent, continues the
+  drafts' state when its prompt extends it (`usage.prompt_tokens_details.cached_tokens` counts what the drafts read);
+  a message that differs from the last draft resumes from the checkpoint, as an edit does.
+- **Never in the way.** A draft is read only while the server is idle: with a request in flight it answers `busy`
+  and does nothing, and a request that arrives while a draft is read stops it at the next prefill chunk (up to 2,048
+  rows), leaving what was read for the request. Its KV cache grows within the slot's own memory; no other conversation's is
+  given up for a draft.
+- **The same reply.** A follow-up writes the same tokens with drafts before it as without, where its prompt is read
+  on the GPU (greedy, token for token: `tests/test_draft.py` checks drafts of the whole message, less its last word,
+  as it was typed, edited in the middle, deleted and typed again, a paste, a reading a request stopped). A draft cuts
+  the prompt's reading into other passes, as any cached turn does (the noise floor's "chunks" source,
+  [CONTRIBUTING.md](../CONTRIBUTING.md)), which on the GPU has moved no token in these checks. A dense model's
+  Neural Engine split is another matter: it computes the FFN of chunks of 512 rows or more in 8 bits (the 4B's and
+  27B's default), so after a long draft (a paste) the request's last rows are the GPU's where without drafts they are
+  the split's, and the reply can change where two tokens nearly tie: the 4B's paste reply below did. `NI_ANE=0`
+  keeps the prompt on the GPU.
+- **Models.** The Qwen3.5 family (Qwen3.5 4B, Qwen3.6 35B-A3B, Qwen3.8 27B) with their draft models, the MTP head or
+  none. Nemotron-H models, Dory and Flint answer `unsupported`. Text without spaces (Chinese, Japanese) is read only
+  up to its last whitespace, which may be none of it yet.
+
+The reply is always 200 (a body without `after` and `text` as strings is a 400; `"think": true`, reasoning ahead, is
+not supported yet and is a 400 too):
+
+| Field | |
+| --- | --- |
+| `status` | `prefilled` (read), `unchanged` (nothing new since the last draft), `interrupted` (a request arrived: stopped at a chunk, the part read kept), `busy` (a request in flight: nothing done), `no_conversation` (no recent reply is `after`, or its slot has since gone to another conversation), `unsupported` (this model, or an image in the conversation not yet read), `no_room` (beyond the context or the memory for its KV cache) |
+| `prompt_tokens` | The prompt as far as the draft can be read; the slot holds all of it but its last token once read |
+| `cached_tokens` | Of those, what the slot held before (the live state, or the checkpoint it went back to) |
+| `prefilled_tokens` | Read by this call |
+| `ms` | The call's time in the engine |
+
+Measured on a MacBook Pro 16-inch (M4 Pro, 20-core GPU, 48 GB), macOS 27.0.1, by `tests/test_draft.py --measure`
+(greedy, thinking off, the DFlash drafters, the servers as by default, each case on a fresh server): a 5,315-token
+first turn (a slice of code and a question) and its answer, then the next message sent with no draft, right after a
+draft of the whole message (read up to its last word), or of all but its last word; the time to the first token of that
+request, sent right after a one-token request of another conversation (the GPU awake). Three rounds (in the first two
+the first turn's question was two words longer, every prompt and cache one or two tokens more; a fourth ran while
+another job held the Neural Engine, its first turn's prefill 46-525 s instead of 2.7 s, and is left out):
+
+| Model | Next message | No draft | After a draft of all of it | Of all but its last word | The draft's own time |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Qwen3.5 4B | ~40 tokens (prompt 5,425) | 0.073-0.074 s (5,381 cached) | 0.028-0.029 s (5,413 cached) | 0.029-0.030 s (5,412 cached) | 52-68 ms |
+| Qwen3.5 4B | a ~2,000-token paste (prompt 7,461) | 1.27-1.31 s (5,381 cached) | 0.029 s (7,449 cached) | 0.029-0.051 s (7,448 cached) | 1.34-1.62 s (once 4.5 s) |
+
+The replies were the same with and without drafts but in the first two rounds' paste: there the 4B's three replies
+differed, the same way in both rounds (the Neural Engine split, above). The draft's own time is the prompt's prefill
+moved to before the request.
 
 ### Thinking
 

@@ -85,6 +85,18 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     return std::make_shared<RequestGuard>(shared_from_this(), eng);
   }
 
+  // The active engine for a request that never switches models (POST /v1/draft): null when `requested_model` names
+  // another one (with --allow-switch; without it the server serves its model whatever a request names)
+  std::shared_ptr<RequestGuard> acquire_current(const std::string& requested_model) {
+    std::shared_ptr<Engine> eng;
+    {
+      std::shared_lock<std::shared_mutex> lk(rw_mu_);
+      if (!allow_switch_ || is_current_model_unlocked(requested_model)) eng = engine_;
+    }
+    if (!eng) return nullptr;
+    return std::make_shared<RequestGuard>(shared_from_this(), eng);
+  }
+
   // Explicitly switch the active model
   std::shared_ptr<Engine> switch_to(const std::string& target_model, std::string* error_out = nullptr) {
     if (!allow_switch_) {
@@ -252,6 +264,10 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
   }
 
   void prefill_after(const ChatRequest& r, const ChatResult& out) {
+    {  // the reply is a conversation POST /v1/draft can read ahead in, at once (a stream's was, before its end)
+      std::shared_lock<std::shared_mutex> rlk(rw_mu_);
+      if (engine_) engine_->remember_reply(r, out);
+    }
     std::lock_guard<std::mutex> lk(prefill_mu_);
     if (prefill_th_.joinable()) {
       prefill_th_.join();

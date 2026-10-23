@@ -65,6 +65,16 @@ static bool ends_with_query(const ojson& messages) {
   return !wrapped;
 }
 
+// The checkpoint a turn boundary overwrites (Engine::chat, Engine::draft): an invalid one, else one saved at a tool
+// response, else the oldest; with NI_QUERY_CKPT=0 the oldest of all, as before query checkpoints were kept
+static bool keep_query_ckpts() {
+  static const bool on = [] {
+    const char* v = getenv("NI_QUERY_CKPT");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
+  return on;
+}
+
 // Prompt lookup (n-gram drafts): the tokens that followed the latest earlier occurrence of the last n tokens of
 // tokens[0, P] (n from `nmax` down to `nmin`), up to `k` of them, into out (empty: no match). The search looks back
 // at most `window` positions.
@@ -1567,6 +1577,51 @@ size_t Engine::common_rows(const Slot& slot, const std::vector<int>& keys, const
   return i;
 }
 
+ChatRequest with_answer(const ChatRequest& r, const std::string& content, const std::string& reasoning,
+                        const std::function<void(ChatRequest&)>& restore) {
+  ChatRequest r2 = r;
+  r2.messages.push_back({{"role", "assistant"}, {"content", content}});
+  if (restore) restore(r2);
+  // with its reasoning when the client sends reasoning back (it asks to keep every turn's thinking, or an earlier
+  // assistant turn came back with it): templates that render past reasoning (Qwen3.8; preserve_thinking) then render
+  // this turn as the live state holds it, and there is nothing to prefill
+  const auto pt = r.template_kwargs.find("preserve_thinking");
+  bool returns_reasoning = pt != r.template_kwargs.end() && pt->is_boolean() && pt->get<bool>();
+  for (const auto& m : r2.messages)
+    returns_reasoning = returns_reasoning || (role_of(m) == "assistant" && m.contains("reasoning_content") &&
+                                              m["reasoning_content"].is_string() &&
+                                              !m["reasoning_content"].get<std::string>().empty());
+  if (returns_reasoning) r2.messages.back()["reasoning_content"] = reasoning;
+  return r2;
+}
+
+std::string draft_readable(const std::string& text) {
+  static const char* ws = " \t\n\r\f\v";
+  const size_t last = text.find_last_of(ws);
+  if (last == std::string::npos) return "";
+  const size_t keep = text.find_last_not_of(ws, last);
+  return keep == std::string::npos ? "" : text.substr(0, keep + 1);
+}
+
+DraftPrompt draft_prompt(const ChatRequest& answered, const std::string& draft,
+                         const std::function<std::string(const ChatRequest&)>& render) {
+  // the user turn holds the readable draft and a marker the template copies as it is; the text is cut at the marker
+  static const std::string marker = "\x01nace-draft-marker\x01", turn = "<|im_start|>";
+  DraftPrompt out;
+  const std::string readable = draft_readable(draft);
+  if (readable.find(turn) != std::string::npos) return out;  // (the user turn's start would be ambiguous)
+  ChatRequest q = answered;
+  q.messages.push_back({{"role", "user"}, {"content", readable + marker}});
+  std::string text = render(q);
+  const size_t mpos = text.rfind(marker);
+  const size_t at = mpos == std::string::npos ? std::string::npos : text.rfind(turn, mpos);
+  if (at == std::string::npos) return out;
+  text.resize(mpos);
+  out.text = std::move(text);
+  out.user_at = at;
+  return out;
+}
+
 // Image and video parts become a short note (a model without an image encoder, or render_chat's callers that do not
 // handle images).
 static ojson without_images(const ojson& messages, int* dropped) {
@@ -2291,10 +2346,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // response, and with "oldest first" two tool calls evicted the query's, so the next query re-prefilled
   // the whole conversation. Kept this way: the newest query checkpoint and the newest one (the tool
   // response a tool loop's next request restores when it diverges).
-  static const bool keep_query = [] {
-    const char* v = getenv("NI_QUERY_CKPT");
-    return !(v && v[0] == '0' && v[1] == 0);
-  }();
+  const bool keep_query = keep_query_ckpts();
   const bool query = ends_with_query(r.messages);
   // the prefix checkpoint, saved while this prompt is read through pbound (not when the prefill starts at or past
   // it: the checkpoint then holds it already, or the state at pbound is gone)
@@ -3573,19 +3625,8 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   // the answer as the client sends it back ("stop": no tool calls), then a placeholder user turn: the
   // template renders answers before the last user query without their think block, so render it that
   // way and keep the text up to the placeholder turn's start
-  ChatRequest r2 = r;
-  r2.messages.push_back({{"role", "assistant"}, {"content", res.content}});
-  restore_reasoning(r2);  // as chat() renders the next request: this answer too, when the client will send it without
-  // with its reasoning when the client sends reasoning back (it asks to keep every turn's thinking, or an earlier
-  // assistant turn came back with it): templates that render past reasoning (Qwen3.8; preserve_thinking) then render
-  // this turn as the live state holds it, and there is nothing to prefill
-  const auto pt = r.template_kwargs.find("preserve_thinking");
-  bool returns_reasoning = pt != r.template_kwargs.end() && pt->is_boolean() && pt->get<bool>();
-  for (const auto& m : r2.messages)
-    returns_reasoning = returns_reasoning || (role_of(m) == "assistant" && m.contains("reasoning_content") &&
-                                              m["reasoning_content"].is_string() &&
-                                              !m["reasoning_content"].get<std::string>().empty());
-  if (returns_reasoning) r2.messages.back()["reasoning_content"] = res.reasoning;
+  // (the reasoning memory puts back what chat() will: this answer's too, when the client sends it without)
+  ChatRequest r2 = with_answer(r, res.content, res.reasoning, [this](ChatRequest& q) { restore_reasoning(q); });
   static const std::string marker = "\x01nace-history-marker\x01";
   r2.messages.push_back({{"role", "user"}, {"content", marker}});
   std::vector<vision::Prepared> images;  // the request's, as chat() prepared them (no download again)
@@ -3697,6 +3738,213 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   slot.live_ok = true;  // the follow-up continues this state
   ++slot.version;
   logi("history: prefilled %d tokens of the rendered reply (from %d) in %.0f ms", n - start, start, now_ms() - t0);
+}
+
+void Engine::remember_reply(const ChatRequest& r, const ChatResult& res) {
+  if (res.finish_reason != "stop" || res.slot < 0) return;
+  std::lock_guard<std::mutex> lk(answered_mu_);
+  if (!answered_.empty() && answered_.back()->slot == res.slot && answered_.back()->slot_gen == res.slot_gen) return;
+  auto a = std::make_shared<Answered>();
+  a->r = r;
+  a->r.messages = vision::without_image_data(r.messages);  // (renders the same: the engine renders images this way)
+  a->r.live = nullptr;
+  a->r.grammar = nullptr;
+  a->content = res.content;
+  a->reasoning = res.reasoning;
+  a->reply = content_text(ojson(res.content));
+  a->slot = res.slot;
+  a->slot_gen = res.slot_gen;
+  a->images = res.images;
+  answered_.push_back(std::move(a));
+  while (answered_.size() > kAnswered) answered_.pop_front();
+}
+
+DraftResult Engine::draft(const std::string& after, const std::string& text) {
+  const double t0 = now_ms();
+  DraftResult out;
+  auto done = [&](const char* status) {  // (nothing read)
+    out.status = status;
+    out.ms = now_ms() - t0;
+    logd("draft: %s (prompt %d, cached %d) in %.1f ms", status, out.prompt_tokens, out.cached_tokens, out.ms);
+    return out;
+  };
+  // The Qwen3.5 family (its checkpoints hold the drafter's ring; the MTP head's KV rows need none). Not Nemotron-H (its
+  // drafters' contexts), Dory (loop counts), Flint.
+  if (!q35_ || nh_ || dory_ || flint_ || lili_) return done("unsupported");
+
+  // ---- the conversation: the newest remembered reply whose text is `after` ----
+  std::shared_ptr<const Answered> a;
+  {
+    const std::string want = content_text(ojson(after));
+    std::lock_guard<std::mutex> lk(answered_mu_);
+    for (auto it = answered_.rbegin(); it != answered_.rend() && !a; ++it)
+      if ((*it)->reply == want) a = *it;
+  }
+  if (!a) return done("no_conversation");
+
+  // ---- the next request's prompt as far as the draft goes (CPU only, before the GPU turn) ----
+  std::vector<vision::Prepared> images;  // the conversation's, as chat() prepared them
+  if (a->images) images = *a->images;
+  DraftPrompt dp;
+  try {
+    const ChatRequest answered =
+        with_answer(a->r, a->content, a->reasoning, [this](ChatRequest& q) { restore_reasoning(q); });
+    dp = draft_prompt(answered, text, [&](const ChatRequest& q) {
+      if (vision_ && vision::image_sources(q.messages).size() != images.size()) throw vision::Error("images");
+      return render(q, false);
+    });
+  } catch (...) {
+    return done("unsupported");
+  }
+  if (dp.user_at == std::string::npos) return done("unsupported");
+  int user_at = -1;  // the user turn's first row: the end of the history
+  std::vector<int> ids = tok_.encode(dp.text, dp.user_at, &user_at);
+  vision::Prompt mm;
+  const vision::Prompt* mmp = nullptr;
+  if (!images.empty()) {
+    try {
+      mm = expand_images(ids, images, &user_at);
+    } catch (...) {
+      return done("unsupported");
+    }
+    ids = mm.ids;
+    mmp = &mm;
+  }
+  const std::vector<int>& keys = mmp ? mm.keys : ids;
+  const int n = int(ids.size());
+  const int end = n - 1;  // rows read: the request reads the last token (its MTP pair; the next text may change it)
+  out.prompt_tokens = n;
+  if (user_at <= 1 || end <= user_at) return done("unsupported");
+
+  // ---- the GPU turn, only while the server is idle ----
+  std::unique_lock<TurnLock> lk(turn_, std::try_to_lock);
+  if (!lk.owns_lock() || active_ > 0) return done("busy");
+  const uint64_t seen = requests_.load();
+  if (a->slot >= int(slots_.size())) return done("no_conversation");
+  Slot& slot = slots_[size_t(a->slot)];
+  Seq& s = *slot.seq;
+  // another request on the slot since the reply (dropped for memory, another conversation, the next turn)
+  if (slot.gen != a->slot_gen || slot.tokens.empty() || s.cap == 0) return done("no_conversation");
+  if (end + 64 >= s.limit) return done("no_room");
+  // The live state when the draft extends it, else the newest turn checkpoint inside the common prefix (the user
+  // turn's for an edited draft, the reply's before the history prefill ran; not the prefix one: no drafter context)
+  const size_t common = common_rows(slot, keys, mmp);
+  const int live = int(slot.tokens.size());
+  const TurnCheckpoint* best = nullptr;
+  int start = live;
+  if (int(common) == live) {
+    if (live >= end) {
+      out.cached_tokens = live;
+      slot.last_used = ++clock_;
+      return done("unchanged");
+    }
+  } else {
+    for (auto& c : slot.ckpts)
+      if (!c.prefix && c.pos > 0 && c.pos <= int(common) && c.pos < end && (!best || c.pos > best->pos)) best = &c;
+    if (!best) return done("no_conversation");
+    start = best->pos;
+  }
+  for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the request
+    if (sp.pos + sp.n > start) return done("unsupported");
+  if (!model_->reserve(s, end + 64)) return done("no_room");  // (the slot's own KV cache; no other slot's is dropped)
+  // The user turn's checkpoint: the conversation as the history prefill leaves it (all but its last token), where a
+  // request without drafts starts; a draft that restores it computes the rows of one draft of its text, in its passes
+  const int turn_at = user_at - 1;
+  const std::string from = !best ? "the live state" : best->pos == turn_at ? "the user turn's checkpoint"
+                                                    : "the turn checkpoint at " + std::to_string(best->pos);
+
+  Gpu& g = Gpu::get();
+  std::unique_ptr<Encoder> e = g.begin();
+  if (best) {
+    model_->restore(*e, s, *best);
+    if (dfl_) dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
+  }
+  // the drafter's ring at `start` (behind it after a reply: nothing before it is then usable, as in chat())
+  if (dfl_) DFlash2::rewind(*slot.dseq, start);
+  for (auto& c : slot.ckpts)
+    if (c.pos > start) c.pos = -1;
+  slot.tokens.resize(size_t(start));
+  ++slot.version;
+  // It takes the checkpoint chat()'s rule gives a turn boundary (invalid, else a tool response's, else the oldest; not
+  // the prefix one): the reply's own boundary stays until the request saves its own over the older of the two
+  TurnCheckpoint* uck = nullptr;
+  if (start <= turn_at) {
+    bool have = false;
+    for (auto& c : slot.ckpts) have = have || (!c.prefix && c.pos == turn_at);
+    auto rank = [](const TurnCheckpoint& k) { return k.pos < 0 ? 0 : keep_query_ckpts() && k.query ? 2 : 1; };
+    if (!have)
+      for (auto& k : slot.ckpts)
+        if (!k.prefix && (!uck || rank(k) < rank(*uck) || (rank(k) == rank(*uck) && k.pos < uck->pos))) uck = &k;
+  }
+  auto save_turn = [&](Encoder& en) {
+    model_->save(en, s, *uck, turn_at);
+    uck->query = true;
+    if (dfl_) dfl_->encode_ring_copy(en, *slot.dseq, *slot.dckpts[size_t(uck - slot.ckpts.data())]);
+    uck = nullptr;
+  };
+  std::copy(ids.begin(), ids.end(), s.tokens());
+  model_->set_rope_positions(s, end, mm.spans);
+  if (uck && start == turn_at) save_turn(*e);
+  SamplingParams sp;
+  const int C = model_->prefill_chunk();
+  const bool even = prefill_even_chunks() && !model_->ane_split_on();
+  int p = start;
+  bool stopped = false;
+  while (p < end) {
+    // a request arrived, or waits for the GPU turn: it goes first, and the slot holds what was read
+    if (p > start && (requests_.load() != seen || turn_.waiting() > 0)) {
+      stopped = true;
+      break;
+    }
+    if (!e) e = g.begin();
+    // chunks as a prompt's, cut at the user turn's checkpoint; a DFlash drafter's ring takes each chunk's rows after it
+    // (at most kCtxKeep, what the prompt capture holds), so it holds every row read whenever the reading stops
+    int T = prefill_chunk_rows(C, p, p < turn_at ? turn_at : end, even);
+    if (dfl_) T = std::min(T, DFlash2::kCtxKeep);
+    // as in chat(): a chunk the NI_ANE split runs is checkpointed and waited for, and rerun on the GPU alone if the
+    // split failed (the rerun captures its rows for the drafter again)
+    const bool split = model_->ane_splits(T);
+    if (split) {
+      if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
+      model_->save(*e, s, *ane_ck_, p);
+    }
+    if (dfl_) dfl_->begin_prefill(p + T, p);
+    model_->encode_prefill(*e, s, p, T, sp, 0, false);
+    if (spec_) q35_->encode_mtp_prefill(*e, s, p, T, 0);  // MTP history pairs: the next tokens are known up to ids[end]
+    if (split) {
+      wait_split(*e);
+      if (!model_->ane_finish_chunk()) {
+        e = g.begin();
+        model_->restore(*e, s, *ane_ck_);
+        model_->encode_prefill(*e, s, p, T, sp, 0, false);
+        if (spec_) q35_->encode_mtp_prefill(*e, s, p, T, 0);
+        e->commit_and_wait();
+      }
+      e = g.begin();
+    }
+    p += T;
+    if (dfl_) {
+      dfl_->end_prefill();
+      dfl_->encode_prefill_commit(*e, *slot.dseq);
+    }
+    if (uck && p == turn_at) save_turn(*e);
+    e->commit_and_wait();
+    e.reset();
+    slot.tokens.assign(keys.begin(), keys.begin() + p);
+  }
+  slot.img_spans = mm.spans;
+  slot.img_digests = mm.digests;
+  disk_filled(slot, start, p);
+  slot.live_ok = false;  // (the SSD keeps the user turn's checkpoint, not a state the next draft replaces)
+  slot.last_used = ++clock_;
+  ++slot.version;
+  out.cached_tokens = start;
+  out.prefilled_tokens = p - start;
+  out.status = stopped ? "interrupted" : "prefilled";
+  out.ms = now_ms() - t0;
+  logi("draft: read %d tokens ahead (prompt %d; from %d, %s) in %.0f ms%s", p - start, n, start, from.c_str(), out.ms,
+       stopped ? "; stopped: a request arrived" : "");
+  return out;
 }
 
 } // namespace ni
