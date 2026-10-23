@@ -404,7 +404,7 @@ id<MTLCommandBuffer> heat_cb(Heater& h, uint32_t rounds) {
 bool Gpu::heat_on() {
   static const bool on = [] {
     // Default: on for Apple10 (M5), where a real-pack A/B measured it (Flash-Next Q2_0, streamed experts: decode
-    // 1.4-1.7x, logits bit for bit, CPU+GPU+DRAM energy about flat); off elsewhere (the M4 is not measured).
+    // 1.2-1.7x, logits bit for bit, CPU+GPU+DRAM energy about flat); off elsewhere (the M4 is not measured).
     // NI_GPU_HEAT=0 turns it off, NI_GPU_HEAT=1 on, on any chip.
     const char* v = getenv("NI_GPU_HEAT");
     if (v && *v) return atoi(v) > 0;

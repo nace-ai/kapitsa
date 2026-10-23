@@ -666,8 +666,9 @@ passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full 
 request's log says how many of its experts were in memory and how much was read.
 On an M5, decoding through such a store keeps the GPU busy across those per-layer waits with a tiny kernel on a second
 queue (the GPU heater, `Gpu::keep_warm`), so it does not drop its clock or park between layers: on a 48 GB M5 Pro with
-a 29.9 GB store, decode 42.6-44.0 tok/s instead of 25.7-30.5 after an 85-token prompt, the same tokens and logits bit for
-bit, at about 3x the GPU power and about the same CPU+GPU+DRAM energy a token. `NI_GPU_HEAT=0` turns it off,
+a 29.9 GB store, decode 42.6-44.0 tok/s instead of 25.7-30.5 after an 85-token prompt and 42.4-42.7 instead of 35.5-35.6
+after a 4,132-token one, the same tokens and logits bit for bit. GPU power rises about 3x during decode (about 5 W to
+17 W); CPU+GPU+DRAM energy a token stays about the same. `NI_GPU_HEAT=0` turns it off,
 `NI_GPU_HEAT=1` turns it on on other chips (off by default there: not measured). A store that holds every expert, and
 every other model, never runs it.
 
