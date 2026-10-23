@@ -63,6 +63,7 @@ jobs:
         run: |
           packaging/release/build.sh "${GITHUB_REF_NAME#v}"
           ./install.sh --from-file "build/release/kapitsa-${GITHUB_REF_NAME#v}-darwin-arm64.tar.gz" --prefix "$RUNNER_TEMP/bin"
+          test -x "$RUNNER_TEMP/bin/kapitsa-systemone" && test -x "$RUNNER_TEMP/bin/kapitsa-drex-pointer"
 
       - name: GitHub release
         env:

@@ -5,6 +5,11 @@ per option, not with generated text. `build/systemone` serves that protocol on K
 release GGUF can be run natively on the Mac instead of through llama.cpp's server: the state is encoded once,
 each question is scored from it, and the answer comes back as calibrated probabilities.
 
+A release install (`install.sh` or `brew install nace-ai/tap/kapitsa`) puts both programs on the PATH next to
+`kapitsa`: `kapitsa-systemone` is `build/systemone` and `kapitsa-drex-pointer` is `tools/drex_pointer.py`, so the
+commands below work from any folder with those names. From a clone, build them with
+`cmake --build build --target systemone`.
+
 ```bash
 # the pointers head is the GGUF's five F32 pointer tensors in a plain binary (no conversion, no quantization)
 python3 tools/drex_pointer.py "drex-v2.0-Q8_0.gguf" ~/.cache/kapitsa/models/drex-v2.0-q8/pointer.bin

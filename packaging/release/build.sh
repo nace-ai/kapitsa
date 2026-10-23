@@ -1,11 +1,12 @@
 #!/bin/bash
-# Builds a Kapitsa release: build/release/kapitsa-VERSION-darwin-arm64.tar.gz (kapitsa, LICENSE,
-# THIRD_PARTY_NOTICES and bench/harness, which `kapitsa bench compare` runs) and its .sha256. The Homebrew formula
+# Builds a Kapitsa release: build/release/kapitsa-VERSION-darwin-arm64.tar.gz (kapitsa, kapitsa-systemone and
+# kapitsa-drex-pointer for Drex decision models (docs/systemone.md), LICENSE, THIRD_PARTY_NOTICES and bench/harness,
+# which `kapitsa bench compare` runs) and its .sha256. The Homebrew formula
 # and install.sh install this tarball; the harness carries VERSION (this release) since a copy has no checkout.
 #   packaging/release/build.sh [VERSION]    VERSION must be CMakeLists.txt's KAPITSA_VERSION (the default)
 # It builds the committed tree (HEAD, exported with git archive), never the working tree: Release (-O3), arm64,
-# CMakeLists.txt's deployment target. It strips and signs the binary, then checks its architecture, minimum macOS,
-# libraries (system ones only) and --version.
+# CMakeLists.txt's deployment target. It strips and signs the binaries, then checks their architecture, minimum macOS,
+# libraries (system ones only), kapitsa's --version and kapitsa-systemone's --help.
 # Signing is ad hoc, unless KAPITSA_SIGN_IDENTITY names a "Developer ID Application" certificate in the keychain
 # (KAPITSA_KEYCHAIN: in that keychain file). KAPITSA_NOTARY_PROFILE, a profile saved with
 # `xcrun notarytool store-credentials`, then also has Apple notarize it. .github/workflows/release.yml runs it for each release tag.
@@ -43,8 +44,8 @@ git archive --format=tar "$commit" | tar -x -C "$work/src"
 clean_env=(env -u CFLAGS -u CXXFLAGS -u OBJCFLAGS -u OBJCXXFLAGS -u CPPFLAGS -u LDFLAGS -u MACOSX_DEPLOYMENT_TARGET)
 "${clean_env[@]}" cmake -S "$work/src" -B "$work/obj" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET="$minos" -DKAPITSA_GIT="$short"
-"${clean_env[@]}" cmake --build "$work/obj" --target kapitsa -j "$(sysctl -n hw.ncpu)"
-for target in naceinfer kapitsa; do
+"${clean_env[@]}" cmake --build "$work/obj" --target kapitsa systemone -j "$(sysctl -n hw.ncpu)"
+for target in naceinfer kapitsa systemone; do
   flags=$(grep -E '^(C|CXX|OBJCXX)_FLAGS = ' "$work/obj/CMakeFiles/$target.dir/flags.make")
   if [ -z "$flags" ] || printf '%s\n' "$flags" | grep -v -q -- ' -O3'; then
     die "the $target target did not compile with -O3: $flags"
@@ -53,20 +54,28 @@ done
 
 # 2. Strip and sign (hardened runtime either way, so the ad hoc build runs as the notarized one would)
 bin="$work/stage/$name/kapitsa"
+sysbin="$work/stage/$name/kapitsa-systemone"
 install -m 0755 "$work/obj/kapitsa" "$bin"
-strip "$bin"
-sign=(codesign --force --options runtime --identifier ai.nace.kapitsa)
-if [ -n "${KAPITSA_SIGN_IDENTITY:-}" ]; then
-  "${sign[@]}" --timestamp --sign "$KAPITSA_SIGN_IDENTITY" ${KAPITSA_KEYCHAIN:+--keychain "$KAPITSA_KEYCHAIN"} "$bin"
-  signed="Developer ID ($KAPITSA_SIGN_IDENTITY)"
-else
-  [ -z "${KAPITSA_NOTARY_PROFILE:-}" ] || die "notarizing needs a Developer ID signature: set KAPITSA_SIGN_IDENTITY too."
-  "${sign[@]}" --sign - "$bin"
-  signed="ad hoc"
+install -m 0755 "$work/obj/systemone" "$sysbin"
+if [ -z "${KAPITSA_SIGN_IDENTITY:-}" ] && [ -n "${KAPITSA_NOTARY_PROFILE:-}" ]; then
+  die "notarizing needs a Developer ID signature: set KAPITSA_SIGN_IDENTITY too."
 fi
-codesign --verify --strict "$bin" || die "the signature does not verify."
+for b in "$bin" "$sysbin"; do
+  strip "$b"
+  sign=(codesign --force --options runtime --identifier "ai.nace.$(basename "$b")")
+  if [ -n "${KAPITSA_SIGN_IDENTITY:-}" ]; then
+    "${sign[@]}" --timestamp --sign "$KAPITSA_SIGN_IDENTITY" ${KAPITSA_KEYCHAIN:+--keychain "$KAPITSA_KEYCHAIN"} "$b"
+    signed="Developer ID ($KAPITSA_SIGN_IDENTITY)"
+  else
+    "${sign[@]}" --sign - "$b"
+    signed="ad hoc"
+  fi
+  codesign --verify --strict "$b" || die "the signature of $(basename "$b") does not verify."
+done
 if [ -n "${KAPITSA_NOTARY_PROFILE:-}" ]; then
-  ditto -c -k --keepParent "$bin" "$work/notarize.zip"
+  mkdir "$work/notarize"
+  cp "$bin" "$sysbin" "$work/notarize/"
+  ditto -c -k --keepParent "$work/notarize" "$work/notarize.zip"
   xcrun notarytool submit "$work/notarize.zip" --keychain-profile "$KAPITSA_NOTARY_PROFILE" \
     ${KAPITSA_KEYCHAIN:+--keychain "$KAPITSA_KEYCHAIN"} --wait --timeout 1h --output-format json > "$work/notary.json" || true
   status=$(plutil -extract status raw -o - "$work/notary.json" 2> /dev/null || echo "no answer")
@@ -80,20 +89,27 @@ if [ -n "${KAPITSA_NOTARY_PROFILE:-}" ]; then
 fi
 
 # 3. Check what ships: arm64 only, the deployment target, system libraries only, the version
-[ "$(lipo -archs "$bin")" = arm64 ] || die "the binary is $(lipo -archs "$bin"), not arm64 only."
-build_info=$(vtool -show-build "$bin")
-platform=$(printf '%s\n' "$build_info" | awk '$1 == "platform" {print $2; exit}')
-got_minos=$(printf '%s\n' "$build_info" | awk '$1 == "minos" {print $2; exit}')
-[ "$platform" = MACOS ] && [ "$got_minos" = "$minos" ] ||
-  die "the binary targets $platform $got_minos, not MACOS $minos (vtool -show-build)."
-libs=$(otool -L "$bin" | tail -n +2 | awk '{print $1}')
-outside=$(printf '%s\n' "$libs" | grep -v -E '^(/usr/lib/|/System/Library/)' || true)
-[ -z "$outside" ] || die "the binary links libraries that are not part of macOS: $outside"
+for b in "$bin" "$sysbin"; do
+  what=$(basename "$b")
+  [ "$(lipo -archs "$b")" = arm64 ] || die "$what is $(lipo -archs "$b"), not arm64 only."
+  build_info=$(vtool -show-build "$b")
+  platform=$(printf '%s\n' "$build_info" | awk '$1 == "platform" {print $2; exit}')
+  got_minos=$(printf '%s\n' "$build_info" | awk '$1 == "minos" {print $2; exit}')
+  [ "$platform" = MACOS ] && [ "$got_minos" = "$minos" ] ||
+    die "$what targets $platform $got_minos, not MACOS $minos (vtool -show-build)."
+  libs=$(otool -L "$b" | tail -n +2 | awk '{print $1}')
+  outside=$(printf '%s\n' "$libs" | grep -v -E '^(/usr/lib/|/System/Library/)' || true)
+  [ -z "$outside" ] || die "$what links libraries that are not part of macOS: $outside"
+done
 got_version=$("$bin" --version)
 [ "$got_version" = "kapitsa $version ($short)" ] || die "--version prints \"$got_version\", not \"kapitsa $version ($short)\"."
+# --help exits before the GPU lock and the model load
+sys_help=$("$sysbin" --help 2>&1) || die "kapitsa-systemone --help fails."
+[[ "$sys_help" == *"usage: systemone"* ]] || die "kapitsa-systemone --help does not print its usage."
 
 # 4. The tarball: fixed owner, times (the commit's) and order, no extended attributes, so a rebuild matches
 install -m 0644 "$work/src/LICENSE" "$work/src/THIRD_PARTY_NOTICES" "$work/stage/$name/"
+install -m 0755 "$work/src/tools/drex_pointer.py" "$work/stage/$name/kapitsa-drex-pointer"
 # `kapitsa bench compare` runs this harness; install.sh and the formula put it beside the notices, where find_harness()
 # looks: <the binary's folder>/../share/kapitsa/bench/harness. The copy has no checkout, so its VERSION file says which
 # release it came with, and a report made from an install names its harness instead of "unknown".
@@ -108,6 +124,9 @@ find "$work/stage/$name" -exec env TZ=UTC touch -t "$stamp" {} +
 (cd "$out" && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256")
 tar -tzf "$out/$name.tar.gz" | grep -qx "$name/bench/harness/kbench.py" ||
   die "the tarball has no bench/harness: kapitsa bench compare would not find it."
+for f in kapitsa-systemone kapitsa-drex-pointer; do
+  tar -tzf "$out/$name.tar.gz" | grep -qx "$name/$f" || die "the tarball has no $f."
+done
 rm -rf "$work"
 
 printf '\n%s\n' "$out/$name.tar.gz"
@@ -115,4 +134,5 @@ printf '  sha256    %s\n' "$(cut -d ' ' -f 1 "$out/$name.tar.gz.sha256")"
 printf '  size      %s bytes (binary %s bytes)\n' "$(stat -f %z "$out/$name.tar.gz")" "$(tar -xOzf "$out/$name.tar.gz" "$name/kapitsa" | wc -c | tr -d ' ')"
 printf '  harness   %s files (bench/harness, run by `kapitsa bench compare`)\n' \
   "$(tar -tzf "$out/$name.tar.gz" | grep "/bench/harness/" | grep -vc "/$")"
-printf '  binary    %s, arm64, macOS %s or later, system libraries only, signed %s\n' "$got_version" "$minos" "$signed"
+printf '  binaries  %s and kapitsa-systemone, arm64, macOS %s or later, system libraries only, signed %s\n' \
+  "$got_version" "$minos" "$signed"

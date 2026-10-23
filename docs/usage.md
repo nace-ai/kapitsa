@@ -427,6 +427,10 @@ curl http://127.0.0.1:8000/v1/messages -H 'Content-Type: application/json' -d '{
   "max_tokens": 1024, "messages": [{"role": "user", "content": "Write a haiku about unified memory."}]}'
 ```
 
+Drex decision models answer a state and a set of questions with a probability per option instead of generated text.
+They are served by a separate program, `kapitsa-systemone` (`build/systemone` in a clone; `POST /v1/systemone`), not by
+`kapitsa serve`: [docs/systemone.md](systemone.md).
+
 ### Reading ahead while the user types
 
 An app can send the draft of a conversation's next message to `POST /v1/draft` at each pause in the typing. The
@@ -1053,7 +1057,10 @@ Kapitsa releases are, and by the same Developer ID team as the running binary wh
 is running from it (a benchmark's servers must all run one binary) and that the file there is still the kapitsa that
 runs. The old binary is kept as `kapitsa.previous` beside the license files (`../share/kapitsa` from the binary's
 folder, where `install.sh` puts them, updated too, with the benchmark harness in `bench/harness` there: your own
-`local.env` in it is kept, other edits are replaced, and `--rollback` leaves the newer harness). A release that fails a check changes nothing. A server that is
+`local.env` in it is kept, other edits are replaced, and `--rollback` leaves the newer harness). `kapitsa-systemone`
+and `kapitsa-drex-pointer` beside the binary are replaced from the release too, the server only when it is signed as
+Kapitsa's (`ai.nace.kapitsa-systemone`, by the same team); one that fails that check is left as it was, with a warning,
+and `--rollback` leaves both. A release that fails a check changes nothing. A server that is
 running keeps the version it started with until it restarts. When the binary's folder is not yours to write (say
 `/usr/local/bin`), `kapitsa update` prints the command that works: `sudo /usr/local/bin/kapitsa update`.
 

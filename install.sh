@@ -137,7 +137,7 @@ build_from_source() {
   log=$(mktemp -t kapitsa-install)
   jobs=$(sysctl -n hw.perflevel0.logicalcpu 2> /dev/null || sysctl -n hw.ncpu)
   say "Building Kapitsa (a minute or two the first time)..."
-  if ! { cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target kapitsa -j "$jobs"; } > "$log" 2>&1; then
+  if ! { cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target kapitsa systemone -j "$jobs"; } > "$log" 2>&1; then
     tail -25 "$log" >&2
     die "the build failed (full log: $log)."
   fi
@@ -156,7 +156,9 @@ pick_prefix() {
   esac
 }
 
-# Installs $1 (the binary) into $prefix, and LICENSE, THIRD_PARTY_NOTICES and the benchmark harness from folder $2
+# Installs $1 (the binary) into $prefix, and LICENSE, THIRD_PARTY_NOTICES and the benchmark harness from folder $2;
+# $3 and $4, when they exist, as kapitsa-systemone and kapitsa-drex-pointer (Drex decision models, docs/systemone.md;
+# an older release has neither)
 install_kapitsa() {
   local notices notice installed first run=kapitsa harness="$2/bench/harness"
   notices="$(dirname "$prefix")/share/kapitsa"
@@ -166,6 +168,15 @@ install_kapitsa() {
   done
   install -m 0755 "$1" "$prefix/kapitsa" || die "can't write $prefix/kapitsa (--prefix picks another folder)."
   installed=$("$prefix/kapitsa" --version) || die "the installed $prefix/kapitsa does not run."
+  local systemone=""
+  if [ -f "${3:-}" ]; then
+    install -m 0755 "$3" "$prefix/kapitsa-systemone" || die "can't write $prefix/kapitsa-systemone."
+    "$prefix/kapitsa-systemone" --help > /dev/null 2>&1 || die "the installed $prefix/kapitsa-systemone does not run."
+    systemone="$prefix/kapitsa-systemone"
+  fi
+  if [ -f "${4:-}" ]; then
+    install -m 0755 "$4" "$prefix/kapitsa-drex-pointer" || die "can't write $prefix/kapitsa-drex-pointer."
+  fi
 
   # `kapitsa bench compare` runs the harness; it finds it next to the notices, with no checkout and no env var
   if [ -f "$harness/kbench.py" ]; then
@@ -193,6 +204,7 @@ install_kapitsa() {
   fi
 
   say "Installed $installed: $prefix/kapitsa"
+  if [ -n "$systemone" ]; then say "Drex decision models (docs/systemone.md): $systemone, $prefix/kapitsa-drex-pointer"; fi
   say "License notices: $notices"
   if [ -f "$notices/bench/harness/kbench.py" ]; then say "Benchmark harness: $notices/bench/harness"; fi
   case ":$PATH:" in
@@ -252,12 +264,13 @@ main() {
   pick_prefix
   if [ "$mode" = source ]; then
     build_from_source
-    install_kapitsa "$clone/build/kapitsa" "$clone"
+    install_kapitsa "$clone/build/kapitsa" "$clone" "$clone/build/systemone" "$clone/tools/drex_pointer.py"
   else
     KAPITSA_TMP="$(mktemp -d -t kapitsa-install)"
     trap 'rm -rf "$KAPITSA_TMP"' EXIT
     fetch_release
-    install_kapitsa "$KAPITSA_TMP/x/kapitsa" "$KAPITSA_TMP/x"
+    install_kapitsa "$KAPITSA_TMP/x/kapitsa" "$KAPITSA_TMP/x" "$KAPITSA_TMP/x/kapitsa-systemone" \
+      "$KAPITSA_TMP/x/kapitsa-drex-pointer"
   fi
 }
 

@@ -23,10 +23,12 @@ class Kapitsa < Formula
     if build.head?
       ENV.O3 # Homebrew would compile with -Os instead of the build's -O3; the benchmarks ran -O3
       system "cmake", "-S", ".", "-B", "build", *std_cmake_args
-      system "cmake", "--build", "build", "--target", "kapitsa"
+      system "cmake", "--build", "build", "--target", "kapitsa", "systemone"
       bin.install "build/kapitsa"
+      bin.install "build/systemone" => "kapitsa-systemone"
+      bin.install "tools/drex_pointer.py" => "kapitsa-drex-pointer"
     else
-      bin.install "kapitsa"
+      bin.install "kapitsa", "kapitsa-systemone", "kapitsa-drex-pointer"
     end
     pkgshare.install "LICENSE", "THIRD_PARTY_NOTICES"
     # `kapitsa bench compare` runs this harness; find_harness() looks for it in pkgshare, so a brew install needs no
@@ -58,6 +60,9 @@ class Kapitsa < Formula
     assert_match "kapitsa opencode", shell_output("#{bin}/kapitsa --help")
     # the harness ships with the formula: bench compare finds it with no checkout and no environment variable
     assert_match "kapitsa bench compare", shell_output("#{bin}/kapitsa bench compare --help")
+    # Drex decision models: --help exits before the GPU and the model load
+    assert_match "usage: systemone", shell_output("#{bin}/kapitsa-systemone --help 2>&1")
+    assert_match "usage: drex_pointer.py", shell_output("#{bin}/kapitsa-drex-pointer 2>&1", 1)
     # model names resolve offline
     ENV["KAPITSA_HOME"] = testpath.to_s
     assert_match "qwen3.5-4b", shell_output("#{bin}/kapitsa pull --dry-run --json 4b")
