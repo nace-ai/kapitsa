@@ -235,19 +235,6 @@ class SystemOne {
     }
   }
 
-  // Commits a prefill chunk and waits for it. A Neural Engine split job that never reports would leave the GPU waiting
-  // on its event forever, so a split chunk is bounded the way the engine bounds it (Engine::wait_split,
-  // src/engine/engine.cpp:957): 60 s as the last resort after the per-job 2 s watchdog, then the split is given up, its
-  // waits are released, and ane_finish_chunk() reruns the chunk on the GPU alone.
-  void commit_chunk(Encoder& e, int rows) {
-    e.commit();
-    if (model_->ane_splits(rows) && !e.wait_for(60000)) {
-      logi("NI_ANE: a split prefill chunk has not finished in 60 s; giving up the Neural Engine split");
-      model_->ane_abort("a split chunk did not finish within 60 s");
-    }
-    e.wait();
-  }
-
   // Scores one {"state", "questions"} object, returning its answers object.
   ojson score(const ojson& body, Timings* tm) {
     Gpu& g = Gpu::get();
@@ -276,16 +263,20 @@ class SystemOne {
       // the checkpoint, and the KV rows above n_state stay masked by position, so the KV caches need no reset.
       model_->reset(*seq_);
       // A chunk per encoder, as every other prefill caller does: commit() ends the encoder, and the Neural Engine split
-      // is begun and finished per chunk. A split that gives up (a Neural Engine job that never reports, or output that
-      // is not finite) fails ane_finish_chunk(), is retired for the rest of the process (FfnSplit::splits()) and leaves
-      // part of the chunk behind, so the state is prefilled again from an empty one on the GPU alone. The engine reruns
-      // the chunk the same way (src/engine/engine.cpp); a server outlives the request, so it must not fatal() here.
+      // is begun and finished per chunk. The wait is a plain commit_and_wait(): what bounds a split job that never
+      // reports is the per-job 2 s watchdog (src/ane/ffn_split.cpp), not a timeout of our own.
+      // Engine::wait_split bounds a whole chunk through Model::ane_abort, and that is a no-op for the Qwen35 backbone
+      // this server loads (src/model/model.h), so a 60 s bound here would release nothing and is not written.
+      // A split that gives up (a watched job that never reports, or output that is not finite) fails
+      // ane_finish_chunk(), is retired for the rest of the process (FfnSplit::splits()) and leaves part of the chunk
+      // behind, so the state is prefilled again from an empty one on the GPU alone. The engine reruns the chunk the
+      // same way (src/engine/engine.cpp); a server outlives the request, so it must not fatal() here.
       bool reran = false;
       for (int pos = 0; pos < n_state;) {
         const int T = std::min(chunk, n_state - pos);
         auto e = g.begin();
         model_->encode_prefill(*e, *seq_, pos, T, sp, 0, false);
-        commit_chunk(*e, T);
+        e->commit_and_wait();
         if (!model_->ane_finish_chunk()) {
           if (reran) throw std::runtime_error("the Neural Engine prefill split failed with it retired");
           reran = true;
@@ -328,7 +319,7 @@ class SystemOne {
         auto e = g.begin();
         if (off == 0) model_->restore(*e, *seq_, *ck);
         model_->encode_prefill(*e, *seq_, n_state + off, rows, sp, 0, false);
-        commit_chunk(*e, rows);
+        e->commit_and_wait();
         if (!model_->ane_finish_chunk()) {
           if (reran) throw std::runtime_error("the Neural Engine prefill split failed with it retired");
           reran = true;
