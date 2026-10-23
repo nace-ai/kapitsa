@@ -954,11 +954,18 @@ hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt,
 // Commits a chunk that runs a GPU + Neural Engine split and waits for it. A split job that never reports would keep
 // the GPU waiting on its event (each job has a 2 s watchdog; this bounds the whole chunk as a last resort): the split
 // is given up, the GPU's waits are released, and ane_finish_chunk() then reruns the chunk on the GPU alone.
+// `NI_ANE_SPLIT_WAIT_MS` (default 60000) is that bound: a test shortens it (NI_ANE_FAULT, tests/test_ane_split_abort.py)
+// rather than wait out a real wedge.
 void Engine::wait_split(Encoder& e) {
   e.commit();
-  if (!e.wait_for(60000)) {
-    logi("NI_ANE: a split prefill chunk has not finished in 60 s; giving up the Neural Engine split");
-    model_->ane_abort("a split chunk did not finish within 60 s");
+  const char* v = getenv("NI_ANE_SPLIT_WAIT_MS");
+  const int wait_ms = v && atoi(v) > 0 ? atoi(v) : 60000;
+  if (!e.wait_for(wait_ms)) {
+    // the shipped 60000 keeps the log line it has always had: "in 60 s"
+    const std::string bound = wait_ms % 1000 == 0 ? std::to_string(wait_ms / 1000) + " s"
+                                                  : std::to_string(wait_ms) + " ms";
+    logi("NI_ANE: a split prefill chunk has not finished in %s; giving up the Neural Engine split", bound.c_str());
+    model_->ane_abort("a split chunk did not finish within " + bound);
   }
   e.wait();
 }
