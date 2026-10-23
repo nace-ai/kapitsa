@@ -47,12 +47,14 @@ def check(name, ok, detail=""):
 
 
 # ---------------------------------------------------------------- offline
-def encode(build, model_dir, body, tokens=False, env=None):
+def encode(build, model_dir, body, tokens=False, env=None, args=None):
     """Runs `systemone --encode` on one request; returns (exit code, parsed JSON or the error text)."""
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
-        json.dump(body, f)
+        # dumps(), not dump(): the one-shot encoder handles the 10000-deep state below, json.dump recurses in Python.
+        f.write(json.dumps(body))
         path = f.name
-    cmd = [os.path.join(build, "systemone"), "--model", model_dir, "--encode", path] + (["--tokens"] if tokens else [])
+    cmd = [os.path.join(build, "systemone"), "--model", model_dir, "--encode", path] + (["--tokens"] if tokens else []) \
+        + (args or [])
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=dict(os.environ, **(env or {})))
     finally:
@@ -117,6 +119,48 @@ def offline(build, model_dir):
     rc, got = encode(build, model_dir, {"state": " ".join(["word"] * 40), "questions": {
         "o": {"type": "noul", "instructions": "i"}}}, env={"SYSTEMONE_MAX_STATE": "8"})
     check("encode: a state over SYSTEMONE_MAX_STATE is rejected", rc != 0 and "state" in str(got), got)
+
+    # A request is caller JSON and the renderer recurses once per nesting level: past the bound it is a 400 the server
+    # answers (this crashed an httplib worker thread's stack), and a value inside the bound still renders.
+    deep = "leaf"
+    for _ in range(10000):
+        deep = [deep]
+    rc, got = encode(build, model_dir, {"state": deep, "questions": {"o": {"type": "noul", "instructions": "i"}}})
+    check("encode: a state nested 10000 levels deep is a 400, not a crash",
+          rc == 2 and "400 " in str(got) and "nest" in str(got), (rc, got))
+
+    nested_ok = "leaf"
+    for _ in range(8):
+        nested_ok = {"k": [nested_ok]}
+    rc, got = encode(build, model_dir, {"state": nested_ok, "questions": {"o": {"type": "noul", "instructions": "i"}}})
+    check("encode: a value nested inside the bound still renders", rc == 0 and got["state_tokens"] > 1, (rc, got))
+
+    # A question row longer than the 2048-row prefill chunk is encoded in several chunks: the encoder must accept it
+    # (the GPU path, where each chunk needs its own encoder, is the URL half's over-chunk check).
+    long_text = "a description of the road ahead that takes a good few tokens"
+    long_options = {"option_%03d" % i: {"description": long_text} for i in range(120)}
+    rc, got = encode(build, model_dir, {"state": "The flag is enabled.", "questions": {
+        "long": {"type": "choice", "instructions": "Which option matches the state?", "criteria": long_options}}})
+    check("encode: a question row longer than one 2048-row prefill chunk is encoded",
+          rc == 0 and got["questions"]["long"]["tokens"] > 2048, (rc, str(got)[:400]))
+
+    # The prefill pass is fatal when its last row is at the context's last position, so a state or row of exactly
+    # --context tokens is a 400 and one position more is accepted (the check the server applies is the same one).
+    fit = {"state": " ".join(["word"] * 300),
+           "questions": {"o": {"type": "noul", "instructions": "Is it on?"}}}
+    rc, base = encode(build, model_dir, fit)
+    check("encode: a long state and row encode at the default context", rc == 0, (rc, str(base)[:300]))
+    if rc == 0:
+        n_state = base["state_tokens"]
+        row = n_state + base["questions"]["o"]["tokens"]
+        rc, got = encode(build, model_dir, fit, args=["--context", str(n_state)])
+        check("encode: a state that fills the context to its last position is rejected",
+              rc == 2 and "state is %d tokens" % n_state in str(got), (rc, got))
+        rc, got = encode(build, model_dir, fit, args=["--context", str(row)])
+        check("encode: a row that ends on the context's last position is rejected",
+              rc == 2 and "ends at position %d" % row in str(got), (rc, got))
+        rc, got = encode(build, model_dir, fit, args=["--context", str(row + 1)])
+        check("encode: the same row fits a context one position longer", rc == 0, (rc, str(got)[:300]))
 
     for bad, what in (({"state": "s"}, "no questions"),
                       ({"state": "s", "questions": {"o": {"type": "maybe"}}}, "an unknown question type"),
@@ -231,6 +275,20 @@ def online(url):
             check("batch: usage adds up the requests' tokens",
                   batch["usage"]["input_tokens"] > body["usage"]["input_tokens"], (batch.get("usage"), body.get("usage")))
 
+        # A question's row can be longer than the 2048-row prefill chunk: it is encoded in chunks and each chunk needs
+        # its own encoder (a second chunk through a committed one aborted the GPU and killed the server).
+        long_text = "a description of the road ahead that takes a good few tokens"
+        long_options = {"option_%03d" % i: {"description": long_text} for i in range(120)}
+        st6, long_body = post(url, {"state": state, "questions": {
+            "long": {"type": "choice", "instructions": "Which option matches the state?", "criteria": long_options}}})
+        long_answer = (long_body.get("answers") or {}).get("long", {}) if st6 == 200 else {}
+        check("a question row longer than one prefill chunk is answered",
+              st6 == 200 and len(long_answer.get("probabilities") or {}) == 120, (st6, str(long_body)[:300]))
+        st7, after = post(url, {"state": state, "questions": {"n": noul}})
+        check("the server still answers after an over-chunk row",
+              st7 == 200 and (after.get("answers") or {}).get("n", {}).get("probabilities") ==
+              answers.get("n", {}).get("probabilities"), (st7, str(after)[:300]))
+
     req = urllib.request.Request(url.rstrip("/") + "/v1/systemone", data=b"{not json",
                                  headers={"Content-Type": "application/json"})
     try:
@@ -238,6 +296,16 @@ def online(url):
         check("bad JSON: 400", False, "accepted")
     except urllib.error.HTTPError as e:
         check("bad JSON: 400", e.code == 400, e.code)
+
+    # The renderer recurses once per nesting level on caller JSON, and the server's bodies go to 64 MiB: past the bound
+    # it must be a 400 that leaves the worker threads alive, not a stack overflow.
+    node = "leaf"
+    for _ in range(10000):
+        node = [node]
+    st, reply = post(url, {"state": node, "questions": {"o": {"type": "noul", "instructions": "i"}}})
+    check("rejects a state nested 10000 levels deep with 400", st == 400 and "error" in reply, (st, reply))
+    st, reply = post(url, {"state": "s", "questions": {"o": {"type": "noul", "instructions": "i"}}})
+    check("the server still answers after a deeply nested request", st == 200, (st, reply))
 
     for body, what in (({"state": "s"}, "no questions"),
                        ({"state": "s", "questions": {}}, "an empty questions object"),

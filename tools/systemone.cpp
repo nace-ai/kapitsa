@@ -73,8 +73,9 @@ void usage() {
                "              0 serves every request cold. NI_SYS_CACHE=0 also disables it\n"
                "  --once: score one request from a file, print the reply, exit (--repeat times, --warmup first\n"
                "          runs unmeasured: the latencies reported are min / median / max ms over the measured runs)\n"
-               "  --encode: only the tokenizer is loaded: print the encoded layout of a request and exit\n"
-               "            (--tokens also prints the token ids), no GPU and no weights are touched\n");
+               "  --encode: only the tokenizer is loaded: print the encoded layout of a request and exit (--tokens\n"
+               "            also prints the token ids), no GPU and no weights are touched; a request the server would\n"
+               "            reject as a 400 prints `400 <reason>` and exits 2\n");
 }
 
 Options parse_args(int argc, char** argv) {
@@ -198,6 +199,14 @@ class SystemOne {
     }
     hidden_ = model_->hidden_width();
     if (head_.hidden() != hidden_) fatal("pointer head expects %d hidden values, the model has %d", head_.hidden(), hidden_);
+    // hidden_rows() rows are read as hidden_ f32 values: a backbone whose rows hold several streams (Qwen3.8 Flash-Next
+    // keeps four) would be scored from the wrong bytes, so only a dense f32 row is accepted.
+    if (model_->hidden_row_bytes() != size_t(hidden_) * sizeof(float)) {
+      fatal("%s: the model's residual rows are %zu bytes, not one dense f32 row of %d values (a Flash-Next backbone "
+            "keeps several streams per row), and systemone scores one dense f32 row per option: it needs a dense "
+            "Qwen3.5/3.6/3.8 model",
+            opts_.model_dir.c_str(), model_->hidden_row_bytes(), hidden_);
+    }
     norm_w_ = model_->final_norm_weights();
     eps_ = model_->rms_eps();
     limits_ = ni::systemone::limits_from_env();
@@ -231,16 +240,8 @@ class SystemOne {
     Gpu& g = Gpu::get();
     const ni::systemone::Encoded enc = ni::systemone::encode(tok_, body, limits_);
     const int n_state = enc.n_state();
-    const int row = n_state + (int) enc.max_branch();
-    if (n_state > seq_->limit) {
-      throw ni::systemone::BadRequest("state is " + std::to_string(n_state) + " tokens and does not fit the " +
-                                      std::to_string(seq_->limit) + "-token context (raise --context)");
-    }
-    if (row > seq_->limit) {
-      throw ni::systemone::BadRequest("a question row is " + std::to_string(row) +
-                                      " tokens with the state and does not fit the " + std::to_string(seq_->limit) +
-                                      "-token context (raise --context)");
-    }
+    // A state or row that ends on the context's last position kills the prefill pass, so it is a 400 here (check_fits).
+    ni::systemone::check_fits(enc, seq_->limit);
     std::copy(enc.state.begin(), enc.state.end(), seq_->tokens());
     ni::SamplingParams sp;  // nothing is sampled: these passes only advance the state
     const int chunk = model_->prefill_chunk();
@@ -261,13 +262,18 @@ class SystemOne {
       // prefilled from an empty one. A cache hit does not reset: restore() writes the whole recurrent state back from
       // the checkpoint, and the KV rows above n_state stay masked by position, so the KV caches need no reset.
       model_->reset(*seq_);
+      // A chunk per encoder, as every other prefill caller does: commit() ends the encoder, and the Neural Engine split
+      // is begun and finished per chunk.
+      for (int pos = 0; pos < n_state;) {
+        const int T = std::min(chunk, n_state - pos);
+        auto e = g.begin();
+        model_->encode_prefill(*e, *seq_, pos, T, sp, 0, false);
+        e->commit_and_wait();
+        if (!model_->ane_finish_chunk()) fatal("the Neural Engine prefill split failed; rerun with NI_ANE=0");
+        pos += T;
+      }
       {
         auto e = g.begin();
-        for (int pos = 0; pos < n_state;) {
-          const int T = std::min(chunk, n_state - pos);
-          model_->encode_prefill(*e, *seq_, pos, T, sp, 0, false);
-          pos += T;
-        }
         model_->save(*e, *seq_, ck_, n_state);
         e->commit_and_wait();
       }
@@ -288,22 +294,24 @@ class SystemOne {
       std::copy(b.tokens.begin(), b.tokens.end(), seq_->tokens() + n_state);
       decide_row.clear();
       option_rows.assign(b.group.options.size(), {});
-      {
+      for (int off = 0; off < T;) {
+        const int rows = std::min(chunk, T - off);
+        // One encoder per chunk: commit() ends the encoder and releases it, so a second chunk through the same one
+        // would record into a committed command buffer (a Metal validation abort that kills the server). The restore
+        // goes in the first chunk's encoder, where the record order puts it before the prefill's reads.
         auto e = g.begin();
-        model_->restore(*e, *seq_, *ck);
-        for (int off = 0; off < T;) {
-          const int rows = std::min(chunk, T - off);
-          model_->encode_prefill(*e, *seq_, n_state + off, rows, sp, 0, false);
-          e->commit_and_wait();
-          const float* x = model_->hidden_rows().as<float>();
-          auto take = [&](int index, std::vector<float>* out) {
-            if (index < off || index >= off + rows) return;
-            ni::systemone::final_norm_row(x + size_t(index - off) * hidden_, norm_w_.data(), hidden_, eps_, out);
-          };
-          if (b.group.decide >= 0) take(b.group.decide, &decide_row);
-          for (size_t o = 0; o < b.group.options.size(); ++o) take(b.group.options[o], &option_rows[o]);
-          off += rows;
-        }
+        if (off == 0) model_->restore(*e, *seq_, *ck);
+        model_->encode_prefill(*e, *seq_, n_state + off, rows, sp, 0, false);
+        e->commit_and_wait();
+        if (!model_->ane_finish_chunk()) fatal("the Neural Engine prefill split failed; rerun with NI_ANE=0");
+        const float* x = model_->hidden_rows().as<float>();
+        auto take = [&](int index, std::vector<float>* out) {
+          if (index < off || index >= off + rows) return;
+          ni::systemone::final_norm_row(x + size_t(index - off) * hidden_, norm_w_.data(), hidden_, eps_, out);
+        };
+        if (b.group.decide >= 0) take(b.group.decide, &decide_row);
+        for (size_t o = 0; o < b.group.options.size(); ++o) take(b.group.options[o], &option_rows[o]);
+        off += rows;
       }
       if ((int) decide_row.size() != hidden_) throw std::runtime_error("the decide row of a question was not read");
       for (const auto& r : option_rows)
@@ -495,8 +503,16 @@ int encode_only(const Options& opts) {
   if (!f) fatal("cannot open %s", g_encode_path.c_str());
   std::stringstream ss;
   ss << f.rdbuf();
-  const ojson body = parse_body(ss.str());
-  const ni::systemone::Encoded enc = ni::systemone::encode(tok, body, ni::systemone::limits_from_env());
+  ni::systemone::Encoded enc;
+  try {
+    enc = ni::systemone::encode(tok, parse_body(ss.str()), ni::systemone::limits_from_env());
+    ni::systemone::check_fits(enc, opts.context);  // what the server answers for this --context
+  } catch (const ni::systemone::BadRequest& e) {
+    // A request the encoder rejects is a 400, which the server answers and this mode prints as `400 <reason>` and
+    // exits 2 on, rather than letting it reach std::terminate (an uncaught exception aborts the process).
+    std::fprintf(stderr, "400 %s\n", e.what());
+    return 2;
+  }
   ojson out = ojson::object();
   out["state_tokens"] = enc.n_state();
   out["total_tokens"] = (int) enc.total_tokens();

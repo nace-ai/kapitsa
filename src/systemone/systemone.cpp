@@ -31,7 +31,12 @@ const char* kDelims[] = {
     "<|fim_suffix|>",
 };
 
-std::string render_value(const ojson& value, int indent);
+std::string render_value(const ojson& value, int depth);
+
+// A request is caller JSON and the renderer recurses once per array or object nesting level: a body of 64 MiB (the
+// server's cap) can nest hundreds of thousands deep, which overflows the render thread's stack (a secondary thread on
+// macOS gets 512 KB). The reference renders a handful of levels, so a depth bound costs nothing and rejects it as a 400.
+constexpr int kMaxRenderDepth = 64;
 
 // Caller text can never produce a delimiter: `<|name|>` becomes `<¦name¦>` before tokenizing (the tokenizer matches
 // added tokens wherever they appear, so the shield is what makes option boundaries unforgeable).
@@ -83,13 +88,16 @@ std::string render_scalar(const ojson& value) {
 }
 
 // str | object | array flattened into the text the model sees, field names kept as labels (kev/api.py's render).
-std::string render_value(const ojson& value, int indent) {
-  const std::string pad(indent * 2, ' ');
+std::string render_value(const ojson& value, int depth) {
+  if (depth >= kMaxRenderDepth) {
+    throw BadRequest("the request nests values more than " + std::to_string(kMaxRenderDepth) + " levels deep");
+  }
+  const std::string pad(depth * 2, ' ');
   if (value.is_array()) {
     std::string out;
     for (size_t i = 0; i < value.size(); ++i) {
       if (i) out += '\n';
-      std::string child = render_value(value.at(i), indent + 1);
+      std::string child = render_value(value.at(i), depth + 1);
       size_t cut = 0;
       while (cut < child.size() && (child[cut] == ' ' || child[cut] == '\t')) ++cut;
       out += pad + "- " + child.substr(cut);
@@ -103,7 +111,7 @@ std::string render_value(const ojson& value, int indent) {
       if (!first) out += '\n';
       first = false;
       if (child.is_object() || child.is_array()) {
-        out += pad + key + ":\n" + render_value(child, indent + 1);
+        out += pad + key + ":\n" + render_value(child, depth + 1);
       } else {
         out += pad + key + ": " + render_scalar(child);
       }
@@ -201,6 +209,19 @@ size_t Encoded::total_tokens() const {
   size_t n = state.size();
   for (const Branch& b : branches) n += b.tokens.size();
   return n;
+}
+
+void check_fits(const Encoded& enc, int context) {
+  const int n_state = enc.n_state();
+  const int row = n_state + (int) enc.max_branch();
+  if (n_state >= context) {
+    throw BadRequest("state is " + std::to_string(n_state) + " tokens and the context's last usable position is " +
+                     std::to_string(context - 1) + " (raise --context)");
+  }
+  if (row >= context) {
+    throw BadRequest("a question row ends at position " + std::to_string(row) + " with the state and the context's " +
+                     "last usable position is " + std::to_string(context - 1) + " (raise --context)");
+  }
 }
 
 Encoded encode(const Tokenizer& tok, const ojson& body, const Limits& limits) {

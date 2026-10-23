@@ -73,6 +73,11 @@ struct Encoded {
 // Encodes one {"state", "questions"} object. Throws std::runtime_error when it is invalid or exceeds `limits`.
 Encoded encode(const Tokenizer& tok, const ojson& body, const Limits& limits);
 
+// Throws BadRequest when a request's rows do not fit a `context`-token sequence. The prefill pass is fatal when its last
+// row is at the sequence's last position (Qwen35::encode_prefill's `pos0 + T >= cap`), so the last position a request
+// may reach is context - 1, and a state or row of exactly `context` tokens is as fatal as a longer one.
+void check_fits(const Encoded& enc, int context);
+
 // The answers object of the reference server, from one logit vector per question (its options, in option order).
 // Throws std::runtime_error when the logits do not match the questions.
 ojson format_answers(const std::vector<std::vector<float>>& logits, const std::vector<QuestionMeta>& meta);
