@@ -111,8 +111,9 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
   store(0);
   threadgroup_barrier(mem_flags::mem_threadgroup);
   const uint steps = p.K / BK;
-  // a simdgroup whose SM rows are all past the tile's live rows skips its products (its outputs are never stored)
-  const bool live = sm * SM < rows;
+  // a simdgroup whose SM rows are all past the tile's live rows skips its products (its outputs are never stored);
+  // part of the staged kernels only, so the *_o ones (NI_MOE_STAGE=0) are main's kernel exactly
+  const bool live = !STG || sm * SM < rows;
   for (uint st = 0; st < steps; ++st) {
     const bool more = st + 1 < steps;
     if (more) load((st + 1) * BK);
