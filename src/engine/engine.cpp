@@ -2277,9 +2277,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // row lies below it is a fatal: a longer suffix must not enter this path. The cap is where the prefill path stops
   // being the slower one: it used to be 128 rows on the measurement "116 rows at a 16K prefix costs 757 ms as verify
   // passes against 994 ms on the prefill path (64 rows 491 against 527)", but that prefill number was the
-  // short-prefill families', and a 65..128-row chunk takes the tensor-op GEMM now (Qwen35::sp_qmt_pref): 73 rows
-  // 433 ms as passes against 399 on the prefill path, 124 rows 663 against 483. Below 64 rows the pass still wins
-  // (55 rows 376 against 537), so the cap is that boundary
+  // short-prefill families', and a 65..128-row chunk takes the tensor-op GEMM now (Qwen35::sp_qmt_pref): at a 16K
+  // prefix a 73-row suffix costs 434/433 ms as passes against 373/379 ms on the prefill path, a 124-row one 665/673
+  // against 442/452. Below the boundary it is the other way round, and 47 and 55 rows still take the staged GEMMs
+  // (447 and 484 ms on the prefill path against 399 and 378 as passes), so the cap is 64, the short-prefill boundary
   static const int vpf_max = [] {
     const char* v = getenv("NI_VPF_MAX");
     return std::min(2047, v ? std::max(0, atoi(v)) : 64);
