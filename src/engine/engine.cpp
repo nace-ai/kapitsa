@@ -3540,8 +3540,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   if (kfw.cycles > 0) {  // KFlash's account of the request: rows verified, and the drafts among them that were accepted
     const size_t n0 = strlen(cyc);
-    snprintf(cyc + n0, sizeof cyc - n0, ", KFlash (%s): %ld cycles, %ld rows, %ld drafts accepted", kfw.source.c_str(), kfw.cycles,
-             kfw.rows, kfw.tokens - kfw.cycles);
+    if (kfw.planned > 0)  // (rows only where KFlash's plan() chose them: a drafter's or MTP's cycle verifies several, counted elsewhere)
+      snprintf(cyc + n0, sizeof cyc - n0, ", KFlash (%s): %ld cycles, %ld rows, %ld drafts accepted", kfw.source.c_str(), kfw.cycles,
+               kfw.rows, kfw.tokens - kfw.cycles);
+    else
+      snprintf(cyc + n0, sizeof cyc - n0, ", KFlash (%s): %ld cycles", kfw.source.c_str(), kfw.cycles);
   }
   if (kfw.lookup && kfw.lookup->c1() > 0 && kfw.lookup->s() > 0) {  // the measured row cost, to calibrate NI_KFLASH_ROW_COST
     const size_t n0 = strlen(cyc);

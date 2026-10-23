@@ -130,9 +130,13 @@ class KfLookup {
 struct KfWrap {
   std::string source = "none";  // "DFlash2", "LiLiCorr", "MTP", "prompt lookup", ... or "none" (plain decoding)
   std::optional<KfLookup> lookup;
-  long cycles = 0, tokens = 0, rows = 0;  // decode cycles, the tokens they wrote, the rows the plain and prompt-lookup ones verified
+  long cycles = 0, tokens = 0, rows = 0;  // decode cycles, the tokens they wrote, the rows the plan()-driven ones (plain, prompt lookup) verified
+  long planned = 0;                        // plan() calls: 0 for a loop that keeps its own budget (drafters, MTP, Dory), whose rows are not counted here
 
-  int plan(int avail) { return (lookup ? lookup->pick(avail) : std::max(avail, 0)) + 1; }
+  int plan(int avail) {
+    ++planned;
+    return (lookup ? lookup->pick(avail) : std::max(avail, 0)) + 1;
+  }
   void observe(int drafts, int accepted, double ms) {
     if (lookup) lookup->observe(drafts, accepted, ms);
   }
