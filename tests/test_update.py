@@ -245,10 +245,11 @@ def binary(version, how="signed", identifier=IDENTIFIER):
 
 
 def tar_release(version, binary_path=None, sha256=None, files=("kapitsa", "LICENSE", "THIRD_PARTY_NOTICES"), symlink=False,
-                harness=True):
+                harness=True, companions=None):
     """Serves release `version` as packaging/release/build.sh packs it: kapitsa, LICENSE, THIRD_PARTY_NOTICES and
     bench/harness in a folder of the release's name (ustar, gzip), and its .sha256 (shasum's format) or `sha256` in
-    its place. Also written to TMP/dl for install.sh --from-file. Returns the tarball's path there."""
+    its place. Also written to TMP/dl for install.sh --from-file. Returns the tarball's path there.
+    companions: the path of a kapitsa-systemone to pack, with a kapitsa-drex-pointer of `version` beside it."""
     name = f"kapitsa-{version}-darwin-arm64"
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz", format=tarfile.USTAR_FORMAT) as t:
@@ -269,6 +270,9 @@ def tar_release(version, binary_path=None, sha256=None, files=("kapitsa", "LICEN
         if harness:  # bench/harness, which `kapitsa bench compare` runs (a nested file too, as the real one has)
             entry(f"{name}/bench/harness/kbench.py", mode=0o755, data=f"# kbench.py of {version}\n".encode())
             entry(f"{name}/bench/harness/configs/q35-4b.json", data=f'{{"release": "{version}"}}\n'.encode())
+        if companions:
+            entry(f"{name}/kapitsa-systemone", mode=0o755, data=open(companions, "rb").read())
+            entry(f"{name}/kapitsa-drex-pointer", mode=0o755, data=f"#!/bin/sh\necho drex_pointer {version}\n".encode())
     data = buf.getvalue()
     sums = f"{sha256 or hashlib.sha256(data).hexdigest()}  {name}.tar.gz\n".encode()
     url = f"/releases/download/v{version}/{name}.tar.gz"
@@ -459,6 +463,36 @@ r = run([SH2, "update"], env(HH2))
 hk2 = os.path.join(notices_of(SH2), "bench", "harness", "kbench.py")
 check(r.returncode == 0 and os.path.isfile(hk2) and open(hk2).read() == f"# kbench.py of {N}\n",
       "an install without a harness gets it on update", r.stdout + r.stderr)
+
+# kapitsa-systemone and kapitsa-drex-pointer (Drex decision models) come with a release that carries them, beside the
+# binary; a server signed as something else is left out with a warning, and kapitsa itself still updates
+SYSTEMONE = os.path.join(BUILD, "systemone")
+if not os.path.isfile(SYSTEMONE):
+    print(f"SKIP the Drex companions on update: {SYSTEMONE} is not built (cmake --build build --target systemone)")
+else:
+    def companion(identifier):
+        d = tempfile.mkdtemp(prefix="sys-", dir=TMP)
+        path = os.path.join(d, "kapitsa-systemone")
+        shutil.copy(SYSTEMONE, path)
+        sign(path, identifier)
+        return path
+    SC1, HC1 = standalone("sc1"), home("sc1")
+    tar_release(N, companions=companion(IDENTIFIER + "-systemone"))
+    r = run([SC1, "update"], env(HC1))
+    sys1, ptr1 = os.path.join(os.path.dirname(SC1), "kapitsa-systemone"), os.path.join(os.path.dirname(SC1), "kapitsa-drex-pointer")
+    h = run([sys1, "--help"], BASE_ENV) if os.path.isfile(sys1) else None
+    check(r.returncode == 0 and version_of(SC1) == N and h is not None and h.returncode == 0 and
+          "usage: systemone" in h.stderr and os.access(ptr1, os.X_OK) and
+          run([ptr1], BASE_ENV).stdout == f"drex_pointer {N}\n",
+          "an update installs kapitsa-systemone and kapitsa-drex-pointer beside the binary", r.stdout + r.stderr)
+    SC2, HC2 = standalone("sc2"), home("sc2")
+    tar_release(N, companions=companion("ai.example.other"))
+    r = run([SC2, "update"], env(HC2))
+    check(r.returncode == 0 and version_of(SC2) == N and
+          not os.path.exists(os.path.join(os.path.dirname(SC2), "kapitsa-systemone")) and
+          "kapitsa-systemone" in r.stdout + r.stderr,
+          "a kapitsa-systemone signed as another program is not installed, with a warning; kapitsa updates", r.stdout + r.stderr)
+    tar_release(N)
 
 # ---------------------------------------------------------------- 4. refused releases change nothing
 

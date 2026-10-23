@@ -751,6 +751,33 @@ bool install_harness(const std::string& from, const Install& in, std::string* wh
   return true;
 }
 
+// kapitsa-systemone and kapitsa-drex-pointer (Drex decision models, docs/systemone.md) beside the binary, where
+// install.sh puts them. A release without them (all of them before they shipped) leaves whatever is installed. The
+// server's signature is held to kapitsa's requirement `req`; one that fails it, or that can't be written, is a warning
+// and the installed copy stays: the update of kapitsa itself has already happened.
+bool install_companions(const std::string& x, const Install& in, const std::string& req, std::string* why) {
+  const std::string server = join(x, "kapitsa-systemone"), pointer = join(x, "kapitsa-drex-pointer");
+  bool ok = true;
+  if (is_file(server)) {
+    chmod(server.c_str(), 0755);
+    if (const std::string bad = check_signature(server, req); !bad.empty()) {
+      *why = "the kapitsa-systemone in this release: " + bad + "; the installed one is kept";
+      ok = false;
+    } else if (const std::string id = file_signing(server).identifier; id != std::string(kIdentifier) + "-systemone") {
+      *why = "the kapitsa-systemone in this release is signed as \"" + id + "\"; the installed one is kept";
+      ok = false;
+    } else if (!move(server, join(in.dir, "kapitsa-systemone"), why)) {
+      ok = false;
+    }
+  }
+  if (is_file(pointer)) {
+    chmod(pointer.c_str(), 0755);
+    std::string w;
+    if (!move(pointer, join(in.dir, "kapitsa-drex-pointer"), &w) && ok) *why = w, ok = false;
+  }
+  return ok;
+}
+
 Done install(const Install& in, const std::string& version, const Stage& stage) {
   Done d;
   auto failed = [&](Failure f, const std::string& why) {
@@ -825,6 +852,7 @@ Done install(const Install& in, const std::string& version, const Stage& stage) 
     if (!move(join(x, f), join(in.notices, f), &warn) && d.warning.empty()) d.warning = warn;
   }
   if (!install_harness(join(join(x, "bench"), "harness"), in, &warn) && d.warning.empty()) d.warning = warn;
+  if (!install_companions(x, in, req, &warn) && d.warning.empty()) d.warning = warn;
   return d;
 }
 

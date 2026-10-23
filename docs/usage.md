@@ -1095,7 +1095,8 @@ again (`curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/instal
 
 ## Uninstalling
 
-`brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the binary
-`install.sh` placed (in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
+`brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the binaries
+`install.sh` placed (`kapitsa`, `kapitsa-systemone` and `kapitsa-drex-pointer`, in `/opt/homebrew/bin`,
+`~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
 folder (the license files, the benchmark harness, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`)
 removes the models, logs, update state and the SSD prefix cache (`prefix-cache/` alone: the cache).
