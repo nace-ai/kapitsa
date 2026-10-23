@@ -14,10 +14,18 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-697 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-23 down to 2026-10-16, newest first.
+705 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-23 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 222.6 | 222.7 | 2793 | 2466 | 1.48 | – | – | [q36-35b-kapitsa-20261023-084805](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-084805.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 201.1 | 216.9 | 2802 | 2479 | 1.48 | – | – | [q36-35b-kapitsa-20261023-084520](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-084520.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 197.0 | 222.3 | 2825 | 2488 | 1.46 | – | – | [q36-35b-kapitsa-20261023-084020](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-084020.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 207.1 | 219.9 | 2822 | 2442 | 1.46 | – | – | [q36-35b-kapitsa-20261023-083654](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-083654.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 208.0 | 221.1 | 2845 | 2505 | 1.45 | – | – | [q36-35b-kapitsa-20261023-081508](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-081508.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 195.1 | 213.2 | 2820 | 2444 | 1.47 | – | – | [q36-35b-kapitsa-20261023-081138](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-081138.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 193.5 | 214.5 | 2842 | 2507 | 1.45 | – | – | [q36-35b-kapitsa-20261023-080748](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-080748.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 920542c | 200.0 | 226.7 | 2839 | 2496 | 1.46 | – | – | [q36-35b-kapitsa-20261023-075537](results/2026-10-23-m5-pro-35b-365/results/q36-35b-kapitsa-20261023-075537.json) |
 | 2026-10-23 | Alisher Amantay | M3 Pro, 36 GB | Flint-40B-A2.5B | 4-bit | Kapitsa (catalog flint) | c490f81 | – | – | – | – | – | – | – | [sw-flint-kapitsa-20261023-051434](results/2026-10-22-m3pro-36gb/results/sw-flint-kapitsa-20261023-051434.json) |
 | 2026-10-23 | Alisher Amantay | M3 Pro, 36 GB | Qwen3.5 9B | Q4_K_M | llama.cpp (unsloth Q4_K_M GGUF) | b11804 | 23.4 | 23.4 | 307 | 296 | 13.45 | – | – | [q35-9b-llamacpp-20261023-050750](results/2026-10-22-m3pro-36gb/results/q35-9b-llamacpp-20261023-050750.json) |
 | 2026-10-23 | Alisher Amantay | M3 Pro, 36 GB | Nemotron 3.5 Bolt | 2-bit experts | Kapitsa (catalog bolt) | c490f81 | – | – | – | – | – | – | – | [sw-bolt-kapitsa-20261023-043437](results/2026-10-22-m3pro-36gb/results/sw-bolt-kapitsa-20261023-043437.json) |
