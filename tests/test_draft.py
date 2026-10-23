@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
-"""Reading a user's draft ahead (POST /v1/draft, Engine::draft). Needs a model folder and the GPU (the GPU lock:
-$BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock, unless NACE_GPU_LOCK_HELD=1 or NI_LOCK_HELD=1). Servers run with
-KAPITSA_HOME in a temporary folder and --disk-cache 0, greedy, thinking off; the checks with NI_ANE=0 (the Neural
-Engine split moves a prefill's bits by whether its program is ready yet), NI_LOG=2 and NI_TRACE_TOKENS (token ids and
-margins). Each case is a fresh server (it computes the same requests to the bit): a slice of the corpus and a question,
-the answer's history prefill, drafts of the next message, then that message.
-  1. the follow-up without drafts, and after a draft of the whole message (also before the history prefill ran), of
-     the message less its last word, as it was typed, edited in the middle and back, deleted and typed again: the
-     same tokens, the request continuing the last draft's state (cached_tokens; no "checkpoints: prompt diverges"); an
-     edit restores the user turn's checkpoint and then computes what the one draft of the whole message does
-  2. a ~2,000-token paste, read ahead; with 256-row chunks, a request of another conversation stops its reading
-     ("interrupted") and the follow-up continues what was read; the same tokens as without drafts
-  3. unchanged, no_conversation, busy, 400s
+"""Reading a user's draft ahead (POST /v1/draft). Needs a model folder and the GPU (the GPU lock: $BENCH_GPU_LOCK,
+default /tmp/kapitsa-gpu.lock, unless NACE_GPU_LOCK_HELD=1 or NI_LOCK_HELD=1). Each case is a fresh server (the same
+requests to the bit; KAPITSA_HOME temporary, --disk-cache 0, NI_ANE=0, NI_TRACE_TOKENS): a slice of the corpus and a
+question, its answer's history prefill, drafts of the next message, then that message, greedy. The follow-up writes
+the reply it writes without drafts, token for token; on a MoE model (whose short prefill passes are not row-count
+invariant) a reply that takes another token passes only if it moved no more than the one-pass history path
+(NI_HISTORY_PREFILL=0) moves it (close()). Exact on every model: an edited draft and one sent before the history
+prefill against the one draft of the whole message, a ~2,000-token paste, a paste whose reading a request interrupts.
 usage: test_draft.py <kapitsa> <model dir> [--tokens 3000] [--port 8198] [--server-args "--dflash none"] [--keep]
        test_draft.py <kapitsa> <model dir> --measure [--tokens 5000] [--rounds 2]
-  --measure: the follow-up's time to its first token (sent right after a one-token request of another conversation:
-             the GPU awake) and cached_tokens, for a ~40-token question and a ~2,000-token paste, without a draft and
-             after one of the whole message or of all but its last word; the servers as by default. The replies must be
-             the same, but where the Neural Engine split read the follow-up without a draft (a dense model's chunks of
-             512 rows or more: the FFN in 8 bits; after a draft the last rows are the GPU's): then a note"""
+  --measure: the follow-up's time to its first token (right after a one-token request of another conversation) and
+             cached_tokens, a ~40-token question and a ~2,000-token paste, with no draft, a draft of all of it, of all
+             but its last word; servers as by default (the Neural Engine split on)"""
 import fcntl, json, os, re, shutil, signal, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 
 ARGS = sys.argv[1:]
@@ -66,7 +59,7 @@ def gpu_lock():
 
 
 class Server:
-    def __init__(self, tmp, log, extra=()):
+    def __init__(self, tmp, log, extra=(), env=None):
         self.log_path = log
         self.trace = os.path.join(tmp, f"trace-{time.time_ns()}.jsonl")
         home = os.path.join(tmp, "home")
@@ -74,6 +67,7 @@ class Server:
         e.update({"KAPITSA_HOME": home, "KAPITSA_NO_AUTO_UPDATE": "1", "KAPITSA_NO_PROMPT": "1"})
         if not MEASURE:  # (measured: the server as it runs by default, the Neural Engine split on where it is)
             e.update({"NI_ANE": "0", "NI_LOG": "2", "NI_TRACE_TOKENS": self.trace})
+        e.update(env or {})
         self.log = open(log, "a")
         self.log.write(f"\n==== start {' '.join(extra)}\n")
         self.log.flush()
@@ -218,21 +212,63 @@ def follow_up(s, conv, answer, message, warm=False):
     return text, u, t, (tr[-1] if tr else None), s.text()[m:]
 
 
+def ids(r):
+    return [r["first"]] + r["tokens"]
+
+
+def part(ra, rb):  # the first reply token where two traces differ (their shorter length when one is the other's start)
+    return next((k for k, (x, y) in enumerate(zip(ids(ra), ids(rb))) if x != y), min(len(ids(ra)), len(ids(rb))))
+
+
 def same(a, b):
     """the replies are the same, token for token where traced; else where they part, and the margins there"""
     (ta, _, _, ra, _), (tb, _, _, rb, _) = a, b
-    ids = lambda r: [r["first"]] + r["tokens"]  # noqa: E731
     if not (ra and rb):
         return ta == tb, f"\n     A: {ta!r}\n     B: {tb!r}"
-    i = next((k for k, (x, y) in enumerate(zip(ids(ra), ids(rb))) if x != y), None)
-    m = [([None] + r["margins"])[i:i + 1] for r in (ra, rb)] if i is not None else None
-    return ids(ra) == ids(rb), f"tokens part at {i} (margins {m})\n     A: {ta!r}\n     B: {tb!r}"
+    i = part(ra, rb)
+    m = [([None] + r["margins"])[i:i + 1] for r in (ra, rb)]
+    j = max(0, i - 2)
+    return ids(ra) == ids(rb), f"tokens part at {i}: {ids(ra)[j:i + 2]} vs {ids(rb)[j:i + 2]} (margins {m})"
 
 
-def run(tmp, log, message, drafts, extra=(), early=False, image=False):
+def moe():  # a model that routes experts: its short prefill passes are not row-count invariant (docs/usage.md)
+    def has(o):
+        return isinstance(o, dict) and (o.get("num_experts", 0) > 0 or any(has(v) for v in o.values()))
+    with open(os.path.join(MODEL, "config.json")) as f:
+        return has(json.load(f))
+
+
+SLACK = 0.02  # logits
+MOE = moe()
+
+
+def close(base, x, ctrl):
+    """x's reply is base's token for token; or, on a MoE model, a draft moves its logits no more than a request without
+    drafts read in one pass does (ctrl: NI_HISTORY_PREFILL=0, the follow-up that comes before the history prefill):
+    over the reply positions where base, x and ctrl still decode the same tokens (the same context, teacher-forced
+    alike), x's mean change of the top-2 logit gap is at most ctrl's + SLACK, and where x takes another token, base's
+    gap there is no wider than ctrl's largest change"""
+    ok, why = same(base, x)
+    if ok or not MOE:
+        return ok, why
+    rb, rx, rc = base[3], x[3], ctrl()[3]
+    w = min(part(rb, rx), part(rb, rc))
+    mb, mx, mc = rb["margins"], rx["margins"], rc["margins"]
+    dx = [abs(mb[k] - mx[k]) for k in range(w - 1)]  # reply tokens 1 .. w - 1 (the first has no margin)
+    dc = [abs(mb[k] - mc[k]) for k in range(w - 1)]
+    if not dx:
+        return False, why + "; no shared reply tokens to compare"
+    mean_x, mean_c, gap = sum(dx) / len(dx), sum(dc) / len(dc), mb[part(rb, rx) - 1]
+    ok = mean_x <= mean_c + SLACK and gap <= max(dc)
+    return ok, (f"{why}; over reply tokens 1-{w - 1} the top-2 gap moved {mean_x:.4f} on average, at most "
+                f"{max(dx):.4f} (one-pass history: {mean_c:.4f}, at most {max(dc):.4f}); no-draft gap where it "
+                f"parts {gap:.4f}")
+
+
+def run(tmp, log, message, drafts, extra=(), early=False, image=False, env=None):
     """a fresh server: turn 1, then each draft of `drafts` (texts; early: before the history prefill), then the
     follow-up; (follow-up, draft replies, turn 1's answer)"""
-    s = Server(tmp, log, extra)
+    s = Server(tmp, log, extra, env)
     try:
         conv = conversation(image)
         a, _ = first_turn(s, conv, wait=not early)
@@ -244,84 +280,64 @@ def run(tmp, log, message, drafts, extra=(), early=False, image=False):
 
 
 def functional(tmp, log):
-    words = SHORT.split(" ")
+    words, ctl = SHORT.split(" "), {}
     base, _, a0 = run(tmp, log, SHORT, [])
+    # the one-pass history controls (NI_HISTORY_PREFILL=0), run when a MoE model's drafted reply is not the no-draft one
+    control = lambda img=False: ctl.get(img) or ctl.setdefault(  # noqa: E731
+        img, run(tmp, log, SHORT, [], image=img, env={"NI_HISTORY_PREFILL": "0"})[0])
+    cont = lambda res, d: cached(res[1]) == d["cached_tokens"] + d["prefilled_tokens"]  # noqa: E731
     h = cached(base[1])  # the history prefill's state: all of the conversation but its last token
-    print(f"  no draft: prompt {base[1].get('prompt_tokens')}, cached {h}, first token {base[2]:.3f} s", flush=True)
     check(h > TOKENS // 2, "the follow-up continues the history prefill's state", base[1])
 
-    full, (d1,), _ = run(tmp, log, SHORT, [SHORT])
-    st, d = d1
+    full, ((st, d),), _ = run(tmp, log, SHORT, [SHORT])
     check(st == 200 and d["status"] == "prefilled" and d["cached_tokens"] == h,
-          "a draft of the whole message reads it from the history prefill's state", d1)
-    ok, why = same(base, full)
-    check(ok, "... and the follow-up writes the reply it writes without the draft", why)
-    check(cached(full[1]) == d["cached_tokens"] + d["prefilled_tokens"] and
-          "checkpoints: prompt diverges" not in full[4],
-          "... continuing the draft's state (cached_tokens = what the draft left, no checkpoint restored)",
-          f"usage {full[1]}, draft {d}")
-
-    early, (de,), _ = run(tmp, log, SHORT, [SHORT], early=True)
+          "a draft of the whole message reads it from the history prefill's state", d)
+    ok, why = close(base, full, control)
+    check(ok, "... and the follow-up writes the reply without drafts (MoE: or moves it no more than the one-pass "
+          "history path)", why)
+    check(cont(full, d) and "checkpoints: prompt diverges" not in full[4],
+          "... continuing the draft's state (cached_tokens = what the draft left, no checkpoint restored)", full[1])
+    early, ((_, de),), _ = run(tmp, log, SHORT, [SHORT], early=True)
     ok, why = same(full, early)
-    check(ok and de[1]["status"] == "prefilled" and de[1]["cached_tokens"] < h and cached(early[1]) == cached(full[1]),
-          "a draft before the history prefill ran reads the reply's history too, as the history prefill would: then "
-          "the same rows in the same passes", why or [de, early[1]])
-
-    minus, (d2,), _ = run(tmp, log, SHORT, [less_last_word(SHORT)])
-    ok, why = same(base, minus)
-    check(ok and cached(minus[1]) == d2[1]["cached_tokens"] + d2[1]["prefilled_tokens"],
-          "a draft less the last word: the same reply, the draft's state continued", why or minus[1])
-
+    check(ok and de["status"] == "prefilled" and de["cached_tokens"] < h and cont(early, de),
+          "a draft before the history prefill ran reads the reply's history too: then the same rows in the same passes "
+          "as after it", why or de)
     typed = [" ".join(words[:k]) for k in range(1, len(words) + 1, 3)] + [SHORT]
-    typing, rs, _ = run(tmp, log, SHORT, typed)
-    ok, why = same(base, typing)
-    check(ok and all(r[1]["status"] in ("prefilled", "unchanged") for r in rs) and
-          cached(typing[1]) == rs[-1][1]["cached_tokens"] + rs[-1][1]["prefilled_tokens"],
-          f"drafts as the message is typed ({len(typed)} of them): the same reply, the last draft's state continued",
-          why or [r[1] for r in rs])
-
+    for name, drafts in (("a draft less the last word", [less_last_word(SHORT)]), ("drafts as it is typed", typed),
+                         ("the draft deleted (back to the answer's end, the user turn's checkpoint) and typed again",
+                          [SHORT, "", SHORT])):
+        res, rs, _ = run(tmp, log, SHORT, drafts)
+        ok, why = close(base, res, control)
+        check(ok and cont(res, rs[-1][1]) and all(r[1]["status"] in ("prefilled", "unchanged") for r in rs) and
+              (len(rs) != 3 or rs[1][1]["cached_tokens"] == h),
+              f"{name}: the reply without drafts, the last draft's state continued", why or [r[1] for r in rs])
     mid = len(words) // 2
     edited = " ".join(words[:mid] + ["completely", "different"] + words[mid + 1:])
     edit, rs, _ = run(tmp, log, SHORT, [SHORT, edited, SHORT])
-    ok, why = same(base, edit)
-    check(ok, "an edit in the middle of the draft and back: the reply without drafts", why)
-    check(rs[1][1]["cached_tokens"] == h and rs[2][1]["cached_tokens"] == h,
-          "... each edit restores the user turn's checkpoint (the conversation is not read again)", [r[1] for r in rs])
+    ok, why = close(base, edit, control)
+    check(ok and rs[1][1]["cached_tokens"] == h and rs[2][1]["cached_tokens"] == h,
+          "an edit in the middle and back restores the user turn's checkpoint; the reply without drafts", why or rs)
     ok, why = same(full, edit)
-    check(ok and cached(edit[1]) == cached(full[1]),
-          "... and then computes what the one draft of the whole message does (the same rows in the same passes)",
-          why or f"{edit[1]} vs {full[1]}")
-
-    gone, rs, _ = run(tmp, log, SHORT, [SHORT, "", SHORT])
-    ok, why = same(base, gone)
-    check(ok and rs[1][1]["status"] == "prefilled" and rs[1][1]["cached_tokens"] == h,
-          "the draft deleted (back to the answer's end) and typed again: the reply without drafts", why or
-          [r[1] for r in rs])
-
+    check(ok and cached(edit[1]) == cached(full[1]), "... then computes the one draft of the whole message's rows in its "
+          "passes", why)
     if os.path.exists(os.path.join(MODEL, "preprocessor_config.json")):  # (a model that reads images)
         ibase, _, _ = run(tmp, log, SHORT, [], image=True)
-        ifull, (di,), _ = run(tmp, log, SHORT, [SHORT], image=True)
-        ok, why = same(ibase, ifull)
-        check(ok and di[1]["status"] == "prefilled" and cached(ifull[1]) == di[1]["cached_tokens"] + di[1]["prefilled_tokens"],
-              "a conversation that starts with an image: read ahead, the same reply", why or [di, ifull[1]])
+        ifull, ((_, di),), _ = run(tmp, log, SHORT, [SHORT], image=True)
+        ok, why = close(ibase, ifull, lambda: control(True))
+        check(ok and di["status"] == "prefilled" and cont(ifull, di), "a conversation that starts with an image: read "
+              "ahead, the reply without drafts", why or di)
 
-    # 2. a paste of about 2,000 tokens
+    # 2. a paste of about 2,000 tokens; then 256-row chunks, a request of another conversation sent while it is read
     pbase, _, _ = run(tmp, log, PASTE, [])
-    pfull, (pd,), _ = run(tmp, log, PASTE, [PASTE])
+    pfull, ((_, pd),), _ = run(tmp, log, PASTE, [PASTE])
     ok, why = same(pbase, pfull)
-    print(f"  paste: prompt {pbase[1].get('prompt_tokens')}, first token {pbase[2]:.3f} s without a draft, "
-          f"{pfull[2]:.3f} s after one ({pd[1]})", flush=True)
-    check(ok and pd[1]["prefilled_tokens"] > 1500 and cached(pfull[1]) == pd[1]["cached_tokens"] + pd[1]["prefilled_tokens"],
-          "a pasted draft: read ahead, then the reply without drafts", why or pd)
-
-    # interrupted: 256-row chunks, a request of another conversation sent while the paste is read
-    chunk = ("--prefill-chunk", "256")
-    p256, _, _ = run(tmp, log, PASTE, [], chunk)
-    s = Server(tmp, log, chunk)
+    check(ok and pd["prefilled_tokens"] > 1500 and cont(pfull, pd), "a pasted draft: read ahead, the same tokens",
+          why or pd)
+    p256, _, _ = run(tmp, log, PASTE, [], ("--prefill-chunk", "256"))
+    s = Server(tmp, log, ("--prefill-chunk", "256"))
     try:
-        conv = conversation()
+        conv, got = conversation(), {}
         a, _ = first_turn(s, conv)
-        got = {}
         th = threading.Thread(target=lambda: got.update(r=draft(a, PASTE)))
         th.start()
         time.sleep(0.1)  # (the draft has the GPU turn: it renders its prompt in a few ms)
@@ -332,9 +348,7 @@ def functional(tmp, log):
               "a request arriving while a paste is read stops it at a chunk boundary", d)
         res = follow_up(s, conv, a, PASTE)
         ok, why = same(p256, res)
-        check(ok and cached(res[1]) == d["cached_tokens"] + d["prefilled_tokens"],
-              "... and the follow-up continues what was read, with the reply it writes without the draft",
-              why or f"{res[1]} vs draft {d}")
+        check(ok and cont(res, d), "... the follow-up continues what was read, the same tokens", why or res[1])
     finally:
         s.stop()
 
@@ -348,9 +362,8 @@ def functional(tmp, log):
               "the same draft again: unchanged", [r1, r2])
         check(draft("an answer this server never wrote", SHORT)[1]["status"] == "no_conversation",
               "another `after`: no_conversation")
-        check(draft(a, SHORT, think=True)[0] == 400 and draft(a, SHORT, think=False)[0] == 200,
-              "\"think\": true is a 400 (not supported yet); false is the default")
-        check(draft(a, None)[0] == 400, "a body without \"text\" is a 400")
+        check(draft(a, SHORT, think=True)[0] == 400 and draft(a, SHORT, think=False)[0] == 200 and
+              draft(a, None)[0] == 400, "400: \"think\": true (not supported yet), no \"text\"")
         writing = threading.Event()
         th = threading.Thread(target=lambda: chat([{"role": "user", "content": "Count from 1 to 300."}], max_tokens=600,
                                                   on_first=writing.set))
@@ -381,18 +394,16 @@ def measure(tmp, log):
                     s.stop()
             texts = {c: r[0][0] for c, r in res.items()}
             ane = "Neural Engine busy" in res["no draft"][0][4]
-            if len(set(texts.values())) == 1 or not ane:
+            if len(set(texts.values())) == 1 or not (ane or MOE):
                 check(len(set(texts.values())) == 1, f"round {rnd + 1}, {name}: the same reply in all three cases",
                       json.dumps(texts, indent=1))
-            else:
-                print(f"NOTE round {rnd + 1}, {name}: the replies differ; the Neural Engine split read the follow-up "
-                      "without a draft (rows it computes in 8 bits, after a draft on the GPU)\n     " +
-                      json.dumps(texts, indent=1), flush=True)
+            else:  # (the functional checks gate how far a MoE model's reply moves)
+                print(f"NOTE round {rnd + 1}, {name}: the replies differ ({'the Neural Engine split' if ane else 'MoE'}"
+                      f")\n     " + json.dumps(texts, indent=1), flush=True)
             for cond, ((_, u, t, _, _), ds, u1) in res.items():
                 d = ds[-1] if ds else None
                 rows.append((rnd + 1, name, u1.get("prompt_tokens"), u.get("prompt_tokens"), cond, t, cached(u),
                              f"{d['prefilled_tokens']} in {d['ms']:.0f} ms" if d else "-"))
-                print(rows[-1], flush=True)
     print(f"| {os.path.basename(MODEL)} | round | turn 1 tokens | follow-up tokens | before it | first token | cached | "
           "draft read |")
     print("| --- | ---: | ---: | ---: | --- | ---: | ---: | --- |")
