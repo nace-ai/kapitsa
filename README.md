@@ -74,7 +74,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 The catalog models measured on each Mac, against the engines that run them: one collapsed section per Mac, with a table for each model family. Decode is a 512-token coding answer at T 0.6 (Flint at its card's T 1.0), prefill a 4K-token prompt. Under each model's name are the weights Kapitsa ran; the other engines' weights and how each number was measured are in [docs/benchmarks.md](docs/benchmarks.md#the-readmes-tables).
 
-<sub>Each cell: prefill / decode, tokens/s (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured · KFlash needs a draft model: Flint, Dory, Nano 9B v2 and the 35B-A3B 2-bit have none and decode one token per pass; Flash-Next drafts with its MTP head, Nano 4B with prompt lookup</sub>
+<sub>Each cell: prefill / decode, tokens/s (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured</sub>
 
 <details>
 <summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 7 models</summary>
