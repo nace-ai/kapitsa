@@ -2,9 +2,9 @@
 #include "util/term.h"
 
 #include <fcntl.h>
-#include <poll.h>
 #include <signal.h>
 #include <sys/ioctl.h>
+#include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -114,8 +114,12 @@ Bg query_background() {
           const int left = 1000 - int(std::chrono::duration_cast<std::chrono::milliseconds>(
                                          std::chrono::steady_clock::now() - t0).count());
           if (left <= 0) break;
-          pollfd p{fd, POLLIN, 0};
-          const int n = poll(&p, 1, left);
+          // select, not poll: macOS's poll answers POLLNVAL at once on /dev/tty, which ended the wait before any reply
+          fd_set in;
+          FD_ZERO(&in);
+          FD_SET(fd, &in);
+          timeval tv{left / 1000, (left % 1000) * 1000};
+          const int n = select(fd + 1, &in, nullptr, nullptr, &tv);
           if (n < 0 && errno == EINTR) continue;
           if (n <= 0) break;
           char buf[256];
