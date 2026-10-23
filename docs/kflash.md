@@ -474,10 +474,10 @@ the guesses the budget keeps. The source is a drafter (DFlash2, LiLiCorr, DSpark
 drafts, or none (a cycle of one row, which is plain decoding). The startup line ends with `KFlash (<source>)`, and each
 reply reports `usage.kapitsa.kflash` as `{"source": ..., "cycles": N}`.
 
-Where the source has a cost to weigh, the budget decides. Prompt lookup (Nemotron Nano 4B by default, Flint with
-`NI_FLINT_NGRAM`) used to verify every draft it found; it now measures the cost of a row and the acceptance of each draft
-position, and verifies only the drafts that pay for their rows (`src/model/kflash_wrap.h`), probing all of them once in
-64 cycles. Plain decoding stays on its pipelined loop: sending it through a verify pass would make it slower, and Flint
+Prompt lookup (Nemotron Nano 4B by default, Flint with `NI_FLINT_NGRAM`) verifies every draft it finds. With
+`NI_KFLASH_BUDGET=1` it verifies only the drafts that pay for their rows (`src/model/kflash_wrap.h`): the acceptance of each
+draft position is counted per request, a row costs a fixed number of steps (Flint 0.6; Nano 0.25, not measured), and all the
+drafts are verified once in 16 cycles to keep the counts fresh. Plain decoding stays on its pipelined loop: sending it through a verify pass would make it slower, and Flint
 and the MTP models are bit-identical to their plain steps only on that loop.
 
 After each request, the server's log prints the budget: rows per cycle, the cycles at each tree size, the tokens per
