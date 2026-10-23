@@ -8,6 +8,7 @@
 #include "server/cli.h"
 #include "server/beam.h"
 #include "server/picker.h"
+#include "server/route.h"
 #include "server/ui.h"
 #include "util/log.h"
 #include "util/term.h"
@@ -380,6 +381,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     }
     hub::ModelRef ref;
     std::string serve_model = model;
+    bool elsewhere = false;  // a Mac on the network runs it whole: the server sends its requests there (route.h)
     try {
       if (model.empty()) {
         std::string w;
@@ -389,9 +391,14 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
         ref = for_this_mac(hub::resolve(expand_home(model)), opt, budget);
         ui::remember(ref);
       }
+      if (!runs_whole_here(ref, opt, budget)) {  // then nothing downloads here
+        cluster::Browser b;
+        b.wait(1.5);
+        elsewhere = cluster::pick_server(b.peers(), model_key(ref), false).has_value();
+      }
       hub::PullOptions po;
       if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
-      hub::ensure(ref, po);
+      if (!elsewhere) hub::ensure(ref, po);
     } catch (const hub::Stopped& e) {
       if (term::fancy()) term::status(""), ui::warning(e.what());
       else fprintf(stderr, "\n%s\n", e.what());
@@ -401,7 +408,8 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     }
     // the context first (serve then picks the slots, and caps a context past the model's limit, saying so): as
     // asked, max the model's limit, else serve's default for this Mac (default_context)
-    if (ctx == kContextMax) {
+    if (elsewhere) {  // that Mac's server has its context
+    } else if (ctx == kContextMax) {
       ctx = model_context_limit(ref.dir);
       if (ctx <= 0)
         return fail(serve_model + " does not state the context it was trained for (max_position_embeddings in its "
@@ -418,8 +426,8 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     if (const std::string p = port_problem("127.0.0.1", port); !p.empty()) return fail(p);
     mkdir(hub::home_dir().c_str(), 0755);
     mkdir((hub::home_dir() + "/logs").c_str(), 0755);
-    std::vector<std::string> sargv = {self_path(), "serve", "--model", serve_model, "--port", std::to_string(port),
-                                      "--context", std::to_string(ctx)};
+    std::vector<std::string> sargv = {self_path(), "serve", "--model", serve_model, "--port", std::to_string(port)};
+    if (ctx > 0) sargv.insert(sargv.end(), {"--context", std::to_string(ctx)});
     if (!key.empty()) sargv.insert(sargv.end(), {"--api-key", key});
     if (loops > 0) sargv.insert(sargv.end(), {"--loops", std::to_string(loops)});
     std::vector<std::string> senv;
@@ -451,14 +459,15 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     sigaction(SIGTERM, &act, &old_term);
     sigaction(SIGHUP, &act, &old_hup);
     const bool tty = isatty(2);
-    const std::string what = (ref.model ? ref.model->name : ref.name) + ", " + std::to_string(ctx) + "-token context";
+    const std::string what = (ref.model ? ref.model->name : ref.name) +
+                             (elsewhere ? ", on another Mac" : ", " + std::to_string(ctx) + "-token context");
     const auto t0 = std::chrono::steady_clock::now();
     int shown = -1;
     bool ready = false;
     // in a terminal: the logo as a loader while the server starts (a spinner where it can't play)
     const bool tui = term::fancy();
     const std::string label = term::bold(ref.model ? ref.model->name : ref.name) + term::dim("  " + std::string(term::kDot) + "  ") +
-                              term::context(ctx) + " context";
+                              (elsewhere ? "on another Mac" : term::context(ctx) + " context");
     auto secs_since = [t0] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
     std::unique_ptr<ui::Loader> wobble;
     std::unique_ptr<term::Spinner> spinner;

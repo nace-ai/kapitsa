@@ -14,6 +14,7 @@
 #include "engine/engine.h"
 #include "hub/hub.h"
 
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -32,9 +33,12 @@ struct Pick {
 // that confirms it (and the download it needs), or nullopt when cancelled. `opt` and `budget`: what the fit marks are
 // planned for; `command`: the command that runs it ("kapitsa serve"), for the hint that names the choice with --model;
 // `context`: the --context given (0 none: the last one picked, else the default); ask_context false (kapitsa bench, which
-// runs its own): no context to choose, the fits planned at opt.context.
+// runs its own): no context to choose, the fits planned at opt.context. `elsewhere`, if given: where a model runs whole
+// on the network ("Studio, 58 tok/s", "" nowhere), asked again as the screen redraws; a model too big for this Mac that
+// runs whole elsewhere says so instead, and picking it sends its requests there (route.h).
 std::optional<Pick> pick_model(const EngineOptions& opt, size_t budget, const std::string& command, int context = 0,
-                               bool ask_context = true);
+                               bool ask_context = true,
+                               std::function<std::string(const hub::CatalogModel&)> elsewhere = nullptr);
 
 // A download that does not fit the disk (hub::PullOptions::make_room): the other downloaded models, each with what
 // deleting it gives back (one that is an APFS clone of another copy frees nothing), to select (space) and delete

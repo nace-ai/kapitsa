@@ -7,6 +7,7 @@
 //                 no --model: the best catalog model for this Mac's memory. Visible to Kapitsa on the other Macs of
 //                 the network (src/cluster/), and sends its requests to one that runs the model whole when this Mac
 //                 would not (route.h)
+//   kapitsa cluster [--json] [--watch]   the Macs on this network that run Kapitsa (cluster_cmd.cpp; alias: macs)
 //   kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
@@ -56,6 +57,7 @@
 #include <filesystem>
 #include <functional>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <csignal>
 #include <ctime>
@@ -300,6 +302,7 @@ static void print_help() {
          "  rm MODEL     delete a downloaded model\n"
          "  import FILE  convert a GGUF (LM Studio, Ollama, llama.cpp) into a model (kapitsa import --help)\n"
          "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n"
+         "  cluster      the Macs on this network that run Kapitsa: model, speed, link (kapitsa cluster --help)\n"
          "  bench        benchmark Kapitsa (and other engines: bench compare) on this Mac (kapitsa bench --help)\n"
          "  update       update Kapitsa to its latest release; it also updates itself (kapitsa update --help)\n\n"
          "Models are stored in %s (KAPITSA_HOME moves them). HF_TOKEN is used when set.\n",
@@ -316,7 +319,7 @@ static void print_serve_help() {
          "  --port PORT            default 8000\n"
          "  --private              this Mac only: listen on 127.0.0.1, stay out of sight of Kapitsa on the other Macs\n"
          "                         and never send them requests. By default the server is visible on the network\n"
-         "                         (Bonjour), with no password\n"
+         "                         (Bonjour), with no password: kapitsa cluster on any Mac lists it\n"
          "  --local                run the model here even when another Mac on the network runs it whole. By default a\n"
          "                         Mac that would not hold the model whole (it does not fit, or streams experts from\n"
          "                         the SSD) sends its requests to one that does, which kapitsa serve finds by itself\n"
@@ -721,14 +724,20 @@ static std::function<cluster::MacInfo()> server_info(int port, size_t budget,
   };
 }
 
-// The server on the network, for its ready card
-static ui::Network network_of(bool visible, int port, bool api_key) {
+// The server on the network, for its ready card (and how many other Macs `browser` has found running Kapitsa)
+static ui::Network network_of(bool visible, int port, bool api_key, const cluster::Browser* browser) {
   ui::Network n;
   n.visible = visible;
   if (!visible) return n;
   n.name = cluster::this_mac().name;
   if (const std::string a = cluster::lan_address(); !a.empty()) n.url = "http://" + a + ":" + std::to_string(port);
   n.api_key = api_key;
+  if (browser) {
+    std::set<std::string> others;
+    for (const auto& p : browser->peers())
+      if (!p.this_mac()) others.insert(p.name);
+    n.others = int(others.size());
+  }
   return n;
 }
 
@@ -765,7 +774,7 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
   const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
   const std::string base =
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
-  const ui::Network net = network_of(visible, port, !api_key.empty());
+  const ui::Network net = network_of(visible, port, !api_key.empty(), browser.get());
   if (tui) {
     ui::Routed r;
     r.model = route.model, r.mac = route, r.base = base, r.log = log_path, r.net = net;
@@ -911,11 +920,21 @@ static int serve(int argc, char** argv, int first) {
   const size_t budget = opt.mem_budget_gb > 0 ? size_t(opt.mem_budget_gb * 1e9) : default_mem_budget();
   // none named, in a terminal: which one, asked under the header (picker.h); a busy port fails before the question
   bool header = false;
+  std::shared_ptr<cluster::Browser> browser;  // the other Macs running Kapitsa (route.h)
   if (model.empty() && ui::can_prompt(yes)) {
     if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
     ui::serve_header(KAPITSA_VERSION);
     header = true;
-    const auto pick = ui::pick_model(opt, budget, "kapitsa serve", context_req);
+    // found while it asks: a model too big for this Mac that one runs whole says where
+    std::function<std::string(const hub::CatalogModel&)> elsewhere;
+    if (may_route) {
+      browser = std::make_shared<cluster::Browser>();
+      elsewhere = [b = browser](const hub::CatalogModel& m) {
+        const auto p = cluster::pick_server(b->peers(), m.name, false);
+        return !p ? std::string() : p->name + (p->tok_s > 0 ? strf(", %.0f tok/s", p->tok_s) : std::string());
+      };
+    }
+    const auto pick = ui::pick_model(opt, budget, "kapitsa serve", context_req, true, elsewhere);
     if (!pick) return 130;
     model = pick->model;
     context_req = pick->context;
@@ -958,10 +977,9 @@ static int serve(int argc, char** argv, int first) {
   // several Macs: one that would not hold the model whole sends its requests to a Mac on the network that runs it whole
   // (route.h), before anything downloads or loads here; NI_CLUSTER_ROUTE=1 does whenever one serves it (tests: two
   // servers on one Mac)
-  std::shared_ptr<cluster::Browser> browser;  // the other Macs running Kapitsa
   std::optional<cluster::MacInfo> route;
   if (may_route && (env_on("NI_CLUSTER_ROUTE") || !runs_whole_here(ref, opt, budget))) {
-    browser = std::make_shared<cluster::Browser>();
+    if (!browser) browser = std::make_shared<cluster::Browser>();
     std::unique_ptr<term::Spinner> sp;
     if (tui) sp = std::make_unique<term::Spinner>("Looking for a Mac on this network that runs " +
                                                   bold_name(cluster::model_base(model_key(ref))) + " whole");
@@ -971,9 +989,8 @@ static int serve(int argc, char** argv, int first) {
   }
   const std::string nobody = !browser ? ""
                              : browser->error().empty()
-                                 ? " No Mac on this network runs it whole either."
+                                 ? " No Mac on this network runs it whole either (kapitsa cluster lists them)."
                                  : " Kapitsa could not look for another Mac that runs it: " + browser->error() + ".";
-  if (!route) browser.reset();  // (it looked for a Mac to send requests to)
   if (!route && ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
     // before a long download: the engine's own start check on the model's headers; a model that would not start
     // here is refused, with the one that fits
@@ -1029,6 +1046,8 @@ static int serve(int argc, char** argv, int first) {
     for (const auto& n : notes) ui::note(n);
   }
   if (route) return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
+  if (tui && visible && !browser) browser = std::make_shared<cluster::Browser>();  // the other Macs, for the ready card
+  if (!tui) browser.reset();
   try {
     hub::PullOptions po;
     if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
@@ -1388,7 +1407,8 @@ static int serve(int argc, char** argv, int first) {
   logi("listening on http://%s:%d", host.c_str(), port);
   std::unique_ptr<cluster::Advertiser> ad;  // visible to Kapitsa on the other Macs while it serves
   if (visible) ad = std::make_unique<cluster::Advertiser>(port, info);
-  const ui::Network net = network_of(visible, port, !api_key.empty());
+  const ui::Network net = network_of(visible, port, !api_key.empty(), browser.get());
+  browser.reset();  // (it only counted the other Macs)
   const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
   const std::string base =
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
@@ -1691,6 +1711,10 @@ int main(int argc, char** argv) {
       char h[] = "--help";
       char* a[] = {argv[0], argv[2], h, nullptr};
       return run_update(3, a, 2);
+    } else if (argc > 2 && (!strcmp(argv[2], "cluster") || !strcmp(argv[2], "macs"))) {
+      char h[] = "--help";
+      char* a[] = {argv[0], argv[2], h, nullptr};
+      return run_cluster(3, a, 2);
     }
     else print_help();
     return 0;
@@ -1709,6 +1733,7 @@ int main(int argc, char** argv) {
   if (cmd == "claude" || cmd == "codex" || cmd == "opencode" || cmd == "pi") return launch_agent(cmd, argc, argv, 2);
   if (cmd == "bench") return run_bench(argc, argv, 2);
   if (cmd == "update") return run_update(argc, argv, 2);
+  if (cmd == "cluster" || cmd == "macs") return run_cluster(argc, argv, 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }

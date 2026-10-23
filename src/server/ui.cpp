@@ -262,6 +262,7 @@ void home(const std::string& version) {
                   {"rm", "delete a downloaded model"},
                   {"import", "convert a GGUF (LM Studio, Ollama, llama.cpp) into a model"},
                   {"doctor", "this Mac's GPU and memory, and which models fit"},
+                  {"cluster", "the Macs on this network that run Kapitsa, and what they serve"},
                   {"bench", "benchmark this Mac and add it to the community results"},
                   {"update", "update Kapitsa to its latest release (it also updates itself)"}},
               4, W);
@@ -710,8 +711,11 @@ void ready(const Ready& r) {
 
 std::string network_line(const Network& n) {
   if (!n.visible) return "";
-  return "Visible to Kapitsa on this network as " + n.name +
-         (n.api_key ? " (its API needs the key; --private hides it)" : " (no password; --private hides it)");
+  std::string s = "Visible to Kapitsa on this network as " + n.name +
+                  (n.api_key ? " (its API needs the key; --private hides it)" : " (no password; --private hides it)");
+  if (n.others > 0) s += std::string(" ") + kDot + " " + std::to_string(n.others) + (n.others == 1 ? " other Mac" : " other Macs") + ": kapitsa cluster";
+  else if (n.others == 0) s += std::string(" ") + kDot + " kapitsa cluster lists the Macs on it";
+  return s;
 }
 
 std::string route_line(const std::string& model, const cluster::MacInfo& mac) {

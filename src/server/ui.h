@@ -48,6 +48,7 @@ struct Network {
   std::string name;      // as they see it: this Mac's computer name
   std::string url;       // http://<this Mac's address>:<port>
   bool api_key = false;  // the API needs its key
+  int others = -1;       // other Macs found running Kapitsa (-1: not looked)
 };
 // The line about it under the card: "Visible to Kapitsa on this network as ... (no password; --private hides it)"
 std::string network_line(const Network& n);
