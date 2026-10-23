@@ -19,6 +19,7 @@
 #include "engine/output_parser.h"
 #include "engine/disk_wait.h"
 #include "engine/reasoning_memory.h"
+#include "engine/tool_args.h"
 #include "model/kflash_wrap.h"
 #include "tokenizer/tokenizer.h"
 
@@ -1216,6 +1217,116 @@ void float_arguments_text() {
   check(render_chat(other, r, false).find("1.5") != std::string::npos && render_chat(other, r, false).find("1.500000") == std::string::npos, "float arguments: a template without `| string` renders them as before");
 }
 
+// Tool arguments keep each value's spelling (src/engine/tool_args.h) through the Qwen3.5 / Nemotron templates' `| string`
+// (a minimal template with their argument line, no model folder, so CI runs it): what the model wrote (`true`, `null`,
+// `2.50`, `[1,2]`, non-ASCII text) is what the next prompt holds, from an OpenAI client that sends the arguments text
+// back (also re-spaced), from a Responses client, and from an Anthropic client that sends a parsed input.
+void tool_arguments_spelling() {
+  using namespace tool_args;
+  const std::string src =
+      "{%- for m in messages %}{%- if m.tool_calls %}{%- for tool_call in m.tool_calls %}"
+      "{%- if tool_call.function is defined %}{%- set tool_call = tool_call.function %}{%- endif %}"
+      "{%- for args_name, args_value in tool_call.arguments|items %}"
+      "{%- set args_value = args_value | tojson | safe if args_value is mapping or (args_value is sequence and args_value is not string) else args_value | string %}"
+      "{{- '<parameter=' + args_name + '>' + args_value + '</parameter>;' }}{%- endfor %}{%- endfor %}{%- endif %}{%- endfor %}";
+  minja::chat_template tmpl(src, "", "");
+  // the argument text the output parser writes for a call whose values the model spelled like this
+  const std::string written =
+      "{\"s\":\"text\",\"i\":10,\"t\":true,\"f\":false,\"z\":null,\"n\":2.50,\"e\":1e3,\"a\":[1,2],\"o\":{\"k\":[true,null]},\"u\":[\"caf\xc3\xa9\",1],\"c\":\"caf\xc3\xa9\"}";
+  const std::string expect =
+      "<parameter=s>text</parameter>;<parameter=i>10</parameter>;<parameter=t>true</parameter>;<parameter=f>false</parameter>;"
+      "<parameter=z>null</parameter>;<parameter=n>2.50</parameter>;<parameter=e>1e3</parameter>;<parameter=a>[1,2]</parameter>;"
+      "<parameter=o>{\"k\":[true,null]}</parameter>;<parameter=u>[\"caf\xc3\xa9\",1]</parameter>;<parameter=c>caf\xc3\xa9</parameter>;";
+  auto render = [&](const ojson& call) {
+    ChatRequest r;
+    r.messages = ojson::array({{{"role", "assistant"}, {"content", ""}, {"tool_calls", ojson::array({call})}}});
+    return render_chat(tmpl, r, false);
+  };
+  auto first_diff = [](const std::string& a, const std::string& b) {
+    size_t i = 0;
+    while (i < a.size() && i < b.size() && a[i] == b[i]) ++i;
+    return "at " + std::to_string(i) + ": " + a.substr(i, 30) + " / " + b.substr(i, 30);
+  };
+  {  // the text helpers: the values as written, the object back with them
+    const auto raw = raw_values(" { \"a\" : [1,2] , \"b\":true,\"c\" : \"x,}\" , \"d\":{\"k\":\"]\"} } ");
+    check(raw.size() == 4 && raw[0].second == "[1,2]" && raw[1].second == "true" && raw[2].second == "\"x,}\"" && raw[3].second == "{\"k\":\"]\"}",
+          "tool args: raw_values reads each top-level value's text as written (strings with delimiters, nested values)");
+    check(raw_values("[1]").empty() && raw_values("{\"a\":").empty() && raw_values("not json").empty(), "tool args: raw_values of no object is nothing");
+    const ojson args = ojson::parse(written);
+    check(object_text(args, raw_values(written)) == written, "tool args: object_text with the raw values writes the arguments as written", first_diff(object_text(args, raw_values(written)), written));
+    check(object_text(args, {{"n", "2.5000"}}).find("\"n\":2.5000,") != std::string::npos, "tool args: a raw text of the same value is written as it is");
+    check(object_text(args, {{"n", "9"}}).find("\"n\":2.5") != std::string::npos, "tool args: a raw text that parses to another value is not used");
+  }
+  const ojson parsed_args = ojson::parse(written);
+  {  // OpenAI chat: the arguments text comes back, the server parses it (normalize_messages) and keeps the spellings
+    ojson fn = {{"name", "f"}, {"arguments", parsed_args}};
+    note_raw(fn, written);
+    const std::string out = render({{"id", "1"}, {"type", "function"}, {"function", fn}});
+    check(out == expect, "tool arguments: true, false, null, 2.50, 1e3, [1,2] and non-ASCII text come back as written (OpenAI chat)", first_diff(out, expect));
+    check(!fn["arguments"].is_string() && fn.contains("arguments_raw") && !fn["arguments_raw"].contains("i") && !fn["arguments_raw"].contains("s"),
+          "tool arguments: strings and integers need no spelling noted");
+  }
+  {  // a client that re-spaces the text (a JSON pretty-printer): the spelling it sent is the spelling kept
+    const std::string spaced = "{\"t\": true, \"a\": [1, 2], \"n\": 2.50, \"z\": null}";
+    ojson fn = {{"name", "f"}, {"arguments", ojson::parse(spaced)}};
+    note_raw(fn, spaced);
+    const std::string out = render({{"id", "1"}, {"type", "function"}, {"function", fn}});
+    check(out == "<parameter=t>true</parameter>;<parameter=a>[1, 2]</parameter>;<parameter=n>2.50</parameter>;<parameter=z>null</parameter>;",
+          "tool arguments: a re-spaced arguments text is rendered as the client sent it", out);
+  }
+  {  // Responses: a function_call item's arguments text keeps its spellings the same way
+    ResponseStore store;
+    ojson body = {{"model", "m"}, {"input", ojson::array({{{"role", "user"}, {"content", "go"}},
+                                                           {{"type", "function_call"}, {"call_id", "c1"}, {"name", "f"}, {"arguments", written}},
+                                                           {{"type", "function_call_output"}, {"call_id", "c1"}, {"output", "ok"}}})}};
+    const ResponsesRequest q = responses_request(body, store);
+    std::string out;
+    for (auto& m : q.chat.messages)
+      if (m.contains("tool_calls")) {
+        ChatRequest r;
+        r.messages = ojson::array({m});
+        out = render_chat(tmpl, r, false);
+      }
+    check(out == expect, "tool arguments: true, false, null, 2.50, [1,2] and non-ASCII text come back as written (Responses)", first_diff(out, expect));
+  }
+  {  // an arguments object without spellings (Anthropic's input): JSON's true, false, null and 2.5 for a float; lists the template's
+    ojson fn = {{"name", "f"}, {"arguments", ojson::parse(R"({"t":true,"f":false,"z":null,"n":2.5,"a":[1,2],"i":3})")}};
+    const std::string out = render({{"id", "1"}, {"type", "function"}, {"function", fn}});
+    check(out == "<parameter=t>true</parameter>;<parameter=f>false</parameter>;<parameter=z>null</parameter>;<parameter=n>2.5</parameter>;<parameter=a>[1, 2]</parameter>;<parameter=i>3</parameter>;",
+          "tool arguments: a parsed input renders true, false, null and floats as JSON writes them (Anthropic)", out);
+  }
+  {  // a spelling that no longer matches the value is ignored (a client that edited the arguments), and none reaches the template
+    ojson fn = {{"name", "f"}, {"arguments", ojson::parse(R"({"t":false,"n":3})")}, {"arguments_raw", {{"t", "true"}, {"n", "4"}}}};
+    const std::string out = render({{"id", "1"}, {"type", "function"}, {"function", fn}});
+    check(out == "<parameter=t>false</parameter>;<parameter=n>3</parameter>;", "tool arguments: a spelling of another value is not used", out);
+  }
+  {  // a template that renders arguments some other way sees no arguments_raw
+    minja::chat_template other("{%- for m in messages %}{%- for t in m.tool_calls %}{{- t.function | tojson }}{%- endfor %}{%- endfor %}", "", "");
+    ChatRequest r;
+    r.messages = J(R"([{"role": "assistant", "content": "", "tool_calls": [{"id": "1", "type": "function", "function": {"name": "f", "arguments": {"a": true}, "arguments_raw": {"a": "true"}}}]}])");
+    check(render_chat(other, r, false).find("arguments_raw") == std::string::npos, "tool arguments: the spelling is not part of the call the template sees");
+  }
+  {  // Anthropic client and the memory: the spellings of what the server generated come back with the turn's reasoning kept by the client
+    ReasoningMemory mem;
+    const ojson before = J(R"([{"role": "user", "content": "go"}])");
+    mem.remember(before, "", {{"f", written}}, "thinking");
+    ojson msgs = before;
+    msgs.push_back({{"role", "assistant"}, {"content", ""}, {"reasoning_content", "thinking"},
+                    {"tool_calls", ojson::array({{{"id", "1"}, {"type", "function"}, {"function", {{"name", "f"}, {"arguments", parsed_args}}}}})}});
+    mem.restore(msgs);
+    check(msgs[1]["tool_calls"][0]["function"].contains("arguments_raw"), "tool arguments: a turn the server wrote gets its spellings back");
+    ChatRequest r;
+    r.messages = ojson::array({msgs[1]});
+    const std::string out = render_chat(tmpl, r, false);
+    check(out == expect, "tool arguments: [1,2] and the rest come back as written for a client that sends parsed input (Anthropic, memory)", first_diff(out, expect));
+    // another conversation's identical call is not matched, so no spelling is taken from it
+    ojson other = J(R"([{"role": "user", "content": "elsewhere"}])");
+    other.push_back({{"role", "assistant"}, {"content", ""}, {"tool_calls", ojson::array({{{"id", "1"}, {"type", "function"}, {"function", {{"name", "f"}, {"arguments", parsed_args}}}}})}});
+    mem.restore(other);
+    check(!other[1]["tool_calls"][0]["function"].contains("arguments_raw"), "tool arguments: a call after another conversation gets no spelling");
+  }
+}
+
 // An OpenAI chat client's tool loop (what `kapitsa serve` is mostly driven by): the reply's tool call goes back as
 // arguments text, the server parses it into an object (normalize_messages in src/server/main.cpp) and the template
 // writes it again. The parameter the model wrote must come back as the same text, else the next prompt diverges
@@ -1234,8 +1345,16 @@ void openai_tool_arguments(const TmplModel& m, const std::string& tag) {
       {"number 2.0", "n", "2.0"},
       {"number 0.1", "n", "0.1"},
       {"untyped value 1.5", "x", "1.5"},
-      // booleans are written as Python text ("True"): the template's own `| string`, as in the reference Jinja, so a model
-      // that writes JSON's `true` gets `True` back, which no server can avoid without changing the template
+      // a boolean as JSON writes it, and as Python does (a model that writes `True` for a boolean keeps it as the text)
+      {"boolean true", "b", "true"},
+      {"boolean false", "b", "false"},
+      {"null", "x", "null"},
+      {"number 2.50", "n", "2.50"},
+      {"number 1e3", "n", "1e3"},
+      {"compact array", "a", "[1,2]"},
+      {"compact array of text", "a", "[\"a\",\"b\"]"},
+      {"compact object", "o", "{\"k\":[true,null],\"n\":2.50}"},
+      {"non-ASCII in an array", "a", "[\"caf\xc3\xa9\",1]"},
       {"boolean True", "b", "True"},
       {"boolean False", "b", "False"},
       {"array", "a", "[\"a\", \"b\"]"},
@@ -1266,11 +1385,63 @@ void openai_tool_arguments(const TmplModel& m, const std::string& tag) {
     q2.messages.push_back({{"role", "tool"}, {"tool_call_id", res.tool_calls.empty() ? "" : res.tool_calls[0].id}, {"content", "ok"}});
     for (auto& mm : q2.messages)  // normalize_messages
       if (mm.contains("tool_calls"))
-        for (auto& tc : mm["tool_calls"]) tc["function"]["arguments"] = ojson::parse(tc["function"]["arguments"].get<std::string>());
+        for (auto& tc : mm["tool_calls"]) {
+          const std::string text = tc["function"]["arguments"].get<std::string>();
+          tc["function"]["arguments"] = ojson::parse(text);
+          tool_args::note_raw(tc["function"], text);
+        }
     std::string why;
     const std::string p2 = render_chat(*m.tmpl, q2, true);
     check(res.tool_calls.size() == 1 && continues(m, p1, g1, p2, &why),
           tag + "openai: a tool call's argument as the model wrote it comes back as the same text (" + c.name + ")", why);
+  }
+}
+
+// An Anthropic client sends a tool call back as a parsed input: JSON's true, false, null and 1.5 come back as written;
+// a spelling JSON does not keep (`[1,2]`, `2.50`) comes back through the memory of what this server generated.
+void anthropic_tool_arguments(const TmplModel& m, const std::string& tag) {
+  const char* tools = R"([{"name": "f", "description": "d", "input_schema": {"type": "object", "properties": {
+    "s": {"type": "string"}, "b": {"type": "boolean"}, "n": {"type": "number"}, "a": {"type": "array"}, "o": {"type": "object"}, "x": {}}}}])";
+  struct Case { const char* name; const char* param; const char* value; bool memory; };
+  const Case cases[] = {
+      {"boolean true", "b", "true", false},
+      {"boolean false", "b", "false", false},
+      {"null", "x", "null", false},
+      {"number 1.5", "n", "1.5", false},
+      {"string", "s", "caf\xc3\xa9 text", false},
+      {"array [1, 2]", "a", "[1, 2]", false},
+      {"number 2.50", "n", "2.50", true},
+      {"compact array", "a", "[1,2]", true},
+      {"compact object with true and null", "o", "{\"k\":[true,null],\"n\":2.50}", true},
+      {"non-ASCII in an array", "a", "[\"caf\xc3\xa9\",1]", true},
+  };
+  for (const Case& c : cases) {
+    ojson body = J(R"({"model": "m", "max_tokens": 1000, "stream": true, "system": "S", "messages": [{"role": "user", "content": "Q"}],
+      "thinking": {"type": "adaptive", "display": "omitted"}, "output_config": {"effort": "high"},
+      "context_management": {"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]}})");
+    body["tools"] = J(tools);
+    const MessagesRequest q1 = messages_request(body);
+    const std::string p1 = render_chat(*m.tmpl, q1.chat, true);
+    std::vector<int> g1;
+    const std::string gen1 = std::string("Let me call it.\n</think>\n\n<tool_call>\n<function=f>\n<parameter=") + c.param + ">\n" + c.value +
+                             "\n</parameter>\n</function>\n</tool_call>";
+    auto d1 = generate(m, gen1, true, q1.chat.tools, &g1);
+    const ChatResult res = finished(d1, int(g1.size()));
+    MessagesStream w1("msg_a", "m", q1.show_thinking);
+    const ojson reply1 = anthropic_reply(run(w1, d1, res));
+    body["messages"].push_back(reply1);
+    body["messages"].push_back(J(R"({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "", "content": "ok"}]})"));
+    body["messages"].back()["content"][0]["tool_use_id"] = reply1["content"].back()["id"];
+    MessagesRequest q2 = messages_request(body);
+    ReasoningMemory mem;
+    std::vector<std::pair<std::string, std::string>> calls;
+    for (auto& tc : res.tool_calls) calls.emplace_back(tc.name, tc.arguments);
+    mem.remember(q1.chat.messages, res.content, calls, res.reasoning.empty() ? "r" : res.reasoning);
+    if (c.memory) mem.restore(q2.chat.messages);
+    std::string why;
+    const std::string p2 = render_chat(*m.tmpl, q2.chat, true);
+    check(res.tool_calls.size() == 1 && continues(m, p1, g1, p2, &why),
+          tag + "anthropic: a tool call's argument as the model wrote it comes back as the same text (" + c.name + (c.memory ? ", with the memory)" : ")"), why);
   }
 }
 
@@ -1489,6 +1660,7 @@ int main(int argc, char** argv) {
   clients();
   reasoning_memory_unit();
   float_arguments_text();
+  tool_arguments_spelling();
   disk_wait_unit();
   kflash_lookup_unit();
   std::vector<std::string> dirs;
@@ -1514,6 +1686,7 @@ int main(int argc, char** argv) {
     responses_round_trip(m, tag, false);
     responses_round_trip(m, tag, true);
     openai_tool_arguments(m, tag);
+    anthropic_tool_arguments(m, tag);
     template_checks(m, tag);
     draft_checks(m, tag);
   }

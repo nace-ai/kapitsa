@@ -1,5 +1,6 @@
 #include "api/responses.h"
 
+#include "engine/tool_args.h"
 #include "util/log.h"
 
 namespace ni::api {
@@ -180,6 +181,8 @@ void add_item(const ojson& it, Conv& cv) {
     std::string name = str(it, "name");
     if (!str(it, "namespace").empty()) name = alias(str(it, "namespace"), name);
     cv.call(it, name, arguments_object(it.contains("arguments") ? it["arguments"] : ojson()));
+    if (it.contains("arguments") && it["arguments"].is_string())  // the spelling of each value, as the client sent it
+      tool_args::note_raw(cv.pending["tool_calls"].back()["function"], it["arguments"].get<std::string>());
   } else if (type == "custom_tool_call") {
     cv.call(it, str(it, "name"), ojson{{"input", str(it, "input")}});
   } else if (type == "function_call_output" || type == "custom_tool_call_output") {

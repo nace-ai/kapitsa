@@ -28,6 +28,7 @@
 #include "cluster/pipe.h"
 #include "engine/doctor.h"
 #include "engine/engine.h"
+#include "engine/tool_args.h"
 #include "gguf/gguf.h"
 #include "gguf/import.h"
 #include "hub/hub.h"
@@ -87,8 +88,10 @@ static json normalize_messages(const json& in) {
     if (m.contains("tool_calls") && m["tool_calls"].is_array()) {
       for (auto& tc : m["tool_calls"]) {
         if (tc.contains("function") && tc["function"].contains("arguments") && tc["function"]["arguments"].is_string()) {
+          const std::string text = tc["function"]["arguments"].get<std::string>();
           try {
-            tc["function"]["arguments"] = json::parse(tc["function"]["arguments"].get<std::string>());
+            tc["function"]["arguments"] = json::parse(text);
+            tool_args::note_raw(tc["function"], text);  // each value's spelling, for the template to write as it was generated
           } catch (...) {
           }
         }

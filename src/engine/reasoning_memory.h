@@ -15,6 +15,7 @@
 // part of the rendered text). A client that rewrites earlier messages (trims old tool results) gets no reasoning put
 // back: no match is the old behaviour. NI_REASONING_MEMORY=0 turns it off.
 #include "engine/grammar.h"
+#include "engine/tool_args.h"
 #include <cstdint>
 #include <cstdlib>
 #include <list>
@@ -48,6 +49,9 @@ class ReasoningMemory {
       c.emplace_back(name, parsed(ojson(args)));
       if (too_deep(c.back().second)) return;
       e.args.push_back(c.back().second);
+      ojson fn = {{"arguments", c.back().second}};  // each value's spelling (tool_args.h), as the model wrote it
+      tool_args::note_raw(fn, args);
+      e.raws.push_back(fn.contains("arguments_raw") ? fn["arguments_raw"] : ojson::object());
     }
     const std::string text = trimmed(ojson(content));
     if (text.empty() && c.empty()) return;
@@ -58,6 +62,7 @@ class ReasoningMemory {
     if (e.key.empty()) return;
     e.bytes = e.key.size() + reasoning.size();
     for (auto& a : e.args) e.bytes += a.dump().size();
+    for (auto& a : e.raws) e.bytes += a.dump().size();
     std::lock_guard<std::mutex> lk(mu_);
     if (auto it = idx_.find(e.key); it != idx_.end()) {
       bytes_ -= it->second->bytes;
@@ -89,7 +94,7 @@ class ReasoningMemory {
       const bool assistant = m.contains("role") && m["role"] == "assistant";
       const bool has_reasoning = m.contains("reasoning_content") && m["reasoning_content"].is_string() &&
                                  !m["reasoning_content"].get<std::string>().empty();  // the client sent it
-      if (assistant && !has_reasoning && !h.skip) {
+      if (assistant && !h.skip) {
         Calls calls;
         bool deep = false;
         if (m.contains("tool_calls") && m["tool_calls"].is_array())
@@ -104,25 +109,33 @@ class ReasoningMemory {
         if (!deep && !(text.empty() && calls.empty())) {
           const std::string key = h.turn(text, calls);
           std::string reasoning;
-          std::vector<ojson> args;
+          std::vector<ojson> args, raws;
           {
             std::lock_guard<std::mutex> lk(mu_);
             if (auto it = idx_.find(key); it != idx_.end()) {
               lru_.splice(lru_.begin(), lru_, it->second);
               reasoning = lru_.front().reasoning;
               args = lru_.front().args;
+              raws = lru_.front().raws;
             }
           }
-          if (!reasoning.empty()) {
-            m["reasoning_content"] = reasoning;
-            if (m.contains("tool_calls") && m["tool_calls"].is_array() && m["tool_calls"].size() == args.size())
-              for (size_t i = 0; i < args.size(); ++i) {
-                if (!m["tool_calls"][i].is_object() || !m["tool_calls"][i].contains("function") ||
-                    !m["tool_calls"][i]["function"].is_object())
-                  continue;
-                ojson& a = m["tool_calls"][i]["function"]["arguments"];
+          const bool found = !reasoning.empty();
+          if (found && m.contains("tool_calls") && m["tool_calls"].is_array() && m["tool_calls"].size() == args.size())
+            for (size_t i = 0; i < args.size(); ++i) {
+              if (!m["tool_calls"][i].is_object() || !m["tool_calls"][i].contains("function") ||
+                  !m["tool_calls"][i]["function"].is_object())
+                continue;
+              ojson& fn = m["tool_calls"][i]["function"];
+              // the spelling of each value as the model wrote it, for a client that sent the arguments as a parsed object
+              // (the reasoning of a turn the client kept needs none of this restored)
+              if (!fn.contains("arguments_raw") && i < raws.size() && !raws[i].empty()) fn["arguments_raw"] = raws[i];
+              if (!has_reasoning) {
+                ojson& a = fn["arguments"];
                 a = a.is_string() ? ojson(args[i].dump()) : args[i];
               }
+            }
+          if (found && !has_reasoning) {
+            m["reasoning_content"] = reasoning;
             ++restored;
           }
         }
@@ -230,6 +243,7 @@ class ReasoningMemory {
   struct Entry {
     std::string key, reasoning;
     std::vector<ojson> args;  // each call's arguments as the model wrote them
+    std::vector<ojson> raws;  // each call's value spellings (tool_args::note_raw)
     size_t bytes = 0;
   };
 

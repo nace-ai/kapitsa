@@ -1,6 +1,7 @@
 #include "engine/engine.h"
 #include "engine/output_parser.h"
 #include "engine/reasoning_memory.h"
+#include "engine/tool_args.h"
 #include "util/log.h"
 
 #include <minja/chat-template.hpp>
@@ -1832,21 +1833,35 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
     later.push_back(content_text(m.contains("content") ? m["content"] : ojson()));
     m = {{"role", "user"}, {"content", "<tool_response>" + mark + std::to_string(later.size() - 1) + "\x02</tool_response>"}};
   }
-  // minja's `| string` writes a float as std::to_string does (1.5 as 1.500000), where the model wrote 1.5. The Qwen3.5
-  // and Nemotron templates run a scalar argument through it, so a float argument goes in as its text (what the other
-  // Qwen templates' `| tojson` writes) and the next prompt keeps the text of the reply that was generated.
+  // minja's `| string` writes a float as std::to_string does (1.5 as 1.500000) and a boolean as Python does (true as True),
+  // where the model wrote 1.5 and true; the Qwen3.5 and Nemotron templates run a scalar argument through it (a list or an
+  // object through `| tojson`, which spaces `[1,2]` as `[1, 2]`; Qwen3.6's only a string as it is). So an argument that is not a string goes in as its text:
+  // as the model wrote it when the call carries that ("arguments_raw", src/engine/tool_args.h: an arguments string the
+  // client sent back), else as JSON (lists and objects stay the template's). The next prompt then keeps the text of the
+  // reply that was generated.
   const std::string& tsrc = tmpl.source();
   std::string squeezed;  // the source without whitespace: `else args_value|string -%}` and a line break match too
   for (char ch : tsrc)
     if (ch != ' ' && ch != '\n' && ch != '\t' && ch != '\r') squeezed += ch;
-  if (squeezed.find("elseargs_value|string") != std::string::npos)
-    for (ojson& m : in.messages)
-      if (m.is_object() && m.contains("tool_calls") && m["tool_calls"].is_array())
-        for (ojson& tc : m["tool_calls"])
-          if (tc.is_object() && tc.contains("function") && tc["function"].is_object() && tc["function"].contains("arguments") &&
-              tc["function"]["arguments"].is_object())
-            for (auto& kv : tc["function"]["arguments"].items())
-              if (kv.value().is_number_float()) kv.value() = kv.value().dump();
+  // (the Qwen3.6 form, `args_value | string if args_value is string else args_value | tojson | safe`, writes a string as it is)
+  const bool spell = squeezed.find("elseargs_value|string") != std::string::npos ||
+                     squeezed.find("args_value|stringifargs_valueisstringelseargs_value|tojson") != std::string::npos;
+  for (ojson& m : in.messages)
+    if (m.is_object() && m.contains("tool_calls") && m["tool_calls"].is_array())
+      for (ojson& tc : m["tool_calls"]) {
+        if (!tc.is_object() || !tc.contains("function") || !tc["function"].is_object()) continue;
+        ojson& fn = tc["function"];
+        const ojson raw = fn.contains("arguments_raw") && fn["arguments_raw"].is_object() ? fn["arguments_raw"] : ojson::object();
+        fn.erase("arguments_raw");  // not for the template to see
+        if (!spell || !fn.contains("arguments") || !fn["arguments"].is_object()) continue;
+        for (auto& kv : fn["arguments"].items()) {
+          ojson& v = kv.value();
+          if (v.is_string()) continue;
+          const auto r = raw.find(kv.key());
+          if (r != raw.end() && r->is_string() && ojson::parse(r->get<std::string>(), nullptr, false) == v) v = r->get<std::string>();
+          else if (v.is_number_float() || v.is_boolean() || v.is_null()) v = v.dump();
+        }
+      }
   in.tools = r.tools.empty() ? ojson() : r.tools;
   in.add_generation_prompt = add_generation_prompt;
   in.extra_context = r.template_kwargs;

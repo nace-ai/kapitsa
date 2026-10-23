@@ -5,8 +5,10 @@
 // are matched in the decoded text.
 #pragma once
 #include "engine/engine.h"
+#include "engine/tool_args.h"
 #include "tokenizer/tokenizer.h"
 
+#include <algorithm>
 #include <random>
 #include <string>
 #include <vector>
@@ -359,6 +361,7 @@ class OutputParser {
     if (fe == std::string::npos) return false;
     tc.name = body.substr(f + 10, fe - f - 10);
     ojson args = ojson::object();
+    std::vector<std::pair<std::string, std::string>> raw;  // the text of each value that is not a string
     size_t p = fe + 1;
     while (true) {
       size_t ps = body.find("<parameter=", p);
@@ -369,10 +372,13 @@ class OutputParser {
       size_t ve = body.find("</parameter>", pe);
       if (ve == std::string::npos) ve = body.find("</function>", pe);
       if (ve == std::string::npos) ve = body.size();
-      args[pname] = typed(tc.name, pname, trim_nl(body.substr(pe + 1, ve - pe - 1)));
+      const std::string text = trim_nl(body.substr(pe + 1, ve - pe - 1));
+      args[pname] = typed(tc.name, pname, text);
+      if (!args[pname].is_string()) raw.emplace_back(pname, text);  // (a value kept as text that is no JSON has none)
+      else raw.erase(std::remove_if(raw.begin(), raw.end(), [&](auto& kv) { return kv.first == pname; }), raw.end());
       p = ve + 1;
     }
-    tc.arguments = args.dump();
+    tc.arguments = tool_args::object_text(args, raw);  // each value as the model spelled it, so the next prompt's call matches
     tc.id = random_id("call_");
     return true;
   }
