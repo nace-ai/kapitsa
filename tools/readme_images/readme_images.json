@@ -154,15 +154,15 @@
   ]
  },
  "header": {
-  "mac": "MacBook Pro M1 Pro 16 GB",
-  "model": "Flint 40B 2-bit",
-  "engines": ["llama.cpp", "Kapitsa"],
+  "mac": "MacBook Pro M4 Pro 48 GB",
+  "model": "Qwen3.6 35B-A3B",
+  "engines": ["llama.cpp", "MTPLX", "LM Studio", "Ollama", "oMLX", "Splash", "Kapitsa"],
   "title": "Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen, Nemotron and Flint",
   "tagline": ["Blazing fast Apple Silicon optimized", "inference engine for Qwen, Nemotron and Flint"],
   "caption": [
-   "Writing speed, tok/s · Flint 40B · 2-bit experts",
-   "MacBook Pro (2021) · M1 Pro · 16 GB"
+   "Writing speed, tok/s · Qwen3.6 35B-A3B · 4-bit",
+   "MacBook Pro (2024) · M4 Pro · 48 GB"
   ],
-  "desc": "Writing speed in tokens per second for Recursive Flint 40B-A2.5B with 2-bit experts (unsloth's UD-IQ2_XXS GGUF, the same file in both engines) on a MacBook Pro (2021), M1 Pro, 16 GB"
+  "desc": "Writing speed in tokens per second for Qwen3.6 35B-A3B at 4-bit on a MacBook Pro (2024), M4 Pro, 48 GB"
  }
 }
