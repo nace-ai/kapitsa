@@ -23,6 +23,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <list>
 #include <numeric>
 #include <sstream>
 #include <thread>
@@ -215,6 +216,10 @@ struct Engine::Disk {
     double at = 0;
   };
   std::deque<std::unique_ptr<Captured>> captured;
+  // the tokens of every capture not yet on the SSD (queued or being written), so a request whose prompt continues one
+  // waits for it rather than reading its prompt again (a short side request takes a slot and the conversation's next
+  // request follows within the time its copy takes to write)
+  std::list<std::vector<int32_t>> unwritten;
   std::atomic<bool> no_room_said{false};
 
   // whether the cache has room at all (a volume with less free space than the floor leaves it none: said once)
@@ -531,6 +536,7 @@ void Engine::disk_leaving(Slot& slot, int start) {
   slot.disk_version = slot.version;
   {
     std::lock_guard<std::mutex> lk(d.mu);
+    d.unwritten.push_back(c->plan->entry.tokens);
     d.captured.push_back(std::move(c));
   }
   d.cv.notify_all();
@@ -573,6 +579,11 @@ void Engine::disk_loop() {
     }
     if (c) {
       d.write_captured(*c);
+      {
+        std::lock_guard<std::mutex> lk(d.mu);
+        d.unwritten.pop_front();  // (written in the order queued)
+      }
+      d.cv.notify_all();
       continue;
     }
     const double now = now_ms();
@@ -655,6 +666,28 @@ pcache::Hit Engine::disk_lookup(const std::vector<int>& keys, int n, int ram, ui
       dc::images_from(e.attach, &spans, &digests);
       return std::min(l, vision::common_prefix(e.tokens, spans, digests, *mm));
     };
+  // a capture of the conversation this prompt continues that is still being written: wait for it (bounded) with the GPU
+  // turn given up, as a read does
+  {
+    Disk& d = *disk_;
+    auto continues = [&] {
+      for (const std::vector<int32_t>& t : d.unwritten) {
+        size_t l = 0;
+        while (l < t.size() && l < keys.size() && t[l] == keys[l]) ++l;
+        if (int(l) > ram && int(l) >= d.min_pos) return true;
+      }
+      return false;
+    };
+    std::unique_lock<std::mutex> lk(d.mu);
+    if (continues()) {
+      const double t0 = now_ms();
+      turn_.unlock();
+      d.cv.wait_for(lk, std::chrono::milliseconds(3000), [&] { return d.quit.load() || !continues(); });
+      lk.unlock();
+      turn_.lock();
+      logi("SSD cache: the request waited %.0f ms for the copy of its conversation to be written", now_ms() - t0);
+    }
+  }
   const pcache::Hit h = disk_->store.lookup(keys.data(), int(keys.size()), n, tag, same_images);
   return h && h.pos > ram ? h : pcache::Hit{};
 }

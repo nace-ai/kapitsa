@@ -53,6 +53,9 @@ ap.add_argument("--q2", default="", help="the new user query (default: a one-sen
 ap.add_argument("--no-q2", action="store_true", help="end each conversation after the tool loop")
 ap.add_argument("--corpus", default=find_corpus())
 ap.add_argument("--no-warmup", action="store_true")
+ap.add_argument("--side", type=int, default=0,
+                help="side requests (a short title or summary prompt with its own system message, as harnesses send them "
+                     "beside the main conversation) sent before every request after the first: how many each time")
 ap.add_argument("--tag", default="")
 ap.add_argument("--out", default="")
 a = ap.parse_args()
@@ -180,11 +183,24 @@ def seed_of(nonce, turn):
     return int(hashlib.sha256(f"{nonce}/{turn}".encode()).hexdigest()[:8], 16) & 0x7FFFFFFF
 
 
+def side_requests(nonce):
+    """The harness's side calls: each its own system prompt and a distinct text, so each wants a slot of its own."""
+    for k in range(a.side):
+        sysmsg = f"[{nonce}/side{k}/{random.getrandbits(32):08x}] Write a title of at most five words for this conversation."
+        chat({"model": a.model, "messages": [{"role": "system", "content": sysmsg},
+                                              {"role": "user", "content": excerpt(150, 90000 + 1000 * k)}],
+              "max_tokens": 12, "temperature": 0.0, "top_k": 1, "stream": True,
+              "stream_options": {"include_usage": True},
+              "chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "none"})
+
+
 def conversation(size, calls, nonce, word):
     sysmsg = f"[{nonce}] {SYS}\n\n# Repository context\n{excerpt(size, 0)}"
     msgs = [{"role": "system", "content": sysmsg}, {"role": "user", "content": Q1}]
     steps, texts, made = [], [], 0
     for turn in range(calls + 3):
+        if a.side and turn > 0:
+            side_requests(nonce)
         r = chat(body(msgs, 4096 if a.think else 1024, seed_of(nonce, turn)))
         steps.append(step_rec("q1" if turn == 0 else "tool", r))
         texts.append({"reasoning": r["reasoning"], "content": r["content"], "tool_calls": [
@@ -217,6 +233,8 @@ def conversation(size, calls, nonce, word):
         return steps, texts, made
     msgs.append({"role": "user", "content": a.q2 or Q2})
     time.sleep(a.q2_gap)  # the user reads the answer and types (the harness's turn gap)
+    if a.side:
+        side_requests(nonce)
     r = chat(body(msgs, a.q2_tokens, seed_of(nonce, "q2")))
     steps.append(step_rec("q2", r))
     texts.append({"reasoning": r["reasoning"], "content": r["content"], "tool_calls": [

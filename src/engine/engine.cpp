@@ -1843,8 +1843,13 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
     // the conversation in progress, however long an older one-off was, and a new conversation
     // replaces the conversation idle longest. A conversation whose request was still running when this
     // one arrived counts as continued: an agent sends its title request beside its first request
-    // (opencode does), and that first conversation goes on with the tools' results.
-    auto rank = [&](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 && arrival > s.done_at ? 1 : 2; };
+    // (opencode does), and that first conversation goes on with the tools' results. A one-off is also a short
+    // conversation: one longer than 1024 tokens and four times this prompt is a main conversation's first turn that
+    // a short side request (a title, a summary) came after, and is not given up for it.
+    const size_t cheap = std::max<size_t>(1024, 4 * prompt.size());
+    auto rank = [&](const Slot& s) {
+      return s.tokens.empty() ? 0 : s.turns <= 1 && arrival > s.done_at && s.tokens.size() <= cheap ? 1 : 2;
+    };
     Slot* pick = nullptr;
     for (auto& s : slots_) {
       if (s.busy || int(prompt.size()) + 64 > s.seq->limit) continue;
