@@ -519,7 +519,7 @@ void ExpertStore::begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, co
   r.pred_layer = pred_layer;
   r.pred_all = pred_all;
   r.scan = scan;
-  // NI_GPU_HEAT=1, decode / verify only: the pass's first wait comes before any go
+  // Heater (Gpu::heat_on: M5 by default), decode / verify only: the pass's first wait comes before any go
   if (warm && Gpu::heat_on()) Gpu::get().keep_warm(kHeatMs);
   r.warm = warm;
   r.ready = ++next_value_;
