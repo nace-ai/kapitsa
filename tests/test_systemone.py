@@ -344,6 +344,14 @@ def online(url):
         st, reply = post(url, {"state": nested(levels),
                                "questions": {"o": {"type": "noul", "instructions": "i"}}})
         check("rejects a state nested %d levels deep with 400" % levels, st == 400 and "error" in reply, (st, reply))
+    # The bound counts the whole body, and a {"requests": [element]} wrapper is two of the 64, so a batch element's
+    # state has two levels fewer than the same state alone: 61 deep is a batch element's limit, and a state nested 62
+    # deep is still 200 alone but is the 400 inside a batch.
+    for levels, in_batch, want in ((62, False, 200), (63, False, 200), (61, True, 200), (62, True, 400)):
+        one = {"state": nested(levels), "questions": {"o": {"type": "noul", "instructions": "i"}}}
+        st, reply = post(url, {"requests": [one]} if in_batch else one)
+        check("a state nested %d levels deep %s: %d" % (levels, "as a batch element" if in_batch else "alone", want),
+              st == want and (want != 400 or "nest" in str(reply.get("error"))), (st, reply))
     st, reply = post(url, {"state": "s", "questions": {"o": {"type": "noul", "instructions": "i"}}})
     check("the server still answers after a deeply nested request",
           st == 200 and answer_value((reply.get("answers") or {}).get("o")) is not None, (st, reply))
