@@ -13,7 +13,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 1.4× llama.cpp's decode on the same 2-bit GGUF.** `--model flint` takes unsloth's 2-bit GGUF on 16-24 GB Macs: its routed experts run as stored, the rest requantized to 3-6 bits. 61 tok/s decode on an M1 Pro, in 11.6 GB ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **Kapitsa: the fastest decode in 32 of 36 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **Kapitsa: the fastest decode in 32 of 36 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
 - [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (4B, M5 Pro).
 - [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** A 16K-token follow-up on the 35B starts in **0.16 s instead of 17 s**, about 100× (`--disk-cache`).
