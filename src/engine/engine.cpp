@@ -2258,7 +2258,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // 210 vs 53-115 GB/s): a 16-row pass costs ~90 ms at a 16K prefix, where the prefill path costs ~120 ms plus
   // ~7.6 ms a row. The rows are a chain, which is exactly what a verify pass verifies (row t at position pos + t,
   // its state its predecessors' fold), so a cached turn's suffix is the work of a draft cycle's verify.
-  // NI_VPF=0 turns it off; NI_VPF_MAX (default 128) bounds the suffix's rows. Gated on a request that is nothing
+  // NI_VPF=0 turns it off; NI_VPF_MAX (default 64) bounds the suffix's rows. Gated on a request that is nothing
   // but such a suffix: one chunk, no prefix checkpoint inside it, no grammar mask, no image rows. The turn
   // boundary's checkpoint (which the plain path saves when its chunk reaches it) is saved here between two passes,
   // with the state folded up to it, so a suffix that holds the boundary is fine.
