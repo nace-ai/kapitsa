@@ -116,7 +116,12 @@ int main(int argc, char** argv) {
       qb = (g8 ? 2 : 4) * nsg; th = 32 * nsg; gy = Hkv;
       if (name.find("d2") != std::string::npos) qb /= 2;   // a pair of simdgroups per 16-row tile
     }
-    const uint32_t nblk = gq ? (T * G + 31) / 32 : (T + qb - 1) / qb;
+    uint32_t nblk = gq ? (T * G + 31) / 32 : (T + qb - 1) / qb;
+    if (name.rfind("qattn_t", 0) == 0 && name.find("d2s") != std::string::npos) {   // 8 NS (token, head) rows per group
+      const uint32_t nsg = atoi(name.c_str() + name.find("d2s") + 3);
+      th = 32 * nsg;
+      nblk = (T * G + 8 * nsg - 1) / (8 * nsg);
+    }
     if (gq) gy = Hkv;
     auto run = [&](int n = 1) {  // n back-to-back calls in one command buffer, ms per call
       auto e = g.begin();

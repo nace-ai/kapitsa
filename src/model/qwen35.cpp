@@ -206,8 +206,8 @@ static int shortpf_max() {
 //     split over threadgroups (attn_prefill11g / 11gs + attn11_reduce). This branch runs before the
 //     qattn_t one, so on an M5 a model whose heads it fits (4B qg4, 35B qg8) takes 11g for a chunk
 //     between the old bound and this one instead of qattn_t: 192 was measured at 141 rows (9.74
-//     against 11.16 ms) and 162 (11.27 against 12.71) on the 27B, which has no qattn_t form, and is
-//     left off the default for that reason.
+//     against 11.16 ms) and 162 (11.27 against 12.71) on the 27B before it had a qattn_t form, and is
+//     left off the default for that reason (the 27B's qattn_t_g6d2s8 runs 141 rows in 4.16 ms).
 //   NI_SHORTPF_MOE_MAX (default 128): MoE experts in 8-row tiles (qmms_moe_gu / qmms_moe_dn)
 static int shortpf_attn_max() {
   static const int v = std::clamp(env_int("NI_SHORTPF_ATTN_MAX", 128), 0, 512);
@@ -2939,8 +2939,22 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // (--allow-switch), and function-local statics survive the swap.
   static const bool g8_on = env_int("NI_QATTN_G8", 1) != 0;
   static const bool d2_on = env_int("NI_QATTN_D2", 1) != 0;
+  // NI_QATTN_G6 (default on, 0 = off): G = 6 (the 27B, 24 query heads over 4 KV heads) runs qattn_t_g6d2s8, the d2
+  // kernel over (token, head) rows, 64 rows (10 2/3 tokens) per threadgroup; off, it stays on attn_prefill11r.
+  // bench_attn on the M5 Pro, the 27B's heads: T 141 / 512 against a 16K prefix 4.16 / 12.76 ms vs 11r's 10.93 /
+  // 30.77; T 2048 against 4096 / 16384 keys 8.85 / 44.23 ms vs 22.21 / 111.64 (2.4-2.6x). Error against the fp64
+  // reference 2.6-3.1e-4 (11r 1.9-2.6e-4; the shipped G = 4 and G = 8 qattn kernels sit the same distance above it).
+  static const bool g6_on = env_int("NI_QATTN_G6", 1) != 0;
   const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
   const bool qg8 = g8_on && cfg_.hq == 8 * cfg_.hkv;
+  const bool qg6 = g6_on && cfg_.hq == 6 * cfg_.hkv;
+  if (qattn && cfg_.head_dim == 256 && qg6) {
+    e.use(pipe("qattn_t_g6d2s8"));
+    e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+    e.val(5, fp);
+    e.dispatch((uint32_t(T) * 6 + 63) / 64, cfg_.hkv, 1, 256);   // 4 pairs x 16 rows
+    return;
+  }
   if (qattn && cfg_.head_dim == 256 && (qg4 || qg8)) {
     e.use(pipe(qg8 ? (d2_on ? "qattn_t_g8d2s8" : "qattn_t_g8s4k16") : "qattn_t_s8k16"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
