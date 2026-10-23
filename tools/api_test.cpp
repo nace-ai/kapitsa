@@ -1076,28 +1076,37 @@ void kflash_lookup_unit() {
   w.cycle(1), w.cycle(3);
   check(w.cycles == 2 && w.tokens == 4 && w.tokens_per_cycle() == 2.0 && w.source == "none", "kflash wrap: counts cycles and tokens");
   {  // unmeasured: the source's own count, never more than it proposed
-    KfLookup b(4);
+    KfLookup b(4, 0.6);
     check(b.pick(0) == 0 && b.pick(3) == 3 && b.pick(9) == 4, "kflash lookup: unmeasured, takes the source's count up to its maximum");
   }
-  {  // drafts always accepted and rows cheap: all of them
-    KfLookup b(4);
-    for (int i = 0; i < 20; ++i) b.observe(0, 0, 10.0);
+  {  // drafts always accepted: most of them (an extra row at 0.6 steps still pays; the 1% margin keeps a shorter pass on a tie)
+    KfLookup b(4, 0.6);
     for (int i = 0; i < 20; ++i) b.observe(4, 4, 11.0);
-    int skipped = 0, all = 0;
-    for (int i = 0; i < 63; ++i) (b.pick(4) == 4 ? all : skipped)++;
-    check(all == 63 && skipped == 0, "kflash lookup: accepted drafts on cheap rows are all verified");
+    int small = 0;
+    for (int i = 0; i < 63; ++i) small += b.pick(4) < 3;
+    check(small == 0, "kflash lookup: accepted drafts are verified");
+  }
+  {  // no clock in the choice: the same cycles give the same rows whatever the cycles took
+    KfLookup a(4, 0.6), b(4, 0.6);
+    bool same = true;
+    for (int i = 0; i < 200; ++i) {
+      const int da = a.pick(4), db = b.pick(4);
+      same = same && da == db;
+      const int acc = i % 3 == 0 ? da : 0;
+      a.observe(da, acc, 10.0 + i % 7);
+      b.observe(db, acc, 3.0 + 40.0 * (i % 5));
+    }
+    check(same, "kflash lookup: the rows of a cycle do not depend on the time the cycles took");
   }
   {  // drafts never accepted and rows costly: the pending token alone, except the periodic probe
-    KfLookup b(4);
-    for (int i = 0; i < 20; ++i) b.observe(0, 0, 10.0);
+    KfLookup b(4, 0.6);
     for (int i = 0; i < 20; ++i) b.observe(4, 0, 16.0);
     int zero = 0, full = 0;
     for (int i = 0; i < 128; ++i) (b.pick(4) == 0 ? zero : full)++;
-    check(zero >= 124 && full >= 1 && full <= 3, "kflash lookup: rejected drafts on costly rows are skipped, one cycle in 64 probes");
+    check(zero >= 124 && full >= 1 && full <= 3, "kflash lookup: rejected drafts are skipped, one cycle in 64 probes");
   }
   {  // two of four accepted: a middle count that pays beats both extremes
-    KfLookup b(4);
-    for (int i = 0; i < 30; ++i) b.observe(0, 0, 10.0);
+    KfLookup b(4, 0.6);
     for (int i = 0; i < 40; ++i) b.observe(4, 2, 11.0);
     const int d = b.pick(4);
     check(d >= 1 && d <= 4, "kflash lookup: a partly accepted draft is budgeted", std::to_string(d));

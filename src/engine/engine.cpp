@@ -494,7 +494,13 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // (NI_BATCH=1 batches them too)
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
                     (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
-  if (kflash_wrap_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) kf_lookup_ = std::make_unique<KfLookup>(std::max(nh_ngram_, flint_ngram_));
+  if (kflash_wrap_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) {
+    // what an extra row of a pass costs in decode steps (NI_KFLASH_ROW_COST overrides): Flint's 6-of-256 experts per row
+    // make it 0.6 (an M4 Pro: 2 / 4 / 8 rows = 1.6 / 2.8 / 5.2 steps); Nemotron's dense layers 0.25
+    const char* v = getenv("NI_KFLASH_ROW_COST");
+    const double r = v && *v && atof(v) > 0 ? atof(v) : flint_ngram_ > 0 ? 0.6 : 0.25;
+    kf_lookup_ = std::make_unique<KfLookup>(std::max(nh_ngram_, flint_ngram_), r);
+  }
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
                                                   " drafts per cycle)"
@@ -3510,6 +3516,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   char cyc[64] = "";
   if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
+  if (kf_lookup_ && kf_lookup_->c1() > 0 && kf_lookup_->s() > 0) {  // the measured row cost, to calibrate NI_KFLASH_ROW_COST
+    const size_t n0 = strlen(cyc);
+    snprintf(cyc + n0, sizeof cyc - n0, ", row %.2f steps (budget %.2f)", kf_lookup_->s() / kf_lookup_->c1(), kf_lookup_->row_cost());
+  }
   // requests in flight at once: the slot, the wait for it, the turns given to the others (prefill, decode)
   char conc[256] = "";
   if (res.yields > 0 || res.queue_ms > 0 || res.batched > 0)
