@@ -235,6 +235,19 @@ class SystemOne {
     }
   }
 
+  // Commits a prefill chunk and waits for it. A Neural Engine split job that never reports would leave the GPU waiting
+  // on its event forever, so a split chunk is bounded the way the engine bounds it (Engine::wait_split,
+  // src/engine/engine.cpp:957): 60 s as the last resort after the per-job 2 s watchdog, then the split is given up, its
+  // waits are released, and ane_finish_chunk() reruns the chunk on the GPU alone.
+  void commit_chunk(Encoder& e, int rows) {
+    e.commit();
+    if (model_->ane_splits(rows) && !e.wait_for(60000)) {
+      logi("NI_ANE: a split prefill chunk has not finished in 60 s; giving up the Neural Engine split");
+      model_->ane_abort("a split chunk did not finish within 60 s");
+    }
+    e.wait();
+  }
+
   // Scores one {"state", "questions"} object, returning its answers object.
   ojson score(const ojson& body, Timings* tm) {
     Gpu& g = Gpu::get();
@@ -272,7 +285,7 @@ class SystemOne {
         const int T = std::min(chunk, n_state - pos);
         auto e = g.begin();
         model_->encode_prefill(*e, *seq_, pos, T, sp, 0, false);
-        e->commit_and_wait();
+        commit_chunk(*e, T);
         if (!model_->ane_finish_chunk()) {
           if (reran) throw std::runtime_error("the Neural Engine prefill split failed with it retired");
           reran = true;
@@ -315,7 +328,7 @@ class SystemOne {
         auto e = g.begin();
         if (off == 0) model_->restore(*e, *seq_, *ck);
         model_->encode_prefill(*e, *seq_, n_state + off, rows, sp, 0, false);
-        e->commit_and_wait();
+        commit_chunk(*e, rows);
         if (!model_->ane_finish_chunk()) {
           if (reran) throw std::runtime_error("the Neural Engine prefill split failed with it retired");
           reran = true;
