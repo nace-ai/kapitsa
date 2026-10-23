@@ -86,6 +86,10 @@ inline int fit_slots(int slots) { return slots > 0 ? slots : 2; }
 // (recommendedMaxWorkingSetSize, which macOS sizes from the RAM) minus a margin (4%, at least 512 MB) for
 // the Neural Engine service's buffers and other GPU users. NI_MEM_BUDGET=<GB> overrides it.
 size_t default_mem_budget();
+// Qwen3.8-Flash-Next: the memory budget the engine gives the model (Qwen4Exp's mem_budget), the slots' state and one
+// conversation's KV cache (up to 32K tokens) set apart; a Q2_0 pack's expert store takes what that leaves after the
+// weights (the engine and `kapitsa doctor` share it). At least 1 byte.
+size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t budget);
 // The prefill chunk (rows) the engine picks when none is given: 2048, or 1024 when 2048-row buffers would leave
 // less than one conversation of `context` tokens in the budget (activations scale with the chunk), less (a multiple of
 // 64, at least 256) when 1024-row ones would leave less than the tokens the engine starts with (the context, up to 8K)

@@ -25,6 +25,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdio>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -83,6 +84,53 @@ inline AutoStore auto_store_size(const AutoStoreIn& in) {
   }
   return r;
 }
+// The automatic size's reason, for logs and JSON: "all", "budget", "available_memory", "ram_share_cap"
+inline const char* auto_store_why_name(AutoStoreWhy w) {
+  switch (w) {
+    case AutoStoreWhy::All: return "all";
+    case AutoStoreWhy::Avail: return "available_memory";
+    case AutoStoreWhy::Cap: return "ram_share_cap";
+    case AutoStoreWhy::Budget: break;
+  }
+  return "budget";
+}
+// The automatic size and its reason in one line (Qwen4Exp::init_store logs it after "expert store: ", and `kapitsa
+// doctor` prints it before any load)
+inline std::string auto_store_reason(const AutoStore& st, const AutoStoreIn& in) {
+  char b[512];
+  const double left = double(std::min(in.left, in.all)) / 1e9;
+  switch (st.why) {
+    case AutoStoreWhy::All:
+      snprintf(b, sizeof b, "all %.1f GB of experts fit the %.1f GB the budget leaves: resident, no SSD reads",
+               double(in.all) / 1e9, double(in.left) / 1e9);
+      break;
+    case AutoStoreWhy::Budget:
+      snprintf(b, sizeof b,
+               "%.1f GB of the %.1f GB of experts, what the budget leaves (%s; the process's GPU memory %.0f%% of the "
+               "RAM)",
+               double(st.bytes) / 1e9, double(in.all) / 1e9,
+               in.cap > 0 ? "within the RAM-share cap" : "no RAM-share cap on this chip",
+               in.ram ? 100.0 * double(in.used + st.bytes) / double(in.ram) : 0.0);
+      break;
+    case AutoStoreWhy::Avail:
+      snprintf(b, sizeof b,
+               "%.1f GB rather than the %.1f GB the budget leaves (the system's available memory %.1f GB less %.1f GB "
+               "headroom: other processes hold the rest)",
+               double(st.bytes) / 1e9, left, double(in.avail) / 1e9, double(st.headroom) / 1e9);
+      break;
+    case AutoStoreWhy::Cap:
+      snprintf(b, sizeof b,
+               "%.1f GB rather than the %.1f GB the budget leaves (the process's GPU memory within %.0f%% of the RAM: "
+               "beyond ~45%%, every command buffer of a streamed store took seconds longer on a 48 GB M4 Pro; "
+               "NI_EXPERT_CAP=0 lifts it)",
+               double(st.bytes) / 1e9, left, in.cap * 100);
+      break;
+  }
+  return b;
+}
+// The RAM-share cap of a store short of all the experts: 40% of the RAM before Apple10 (M5), none on it; NI_EXPERT_CAP=
+// <share of the RAM, 0..1> sets it on any chip (0 = none; anything else is logged and ignored)
+double auto_store_cap(bool apple10);
 // The system's available memory now (free, inactive and purgeable pages; free_count already includes the speculative ones), 0 if unknown. Inactive pages
 // include file cache, so the automatic store size depends on what the page cache held at launch: back-to-back launches
 // can pick different sizes.

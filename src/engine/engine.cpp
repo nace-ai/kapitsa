@@ -295,9 +295,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     // Qwen3.8-Flash-Next; a Q2_0 pack's expert store takes what the budget leaves after the slots' state and one
     // conversation's KV cache (up to 32K tokens)
     const MemPlan mp = model_plan(opts_.model_dir, opts_.prefill_chunk);
-    const int slots = std::max(1, opts_.slots);
-    const size_t keep = size_t(slots) * mp.slot_state + mp.kv_per_pos * size_t(std::min(opts_.context, 32768));
-    auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk, budget_ > keep ? budget_ - keep : 1);
+    auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk,
+                                        flash_next_model_budget(mp, opts_.slots, opts_.context, budget_));
     q35_ = m.get();
     model_ = std::move(m);
   } else if (Dory::is_model(opts_.model_dir)) {
@@ -582,6 +581,11 @@ size_t default_mem_budget() {
   if (const char* v = getenv("NI_MEM_BUDGET"); v && *v) return size_t(atof(v) * 1e9);
   const size_t rws = Gpu::get().recommended_working_set();
   return rws - std::max<size_t>(size_t(512) << 20, rws / 25);
+}
+
+size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t budget) {
+  const size_t keep = size_t(std::max(1, slots)) * mp.slot_state + mp.kv_per_pos * size_t(std::min(context, 32768));
+  return budget > keep ? budget - keep : 1;
 }
 
 MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {

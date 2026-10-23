@@ -245,6 +245,29 @@ void case_auto_size() {
   r = auto_store_size(in);
   CHECK(r.headroom == (size_t(128) << 30) / 12 && r.why == AutoStoreWhy::Avail, "auto: 128 GB headroom %zu why %d",
         r.headroom, int(r.why));
+  // the reason line (the engine's log and kapitsa doctor print it) and its JSON name, one per reason
+  in = AutoStoreIn{};
+  in.all = 24576 * slot, in.least = 3 * 512 * slot, in.left = size_t(29.9 * GB), in.used = size_t(5.3 * GB);
+  in.keep = size_t(1.5 * GB), in.ram = ram, in.avail = size_t(40 * GB), in.cap = 0;
+  r = auto_store_size(in);
+  std::string t = auto_store_reason(r, in);
+  CHECK(t == "29.9 GB of the 34.2 GB of experts, what the budget leaves (no RAM-share cap on this chip; the process's "
+             "GPU memory 68% of the RAM)",
+        "auto: budget text '%s'", t.c_str());
+  CHECK(!strcmp(auto_store_why_name(r.why), "budget"), "auto: budget name");
+  in.cap = 0.40, r = auto_store_size(in), t = auto_store_reason(r, in);
+  CHECK(t.rfind("13.8 GB rather than the 29.9 GB the budget leaves (the process's GPU memory within 40% of the RAM", 0) == 0 &&
+            !strcmp(auto_store_why_name(r.why), "ram_share_cap"),
+        "auto: cap text '%s'", t.c_str());
+  in.cap = 0, in.avail = size_t(13 * GB), r = auto_store_size(in), t = auto_store_reason(r, in);
+  CHECK(t == "8.7 GB rather than the 29.9 GB the budget leaves (the system's available memory 13.0 GB less 4.3 GB "
+             "headroom: other processes hold the rest)" &&
+            !strcmp(auto_store_why_name(r.why), "available_memory"),
+        "auto: avail text '%s'", t.c_str());
+  in.avail = 0, in.left = size_t(60 * GB), r = auto_store_size(in), t = auto_store_reason(r, in);
+  CHECK(t == "all 34.2 GB of experts fit the 60.0 GB the budget leaves: resident, no SSD reads" &&
+            !strcmp(auto_store_why_name(r.why), "all"),
+        "auto: all text '%s'", t.c_str());
   printf("auto store size: ok\n");
 }
 

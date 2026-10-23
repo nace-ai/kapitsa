@@ -52,6 +52,18 @@ size_t available_memory() {
   return size_t(pages * vm_kernel_page_size);
 }
 
+double auto_store_cap(bool apple10) {
+  double cap = apple10 ? 0.0 : 0.40;
+  const char* cv = getenv("NI_EXPERT_CAP");
+  if (cv && *cv) {
+    char* end = nullptr;
+    const double x = strtod(cv, &end);
+    if (end != cv && !*end && x >= 0 && x <= 1) cap = x;
+    else logi("NI_EXPERT_CAP=%s is not a share of the RAM between 0 and 1, ignored: using %.2f", cv, cap);
+  }
+  return cap;
+}
+
 // ---- ExpertCache ----
 
 ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,

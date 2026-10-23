@@ -726,44 +726,16 @@ void Qwen4Exp::init_store(const std::string& dir) {
     // (macOS 26.5) ran 12-30 GB stores (peak footprint up to 71% of the RAM) at full speed, the larger the faster
     // (85-token prompt 29.9 -> 120.6 tok/s, decode 24.5 -> 31.9 at 12 -> 30 GB), so the cap stays for chips before
     // Apple10 only. That split is by chip, not by OS: the two runs also differ in macOS (27 vs 26.5), and which of
-    // the two explains the stall is not measured. NI_EXPERT_CAP=<share of the RAM, 0..1> sets it on any chip (0 = none). The available-memory guard
-    // (q20::auto_store_size) applies on every chip: the budget assumes the Mac to itself.
-    const char* cv = getenv("NI_EXPERT_CAP");
+    // the two explains the stall is not measured. NI_EXPERT_CAP=<share of the RAM, 0..1> sets it on any chip (0 = none;
+    // q20::auto_store_cap). The available-memory guard (q20::auto_store_size) applies on every chip: the budget assumes
+    // the Mac to itself. `kapitsa doctor` prints the same reason before a load (doctor.cpp).
     q20::AutoStoreIn in;
     in.all = all, in.least = size_t(3) * E * lay.bytes, in.left = left, in.used = used, in.keep = keep;
     in.ram = size_t(ram), in.avail = q20::available_memory();
-    in.cap = Gpu::get().apple10() ? 0.0 : 0.40;
-    if (cv && *cv) {
-      char* end = nullptr;
-      const double x = strtod(cv, &end);
-      if (end != cv && !*end && x >= 0 && x <= 1) in.cap = x;
-      else logi("NI_EXPERT_CAP=%s is not a share of the RAM between 0 and 1, ignored: using %.2f", cv, in.cap);
-    }
+    in.cap = q20::auto_store_cap(Gpu::get().apple10());
     const q20::AutoStore st = q20::auto_store_size(in);
     o.bytes = st.bytes;
-    const double pct = ram ? 100.0 * double(used + st.bytes) / double(ram) : 0;
-    switch (st.why) {
-      case q20::AutoStoreWhy::All:
-        logi("expert store: all %.1f GB of experts fit the %.1f GB the budget leaves: resident, no SSD reads",
-             all / 1e9, left / 1e9);
-        break;
-      case q20::AutoStoreWhy::Budget:
-        logi("expert store: %.1f GB of the %.1f GB of experts, what the budget leaves (%s; the process's GPU memory "
-             "%.0f%% of the RAM)",
-             st.bytes / 1e9, all / 1e9, in.cap > 0 ? "within the RAM-share cap" : "no RAM-share cap on this chip", pct);
-        break;
-      case q20::AutoStoreWhy::Avail:
-        logi("expert store: %.1f GB rather than the %.1f GB the budget leaves (the system's available memory %.1f GB "
-             "less %.1f GB headroom: other processes hold the rest)",
-             st.bytes / 1e9, std::min(left, all) / 1e9, in.avail / 1e9, st.headroom / 1e9);
-        break;
-      case q20::AutoStoreWhy::Cap:
-        logi("expert store: %.1f GB rather than the %.1f GB the budget leaves (the process's GPU memory within %.0f%% "
-             "of the RAM: beyond ~45%%, every command buffer of a streamed store took seconds longer on a 48 GB M4 "
-             "Pro; NI_EXPERT_CAP=0 lifts it)",
-             st.bytes / 1e9, std::min(left, all) / 1e9, in.cap * 100);
-        break;
-    }
+    logi("expert store: %s", q20::auto_store_reason(st, in).c_str());
   }
   o.bytes = std::min(o.bytes, all);
   if (const char* r = getenv("NI_EXPERT_READERS"); r && *r) o.cache.readers = atoi(r);
@@ -1570,8 +1542,12 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
     }
   }
   (void)table;
-  if (m.streamed)
-    m.weights += size_t(std::min(3, hi - lo)) * c.experts * q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes;
+  if (m.streamed) {
+    const size_t slot = q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes;
+    m.store_least = size_t(std::min(3, hi - lo)) * c.experts * slot;
+    m.store_all = size_t(hi - lo) * c.experts * slot;
+    m.weights += m.store_least;
+  }
   m.dense = false;
   m.hidden = c.hidden;
   m.layers = c.layers;
