@@ -127,6 +127,43 @@ kernel void hs_experts_spin(device const uint4* arena [[buffer(0)]], device atom
   for (uint i = tg.x * tpg.x + lid; i < p.y; i += ntg.x * tpg.x) a ^= w[i];
   if ((a.x ^ a.y ^ a.z ^ a.w) == 0x9e3779b9u) sink[1] = s;
 }
+
+// hs_experts_spin with MSL 3.2's coherent(device) loads instead of relaxed atomics (public API; whether the host's
+// stores reach the GPU's coherence point is what gspin2 measures).
+kernel void hs_experts_spin2(device const uint4* arena [[buffer(0)]], volatile coherent(device) device uint* slots [[buffer(1)]],
+                             device uint* seen [[buffer(2)]], device uint* sink [[buffer(3)]],
+                             constant uint4& p [[buffer(4)]], volatile coherent(device) device uint* go [[buffer(5)]],
+                             device atomic_uint* fail [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
+                             uint2 ntg [[threadgroups_per_grid]], uint lid [[thread_index_in_threadgroup]],
+                             uint2 tpg [[threads_per_threadgroup]]) {
+  threadgroup uint s_tg;
+  if (lid == 0) {
+    uint n = 0;
+    while (go[p.x] < p.w && ++n < (1u << 20)) {}
+    if (n >= (1u << 20)) atomic_store_explicit(fail, 1u, memory_order_relaxed);
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    s_tg = slots[32 * p.x + tg.y];
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint s = s_tg;
+  if (tg.x == 0 && lid == 0) seen[32 * p.x + tg.y] = s;
+  device const uint4* w = arena + ulong(s) * p.y;
+  uint4 a = 0;
+  for (uint i = tg.x * tpg.x + lid; i < p.y; i += ntg.x * tpg.x) a ^= w[i];
+  if ((a.x ^ a.y ^ a.z ^ a.w) == 0x9e3779b9u) sink[1] = s;
+}
+
+// The warm mode's heater: one small threadgroup of ALU work on a second queue, until the host's stop word (seen or
+// not: bounded by n rounds), so the GPU never idles during a pass's waits.
+kernel void hs_heat(volatile coherent(device) device uint* stop [[buffer(0)]], device uint* sink [[buffer(1)]],
+                    constant uint2& p [[buffer(2)]], uint t [[thread_position_in_grid]]) {
+  uint a = t;
+  for (uint r = 0; r < p.x; ++r) {
+    for (uint i = 0; i < 256; ++i) a = a * 1664525u + 1013904223u;
+    if (stop[0] > p.y) break;  // the host stores pass + 1 when pass p.y ends (0 at start: pass 0 heats too)
+  }
+  if (a == 0x9e3779b9u) sink[2] = t;
+}
 )MSL";
 
 struct Opt {
@@ -150,7 +187,11 @@ struct Miss {
 Opt o;
 id<MTLDevice> dev;
 id<MTLCommandQueue> q;
-id<MTLComputePipelineState> p_stream, p_route, p_experts, p_experts_spin;
+id<MTLComputePipelineState> p_stream, p_route, p_experts, p_experts_spin, p_experts_spin2, p_heat;
+id<MTLCommandQueue> q_heat;
+uint32_t heat_rounds = 4000;
+id<MTLBuffer> b_heat;
+bool use_spin2 = false;
 id<MTLBuffer> b_pre, b_shared, b_arena, b_ids, b_slots, b_seen, b_ready, b_go, b_sink, b_fail;
 id<MTLSharedEvent> ev, ev2;
 MTLSharedEventListener* listener;
@@ -255,7 +296,7 @@ void enc_route(id<MTLComputeCommandEncoder> e, int l) {
 
 void enc_experts(id<MTLComputeCommandEncoder> e, int l, bool spin) {
   const uint32_t p[4] = {uint32_t(l), expert_n4, uint32_t(o.topk), pass + 1};
-  [e setComputePipelineState:spin ? p_experts_spin : p_experts];
+  [e setComputePipelineState:spin ? (use_spin2 ? p_experts_spin2 : p_experts_spin) : p_experts];
   [e setBuffer:b_arena offset:0 atIndex:0];
   [e setBuffer:b_slots offset:0 atIndex:1];
   [e setBuffer:b_seen offset:0 atIndex:2];
@@ -371,7 +412,22 @@ void run_pass(const std::string& mode, Stats* st) {
     }
     wall_us = now_us() - t0;
   } else {
-    const bool overlap = mode == "overlap", flag = mode == "flag", presig = mode == "presig", gspin = mode == "gspin";
+    const bool overlap = mode == "overlap", flag = mode == "flag", presig = mode == "presig",
+               gspin = mode == "gspin" || mode == "gspin2", warm = mode == "warm" || getenv("HS_HEAT");
+    use_spin2 = mode == "gspin2";
+    id<MTLCommandBuffer> hcb = nil;
+    if (warm) {
+      hcb = [q_heat commandBufferWithUnretainedReferences];
+      id<MTLComputeCommandEncoder> he = [hcb computeCommandEncoder];
+      const uint32_t hp[2] = {heat_rounds, pass};
+      [he setComputePipelineState:p_heat];
+      [he setBuffer:b_heat offset:0 atIndex:0];
+      [he setBuffer:b_heat offset:16 atIndex:1];
+      [he setBytes:hp length:sizeof(hp) atIndex:2];
+      [he dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
+      [he endEncoding];
+      [hcb commit];
+    }
     const bool events = mode != "base" && !gspin;
     const uint64_t b = ev_v, b2 = ev2_v;
     id<MTLCommandBuffer> cb = [q commandBufferWithUnretainedReferences];
@@ -410,7 +466,7 @@ void run_pass(const std::string& mode, Stats* st) {
     for (int l = 0; l < o.depth && handshakes; ++l) read_ahead(l);
     const double t0 = now_us();
     [cb commit];
-    if (mode == "spin" || overlap || flag || gspin) {
+    if (mode == "spin" || overlap || flag || gspin || mode == "warm") {
       const volatile uint32_t* ready = static_cast<const volatile uint32_t*>(b_ready.contents);
       uint32_t* go = static_cast<uint32_t*>(b_go.contents);
       for (int s = 0; s < L; ++s) {
@@ -445,6 +501,10 @@ void run_pass(const std::string& mode, Stats* st) {
     }
     [cb waitUntilCompleted];
     wall_us = now_us() - t0;
+    if (warm) {
+      __atomic_store_n(static_cast<uint32_t*>(b_heat.contents), pass + 1, __ATOMIC_RELEASE);
+      [hcb waitUntilCompleted];
+    }
     if (failed(cb)) ++cur->errors;
     gpu_s = cb.GPUEndTime - cb.GPUStartTime;
     if (events) ev_v = b + 2 * uint64_t(L) + 2;
@@ -522,6 +582,12 @@ int main(int argc, char** argv) {
     p_route = pipe(lib, "hs_route");
     p_experts = pipe(lib, "hs_experts");
     p_experts_spin = pipe(lib, "hs_experts_spin");
+    p_experts_spin2 = pipe(lib, "hs_experts_spin2");
+    p_heat = pipe(lib, "hs_heat");
+    q_heat = [dev newCommandQueue];
+    b_heat = [dev newBufferWithLength:64 options:MTLResourceStorageModeShared | MTLResourceHazardTrackingModeUntracked];
+    std::memset(b_heat.contents, 0, 64);
+    if (const char* h = getenv("HS_HEAT_ROUNDS")) heat_rounds = uint32_t(atoi(h));
 
     const auto bytes = [](double mb) {
       const size_t b = std::max<size_t>(size_t(mb * 1e6), 16);
@@ -540,7 +606,7 @@ int main(int argc, char** argv) {
     b_slots = buffer(4 * kStride * size_t(o.layers), true);
     b_seen = buffer(4 * kStride * size_t(o.layers), true);
     b_ready = buffer(4 * size_t(o.layers), true);
-    b_go = buffer(4 * size_t(o.layers), true);
+    b_go = buffer(4 * size_t(o.layers) + 64, true);
     b_sink = buffer(64, true);
     b_fail = buffer(16, true);
     std::memset(b_ready.contents, 0, b_ready.length);
@@ -578,7 +644,7 @@ int main(int argc, char** argv) {
     plan.assign(size_t(o.layers), {});
     for (int l = 0; l < o.layers; ++l) groups.push_back(dispatch_group_create());
 
-    std::vector<std::string> modes = {"base", "presig", "spin", "listen", "flag", "overlap", "cbs", "gspin"};
+    std::vector<std::string> modes = {"base", "presig", "spin", "listen", "flag", "overlap", "cbs", "gspin", "gspin2", "warm"};
     if (!o.only.empty()) {
       std::vector<std::string> keep;
       for (const auto& m : modes)

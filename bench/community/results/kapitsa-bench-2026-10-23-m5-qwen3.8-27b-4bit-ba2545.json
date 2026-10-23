@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-23T09:32:04Z",
+  "kapitsa": {
+    "version": "0.2.11",
+    "commit": "6f9e7b4"
+  },
+  "mac": {
+    "identifier": "Mac17,4",
+    "name": "MacBook Air (15-inch, M5)",
+    "year": 2026,
+    "chip": "Apple M5",
+    "cpu_cores": 10,
+    "gpu_cores": 10,
+    "memory_gb": 32,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "qwen3.8-27b",
+    "title": "Qwen3.8-27B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "6067b15",
+    "decoding": "unknown",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 30.18,
+      "runs_tps": [
+        30.18,
+        28.95,
+        30.67,
+        31.96,
+        29.21
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 33.33,
+      "runs_tps": [
+        33.33,
+        33.86,
+        34.08,
+        32.1,
+        30.55
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4134,
+        "ttft_s": 21.8679,
+        "tps": 189.0,
+        "followup_s": [
+          0.4703,
+          0.5742,
+          0.4641
+        ],
+        "followup_median_s": 0.4703,
+        "followup_suffix_tps": 48.8
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16285,
+        "ttft_s": 94.7855,
+        "tps": 171.8,
+        "followup_s": [
+          0.5698,
+          0.6534,
+          0.53
+        ],
+        "followup_median_s": 0.5698,
+        "followup_suffix_tps": 40.4
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.63
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 208389,
+    "gpu_quiet_wait_s": 26.1,
+    "gpu_other_mean_pct": 2.2,
+    "gpu_other_max_pct": 21.21,
+    "gpu_ambient_mean_pct": 1.29,
+    "gpu_users": [
+      "Firefox"
+    ],
+    "contention": [
+      "prefill_16000"
+    ]
+  },
+  "flags": [
+    "decode_greedy: 15725 pages swapped out during the phase",
+    "prefill_4000: 56692 pages swapped out during the phase",
+    "prefill_16000: 135972 pages swapped out during the phase",
+    "CONTENTION: sustained foreign GPU load > 5% in ['prefill_16000'] (mean 2.2%, top ['Firefox'])"
+  ],
+  "invalid": []
+}

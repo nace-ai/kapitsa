@@ -363,6 +363,108 @@ void* Gpu::new_shared_event() {
   return (__bridge_retained void*)ev;
 }
 
+namespace {
+// Gpu::keep_warm's state: its queue, kernel, rounds per ms (measured once) and command buffers in flight
+struct Heater {
+  std::mutex mu;
+  id<MTLCommandQueue> q = nil;
+  id<MTLComputePipelineState> pso = nil;
+  id<MTLBuffer> sink = nil;
+  double rounds_per_ms = 0;
+  std::atomic<int> inflight{0};
+  std::atomic<uint64_t> started{0};
+  bool failed = false;
+};
+Heater& heater() {
+  static Heater* h = new Heater;
+  return *h;
+}
+const char* kHeatSource = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+kernel void ni_heat(device uint* sink [[buffer(0)]], constant uint& n [[buffer(1)]], uint t [[thread_position_in_grid]]) {
+  uint a = t;
+  for (uint r = 0; r < n; ++r)
+    for (uint i = 0; i < 256; ++i) a = a * 1664525u + 1013904223u;
+  if (a == 0x9e3779b9u) sink[0] = t;
+}
+)MSL";
+id<MTLCommandBuffer> heat_cb(Heater& h, uint32_t rounds) {
+  id<MTLCommandBuffer> cb = [h.q commandBufferWithUnretainedReferences];
+  id<MTLComputeCommandEncoder> e = [cb computeCommandEncoder];
+  [e setComputePipelineState:h.pso];
+  [e setBuffer:h.sink offset:0 atIndex:0];
+  [e setBytes:&rounds length:sizeof rounds atIndex:1];
+  [e dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
+  [e endEncoding];
+  return cb;
+}
+}  // namespace
+
+bool Gpu::heat_on() {
+  static const bool on = [] {
+    // Default: on for Apple10 (M5), where a real-pack A/B measured it (Flash-Next Q2_0, streamed experts: decode
+    // 1.2-1.7x, logits bit for bit, CPU+GPU+DRAM energy about flat); off elsewhere (the M4 is not measured).
+    // NI_GPU_HEAT=0 turns it off, NI_GPU_HEAT=1 on, on any chip.
+    const char* v = getenv("NI_GPU_HEAT");
+    if (v && *v) return atoi(v) > 0;
+    return Gpu::get().apple10();
+  }();
+  return on;
+}
+
+int Gpu::heat_inflight() { return heater().inflight.load(); }
+uint64_t Gpu::heat_started() { return heater().started.load(); }
+
+void Gpu::keep_warm(double ms) {
+  if (!heat_on()) return;
+  Heater& h = heater();
+  if (ms > 0 && h.inflight.load(std::memory_order_relaxed) >= 2) return;
+  std::lock_guard<std::mutex> lk(h.mu);
+  if (h.failed) return;
+  @autoreleasepool {
+    if (!h.q) {
+      NSError* err = nil;
+      id<MTLDevice> d = dev(device_);
+      id<MTLLibrary> lib = [d newLibraryWithSource:@(kHeatSource) options:[MTLCompileOptions new] error:&err];
+      id<MTLFunction> fn = lib ? [lib newFunctionWithName:@"ni_heat"] : nil;
+      h.pso = fn ? [d newComputePipelineStateWithFunction:fn error:&err] : nil;
+      h.q = [d newCommandQueue];
+      h.sink = [d newBufferWithLength:16 options:MTLResourceStorageModeShared];
+      if (!h.pso || !h.q || !h.sink) {
+        h.failed = true;
+        logi("GPU heater: unavailable (%s)", err ? err.localizedDescription.UTF8String : "no queue");
+        return;
+      }
+      // rounds per ms: the median of a few short runs
+      std::vector<double> r;
+      for (int i = 0; i < 5; ++i) {
+        id<MTLCommandBuffer> cb = heat_cb(h, 500);
+        [cb commit];
+        [cb waitUntilCompleted];
+        const double t = (cb.GPUEndTime - cb.GPUStartTime) * 1e3;
+        if (t > 0) r.push_back(500 / t);
+      }
+      std::sort(r.begin(), r.end());
+      h.rounds_per_ms = r.empty() ? 0 : r[r.size() / 2];
+      if (h.rounds_per_ms <= 0) {
+        h.failed = true;
+        return;
+      }
+      logi("GPU heater: %.0f rounds per ms", h.rounds_per_ms);
+    }
+    while (ms > 0 && h.inflight.load() < 2) {
+      const uint32_t rounds = uint32_t(std::clamp(h.rounds_per_ms * ms / 2, 1.0, 1e8));
+      id<MTLCommandBuffer> cb = heat_cb(h, rounds);
+      Heater* hp = &h;
+      [cb addCompletedHandler:^(id<MTLCommandBuffer>) { hp->inflight.fetch_sub(1); }];
+      h.inflight.fetch_add(1);
+      h.started.fetch_add(1);
+      [cb commit];
+    }
+  }
+}
+
 void Gpu::release(Buffer& b) {
   if (!b.mtl) return;
   std::lock_guard<std::mutex> lk(impl_->mu);

@@ -665,6 +665,13 @@ passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full 
 `NI_EXPERT_STORE=<GB>` sets the store's size (any size), `all` keeps every expert, `off` loads them as stacked tensors
 (the whole pack must then fit); `NI_EXPERT_CAP=<share>` (0 to 1; 0 = none, other values warn and are ignored) sets the RAM share the automatic size keeps the process's GPU memory within for a store short of all the experts (default 0.40 before the M5, none on it); `NI_EXPERT_READERS` (default 16) sets the SSD reader threads. With `NI_LOG=1` each
 request's log says how many of its experts were in memory and how much was read.
+On an M5, decoding through such a store keeps the GPU busy across those per-layer waits with a tiny kernel on a second
+queue (the GPU heater, `Gpu::keep_warm`), so it does not drop its clock or park between layers: on a 48 GB M5 Pro with
+a 29.9 GB store, decode 42.6-44.0 tok/s instead of 25.7-30.5 after an 85-token prompt and 42.4-42.7 instead of 35.5-35.6
+after a 4,132-token one, the same tokens and logits bit for bit. GPU power rises about 3x during decode (about 5 W to
+17 W); CPU+GPU+DRAM energy a token stays about the same. `NI_GPU_HEAT=0` turns it off,
+`NI_GPU_HEAT=1` turns it on on other chips (off by default there: not measured). A store that holds every expert, and
+every other model, never runs it.
 
 On that 48 GB M4 Pro (macOS 27.0.1; a 12 GB store, 35% of the experts, the automatic size there; 17-20 GB peak
 memory), with the published protocol's prompts: 512-token code answers at 16.8 tok/s greedy and 17.8 at T = 0.6 with
