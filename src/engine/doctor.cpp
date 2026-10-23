@@ -263,6 +263,7 @@ int run_doctor(int argc, char** argv) {
   std::vector<std::string> models, roots;
   int ctx = 65536, slots_opt = 0, chunk = 0;  // slots 0: per model as the engine picks them (auto_slots); chunk 0: as
                                                // the engine picks it (auto_prefill_chunk)
+  bool ctx_given = false;  // --context given: the expert store line plans at it, else at serve's (start_plan)
   std::string dflash;                      // as the server's --dflash ("": NI_DFLASH or auto)
   bool as_json = false;
   double budget_gb = 0;
@@ -276,6 +277,7 @@ int run_doctor(int argc, char** argv) {
     else if (a == "--context" || a == "--ctx") {
       std::string why;
       ctx = parse_context(next(), &why);
+      ctx_given = true;
       if (ctx == kContextMax) why = "--context max has no one size here (every model is planned at one context): give it in tokens (--context 256k)";
       if (ctx <= 0) {
         if (term::fancy()) term::error(why, "kapitsa doctor --help shows how to use it.");
@@ -451,7 +453,7 @@ int run_doctor(int argc, char** argv) {
     const size_t full_need = fixed + m.kv_per_pos * size_t(ctx) * size_t(slots);
     const size_t room = budget > fixed ? budget - fixed : 0;
     // a Q2_0 pack's routed experts: the store kapitsa serve picks and why (NI_EXPERT_STORE=<GB> or all sets it instead)
-    std::string store_line;
+    std::string store_line, store_short;  // the whole reason (plain text, --json); a short one (the styled view)
     nlohmann::ordered_json store_j;
     if (m.streamed) {
       const char* es = getenv("NI_EXPERT_STORE");
@@ -459,15 +461,26 @@ int run_doctor(int argc, char** argv) {
         const size_t b = std::min(m.store_all, !strcmp(es, "all") ? m.store_all : size_t(atof(es) * 1e9));
         char t[160];
         snprintf(t, sizeof t, "%.1f GB of the %.1f GB of experts (NI_EXPERT_STORE=%s)", b / 1e9, m.store_all / 1e9, es);
-        store_line = t;
+        store_line = store_short = t;
         store_j = {{"bytes", b}, {"all_bytes", m.store_all}, {"reason", "NI_EXPERT_STORE"}, {"text", store_line}};
       } else {
-        const q20::AutoStoreIn in = planned_store(m, slots, ctx, budget, g.apple10());
+        // planned as `kapitsa serve` starts this model (start_plan, as Engine's constructor): without --context at
+        // serve's default context here (default_context) and the slots and prefill chunk that go with it, not at
+        // doctor's 64K; with --context at it, within the model's limit as serve takes it
+        EngineOptions so;
+        so.context = ctx_given ? context_within_limit(dir, ctx) : 0;
+        so.slots = slots_opt, so.prefill_chunk = chunk, so.dflash = dflash;
+        const StartPlan sp = start_plan(dir, so, budget);
+        const MemPlan sm = sp.prefill_chunk == lp.prefill_chunk ? m : model_plan(dir, sp.prefill_chunk);
+        const q20::AutoStoreIn in = planned_store(sm, sp.slots, sp.context, budget, g.apple10());
         const q20::AutoStore st = q20::auto_store_size(in);
         store_line = q20::auto_store_reason(st, in);
+        store_short = q20::auto_store_short(st, in);
         store_j = {{"bytes", st.bytes},
                    {"all_bytes", m.store_all},
                    {"reason", q20::auto_store_why_name(st.why)},
+                   {"context", sp.context},
+                   {"slots", sp.slots},
                    {"budget_leaves_bytes", in.left},
                    {"available_memory_bytes", in.avail},
                    {"ram_share_cap", in.cap},
@@ -526,7 +539,7 @@ int run_doctor(int argc, char** argv) {
                    : m.mtp ? "MTP head" : lookup > 0 ? "prompt lookup" : "plain";
       r.image_bytes = enc ? enc->weight_bytes() : 0;
       r.dec = dec, r.pf = pf;
-      r.note = m.streamed ? "expert store: " + store_line : dory_note;
+      r.note = m.streamed ? "expert store: " + store_short : dory_note;
       r.default_ctx = default_ctx, r.ctx_limit = model_context_limit(dir);
       tty_rows.push_back(r);
       continue;

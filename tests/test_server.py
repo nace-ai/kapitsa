@@ -427,6 +427,59 @@ def cli_checks(kapitsa):
           dflt["48"].get("default_context") == dflt["48"].get("context_limit") == 262144, json.dumps(dflt["48"])[:300])
     check("cli: doctor, 14.8 GB: the default context stops at 128K, where 1024-row buffers would take the chunk down",
           dflt["14.8"].get("default_context") == 131072, str(dflt["14.8"].get("default_context")))
+    # A Flash-Next Q2_0 pack's expert store (doctor's expert_store) is planned as `kapitsa serve` starts the model
+    # (start_plan, shared with the engine): without --context at serve's default context and the slots auto_slots gives
+    # there, not at doctor's 64K. Headers alone, the real model's shapes: 34 GB of Q2_0 experts, 4.5 GB of the rest.
+    # On 14 GB serve's default is 128K with 2 slots, which leaves the store more than 64K with 4 slots would. The size
+    # itself also depends on the available memory now, so what the budget leaves is compared (and the size, where the
+    # budget sets it).
+    fnx = os.path.join(home, "fake-flash-next")
+    os.makedirs(fnx)
+    fn_text = {"model_type": "qwen4_exp_text", "hidden_size": 2560, "num_hidden_layers": 48, "vocab_size": 248320,
+               "layer_types": (["linear_attention"] * 3 + ["full_attention"]) * 12, "full_attention_interval": 4,
+               "num_attention_heads": 24, "num_key_value_heads": 2, "head_dim": 256, "partial_rotary_factor": 0.25,
+               "linear_num_key_heads": 16, "linear_num_value_heads": 48, "linear_key_head_dim": 128,
+               "linear_value_head_dim": 128, "linear_conv_kernel_dim": 4, "num_experts": 512, "num_experts_per_tok": 10,
+               "moe_intermediate_size": 640, "shared_expert_intermediate_size": 640, "hc_count": 4, "hc_lowrank": 320,
+               "indexer_budget": 2048, "indexer_compress_ratio": 4, "indexer_head_dim": 128, "indexer_kv_heads": 1,
+               "indexer_n_heads": 4, "max_position_embeddings": 262144, "rms_norm_eps": 1e-06, "mtp_num_hidden_layers": 1,
+               "ngram_size": 3, "heads_per_ngram": 8, "ngram_vocab_size_base": 20000000, "split_ngram_parts": 128,
+               "make_ngram_vocab_size_divisible_by": 128, "ple_embed_dim": 2560, "ple_layer_ids": [2],
+               "ple_conv_kernel_size": 4, "output_gate_type": "sigmoid", "eos_token_id": 248044,
+               "rope_parameters": {"mrope_interleaved": True, "mrope_section": [11, 11, 10], "partial_rotary_factor": 0.25,
+                                   "rope_theta": 10000000, "rope_type": "default"}}
+    with open(os.path.join(fnx, "config.json"), "w") as f:
+        json.dump({"model_type": "qwen4_exp", "text_config": fn_text, "quantization": {
+            "group_size": 64, "bits": 4, "mode": "affine",
+            "language_model.model.layers.0.mlp.switch_mlp.gate_proj": {"group_size": 64, "bits": 2, "mode": "q2_0"}}}, f)
+    tensors, off = {}, 0
+    for name, size in [("language_model.model.layers.0.mlp.switch_mlp.gate_proj.weight", 34 * 10**9),
+                       ("language_model.model.embed_tokens.weight", 45 * 10**8), ("mtp.layers.0.mlp.gate_proj.weight", 15 * 10**8)]:
+        tensors[name] = {"dtype": "U8", "shape": [size], "data_offsets": [off, off + size]}
+        off += size
+    hdr = json.dumps(tensors).encode()
+    with open(os.path.join(fnx, "model.safetensors"), "wb") as f:
+        f.write(len(hdr).to_bytes(8, "little") + hdr)
+    fn_args = [(), ("--context", "131072"), ("--context", "65536"), ("--context", "1m")]
+    fn_runs = {a: subprocess.Popen([kapitsa, "doctor", "--json", "--model", fnx, *a], env=dict(env, NI_MEM_BUDGET="14"),
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for a in fn_args}
+    fn = {a: model(p) for a, p in fn_runs.items()}
+    st = {a: m.get("expert_store", {}) for a, m in fn.items()}
+    serve, at64 = fn[("--context", "131072")], st[("--context", "65536")]  # serve's default here (checked below)
+    keys = ("context", "slots", "budget_leaves_bytes", "bytes", "reason")
+    seen = json.dumps({" ".join(a) or "none": {k: s.get(k) for k in keys} for a, s in st.items()})
+    check("cli: doctor, a Flash-Next Q2_0 pack without --context: its expert store is planned at serve's default "
+          "context and slots (as with --context <that>), not at doctor's 64K",
+          fn[()].get("default_context") == 131072 and st[()].get("context") == 131072 and
+          st[()].get("slots") == serve.get("slots") == 2 and
+          st[()].get("budget_leaves_bytes") == serve.get("expert_store", {}).get("budget_leaves_bytes") >
+          at64.get("budget_leaves_bytes", 1 << 62) and
+          (st[()].get("reason") != "budget" or st[()].get("bytes") == serve.get("expert_store", {}).get("bytes")),
+          seen + f" default {fn[()].get('default_context')}")
+    check("cli: doctor, a Flash-Next Q2_0 pack with --context: its expert store is planned at it (64K with its slots; "
+          "past the model's 256K, at 256K as serve caps it)",
+          at64.get("context") == 65536 and at64.get("slots") == fn[("--context", "65536")].get("slots") and
+          st[("--context", "1m")].get("context") == 262144, seen)
     for a in ["flint:16gb", "flint:4bit"]:
         rc, out, err = run("rm", a)
         check(f"cli: rm {a} deletes it", rc == 0 and "Deleted flint:" + a.split(":")[1] in out, out + err)

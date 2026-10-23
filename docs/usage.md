@@ -800,8 +800,10 @@ passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full 
 `kapitsa doctor` counts the smallest such store (2.1 GB) in its weights, lists the rest as streamed, and prints the
 store `kapitsa serve` would pick now and why, the same line the engine logs at load (`expert store: ...`: all experts
 resident, what the budget leaves, capped by the available memory, or capped by the RAM share; `--json`: `expert_store`
-with `bytes`, `reason` and `text`). The available memory changes with what else runs and what the file cache holds,
-so the printed size is a snapshot.
+with `bytes`, `reason`, `text`, and the `context` and `slots` it is planned at; the terminal view shows a shorter
+line). Without `--context` it plans at the context serve takes here without one (`default_context`), not at doctor's
+64K, the same way the engine resolves it (`start_plan`). The available memory changes with what else runs and what the
+file cache holds, so the printed size is a snapshot.
 `NI_EXPERT_STORE=<GB>` sets the store's size (any size), `all` keeps every expert, `off` loads them as stacked tensors
 (the whole pack must then fit); `NI_EXPERT_CAP=<share>` (0 to 1; 0 = none, other values warn and are ignored) sets the RAM share the automatic size keeps the process's GPU memory within for a store short of all the experts (default 0.40 before the M5, none on it); `NI_EXPERT_READERS` (default 16) sets the SSD reader threads. With `NI_LOG=1` each
 request's log says how many of its experts were in memory and how much was read.

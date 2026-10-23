@@ -268,6 +268,22 @@ void case_auto_size() {
   CHECK(t == "all 34.2 GB of experts fit the 60.0 GB the budget leaves: resident, no SSD reads" &&
             !strcmp(auto_store_why_name(r.why), "all"),
         "auto: all text '%s'", t.c_str());
+  // the short line (doctor's styled view, after "expert store: "): within 100 characters for every reason, even with
+  // 999.9 GB figures and a 100% cap, so the row fits 120 columns unclipped
+  t = auto_store_short(r, in);
+  CHECK(t == "all 34.2 GB of experts resident, no SSD reads", "auto: all short '%s'", t.c_str());
+  in.left = size_t(29.9 * GB), in.avail = size_t(13 * GB), r = auto_store_size(in), t = auto_store_short(r, in);
+  CHECK(t == "8.7 GB, not the 29.9 GB the budget leaves: 13.0 GB available less 4.3 headroom", "auto: avail short '%s'",
+        t.c_str());
+  for (AutoStoreWhy w : {AutoStoreWhy::All, AutoStoreWhy::Budget, AutoStoreWhy::Avail, AutoStoreWhy::Cap}) {
+    AutoStoreIn big;
+    big.all = big.left = big.avail = big.ram = size_t(999.9 * GB), big.cap = 1.0;
+    AutoStore b;
+    b.bytes = b.headroom = size_t(999.9 * GB), b.why = w;
+    const std::string sh = auto_store_short(b, big), lg = auto_store_reason(b, big);
+    CHECK(sh.size() <= 100 && sh.size() < lg.size(), "auto: short %s %zu chars: '%s'", auto_store_why_name(w),
+          sh.size(), sh.c_str());
+  }
   printf("auto store size: ok\n");
 }
 

@@ -128,6 +128,25 @@ inline std::string auto_store_reason(const AutoStore& st, const AutoStoreIn& in)
   }
   return b;
 }
+// The same in a short line (at most 100 characters for any numbers below 1000 GB): `kapitsa doctor`'s styled view, a
+// table row of a terminal's width; its plain text and --json keep auto_store_reason's whole sentence
+inline std::string auto_store_short(const AutoStore& st, const AutoStoreIn& in) {
+  char b[160];
+  const double gb = double(st.bytes) / 1e9, all = double(in.all) / 1e9, left = double(std::min(in.left, in.all)) / 1e9;
+  switch (st.why) {
+    case AutoStoreWhy::All: snprintf(b, sizeof b, "all %.1f GB of experts resident, no SSD reads", all); break;
+    case AutoStoreWhy::Budget: snprintf(b, sizeof b, "%.1f of %.1f GB of experts, what the budget leaves", gb, all); break;
+    case AutoStoreWhy::Avail:
+      snprintf(b, sizeof b, "%.1f GB, not the %.1f GB the budget leaves: %.1f GB available less %.1f headroom", gb, left,
+               double(in.avail) / 1e9, double(st.headroom) / 1e9);
+      break;
+    case AutoStoreWhy::Cap:
+      snprintf(b, sizeof b, "%.1f GB, not the %.1f GB the budget leaves: the %.0f%% RAM-share cap (NI_EXPERT_CAP=0 lifts it)",
+               gb, left, in.cap * 100);
+      break;
+  }
+  return b;
+}
 // The RAM-share cap of a store short of all the experts: 40% of the RAM before Apple10 (M5), none on it; NI_EXPERT_CAP=
 // <share of the RAM, 0..1> sets it on any chip (0 = none; anything else is logged and ignored)
 double auto_store_cap(bool apple10);
