@@ -204,7 +204,7 @@ static int shortpf_max() {
 // Row limits of the other short-prefill paths (read once; 0 turns a path off):
 //   NI_SHORTPF_ATTN_MAX (default 128): attention as (query, head) rows of one KV head with the keys
 //     split over threadgroups (attn_prefill11g / 11gs + attn11_reduce). This branch runs before the
-//     qattn_t one, so on an M5 a model whose heads it fits (4B qg4, 35B qg8) takes 11g for a chunk
+//     qattn_t one, so on an M5 a model whose heads it fits (4B qg4, 35B qg8, 27B g6) takes 11g for a chunk
 //     between the old bound and this one instead of qattn_t: 192 was measured at 141 rows (9.74
 //     against 11.16 ms) and 162 (11.27 against 12.71) on the 27B before it had a qattn_t form, and is
 //     left off the default for that reason (the 27B's qattn_t_g6d2s8 runs 141 rows in 4.16 ms).
