@@ -6,7 +6,8 @@ Engine (`kapitsa serve` prints whether the split is on for the model): it takes 
 server with KAPITSA_HOME in a temporary folder (the split is per process and the RAM and SSD prefix caches would answer
 a leg's prompt from an earlier leg's), greedy replies, thinking off. A leg first sends a one-token request: the engine
 builds the split from its chat path (Engine::chat's ane_poll), not when the model loads.
-  0. NI_ANE=0: the two prompts' replies on the GPU alone, which both other legs are checked against
+  0. NI_ANE=0: the two prompts' replies on the GPU alone, the reference for leg 2's rerun (leg 1's are not compared:
+     the split runs the FFN in int8 on the Neural Engine, so its rows are an approximation)
   1. the split on: both prompts run split chunks, and the log's "prefill: Neural Engine busy ... evaluations" says
      they held (no chunk was given up)
   2. the fault (NI_ANE_FAULT=0: the ANE job of layer 0 of the first split chunk never starts, NI_ANE_VERIFY=0 so the
@@ -205,11 +206,9 @@ try:
     m1 = s1.mark()
     warm(s1)
     ane_line(s1, m1, 300)
-    got = []
     for k in range(2):
         mark = s1.mark()
         text, n, secs = chat(prompt(k))
-        got.append((text, n))
         busy = s1.wait_log(r"prefill: Neural Engine busy [\d.]+% of [\d.]+ ms over (\d+) split chunks "
                            r"\((\d+) evaluations\)", 60, since=mark)
         check(busy is not None and int(busy.group(2)) > 0,
