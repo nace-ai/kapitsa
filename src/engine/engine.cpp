@@ -2708,9 +2708,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   int fed_until = n;  // exclusive: tokens whose effect is in the live state
   int req_cycles = 0;  // DFlash2 cycles of this request
   const int depth = spec_ ? opts_.spec_depth : 0;
-  int kf_cycles = 0;  // decode cycles of this request (KFlash's: a plain step is a cycle of 1 row)
-  auto cycle_done = [live, &kf_cycles](int m) {  // a decode cycle wrote m tokens (for a display)
-    ++kf_cycles;
+  KfWrap kfw;  // this request's KFlash: its decode loop asks it for the rows of a cycle and tells it what the cycle wrote
+  kfw.source = kflash_source();
+  kfw.lookup = kf_lookup_.get();
+  int kf_rows = 1;  // rows of the cycle in flight (cycle_done's report)
+  auto cycle_done = [live, &kfw, &kf_rows](int m) {  // a decode cycle wrote m tokens (for a display)
+    kfw.cycle(m, kf_rows);
+    kf_rows = 1;
     if (!live) return;
     live->last.store(m, std::memory_order_relaxed);
     live->cycles.fetch_add(1, std::memory_order_relaxed);
@@ -3171,7 +3175,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
       ngram_drafts(s.tokens(), P, nh_ngram_, nd);
-      if (kf_lookup_) nd.resize(size_t(kf_lookup_->pick(int(nd.size()))));  // KFlash's budget: the drafts worth their rows
+      kf_rows = kfw.plan(int(nd.size()));  // KFlash's budget: the pending token's row and the drafts worth theirs
+      nd.resize(size_t(kf_rows - 1));
       const double kf_t0 = now_ms();
       int* tw = s.tokens();
       for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
@@ -3181,7 +3186,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       nh_->encode_accept(*e2, s, P, R, R - 1, sp);
       e2->commit_and_wait();
       const int a = nh_->accepted();
-      if (kf_lookup_) kf_lookup_->observe(int(nd.size()), a, now_ms() - kf_t0);
+      kfw.observe(int(nd.size()), a, now_ms() - kf_t0);
       const int* tk = s.tokens();
       int m = 0;
       while (m < a + 1) {
@@ -3226,7 +3231,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
       ngram_drafts(s.tokens(), P, flint_ngram_, nd);
-      if (kf_lookup_) nd.resize(size_t(kf_lookup_->pick(int(nd.size()))));  // KFlash's budget: the drafts worth their rows
+      kf_rows = kfw.plan(int(nd.size()));  // KFlash's budget: the pending token's row and the drafts worth theirs
+      nd.resize(size_t(kf_rows - 1));
       const double kf_t0 = now_ms();
       int* tw = s.tokens();
       for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
@@ -3236,7 +3242,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       flint_->encode_accept(*e2, s, P, R, R - 1, sp);
       e2->commit_and_wait();
       const int a = flint_->accepted();
-      if (kf_lookup_) kf_lookup_->observe(int(nd.size()), a, now_ms() - kf_t0);
+      kfw.observe(int(nd.size()), a, now_ms() - kf_t0);
       const int* tk = s.tokens();
       int m = 0;
       while (m < a + 1) {
@@ -3351,6 +3357,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         park();
         yield_turn(res);
       }
+      kf_rows = kfw.plan(0);  // KFlash's budget with no proposals: the pending token's row alone, this step (so plain decoding is as before)
       // the step feeding token `pos` is in flight; queue the one after it, then wait
       auto cur = std::move(next);
       next = encode_at(pos + 1);
@@ -3485,8 +3492,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
   if (mmp) std::copy(keys.begin(), keys.end(), slot.tokens.begin());  // image rows: their keys
   res.completion_tokens = gen;
-  res.kflash_source = kflash_source();
-  res.kflash_cycles = kf_cycles;
+  res.kflash_source = kfw.source;
+  res.kflash_cycles = int(kfw.cycles);
   if ((dfl_ || lili_) && spec_cycles_ > 0)
     logd("%s: %.2f tokens/cycle over %ld cycles", lili_ ? lili_->name() : "dflash", double(spec_accepted_) / spec_cycles_,
          spec_cycles_);

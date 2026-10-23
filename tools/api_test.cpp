@@ -1073,8 +1073,20 @@ void reasoning_memory(const TmplModel& m, const std::string& tag) {
 // then only as many as pay for their rows
 void kflash_lookup_unit() {
   KfWrap w;
-  w.cycle(1), w.cycle(3);
-  check(w.cycles == 2 && w.tokens == 4 && w.tokens_per_cycle() == 2.0 && w.source == "none", "kflash wrap: counts cycles and tokens");
+  w.cycle(1), w.cycle(3, 4);
+  check(w.cycles == 2 && w.tokens == 4 && w.rows == 5 && w.tokens_per_cycle() == 2.0 && w.source == "none",
+        "kflash wrap: counts cycles, tokens and rows");
+  check(w.plan(0) == 1 && w.plan(3) == 4, "kflash wrap: with no budget a cycle verifies the source's proposals (none: 1 row, the plain step)");
+  {  // through a lookup budget: unmeasured it takes the proposals, rejected ones stop being verified
+    KfLookup lk(4, 0.6);
+    KfWrap x;
+    x.lookup = &lk;
+    check(x.plan(0) == 1 && x.plan(3) == 4, "kflash wrap: a lookup budget unmeasured takes the proposals");
+    for (int i = 0; i < 40; ++i) x.observe(4, 0, 16.0);
+    int one = 0;
+    for (int i = 0; i < 63; ++i) one += x.plan(4) == 1;
+    check(one >= 60, "kflash wrap: rejected proposals are 1 row");
+  }
   {  // unmeasured: the source's own count, never more than it proposed
     KfLookup b(4, 0.6);
     check(b.pick(0) == 0 && b.pick(3) == 3 && b.pick(9) == 4, "kflash lookup: unmeasured, takes the source's count up to its maximum");

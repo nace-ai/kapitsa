@@ -5,7 +5,8 @@
 // source proposes, and 1 row is plain decoding. The drafter models (DFlash2, LiLiCorr, DSpark) and the MTP head have
 // their budgets (kflash_budget.h and the loops in engine.cpp); a model with no source decodes 1 row per cycle, which
 // is a plain step. This file holds
-//  - KfWrap: the source's name and a request's cycle counts (the startup log's and the usage's "KFlash (<source>)");
+//  - KfWrap: what the engine builds per request and every decode loop goes through: plan(avail) the rows of the next
+//    cycle, cycle(m, rows) what it wrote; its counts are the usage's "KFlash (<source>)";
 //  - KfLookup: the budget of the prompt-lookup source (Nemotron Nano, Flint with --spec): how many of the proposed
 //    tokens a cycle verifies, from the acceptance the verifies recorded and the model's cost of an extra row, so that
 //    where a verify's extra rows cost more than the tokens they win, the cycle verifies the pending token alone.
@@ -31,14 +32,6 @@ inline bool kflash_wrap_on() {
   }();
   return on;
 }
-
-// A request's cycles by one source
-struct KfWrap {
-  std::string source = "none";  // "DFlash2", "LiLiCorr", "MTP", "prompt lookup", ... or "none" (plain decoding)
-  long cycles = 0, tokens = 0;  // decode cycles and the tokens they wrote
-  void cycle(int m) { ++cycles, tokens += m; }
-  double tokens_per_cycle() const { return cycles > 0 ? double(tokens) / double(cycles) : 0.0; }
-};
 
 // The budget of prompt lookup. A cycle with `avail` proposed tokens verifies d of them (0 .. avail) in a pass of d + 1
 // rows. Verifying d gives 1 + sum over j <= d of (the chance that the first j proposals were accepted) tokens and
@@ -112,6 +105,25 @@ class KfLookup {
   double hit_[kMax + 1] = {}, try_[kMax + 1] = {};
   double c1_ = 0, s_ = 0;
   long c1_n_ = 0, s_n_ = 0, tried_ = 0, asked_ = 0;
+};
+
+// A request's KFlash: the engine builds one per request and every decode loop goes through it. plan(avail) is how many
+// rows the next cycle verifies given the `avail` tokens its source proposed (the pending token's row plus the drafts
+// worth their rows); cycle(m, rows) records what the cycle wrote. A source with no proposals (a plain model: avail 0)
+// gets 1 row, which the loop runs as its existing step, so a model that decodes plain is bit-identical to before. The
+// drafter models and the MTP head keep their own budgets (kflash_budget.h) and report their cycles here. `lookup` is the
+// prompt-lookup budget (null where the source has none, or with the wrapper off: then plan() is the source's own count).
+struct KfWrap {
+  std::string source = "none";  // "DFlash2", "LiLiCorr", "MTP", "prompt lookup", ... or "none" (plain decoding)
+  KfLookup* lookup = nullptr;
+  long cycles = 0, tokens = 0, rows = 0;  // decode cycles, the tokens they wrote, the rows the plain and prompt-lookup ones verified
+
+  int plan(int avail) { return (lookup ? lookup->pick(avail) : std::max(avail, 0)) + 1; }
+  void observe(int drafts, int accepted, double ms) {
+    if (lookup) lookup->observe(drafts, accepted, ms);
+  }
+  void cycle(int m, int r = 1) { ++cycles, tokens += m, rows += r; }
+  double tokens_per_cycle() const { return cycles > 0 ? double(tokens) / double(cycles) : 0.0; }
 };
 
 }  // namespace ni
