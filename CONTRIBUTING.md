@@ -15,10 +15,12 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j   # or:
 
 In a clone, `./install.sh` checks for Apple silicon (and a terminal not running under Rosetta), macOS 14 or later, the
 Command Line Tools (it opens their installer) and CMake (it offers `brew install cmake`; `--yes` doesn't ask). It builds
-the `kapitsa` target in Release and installs it to `/opt/homebrew/bin` when that is writable, else to `~/.local/bin`
-(`--prefix DIR` picks another folder), with `LICENSE` and `THIRD_PARTY_NOTICES` in `../share/kapitsa` relative to that
-folder. Run it again to update; `./install.sh --help` lists its options. By hand, `cmake --build build --target kapitsa`
-builds only the `kapitsa` command, into `build/kapitsa`.
+the `kapitsa` and `systemone` targets in Release and installs `kapitsa` to `/opt/homebrew/bin` when that is writable,
+else to `~/.local/bin` (`--prefix DIR` picks another folder), with `LICENSE` and `THIRD_PARTY_NOTICES` in
+`../share/kapitsa` relative to that folder, and `kapitsa-systemone` (the Drex decision server, docs/systemone.md) and
+`kapitsa-drex-pointer` beside it. Run it again to update; `./install.sh --help` lists its options. By hand,
+`cmake --build build --target kapitsa` builds only the `kapitsa` command, into `build/kapitsa` (`--target systemone` is
+the server, into `build/systemone`).
 
 The Metal kernels are embedded in the binary as source and compiled by macOS at runtime, so neither Xcode nor the
 offline `metal` compiler is needed. The GPU pipelines are created when a model loads; `NI_PREWARM=0` creates them on
