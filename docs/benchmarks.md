@@ -157,7 +157,11 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   Kapitsa was re-run: mlx-serve's cell stays the mean of its two runs in the `16f2b6a` pair (78 tok/s decode, 464
   prefill; [the four runs](../bench/results/2026-10-22-m5pro-48gb/README.md)). Its decode is now ahead, 78.2 against
   76.6 sampled and 86.2 against 83.9 greedy, so the row has no tie any more: mlx-serve has the row's fastest decode
-  (🟩 78), and the README's count of pairs is unchanged because the tie was not counted for Kapitsa. Kapitsa reads the
+  (🟩 78), and the README's count of pairs is unchanged because the tie was not counted for Kapitsa. The 2.1% gap is
+  inside the spread and crosses sessions, as the 4.1% lead before it did, and three of mlx-serve's four stored runs still
+  carry the browser flag where Kapitsa's counted runs do not. The tie rule only keeps Kapitsa from being credited with a
+  lead the spread does not settle: when Kapitsa's cell is the lower one, the marker goes to the engine whose cell reads
+  higher (the coordinator's rule for this re-measure), so the poster never shows Kapitsa level with a faster cell. Kapitsa reads the
   4K prompt 1.31x as fast as mlx-serve. mlx-serve still answers cached follow-ups sooner (0.14 / 0.18 s at 4K / 16K
   against 0.21-0.22 / 0.23-0.24 s in every counted run), so the gain to cite stays cached suffix prefill 20-29% faster
   (probe, [#315](https://github.com/nace-ai/kapitsa/pull/315)).
@@ -1692,7 +1696,7 @@ sessions on different builds and days, not an interleaved A/B, so none of these 
 mlx-serve's stored pair still answers sooner (0.14 / 0.18 s), so the gain to cite stays cached suffix prefill 20-29%
 faster (probe, [#315](https://github.com/nace-ai/kapitsa/pull/315)). Against the stored mlx-serve pair Kapitsa reads the
 4K prompt 1.31x as fast (606 against 464), and mlx-serve now decodes faster, by 2.1% sampled (78.2 against 76.6) and
-2.8% greedy (86.2 against 83.9): the row's tie ends and mlx-serve's cell takes the fastest-decode marker. The headline's
+2.8% greedy (86.2 against 83.9): the row's tie ends and mlx-serve's cell takes the fastest-decode marker. That gap is inside the spread too (launch 1 read 80.2) and the browser-flag caveat on mlx-serve's stored runs still stands; a tie only withholds a Kapitsa lead the spread does not settle, so with Kapitsa's cell the lower one the marker goes to mlx-serve (the coordinator's rule for this re-measure). The headline's
 count is unchanged (32 of 36), because the tie was never counted as Kapitsa's. Against Splash's stored cell (674 / 618 /
 72) Splash reads the 4K prompt 1.11x as fast, 16K is level (617.6 against 618.0; two of the three counted runs read
 16K under Splash's 618), and Kapitsa decodes 6% faster. Runs, both sessions and every launch's process snapshots:
