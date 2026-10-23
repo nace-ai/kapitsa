@@ -468,7 +468,8 @@ check(r.returncode == 0 and os.path.isfile(hk2) and open(hk2).read() == f"# kben
 # binary; a server signed as something else is left out with a warning, and kapitsa itself still updates
 SYSTEMONE = os.path.join(BUILD, "systemone")
 if not os.path.isfile(SYSTEMONE):
-    print(f"SKIP the Drex companions on update: {SYSTEMONE} is not built (cmake --build build --target systemone)")
+    print(f"SKIP the Drex companions on update: {SYSTEMONE} is not built (cmake --build build --target systemone; "
+          f"nace-ai/kapitsa#422 adds it to CI's build targets)")
 else:
     def companion(identifier):
         d = tempfile.mkdtemp(prefix="sys-", dir=TMP)
