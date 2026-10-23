@@ -22,7 +22,9 @@ The bound is shortened because the shipped 60 s is not a test's to wait out; wit
 before that watchdog).
 usage: test_ane_split_abort.py <kapitsa> <model dir> [--port 8199] [--rows 700] [--tokens 24] [--split-ms 250] [--keep]
   --rows: tokens of each leg's prompt (over the split's floor, under one prefill chunk)
-  --keep: keep the temporary folder (the three servers' logs)"""
+  --keep: keep the temporary folder (the three servers' logs)
+With no arguments it prints "SKIP" and exits 0: CI has no model folder, GPU or Neural Engine, so it must not fail
+there (a run that typed the arguments wrong still gets this usage message and exit 1)."""
 import fcntl, json, os, re, shutil, signal, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 ARGS = sys.argv[1:]
@@ -45,7 +47,12 @@ ROWS = int(opt("--rows", "700"))
 TOKENS = int(opt("--tokens", "24"))
 SPLIT_MS = opt("--split-ms", "250")
 KEEP = opt("--keep", flag=True)
-if len(ARGS) != 2 or not SPLIT_MS.isdigit():
+if not SPLIT_MS.isdigit():
+    sys.exit(__doc__)
+if not ARGS:  # CI has no model folder, GPU or Neural Engine: skip, do not fail a run that has nothing to test
+    print("SKIP: this test needs a binary and a model folder, on a Mac with the GPU and its Neural Engine", flush=True)
+    sys.exit(0)
+if len(ARGS) != 2:
     sys.exit(__doc__)
 KAPITSA, MODEL = os.path.abspath(ARGS[0]), os.path.abspath(os.path.expanduser(ARGS[1]))
 HERE = os.path.dirname(os.path.abspath(__file__))
