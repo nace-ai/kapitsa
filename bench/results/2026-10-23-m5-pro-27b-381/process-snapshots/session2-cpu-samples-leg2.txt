@@ -1,0 +1,205 @@
+12:51:14   172  33.1 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:51:14 66451  34.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:14 66459  44.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:19   172  39.6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:51:19   453  36.5 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter
+12:51:19 66451  31.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:19 66459  32.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:24 66451  33.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:24 66459  35.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:24 66871  82.3 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /
+12:51:29 66451  33.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:29 66459  31.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:29 66464  36.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:34 66451  33.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:34 66459  38.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:34 66460  30.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:39 66451  32.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:39 66459  34.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:44 66451  34.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:44 66459  33.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:49 66451  34.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:49 66459  38.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:54 66451  33.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:54 66459  32.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:51:59 66451  33.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:04 66451  34.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:04 66459  39.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:09 66451  35.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:09 66459  36.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:14 66451  34.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:14 66459  34.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:19 66451  35.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:19 66459  37.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:24   172  33.5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:52:24 66451  34.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:24 66459  36.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:29 66451  34.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:29 66459  37.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:34 66451  33.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:34 66459  40.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:39   172  35.5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:52:39 66451  38.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:39 66459  44.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:44 66451  34.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:44 66459  33.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:50 66384  46.4 /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge
+12:52:50 66451  35.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:50 66459  37.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:55 66451  33.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:52:55 66459  32.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:00 66451  34.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:00 66459  38.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:05 66451  34.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:05 66459  44.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:10   172  31.9 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:53:10 66451  40.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:10 66459  30.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:15 66451  34.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:15 66459  36.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:20   172  30.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:53:20 66451  36.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:20 66459  36.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:25 66451  32.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:25 66459  35.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:30 66451  35.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:30 66459  35.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:35 66451  35.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:35 66459  37.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:40 66451  32.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:40 66459  36.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:45 66451  33.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:45 66459  35.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:50 66451  34.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:50 66459  35.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:55 66451  32.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:53:55 66459  33.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:00   172  35.6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:54:00 66451  33.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:00 66459  36.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:05 66451  32.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:05 66459  36.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:10 66451  33.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:10 66459  36.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:15 66451  33.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:15 66459  37.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:20 66451  33.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:20 66459  35.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:25 66451  34.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:25 66459  34.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:31 66451  33.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:31 66459  35.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:36 66451  34.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:36 66459  40.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:41 66451  32.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:41 66459  35.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:46 66451  34.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:46 66459  35.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:51 66451  32.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:51 66459  33.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:56 66451  34.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:54:56 66459  43.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:01 66451  33.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:01 66459  34.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:06 66451  34.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:06 66459  39.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:11 66451  33.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:11 66459  34.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:16 66451  34.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:16 66459  34.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:21 66451  34.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:21 66459  32.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:26 66451  34.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:26 66459  32.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:31 66451  35.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:31 66459  32.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:36 66451  34.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:36 66459  37.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:41 66451  34.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:41 66459  33.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:46 66451  34.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:46 66459  33.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:51 66451  34.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:51 66459  36.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:56 66451  34.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:55:56 66459  38.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:01 66451  33.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:01 66459  33.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:06   172  33.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:56:06 66451  33.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:06 66459  42.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:12   172  37.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:56:12 66451  36.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:12 66459  41.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:17   172  35.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:56:17 66451  37.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:17 66459  35.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:22   172  42.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:56:22 66451  36.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:22 66459  38.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:27 66451  32.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:27 66459  32.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:32 66451  38.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:32 66459  42.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:37 66451  37.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:37 66459  36.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:42 66451  38.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:42 66459  43.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:47 66451  37.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:47 66459  45.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:52 66451  37.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:52 66459  40.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:57   172  39.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:56:57 66451  43.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:56:57 66459  51.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:02   172  38.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:57:02 66451  42.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:02 66459  66.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:07 66451  39.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:07 66459  44.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:12 66451  39.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:12 66459  38.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:17   172  38.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:57:17 66451  39.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:17 66459  40.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:22 66451  37.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:22 66459  38.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:27 66451  39.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:27 66459  38.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:32 66451  37.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:32 66459  45.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:37   172  35.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:57:37 66451  42.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:37 66459  55.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:42   172  61.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:57:42 66451  39.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:42 66459  41.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:47 66451  38.5 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:47 66459  37.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:52 66451  35.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:52 66459  33.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:57   172  40.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:57:57 66451  45.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:57:57 66459  49.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:02   172  40.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:02 66451  39.9 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:02 66459  44.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:07   172  41.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:07 66451  30.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:12   172  44.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:12 66451  31.1 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:18   172  46.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:18 45977  35.6 /System/Applications/Notes.app/Contents/MacOS/Notes
+12:58:18 66451  35.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:23   172  46.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:23 66451  36.4 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:28   172  44.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:28 66451  38.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:33   172  44.6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:33 66451  37.8 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:38   172  43.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:38 66451  32.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:43   172  43.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:43 66451  31.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft
+12:58:48   172  45.9 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+12:58:48 66451  36.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft

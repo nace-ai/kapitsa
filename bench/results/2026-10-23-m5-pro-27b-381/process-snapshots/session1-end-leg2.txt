@@ -1,0 +1,10 @@
+13969  95.8 320560 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-objc-isa-usage -Werror=deprecated-objc-isa-usage -Werr
+  321  16.0  78336 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores
+  676   0.5  22944 /Applications/1Focus.app/Contents/MacOS/1Focus
+13933   0.4  25648 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared -s mdworker -c MDSImporterWorker -m com.apple.mdworker.
+  639   0.4  62816 ~/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway run --replace
+  140   0.4  23904 /usr/libexec/xprotectd
+19902   0.2 2110800 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+13930   0.2  23664 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared -s mdworker -c MDSImporterWorker -m com.apple.mdworker.
+13928   0.2  23728 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared -s mdworker -c MDSImporterWorker -m com.apple.mdworker.
+  143   0.2   6928 /System/Library/CoreServices/launchservicesd

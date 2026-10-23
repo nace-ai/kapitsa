@@ -1,0 +1,10 @@
+78047  62.5 3576560 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+22072  32.9  64784 ~/.cache/uv/archive-v0/wbCxhJyst5hiDfPkLAEqL/bin/python ~/.cache/uv/archive-v0/wbCxhJyst5hiDfPkLAEqL/bin/modal app list --env naceDM-test --j
+  172  26.5  64256 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+78045   9.7  50208 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU
+78044   5.6  38464 ~/Applications/DSH.app/Contents/MacOS/DSH
+22070   5.1  75472 /opt/homebrew/bin/uv tool uvx --from modal modal app list --env naceDM-test --json
+82124   4.8 2068432 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+  365   2.3  44480 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+22071   2.1  14960 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -c import json,sys;s={x['app_id']:x['state'] for x in 
+  140   1.2  26384 /usr/libexec/xprotectd

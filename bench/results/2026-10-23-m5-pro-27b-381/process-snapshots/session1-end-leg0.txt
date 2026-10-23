@@ -1,0 +1,10 @@
+99422   1.4   4416 /usr/bin/dig +time=1 +retries=3 +trace .
+19902   0.9 2104336 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+  676   0.5  22736 /Applications/1Focus.app/Contents/MacOS/1Focus
+  165   0.5  19600 /usr/sbin/bluetoothd
+88170   0.3   4064 /usr/libexec/sysmond
+  365   0.3  42064 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+88271   0.2  43328 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  140   0.2  25376 /usr/libexec/xprotectd
+  548   0.1  23552 /usr/libexec/sharingd
+  456   0.1  16384 /usr/libexec/rapportd

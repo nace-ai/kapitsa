@@ -1,0 +1,69 @@
+18:13:08 78047 104.4 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:13 78047 118.9 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:18 44602  94.0 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44607  93.6 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44613  96.0 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44614  97.2 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44618  94.0 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44666  92.4 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44692  94.4 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44710  94.6 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44711  92.6 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44715  92.7 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44718  92.5 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44722  92.2 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44726  92.7 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44727  95.3 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44735  94.3 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44759  81.1 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:18 44762  75.3 (clang)
+18:13:18 44768  50.2 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44614  96.1 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44666  98.6 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44692  98.1 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44782  99.0 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44797  95.9 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44849  96.7 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44859  98.5 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44860  99.0 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44861  94.0 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44879  96.8 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44895  95.5 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 44898  96.1 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:23 78047  54.0 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:28 45104  92.4 /Library/Developer/CommandLineTools/usr/bin/clang -cc1 -triple arm64-apple-macosx14.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-o
+18:13:28 78047 173.5 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:33   321 109.3 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores
+18:13:33 78047 125.9 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:38 78047 133.2 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:43 78047 107.0 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:48 78047 162.8 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:53 78047 123.8 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:13:53 82124 153.3 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+18:13:58 78047 106.1 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:03 78047 109.9 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:08 78047 108.8 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:13 78047 135.3 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:13 88271  31.4 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+18:14:18 78047 118.9 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:23 78047 186.1 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:28 78047 124.0 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:33 78047 112.3 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:38 78047 145.1 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:43 78047  99.7 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:43 82124  69.8 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+18:14:49 78047 118.4 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:54 78047 107.4 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:14:59 78047 103.8 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:04 78047 105.8 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:09 78047 136.3 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:14 78047 133.5 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:19 78047  99.3 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:19 82124  71.9 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+18:15:24 78047 133.7 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:24 82124 107.1 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+18:15:29 78047 135.0 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:34 78047 109.8 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:39 78047 112.9 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:44 78047 125.9 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK
+18:15:49 78047 100.3 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebK

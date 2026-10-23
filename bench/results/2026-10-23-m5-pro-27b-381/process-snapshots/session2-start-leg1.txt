@@ -1,0 +1,10 @@
+  175   6.7  45584 /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow console
+91074   4.9  14624 /System/Library/Frameworks/Metal.framework/Versions/A/XPCServices/MTLCompilerService.xpc/Contents/MacOS/MTLCompilerService
+88170   4.9   4832 /usr/libexec/sysmond
+19902   2.2 2117936 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+91075   1.8  12432 /System/Library/Frameworks/Metal.framework/Versions/A/XPCServices/MTLCompilerService.xpc/Contents/MacOS/MTLCompilerService
+32130   1.4   6544 (dig)
+  172   1.0  31712 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  640   0.4   6432 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.octarin/cowork/watch.py --watch
+  365   0.4  41248 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+26724   0.2   2384 /bin/bash <run-dir>/inner2.sh 1

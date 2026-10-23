@@ -1,0 +1,10 @@
+78047 107.4 5763632 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+  640   8.1   6384 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.octarin/cowork/watch.py --watch
+82124   7.3 2298272 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+88170   4.2   3904 /usr/libexec/sysmond
+  365   3.5  41984 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+78045   2.0  41872 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU
+78044   1.7  48896 ~/Applications/DSH.app/Contents/MacOS/DSH
+75957   1.6  37584 /usr/libexec/signpost_reporter
+  140   1.0  26720 /usr/libexec/xprotectd
+  269   0.5  15664 /usr/libexec/syspolicyd
