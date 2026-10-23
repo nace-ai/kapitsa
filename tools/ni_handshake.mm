@@ -160,7 +160,7 @@ kernel void hs_heat(volatile coherent(device) device uint* stop [[buffer(0)]], d
   uint a = t;
   for (uint r = 0; r < p.x; ++r) {
     for (uint i = 0; i < 256; ++i) a = a * 1664525u + 1013904223u;
-    if (stop[0] >= p.y) break;
+    if (stop[0] > p.y) break;  // the host stores pass + 1 when pass p.y ends (0 at start: pass 0 heats too)
   }
   if (a == 0x9e3779b9u) sink[2] = t;
 }
@@ -502,7 +502,7 @@ void run_pass(const std::string& mode, Stats* st) {
     [cb waitUntilCompleted];
     wall_us = now_us() - t0;
     if (warm) {
-      __atomic_store_n(static_cast<uint32_t*>(b_heat.contents), pass, __ATOMIC_RELEASE);
+      __atomic_store_n(static_cast<uint32_t*>(b_heat.contents), pass + 1, __ATOMIC_RELEASE);
       [hcb waitUntilCompleted];
     }
     if (failed(cb)) ++cur->errors;
