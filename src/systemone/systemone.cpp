@@ -33,11 +33,6 @@ const char* kDelims[] = {
 
 std::string render_value(const ojson& value, int depth);
 
-// A request is caller JSON and the renderer recurses once per array or object nesting level: a body of 64 MiB (the
-// server's cap) can nest hundreds of thousands deep, which overflows the render thread's stack (a secondary thread on
-// macOS gets 512 KB). The reference renders a handful of levels, so a depth bound costs nothing and rejects it as a 400.
-constexpr int kMaxRenderDepth = 64;
-
 // Caller text can never produce a delimiter: `<|name|>` becomes `<¦name¦>` before tokenizing (the tokenizer matches
 // added tokens wherever they appear, so the shield is what makes option boundaries unforgeable).
 std::string shield_specials(const std::string& text) {
@@ -174,6 +169,36 @@ void dumps(std::string& out, const ojson& value) {
 }
 
 }  // namespace
+
+// request_depth: see the header. A request is caller JSON and the renderer recurses once per array or object nesting
+// level: a body of 64 MiB (the server's cap) can nest hundreds of thousands deep, which overflows the render thread's
+// stack (a secondary thread on macOS gets 512 KB) — and overflows the parser's first. The reference renders a handful
+// of levels, so the bound costs nothing and rejects it as a 400.
+int request_depth(const std::string& text) {
+  int depth = 0, deepest = 0;
+  bool in_string = false, escaped = false;
+  for (const char c : text) {
+    if (in_string) {
+      if (escaped) {
+        escaped = false;
+      } else if (c == '\\') {
+        escaped = true;
+      } else if (c == '"') {
+        in_string = false;
+      }
+      continue;
+    }
+    if (c == '"') {
+      in_string = true;
+    } else if (c == '{' || c == '[') {
+      if (++depth > deepest) deepest = depth;
+    } else if ((c == '}' || c == ']') && depth > 0) {
+      --depth;
+    }
+  }
+  return deepest;
+}
+
 
 Limits limits_from_env() {
   auto read_max = [](const char* name, int fallback) {

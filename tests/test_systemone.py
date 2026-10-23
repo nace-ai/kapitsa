@@ -120,14 +120,33 @@ def offline(build, model_dir):
         "o": {"type": "noul", "instructions": "i"}}}, env={"SYSTEMONE_MAX_STATE": "8"})
     check("encode: a state over SYSTEMONE_MAX_STATE is rejected", rc != 0 and "state" in str(got), got)
 
-    # A request is caller JSON and the renderer recurses once per nesting level: past the bound it is a 400 the server
-    # answers (this crashed an httplib worker thread's stack), and a value inside the bound still renders.
-    deep = "leaf"
-    for _ in range(10000):
-        deep = [deep]
-    rc, got = encode(build, model_dir, {"state": deep, "questions": {"o": {"type": "noul", "instructions": "i"}}})
-    check("encode: a state nested 10000 levels deep is a 400, not a crash",
-          rc == 2 and "400 " in str(got) and "nest" in str(got), (rc, got))
+    # Both the renderer and the JSON parser recurse once per container level on the caller's JSON, and the server runs
+    # them on threads with much smaller stacks than the main one: a body past the bound is a 400 the server answers
+    # (a 4,000-deep body killed an httplib worker thread with SIGBUS, and --encode's 8 MiB main stack survived the same
+    # parse, so the offline path checks the answer, not the stack). A value inside the bound still renders.
+    def nested(levels):
+        value = "leaf"
+        for _ in range(levels):
+            value = [value]
+        return value
+
+    for levels in (4000, 10000):
+        rc, got = encode(build, model_dir, {"state": nested(levels),
+                                            "questions": {"o": {"type": "noul", "instructions": "i"}}})
+        check("encode: a state nested %d levels deep is a 400, not a crash" % levels,
+              rc == 2 and "400 " in str(got) and "nest" in str(got), (rc, got))
+
+    # The bound counts the whole body, so the request object is one of the 64: a state nested 63 deep still encodes and
+    # one more level is the 400.
+    rc, got = encode(build, model_dir, {"state": nested(63), "questions": {"o": {"type": "noul", "instructions": "i"}}})
+    check("encode: a body nested exactly 64 levels deep still encodes", rc == 0 and got["state_tokens"] > 1, (rc, got))
+    rc, got = encode(build, model_dir, {"state": nested(64), "questions": {"o": {"type": "noul", "instructions": "i"}}})
+    check("encode: one level past the bound is a 400", rc == 2 and "400 " in str(got) and "nest" in str(got), (rc, got))
+    # The scan is string-aware, so brackets in a string are text and never count as nesting.
+    rc, got = encode(build, model_dir, {"state": "[" * 200 + '"',
+                                       "questions": {"o": {"type": "noul", "instructions": "i"}}})
+    check("encode: brackets inside a string do not count toward the depth", rc == 0 and got["state_tokens"] > 1,
+          (rc, got))
 
     nested_ok = "leaf"
     for _ in range(8):
@@ -188,6 +207,12 @@ def total(p):
     return round(sum(p.values()), 4)
 
 
+def answer_value(answer):
+    """The number a question's answer carries: noul's probability of yes, or the choice/score distribution."""
+    answer = answer or {}
+    return answer["noul"] if "noul" in answer else answer.get("probabilities")
+
+
 def online(url):
     try:
         with urllib.request.urlopen(url.rstrip("/") + "/health", timeout=30) as r:
@@ -213,8 +238,8 @@ def online(url):
         check("reply: a latency", isinstance(body.get("latency_ms"), (int, float)), body.get("latency_ms"))
         n = answers.get("n", {})
         check("noul: a probability of yes in 0..1", isinstance(n.get("noul"), (int, float)) and 0 <= n["noul"] <= 1, n)
-        check("noul: false and true", sorted((n.get("probabilities") or {})) == ["false", "true"], n)
-        check("noul: the two probabilities sum to 1", total(n.get("probabilities") or {}) == 1, n)
+        # A noul answer carries the probability of yes as `noul`; it has no `probabilities` map (docs/systemone.md).
+        check("noul: no probabilities map", "probabilities" not in n, n)
         c = answers.get("c", {})
         check("choice: one of the keys", c.get("choice") in ("a", "b"), c)
         check("choice: a probability per option, summing to 1", total(c.get("probabilities") or {}) == 1, c)
@@ -256,11 +281,12 @@ def online(url):
                                       ("score", {"r": rate}, answers.get("r"))):
             st3, only = post(url, {"state": state, "questions": alone})
             got = (only.get("answers") or {}).get(list(alone)[0], {}) if st3 == 200 else {}
-            same = (got.get("probabilities") or {}) == (expected or {}).get("probabilities")
+            with_siblings = answer_value(expected)
+            same = with_siblings is not None and answer_value(got) == with_siblings
             check("restore: %s alone answers as it does with its siblings" % name, same, (got, expected))
         st4, reversed_body = post(url, {"state": state, "questions": {"r": rate, "c": pick, "n": noul}})
-        same = st4 == 200 and reversed_body["answers"].get("n", {}).get("probabilities") == \
-            answers.get("n", {}).get("probabilities")
+        pooled = answer_value(answers.get("n"))
+        same = st4 == 200 and pooled is not None and answer_value(reversed_body["answers"].get("n")) == pooled
         check("restore: the question order does not change an answer", same, reversed_body.get("answers"))
 
         st5, batch = post(url, {"requests": [
@@ -269,8 +295,9 @@ def online(url):
         check("batch: both requests' answers come back", st5 == 200 and set(batch.get("answers", {})) == {"n", "q"},
               (st5, batch))
         if st5 == 200:
-            check("batch: the probabilities are the single-request ones",
-                  batch["answers"]["n"]["probabilities"] == answers["n"]["probabilities"],
+            check("batch: the answer is the single-request one",
+                  answer_value(batch["answers"]["n"]) is not None and
+                  answer_value(batch["answers"]["n"]) == answer_value(answers.get("n")),
                   (batch["answers"].get("n"), answers.get("n")))
             check("batch: usage adds up the requests' tokens",
                   batch["usage"]["input_tokens"] > body["usage"]["input_tokens"], (batch.get("usage"), body.get("usage")))
@@ -286,8 +313,9 @@ def online(url):
               st6 == 200 and len(long_answer.get("probabilities") or {}) == 120, (st6, str(long_body)[:300]))
         st7, after = post(url, {"state": state, "questions": {"n": noul}})
         check("the server still answers after an over-chunk row",
-              st7 == 200 and (after.get("answers") or {}).get("n", {}).get("probabilities") ==
-              answers.get("n", {}).get("probabilities"), (st7, str(after)[:300]))
+              st7 == 200 and answer_value((after.get("answers") or {}).get("n")) is not None and
+              answer_value((after.get("answers") or {}).get("n")) == answer_value(answers.get("n")),
+              (st7, str(after)[:300]))
 
     req = urllib.request.Request(url.rstrip("/") + "/v1/systemone", data=b"{not json",
                                  headers={"Content-Type": "application/json"})
@@ -297,15 +325,22 @@ def online(url):
     except urllib.error.HTTPError as e:
         check("bad JSON: 400", e.code == 400, e.code)
 
-    # The renderer recurses once per nesting level on caller JSON, and the server's bodies go to 64 MiB: past the bound
-    # it must be a 400 that leaves the worker threads alive, not a stack overflow.
-    node = "leaf"
-    for _ in range(10000):
-        node = [node]
-    st, reply = post(url, {"state": node, "questions": {"o": {"type": "noul", "instructions": "i"}}})
-    check("rejects a state nested 10000 levels deep with 400", st == 400 and "error" in reply, (st, reply))
+    # The parser recurses once per container level and the server parses on its worker threads, whose stacks are far
+    # smaller than the main one: past the bound it must be a 400 that leaves the workers alive, not a stack overflow
+    # (a 4,000-deep state used to kill the process with SIGBUS before the bound could answer).
+    def nested(levels):
+        node = "leaf"
+        for _ in range(levels):
+            node = [node]
+        return node
+
+    for levels in (4000, 10000):
+        st, reply = post(url, {"state": nested(levels),
+                               "questions": {"o": {"type": "noul", "instructions": "i"}}})
+        check("rejects a state nested %d levels deep with 400" % levels, st == 400 and "error" in reply, (st, reply))
     st, reply = post(url, {"state": "s", "questions": {"o": {"type": "noul", "instructions": "i"}}})
-    check("the server still answers after a deeply nested request", st == 200, (st, reply))
+    check("the server still answers after a deeply nested request",
+          st == 200 and answer_value((reply.get("answers") or {}).get("o")) is not None, (st, reply))
 
     for body, what in (({"state": "s"}, "no questions"),
                        ({"state": "s", "questions": {}}, "an empty questions object"),

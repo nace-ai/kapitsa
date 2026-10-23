@@ -515,6 +515,14 @@ class SystemOne {
 };
 
 ojson parse_body(const std::string& body) {
+  // The parser recurses once per container level and nlohmann has no depth bound of its own: the server parses on
+  // httplib worker threads, whose stacks are far smaller than the main thread's, so a deep body overflows them (a
+  // 4,000-deep state killed the process with SIGBUS before the renderer's own bound could answer 400). Reject past the
+  // bound here, before the parser runs, with the renderer's message; --encode and the server share this path.
+  if (ni::systemone::request_depth(body) > ni::systemone::kMaxRenderDepth) {
+    throw ni::systemone::BadRequest("the request nests values more than " +
+                                    std::to_string(ni::systemone::kMaxRenderDepth) + " levels deep");
+  }
   try {
     return ojson::parse(body);
   } catch (const std::exception& e) {

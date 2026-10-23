@@ -28,6 +28,17 @@ struct BadRequest : std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
+// The deepest container nesting a request may have. Both the renderer and the JSON parser (nlohmann has no bound of
+// its own) recurse once per container level on the caller's JSON, and both run on threads with stacks far smaller than
+// the main one, so a request past this bound is answered 400 before either of them runs. The count is over the request
+// text, so the body's own object is one level.
+constexpr int kMaxRenderDepth = 64;
+
+// An iterative, string-aware nesting count over a request's JSON text: one per open object or array, the deepest
+// value's depth (0 for a scalar). Brackets inside strings, with their \" and \\ escapes, do not count. This is the
+// guard that runs before the parser (tools/systemone.cpp parse_body): it never recurses and never allocates.
+int request_depth(const std::string& text);
+
 // ---- limits (SYSTEMONE_* environment variables as in the reference fork) ----
 constexpr int kMaxOptions = 255;
 constexpr int kRecommendedContext = 16384;  // the serving context the model is calibrated for
