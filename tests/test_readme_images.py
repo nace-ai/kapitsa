@@ -27,4 +27,7 @@ for r in rows:
         assert label == "KFlash", (r["model"], label)
 assert n > 20, n
 assert all(h["method"] == "KFlash" for h in ri.header_rows(data) if h["kap"] and h["value"] is not None)
+hr = ri.header_rows(data)   # the header SVGs' <desc> (and the README alt text) name Kapitsa's method as KFlash
+assert "Kapitsa with KFlash " in ri.header_desc(data, hr), ri.header_desc(data, hr)
+assert "no spec" not in ri.header_desc(data, hr), ri.header_desc(data, hr)
 print(f"test_readme_images: ok ({n} Kapitsa cells, all KFlash)")
