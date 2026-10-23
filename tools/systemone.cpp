@@ -181,6 +181,11 @@ class SystemOne {
     logi("loading %s", opts_.model_dir.c_str());
     model_ = load_qwen(opts_.model_dir, 2048);
     if (!model_) fatal("could not load %s", opts_.model_dir.c_str());
+    if (!model_->can_snapshot()) {
+      fatal("%s: this model's recurrent state is not something a checkpoint captures, and systemone answers every "
+            "question by restoring the state's checkpoint; it needs a model that can snapshot (Qwen3.5/3.6/3.8)",
+            opts_.model_dir.c_str());
+    }
     tok_.load(opts_.model_dir + "/tokenizer.json");
     const std::string head_path = ni::systemone::PointerHead::find(opts_.model_dir);
     if (head_path.empty()) {
