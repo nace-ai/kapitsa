@@ -557,6 +557,12 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     const char* kf = getenv("NI_KFLASH");
     const char* v = getenv("NI_DFLASH_TREE");
     set_tree(v && *v ? atoi(v) != 0 : (!(kf && *kf) || atoi(kf) != 0));
+    // The downward depth gate caps a chain's dynamic depth: encode_cycle_verify returns from its tree branch
+    // before the gate code, so an asked-for gate under the (default) trees would log as engaged and then never
+    // observe, cap or trace. Say so here, at load, where tree_ is final (set_tree has no later callers).
+    if (gate_p_ > 0 && tree_)
+      logi("DFlash2: NI_DFLASH_GATE is inert while the KFlash trees are on (it caps the chain's dynamic depth): "
+           "add NI_KFLASH=0 or NI_DFLASH_TREE=0 to run it");
     if (const char* r = getenv("NI_KFLASH_ROWS"); r && *r && !moe) {
       uint32_t want = 0;
       for (const char* c = r; *c;) {

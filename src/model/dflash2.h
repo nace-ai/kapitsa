@@ -256,7 +256,9 @@ class DFlash2 {
   // with at least kMinN observations behind it, else K: from that proposal on the cycle pays more per
   // verified row than the position's acceptances buy. Pure host arithmetic, downward only (never above the
   // static depth), warmup = the first win cycles keep K. The window is a per-request statistic: the engine
-  // calls gate_reset() when a request starts; a park keeps it.
+  // calls gate_reset() when a request starts; a park keeps it (with --slots above 1, a request starting while
+  // another is parked clears the parked one's window too -- it re-warms; the gate only moves kmax down, so
+  // that costs warmup cycles, never correctness).
   struct DepthGate {
     static constexpr int kPos = kB - 1;  // proposal positions 0..6
     static constexpr int kWin = 64;      // the rolling window, cycles (one bit per cycle per position)
