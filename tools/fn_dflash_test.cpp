@@ -135,6 +135,41 @@ void run_cpu() {
   check(DFlash2::plan_block_rows(dense, 1, "", true) == 16, "and with the knobs back off: 16 rows");
   check(DFlash2::plan_block_rows(dense, 1, "", false) == 8,
         "no matrix units on this Mac (an M1-M4, or CI's virtual GPU): the plan keeps 8 rows too");
+  // The downward depth gate (M3, NI_DFLASH_GATE): the rolling hazard policy alone -- pure host arithmetic, exactly
+  // what encode_cycle_verify applies per cycle (kmax), fed by what it observes per completed cycle (observe).
+  std::printf("downward depth gate (DFlash2::DepthGate)\n");
+  {
+    using G = DFlash2::DepthGate;
+    G g;
+    check(g.kmax(7, 0.5f, 64) == 7, "a fresh gate warms up: the static depth");
+    check(g.kmax(1, 0.5f, 64) == 1, "and a depth below 2 has nothing to cap");
+    for (int i = 0; i < 64; ++i) g.observe(7, 7);  // every kept position accepted
+    check(g.kmax(7, 0.5f, 64) == 7, "all acceptances: no hazard is below p, no cap");
+    check(g.kmax(2, 0.5f, 64) == 2, "downward only: the cap never exceeds the depth it is given");
+    G m;
+    for (int i = 0; i < 64; ++i) m.observe(7, i % 2 ? 2 : 1);  // position 1 accepted in half the cycles, 2..6 never
+    check(m.kmax(7, 0.25f, 64) == 2, "position 1 at 50% is above p = 0.25, position 2 at 0%: caps at 2");
+    check(m.kmax(7, 0.75f, 64) == 1, "the same window at p = 0.75: position 1 caps too");
+    check(m.kmax(7, 0.0f, 64) == 7, "p = 0: no hazard is below it, no cap");
+    G t;
+    for (int i = 0; i < 64; ++i) t.observe(1, 1);  // tau kept position 0 alone
+    check(t.kmax(7, 0.5f, 64) == 7, "positions tau never kept: censored, no evidence, no cap");
+    G r;
+    for (int i = 0; i < 64; ++i) r.observe(7, 1);  // positions 1..6 rejected for 64 cycles
+    check(r.kmax(7, 0.25f, 64) == 1, "a full window of rejections: caps at 1");
+    for (int i = 0; i < 64; ++i) r.observe(7, 7);  // ...then 64 accepted cycles
+    check(r.kmax(7, 0.25f, 64) == 7, "the old rejections age out: the cap lifts");
+    G w;
+    for (int i = 0; i < 56; ++i) w.observe(7, 1);
+    for (int i = 0; i < 8; ++i) w.observe(7, 7);
+    check(w.kmax(7, 0.25f, 8) == 7, "win = 8 sees the last 8 cycles alone: the older rejections do not cap");
+    check(w.kmax(7, 0.25f, 64) == 1, "the full window still sees them");
+    G u;
+    for (int i = 0; i < 63; ++i) u.observe(7, 1);
+    check(u.kmax(7, 0.5f, 64) == 7, "63 observed cycles: still warmup");
+    u.observe(7, 1);
+    check(u.kmax(7, 0.5f, 64) == 1, "the 64th cycle arms the gate");
+  }
   // incoai/Qwen3.8-Flash-Next-DFlash2 @ a22a1744 (Apache-2.0), its config.json's fields that the checks read: 5 draft
   // layers over target layers 5, 15, 25, 35, 45, rope theta 1e4, no target_hidden_reduction (the target's: stream_mean)
   const std::string incoai = R"({"architectures": ["DFlash2DraftModel"], "is_causal": false,
