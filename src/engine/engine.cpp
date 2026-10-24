@@ -3775,8 +3775,31 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
   }
-  Slot& slot = slots_[size_t(res.slot)];
-  if (slot.gen != res.slot_gen) return logd("history: given up, another request used slot %d (use %llu, was %llu; %.0f ms after the reply, %d active, %llu requests, %llu then)", res.slot, (unsigned long long)slot.gen, (unsigned long long)res.slot_gen, now_ms() - t_reply, active_, (unsigned long long)requests_.load(), (unsigned long long)res.req_seq);
+  // NI_HISTORY_ANYSLOT (default on; 0: as before): the conversation's slot was used by another request since the reply
+  // (--slots 1: the other conversation's), so its state is on the SSD, and the history is prefilled into the slot a new
+  // conversation would take (an empty or one-off slot; with one slot, that one, its conversation going to the SSD first)
+  // instead of being given up. The next question then reads this state back, not the rows after the first assistant turn.
+  static const bool anyslot_on = [] {
+    const char* v = getenv("NI_HISTORY_ANYSLOT");
+    return !(v && *v && atoi(v) == 0);
+  }();
+  Slot* hp = &slots_[size_t(res.slot)];
+  bool stolen = false;
+  if (hp->gen != res.slot_gen) {
+    if (!anyslot_on || !disk_ || lili_ || dory_ || (res.images && !res.images->empty()))
+      return logd("history: given up, another request used slot %d (use %llu, was %llu; %.0f ms after the reply, %d active, %llu requests, %llu then)", res.slot, (unsigned long long)hp->gen, (unsigned long long)res.slot_gen, now_ms() - t_reply, active_, (unsigned long long)requests_.load(), (unsigned long long)res.req_seq);
+    std::vector<HistorySlotView> view;
+    for (const Slot& s : slots_)
+      view.push_back({!s.busy && s.seq, s.tokens.empty(), s.turns <= 1 && s.tokens.size() <= 1024, s.last_used});
+    const int pick = pick_history_slot(view);
+    if (pick < 0) return logd("history: given up, another request used slot %d and no other slot is free to take", res.slot);
+    hp = &slots_[size_t(pick)];
+    stolen = true;
+    logd("history: slot %d was used by another request; prefilling into slot %d (%zu tokens there)", res.slot, pick, hp->tokens.size());
+  }
+  Slot& slot = *hp;
+  const uint64_t want_gen = slot.gen;
+  const uint64_t seen_req = requests_.load();  // (a request that arrives after this ends the work at a chunk boundary)
   const double t0 = now_ms();
   // the answer as the client sends it back ("stop": no tool calls), then a placeholder user turn: the
   // template renders answers before the last user query without their think block, so render it that
@@ -3816,15 +3839,15 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
   const int n = int(t2.size()) - 1;
   const size_t common = common_rows(slot, k2, mmp);
   // nothing to add, or the live state matches it as far as it goes (the follow-up continues it)
-  if (n > 0 && common == slot.tokens.size() && !slot.live_ok) {
+  if (!stolen && n > 0 && common == slot.tokens.size() && !slot.live_ok) {
     slot.live_ok = true;  // (the SSD prefix cache saves the live state too)
     ++slot.version;
   }
-  if (n <= 0 || int(common) >= n || common == slot.tokens.size())
+  if (n <= 0 || int(common) >= n || (!stolen && common == slot.tokens.size()))
     return logd("history: nothing to add (n %d, common %zu of the slot's %zu tokens)", n, common, slot.tokens.size());
   const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
-    if (!c.prefix && c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
+    if (!stolen && !c.prefix && c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
   Seq& s = *slot.seq;
   if (n + 64 >= s.limit) return logd("history: no room (n %d, limit %d)", n, s.limit);
   // A slot that read its conversation back from the SSD (another request took it meanwhile: a title or summary request
@@ -3858,7 +3881,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     ++active_;
     Hold hold{*this, slot};
     const pcache::Hit hit = disk_lookup(k2, n, 0, 0, nullptr);
-    if (!hit || hit.pos < 64 || hit.pos >= n || slot.gen != res.slot_gen)
+    if (!hit || hit.pos < 64 || hit.pos >= n || slot.gen != want_gen)
       return logd("history: no restore point to start from (n %d, common %zu, slot %zu tokens; points:%s; SSD: %s)", n,
                   common, slot.tokens.size(), have.c_str(), hit ? "too early or the slot changed" : "none");
     disk_leaving(slot, 0);  // the live state goes to the SSD first unless it is there
@@ -3873,6 +3896,10 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     }
     start = int(slot.tokens.size());
     from_disk = true;
+    if (stolen) {  // the slot holds this conversation now: another request is a new use of it, and it is a continued one
+      ++slot.gen;
+      slot.turns = std::max(slot.turns, 2);
+    }
     // (Hold ends here: the rest runs under the turn as before, with no wait for the SSD)
   } else {
     for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the next request
@@ -3902,6 +3929,18 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
   SamplingParams sp;
   const int C = model_->prefill_chunk();
   const bool even = prefill_even_chunks() && !model_->ane_split_on();
+  // NI_HISTORY_YIELD=1 (default off): a request that arrives while the rows are prefilled waits for one chunk, not for the
+  // whole history: the rows done stay, as a history that ends there. Measured on the 4B without its drafter (30 turns,
+  // a fresh request 0.9 s after a final answer): that request's first token comes after 1.25 s instead of 2.7 s, but
+  // the interrupted conversation's next question then reads only 5216 of 9206 rows from the cache (1.44 s instead of
+  // 0.06 s), as the rest of its history is not resumed. Off, as that is the miss this fixes. With a DFlash2 or
+  // LiLiCorr drafter it never yields (their state takes the last chunk's commit).
+  static const bool yield_on = [] {
+    const char* v = getenv("NI_HISTORY_YIELD");
+    return v && *v && atoi(v) == 1;
+  }();
+  const bool can_yield = yield_on && !dfl_ && !lili_;
+  int done_to = n;
   for (int p = start; p < n;) {
     const int T = prefill_chunk_rows(C, p, n, even);
     // as in chat(): a chunk the NI_ANE split runs is checkpointed and waited for, and rerun on the GPU
@@ -3934,17 +3973,23 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       dfl_->encode_prefill_commit(*e, *slot.dseq);
     }
     e->commit();
+    if (p < n && can_yield && history_should_yield(seen_req, requests_.load())) {
+      done_to = p;
+      break;
+    }
     if (p < n) e = g.begin();
   }
   e->wait();
-  slot.tokens.assign(k2.begin(), k2.begin() + n);
+  slot.tokens.assign(k2.begin(), k2.begin() + done_to);
   slot.img_spans = mm.spans;
   slot.img_digests = mm.digests;
-  disk_filled(slot, start, n);
+  disk_filled(slot, start, done_to);
   slot.live_ok = true;  // the follow-up continues this state
   ++slot.version;
-  logi("history: prefilled %d tokens of the rendered reply (from %d%s) in %.0f ms", n - start, start,
-       from_disk ? ", read from the SSD" : "", now_ms() - t0);
+  logi("history: prefilled %d tokens of the rendered reply (from %d%s%s) in %.0f ms", done_to - start, start,
+       from_disk ? ", read from the SSD" : "",
+       done_to < n ? (", stopped " + std::to_string(n - done_to) + " rows short: a request arrived").c_str() : "",
+       now_ms() - t0);
 }
 
 void Engine::remember_reply(const ChatRequest& r, const ChatResult& res) {

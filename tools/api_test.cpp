@@ -1174,6 +1174,17 @@ void history_gate_unit() {
   check(g.ready(11, 0, 901), "history gate: ready again when it has ended");
   QuietGate z(0, 5, 7);
   check(z.ready(5, 0, 7), "history gate: with no idle time it opens at once on an idle server");
+  // the slot a history prefill takes when its own was used meanwhile (--slots 1: the other conversation's)
+  check(pick_history_slot({{true, false, false, 5}}) == 0, "history slot: with one slot it takes that one, a continued conversation's");
+  check(pick_history_slot({{true, false, false, 5}, {true, false, false, 2}}) == -1,
+        "history slot: with several slots all holding continued conversations it gives up");
+  check(pick_history_slot({{true, false, false, 5}, {true, false, true, 9}, {true, true, false, 7}}) == 2,
+        "history slot: an empty slot is taken before a one-off");
+  check(pick_history_slot({{true, false, false, 5}, {true, false, true, 9}, {true, false, true, 3}}) == 2,
+        "history slot: of two one-offs the least recently used");
+  check(pick_history_slot({{false, true, false, 1}, {true, false, false, 2}}) == -1, "history slot: a busy slot is never taken");
+  check(!history_should_yield(10, 10), "history yield: no request since the work began: it goes on");
+  check(history_should_yield(10, 11), "history yield: a request arrived: it stops at the chunk boundary");
 }
 
 // A float tool argument keeps its text through the Qwen3.5 / Nemotron templates' `| string` (without a model folder: a
