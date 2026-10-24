@@ -1016,6 +1016,17 @@ namespace {
 struct QsaSelParams {
   uint32_t R, NH, HD, pos0, ratio, topb, s_ld, i_ld;
 };
+
+// NI_QSA_ROWFUSE=1: price the row-fused score kernel (qsa_score_rows) against the per-row one. It is a byte measure
+// first — R rows read the same indexer key blocks, so four rows per threadgroup read them 4x fewer times — and a
+// bitwise-expected one second: the per-score expression and its order are unchanged, so a logit md5 mismatch escalates
+// rather than being accepted. Off by default; the kernel holds four rows of queries (NH <= 4 heads, HD <= 128) and one
+// sub-chunk of keys in 16,384 B of threadgroup memory, the most the validation layer accepts.
+bool qsa_rowfuse_on(uint32_t R, uint32_t NH, uint32_t HD, uint32_t nb) {
+  static const bool on = [] { const char* v = getenv("NI_QSA_ROWFUSE"); return v && atoi(v) != 0; }();
+  const uint32_t H4 = HD / 4;
+  return on && R >= 2 && R <= 8 && HD % 4 == 0 && NH <= 4 && H4 <= 32 && nb > 8;
+}
 struct AttnSparseParams {
   uint32_t Hq, Hkv, chunk, max_seq;
   float scale;
@@ -1040,10 +1051,17 @@ void Qwen4Exp::enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int
   if (qscore_.size < need) regrow(e, qscore_, std::max(need, size_t(4) << 20), "qsa_scores");
   const QsaSelParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(pos0), uint32_t(c4_.ix_ratio),
                        uint32_t(c4_.ix_budget / c4_.ix_ratio), nb, qidx_ld_};
-  e.use(pipe("qsa_score"));
-  e.buf(0, iq_, size_t(iq_row0) * c4_.ix_heads * c4_.ix_dim * 4); e.buf(1, bk); e.buf(2, qscore_);
-  e.val(3, p);
-  e.dispatch((nb + 255) / 256, uint32_t(R), 1, 256);
+  if (qsa_rowfuse_on(uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), nb)) {
+    e.use(pipe("qsa_score_rows"));
+    e.buf(0, iq_, size_t(iq_row0) * c4_.ix_heads * c4_.ix_dim * 4); e.buf(1, bk); e.buf(2, qscore_);
+    e.val(3, p);
+    e.dispatch((nb + 127) / 128, (uint32_t(R) + 3) / 4, 1, 64);
+  } else {
+    e.use(pipe("qsa_score"));
+    e.buf(0, iq_, size_t(iq_row0) * c4_.ix_heads * c4_.ix_dim * 4); e.buf(1, bk); e.buf(2, qscore_);
+    e.val(3, p);
+    e.dispatch((nb + 255) / 256, uint32_t(R), 1, 256);
+  }
   e.use(pipe("qsa_select"));
   e.buf(0, qscore_); e.buf(1, qidx_); e.buf(2, qcnt_);
   e.val(3, p);
@@ -1057,10 +1075,17 @@ void Qwen4Exp::enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int r
   if (qmask_.size < mneed) regrow(e, qmask_, std::max(size_t(tmax_) * mwords * 4, mneed), "qsa_mask");
   const QsaSelParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(pos0), uint32_t(c4_.ix_ratio),
                        uint32_t(c4_.ix_budget / c4_.ix_ratio), nb, mwords};
-  e.use(pipe("qsa_score"));
-  e.buf(0, iq_, size_t(row0) * c4_.ix_heads * c4_.ix_dim * 4); e.buf(1, bk); e.buf(2, qscore_);
-  e.val(3, p);
-  e.dispatch((nb + 255) / 256, uint32_t(R), 1, 256);
+  if (qsa_rowfuse_on(uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), nb)) {
+    e.use(pipe("qsa_score_rows"));
+    e.buf(0, iq_, size_t(row0) * c4_.ix_heads * c4_.ix_dim * 4); e.buf(1, bk); e.buf(2, qscore_);
+    e.val(3, p);
+    e.dispatch((nb + 127) / 128, (uint32_t(R) + 3) / 4, 1, 64);
+  } else {
+    e.use(pipe("qsa_score"));
+    e.buf(0, iq_, size_t(row0) * c4_.ix_heads * c4_.ix_dim * 4); e.buf(1, bk); e.buf(2, qscore_);
+    e.val(3, p);
+    e.dispatch((nb + 255) / 256, uint32_t(R), 1, 256);
+  }
   e.use(pipe("qsa_select_mask"));
   e.buf(0, qscore_); e.buf(1, qmask_, size_t(row0) * mwords * 4); e.buf(2, qcnt_);
   e.val(3, p);

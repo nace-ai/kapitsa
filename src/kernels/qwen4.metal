@@ -333,6 +333,52 @@ struct QsaSelParams {
   score[r * p.s_ld + j] = acc * metal::precise::rsqrt(float(p.HD));
 }
 
+// The same scores for four rows per threadgroup, in one pass over the key blocks (NI_QSA_ROWFUSE). The four rows'
+// query matrices sit in threadgroup memory and each sub-chunk of QSA_SUB key blocks is staged once, so a block's bytes
+// are read once instead of once per row: at a verify pass of 8 rows two threadgroups cover them, which reads the key
+// bytes 4x fewer times than the per-row kernel does. A score is computed by exactly the expression qsa_score uses on
+// the same values (same per-head dot, same max, same order, same scale), so the results are expected bit-identical;
+// the logit md5 is the gate, and tools/fn_check.cpp compares the two kernels score for score.
+// The 16,384 B of static threadgroup memory (8 KB of queries + 8 KB of keys) is the most this macOS's validation layer
+// accepts — it counts the static size twice against the 32,768 B cap — so four rows of four indexer heads is the widest
+// block that can also run under the layer.
+constexpr uint QSA_RPG = 4;    // rows per threadgroup
+constexpr uint QSA_SUB = 16;   // key blocks staged per sub-chunk
+constexpr uint QSA_NSUB = 8;   // sub-chunks per threadgroup: 128 blocks
+constexpr uint QSA_NT = QSA_RPG * QSA_SUB;  // one thread per (row, key)
+[[kernel]] void qsa_score_rows(const device float* iq [[buffer(0)]], const device float* bk [[buffer(1)]],
+                               device float* score [[buffer(2)]], constant QsaSelParams& p [[buffer(3)]],
+                               uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]]) {
+  const uint H4 = p.HD / 4, r0 = tg.y * QSA_RPG, nr = min(QSA_RPG, p.R - r0);
+  threadgroup float4 q4[QSA_RPG * 4 * 32];  // the rows' queries: NH <= 4 heads of HD = 128 (8 KB)
+  threadgroup float4 kb[QSA_SUB * 32];      // one sub-chunk of key blocks (8 KB)
+  const device float4* iq4 = (const device float4*)(iq + r0 * p.NH * p.HD);
+  for (uint i = tid; i < nr * p.NH * H4; i += QSA_NT) q4[i] = iq4[i];  // a row's query is NH * HD floats: contiguous
+  const uint nbtop = (p.pos0 + p.R) / p.ratio;  // the last row's block count: the valid extent of bk
+  for (uint c = 0; c < QSA_NSUB; ++c) {
+    const uint j0 = (tg.x * QSA_NSUB + c) * QSA_SUB;
+    for (uint i = tid; i < QSA_SUB * H4; i += QSA_NT) {
+      const uint j = j0 + i / H4;
+      kb[i] = j < nbtop ? ((const device float4*)bk)[j * H4 + i % H4] : float4(0.0f);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint it = tid; it < nr * QSA_SUB; it += QSA_NT) {
+      const uint r = it / QSA_SUB, k = it % QSA_SUB, j = j0 + k;
+      if (j >= (p.pos0 + r0 + r + 1) / p.ratio) continue;  // this row's own causal limit
+      const threadgroup float4* qr = q4 + r * p.NH * H4;
+      const threadgroup float4* k4 = kb + k * H4;
+      float acc = 0.0f;
+      for (uint h = 0; h < p.NH; ++h) {
+        float d = 0.0f;
+        for (uint i = 0; i < H4; ++i) d += dot(qr[h * H4 + i], k4[i]);
+        acc += max(d, 0.0f);
+      }
+      score[(r0 + r) * p.s_ld + j] = acc * metal::precise::rsqrt(float(p.HD));
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+}
+
 // The key positions row r attends to: the topb best-scoring blocks (ties: the lowest block indices) as 4 positions
 // each, then the incomplete block's 0..ratio-1 positions; every position 0..pos when nb <= topb (dense). idx [R, i_ld],
 // cnt [R]; positions in ascending block order. One threadgroup of 1024 threads per row: an MSB-first radix select of

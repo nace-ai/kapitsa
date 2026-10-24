@@ -11,6 +11,7 @@
 #include "util/log.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -511,6 +512,89 @@ void test_qsa() {
   report("qsa_block: block keys", eb, 1e-4);
 }
 
+// A/B of two score kernels in one command buffer, reps dispatches behind one commit: the model-level ms/C of the
+// indexer scan is per layer and too small to see through a full token, so it is measured here in isolation. The R
+// sweep separates the two explanations for the scan's cost: time growing with R at fixed nb means every row pays the
+// key bytes (a byte-bound kernel, which fusing fixes), flat time means the rows already share the lines and the cost
+// is the work itself.
+void timeit(const char* kernel, const std::function<void(Encoder&)>& bind, uint32_t gx, uint32_t gy, uint32_t gz,
+            uint32_t tx, uint32_t reps, double* ms) {
+  auto warm = Gpu::get().begin();
+  warm->use(Gpu::get().pipeline(kernel));
+  bind(*warm);
+  warm->dispatch(gx, gy, gz, tx);
+  warm->commit_and_wait();
+  auto e = Gpu::get().begin();
+  for (uint32_t i = 0; i < reps; ++i) {
+    e->use(Gpu::get().pipeline(kernel));
+    bind(*e);
+    e->dispatch(gx, gy, gz, tx);
+  }
+  const auto t0 = std::chrono::steady_clock::now();
+  e->commit_and_wait();
+  *ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / reps;
+}
+
+void test_qsa_timing() {
+  const uint32_t NH = 4, HD = 128, RATIO = 4, TOPB = 512, REPS = 40;  // TOPB = 2048 / 4, as Flash-Next's budget
+  printf("  qsa_score A/B, ms per dispatch (12 sparse layers per cycle => x12 for ms/C)\n");
+  for (uint32_t nb : {1024u, 8192u}) {  // 4K and 32K of context: nb = ctx / ratio
+    const uint32_t pos0 = nb * RATIO - 8;
+    Buf bk(nb * HD);
+    bk.fill(-1, 1);
+    for (uint32_t R : {1u, 2u, 4u, 8u}) {
+      Buf iq(R * NH * HD), s(R * nb);
+      iq.fill(-1, 1);
+      const uint32_t nbmax = (pos0 + R) / RATIO;
+      struct { uint32_t R, NH, HD, pos0, ratio, topb, s_ld, i_ld; } p{R, NH, HD, pos0, RATIO, TOPB, nbmax, nbmax};
+      double m1 = 0;
+      timeit("qsa_score", [&](Encoder& e) { e.buf(0, iq.b); e.buf(1, bk.b); e.buf(2, s.b); e.val(3, p); },
+             (nbmax + 255) / 256, R, 1, 256, REPS, &m1);
+      char fused[48] = " -";
+      if (R >= 2) {
+        double m2 = 0;
+        timeit("qsa_score_rows", [&](Encoder& e) { e.buf(0, iq.b); e.buf(1, bk.b); e.buf(2, s.b); e.val(3, p); },
+               (nbmax + 127) / 128, (R + 3) / 4, 1, 64, REPS, &m2);
+        if (m2 > 0) snprintf(fused, sizeof fused, "%7.4f (%4.2fx faster)", m2, m1 / m2);
+      }
+      printf("    nb=%5u R=%u  per-row %7.4f ms  fused %s\n", nb, R, m1, fused);
+    }
+  }
+}
+
+// qsa_score_rows (NI_QSA_ROWFUSE) must agree with qsa_score bit for bit: the fused kernel computes each score by
+// the same expression on the same values and only shares the staged key blocks across rows, so a difference here
+// means the compiler reassociated something and the change is reorder-class, not bitwise (the logit md5 gate then
+// escalates instead of accepting it).
+void test_qsa_rows() {
+  const uint32_t NH = 4, HD = 128, RATIO = 4, TOPB = 8, pos0 = 4095;  // sparse regime, nb >> 128
+  for (uint32_t R : {3u, 4u, 8u}) {
+    const uint32_t nbmax = (pos0 + R) / RATIO, ILD = TOPB * RATIO + RATIO;
+    Buf iq(R * NH * HD), bk(nbmax * HD), s0(R * nbmax), s1(R * nbmax);
+    iq.fill(-1, 1), bk.fill(-1, 1);
+    // a tie and a shared block, so a mis-staged sub-chunk shows up as well
+    for (uint32_t i = 0; i < HD; ++i) bk.f()[17 * HD + i] = bk.f()[33 * HD + i] = bk.f()[0 * HD + i];
+    struct { uint32_t R, NH, HD, pos0, ratio, topb, s_ld, i_ld; } p{R, NH, HD, pos0, RATIO, TOPB, nbmax, ILD};
+    run("qsa_score", [&](Encoder& e) { e.buf(0, iq.b); e.buf(1, bk.b); e.buf(2, s0.b); e.val(3, p); },
+        (nbmax + 255) / 256, R, 1, 256);
+    run("qsa_score_rows", [&](Encoder& e) { e.buf(0, iq.b); e.buf(1, bk.b); e.buf(2, s1.b); e.val(3, p); },
+        (nbmax + 127) / 128, (R + 3) / 4, 1, 64);
+    double e = 0;
+    uint32_t bits = 0, first = ~0u;
+    for (uint32_t i = 0; i < R * nbmax; ++i) {
+      const float a = s0.f()[i], b = s1.f()[i];
+      if (a != b) {
+        ++bits;
+        if (first == ~0u) first = i;
+        e = std::max(e, double(std::fabs(a - b)));
+      }
+    }
+    const std::string at = first == ~0u ? "" : " (first at " + std::to_string(first) + ")";
+    printf("  %s: R=%u stray scores %u/%u%s\n", "qsa_score_rows", R, bits, R * nbmax, at.c_str());
+    report("qsa_score_rows: bitwise", e, 0);
+  }
+}
+
 // block scores, the top-k selection (ties: lowest indices) with the tail, attention over the lists
 void test_qsa_sparse() {
   const uint32_t R = 3, NH = 4, HD = 128, RATIO = 4, TOPB = 8, pos0 = 97, Hq = 24, Hkv = 2, D = 256, CAP = 128;
@@ -989,6 +1073,8 @@ int kernels() {
   test_moe4_rows(getenv("MTL_SHADER_VALIDATION") != nullptr);
   test_ple();
   test_qsa();
+  test_qsa_rows();
+  test_qsa_timing();
   test_qsa_sparse();
   printf("%s\n", g_fail ? "FAILED" : "all kernels match");
   return g_fail ? 1 : 0;
