@@ -16,7 +16,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (14-inch, 2026) · M5 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2026--m5-pro-16-core-gpu--48-gb) | 3 |
 | [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 48 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--48-gb) | 1 |
 | [Mac Studio (2025) · M3 Ultra 80-core GPU · 512 GB](#mac-studio-2025--m3-ultra-80-core-gpu--512-gb) | 3 |
-| [MacBook Pro (14-inch, 2025) · M5 10-core GPU · 32 GB](#macbook-pro-14-inch-2025--m5-10-core-gpu--32-gb) | 5 |
+| [MacBook Pro (14-inch, 2025) · M5 10-core GPU · 32 GB](#macbook-pro-14-inch-2025--m5-10-core-gpu--32-gb) | 6 |
 | [Mac mini (2024) · M4 10-core GPU · 24 GB](#mac-mini-2024--m4-10-core-gpu--24-gb) | 2 |
 | [Mac mini (2024) · M4 10-core GPU · 32 GB](#mac-mini-2024--m4-10-core-gpu--32-gb) | 1 |
 | [Mac mini (2024) · M4 Pro 16-core GPU · 48 GB](#mac-mini-2024--m4-pro-16-core-gpu--48-gb) | 2 |
@@ -191,6 +191,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [2026-10-24](results/kapitsa-bench-2026-10-24-m3-ultra-qwen3.8-flash-next-4bit-110a29.json) | 96.8 tok/s | 100.3 tok/s | 1,410 tok/s | 1,342 tok/s | 0.07 s | 0.08 s | 70.8 GB + 5.5 mapped | pass | MTP | 0.2.15 | 27.0.1 | – |
 
 ## MacBook Pro (14-inch, 2025) · M5 10-core GPU · 32 GB
+
+### Qwen3.8 27B · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-24](results/kapitsa-bench-2026-10-24-m5-qwen3.8-27b-4bit-0778ef.json) | 33.3 tok/s | 37.4 tok/s | 323 tok/s | 306 tok/s | 0.40 s | 0.47 s | 19.6 GB | pass | KFlash | 0.2.17 | 27.0 | – |
 
 ### Qwen3.6 35B-A3B · 4-bit
 
