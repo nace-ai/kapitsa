@@ -1205,6 +1205,53 @@ void disk_saved_unit() {
   check(!safe_to_replace(true, 4, 3, 64, 64), "guard: a slot at the cache's minimum length is kept unless its save landed");
 }
 
+// #467: the wiring, which the helper tests above cannot see. The store's per-slot refused-version entries are sized when
+// the store is built (disk_start passes the slot count); the write-behind's pass -- skip_retry, pick_write, save_verdict,
+// as disk_loop applies them -- then tries a slot whose save keeps failing once per retry_ms instead of at every quiet
+// spell (~10 s), and the slots behind it are written. A store whose entries were never sized (the shipped bug: no
+// entries, every slot reads 0) re-picks the failing slot every spell and writes nothing else, and its retry wait is
+// honoured nowhere.
+void disk_retry_wiring_unit() {
+  check(Engine::disk_wait_selftest(2), "retry wiring: a store built with two slots remembers a refused version per slot");
+  check(Engine::disk_wait_selftest(1), "retry wiring: a store built with one slot (--slots 1) round-trips its entry");
+  check(Engine::disk_wait_selftest(0), "retry wiring: a store built with no entry reads no refused version");
+  // one write-behind pass every 5 s for a minute; slot 0 is the most recently used (so the pick takes it first) and its
+  // conversation never fits: every attempt on it fails, the other slots' saves land
+  const auto run = [](size_t entries) {
+    RefusedVersions refused(entries);
+    const double retry_ms = 20000;
+    std::vector<uint64_t> version{1, 1, 1}, disk_version{0, 0, 0};
+    std::vector<int> attempts{0, 0, 0};
+    double refused_until = 0;
+    bool refused_all = false;
+    for (double t = 0; t <= 60000; t += 5000) {
+      std::vector<WriteCandidate> cand(3);
+      for (size_t i = 0; i < 3; ++i)
+        cand[i] = {false, version[i] == disk_version[i],
+                   skip_retry(t < refused_until, refused_all, refused.get(int(i)) == version[i]), 3 - double(i)};
+      const int pick = pick_write(cand);
+      if (pick < 0) continue;
+      ++attempts[size_t(pick)];
+      const SaveVerdict v = save_verdict(pick == 0 ? SaveOutcome::kWriteFailed : SaveOutcome::kLanded);
+      if (v.save) {
+        disk_version[size_t(pick)] = version[size_t(pick)];
+        if (clear_retry_on_save(refused_all)) refused_until = 0, refused_all = false;
+      } else {
+        refused_until = t + retry_ms;
+        refused_all = v.cache_full;
+        if (!v.cache_full) refused.set(pick, version[size_t(pick)]);
+      }
+    }
+    return attempts;
+  };
+  const std::vector<int> sized = run(3);
+  check(sized[0] == 4, "retry wiring: the failing slot is tried once per retry_ms (4 times in 60 s at 20 s), not every spell");
+  check(sized[1] == 1 && sized[2] == 1, "retry wiring: the slots behind a failing one are written while it waits");
+  const std::vector<int> unsized = run(0);
+  check(unsized[0] == 13, "retry wiring: without sized entries the failing slot is copied at every quiet spell (13 in 60 s)");
+  check(unsized[1] == 0 && unsized[2] == 0, "retry wiring: without sized entries the failing slot starves the others");
+}
+
 void history_gate_unit() {
   QuietGate g(250, 10, 0);
   check(!g.ready(10, 0, 100), "history gate: 100 ms after the reply it is not yet quiet");
@@ -1814,6 +1861,7 @@ int main(int argc, char** argv) {
   tool_arguments_spelling();
   disk_wait_unit();
   disk_saved_unit();
+  disk_retry_wiring_unit();
   history_gate_unit();
   kflash_lookup_unit();
   unsupported_model_unit();

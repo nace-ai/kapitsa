@@ -191,6 +191,9 @@ struct Engine::DiskPlan {
 };
 
 struct Engine::Disk {
+  // one per slot: the refused-version entries are sized here, where the store is built (a store whose entries were never
+  // sized skips nothing, so the slot count is a constructor argument, #467)
+  explicit Disk(size_t slots) : refused_version(slots) {}
   pcache::Store store;
   std::string root, ns, about;
   pcache::Key ns_key;
@@ -206,14 +209,14 @@ struct Engine::Disk {
   std::atomic<bool> refused_all{false};  // ... for every slot: the cache had no room at all, not one slot's copy too large
   // per slot: the version whose save was refused (0: none). Read and written by the request threads and the disk thread,
   // so under mu: unlike the slot's own fields, which the GPU turn guards.
-  std::vector<uint64_t> refused_version;
+  RefusedVersions refused_version;
   uint64_t refused(int i) {
     std::lock_guard<std::mutex> lk(mu);
-    return size_t(i) < refused_version.size() ? refused_version[size_t(i)] : 0;
+    return refused_version.get(i);
   }
   void refuse(int i, uint64_t version) {
     std::lock_guard<std::mutex> lk(mu);
-    if (size_t(i) < refused_version.size()) refused_version[size_t(i)] = version;
+    refused_version.set(i, version);
   }
   std::mutex mu;
   std::condition_variable cv;
@@ -359,7 +362,8 @@ void Engine::disk_start() {
     logi("SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)");
     return;
   }
-  std::unique_ptr<Disk, DiskFree> d(new Disk());
+  // one refused-version entry per slot (the store's write-behind skips a slot only while its own entry says so, #467)
+  std::unique_ptr<Disk, DiskFree> d(new Disk(size_t(slots_.size())));
   d->quota = quota;
   d->mtp = spec_;
   d->min_pos = std::max(64, int(dc::env_num("NI_DISK_CACHE_MIN", 1024)));
@@ -380,6 +384,22 @@ void Engine::disk_start() {
   d->ns = d->ns_key.hex();
   disk_ = std::move(d);
   disk_->thread = std::thread([this] { disk_loop(); });
+}
+
+bool Engine::disk_wait_selftest(size_t slots) {
+  Disk d(slots);  // the same construction disk_start uses, so the entries are sized the same way
+  if (d.refused_version.size() != slots || d.refused(0) != 0) return false;
+  if (slots == 0) return true;
+  const int last = int(slots) - 1;
+  d.refuse(0, 7);
+  if (d.refused(0) != 7) return false;  // refuse() is read back by refused()
+  if (last != 0) {
+    d.refuse(last, 9);
+    if (d.refused(last) != 9 || d.refused(0) != 7) return false;  // one slot's wait is not another's
+  }
+  if (d.refused(int(slots)) != 0 || d.refused(-1) != 0) return false;  // no entry outside the store's slots
+  d.refuse(0, 0);
+  return d.refused(0) == 0;  // a wait that ended is read back as none
 }
 
 // ---- what a slot's state is on the SSD ----
@@ -475,7 +495,8 @@ bool Engine::disk_save_slot(int i, bool held) {
     if (!held) turn_.unlock();
   };
   auto done = [&](uint64_t version) {  // this version is saved, or has nothing the SSD can take
-    if (!take()) return;
+    if (!take()) return;  // (the mark needs the turn: the pieces are on the SSD either way, the slot just looks unsaved
+                          // until the next write-behind pass -- a known limit: one entry write, never a lost conversation)
     if (slot.version == version) slot.disk_version = version;
     give_back();
   };
@@ -486,7 +507,10 @@ bool Engine::disk_save_slot(int i, bool held) {
   if (!held) d.store.measure();
   if (!take()) return false;
   // the outcome's verdict (engine/disk_saved.h): whether the slot's version counts as saved, and whether the next attempt
-  // waits. False as a return means the caller (the write-behind) paces itself.
+  // waits. False as a return means the caller (the write-behind) paces itself. Every path below that does not write the
+  // conversation out in full -- no room at all (:528), a piece's write refused or failed (:556), the put that writes the
+  // entry (:566) -- goes through finish() with an outcome whose verdict is not a save, so the slot keeps its unsaved
+  // version and done() below is reached only when the whole conversation landed (#467).
   auto finish = [&](SaveOutcome o, uint64_t tried) -> bool {
     const SaveVerdict v = save_verdict(o);
     if (v.save) {  // (a save landed: room came free, so a wait for room ends; one slot's own wait does not)

@@ -43,6 +43,25 @@ inline bool skip_retry(bool waiting, bool cache_full, bool same_version) {
 // about the room this slot's pieces need.
 inline bool clear_retry_on_save(bool cache_full) { return cache_full; }
 
+// #467: the version of each slot whose save was refused (0: none), which skip_retry compares with the slot's version: a
+// slot whose own save was refused waits, and the write-behind's pick leaves it alone while it does. The store is built
+// with one entry per slot when it starts, so the size is a constructor argument rather than a later call: entries that
+// were never sized remember nothing, every slot then looks unwaiting, and a slot whose save keeps failing is copied
+// again at every quiet spell (~10 s) instead of once per retry_ms, while the slots behind it starve. The caller holds the
+// store's mutex.
+class RefusedVersions {
+ public:
+  explicit RefusedVersions(size_t slots) : v_(slots, 0) {}
+  size_t size() const { return v_.size(); }
+  uint64_t get(int i) const { return i >= 0 && size_t(i) < v_.size() ? v_[size_t(i)] : 0; }
+  void set(int i, uint64_t version) {
+    if (i >= 0 && size_t(i) < v_.size()) v_[size_t(i)] = version;
+  }
+
+ private:
+  std::vector<uint64_t> v_;
+};
+
 // A slot as the write-behind sees it. The pick takes the one used longest ago among those that can be written: not busy,
 // not on the SSD, not waiting out a refused save (one slot whose conversation never fits must not block the others).
 struct WriteCandidate {

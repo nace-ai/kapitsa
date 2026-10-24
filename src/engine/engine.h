@@ -680,6 +680,10 @@ class Engine {
   // Looped models: the loop count a request runs (its "loops", else its effort or thinking budget mapped, else the
   // server's default); 0 for other models
   int request_loops(const ChatRequest& r) const;
+  // The SSD store's per-slot refused-version bookkeeping, built with the slot count exactly as disk_start builds it:
+  // refuse() must be read back by refused(), and a slot outside the store must read 0. A store is not built without a
+  // model, so its wiring is checked here (api_test, no model loaded) rather than through the helpers alone (#467).
+  static bool disk_wait_selftest(size_t slots);
 };
 
 } // namespace ni
