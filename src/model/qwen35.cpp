@@ -108,6 +108,10 @@ static int moe_qmr() {
 // dense NI_QMT path) and the model keeps the 35B's shapes (below): 4K prefill 2,135 -> 1,574 ms and 16K 10,810 ->
 // 8,570 ms on the M5 Pro. `NI_MOE_QTM=0` keeps the qrm path; every other Mac defaults to qrm.
 static bool qmt_on();
+// NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
+// at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
+// qrf_f6g64_m32_n128.
+static bool qmt6_on();
 // NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
 // memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
 // bitwise; 0 runs the *_o instantiations with main's stores (the kill switch). M5 Pro, 35B ni_run prefill (chunk
@@ -487,6 +491,7 @@ void Qwen35::prewarm_pipelines() {
     for (const std::string& f : fmts) {
       for (const char* t : {"_m32_n128", "_m16_n64", "_m8_n64"}) names.insert("qrf_" + f + t);
       for (const char* t : {"_m32_n64", "_m16_n64", "_m8_n32"}) names.insert("qrf_gu_" + f + t);
+      if (f == "f6g64" && qmt6_on()) names.insert("qmt6_m64_n64");  // enc_qmm_large's 6-bit tensor tile
       if (f == "f16") {
         names.insert("qrf_f16_m32_n128_mf");
         names.insert("qrf_gu_f16_m32_n64_mf");
@@ -2267,6 +2272,21 @@ static bool qmt_on() {
   return on;
 }
 
+// NI_QMT6 (read once): the 6-bit group-64 dense weights' large-prefill GEMMs on qmt6_m64_n64 (tensor_ops/qmt6.metal)
+// instead of wfmt.metal's qrf_f6g64_m32_n128. Default on where qmt_on() is. The tile's weight decode mirrors
+// qrf_load_w's half-domain affine (0x3400|q trick, one half fma with the scale pre-multiplied by 4096), so the
+// dequantized halfs — and the products over them — are bitwise the qrf path's; only the MMA shape differs
+// (one 32-K matmul2d per step instead of four 8-K simdgroup MMAs, as qmt_m64_n64 did for the 4-bit weights).
+static bool qmt6_on() {
+  static const bool on = [] {
+    if (env_int("NI_QMT6", 1) == 0) return false;
+    if (!qmt_on()) return false;
+    logi("NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64");
+    return true;
+  }();
+  return on;
+}
+
 void Qwen35::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T, int D) {
   e.use(pipe("rows_to_half"));
   kp::Rows p{uint32_t(D), norm ? 1u : 0u, cfg_.eps};
@@ -2339,6 +2359,14 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
   }
   if (q.on && qmt_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
     e.use(pipe("qmt_m64_n64"));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 63) / 64, 1, 128);
+    return;
+  }
+  if (q.on && qmt6_on() && M >= 64 && L.bits == 6 && L.gs == 64 && L.K % 64 == 0) {
+    e.use(pipe("qmt6_m64_n64"));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
     e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
     e.val(5, p);
