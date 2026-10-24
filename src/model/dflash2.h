@@ -220,8 +220,9 @@ class DFlash2 {
     return tree_ ? (t[kf::kObs] > 0 ? t[kf::kObs] : t[kf::kN]) - 1
                  : dyn_tau_ > 0 ? std::min(K, int(kdyn_.as<uint32_t>()[0])) : K;
   }
-  // KFlash on every target (NI_KFLASH=0 or NI_DFLASH_TREE=0 keeps the chain; NI_DFLASH_CAP=<n>, the F74 depth cap,
-  // keeps chains too and caps the depth -- kf_tree_default() in dflash2.cpp): the single-stream cycles (encode_cycle*)
+  // KFlash on every target (NI_KFLASH=0 or NI_DFLASH_TREE=0 keeps the chain; a genuine NI_DFLASH_CAP=<n> below the
+  // full depth, the F74 depth cap, keeps chains too and caps the depth -- a cap at or above the full depth is a
+  // no-op; kf_tree_default() in dflash2.cpp): the single-stream cycles (encode_cycle*)
   // verify a best-first tree over the lattice (the shared builder kf_build on this drafter's children tables,
   // dfl_kf_table) instead of the walk's chain, under the shared budget (KfBudget: the lattice's probabilities
   // calibrated against the verify's own acceptances, a cycle's GPU time per row count measured on this Mac), and
@@ -241,7 +242,7 @@ class DFlash2 {
   // verify's (the loop calls it after its wait)
   void observe(double ms);
   // proposals verified per cycle: NI_DFLASH_VERIFY (1..block - 1), or NI_DFLASH_CAP=<n> (the F74 depth cap, which
-  // also keeps the chain), default block() - 1
+  // also keeps the chain; only a genuine cap below the full depth engages), default block() - 1
   int verify_depth() const { return vdepth_; }
   // dynamic verify depth threshold (dfl_depth; MoE targets only): 0.5 by default, NI_DFLASH_DYN=tau, 0 = off
   float dyn_tau() const { return dyn_tau_; }

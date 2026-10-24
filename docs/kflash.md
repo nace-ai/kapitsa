@@ -21,12 +21,18 @@ On a MacBook Pro with an M4 Pro, against the engine just before it, KFlash made 
 faster on Qwen3.8-27B, 5% on Qwen3.5-4B and 3% on Qwen3.6-35B-A3B; on a prose answer, 16%, 9% and 6%. Long agent turns,
 where the chain already does well, landed between −5% and +3%. KFlash has been on by default since
 [#187](https://github.com/nace-ai/kapitsa/pull/187); `NI_KFLASH=0` brings the chain back. A verify-depth cap for the
-Qwen DFlash2 drafters is opt-in, as `NI_DFLASH_CAP=<n>`: at 4K the cycle fits C = 26.2 + 9.51·R ms and the measured
-marginal acceptances p3..p7 (0.273 … 0.023) are all under the break-even 0.296 accepted tokens per extra row, so every
-marginal row past the second was under water (20.3 ms/token at depth 2 against the full depth's 32.1, ids-identical:
-speculative verify is output-exact). The trees need the full depth, so the cap keeps chains. Those legs ran on the
-pre-qmt6 lineage, so the shipping default stays the full-depth trees until the shipping-binary sweep (4K and 32K, ids
-match, ABBA ≥ 8) confirms the win; the flip is pre-registered for where it does. The A/B numbers above compare
+Qwen DFlash2 drafters is opt-in, as `NI_DFLASH_CAP=<n>`: the drafter verifies `n` proposals per cycle (1..block − 1)
+and keeps chains — the trees need the full depth, so a capped depth is always a chain, and below the full depth the
+cap is the same axis as the existing `NI_DFLASH_VERIFY=<n>`; a genuine cap decides even where the trees are
+explicitly asked (`NI_KFLASH=1`, `NI_DFLASH_TREE=1`), because a capped verify cannot tree. Only a genuine cap engages: a `NI_DFLASH_CAP` at or
+above the full depth is a no-op (full depth, trees on), so an arm that names a full-depth cap measures what it
+believes it measures. The basis for the cap (ledger §2.16 as corrected through §2.32-E): two clean same-policy
+mode-3 chain anchors at depths 2/3, ids-identical (speculative verify is output-exact, so depth is a pure speed
+knob), read cheaper per token than any deeper measured arm; the ship comparison itself — shipping tree-7 against
+the capped chain-2 — is measured on both sides at 1.56× per token (the ledger's chain-vs-chain conditional
+endpoints are diagnostics, not the prize's floor, §2.32-E), and the shipping default stays the full-depth trees
+until the shipping-binary sweep (4K AND 32K, ids match, ABBA ≥ 8) lands; the flip is
+pre-registered in the ledger rulings for where it does. The A/B numbers above compare
 full-depth trees with full-depth chains.
 
 ## The chain stops at the first miss
@@ -472,7 +478,7 @@ KFlash is on by default for every block drafter. To compare it with the chain, o
 | --- | --- |
 | `NI_KFLASH=0` (environment) | chains on every model |
 | `NI_DFLASH_TREE=0` (environment) | chains on the Qwen models only (overrides `NI_KFLASH` there) |
-| `NI_DFLASH_CAP=<n>` (environment) | the verify-depth cap (the F74 fit above), opt-in: a Qwen DFlash2 drafter verifies `n` proposals per cycle (1..block − 1) and keeps chains (the trees need the full depth). `NI_DFLASH_VERIFY=<n>` sets the depth directly and overrides it |
+| `NI_DFLASH_CAP=<n>` (environment) | the verify-depth cap (F74, opt-in): a Qwen DFlash2 drafter verifies `n` proposals per cycle (1..block − 1) and keeps chains (the trees need the full depth). Only a genuine cap engages — a cap at or above the full depth is a no-op — and below the full depth it is the same axis as `NI_DFLASH_VERIFY=<n>`, which sets the depth directly and overrides it |
 | `NI_DFLASH_VERIFY=<n>` (environment) | the proposals a Qwen DFlash2 drafter verifies per cycle (1..block − 1); the block's full depth by default |
 | `--spec 0` (`kapitsa serve` option) | plain decoding, no drafter |
 | `NI_KFLASH_WRAP=0` (environment) | no KFlash label or accounting, and no prompt-lookup budget (also off by default, see below): prompt lookup verifies every draft it finds. Decoding is otherwise unchanged |

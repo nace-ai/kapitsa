@@ -121,6 +121,15 @@ void run_cpu() {
   unsetenv("NI_DFLASH_CAP");
   check(env8 == 8 && envcap == 8 && DFlash2::plan_block_rows(dense, 1, nullptr, true) == 16,
         "the environment is read when no value is passed: 16, 8 (BLOCK=8), 8 (CAP=2), 16");
+  // only a genuine cap engages: a NI_DFLASH_CAP at or above the full depth (block - 1) is a no-op, exactly as if
+  // it were unset -- an arm that names a full-depth cap measures what it believes it measures (kf_tree_default)
+  setenv("NI_DFLASH_CAP", "15", 1);
+  const int capfull = DFlash2::plan_block_rows(dense, 1, nullptr, true);
+  setenv("NI_DFLASH_CAP", "20", 1);
+  const int capover = DFlash2::plan_block_rows(dense, 1, nullptr, true);
+  unsetenv("NI_DFLASH_CAP");
+  check(capfull == 16 && capover == 16,
+        "a cap at or above the full depth (15, or 20 past it) is a no-op: the plan keeps 16 rows");
   const int first = DFlash2::plan_block_rows(dense, 1, "", true), moe_next = DFlash2::plan_block_rows(moe, 1, "", true),
             back = DFlash2::plan_block_rows(dense, 1, "", true);
   check(first == 16 && moe_next == 8 && back == 16,
