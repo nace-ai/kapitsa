@@ -20,13 +20,14 @@ the same seed. The tree's size comes from a budget that each Mac measures for it
 On a MacBook Pro with an M4 Pro, against the engine just before it, KFlash made greedy decoding of a coding answer 6%
 faster on Qwen3.8-27B, 5% on Qwen3.5-4B and 3% on Qwen3.6-35B-A3B; on a prose answer, 16%, 9% and 6%. Long agent turns,
 where the chain already does well, landed between −5% and +3%. KFlash has been on by default since
-[#187](https://github.com/nace-ai/kapitsa/pull/187); `NI_KFLASH=0` brings the chain back. The verify-depth cap later
-split the default: the Qwen DFlash2 drafters now run depth-2 chains by default — at 4K the cycle fits
-C = 26.2 + 9.51·R ms and the measured marginal acceptances p3..p7 (0.273 … 0.023) are all under the break-even 0.296
-accepted tokens per extra row, so every marginal row past the second was under water (20.3 ms/token against the
-full-depth default's 32.1, ids-identical: speculative verify is output-exact). The Nemotron drafters keep the trees by
-default, and `NI_KFLASH=1` (or `NI_DFLASH_TREE=1`) brings the trees back on the DFlash2 drafters, at the full depth
-the trees need. The A/B numbers above compare full-depth trees with full-depth chains.
+[#187](https://github.com/nace-ai/kapitsa/pull/187); `NI_KFLASH=0` brings the chain back. A verify-depth cap for the
+Qwen DFlash2 drafters is opt-in, as `NI_DFLASH_CAP=<n>`: at 4K the cycle fits C = 26.2 + 9.51·R ms and the measured
+marginal acceptances p3..p7 (0.273 … 0.023) are all under the break-even 0.296 accepted tokens per extra row, so every
+marginal row past the second was under water (20.3 ms/token at depth 2 against the full depth's 32.1, ids-identical:
+speculative verify is output-exact). The trees need the full depth, so the cap keeps chains. Those legs ran on the
+pre-qmt6 lineage, so the shipping default stays the full-depth trees until the shipping-binary sweep (4K and 32K, ids
+match, ABBA ≥ 8) confirms the win; the flip is pre-registered for where it does. The A/B numbers above compare
+full-depth trees with full-depth chains.
 
 ## The chain stops at the first miss
 
@@ -465,15 +466,14 @@ allocation of that size. It does not fix the capacity-dependent history partitio
 
 ## Using it
 
-KFlash trees are on by default for every Nemotron block drafter; the Qwen DFlash2 drafters run depth-2 chains by
-default (the verify-depth cap above). To compare the configurations, or to turn speculation off:
+KFlash is on by default for every block drafter. To compare it with the chain, or to turn speculation off:
 
 | Switch | Effect |
 | --- | --- |
 | `NI_KFLASH=0` (environment) | chains on every model |
-| `NI_KFLASH=1` (environment) | trees on every model; on the Qwen DFlash2 drafters it also restores the full-depth verify (the trees need `verify_depth() == block() - 1`) |
-| `NI_DFLASH_TREE=0/1` (environment) | chains/trees on the Qwen models only (overrides `NI_KFLASH` there); `1` also restores the full depth |
-| `NI_DFLASH_VERIFY=<n>` (environment) | the proposals a Qwen DFlash2 drafter verifies per cycle: 2 by default (the depth cap), the full block depth where a tree is asked; `n` overrides both |
+| `NI_DFLASH_TREE=0` (environment) | chains on the Qwen models only (overrides `NI_KFLASH` there) |
+| `NI_DFLASH_CAP=<n>` (environment) | the verify-depth cap (the F74 fit above), opt-in: a Qwen DFlash2 drafter verifies `n` proposals per cycle (1..block − 1) and keeps chains (the trees need the full depth). `NI_DFLASH_VERIFY=<n>` sets the depth directly and overrides it |
+| `NI_DFLASH_VERIFY=<n>` (environment) | the proposals a Qwen DFlash2 drafter verifies per cycle (1..block − 1); the block's full depth by default |
 | `--spec 0` (`kapitsa serve` option) | plain decoding, no drafter |
 | `NI_KFLASH_WRAP=0` (environment) | no KFlash label or accounting, and no prompt-lookup budget (also off by default, see below): prompt lookup verifies every draft it finds. Decoding is otherwise unchanged |
 | `NI_KFLASH_BUDGET=1` (environment) | the prompt-lookup budget (Nemotron Nano, Flint with `--spec`): a cycle verifies only the drafts that pay for their rows. Off by default, so prompt lookup verifies every draft as before; a pass of 2+ rows rounds differently from decode steps, so turning it on can change the text. `NI_KFLASH_ROW_COST=<steps>` sets the cost of an extra row (Flint 0.6, Nano 0.25 unmeasured) |
