@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-24T07:25:59Z",
+  "kapitsa": {
+    "version": "0.2.12",
+    "commit": "e8bfb4b"
+  },
+  "mac": {
+    "identifier": "Mac16,6",
+    "name": "MacBook Pro (14-inch, 2024)",
+    "year": 2024,
+    "chip": "Apple M4 Max",
+    "cpu_cores": 16,
+    "gpu_cores": 40,
+    "memory_gb": 64,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "flint",
+    "title": "Recursive Flint 40B-A2.5B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "3b93f90",
+    "decoding": "plain",
+    "decoding_detail": "plain decoding",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 1.0
+  },
+  "results": {
+    "decode": {
+      "median_tps": 136.11,
+      "runs_tps": [
+        115.52,
+        136.11,
+        134.32,
+        137.94,
+        143.74
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 147.94,
+      "runs_tps": [
+        147.94,
+        136.38,
+        144.71,
+        155.05,
+        152.84
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 3878,
+        "ttft_s": 3.7892,
+        "tps": 1023.4,
+        "followup_s": [
+          0.1142,
+          0.1722,
+          0.1048
+        ],
+        "followup_median_s": 0.1142,
+        "followup_suffix_tps": 87.1
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 15066,
+        "ttft_s": 18.8902,
+        "tps": 797.6,
+        "followup_s": [
+          0.1353,
+          0.2789,
+          0.0725
+        ],
+        "followup_median_s": 0.1353,
+        "followup_suffix_tps": 73.9
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.41
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 38.3,
+    "gpu_other_mean_pct": 11.23,
+    "gpu_other_max_pct": 47.33,
+    "gpu_ambient_mean_pct": 0.19,
+    "gpu_users": [
+      "Claude",
+      "avconferenced"
+    ],
+    "contention": [
+      "prefill_4000",
+      "prefill_16000"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000', 'prefill_16000'] (mean 11.23%, top ['Claude', 'avconferenced'])"
+  ],
+  "invalid": []
+}
