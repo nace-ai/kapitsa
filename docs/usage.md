@@ -639,20 +639,30 @@ keeps looking: they go there again when it is back, or to another Mac that runs 
 model here anyway. `kapitsa claude` and the other coding-agent commands download nothing for such a model either: the
 server they start sends its requests on.
 
-Two Macs that would each stream Qwen3.8-Flash-Next's experts from the SSD pair on their own, and then hold it in memory
+Macs that would each stream Qwen3.8-Flash-Next's experts from the SSD pair on their own, and then hold it in memory
 between them as [Flash-Next across Macs](#flash-next-across-macs) does with `--split`. A `kapitsa serve` that would
 stream the model looks for another server of the same model and variant that runs it alone and streamed, within a
-round trip of 15 ms (a pass of the split crosses the network once there and back). If the two Macs hold the model in
-memory between them, it becomes that server's stage: it loads the layers that server gives it and sends its own
-requests there, as a Mac that routes them does. The server that started first is the head: it places the layers, loads
-its own share again (requests get a 503 for the few seconds that takes) and runs the model across the two. Of two
-servers that started alone (at the same time, or before they could see each other), the later one gives way: it starts
-again as the other's stage. A head that has decoded alone measures the split: two replies in a row slower than 80% of
-its rate alone, and it runs alone again and does not pair with that Mac again. When the stage goes away, the reply in
-flight ends with an error and the head runs the model alone again; when the head goes away, the stage starts again on
-its own after 30 s. A Mac that streams the model says how much memory a second Mac needs to pair with it. `--local` and
-`--private` keep a server out of pairing. Not measured between two Macs yet: over Wi-Fi a long prompt's rows (189 MB
-for a 2048-token chunk) take seconds to cross, so its prefill can be slower paired than streamed alone.
+round trip of 15 ms (a pass of the split crosses the network once there and back). If the Macs that run it that way
+hold the model in memory between them (two, or more when two do not: three 24 GB Macs, say), each becomes the stage of
+the one that started first: it loads the layers that server gives it and sends its own requests there, as a Mac that
+routes them does. That server is the head: once its stages and it hold the model in memory, it places the layers,
+loads its own share again (requests get a 503 for the few seconds that takes) and runs the model across the Macs. Of
+two servers that started alone (at the same time, or before they could see each other), the later one gives way: it
+starts again as the other's stage. A head that has decoded alone measures the split: two replies in a row slower than
+80% of its rate alone, and it runs alone again and does not pair with those Macs again. When a stage goes away, the
+reply in flight ends with an error and the head runs the model alone again, then pairs with the stages left if they
+still hold it; when the head goes away, its stages start again on their own after 30 s. A Mac that streams the model
+says how much memory a second Mac needs to pair with it. `--local` and `--private` keep a server out of pairing.
+
+A Mac that starts the model later, while a split runs, joins it as a stage. The head works out a token's pass with it
+(each Mac's layers over its memory bandwidth, a network hop more): when that is a tenth faster, the head loads its
+share alone again and places the layers over every Mac, and a stage given other layers than it holds starts again to
+load them (its old buffers are not freed in place), so the Macs run alone for the seconds that takes. Otherwise the
+new Mac stays a spare: it sends its requests to the head, and takes layers when a stage leaves. Measured over office
+Wi-Fi with `--split` and both Macs streaming (M3 Pro 48 GB head, M4 Pro 24 GB stage): 11.0 tok/s and a 4K-token prompt
+in 108 s, against 18.0 tok/s and 14 s on the M3 Pro alone, which is why Macs pair only when they hold the model in
+memory. A pair in memory over Wi-Fi is not measured yet; a long prompt's rows (189 MB for a 2048-token chunk) take
+seconds to cross, so its prefill can be slower paired than streamed alone.
 
 Models are matched by name: a catalog model by its name and variant (`qwen3.8-flash-next:4bit`), also when it is served
 from a folder named as the store names one (`qwen3.8-flash-next-q2_0` is `qwen3.8-flash-next:q2_0`), and any other
@@ -989,7 +999,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_DFLASH_CORE4` | Auto | `1` selects the newer four-row 4-bit drafter core, `0` the earlier core. Auto uses the newer core on Apple10 and the 32-core M1 Max. |
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
 | `NI_CLUSTER_ROUTE` | | `1`: `kapitsa serve` sends its requests to another server that runs the model whole even when this Mac could run it ([Several Macs](#several-macs)); for a check with two servers on one Mac. |
-| `NI_CLUSTER_PAIR` | | `1`: `kapitsa serve` pairs for any Flash-Next folder, even one this Mac holds whole, and counts it as streamed until it is split; a stage whose head went away runs alone after 5 s, not 30, and a head pairs again 3 s after a stage was lost, not 60 ([Several Macs](#several-macs)); for `tests/test_pair.py`, two servers on one Mac. |
+| `NI_CLUSTER_PAIR` | | `1`: `kapitsa serve` pairs for any Flash-Next folder, even one this Mac holds whole, and counts it as streamed until it is split; a stage whose head went away runs alone after 5 s, not 30, and a head pairs again 3 s after a stage was lost, not 60, and gives a stage that joins its split layers whenever the Macs hold the model with it, not only when a token would be a tenth faster ([Several Macs](#several-macs)); for `tests/test_pair.py`, several servers on one Mac. |
 | `NI_VPF` | on for a dense target whose drafter drafts a 16-row block and that is big enough for the pass to pay (weight scale `hidden*intermediate*layers` >= 3e9, which the 27B meets and the 4B does not; the middle is unmeasured, so it stays off) | A cached turn's short new suffix (one chunk of at most `NI_VPF_MAX` rows over a cached prefix of at least 1K rows, no grammar mask, image rows or MTP speculation) runs as verify passes - one pass per up to 32 rows where the target's verify holds them (`NI_VPF_ROWS`), 16 or 8 where it does not - instead of the prefill path's small-T pass, whose GEMMs stream the weights at 53-115 GB/s where a verify pass reaches 210 GB/s. A cached follow-up's time to first token drops 16-27% on the 27B at a 4K to 16K prefix. `1` also takes the path on any target the default leaves out (a MoE model, whose verify reads the union of its rows' experts; a target whose tables hold 8 rows; a small dense model, where the pass costs more than the narrow prefill it replaces - the 4B pays ~30-40 ms for it), `0` restores the prefill path everywhere. |
 | `NI_VPF_MAX` | `64` | The longest cached suffix `NI_VPF` takes, in rows (clamped to 2047, the drafter's prompt-capture window). A pass costs one weights read whatever the suffix, and the prefill path's is a 64-row tile, so the crossover is where the prefill path stops staging its GEMMs: at a 16K prefix 47 rows run 399 ms as passes against 447 ms on the staged prefill path, 55 rows 378 against 484, while 73 rows prefill in 373 ms against 433 ms as passes and 124 rows in 442 against 665 (PR #366). `64`, the short-prefill boundary, caps the default just below that crossover. |
 | `NI_VPF_SPLIT_MIN` | `25` | The shortest suffix that still takes `NI_VPF` passes when the turn boundary falls *inside* it. A boundary inside the suffix needs the recurrence state folded up to that row for the checkpoint; the plain path saves that checkpoint from its chunk's snapshot for free, while the passes pay a fold pass (~70 ms at a 16K prefix) for it, and the plain path's own cost steps up as it gains a small-T pass. Measured at a 16K prefix on the 27B, two interleaved legs a setting: 21 rows 209/209 ms on the prefill path against 169/169 as passes, 24 rows 214/214 against 237/236, 25 rows 266/266 against 237/235, 26 rows 266/268 against 237/238, 38 rows 339/339 against 290/290. The crossover is between 24 and 25 rows, so a shorter suffix holding a boundary takes the prefill path, exactly the request it took before the passes existed. Rows alone do not decide it - the fold splits the suffix into two pass-quantised pieces - and 30 rows is the one measured size above the crossover where the passes lose (280/280 against 269/269). `0` takes the passes for every suffix `NI_VPF_MAX` allows. |

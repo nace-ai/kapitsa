@@ -782,6 +782,7 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
     so.gbs = stage->gbs;
     so.chunk = stage->chunk;
     so.status = [](const std::string& s) { logi("stage: %s", s.c_str()); };
+    so.fresh = [] { restart_server(); };  // other layers: loaded in a fresh process (it pairs again at its start)
     std::thread([so] { cluster::run_stage(so); }).detach();
   }
   auto router = std::make_shared<Router>(browser, key, head_id);
@@ -808,8 +809,12 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
   const ui::Network net = network_of(visible, port, !api_key.empty(), browser.get());
   if (stage) {
-    const std::string say = route.name + " runs " + cluster::model_base(key) + " too, from its SSD: this Mac pairs with "
-                            "it as the stage of its split, and the two hold the model in memory between them.";
+    const std::string say =
+        cluster::splits(browser->peers(), route)
+            ? route.name + " runs " + cluster::model_base(key) + " split across Macs: this Mac joins as a stage, and " +
+                  route.name + " gives it layers when that makes a token faster (it sends its requests there)."
+            : route.name + " runs " + cluster::model_base(key) + " too, from its SSD: this Mac pairs with it as a stage "
+              "of its split, and the Macs hold the model in memory between them.";
     if (tui) ui::note(say);
     else fprintf(stderr, "%s\n", say.c_str());
   }
@@ -1047,9 +1052,11 @@ static int serve(int argc, char** argv, int first) {
     if (sp) sp->done();
     route = cluster::pick_server(browser->peers(), model_key(ref), false);
   }
-  // several Macs that would each stream the model pair (pair.h): this server becomes the stage of one that runs it
-  // alone and started first (and sends its own requests there), when the two hold it in memory between them
-  const bool pairing = may_route && split.empty() && !route && pairs_for(ref, opt, budget);
+  // several Macs that would each stream the model pair (pair.h): this server becomes a stage of a split of the model
+  // (rather than only sending its requests there), or of one that runs it alone and started first (and sends its own
+  // requests there), when they all hold it in memory between them
+  const bool pairing = may_route && split.empty() && (!route || cluster::splits(browser->peers(), *route)) &&
+                       pairs_for(ref, opt, budget);
   const std::string not_with = alone_from();
   const int stage_chunk = opt.prefill_chunk > 0 ? opt.prefill_chunk : 2048;
   std::optional<cluster::MacInfo> pair_head;
@@ -1061,8 +1068,10 @@ static int serve(int argc, char** argv, int first) {
     std::vector<cluster::MacInfo> peers;
     for (const auto& p : browser->peers())
       if (p.id != not_with) peers.push_back(p);
-    pair_head = cluster::pair_with(peers, model_key(ref));
-    if (pair_head && !pair_fits(hub::plan_dir(ref), *pair_head, budget, stage_chunk)) pair_head.reset();
+    cluster::MacInfo me;  // this server, about to start
+    me.model = model_key(ref), me.since = double(time(nullptr));
+    const std::vector<cluster::MacInfo> group = cluster::join_group(peers, me);
+    if (!group.empty() && group_fits(hub::plan_dir(ref), group, budget, stage_chunk)) pair_head = group[0], route.reset();
   }
   const std::string nobody = !browser ? ""
                              : browser->error().empty()

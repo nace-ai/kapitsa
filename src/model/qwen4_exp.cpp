@@ -1485,14 +1485,15 @@ double Qwen4Exp::store_layer_bytes(const std::string& dir) {
   return double(c.experts) * double(q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes);
 }
 
-MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
+MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
   MemPlan m;
   const json root = read_json(dir + "/config.json");
   Qwen35Config c = read_config(dir);
   Qwen4ExpConfig c4;
   parse4(root, c4);
   // the process's share of a split model: its layers' tensors, the head's own ones on the head
-  const int lo = process_split().lo, hi = process_split().hi < 0 ? c.layers : std::min(process_split().hi, c.layers);
+  const Split& sp = split ? *split : process_split();
+  const int lo = sp.lo, hi = sp.hi < 0 ? c.layers : std::min(sp.hi, c.layers);
   // tensors as stored: the trunk (vision tower and the n-gram table left out), the MTP head (mtp.*)
   std::vector<std::string> files;
   if (DIR* d = opendir(dir.c_str())) {

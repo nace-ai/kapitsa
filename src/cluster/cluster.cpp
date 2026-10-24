@@ -258,6 +258,36 @@ bool gives_way(const MacInfo& me, const std::vector<MacInfo>& peers, double max_
   return false;
 }
 
+bool splits(const std::vector<MacInfo>& peers, const MacInfo& head) {
+  if (head.id.empty()) return false;
+  for (const auto& p : peers)
+    if (p.proto == kProto && p.stage_port > 0 && p.stage_of == head.id) return true;
+  return false;
+}
+
+std::vector<MacInfo> join_group(const std::vector<MacInfo>& peers, const MacInfo& me, double max_rtt_ms) {
+  // the head: a split of the model (a server that runs it whole and has stages, not a stage or a proxy itself)
+  const MacInfo* head = nullptr;
+  for (const auto& p : peers)
+    if (p.id != me.id && p.proto == kProto && p.whole && p.routes_to.empty() && p.stage_port == 0 && !p.host.empty() &&
+        p.port > 0 && p.rtt_ms >= 0 && p.rtt_ms <= max_rtt_ms && !me.model.empty() && lower(p.model) == lower(me.model) &&
+        splits(peers, p) && (!head || before(p, *head)))
+      head = &p;
+  // else the earliest that runs it alone, when before me
+  if (!head)
+    for (const auto& p : peers)
+      if (p.id != me.id && streams_alone(p, me.model, max_rtt_ms) && before(p, me) && (!head || before(p, *head)))
+        head = &p;
+  if (!head) return {};
+  std::vector<MacInfo> out = {*head};
+  for (const auto& p : peers)
+    if (p.id != me.id && p.id != head->id && p.proto == kProto && p.stage_port > 0 && p.stage_of == head->id)
+      out.push_back(p);
+  for (const auto& p : peers)
+    if (p.id != me.id && p.id != head->id && streams_alone(p, me.model, max_rtt_ms)) out.push_back(p);
+  return out;
+}
+
 std::string describe(const MacInfo& m) {
   std::string s = !m.name.empty() ? m.name : !m.host.empty() ? m.host : "a Mac";
   std::string what = chip_short(m.chip);

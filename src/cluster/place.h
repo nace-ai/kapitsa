@@ -43,7 +43,7 @@ double whole_ms(const std::vector<LayerCost>& layers, const LayerCost& head, dou
 // model between them. When they do not, with may_stream and a Q2_0 pack: the runs follow the Macs' memory (as if each
 // held the same multiple of its budget, the least that fits), so each Mac streams about the same share of its experts
 // from its SSD (streams set; each still holds its run's dense weights and a store of 3 layers' experts). From the
-// headers alone; call it before the process's split is set (Qwen4Exp::set_split), which would plan only a share.
+// headers alone, the whole model's whatever this process's split (Qwen4Exp::set_split).
 Placement plan_split(const std::string& model_dir, std::vector<Member> members, int prefill_chunk,
                      bool may_stream = true);
 
