@@ -386,11 +386,12 @@ class Engine {
   // will render it (the template drops this turn's think block, so the generated tokens in the live
   // state do not match it) from the turn-boundary checkpoint, so that a follow-up prefills only its
   // own new messages. Call it from its own thread once the reply has been sent: it first waits until
-  // the server has been idle for NI_HISTORY_IDLE_MS (default 250 ms) and gives up if any request
-  // arrived meanwhile. Only replies that end with "stop" (a user query follows; after tool calls the
+  // the server has been idle for NI_HISTORY_IDLE_MS (default 250 ms), waiting up to NI_HISTORY_WAIT_MS (default
+  // 5000; 0: no waiting, give up if any request arrived meanwhile) for such a moment, and gives up once another
+  // request used its slot. `cancelled`, if given, is polled while it waits. Only replies that end with "stop" (a user query follows; after tool calls the
   // template keeps the think block and the live state already matches the next request).
   // With DFlash2 the prefilled rows also enter the slot's drafter context ring, as prompt rows do.
-  void prefill_history(const ChatRequest& r, const ChatResult& res);
+  void prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<bool()>& cancelled = nullptr);
   // The reasoning of a turn this engine wrote, put back into the same turn when a client sends it without (reasoning_memory.h)
   void remember_reasoning(const ChatRequest& r, const ChatResult& res);
   int restore_reasoning(ChatRequest& r);

@@ -18,6 +18,7 @@
 #include "api/responses.h"
 #include "engine/output_parser.h"
 #include "engine/disk_wait.h"
+#include "engine/history_gate.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
 #include "model/kflash_wrap.h"
@@ -1157,6 +1158,22 @@ void kflash_lookup_unit() {
   }
 }
 
+// Engine::prefill_history's wait for a quiet server (QuietGate): a request starting or running holds it back, and it
+// opens once none started for idle_ms and none is running (two conversations on two slots: the first to finish was
+// dropped by the second's next request before)
+void history_gate_unit() {
+  QuietGate g(250, 10, 0);
+  check(!g.ready(10, 0, 100), "history gate: 100 ms after the reply it is not yet quiet");
+  check(g.ready(10, 0, 250), "history gate: no request for 250 ms and none running: ready");
+  check(!g.ready(11, 0, 300), "history gate: another conversation's request started: the quiet time restarts");
+  check(!g.ready(11, 0, 549), "history gate: 249 ms after that request it is still not ready");
+  check(g.ready(11, 0, 550), "history gate: ready once a request-free idle_ms has passed");
+  check(!g.ready(11, 1, 900), "history gate: a request running holds it back however long ago it started");
+  check(g.ready(11, 0, 901), "history gate: ready again when it has ended");
+  QuietGate z(0, 5, 7);
+  check(z.ready(5, 0, 7), "history gate: with no idle time it opens at once on an idle server");
+}
+
 // A float tool argument keeps its text through the Qwen3.5 / Nemotron templates' `| string` (without a model folder: a
 // minimal template with their argument line, so CI runs it).
 // Engine::disk_lookup's wait for a conversation's SSD copy still being written: bounded by the write and by the prefill
@@ -1676,6 +1693,7 @@ int main(int argc, char** argv) {
   float_arguments_text();
   tool_arguments_spelling();
   disk_wait_unit();
+  history_gate_unit();
   kflash_lookup_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {

@@ -1,3 +1,4 @@
+#include "engine/history_gate.h"
 #include "engine/engine.h"
 #include "engine/output_parser.h"
 #include "engine/reasoning_memory.h"
@@ -3690,7 +3691,7 @@ int Engine::request_loops(const ChatRequest& r) const {
   return std::clamp(l, 1, Dory::kMaxLoops);
 }
 
-void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
+void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<bool()>& cancelled) {
   static const bool on = [] {  // default on; NI_HISTORY_PREFILL=0 turns it off
     const char* v = getenv("NI_HISTORY_PREFILL");
     return !(v && !strcmp(v, "0"));
@@ -3707,10 +3708,37 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   if (!on || res.slot < 0 || res.finish_reason != "stop") return;
   // only in an idle gap: a request that follows at once (a benchmark's next run, a fast tool) or another
   // conversation must not wait behind this work
+  // NI_HISTORY_WAIT_MS (default 5000; 0: give up at the first busy moment, as before): another conversation's
+  // request, started on another slot since this reply (or still running), no longer drops it. With two slots
+  // and two interleaved conversations the first to finish had its history dropped by the second's next request,
+  // and its next question re-prefilled everything after the first assistant turn. The work waits for a quiet
+  // moment (no request started for idle_ms, none running, the turn free) up to that long, and gives up as soon as
+  // another request used this slot (then the live state is not this conversation's).
+  static const int wait_ms = [] {
+    const char* v = getenv("NI_HISTORY_WAIT_MS");
+    return v && *v ? std::max(0, atoi(v)) : 5000;
+  }();
   std::this_thread::sleep_for(std::chrono::milliseconds(idle_ms));
-  if (requests_.load() != res.req_seq) return;
-  std::unique_lock<TurnLock> lk(turn_, std::try_to_lock);  // nobody holds the GPU turn or waits for it
-  if (!lk.owns_lock() || requests_.load() != res.req_seq || active_ > 0) return;
+  std::unique_lock<TurnLock> lk(turn_, std::defer_lock);
+  if (wait_ms == 0) {
+    if (requests_.load() != res.req_seq) return;
+    lk.try_lock();  // nobody holds the GPU turn or waits for it
+    if (!lk.owns_lock() || requests_.load() != res.req_seq || active_ > 0) return;
+  } else {
+    const double deadline = now_ms() + wait_ms;
+    QuietGate gate(idle_ms, requests_.load(), now_ms());
+    for (;;) {
+      if (cancelled && cancelled()) return;
+      if (gate.ready(requests_.load(), active_, now_ms())) {
+        if (lk.try_lock()) {
+          if (active_ == 0 && requests_.load() == gate.seen) break;
+          lk.unlock();
+        }
+      }
+      if (now_ms() >= deadline) return;
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+  }
   Slot& slot = slots_[size_t(res.slot)];
   if (slot.gen != res.slot_gen) return;
   const double t0 = now_ms();
