@@ -84,7 +84,7 @@ bool small_tiles() {
 // expert adjacent, so they share its weights through the cache). Main took that path for 2 - 4 rows and the per-row
 // kernels below for 5 - 8; extending it to 5 - 8 is bitwise with them: same qmv2_rows dots (same lane slices, same
 // simd_sum), same fp32 h rows, same moe_down2_impl - only how many rows a read of an expert serves changes. 4 restores
-// main exactly (the per-row kernels for 5 - 8 rows); 8, M5 Pro, 1K context: a step of 8 rows 31.9 ms against 33.8.
+// main exactly (the per-row kernels for 5 - 8 rows); 8, M5 Pro, 1K context: a step of 8 rows 31.9 ms against 33.7.
 int verify_rows() {
   static const int v = [] {
     const char* s = getenv("NI_FLINT_MOE4_ROWS");
@@ -1032,7 +1032,7 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     // 2-8 rows (a prompt-lookup or draft verify): the distinct experts of the rows' top-k,
     // each one's gate / up for the rows that chose it (their threadgroups adjacent: the weights shared through the
     // cache), then every row's down products (moe4_*, the decode kernels' arithmetic: moe_gate_up3's and
-    // moe_down2_w's; M5 Pro, 1K context: a pass of 8 rows 31.9 ms against 33.8 with the per-row kernels below, and
+    // moe_down2_w's; M5 Pro, 1K context: a pass of 8 rows 31.9 ms against 33.7 with the per-row kernels below, and
     // 2 / 4 rows 10.5 / 16.9 the same either way)
     const struct {
       uint32_t R, k;
