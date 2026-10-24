@@ -459,6 +459,16 @@ with tempfile.TemporaryDirectory() as tmp:
         except SystemExit as e:
             refused = k in str(e)
         check(refused, f"--reuse refuses dumps of more than one {k}")
+    newer = {**one, "build": "0.2.16 (deadbeef)", "date": "2026-10-24T03:00:00Z"}
+    try:
+        lf.reused_runs(metas, [newer])
+        refused = False
+    except SystemExit as e:
+        refused = "build" in str(e)
+    check(refused, "--reuse refuses reused dumps of one build next to a fresh dump of another")
+    check(lf.reused_runs(metas, [{**one, "date": "2026-10-24T03:00:00Z"}])
+          == {"dumps": 3, "from": "2026-10-24T01:20:01Z", "to": "2026-10-24T02:46:10Z"},
+          "--reuse counts and dates the reused dumps only, not the fresh ones")
 
 print("\nALL PASSED" if not FAILED else f"\nFAIL: {len(FAILED)} failed: {FAILED}")
 sys.exit(1 if FAILED else 0)

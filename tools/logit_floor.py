@@ -131,14 +131,14 @@ def dump_metas(d):
     return metas
 
 
-def reused_runs(metas):
+def reused_runs(metas, fresh=()):
     """--reuse: the reused dumps' runs (their meta.json's build, Mac, macOS and date). A floor compares one build on one
-    Mac: exits when they name more than one; else {"dumps": paths reused, "from" / "to": their first and last date} for
-    the file's "measured"."""
+    Mac: exits when they, or they and the dumps this command ran (fresh), name more than one; else {"dumps": paths
+    reused, "from" / "to": their first and last date} for the file's "measured"."""
     for k in ("build", "mac", "macos"):
-        seen = {meta.get(k) for meta in metas}
+        seen = {meta.get(k) for meta in (*metas, *fresh)}
         if len(seen) > 1:
-            sys.exit(f"--reuse: the reused dumps name more than one {k} ({', '.join(sorted(map(str, seen)))}): "
+            sys.exit(f"--reuse: the reused and fresh dumps name more than one {k} ({', '.join(sorted(map(str, seen)))}): "
                      "a floor compares one build on one Mac; dump them again")
     dates = sorted(meta.get("date", "") for meta in metas)
     return {"dumps": len(metas), "from": dates[0], "to": dates[-1]} if metas else {}
@@ -210,6 +210,7 @@ def main():
         r = subprocess.run(cmd, env=dict(os.environ, **env))
         if r.returncode:
             sys.exit(f"logit_dump failed ({r.returncode})")
+        fresh.extend(dump_metas(d))  # (read now: once() may delete d)
         return d
 
     def cmp(d1, d2, path):
@@ -246,7 +247,7 @@ def main():
         return sources, meta
 
     os.makedirs(work, exist_ok=True)
-    top, cond, reused = work, {}, []
+    top, cond, reused, fresh = work, {}, [], []
     sources, meta = measure()
     for also in a.also:
         k, _, v = also.partition("=")
@@ -292,7 +293,7 @@ def main():
     if a.also:
         result["measured"]["also"] = a.also
     if reused:  # dumps run before this command (another run's, or one at a time): which, and that they are one build's
-        result["measured"]["reused"] = reused_runs(reused)
+        result["measured"]["reused"] = reused_runs(reused, fresh)
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w") as f:
         f.write(dumps(result))
