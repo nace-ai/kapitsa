@@ -22,6 +22,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [Mac mini (2024) · M4 Pro 16-core GPU · 48 GB](#mac-mini-2024--m4-pro-16-core-gpu--48-gb) | 2 |
 | [Mac mini (2024) · M4 Pro 20-core GPU · 64 GB](#mac-mini-2024--m4-pro-20-core-gpu--64-gb) | 4 |
 | [MacBook Pro (14-inch, 2024) · M4 10-core GPU · 16 GB](#macbook-pro-14-inch-2024--m4-10-core-gpu--16-gb) | 2 |
+| [MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 64 GB](#macbook-pro-14-inch-2024--m4-max-40-core-gpu--64-gb) | 2 |
 | [MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 128 GB](#macbook-pro-14-inch-2024--m4-max-40-core-gpu--128-gb) | 1 |
 | [MacBook Pro (14-inch, 2024) · M4 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2024--m4-pro-16-core-gpu--48-gb) | 1 |
 | [MacBook Pro (16-inch, 2024) · M4 Max 40-core GPU · 48 GB](#macbook-pro-16-inch-2024--m4-max-40-core-gpu--48-gb) | 1 |
@@ -229,6 +230,15 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-21](results/kapitsa-bench-2026-10-21-m4-qwen3.5-9b-4bit-0242f4.json) | 54.6 tok/s | 61.7 tok/s | 233 tok/s | 218 tok/s | 0.14 s | 0.17 s | 8.0 GB | pass | KFlash | 0.2.0 | 27.0.1 | swap |
+
+## MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 64 GB
+
+### Recursive Flint 40B-A2.5B · 4-bit
+
+| Run | Writing, T = 1.0 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-24](results/kapitsa-bench-2026-10-24-m4-max-flint-4bit-f1a3a3.json) | 212.7 tok/s | 213.8 tok/s | 1,508 tok/s | 1,316 tok/s | 0.12 s | 0.14 s | 22.4 GB | pass | plain | 0.2.12 | 27.0.1 | on battery |
+| [2026-10-24](results/kapitsa-bench-2026-10-24-m4-max-flint-4bit-8c07e0.json) | 136.1 tok/s | 147.9 tok/s | 1,023 tok/s ⚠ | 798 tok/s ⚠ | 0.11 s ⚠ | 0.14 s ⚠ | 22.4 GB | pass | plain | 0.2.12 | 27.0.1 | contention (prefill_4000, prefill_16000) |
 
 ## MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 128 GB
 
