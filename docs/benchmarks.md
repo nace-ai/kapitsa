@@ -95,7 +95,11 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   (`bench/community/results/kapitsa-bench-2026-10-22-m3-pro-*.json`) read differently (the
   35B-A3B's 4K prefill 911 there against the harness's 855), so the two are not mixed in a row: the cells are the
   harness's only.
-- mlx-serve, oMLX and Splash do not run on macOS 14.1 (×); LM Studio was not installed (—).
+- mlx-serve, oMLX and Splash do not run on macOS 14.1 (×): each vendor's minimum is above it (Splash 26.4, mlx-serve
+  26.2, oMLX 15.0), and their binaries say the same (Splash's `engine/splash` is built for macOS 26.4, mlx-serve's for
+  26.2, oMLX's compiled kernels for 15.0). Checked on this Mac on 2026-10-24: Splash 1.4.0's and mlx-serve 26.10.2's
+  binaries abort at launch (dyld: built for a newer macOS, `MTLResidencySetDescriptor` missing), and oMLX 0.7.1rc1 ships
+  only `macosx_15_0` wheels, which its Python does not accept. LM Studio was not installed (—).
 - Kapitsa is behind on the Nano 4B (34.4 against llama.cpp's 34.9 on NVIDIA's Q4_K_M GGUF) and the Nano 9B v2 (20.9
   against mlx-lm's 24.9 on mlx-community's 4-bit): Kapitsa runs NVIDIA's own checkpoints (the 4B's FP8, the 9B's NVFP4
   with BF16 layers), which read more bytes per token than those 4-bit files.
@@ -114,7 +118,7 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   the Nano 9B v2, prompt lookup on the Nano 4B); each cell's prefill and decode are the same run
   ([details](#macbook-pro-m1-pro-16-gb-kapitsa-026-2026-10-22)). The other engines' cells are the 2026-10-19 runs below.
 - Qwen: the full protocol in one hold of the GPU lock, Kapitsa 0.1.36 first and last (its runs: 85.5 and 78.5 tok/s at
-  T = 0.6; main with KFlash on 2026-10-21: 92.6 and 97.5, [details](#kflash-trees-m4-pro-2026-10-21)). Splash needs an M3 or newer. Each engine in its fastest setting on this Mac, chosen in short runs:
+  T = 0.6; main with KFlash on 2026-10-21: 92.6 and 97.5, [details](#kflash-trees-m4-pro-2026-10-21)). Splash needs an M3 or newer on macOS 26.4 or later. Each engine in its fastest setting on this Mac, chosen in short runs:
   oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.
   Rapid-MLX (no speculation, its faster setting here) in a bracket of its own, Kapitsa 0.1.36 first and last.
   Kapitsa 0.1.36 read 16K-token prompts more slowly than mlx-lm, Rapid-MLX and LM Studio here (269 tok/s against 289,
