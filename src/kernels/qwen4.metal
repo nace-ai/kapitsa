@@ -85,6 +85,86 @@ NI_INLINE void hc_pre_impl(device float* X, device float* y, const device float*
 NI_HC_PRE(hc_pre, float)
 NI_HC_PRE(hc_pre_h, half)
 
+// The gated residual's first part with the previous MoE block's combine sum folded in (NI_HC_PRECOMB):
+// the separate moe_combine dispatch is skipped and each row's threadgroup computes that sum itself —
+// phase A replicates moe_combine's arithmetic verbatim (the same float4 ops, ascending routed slots
+// then the shared slot, the same token-major y addressing) into threadgroup memory, and phase B is
+// hc_pre_impl's loop reading that sum in place of y. yb_ is neither read nor zeroed here: with the
+// combine skipped it stays zero from the previous gated residual's zeroing until the next mixer
+// output overwrites it. Intended to be bitwise identical to moe_combine + hc_pre{,_h} by
+// construction; outputs not yet compared on a GPU. y / ys / wts bind as moe_combine's (ys = the
+// shared rows, or the shared-fold view of y); the host gate holds cp.D <= 3968 (cp.k is unbounded —
+// phase A's slot loop takes any k).
+struct HcCombParams {
+  uint D;  // stream width (the same value as HcParams.D; the layout of moe_combine's CombineParams)
+  uint k;  // routed slots; the shared slot's weight is wts[t * (k + 1) + k]
+};
+
+// phase B: hc_pre_impl verbatim except the injected y comes from the threadgroup ysum4 (no y zeroing)
+template <typename XN>
+NI_INLINE void hc_pre_comb_impl(device float* X, threadgroup float4* ysum4, const device float* inj_prev,
+                                const device float* w, const device bfloat* winj, device XN* xn, device float* inj,
+                                constant HcParams& p, uint r, uint tid, uint ntg, threadgroup float4* scratch) {
+  const uint SD = p.S * p.D, D = p.D;
+  device float* x = X + r * SD;
+  const float4 a = p.has_y ? float4(inj_prev[r * 4], inj_prev[r * 4 + 1], inj_prev[r * 4 + 2], inj_prev[r * 4 + 3])
+                           : float4(0.0f);
+  float4 ss = 0.0f;
+  for (uint c = tid; c < D; c += ntg) {  // channel c of every stream
+    float4 v = float4(x[c], x[D + c], x[2 * D + c], x[3 * D + c]);
+    if (p.has_y) {
+      v += a * ysum4[c >> 2][c & 3];
+      x[c] = v.x, x[D + c] = v.y, x[2 * D + c] = v.z, x[3 * D + c] = v.w;
+    }
+    ss += v * v;
+  }
+  const float4 inv = metal::precise::rsqrt(tg_sum4(ss, scratch, tid, ntg) / float(D) + p.eps);
+  float4 dot = 0.0f;
+  for (uint c = tid; c < D; c += ntg) {
+    float4 v = float4(x[c], x[D + c], x[2 * D + c], x[3 * D + c]) * inv * float4(w[c], w[D + c], w[2 * D + c], w[3 * D + c]);
+    xn[r * SD + c] = XN(v.x);
+    xn[r * SD + D + c] = XN(v.y);
+    xn[r * SD + 2 * D + c] = XN(v.z);
+    xn[r * SD + 3 * D + c] = XN(v.w);
+    if (p.has_inj) {
+      const uint i0 = c, i1 = D + c, i2 = 2 * D + c, i3 = 3 * D + c;
+      dot += v.x * float4(winj[i0], winj[SD + i0], winj[2 * SD + i0], winj[3 * SD + i0]);
+      dot += v.y * float4(winj[i1], winj[SD + i1], winj[2 * SD + i1], winj[3 * SD + i1]);
+      dot += v.z * float4(winj[i2], winj[SD + i2], winj[2 * SD + i2], winj[3 * SD + i2]);
+      dot += v.w * float4(winj[i3], winj[SD + i3], winj[2 * SD + i3], winj[3 * SD + i3]);
+    }
+  }
+  if (p.has_inj) {
+    const float4 d = tg_sum4(dot, scratch, tid, ntg);
+    if (tid == 0) *(device float4*)(inj + r * 4) = 2.0f * sigmoid4(d / float(p.S));
+  }
+}
+
+#define NI_HC_PRE_COMB(NAME, XN)                                                                               \
+  [[kernel]] void NAME(device float* X [[buffer(0)]], const device float* inj_prev [[buffer(1)]],              \
+                       const device float* w [[buffer(2)]], const device bfloat* winj [[buffer(3)]],           \
+                       device XN* xn [[buffer(4)]], device float* inj [[buffer(5)]],                           \
+                       constant HcParams& p [[buffer(6)]], const device float* y [[buffer(7)]],                \
+                       const device float* ys [[buffer(8)]], const device float* wts [[buffer(9)]],            \
+                       constant HcCombParams& cp [[buffer(10)]], uint r [[threadgroup_position_in_grid]],      \
+                       uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {       \
+    threadgroup float4 scratch[32];                                                                            \
+    threadgroup float4 ysum4[992];  /* 15,872 B; with the scratch 16,384 B static (the cap, read as 32,768) */ \
+    if (tid < cp.D / 4) {           /* moe_combine's accumulation verbatim: ascending slots, shared last */    \
+      const uint d4 = tid;                                                                                     \
+      float4 acc = 0.0f;                                                                                       \
+      for (uint s = 0; s < cp.k; ++s)                                                                          \
+        acc += wts[r * (cp.k + 1) + s] * ((const device float4*)(y + (r * cp.k + s) * cp.D))[d4];              \
+      acc += wts[r * (cp.k + 1) + cp.k] * ((const device float4*)(ys + r * cp.D))[d4];                         \
+      ysum4[d4] = acc;                                                                                         \
+    }                                                                                                          \
+    threadgroup_barrier(mem_threadgroup);                                                                      \
+    hc_pre_comb_impl<XN>(X, ysum4, inj_prev, w, winj, xn, inj, p, r, tid, ntg, scratch);                       \
+  }
+NI_HC_PRE_COMB(hc_pre_comb, float)
+NI_HC_PRE_COMB(hc_pre_comb_h, half)
+
+
 // h = silu(h / S) in place (the low-rank mix's hidden), n values. grid: ceil(n / 256) x 256.
 [[kernel]] void hc_act(device float* h [[buffer(0)]], constant uint& n [[buffer(1)]], constant float& inv_s [[buffer(2)]],
                        uint i [[thread_position_in_grid]]) {

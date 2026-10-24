@@ -2641,12 +2641,17 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
     }
     if (!fold) enc_shared();
   }
-  kp::Combine cp{uint32_t(D), uint32_t(k)};
-  e.use(pipe("moe_combine"));
-  e.buf(0, yd_); e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_); e.buf(2, rwts_);
-  e.buf(3, xbuf);
-  e.val(4, cp);
-  e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
+    comb_pending_ = {yd_, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_, uint32_t(D), uint32_t(k), true};
+  } else {
+    comb_pending_.active = false;
+    kp::Combine cp{uint32_t(D), uint32_t(k)};
+    e.use(pipe("moe_combine"));
+    e.buf(0, yd_); e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_); e.buf(2, rwts_);
+    e.buf(3, xbuf);
+    e.val(4, cp);
+    e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  }
   return true;
 }
 
@@ -2954,13 +2959,18 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
   }
   if (!fold && !q20) enc_shared();
-  kp::Combine cp{uint32_t(D), uint32_t(k)};
-  e.use(pipe("moe_combine"));
-  e.buf(0, yd_);
-  e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_);
-  e.buf(2, rwts_); e.buf(3, xbuf);
-  e.val(4, cp);
-  e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
+    comb_pending_ = {yd_, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_, uint32_t(D), uint32_t(k), true};
+  } else {
+    comb_pending_.active = false;
+    kp::Combine cp{uint32_t(D), uint32_t(k)};
+    e.use(pipe("moe_combine"));
+    e.buf(0, yd_);
+    e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_);
+    e.buf(2, rwts_); e.buf(3, xbuf);
+    e.val(4, cp);
+    e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  }
   return true;
 }
 
