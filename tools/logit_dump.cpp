@@ -191,13 +191,13 @@ std::string now_iso() {
 int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] "
-                    "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] "
+                    "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
                     "[--loop-kv last-loop|per-loop]\n");
     return 1;
   }
   const std::string dir = argv[1], out = argv[2];
   std::string from, corpus = "bench/corpus.txt", paths_arg = "step,verify,batch", loop_kv;
-  int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0;
+  int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1;
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -213,6 +213,7 @@ int main(int argc, char** argv) {
     else if (a == "--batch") members = std::stoi(next());
     else if (a == "--batch-rows") member_rows = std::stoi(next());
     else if (a == "--loops") loops = std::stoi(next());
+    else if (a == "--spec") spec = std::stoi(next());
     else if (a == "--loop-kv") loop_kv = next();
     else fatal("unknown argument %s", a.c_str());
   }
@@ -314,9 +315,11 @@ int main(int argc, char** argv) {
   // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (which kernels a pass takes is
   // NI_FLINT_MOE4_ROWS, in flint.cpp)
   // Flash-Next: its MTP cycle's depth + 1 rows (Engine: spec_depth defaults to default_spec_depth())
+  // --spec N: a Flash-Next MTP depth of N, so its verify path dumps N + 1 rows (the engine's own cap is
+  // kMaxVerify; --spec 7 is the 8-row verify the decode's tree budget runs)
   const int vrows = fl && getenv("NI_FLINT_VERIFY_ROWS") ? std::clamp(atoi(getenv("NI_FLINT_VERIFY_ROWS")), 2, 8)
-                    : fn                                 ? fn->default_spec_depth() + 1
-                                                         : kVerifyRows;
+                    : fn ? std::clamp(spec >= 0 ? spec + 1 : fn->default_spec_depth() + 1, 1, Qwen35::kMaxVerify)
+                         : kVerifyRows;
   auto path_rows = [&](const std::string& p, const Window& w) {
     const int k = p == "verify" ? vrows : p == "batch" ? member_rows : 1;
     const int W = (w.W + k - 1) / k * k;
