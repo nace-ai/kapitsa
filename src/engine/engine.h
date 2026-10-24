@@ -510,8 +510,10 @@ class Engine {
   // decides it below the lookup
   static int reuse_start(const Slot& slot, size_t common, int n);
   // A request is about to replace the slot's state from row `start` (another conversation, or memory for another):
-  // what it would lose and the SSD lacks is copied now and written in the background
-  void disk_leaving(Slot& slot, int start);
+  // what it would lose and the SSD lacks is copied now and written in the background. wait_write: the caller replaces
+  // the slot next and must know whether it landed (a history prefill taking it): the copy is written before returning,
+  // with the GPU turn given up, and the slot is marked saved only if it did
+  void disk_leaving(Slot& slot, int start, bool wait_write = false);
   // After disk_leaving(slot, 0): false when the slot holds a conversation worth saving that the SSD does not have
   bool disk_safe_to_replace(const Slot& slot);
   // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
@@ -526,8 +528,12 @@ class Engine {
   std::unique_ptr<DiskPlan> disk_plan(const Slot& slot) const;
   // Writes slot i's state if it changed since it was last saved. held: the caller holds the GPU turn throughout;
   // otherwise each chunk is copied under a turn taken while the engine is idle, and the save stops when a request
-  // arrives (what it wrote stays for the next save to reuse). False: given up.
+  // arrives (what it wrote stays for the next save to reuse). False: given up, or nothing could be written, in which case
+  // the slot keeps its unsaved version (#467) and the write-behind waits NI_DISK_CACHE_RETRY_MS before the next try
   bool disk_save_slot(int i, bool held);
+  // A copy of slot i's version written by the disk thread: marks the slot saved if it still holds that version (the copy
+  // is on the SSD either way; this only lets a history prefill take the slot, #467)
+  void disk_confirm(int i, uint64_t version);
   void disk_loop();
 
   // ---- batched decode: the decode cycles of several requests in one forward pass ----

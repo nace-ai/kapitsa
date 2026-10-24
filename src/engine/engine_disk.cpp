@@ -8,9 +8,12 @@
 // copies a chunk at a time under the GPU turn while no request runs, and stops when one arrives (nothing is written
 // between decode cycles; what it wrote stays for the next try); when a request is about to replace a conversation the
 // SSD lacks (another conversation, or memory for one), what it lacks is copied at once and written in the background;
-// when the server stops (save_disk_cache). Read: when a prompt matches a stored state deeper than its slot holds,
+// A slot's version counts as on the SSD only when the write of it landed (or when the SSD takes nothing from it): a save
+// refused for lack of room, or one that failed writing, leaves it unsaved, so a history prefill that would replace that
+// conversation gives up instead of losing it (#467). Read: when a prompt matches a stored state deeper than its slot holds,
 // before the prefill, which then starts there.
 #include "engine/engine.h"
+#include "engine/disk_saved.h"
 #include "engine/disk_wait.h"
 #include "util/log.h"
 
@@ -195,9 +198,23 @@ struct Engine::Disk {
   bool mtp = false;        // MTP decoding: the MTP head's KV rows and its gathered draft rows belong to a state
   int min_pos = 1024;      // states nearer the start than this are not saved (quick to prefill again)
   double idle_ms = 10000;  // write-behind: after this long without requests
+  double retry_ms = 60000;  // after a save that could not be written: how long before the write-behind tries it again
   uint64_t capture_max = 0;  // most bytes copied at once when a request replaces a conversation the SSD lacks
   std::atomic<bool> ready{false}, quit{false};
   std::atomic<double> quiet_since{0};
+  std::atomic<double> refused_until{0};  // the write-behind skips saves until then (a save could not be written)
+  std::atomic<bool> refused_all{false};  // ... for every slot: the cache had no room at all, not one slot's copy too large
+  // per slot: the version whose save was refused (0: none). Read and written by the request threads and the disk thread,
+  // so under mu: unlike the slot's own fields, which the GPU turn guards.
+  std::vector<uint64_t> refused_version;
+  uint64_t refused(int i) {
+    std::lock_guard<std::mutex> lk(mu);
+    return size_t(i) < refused_version.size() ? refused_version[size_t(i)] : 0;
+  }
+  void refuse(int i, uint64_t version) {
+    std::lock_guard<std::mutex> lk(mu);
+    if (size_t(i) < refused_version.size()) refused_version[size_t(i)] = version;
+  }
   std::mutex mu;
   std::condition_variable cv;
   bool stopped = false;
@@ -215,6 +232,7 @@ struct Engine::Disk {
     std::unique_ptr<pcache::Store::Job> job;
     std::vector<Piece> pieces;
     double at = 0;
+    uint64_t version = 0;  // the slot version this copy is of: the slot is marked saved when the copy lands (#467)
   };
   std::deque<std::unique_ptr<Captured>> captured;
   // the tokens of every capture not yet on the SSD (queued or being written), so a request whose prompt continues one
@@ -346,6 +364,7 @@ void Engine::disk_start() {
   d->mtp = spec_;
   d->min_pos = std::max(64, int(dc::env_num("NI_DISK_CACHE_MIN", 1024)));
   d->idle_ms = std::max(0.0, dc::env_num("NI_DISK_CACHE_IDLE_MS", 10000));
+  d->retry_ms = std::max(0.0, dc::env_num("NI_DISK_CACHE_RETRY_MS", 60000));
   d->capture_max = std::min<uint64_t>(pcache::kGiB, dc::ram_bytes() / 32);
   const char* root = getenv("NI_DISK_CACHE_DIR");
   d->root = root && *root ? root : hub::home_dir() + "/prefix-cache";
@@ -460,17 +479,41 @@ bool Engine::disk_save_slot(int i, bool held) {
     if (slot.version == version) slot.disk_version = version;
     give_back();
   };
+  if (!held && skip_retry(now_ms() < d.refused_until.load(std::memory_order_relaxed),
+                          d.refused_all.load(std::memory_order_relaxed), d.refused(i) == slot.version)) {
+    return false;  // (a save could not be written a moment ago: the copy it would make is not worth repeating yet)
+  }
   if (!held) d.store.measure();
   if (!take()) return false;
+  // the outcome's verdict (engine/disk_saved.h): whether the slot's version counts as saved, and whether the next attempt
+  // waits. False as a return means the caller (the write-behind) paces itself.
+  auto finish = [&](SaveOutcome o, uint64_t tried) -> bool {
+    const SaveVerdict v = save_verdict(o);
+    if (v.save) {  // (a save landed: room came free, so a wait for room ends; one slot's own wait does not)
+      if (clear_retry_on_save(d.refused_all.load(std::memory_order_relaxed))) {
+        d.refused_until.store(0, std::memory_order_relaxed);
+        d.refused_all.store(false, std::memory_order_relaxed);
+      }
+    } else if (v.pace_retry) {
+      d.refused_until.store(now_ms() + d.retry_ms, std::memory_order_relaxed);
+      d.refused_all.store(v.cache_full, std::memory_order_relaxed);
+      if (!v.cache_full && tried) d.refuse(i, tried);  // (the version that failed, which the slot may have left since)
+    }
+    return v.save;
+  };
   if (slot.busy || slot.version == slot.disk_version) {
     give_back();
-    return true;
+    return finish(SaveOutcome::kNothingToTake, 0);
   }
-  std::unique_ptr<DiskPlan> p = d.room() ? disk_plan(slot) : nullptr;
-  if (!p) {
+  if (!d.room()) {  // the volume has no room at all: nothing was written, so the slot keeps its unsaved version
+    give_back();
+    return finish(SaveOutcome::kNoRoom, 0);
+  }
+  std::unique_ptr<DiskPlan> p = disk_plan(slot);
+  if (!p) {  // nothing the SSD takes from this slot (no conversation, nothing stored)
     slot.disk_version = slot.version;
     give_back();
-    return true;
+    return finish(SaveOutcome::kNothingToTake, 0);
   }
   p->requests = requests_.load();
   std::vector<Disk::Piece> todo = d.missing(*this, *p, slot);
@@ -478,6 +521,7 @@ bool Engine::disk_save_slot(int i, bool held) {
   auto job = d.store.begin(p->pieces());
   uint64_t bytes = 0;
   int nkv = 0, nst = 0;
+  SaveOutcome outcome = SaveOutcome::kLanded;
   for (Disk::Piece& pc : todo) {
     bool gave_up = false;
     const Gather& g = pc.g;
@@ -493,17 +537,19 @@ bool Engine::disk_save_slot(int i, bool held) {
       if (gave_up) return false;  // a request came: later (what was written stays)
       logi("SSD cache: slot %d was not saved (no room within the cache's limit of %s, or a write failed)", i,
            pcache::gib(d.store.limit()).c_str());
-      done(p->version);
-      return true;
+      outcome = SaveOutcome::kWriteFailed;
+      break;
     }
     bytes += g.bytes;
     ++(pc.kind == pcache::kKv ? nkv : nst);
   }
-  if (!d.store.put(*job, p->entry)) {
+  if (save_landed(outcome) && !d.store.put(*job, p->entry)) {
     logi("SSD cache: slot %d was not saved (its entry could not be written)", i);
-    done(p->version);
-    return true;
+    outcome = SaveOutcome::kEntryFailed;
   }
+  // not a save: the slot keeps its unsaved version, so another conversation does not replace it unsaved; the write-behind
+  // tries again after a quiet spell and, when the cache has no room for it, not before NI_DISK_CACHE_RETRY_MS (#467)
+  if (!finish(outcome, p->version)) return false;
   done(p->version);
   logi("SSD cache: saved slot %d (%zu tokens, %zu restore point%s; %d of %zu KV blocks and %d state%s new: %.0f MB) in "
        "%.0f ms", i, p->entry.tokens.size(), p->entry.snaps.size(), p->entry.snaps.size() == 1 ? "" : "s", nkv,
@@ -512,11 +558,22 @@ bool Engine::disk_save_slot(int i, bool held) {
 }
 
 bool Engine::disk_safe_to_replace(const Slot& slot) {
-  if (!disk_ || !disk_->ready || slot.version == slot.disk_version) return true;
-  return int(slot.tokens.size()) < disk_->min_pos;  // (shorter than the cache stores: nothing worth saving)
+  // (shorter than the cache stores: nothing worth saving; the slot's version is on the SSD only if its write landed)
+  return safe_to_replace(disk_ && disk_->ready, slot.version, slot.disk_version, slot.tokens.size(),
+                         disk_ ? disk_->min_pos : 0);
 }
 
-void Engine::disk_leaving(Slot& slot, int start) {
+void Engine::disk_confirm(int i, uint64_t version) {
+  if (version == 0) return;
+  // the slot is in use: the next write-behind finds nothing to write and marks it then (a copy that landed is on the SSD
+  // whatever this field says, so this only delays a history prefill taking the slot, never loses the copy)
+  if (!turn_.try_lock()) return;
+  Slot& s = slots_[size_t(i)];
+  if (s.version == version) s.disk_version = version;
+  turn_.unlock();
+}
+
+void Engine::disk_leaving(Slot& slot, int start, bool wait_write) {
   if (!disk_ || !disk_->ready || slot.version == slot.disk_version) return;
   Disk& d = *disk_;
   if (!d.room()) return;
@@ -530,6 +587,9 @@ void Engine::disk_leaving(Slot& slot, int start) {
   if (start >= deep) return;
   std::unique_ptr<DiskPlan> p = disk_plan(slot);
   if (!p) return;
+  if (wait_write && skip_retry(now_ms() < d.refused_until.load(std::memory_order_relaxed),
+                               d.refused_all.load(std::memory_order_relaxed), d.refused(p->slot) == slot.version))
+    return;  // (a save of this slot, or of any slot for lack of room, was refused a moment ago)
   const double t0 = now_ms();
   auto c = std::make_unique<Disk::Captured>();
   c->pieces = d.missing(*this, *p, slot);
@@ -594,13 +654,28 @@ void Engine::disk_leaving(Slot& slot, int start) {
   logd("SSD cache: slot %d's conversation (%zu tokens) copied for the SSD before it is replaced (%.0f MB in %.1f ms)",
        p->slot, p->entry.tokens.size(), bytes / 1e6, now_ms() - t0);
   c->plan = std::move(p);
-  slot.disk_version = slot.version;
-  {
-    std::lock_guard<std::mutex> lk(d.mu);
-    d.unwritten.push_back({c->plan->entry.tokens, bytes});
-    d.captured.push_back(std::move(c));
+  c->version = slot.version;
+  if (!wait_write) {
+    {
+      std::lock_guard<std::mutex> lk(d.mu);
+      d.unwritten.push_back({c->plan->entry.tokens, bytes});
+      d.captured.push_back(std::move(c));
+    }
+    d.cv.notify_all();
+    return;
   }
-  d.cv.notify_all();
+  // the caller replaces this slot now (a history prefill taking it): write the copy here, giving the GPU turn up as a read
+  // does, so the check that follows knows whether it landed. Not queued: the caller waits for it anyway.
+  if (slot.busy) turn_.unlock();
+  const bool ok = d.write_captured(*c);
+  if (slot.busy) turn_.lock();
+  if (!ok) {  // not on the SSD: the slot keeps its unsaved version, and the caller gives up rather than lose it
+    d.refused_until.store(now_ms() + d.retry_ms, std::memory_order_relaxed);
+    d.refused_all.store(false, std::memory_order_relaxed);
+    d.refuse(p->slot, p->version);  // (the version it tried: the slot's own may have moved on)
+    return;
+  }
+  slot.disk_version = slot.version;
 }
 
 void Engine::disk_loop() {
@@ -639,7 +714,14 @@ void Engine::disk_loop() {
       }
     }
     if (c) {
-      d.write_captured(*c);
+      const bool ok = d.write_captured(*c);
+      if (ok)
+        disk_confirm(c->plan->slot, c->version);  // (marked saved only now that what it holds is on the SSD)
+      else {  // not written: the slot keeps its unsaved version, and only it waits before the next attempt
+        d.refused_until.store(now_ms() + d.retry_ms, std::memory_order_relaxed);
+        d.refused_all.store(false, std::memory_order_relaxed);
+        d.refuse(c->plan->slot, c->version);
+      }
       {
         std::lock_guard<std::mutex> lk(d.mu);
         d.unwritten.pop_front();  // (written in the order queued)
@@ -655,12 +737,17 @@ void Engine::disk_loop() {
     // write-behind: an idle slot that changed since it was saved, the most recently used first
     int pick = -1;
     if (turn_.try_lock()) {
-      if (active_ == 0)
+      if (active_ == 0) {
+        const bool waiting = now_ms() < d.refused_until.load(std::memory_order_relaxed);
+        const bool full = d.refused_all.load(std::memory_order_relaxed);
+        std::vector<WriteCandidate> cand(slots_.size());
         for (size_t i = 0; i < slots_.size(); ++i) {
           const Slot& s = slots_[i];
-          if (!s.busy && s.version != s.disk_version && (pick < 0 || s.last_used > slots_[size_t(pick)].last_used))
-            pick = int(i);
+          cand[i] = {s.busy, s.version == s.disk_version, skip_retry(waiting, full, d.refused(int(i)) == s.version),
+                     double(s.last_used)};
         }
+        pick = pick_write(cand);
+      }
       turn_.unlock();
     }
     if (pick >= 0 && !disk_save_slot(pick, false)) quiet = now_ms();  // a request came: after the next quiet spell
@@ -690,7 +777,9 @@ void Engine::save_disk_cache(double budget_ms) {
       c = std::move(d.captured.front());
       d.captured.pop_front();
     }
-    saved += d.write_captured(*c);
+    const bool ok = d.write_captured(*c);
+    if (ok) disk_confirm(c->plan->slot, c->version);
+    saved += ok;
   }
   {
     std::lock_guard<TurnLock> lk(turn_);  // nothing changes while it writes

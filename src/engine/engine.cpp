@@ -3886,9 +3886,11 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     if (!hit || hit.pos < 64 || hit.pos >= n || slot.gen != want_gen)
       return logd("history: no restore point to start from (n %d, common %zu, slot %zu tokens; points:%s; SSD: %s)", n,
                   common, slot.tokens.size(), have.c_str(), hit ? "too early or the slot changed" : "none");
-    disk_leaving(slot, 0);  // the live state goes to the SSD first unless it is there
-    // disk_leaving does not always save it (no room, too large to copy and not worth a wait): the conversation another
-    // request left in a slot taken here is never replaced unsaved, its next request would pay for it
+    // the live state goes to the SSD first unless it is there, written here when the slot is taken next (a copy queued in
+    // the background could fail after the slot was cleared, and the conversation would be lost, #467)
+    disk_leaving(slot, 0, true);
+    // it is not always saved (no room, too large to copy and not worth a wait): the conversation another request left in a
+    // slot taken here is never replaced unsaved, its next request would pay for it
     if (stolen && !disk_safe_to_replace(slot))
       return logd("history: given up, slot %zu's conversation (%zu tokens) is not on the SSD and would be lost", size_t(&slot - slots_.data()), slot.tokens.size());
     slot.tokens.clear();

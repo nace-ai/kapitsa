@@ -18,6 +18,7 @@
 #include "api/responses.h"
 #include "engine/output_parser.h"
 #include "engine/disk_wait.h"
+#include "engine/disk_saved.h"
 #include "engine/engine.h"
 #include "engine/history_gate.h"
 #include "engine/reasoning_memory.h"
@@ -1163,6 +1164,47 @@ void kflash_lookup_unit() {
 // Engine::prefill_history's wait for a quiet server (QuietGate): a request starting or running holds it back, and it
 // opens once none started for idle_ms and none is running (two conversations on two slots: the first to finish was
 // dropped by the second's next request before)
+// #467: a save refused for lack of room, or one that failed while writing, used to be recorded as a save, so a slot whose
+// conversation was never written looked saved and another conversation could replace it (its next request then read its
+// prompt from the start). A slot counts as saved only when the write of it landed.
+void disk_saved_unit() {
+  check(!save_landed(SaveOutcome::kNoRoom), "save: no room at all writes nothing: the slot stays unsaved");
+  check(!save_landed(SaveOutcome::kWriteFailed), "save: a piece that failed to write is not a save");
+  check(!save_landed(SaveOutcome::kEntryFailed), "save: an entry that could not be written is not a save");
+  check(save_landed(SaveOutcome::kLanded), "save: a write that landed is a save");
+  check(save_landed(SaveOutcome::kNothingToTake), "save: a slot the SSD takes nothing from has nothing to lose");
+  // what disk_save_slot and disk_leaving do with each outcome: mark the version saved, and whether to wait before the
+  // next attempt (a save that could not be written is not copied again straight away)
+  const SaveVerdict no_room = save_verdict(SaveOutcome::kNoRoom);
+  check(!no_room.save && no_room.pace_retry, "save verdict: no room leaves the slot unsaved and waits before retrying");
+  const SaveVerdict failed = save_verdict(SaveOutcome::kWriteFailed);
+  check(!failed.save && failed.pace_retry, "save verdict: a failed write leaves the slot unsaved and waits");
+  const SaveVerdict entry = save_verdict(SaveOutcome::kEntryFailed);
+  check(!entry.save && entry.pace_retry, "save verdict: a failed entry leaves the slot unsaved and waits");
+  const SaveVerdict landed = save_verdict(SaveOutcome::kLanded);
+  check(landed.save && !landed.pace_retry, "save verdict: a landed write marks the slot saved");
+  const SaveVerdict nothing = save_verdict(SaveOutcome::kNothingToTake);
+  check(nothing.save && !nothing.pace_retry, "save verdict: nothing to take marks the slot saved and does not wait");
+  check(!skip_retry(false, false, true), "retry: a slot is written when nothing is waiting");
+  check(skip_retry(true, true, false), "retry: a cache with no room at all holds every slot back");
+  check(skip_retry(true, false, true), "retry: a slot whose own save was refused waits");
+  check(!skip_retry(true, false, false), "retry: another slot is written while that one waits");
+  check(clear_retry_on_save(true), "retry: a save that landed ends a wait for room in the cache");
+  check(!clear_retry_on_save(false), "retry: another slot's save does not end this slot's own wait");
+  // the write-behind's pick: one slot whose conversation never fits must not block the others
+  check(pick_write(std::vector<WriteCandidate>{{false, false, false, 5}, {false, false, true, 9}}) == 0,
+        "write-behind: a slot waiting out a refused save is skipped, the other unsaved slot is written");
+  check(pick_write(std::vector<WriteCandidate>{{false, false, false, 5}, {false, false, false, 9}}) == 1,
+        "write-behind: the most recently used unsaved slot is written first");
+  check(pick_write(std::vector<WriteCandidate>{{false, true, false, 9}, {true, false, false, 8}}) == -1,
+        "write-behind: nothing to write when the slots are on the SSD or busy");
+  check(safe_to_replace(true, 3, 3, 5000, 64), "guard: a slot already on the SSD is replaced");
+  check(!safe_to_replace(true, 4, 3, 5000, 64), "guard: a slot whose save failed is not replaced");
+  check(safe_to_replace(true, 4, 3, 50, 64), "guard: a slot shorter than the cache stores is replaced");
+  check(safe_to_replace(false, 4, 3, 5000, 64), "guard: no SSD (or one that is off), nothing to lose");
+  check(!safe_to_replace(true, 4, 3, 64, 64), "guard: a slot at the cache's minimum length is kept unless its save landed");
+}
+
 void history_gate_unit() {
   QuietGate g(250, 10, 0);
   check(!g.ready(10, 0, 100), "history gate: 100 ms after the reply it is not yet quiet");
@@ -1771,6 +1813,7 @@ int main(int argc, char** argv) {
   float_arguments_text();
   tool_arguments_spelling();
   disk_wait_unit();
+  disk_saved_unit();
   history_gate_unit();
   kflash_lookup_unit();
   unsupported_model_unit();

@@ -1031,6 +1031,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_GRAMMAR_SPEC` | on | [Structured output](#structured-output) with a DFlash2 draft model (the Qwen models): drafts are still verified, each verify row under its own mask; `0` decodes the formatted part one token per pass. |
 | `NI_DISK_CACHE` | | As `--disk-cache` when the option is absent; tools that start an engine without `kapitsa serve` keep no SSD prefix cache unless it is set. |
 | `NI_DISK_CACHE_IDLE_MS` | `10000` | SSD prefix cache: how long the server is idle after a turn before it writes the conversation, in ms. |
+| `NI_DISK_CACHE_RETRY_MS` | `60000` | SSD prefix cache: after a save the cache had no room for, how long before a slot is written again, in ms (`0`: after every quiet spell). Until then the slot counts as unsaved. |
 | `NI_DISK_CACHE_MIN` | `1024` | SSD prefix cache: the shallowest state kept, in tokens. |
 | `NI_DISK_CACHE_DIR` | `$KAPITSA_HOME/prefix-cache` | SSD prefix cache: the folder of its namespaces. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
