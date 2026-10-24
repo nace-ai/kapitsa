@@ -90,6 +90,7 @@ for e in ("kap", "llama-gpu"):
         a, lm = agg([r["load"] for r in L]); b, _ = agg([r["pms"] for r in L])
         c, cm = agg([r["real"] - r["dms"] / 1e3 for r in L if r["real"] and r["dms"]])
         best["cold"][e] = (cm,)
+        best.setdefault("coldlegs", {})[e] = sorted((r["leg"], r["real"] - r["dms"] / 1e3) for r in L if r["real"] and r["dms"])
         print(f"| {name[e]} | {a} | {b} | {c} |")
 print("\n## Fastest? (Kapitsa vs the best llama.cpp configuration at each length)\n")
 for p in order:
@@ -101,9 +102,9 @@ for p in order:
     for i, nm in ((0, "prefill"), (1, "decode")):
         o = max(v[i] for v in ll)
         print(f"- {p} {nm}: Kapitsa {k[i]:.1f} vs llama.cpp {o:.1f} tok/s -> fastest: {'yes' if k[i] > o else 'no'}, by {abs(k[i] / o - 1) * 100:.1f}%")
-if "kap" in best["cold"] and "llama-gpu" in best["cold"]:
-    a, b = best["cold"]["kap"][0], best["cold"]["llama-gpu"][0]
-    print(f"- cold start to first token: Kapitsa {a:.2f} s vs llama.cpp {b:.2f} s -> fastest: {'yes' if a < b else 'no'}, by {abs(b / a - 1) * 100:.1f}%")
+if "kap" in best.get("coldlegs", {}) and "llama-gpu" in best["coldlegs"]:
+    f = lambda e: ", ".join(f"{lg} {v:.2f}" for lg, v in best["coldlegs"][e])
+    print(f"- cold start to first token, per leg (s): Kapitsa {f('kap')}; llama.cpp {f('llama-gpu')} (read each leg: a leg whose weights load far faster than the others was warm, not cold; no percentage is derived from the mean)")
 print("\n## Generated tokens (greedy, first 128): Kapitsa vs llama.cpp, common prefix\n")
 for p in order:
     k = next((r["toks"] for r in ok if r["eng"] == "kap" and r["pr"] == p and r["toks"]), None)

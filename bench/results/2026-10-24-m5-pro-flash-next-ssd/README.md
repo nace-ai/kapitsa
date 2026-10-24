@@ -6,7 +6,8 @@ disk for the timed legs.
 
 - **Kapitsa** main `4b087c8` (`build/ni_run`), the Q2_0 pack (43 GB on disk): routed experts streamed through the
   expert store, which was **pinned at 24 GB** (`NI_EXPERT_STORE=24`) for memory headroom during the run. The auto
-  size on this Mac is about 29.9 GB, so these Kapitsa numbers come from a smaller store than a user gets. GPU heater
+  size on this Mac is about 29.9 GB, so these Kapitsa numbers come from a smaller store than a user gets. Four runs at
+  the auto size were stopped at memory pressure level 2 (see Caveats). GPU heater
   on (the default). No speculative decoding.
 - **llama.cpp** `0a9ef00`, `llama-server -ngl 99 -fa on -c 33280 -np 1` on ISTA's Q2_0 GGUF (66.4 GB, mmap), no
   speculative decoding. A side row runs it with `--cpu-moe` (routed experts on the CPU).
@@ -19,9 +20,10 @@ available, so before each cold leg the other engine's files were read through th
 [scripts/](scripts/) and every leg's log is in [legs/](legs/), along with the aborted and refused attempts.
 
 **Verdict: Kapitsa is not the fastest everywhere.** Its prefill is behind at 85 tokens (79% slower) and at 1K (28%
-slower), and level from 4K up (-2.0% at 4K, +1.0% at 16K, +2.7% at 32K, all inside the legs' spread). Its decode
+slower), level at 4K (-2.0%) and 16K (+1.0%), both inside the legs' spread, and slightly ahead at 32K (+2.7%: both Kapitsa legs, 541.7
+and 558.0 tok/s, are above both llama.cpp legs, 535.5 and 535.2, one pair of legs per engine). Its decode
 is ahead up to 4K (+4.0%, +6.3%, +8.0%) and behind at 16K (-5.1%) and 32K (-8.2%). Cold start to the first token is
-33% faster (approximate, see below).
+level (Kapitsa's cold leg 13.9 s, llama.cpp 13.2 s; Kapitsa's second leg is warm, see below).
 
 ## Summary (all model files on the internal disk; ± = half the range over the mean)
 
@@ -59,7 +61,7 @@ is ahead up to 4K (+4.0%, +6.3%, +8.0%) and behind at 16K (-5.1%) and 32K (-8.2%
 - pf16 decode: Kapitsa 34.7 vs llama.cpp 36.5 tok/s -> fastest: no, by 5.1%
 - c32k prefill: Kapitsa 549.9 vs llama.cpp 535.4 tok/s -> fastest: yes, by 2.7%
 - c32k decode: Kapitsa 32.7 vs llama.cpp 35.6 tok/s -> fastest: no, by 8.2%
-- cold start to first token: Kapitsa 9.94 s vs llama.cpp 13.22 s -> fastest: yes, by 33.0%
+- cold start to first token, per leg (s): Kapitsa c1 13.85, c2 6.02; llama.cpp c1 13.21, c2 13.22 (read each leg: a leg whose weights load far faster than the others was warm, not cold; no percentage is derived from the mean)
 
 ## Generated tokens (greedy, first 128): Kapitsa vs llama.cpp, common prefix
 
@@ -74,7 +76,8 @@ is ahead up to 4K (+4.0%, +6.3%, +8.0%) and behind at 16K (-5.1%) and 32K (-8.2%
 - Kapitsa store sizes seen: 24.00 GB (70.1%).
 - Same Mac: M5 Pro 48 GB; all model files on the internal disk during timed legs (ISTA GGUF copy removed after the run, sha256-checked against the drive; df 170 GiB free). Kapitsa heater default-on (main 4b087c8). MLX not measured.
 - Kapitsa expert store pinned at 24 GB (NI_EXPERT_STORE=24) for memory headroom during the run; the auto default on this Mac is ~29.9 GB, so these Kapitsa numbers are from a smaller store than a user gets.
-- Cold starts are approximate: no sudo purge; the other engine's files were read through the page cache before each cold leg.
+- Cold starts are approximate: no sudo purge; the other engine's files were read through the page cache before each cold leg. Kapitsa's second cold leg (c2) was warm: its weights loaded in 4.1 s against 12.0 s in c1, and the eviction step took 3 s, so its pack stayed cached. The table's mean of the two Kapitsa legs (9.9 s, ±39.4%) is not a cold start.
+- Four attempts at Kapitsa's default store size (28-29.9 GB) were stopped by the harness at memory pressure level 2 and are kept in `legs/aborted/auto0_..auto3_*` (swap +0 MB, +1,847 MB, +0 MB, +44 MB; auto3 logged that the weights are no longer kept wired while idle). So the default store size was not measured here, and it was not tested whether a user's session would hit the same pressure.
 - pf16: Kapitsa stopped at EOS after 47 decoded tokens, llama.cpp decoded 128 (`ignore_eos`); decode rates are over the same 16K context but not the same token count.
 - Kapitsa's 1K prefill legs read 356 and 534 tok/s (±20%); both are below llama.cpp's 610 and 625.
 - Greedy outputs differ between engines (different quantized weights/kernels; common prefix 2-63 tokens), so decode speed is compared, not text.
