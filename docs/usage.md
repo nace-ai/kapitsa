@@ -1032,6 +1032,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_DISK_CACHE` | | As `--disk-cache` when the option is absent; tools that start an engine without `kapitsa serve` keep no SSD prefix cache unless it is set. |
 | `NI_DISK_CACHE_IDLE_MS` | `10000` | SSD prefix cache: how long the server is idle after a turn before it writes the conversation, in ms. |
 | `NI_DISK_CACHE_MIN` | `1024` | SSD prefix cache: the shallowest state kept, in tokens. |
+| `NI_DISK_CACHE_CAPTURE_MAX` | min(1 GiB, RAM/32) | SSD prefix cache: the most bytes of a conversation copied in memory when a request replaces it before it was saved; above it the conversation is written straight from the slot (a wait) or replaced unsaved. A smaller value is for testing that path. |
 | `NI_DISK_CACHE_DIR` | `$KAPITSA_HOME/prefix-cache` | SSD prefix cache: the folder of its namespaces. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |

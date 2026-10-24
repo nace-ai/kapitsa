@@ -347,6 +347,9 @@ void Engine::disk_start() {
   d->min_pos = std::max(64, int(dc::env_num("NI_DISK_CACHE_MIN", 1024)));
   d->idle_ms = std::max(0.0, dc::env_num("NI_DISK_CACHE_IDLE_MS", 10000));
   d->capture_max = std::min<uint64_t>(pcache::kGiB, dc::ram_bytes() / 32);
+  // (NI_DISK_CACHE_CAPTURE_MAX, bytes: a smaller limit sends more conversations down the path of one too large to copy in
+  // memory, which replaces the conversation unsaved when it is not worth waiting for; for testing that path on a small model)
+  if (const double v = dc::env_num("NI_DISK_CACHE_CAPTURE_MAX", 0); v >= 1) d->capture_max = uint64_t(v);
   const char* root = getenv("NI_DISK_CACHE_DIR");
   d->root = root && *root ? root : hub::home_dir() + "/prefix-cache";
   const std::string mode = dfl_ ? "DFlash2 drafter (" + std::to_string(dfl_->bits()) + "-bit), its context ring"
