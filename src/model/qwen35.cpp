@@ -417,6 +417,12 @@ void Qwen35::prewarm_pipelines() {
       if (L.mg && L.mg.q8()) names.insert("mlp_gate_up_f8g64");
       if (L.eg.q20) {  // Q2_0 routed experts (src/model/moe_q20.cpp)
         for (const std::string& n : q20::kernel_names(q20_arena())) names.insert(n);
+        // qtm-q20: the bm-64 tensor_ops prefill tiles (enc_moe_prefill_fused's gate; the qrm prefill names above
+        // compile anyway, two kernels' worth)
+        if (q20::qtm_prefill() && qmt_on() && L.eg.K % 64 == 0 && L.ed.K % 64 == 0 && L.eg.N % 32 == 0 &&
+            L.ed.N % 64 == 0)
+          for (const char* n : {"qmtm_gu_q20_m64_n64", "qmtm_dn_q20_m64_n64"})
+            names.insert(std::string(n) + moe_stage_sfx() + (q20_arena() ? "_slot" : ""));
       } else if (L.eg.iq) {  // llama.cpp's IQ blocks (qwen35_iq.cpp)
         const bool t16 = cfg_.moe_I == 512 && cfg_.shared_I == 512;
         for (const std::string& n : {"moei_gu_rows_" + L.eg.fmt() + "_r2", "moe8i_gu_" + L.eg.fmt(),
@@ -463,6 +469,13 @@ void Qwen35::prewarm_pipelines() {
     if (!fmts.empty() || moe_gen) names.insert("moe_topk256_rows");
   }
   std::vector<std::string> v(names.begin(), names.end());
+  // tensor_ops kernels live in the Metal 4 tensor library (the trigger pipe() fires on first use, moved up so the
+  // prewarmed qmt pipelines find their kernels)
+  for (const std::string& n : v)
+    if (n.rfind("qmt", 0) == 0 || n.rfind("qattn_t", 0) == 0) {
+      Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+      break;
+    }
   Gpu& g = Gpu::get();
   g.pipeline(v[0]);  // compiles the library once, before the threads
   const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
@@ -2749,6 +2762,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   // qmtm_gu_m64_n64 / qmtm_dn_m64_n64: tile width BN 64 (gate/up: 32 gate + 32 up columns per threadgroup) and K
   // step 32, the measured best; the tensor library builds only these two.
   constexpr int qtm_gu_n = 64, qtm_dn_n = 64;
+  // qtm-q20: the same tile on the Q2_0 experts (qmtm_gu_q20_m64_n64 / qmtm_dn_q20_m64_n64,
+  // src/kernels/tensor/qmt_moe_q20.metal); K % 64 as qrm-q20 needs, the N mods as the 4-bit qtm path's grids (gu:
+  // 32-column grid, I % 32; dn: 64-column grid, D % 64)
+  const bool qtm20 = q20 && q20::qtm_prefill() && qmt_on() && G.K % 64 == 0 && Dn.K % 64 == 0 &&
+                     G.N % (qtm_gu_n / 2) == 0 && Dn.N % qtm_dn_n == 0;
   // qmtm_gu_m64_n64 / qmtm_dn_m64_n64 on 64-row tiles: the qmt tile (tensor_ops) on the routed experts' grouped
   // GEMMs (4-bit g64). 64 rows is the whole tile of an expert's bucket at 4K-16K rows of a 256-expert layer.
   const bool qtm = !q20 && !gen && moe_qtm() && qmt_on() && G.bits == 4 && G.gs == 64 && U.bits == 4 &&
@@ -2758,8 +2776,9 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
                    Dn.K % 64 == 0 && G.N % 64 == 0 && Dn.N % 128 == 0;
   // NI_MOE_BM: rows per tile (16, 32 or 64); partial tiles skip their empty 8-row fragments
   static const int bm_env = getenv("NI_MOE_BM") ? atoi(getenv("NI_MOE_BM")) : 64;
-  const int bm = q20 || gen ? 32 : qtm ? 64 : qrm ? moe_qmr() : bm_env;
-  const int kBnGu = q20 || qrm || gen ? 64 : qtm ? qtm_gu_n / 2 : 32, kBnDn = q20 || qrm || gen ? 128 : qtm ? qtm_dn_n : 64;
+  const int bm = qtm20 ? 64 : q20 || gen ? 32 : qtm ? 64 : qrm ? moe_qmr() : bm_env;
+  const int kBnGu = qtm20 || qtm ? qtm_gu_n / 2 : q20 || qrm || gen ? 64 : 32,
+            kBnDn = qtm20 || qtm ? qtm_dn_n : q20 || qrm || gen ? 128 : 64;
   auto fits = [gen, q20](const QLinear& q) {
     if (q20) return q.q20 && q.K % 64 == 0;
     return gen ? q.K % 32 == 0 : q.bits == 4 && q.gs % 32 == 0 && q.K % 32 == 0;
@@ -2780,6 +2799,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   if (qtm && !qtm_logged) {
     qtm_logged = true;
     logi("NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)");
+  }
+  static bool qtm20_logged = false;
+  if (qtm20 && !qtm20_logged) {
+    qtm20_logged = true;
+    logi("NI_MOE_QTM_Q20: routed Q2_0 expert GEMMs on tensor_ops (qmtm_gu_q20_m64_n64, qmtm_dn_q20_m64_n64, 64-row tiles)");
   }
   const int S = fold ? T : 0;
   if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);

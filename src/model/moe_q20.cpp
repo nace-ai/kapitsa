@@ -4,6 +4,12 @@
 #include "util/log.h"
 
 #include <algorithm>
+#include <cstdlib>
+
+// the Metal 4 tensor_ops kernel source (generated from src/kernels/tensor/, embedded by cmake)
+namespace ni {
+extern const char* const kTensorKernelSource;
+}
 
 namespace ni::q20 {
 
@@ -20,7 +26,12 @@ SlotParams slot_params(const Experts& x) {
   return SlotParams{x.lay.gc, x.lay.gd, x.lay.uc, x.lay.ud, x.lay.dc, x.lay.dd};
 }
 
-Pipeline pipe(const std::string& base, const Experts& x) { return Gpu::get().pipeline(x.arena ? base + "_slot" : base); }
+Pipeline pipe(const std::string& base, const Experts& x) {
+  const std::string n = x.arena ? base + "_slot" : base;
+  // the qmt tiles live in the Metal 4 tensor library, as qwen35.cpp's qmt kernels do (compile_extra is keyed)
+  if (n.rfind("qmt", 0) == 0) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+  return Gpu::get().pipeline(n);
+}
 
 // the routed experts' gate/up at buffers i .. i + 3: stacked planes, or the arena chunks and the slot table
 void bind_gu(Encoder& e, const Experts& x, int i) {
@@ -142,32 +153,61 @@ void enc_verify(Encoder& e, const Experts& x, const Shared& s, const Shape& sh, 
   enc_down(e, x, s, sh, R, h, idx, wts, y);
 }
 
+// NI_MOE_QTM_Q20 (read once; default on): the bm-64 qmt-tile prefill of enc_prefill. The caller also gates on the
+// hardware (the tile needs the M5's matrix units, as qwen35.cpp's qmt_on() checks for the 4-bit qmt kernels).
+bool qtm_prefill() {
+  static const bool on = [] {
+    const char* v = getenv("NI_MOE_QTM_Q20");
+    return !v || !*v || atoi(v) != 0;
+  }();
+  return on;
+}
+
+namespace {
+
+// NI_MOE_STAGE (qwen35.cpp's switch of the same name): with 0, the "_o" twins keep main's element stores
+const char* stage_sfx() {
+  static const char* s = [] {
+    const char* v = getenv("NI_MOE_STAGE");
+    return v && *v && atoi(v) == 0 ? "_o" : "";
+  }();
+  return s;
+}
+
+}  // namespace
+
 void enc_prefill(Encoder& e, const Experts& x, const Shape& sh, int bm, uint32_t max_tiles, const Buffer& xh,
                  const Buffer& H, const Buffer& Y, const Buffer& tiles, const Buffer& ntiles, const Buffer& xrows,
                  const Buffer& yrows) {
-  if (bm != 8 && bm != 32) fatal("q20::enc_prefill: tiles of %d rows (8 or 32)", bm);
-  const bool small = bm == 8;
+  if (bm != 8 && bm != 32 && bm != 64) fatal("q20::enc_prefill: tiles of %d rows (8, 32 or 64)", bm);
+  const bool small = bm == 8, qtm = bm == 64;  // qtm: the tensor_ops tile (src/kernels/tensor/qmt_moe_q20.metal)
   const SlotParams L = slot_params(x);
   // N, K, x_ld, y_ld, gs, expert strides (words, halfs), shared_e (no shared tiles)
   const kp::Qmm2 pg{sh.I, sh.D, sh.D, sh.I, 64u, sh.I * (sh.D / 16), sh.I * (sh.D / 64), sh.E + 1};
   const kp::Qmm2 pd{sh.D, sh.I, sh.I, sh.D, 64u, sh.D * (sh.I / 16), sh.D * (sh.I / 64), sh.E + 1};
   constexpr uint32_t nsg = 4;  // the small-T kernels: 4 simdgroups of 8 weight rows
-  e.use(pipe(small ? "qmms_moe_gu_q20" : "qrm_gu_q20_m32_n64", x));
+  // the qtm tile: BN / 2 gate + BN / 2 up columns a tile (BN = 64), so its gu grid is twice qrm's and its dn grid is
+  // the qrm dn grid at half its BN; buffer slots are the qrm_*_q20 ones in every mode
+  e.use(pipe(small ? "qmms_moe_gu_q20" : qtm ? "qmtm_gu_q20_m64_n64" + std::string(stage_sfx()) : "qrm_gu_q20_m32_n64",
+             x));
   e.buf(0, xh);
   bind_gu(e, x, 1);
   e.buf(5, H);
   e.val(6, pg);
   e.buf(7, tiles); e.buf(8, ntiles); e.buf(9, xrows);
   e.val(10, L);
-  e.dispatch(small ? sh.I / (8 * nsg) : sh.I / 64, max_tiles, 1, small ? 32 * nsg : 128);
-  e.use(pipe(small ? "qmms_moe_dn_q20" : "qrm_dn_q20_m32_n128", x));
+  e.dispatch(small ? sh.I / (8 * nsg) : qtm ? sh.I / 32 : sh.I / 64, max_tiles, 1, small ? 32 * nsg : 128);
+  e.use(pipe(small ? "qmms_moe_dn_q20"
+                   : qtm ? "qmtm_dn_q20_m64_n64" + std::string(stage_sfx())
+                         : "qrm_dn_q20_m32_n128",
+             x));
   e.buf(0, H);
   bind_dn(e, x, 1);
   e.buf(4, Y);
   e.val(5, pd);
   e.buf(6, tiles); e.buf(7, ntiles); e.buf(8, yrows);
   e.val(9, L);
-  e.dispatch(small ? sh.D / (8 * nsg) : sh.D / 128, max_tiles, 1, small ? 32 * nsg : 128);
+  e.dispatch(small ? sh.D / (8 * nsg) : qtm ? sh.D / 64 : sh.D / 128, max_tiles, 1, small ? 32 * nsg : 128);
 }
 
 }  // namespace ni::q20
