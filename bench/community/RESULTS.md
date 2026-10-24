@@ -15,7 +15,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (14-inch, 2026) · M5 Max 40-core GPU · 64 GB](#macbook-pro-14-inch-2026--m5-max-40-core-gpu--64-gb) | 1 |
 | [MacBook Pro (14-inch, 2026) · M5 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2026--m5-pro-16-core-gpu--48-gb) | 3 |
 | [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 48 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--48-gb) | 1 |
-| [Mac Studio (2025) · M3 Ultra 80-core GPU · 512 GB](#mac-studio-2025--m3-ultra-80-core-gpu--512-gb) | 3 |
+| [Mac Studio (2025) · M3 Ultra 80-core GPU · 512 GB](#mac-studio-2025--m3-ultra-80-core-gpu--512-gb) | 4 |
 | [MacBook Pro (14-inch, 2025) · M5 10-core GPU · 32 GB](#macbook-pro-14-inch-2025--m5-10-core-gpu--32-gb) | 7 |
 | [Mac mini (2024) · M4 10-core GPU · 24 GB](#mac-mini-2024--m4-10-core-gpu--24-gb) | 2 |
 | [Mac mini (2024) · M4 10-core GPU · 32 GB](#mac-mini-2024--m4-10-core-gpu--32-gb) | 1 |
@@ -183,6 +183,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-24](results/kapitsa-bench-2026-10-24-m3-ultra-qwen3.8-27b-4bit-2fec89.json) | 161.1 tok/s | 166.0 tok/s | 464 tok/s | 456 tok/s | 0.11 s | 0.11 s | 19.3 GB | pass | KFlash | 0.2.15 | 27.0.1 | – |
+
+### Recursive Flint 40B-A2.5B · 4-bit
+
+| Run | Writing, T = 1.0 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-24](results/kapitsa-bench-2026-10-24-m3-ultra-flint-4bit-ef70f4.json) | 191.0 tok/s | 192.5 tok/s | 2,924 tok/s | 2,599 tok/s | 0.09 s | 0.11 s | 22.6 GB | pass | plain | 0.2.15 | 27.0.1 | – |
 
 ### Qwen3.8 Flash-Next 180B-A7B · 4-bit
 
