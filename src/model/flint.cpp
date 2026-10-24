@@ -112,19 +112,25 @@ bool qmt_available() {
 
 // The decode kernels' merges in a dispatch of their own (flint.metal, FLINT_FENCES): always on macOS 14, whose Metal
 // 3.1 has no device-scope fences for the last threadgroup to merge in; NI_FLINT_SPLIT=1 takes them on a newer macOS too.
-// iq (a GGUF import's IQ experts): also before Apple9 (M1, M2), where that threadgroup read stale data behind the
-// fences: on the M1 Pro decode rows' experts and attention went wrong, differently run to run (logit_dump of
-// flint-16gb, step rows: NLL 9.05 / 10.56, top-1 0.19 / 0.06, where the verify rows read 0.908; an M2 not verified).
-// The 4-bit export keeps the fused kernels there until it is measured on such a Mac (it does not fit the 16 GB M1 Pro).
-// Every export on an Ultra (two dies) too: on the M5 Ultra both the 4-bit export and an IQ import turned to garbage once
-// the context passed a 32-key tile (#421), when the decode attention starts to merge splits: the M1 Pro's stale reads
-// across two dies (not yet confirmed on an Ultra); the M5 Pro and M4 Pro, one die, run the fused kernels correctly.
-// NI_FLINT_SPLIT=0 keeps them anyway.
-bool split_merges(bool iq) {
+// Before Apple9 (M1, M2), every export takes them: single-die chips where the fences do not hold for the last
+// threadgroup, so a GGUF import's IQ experts and a 4-bit export both read stale data behind them. On the M1 Pro decode
+// rows' experts and attention went wrong, differently run to run (logit_dump of flint-16gb, step rows: NLL 9.05 / 10.56,
+// top-1 0.19 / 0.06, where the verify rows read 0.908); on brechtm's single-die M1 Max (macOS 27, 0.2.15) the 4-bit
+// export answered `oper.com.com...` and `Il Il Il` garbage on a chat prompt, and the same build with NI_FLINT_SPLIT=1
+// decoded properly (#478, that test on #472's advice; how soon the garbage starts, at the first token or after a 32-key
+// tile, is not settled; an M2 not verified). The fused path has never been measured on one of these Macs and those are
+// its only results there, both failures, so they all take the split merges: one extra dispatch a merge, the path
+// NI_FLINT_SPLIT=1 has always shipped, and the family test covers a Mac whose name hides what it is ("Apple M1 Max"
+// names no Ultra). A measurement on a pre-Apple9 chip can narrow this again. Apple9 and later keep the fused kernels
+// (an M3 Pro, M5 Pro, M4 Pro and M4 Max run them correctly). On an Ultra, two dies joined by UltraFusion, they do not:
+// the M5 Ultra's 4-bit export and IQ import both turned to garbage once the context passed a 32-key tile, when the
+// decode attention starts to merge splits (#421), and the name test covers those chips because their apple_family is 9+
+// and they would otherwise take the fused path. NI_FLINT_SPLIT=0 keeps the fused kernels anyway.
+bool split_merges() {
   if (env_on("NI_FLINT_SPLIT")) return true;
   if (__builtin_available(macOS 15.0, *)) {
     if (getenv("NI_FLINT_SPLIT")) return false;
-    return Gpu::get().name().find("Ultra") != std::string::npos || (iq && Gpu::get().apple_family() < 9);
+    return Gpu::get().name().find("Ultra") != std::string::npos || Gpu::get().apple_family() < 9;
   }
   return true;
 }
@@ -306,7 +312,7 @@ Flint::Flint(const std::string& path, int prefill_chunk) {
   cfg_ = read_config(path_);
   Gpu::get().compile_extra("Flint", kFlintKernelSource);
   qmt_ = cfg_.bits == 4 && qmt_available();
-  split_ = split_merges(!cfg_.iq.empty());
+  split_ = split_merges();
   if (split_) logi("Flint: the decode kernels' merges in dispatches of their own (NI_FLINT_SPLIT)");
   if (qmt_) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
   load(prefill_chunk);

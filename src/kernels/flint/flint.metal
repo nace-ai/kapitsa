@@ -21,9 +21,9 @@
 // counter behind device-scope fences, atomic_thread_fence with thread_scope_device). Those fences come with Metal 3.2,
 // which macOS 14 does not have: there the library compiles without them (FLINT_FENCES 0), the three kernels only write
 // their partial results, and flint_router_topk_merge / flint_router_shared_merge / flint_attn_d2_merge run the same
-// merge as a dispatch of their own (p.split; Flint's split_merges(), NI_FLINT_SPLIT=1 on a newer macOS). A GGUF
-// import's (IQ experts') do so before Apple9 (M1, M2) too, where the last threadgroup read stale data behind the
-// fences (the M1 Pro).
+// merge as a dispatch of their own (p.split; Flint's split_merges(), NI_FLINT_SPLIT=1 on a newer macOS). Every export
+// does so before Apple9 (M1, M2) too, where the last threadgroup read stale data behind the fences (the M1 Pro; an M1
+// Max's 4-bit export answered garbage, #478).
 
 #ifndef NI_UNROLL
 #define NI_UNROLL _Pragma("clang loop unroll(full)")
