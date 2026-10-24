@@ -406,6 +406,8 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
+    if (!elsewhere)
+      if (const std::string why = unsupported_model(ref.dir); !why.empty()) return fail(why);
     // the context first (serve then picks the slots, and caps a context past the model's limit, saying so): as
     // asked, max the model's limit, else serve's default for this Mac (default_context)
     if (elsewhere) {  // that Mac's server has its context

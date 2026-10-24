@@ -1151,6 +1151,7 @@ static int serve(int argc, char** argv, int first) {
   } catch (const hub::Error& e) {
     return fail(e.what());
   }
+  if (const std::string why = unsupported_model(opt.model_dir); !why.empty()) return fail(why, 2);
   // --split: the stages hold the layers after this Mac's (src/cluster/pipe.h); every plan of the model and the engine's
   // Qwen4Exp then take this Mac's share
   if (!split.empty()) {

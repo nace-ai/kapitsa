@@ -20,6 +20,7 @@
 #include <fstream>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 
 namespace ni {
@@ -233,6 +234,7 @@ static bool newline_before_think_close(const minja::chat_template& tmpl) {
 }
 
 Engine::Engine(const EngineOptions& o) : opts_(o) {
+  if (const std::string why = unsupported_model(opts_.model_dir); !why.empty()) fatal("%s", why.c_str());
   if (opts_.model_id.empty()) {
     std::string d = opts_.model_dir;
     while (!d.empty() && d.back() == '/') d.pop_back();
@@ -591,6 +593,33 @@ size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t
   return budget > keep ? budget - keep : 1;
 }
 
+std::string unsupported_model(const std::string& model_dir) {
+  std::ifstream f(model_dir + "/config.json");
+  if (!f) return "";  // (a missing config.json is refused where the folder is resolved)
+  const nlohmann::json j = nlohmann::json::parse(f, nullptr, false);
+  if (!j.is_object()) return model_dir + ": its config.json is not valid JSON.";
+  if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
+      Flint::is_model(model_dir))
+    return "";
+  // the Qwen3.5 family by its model_type (Hugging Face's, and what the GGUF import writes); a config that names none,
+  // by the hybrid's shape, as the Hub check reads it (src/hub/fetch.cpp, check_supported)
+  auto type = [](const nlohmann::json& c) {
+    return c.is_object() && c.contains("model_type") && c["model_type"].is_string() ? c["model_type"].get<std::string>()
+                                                                                    : std::string();
+  };
+  const nlohmann::json t = j.contains("text_config") && j["text_config"].is_object() ? j["text_config"] : j;
+  const std::string mt = type(j), tt = type(t);
+  if (mt == "qwen3_5" || mt == "qwen3_5_moe" || tt == "qwen3_5_text" || tt == "qwen3_5_moe_text") return "";
+  if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers")) return "";
+  const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
+                           "Qwen3.8-Flash-Next (qwen4_exp), NVIDIA's Nemotron-H (nemotron_h: Nemotron Nano, Nemotron 3.5), "
+                           "Nemotron Labs Dory (dory) and Recursive's Flint (flint).";
+  const std::string what = !mt.empty() ? mt : tt;
+  if (what.empty()) return model_dir + " is not a model Kapitsa runs: its config.json names no model_type." + runs;
+  return model_dir + " is a " + what + " model (its config.json's model_type), an architecture Kapitsa does not run." +
+         runs;
+}
+
 MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
   // kept per process: a model's headers do not change while it is planned, and the largest take most of a second to
   // read (Super-VL's), which the picker, `kapitsa doctor` and default_context would otherwise pay on every plan.
@@ -605,6 +634,7 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
     std::lock_guard<std::mutex> lk(mu);
     if (const auto it = plans.find(key); it != plans.end()) return it->second;
   }
+  if (const std::string why = unsupported_model(model_dir); !why.empty()) throw std::runtime_error(why);
   const MemPlan p = Dory::is_model(model_dir)       ? Dory::plan(model_dir, prefill_chunk)
                     : Flint::is_model(model_dir)    ? Flint::plan(model_dir, prefill_chunk)
                     : Qwen4Exp::is_model(model_dir) ? Qwen4Exp::plan(model_dir, prefill_chunk)
