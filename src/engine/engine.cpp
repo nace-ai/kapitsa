@@ -3764,7 +3764,8 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     QuietGate gate(idle_ms, requests_.load(), now_ms());
     for (;;) {
       if (cancelled && cancelled()) return logd("history: given up, the model changed");
-      if (gate.ready(requests_.load(), active_, now_ms())) {
+      // (no read of active_ here: it is the turn's; the test under the lock below is the one that counts)
+      if (gate.ready(requests_.load(), 0, now_ms())) {
         if (lk.try_lock()) {
           if (active_ == 0 && requests_.load() == gate.seen) break;
           lk.unlock();
