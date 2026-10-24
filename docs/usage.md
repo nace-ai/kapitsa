@@ -119,10 +119,11 @@ next-token KL of 7e-6 from the BF16 head, the same top token at 319 of 320 posit
 ### Other models
 
 Any Hugging Face repo of a Qwen3.5-family model (Qwen3.5, Qwen3.6, Qwen3.8) in MLX format runs: bf16, or MLX affine 3,
-4, 5, 6 or 8-bit with groups of 64 (4-bit also 32), mixed recipes included. Kapitsa reads the repo's `config.json`
-before any weights, then downloads its top-level files except other formats (`.gguf`, `.bin`, images and the like). A
-catalog variant's repo (`mlx-community/Qwen3.6-35B-A3B-6bit`) comes with that variant's MTP head and draft model; other
-repos use the MTP head they contain, if any.
+4, 5, 6 or 8-bit with groups of 64 (4-bit also 32), mixed recipes included, except ones whose dense MLP gives
+`gate_proj` and `up_proj` different formats (as `mlx-community/Qwen3.8-27B-OptiQ-4bit`): those are refused when they
+load. Kapitsa reads the repo's `config.json` before any weights, then downloads its top-level files except other formats
+(`.gguf`, `.bin`, images and the like). A catalog variant's repo (`mlx-community/Qwen3.6-35B-A3B-6bit`) comes with that
+variant's MTP head and draft model; other repos use the MTP head they contain, if any.
 
 A folder needs `config.json`, the `*.safetensors` weights and `tokenizer.json`, and may hold an MTP head in
 `mtp.safetensors`. The official Hugging Face checkpoints of the dense models run as well. A Qwen3.8-Flash-Next
