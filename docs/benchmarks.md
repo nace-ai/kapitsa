@@ -2268,6 +2268,20 @@ run with less load in its window (for decode, a window of one or two samples, so
   point's foreign GPU load and both runs are in the
   [results folder](../bench/results/2026-10-22-flint-m5pro/README.md#context-sweep-1k-to-128k-tokens).
 
+The sweep again on 2026-10-24, Kapitsa `71d6891` (0.2.15) against llama.cpp b11840, with 3 to 5 cold requests per
+point and 512-token answers (rec not rerun):
+
+| Median tok/s | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Kapitsa prefill | **2,428** | **3,043** | **3,126** | **3,041** | **2,754** | **2,289** | **1,694** | **1,110** |
+| llama.cpp prefill | 1,893 | 2,208 | 2,172 | 2,053 | 1,766 | 1,355 | 914 | 549 |
+| Kapitsa decode | **145.6** | **142.7** | **137.8** | **131.3** | **116.9** | **97.8** | **74.1** | **49.1** |
+| llama.cpp decode | 90.7 | 89.0 | 86.5 | 83.0 | 73.5 | 61.5 | 46.7 | 30.8 |
+
+Kapitsa's prefill is 2.1-3.2x `6c13588`'s, so it now reads 1.28x as fast as llama.cpp at 1K and 2.02x at 128K, where
+it read 0.60-0.64x; decode is unchanged, 1.58-1.60x llama.cpp's. The spread, the method and the chart are in
+[bench/results/2026-10-24-flint-m5pro-context](../bench/results/2026-10-24-flint-m5pro-context/README.md).
+
 ## Recursive Flint 40B-A2.5B with 2-bit experts (M1 Pro 16 GB, 2026-10-22)
 
 Flint's 4-bit export (22.6 GB) does not fit a 16 GB Mac; unsloth's `flint-UD-IQ2_XXS.gguf` (11.9 GB, IQ1_S to IQ3_XXS

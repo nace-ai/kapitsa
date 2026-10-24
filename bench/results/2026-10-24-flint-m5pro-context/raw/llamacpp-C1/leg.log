@@ -1,0 +1,7 @@
+2026-10-24 06:52:52 leg llamacpp C1 plan 131072,131072
+memory free 90%, swap used 3261 MB, disk free 167 GiB
+06:53:03 llamacpp ready after 12s
+context source: 1950177 tokens
+{"engine": "llamacpp", "leg": "C1", "size": 131072, "rep_in_leg": 1, "start_epoch": 1792806789.071, "prompt_tokens": 131056, "ttft_s": 237.96257185935974, "prefill_tps": 550.7420724863257, "completion_tokens": 512, "finish_reason": "length", "events": 511, "decode_tps": 30.973462153394628, "decode_tps_e2e": 31.047117352878296, "rate_method": "chars", "window_tokens": 489.7, "window_s": 15.8097, "wall_s": 254.423, "swap_used_mb": [3253.69, 3245.69], "foreign_gpu_prefill": {"samples": 117, "mean_pct": 0.0, "max_pct": 0.0, "top": "-"}, "foreign_gpu_decode": {"samples": 8, "mean_pct": 0.0, "max_pct": 0.0, "top": "-"}}
+{"engine": "llamacpp", "leg": "C1", "size": 131072, "rep_in_leg": 2, "start_epoch": 1792807043.526, "prompt_tokens": 131060, "ttft_s": 237.9472301006317, "prefill_tps": 550.7943922884608, "completion_tokens": 512, "finish_reason": "length", "events": 511, "decode_tps": 30.948137823833573, "decode_tps_e2e": 31.030577077206537, "rate_method": "chars", "window_tokens": 490.6, "window_s": 15.8519, "wall_s": 254.417, "swap_used_mb": [3245.69, 3245.69], "foreign_gpu_prefill": {"samples": 117, "mean_pct": 0.0, "max_pct": 3.3, "top": "NotificationCent"}, "foreign_gpu_decode": {"samples": 8, "mean_pct": 0.0, "max_pct": 0.0, "top": "-"}}
+2026-10-24 07:01:38 end rc=0, leg 525s, total = 4096.00M  used = 3245.69M  free = 850.31M  (encrypted)
