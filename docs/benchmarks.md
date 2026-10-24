@@ -2351,6 +2351,23 @@ in one of them) and are kept in `legs/aborted/`; whether a user's session would 
 tokens and only speed is compared. llama.cpp with `--cpu-moe` ran 34.8 / 13.2 tok/s at 85 tokens and 132.9 / 14.6 at
 4K (a side row, not in the verdict).
 
+**Correction (24 Oct).** The Kapitsa prefill means at 1K-32K above understate Kapitsa. Its leg 1 always ran right after
+a llama.cpp leg (ABBA order), and at 1K it also paid a one-time 736 ms tensor-kernel compile. The cause is most likely
+the page cache displaced by the llama.cpp leg (Kapitsa's n-gram table), inferred by elimination and not measured
+directly. Kapitsa's second leg alone (n = 1; llama.cpp's own legs differ by up to 2.3%):
+
+| Prompt | Kapitsa prefill tok/s: published → leg 2 | Prefill: published → corrected |
+| --- | ---: | --- |
+| 1K | ~~445.0~~ → 533.9 | ~~28% slower~~ → 13.5-14.5% slower |
+| 4K | ~~558.2~~ → 585.2 | ~~level (-2.0%)~~ → level (Kapitsa +2.8-3.1% on one warm leg; the published -2.0% was an artifact of the cold first leg) |
+| 16K | ~~555.0~~ → 571.1 | ~~level (+1.0%)~~ → Kapitsa ahead by a few percent (+3.9%) |
+| 32K | ~~549.9~~ → 558.0 | ~~2.7% faster~~ → Kapitsa ahead by a few percent (+4.2-4.3%) |
+
+Decode and the 85-token row stand unchanged. Kapitsa's cold-start load of 8.1 s (±49%) mixes c1 (12.0 s, of which
+6.2 s + 2.8 s was compiling kernels with a cold shader cache) and c2 (4.1 s). The TTFT figures and details are in the
+[results README](../bench/results/2026-10-24-m5-pro-flash-next-ssd/README.md#correction-24-oct). The next Flash-Next
+run, where every measured leg follows an untimed warm-up leg of the same engine, will supersede these figures.
+
 ## Your Mac: `kapitsa bench`
 
 `kapitsa bench` runs this protocol for Kapitsa alone, from the `kapitsa` binary: no Python, no configs, no weights to
