@@ -195,6 +195,21 @@ int run_pass(ExpertCache& c, Event& ev, const Arena& a, const SlotLayout& lay, u
   return bad;
 }
 
+// Hard-sync of the turn thread (#512): serve() signals go before its read-ahead admit loop (expert_store.cpp), so
+// run_pass can return while admits are still in flight, and a check that reads the replacement bookkeeping (slots,
+// per-layer counts, residency) races the loop still writing it. An empty handshake drains it: the turn thread serves
+// requests in order, so this go proves the previous request's serve() returned, admits included. Nothing moves
+// between here and the next post, so a check after a quiesce reads one settled state on both of its sides.
+void quiesce(ExpertCache& c, Event& ev, uint64_t& value) {
+  ExpertCache::Req r;
+  r.layer = 0;
+  r.ready = ++value;
+  r.go = ++value;
+  c.post(r);
+  ev.v.store(r.ready, std::memory_order_release);
+  while (ev.v.load(std::memory_order_acquire) < r.go) std::this_thread::yield();
+}
+
 std::vector<uint32_t> topk(std::mt19937& rng, uint32_t E, uint32_t k, const std::vector<uint32_t>* hot = nullptr) {
   std::vector<uint32_t> v;
   while (v.size() < k) {
@@ -458,6 +473,7 @@ void case_scan_victim(const Pack& p) {
       steps[0].pred_all = l + 1 < L;
       steps[0].pred_layer = l + 1 < L ? int(l + 1) : -1;
       bad += run_pass(c, ev, a, p.lay, value, steps, rng);
+      quiesce(c, ev, value);  // #512: settle the read-ahead admits before reading the bookkeeping
       // the floor scan_victim reads: the lowest layer any slot holds, recomputed from the slots themselves
       int floor = 0x7fffffff;
       for (uint32_t ll = 0; ll < L; ++ll)
@@ -513,6 +529,7 @@ void case_scan_victim(const Pack& p) {
       steps[0].pred_layer = l + 1 < L ? int(l + 1) : -1;
       bad2 += run_pass(d, ev2, a2, p.lay, value2, steps, rng2);
     }
+  quiesce(d, ev2, value2);  // #512: the last chunk's serve() updates the stats after its go; settle before reading
   const StoreStats t = d.stats();
   CHECK(bad2 == 0, "scan victim off: %d experts not in their slots", bad2);
   CHECK(t.prefetches > s.prefetches, "scan victim off: %llu read ahead, the rule's arm %llu: the switch does nothing",
