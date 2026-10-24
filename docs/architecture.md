@@ -122,9 +122,12 @@ new architecture requires more than implementing `Model` if it needs a new draft
   (`src/kernels/tensor/qmt_moe.metal`, `NI_MOE_QTM=0` keeps it on the simdgroup kernels), and so do Flint's routed
   expert GEMMs (`qmtm_g_m64_n64`: gate, up and down each to fp32 rows, so `flint_swiglu_scaled` still sees whole rows;
   `NI_FLINT_MOE_QTM=0` keeps `qmm_moe_b4_m16_n64`; these tiles write whole output rows staged through threadgroup
-  memory, `NI_MOE_STAGE=0` keeps one store per accumulator element), and Flint's prefill attention (head dim 128, 8 query heads per
-  KV head: `tensor/qattn_t_flint.metal`, `NI_FLINT_QATTN=0` keeps `flint_attn_prefill`). Measured on the 4B (dense)
-  and the 35B-A3B (experts): neither is bit-identical to the simdgroup paths, since the tile reassociates each output's
+  memory, `NI_MOE_STAGE=0` keeps one store per accumulator element), Qwen3.8-Flash-Next's Q2_0 routed expert prefill
+  (`src/kernels/tensor/qmt_moe_q20.metal`: the same 64-row tile on the Q2_0 weight rows, the qrm kernels' per-element
+  arithmetic kept — the decode is exact and the products accumulate in fp32 — so only the tiling reassociates the K
+  reduction; `NI_MOE_QTM_Q20=0` keeps the simdgroup kernels), and Flint's prefill attention (head dim 128, 8 query heads per
+  KV head: `tensor/qattn_t_flint.metal`, `NI_FLINT_QATTN=0` keeps `flint_attn_prefill`). Measured on the 4B (dense),
+  the 35B-A3B and Flash-Next (experts): none is bit-identical to the simdgroup paths, since the tile reassociates each output's
   K reduction, so the experts' tile is gated by `tools/logit_compare.py --reorder` (AGENTS.md) rather than the model's
   noise floor.
 * **Several verified tokens per target pass.** DFlash2, MTP and LiLiCorr amortize target-model work when the drafts
