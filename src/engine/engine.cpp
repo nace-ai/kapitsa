@@ -3790,7 +3790,9 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       return logd("history: given up, another request used slot %d (use %llu, was %llu; %.0f ms after the reply, %d active, %llu requests, %llu then)", res.slot, (unsigned long long)hp->gen, (unsigned long long)res.slot_gen, now_ms() - t_reply, active_, (unsigned long long)requests_.load(), (unsigned long long)res.req_seq);
     std::vector<HistorySlotView> view;
     for (const Slot& s : slots_)
-      view.push_back({!s.busy && s.seq, s.tokens.empty(), s.turns <= 1 && s.tokens.size() <= 1024, s.last_used});
+      // as pick_slot ranks them for a conversation arriving now (requests_ + 1: nothing was sent beside a slot's request)
+      view.push_back({!s.busy && s.seq, s.tokens.empty(),
+                      s.turns <= 1 && requests_.load() + 1 > s.done_at && s.tokens.size() <= 1024, s.last_used});
     const int pick = pick_history_slot(view);
     if (pick < 0) return logd("history: given up, another request used slot %d and no other slot is free to take", res.slot);
     hp = &slots_[size_t(pick)];
@@ -3799,7 +3801,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
   }
   Slot& slot = *hp;
   const uint64_t want_gen = slot.gen;
-  const uint64_t seen_req = requests_.load();  // (a request that arrives after this ends the work at a chunk boundary)
+  uint64_t seen_req = requests_.load();  // (a request that arrives after this ends the work at a chunk boundary; read again once the SSD read, which gives the turn up, is over)
   const double t0 = now_ms();
   // the answer as the client sends it back ("stop": no tool calls), then a placeholder user turn: the
   // template renders answers before the last user query without their think block, so render it that
@@ -3885,6 +3887,10 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       return logd("history: no restore point to start from (n %d, common %zu, slot %zu tokens; points:%s; SSD: %s)", n,
                   common, slot.tokens.size(), have.c_str(), hit ? "too early or the slot changed" : "none");
     disk_leaving(slot, 0);  // the live state goes to the SSD first unless it is there
+    // disk_leaving does not always save it (no room, too large to copy and not worth a wait): the conversation another
+    // request left in a slot taken here is never replaced unsaved, its next request would pay for it
+    if (stolen && !disk_safe_to_replace(slot))
+      return logd("history: given up, slot %zu's conversation (%zu tokens) is not on the SSD and would be lost", size_t(&slot - slots_.data()), slot.tokens.size());
     slot.tokens.clear();
     slot.fills.clear();
     for (auto& c : slot.ckpts) c.pos = -1;
@@ -3899,7 +3905,9 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     if (stolen) {  // the slot holds this conversation now: another request is a new use of it, and it is a continued one
       ++slot.gen;
       slot.turns = std::max(slot.turns, 2);
+      slot.last_used = ++clock_;  // (the next new conversation must not take the slot just filled first)
     }
+    seen_req = requests_.load();
     // (Hold ends here: the rest runs under the turn as before, with no wait for the SSD)
   } else {
     for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the next request

@@ -511,6 +511,11 @@ bool Engine::disk_save_slot(int i, bool held) {
   return true;
 }
 
+bool Engine::disk_safe_to_replace(const Slot& slot) {
+  if (!disk_ || !disk_->ready || slot.version == slot.disk_version) return true;
+  return int(slot.tokens.size()) < disk_->min_pos;  // (shorter than the cache stores: nothing worth saving)
+}
+
 void Engine::disk_leaving(Slot& slot, int start) {
   if (!disk_ || !disk_->ready || slot.version == slot.disk_version) return;
   Disk& d = *disk_;

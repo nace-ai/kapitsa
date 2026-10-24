@@ -512,6 +512,8 @@ class Engine {
   // A request is about to replace the slot's state from row `start` (another conversation, or memory for another):
   // what it would lose and the SSD lacks is copied now and written in the background
   void disk_leaving(Slot& slot, int start);
+  // After disk_leaving(slot, 0): false when the slot holds a conversation worth saving that the SSD does not have
+  bool disk_safe_to_replace(const Slot& slot);
   // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
   // state must match (Dory: the request's loop count); mm: the prompt's images (null for text), the same as stored
   pcache::Hit disk_lookup(const std::vector<int>& keys, int n, int ram, uint32_t tag, const vision::Prompt* mm);
