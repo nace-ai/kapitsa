@@ -460,17 +460,18 @@ curl http://127.0.0.1:8000/v1/draft -H 'Content-Type: application/json' -d '{"mo
 - **The same reply?** On a dense model's GPU path, yes: the Qwen3.5 4B writes the same tokens with drafts as without
   (`tests/test_draft.py`). A draft cuts the new message into other prefill passes; since `NI_SHORTPF_EXACT` a short pass
   (at most 128 rows) gives a row the same bits whatever its length, on the Qwen3.6 35B-A3B too. Before it, a MoE
-  model's reply could take the other word where two nearly tie, as it did when a follow-up arrived before the history prefill (within its 250 ms idle wait, or
-  with `NI_HISTORY_PREFILL=0`: the answer and the message read in one pass). On a MacBook Pro 16-inch (M4 Pro, 48 GB),
-  on a 3,234-token follow-up, all six of the 35B-A3B's short-message draft cases took another word, at the token where
-  the one-pass history path does or later (the paste's reply stayed the same); over the reply tokens before it, the
-  gap between the two best logits moved 0.007-0.045 on average with drafts against 0.038 for the one-pass path (at
-  most 0.29 against 0.14, at one token; with an image 0.081 against 0.080), and where a reply parts, the no-draft gap
-  was 0.021-0.107: the one-pass path parts at 0.107 too, beyond the 0.060 the model's noise floor counts as a near
-  tie. The cause is how the last rows are cut into short prefill passes, not speculative decoding (plain decoding and
-  MTP flip too). A dense model's Neural Engine split (the 4B's default for chunks of 512 rows or more) computes the
-  FFN in 8 bits, so after a long draft the request's last rows are the GPU's: in one series on the 4B a paste's reply
-  changed, in the table's rounds it did not. `NI_ANE=0` keeps the prompt on the GPU.
+  model's reply could take the other word where two nearly tie, as it did when a follow-up arrived before the history
+  prefill (within its 250 ms idle wait, or with `NI_HISTORY_PREFILL=0`: the answer and the message read in one pass),
+  and on a MacBook Pro 16-inch (M4 Pro, 48 GB), on a 3,234-token follow-up, all six of the 35B-A3B's short-message
+  draft cases took another word, at the token where the one-pass history path did or later (the paste's reply stayed
+  the same); over the reply tokens before it, the gap between the two best logits moved 0.007-0.045 on average with
+  drafts against 0.038 for the one-pass path (at most 0.29 against 0.14, at one token; with an image 0.081 against
+  0.080), and where a reply parts, the no-draft gap was 0.021-0.107: the one-pass path parts at 0.107 too, beyond the
+  0.060 the model's noise floor counts as a near tie. The cause was how the last rows were cut into short prefill
+  passes, not speculative decoding (plain decoding and MTP did too). A dense model's Neural Engine split (the 4B's
+  default for chunks of 512 rows or more) computes the FFN in 8 bits, so after a long draft the request's last rows
+  are the GPU's: in one series on the 4B a paste's reply changed, in the table's rounds it did not. `NI_ANE=0` keeps
+  the prompt on the GPU.
 - **Models.** The Qwen3.5 family with its drafters, the MTP head or none. Nemotron-H models, Dory and Flint answer
   `unsupported`. Text without spaces (Chinese, Japanese) is read only up to its last whitespace.
 
