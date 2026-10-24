@@ -316,6 +316,24 @@ void ExpertCache::hit(int k, bool scan, bool first) {
   }
 }
 
+// A scan sweep's victim: hit() records nothing while scan is set, so T1/T2 are insertion order and the policy is FIFO
+// over every key: a turn's sweep then re-reads the whole store. Evicting a slot whose layer the sweep has already
+// passed instead keeps the layer being read resident: a rotating cursor over the slots, at most one lap, and the ARC
+// rule picks the victim when no slot qualifies. Decode never sets scan: its replacement is unchanged.
+int ExpertCache::scan_victim(int k) {
+  const int layer = k / int(E_);
+  for (uint32_t i = 0; i < nslots_; ++i) {
+    const int slot = int(scan_cursor_);
+    scan_cursor_ = scan_cursor_ + 1 == nslots_ ? 0 : scan_cursor_ + 1;
+    const int v = key_of_slot_[size_t(slot)];
+    if (v < 0 || v / int(E_) >= layer) continue;
+    if (Where(where_[size_t(v)]) != kT1) continue;  // T2 holds decoding's hot experts: a sweep leaves them (ARC's rule)
+    if (pin_[size_t(v)] || pending_[size_t(v)].load(std::memory_order_relaxed)) continue;
+    return v;
+  }
+  return -1;
+}
+
 int ExpertCache::admit(int k, bool scan) {
   const Where w = Where(where_[size_t(k)]);
   const double c = double(nslots_);
@@ -331,10 +349,13 @@ int ExpertCache::admit(int k, bool scan) {
     slot = free_.back();
     free_.pop_back();
   } else {
-    const bool t1_first = scan || (t1_.size >= 1 && ((w == kB2 && double(t1_.size) >= p_) || double(t1_.size) > p_));
-    int v = lru_free(t1_first ? t1_ : t2_);
-    if (v < 0) v = lru_free(t1_first ? t2_ : t1_);
-    if (v < 0) fatal("expert store: all %u slots hold experts in use", nslots_);
+    int v = scan ? scan_victim(k) : -1;
+    if (v < 0) {
+      const bool t1_first = scan || (t1_.size >= 1 && ((w == kB2 && double(t1_.size) >= p_) || double(t1_.size) > p_));
+      v = lru_free(t1_first ? t1_ : t2_);
+      if (v < 0) v = lru_free(t1_first ? t2_ : t1_);
+      if (v < 0) fatal("expert store: all %u slots hold experts in use", nslots_);
+    }
     slot = slot_of_[size_t(v)];
     evict(v);
   }

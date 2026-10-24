@@ -759,8 +759,20 @@ q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, 
   if (!store_ || li < 0) return Qwen35::q20_fetch(e, L, ids, n, T, between);
   // (the store's layers are this Mac's: trunk layer li is its li - lo_)
   const int nl = li + 1 < hi_ ? li + 1 - lo_ : -1;
-  const bool all = T >= 64 && nl >= 0;
-  store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > 16);
+  // The read-ahead of the whole next layer costs the store's size on an 85-token prompt (1232 ms of a 1613 ms TTFT),
+  // and only a chunk of 64+ rows routes most of that layer anyway: NI_PRED_ALL_MIN is the shortest chunk that pays it
+  // (default 64, the constant it replaces).
+  static const int pred_all_min = [] {
+    const char* v = getenv("NI_PRED_ALL_MIN");
+    return v && *v ? atoi(v) : 64;
+  }();
+  // NI_SCAN_MIN: the shortest chunk whose sweep leaves the recency order alone (default 16, the constant it replaces).
+  static const int scan_min = [] {
+    const char* v = getenv("NI_SCAN_MIN");
+    return v && *v ? atoi(v) : 16;
+  }();
+  const bool all = T >= pred_all_min && nl >= 0;
+  store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > scan_min);
   if (between) between();
   store_->end(e);
   return store_->experts(li - lo_);

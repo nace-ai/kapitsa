@@ -243,6 +243,7 @@ class ExpertCache {
   void lst_push(List& L, int k);
   List& list_of(Where w);
   int lru_free(const List& L) const;  // least recent key neither pinned nor being read, -1 if none
+  int scan_victim(int k);             // a sweep's victim: a slot below k's layer, rotating over the slots, -1 if none
   void hit(int k, bool scan, bool first);  // first: k was read ahead and is routed for the first time
   int admit(int k, bool scan);        // a slot for absent key k (evicting if needed); k into T1 / T2
   void evict(int k);
@@ -266,6 +267,7 @@ class ExpertCache {
   std::vector<int32_t> free_;
   List t1_, t2_, b1_, b2_;
   double p_ = 0;
+  uint32_t scan_cursor_ = 0;  // a scan sweep's rotating slot for its victim (admit)
   std::vector<int> active_;  // the keys of the last served request (in use on the GPU until the next ready)
 
   std::thread turn_;
