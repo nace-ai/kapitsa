@@ -614,6 +614,15 @@ void Engine::disk_leaving(Slot& slot, int start, bool wait_write) {
   if (wait_write && skip_retry(now_ms() < d.refused_until.load(std::memory_order_relaxed),
                                d.refused_all.load(std::memory_order_relaxed), d.refused(p->slot) == slot.version))
     return;  // (a save of this slot, or of any slot for lack of room, was refused a moment ago)
+  // a write that had to land because the caller replaces the slot now failed: the slot keeps its unsaved version and the
+  // next attempt waits NI_DISK_CACHE_RETRY_MS, whichever of the two writes below it was (a copy, or a conversation too
+  // large to copy written straight from the slot), so a history prefill does not re-write the same doomed conversation at
+  // every request. A request replacing its own slot's state is not throttled: it is about to lose it anyway.
+  auto refused_a_moment_ago = [&](const std::unique_ptr<DiskPlan>& plan) {
+    d.refused_until.store(now_ms() + d.retry_ms, std::memory_order_relaxed);
+    d.refused_all.store(false, std::memory_order_relaxed);
+    d.refuse(plan->slot, plan->version);  // (the version it tried: the slot's own may have moved on)
+  };
   const double t0 = now_ms();
   auto c = std::make_unique<Disk::Captured>();
   c->pieces = d.missing(*this, *p, slot);
@@ -654,6 +663,7 @@ void Engine::disk_leaving(Slot& slot, int start, bool wait_write) {
     const double w1 = now_ms();  // (the write alone: the write speed is not the time spent waiting for the turn)
     turn_.lock();
     if (!ok) {
+      if (wait_write) refused_a_moment_ago(p);
       logi("SSD cache: slot %d's conversation (%zu tokens) could not be written before it is replaced (no room within "
            "the cache's limit, or a write failed)", p->slot, p->entry.tokens.size());
       return;
@@ -694,9 +704,7 @@ void Engine::disk_leaving(Slot& slot, int start, bool wait_write) {
   const bool ok = d.write_captured(*c);
   if (slot.busy) turn_.lock();
   if (!ok) {  // not on the SSD: the slot keeps its unsaved version, and the caller gives up rather than lose it
-    d.refused_until.store(now_ms() + d.retry_ms, std::memory_order_relaxed);
-    d.refused_all.store(false, std::memory_order_relaxed);
-    d.refuse(p->slot, p->version);  // (the version it tried: the slot's own may have moved on)
+    refused_a_moment_ago(c->plan);  // (`p` was moved into the capture)
     return;
   }
   slot.disk_version = slot.version;
