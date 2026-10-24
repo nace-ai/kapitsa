@@ -79,6 +79,21 @@ bool small_tiles() {
   return v;
 }
 
+// NI_FLINT_MOE4_ROWS (read once; default 8, at most 8): the most rows of a verify pass whose routed experts take
+// moe4_* - the distinct experts of the rows' top-k, each read once for the rows that chose it (the threadgroups of one
+// expert adjacent, so they share its weights through the cache). Main took that path for 2 - 4 rows and the per-row
+// kernels below for 5 - 8; extending it to 5 - 8 is bitwise with them: same qmv2_rows dots (same lane slices, same
+// simd_sum), same fp32 h rows, same moe_down2_impl - only how many rows a read of an expert serves changes. 4 restores
+// main exactly (the per-row kernels for 5 - 8 rows); 8, M5 Pro, 1K context: a step of 8 rows 31.9 ms against 33.8.
+int verify_rows() {
+  static const int v = [] {
+    const char* s = getenv("NI_FLINT_MOE4_ROWS");
+    const int n = s ? atoi(s) : 8;
+    return n <= 4 ? 4 : std::min(n, 8);
+  }();
+  return v;
+}
+
 kp::IqSec iq_sec(const FlintMat& m) { return kp::IqSec{m.iq_x1, m.iq_x2, m.iq_x3, m.iq_d}; }
 
 uint32_t gpu_cores() {
@@ -1013,11 +1028,12 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     }
     return;
   }
-  if (R <= 4 && (k + 1) * I <= 7168) {
-    // 2-4 rows (a prompt-lookup verify): the distinct experts of the rows' top-k, each one's gate / up for the rows that
-    // chose it (their threadgroups adjacent: the weights shared through the cache), then every row's down products
-    // (moe4_*, the decode kernels' arithmetic: moe_gate_up3's and moe_down2_w's; M4 Pro, 1K context: a pass of 2 / 4
-    // rows 13.0 / 22.7 ms against 14.3 / 24.6 with the per-row kernels below)
+  if (R <= verify_rows() && (k + 1) * I <= 7168) {
+    // 2-8 rows (a prompt-lookup or draft verify): the distinct experts of the rows' top-k,
+    // each one's gate / up for the rows that chose it (their threadgroups adjacent: the weights shared through the
+    // cache), then every row's down products (moe4_*, the decode kernels' arithmetic: moe_gate_up3's and
+    // moe_down2_w's; M5 Pro, 1K context: a pass of 8 rows 31.9 ms against 33.8 with the per-row kernels below, and
+    // 2 / 4 rows 10.5 / 16.9 the same either way)
     const struct {
       uint32_t R, k;
     } rk{uint32_t(R), k};
@@ -1044,7 +1060,8 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     e.dispatch(uint32_t(R), (D + 15) / 16, 1, 256);
     return;
   }
-  // 5-8 rows: each row's gate / up (routed + shared) and down products in turn
+  // 5-8 rows with NI_FLINT_MOE4_ROWS=4 (main's path): each row's gate / up (routed + shared) and
+  // down products in turn
   constexpr uint32_t nsg = 8, rows = 2;
   for (int r = 0; r < R; ++r) {
     const size_t xo = size_t(r) * D * 4;

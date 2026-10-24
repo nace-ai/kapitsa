@@ -311,7 +311,8 @@ int main(int argc, char** argv) {
       fatal("Dory verifies drafts only with per-loop KV (--loop-kv per-loop); with last-loop KV it decodes step by step");
   }
   // rows a window feeds on a path: its scored rows, up to whole passes
-  // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (its 2-4-row passes take other expert kernels)
+  // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (which kernels a pass takes is
+  // NI_FLINT_MOE4_ROWS, in flint.cpp)
   // Flash-Next: its MTP cycle's depth + 1 rows (Engine: spec_depth defaults to default_spec_depth())
   const int vrows = fl && getenv("NI_FLINT_VERIFY_ROWS") ? std::clamp(atoi(getenv("NI_FLINT_VERIFY_ROWS")), 2, 8)
                     : fn                                 ? fn->default_spec_depth() + 1

@@ -296,11 +296,12 @@ NI_HC_UP_MIX3(hc_up_mix3_c2_b6, 6, 2)
 NI_HC_UP_MIX3(hc_up_mix3_c2_b4, 4, 2)
 NI_HC_UP_MIX3(hc_up_mix3_c2_b8, 8, 2)
 
-// ---- The MoE of R <= 4 rows with the decode kernels' arithmetic (moe_gate_up3 / moe_down2_w) ----
+// ---- The MoE of up to 8 rows with the decode kernels' arithmetic (moe_gate_up3 / moe_down2_w) ----
 // moe4_unique: the distinct experts of the rows' top-k (idx [R, k]): ue[u], the rows that chose it (bit mask) and
-// each such row's slot; n[0] = U. One thread (R * k <= 64 entries).
+// each such row's slot (4 bits a row in uslot[u], so the slots of up to 8 rows share one word: k <= 16);
+// n[0] = U. One thread (R * k <= 64 entries).
 [[kernel]] void moe4_unique(const device uint* idx [[buffer(0)]], device uint* ue [[buffer(1)]],
-                            device uint* umask [[buffer(2)]], device uchar* uslot [[buffer(3)]],
+                            device uint* umask [[buffer(2)]], device uint* uslot [[buffer(3)]],
                             device uint* n [[buffer(4)]], constant uint2& rk [[buffer(5)]],
                             uint tid [[thread_position_in_grid]]) {
   if (tid != 0) return;
@@ -314,10 +315,11 @@ NI_HC_UP_MIX3(hc_up_mix3_c2_b8, 8, 2)
       if (u == U) {
         ue[U] = e;
         umask[U] = 0;
+        uslot[U] = 0;
         ++U;
       }
       umask[u] |= 1u << r;
-      uslot[u * 4 + r] = uchar(s);
+      uslot[u] |= uint(s) << (4 * r);
     }
   n[0] = U;
 }
@@ -333,7 +335,7 @@ NI_HC_UP_MIX3(hc_up_mix3_c2_b8, 8, 2)
                              const device bfloat* sus [[buffer(10)]], const device bfloat* sub [[buffer(11)]],
                              const device float* xn [[buffer(12)]], device float* h [[buffer(13)]],
                              constant MoeParams& p [[buffer(14)]], const device uint* ue [[buffer(15)]],
-                             const device uint* umask [[buffer(16)]], const device uchar* uslot [[buffer(17)]],
+                             const device uint* umask [[buffer(16)]], const device uint* uslot [[buffer(17)]],
                              const device uint* un [[buffer(18)]], constant uint& R [[buffer(19)]],
                              uint3 tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                              uint3 ntg3 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
@@ -345,7 +347,7 @@ NI_HC_UP_MIX3(hc_up_mix3_c2_b8, 8, 2)
   uint slot = p.k, e = 0;
   if (!shared) {
     if (u >= un[0] || !((umask[u] >> r) & 1u)) return;  // uniform across the threadgroup
-    slot = uslot[u * 4 + r];
+    slot = (uslot[u] >> (4 * r)) & 15u;
     e = ue[u];
   }
   for (uint i = tid; i < p.D / 4; i += ntg) ((threadgroup float4*)xs)[i] = ((const device float4*)(xn + r * p.D))[i];
