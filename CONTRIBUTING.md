@@ -189,6 +189,20 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
   drift only (a flip under 5.8 logits is not refused by itself): a change gated with it also shows the per-GEMM check
   and the temperature-0 continuations above. `logit_floor.py --rows 96 --also NI_QMT=0 --reorder` measures all of it;
   `--rescore` derives the floors and both gates again from the file's sources (this Mac's file by default).
+- `flash-next-q20.m5.json` (Qwen3.8-Flash-Next, Q2_0 pack streaming its experts from the SSD, store pinned at 24 GB
+  with `NI_EXPERT_STORE=24`; M5 Pro 48 GB, macOS 26.5.2, 0.2.15 `e24a59ea`, `--also NI_QMT=0 --reorder`): every source
+  is bitwise on 192 rows, with and without `NI_QMT=0`: the repeat on every path, the 512-row chunks, and plain decoding
+  against the verify, which is the MTP cycle's 3 rows (no batch path, no Neural Engine split). Its floor and decode
+  floor are 0, so its gate is bitwise: a change that moves any row fails it. Its `reorder_gate` is twice the qmt against
+  `NI_QMT=0` drift of the decode paths, with fast and with safe math (1 flip in 192 at a margin under 0.55): mean KL
+  1.8e-3, median 1.0e-4, p99 2.8e-2, near-tie 0.55. It bounds a change of summation order only. A kernel that also
+  rounds an intermediate differently (an attention whose P goes to half before P·V, as tensor_ops' operands are)
+  changes what is computed. It stays on the floor's gate and shows its numbers. The prefill is covered only through
+  the KV cache that the step and verify rows read; the 8 prefill rows' logits are in the file but are not gated. In
+  QSA prefill attention, the 2432-, 2816- and 3200-token windows reach the masked arm (`attn_prefill11m`): the second
+  of their two even 2048-row chunks, and the later 512-row chunks, end past the 2048-key budget. The other windows take
+  the dense kernel, and no window reaches the per-row list arm past 8192 keys. The step and verify rows of the windows
+  of 2048 tokens or more decode over the selected blocks only.
 - Put the comparison's output in the pull request. A change that is not meant to move outputs shows "every row bitwise
   identical" or passes the gate; one that moves them on purpose (a precision, a quantization) fails it and says so, with
   the numbers. A floor changes only with the conditions it measures (re-measured, in a pull request of its own), never
