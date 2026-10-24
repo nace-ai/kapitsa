@@ -99,12 +99,15 @@ void run_cpu() {
 
   // The drafting block the memory plan reserves rows for: a pure decision on (target, slots, NI_DFLASH_BLOCK), asked
   // several times in one process here, as an --allow-switch server does (each model decides its own at its load).
+  // Since the F74 depth cap the DFlash2 targets default to the chains (kf_tree_default() in dflash2.cpp), so the
+  // plan is the 8-row tile where the env says nothing; the trees, and their 16-row plan, need an explicit
+  // NI_KFLASH=1 or NI_DFLASH_TREE=1.
   std::printf("drafting block (DFlash2::plan_block_rows)\n");
   Qwen35Config dense = plain, moe = plain;
   dense.moe = false;
   moe.moe = true;
-  check(DFlash2::plan_block_rows(dense, 1, "", true) == 16, "one slot, dense target, unset: 16 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "auto", true) == 16, "NI_DFLASH_BLOCK=auto is the default: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "", true) == 8, "one slot, dense target, unset: 8 rows (the chain default)");
+  check(DFlash2::plan_block_rows(dense, 1, "auto", true) == 8, "NI_DFLASH_BLOCK=auto is the default: 8 rows");
   check(DFlash2::plan_block_rows(dense, 1, "8", true) == 8, "NI_DFLASH_BLOCK=8: 8 rows");
   check(DFlash2::plan_block_rows(dense, 1, "16", true) == 16, "NI_DFLASH_BLOCK=16, dense target: 16 rows");
   check(DFlash2::plan_block_rows(dense, 2, "", true) == 8, "two slots: 8 rows (a 16-row block has no batched cycle)");
@@ -114,25 +117,34 @@ void run_cpu() {
   setenv("NI_DFLASH_BLOCK", "8", 1);
   const int env8 = DFlash2::plan_block_rows(dense, 1, nullptr, true);
   unsetenv("NI_DFLASH_BLOCK");
-  check(env8 == 8 && DFlash2::plan_block_rows(dense, 1, nullptr, true) == 16, "the environment is read when no value is passed: 16, 8, 16");
+  setenv("NI_KFLASH", "1", 1);
+  const int envkf = DFlash2::plan_block_rows(dense, 1, nullptr, true);
+  unsetenv("NI_KFLASH");
+  check(env8 == 8 && envkf == 16 && DFlash2::plan_block_rows(dense, 1, nullptr, true) == 8,
+        "the environment is read when no value is passed: 8 (BLOCK=8), 16 (KFLASH=1), 8 (unset)");
+  setenv("NI_KFLASH", "1", 1);
   const int first = DFlash2::plan_block_rows(dense, 1, "", true), moe_next = DFlash2::plan_block_rows(moe, 1, "", true),
             back = DFlash2::plan_block_rows(dense, 1, "", true);
+  unsetenv("NI_KFLASH");
   check(first == 16 && moe_next == 8 && back == 16,
         "16 then 8 then 16 in one process: the next model decides for itself");
   // the cheap half of rows16_auto_ok: the knobs that make the load keep 8 rows take the plan with them, so a start
-  // that cannot run the block does not reserve its rows
+  // that cannot run the block does not reserve its rows. Under the chain default the trees need NI_KFLASH=1, and
+  // even with them on a shallow verify depth or the scalar attention path keeps the 8-row plan.
   setenv("NI_KFLASH", "0", 1);
   const int kf0 = DFlash2::plan_block_rows(dense, 1, "", true);
-  unsetenv("NI_KFLASH");
+  setenv("NI_KFLASH", "1", 1);
+  const int kf1 = DFlash2::plan_block_rows(dense, 1, "", true);
   setenv("NI_DFLASH_VERIFY", "7", 1);
   const int shallow = DFlash2::plan_block_rows(dense, 1, "", true);
   unsetenv("NI_DFLASH_VERIFY");
   setenv("NI_DFLASH_ATTN", "scalar", 1);
   const int scalar = DFlash2::plan_block_rows(dense, 1, "", true);
   unsetenv("NI_DFLASH_ATTN");
-  check(kf0 == 8 && shallow == 8 && scalar == 8,
-        "NI_KFLASH=0, NI_DFLASH_VERIFY=7, NI_DFLASH_ATTN=scalar: the plan keeps 8 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "", true) == 16, "and with the knobs back off: 16 rows");
+  unsetenv("NI_KFLASH");
+  check(kf0 == 8 && kf1 == 16 && shallow == 8 && scalar == 8,
+        "NI_KFLASH=0: 8 rows; =1: 16; =1 with NI_DFLASH_VERIFY=7 or NI_DFLASH_ATTN=scalar: the plan keeps 8 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "", true) == 8, "and with the knobs back off: 8 rows (the chain default)");
   check(DFlash2::plan_block_rows(dense, 1, "", false) == 8,
         "no matrix units on this Mac (an M1-M4, or CI's virtual GPU): the plan keeps 8 rows too");
   // The downward depth gate (M3, NI_DFLASH_GATE): the rolling acceptance policy alone -- pure host

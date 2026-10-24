@@ -82,6 +82,10 @@ void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo,
 class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
+  // The verify proposals per cycle where the env says nothing and no trees are asked (the F74 depth cap: every
+  // marginal row past the second measured under water at 4K -- see kf_tree_default() in dflash2.cpp).
+  // NI_DFLASH_VERIFY=n overrides; the trees, where explicitly asked, keep the full block depth.
+  static constexpr int kVerifyDefault = 2;
   // The drafting block's rows: kB (8, the tile), or 16 (the anchor + 15 mask rows, two 8-row tiles; KFlash tree cycles
   // only). NI_DFLASH_BLOCK picks it (8, 16, or `auto` for the default); where that says nothing it is 8, and Engine asks
   // for 16 on a single-slot engine that takes the 16-row paths (the ctor's rows16). Fixed while the drafter loads, since
@@ -220,7 +224,8 @@ class DFlash2 {
     return tree_ ? (t[kf::kObs] > 0 ? t[kf::kObs] : t[kf::kN]) - 1
                  : dyn_tau_ > 0 ? std::min(K, int(kdyn_.as<uint32_t>()[0])) : K;
   }
-  // KFlash on every target (NI_KFLASH=0 or NI_DFLASH_TREE=0 keeps the chain): the single-stream cycles (encode_cycle*)
+  // KFlash where the trees are explicitly asked (NI_KFLASH=1 / NI_DFLASH_TREE=1; the chains are the default since the
+  // F74 depth cap, kf_tree_default() in dflash2.cpp): the single-stream cycles (encode_cycle*)
   // verify a best-first tree over the lattice (the shared builder kf_build on this drafter's children tables,
   // dfl_kf_table) instead of the walk's chain, under the shared budget (KfBudget: the lattice's probabilities
   // calibrated against the verify's own acceptances, a cycle's GPU time per row count measured on this Mac), and
@@ -239,7 +244,8 @@ class DFlash2 {
   // after each tree cycle completed: the cycle's GPU ms for the budget, its drafting half's command buffer and its
   // verify's (the loop calls it after its wait)
   void observe(double ms);
-  // proposals verified per cycle: NI_DFLASH_VERIFY (1..block - 1), default block() - 1
+  // proposals verified per cycle: NI_DFLASH_VERIFY (1..block - 1), default kVerifyDefault, or block() - 1 where the
+  // trees are asked (they need the full depth)
   int verify_depth() const { return vdepth_; }
   // dynamic verify depth threshold (dfl_depth; MoE targets only): 0.5 by default, NI_DFLASH_DYN=tau, 0 = off
   float dyn_tau() const { return dyn_tau_; }
@@ -365,7 +371,7 @@ class DFlash2 {
   DFlash2Config cfg_;
   int bits_ = 4;
   int block_ = kB;         // kB, or 16 (the ctor picks it before anything is sized)
-  int vdepth_ = kB - 1;    // proposals verified per cycle: verify_depth()
+  int vdepth_ = kVerifyDefault;  // proposals verified per cycle: verify_depth() (the ctor re-reads the env)
   size_t resident_ = 0;
   std::vector<DLayer> layers_;
   QLinear fc_, sel_w_, kv_all_;
