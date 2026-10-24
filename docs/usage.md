@@ -1060,6 +1060,67 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 The other `NI_*` switches exist for development and A/B tests.
 
+## Benchmarking a chosen context window
+
+```sh
+kapitsa bench --model 35b --ctx 64k --out bench-64k.json
+kapitsa bench --model 35b --ctx 128k --quick --out bench-128k-quick.json
+```
+
+`--ctx` (also `--context`) first runs the existing standard benchmark with its original 32K server settings.
+It then restarts the server at the selected window and appends a separate context section. `--quick` shortens
+only the standard section (three writing runs per temperature and 4K reading); the context section always uses
+three repetitions. Without `--ctx`, the standard protocol is unchanged.
+
+The added section measures:
+
+- Uncached time to first token (TTFT), with a fresh prefix for each repetition.
+- Cached TTFT from a follow-up to each of the three cold requests.
+- Cold input throughput and new-input throughput, defined as input tokens divided by client TTFT. The cached
+  rate excludes reused tokens. These effective rates include request overhead and first-token latency; they are
+  not isolated GPU prefill measurements, and cached tokens are not counted as newly processed tokens.
+- Cached token count and percentage from API usage; unavailable counts leave the derived rates null.
+- Writing speed at the model's benchmark temperature (usually 0.6; Flint 1.0) and greedy with long prompts, actual
+  prompt token counts, and peak memory.
+
+TTFT, input rates and cache reuse show median and minimum/maximum across three samples; writing uses the existing
+middle-window streaming rate. JSON retains the individual samples, validity warnings and context-stage conditions
+under `context`. Standard measurements remain under `results`, with their own original protocol and conditions.
+The combined report is labelled `context` or `context-quick` and cannot be submitted as a standard community run. Paired
+TTFT speedup compares each cold request with its own follow-up, then reports the median and range of those ratios.
+
+Before the context stage, a standalone standard report is saved beside the combined output as
+`<output-name>.standard.json` (replacing the `.json` suffix). It remains available if you interrupt the long-context
+test. Reports are written to a temporary sibling file, flushed, and renamed into place to avoid partial JSON files.
+The context-stage GPU-idle wait is shown separately. Its decoding mode is shown only when it differs from the standard run (and is always saved in JSON). Missing cache counts are flagged; inconsistent counts are
+excluded from summaries rather than producing misleading throughput.
+
+Values are token counts or binary suffixes (`64k` = 65536). The minimum is `4k`; `max` is not accepted. The token-count
+endpoint fits repeated text from the frozen corpus near the requested window, reserving 2048 tokens for answers
+and follow-up turns (3072 for reasoning-only models such as Flint). Windows above the model's advertised limit or available server capacity are rejected. Large
+windows take longer and need more memory. A context-stage failure is recorded while retaining the standard results.
+Compare the added measurements only with runs at the same context and model settings.
+
+During context prefill, a token progress bar shows completed prompt tokens / total prompt tokens and a percentage.
+The counts come from GPU-completed prefill chunks, sampled by the server about once per second, and include reused
+cache tokens. The bar moves in chunks; tokenization or slot waits are labelled separately. This is actual work
+completed, not an estimate from elapsed time. Telemetry events do not start TTFT or count toward generated tokens.
+Older servers that do not send telemetry retain the elapsed-time spinner and report diagnostics as unavailable.
+
+The context stage shows warm-up and GPU-idle status, then progress through nine measured steps: three cold/cached
+reading pairs, three writing runs at T=0.6 and three greedy writing runs. Each step shows an elapsed-time spinner
+and leaves a completion line with measured latency or speed. These counters describe completed workloads, not
+a token-level percentage or an estimated finish time.
+
+The context summary groups setup/cache, latency/throughput and generation. Token counts use comma-separated
+integers, TTFT uses three decimals in seconds, generation rates and cache speedup use one decimal, and memory
+uses two decimals. Input throughput medians appear beside TTFT; full precision and ranges remain in JSON.
+
+Context writing also records per-request decode cycles, tokens produced per cycle (excluding the first token),
+and accepted draft tokens per cycle for supported speculative modes. Accepted draft tokens count committed output
+beyond the one target token per cycle. This is a cycle-yield diagnostic, not a proposed-token acceptance percentage;
+a tree drafter does not expose a suitable denominator here. The JSON retains each run and median/range summaries.
+
 ## Updating
 
 `kapitsa update` updates Kapitsa to its latest release, the way it was installed:

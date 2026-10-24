@@ -18,7 +18,7 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
 8. The whole command against the scripted server (KAPITSA_BENCH_SERVER, a test hook: no model, no lock): plain,
    --json and on a terminal; the result saved, valid against the schema, refused for submission.
 """
-import glob, http.server, json, os, pty, random, re, select, shutil, socketserver, subprocess, sys, tempfile, threading, time
+import glob, http.server, json, os, pty, random, re, select, shutil, signal, socketserver, subprocess, sys, tempfile, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -52,11 +52,39 @@ class Script(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     log = []
     prompt = {}  # session -> last prompt_tokens
+    custom_context = 0
+    in_context = False
+    cache_override = None
+    interrupt_pid = 0
+
+    def do_GET(self):
+        b = json.dumps({"data": [{"context_length": Script.custom_context,
+                                  "context_fit": Script.custom_context}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
+    @staticmethod
+    def custom_count(body):
+        system = body.get("system", "")
+        messages = body.get("messages", [])
+        return (len(system) + sum(len(m.get("content", "")) for m in messages)) // 4 + 16
+
 
     def log_message(self, *a):
         pass
 
     def send_events(self, events):
+        if self.headers.get("X-Kapitsa-Bench-Telemetry") == "1":
+            usage = next((e['usage'] for e in reversed(events) if isinstance(e, dict) and 'usage' in e), {})
+            total = usage.get('prompt_tokens', 0)
+            count = usage.get('completion_tokens', 0)
+            base = dict(phase=1, prompt_tokens=total, processed_tokens=total // 2, cached_tokens=0,
+                        completion_tokens=0, cycles=0, speculative=2, final=False)
+            final = dict(base, phase=3, processed_tokens=total, completion_tokens=count, cycles=128, final=True)
+            events = [{'kapitsa_progress': base}] + events + [{'kapitsa_progress': final}]
+
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Transfer-Encoding", "chunked")
@@ -66,6 +94,8 @@ class Script(http.server.BaseHTTPRequestHandler):
             data = ("data: " + (ev if isinstance(ev, str) else json.dumps(ev)) + "\n\n").encode()
             self.wfile.write(b"%x\r\n%s\r\n" % (len(data), data))
             self.wfile.flush()
+            if isinstance(ev, dict) and 'kapitsa_progress' in ev and not ev['kapitsa_progress']['final']:
+                time.sleep(0.35)  # prove telemetry does not start TTFT, and make the bar visible in terminal checks
             time.sleep(0.0005)
         self.wfile.write(b"0\r\n\r\n")
 
@@ -74,6 +104,17 @@ class Script(http.server.BaseHTTPRequestHandler):
         raw = self.rfile.read(n)
         body = json.loads(raw)
         Script.log.append({"path": self.path, "session": self.headers.get("X-Session-Id"), "body": body})
+        if self.path == "/v1/messages/count_tokens":
+            Script.in_context = True
+            if Script.interrupt_pid:
+                os.kill(Script.interrupt_pid, signal.SIGINT)
+                Script.interrupt_pid = 0
+            b = json.dumps({"input_tokens": self.custom_count(body)}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+            return
         msgs = body["messages"]
         chunk = lambda delta, finish=None, usage=None: dict({"choices": [{"index": 0, "delta": delta, "finish_reason": finish}]},
                                                             **({"usage": usage} if usage else {}))
@@ -108,21 +149,24 @@ class Script(http.server.BaseHTTPRequestHandler):
                 take = 2 if i < 76 else 1
                 events.append(chunk({"content": " ".join(words[k:k + take]) + " "}))
                 k += take
-            events.append(chunk({}, "length", {"prompt_tokens": 64, "completion_tokens": 512}))
+            events.append(chunk({}, "length", {"prompt_tokens": self.custom_count(body) if Script.in_context else 64, "completion_tokens": 512}))
             return self.send_events(events)
         sid = self.headers.get("X-Session-Id") or "-"
         sys_len = len(msgs[0]["content"])
         if len(msgs) == 2:  # a cold prompt: its size by its characters
-            pt = 4133 if 15000 < sys_len < 20000 else 16286 if sys_len > 60000 else 2900
+            pt = self.custom_count(body) if Script.in_context else 4133 if 15000 < sys_len < 20000 else 16286 if sys_len > 60000 else 2900
             cached = 0
         else:  # a follow-up: the conversation so far, from the cache
             cached = Script.prompt.get(sid, 0) + 6
             pt = cached + 30
         Script.prompt[sid] = pt
+        cache_details = {"cached_tokens": cached}
+        if Script.in_context and len(msgs) > 2 and Script.cache_override is not None:
+            cache_details = {} if Script.cache_override == "missing" else {"cached_tokens": pt + 100}
         answer = "ok" if body["max_tokens"] == 64 else "The first file implements a speech recognition model."
         events = role + [chunk({"content": w + " "}) for w in answer.split()] + \
             [chunk({}, "stop", {"prompt_tokens": pt, "completion_tokens": len(answer.split()),
-                                "prompt_tokens_details": {"cached_tokens": cached}})]
+                                "prompt_tokens_details": cache_details})]
         self.send_events(events)
 
 
@@ -582,6 +626,127 @@ res = json.load(open(saved[0])) if saved else {}
 check(res.get("protocol", {}).get("temperature") == 1.0 and "decode T=1.0: median" in r.stderr and "T=0.6" not in r.stderr
       and "| Writing, T = 1.0 |" in r.stdout, "Flint from a folder: its writing at T = 1.0, shown and recorded",
       (r.stdout + r.stderr)[-500:])
+# Custom contexts exercise the real command against a server with deterministic token counting.
+Script.custom_context = 65536
+Script.log, Script.prompt = [], {}
+custom_file = os.path.join(xhome, "custom-64k.json")
+r = run([KAPITSA, "bench", "--model", "4b", "--ctx", "64k", "--quick", "--json", "--out", custom_file], env=xenv)
+custom = json.load(open(custom_file)) if os.path.exists(custom_file) else {}
+check(custom.get("mode") == "context-quick", "--ctx selects a labelled custom-context run", r.stderr[-500:])
+checkpoint_file = custom_file.removesuffix(".json") + ".standard.json"
+checkpoint = json.load(open(checkpoint_file)) if os.path.exists(checkpoint_file) else {}
+check(checkpoint.get("mode") == "quick" and "context" not in checkpoint and
+      checkpoint.get("results") == custom.get("results") and "context_window" not in checkpoint.get("protocol", {}),
+      "standard checkpoint is a standalone result saved before the context stage")
+check(not glob.glob(custom_file + ".tmp-*") and not glob.glob(checkpoint_file + ".tmp-*"),
+      "atomic result writes leave no temporary files")
+pr = custom.get("protocol", {})
+cx = custom.get("context", {})
+check(pr.get("context_window") == 65536 and pr.get("sizes") == [4000] and cx.get("reply_reserve_tokens") == 2048,
+      "64k appends a separate context stage and retains the standard protocol", str(pr))
+check(63000 <= cx.get("prefill_prompt_tokens", 0) <= 63488 and 63000 <= cx.get("decode_prompt_tokens", 0) <= 63488,
+      "reading AND writing prompts fill the selected context", str(cx)[:500])
+writing = [x['body'] for x in Script.log if x['path'] == '/v1/chat/completions' and
+           x['body'].get('max_tokens') == 512 and not x['body'].get('tools')]
+check(len(writing) == 12 and all(len(x['messages'][0]['content']) < 1000 for x in writing[:6]) and
+      all(len(x['messages'][0]['content']) > 200000 for x in writing[6:]),
+      "standard decode runs first, followed by six long-context decode requests")
+check(all(x['body'].get('chat_template_kwargs', {}).get('enable_thinking') is False
+          for x in Script.log if x['path'] == '/v1/messages/count_tokens'),
+      'context fitting uses the same thinking-off template options as measured requests')
+count_index = next(i for i, x in enumerate(Script.log) if x['path'] == '/v1/messages/count_tokens')
+check(any(x['body'].get('tools') for x in Script.log[:count_index]) and
+      custom.get("results", {}).get("prefill", [{}])[0].get("size") == 4000,
+      "standard reading and tool tests finish before context preparation")
+check(len(cx.get('decode', [])) == 3 and all(63000 <= d['prompt_tokens'] <= 63488 for d in cx['decode']),
+      'actual per-run context writing prompt counts are saved separately')
+check(len(cx.get('reading_samples', [])) == 3 and
+      all(len(p['cached']['samples']) == 1 for p in cx['reading_samples']),
+      'three independent cold/cached pairs')
+check(all(d['chunks'] == 436 and d['diagnostics']['cycles'] == 128 and
+          abs(d['diagnostics']['tokens_per_cycle'] - 511 / 128) < 1e-9 and
+          d['diagnostics']['accepted_draft_tokens'] == 383 for d in cx['decode']),
+      'telemetry is excluded from content event counts and reports per-request cycle yield')
+check(len(cx.get('diagnostics', {}).get('decode', {}).get('tokens_per_cycle', {}).get('samples', [])) == 3,
+      'context speculative diagnostics summarize three measured writing runs')
+check(all(p['ttft_s'] >= 0.3 for p in cx['reading_samples']), 'TTFT starts at content after early progress events, not at telemetry arrival')
+check(len(cx.get('ttft_speedup', {}).get('samples', [])) == 3 and
+      all(abs(x - p['ttft_s'] / p['cached']['samples'][0]['ttft_s']) < 1e-6
+          for x, p in zip(cx['ttft_speedup']['samples'], cx['reading_samples'])),
+      'TTFT speedup uses each matched cold/cached pair')
+check(len(cx.get('uncached_ttft_s', {}).get('samples', [])) == 3 and
+      len(cx.get('cached_ttft_s', {}).get('samples', [])) == 3,
+      'cold and cached TTFT each have three samples, median and range')
+check(all(c['new_input_tokens'] == c['prompt_tokens'] - c['cached_tokens'] and
+          abs(c['new_input_effective_tps'] - c['new_input_tokens'] / c['ttft_s']) < 1e-6 and
+          abs(c['cache_reuse_pct'] - 100 * c['cached_tokens'] / c['prompt_tokens']) < 1e-6
+          for p in cx.get('reading_samples', []) for c in p['cached']['samples']),
+      'cached throughput excludes reused tokens and cache percentage uses actual usage')
+check(not cx.get('invalid', ['missing context']) and custom['results']['decode']['median_tps'] > 0,
+      'context validity and standard measurements are preserved independently', str(cx.get('invalid')))
+try:
+    import jsonschema
+    errors = list(jsonschema.Draft202012Validator(schema).iter_errors(custom))
+    check(not errors, "custom-context JSON validates", '; '.join(e.message for e in errors[:3]))
+except ImportError:
+    pass
+r = run([KAPITSA, "bench", "submit", custom_file, "--dry-run"], env=xenv)
+check(r.returncode != 0 and "Custom-context" in r.stderr, "saved custom runs cannot be submitted as standard benchmarks")
+for value in ['0', '-1', 'max', '2k', 'abc', '9999999999999k']:
+    r = run([KAPITSA, 'bench', '--ctx', value, '--model', '4b'], env=xenv)
+    check(r.returncode != 0 and not r.stdout, f'--ctx rejects {value!r} before starting a benchmark')
+r = run([KAPITSA, 'bench', '--ctx', '64k', '--submit'], env=xenv)
+check(r.returncode != 0 and 'custom-context' in r.stderr, '--ctx --submit rejected before model loading')
+Script.custom_context = 32768
+Script.in_context = False
+failed_file = os.path.join(xhome, 'context-failed.json')
+r = run([KAPITSA, 'bench', '--ctx', '64k', '--model', '4b', '--quick', '--out', failed_file], env=xenv)
+check(r.returncode != 0 and 'does not fit' in r.stderr, 'custom run refuses a server with a smaller context')
+failed = json.load(open(failed_file)) if os.path.exists(failed_file) else {}
+check(failed.get('results', {}).get('tool_calls') == 'pass' and
+      failed.get('results', {}).get('decode', {}).get('median_tps', 0) > 0 and
+      failed.get('context', {}).get('invalid'), 'failed context stage retains completed standard results')
+# Unknown cache usage must not masquerade as measured new-input throughput; impossible counts invalidate it.
+Script.custom_context = 65536
+for mode in ["missing", "inconsistent"]:
+    Script.in_context = False
+    Script.cache_override = mode
+    cache_file = os.path.join(xhome, "cache-" + mode + ".json")
+    r = run([KAPITSA, "bench", "--model", "4b", "--ctx", "64k", "--quick", "--out", cache_file], env=xenv)
+    cr = json.load(open(cache_file))['context']
+    check(cr['new_input_effective_tps'] is None and cr['cache_reuse_pct'] is None,
+          mode + " cache counts never produce a derived throughput or reuse summary")
+    if mode == "inconsistent":
+        check(cr['invalid'] and cr['cached_ttft_s'] is None and cr['cached_tokens'] is None,
+              'impossible cache counts are rejected and excluded from summaries')
+    else:
+        check(cr['flags'] and not cr['invalid'], 'missing cache usage is explicitly flagged while TTFT stays usable')
+Script.cache_override = None
+Script.in_context = False
+flint_dir = os.path.join(xhome, 'flint-fixture')
+os.mkdir(flint_dir)
+with open(os.path.join(flint_dir, 'config.json'), 'w') as fh:
+    json.dump({'model_type': 'flint', 'max_position_embeddings': 65536}, fh)
+flint_file = os.path.join(xhome, 'flint-context.json')
+r = run([KAPITSA, 'bench', '--model', flint_dir, '--ctx', '64k', '--quick', '--out', flint_file], env=xenv)
+fctx = json.load(open(flint_file))['context'] if os.path.exists(flint_file) else {}
+check(fctx.get('reply_reserve_tokens') == 3072 and fctx.get('temperature') == 1.0 and
+      62100 <= fctx.get('prefill_prompt_tokens', 0) <= 62464,
+      'reasoning-only models keep their benchmark temperature and extra reply headroom', r.stderr[-300:])
+Script.in_context = False
+interrupt_file = os.path.join(xhome, 'interrupted.json')
+p = subprocess.Popen([KAPITSA, 'bench', '--model', '4b', '--ctx', '64k', '--quick', '--out', interrupt_file],
+                     env=xenv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+Script.interrupt_pid = p.pid
+stdout, stderr = p.communicate(timeout=120)
+Script.interrupt_pid = 0
+saved_standard = interrupt_file.removesuffix('.json') + '.standard.json'
+check(p.returncode == 130 and os.path.exists(saved_standard) and not os.path.exists(interrupt_file) and
+      'standard results are saved' in stderr,
+      'interrupting the context stage retains the standard checkpoint and reports its location', stderr[-500:])
+Script.custom_context = 0
+Script.in_context = False
+
 shutil.rmtree(xhome, ignore_errors=True)
 
 shutil.rmtree(tmp, ignore_errors=True)

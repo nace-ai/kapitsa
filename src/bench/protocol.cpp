@@ -130,6 +130,58 @@ ojson decode_messages(const std::string& run_nonce) {
                        {{"role", "user"}, {"content", "[run " + run_nonce + "] " + kDecodeUser}}});
 }
 
+ojson context_decode_messages(const Settings& s, const std::string& nonce) {
+  ojson msgs = decode_messages(nonce);
+  if (s.context_window) msgs[0]["content"] = std::string(kDecodeSys) + "\n\n# Repository context\n" + s.context_text;
+  return msgs;
+}
+
+void prepare_context(Settings& s, int window) {
+  if (window < 4096) throw std::runtime_error("custom benchmark context must be at least 4096 tokens");
+  const int reserve = s.always_reasons ? 3072 : 2048;
+  const int target = window - reserve;
+  s.context_window = window;
+  auto count = [&](const ojson& msgs) {
+    ojson body = {{"model", s.model}, {"system", msgs[0]["content"]},
+                  {"messages", ojson::array({msgs[1]})}};
+    body.update(no_think());
+    httplib::Client cli(s.host, s.port);
+    cli.set_connection_timeout(30, 0);
+    cli.set_read_timeout(120, 0);
+    auto r = cli.Post("/v1/messages/count_tokens", {{"Authorization", "Bearer local"}}, body.dump(), "application/json");
+    if (!r || r->status != 200) throw std::runtime_error("could not count the custom context prompt");
+    const ojson j = ojson::parse(r->body);
+    if (!j.contains("input_tokens") || !j["input_tokens"].is_number_integer() || j["input_tokens"].get<int>() <= 0)
+      throw std::runtime_error("token-count endpoint returned no valid input_tokens");
+    return j["input_tokens"].get<int>();
+  };
+  std::string text;
+  size_t bytes = size_t(target) * 4;
+  size_t lo = 0, hi = size_t(target) * 16;
+  int pt = 0, dt = 0;
+  for (int attempt = 0; attempt < 20; ++attempt) {
+    while (text.size() < bytes) text += corpus() + "\n\n";
+    size_t end = bytes;
+    while (end && end < text.size() && (uint8_t(text[end]) & 0xc0) == 0x80) --end;
+    s.context_text = text.substr(0, end);
+    pt = count(prefill_messages(s.context_text, "session 0123456789abcdef", kPrefillQuestion));
+    dt = count(context_decode_messages(s, "0.123456"));
+    const int largest = std::max(pt, dt);
+    if (largest <= target && largest >= target - std::max(16, target / 200)) break;
+    if (largest > target) hi = bytes;
+    else lo = bytes;
+    size_t next = size_t(double(bytes) * target / largest);
+    if (next <= lo || next >= hi) next = lo + (hi - lo) / 2;
+    if (next == bytes || next == 0) throw std::runtime_error("could not fit the custom context prompt");
+    bytes = next;
+    if (attempt == 19) throw std::runtime_error("could not fit the custom context prompt after 20 attempts");
+  }
+  s.context_prefill_tokens = pt;
+  s.context_decode_tokens = dt;
+  s.sizes = {window};
+  s.ref_prompt_tokens = {{window, pt}};
+}
+
 ojson tools_messages() {
   return ojson::array({{{"role", "system"}, {"content", kSys}},
                        {{"role", "user"}, {"content", "Open src/main.py and tell me what the entry point does."}}});
@@ -239,6 +291,7 @@ Stream stream_chat(const Settings& s, const ojson& body_in, const std::string& s
   req.path = "/v1/chat/completions";
   req.headers = {{"Content-Type", "application/json"}, {"Authorization", "Bearer local"}};
   if (!session.empty()) req.headers.emplace("X-Session-Id", session);  // engines like MTPLX key a session bank on it
+  if (s.context_window) req.headers.emplace("X-Kapitsa-Bench-Telemetry", "1");
   req.body = body.dump();
   req.response_handler = [&](const httplib::Response& r) {
     status = r.status;
@@ -262,6 +315,11 @@ Stream stream_chat(const Settings& s, const ojson& body_in, const std::string& s
       }
       ojson ev = ojson::parse(data_s, nullptr, false);
       if (ev.is_discarded() || !ev.is_object()) continue;
+      if (ev.contains("kapitsa_progress") && ev["kapitsa_progress"].is_object()) {
+        out.progress = ev["kapitsa_progress"];
+        if (s.on_progress) s.on_progress(out.progress);
+        continue; // telemetry never starts TTFT or adds a content event
+      }
       if (ev.contains("usage") && !ev["usage"].is_null() && !ev["usage"].empty()) out.usage = ev["usage"];
       if (ev.contains("timings") && !ev["timings"].is_null() && !ev["timings"].empty()) out.timings = ev["timings"];
       if (!ev.contains("choices") || !ev["choices"].is_array()) continue;
@@ -496,7 +554,7 @@ int int_or(const ojson& o, const char* k, int def = -1) {
 }  // namespace
 
 ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
-  const ojson body = body_of(s, decode_messages(n.run()), s.decode_tokens, greedy);
+  const ojson body = body_of(s, context_decode_messages(s, n.run()), s.decode_tokens, greedy);
   ojson res = {{"greedy", greedy}, {"invalid", ojson::array()}, {"flags", ojson::array()}};
   Stream r;
   try {
@@ -504,6 +562,15 @@ ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
   } catch (const std::exception& e) {
     res["invalid"].push_back(what(e));
     return res;
+  }
+  if (s.context_window) {
+    const int pt = int_or(r.usage, "prompt_tokens", 0);
+    res["prompt_tokens"] = pt ? ojson(pt) : ojson(nullptr);
+    const auto cached = cached_of(r.usage, r.timings);
+    res["cached_tokens"] = cached ? ojson(*cached) : ojson(nullptr);
+    if (!pt) res["invalid"].push_back("usage.prompt_tokens missing for custom-context writing");
+    else if (std::abs(pt - s.context_decode_tokens) > kPromptTol * s.context_decode_tokens)
+      res["invalid"].push_back("writing prompt_tokens outside expected context size (truncated or template drift)");
   }
   const int ct = int_or(r.usage, "completion_tokens", 0);
   const Rate rate = decode_rates(r.ev_t, r.ev_c, ct, s.window_head, s.window_tail);
@@ -530,6 +597,19 @@ ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
     snprintf(b, sizeof b, "repetition loop (distinct-4-gram %g)", *d4);
     res["flags"].push_back(b);
   }
+  if (s.context_window && r.progress.is_object() && r.progress.value("final", false)) {
+    const int cycles = r.progress.value("cycles", 0), tokens = r.progress.value("completion_tokens", 0);
+    const int spec = r.progress.value("speculative", 0);
+    if (cycles > 0 && tokens == ct && tokens > 1) {
+      res["diagnostics"] = {{"cycles", cycles}, {"speculative", spec != 0},
+                            {"mode", spec == 2 ? "DFlash2/KFlash" : spec == 3 ? "LiLiCorr" : spec == 1 ? "MTP" : "plain"},
+                            {"tokens_per_cycle", double(tokens - 1) / cycles}};
+      if (spec != 0) {
+        res["diagnostics"]["accepted_draft_tokens"] = std::max(0, tokens - 1 - cycles);
+        res["diagnostics"]["accepted_draft_tokens_per_cycle"] = double(std::max(0, tokens - 1 - cycles)) / cycles;
+      }
+    }
+  }
   if (r.timings.is_object() && r.timings.contains("draft_n") && r.timings["draft_n"].is_number() &&
       r.timings["draft_n"].get<double>() > 0)
     res["draft_acceptance"] = py_round(r.timings.value("draft_n_accepted", 0.0) / r.timings["draft_n"].get<double>(), 4);
@@ -537,7 +617,7 @@ ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
 }
 
 ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress, const std::function<bool()>& stopped) {
-  const std::string ctx = build_context(size);
+  const std::string ctx = s.context_window ? s.context_text : build_context(size);
   const std::string nonce = "session " + n.hex(64);
   const ojson msgs = prefill_messages(ctx, nonce, kPrefillQuestion);
   // max_tokens high enough that the answer ends naturally (a turn cut by max_tokens is not reusable as a cached
@@ -561,6 +641,10 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
   res["ttft_s"] = secs_or_null(r.ttft);
   res["prefill_tps"] = pt && r.ttft > 0 ? ojson(pt / r.ttft) : ojson(nullptr);
   res["cold_cached_tokens"] = cold_cached ? ojson(*cold_cached) : ojson(nullptr);
+  if (s.context_window && !cold_cached) res["flags"].push_back("cold cache usage unavailable; uncached state unverified");
+  if (s.context_window && cold_cached && (*cold_cached < 0 || *cold_cached > pt))
+    res["invalid"].push_back("inconsistent cold cached token count");
+  if (s.context_window && (r.ttft <= 0 || strip(r.content).empty())) res["invalid"].push_back("missing first token or content");
   res["finish"] = r.finish.empty() ? ojson(nullptr) : ojson(r.finish);
   res["reasoning_chars"] = chars(r.reasoning);
   for (const auto& why : leaks(s, r)) res["invalid"].push_back(why);
@@ -612,6 +696,17 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
                                  {"uncached_tokens", c2 && fresh2 > 0 ? ojson(fresh2) : ojson(nullptr)},
                                  {"suffix_prefill_tps", fresh2 > 0 && r2.ttft > 0 ? ojson(py_round(fresh2 / r2.ttft, 1)) : ojson(nullptr)},
                                  {"finish", r2.finish.empty() ? ojson(nullptr) : ojson(r2.finish)}});
+    if (s.context_window) {
+      auto& c = cached["samples"].back();
+      const bool known = c2 && *c2 >= 0 && *c2 <= pt2;
+      c["new_input_tokens"] = known ? ojson(pt2 - *c2) : ojson(nullptr);
+      c["cache_reuse_pct"] = known && pt2 > 0 ? ojson(100.0 * *c2 / pt2) : ojson(nullptr);
+      c["new_input_effective_tps"] = known && r2.ttft > 0 ? ojson((pt2 - *c2) / r2.ttft) : ojson(nullptr);
+      if (!known) cached["flags"].push_back("cache usage unavailable or inconsistent; new-input rate omitted");
+      if (c2 && !known) cached["invalid"].push_back("cached token count is negative or exceeds prompt_tokens");
+      if (!pt2 || r2.ttft <= 0 || strip(r2.content).empty()) cached["invalid"].push_back("missing cached prompt count, first token or content");
+      if (known && prev_pt > 0 && *c2 < 0.5 * prev_pt) cached["invalid"].push_back("cached request did not reuse half of the prefix");
+    }
     for (const auto& why : leaks(s, r2)) cached["invalid"].push_back("follow-up: " + why);
     if (c2 && prev_pt && *c2 < 0.5 * prev_pt)
       cached["flags"].push_back("follow-up reused only " + std::to_string(*c2) + " of " + std::to_string(prev_pt) +

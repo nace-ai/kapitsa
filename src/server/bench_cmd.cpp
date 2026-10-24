@@ -1,6 +1,6 @@
 // kapitsa bench: Kapitsa's benchmark on this Mac, with the published protocol (src/bench/: bench/harness's bench.py and
 // compare_engines.py, request for request). It starts the model's server as compare_engines.py does (one slot, a
-// 32K context, NI_* variables cleared), warms it up, waits for a quiet GPU, measures it over the local API while a
+// default 32K context (or --ctx), NI_* variables cleared), warms it up, waits for a quiet GPU, measures it over the local API while a
 // monitor samples the other processes' GPU time, the thermal state and the power source, then stops it. The result
 // (bench/community/schema.json) is saved and, when asked, submitted to the community results: a pull request with
 // the user's own gh login, never without an answer at the terminal (one question; Enter is a yes).
@@ -61,7 +61,7 @@ using term::dim;
 namespace {
 
 const char* kHelp =
-    "kapitsa bench [--model MODEL] [--quick] [--json] [--submit] [--out FILE]\n\n"
+    "kapitsa bench [--model MODEL] [--ctx TOKENS] [--quick] [--json] [--submit] [--out FILE]\n\n"
     "Benchmarks Kapitsa on this Mac with the protocol of its published benchmarks (bench/harness): writing speed\n"
     "(512-token coding answers at temperature 0.6, Flint's at 1.0, and greedy, median of 5 runs each), reading a 4K-\n"
     "and a 16K-token prompt, the time to the first token of a follow-up in each conversation, peak memory and tool\n"
@@ -71,7 +71,9 @@ const char* kHelp =
     "  --model MODEL   35b, 27b, 4b, bolt or flint (<model>:<variant> for another precision), a model folder or a\n"
     "                  .gguf file.\n"
     "                  Default: the best model for this Mac (in a terminal it asks)\n"
-    "  --quick         a shorter run: 3 runs per writing test, the 4K prompt only (marked quick in the result)\n"
+    "  --ctx TOKENS    append a context test AFTER the standard benchmark (e.g. 64k; minimum 4k)\n"
+    "                  TTFT, cache reuse, reading and writing; live token progress, 3 repetitions\n"
+    "  --quick         3 standard writing runs per test and 4K reading; context stage still has 3 repetitions\n"
     "  --json          the result as JSON on stdout (progress on stderr)\n"
     "  --out FILE      where to save the result (default: %s/kapitsa-bench-<date>-<chip>-<model>.json)\n"
     "  --submit        add the result to the community results: asks once (Enter is yes), then opens a pull request\n"
@@ -213,6 +215,24 @@ class Ticker {
   std::thread th_;
 };
 
+// Token counts come from completed GPU chunks, not an elapsed-time estimate.
+void live_progress(Ticker& ticker, const ojson& p, int output_tokens) {
+  const int phase = p.value("phase", 0), total = std::max(0, p.value("prompt_tokens", 0));
+  const int read = std::clamp(p.value("processed_tokens", 0), 0, total);
+  if (phase == 1 && total > 0) {
+    const int width = 12, filled = int(int64_t(read) * width / total);
+    char pct[32];
+    snprintf(pct, sizeof pct, " %.1f%%", 100.0 * read / total);
+    const std::string text = "[" + std::string(filled, '#') + std::string(width - filled, '-') + "] " +
+                             thousands(read) + "/" + thousands(total) + " tokens" + pct;
+    ticker.detail(text);
+    if (!g_tui) say("Context prefill " + text + "; " + thousands(p.value("cached_tokens", 0)) + " cached");
+  } else if (phase >= 2) {
+    ticker.detail("context " + thousands(total) + " tokens; writing " + std::to_string(p.value("completion_tokens", 0)) +
+                  "/" + std::to_string(output_tokens) + " tokens");
+  } else ticker.detail("tokenizing / waiting for a slot");
+}
+
 // "  ✓ Writing, T = 0.6     153.7 tok/s   146.6–165.8, 5 runs"
 void phase_line(const std::string& what, const std::string& value, const std::string& detail, bool ok = true) {
   if (!g_tui) return;
@@ -333,6 +353,16 @@ std::string drafter_of(const hub::ModelRef& ref) {
   return "";
 }
 
+std::string decoding_detail(const std::string& path) {
+  const std::string log = read_file(path);
+  const size_t p = log.rfind("engine ready: ");
+  if (p == std::string::npos) return "unknown";
+  std::string line = log.substr(p, log.find('\n', p) - p);
+  if (const size_t k = line.find(" slots, "); k != std::string::npos) line = line.substr(k + 8);
+  if (const size_t k = line.find(", images on"); k != std::string::npos) line.resize(k);
+  return line;
+}
+
 // ---------------------------------------------------------------- the server
 
 struct Server {
@@ -365,6 +395,44 @@ void stop_server(Server& s) {
 // ---------------------------------------------------------------- submitting
 
 std::string pretty(const ojson& j) { return j.dump(2) + "\n"; }
+
+// Write beside the destination, then rename, so interruption cannot leave a truncated report.
+void save_result(const std::string& path, const std::string& content) {
+  std::string tmp = path + ".tmp-XXXXXX";
+  const int fd = mkstemp(tmp.data());
+  if (fd < 0) throw std::runtime_error("Can't write " + path + ": " + strerror(errno));
+  size_t offset = 0;
+  int error = 0;
+  while (offset < content.size()) {
+    const ssize_t n = write(fd, content.data() + offset, content.size() - offset);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) { error = n < 0 ? errno : EIO; break; }
+    offset += size_t(n);
+  }
+  if (!error && fsync(fd) != 0) error = errno;
+  if (close(fd) != 0 && !error) error = errno;
+  if (!error && rename(tmp.c_str(), path.c_str()) != 0) error = errno;
+  if (error) {
+    unlink(tmp.c_str());
+    throw std::runtime_error("Can't save " + path + ": " + strerror(error));
+  }
+}
+
+std::string standard_path(const std::string& path) {
+  return path.ends_with(".json") ? path.substr(0, path.size() - 5) + ".standard.json" : path + ".standard.json";
+}
+
+std::string output_path(const ojson& result, const std::string& requested) {
+  if (!requested.empty()) return requested;
+  mkdir(bench_dir().c_str(), 0755);
+  const std::string name = result_file_name(result), base = name.substr(0, name.size() - 5);
+  std::string path = bench_dir() + "/" + name;
+  struct stat st;
+  for (int n = 2; stat(path.c_str(), &st) == 0 || stat(standard_path(path).c_str(), &st) == 0; ++n)
+    path = bench_dir() + "/" + base + "-" + std::to_string(n) + ".json";
+  return path;
+}
+
 
 // A no: the result stays where it was saved
 int not_sent(const std::string& file) {
@@ -515,7 +583,7 @@ void print_summary(const ojson& r, const std::string& path) {
   const ojson& res = r["results"];
   const ojson& m = r["model"];
   const ojson& mac = r["mac"];
-  const bool quick = r.value("mode", "") == "quick";
+  const bool quick = r.value("mode", "").find("quick") != std::string::npos;
   const int W = std::min(term::columns(), 100);
   const int inner = std::max(40, std::min(W - 8, 72));
   const std::string dot = dim("   " + std::string(term::kDot) + "   ");
@@ -527,7 +595,9 @@ void print_summary(const ojson& r, const std::string& path) {
   {
     const std::string name = bold(model_display(m.value("title", m.value("name", std::string())))) +
                              dim("  " + std::string(term::kDot) + "  ") + m.value("precision", std::string());
-    const std::string tag = quick ? term::warn(term::kOn) + " quick" : accent(term::kOn) + " full run";
+    const std::string tag = !r.contains("context") && r["protocol"].contains("context_window")
+        ? accent(term::kOn) + " ctx " + std::to_string(r["protocol"]["context_window"].get<int>() / 1024) + "K" + (quick ? " quick" : "")
+        : quick ? term::warn(term::kOn) + " quick" : accent(term::kOn) + " full run";
     const int gap = inner - term::width(name) - term::width(tag);
     rows.push_back(gap >= 2 ? name + std::string(size_t(gap), ' ') + tag : name);
   }
@@ -568,6 +638,17 @@ void print_summary(const ojson& r, const std::string& path) {
   }
   row("Tool calls", res.value("tool_calls", std::string()) == "pass" ? accent("pass") : term::red("fail"));
   row("Decoding", m.value("decoding_detail", m.value("decoding", std::string())));
+  if (r.contains("context")) {
+    rows.push_back("");
+    for (const auto& [label, value] : context_rows(r)) {
+      if (label.empty()) { rows.push_back(""); continue; }
+      const auto lines = term::wrap(value, inner - 15);
+      for (size_t i = 0; i < lines.size(); ++i)
+        rows.push_back(term::left(i == 0 ? dim(label) : "", 15) + lines[i]);
+    }
+    for (const auto& line : term::wrap("Input rates include first-token latency; new input excludes cache.", inner))
+      rows.push_back(dim(line));
+  }
   rows.push_back("");
   row("Conditions", conditions_text(r));
   for (const auto& l : term::wrap(gpu_text(r), inner - 13))
@@ -584,6 +665,7 @@ void print_summary(const ojson& r, const std::string& path) {
 
 struct Options {
   std::string model, out;
+  int context = 0;
   bool quick = false, json = false, submit = false, dry = false, yes = false;
 };
 
@@ -597,6 +679,7 @@ std::string utc_now() {
 int run(const Options& o) {
   // ---- the model
   EngineOptions eo;  // serve's defaults: the model `kapitsa serve` would start
+  eo.context = 0;
   const size_t budget = default_mem_budget();
   std::string model = o.model;
   if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {
@@ -644,7 +727,8 @@ int run(const Options& o) {
       term::line("  " + mac_name + dim(dot) + chip_short(mac.chip) + dim(dot) + std::to_string(mac.gpu_cores) + "-core GPU" + dim(dot) + b +
                  dim(dot + "macOS " + mac.macos));
       term::line("  " + bold(model_display(mi.title)) + dim(dot) + mi.precision +
-                 (o.quick ? dim(dot + "quick: 3 runs per writing test, the 4K prompt only") : std::string()));
+                 (o.context ? dim(dot + "custom context " + std::to_string(o.context / 1024) + "K" + (o.quick ? " (quick)" : "")) :
+                  o.quick ? dim(dot + "quick: 3 runs per writing test, the 4K prompt only") : std::string()));
       term::line("");
     } else {
       fprintf(stderr, "kapitsa bench: %s %s on %s: %s, %d-core GPU, %s, macOS %s%s\n", model_display(mi.title).c_str(),
@@ -678,6 +762,10 @@ int run(const Options& o) {
   if (!external)  // a repo already downloaded is not checked again by the download
     if (const std::string why = unsupported_model(ref.dir); !why.empty()) return fail(why, 2);
 
+  if (o.context) {
+    const int limit = model_context_limit(ref.dir);
+    if (limit > 0 && o.context > limit) return fail("Requested context exceeds this model's " + std::to_string(limit) + "-token limit.", 2);
+  }
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
@@ -707,7 +795,7 @@ int run(const Options& o) {
     if (!ok) warn_line("Can't take the GPU lock " + GpuLock::path() + " (" + strerror(errno) + "): running without it.");
   }
 
-  // ---- the server: compare_engines.py's start (its own session, NI_* cleared, one slot, 32K context)
+  // ---- the server: compare_engines.py's start (its own session, NI_* cleared, one slot, selected context)
   Server srv;
   srv.port = external ? external : free_port();
   if (srv.port <= 0) return fail("Can't find a free port for the server.");
@@ -717,14 +805,15 @@ int run(const Options& o) {
   sigaction(SIGINT, &act, &old_int);
   sigaction(SIGTERM, &act, &old_term);
   sigaction(SIGHUP, &act, &old_hup);
-  if (!external) {  // start one
+  auto start_server = [&](int context) {
+    if (external) return;
     mkdir(hub::home_dir().c_str(), 0755);
     mkdir((hub::home_dir() + "/logs").c_str(), 0755);
-    srv.log = hub::home_dir() + "/logs/bench-" + std::to_string(srv.port) + ".log";
+    srv.log = hub::home_dir() + "/logs/bench-" + std::to_string(srv.port) + "-ctx" + std::to_string(context) + ".log";
     srv.gpu_mem_before = gpu_memory_in_use();
     // (no SSD prefix cache: a benchmark writes nothing to the disk, and no run reads what an earlier one left there)
     std::vector<std::string> sargv = {self_path(), "serve", "--model", ref.dir, "--model-id", s.model, "--host", "127.0.0.1",
-                                      "--port", std::to_string(srv.port), "--ctx", "32768", "--slots", "1",
+                                      "--port", std::to_string(srv.port), "--ctx", std::to_string(context), "--slots", "1",
                                       "--disk-cache", "0"};
     std::vector<std::string> senv, cleared;
     for (char** e = environ; *e; ++e) {
@@ -751,9 +840,9 @@ int run(const Options& o) {
     for (auto& x : senv) se.push_back(x.data());
     se.push_back(nullptr);
     const int lfd = open(srv.log.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-    if (lfd < 0) return fail("Can't write the server's log " + hub::tilde(srv.log) + ": " + strerror(errno));
+    if (lfd < 0) throw std::runtime_error("Can't write the server's log " + hub::tilde(srv.log) + ": " + strerror(errno));
     const pid_t child = fork();
-    if (child < 0) return fail(std::string("Can't start the server: ") + strerror(errno));
+    if (child < 0) throw std::runtime_error(std::string("Can't start the server: ") + strerror(errno));
     if (child == 0) {
       setsid();
       const int null = open("/dev/null", O_RDONLY);
@@ -766,7 +855,7 @@ int run(const Options& o) {
     close(lfd);
     srv.pid = child;
     g_server = child;
-  }
+  };
   auto own = [&] { return srv.pid > 0 ? process_tree({int(srv.pid)}) : std::set<int>{}; };
   auto cleanup = [&] {
     stop_server(srv);
@@ -791,8 +880,9 @@ int run(const Options& o) {
   raw["memory"] = ojson::object();
   Nonces nonces;
   int code = 0;
-  std::string out_path;
+  std::string out_path, checkpoint_path;
   try {
+    start_server(32768);
     // wait for it, showing what it does
     if (external) {
       mi.decoding = "unknown";
@@ -835,17 +925,7 @@ int run(const Options& o) {
       if (stopping()) throw Stopped{};
       if (!ready) throw std::runtime_error("The server did not answer within 15 minutes. Its log: " + hub::tilde(srv.log));
       // what it decodes with: its "engine ready" line
-      std::string detail;
-      {
-        const std::string log = read_file(srv.log);
-        const size_t p = log.rfind("engine ready: ");
-        if (p != std::string::npos) {
-          std::string l = log.substr(p, log.find('\n', p) - p);
-          if (const size_t k = l.find(" slots, "); k != std::string::npos) l = l.substr(k + 8);
-          if (const size_t k = l.find(", images on"); k != std::string::npos) l.resize(k);
-          detail = l;
-        }
-      }
+      const std::string detail = decoding_detail(srv.log);
       mi.decoding_detail = detail;
       mi.decoding = decoding_of(detail);
       if (decoding_has_drafter(mi.decoding)) mi.drafter = drafter_of(ref);
@@ -857,7 +937,6 @@ int run(const Options& o) {
       say("Ready after " + term::duration(secs()) + ": " + detail);
     }
     s.port = srv.port;
-
     // warm-up (compare_engines.py), then a quiet GPU
     {
       Ticker t("Warming up");
@@ -1019,38 +1098,241 @@ int run(const Options& o) {
     }
     mon.stop();
     in.samples = mon.samples();
+
+    // Keep the standard server settings, measurements and monitoring separate from the optional context stage.
+    in.power_end = power();
+    in.vm_end = vm();
+    if (o.context) {
+      in.model = mi;
+      in.settings = s;
+      in.context = 32768;
+      const ojson standard = make_result(in);
+      ojson naming = standard;
+      naming["protocol"]["context_window"] = o.context;
+      out_path = output_path(naming, o.out);
+      checkpoint_path = standard_path(out_path);
+      save_result(checkpoint_path, pretty(standard));
+      say("Standard results saved before the context stage: " + hub::tilde(checkpoint_path));
+      if (g_tui) ui::note("Standard results saved: " + hub::tilde(checkpoint_path));
+      const int reserve = s.always_reasons ? 3072 : 2048;
+      ojson cx = {{"window_tokens", o.context}, {"reply_reserve_tokens", reserve}, {"repetitions", 3},
+                  {"invalid", ojson::array()}, {"flags", ojson::array()},
+                  {"reading_samples", ojson::array()}, {"decode", ojson::array()}, {"decode_greedy", ojson::array()}};
+      try {
+        phase_line("Context stage", std::to_string(o.context / 1024) + "K", "standard benchmark complete; three repetitions");
+        say("Standard benchmark complete; starting the separate " + std::to_string(o.context) + "-token context stage");
+        stop_server(srv);
+        start_server(o.context);
+        if (!external) {
+          Ticker t("Loading the context benchmark server");
+          const double start = Monitor::now();
+          while (!stopping() && Monitor::now() - start < 900) {
+            int st;
+            if (waitpid(srv.pid, &st, WNOHANG) == srv.pid) {
+              srv.pid = 0;
+              g_server = 0;
+              throw std::runtime_error("Context server stopped while loading; see " + hub::tilde(srv.log));
+            }
+            if (http_status(srv.port, "/health", 1) == 200 && http_status(srv.port, "/v1/models", 5) == 200) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+          }
+          if (stopping()) throw Stopped{};
+          if (http_status(srv.port, "/health", 1) != 200) throw std::runtime_error("Context server did not become ready");
+          t.done();
+        }
+        cx["decoding_detail"] = external ? "unknown (external server)" : decoding_detail(srv.log);
+        Settings cs = s;
+        httplib::Client cli(cs.host, cs.port);
+        auto r = cli.Get("/v1/models");
+        if (!r || r->status != 200) throw std::runtime_error("Cannot verify the server's context window");
+        const ojson models = ojson::parse(r->body);
+        const auto& active = models.at("data").at(0);
+        if (active.value("context_length", 0) < o.context || active.value("context_fit", 0) < o.context)
+          throw std::runtime_error("The requested context does not fit this model/server; choose a smaller --ctx");
+        {
+          Ticker t("Preparing context prompts");
+          prepare_context(cs, o.context);
+          t.done();
+        }
+        if (stopping()) throw Stopped{};
+        cx["prefill_prompt_tokens"] = cs.context_prefill_tokens;
+        cx["decode_prompt_tokens"] = cs.context_decode_tokens;
+        cx["temperature"] = cs.temperature;
+        say("Context prompts: " + std::to_string(cs.context_prefill_tokens) + " reading tokens, " +
+            std::to_string(cs.context_decode_tokens) + " writing tokens; " + std::to_string(reserve) + " tokens reserved for replies");
+        cs.cached_samples = 1; // three independent cold/warm pairs, rather than one growing conversation
+        {
+          Ticker t("Warming up the context benchmark server");
+          cx["warmup"] = warmup(cs, nonces, [&](const std::string& step) { t.detail(step); });
+          t.done();
+          phase_line("Context warm-up", term::duration(t.secs()), "short prompt and tool call", cx["warmup"].value("ok", false));
+        }
+        if (!cx["warmup"].value("ok", false)) cx["flags"].push_back("context warm-up failed");
+        double waited = 0;
+        std::vector<Busy> context_busy;
+        {
+          Ticker t("Waiting for the GPU to settle before the context test");
+          cx["gpu_quiet"] = external || wait_quiet(kForeignMaxPct, 15, o.quick ? 120 : 300, own, terminal, &waited, &context_busy,
+                                       [&](const std::vector<Busy>& busy, double) {
+                                         t.detail(busy.empty() ? "quiet: waiting for 15 seconds" : "busy: " + busy.front().name);
+                                         return !stopping();
+                                       });
+          t.done();
+        }
+        cx["gpu_quiet_wait_s"] = waited;
+        if (stopping()) throw Stopped{};
+        if (!external) phase_line("Context GPU quiet", term::duration(waited), cx.value("gpu_quiet", false) ? "other apps under 5% for 15 s" : "GPU busy; results will be flagged", cx.value("gpu_quiet", false));
+        Monitor context_mon(own, terminal);
+        context_mon.start();
+        const double t0 = Monitor::now();
+        const Vm v0 = vm();
+        auto rollup = [&](const ojson& sample, const std::string& name) {
+          for (const char* key : {"invalid", "flags"})
+            for (const auto& x : sample.value(key, ojson::array())) cx[key].push_back(name + ": " + x.get<std::string>());
+        };
+        for (int i = 0; i < 3; ++i) {
+          if (stopping()) throw Stopped{};
+          const std::string step = std::to_string(i + 1) + "/9";
+          Ticker t("Ctx read " + std::to_string(i + 1) + "/3 [" + step + "]");
+          cs.on_progress = [&](const ojson& progress) { live_progress(t, progress, cs.always_reasons ? 1024 : 256); };
+          ojson p = t_prefill(cs, o.context, nonces, [&](const std::string& status) {
+            t.label("Ctx cached " + std::to_string(i + 1) + "/3 [" + step + "]");
+            t.detail(status);
+          }, stopping);
+          cs.on_progress = {};
+          rollup(p, "cold " + std::to_string(i + 1));
+          if (p.contains("cached")) rollup(p["cached"], "cached " + std::to_string(i + 1));
+          cx["reading_samples"].push_back(p);
+          t.done();
+          const ojson cached = p.value("cached", ojson::object());
+          const ojson followup = cached.value("median_ttft_s", ojson());
+          const std::string cold = p.value("ttft_s", ojson()).is_number() ? fmt_secs(p["ttft_s"]) : "–";
+          const std::string warm = followup.is_number() ? fmt_secs(followup) : "–";
+          const bool valid = p.value("invalid", ojson::array()).empty() && cached.value("invalid", ojson::array()).empty() && followup.is_number();
+          phase_line("Ctx read " + std::to_string(i + 1) + "/3 [" + step + "]", cold + " cold", warm + " cached; elapsed " + term::duration(t.secs()), valid);
+          say("Context " + step + ": reading pair " + std::to_string(i + 1) + "/3 complete; " + cold + " cold, " + warm + " cached");
+        }
+        char sampled_label[24];
+        snprintf(sampled_label, sizeof sampled_label, "T = %.1f", cs.temperature);
+        for (const bool greedy : {false, true}) {
+          const char* key = greedy ? "decode_greedy" : "decode";
+          for (int i = 0; i < 3; ++i) {
+            if (stopping()) throw Stopped{};
+            const std::string step = std::to_string(4 + (greedy ? 3 : 0) + i) + "/9";
+            Ticker t("Context " + step + ": writing " + (greedy ? "greedy" : std::string(sampled_label)) + " (run " + std::to_string(i + 1) + "/3)");
+            cs.on_progress = [&](const ojson& progress) { live_progress(t, progress, cs.decode_tokens); };
+            ojson d = t_decode(cs, greedy, nonces);
+            cs.on_progress = {};
+            rollup(d, key);
+            cx[key].push_back(d);
+            t.done();
+            const ojson rate = d.value("decode_tps", ojson());
+            const std::string speed = rate.is_number() ? fmt_tps(rate) : "–";
+            phase_line(std::string(greedy ? "Ctx greedy " : "Ctx write ") + std::to_string(i + 1) + "/3 [" + step + "]",
+                       speed, (greedy ? std::string("greedy") : std::string(sampled_label)) + "; elapsed " + term::duration(t.secs()),
+                       rate.is_number() && d.value("invalid", ojson::array()).empty());
+            say("Context " + step + ": writing " + (greedy ? std::string("greedy") : std::string(sampled_label)) + " run " + std::to_string(i + 1) + "/3 complete; " + speed);
+          }
+          cx[std::string(key) + "_summary"] = summary(cx[key]);
+        }
+        context_mon.stop();
+        cx["conditions"] = summarize_samples(context_mon.samples(), t0, Monitor::now());
+        const Footprint f = footprint(own(), true);
+        cx["peak_memory_gb"] = f.peak ? ojson(py_round(double(f.peak) / 1073741824.0, 2)) : ojson(nullptr);
+        const Vm v1 = vm();
+        cx["swapouts_delta"] = v0.swapouts >= 0 && v1.swapouts >= 0 ? ojson(v1.swapouts - v0.swapouts) : ojson(nullptr);
+        if (cx["conditions"].contains("thermal") && thermal_rank(cx["conditions"]["thermal"]) >= 2)
+          cx["flags"].push_back("thermal throttling during the context stage");
+        if (cx["conditions"].value("on_battery", false)) cx["flags"].push_back("context stage ran on battery");
+        if (cx["conditions"].value("low_power_mode", false)) cx["flags"].push_back("Low Power Mode during the context stage");
+        if (cx["conditions"].value("flagged", false)) cx["flags"].push_back("other apps used the GPU during the context stage");
+        if (!cx.value("gpu_quiet", false)) cx["flags"].push_back("GPU did not become quiet before the context stage");
+        if (v0.swapouts >= 0 && v1.swapouts - v0.swapouts > 1000) cx["flags"].push_back("pages swapped out during the context stage");
+        auto stats = [](const std::vector<double>& xs) -> ojson {
+          if (xs.empty()) return nullptr;
+          return {{"median", py_round(median(xs), 4)}, {"min", *std::min_element(xs.begin(), xs.end())},
+                  {"max", *std::max_element(xs.begin(), xs.end())}, {"samples", xs}};
+        };
+        std::vector<double> cold, cached, cold_tps, new_tps, reused, reuse_pct;
+        for (const auto& p : cx["reading_samples"]) {
+          if (p.value("invalid", ojson::array()).empty()) {
+            if (p.value("ttft_s", ojson()).is_number()) cold.push_back(p["ttft_s"]);
+            if (p.value("prefill_tps", ojson()).is_number()) cold_tps.push_back(p["prefill_tps"]);
+          }
+          if (!p.value("invalid", ojson::array()).empty() || !p.contains("cached") || !p["cached"]["invalid"].empty()) continue;
+          for (const auto& c : p["cached"]["samples"]) {
+            if (c["ttft_s"].is_number()) cached.push_back(c["ttft_s"]);
+            if (c.value("new_input_effective_tps", ojson()).is_number()) new_tps.push_back(c["new_input_effective_tps"]);
+            if (c.value("cached_tokens", ojson()).is_number()) reused.push_back(c["cached_tokens"]);
+            if (c.value("cache_reuse_pct", ojson()).is_number()) reuse_pct.push_back(c["cache_reuse_pct"]);
+          }
+        }
+        ojson diagnostics = ojson::object();
+        for (const char* key : {"decode", "decode_greedy"}) {
+          std::vector<double> yield, accepted;
+          int cycles = 0;
+          for (const auto& d : cx[key]) {
+            if (!d.value("invalid", ojson::array()).empty() || !d.contains("diagnostics")) continue;
+            const auto& dg = d["diagnostics"];
+            cycles += dg.value("cycles", 0);
+            if (dg.value("tokens_per_cycle", ojson()).is_number()) yield.push_back(dg["tokens_per_cycle"]);
+            if (dg.value("accepted_draft_tokens_per_cycle", ojson()).is_number()) accepted.push_back(dg["accepted_draft_tokens_per_cycle"]);
+          }
+          if (!yield.empty()) diagnostics[key] = {{"tokens_per_cycle", stats(yield)}, {"accepted_draft_tokens_per_cycle", stats(accepted)}, {"total_cycles", cycles}};
+        }
+        cx["diagnostics"] = diagnostics;
+        if (diagnostics.empty()) cx["flags"].push_back("server did not provide per-request speculative diagnostics");
+        cx["uncached_ttft_s"] = stats(cold);
+        cx["cached_ttft_s"] = stats(cached);
+        cx["cold_input_effective_tps"] = stats(cold_tps);
+        cx["new_input_effective_tps"] = stats(new_tps);
+        cx["cached_tokens"] = stats(reused);
+        cx["cache_reuse_pct"] = stats(reuse_pct);
+        std::vector<double> speedups;
+        for (const auto& p : cx["reading_samples"]) {
+          if (!p.value("invalid", ojson::array()).empty() || !p.contains("cached") || !p["cached"]["invalid"].empty() ||
+              !p.value("ttft_s", ojson()).is_number()) continue;
+          for (const auto& c : p["cached"]["samples"])
+            if (c["ttft_s"].is_number() && c["ttft_s"].get<double>() > 0)
+              speedups.push_back(p["ttft_s"].get<double>() / c["ttft_s"].get<double>());
+        }
+        cx["ttft_speedup"] = stats(speedups);
+        cx["throughput_definition"] = "input tokens / client TTFT; cached new-input rate excludes reused tokens; includes first-token latency, not isolated GPU prefill";
+        if (cold.size() != 3 || cached.size() != 3) cx["invalid"].push_back("expected three valid cold/cached TTFT pairs");
+      } catch (const Stopped&) {
+        throw;
+      } catch (const std::exception& e) {
+        cx["invalid"].push_back(e.what());
+        warn_line(std::string("Context stage: ") + e.what() + "; standard results retained");
+      }
+      raw["context"] = cx;
+    }
+
   } catch (const Stopped&) {
     term::status("");
     cleanup();
-    if (g_tui) ui::warning("Stopped: no result.");
-    else fprintf(stderr, "Stopped: no result.\n");
+    const std::string message = checkpoint_path.empty() ? "Stopped: no result."
+        : "Stopped: standard results are saved at " + hub::tilde(checkpoint_path);
+    if (g_tui) ui::warning(message);
+    else fprintf(stderr, "%s\n", message.c_str());
     return 130;
   } catch (const std::exception& e) {
     term::status("");
     cleanup();
     return fail(e.what());
   }
-  in.power_end = power();
-  in.vm_end = vm();
   cleanup();
 
   in.model = mi;
   in.settings = s;
+  in.context = 32768;
   const ojson result = make_result(in);
   const std::string content = pretty(result);
-  // save it
-  out_path = o.out;
-  if (out_path.empty()) {
-    mkdir(bench_dir().c_str(), 0755);
-    std::string name = result_file_name(result), base = name.substr(0, name.size() - 5);
-    out_path = bench_dir() + "/" + name;
-    struct stat st;
-    for (int n = 2; stat(out_path.c_str(), &st) == 0; ++n) out_path = bench_dir() + "/" + base + "-" + std::to_string(n) + ".json";
-  }
-  {
-    std::ofstream f(out_path, std::ios::binary);
-    f << content;
-    if (!f) return fail("Can't write " + out_path + ".");
+  try {
+    if (out_path.empty()) out_path = output_path(result, o.out);
+    save_result(out_path, content);
+  } catch (const std::exception& e) {
+    return fail(e.what());
   }
   if (o.json) {
     fputs(content.c_str(), stdout);
@@ -1164,6 +1446,11 @@ int run_bench(int argc, char** argv, int first) {
       else fputs(b, stdout);
       return 0;
     } else if (a == "--model" || a == "-m") o.model = next();
+    else if (a == "--ctx" || a == "--context") {
+      std::string why;
+      o.context = parse_context(next(), &why);
+      if (o.context < 4096) usage_error(why.empty() ? "--ctx needs an explicit context of at least 4k (e.g. 64k)" : why, help);
+    }
     else if (a == "--quick") o.quick = true;
     else if (a == "--json") o.json = true;
     else if (a == "--submit") o.submit = true;
@@ -1172,6 +1459,7 @@ int run_bench(int argc, char** argv, int first) {
     else if (a == "--yes") o.yes = true;
     else usage_error("unknown option " + a, help);
   }
+  if (o.context && o.submit) usage_error("custom-context runs cannot be submitted as standard community benchmarks", help);
   if (o.dry && !o.submit) usage_error("--dry-run goes with --submit", help);
   g_tui = term::fancy() && !o.json;
   g_plain = !g_tui;

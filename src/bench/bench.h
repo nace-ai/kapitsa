@@ -64,6 +64,11 @@ struct Settings {
   int decode_tokens = 512, decode_runs = 5, greedy_runs = 5, window_head = 16, window_tail = 4;
   double rep_threshold = 0.5;
   std::vector<int> sizes{4000, 16000};
+  int context_window = 0;  // opt-in custom context workload; 0 preserves the published protocol
+  int context_prefill_tokens = 0, context_decode_tokens = 0;
+  std::function<void(const ojson&)> on_progress;  // optional opt-in token progress, never counted as generated output
+  std::string context_text;  // repeated frozen corpus, fitted by the server's tokenizer
+
   int cached_samples = 3;
   double turn_gap = 1.0;
   double temperature = 0.6, top_p = 0.95;
@@ -84,6 +89,10 @@ ojson think_on(const Settings& s);
 ojson body_of(const Settings& s, const ojson& msgs, int max_tokens, bool greedy = false, bool think = false,
               const ojson& extra = ojson::object());
 
+// Fit a custom-context workload without running inference; reserves 2048 tokens for replies/follow-ups.
+void prepare_context(Settings& s, int window);
+ojson context_decode_messages(const Settings& s, const std::string& nonce);
+
 // Random nonces as bench.py makes them
 struct Nonces {
   std::mt19937_64 rng{std::random_device{}()};
@@ -102,6 +111,7 @@ struct ToolCallAcc {
 };
 struct Stream {
   double ttft = -1, gen_time = -1, total = 0;
+  ojson progress;  // last opt-in server telemetry event
   ojson usage, timings;  // null when the stream sent none
   std::string content, reasoning, finish;
   std::vector<ToolCallAcc> tool_calls;
@@ -338,6 +348,8 @@ std::string result_markdown(const ojson& result);
 // The temperature of the writing runs (decode; the greedy ones are at 0): the result's protocol.temperature, or for a
 // result written before it was recorded, Flint's 1.0 (its model card's, as configs/flint.json) and 0.6 for any other
 double writing_temperature(const ojson& result);
+// Context summary rows, shared by the terminal and Markdown; empty labels/values separate groups.
+std::vector<std::pair<std::string, std::string>> context_rows(const ojson& result);
 // The checks a result must pass to be submitted ("" when it may be)
 std::string submit_problem(const ojson& result);
 // Formats for the screens and texts: "153.7 tok/s", "1,169 tok/s", "0.06 s", "21.1 GB", a temperature "0.6"

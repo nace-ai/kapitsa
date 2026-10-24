@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <tuple>
 
 namespace ni::bench {
 
@@ -247,6 +248,11 @@ ojson make_result(const RunInputs& in) {
                     {"greedy_runs", s.greedy_runs},
                     {"sizes", s.sizes},
                     {"temperature", s.temperature}};
+  if (raw.contains("context")) {
+    protocol["context_window"] = raw["context"]["window_tokens"];
+    for (const auto& x : raw["context"]["invalid"]) invalid.push_back("context: " + x.get<std::string>());
+    for (const auto& x : raw["context"]["flags"]) flags.push_back("context: " + x.get<std::string>());
+  }
   ojson users = ojson::array();
   for (const auto& u : overall.value("gpu_users", ojson::array())) users.push_back(u["name"]);
   ojson conditions = {{"power_source", in.power_start.source.empty() ? ojson(nullptr) : ojson(in.power_start.source)},
@@ -260,9 +266,9 @@ ojson make_result(const RunInputs& in) {
                       {"gpu_ambient_mean_pct", overall.value("mean_ambient_gpu_pct", 0.0)},
                       {"gpu_users", users},
                       {"contention", busy}};
-  return {{"schema", kSchema},
+  ojson result = {{"schema", kSchema},
           {"kind", "kapitsa-bench"},
-          {"mode", in.quick ? "quick" : "full"},
+          {"mode", raw.contains("context") ? (in.quick ? "context-quick" : "context") : (in.quick ? "quick" : "full")},
           {"time_utc", in.time_utc},
           {"kapitsa", {{"version", in.version}, {"commit", in.commit.empty() ? ojson(nullptr) : ojson(in.commit)}}},
           {"mac", mac},
@@ -272,6 +278,73 @@ ojson make_result(const RunInputs& in) {
           {"conditions", conditions},
           {"flags", flags},
           {"invalid", invalid}};
+  if (raw.contains("context")) result["context"] = raw["context"];
+  return result;
+}
+
+// Keep display precision and grouping consistent without rounding the saved measurements.
+std::vector<std::pair<std::string, std::string>> context_rows(const ojson& r) {
+  std::vector<std::pair<std::string, std::string>> rows;
+  if (!r.contains("context")) return rows;
+  const auto& cx = r["context"];
+  auto number = [](double v, int places) {
+    char b[64];
+    snprintf(b, sizeof b, "%.*f", places, v);
+    return std::string(b);
+  };
+  auto has = [&](const char* key) { return cx.contains(key) && cx[key].is_object(); };
+  auto range = [&](const ojson& v, int places, const std::string& unit = "") {
+    return number(v["median"], places) + unit + " [" + number(v["min"], places) + "–" + number(v["max"], places) + "]";
+  };
+  const std::string dot = "  ·  ";
+  rows.emplace_back("Context", std::to_string(cx["window_tokens"].get<int>() / 1024) + "K; three repetitions, median [min–max]");
+  if (cx.contains("prefill_prompt_tokens") && cx.contains("decode_prompt_tokens"))
+    rows.emplace_back("Prompt tokens", thousands(cx["prefill_prompt_tokens"].get<long>()) + " reading; " +
+                      thousands(cx["decode_prompt_tokens"].get<long>()) + " writing; " + thousands(cx.value("reply_reserve_tokens", 2048)) + " reserved");
+  if (has("cached_tokens")) {
+    const auto& v = cx["cached_tokens"];
+    std::string s = thousands(std::lround(v["median"].get<double>())) + " [" + thousands(std::lround(v["min"].get<double>())) +
+                    "–" + thousands(std::lround(v["max"].get<double>())) + "]";
+    if (has("cache_reuse_pct")) s += dot + number(cx["cache_reuse_pct"]["median"], 1) + "% reuse";
+    rows.emplace_back("Cached tokens", s);
+  } else if (has("cache_reuse_pct")) rows.emplace_back("Cache reuse", number(cx["cache_reuse_pct"]["median"], 1) + "%");
+  rows.emplace_back("", "");
+  for (const auto& [key, label, rate, suffix] : {
+       std::tuple{"uncached_ttft_s", "Cold TTFT", "cold_input_effective_tps", " input"},
+       std::tuple{"cached_ttft_s", "Cached TTFT", "new_input_effective_tps", " new input"}}) {
+    if (!has(key)) continue;
+    std::string s = range(cx[key], 3, " s");
+    if (has(rate)) s += dot + fmt_tps(cx[rate]["median"], true) + suffix;
+    rows.emplace_back(label, s);
+  }
+  if (has("ttft_speedup")) {
+    const auto& v = cx["ttft_speedup"];
+    rows.emplace_back("Cache speedup", number(v["median"], 1) + "x [" + number(v["min"], 1) + "x–" + number(v["max"], 1) + "x]");
+  }
+  rows.emplace_back("", "");
+  for (const auto& [key, label] : {std::pair{"decode_summary", "Ctx writing"}, {"decode_greedy_summary", "Ctx greedy"}}) {
+    if (!has(key) || !cx[key].contains("median_tps")) continue;
+    const auto& v = cx[key];
+    std::string s = number(v["median_tps"], 1) + " tok/s [" + number(v["min_tps"], 1) + "–" + number(v["max_tps"], 1) + "]";
+    if (key == std::string("decode_summary")) s += dot + "T = " + number(cx.value("temperature", 0.6), 1);
+    rows.emplace_back(label, s);
+  }
+  if (cx.contains("diagnostics"))
+    for (const auto& [key, label] : {std::pair{"decode", "Draft yield"}, {"decode_greedy", "Greedy yield"}}) {
+      const auto& all = cx["diagnostics"];
+      if (all.contains(key) && all[key].value("tokens_per_cycle", ojson()).is_object()) {
+        const auto& d = all[key];
+        std::string value = range(d["tokens_per_cycle"], 2, " tok/cycle");
+        if (d.value("accepted_draft_tokens_per_cycle", ojson()).is_object())
+          value += dot + number(d["accepted_draft_tokens_per_cycle"]["median"], 2) + " accepted drafts/cycle";
+        rows.emplace_back(label, value);
+      }
+    }
+  if (cx.contains("decoding_detail") && cx["decoding_detail"] != r["model"].value("decoding_detail", std::string()))
+    rows.emplace_back("Ctx decoding", cx["decoding_detail"].get<std::string>());
+  if (cx.contains("peak_memory_gb") && cx["peak_memory_gb"].is_number())
+    rows.emplace_back("Ctx memory", number(cx["peak_memory_gb"], 2) + " GB peak");
+  return rows;
 }
 
 // ---------------------------------------------------------------- names and texts
@@ -281,7 +354,8 @@ std::string result_file_name(const ojson& r) {
   std::string model = slug(str_or(m, "name"));
   if (!str_or(m, "variant").empty()) model += "-" + slug(str_or(m, "variant"));
   return "kapitsa-bench-" + str_or(r, "time_utc").substr(0, 10) + "-" + slug(chip_short(str_or(r["mac"], "chip"))) + "-" + model +
-         (str_or(r, "mode") == "quick" ? "-quick" : "") + ".json";
+         (r["protocol"].contains("context_window") ? "-ctx" + std::to_string(r["protocol"]["context_window"].get<int>()) : "") +
+         (str_or(r, "mode").find("quick") != std::string::npos ? "-quick" : "") + ".json";
 }
 
 std::string result_mac_line(const ojson& r) {
@@ -292,7 +366,8 @@ std::string result_title(const ojson& r) {
   const ojson& m = r["model"];
   std::string t = "Benchmark: " + result_mac_line(r) + " · " + model_display(str_or(m, "title", str_or(m, "name"))) + " " +
                   str_or(m, "precision");
-  if (str_or(r, "mode") == "quick") t += " · quick";
+  if (r["protocol"].contains("context_window")) t += " · " + std::to_string(r["protocol"]["context_window"].get<int>()) + "-token context";
+  if (str_or(r, "mode").find("quick") != std::string::npos) t += " · quick";
   return t;
 }
 
@@ -347,6 +422,13 @@ std::string result_markdown(const ojson& r) {
   }
   s += "| Tool calls | " + str_or(res, "tool_calls", "–") + (busy.count("tools") ? mark : "") + " |\n\n";
   if (!busy.empty()) s += "⚠ other apps used the GPU during this measurement (contention flagged): it may be low.\n\n";
+  if (r.contains("context")) {
+    s += "Additional context test:\n\n";
+    s += "| Context metric | Result |\n| --- | ---: |\n";
+    for (const auto& [label, value] : context_rows(r))
+      if (!label.empty()) s += "| " + label + " | " + value + " |\n";
+    s += "\nInput rates include first-token latency; cached rate counts only new tokens. Standard results above use the original 32K server.\n\n";
+  }
   const std::string src = str_or(c, "power_source");
   std::string cond = "Kapitsa " + str_or(r["kapitsa"], "version") +
                      (r["kapitsa"]["commit"].is_string() ? " (" + r["kapitsa"]["commit"].get<std::string>() + ")" : "") + " · " +
@@ -358,7 +440,8 @@ std::string result_markdown(const ojson& r) {
                       : str_or(c, "power_mode") == "low" ? " · Low Power Mode"
                       : str_or(c, "power_mode") == "automatic" ? " · Automatic power mode" : "") +
                      (str_or(c, "thermal_state").empty() ? "" : " · thermal state " + str_or(c, "thermal_state")) + " · " +
-                     (str_or(r, "mode") == "quick" ? "quick run (3 runs per writing test, the 4K prompt only)" : "full run");
+                     (r["protocol"].contains("context_window") ? "standard benchmark followed by context workload at " + std::to_string(r["protocol"]["context_window"].get<int>()) + " tokens" :
+                     str_or(r, "mode") == "quick" ? "quick run (3 runs per writing test, the 4K prompt only)" : "full run");
   s += cond + "\n\n";
   if (r["flags"].empty()) {
     s += "Flags: none.\n";
@@ -373,6 +456,7 @@ std::string result_markdown(const ojson& r) {
 
 std::string submit_problem(const ojson& r) {
   if (r.value("kind", "") != "kapitsa-bench" || r.value("schema", 0) != kSchema) return "This is not a kapitsa bench result.";
+  if (r.contains("protocol") && r["protocol"].contains("context_window")) return "Custom-context runs cannot be submitted as standard community benchmarks.";
   const ojson& m = r["model"];
   if (!m.value("catalog", false) || !m["variant"].is_string())
     return "Only results of the catalog's models can be submitted (their weights are pinned, so results compare): "

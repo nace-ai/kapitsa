@@ -467,7 +467,7 @@ struct StreamJob {
 static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
                          std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter,
-                         bool early = false) {
+                         bool early = false, bool telemetry = false) {
   auto job = std::make_shared<StreamJob>();
   job->worker = std::thread([guard, r, w, meter, early, raw = job.get()] {
     auto start = [&](const ChatResult& prompt) {  // with raw->mu held
@@ -519,7 +519,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
     return;
   }
   res.set_header("Cache-Control", "no-cache");
-  res.set_chunked_content_provider("text/event-stream", [guard, job, w, after, meter](size_t, httplib::DataSink& sink) {
+  res.set_chunked_content_provider("text/event-stream", [guard, job, w, after, meter, live = r.live, telemetry](size_t, httplib::DataSink& sink) {
     // the client is gone: the engine stops at its next token, or gives the request up before it takes a slot
     auto gone = [&] {
       job->cancel();
@@ -529,6 +529,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
     };
     auto last = std::chrono::steady_clock::now();  // the last write
     bool first = true;
+    auto progress_at = std::chrono::steady_clock::time_point::min();
     for (;;) {
       std::deque<std::string> batch;
       bool done;
@@ -540,6 +541,22 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
           job->out.push_back(w->keepalive());  // 15 s without an event
         batch.swap(job->out);
         done = job->done;
+      }
+      // Opt-in benchmark events sample existing atomics from the HTTP thread; no GPU polling or synchronization.
+      if (telemetry && live) {
+        const auto now = std::chrono::steady_clock::now();
+        if (done || progress_at == std::chrono::steady_clock::time_point::min() ||
+            now - progress_at >= std::chrono::seconds(1)) {
+          const int prompt = live->prompt.load(std::memory_order_relaxed);
+          const int cached = live->cached.load(std::memory_order_relaxed);
+          json progress{{"phase", live->phase.load(std::memory_order_relaxed)}, {"prompt_tokens", prompt},
+                        {"cached_tokens", cached}, {"processed_tokens", std::clamp(live->read.load(std::memory_order_relaxed), 0, prompt)},
+                        {"completion_tokens", live->tokens.load(std::memory_order_relaxed)},
+                        {"cycles", live->cycles.load(std::memory_order_relaxed)}, {"speculative", live->spec.load(std::memory_order_relaxed)},
+                        {"final", done}};
+          batch.push_front("event: kapitsa_progress\ndata: " + json{{"kapitsa_progress", progress}}.dump() + "\n\n");
+          progress_at = now;
+        }
       }
       if (batch.empty() && !sink.is_writable()) return gone();
       for (const auto& e : batch)
@@ -1366,6 +1383,8 @@ static int serve(int argc, char** argv, int first) {
     const std::string model = guard->engine().model_id();
     const auto meter = ui::meter(req, r);
     r.live = ui::live_of(meter);
+    const bool telemetry = req.get_header_value("X-Kapitsa-Bench-Telemetry") == "1";
+    if (telemetry && !r.live) r.live = std::make_shared<LiveDecode>();
     if (!stream) {
       ChatResult out = guard->engine().chat(r, [&](const ChatDelta&) {
         ui::token(meter);
@@ -1393,7 +1412,7 @@ static int serve(int argc, char** argv, int first) {
     }
     // the stream (src/api/chat_completions.cpp) starts as soon as the prompt is known to fit, before the slot
     stream_reply(guard, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
-                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true);
+                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true, telemetry);
   });
 
   // Anthropic Messages (src/api/anthropic.cpp)
