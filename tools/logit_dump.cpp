@@ -257,11 +257,9 @@ int main(int argc, char** argv) {
   Dory* dory = nullptr;
   Flint* fl = nullptr;
   if (Qwen4Exp::is_model(dir)) {
-    // the tools' budget, not a served model's: with no mem_budget, qwen4_exp.cpp's expert-store sizing takes the
-    // default budget less a 16K-token KV cache and 1.5 GB, where the engine's flash_next_model_budget first sets its
-    // slots' state and up to 32K tokens of KV apart. The store size can therefore differ from a serve's, which changes
-    // which experts are resident, not their bytes; NI_EXPERT_STORE pins it when a run has to match (the floor's env
-    // does, at 24 GB).
+    // the default memory budget, not the engine's (which sets its slots' state and KV apart): a Q2_0 pack's expert
+    // store, and so which routed experts stream, may differ from a served model's (NI_EXPERT_STORE pins it). The
+    // store holds the same expert bytes either way: the logits do not depend on its size
     auto m = std::make_unique<Qwen4Exp>(dir, chunk);
     fn = m.get();
     q = m.get();

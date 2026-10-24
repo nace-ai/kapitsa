@@ -120,6 +120,30 @@ def reorder_floor_and_gate(sources):
     return floor, gate
 
 
+def dump_metas(d):
+    """A dump directory's meta.json per path."""
+    metas = []
+    for p in sorted(os.listdir(d)):
+        m = os.path.join(d, p, "meta.json")
+        if os.path.exists(m):
+            with open(m) as f:
+                metas.append(json.load(f))
+    return metas
+
+
+def reused_runs(metas):
+    """--reuse: the reused dumps' runs (their meta.json's build, Mac, macOS and date). A floor compares one build on one
+    Mac: exits when they name more than one; else {"dumps": paths reused, "from" / "to": their first and last date} for
+    the file's "measured"."""
+    for k in ("build", "mac", "macos"):
+        seen = {meta.get(k) for meta in metas}
+        if len(seen) > 1:
+            sys.exit(f"--reuse: the reused dumps name more than one {k} ({', '.join(sorted(map(str, seen)))}): "
+                     "a floor compares one build on one Mac; dump them again")
+    dates = sorted(meta.get("date", "") for meta in metas)
+    return {"dumps": len(metas), "from": dates[0], "to": dates[-1]} if metas else {}
+
+
 def this_mac():
     """This Mac's chip as meta.json's "mac" would name it (enough for logit_compare.chip_gen)."""
     try:
@@ -141,7 +165,9 @@ def main():
     ap.add_argument("--reorder", action="store_true",
                     help="the --also paths only reorder the default's sums: their drift is the reorder_gate")
     ap.add_argument("--keep", action="store_true", help="keep the dumps")
-    ap.add_argument("--reuse", action="store_true", help="compare the dumps --work already holds, not run them again")
+    ap.add_argument("--reuse", action="store_true",
+                    help="compare the dumps --work already holds, not run them again (one build's on one Mac: "
+                         "\"measured\" records how many and their dates)")
     ap.add_argument("--rescore", action="store_true",
                     help="no dumps: the floors and gates of the model's JSON again from its sources (no GPU)")
     a = ap.parse_args()
@@ -176,6 +202,7 @@ def main():
         d = os.path.join(work, name)
         extra = (*extra, *rows)
         if a.reuse and all(os.path.exists(os.path.join(d, p, "meta.json")) for p in ["prefill", *run_paths]):
+            reused.extend(dump_metas(d))
             return d
         cmd = [a.bin, a.model, d, "--paths", ",".join(run_paths), *extra]
         env = {**cond, **(env or {})}
@@ -219,7 +246,7 @@ def main():
         return sources, meta
 
     os.makedirs(work, exist_ok=True)
-    top, cond = work, {}
+    top, cond, reused = work, {}, []
     sources, meta = measure()
     for also in a.also:
         k, _, v = also.partition("=")
@@ -260,9 +287,12 @@ def main():
         result["reorder_floor"], result["reorder_gate"] = reorder_floor_and_gate(reorder)
     result["measured"]["command"] = " ".join(["tools/logit_floor.py", a.model.replace(os.path.expanduser("~"), "~"),
                                               *rows, *[f"--also {x}" for x in a.also],
-                                              *(["--reorder"] if a.reorder else [])])
+                                              *(["--reorder"] if a.reorder else []),
+                                              *(["--reuse"] if reused else [])])
     if a.also:
         result["measured"]["also"] = a.also
+    if reused:  # dumps run before this command (another run's, or one at a time): which, and that they are one build's
+        result["measured"]["reused"] = reused_runs(reused)
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w") as f:
         f.write(dumps(result))

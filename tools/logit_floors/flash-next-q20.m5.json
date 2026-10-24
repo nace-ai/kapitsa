@@ -8,9 +8,9 @@
     "records": 192,
     "source": "bench/corpus.txt",
     "env": {"NI_EXPERT_STORE": "24"},
-    "command": "tools/logit_floor.py ~/Documents/nace/models/flash-next-q20 --also NI_QMT=0 --reorder",
+    "command": "tools/logit_floor.py ~/Documents/nace/models/flash-next-q20 --also NI_QMT=0 --reorder --reuse",
     "also": ["NI_QMT=0"],
-    "assembled": "each source's logit_dump run on its own under the GPU lock (NI_LOCK_HELD=1, the same arguments logit_floor.py passes, NI_EXPERT_STORE=24 in every one: the store holds expert bytes only), 2026-10-24 01:20-03:13Z, one build and Mac; then logit_floor.py --reuse --keep with the command above; the Neural Engine sources are absent because the verify's meta.json shows no split (ane evals 0)"
+    "reused": {"dumps": 22, "from": "2026-10-24T01:20:01Z", "to": "2026-10-24T03:13:21Z"}
   },
   "reference_path": "verify",
   "sources": {
