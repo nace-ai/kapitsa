@@ -140,7 +140,7 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
     # writing numbers come from a protocol of their own, so it is not a submitted row
     mode = r["mode"]
     if mode not in PROTOCOL:
-        errs.append(f"{mode} run: only full and quick runs are submitted (a --ctx report is not a standard community run)")
+        errs.append(f"{mode} run: only full and quick runs are submitted (a --ctx or --prefill-chunk report is not a standard community run)")
         return errs, warns
     want = PROTOCOL[mode]
     if r["protocol"]["corpus_sha256"] not in (CORPUS_SHA256, CORPUS_SHA256_V1):

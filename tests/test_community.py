@@ -77,6 +77,8 @@ refused(lambda r: r["model"].update(precision="6-bit"), "a precision that is not
 refused(lambda r: r["model"].update(title="Qwen3.6-35B"), "a wrong title", "title")
 refused(lambda r: r.update(mode="context"), "a --ctx report", "not a standard community run")
 refused(lambda r: r.update(mode="context-quick"), "a --quick --ctx report", "not a standard community run")
+refused(lambda r: r.update(mode="prefill"), "a --prefill-chunk report", "not a standard community run")
+refused(lambda r: r.update(mode="prefill-quick"), "a --quick --prefill-chunk report", "not a standard community run")
 lightning = copy.deepcopy(full)  # what kapitsa bench writes for Lightning: DSpark decoding, with its drafter
 lightning["model"].update(name="nemotron-3.5-lightning", title=cat["nemotron-3.5-lightning"]["title"], variant="nvfp4",
                           precision=cat["nemotron-3.5-lightning"]["variants"]["nvfp4"], decoding="DSpark",
