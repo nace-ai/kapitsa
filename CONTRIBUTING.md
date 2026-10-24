@@ -209,7 +209,9 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
   to let a change pass.
 - Raw dumps of `nh_eval --vcheck`, `ni_v8check` (`NI_V8CHECK_DUMP`) and `ni_run --dump-all-logits` compare with
   `tools/logit_compare.py --vocab V`. Other questions have their own checks: `tools/kflash_invariance.py` and
-  `moe_tree_check` (a tree's size or shape must not change a row, bit for bit), `bench/batch/match.py` (batched
+  `moe_tree_check` (a tree's size or shape must not change a row, bit for bit), `moe_exact_check` (nor how many rows of
+  a short prefill pass share an expert), `logit_dump --chunk 128` against `--chunk 37` (nor how a prompt is cut into
+  short passes: every row bitwise identical), `bench/batch/match.py` (batched
   against single-stream greedy replies through the server); `batch_check` and `ni_v8check` time their passes while a
   kernel is developed.
 

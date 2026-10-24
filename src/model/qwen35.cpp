@@ -225,6 +225,22 @@ static int shortpf_moe_max() {
   static const int v = std::clamp(env_int("NI_SHORTPF_MOE_MAX", 128), 0, 128);
   return v;
 }
+// NI_SHORTPF_EXACT (read once; default on, 0 = the earlier choices by row count): a short pass (at most NI_SHORTPF_MAX
+// rows) gives each row the same bits whatever its length, so a prompt's tail read in several short passes (a cached
+// turn after the history prefill, a draft read ahead) gets the logits it gets in one. Every choice the short path made
+// by the pass's row count is made without it:
+//  * projections: one GEMM family per projection group (exact_qmms): qmms over up to 128 rows in one dispatch (its K
+//    split and order depend on K alone, its row groups on nothing an output sees) or the qmr k64 tiles (the K order
+//    depends on BK alone); the 8-bit router and shared-expert gate always qmms (they took qmm_b8 above 64 rows);
+//  * routed experts: qmms_moe3, qmms_moe2's FMA arithmetic for every expert (qmms_moe2 switches to an MMA that sums in
+//    another order from 3 rows);
+//  * attention: the keys split at fixed tiles (NI_SHORTPF_EXACT_SEG, 32 tiles of 32 keys per split by default) instead
+//    of into a number of splits picked from the row count, through the split kernel even for one split.
+// Passes above NI_SHORTPF_MAX rows (128) keep the large-prefill kernels, whose arithmetic differs from these.
+static bool shortpf_exact() {
+  static const bool on = env_int("NI_SHORTPF_EXACT", 1) != 0;
+  return on;
+}
 // NI_SHORTPF_GEMM (read once): kernels for the projections of passes of at most NI_SHORTPF_MAX rows
 //   auto (default): per projection group, the faster of the two short-prefill families below as
 //         measured with bench_qmms on M4 Pro over the 35B / 27B shapes (short_qmms())
@@ -261,6 +277,17 @@ static bool short_qmms(int M, double bytes, bool gu, bool multi, uint32_t K) {
   if (M <= 16) return true;
   if (gu) return bytes < 24e6 || M <= 56;
   return bytes < 24e6 && M <= 56;
+}
+
+// NI_SHORTPF_EXACT: the short-prefill family of a projection group for every row count: qmms, but for the large
+// matrix groups that are compute bound past a few rows (the 27B's DeltaNet and attention inputs, its MLP gate/up and
+// down; every 35B and 4B group is under the bound), which keep the qmr tiles. NI_SHORTPF_EXACT_GEMM=qmms / tile
+// forces one family.
+static bool exact_qmms(double bytes, bool multi, uint32_t K) {
+  static const std::string v = getenv("NI_SHORTPF_EXACT_GEMM") ? getenv("NI_SHORTPF_EXACT_GEMM") : "auto";
+  if (v == "qmms") return true;
+  if (v == "tile") return false;
+  return bytes < 32e6 && (multi || K < 12288);
 }
 
 // A chunk of M >= 64 new rows whose GEMM this matrix's tensor_ops tile can serve (qmtg_m64_n64 / qmt_m64_n64: qmt_on, 4-bit
@@ -306,6 +333,16 @@ void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& x
       all_qmr = all_qmr && qmr_ok(*s.L) && s.L->K == segs[0].L->K;
       all_qmms = all_qmms && qmms_ok(*s.L);
       bytes += qbytes(*s.L);
+    }
+    if (shortpf_exact()) {
+      if (all_qmms && (!all_qmr || exact_qmms(bytes, segs.size() > 1, segs[0].L->K))) {
+        enc_qmms_rows(e, segs, xh, M);
+        return;
+      }
+      if (all_qmr) {
+        enc_qmr_short(e, segs, xh, M);
+        return;
+      }
     }
     bool qm = !all_qmr || sp_gemm() == SpGemm::Qmms ||
               (sp_gemm() == SpGemm::Auto && short_qmms(M, bytes, false, segs.size() > 1, segs[0].L->K));
@@ -400,7 +437,7 @@ void Qwen35::prewarm_pipelines() {
       }
     for (const char* n : {"qmms_moe_gu_b4", "qmms_moe_dn_b4", "attn_prefill11g", "attn_prefill11gs", "attn11_reduce",
                           "gdn_prep_par_snap", "gdn_step_par_snap_l16", "gdn_step_parr4_snap_l16", "qmms_moe2_gu_b4",
-                          "qmms_moe2_dn_b4"})
+                          "qmms_moe2_dn_b4", "qmms_moe3_gu_b4", "qmms_moe3_dn_b4"})
       names.insert(n);
   }
   // kernels of the weight formats without specialized ones (wfmt.metal), decode paths included
@@ -2343,12 +2380,12 @@ static std::string qmms_family(const QLinear& L, bool gu) {
 static uint32_t qmms_row_groups(uint32_t tg, int T) {
   static const int mode = env_int("NI_QMMS_TY", 1);
   const uint32_t tb = uint32_t((T + 7) / 8);
-  if (!mode || tb <= 1) return 1;
+  if (!mode || tb <= 1) return std::max(1u, (tb + 7) / 8);
   // thresholds per GPU core: 96 and 128 threadgroups on the 20-core M4 Pro
   const uint32_t enough = 24 * gpu_cores() / 5, want = 32 * gpu_cores() / 5;
   uint32_t gy = tg >= enough ? 1u : std::min(tb, (want + tg - 1) / tg);
   if (mode == 2) gy = std::max(gy, (tb + 3) / 4);
-  return gy;
+  return std::max(gy, (tb + 7) / 8);  // the kernels hold 8 token blocks at most (T > 64: NI_SHORTPF_EXACT)
 }
 
 // Y_i[T, N_i] (+)= X[T, K] W_i^T for up to 4 projections sharing the half input rows xh (row
@@ -2356,7 +2393,7 @@ static uint32_t qmms_row_groups(uint32_t tg, int T) {
 // them (bench_qmms on M4 Pro: ks 4 for K < 4096, 8 from 4096; NI_QMMS_KS overrides).
 void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T) {
   if (segs.empty()) return;
-  if (T < 1 || T > 64) fatal("qmms: T=%d", T);
+  if (T < 1 || T > 128) fatal("qmms: T=%d", T);
   for (size_t i = 1; i < segs.size(); ++i)
     if (!segs[i].L->same_format(*segs[0].L) || segs[i].L->K != segs[0].L->K) {
       // mixed formats: split into runs of one format
@@ -2406,9 +2443,20 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
   e.dispatch(tg, uint32_t((T + 8 * TB - 1) / (8 * TB)), 1, 32 * nsg);
 }
 
+// enc_qmms over any T: up to 128 rows in one dispatch (qmms_row_groups splits them over grid.y), slices of 128 beyond
+void Qwen35::enc_qmms_rows(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int T) {
+  for (int r0 = 0; r0 < T; r0 += 128) {
+    const int n = std::min(128, T - r0);
+    std::vector<SegQ> v = segs;
+    for (auto& sq : v) sq.y = sq.y.view(size_t(r0) * sq.L->N * 4, size_t(n) * sq.L->N * 4);
+    const size_t xb = size_t(segs[0].L->K) * 2;
+    enc_qmms(e, v, xh.view(size_t(r0) * xb, size_t(n) * xb), n);
+  }
+}
+
 // H[T, N] = half(silu(X G^T) * (X U^T)) (row stride N) in one pass over both matrices.
 bool Qwen35::enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T) {
-  if (!qmms_ok(G) || !qmms_ok(U) || !G.same_format(U) || G.N != U.N || G.K != U.K || T < 1 || T > 64) return false;
+  if (!qmms_ok(G) || !qmms_ok(U) || !G.same_format(U) || G.N != U.N || G.K != U.K || T < 1 || T > 128) return false;
   const uint32_t K = G.K, gpr = K / 64, nsg = 8;
   static const int ks_env = getenv("NI_QMMS_KS") && *getenv("NI_QMMS_KS") ? atoi(getenv("NI_QMMS_KS")) : 0;
   uint32_t ks = ks_env > 0 ? uint32_t(ks_env) : (K >= 4096 ? 8u : 4u);
@@ -2474,7 +2522,8 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
   auto fits = [gen, q20](const QLinear& q) {
     if (q20) return q.q20 && q.K % 64 == 0 && q.N % 8 == 0;
     if (gen) return q.K % 64 == 0 && q.N % 8 == 0;
-    return q.bits == 4 && (q.gs == 64 || (moe_fma() && q.gs == 32)) && q.K % 64 == 0 && q.N % 8 == 0;
+    const bool g32 = shortpf_exact() || moe_fma();  // the FMA forms (qmms_moe2, qmms_moe3) take group 32 too
+    return q.bits == 4 && (q.gs == 64 || (g32 && q.gs == 32)) && q.K % 64 == 0 && q.N % 8 == 0;
   };
   if (!fits(G) || !fits(U) || !fits(Dn) || U.N != G.N || U.K != G.K || G.K != uint32_t(D) || Dn.K != G.N ||
       Dn.N != uint32_t(D) || !qmms_ok(L.router) || !qmms_ok(L.shared_gate) || !qmms_ok(L.sd) ||
@@ -2523,10 +2572,11 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
     const uint32_t gws = uint32_t(size_t(G.N) * G.row_bytes() / 4), gss = G.dense() ? 0u : G.N * (G.K / G.gs);
     const uint32_t dws = uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4), dss = Dn.dense() ? 0u : Dn.N * (Dn.K / Dn.gs);
     kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), gws, gss, shared_e};
-    const bool fma = moe_fma();
+    // NI_SHORTPF_EXACT: qmms_moe3, one arithmetic for every tile (not qmms_moe2's switch at 3 rows)
+    const std::string form = shortpf_exact() ? "qmms_moe3_" : moe_fma() ? "qmms_moe2_" : "qmms_moe_";
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U, &SD = fold ? L.sd : Dn;
     {
-      e.use(pipe(gen ? "qmmsf_moe_gu_" + G.fmt() : fma ? "qmms_moe2_gu_b4" : "qmms_moe_gu_b4"));
+      e.use(pipe(gen ? "qmmsf_moe_gu_" + G.fmt() : form + "gu_b4"));
       e.buf(0, xh_);
       e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf);
       e.buf(4, U.w->buf); e.buf(5, U.s->buf); e.buf(6, U.b->buf);
@@ -2539,7 +2589,7 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
     }
     kp::Qmm2 q{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), dws, dss, shared_e};
     {
-      e.use(pipe(gen ? "qmmsf_moe_dn_" + Dn.fmt() : fma ? "qmms_moe2_dn_b4" : "qmms_moe_dn_b4"));
+      e.use(pipe(gen ? "qmmsf_moe_dn_" + Dn.fmt() : form + "dn_b4"));
       e.buf(0, hhalf_);
       e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf);
       e.buf(4, yd_);
@@ -2599,7 +2649,12 @@ bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g,
 // and SwiGLU in one qmr_gu dispatch writing the half h rows (no fp32 hg/hu, no swiglu pass).
 bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int M) {
   const bool qmt_gu = sp_qmt_pref(G, M) && sp_qmt_pref(U, M);  // qmtg_m64_n64 fuses the pair
-  if (!qmt_gu && small_t(M) && sp_gemm() != SpGemm::Qmr) {
+  if (!qmt_gu && small_t(M) && sp_gemm() != SpGemm::Qmr && shortpf_exact()) {
+    const bool tiles = qmr_ok(G) && qmr_ok(U) && G.N == U.N && G.K == U.K;
+    // qmms_gu over all the rows (small_t: at most 128) in one dispatch; a pair it cannot take goes on
+    if ((!tiles || exact_qmms(qbytes(G) + qbytes(U), true, G.K)) && enc_qmms_gu(e, G, U, xh, h, M)) return true;
+  }
+  if (!qmt_gu && small_t(M) && sp_gemm() != SpGemm::Qmr && !shortpf_exact()) {
     const bool tiles = qmr_ok(G) && qmr_ok(U) && G.N == U.N && G.K == U.K;
     const bool qm = !tiles || sp_gemm() == SpGemm::Qmms ||
                     (sp_gemm() == SpGemm::Auto && short_qmms(M, qbytes(G) + qbytes(U), true, false, G.K));
@@ -2935,6 +2990,38 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   if (shortpf() && T <= shortpf_attn_max() && (an == "attn_prefill11" || an == "attn_prefill11r")) {
     const uint32_t G = uint32_t(cfg_.hq / cfg_.hkv);
     const uint32_t nqb = (uint32_t(T) * G + 31) / 32, gy = uint32_t(cfg_.hkv), tiles = (uint32_t(pos0 + T) + 31) / 32;
+    // NI_SHORTPF_EXACT: splits of a fixed NI_SHORTPF_EXACT_SEG key tiles (default 32: 1024 keys), as many as the
+    // pass's last query needs, so a query's partials do not depend on T; the queries go in groups whose partials fit
+    // part_o_ (1024 rows per head). One split too runs the split kernel and the reduce: a query is then always summed
+    // by the same compiled code, whichever pass reads it.
+    if (shortpf_exact()) {
+      static const uint32_t seg = uint32_t(std::clamp(env_int("NI_SHORTPF_EXACT_SEG", 32), 1, 1 << 16));
+      const uint32_t ns = (tiles + seg - 1) / seg;
+      if (ns > 1024) fatal("attention: %u splits of %u key tiles (NI_SHORTPF_EXACT_SEG) exceed 1024", ns, seg);
+      const uint32_t tq = 1024 / ns, one = 1;
+      const size_t qb = size_t(cfg_.hq) * cfg_.head_dim * 4;  // bytes of one query row of qo_ / attn_out_ (qg_: twice)
+      for (uint32_t t0 = 0; t0 < uint32_t(T); t0 += tq) {
+        const uint32_t n = std::min(tq, uint32_t(T) - t0);
+        kp::AttnPref gp = fp;
+        gp.T = n;
+        gp.pos0 = uint32_t(pos0) + t0;
+        const Buffer q = qo_.view(t0 * qb, n * qb), g = qg_.view(t0 * 2 * qb, n * 2 * qb), o = attn_out_.view(t0 * qb, n * qb);
+        e.use(pipe("attn_prefill11gs"));
+        e.buf(0, q); e.buf(1, kc); e.buf(2, vc); e.buf(3, g); e.buf(4, o);
+        e.val(5, gp);
+        e.buf(6, part_o_); e.buf(7, part_ml_);
+        e.val(8, ns);
+        e.val(9, seg);
+        e.dispatch((n * G + 31) / 32, gy, ns, 256);
+        e.use(pipe("attn11_reduce"));
+        e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, g); e.buf(3, o);
+        e.val(4, gp);
+        e.val(5, ns);
+        e.val(6, one);
+        e.dispatch(n, cfg_.hq, 1, cfg_.head_dim);
+      }
+      return;
+    }
     static const int ns_env = getenv("NI_ATTN_SPLIT") && *getenv("NI_ATTN_SPLIT") ? atoi(getenv("NI_ATTN_SPLIT")) : 0;
     const uint32_t target = 5 * gpu_cores();  // ~5 threadgroups per core (100 on the 20-core M4 Pro)
     uint32_t ns = ns_env > 0 ? uint32_t(ns_env) : (target + nqb * gy - 1) / (nqb * gy);
@@ -2952,11 +3039,14 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
       e.val(5, fp);
       e.buf(6, part_o_); e.buf(7, part_ml_);
       e.val(8, ns);
+      const uint32_t zero = 0;
+      e.val(9, zero);
       e.dispatch(nqb, gy, ns, 256);
       e.use(pipe("attn11_reduce"));
       e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, qg_); e.buf(3, attn_out_);
       e.val(4, fp);
       e.val(5, ns);
+      e.val(6, zero);
       e.dispatch(T, cfg_.hq, 1, cfg_.head_dim);
       return;
     }

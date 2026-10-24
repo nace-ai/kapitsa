@@ -3,7 +3,7 @@
 // usage: bench_attn [T] [L] kernels...
 // Short-prefill forms (NI_SHORTPF): attn_prefill11g (rows = (query, head) pairs of one KV head),
 // attn_prefill11gs:NS (the same with the keys split over NS threadgroups + attn11_reduce;
-// NS = auto: the engine's choice).
+// NS = auto: the engine's choice; segN: splits of N fixed key tiles, as NI_SHORTPF_EXACT runs them).
 // Each kernel's output is checked against a CPU reference (double precision) on a few sampled
 // queries (block edges, the last partial block) x all heads: err = max |gpu - ref| / max |ref|.
 #include "metal/gpu.h"
@@ -83,11 +83,16 @@ int main(int argc, char** argv) {
       }
   }
 
-  const uint32_t max_rows = 1024;  // nsplit * T rows per head (as the engine's part_o_)
+  // nsplit * T rows per head (the engine's part_o_ holds 1024 and runs the queries in groups beyond: here one
+  // dispatch, so the buffer is as large as the largest case asks)
+  uint32_t max_rows = 1024;
+  for (int k = 3; k < argc; ++k)
+    if (const char* a = strstr(argv[k], ":seg"))
+      max_rows = std::max(max_rows, T * (((L + 31) / 32 + std::max(1, atoi(a + 4)) - 1) / std::max(1, atoi(a + 4))));
   Buffer part_o = g.alloc(size_t(Hq) * max_rows * D * 4), part_ml = g.alloc(size_t(Hq) * max_rows * 2 * 4);
   for (int k = 3; k < argc; ++k) {
     std::string name = argv[k];
-    uint32_t ns = 0;
+    uint32_t ns = 0, seg = 0;
     const bool gq = name.rfind("attn_prefill11g", 0) == 0;
     if (name.find(':') != std::string::npos) {
       std::string a = name.substr(name.find(':') + 1);
@@ -95,7 +100,10 @@ int main(int argc, char** argv) {
       const uint32_t nqb = gq ? (T * G + 31) / 32 : (T + 31) / 32, gy = gq ? Hkv : Hq, tiles = (L + 31) / 32;
       if (a == "auto") {
         ns = (100 + nqb * gy - 1) / (nqb * gy);
-        ns = std::min({ns, tiles / 8, max_rows / T, 16u});
+        ns = std::min({ns, tiles / 8, 1024u / T, 16u});
+      } else if (a.rfind("seg", 0) == 0) {
+        seg = std::max(1, atoi(a.c_str() + 3));
+        ns = (tiles + seg - 1) / seg;
       } else {
         ns = atoi(a.c_str());
       }
@@ -132,11 +140,14 @@ int main(int argc, char** argv) {
         if (ns) {
           e->buf(6, part_o); e->buf(7, part_ml);
           e->val(8, ns);
+          e->val(9, seg);
           e->dispatch(nblk, gy, ns, th);
           e->use(red);
           e->buf(0, part_o); e->buf(1, part_ml); e->buf(2, qg); e->buf(3, out);
           e->val(4, p);
           e->val(5, ns);
+          const uint32_t recip = seg ? 1 : 0;
+          e->val(6, recip);
           e->dispatch(T, Hq, 1, D);
         } else {
           e->dispatch(nblk, gy, 1, th);
@@ -145,7 +156,7 @@ int main(int argc, char** argv) {
       e->commit_and_wait();
       return e->gpu_ms() / n;
     };
-    if (ns) name += ":" + std::to_string(ns);
+    if (ns) name += ":" + std::to_string(ns) + (seg ? "x" + std::to_string(seg) : "");
     memset(out.ptr(), 0xff, out.size);  // NaN: rows a kernel fails to write show up as errors
     run();
     double err = 0;
