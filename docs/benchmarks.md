@@ -2063,7 +2063,10 @@ differ from the M4 Pro:
 
 - **Kapitsa runs [#303](https://github.com/nace-ai/kapitsa/pull/303)'s macOS 14 path.** Flint's fused kernels need
   Metal 3.2 (macOS 15), so on macOS 14 Kapitsa runs their three merges as separate dispatches. On macOS 15+ the fused
-  kernels run.
+  kernels run on Apple9 and later non-Ultra Macs; an M1 or M2 takes the split merges there whatever the export, because
+  the last threadgroup read stale data behind those fences on both ([#421](https://github.com/nace-ai/kapitsa/pull/421)'s
+  M1 Pro, [#478](https://github.com/nace-ai/kapitsa/issues/478)'s M1 Max answered garbage on its 4-bit export, split
+  since [#481](https://github.com/nace-ai/kapitsa/pull/481)).
 - **rec 0.1.0 refuses this Mac** ("this model requires 48 GiB of memory; detected 36 GiB"), so it has no numbers here.
 
 The harness saw no foreign GPU load. A first pass of the protocol is not counted: with the display awake on AC power,
