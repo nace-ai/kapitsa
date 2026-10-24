@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-24T20:10:58Z",
+  "kapitsa": {
+    "version": "0.2.15",
+    "commit": "5c489cc"
+  },
+  "mac": {
+    "identifier": "MacBookPro18,3",
+    "name": "MacBook Pro (14-inch, 2021)",
+    "year": 2021,
+    "chip": "Apple M1 Pro",
+    "cpu_cores": 8,
+    "gpu_cores": 14,
+    "memory_gb": 32,
+    "macos": "27.2",
+    "macos_build": "26B5091g"
+  },
+  "model": {
+    "name": "nemotron-3.5-bolt",
+    "title": "Nemotron 3.5 Bolt 74B-A9B",
+    "variant": "24gb",
+    "precision": "NVIDIA 24 GB",
+    "catalog": true,
+    "revision": "c6cc2e8",
+    "decoding": "LiLiCorr",
+    "decoding_detail": "LiLiCorr speculative decoding (7-token blocks), KFlash (LiLiCorr)",
+    "drafter": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr@abd4780"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 22.01,
+      "runs_tps": [
+        22.13,
+        22.88,
+        22.01,
+        20.36,
+        18.32
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 22.33,
+      "runs_tps": [
+        23.12,
+        22.07,
+        22.99,
+        22.13,
+        22.33
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4183,
+        "ttft_s": 24.1057,
+        "tps": 173.5,
+        "followup_s": [
+          0.848,
+          0.8195,
+          0.6023
+        ],
+        "followup_median_s": 0.8195,
+        "followup_suffix_tps": 32.9
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16514,
+        "ttft_s": 87.2287,
+        "tps": 189.3,
+        "followup_s": [
+          0.6269,
+          0.6881,
+          0.5545
+        ],
+        "followup_median_s": 0.6269,
+        "followup_suffix_tps": 36.1
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.53,
+    "mapped_gb": 0.9
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 129649,
+    "gpu_quiet_wait_s": 18.2,
+    "gpu_other_mean_pct": 0.02,
+    "gpu_other_max_pct": 0.86,
+    "gpu_ambient_mean_pct": 0.01,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode_greedy: 11081 pages swapped out during the phase",
+    "prefill_4000: 38112 pages swapped out during the phase",
+    "prefill_16000: 80456 pages swapped out during the phase"
+  ],
+  "invalid": []
+}
