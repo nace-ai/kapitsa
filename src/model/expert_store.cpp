@@ -105,6 +105,7 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
   for (size_t k = 0; k < keys; ++k) pending_[k].store(0, std::memory_order_relaxed);
   free_.resize(nslots_);
   layer_res_.assign(L_, 0);
+  layer_t1_.assign(L_, 0);
   for (uint32_t i = 0; i < nslots_; ++i) free_[i] = int32_t(nslots_ - 1 - i);  // slot 0 first
 
   const int nr = std::max(1, std::min(o.readers, 64));
@@ -303,6 +304,27 @@ int ExpertCache::lru_free(const List& L) const {
   return -1;
 }
 
+void ExpertCache::t1_add(int layer) {
+  ++layer_t1_[size_t(layer)];
+  if (layer < low_t1_) low_t1_ = layer;
+}
+
+void ExpertCache::t1_drop(int layer) {
+  if (--layer_t1_[size_t(layer)] == 0 && low_t1_ == layer)
+    while (low_t1_ < int(L_) && layer_t1_[size_t(low_t1_)] == 0) ++low_t1_;
+}
+
+int ExpertCache::t1_slots(int layer) const { return layer < int(L_) ? int(layer_t1_[size_t(layer)]) : 0; }
+
+int ExpertCache::t1_slots_in_table(int layer) const {
+  int n = 0;
+  for (uint32_t slot = 0; slot < nslots_; ++slot) {
+    const int v = key_of_slot_[size_t(slot)];
+    if (v >= 0 && v / int(E_) == layer && Where(where_[size_t(v)]) == kT1) ++n;
+  }
+  return n;
+}
+
 void ExpertCache::hit(int k, bool scan, bool first) {
   if (scan) return;  // a prompt's sweep leaves the order as it is
   routed_[size_t(k)] = 1;
@@ -314,6 +336,7 @@ void ExpertCache::hit(int k, bool scan, bool first) {
   } else {
     lst_push(t2_, k);
     where_[size_t(k)] = kT2;
+    if (w == kT1) t1_drop(k / int(E_));  // its frequency moves it out of the sweep's victims
   }
 }
 
@@ -323,7 +346,10 @@ void ExpertCache::hit(int k, bool scan, bool first) {
 // rule picks the victim when no slot qualifies. Decode never sets scan: its replacement is unchanged.
 int ExpertCache::scan_victim(int k) {
   const int layer = k / int(E_);
-  if (low_layer_ >= layer) return -1;  // every resident slot is of this layer or above: the sweep has passed nothing
+  // A T1 slot below this layer is the victim the sweep wants, and the per-layer counts say whether one exists: with a
+  // lower layer holding only T2 keys (decoding's hot experts) or slots above, no scan can find one, and the ARC rule
+  // below is the answer without a lap. A lap here would cost nslots slot reads per admit, a whole store per turn.
+  if (low_t1_ >= layer) return -1;
   for (uint32_t i = 0; i < nslots_; ++i) {
     const int slot = int(scan_cursor_);
     scan_cursor_ = scan_cursor_ + 1 == nslots_ ? 0 : scan_cursor_ + 1;
@@ -369,6 +395,7 @@ int ExpertCache::admit(int k, bool scan) {
   const bool freq = !scan && (w == kB1 || w == kB2);
   lst_push(freq ? t2_ : t1_, k);
   where_[size_t(k)] = freq ? kT2 : kT1;
+  if (!freq) t1_add(kl);
   // its table entry: the GPU reads it only once k's layer is routed, and that turn waits for k's read first
   mem_.table[k] = word(slot);
   trim_ghosts();
@@ -383,6 +410,7 @@ void ExpertCache::evict(int v) {
   const int vl = v / int(E_);
   if (--layer_res_[size_t(vl)] == 0 && low_layer_ == vl)
     while (low_layer_ < int(L_) && layer_res_[size_t(low_layer_)] == 0) ++low_layer_;
+  if (w == kT1) t1_drop(vl);
   mem_.table[v] = 0;
   prefetched_[size_t(v)] = 0;
   if (routed_[size_t(v)]) {  // remembered as a ghost: only experts decoding routed

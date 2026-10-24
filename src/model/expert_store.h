@@ -217,6 +217,9 @@ class ExpertCache {
   uint32_t word(int slot) const;                // a slot's table word
   int slot_of(int layer, uint32_t e) const;     // tests: the expert's slot, -1 if absent (only while nothing is served)
   int lowest_layer() const { return low_layer_; }  // tests: the lowest layer any slot holds (scan_victim's floor)
+  int lowest_t1_layer() const { return low_t1_; }  // tests: the lowest layer holding a T1 key, the sweep's victims
+  int t1_slots(int layer) const;                   // tests: the per-layer T1 count admit/evict/hit keep
+  int t1_slots_in_table(int layer) const;          // tests: the same, recomputed from the slots and their lists
   StoreStats stats() const;
   void reset_stats();
   double fill_ms() const { return fill_ms_; }
@@ -251,6 +254,8 @@ class ExpertCache {
   void trim_ghosts();
   void load(int k, bool urgent);      // reads of k's planes into its slot
   uint8_t* slot_ptr(int slot) const;
+  void t1_add(int layer);   // k into T1 (admit): the layer's T1 count up, the floor possibly down
+  void t1_drop(int layer);  // out of T1 (evict, or hit's promotion to T2): the floor up when the layer empties
 
   uint32_t L_ = 0, E_ = 0, nslots_ = 0;
   SlotLayout lay_;
@@ -271,6 +276,8 @@ class ExpertCache {
   uint32_t scan_cursor_ = 0;  // a scan sweep's rotating slot for its victim (admit)
   std::vector<uint32_t> layer_res_;  // resident slots per layer (admit / evict): scan_victim's "has the sweep passed it"
   int low_layer_ = 0x7fffffff;       // the lowest layer with a resident slot: scan_victim returns -1 above it
+  std::vector<uint32_t> layer_t1_;   // T1 slots per layer: a sweep's victims, so a lower layer's hot T2 keys are no lap
+  int low_t1_ = 0x7fffffff;          // the lowest layer with a T1 slot: scan_victim returns -1 above it, a lap when below
   std::vector<int> active_;  // the keys of the last served request (in use on the GPU until the next ready)
 
   std::thread turn_;

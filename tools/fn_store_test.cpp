@@ -465,6 +465,16 @@ void case_scan_victim(const Pack& p) {
           if (c.slot_of(int(ll), e) >= 0 && int(ll) < floor) floor = int(ll);
       CHECK(c.lowest_layer() == floor, "scan victim: pass %d, chunk %u floor %d, slots say %d", pass, l, c.lowest_layer(),
             floor);
+      // the T1 floor and the per-layer T1 counts are what make scan_victim skip a lap; check them against the slots
+      int t1_floor = 0x7fffffff;
+      for (uint32_t ll = 0; ll < L; ++ll) {
+        const int n = c.t1_slots_in_table(int(ll));
+        CHECK(c.t1_slots(int(ll)) == n, "scan victim: pass %d, chunk %u layer %u T1 %d counted, %d in the slots", pass, l,
+              ll, c.t1_slots(int(ll)), n);
+        if (n > 0 && int(ll) < t1_floor) t1_floor = int(ll);
+      }
+      CHECK(c.lowest_t1_layer() == t1_floor, "scan victim: pass %d, chunk %u T1 floor %d, slots say %d", pass, l,
+            c.lowest_t1_layer(), t1_floor);
       if (l + 1 < L) {
         int kept = 0;
         for (uint32_t e = 0; e < E; ++e) kept += c.slot_of(int(l + 1), e) >= 0;
@@ -475,6 +485,11 @@ void case_scan_victim(const Pack& p) {
   const StoreStats s = c.stats();
   CHECK(bad == 0, "scan victim: %d experts not in their slots", bad);
   CHECK(s.evictions > 0, "scan victim: no evictions");
+  // The policy's own count, not just its bookkeeping: with no victim rule a sweep re-reads the whole next layer every
+  // chunk (960 read-aheads on this pack), with it far fewer (832 here: the read-ahead stays resident and its next
+  // layer's chunk consumes it as a hit). A test that passes with scan_victim() returning -1 always is no test.
+  CHECK(s.prefetches <= 880, "scan victim: %llu read ahead for %llu chunks: the next layer was not kept",
+        (unsigned long long)s.prefetches, (unsigned long long)s.handshakes);
   check_sums(s, "scan victim");
   printf("scan sweep, %u slots: %llu prefill chunks, %llu misses, %llu read ahead, %llu evictions, %.1f MB read\n",
          nslots, (unsigned long long)s.handshakes, (unsigned long long)s.misses, (unsigned long long)s.prefetches,
