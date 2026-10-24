@@ -505,21 +505,22 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   if (const char* v = getenv("NI_DFLASH_DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
   // The downward depth gate (M3, opt-in): NI_DFLASH_GATE=<p>[:<win>] caps each cycle's verify depth at the
-  // first proposal position whose rolling tau-conditional acceptance hazard (the last <win> cycles, default
-  // 64) fell below the break-even fraction p -- e.g. 0.215, the corrected break-even accepted tokens per
-  // extra verify row (ledger §2.16 as corrected through §2.32-E: the clean 6.9 ms/row slope, under which
-  // p3 = 0.273 clears and positions 5-7 do not). It needs the dynamic depth (an MoE target,
-  // NI_DFLASH_DYN > 0): the
-  // hazard conditions on what tau kept. Downward only -- the cap never exceeds verify_depth(). Off by
-  // default until the pre-registered trace gate (multi-seed, tau-conditional p_i on the shipping binary)
-  // says tau itself keeps enough negative-value rows for the cap to pay. See DepthGate in dflash2.h.
+  // first proposal position whose rolling marginal acceptance -- the fraction of the last <win> cycles
+  // (default 64) where position i was accepted among the cycles where tau kept it -- fell below the
+  // break-even fraction p -- e.g. 0.215, the corrected break-even accepted tokens per extra verify row
+  // (ledger §2.16 as corrected through §2.32-E: the clean 6.9 ms/row slope, under which p3 = 0.273 clears
+  // and positions 5-7 do not; p was fitted from the same marginal statistic). It needs the dynamic depth
+  // (an MoE target, NI_DFLASH_DYN > 0): the statistic conditions on what tau kept. Downward only -- the
+  // cap never exceeds verify_depth(). Off by default until the pre-registered trace gate (multi-seed,
+  // tau-conditional p_i on the shipping binary) says tau itself keeps enough negative-value rows for the
+  // cap to pay. See DepthGate in dflash2.h.
   if (const char* v = getenv("NI_DFLASH_GATE"); v && *v) {
     if (dyn_tau_ > 0) {
       gate_p_ = std::clamp(float(atof(v)), 0.0f, 1.0f);
       if (const char* c = strchr(v, ':')) gate_win_ = std::clamp(atoi(c + 1), DepthGate::kMinN, DepthGate::kWin);
       if (gate_p_ > 0)
         logi("DFlash2: NI_DFLASH_GATE -- downward depth gate, break-even %.3f, window %d cycles (a per-cycle cap "
-             "from the rolling tau-conditional hazard; downward only)",
+             "from the rolling marginal acceptance of the tau-kept positions; downward only)",
              gate_p_, gate_win_);
     } else {
       logi("DFlash2: NI_DFLASH_GATE ignored (it needs the dynamic depth: an MoE target with NI_DFLASH_DYN > 0)");
@@ -1911,6 +1912,15 @@ void DFlash2::gpu_state_reset(int P) {
   g[1] = 0;
   g[2] = uint32_t(P);
   gate_prev_ = false;  // acc_/kdyn_ predate this run: the first chain cycle must not observe them
+}
+
+// A request starts (the engine calls this where its speculative loop begins): both gate windows clear and
+// warm up again. Deliberately NOT in gpu_state_reset -- every park hits that too, and a park is mid-request:
+// the window is a per-request statistic, so a prose request's cap must not leak into the next code request
+// (and consecutive ABBA legs must not contaminate each other's first win cycles).
+void DFlash2::gate_reset() {
+  gate_[0].reset();
+  gate_[1].reset();
 }
 
 void DFlash2::encode_cycle_draft_gpu(Encoder& e, Seq& s, DFlashSeq& d, int P_max, const SamplingParams& sp) {
