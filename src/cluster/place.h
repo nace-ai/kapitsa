@@ -40,10 +40,10 @@ double whole_ms(const std::vector<LayerCost>& layers, const LayerCost& head, dou
 // conversations need of it (a linear-attention layer two slots' states, a full-attention one two 32K-token
 // conversations' caches), each Mac's budget less its prefill buffers for `prefill_chunk` rows (what a stage checks
 // before it loads its share); the head holds the n-gram block's layers. Every layer in memory when the Macs hold the
-// model between them. When they do not, with may_stream and a Q2_0 pack: each Mac holds its layers' dense weights and
-// a store of 3 layers' experts (Qwen4Exp::plan's rule) and streams the rest of its experts from its SSD (streams set;
-// the pass time then leaves the SSD out). From the headers alone; call it before the process's split is set
-// (Qwen4Exp::set_split), which would plan only a share.
+// model between them. When they do not, with may_stream and a Q2_0 pack: the runs follow the Macs' memory (as if each
+// held the same multiple of its budget, the least that fits), so each Mac streams about the same share of its experts
+// from its SSD (streams set; each still holds its run's dense weights and a store of 3 layers' experts). From the
+// headers alone; call it before the process's split is set (Qwen4Exp::set_split), which would plan only a share.
 Placement plan_split(const std::string& model_dir, std::vector<Member> members, int prefill_chunk,
                      bool may_stream = true);
 

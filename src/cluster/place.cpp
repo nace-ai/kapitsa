@@ -101,13 +101,34 @@ Placement plan_split(const std::string& dir, std::vector<Member> members, int ch
   }
   Placement p = place(layers, head, min_head, members);
   if (p.fits || !may_stream || !mp.streamed) return p;
-  // the Macs do not hold the experts between them: each keeps its dense weights and a store of 3 layers' experts in
-  // memory, and streams the rest of its experts from its SSD
-  for (size_t i = 0; i < layers.size(); ++i) layers[i].weights -= lb[i].experts;
+  // The Macs do not hold the model between them: each streams from its SSD the experts its memory does not hold. The
+  // runs follow the Macs' memory: placed as if each held the same multiple of its budget, the least that fits, so each
+  // streams about the same share of its experts. (Placed by bandwidth alone, with the experts left out of the weights,
+  // the fastest Mac took the most layers however little memory it had, and streamed most of them: a 24 GB M4 Pro got
+  // 46 of 48 layers beside a 36 GB M3 Pro, 5 tok/s against the M3's 18 alone.)
+  std::vector<Member> grown = members;
+  auto at = [&](double f) {
+    for (size_t i = 0; i < members.size(); ++i) grown[i].mem = members[i].mem * f;
+    return place(layers, head, min_head, grown);
+  };
+  double lo = 1, hi = 2;
+  while (!at(hi).fits && hi < 64) hi *= 2;
+  if (!at(hi).fits) return p;  // (more Macs than layers)
+  for (int i = 0; i < 40; ++i) (at((lo + hi) / 2).fits ? hi : lo) = (lo + hi) / 2;
+  p = at(hi);
+  // each Mac still holds its run's dense weights and a store of 3 layers' experts
   const double store = 3 * Qwen4Exp::store_layer_bytes(dir);
-  for (Member& m : members) m.mem -= store;
-  p = place(layers, head, min_head, members);
-  p.streams = p.fits;
+  for (size_t m = 0; m < members.size(); ++m) {
+    double dense = m == 0 ? head.weights : 0, all = dense;
+    for (int i = p.lo[m]; i < p.lo[m + 1]; ++i) dense += layers[size_t(i)].weights - lb[size_t(i)].experts;
+    for (int i = p.lo[m]; i < p.lo[m + 1]; ++i) all += layers[size_t(i)].weights;
+    if (dense + store > members[m].mem) {
+      p.fits = false;
+      return p;
+    }
+    p.held[m] = std::min(all, members[m].mem);
+  }
+  p.streams = true;
   return p;
 }
 

@@ -25,6 +25,36 @@ size_t dtype_size(DType d) {
   }
 }
 
+// A file's header, checked: a copy cut short or a placeholder (zeros) stops with the file named rather than a JSON
+// exception, and so does a header whose tensors end past the file's end.
+static nlohmann::json read_header(int fd, const std::string& path, uint64_t& hlen) {
+  struct stat st {};
+  if (fstat(fd, &st) != 0) fatal("stat %s failed", path.c_str());
+  const auto bad = [&](const char* why) {
+    fatal("%s is incomplete or not a safetensors file (%s, %lld bytes): copy or download it again", path.c_str(), why,
+          (long long)st.st_size);
+  };
+  hlen = 0;
+  if (pread(fd, &hlen, 8, 0) != 8) bad("shorter than a header");
+  if (hlen < 2 || hlen > (uint64_t(1) << 30) || 8 + hlen > uint64_t(st.st_size)) bad("no header");
+  std::string hdr(hlen, '\0');
+  if (pread(fd, hdr.data(), hlen, 8) != ssize_t(hlen)) fatal("read %s header failed", path.c_str());
+  nlohmann::json j = nlohmann::json::parse(hdr, nullptr, false);
+  if (!j.is_object()) bad("unreadable header");
+  uint64_t end = 0;
+  for (auto& [name, v] : j.items()) {
+    if (name == "__metadata__") continue;
+    const auto& o = v.is_object() ? v.value("data_offsets", nlohmann::json()) : nlohmann::json();
+    if (!o.is_array() || o.size() != 2 || !o[0].is_number_unsigned() || !o[1].is_number_unsigned() ||
+        o[1].get<uint64_t>() < o[0].get<uint64_t>() || !v.contains("dtype") || !v["dtype"].is_string() ||
+        !v.contains("shape") || !v["shape"].is_array())
+      bad("bad tensor entry");
+    end = std::max(end, o[1].get<uint64_t>());
+  }
+  if (8 + hlen + end > uint64_t(st.st_size)) bad("its tensors run past its end");
+  return j;
+}
+
 static DType parse_dtype(const std::string& s) {
   if (s == "F32") return DType::F32;
   if (s == "F16") return DType::F16;
@@ -68,10 +98,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     if (fd < 0) fatal("open %s failed", path.c_str());
     fcntl(fd, F_NOCACHE, 1); // stream once; don't keep a second copy in the page cache
     uint64_t hlen = 0;
-    if (pread(fd, &hlen, 8, 0) != 8) fatal("read %s failed", path.c_str());
-    std::string hdr(hlen, '\0');
-    if (pread(fd, hdr.data(), hlen, 8) != ssize_t(hlen)) fatal("read %s header failed", path.c_str());
-    auto j = nlohmann::json::parse(hdr);
+    const auto j = read_header(fd, path, hlen);
     size_t data0 = 8 + hlen;
 
     struct Item {
@@ -218,10 +245,7 @@ SafetensorsIndex::SafetensorsIndex(const std::string& dir, const std::function<b
     fcntl(fd, F_NOCACHE, 1);
     fds_.push_back(fd);
     uint64_t hlen = 0;
-    if (pread(fd, &hlen, 8, 0) != 8 || hlen > (uint64_t(1) << 30)) fatal("read %s failed", path.c_str());
-    std::string hdr(hlen, '\0');
-    if (pread(fd, hdr.data(), hlen, 8) != ssize_t(hlen)) fatal("read %s header failed", path.c_str());
-    const auto j = nlohmann::json::parse(hdr);
+    const auto j = read_header(fd, path, hlen);
     for (auto& [name, v] : j.items()) {
       if (name == "__metadata__" || (skip && skip(name))) continue;
       Entry t;
