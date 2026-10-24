@@ -552,6 +552,8 @@ class Qwen35 : public Model {
   bool sp_qmt_pref(const QLinear& L, int M) const;
   bool qmms_ok(const QLinear& L) const;
   void enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T);
+  // enc_qmms over any T, in slices of at most 64 rows (NI_SHORTPF_EXACT)
+  void enc_qmms_rows(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int T);
   // projections sharing xh: one dispatch where the short-prefill kernels allow it
   void enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
   void enc_topk_rows(Encoder& e, uint32_t E, uint32_t k, bool norm, int T);

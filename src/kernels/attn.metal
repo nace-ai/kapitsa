@@ -1721,7 +1721,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
                                    threadgroup float2* xs, uint split = 0, uint nsplit = 1,
                                    device float* part_o = nullptr, device float2* part_ml = nullptr,
                                    const device uint* mask = nullptr, uint mwords = 0,
-                                   threadgroup uint* tflag = nullptr) {
+                                   threadgroup uint* tflag = nullptr, uint seg = 0) {
   constexpr uint NC = BK / 8;                     // key fragments per tile
   constexpr uint KLD = attn11_kld<BK>();
   const uint G = p.Hq / p.Hkv;
@@ -1753,7 +1753,8 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   const uint ntiles = (kend + BK - 1) / BK;
   uint it_begin = 0, it_end = ntiles;
   if (SPLIT) {
-    const uint per = (ntiles + nsplit - 1) / nsplit;
+    // seg > 0: split s covers the fixed key tiles [s * seg, (s + 1) * seg), the same whatever T and the block
+    const uint per = seg ? seg : (ntiles + nsplit - 1) / nsplit;
     it_begin = min(split * per, ntiles);
     it_end = min(it_begin + per, ntiles);
   }
@@ -1907,16 +1908,22 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   }
 // GQA-row form with the keys split over grid.z = nsplit threadgroups (grid (ceil(T*G/32), Hkv, nsplit)).
 // 11g/11gs skip unit O rescales like attn_prefill11r (bitwise neutral).
+// seg (NI_SHORTPF_EXACT): 0 = the block's tiles in nsplit equal parts; > 0 = split s takes key tiles
+// [s * seg, (s + 1) * seg) (nsplit covers the pass's last query). A query's partials then depend only on its own
+// keys: tiles past it are masked to exact zeros (exp2 of the sentinel), so the rows of a block, the block's extent
+// and the pass's length change nothing in them. (The unsplit kernels are other compiled code: under fast math they
+// need not round a query's sums as this one does, so the exact path runs this kernel even for one split.)
 [[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11gs(
     const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
     const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
     device float* part_o [[buffer(6)]], device float2* part_ml [[buffer(7)]], constant uint& nsplit [[buffer(8)]],
+    constant uint& seg [[buffer(9)]],
     uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
     uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup uint4 kvm[attn11_kv<32>() / 8];
   threadgroup float2 xs[1];
   attn_prefill11_impl<32, false, true, true, true>(q, kc, vc, qg, out, p, tg.xy, tid, sg, lane, (threadgroup half*)kvm,
-                                                   xs, tg.z, nsplit, part_o, part_ml);
+                                                   xs, tg.z, nsplit, part_o, part_ml, nullptr, 0, nullptr, seg);
 }
 
 // GQA-row form without the key split (grid (ceil(T*G/32), Hkv)).
@@ -1931,19 +1938,23 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
 }
 
 // Combines attn_prefill11gs partials: out[t, h*D + d] = (sum_s 2^(m_s - m) o_s[d]) / (sum_s 2^(m_s - m) l_s)
-// * sigmoid(gate). grid: (T, Hq) x 256 threads (one per head dim).
+// * sigmoid(gate). grid: (T, Hq) x 256 threads (one per head dim). skip (NI_SHORTPF_EXACT): the sums start at -0 and
+// leave out the splits of weight 0 (a query's splits past its own keys), so how many such splits a pass has changes
+// nothing in the query's output, signed zeros included.
 [[kernel]] void attn11_reduce(const device float* part_o [[buffer(0)]], const device float2* part_ml [[buffer(1)]],
                               const device float* qg [[buffer(2)]], device float* out [[buffer(3)]],
                               constant AttnPrefParams& p [[buffer(4)]], constant uint& nsplit [[buffer(5)]],
+                              constant uint& skip [[buffer(6)]],
                               uint2 tg [[threadgroup_position_in_grid]], uint d [[thread_index_in_threadgroup]]) {
   const uint t = tg.x, h = tg.y;
   float m = kNeg11;
   for (uint s = 0; s < nsplit; ++s) m = max(m, part_ml[(s * p.T + t) * p.Hq + h].x);
-  float l = 0.0f, o = 0.0f;
+  float l = skip ? -0.0f : 0.0f, o = skip ? -0.0f : 0.0f;
   for (uint s = 0; s < nsplit; ++s) {
     const uint row = (s * p.T + t) * p.Hq + h;
     const float2 ml = part_ml[row];
     const float w = ml.y > 0.0f ? metal::fast::exp2(ml.x - m) : 0.0f;
+    if (skip && w == 0.0f) continue;
     l += w * ml.y;
     o += w * part_o[row * kHD + d];
   }
