@@ -169,7 +169,8 @@ class Qwen4Exp : public Qwen35 {
     bool add = false;
     uint32_t y_ld = 0;
   };
-  void enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffer& x, int R, uint32_t x_ld = 0);
+  void enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffer& x, int R, uint32_t x_ld = 0,
+                bool pair8 = false);
   // the MoE of R rows of xrn_ into yb_ (router on the row kernels, the 512-expert top-k per row, the experts)
   void enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer);
   // streamed Q2_0 experts (src/model/expert_store.h)

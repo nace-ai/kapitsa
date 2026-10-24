@@ -29,7 +29,7 @@ struct HcParams {
 
 }  // namespace
 
-void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffer& x, int R, uint32_t x_ld) {
+void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffer& x, int R, uint32_t x_ld, bool pair8) {
   if (segs.empty()) return;
   const uint32_t K = segs[0].L->K;
   // NI_ROWS_OLD=1: Qwen35's verify GEMVs (qmvrc1 / qmvr2 / qmvr4 / the 8-row MMA GEMM)
@@ -61,9 +61,12 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
       for (const RowSeg* sg : same) fallback(*sg);
       continue;
     }
-    // 4 rows of 4/8-bit: two token pairs per weight block (qmvp: 60 vs 69 us for 16384 x 2560, 832 vs 990 us for
-    // the LM head on the M5 Max); else a simdgroup per token row
-    const bool qmvp = sp0 && R == 4;
+    // 4 rows of 4/8-bit — or 8 where the caller asks (pair8: the decode/verify LM head, whose cycle runs the full
+    // 8-row block): two token pairs per weight block (qmvp: 60 vs 69 us for 16384 x 2560, 832 vs 990 us for
+    // the LM head on the M5 Max); else a simdgroup per token row. The pair kernel needs 2 * ceil(R / 2)
+    // simdgroups (pair = sg % ceil(R/2), blk = sg / ceil(R/2)): threads must scale with ceil(R / 2) or blk
+    // collapses to 0 and half of every weight tile goes unread.
+    const bool qmvp = sp0 && (R == 4 || (pair8 && R == 8));
     e.use(pipe4(qmvp ? "qmvp_multi" : sp0 ? "qmvs_multi" : "qmvs_multi_" + f0.fmt()));
     struct {
       uint32_t K, R, nseg, x_ld, N[4], tg_begin[5], bits[4], y_ld[4], add[4];
@@ -91,7 +94,7 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
     p.tg_begin[same.size()] = tg;
     e.buf(16, x);
     e.val(17, p);
-    if (qmvp) e.dispatch(tg, 1, 1, 128);
+    if (qmvp) e.dispatch(tg, 1, 1, 64u * uint32_t((R + 1) / 2));
     else e.dispatch(uint32_t(R), tg, 1, 64);
   }
 }
@@ -290,7 +293,8 @@ void Qwen4Exp::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingP
   enc_hop(e, Remote::Kind::verify, s, pos, R);
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   enc_gr_rows(e, mix_, R, x_, 0, true, injM_, injA_, xrn_, uint32_t(D));
-  enc_rows(e, {{&lm_head_, logits_}}, xrn_, R);
+  // the verify cycle's LM head runs the full 8-row block: the pair kernel takes it (pair8), the sole R=8 caller
+  enc_rows(e, {{&lm_head_, logits_}}, xrn_, R, 0, true);
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
   const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
   kp::TopkStage ts{V, K, chunk};
