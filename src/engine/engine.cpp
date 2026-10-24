@@ -3718,29 +3718,30 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     const char* v = getenv("NI_HISTORY_WAIT_MS");
     return v && *v ? std::max(0, atoi(v)) : 5000;
   }();
+  const double t_reply = now_ms();
   std::this_thread::sleep_for(std::chrono::milliseconds(idle_ms));
   std::unique_lock<TurnLock> lk(turn_, std::defer_lock);
   if (wait_ms == 0) {
     if (requests_.load() != res.req_seq) return;
     lk.try_lock();  // nobody holds the GPU turn or waits for it
-    if (!lk.owns_lock() || requests_.load() != res.req_seq || active_ > 0) return;
+    if (!lk.owns_lock() || requests_.load() != res.req_seq || active_ > 0) return logd("history: given up, the server was busy");
   } else {
     const double deadline = now_ms() + wait_ms;
     QuietGate gate(idle_ms, requests_.load(), now_ms());
     for (;;) {
-      if (cancelled && cancelled()) return;
+      if (cancelled && cancelled()) return logd("history: given up, the model changed");
       if (gate.ready(requests_.load(), active_, now_ms())) {
         if (lk.try_lock()) {
           if (active_ == 0 && requests_.load() == gate.seen) break;
           lk.unlock();
         }
       }
-      if (now_ms() >= deadline) return;
+      if (now_ms() >= deadline) return logd("history: given up, no quiet moment in %d ms", wait_ms);
       std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
   }
   Slot& slot = slots_[size_t(res.slot)];
-  if (slot.gen != res.slot_gen) return;
+  if (slot.gen != res.slot_gen) return logd("history: given up, another request used slot %d (use %llu, was %llu; %.0f ms after the reply, %d active, %llu requests, %llu then)", res.slot, (unsigned long long)slot.gen, (unsigned long long)res.slot_gen, now_ms() - t_reply, active_, (unsigned long long)requests_.load(), (unsigned long long)res.req_seq);
   const double t0 = now_ms();
   // the answer as the client sends it back ("stop": no tool calls), then a placeholder user turn: the
   // template renders answers before the last user query without their think block, so render it that
@@ -3760,7 +3761,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
   }
   const size_t mpos = text.rfind(marker);
   const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_ ? "<|user|>" : "<|im_start|>", mpos);
-  if (cut == std::string::npos) return;
+  if (cut == std::string::npos) return logd("history: nothing, no marker in the rendered text");
   text.resize(cut);
   std::vector<int> t2 = tok_.encode(text);
   vision::Prompt mm;
@@ -3784,27 +3785,77 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     slot.live_ok = true;  // (the SSD prefix cache saves the live state too)
     ++slot.version;
   }
-  if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
+  if (n <= 0 || int(common) >= n || common == slot.tokens.size())
+    return logd("history: nothing to add (n %d, common %zu of the slot's %zu tokens)", n, common, slot.tokens.size());
   const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
     if (!c.prefix && c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
   Seq& s = *slot.seq;
-  if (!best || n + 64 >= s.limit) return;
-  for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the next request
-    if (sp.pos + sp.n > best->pos) return;
-  if (!model_->reserve(s, n + 64)) return;
+  if (n + 64 >= s.limit) return logd("history: no room (n %d, limit %d)", n, s.limit);
+  // A slot that read its conversation back from the SSD (another request took it meanwhile: a title or summary request
+  // beside the conversations) holds the live state only: the checkpoint at the user's first question is gone, and
+  // the follow-up would read everything after it again. The SSD has the conversation's stored states: the newest at
+  // or before the point where the rendered reply diverges is read into the slot (NI_HISTORY_DISK=0: not).
+  static const bool from_disk_on = [] {
+    const char* v = getenv("NI_HISTORY_DISK");
+    return !(v && *v && atoi(v) == 0);
+  }();
+  bool from_disk = false;
+  int start = 0;
+  if (!best) {
+    std::string have;
+    for (auto& c : slot.ckpts) have += " " + std::to_string(c.pos) + (c.prefix ? "p" : c.query ? "q" : "");
+    if (!from_disk_on || !disk_ || lili_ || dory_ || !images.empty())
+      return logd("history: no restore point to start from (n %d, common %zu, slot %zu tokens; points:%s)", n, common,
+                  slot.tokens.size(), have.c_str());
+    if (!model_->reserve(s, n + 64)) return;
+    // the slot is this work's while the SSD is read (the reads give the turn up)
+    struct Hold {
+      Engine& en;
+      Slot& sl;
+      ~Hold() {
+        sl.busy = false;
+        --en.active_;
+        en.turn_.notify();
+      }
+    };
+    slot.busy = true;
+    ++active_;
+    Hold hold{*this, slot};
+    const pcache::Hit hit = disk_lookup(k2, n, 0, 0, nullptr);
+    if (!hit || hit.pos < 64 || hit.pos >= n || slot.gen != res.slot_gen)
+      return logd("history: no restore point to start from (n %d, common %zu, slot %zu tokens; points:%s; SSD: %s)", n,
+                  common, slot.tokens.size(), have.c_str(), hit ? "too early or the slot changed" : "none");
+    disk_leaving(slot, 0);  // the live state goes to the SSD first unless it is there
+    slot.tokens.clear();
+    slot.fills.clear();
+    for (auto& c : slot.ckpts) c.pos = -1;
+    ++slot.version;
+    if (!disk_restore(slot, hit)) {
+      model_->reset(s);
+      slot.tokens.clear();
+      return logd("history: the stored conversation could not be read");
+    }
+    start = int(slot.tokens.size());
+    from_disk = true;
+    // (Hold ends here: the rest runs under the turn as before, with no wait for the SSD)
+  } else {
+    for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the next request
+      if (sp.pos + sp.n > best->pos) return;
+    if (!model_->reserve(s, n + 64)) return;
+    start = best->pos;
+  }
   Gpu& g = Gpu::get();
   auto e = g.begin();
-  model_->restore(*e, s, *best);
-  const int start = best->pos;
+  if (best) model_->restore(*e, s, *best);
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
   std::copy(t2.begin(), t2.end(), s.tokens());
   model_->set_rope_positions(s, n, mm.spans);
-  // DFlash2: the drafter's context ring goes back to the checkpoint with the target state, and the rows
-  // prefilled here enter it like prompt rows (captured by every pass, projected after the last chunk)
+  // DFlash2: the drafter's context ring goes back to the checkpoint with the target state (the SSD's state brings its
+  // own), and the rows prefilled here enter it like prompt rows (captured by every pass, projected after the last chunk)
   if (dfl_) {
-    dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
+    if (best) dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
     DFlash2::rewind(*slot.dseq, start);
     dfl_->begin_prefill(n, start);
   }
@@ -3857,7 +3908,8 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
   disk_filled(slot, start, n);
   slot.live_ok = true;  // the follow-up continues this state
   ++slot.version;
-  logi("history: prefilled %d tokens of the rendered reply (from %d) in %.0f ms", n - start, start, now_ms() - t0);
+  logi("history: prefilled %d tokens of the rendered reply (from %d%s) in %.0f ms", n - start, start,
+       from_disk ? ", read from the SSD" : "", now_ms() - t0);
 }
 
 void Engine::remember_reply(const ChatRequest& r, const ChatResult& res) {
