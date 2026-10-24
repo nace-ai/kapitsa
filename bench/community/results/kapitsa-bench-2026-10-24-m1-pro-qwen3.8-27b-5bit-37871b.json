@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-24T02:55:13Z",
+  "kapitsa": {
+    "version": "0.2.15",
+    "commit": "5c489cc"
+  },
+  "mac": {
+    "identifier": "MacBookPro18,3",
+    "name": "MacBook Pro (14-inch, 2021)",
+    "year": 2021,
+    "chip": "Apple M1 Pro",
+    "cpu_cores": 8,
+    "gpu_cores": 14,
+    "memory_gb": 32,
+    "macos": "27.2",
+    "macos_build": "26B5091g"
+  },
+  "model": {
+    "name": "qwen3.8-27b",
+    "title": "Qwen3.8-27B",
+    "variant": "5bit",
+    "precision": "5-bit",
+    "catalog": true,
+    "revision": "b9ad7b9",
+    "decoding": "unknown",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 18.83,
+      "runs_tps": [
+        16.58,
+        18.83,
+        16.2,
+        20.74,
+        20.27
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 20.53,
+      "runs_tps": [
+        20.53,
+        20.42,
+        20.82,
+        20.47,
+        20.66
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 82.8764,
+        "tps": 49.9,
+        "followup_s": [
+          0.7979,
+          0.8783,
+          0.6964
+        ],
+        "followup_median_s": 0.7979,
+        "followup_suffix_tps": 30.2
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16287,
+        "ttft_s": 335.3211,
+        "tps": 48.6,
+        "followup_s": [
+          0.8008,
+          1.0612,
+          0.746
+        ],
+        "followup_median_s": 0.8008,
+        "followup_suffix_tps": 28.2
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.28
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 18232,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.17,
+    "gpu_other_max_pct": 11.05,
+    "gpu_ambient_mean_pct": 1.43,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "prefill_16000: 18232 pages swapped out during the phase"
+  ],
+  "invalid": []
+}
