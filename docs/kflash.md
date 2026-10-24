@@ -30,6 +30,8 @@ believes it measures. The basis for the cap (ledger §2.16 as corrected through 
 mode-3 chain anchors at depths 2/3, ids-identical on the F74 legs, read cheaper per token than any deeper measured arm; the ship comparison itself — shipping tree-7 against
 the capped chain-2 — buys 1.46× per token and 2.01× per cycle in the shipping build, measured on one pinned
 binary (p1u 106.47 ms/C at 2.953 tok/C vs v2k0u 53.09 ms/C at 2.153 tok/C; ledger rulings v2.39-197). The
+guarded quiet-window re-measure confirmed the ratio (§8w canonical 1.44–1.46×/token within-window pinned,
+arm-qualified; stall model falsified). The
 earlier 1.56× carrier figure is historical only — it crosses eras at both ends — and the 1.452× policy-off
 pair (v2k0u vs v7k0u) is a same-era diagnostic that answers cap-at-policy-off, not the shipping decision;
 bracket-era ranges are retired), and the shipping default stays the full-depth trees

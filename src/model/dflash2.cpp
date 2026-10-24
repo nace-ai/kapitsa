@@ -373,7 +373,8 @@ bool DFlash2::rows16_tensor_ok() const {
 // at depths 2/3, ids-identical on the F74 legs, read
 // cheaper per token than any deeper measured arm; the ship comparison (shipping tree-7 vs capped chain-2)
 // buys 1.46x per token and 2.01x per cycle in the shipping build, measured on one pinned binary (ledger
-// rulings v2.39-197; the earlier 1.56x carrier figure is historical only -- it crosses eras at both ends),
+// rulings v2.39-197; quiet-window-confirmed, §8w canonical 1.44-1.46x/token within-window pinned,
+// arm-qualified; the earlier 1.56x carrier figure is historical only -- it crosses eras at both ends),
 // and the shipping default stays untouched until the
 // shipping-binary sweep (4K AND 32K, ids match, ABBA >= 8) settles it. A genuine cap below the full depth
 // keeps the chains and the 8-row plan even where the trees are explicitly asked -- a capped verify cannot tree
