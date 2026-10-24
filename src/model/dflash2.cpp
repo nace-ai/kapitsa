@@ -506,8 +506,10 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
   // The downward depth gate (M3, opt-in): NI_DFLASH_GATE=<p>[:<win>] caps each cycle's verify depth at the
   // first proposal position whose rolling tau-conditional acceptance hazard (the last <win> cycles, default
-  // 64) fell below the break-even fraction p -- e.g. 0.096, the measured 3.1 ms marginal verify row against
-  // 32.1 ms per accepted token at 4K. It needs the dynamic depth (an MoE target, NI_DFLASH_DYN > 0): the
+  // 64) fell below the break-even fraction p -- e.g. 0.215, the corrected break-even accepted tokens per
+  // extra verify row (ledger §2.16 as corrected through §2.32-E: the clean 6.9 ms/row slope, under which
+  // p3 = 0.273 clears and positions 5-7 do not). It needs the dynamic depth (an MoE target,
+  // NI_DFLASH_DYN > 0): the
   // hazard conditions on what tau kept. Downward only -- the cap never exceeds verify_depth(). Off by
   // default until the pre-registered trace gate (multi-seed, tau-conditional p_i on the shipping binary)
   // says tau itself keeps enough negative-value rows for the cap to pay. See DepthGate in dflash2.h.
