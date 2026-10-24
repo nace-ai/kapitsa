@@ -741,6 +741,7 @@ void Qwen4Exp::init_store(const std::string& dir) {
   if (const char* r = getenv("NI_EXPERT_READERS"); r && *r) o.cache.readers = atoi(r);
   if (const char* io = getenv("NI_EXPERT_IO"); io && !strcmp(io, "direct")) o.cache.direct = true;
   if (const char* fl = getenv("NI_EXPERT_FILL"); fl && !strcmp(fl, "0")) o.cache.fill = false;
+  if (const char* sv = getenv("NI_SCAN_VICTIM"); sv && !strcmp(sv, "0")) o.cache.scan_victim = false;
   store_ = std::make_unique<q20::ExpertStore>(files, src, E, lay, o);
   Gpu::get().make_resident(store_->buffers());
   if (!store_->complete()) {

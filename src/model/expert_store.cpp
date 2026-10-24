@@ -69,7 +69,7 @@ double auto_store_cap(bool apple10) {
 ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
                          SlotLayout lay, uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o)
     : L_(uint32_t(layers.size())), E_(E), nslots_(nslots), lay_(lay), mem_(mem), sync_(sync), direct_(o.direct),
-      src_(layers) {
+      scan_victim_on_(o.scan_victim), src_(layers) {
   if (!L_ || !E_) fatal("expert store: no layers");
   if (lay_.bytes % kPage) fatal("expert store: slots of %u bytes (not whole 16 KiB pages)", lay_.bytes);
   // the planes must be the slot layout's: codes cb = uc, d db = ud - gd
@@ -377,7 +377,7 @@ int ExpertCache::admit(int k, bool scan) {
     slot = free_.back();
     free_.pop_back();
   } else {
-    int v = scan ? scan_victim(k) : -1;
+    int v = scan && scan_victim_on_ ? scan_victim(k) : -1;
     if (v < 0) {
       const bool t1_first = scan || (t1_.size >= 1 && ((w == kB2 && double(t1_.size) >= p_) || double(t1_.size) > p_));
       v = lru_free(t1_first ? t1_ : t2_);

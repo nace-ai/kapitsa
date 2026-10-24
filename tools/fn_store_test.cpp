@@ -485,15 +485,41 @@ void case_scan_victim(const Pack& p) {
   const StoreStats s = c.stats();
   CHECK(bad == 0, "scan victim: %d experts not in their slots", bad);
   CHECK(s.evictions > 0, "scan victim: no evictions");
-  // The policy's own count, not just its bookkeeping: with no victim rule a sweep re-reads the whole next layer every
-  // chunk (960 read-aheads on this pack), with it far fewer (832 here: the read-ahead stays resident and its next
-  // layer's chunk consumes it as a hit). A test that passes with scan_victim() returning -1 always is no test.
-  CHECK(s.prefetches <= 880, "scan victim: %llu read ahead for %llu chunks: the next layer was not kept",
-        (unsigned long long)s.prefetches, (unsigned long long)s.handshakes);
+  // The policy's own count, not just its bookkeeping: with the rule on the read-ahead stays resident and its next
+  // layer's chunk consumes it as a hit (832 here), and the off arm below measures the same sweep without it. A case
+  // that passes with scan_victim() returning -1 always is no test, so the two arms are compared.
   check_sums(s, "scan victim");
   printf("scan sweep, %u slots: %llu prefill chunks, %llu misses, %llu read ahead, %llu evictions, %.1f MB read\n",
          nslots, (unsigned long long)s.handshakes, (unsigned long long)s.misses, (unsigned long long)s.prefetches,
          (unsigned long long)s.evictions, s.bytes / 1e6);
+
+  // The A/B's off arm (NI_SCAN_VICTIM=0): the same sweep with ARC's rule alone re-reads the next layer every chunk.
+  ExpertCache::Options off = o;
+  off.scan_victim = false;
+  Arena a2(p.lay, nslots, L, E);
+  Event ev2;
+  ExpertCache d(p.files, p.layers, E, p.lay, nslots, a2.m, ev2.sync(), off);
+  std::mt19937 rng2(17);
+  uint64_t value2 = 0;
+  int bad2 = 0;
+  for (int pass = 0; pass < 3; ++pass)
+    for (uint32_t l = 0; l < L; ++l) {
+      std::vector<Step> steps(1);
+      steps[0].layer = int(l);
+      steps[0].ids.resize(E);
+      std::iota(steps[0].ids.begin(), steps[0].ids.end(), 0u);
+      steps[0].scan = true;
+      steps[0].pred_all = l + 1 < L;
+      steps[0].pred_layer = l + 1 < L ? int(l + 1) : -1;
+      bad2 += run_pass(d, ev2, a2, p.lay, value2, steps, rng2);
+    }
+  const StoreStats t = d.stats();
+  CHECK(bad2 == 0, "scan victim off: %d experts not in their slots", bad2);
+  CHECK(t.prefetches > s.prefetches, "scan victim off: %llu read ahead, the rule's arm %llu: the switch does nothing",
+        (unsigned long long)t.prefetches, (unsigned long long)s.prefetches);
+  check_sums(t, "scan victim off");
+  printf("scan sweep, %u slots, victim rule off: %llu read ahead, %.1f MB read\n", nslots,
+         (unsigned long long)t.prefetches, t.bytes / 1e6);
 }
 
 void case_complete(const Pack& p) {

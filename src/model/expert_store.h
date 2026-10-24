@@ -185,6 +185,7 @@ class ExpertCache {
     int readers = 16;     // reader threads (NI_EXPERT_READERS)
     bool direct = false;  // NI_EXPERT_IO=direct: unaligned pieces read straight into their slot too
     bool fill = true;     // fill the arena at start (NI_EXPERT_FILL=0: no)
+    bool scan_victim = true;  // a sweep evicts the layers it has passed (NI_SCAN_VICTIM=0: ARC's rule, as before)
   };
   // One layer's handshake: the routing ids (n uint32 expert ids of `layer`, repeats allowed) are readable once the
   // event reaches `ready`; the turn sets it to `go` when every routed expert is in its slot. pred / npred: ids predicted
@@ -261,7 +262,7 @@ class ExpertCache {
   SlotLayout lay_;
   Memory mem_;
   Sync sync_;
-  bool complete_ = false, direct_ = false;
+  bool complete_ = false, direct_ = false, scan_victim_on_ = true;
   std::vector<int> fds_;
   std::vector<LayerSrc> src_;
 
