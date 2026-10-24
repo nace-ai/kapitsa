@@ -2279,7 +2279,9 @@ point and 512-token answers (rec not rerun):
 | llama.cpp decode | 90.7 | 89.0 | 86.5 | 83.0 | 73.5 | 61.5 | 46.7 | 30.8 |
 
 Kapitsa's prefill is 2.1-3.2x `6c13588`'s, so it now reads 1.28x as fast as llama.cpp at 1K and 2.02x at 128K, where
-it read 0.60-0.64x; decode is unchanged, 1.58-1.60x llama.cpp's. The spread, the method and the chart are in
+it read 0.60-0.64x; decode is unchanged, 1.58-1.60x llama.cpp's. Its 4K / 16K / 32K prefill is 10-16% above #345's
+`compare_engines` runs above (2,691 / 2,457 / 2,086 on `631bd25`), which use their own prompts and protocol; which part
+of that is the protocol and which later commits was not measured. The spread, the method and the chart are in
 [bench/results/2026-10-24-flint-m5pro-context](../bench/results/2026-10-24-flint-m5pro-context/README.md).
 
 ## Recursive Flint 40B-A2.5B with 2-bit experts (M1 Pro 16 GB, 2026-10-22)

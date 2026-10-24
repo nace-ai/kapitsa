@@ -79,9 +79,15 @@ their spread.
   against 30.8 at 128K. Both lose 66% from 1K to 128K, so the ratio does not move with the length.
 - **Against the earlier M5 Pro sweep** ([2026-10-22-flint-m5pro](../2026-10-22-flint-m5pro/README.md#context-sweep-1k-to-128k-tokens),
   Kapitsa `6c13588`, one cold run per point, 256-token answers): Kapitsa's prefill is 2.1x higher at 1K, 2.4x at 4K and
-  3.2x at 128K (350 → 1,110 tok/s), which turns the 0.60-0.64x it had against llama.cpp there into 1.28-2.02x. That comes from the changes between `6c13588` and `71d6891`, #345 (prefill
-  attention on the matrix units) among them; how much each gives was not measured here. Its decode is within 6%. llama.cpp b11840
-  reads and decodes within 4% of b11804 at every length.
+  3.2x at 128K (350 → 1,110 tok/s), which turns the 0.60-0.64x it had against llama.cpp there into 1.28-2.02x. That
+  comes from the changes between `6c13588` and `71d6891`, #345 (prefill attention on the matrix units) among them; how
+  much each gives was not measured here. Its decode is within 6%. llama.cpp b11840 reads and decodes within 4% of b11804
+  at every length.
+- **Against the README's Flint cell.** The poster's Kapitsa prefill, 2,691 at 4K (and #345's 2,457 / 2,086 at 16K /
+  32K), is 10-16% under this sweep's 3,126 / 2,754 / 2,289; its llama.cpp cell, 2,072, is 5% under 2,172. Those cells are
+  `compare_engines` runs (on `631bd25` for Kapitsa, b11804 for llama.cpp) with its own prompts and protocol, not this
+  sweep's agent-context prompt, warm-up and 512-token answers, so they are not expected to match. Which part of the gap
+  is the protocol and which the commits after `631bd25` was not measured.
 - **Spread.** llama.cpp's runs agree within 4% at every point. Kapitsa's prefill runs agree within 1% at 64K and 128K
   and within 3-10% below that, where the third round of the 1K-32K leg was slower at several sizes; its decode at 2K,
   16K and 64K each has one slow run (125.5, 102.9 and 68.5 tok/s) that the median leaves aside.
