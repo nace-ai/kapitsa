@@ -347,17 +347,9 @@ void Engine::disk_start() {
   d->min_pos = std::max(64, int(dc::env_num("NI_DISK_CACHE_MIN", 1024)));
   d->idle_ms = std::max(0.0, dc::env_num("NI_DISK_CACHE_IDLE_MS", 10000));
   d->capture_max = std::min<uint64_t>(pcache::kGiB, dc::ram_bytes() / 32);
-  // NI_DISK_CAPTURE_MAX (a test/debug knob; bytes, or a size such as 100M): a lower limit than the default sends more
-  // conversations down the path of one too large to copy in memory, which replaces the conversation unsaved unless
-  // writing it is worth a wait; it is how that path (and the history prefill's refusal to take such a slot) is tested
-  // on a small model. It can only lower the limit; a value that is not a size above 0 is ignored.
-  if (const char* v = getenv("NI_DISK_CAPTURE_MAX"); v && *v) {
-    uint64_t cap = 0;
-    if (pcache::parse_size(v, &cap) && cap > 0 && cap != pcache::kAuto)
-      d->capture_max = std::min(d->capture_max, cap);
-    else
-      logi("NI_DISK_CAPTURE_MAX=\"%s\" is not a size above 0 (bytes, or such as 100M): ignored", v);
-  }
+  // (NI_DISK_CACHE_CAPTURE_MAX, bytes: a smaller limit sends more conversations down the path of one too large to copy in
+  // memory, which replaces the conversation unsaved when it is not worth waiting for; for testing that path on a small model)
+  if (const double v = dc::env_num("NI_DISK_CACHE_CAPTURE_MAX", 0); v >= 1) d->capture_max = uint64_t(v);
   const char* root = getenv("NI_DISK_CACHE_DIR");
   d->root = root && *root ? root : hub::home_dir() + "/prefix-cache";
   const std::string mode = dfl_ ? "DFlash2 drafter (" + std::to_string(dfl_->bits()) + "-bit), its context ring"
