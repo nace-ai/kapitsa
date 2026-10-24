@@ -104,6 +104,7 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
   pending_.reset(new std::atomic<int>[keys]);
   for (size_t k = 0; k < keys; ++k) pending_[k].store(0, std::memory_order_relaxed);
   free_.resize(nslots_);
+  layer_res_.assign(L_, 0);
   for (uint32_t i = 0; i < nslots_; ++i) free_[i] = int32_t(nslots_ - 1 - i);  // slot 0 first
 
   const int nr = std::max(1, std::min(o.readers, 64));
@@ -322,6 +323,7 @@ void ExpertCache::hit(int k, bool scan, bool first) {
 // rule picks the victim when no slot qualifies. Decode never sets scan: its replacement is unchanged.
 int ExpertCache::scan_victim(int k) {
   const int layer = k / int(E_);
+  if (low_layer_ >= layer) return -1;  // every resident slot is of this layer or above: the sweep has passed nothing
   for (uint32_t i = 0; i < nslots_; ++i) {
     const int slot = int(scan_cursor_);
     scan_cursor_ = scan_cursor_ + 1 == nslots_ ? 0 : scan_cursor_ + 1;
@@ -361,6 +363,9 @@ int ExpertCache::admit(int k, bool scan) {
   }
   slot_of_[size_t(k)] = slot;
   key_of_slot_[size_t(slot)] = k;
+  const int kl = k / int(E_);
+  ++layer_res_[size_t(kl)];
+  if (kl < low_layer_) low_layer_ = kl;
   const bool freq = !scan && (w == kB1 || w == kB2);
   lst_push(freq ? t2_ : t1_, k);
   where_[size_t(k)] = freq ? kT2 : kT1;
@@ -375,6 +380,9 @@ void ExpertCache::evict(int v) {
   lst_remove(list_of(w), v);
   key_of_slot_[size_t(slot_of_[size_t(v)])] = -1;
   slot_of_[size_t(v)] = -1;
+  const int vl = v / int(E_);
+  if (--layer_res_[size_t(vl)] == 0 && low_layer_ == vl)
+    while (low_layer_ < int(L_) && layer_res_[size_t(low_layer_)] == 0) ++low_layer_;
   mem_.table[v] = 0;
   prefetched_[size_t(v)] = 0;
   if (routed_[size_t(v)]) {  // remembered as a ghost: only experts decoding routed

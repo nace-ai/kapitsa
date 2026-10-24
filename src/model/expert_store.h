@@ -216,6 +216,7 @@ class ExpertCache {
   void post(const Req& r);                      // in the order the GPU will reach them
   uint32_t word(int slot) const;                // a slot's table word
   int slot_of(int layer, uint32_t e) const;     // tests: the expert's slot, -1 if absent (only while nothing is served)
+  int lowest_layer() const { return low_layer_; }  // tests: the lowest layer any slot holds (scan_victim's floor)
   StoreStats stats() const;
   void reset_stats();
   double fill_ms() const { return fill_ms_; }
@@ -268,6 +269,8 @@ class ExpertCache {
   List t1_, t2_, b1_, b2_;
   double p_ = 0;
   uint32_t scan_cursor_ = 0;  // a scan sweep's rotating slot for its victim (admit)
+  std::vector<uint32_t> layer_res_;  // resident slots per layer (admit / evict): scan_victim's "has the sweep passed it"
+  int low_layer_ = 0x7fffffff;       // the lowest layer with a resident slot: scan_victim returns -1 above it
   std::vector<int> active_;  // the keys of the last served request (in use on the GPU until the next ready)
 
   std::thread turn_;

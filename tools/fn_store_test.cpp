@@ -458,6 +458,13 @@ void case_scan_victim(const Pack& p) {
       steps[0].pred_all = l + 1 < L;
       steps[0].pred_layer = l + 1 < L ? int(l + 1) : -1;
       bad += run_pass(c, ev, a, p.lay, value, steps, rng);
+      // the floor scan_victim reads: the lowest layer any slot holds, recomputed from the slots themselves
+      int floor = 0x7fffffff;
+      for (uint32_t ll = 0; ll < L; ++ll)
+        for (uint32_t e = 0; e < E; ++e)
+          if (c.slot_of(int(ll), e) >= 0 && int(ll) < floor) floor = int(ll);
+      CHECK(c.lowest_layer() == floor, "scan victim: pass %d, chunk %u floor %d, slots say %d", pass, l, c.lowest_layer(),
+            floor);
       if (l + 1 < L) {
         int kept = 0;
         for (uint32_t e = 0; e < E; ++e) kept += c.slot_of(int(l + 1), e) >= 0;
