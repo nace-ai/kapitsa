@@ -136,8 +136,13 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
             warns.append(f"{mac['gpu_cores']} GPU cores is unusual for an {mac['chip']}")
     if mac["memory_gb"] not in (8, 16, 18, 24, 32, 36, 48, 64, 96, 128, 192, 256, 512) and not 8 <= mac["memory_gb"] <= 2048:
         errs.append(f"{mac['memory_gb']} GB of memory is not plausible")
-    # the protocol
-    want = PROTOCOL[r["mode"]]
+    # the protocol; a context report (kapitsa bench --ctx) is a standard run plus a separate context section, and its
+    # writing numbers come from a protocol of their own, so it is not a submitted row
+    mode = r["mode"]
+    if mode not in PROTOCOL:
+        errs.append(f"{mode} run: only full and quick runs are submitted (a --ctx report is not a standard community run)")
+        return errs, warns
+    want = PROTOCOL[mode]
     if r["protocol"]["corpus_sha256"] not in (CORPUS_SHA256, CORPUS_SHA256_V1):
         errs.append("the prompts are not from the frozen corpus")
     for k, v in want.items():
