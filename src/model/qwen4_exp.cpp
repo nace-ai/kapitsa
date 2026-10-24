@@ -752,6 +752,20 @@ void Qwen4Exp::init_store(const std::string& dir) {
   }
 }
 
+namespace {
+// A row-count knob from the environment: a whole number that is not negative, or `def` with one warning. Negative,
+// empty and non-numeric values would otherwise become 0 (or a negative number) and switch the gate on for every chunk.
+int env_rows(const char* name, int def) {
+  const char* v = getenv(name);
+  if (!v || !*v) return def;
+  char* end = nullptr;
+  const long x = strtol(v, &end, 10);
+  if (end != v && !*end && x >= 0 && x <= 1 << 20) return int(x);
+  logi("%s=%s is not a row count of 0 or more, ignored: using %d", name, v, def);
+  return def;
+}
+}  // namespace
+
 // a prefill chunk's MoE: a chunk of 64+ rows routes most of the next layer's experts, so every one of them not in
 // memory is read during this layer; shorter ones only read what they route
 q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
@@ -762,16 +776,11 @@ q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, 
   const int nl = li + 1 < hi_ ? li + 1 - lo_ : -1;
   // The read-ahead of the whole next layer costs the store's size on an 85-token prompt (1232 ms of a 1613 ms TTFT),
   // and only a chunk of 64+ rows routes most of that layer anyway: NI_PRED_ALL_MIN is the shortest chunk that pays it
-  // (default 64, the constant it replaces).
-  static const int pred_all_min = [] {
-    const char* v = getenv("NI_PRED_ALL_MIN");
-    return v && *v ? atoi(v) : 64;
-  }();
+  // (default 64, the constant it replaces). A bad value is warned about and ignored, as NI_EXPERT_CAP's is: parsing
+  // it to 0 would read the whole next layer on every chunk, the cost this gate exists to avoid.
+  static const int pred_all_min = env_rows("NI_PRED_ALL_MIN", 64);
   // NI_SCAN_MIN: the shortest chunk whose sweep leaves the recency order alone (default 16, the constant it replaces).
-  static const int scan_min = [] {
-    const char* v = getenv("NI_SCAN_MIN");
-    return v && *v ? atoi(v) : 16;
-  }();
+  static const int scan_min = env_rows("NI_SCAN_MIN", 16);
   const bool all = T >= pred_all_min && nl >= 0;
   store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > scan_min);
   if (between) between();
