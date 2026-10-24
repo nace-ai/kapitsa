@@ -67,6 +67,10 @@ std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bo
 // Qwen4Exp's NI_HC_FUSE mix fold (qmt6_mix_m64_n64), which is that tile's derivative and must share its kill
 // switch rather than carry a second reading of the env.
 bool qmt6_on();
+// The NI_QMM gate (defined in qwen35.cpp): whether the dense prefill GEMMs run through the qmr/qmt selector at
+// all (enc_qmm_large's q.on). Exported for Qwen4Exp's NI_HC_FUSE mix fold, whose host gate must match the
+// tensor-tile branch it replaces exactly.
+bool qmm_on();
 
 struct Qwen35Config {
   int hidden = 0, layers = 0, vocab = 0;

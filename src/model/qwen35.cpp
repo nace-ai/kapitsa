@@ -2287,6 +2287,10 @@ bool qmt6_on() {
   return on;
 }
 
+// Exported for Qwen4Exp's NI_HC_FUSE gate (declared in qwen35.h): enc_qmm_large's tensor-tile branches run only
+// under qmr_sel().on, and the mix fold must engage on exactly that same set of calls.
+bool qmm_on() { return qmr_sel().on; }
+
 void Qwen35::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T, int D) {
   e.use(pipe("rows_to_half"));
   kp::Rows p{uint32_t(D), norm ? 1u : 0u, cfg_.eps};
