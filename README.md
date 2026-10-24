@@ -204,5 +204,14 @@ Kapitsa decodes with **KFlash**. A draft model such as DFlash2 guesses the next 
 
 <sub>Watch → Custom → Releases on [nace-ai/kapitsa](https://github.com/nace-ai/kapitsa) puts every new version in your notifications. A drawn illustration of the steps, not a screen recording; the page source is in [tools/readme_images](tools/readme_images/README.md).</sub>
 
+## Star history
+
+<a href="https://star-history.com/#nace-ai/kapitsa&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nace-ai/kapitsa&type=Date&theme=dark">
+    <img alt="Star history of nace-ai/kapitsa on GitHub" src="https://api.star-history.com/svg?repos=nace-ai/kapitsa&type=Date">
+  </picture>
+</a>
+
 <sub>[How KFlash works](docs/kflash.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Press kit](docs/assets/brand/README.md) ·
 Apache 2.0, © 2026 [Nace AI](https://nace.ai) · [Third-party notices](THIRD_PARTY_NOTICES)</sub>
