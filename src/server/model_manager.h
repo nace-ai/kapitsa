@@ -162,6 +162,14 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     }
     new_opt.model_id = new_ref.id;
 
+    // Another architecture (issue 447) is refused here, before the old engine is released and the new one is built:
+    // a switch must not cost the running model its place, and the engine's constructor refuses it too, as a backstop
+    // for every other caller (`hub::check_supported` only covers the Hub's repos, and this one may be any folder).
+    if (const std::string why = unsupported_model(new_opt.model_dir); !why.empty()) {
+      if (error_out) *error_out = why;
+      return nullptr;
+    }
+
     {
       LoopKv kv = LoopKv::last_loop;
       if (!new_opt.loop_kv.empty()) parse_loop_kv(new_opt.loop_kv, &kv);

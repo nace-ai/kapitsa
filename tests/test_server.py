@@ -580,7 +580,11 @@ def cli_checks(kapitsa):
                    "text_config": {"model_type": "gemma4_text", "hidden_size": 2816, "num_hidden_layers": 30,
                                    "num_attention_heads": 16, "vocab_size": 262144},
                    "quantization": {"group_size": 32, "bits": 4, "mode": "affine"}}, f)
-    rc, _, err = run("serve", "--model", gemma)
+    free = socket.socket()  # a port that is free, so the refusal is the only reason this call fails
+    free.bind(("127.0.0.1", 0))
+    gemma_port = free.getsockname()[1]
+    free.close()
+    rc, _, err = run("serve", "--model", gemma, "--port", str(gemma_port))
     check("cli: serve refuses another architecture by its model_type",
           rc == 2 and "is a gemma4 model" in err and "qwen3_5" in err and "nemotron_h" in err and "terminating" not in err, err)
     rc, _, err = run("serve", "--model", gemma, "--port", str(busy))

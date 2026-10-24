@@ -234,7 +234,11 @@ static bool newline_before_think_close(const minja::chat_template& tmpl) {
 }
 
 Engine::Engine(const EngineOptions& o) : opts_(o) {
-  if (const std::string why = unsupported_model(opts_.model_dir); !why.empty()) fatal("%s", why.c_str());
+  // thrown, not fatal(): ModelManager::switch_to and reload (src/server/model_manager.h) build an Engine to switch to
+  // and catch a std::exception so that a refused switch leaves the server serving, with the old model back (shown as
+  // the switch's error); the callers that start a server let it out, so `kapitsa serve` exits on it as it did on the
+  // message before. The same text, thrown, is what model_plan does for the folders it refuses.
+  if (const std::string why = unsupported_model(opts_.model_dir); !why.empty()) throw std::runtime_error(why);
   if (opts_.model_id.empty()) {
     std::string d = opts_.model_dir;
     while (!d.empty() && d.back() == '/') d.pop_back();
