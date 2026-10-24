@@ -582,6 +582,45 @@ res = json.load(open(saved[0])) if saved else {}
 check(res.get("protocol", {}).get("temperature") == 1.0 and "decode T=1.0: median" in r.stderr and "T=0.6" not in r.stderr
       and "| Writing, T = 1.0 |" in r.stdout, "Flint from a folder: its writing at T = 1.0, shown and recorded",
       (r.stdout + r.stderr)[-500:])
+# A prefill chunk override is independent of the default benchmark workload.
+check(js.get("mode") == "quick" and "prefill_chunk" not in js.get("protocol", {}),
+      "omitting prefill chunk keeps the automatic default report")
+for chunk, json_output, quick in ((1024, False, True), (4096, True, True), (2048, True, False)):
+    independent_file = os.path.join(xhome, f"chunk-{chunk}.json")
+    args = [KAPITSA, "bench", "--model", "4b", "--prefill-chunk", str(chunk), "--out", independent_file]
+    if quick:
+        args.append("--quick")
+    if json_output:
+        args.append("--json")
+    independent_run = run(args, env=xenv)
+    independent = json.load(open(independent_file))
+    check(independent.get("mode") == ("prefill-quick" if quick else "prefill") and independent["protocol"].get("prefill_chunk") == chunk,
+          f"standalone chunk {chunk}: requested chunk and full/quick mode")
+    if json_output:
+        check(json.loads(independent_run.stdout) == independent, "standalone chunk: --json matches saved report")
+    else:
+        check("| Prefill chunk (requested) | 1,024 tokens |" in independent_run.stdout,
+              "standalone chunk: Markdown displays requested size")
+    try:
+        import jsonschema
+        jsonschema.validate(independent, schema)
+        check(True, f"standalone chunk {chunk}: schema validates")
+    except ImportError:
+        pass
+    submitted = run([KAPITSA, "bench", "submit", independent_file, "--dry-run"], env=xenv)
+    check(submitted.returncode != 0 and "Custom prefill chunks" in submitted.stderr,
+          f"standalone chunk {chunk}: saved custom report refused for standard submission")
+missing = run([KAPITSA, "bench", "--prefill-chunk"], env=xenv)
+check(missing.returncode != 0 and "needs a value" in missing.stderr, "prefill chunk requires a value")
+
+for value in ("0", "-1", "abc", "4096x", "99999999999999999"):
+    bad = run([KAPITSA, "bench", "--prefill-chunk", value], env=xenv)
+    check(bad.returncode != 0 and "prefill-chunk" in bad.stderr,
+          f"invalid prefill chunk {value!r} rejected before loading")
+bad = run([KAPITSA, "bench", "--prefill-chunk", "4096", "--submit"], env=xenv)
+check(bad.returncode != 0 and "standard community" in bad.stderr, "custom chunk submission rejected before loading")
+
+
 shutil.rmtree(xhome, ignore_errors=True)
 
 shutil.rmtree(tmp, ignore_errors=True)

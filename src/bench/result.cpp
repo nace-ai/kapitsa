@@ -247,6 +247,7 @@ ojson make_result(const RunInputs& in) {
                     {"greedy_runs", s.greedy_runs},
                     {"sizes", s.sizes},
                     {"temperature", s.temperature}};
+  if (in.prefill_chunk) protocol["prefill_chunk"] = in.prefill_chunk;
   ojson users = ojson::array();
   for (const auto& u : overall.value("gpu_users", ojson::array())) users.push_back(u["name"]);
   ojson conditions = {{"power_source", in.power_start.source.empty() ? ojson(nullptr) : ojson(in.power_start.source)},
@@ -262,7 +263,7 @@ ojson make_result(const RunInputs& in) {
                       {"contention", busy}};
   return {{"schema", kSchema},
           {"kind", "kapitsa-bench"},
-          {"mode", in.quick ? "quick" : "full"},
+          {"mode", in.prefill_chunk ? (in.quick ? "prefill-quick" : "prefill") : (in.quick ? "quick" : "full")},
           {"time_utc", in.time_utc},
           {"kapitsa", {{"version", in.version}, {"commit", in.commit.empty() ? ojson(nullptr) : ojson(in.commit)}}},
           {"mac", mac},
@@ -281,7 +282,7 @@ std::string result_file_name(const ojson& r) {
   std::string model = slug(str_or(m, "name"));
   if (!str_or(m, "variant").empty()) model += "-" + slug(str_or(m, "variant"));
   return "kapitsa-bench-" + str_or(r, "time_utc").substr(0, 10) + "-" + slug(chip_short(str_or(r["mac"], "chip"))) + "-" + model +
-         (str_or(r, "mode") == "quick" ? "-quick" : "") + ".json";
+         (str_or(r, "mode").find("quick") != std::string::npos ? "-quick" : "") + ".json";
 }
 
 std::string result_mac_line(const ojson& r) {
@@ -292,7 +293,7 @@ std::string result_title(const ojson& r) {
   const ojson& m = r["model"];
   std::string t = "Benchmark: " + result_mac_line(r) + " · " + model_display(str_or(m, "title", str_or(m, "name"))) + " " +
                   str_or(m, "precision");
-  if (str_or(r, "mode") == "quick") t += " · quick";
+  if (str_or(r, "mode").find("quick") != std::string::npos) t += " · quick";
   return t;
 }
 
@@ -324,6 +325,8 @@ std::string result_markdown(const ojson& r) {
               "-core GPU · " + std::to_string(ram_gb(r)) + " GB";
   const std::string model_col = model_display(str_or(m, "title", str_or(m, "name"))) + " · " + str_or(m, "precision");
   std::string s = "| " + mac_col + " | " + model_col + " |\n| --- | ---: |\n";
+  if (r["protocol"].contains("prefill_chunk"))
+    s += "| Prefill chunk (requested) | " + thousands(r["protocol"]["prefill_chunk"].get<int>()) + " tokens |\n";
   s += "| Writing, T = " + fmt_temp(writing_temperature(r)) + " | " + cell_decode("decode") + " |\n";
   s += "| Writing, greedy | " + cell_decode("decode_greedy") + " |\n";
   for (const auto& p : res["prefill"]) {
@@ -358,7 +361,7 @@ std::string result_markdown(const ojson& r) {
                       : str_or(c, "power_mode") == "low" ? " · Low Power Mode"
                       : str_or(c, "power_mode") == "automatic" ? " · Automatic power mode" : "") +
                      (str_or(c, "thermal_state").empty() ? "" : " · thermal state " + str_or(c, "thermal_state")) + " · " +
-                     (str_or(r, "mode") == "quick" ? "quick run (3 runs per writing test, the 4K prompt only)" : "full run");
+                     (str_or(r, "mode").find("quick") != std::string::npos ? "quick run (3 runs per writing test, the 4K prompt only)" : "full run");
   s += cond + "\n\n";
   if (r["flags"].empty()) {
     s += "Flags: none.\n";
@@ -373,6 +376,8 @@ std::string result_markdown(const ojson& r) {
 
 std::string submit_problem(const ojson& r) {
   if (r.value("kind", "") != "kapitsa-bench" || r.value("schema", 0) != kSchema) return "This is not a kapitsa bench result.";
+  if (r.contains("protocol") && r["protocol"].contains("prefill_chunk"))
+    return "Custom prefill chunks cannot be submitted as standard community benchmarks.";
   const ojson& m = r["model"];
   if (!m.value("catalog", false) || !m["variant"].is_string())
     return "Only results of the catalog's models can be submitted (their weights are pinned, so results compare): "

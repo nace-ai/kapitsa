@@ -9,7 +9,7 @@
   "properties": {
     "schema": {"const": 1, "description": "The version of this schema."},
     "kind": {"const": "kapitsa-bench"},
-    "mode": {"enum": ["full", "quick"], "description": "full: 5 runs per writing test, 4K and 16K prompts. quick: 3 runs per writing test, the 4K prompt only."},
+    "mode": {"enum": ["full", "quick", "prefill", "prefill-quick"], "description": "full: 5 runs per writing test, 4K and 16K prompts. quick: 3 runs per writing test, the 4K prompt only. prefill/prefill-quick: the corresponding workload with an explicit prefill chunk override."},
     "time_utc": {"type": "string", "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9]Z$", "description": "When the run started, in UTC."},
     "kapitsa": {
       "type": "object",
@@ -62,6 +62,7 @@
         "decode_runs": {"type": "integer", "minimum": 1, "maximum": 50},
         "greedy_runs": {"type": "integer", "minimum": 0, "maximum": 50},
         "sizes": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer", "minimum": 1000, "maximum": 32000}},
+        "prefill_chunk": {"type": "integer", "minimum": 1, "maximum": 2147483647, "description": "Requested server prefill chunk override; omitted when automatic."},
         "temperature": {"type": "number", "minimum": 0, "maximum": 2, "description": "The writing runs' sampling temperature (decode; decode_greedy samples at 0): 0.6, Flint's 1.0 (its model card's). Results written before Kapitsa recorded it leave it out."}
       }
     },

@@ -61,7 +61,7 @@ using term::dim;
 namespace {
 
 const char* kHelp =
-    "kapitsa bench [--model MODEL] [--quick] [--json] [--submit] [--out FILE]\n\n"
+    "kapitsa bench [--model MODEL] [--prefill-chunk N] [--quick] [--json] [--submit] [--out FILE]\n\n"
     "Benchmarks Kapitsa on this Mac with the protocol of its published benchmarks (bench/harness): writing speed\n"
     "(512-token coding answers at temperature 0.6, Flint's at 1.0, and greedy, median of 5 runs each), reading a 4K-\n"
     "and a 16K-token prompt, the time to the first token of a follow-up in each conversation, peak memory and tool\n"
@@ -71,6 +71,7 @@ const char* kHelp =
     "  --model MODEL   35b, 27b, 4b, bolt or flint (<model>:<variant> for another precision), a model folder or a\n"
     "                  .gguf file.\n"
     "                  Default: the best model for this Mac (in a terminal it asks)\n"
+    "  --prefill-chunk N  prompt tokens per prefill pass (default: automatic)\n"
     "  --quick         a shorter run: 3 runs per writing test, the 4K prompt only (marked quick in the result)\n"
     "  --json          the result as JSON on stdout (progress on stderr)\n"
     "  --out FILE      where to save the result (default: %s/kapitsa-bench-<date>-<chip>-<model>.json)\n"
@@ -515,7 +516,7 @@ void print_summary(const ojson& r, const std::string& path) {
   const ojson& res = r["results"];
   const ojson& m = r["model"];
   const ojson& mac = r["mac"];
-  const bool quick = r.value("mode", "") == "quick";
+  const bool quick = r.value("mode", "").find("quick") != std::string::npos;
   const int W = std::min(term::columns(), 100);
   const int inner = std::max(40, std::min(W - 8, 72));
   const std::string dot = dim("   " + std::string(term::kDot) + "   ");
@@ -567,6 +568,8 @@ void print_summary(const ojson& r, const std::string& path) {
     row("Memory", v);
   }
   row("Tool calls", res.value("tool_calls", std::string()) == "pass" ? accent("pass") : term::red("fail"));
+  if (r["protocol"].contains("prefill_chunk"))
+    row("Prefill chunk", thousands(r["protocol"]["prefill_chunk"].get<int>()) + " tokens (requested)");
   row("Decoding", m.value("decoding_detail", m.value("decoding", std::string())));
   rows.push_back("");
   row("Conditions", conditions_text(r));
@@ -584,6 +587,7 @@ void print_summary(const ojson& r, const std::string& path) {
 
 struct Options {
   std::string model, out;
+  int prefill_chunk = 0;
   bool quick = false, json = false, submit = false, dry = false, yes = false;
 };
 
@@ -726,6 +730,7 @@ int run(const Options& o) {
     std::vector<std::string> sargv = {self_path(), "serve", "--model", ref.dir, "--model-id", s.model, "--host", "127.0.0.1",
                                       "--port", std::to_string(srv.port), "--ctx", "32768", "--slots", "1",
                                       "--disk-cache", "0"};
+    if (o.prefill_chunk) sargv.insert(sargv.end(), {"--prefill-chunk", std::to_string(o.prefill_chunk)});
     std::vector<std::string> senv, cleared;
     for (char** e = environ; *e; ++e) {
       const std::string kv = *e;
@@ -779,6 +784,7 @@ int run(const Options& o) {
   RunInputs in;
   in.mac = mac;
   in.quick = o.quick;
+  in.prefill_chunk = o.prefill_chunk;
   in.version = KAPITSA_VERSION;
   in.commit = KAPITSA_GIT;
   in.time_utc = utc_now();
@@ -1164,6 +1170,10 @@ int run_bench(int argc, char** argv, int first) {
       else fputs(b, stdout);
       return 0;
     } else if (a == "--model" || a == "-m") o.model = next();
+    else if (a == "--prefill-chunk") {
+      o.prefill_chunk = to_int(a, next(), help);
+      if (o.prefill_chunk <= 0) usage_error("--prefill-chunk must be a positive integer", help);
+    }
     else if (a == "--quick") o.quick = true;
     else if (a == "--json") o.json = true;
     else if (a == "--submit") o.submit = true;
@@ -1172,6 +1182,7 @@ int run_bench(int argc, char** argv, int first) {
     else if (a == "--yes") o.yes = true;
     else usage_error("unknown option " + a, help);
   }
+  if (o.prefill_chunk && o.submit) usage_error("custom prefill chunks cannot be submitted as standard community benchmarks", help);
   if (o.dry && !o.submit) usage_error("--dry-run goes with --submit", help);
   g_tui = term::fancy() && !o.json;
   g_plain = !g_tui;
