@@ -1,0 +1,9 @@
+evicted (read the other engine's files) in 5 s
+preflight: memory free 90%, swap free 1654.44 MB (after 0s)
+gate kap_dec_c1: available 41.5 GB (need 28), swap free 1654.44 MB, guard: 2026-10-24 04:48:53 ok level=91% pressure=1 swap_used=3609MB/5120MB disk_free=110GB compressor=54MB (after 0s)
+run kap_dec_c1: env -u NI_EXPERT_STORE -u NI_GPU_HEAT -u NI_EXPERT_PREFETCH /tmp/kap-fn98/build/ni_run /Users/alisheramantay/Documents/nace/models/flash-next-q20 @/tmp/kap-ssd-handoff/handoff/splash-1.4.0/scratch/fnq/plan/dec1.ids 128 0
+ABORT: swap +44.38 MB, pressure 2
+process gone (engine 63344)
+RESULT kap_dec_c1 rc=143 swap_delta_mb=44.38 max_pressure=2 stop=abort
+[kapitsa] expert store: 29.7 GB rather than the 29.9 GB the budget leaves (the system's available memory 34.0 GB less 4.3 GB headroom: other processes hold the rest)
+rc=7

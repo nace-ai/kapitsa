@@ -1,0 +1,3 @@
+[kapitsa] read 4.99 GB of weights in 417 ms (12.0 GB/s)
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] expert store: 28.9 GB rather than the 29.9 GB the budget leaves (the system's available memory 33.2 GB less 4.3 GB headroom: other processes hold the rest)

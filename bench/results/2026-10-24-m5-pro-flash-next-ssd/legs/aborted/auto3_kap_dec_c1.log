@@ -1,0 +1,5 @@
+[kapitsa] read 4.99 GB of weights in 411 ms (12.1 GB/s)
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] expert store: 29.7 GB rather than the 29.9 GB the budget leaves (the system's available memory 34.0 GB less 4.3 GB headroom: other processes hold the rest)
+[kapitsa] memory pressure warning: the weights are no longer kept wired while idle
+[kapitsa] 

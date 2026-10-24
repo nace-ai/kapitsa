@@ -1,0 +1,11 @@
+preflight: memory free 89%, swap free 1094.38 MB (after 0s)
+gate llama-gpu_c32k_1: available 40.6 GB (need 28), swap free 1094.38 MB, guard: 2026-10-24 05:26:41 ok level=89% pressure=1 swap_used=3001MB/4096MB disk_free=109GB compressor=978MB (after 0s)
+run llama-gpu_c32k_1: bash /tmp/kap-ssd-scratch/rv_llama.sh /Users/alisheramantay/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf /tmp/kap-moebw-scratch/ids/c32k.ids 128 18431 gpu
+NOTE mem-guard page-cache warn, not aborted (pressure 1, swap delta 0 MB): level=12% pressure=1 swap_used=3001MB/4096MB disk_free=109GB compressor=940MB
+process gone (engine 24707)
+RESULT llama-gpu_c32k_1 rc=0 swap_delta_mb=0 max_pressure=1 stop=none
+LOAD 2 s
+TIMINGS {"cache_n": 0, "prompt_n": 32768, "prompt_ms": 61190.474, "prompt_per_token_ms": 1.8673850708007813, "prompt_per_second": 535.5081903761686, "predicted_n": 128, "predicted_ms": 3554.042, "predicted_per_token_ms": 27.984582677165353, "predicted_per_second": 35.73396150073635}
+         40517730304  maximum resident set size
+             3031400  peak memory footprint
+rc=0

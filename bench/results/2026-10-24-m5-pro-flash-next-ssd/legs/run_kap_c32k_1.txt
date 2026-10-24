@@ -1,0 +1,13 @@
+preflight: memory free 89%, swap free 1094.38 MB (after 0s)
+gate kap_c32k_1: available 41.1 GB (need 28), swap free 1094.38 MB, guard: 2026-10-24 05:28:13 ok level=89% pressure=1 swap_used=3001MB/4096MB disk_free=109GB compressor=1321MB (after 0s)
+run kap_c32k_1: env -u NI_EXPERT_STORE -u NI_GPU_HEAT -u NI_EXPERT_PREFETCH NI_EXPERT_STORE=24 /tmp/kap-fn98/build/ni_run /Users/alisheramantay/Documents/nace/models/flash-next-q20 @/tmp/kap-moebw-scratch/ids/c32k.ids 128 0
+process gone (engine 28695)
+RESULT kap_c32k_1 rc=0 swap_delta_mb=0 max_pressure=1 stop=none
+[kapitsa] expert store: 17233 slots of 1.39 MB (24.00 GB, 70.1% of the 24576 experts) in one buffer (up to 30.15 GB each); 17233 read at load in 2244 ms (11.28 GB/s)
+expert store, prompt: 768 turns, 351451 experts looked up: 98.9% in memory, 0.0% read ahead and waited for, 1.1% read at the turn; 191765 read ahead (180371 routed), 287.50 GB read; GPU stalled 0.711 ms a turn (0.689 waiting for reads)
+mean GPU time per step: 30.68 ms (127 steps)
+prompt 32768 tok in 60487 ms (541.7 tok/s); decode 127 tok in 3900 ms (32.6 tok/s)
+expert store, decode: 6096 turns, 60960 experts looked up: 92.3% in memory, 2.0% read ahead and waited for, 5.7% read at the turn; 5067 read ahead (3934 routed), 12.57 GB read; GPU stalled 0.175 ms a turn (0.165 waiting for reads)
+         33335705600  maximum resident set size
+         31597604376  peak memory footprint
+rc=0

@@ -1,0 +1,13 @@
+preflight: memory free 89%, swap free 1078.38 MB (after 0s)
+gate kap_pf4_2: available 38.7 GB (need 28), swap free 1078.38 MB, guard: 2026-10-24 05:19:40 ok level=89% pressure=1 swap_used=3033MB/4096MB disk_free=110GB compressor=1166MB (after 0s)
+run kap_pf4_2: env -u NI_EXPERT_STORE -u NI_GPU_HEAT -u NI_EXPERT_PREFETCH NI_EXPERT_STORE=24 /tmp/kap-fn98/build/ni_run /Users/alisheramantay/Documents/nace/models/flash-next-q20 @/tmp/kap-ssd-handoff/handoff/splash-1.4.0/scratch/fnq/plan/pf4_seed11.ids 128 0
+process gone (engine 11367)
+RESULT kap_pf4_2 rc=0 swap_delta_mb=0 max_pressure=1 stop=none
+[kapitsa] expert store: 17233 slots of 1.39 MB (24.00 GB, 70.1% of the 24576 experts) in one buffer (up to 30.15 GB each); 17233 read at load in 2225 ms (11.38 GB/s)
+expert store, prompt: 144 turns, 48786 experts looked up: 93.8% in memory, 0.0% read ahead and waited for, 6.2% read at the turn; 23319 read ahead (20856 routed), 38.69 GB read; GPU stalled 2.912 ms a turn (2.871 waiting for reads)
+mean GPU time per step: 24.93 ms (127 steps)
+prompt 4132 tok in 7061 ms (585.2 tok/s); decode 127 tok in 3167 ms (40.1 tok/s)
+expert store, decode: 6096 turns, 60960 experts looked up: 97.4% in memory, 0.6% read ahead and waited for, 2.0% read at the turn; 2232 read ahead (1635 routed), 5.07 GB read; GPU stalled 0.069 ms a turn (0.063 waiting for reads)
+         30961876992  maximum resident set size
+         30803308104  peak memory footprint
+rc=0

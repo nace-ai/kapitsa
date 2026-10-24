@@ -1,0 +1,38 @@
+[kapitsa] read 4.99 GB of weights in 421 ms (11.9 GB/s)
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] expert store: 17233 slots of 1.39 MB (24.00 GB, 70.1% of the 24576 experts) in one buffer (up to 30.15 GB each); 17233 read at load in 2244 ms (11.28 GB/s)
+[kapitsa] GPU heater: 190 rounds per ms
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 13 ms
+[kapitsa] compiled the weight-format kernels in 31 ms
+[kapitsa] prewarmed 134 prefill pipelines in 52 ms
+[kapitsa] loaded /Users/alisheramantay/Documents/nace/models/flash-next-q20: Qwen3.8-Flash-Next, 48 layers (12 attention), 5.0 GB of weights in 2998 ms; 4-bit group 64 4%, 6-bit group 64 3%, 8-bit group 64 2%, Q2_0 91%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped; routed experts: 17233 of 24576 experts in memory (24.0 GB, 70%), the rest read from the SSD
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] compiled the tensor kernels in 4 ms
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+expert store, prompt: 768 turns, 351451 experts looked up: 98.9% in memory, 0.0% read ahead and waited for, 1.1% read at the turn; 191765 read ahead (180371 routed), 287.50 GB read; GPU stalled 0.711 ms a turn (0.689 waiting for reads)
+mean GPU time per step: 30.68 ms (127 steps)
+prompt 32768 tok in 60487 ms (541.7 tok/s); decode 127 tok in 3900 ms (32.6 tok/s)
+expert store, decode: 6096 turns, 60960 experts looked up: 92.3% in memory, 2.0% read ahead and waited for, 5.7% read at the turn; 5067 read ahead (3934 routed), 12.57 GB read; GPU stalled 0.175 ms a turn (0.165 waiting for reads)
+[kapitsa] GPU heater: 3015 command buffers run, 0 in flight at exit (after 0.0 ms)
+ids: 1015 55299 13204 553 52659 7 16 11 220 17 8 198 285 1328 22257 283 638 4582 55299 22257 553 1015 55299 13204 553 52659 7 16 11 220 17 8 198 285 869 22257 283 638 2733 55299 22257 553 1015 55299 13204 553 52659 7 16 11 220 17 8 271 285 6326 19921 25 51338 283 12719 28998 69441 248046 198 248045 74455 198 248068 198 760 1156 16561 25 328 623 799 11316 11 1092 369 279 1118 999 303 279 12182 2193 883 7285 271 760 1118 999 9711 303 279 12182 2193 369 1510 2448 286 15221 276 614 625 38274 6971 27653 1049 5435 279 7873 314 279 62314 37459 1558 1892 264 76342 55665 1558 29607 314 449 7455
+       67.60 real        16.85 user        39.12 sys
+         33335705600  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             2032969  page reclaims
+              249236  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+             1391431  voluntary context switches
+             1657197  involuntary context switches
+        387339790104  instructions retired
+        232719297105  cycles elapsed
+         31597604376  peak memory footprint

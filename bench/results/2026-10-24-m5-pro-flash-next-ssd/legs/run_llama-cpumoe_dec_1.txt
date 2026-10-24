@@ -1,0 +1,10 @@
+preflight: memory free 90%, swap free 1094.38 MB (after 0s)
+gate llama-cpumoe_dec_1: available 40.8 GB (need 28), swap free 1094.38 MB, guard: 2026-10-24 05:33:30 ok level=90% pressure=1 swap_used=3001MB/4096MB disk_free=109GB compressor=923MB (after 0s)
+run llama-cpumoe_dec_1: bash /tmp/kap-ssd-scratch/rv_llama.sh /Users/alisheramantay/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf /tmp/kap-ssd-handoff/handoff/splash-1.4.0/scratch/fnq/plan/dec1.ids 128 18431 cpumoe
+process gone (engine 40811)
+RESULT llama-cpumoe_dec_1 rc=0 swap_delta_mb=0 max_pressure=1 stop=none
+LOAD 2 s
+TIMINGS {"cache_n": 0, "prompt_n": 85, "prompt_ms": 2080.973, "prompt_per_token_ms": 24.482035294117647, "prompt_per_second": 40.84627719821449, "predicted_n": 128, "predicted_ms": 9497.434, "predicted_per_token_ms": 74.78294488188976, "predicted_per_second": 13.372032909099449}
+         38941310976  maximum resident set size
+             1786216  peak memory footprint
+rc=0

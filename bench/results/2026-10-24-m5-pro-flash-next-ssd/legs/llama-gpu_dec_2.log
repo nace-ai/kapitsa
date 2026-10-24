@@ -1,0 +1,45 @@
+llama-server pid 3493 lstart Sat Oct 24 05:15:05 2026 mode gpu
+0.00.030.071 I srv  llama_server: initializing ...
+0.00.030.077 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.030.161 I srv  init_listene: The UI is disabled
+0.00.030.162 I srv  init_listene: Use --ui/--no-ui (or deprecated --webui/--no-webui) to enable/disable
+0.00.030.193 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.031.864 I srv    load_model: loading model '/Users/alisheramantay/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf'
+0.01.339.269 W resolve_fused_ops: layer 3 is assigned to device MTL0 but fused top-k mask is assigned to device CPU (usually due to missing support)
+0.01.339.272 W resolve_fused_ops: fused top-k mask not supported, set to disabled
+0.01.391.956 I cmn          init: llama threadpool init, n_threads = 6
+0.01.486.961 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 33280, kv_unified = 'false'
+0.01.489.723 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.01.489.733 I srv  llama_server: model loaded
+0.01.489.735 I srv  llama_server: listening on http://127.0.0.1:18431
+LOAD 2 s
+0.02.108.499 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+0.02.108.530 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+0.05.454.834 I slot print_timing: id  0 | task 0 | n_gen =    120, tg =  39.38 t/s, tg_3s =  39.71 t/s
+0.05.658.411 I slot print_timing: id  0 | task 0 | prompt eval time =     324.31 ms /    85 tokens (    3.82 ms per token,   262.10 tokens per second)
+0.05.658.413 I slot print_timing: id  0 | task 0 |        eval time =    3225.56 ms /   128 tokens (   25.40 ms per token,    39.37 tokens per second)
+0.05.658.414 I slot print_timing: id  0 | task 0 |       total time =    3549.87 ms /   213 tokens
+0.05.658.414 I slot print_timing: id  0 | task 0 |    graphs reused =        127
+0.05.658.414 I slot print_timing: id  0 | task 0 |   graph reallocs =          0    /     0        (same size) / (changed size)
+0.05.658.463 I slot      release: id  0 | task 0 | stop processing: n_tokens = 212, truncated = 0
+TIMINGS {"cache_n": 0, "prompt_n": 85, "prompt_ms": 324.308, "prompt_per_token_ms": 3.8153882352941175, "prompt_per_second": 262.09652552511807, "predicted_n": 128, "predicted_ms": 3225.561, "predicted_per_token_ms": 25.398118110236222, "predicted_per_second": 39.37299589125736}
+TOKENS 71093 12305 198 12237 198 19504 52 18887 440 75843 1326 46601 321 8487 6027 5468 34315 271 1919 4536 5529 264 15352 7873 314 449 436 34810 318 78994 39642 11851 8 198 9082 440 75843 318 1409 56346 7869 520 8 48241 1761 13 1049 5469 25 271 16 13 357 6007 436 34810 6297 7873 440 75843 1761 198 17 13 357 4368 53269 12876 1608 30637 198 18 13 64605 26864 1228 15705 271 760 6297 3514 29015 10379 3018 383 25 198 12 75843 48241 25 10379 31488 1238 264 5024 854 198 12 436 34810 75555 25 948 279 6297 369 2400 11 279 3140 5742 1429 4202 369 6747 271 6641 6925 369 56672 1472 5976 36605 23038 13 198 12237
+0.05.687.086 I srv    operator(): operator(): cleaning up before exit...
+        6.20 real         3.14 user         1.40 sys
+         39144620032  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             2418688  page reclaims
+                 475  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   6  messages sent
+                   6  messages received
+                  13  signals received
+                  91  voluntary context switches
+                5305  involuntary context switches
+            41472090  instructions retired
+            23280970  cycles elapsed
+             1769832  peak memory footprint

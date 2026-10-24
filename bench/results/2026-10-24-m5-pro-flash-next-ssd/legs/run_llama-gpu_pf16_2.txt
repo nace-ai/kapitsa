@@ -1,0 +1,11 @@
+preflight: memory free 90%, swap free 1094.38 MB (after 0s)
+gate llama-gpu_pf16_2: available 29.2 GB (need 28), swap free 1094.38 MB, guard: 2026-10-24 05:23:16 ok level=85% pressure=1 swap_used=3009MB/4096MB disk_free=109GB compressor=3070MB (after 0s)
+run llama-gpu_pf16_2: bash /tmp/kap-ssd-scratch/rv_llama.sh /Users/alisheramantay/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf /tmp/kap-ssd-handoff/handoff/splash-1.4.0/scratch/fnq/plan/pf16_seed33.ids 128 18431 gpu
+NOTE mem-guard page-cache warn, not aborted (pressure 1, swap delta 0 MB): level=12% pressure=1 swap_used=3001MB/4096MB disk_free=109GB compressor=934MB
+process gone (engine 21874)
+RESULT llama-gpu_pf16_2 rc=0 swap_delta_mb=0 max_pressure=1 stop=none
+LOAD 11 s
+TIMINGS {"cache_n": 0, "prompt_n": 16287, "prompt_ms": 29616.89, "prompt_per_token_ms": 1.8184374040645914, "prompt_per_second": 549.922696137238, "predicted_n": 128, "predicted_ms": 3495.314, "predicted_per_token_ms": 27.52215748031496, "predicted_per_second": 36.33436080420815}
+         40317403136  maximum resident set size
+             2507112  peak memory footprint
+rc=0

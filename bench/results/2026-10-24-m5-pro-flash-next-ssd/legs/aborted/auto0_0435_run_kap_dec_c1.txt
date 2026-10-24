@@ -1,0 +1,8 @@
+evicted (read the other engine's files) in 5 s
+preflight: memory free 88%, swap free 1568.81 MB (after 0s)
+gate kap_dec_c1: available 40.5 GB (need 28), swap free 1568.81 MB, guard: 2026-10-24 04:32:32 ok level=53% pressure=1 swap_used=2535MB/4096MB disk_free=87GB compressor=22178MB (after 0s)
+run kap_dec_c1: env -u NI_EXPERT_STORE -u NI_GPU_HEAT -u NI_EXPERT_PREFETCH /tmp/kap-fn98/build/ni_run /Users/alisheramantay/Documents/nace/models/flash-next-q20 @/tmp/kap-ssd-handoff/handoff/splash-1.4.0/scratch/fnq/plan/dec1.ids 128 0
+ABORT: swap +0 MB, pressure 2
+/tmp/kap-ssd-scratch/rv_leg.sh: line 59: $1: unbound variable
+/tmp/kap-ssd-scratch/rv_leg.sh: line 59: $1: unbound variable
+rc=1

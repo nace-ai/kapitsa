@@ -1,0 +1,12 @@
+evicted (read the other engine's files) in 6 s
+preflight: memory free 89%, swap free 1046.38 MB (after 0s)
+gate llama-gpu_dec_c2: available 40.6 GB (need 28), swap free 1046.38 MB, guard: 2026-10-24 05:07:50 ok level=91% pressure=1 swap_used=3113MB/4096MB disk_free=110GB compressor=429MB (after 1s)
+run llama-gpu_dec_c2: bash /tmp/kap-ssd-scratch/rv_llama.sh /Users/alisheramantay/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf /tmp/kap-ssd-handoff/handoff/splash-1.4.0/scratch/fnq/plan/dec1.ids 128 18431 gpu
+NOTE mem-guard page-cache warn, not aborted (pressure 1, swap delta 0 MB): level=12% pressure=1 swap_used=3049MB/4096MB disk_free=110GB compressor=1255MB
+process gone (engine 97827)
+RESULT llama-gpu_dec_c2 rc=0 swap_delta_mb=0 max_pressure=1 stop=none
+LOAD 12 s
+TIMINGS {"cache_n": 0, "prompt_n": 85, "prompt_ms": 340.699, "prompt_per_token_ms": 4.008223529411765, "prompt_per_second": 249.48708390690902, "predicted_n": 128, "predicted_ms": 3327.957, "predicted_per_token_ms": 26.204385826771652, "predicted_per_second": 38.161550765229244}
+         38482395136  maximum resident set size
+             1769832  peak memory footprint
+rc=0

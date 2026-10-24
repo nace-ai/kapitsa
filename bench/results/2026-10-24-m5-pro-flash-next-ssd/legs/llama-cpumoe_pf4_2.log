@@ -1,0 +1,49 @@
+llama-server pid 60283 lstart Sat Oct 24 05:51:55 2026 mode cpumoe
+0.00.029.790 I srv  llama_server: initializing ...
+0.00.029.796 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.029.881 I srv  init_listene: The UI is disabled
+0.00.029.882 I srv  init_listene: Use --ui/--no-ui (or deprecated --webui/--no-webui) to enable/disable
+0.00.029.915 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.031.589 I srv    load_model: loading model '/Users/alisheramantay/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf'
+0.00.240.216 W llama_model_loader: tensor overrides to CPU are used with mmap enabled - consider using --load-mode none for better performance
+0.01.983.480 W resolve_fused_ops: layer 3 is assigned to device MTL0 but fused top-k mask is assigned to device CPU (usually due to missing support)
+0.01.983.482 W resolve_fused_ops: fused top-k mask not supported, set to disabled
+0.02.007.607 I cmn          init: llama threadpool init, n_threads = 6
+0.02.495.037 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 33280, kv_unified = 'false'
+0.02.499.739 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.02.499.748 I srv  llama_server: model loaded
+0.02.499.750 I srv  llama_server: listening on http://127.0.0.1:18431
+LOAD 3 s
+0.03.127.484 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+0.03.127.505 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+0.19.630.751 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   2048, progress = 0.50, t =  16.50 s / 124.10 tokens per second
+0.29.091.517 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   3616, progress = 0.88, t =  25.96 s / 139.27 tokens per second
+0.31.932.366 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   4128, progress = 1.00, t =  28.80 s / 143.31 tokens per second
+0.39.013.593 I slot print_timing: id  0 | task 0 | n_gen =    100, tg =  14.23 t/s, tg_3s =  14.37 t/s
+0.41.012.633 I slot print_timing: id  0 | task 0 | prompt eval time =   28928.10 ms /  4132 tokens (    7.00 ms per token,   142.84 tokens per second)
+0.41.012.636 I slot print_timing: id  0 | task 0 |        eval time =    8957.02 ms /   128 tokens (   70.53 ms per token,    14.18 tokens per second)
+0.41.012.636 I slot print_timing: id  0 | task 0 |       total time =   37885.12 ms /  4260 tokens
+0.41.012.636 I slot print_timing: id  0 | task 0 |    graphs reused =        127
+0.41.012.636 I slot print_timing: id  0 | task 0 |   graph reallocs =          8    /     0        (same size) / (changed size)
+0.41.013.207 I slot      release: id  0 | task 0 | stop processing: n_tokens = 4259, truncated = 0
+TIMINGS {"cache_n": 0, "prompt_n": 4132, "prompt_ms": 28928.096, "prompt_per_token_ms": 7.000991287512101, "prompt_per_second": 142.8369153642189, "predicted_n": 128, "predicted_ms": 8957.022, "predicted_per_token_ms": 70.52773228346457, "predicted_per_second": 14.17881970145881}
+TOKENS 760 1118 999 303 279 12182 2193 369 883 279 62314 37459 1558 11 864 16661 314 449 7455 22927 11 65690 11 321 3992 1558 13 271 760 999 1510 2448 286 15221 276 614 625 38274 6971 63 5435 279 7873 314 279 62314 37459 1558 17120 11 2583 279 22927 11 65690 11 321 3992 1558 6599 13 1049 18091 6632 364 279 1558 579 15796 11 279 22927 65690 11 25054 261 6326 321 5227 13048 13067 11 321 279 1822 1558 6632 13 561 999 369 919 314 279 462 34098 15802 77754 6522 321 5004 264 76342 55665 1558 421 11036 7455 1879 321 26023 1414 2468 13 271 760 1328 6599 2830 25 198 12 1510 87600 614 53757 19314 7601
+0.41.089.120 I srv    operator(): operator(): cleaning up before exit...
+       41.61 real        54.03 user        17.62 sys
+         38175637504  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+            13610903  page reclaims
+              377874  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   9  messages sent
+                  10  messages received
+                  15  signals received
+                 124  voluntary context switches
+              536644  involuntary context switches
+            54858688  instructions retired
+            27534568  cycles elapsed
+             2064744  peak memory footprint

@@ -1,0 +1,47 @@
+llama-server pid 12939 lstart Sat Oct 24 05:21:35 2026 mode gpu
+0.00.062.037 I srv  llama_server: initializing ...
+0.00.062.042 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.062.900 I srv  init_listene: The UI is disabled
+0.00.062.901 I srv  init_listene: Use --ui/--no-ui (or deprecated --webui/--no-webui) to enable/disable
+0.00.063.099 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.065.386 I srv    load_model: loading model '/Users/alisheramantay/Documents/nace/models/ista-q20-gguf/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf'
+0.10.310.145 W resolve_fused_ops: layer 3 is assigned to device MTL0 but fused top-k mask is assigned to device CPU (usually due to missing support)
+0.10.310.148 W resolve_fused_ops: fused top-k mask not supported, set to disabled
+0.10.323.471 I cmn          init: llama threadpool init, n_threads = 6
+0.10.426.455 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 33280, kv_unified = 'false'
+0.10.435.211 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.10.435.472 I srv  llama_server: model loaded
+0.10.435.475 I srv  llama_server: listening on http://127.0.0.1:18431
+LOAD 12 s
+0.11.283.848 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+0.11.283.865 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+0.17.316.084 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   3616, progress = 0.88, t =   6.03 s / 599.48 tokens per second
+0.17.571.865 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   4128, progress = 1.00, t =   6.29 s / 656.52 tokens per second
+0.21.586.701 I slot print_timing: id  0 | task 0 | n_gen =    113, tg =  37.06 t/s, tg_3s =  37.39 t/s
+0.21.991.712 I slot print_timing: id  0 | task 0 | prompt eval time =    7280.67 ms /  4132 tokens (    1.76 ms per token,   567.53 tokens per second)
+0.21.991.715 I slot print_timing: id  0 | task 0 |        eval time =    3426.89 ms /   128 tokens (   26.98 ms per token,    37.06 tokens per second)
+0.21.991.715 I slot print_timing: id  0 | task 0 |       total time =   10707.56 ms /  4260 tokens
+0.21.991.715 I slot print_timing: id  0 | task 0 |    graphs reused =        127
+0.21.991.716 I slot print_timing: id  0 | task 0 |   graph reallocs =          0    /     0        (same size) / (changed size)
+0.21.992.159 I slot      release: id  0 | task 0 | stop processing: n_tokens = 4259, truncated = 0
+TIMINGS {"cache_n": 0, "prompt_n": 4132, "prompt_ms": 7280.668, "prompt_per_token_ms": 1.7620203291384318, "prompt_per_second": 567.5303419960916, "predicted_n": 128, "predicted_ms": 3426.895, "predicted_per_token_ms": 26.983425196850394, "predicted_per_second": 37.05978735852718}
+TOKENS 760 1118 999 303 279 12182 2193 369 883 279 62314 37459 1558 11 864 16661 314 449 7455 22927 11 65690 11 321 3992 1558 13 271 760 999 1510 2448 286 15221 276 614 625 38274 6971 63 5435 279 7873 314 279 62314 37459 1558 17120 11 2583 279 22927 11 65690 11 321 3992 1558 6599 13 1049 18091 6632 364 279 1558 579 15796 11 279 22927 65690 11 25054 261 6326 321 5227 13048 13067 11 321 279 1822 1558 6632 13 561 999 369 919 314 279 462 34098 15802 77754 6522 321 5004 264 76342 55665 1558 421 11036 7455 1879 321 26023 1414 2468 13 271 760 1328 6599 2830 25 198 12 1510 87600 614 53757 19314 7601
+0.22.064.760 I srv    operator(): operator(): cleaning up before exit...
+       22.59 real         3.44 user         2.71 sys
+         39322075136  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              499716  page reclaims
+             2009424  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  25  messages sent
+                  26  messages received
+                  31  signals received
+                 139  voluntary context switches
+               95757  involuntary context switches
+            80642732  instructions retired
+            45167707  cycles elapsed
+             2048360  peak memory footprint

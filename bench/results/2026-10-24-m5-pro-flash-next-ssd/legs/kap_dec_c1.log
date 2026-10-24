@@ -1,0 +1,36 @@
+[kapitsa] read 4.99 GB of weights in 424 ms (11.8 GB/s)
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] expert store: 17233 slots of 1.39 MB (24.00 GB, 70.1% of the 24576 experts) in one buffer (up to 30.15 GB each); 17233 read at load in 2258 ms (11.21 GB/s)
+[kapitsa] GPU heater: 192 rounds per ms
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 2848 ms
+[kapitsa] compiled the weight-format kernels in 6177 ms
+[kapitsa] prewarmed 134 prefill pipelines in 9045 ms
+[kapitsa] loaded /Users/alisheramantay/Documents/nace/models/flash-next-q20: Qwen3.8-Flash-Next, 48 layers (12 attention), 5.0 GB of weights in 12017 ms; 4-bit group 64 4%, 6-bit group 64 3%, 8-bit group 64 2%, Q2_0 91%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped; routed experts: 17233 of 24576 experts in memory (24.0 GB, 70%), the rest read from the SSD
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+expert store, prompt: 48 turns, 8285 experts looked up: 59.4% in memory, 38.9% read ahead and waited for, 1.7% read at the turn; 12342 read ahead (4087 routed), 18.33 GB read; GPU stalled 25.466 ms a turn (25.455 waiting for reads)
+mean GPU time per step: 27.42 ms (127 steps)
+prompt 85 tok in 1666 ms (51.0 tok/s); decode 127 tok in 3486 ms (36.4 tok/s)
+expert store, decode: 6096 turns, 60960 experts looked up: 96.4% in memory, 1.3% read ahead and waited for, 2.3% read at the turn; 2491 read ahead (3310 routed), 5.75 GB read; GPU stalled 0.086 ms a turn (0.079 waiting for reads)
+[kapitsa] GPU heater: 2583 command buffers run, 0 in flight at exit (after 0.0 ms)
+ids: 71093 12305 198 12237 198 19504 52 18887 440 75843 1326 46601 321 8487 6027 5468 34315 271 1919 4536 5004 264 87401 39642 11851 318 19504 52 8 6297 440 3984 56346 7869 520 318 51 13082 8 198 73130 14512 13 1049 5529 264 4368 53269 12876 364 32907 2528 198 429 5469 264 15352 26864 1228 15705 13 271 20680 25 198 12 436 34810 75555 4687 25 3514 29015 279 3140 5742 1429 1455 948 6297 369 2400 198 12 75843 48241 25 3470 31488 1238 264 5024 854 4534 70953 7836 198 12 8487 53269 7289 1608 30637 198 12 5359 17784 6297 1331 321 75843 198 12 8913 364 2446 1328 4346 318 8038 470 5978 8 198 12 23848 14419 318
+       17.34 real         6.48 user         8.15 sys
+         29408362496  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             1795585  page reclaims
+               11104  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+              222722  voluntary context switches
+              130655  involuntary context switches
+        133665522566  instructions retired
+         61159343264  cycles elapsed
+         30762921328  peak memory footprint
