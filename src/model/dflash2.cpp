@@ -372,7 +372,8 @@ bool DFlash2::rows16_tensor_ok() const {
 // cap (ledger §2.16 as corrected through §2.32-E, docs/kflash.md): two clean same-policy mode-3 chain anchors
 // at depths 2/3, ids-identical (speculative verify is output-exact, so depth is a pure speed knob), read
 // cheaper per token than any deeper measured arm; the ship comparison (shipping tree-7 vs capped chain-2) is
-// measured on both sides at 1.56x per token, and the shipping default stays untouched until the
+// the prize = 1.56x per token, measured, full stop (ledger rulings v2.19-95; any 79.75 ms/C-derived range
+// is a chain-7 diagnostic only), and the shipping default stays untouched until the
 // shipping-binary sweep (4K AND 32K, ids match, ABBA >= 8) settles it. A genuine cap below the full depth
 // keeps the chains and the 8-row plan even where the trees are explicitly asked -- a capped verify cannot tree
 // the lattice (set_tree keeps the trees only at the full depth), and rows16_auto_ok / plan_block_rows read the
