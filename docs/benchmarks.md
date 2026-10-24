@@ -2063,13 +2063,15 @@ differ from the M4 Pro:
 
 - **Kapitsa runs [#303](https://github.com/nace-ai/kapitsa/pull/303)'s macOS 14 path.** Flint's fused kernels need
   Metal 3.2 (macOS 15), so on macOS 14 Kapitsa runs their three merges as separate dispatches. On macOS 15+ the fused
-  kernels run on Apple9 and later non-Ultra Macs; an M1 or M2 takes the split merges there whatever the export, because
-  the last threadgroup read stale data behind those fences on pre-Apple9 chips: the M1 Pro's GGUF import (an IQ export)
-  went wrong on its decode rows' experts and attention, differently run to run, `logit_dump` of `flint-16gb` step rows
-  NLL 9.05 / 10.56 and top-1 0.19 / 0.06 against 0.908 on the verify rows as `src/model/flint.cpp`'s comment records
-  them; [#478](https://github.com/nace-ai/kapitsa/issues/478)'s single-die M1 Max answered garbage on its 4-bit export
-  and decoded properly with `NI_FLINT_SPLIT=1`. An M2 is covered by the family test, not measured, and Ultra's
-  two-die case is above. Split since [#481](https://github.com/nace-ai/kapitsa/pull/481).
+  kernels run on Apple9 and later Macs that are not Ultras; an M1 or M2 takes the split merges there whatever the export,
+  because on a pre-Apple9 chip the last threadgroup read stale data behind those fences: the M1 Pro's GGUF import (an IQ
+  export) went wrong on its decode rows' experts and attention, differently run to run, `logit_dump` of `flint-16gb` step
+  rows NLL 9.05 / 10.56 and top-1 0.19 / 0.06 against 0.908 on the verify rows as `src/model/flint.cpp`'s comment records
+  them, and [#478](https://github.com/nace-ai/kapitsa/issues/478)'s single-die M1 Max answered garbage on its 4-bit export
+  and decoded properly with `NI_FLINT_SPLIT=1`; an M2 is covered by the family test, not measured. An Ultra splits by
+  name, two dies joined by UltraFusion showing the same garbage past a 32-key tile
+  ([#421](https://github.com/nace-ai/kapitsa/issues/421), fixed in [#423](https://github.com/nace-ai/kapitsa/pull/423)).
+  The pre-Apple9 split is [#481](https://github.com/nace-ai/kapitsa/pull/481)'s; the Ultra name test is #423's.
 - **rec 0.1.0 refuses this Mac** ("this model requires 48 GiB of memory; detected 36 GiB"), so it has no numbers here.
 
 The harness saw no foreign GPU load. A first pass of the protocol is not counted: with the display awake on AC power,
