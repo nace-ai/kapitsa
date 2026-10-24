@@ -204,6 +204,11 @@ class Qwen4Exp : public Qwen35 {
   // iq_row0..; the score scratch grows on demand (between passes)
   void regrow(Encoder& e, Buffer& b, size_t bytes, const char* label);  // (qscore_ / qmask_, see the .cpp)
   void enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int iq_row0);
+  // the same two as one qsa_all dispatch (prep + block + score + select, NI_QSA_FUSE): bitwise identical by
+  // construction (see the kernel in qwen4.metal); only for the shapes its 1024-thread row threadgroups cover
+  bool qsa_fusable(int R) const;
+  void enc_qsa_fused(Encoder& e, const Seq& s, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R, int pos0,
+                     const Buffer& ik, const Buffer& bk);
   // the same as bit rows (mask rows row0.. of qmask_, mwords words each) for the masked prefill attention
   void enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int row0, uint32_t mwords);
   // attention of R rows over their key lists (q rows qo_ from q_row0; output attn_out_ rows from q_row0)

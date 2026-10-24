@@ -451,6 +451,102 @@ NI_INLINE void qsa_select_impl(const device float* score, device uint* idx, devi
 NI_QSA_SELECT(qsa_select, false)
 NI_QSA_SELECT(qsa_select_mask, true)
 
+// ---- The fused QSA chain (NI_QSA_FUSE): qsa_prep + qsa_block + qsa_score + qsa_select in one dispatch ----
+// One threadgroup of 1024 threads per row; grid: R x 1024. Bitwise identical to the four-dispatch chain:
+// - Head h's qsa_prep work runs in the thread slice [h * HD, (h + 1) * HD). tg_sum is purely positional (lane =
+//   tid & 31, sg = tid >> 5, the partials in scratch[sg], read back by lanes < nsg), so a slice's four simdgroup
+//   partials land in the same scratch slots and lanes as qsa_prep's HD-thread threadgroup and reduce the same
+//   values in the same order; slices h >= NH (and the threads >= HD of the block phase) only march the barriers.
+//   The rope'd queries stay in row4: the iq buffer's row, in threadgroup memory.
+// - A block whose last key is >= pos0 cannot be read from bk here: this dispatch is still writing it (in another
+//   threadgroup) and there is no grid-wide sync. So every row re-derives those blocks' means itself: float(half(x))
+//   is bitwise the ik entry qsa_prep wrote for a key >= pos0, keys below pos0 come from ik (earlier dispatches),
+//   and the mean sum, /= ratio, tg_sum, wk scale and rope run exactly as in qsa_block. The row that completes a
+//   block publishes it to bk, exactly as qsa_block's completing row does.
+// - The score dots are per-thread and position-independent; they read row4 and bk4 or bk, bitwise the values
+//   qsa_score reads from iq and bk. The scores go to the score buffer, so qsa_select_impl below runs verbatim at
+//   ntg = 1024 after a device-scope barrier, exactly as the qsa_select dispatch would.
+// Host gate (qsa_fusable): R <= 16, NH <= 8, HD == 128, ratio a power of two in [2, 16] — so the blocks re-derived
+// per row are at most R / 2 <= 8 (bk4 holds 9) and the eight head slices fit the 1024 threads.
+[[kernel]] void qsa_all(const device float* iqk [[buffer(0)]], const device float* wq [[buffer(1)]],
+                        const device float* wk [[buffer(2)]], device half* ik [[buffer(3)]],
+                        device float* bk [[buffer(4)]], device float* score [[buffer(5)]],
+                        device uint* idx [[buffer(6)]], device uint* cnt [[buffer(7)]],
+                        constant QsaParams& p [[buffer(8)]], const device int* mpos [[buffer(9)]],
+                        constant MropeParams& mr [[buffer(10)]], constant QsaSelParams& ps [[buffer(11)]],
+                        uint r [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                        uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float scratch[32];
+  threadgroup float4 row4[8 * 32];  // the row's rope'd index queries (qsa_score's q4): NH <= 8 heads of HD = 128
+  threadgroup float brow[128];      // the pre-rope row of the block being re-derived
+  threadgroup float4 bk4[9 * 32];   // re-derived keys of the blocks not complete below pos0
+  threadgroup atomic_uint hist[256];
+  threadgroup uint scan[1024];
+  threadgroup uint sel[2];
+  threadgroup float* const row = (threadgroup float*)row4;
+  const uint HD = p.HD, H4 = HD / 4, pos = p.pos0 + r;
+  // -- qsa_prep: head h = tid / HD, dim d = tid % HD (its (h, r) threadgroup, as a thread slice) --
+  const uint h = tid / HD, d = tid - h * HD;
+  const bool qh = h < p.NH;
+  const float x = qh ? iqk[r * p.ld + h * HD + d] : 0.0f;
+  const float ss = tg_sum(x * x, scratch + 4 * h, tid - HD * h, HD);
+  if (qh) row[h * HD + d] = x * metal::precise::rsqrt(ss / float(HD) + p.eps) * wq[d];
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  float iq0 = 0.0f;
+  if (qh) iq0 = qsa_rope(row + h * HD, row[h * HD + d], d, p.rot, pos, p.theta, mpos, mr);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (qh) row[h * HD + d] = iq0;
+  if (tid < HD) ik[pos * HD + tid] = half(iqk[r * p.ld + p.NH * HD + tid]);  // qsa_prep's last threadgroup
+  // -- qsa_block: the blocks whose last key is >= pos0, re-derived (bitwise the ik values) --
+  const uint nb = (pos + 1) / p.ratio;          // blocks row r sees
+  const uint jold = min(p.pos0 / p.ratio, nb);  // blocks complete below pos0: read from bk
+  const bool done = (pos + 1) % p.ratio == 0;   // this row completes block pos / ratio
+  for (uint j = jold; j < nb; ++j) {
+    const uint t0 = j * p.ratio, b = j - jold;
+    float m = 0.0f;
+    if (tid < HD) {
+      for (uint t = 0; t < p.ratio; ++t) {
+        const uint tp = t0 + t;
+        m += tp < p.pos0 ? float(ik[tp * HD + tid]) : float(half(iqk[(tp - p.pos0) * p.ld + p.NH * HD + tid]));
+      }
+      m /= float(p.ratio);
+    }
+    const float bss = tg_sum(m * m, scratch, tid, HD);  // the threads >= HD march; all read scratch[0 .. 3]
+    if (tid < HD) brow[tid] = m * metal::precise::rsqrt(bss / float(HD) + p.eps) * wk[tid];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid < HD) {
+      const float v = qsa_rope(brow, brow[tid], tid, p.rot, t0, p.theta, mpos, mr);
+      ((threadgroup float*)bk4)[b * HD + tid] = v;
+      if (done && j == pos / p.ratio) bk[j * HD + tid] = v;  // exactly one row completes each block
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  // -- qsa_score: thread j scores block j (j += ntg past the first 1024) --
+  threadgroup_barrier(mem_flags::mem_threadgroup);  // row4 (and bk4, when the loop ran) ready
+  for (uint j = tid; j < nb; j += ntg) {
+    float acc = 0.0f;
+    if (j < jold) {
+      const device float4* k4 = (const device float4*)(bk + j * HD);
+      for (uint hh = 0; hh < p.NH; ++hh) {
+        float dd = 0.0f;
+        for (uint i = 0; i < H4; ++i) dd += dot(row4[hh * H4 + i], k4[i]);
+        acc += max(dd, 0.0f);
+      }
+    } else {
+      const threadgroup float4* k4 = bk4 + (j - jold) * H4;
+      for (uint hh = 0; hh < p.NH; ++hh) {
+        float dd = 0.0f;
+        for (uint i = 0; i < H4; ++i) dd += dot(row4[hh * H4 + i], k4[i]);
+        acc += max(dd, 0.0f);
+      }
+    }
+    score[r * ps.s_ld + j] = acc * metal::precise::rsqrt(float(HD));
+  }
+  // -- qsa_select, verbatim (this row's scores made visible by the device-scope barrier) --
+  threadgroup_barrier(mem_flags::mem_device);
+  qsa_select_impl<false>(score, idx, cnt, ps, r, tid, ntg, hist, scan, sel);
+}
+
 // Attention of R rows over their own key lists (idx / cnt from qsa_select): split-K partials as attn_rows_partial
 // (combined by attn_rows_reduce with the gate), chunk c of row r covering list entries [c * chunk, (c + 1) * chunk).
 // grid: (nchunks, Hkv, R) x 32 * G threads

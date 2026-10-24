@@ -1050,6 +1050,40 @@ void Qwen4Exp::enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int
   e.dispatch(uint32_t(R), 1, 1, 1024);
 }
 
+// The shapes qsa_all's 1024-thread row threadgroups cover (see the kernel): eight head slices of HD = 128, and at
+// most R / 2 <= 8 re-derived blocks per row (a block spans ratio >= 2 rows, so R <= 16 keeps bk4's nine rows free).
+bool Qwen4Exp::qsa_fusable(int R) const {
+  static const bool fuse = env_on("NI_QSA_FUSE");
+  const int ratio = c4_.ix_ratio;
+  return fuse && R >= 1 && R <= 16 && c4_.ix_heads >= 1 && c4_.ix_heads <= 8 && c4_.ix_dim == 128 && ratio >= 2 &&
+         ratio <= 16 && (ratio & (ratio - 1)) == 0;
+}
+
+// enc_qsa + enc_qsa_select as one qsa_all dispatch (NI_QSA_FUSE): bitwise identical to the four by construction
+// (see the kernel in qwen4.metal), so the callers keep the sparse attention that follows enc_qsa_select unchanged
+void Qwen4Exp::enc_qsa_fused(Encoder& e, const Seq& s, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R,
+                             int pos0, const Buffer& ik, const Buffer& bk) {
+  const QsaParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(cfg_.rot_dims), uint32_t(pos0),
+                    uint32_t(c4_.ix_ratio), ld, cfg_.eps, cfg_.theta};
+  const struct {
+    uint32_t mn;
+    int32_t delta;
+    uint32_t sec1, sec2;
+  } m{uint32_t(s.rope_n), s.rope_delta, uint32_t(3 * cfg_.mrope[1]), uint32_t(3 * cfg_.mrope[2])};
+  const Buffer& mpos = s.rope_pos ? s.rope_pos : iq_;
+  const uint32_t nb = uint32_t(pos0 + R) / uint32_t(c4_.ix_ratio);  // blocks of the last row
+  const size_t need = size_t(R) * nb * 4;
+  if (qscore_.size < need) regrow(e, qscore_, std::max(need, size_t(4) << 20), "qsa_scores");
+  const QsaSelParams ps{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(pos0),
+                        uint32_t(c4_.ix_ratio), uint32_t(c4_.ix_budget / c4_.ix_ratio), nb, qidx_ld_};
+  e.use(pipe("qsa_all"));
+  e.buf(0, iqk); e.buf(1, F.iqn->buf); e.buf(2, F.ikn->buf); e.buf(3, ik); e.buf(4, bk);
+  e.buf(5, qscore_); e.buf(6, qidx_); e.buf(7, qcnt_);
+  e.val(8, p);
+  e.buf(9, mpos); e.val(10, m); e.val(11, ps);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+}
+
 void Qwen4Exp::enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int row0, uint32_t mwords) {
   const uint32_t nb = uint32_t(pos0 + R) / uint32_t(c4_.ix_ratio);
   const size_t need = size_t(R) * nb * 4, mneed = size_t(row0 + R) * mwords * 4;
@@ -1112,6 +1146,12 @@ void Qwen4Exp::enc_attn4(Encoder& e, Seq& s, int li, const Layer& L, const Qwen4
   e.val(8, ap);
   if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, 1, 1, cfg_.head_dim);
+  if (qsa_fusable(1) && qsa_sparse(pos)) {  // the fused chain (NI_QSA_FUSE): the four dispatches as one
+    enc_qsa_fused(e, s, F, iqk_, F.iqk.N, 1, pos, s.ixk[size_t(li)], s.ixb[size_t(li)]);
+    enc_attn_sparse(e, s.kc[size_t(li)], s.vc[size_t(li)], s.cap, 1, true, 0);
+    enc_qmv(e, L.o, attn_out_, yb_, nullptr, nullptr);
+    return;
+  }
   enc_qsa(e, s, F, iqk_, F.iqk.N, 1, pos, s.ixk[size_t(li)], s.ixb[size_t(li)]);
   if (qsa_sparse(pos)) {  // the selected blocks only
     enc_qsa_select(e, s.ixb[size_t(li)], 1, pos, 0);
