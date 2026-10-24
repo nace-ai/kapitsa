@@ -27,8 +27,7 @@ cap is the same axis as the existing `NI_DFLASH_VERIFY=<n>`; a genuine cap decid
 explicitly asked (`NI_KFLASH=1`, `NI_DFLASH_TREE=1`), because a capped verify cannot tree. Only a genuine cap engages: a `NI_DFLASH_CAP` at or
 above the full depth is a no-op (full depth, trees on), so an arm that names a full-depth cap measures what it
 believes it measures. The basis for the cap (ledger §2.16 as corrected through §2.32-E): two clean same-policy
-mode-3 chain anchors at depths 2/3, ids-identical (speculative verify is output-exact, so depth is a pure speed
-knob), read cheaper per token than any deeper measured arm; the ship comparison itself — shipping tree-7 against
+mode-3 chain anchors at depths 2/3, ids-identical on the F74 legs, read cheaper per token than any deeper measured arm; the ship comparison itself — shipping tree-7 against
 the capped chain-2 — buys 1.46× per token and 2.01× per cycle in the shipping build, measured on one pinned
 binary (p1u 106.47 ms/C at 2.953 tok/C vs v2k0u 53.09 ms/C at 2.153 tok/C; ledger rulings v2.39-197). The
 earlier 1.56× carrier figure is historical only — it crosses eras at both ends — and the 1.452× policy-off

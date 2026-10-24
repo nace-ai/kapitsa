@@ -370,7 +370,7 @@ bool DFlash2::rows16_tensor_ok() const {
 // counts: a CAP at or above the full depth (block() - 1) is a no-op -- the trees stay on and nothing is capped
 // -- so an arm that names a full-depth cap measures what it believes it measures. The measured basis for the
 // cap (ledger §2.16 as corrected through §2.32-E, docs/kflash.md): two clean same-policy mode-3 chain anchors
-// at depths 2/3, ids-identical (speculative verify is output-exact, so depth is a pure speed knob), read
+// at depths 2/3, ids-identical on the F74 legs, read
 // cheaper per token than any deeper measured arm; the ship comparison (shipping tree-7 vs capped chain-2)
 // buys 1.46x per token and 2.01x per cycle in the shipping build, measured on one pinned binary (ledger
 // rulings v2.39-197; the earlier 1.56x carrier figure is historical only -- it crosses eras at both ends),
