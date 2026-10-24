@@ -25,33 +25,34 @@ size_t dtype_size(DType d) {
   }
 }
 
+// The message for a file cut short or not a safetensors file at all
+[[noreturn]] static void incomplete(const std::string& path, const char* why, long long size) {
+  fatal("%s is incomplete or not a safetensors file (%s, %lld bytes): copy or download it again", path.c_str(), why,
+        size);
+}
+
 // A file's header, checked: a copy cut short or a placeholder (zeros) stops with the file named rather than a JSON
-// exception, and so does a header whose tensors end past the file's end.
-static nlohmann::json read_header(int fd, const std::string& path, uint64_t& hlen) {
+// exception. *size: the file's bytes (a file of headers alone serves the plans; its tensors are checked when read).
+static nlohmann::json read_header(int fd, const std::string& path, uint64_t& hlen, uint64_t* size) {
   struct stat st {};
   if (fstat(fd, &st) != 0) fatal("stat %s failed", path.c_str());
-  const auto bad = [&](const char* why) {
-    fatal("%s is incomplete or not a safetensors file (%s, %lld bytes): copy or download it again", path.c_str(), why,
-          (long long)st.st_size);
-  };
+  *size = uint64_t(st.st_size);
   hlen = 0;
-  if (pread(fd, &hlen, 8, 0) != 8) bad("shorter than a header");
-  if (hlen < 2 || hlen > (uint64_t(1) << 30) || 8 + hlen > uint64_t(st.st_size)) bad("no header");
+  if (pread(fd, &hlen, 8, 0) != 8) incomplete(path, "shorter than a header", st.st_size);
+  if (hlen < 2 || hlen > (uint64_t(1) << 30) || 8 + hlen > uint64_t(st.st_size))
+    incomplete(path, "no header", st.st_size);
   std::string hdr(hlen, '\0');
   if (pread(fd, hdr.data(), hlen, 8) != ssize_t(hlen)) fatal("read %s header failed", path.c_str());
   nlohmann::json j = nlohmann::json::parse(hdr, nullptr, false);
-  if (!j.is_object()) bad("unreadable header");
-  uint64_t end = 0;
+  if (!j.is_object()) incomplete(path, "unreadable header", st.st_size);
   for (auto& [name, v] : j.items()) {
     if (name == "__metadata__") continue;
     const auto& o = v.is_object() ? v.value("data_offsets", nlohmann::json()) : nlohmann::json();
     if (!o.is_array() || o.size() != 2 || !o[0].is_number_unsigned() || !o[1].is_number_unsigned() ||
         o[1].get<uint64_t>() < o[0].get<uint64_t>() || !v.contains("dtype") || !v["dtype"].is_string() ||
         !v.contains("shape") || !v["shape"].is_array())
-      bad("bad tensor entry");
-    end = std::max(end, o[1].get<uint64_t>());
+      incomplete(path, "bad tensor entry", st.st_size);
   }
-  if (8 + hlen + end > uint64_t(st.st_size)) bad("its tensors run past its end");
   return j;
 }
 
@@ -97,8 +98,8 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     int fd = open(path.c_str(), O_RDONLY);
     if (fd < 0) fatal("open %s failed", path.c_str());
     fcntl(fd, F_NOCACHE, 1); // stream once; don't keep a second copy in the page cache
-    uint64_t hlen = 0;
-    const auto j = read_header(fd, path, hlen);
+    uint64_t hlen = 0, fsize = 0;
+    const auto j = read_header(fd, path, hlen, &fsize);
     size_t data0 = 8 + hlen;
 
     struct Item {
@@ -131,6 +132,8 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
       close(fd);
       continue;
     }
+    for (const Item& it : items)
+      if (it.src + it.len > fsize) incomplete(path, "its tensors run past its end", (long long)fsize);
     // Read in file order for sequential I/O.
     std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.src < b.src; });
     std::string base = path.substr(path.find_last_of('/') + 1);
@@ -244,8 +247,8 @@ SafetensorsIndex::SafetensorsIndex(const std::string& dir, const std::function<b
     if (fd < 0) fatal("open %s failed", path.c_str());
     fcntl(fd, F_NOCACHE, 1);
     fds_.push_back(fd);
-    uint64_t hlen = 0;
-    const auto j = read_header(fd, path, hlen);
+    uint64_t hlen = 0, fsize = 0;
+    const auto j = read_header(fd, path, hlen, &fsize);
     for (auto& [name, v] : j.items()) {
       if (name == "__metadata__" || (skip && skip(name))) continue;
       Entry t;

@@ -8,14 +8,16 @@ unless NACE_GPU_LOCK_HELD=1 or NI_LOCK_HELD=1 says the caller holds it.
   1. A starts alone; B, started next, becomes A's stage, and A splits the model with it
   2. the same replies from a whole server (--private: no pairing), from A, and from B (which sends its requests to A)
   3. B killed: A runs the model alone again, with the same replies; B started again pairs again
-  4. A killed: B, its head gone, starts again on its own, with the same replies
+  4. C, a third, joins the split as a stage, and A places the layers over the three (B, given other layers, starts
+     again to load them), with the same replies; C killed: A pairs with B again
+  5. A killed: B, its head gone, starts again on its own, with the same replies
 usage: test_pair.py <build dir> [--tokenizer QWEN_MODEL_DIR] [--keep]"""
-import json, os, shutil, signal, subprocess, sys, tempfile, time, urllib.error, urllib.request
+import json, os, re, shutil, signal, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_split as ts  # noqa: E402 (its argument parsing, lock, tokenizer search, chat and checks)
 
-PORTS = {"whole": 8431, "a": 8432, "b": 8433}
+PORTS = {"whole": 8431, "a": 8432, "b": 8433, "c": 8434}
 
 
 class Proc(ts.Proc):
@@ -48,6 +50,15 @@ def server(tmp, name, private=False):
     s = Proc(tmp, name, args + (["--private"] if private else []), None if private else {"NI_CLUSTER_PAIR": "1"})
     s.wait_for(lambda: up(PORTS[name]), name)
     return s
+
+
+def stages_of(proc):
+    """the stages of the server's latest split, from its log ("..., 3-5 on <Mac>, 6-8 on <Mac>; a pass's ...")"""
+    lines = [l for l in proc.log().splitlines() if "runs in memory across the Macs" in l or "runs on this Mac alone" in l
+             or "runs here alone" in l or "loads again here" in l]
+    if not lines or "runs in memory across the Macs" not in lines[-1]:
+        return 0
+    return len(re.findall(r"\d+-\d+ on ", lines[-1]))
 
 
 def until(ok, timeout=90):
@@ -99,7 +110,20 @@ def main():
         ts.check(until(lambda: cluster(PORTS["a"]).get("whole")), "B started again: A splits with it again",
                  a.log()[-1500:])
         same("A, split again", PORTS["a"])
-        # 4. A goes away: B starts again on its own
+        # 4. a third Mac: C joins the split, and A places the layers over the three; C goes away: A pairs with B again
+        c = server(tmp, "c")
+        procs.append(c)
+        ci = cluster(PORTS["c"])
+        ts.check(ci.get("stage_port", 0) > 0 and ci.get("stage_of") == cluster(PORTS["a"]).get("id"),
+                 "C started third: a stage of A's split", ci)
+        ts.check(until(lambda: stages_of(a) == 2, 120), "A splits the model over B and C", a.log()[-2500:])
+        ts.check("starts again to load" in a.log(), "B, given other layers, started again to load them", a.log()[-2500:])
+        same("A, split over three", PORTS["a"])
+        c.stop(signal.SIGKILL)
+        ts.check(until(lambda: stages_of(a) == 1 and cluster(PORTS["a"]).get("whole"), 120),
+                 "C killed: A splits with B again", a.log()[-2500:])
+        same("A, split with B again", PORTS["a"])
+        # 5. A goes away: B starts again on its own
         a.stop(signal.SIGKILL)
         ts.check(until(lambda: cluster(PORTS["b"]).get("stage_port", 0) == 0 and up(PORTS["b"])
                        and cluster(PORTS["b"]).get("model")),

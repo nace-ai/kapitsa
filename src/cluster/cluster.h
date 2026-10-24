@@ -89,6 +89,16 @@ std::vector<MacInfo> stages_for(const std::vector<MacInfo>& peers, const std::st
 // first (the same second: the smaller id), within max_rtt_ms: it then starts again as that one's stage
 bool gives_way(const MacInfo& me, const std::vector<MacInfo>& peers, double max_rtt_ms = kPairRttMs);
 
+// Whether `head` is the head of a split: some server is its stage
+bool splits(const std::vector<MacInfo>& peers, const MacInfo& head);
+
+// The servers that would hold `me`'s model between them if `me` (one that runs it, or is about to, by itself and
+// streamed) joined: the head it would join, within max_rtt_ms, first (a split of the model, whatever started when,
+// else the earliest of those that run it alone and streamed, when that started before `me`); then that one's stages,
+// then every other server that runs the model alone and streamed within max_rtt_ms (each would join it too). Empty:
+// none to join. Whether they hold it in memory is pair.h's to say (the model's files).
+std::vector<MacInfo> join_group(const std::vector<MacInfo>& peers, const MacInfo& me, double max_rtt_ms = kPairRttMs);
+
 // "Studio (M3 Ultra, 512 GB)"
 std::string describe(const MacInfo& m);
 // "Wi-Fi 4 ms", "this Mac", "Ethernet <1 ms", "not answering"

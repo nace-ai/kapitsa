@@ -274,6 +274,31 @@ void pair_checks() {
   check(!gives_way(me, {me}), "pair: not to itself");
   first.rtt_ms = 30;
   check(!gives_way(me, {first}), "pair: not over a long round trip");
+  // the Macs a newcomer would hold the model with: a split first, else the earliest that runs it alone
+  auto names = [](const std::vector<MacInfo>& g) {
+    std::string s;
+    for (const auto& m : g) s += (s.empty() ? "" : ",") + m.name;
+    return s;
+  };
+  MacInfo newcomer = alone("New", 500, 1), old1 = alone("Old1", 100, 3), old2 = alone("Old2", 200, 2);
+  newcomer.id = "new-id", old1.id = "old1-id", old2.id = "old2-id";
+  check(names(join_group({old2, old1}, newcomer)) == "Old1,Old2",
+        "join: the earliest that runs it alone, then every other that would join it too");
+  check(join_group({newcomer}, old1).empty(), "join: not a server that started later");
+  check(join_group({old1}, old1).empty(), "join: not itself");
+  MacInfo head = alone("Head", 300, 4), hs = alone("Stage", 310, 5), far = alone("FarStage", 320, 40);
+  head.id = "head-id", head.whole = true;
+  hs.stage_port = 9330, hs.stage_of = "head-id", far.stage_port = 9331, far.stage_of = "head-id";
+  check(splits({head, hs}, head) && !splits({head}, head) && !splits({head, hs}, old1), "splits: a server with stages");
+  check(names(join_group({old1, head, hs, far}, newcomer)) == "Head,Stage,FarStage,Old1",
+        "join: a split first, whatever started when, with all its stages, then the servers that run it alone");
+  MacInfo whole_alone = head;
+  whole_alone.id = "whole-id";
+  check(join_group({whole_alone}, newcomer).empty(), "join: not a server that runs the model whole by itself");
+  head.rtt_ms = 30;
+  check(names(join_group({old1, head, hs}, newcomer)) == "Old1", "join: not a split past 15 ms");
+  head.rtt_ms = 4, head.model = "qwen3.8-flash-next:4bit";
+  check(names(join_group({head, hs}, newcomer)).empty(), "join: not a split of another variant");
 }
 
 void table_checks() {

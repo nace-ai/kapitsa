@@ -77,7 +77,8 @@ double whole_ms(const std::vector<LayerCost>& layers, const LayerCost& head, dou
 Placement plan_split(const std::string& dir, std::vector<Member> members, int chunk, bool may_stream) {
   Qwen4Exp::LayerBytes hb;
   const std::vector<Qwen4Exp::LayerBytes> lb = Qwen4Exp::layer_bytes(dir, &hb);
-  const MemPlan mp = Qwen4Exp::plan(dir, chunk);  // the whole model's (no split set yet)
+  const Qwen4Exp::Split whole;
+  const MemPlan mp = Qwen4Exp::plan(dir, chunk, &whole);  // the whole model's, whatever this process's split
   // what a stage checks before it loads its share (stage.cpp's load_share): two slots' states on the linear-attention
   // layers, two 32K-token conversations' caches on the full-attention ones (the MTP head's with the head); the prefill
   // buffers, and half a GB beside a streamed pack's store
