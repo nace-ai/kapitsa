@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-24T18:34:46Z",
+  "kapitsa": {
+    "version": "0.2.17",
+    "commit": "5a83c40"
+  },
+  "mac": {
+    "identifier": "Mac15,8",
+    "name": "MacBook Pro (14-inch, Nov 2023)",
+    "year": 2023,
+    "chip": "Apple M3 Max",
+    "cpu_cores": 16,
+    "gpu_cores": 40,
+    "memory_gb": 64,
+    "macos": "15.8.1",
+    "macos_build": "24H32"
+  },
+  "model": {
+    "name": "qwen3.8-27b",
+    "title": "Qwen3.8-27B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "6067b15",
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "incoai/Qwen3.8-27B-DFlash2@015e795"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 84.9,
+      "runs_tps": [
+        92.98,
+        94.62,
+        79.71,
+        84.9,
+        79.68
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 88.63,
+      "runs_tps": [
+        92.53,
+        82.89,
+        84.97,
+        89.02,
+        88.63
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 19.8021,
+        "tps": 208.7,
+        "followup_s": [
+          0.1656,
+          0.1982,
+          0.1726
+        ],
+        "followup_median_s": 0.1726,
+        "followup_suffix_tps": 138.8
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16287,
+        "ttft_s": 81.0076,
+        "tps": 201.1,
+        "followup_s": [
+          0.1999,
+          0.233,
+          0.1865
+        ],
+        "followup_median_s": 0.1999,
+        "followup_suffix_tps": 115.1
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.14
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 94.5,
+    "gpu_other_mean_pct": 0.53,
+    "gpu_other_max_pct": 16.78,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "NotificationCenter"
+    ],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
