@@ -63,6 +63,10 @@ std::string format_name(int bits, int gs);  // "bf16", "4-bit group 64", ...
 // The per-row MoE kernel (gate/up or down) for routed experts e and shared expert s, "" if none exists.
 // wide: the experts' staged h exceeds 4608 floats (Qwen35::moe_wide), so the down kernel's _w form ("" if none).
 std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bool wide = false);
+// The NI_QMT6 gate (defined in qwen35.cpp): the 6-bit group-64 dense prefill GEMMs on tensor ops. Exported for
+// Qwen4Exp's NI_HC_FUSE mix fold (qmt6_mix_m64_n64), which is that tile's derivative and must share its kill
+// switch rather than carry a second reading of the env.
+bool qmt6_on();
 
 struct Qwen35Config {
   int hidden = 0, layers = 0, vocab = 0;

@@ -111,7 +111,7 @@ static bool qmt_on();
 // NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
 // at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
 // qrf_f6g64_m32_n128.
-static bool qmt6_on();
+bool qmt6_on();  // declared in qwen35.h: Qwen4Exp's NI_HC_FUSE mix fold shares this kill switch
 // NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
 // memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
 // bitwise; 0 runs the *_o instantiations with main's stores (the kill switch). M5 Pro, 35B ni_run prefill (chunk
@@ -2277,7 +2277,7 @@ static bool qmt_on() {
 // qrf_load_w's half-domain affine (0x3400|q trick, one half fma with the scale pre-multiplied by 4096), so the
 // dequantized halfs — and the products over them — are bitwise the qrf path's; only the MMA shape differs
 // (one 32-K matmul2d per step instead of four 8-K simdgroup MMAs, as qmt_m64_n64 did for the 4-bit weights).
-static bool qmt6_on() {
+bool qmt6_on() {
   static const bool on = [] {
     if (env_int("NI_QMT6", 1) == 0) return false;
     if (!qmt_on()) return false;
