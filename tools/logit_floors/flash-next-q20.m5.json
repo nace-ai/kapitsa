@@ -1,0 +1,84 @@
+{
+  "model": "flash-next-q20",
+  "measured": {
+    "build": "0.2.15 (e24a59ea)",
+    "mac": "MacBook Pro (16-inch, 2026), M5 Pro (20-core GPU), 48 GB",
+    "macos": "26.5.2",
+    "date": "2026-10-24T01:20:01Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {"NI_EXPERT_STORE": "24"},
+    "command": "tools/logit_floor.py ~/Documents/nace/models/flash-next-q20 --also NI_QMT=0 --reorder --reuse",
+    "also": ["NI_QMT=0"],
+    "reused": {"dumps": 22, "from": "2026-10-24T01:20:01Z", "to": "2026-10-24T03:13:21Z"}
+  },
+  "reference_path": "verify",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false},
+    "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "plain decoding (--spec 0) against the verify (8 rows; Flash-Next: its MTP cycle's 3)", "in_floor": true, "decode": true},
+    "repeat NI_QMT=0": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice, with NI_QMT=0", "in_floor": true, "decode": true},
+    "chunk NI_QMT=0": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048, with NI_QMT=0", "in_floor": true, "decode": false},
+    "step NI_QMT=0": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "plain decoding (--spec 0) against the verify (8 rows; Flash-Next: its MTP cycle's 3), with NI_QMT=0", "in_floor": true, "decode": true}
+  },
+  "floor": {
+    "flips": 0,
+    "kl_mean": 0.0,
+    "kl_p99": 0.0,
+    "kl_max": 0.0,
+    "margin_change_max": 0.0,
+    "tie_margin": 0.0,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {}
+  },
+  "gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.0,
+    "max_p99_kl": 0.0,
+    "near_tie": 0.0,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 0,
+    "kl_mean": 0.0,
+    "kl_p99": 0.0,
+    "kl_max": 0.0,
+    "margin_change_max": 0.0,
+    "tie_margin": 0.0,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.0,
+    "max_p99_kl": 0.0,
+    "near_tie": 0.0,
+    "max_far_flips": 0
+  },
+  "reorder_sources": {
+    "NI_QMT=0": {"what": "the default against NI_QMT=0", "paths": {"prefill": {"records": 8, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.002891011193258088, "kl_median": 8.354233636854682e-05, "kl_p99": 0.021101930669917772, "kl_max": 0.022679890339675934, "margin_change_max": 0.491058349609375, "tie_margin": 0.0, "nll_change_mean": -0.01744866763594466, "max_abs_diff": 1.056131362915039}, "step": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.0008288836245682494, "kl_median": 5.0350917128735875e-05, "kl_p99": 0.013565975346763789, "kl_max": 0.024083398612175243, "margin_change_max": 0.706578254699707, "tie_margin": 0.5502128601074219, "nll_change_mean": -0.0020543300159608555, "max_abs_diff": 3.6478796005249023, "largest_flip_margin": 0.008922576904296875}, "verify": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.0008288836245682494, "kl_median": 5.0350917128735875e-05, "kl_p99": 0.013565975346763789, "kl_max": 0.024083398612175243, "margin_change_max": 0.706578254699707, "tie_margin": 0.5502128601074219, "nll_change_mean": -0.0020543300159608555, "max_abs_diff": 3.6478796005249023, "largest_flip_margin": 0.008922576904296875}}},
+    "NI_QMT=0 NI_MATH_SAFE=1": {"what": "the default against NI_QMT=0, both with NI_MATH_SAFE=1 (no fast math)", "paths": {"prefill": {"records": 8, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.000612550593838843, "kl_median": 2.8240893072217846e-05, "kl_p99": 0.0032503305724773035, "kl_max": 0.0033926420678042934, "margin_change_max": 0.2064495086669922, "tie_margin": 0.0, "nll_change_mean": 0.005633286882745114, "max_abs_diff": 1.1040918827056885}, "step": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.0009127187222587137, "kl_median": 2.3695818618240763e-05, "kl_p99": 0.01413633340871137, "kl_max": 0.02690829992193955, "margin_change_max": 0.711054801940918, "tie_margin": 0.37624549865722656, "nll_change_mean": -0.0003889312840048749, "max_abs_diff": 3.73952317237854, "largest_flip_margin": 0.09089469909667969}, "verify": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.0009154319392945592, "kl_median": 2.370535072729217e-05, "kl_p99": 0.014141105676155473, "kl_max": 0.026913575493547438, "margin_change_max": 0.7110195159912109, "tie_margin": 0.3762969970703125, "nll_change_mean": -0.0003730061603758328, "max_abs_diff": 3.739485740661621, "largest_flip_margin": 0.09089469909667969}}}
+  },
+  "reorder_floor": {
+    "flips": 1,
+    "kl_mean": 0.0009154319392945592,
+    "kl_p99": 0.014141105676155473,
+    "kl_max": 0.026913575493547438,
+    "margin_change_max": 0.711054801940918,
+    "tie_margin": 0.5502128601074219,
+    "records": 192,
+    "kl_median": 5.0350917128735875e-05,
+    "top1": 0.9947916666666666
+  },
+  "reorder_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.00184,
+    "max_p99_kl": 0.0283,
+    "near_tie": 0.551,
+    "max_far_flips": 0,
+    "max_median_kl": 0.000101,
+    "max_nll_change": 0.0349
+  }
+}

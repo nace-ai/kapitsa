@@ -630,6 +630,7 @@ int run(const Options& o) {
     struct stat st;
     if (stat((ref.dir + "/config.json").c_str(), &st) != 0)
       return fail(ref.dir + " has no config.json. --model takes a model folder, a model name (kapitsa --help) or a Hugging Face repo.", 2);
+    if (const std::string why = unsupported_model(ref.dir); !why.empty()) return fail(why, 2);
   }
   ModelInfo mi = model_info(ref);
   const Mac mac = this_mac();
@@ -674,6 +675,8 @@ int run(const Options& o) {
   } catch (const hub::Error& e) {
     return fail(e.what());
   }
+  if (!external)  // a repo already downloaded is not checked again by the download
+    if (const std::string why = unsupported_model(ref.dir); !why.empty()) return fail(why, 2);
 
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;

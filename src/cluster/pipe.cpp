@@ -268,6 +268,27 @@ std::string random_token() {
 }
 }  // namespace
 
+namespace {
+// The head's handshake: the protocol, the model's files, the rows' shapes
+json hello_for(const std::string& dir, const HeadInfo& me) {
+  const Qwen35Config c = Qwen35::read_config(dir);
+  const json root = json::parse(std::ifstream(dir + "/config.json"), nullptr, false);
+  const json t = root.is_object() && root.contains("text_config") ? root["text_config"] : root;
+  const int hc = t.is_object() ? t.value("hc_count", 4) : 4;
+  return {{"proto", kPipeProto},
+          {"digest", model_digest(dir)},
+          {"head", me.name},
+          {"row_bytes", {size_t(hc) * c.hidden * 4, size_t(c.hidden) * 4, size_t(hc) * 4}}};
+}
+}  // namespace
+
+bool Link::query(const std::string& addr, const std::string& dir, const HeadInfo& me, StageInfo* out,
+                 std::string* why) {
+  json q = hello_for(dir, me);
+  q["query"] = true;
+  return query_stage(addr, q, out, why);
+}
+
 std::shared_ptr<Link> Link::connect(const std::vector<std::string>& addrs, const std::string& dir, const HeadInfo& me,
                                     std::string* why) {
   if (addrs.empty()) {
@@ -275,13 +296,7 @@ std::shared_ptr<Link> Link::connect(const std::vector<std::string>& addrs, const
     return nullptr;
   }
   const Qwen35Config c = Qwen35::read_config(dir);
-  const json root = json::parse(std::ifstream(dir + "/config.json"), nullptr, false);
-  const json t = root.is_object() && root.contains("text_config") ? root["text_config"] : root;
-  const int hc = t.is_object() ? t.value("hc_count", 4) : 4;
-  json hello = {{"proto", kPipeProto},
-                {"digest", model_digest(dir)},
-                {"head", me.name},
-                {"row_bytes", {size_t(hc) * c.hidden * 4, size_t(c.hidden) * 4, size_t(hc) * 4}}};
+  json hello = hello_for(dir, me);
   // 1. each stage, on its own: what it is, and the layers it was started with, if any
   std::shared_ptr<Link> L(new Link());
   for (const std::string& a : addrs) {

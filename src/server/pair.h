@@ -1,8 +1,9 @@
-// Several Macs in `kapitsa serve` (docs/usage.md, "Several Macs"): two Macs that would each stream Qwen3.8-Flash-Next's
+// Several Macs in `kapitsa serve` (docs/usage.md, "Several Macs"): Macs that would each stream Qwen3.8-Flash-Next's
 // experts from the SSD pair on their own. The server that started first becomes the head of a split (src/cluster/
-// pipe.h); the other holds the rest of the layers as its stage and sends its own requests to the head (route.h). They
-// pair only when the two hold the model in memory between them, over a round trip of at most cluster::kPairRttMs, and
-// part again when the split runs slower than the head did alone.
+// pipe.h); the others hold the rest of the layers as its stages and send their own requests to the head (route.h). They
+// pair only when they hold the model in memory between them, over round trips of at most cluster::kPairRttMs, and part
+// again when the split runs slower than the head did alone. A Mac that comes later joins the split: the head places
+// the layers again over every Mac when a token's pass would be a tenth faster with it, else keeps it as a spare.
 #pragma once
 #include "cluster/discovery.h"
 #include "cluster/pipe.h"
@@ -19,12 +20,14 @@ class ModelManager;
 
 // Whether `kapitsa serve` pairs for `ref`: a Qwen3.8-Flash-Next pack that this Mac would stream (runs_whole_here
 // false). NI_CLUSTER_PAIR=1 pairs any Flash-Next folder, whatever this Mac holds, and waits 3 s instead of 60 before
-// pairing again after a stage was lost, 5 s instead of 30 before a stage whose head went away runs alone (tests: two
-// servers on one Mac).
+// pairing again after a stage was lost, 5 s instead of 30 before a stage whose head went away runs alone, and gives a
+// stage that joins a split layers whenever the Macs hold the model with it (tests: several servers on one Mac).
 bool pairs_for(const hub::ModelRef& ref, const EngineOptions& opt, size_t budget);
 
-// Whether this Mac (its budget) and `head` (the budget it gives) hold the model of `model_dir` in memory between them
-bool pair_fits(const std::string& model_dir, const cluster::MacInfo& head, size_t budget, int prefill_chunk);
+// Whether `group` (cluster::join_group's, the budgets they give) and this Mac (its budget) hold the model of
+// `model_dir` in memory between them
+bool group_fits(const std::string& model_dir, const std::vector<cluster::MacInfo>& group, size_t budget,
+                int prefill_chunk);
 
 // The least RAM (of the sizes Macs come in, GB) of a Mac that would pair with this one for `model_dir`, its budget
 // taken as the same share of its RAM as this Mac's; 0 when none would
@@ -38,10 +41,12 @@ struct PairStage {
   int chunk = 0;   // the most rows a pass may bring
 };
 
-// The head's side, on a thread of its own while the server runs, every 2 s. Alone: a stage paired with it makes the
-// split (the model loads again with this Mac's share); another server of the model that started first makes this one
-// give way (give_way: it starts again as that one's stage). Split: when the stage is lost, or the split decodes slower
-// than this Mac did alone, the model loads again whole (streamed).
+// The head's side, on a thread of its own while the server runs, every 2 s. Alone: the stages paired with it make the
+// split once they and this Mac hold the model in memory (the model loads again with this Mac's share); a split of the
+// model, or another server of it that started first, makes this one give way (give_way: it starts again as that one's
+// stage) when they all hold it in memory. Split: when a stage is lost, or the split decodes slower than this Mac did
+// alone, the model loads again whole (streamed); when a stage joins and a token's pass would be a tenth faster with
+// it, the model loads again whole and then splits over every stage (those given other layers start again first).
 struct PairHead {
   std::shared_ptr<ModelManager> mgr;
   std::shared_ptr<cluster::Browser> browser;

@@ -441,5 +441,34 @@ with tempfile.TemporaryDirectory() as tmp:
     finally:
         lc.FLOORS, lf.this_mac = lc_saved, lf_mac
 
+# --reuse: the reused dumps' runs go into "measured", and dumps of two builds (or Macs) are refused
+with tempfile.TemporaryDirectory() as tmp:
+    one = {"build": "0.2.15 (e24a59ea)", "mac": "Apple M5 Pro", "macos": "26.5.2"}
+    for name, path, date in [("a", "verify", "2026-10-24T01:20:01Z"), ("a", "step", "2026-10-24T01:20:01Z"),
+                             ("chunk", "verify", "2026-10-24T02:46:10Z")]:
+        os.makedirs(os.path.join(tmp, name, path))
+        with open(os.path.join(tmp, name, path, "meta.json"), "w") as f:
+            json.dump({**one, "date": date}, f)
+    metas = lf.dump_metas(os.path.join(tmp, "a")) + lf.dump_metas(os.path.join(tmp, "chunk"))
+    check(lf.reused_runs(metas) == {"dumps": 3, "from": "2026-10-24T01:20:01Z", "to": "2026-10-24T02:46:10Z"},
+          "--reuse records how many dumps it reused and their first and last date")
+    for k, other in [("build", "0.2.16 (deadbeef)"), ("mac", "Apple M5 Max"), ("macos", "26.6")]:
+        try:
+            lf.reused_runs(metas + [{**one, k: other, "date": "2026-10-24T03:00:00Z"}])
+            refused = False
+        except SystemExit as e:
+            refused = k in str(e)
+        check(refused, f"--reuse refuses dumps of more than one {k}")
+    newer = {**one, "build": "0.2.16 (deadbeef)", "date": "2026-10-24T03:00:00Z"}
+    try:
+        lf.reused_runs(metas, [newer])
+        refused = False
+    except SystemExit as e:
+        refused = "build" in str(e)
+    check(refused, "--reuse refuses reused dumps of one build next to a fresh dump of another")
+    check(lf.reused_runs(metas, [{**one, "date": "2026-10-24T03:00:00Z"}])
+          == {"dumps": 3, "from": "2026-10-24T01:20:01Z", "to": "2026-10-24T02:46:10Z"},
+          "--reuse counts and dates the reused dumps only, not the fresh ones")
+
 print("\nALL PASSED" if not FAILED else f"\nFAIL: {len(FAILED)} failed: {FAILED}")
 sys.exit(1 if FAILED else 0)

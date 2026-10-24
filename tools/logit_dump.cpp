@@ -13,10 +13,13 @@
 //           the tree a chain of 8 live rows, the experts' row-independent numerics (NI_DFLASH_EXACT_MOE), the K/V
 //           compaction and the next cycle's fold of the accepted path; NI_KFLASH=0 the chain verify instead (DFlash2
 //           without trees). Nemotron-H: the 8-row chain verify. Dory: only with per-loop KV (--loop-kv per-loop), as
-//           the engine runs it.
+//           the engine runs it. Qwen3.8-Flash-Next: the verify of its MTP cycle, default_spec_depth() + 1 = 3 rows
+//           (Engine's encode_verify(depth + 1) with every draft accepted; the drafts are the sequence's own tokens, so
+//           the MTP head itself does not run: the trunk's logits do not read it).
 //   batch   --batch N windows decoding together (encode_verify_multi: one pass over every member's rows), R rows each
 //           per pass: by default the engine's numbers for N requests (Engine::batch_rows: 2 at once 4 rows each, 3 or
-//           4 at once 2 each; Nemotron-H 4 at once 1 each). Qwen and Nemotron-H.
+//           4 at once 2 each; Nemotron-H 4 at once 1 each). Qwen and Nemotron-H (Flash-Next decodes one request
+//           at a time: Engine::batch_rows has no drafter to batch it with).
 //   prefill (always) the prompt's last row as the prefill samples it, one record per window: bitwise the same in two
 //           dumps, the decode paths' differences are the decode passes' own (logit_compare.py gates them at their floor)
 // Default windows: the 8 files of bench/corpus.txt, tokenized as they are (no chat template); window i prefills the
@@ -247,13 +250,21 @@ int main(int argc, char** argv) {
       fatal("cannot take the GPU lock %s: %s", bench::GpuLock::path().c_str(), strerror(errno));
   }
   Gpu& g = Gpu::get();
-  if (Qwen4Exp::is_model(dir)) fatal("Qwen3.8-Flash-Next decodes with its MTP head: no path of this tool runs it");
   std::unique_ptr<Model> model;
   Qwen35* q = nullptr;
+  Qwen4Exp* fn = nullptr;  // Qwen3.8-Flash-Next (a Qwen35 too: q is set)
   NemotronH* nh = nullptr;
   Dory* dory = nullptr;
   Flint* fl = nullptr;
-  if (Flint::is_model(dir)) {
+  if (Qwen4Exp::is_model(dir)) {
+    // the default memory budget, not the engine's (which sets its slots' state and KV apart): a Q2_0 pack's expert
+    // store, and so which routed experts stream, may differ from a served model's (NI_EXPERT_STORE pins it). The
+    // store holds the same expert bytes either way: the logits do not depend on its size
+    auto m = std::make_unique<Qwen4Exp>(dir, chunk);
+    fn = m.get();
+    q = m.get();
+    model = std::move(m);
+  } else if (Flint::is_model(dir)) {
     auto m = std::make_unique<Flint>(dir, chunk);
     fl = m.get();
     model = std::move(m);
@@ -295,12 +306,15 @@ int main(int argc, char** argv) {
   for (const auto& p : paths) {
     if (p == "batch" && dory) fatal("Dory decodes one request at a time: no batch path");
     if (p == "batch" && fl) fatal("Flint decodes one request at a time: no batch path");
+    if (p == "batch" && fn) fatal("Qwen3.8-Flash-Next decodes one request at a time: no batch path");
     if (p == "verify" && dory && dory->kv_mode() != LoopKv::per_loop)
       fatal("Dory verifies drafts only with per-loop KV (--loop-kv per-loop); with last-loop KV it decodes step by step");
   }
   // rows a window feeds on a path: its scored rows, up to whole passes
   // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (its 2-4-row passes take other expert kernels)
+  // Flash-Next: its MTP cycle's depth + 1 rows (Engine: spec_depth defaults to default_spec_depth())
   const int vrows = fl && getenv("NI_FLINT_VERIFY_ROWS") ? std::clamp(atoi(getenv("NI_FLINT_VERIFY_ROWS")), 2, 8)
+                    : fn                                 ? fn->default_spec_depth() + 1
                                                          : kVerifyRows;
   auto path_rows = [&](const std::string& p, const Window& w) {
     const int k = p == "verify" ? vrows : p == "batch" ? member_rows : 1;
@@ -433,6 +447,7 @@ int main(int argc, char** argv) {
         s.n_pend = 0;
         s.pend_tree = false;
         load_tokens(s, *grp[j]);
+        if (fn) fn->ple_forget();  // the prefill's n-gram gather read the token it sampled, not the sequence's
       }
       if (o.name == "step") {
         for (size_t j = 0; j < grp.size(); ++j) {
@@ -445,6 +460,7 @@ int main(int argc, char** argv) {
             e->commit_and_wait();
             put(o, w, i, logits());
             s.tokens()[pos + 1] = w.toks[size_t(pos + 1)];
+            if (fn) fn->ple_forget();  // the next step gathers the n-gram rows of the true token (as tools/fn_eval)
           }
         }
       } else if (o.name == "verify") {
@@ -468,7 +484,7 @@ int main(int argc, char** argv) {
               q->set_verify_tree(nullptr);
               q->encode_kv_tree_compact(*e, s, P, kf_tree);
             } else if (q) {  // its chain branch (greedy: no row limit fed by the drafter, the experts as they group)
-              q->encode_verify(*e, s, P, kVerifyRows, sp, uint32_t(P), /*v8=*/true);
+              q->encode_verify(*e, s, P, vrows, sp, uint32_t(P), /*v8=*/true);
             } else if (nh) {
               nh->encode_verify(*e, s, P, kVerifyRows);
             } else if (fl) {
@@ -479,7 +495,7 @@ int main(int argc, char** argv) {
             e->commit_and_wait();
             for (int r = 0; r < vrows; ++r) put(o, w, i + r, logits() + size_t(r) * V);
             if (q) {
-              q->commit_rows(s, kVerifyRows);
+              q->commit_rows(s, vrows);
               s.pend_tree = tree;  // a tree's next pass folds the accepted path (pend_path), as after kf_accept
             }
             if (nh) nh->commit_rows(s, kVerifyRows);
@@ -539,7 +555,9 @@ int main(int argc, char** argv) {
     meta["model_dir"] = dir;
     meta["path"] = o.name;
     if (o.name == "verify")
-      meta["verify"] = q ? (tree ? "KFlash tree (a chain of 8 live rows)" : "chain of 8 rows") : "8 rows";
+      meta["verify"] = fn  ? "MTP cycle's chain of " + std::to_string(vrows) + " rows"
+                       : q ? (tree ? "KFlash tree (a chain of 8 live rows)" : "chain of 8 rows")
+                           : "8 rows";
     if (o.name == "verify" && q && tree && q->config().moe) meta["moe_exact"] = moe_exact;
     if (o.name == "batch") meta["batch"] = {{"members", members}, {"rows", member_rows}};
     meta["prefill_chunk"] = m.prefill_chunk();

@@ -1731,6 +1731,27 @@ void Qwen35::test_transforms() {
 }
 
 void Qwen35::check_formats() const {
+  // a dense MLP's gate and up in different formats (mixed recipes that give up_proj more bits than gate_proj, as
+  // mlx-community/Qwen3.8-27B-OptiQ-4bit: 4-bit gate, 8-bit up in 10 of its 64 layers): the fused gate/up kernels of
+  // decode (qmvf_gu, mlp_gate_up) read both with one format, so such a model is refused here, at load, not on its first
+  // request
+  {
+    int first = -1, n = 0;
+    for (size_t i = 0; i < layers_.size(); ++i) {
+      const Layer& L = layers_[i];
+      if (L.mg && L.mu && !L.mg.same_format(L.mu)) {
+        if (first < 0) first = int(i);
+        ++n;
+      }
+    }
+    if (first >= 0) {
+      const Layer& L = layers_[size_t(first)];
+      fatal("layer %d: the dense MLP's gate_proj is %s and its up_proj %s (%d of the %zu layers mix them). Kapitsa does "
+            "not run a dense MLP whose gate and up differ in format yet: use a conversion that quantizes both alike "
+            "(kapitsa --help lists the catalog's)",
+            first, L.mg.name().c_str(), L.mu.name().c_str(), n, layers_.size());
+    }
+  }
   if (!cfg_.moe) return;
   auto all = [&](const Layer& L, const char* what) {
     if (!L.eg) return;
@@ -2102,7 +2123,7 @@ void Qwen35::enc_mlp(Encoder& e, const Layer& L) {
   static Pipeline gu = Gpu::get().pipeline("mlp_gate_up");
   constexpr uint32_t rows = 2, nsg = 8;
   kp::Qmv p{L.mg.N, L.mg.K, L.mg.K, L.mg.N, cfg_.eps};
-  if (!L.mg.same_format(L.mu)) fatal("dense MLP: gate and up differ in format");
+  if (!L.mg.same_format(L.mu)) fatal("dense MLP: gate and up differ in format");  // refused at load (check_formats)
   e.use(L.mg.q4() ? gu : pipe("mlp_gate_up_" + L.mg.fmt()));
   e.buf(0, L.mg.w->buf); e.buf(1, L.mg.s->buf); e.buf(2, L.mg.b->buf);
   e.buf(3, L.mu.w->buf); e.buf(4, L.mu.s->buf); e.buf(5, L.mu.b->buf);

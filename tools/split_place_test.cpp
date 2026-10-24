@@ -163,6 +163,11 @@ int main() {
     const Placement s = plan_split(dir, {{"a", mid, 100}, {"b", mid, 100}}, 2048, true);
     CHECK(s.fits && s.streams, "between the two: the Macs stream their experts");
     CHECK(!plan_split(dir, {{"a", mid, 100}, {"b", mid, 100}}, 2048, false).fits, "and without may_stream nothing fits");
+    // streamed, the runs follow memory, not bandwidth: a small fast Mac beside a large slow one takes the smaller share
+    const Placement u = plan_split(dir, {{"big", streamed * 1.2, 150}, {"small", streamed * 0.9, 273}}, 2048, true);
+    const int small = u.lo.size() == 3 ? u.lo[2] - u.lo[1] : -1;
+    CHECK(u.fits && u.streams && small > 0 && small < u.lo[1], "streamed runs by memory: the small fast Mac holds %d of "
+          "12 (by bandwidth alone it took nearly all)", small);
     const Placement r = plan_split(dir, {{"a", in_mem * 1.05, 100}, {"b", in_mem * 1.05, 100}}, 2048, true);
     CHECK(r.fits && !r.streams, "where the Macs hold it, every layer in memory");
     CHECK(r.lo[1] >= 2, "the head keeps the n-gram block's layers: %d", r.lo[1]);

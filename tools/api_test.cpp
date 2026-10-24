@@ -18,6 +18,7 @@
 #include "api/responses.h"
 #include "engine/output_parser.h"
 #include "engine/disk_wait.h"
+#include "engine/engine.h"
 #include "engine/history_gate.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
@@ -27,6 +28,7 @@
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
 
+#include <stdlib.h>
 #include <sys/stat.h>
 
 #include <cstdio>
@@ -1675,6 +1677,55 @@ void dump_cases(const std::string& dir) {
   write("anthropic-count.json", api::dump(ojson{{"input_tokens", 1234}}));
 }
 
+// A folder whose config.json is an architecture Kapitsa does not run is refused by unsupported_model(), the function
+// the engine's constructor, model_plan and `kapitsa serve|bench|doctor` all refuse with (issue 447: Gemma 4 fell
+// through to the Qwen3.5 loader and aborted in nlohmann instead of a message). CPU only: config.json files, no model.
+void unsupported_model_unit() {
+  char tmpl[] = "/tmp/kap-api-unsupported-XXXXXX";
+  const char* root = mkdtemp(tmpl);
+  check(root != nullptr, "unsupported_model: a temporary folder for the config.json files");
+  if (!root) return;
+  auto folder = [&](const std::string& name, const std::string& config) {
+    const std::string dir = std::string(root) + "/" + name;
+    mkdir(dir.c_str(), 0700);
+    if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) {
+      fwrite(config.data(), 1, config.size(), f);
+      fclose(f);
+    }
+    return dir;
+  };
+  auto refused = [&](const std::string& dir) { return unsupported_model(dir); };
+  // the reporter's config.json (mlx-community/gemma-4-26B-A4B-it-qat-q4_0-mlx-aligned), cut to what is read
+  const std::string gemma = refused(folder("gemma4", R"({"architectures": ["Gemma4ForConditionalGeneration"],
+      "model_type": "gemma4", "text_config": {"model_type": "gemma4_text", "hidden_size": 2816,
+      "num_hidden_layers": 30, "num_attention_heads": 16, "vocab_size": 262144},
+      "quantization": {"group_size": 32, "bits": 4, "mode": "affine"}})"));
+  check(gemma.find("is a gemma4 model") != std::string::npos && gemma.find("qwen3_5") != std::string::npos &&
+            gemma.find("nemotron_h") != std::string::npos && gemma.find("flint") != std::string::npos,
+        "unsupported_model: another architecture is named by its model_type, with the ones Kapitsa runs");
+  // the Qwen3.5 family is accepted by its model_type, and by the hybrid's shape when the config names none
+  check(refused(folder("qwen35", R"({"model_type": "qwen3_5"})")).empty(),
+        "unsupported_model: a qwen3_5 config is not refused");
+  check(refused(folder("qwen35moe", R"({"model_type": "qwen3_5_moe"})")).empty(),
+        "unsupported_model: a qwen3_5_moe config is not refused");
+  check(refused(folder("qwen35text", R"({"text_config": {"model_type": "qwen3_5_moe_text"}})")).empty(),
+        "unsupported_model: a qwen3_5_moe_text text_config is not refused");
+  check(refused(folder("hybrid", R"({"linear_num_value_heads": 8, "num_hidden_layers": 4})")).empty(),
+        "unsupported_model: a config with no model_type and the hybrid's shape is not refused");
+  // a drafter's config is another architecture here: it is refused, with its type named
+  check(refused(folder("drafter", R"({"model_type": "qwen3"})")).find("is a qwen3 model") != std::string::npos,
+        "unsupported_model: a qwen3 drafter config is refused by its model_type");
+  // no model_type at all, and a config.json that is not JSON: each says so instead of blaming an architecture
+  check(refused(folder("notype", R"({"hidden_size": 2816})")).find("names no model_type") != std::string::npos,
+        "unsupported_model: a config that names no model_type says that");
+  check(refused(folder("badjson", "{ not json")).find("not valid JSON") != std::string::npos,
+        "unsupported_model: a config.json that is not JSON says that");
+  // a folder with no config.json is not refused here: it is refused where the folder is resolved
+  const std::string noconfig = std::string(root) + "/noconfig";
+  mkdir(noconfig.c_str(), 0700);
+  check(refused(noconfig).empty(), "unsupported_model: a folder with no config.json returns nothing");
+}
+
 bool exists(const std::string& p) {
   struct stat st;
   return stat(p.c_str(), &st) == 0;
@@ -1695,6 +1746,7 @@ int main(int argc, char** argv) {
   disk_wait_unit();
   history_gate_unit();
   kflash_lookup_unit();
+  unsupported_model_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);

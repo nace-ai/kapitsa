@@ -101,14 +101,27 @@ void serve_head(Share& sh, const std::string& digest, int up, const std::string&
   const std::vector<std::string> chain = hello.value("chain", std::vector<std::string>{});
   const std::string ret = hello.value("ret", std::string());
   const bool last = chain.empty();
-  // the layers this stage holds for this head: its own (--layers), else the first of the head's list
+  // the layers the head gives this stage (the first of its list; the rest go on to the stages after it); one started
+  // with --layers holds its own
   json assign = hello.value("assign", json::array());
+  int given_lo = -1, given_hi = -1;
+  if (assign.is_array() && !assign.empty()) {
+    const json& a = assign[0];
+    if (a.is_array() && a.size() == 2 && a[0].is_number_integer() && a[1].is_number_integer())
+      given_lo = a[0].get<int>(), given_hi = a[1].get<int>();
+    assign.erase(assign.begin());
+  }
+  // with o.fresh, other layers than those it holds: it starts again to load them, once the hello has gone on (when a
+  // stage before it refused as well, so that every stage given other layers starts again at once)
+  const int lo = o.lo >= 0 ? o.lo : given_lo, hi = o.lo >= 0 ? o.hi : given_hi;
+  const bool again = o.fresh && o.lo < 0 && sh.m && lo >= 0 && (sh.lo != lo || sh.hi != hi);
   if (err.empty()) {
-    int lo = o.lo, hi = o.hi;
-    if (lo < 0 && assign.is_array() && !assign.empty()) lo = assign[0][0], hi = assign[0][1];
     if (lo < 0) err = o.name + ": the head gave it no layers";
-    else if (o.lo >= 0 && assign.is_array() && !assign.empty() && (assign[0][0] != o.lo || assign[0][1] != o.hi))
+    else if (o.lo >= 0 && given_lo >= 0 && (given_lo != o.lo || given_hi != o.hi))
       err = o.name + ": started with layers " + std::to_string(o.lo + 1) + "-" + std::to_string(o.hi);
+    else if (again)
+      err = o.name + " " + kStageStartsAgain + " layers " + std::to_string(lo + 1) + "-" + std::to_string(hi) +
+            " (it held " + std::to_string(sh.lo + 1) + "-" + std::to_string(sh.hi) + ")";
     else load_share(sh, o, lo, hi, &err);
   }
   // where this stage's messages go: the next stage, else the head (its return port, or back the way they came)
@@ -118,13 +131,13 @@ void serve_head(Share& sh, const std::string& digest, int up, const std::string&
   else if (!ret.empty()) down = connect_to(ret, 5000, &cerr);
   if (down < 0) {
     logi("stage: %s", cerr.c_str());
+    if (again) o.fresh();
     return;
   }
+  hello["chain"] = std::vector<std::string>(chain.begin() + (last ? 0 : 1), chain.end());
+  hello["assign"] = assign;
   if (err.empty()) {
     hello["stages"].push_back({{"name", o.name}, {"lo", sh.lo}, {"hi", sh.hi}, {"rows", sh.m->prefill_chunk()}});
-    hello["chain"] = std::vector<std::string>(chain.begin() + (last ? 0 : 1), chain.end());
-    if (assign.is_array() && !assign.empty()) assign.erase(assign.begin());
-    hello["assign"] = assign;
   } else if (err != "-") {
     h.flags |= kFail;
     hello["error"] = err;
@@ -134,6 +147,7 @@ void serve_head(Share& sh, const std::string& digest, int up, const std::string&
   if (!err.empty()) {
     if (o.status) o.status(err == "-" ? "a head's split was refused before this Mac" : err);
     if (down != up) close(down);
+    if (again) o.fresh();
     return;
   }
   Qwen4Exp& m = *sh.m;

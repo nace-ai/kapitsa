@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-24T05:17:09Z",
+  "kapitsa": {
+    "version": "0.2.14",
+    "commit": "57cb8da"
+  },
+  "mac": {
+    "identifier": "Mac17,15",
+    "name": "Mac Studio (M5 Ultra)",
+    "year": 2026,
+    "chip": "Apple M5 Ultra",
+    "cpu_cores": 36,
+    "gpu_cores": 80,
+    "memory_gb": 256,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "qwen3.8-flash-next",
+    "title": "Qwen3.8-Flash-Next 180B-A7B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "5d423f9",
+    "decoding": "MTP",
+    "decoding_detail": "MTP speculative decoding depth 2, KFlash (MTP)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 142.5,
+      "runs_tps": [
+        142.5,
+        141.29,
+        140.91,
+        148.75,
+        143.6
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 152.99,
+      "runs_tps": [
+        152.99,
+        135.28,
+        153.68,
+        154.46,
+        152.48
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4135,
+        "ttft_s": 1.4724,
+        "tps": 2808.3,
+        "followup_s": [
+          0.0611,
+          0.0608,
+          0.0998
+        ],
+        "followup_median_s": 0.0611,
+        "followup_suffix_tps": 376.2
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16285,
+        "ttft_s": 6.1601,
+        "tps": 2643.6,
+        "followup_s": [
+          0.1027,
+          0.0664,
+          0.0572
+        ],
+        "followup_median_s": 0.0664,
+        "followup_suffix_tps": 367.4
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 70.77,
+    "mapped_gb": 5.58
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 36.2,
+    "gpu_other_mean_pct": 0.41,
+    "gpu_other_max_pct": 3.16,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode_greedy: repetition loop (distinct-4-gram 0.4918)"
+  ],
+  "invalid": []
+}

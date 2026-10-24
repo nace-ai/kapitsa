@@ -571,6 +571,24 @@ def cli_checks(kapitsa):
     for bad in ["bogus", "", "TTFT", "prefill,ttft"]:
         rc, _, err = run("serve", "--model", folder, "--timing", bad)
         check(f"cli: serve --timing {bad!r} is refused", rc == 2 and "--timing takes ttft, prefill or both" in err, err)
+    # another architecture (issue 447: Gemma 4, the config.json of mlx-community/gemma-4-26B-A4B-it-qat-q4_0-mlx-aligned
+    # cut to what is read) is refused with its model_type and the ones Kapitsa runs, not a JSON exception (rc 134)
+    gemma = os.path.join(home, "gemma-4")
+    os.makedirs(gemma)
+    with open(os.path.join(gemma, "config.json"), "w") as f:
+        json.dump({"architectures": ["Gemma4ForConditionalGeneration"], "model_type": "gemma4",
+                   "text_config": {"model_type": "gemma4_text", "hidden_size": 2816, "num_hidden_layers": 30,
+                                   "num_attention_heads": 16, "vocab_size": 262144},
+                   "quantization": {"group_size": 32, "bits": 4, "mode": "affine"}}, f)
+    free = socket.socket()  # a port that is free, so the refusal is the only reason this call fails
+    free.bind(("127.0.0.1", 0))
+    gemma_port = free.getsockname()[1]
+    free.close()
+    rc, _, err = run("serve", "--model", gemma, "--port", str(gemma_port))
+    check("cli: serve refuses another architecture by its model_type",
+          rc == 2 and "is a gemma4 model" in err and "qwen3_5" in err and "nemotron_h" in err and "terminating" not in err, err)
+    rc, _, err = run("serve", "--model", gemma, "--port", str(busy))
+    check("cli: the port is still checked first", rc == 1 and "already in use" in err, err)
     rc, _, err = run("doctor", "--context", "max")
     check("cli: doctor --context max asks for a size", rc == 2 and "--context 256k" in err, err)
     s.close()

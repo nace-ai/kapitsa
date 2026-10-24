@@ -60,6 +60,11 @@ class Link final : public Remote {
   // Null with *why when not.
   static std::shared_ptr<Link> connect(const std::vector<std::string>& addrs, const std::string& model_dir,
                                        const HeadInfo& me, std::string* why);
+  // What the stage at `addr` is (its name, budget, bandwidth, rows), asked on a connection of its own, as connect does
+  // first: nothing loads. False with *why when it does not answer or runs another model. A stage in a head's split
+  // answers once that head lets it go.
+  static bool query(const std::string& addr, const std::string& model_dir, const HeadInfo& me, StageInfo* out,
+                    std::string* why);
   ~Link() override;
   int first() const { return stages_.empty() ? 0 : stages_.front().lo; }  // the head holds layers [0, first)
   int rows() const;                                                       // the most rows a pass may carry
@@ -100,7 +105,12 @@ struct StageOptions {
   int lo = -1, hi = -1;  // --layers: loaded at start and kept; -1: the layers a head gives it, loaded when it does
   // called once listening, and when a head connects or leaves, or layers load (for a status line)
   std::function<void(const std::string&)> status;
+  // set: a stage that holds layers and is given others starts again in a fresh process (this, which does not return)
+  // rather than loading them beside the old ones' buffers (load_share), once it has told the head kStageStartsAgain
+  std::function<void()> fresh;
 };
+// In a head's error when a stage it gave other layers starts again to load them: back in a few seconds, not refused
+constexpr const char* kStageStartsAgain = "starts again to load";
 // Serves heads, one at a time, until the process is stopped, holding the layers it was started with or, without them,
 // the layers each head gives it (loaded when they change).
 [[noreturn]] void run_stage(const StageOptions& o);
