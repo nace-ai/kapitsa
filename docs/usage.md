@@ -865,7 +865,10 @@ fits its memory with the fastest pass (`src/cluster/place.h`: a Mac's layers cos
 one Mac after another; a layer's weights count with two conversations' states on a linear-attention layer and two
 32K-token conversations' caches on a full-attention one); the stage loads them then. When the Macs' memory does not hold
 every routed expert of a Q2_0 pack, each Mac keeps its layers' dense weights and a store of 3 layers' experts and streams
-its other experts from its SSD, as one Mac alone does, and the head says so (how fast that runs is not measured). A
+its other experts from its SSD, as one Mac alone does, and the head says so (how fast that runs is not measured); there
+the runs follow the Macs' memory and not their bandwidth alone: as if each held the same multiple of its budget, the
+least that fits, so each streams about the same share of its experts, and the Mac with the least memory no longer takes
+most of the layers (a 24 GB stage beside a larger head keeps 18 of 48, where bandwidth alone gave it 46). A
 stage started with `--layers A-B` keeps those instead, and every stage of the split must then be started that way.
 Several stages are listed in the order of their layers: `--split a.local,b.local`.
 
