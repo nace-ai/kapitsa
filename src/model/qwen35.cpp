@@ -2354,7 +2354,22 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
 // Q2_0 pack); 1 turns it on elsewhere, 0 off.
 static bool qmt_i8_on(bool dflt) {
   static const int env = env_int("NI_QMT_I8", -1);  // -1: unset
-  return (env < 0 ? dflt : env != 0) && qmt_on();
+  if (!((env < 0 ? dflt : env != 0) && qmt_on())) return false;
+  // qmti8s_m64_n128 asks for 29,184 B of static threadgroup memory (58,368 B as the validation layer counts it). A
+  // device, or a layer, whose maxThreadgroupMemoryLength is below what its pipeline reports gets qmt_m64_n64 instead
+  // (checked once, at pipeline creation; a pipeline that fails to build falls back the same way).
+  static const bool fits = [] {
+    Gpu& g = Gpu::get();
+    g.compile_extra("tensor", kTensorKernelSource, true);
+    const Pipeline p = g.pipeline("qmti8s_m64_n128", false);
+    const bool ok = p.pso && p.tg_mem <= g.max_threadgroup_memory();
+    if (ok) logi("NI_QMT_I8: 4-bit dense prefill GEMMs as W4A8 (qmti8s_m64_n128, %u B threadgroup memory)", p.tg_mem);
+    else
+      logi("NI_QMT_I8: qmti8s_m64_n128 %s (%u B threadgroup memory, this GPU allows %zu); qmt_m64_n64 instead",
+           p.pso ? "does not fit" : "did not build", p.tg_mem, g.max_threadgroup_memory());
+    return ok;
+  }();
+  return fits;
 }
 // a ring of scratch slots for the quantized X: a grouped encoder may overlap a few independent GEMMs
 static std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k) {
