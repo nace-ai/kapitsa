@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+# vk: drive this checkout's Kapitsa the way a user does and keep the evidence.
+#
+#   vk doctor                  read-only: checkout, binary, GPU lock holder, instances this run started
+#   vk build [TARGET...]       configure build/ (Release) and build the CLI plus the CPU test targets (or TARGETs)
+#   vk cli ARGS...             run build/kapitsa ARGS in a scratch KAPITSA_HOME; the Hub and the update server point
+#                              at a closed port, so nothing is downloaded and ~/.cache/kapitsa is never touched
+#   vk cpu-tests               the CPU test list of AGENTS.md ("Build and test"), one log per test
+#   vk checks [BASE]           what a PR's changed files require (BASE...HEAD, default origin/main)
+#   vk ref [BASE] [TARGET...]  build BASE (default origin/main) once per commit, outside this checkout, for the output
+#                              check and speed A/B (default targets: kapitsa logit_dump); prints its build dir
+#   vk serve MODEL [ARGS...]   GPU: kapitsa serve under the GPU lock on 127.0.0.1:$VK_PORT, waits for /health
+#   vk stop                    stop the server this run started (never anything else)
+#   vk cleanup                 vk stop, then delete this run's scratch state; evidence stays
+#
+# Checkout: $VK_ROOT, else the Kapitsa checkout around $PWD, else the one holding this script.
+# Run id: $VK_RUN, default <checkout dir>-<short HEAD>, so separate checkouts never share state.
+# Evidence: $VK_EVIDENCE (default /tmp/verify-kapitsa/evidence)/<run>/   Scratch: /tmp/verify-kapitsa/state/<run>/
+set -euo pipefail
+
+# The skill's own files (required_checks.py), wherever it is installed or symlinked from.
+SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# The checkout to act on: $VK_ROOT; else the caller's checkout when $PWD is inside a Kapitsa checkout (it has
+# src/engine); else the checkout this script lives in. Workers run one shared copy of the skill from their own worktrees.
+kapitsa_top() { local t; t="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" && [[ -d "$t/src/engine" ]] && echo "$t"; }
+ROOT="${VK_ROOT:-$(kapitsa_top "$PWD" || kapitsa_top "$SKILL" || true)}"
+[[ -n "$ROOT" && -d "$ROOT/src/engine" ]] || { echo "vk: not in a Kapitsa checkout (cd into one or set VK_ROOT)" >&2; exit 2; }
+ROOT="$(cd "$ROOT" && pwd -P)"
+HEAD_SHORT="$(git -C "$ROOT" rev-parse --short=8 HEAD)"
+RUN="${VK_RUN:-$(basename "$ROOT")-$HEAD_SHORT}"
+EVID="${VK_EVIDENCE:-/tmp/verify-kapitsa/evidence}/$RUN"
+STATE="/tmp/verify-kapitsa/state/$RUN"
+PORT="${VK_PORT:-8090}"
+LOCK="${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}"
+BIN="$ROOT/build/kapitsa"
+CPU_TARGETS=(kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test
+             fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test)
+
+mkdir -p "$EVID" "$STATE"
+say() { printf '%s\n' "$*" >&2; }
+# no background self-update, no first-run model question, quiet engine log
+export KAPITSA_NO_AUTO_UPDATE=1 KAPITSA_NO_PROMPT=1
+
+cmd_doctor() {
+  local ok=1
+  echo "checkout:  $ROOT ($(git -C "$ROOT" branch --show-current || true) @ $HEAD_SHORT)"
+  echo "run:       $RUN"
+  echo "evidence:  $EVID"
+  if [[ -x "$BIN" ]]; then
+    local v; v="$("$BIN" --version 2>&1 || true)"
+    echo "binary:    $v"
+    if [[ "$v" != *"$HEAD_SHORT"* ]]; then echo "  STALE: build/kapitsa is not HEAD's build; run: vk build"; ok=0; fi
+    if [[ -n "$(git -C "$ROOT" status --porcelain -- src cmake CMakeLists.txt)" ]]; then
+      echo "  NOTE: uncommitted changes under src/ or cmake: the version string cannot prove they are built; rebuild"
+    fi
+  else
+    echo "binary:    missing ($BIN); run: vk build"; ok=0
+  fi
+  echo "mac:       $(sysctl -n machdep.cpu.brand_string), macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion))"
+  local holder; holder="$(lsof -t "$LOCK" 2>/dev/null | head -1 || true)"
+  if [[ -n "$holder" ]]; then
+    echo "gpu lock:  $LOCK held by pid $holder: $(ps -o command= -p "$holder" 2>/dev/null | cut -c1-120)"
+  else
+    echo "gpu lock:  $LOCK free"
+  fi
+  if [[ -f "$STATE/serve.pid" ]]; then
+    local pid; pid="$(cat "$STATE/serve.pid")"
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "server:    ours, pid $pid, port $(cat "$STATE/serve.port"): $(curl -s -m 2 "http://127.0.0.1:$(cat "$STATE/serve.port")/health" || echo 'no /health answer')"
+    else
+      echo "server:    pid file left by a dead server (vk cleanup removes it)"
+    fi
+  else
+    echo "server:    none started by this run"
+  fi
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1 && [[ ! -f "$STATE/serve.pid" ]]; then
+    echo "port:      $PORT is taken by someone else; set VK_PORT"
+  fi
+  [[ $ok == 1 ]]
+}
+
+cmd_build() {
+  local targets=("$@"); [[ ${#targets[@]} -gt 0 ]] || targets=("${CPU_TARGETS[@]}")
+  [[ -f "$ROOT/build/CMakeCache.txt" ]] || cmake -S "$ROOT" -B "$ROOT/build" -DCMAKE_BUILD_TYPE=Release >"$EVID/cmake.log" 2>&1
+  cmake --build "$ROOT/build" -j --target "${targets[@]}" >"$EVID/build.log" 2>&1 || { tail -30 "$EVID/build.log"; exit 1; }
+  echo "built: ${targets[*]} (log: $EVID/build.log)"
+}
+
+# One CLI call = one numbered transcript: the command, exit code, stdout, stderr.
+cmd_cli() {
+  [[ -x "$BIN" ]] || { say "no $BIN; run: vk build"; exit 1; }
+  mkdir -p "$STATE/home" "$EVID/cli"
+  local n; n="$(find "$EVID/cli" -name '*.cmd' | wc -l | tr -d ' ')"; n="$(printf '%03d' $((n + 1)))"
+  local base="$EVID/cli/$n"
+  printf 'KAPITSA_HOME=%s HF_ENDPOINT=http://127.0.0.1:9 KAPITSA_UPDATE_URL=http://127.0.0.1:9 kapitsa' "$STATE/home" >"$base.cmd"
+  printf ' %q' "$@" >>"$base.cmd"; echo >>"$base.cmd"
+  set +e
+  KAPITSA_HOME="$STATE/home" HF_ENDPOINT="http://127.0.0.1:9" KAPITSA_UPDATE_URL="http://127.0.0.1:9" NI_LOG=0 \
+    "$BIN" "$@" >"$base.out" 2>"$base.err"
+  local rc=$?
+  set -e
+  echo "$rc" >"$base.rc"
+  cat "$base.out"; cat "$base.err" >&2
+  say "[vk cli #$n exit $rc -> $base.{cmd,out,err,rc}]"
+  return "$rc"
+}
+
+cmd_cpu_tests() {
+  cmd_build >/dev/null
+  mkdir -p "$EVID/cpu-tests"; local fails=0 line name
+  local tests=(
+    "api_test|build/api_test" "prefix_cache_test|build/prefix_cache_test" "fn_store_test|build/fn_store_test"
+    "fn_dflash_test|build/fn_dflash_test" "tokenizer_test|build/tokenizer_test" "iq_layout_test|build/iq_layout_test"
+    "remote_test|build/remote_test" "cluster_test|build/cluster_test" "split_place_test|build/split_place_test"
+    "test_server_cli|python3 tests/test_server.py --cli build/kapitsa" "test_sidecar|python3 tests/test_sidecar.py build/kapitsa"
+    "test_bench|python3 tests/test_bench.py build" "test_update|python3 tests/test_update.py build"
+    "test_community|python3 tests/test_community.py build" "test_reasoning|python3 tests/test_reasoning.py"
+    "test_pr_size|python3 tests/test_pr_size.py" "test_logit_compare|python3 tests/test_logit_compare.py"
+    "test_structured_cli|python3 tests/test_structured.py --cli build")
+  for line in "${tests[@]}"; do
+    name="${line%%|*}"
+    if (cd "$ROOT" && bash -c "${line#*|}") >"$EVID/cpu-tests/$name.log" 2>&1; then echo "PASS $name"
+    else echo "FAIL $name ($EVID/cpu-tests/$name.log)"; fails=$((fails + 1)); fi
+  done
+  echo "$fails failed"; [[ $fails == 0 ]]
+}
+
+cmd_checks() { python3 "$SKILL/scripts/required_checks.py" --repo "$ROOT" "${1:-origin/main}" | tee "$EVID/required-checks.txt"; }
+
+cmd_serve() {
+  [[ $# -ge 1 ]] || { say "usage: vk serve MODEL [kapitsa serve options]"; exit 2; }
+  [[ -x "$BIN" ]] || { say "no $BIN; run: vk build"; exit 1; }
+  if [[ -f "$STATE/serve.pid" ]] && kill -0 "$(cat "$STATE/serve.pid")" 2>/dev/null; then
+    say "this run already has a server (pid $(cat "$STATE/serve.pid")); vk stop first"; exit 1; fi
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then say "port $PORT is taken; set VK_PORT"; exit 1; fi
+  local model="$1"; shift
+  mkdir -p "$STATE/home"
+  # lockf -t 0 fails at once (exit 75) when someone else holds the GPU: never queue behind another run's measurement
+  KAPITSA_HOME="$STATE/home" nohup lockf -k -t 0 "$LOCK" "$BIN" serve --model "$model" --host 127.0.0.1 --private \
+    --port "$PORT" "$@" >"$EVID/serve.log" 2>&1 &
+  echo $! >"$STATE/serve.pid"; echo "$PORT" >"$STATE/serve.port"
+  say "starting: lockf $LOCK kapitsa serve --model $model --port $PORT $* (log: $EVID/serve.log)"
+  local i
+  for i in $(seq 1 600); do
+    if ! kill -0 "$(cat "$STATE/serve.pid")" 2>/dev/null; then
+      say "server exited (lockf exit 75 = GPU lock held elsewhere):"; tail -20 "$EVID/serve.log" >&2; rm -f "$STATE/serve.pid"; exit 1; fi
+    # ready as kapitsa bench reads it (src/server/bench_cmd.cpp): /health and /v1/models both answer 200
+    if curl -sf -m 1 -o /dev/null "http://127.0.0.1:$PORT/health" && curl -sf -m 5 -o /dev/null "http://127.0.0.1:$PORT/v1/models"; then
+      echo "ready: http://127.0.0.1:$PORT (pid $(cat "$STATE/serve.pid"))"; return 0; fi
+    sleep 1
+  done
+  say "no /health after 600 s"; cmd_stop; exit 1
+}
+
+cmd_stop() {
+  [[ -f "$STATE/serve.pid" ]] || { echo "no server started by this run"; return 0; }
+  local pid; pid="$(cat "$STATE/serve.pid")"
+  if kill -0 "$pid" 2>/dev/null; then
+    # the pid is lockf's, which does not pass signals on: stop its kapitsa child (Ctrl+C, then TERM), and lockf
+    # releases the lock and exits when the child does
+    local kids; kids="$(pgrep -P "$pid" || true)"
+    [[ -n "$kids" ]] && kill -INT $kids 2>/dev/null
+    local i; for i in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    if kill -0 "$pid" 2>/dev/null; then [[ -n "$kids" ]] && kill -TERM $kids 2>/dev/null; sleep 2; fi
+    kill -0 "$pid" 2>/dev/null && kill -TERM "$pid"
+  fi
+  rm -f "$STATE/serve.pid" "$STATE/serve.port"; echo "stopped pid $pid"
+}
+
+# The old build of CONTRIBUTING's output check. CONTRIBUTING calls it build-main/, but build-main/ is not gitignored,
+# so it lives under /tmp keyed by the base's commit and is shared by every run that compares against that commit.
+cmd_ref() {
+  local base="${1:-origin/main}"; [[ $# -gt 0 ]] && shift
+  local targets=("$@"); [[ ${#targets[@]} -gt 0 ]] || targets=(kapitsa logit_dump)
+  local sha; sha="$(git -C "$ROOT" rev-parse --short=8 "$base^{commit}")"
+  local dir="/tmp/verify-kapitsa/ref/$sha"
+  mkdir -p /tmp/verify-kapitsa/ref
+  if [[ ! -d "$dir/src" ]]; then
+    git -C "$ROOT" worktree add --detach "$dir/src" "$sha" >/dev/null 2>&1 \
+      || { say "vk ref: git worktree add $dir/src $sha failed"; exit 1; }
+  fi
+  [[ -f "$dir/build/CMakeCache.txt" ]] \
+    || cmake -S "$dir/src" -B "$dir/build" -DCMAKE_BUILD_TYPE=Release >"$EVID/ref-cmake.log" 2>&1 \
+    || { tail -30 "$EVID/ref-cmake.log"; exit 1; }
+  cmake --build "$dir/build" -j --target "${targets[@]}" >"$EVID/ref-build.log" 2>&1 \
+    || { tail -30 "$EVID/ref-build.log"; exit 1; }
+  say "ref: $base = $sha, $("$dir/build/kapitsa" --version 2>&1 || true) (log: $EVID/ref-build.log)"
+  echo "$dir/build"
+}
+
+cmd_cleanup() { cmd_stop; rm -rf "${STATE:?}"; echo "removed $STATE; evidence kept in $EVID"; }
+
+c="${1:-}"; shift || true
+case "$c" in
+  doctor) cmd_doctor ;; build) cmd_build "$@" ;; cli) cmd_cli "$@" ;; cpu-tests) cmd_cpu_tests ;;
+  checks) cmd_checks "$@" ;; ref) cmd_ref "$@" ;; serve) cmd_serve "$@" ;; stop) cmd_stop ;; cleanup) cmd_cleanup ;;
+  *) sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; [[ -z "$c" ]] ;;
+esac

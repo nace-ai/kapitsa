@@ -49,6 +49,8 @@ not ask for abstractions, interfaces or configuration the change does not need.
   a PR of their own: flag a floor or gate edited by hand, or loosened in the same PR as a change it lets pass.
 - A PR whose title or description says it was not verified on a GPU is fine; flag it only when the diff is a kernel or
   numerics change that is presented as verified without evidence.
+- Whether a PR needed a GPU run, and on which models: `.dsh/skills/verify-kapitsa`'s `vk checks` reads the diff
+  against `origin/main` and says so. Flag a GPU-tier PR that claims outputs or speed without the runs it lists.
 - More than one unrelated change in a PR (speed change plus refactor plus docs rewrite): say it should be split.
 
 ## GPU lock and benchmarks

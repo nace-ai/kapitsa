@@ -18,6 +18,8 @@ change and has to say so.
   "bit for bit" or "the same outputs" for something you did not run.
 - Do not load a model or touch the GPU unless the task says you may. A run takes the machine's GPU for minutes and
   other people's measurements are on it.
+- `.dsh/skills/verify-kapitsa` drives the CLI and server and keeps evidence; its `vk checks` reads the diff
+  against `origin/main` and says whether a PR needs a GPU run and on which models.
 
 ## Build and test (exact commands)
 
