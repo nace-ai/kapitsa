@@ -9,7 +9,7 @@
 // step rescaled into fp32), double-buffered as qmt_tile. Not bitwise qmt's (activation rounding).
 
 [[kernel]] void qx8_g64(const device half* X [[buffer(0)]], device char* Q [[buffer(1)]], device float2* XS [[buffer(2)]],
-                        constant uint3& p [[buffer(3)]],  // M, K, x_ld (halves)
+                        constant packed_uint3& p [[buffer(3)]],  // M, K, x_ld (halves); 12 bytes, as the host passes
                         uint j [[thread_position_in_grid]]) {
   const uint G = p.y / 64, gi = j / 8, sub = j % 8, m = gi / G, g = gi % G;
   const bool ok = m < p.x;
