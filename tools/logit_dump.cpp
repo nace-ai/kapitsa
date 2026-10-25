@@ -22,7 +22,9 @@
 //           at a time: Engine::batch_rows has no drafter to batch it with).
 //   prefill (always) the prompt's last row as the prefill samples it, one record per window: bitwise the same in two
 //           dumps, the decode paths' differences are the decode passes' own (logit_compare.py gates them at their floor)
-// Default windows: the 8 files of bench/corpus.txt, tokenized as they are (no chat template); window i prefills the
+// Default windows: the 8 files of bench/corpus.txt, tokenized as they are (no chat template; a dense Llama whose
+// tokenizer adds a BOS, Nanbeige4.3's <|im_start|>, gets it first, as every prompt of its starts: --no-bos leaves it
+// out, --bos puts it in for any model with a bos_token_id); window i prefills the
 // first 3200 - 384 i tokens of file i (3200 .. 512: two prefill chunks past 2048, one up to it) and scores the next
 // --rows W = 24 (192 rows in all). --from DIR scores the records of an earlier dump instead (Kapitsa's or another
 // engine's): per sequence, its scored prefixes form the window, and the files keep DIR's lines in DIR's order.
@@ -108,7 +110,7 @@ std::vector<std::vector<long>> read_int_lines(const std::string& path) {
 
 // The default windows: file i of the corpus ("### FILE:" sections), the first 512 + 384 (n - 1 - i) tokens prefilled
 // (the longest prefixes from the first files: bench/corpus.txt's last file is its shortest)
-std::vector<Window> corpus_windows(const std::string& corpus, const std::string& model_dir, int n, int W) {
+std::vector<Window> corpus_windows(const std::string& corpus, const std::string& model_dir, int n, int W, int bos) {
   const std::string text = read_file(corpus);
   std::vector<std::string> docs;
   for (size_t a = text.find("### FILE:"); a != std::string::npos;) {
@@ -125,6 +127,7 @@ std::vector<Window> corpus_windows(const std::string& corpus, const std::string&
     w.L0 = 512 + 384 * (n - 1 - i);
     w.W = W;
     std::vector<int> ids = tok.encode(docs[size_t(i) % docs.size()]);
+    if (bos >= 0) ids.insert(ids.begin(), bos);
     if (int(ids.size()) < w.L0 + W + 1)
       fatal("%s: section %zu has %zu tokens, window %d needs %d", corpus.c_str(), size_t(i) % docs.size(), ids.size(), i,
             w.L0 + W + 1);
@@ -192,12 +195,13 @@ int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] "
                     "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
-                    "[--loop-kv last-loop|per-loop]\n");
+                    "[--loop-kv last-loop|per-loop] [--bos | --no-bos]\n");
     return 1;
   }
   const std::string dir = argv[1], out = argv[2];
   std::string from, corpus = "bench/corpus.txt", paths_arg = "step,verify,batch", loop_kv;
   int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1;
+  int bos_arg = -1;  // -1: the model's default; 0: --no-bos; 1: --bos
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -215,6 +219,8 @@ int main(int argc, char** argv) {
     else if (a == "--loops") loops = std::stoi(next());
     else if (a == "--spec") spec = std::stoi(next());
     else if (a == "--loop-kv") loop_kv = next();
+    else if (a == "--bos") bos_arg = 1;
+    else if (a == "--no-bos") bos_arg = 0;
     else fatal("unknown argument %s", a.c_str());
   }
   const std::vector<std::string> paths = split(paths_arg, ',');
@@ -229,7 +235,25 @@ int main(int argc, char** argv) {
   if (!from.empty()) {
     wins = dump_windows(from, records);
   } else {
-    wins = corpus_windows(corpus, dir, n_windows, rows);
+    // the BOS a prompt of the model starts with: a dense Llama's when its tokenizer adds one (tokenizer_config.json
+    // add_bos_token), any model's bos_token_id with --bos
+    int bos = -1;
+    if (bos_arg != 0) {
+      auto json_of = [](const std::string& path) {  // (a file the folder may not have: null)
+        std::ifstream f(path, std::ios::binary);
+        return f ? nlohmann::json::parse(std::string(std::istreambuf_iterator<char>(f), {}), nullptr, false)
+                 : nlohmann::json();
+      };
+      const nlohmann::json cfg = json_of(dir + "/config.json"), tc = json_of(dir + "/tokenizer_config.json");
+      const int id = cfg.is_object() && cfg.contains("bos_token_id") && cfg["bos_token_id"].is_number()
+                         ? cfg["bos_token_id"].get<int>()
+                         : -1;
+      const bool adds = tc.is_object() && tc.value("add_bos_token", false);
+      if (bos_arg == 1 || (adds && Flint::is_model(dir) && Flint::read_config(dir).llama)) bos = id;
+      if (bos_arg == 1 && id < 0) fatal("--bos: %s/config.json has no bos_token_id", dir.c_str());
+    }
+    if (bos >= 0) logi("logit_dump: every window starts with the BOS, token %d", bos);
+    wins = corpus_windows(corpus, dir, n_windows, rows, bos);
     for (size_t i = 0; i < wins.size(); ++i) {
       wins[i].rec.resize(size_t(wins[i].W));
       for (int r = 0; r < wins[i].W; ++r) {
