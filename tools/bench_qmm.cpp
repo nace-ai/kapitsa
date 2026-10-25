@@ -118,7 +118,7 @@ int main(int argc, char** argv) {
     }
     for (size_t i = 0; i < size_t(M) * K; ++i) X.as<uint16_t>()[i] = f2h(d(rng));
     const double flop = 2.0 * M * N * K;
-    const int reps = std::max(3, int(1.5e12 / flop));
+    const int reps = getenv("QMM_REPS") ? atoi(getenv("QMM_REPS")) : std::max(3, int(1.5e12 / flop));  // small shapes: cap it
     std::vector<Pipeline> pipes;
     Pipeline qx8;
     const bool nopre = getenv("QMM_I8_NOPRE") != nullptr;  // qmti8_*: time the GEMM alone (X quantized once)
