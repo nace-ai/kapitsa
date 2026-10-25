@@ -1,7 +1,7 @@
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
-  <img alt="Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen, Nemotron and Flint. Writing speed in tokens per second for Qwen3.6 35B-A3B at 4-bit on a MacBook Pro (2026), M5 Max, 128 GB: Kapitsa with KFlash 339, Splash with DFlash2 281, mlx-serve with MTP 238, oMLX with DFlash2 189, Ollama with MTP 162, LM Studio 136, MTPLX with MTP 130." src="docs/assets/header-light.svg">
+  <img alt="Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen, Nemotron and Flint. Writing speed in tokens per second for Qwen3.6 35B-A3B at 4-bit on a MacBook Pro (2026), M5 Max, 128 GB, the seven fastest of the nine engines measured: Kapitsa with KFlash 339, Splash with DFlash2 281, mlx-serve with MTP 238, oMLX with DFlash2 189, llama.cpp with MTP 171, Ollama with MTP 162, MLX with DFlash2 138." src="docs/assets/header-light.svg">
 </picture>
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.

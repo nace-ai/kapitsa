@@ -159,13 +159,13 @@
  "header": {
   "mac": "MacBook Pro M5 Max 128 GB",
   "model": "Qwen3.6 35B-A3B",
-  "engines": ["MTPLX", "LM Studio", "Ollama", "oMLX", "mlx-serve", "Splash", "Kapitsa"],
+  "engines": ["MLX", "Ollama", "llama.cpp", "oMLX", "mlx-serve", "Splash", "Kapitsa"],
   "title": "Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen, Nemotron and Flint",
   "tagline": ["Blazing fast Apple Silicon optimized", "inference engine for Qwen, Nemotron and Flint"],
   "caption": [
    "Writing speed, tok/s · Qwen3.6 35B-A3B · 4-bit",
-   "MacBook Pro (2026) · M5 Max · 128 GB"
+   "M5 Max · 128 GB · the 7 fastest of 9 engines"
   ],
-  "desc": "Writing speed in tokens per second for Qwen3.6 35B-A3B at 4-bit on a MacBook Pro (2026), M5 Max, 128 GB"
+  "desc": "Writing speed in tokens per second for Qwen3.6 35B-A3B at 4-bit on a MacBook Pro (2026), M5 Max, 128 GB, the seven fastest of the nine engines measured"
  }
 }
