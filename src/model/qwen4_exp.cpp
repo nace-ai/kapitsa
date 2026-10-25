@@ -235,7 +235,6 @@ void Qwen4Exp::load(const std::string& dir) {
   // Q2_0 routed experts go to the expert store (init_store): left unread here (deferred: listed, their bytes in the
   // files), unless NI_EXPERT_STORE=off keeps them as stacked planes
   q20_pack_ = q20_experts_in(root);
-  qmt_i8_default_ = q20_pack_;
   {
     const char* es = getenv("NI_EXPERT_STORE");
     stream_ = q20_pack_ && !(es && (!strcmp(es, "off") || !strcmp(es, "0")));
