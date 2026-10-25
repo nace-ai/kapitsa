@@ -22,7 +22,7 @@ LOCK = "/tmp/kapitsa-gpu.lock"
 QUEUE = "/tmp/kapitsa-gpu.queue"
 DEFAULT_ETA = float(os.environ.get("VK_GPU_DEFAULT_ETA", 20))  # minutes, for a job that declared none
 OVERDUE = 5  # minutes still assumed for a job past its declared ETA
-MODELISH = re.compile(r"kapitsa|ollama|llama|mlx|lms|LM Studio|logit_dump|ni_run|ni_eval|python", re.I)
+MODELISH = re.compile(r"kapitsa|ollama|llama|mlx|lms|LM Studio|logit_dump|ni_run|ni_eval", re.I)
 
 # Runs under sh on every Mac, local or remote; prints "key value..." lines that parse() reads.
 PROBE = r"""
@@ -48,7 +48,7 @@ for f in "$Q"/*; do [ -f "$f" ] || continue; p=${f##*/}; kill -0 "$p" 2>/dev/nul
   [ "$(ps -o lstart= -p "$p" 2>/dev/null | sed 's/^ *//;s/ *$//')" = "$s" ] || continue
   echo "job $p $n"; echo "jobtail $p $(tail -c 4000 "$g" 2>/dev/null | tr '\r' '\n' | grep -v '^ *$' | tail -1 | cut -c1-160)"; done
 ps -axo rss=,pid=,etime=,command= | awk '$1>3000000' | cut -c1-200 | sed 's/^ */big /'
-echo "models $( (ls ~/.cache/kapitsa/models; [ -n "$NACE_MODELS" ] && ls "$NACE_MODELS") 2>/dev/null | tr '\n' ' ')"
+echo "models $( (ls ~/.cache/kapitsa/models; [ -n "$NACE_MODELS" ] && ls "$NACE_MODELS"; [ -d "$HOME/Documents/nace/models" ] && ls "$HOME/Documents/nace/models") 2>/dev/null | sort -u | tr '\n' ' ')"
 """
 
 
