@@ -4,11 +4,17 @@
 // Flint's pre_tokenizer, the 256 byte tokens and every run of adjacent pieces as a token, and ignore_merges: with the
 // right split each piece is one token, and a piece cut in two or two pieces taken as one give other ids (HF gives one
 // token per piece on the same tokenizer.json). load() must take the split only for exactly Flint's Sequence.
+// Then the Metaspace BPE with byte fallback (Nanbeige 4.3's SentencePiece-style file) on a small tokenizer.json,
+// against the tokens HF tokenizers 0.23.3 gives for the same file and texts.
 //   tokenizer_test   exit status 1 if any check fails
+//   tokenizer_test path/to/nanbeige/tokenizer.json   also Nanbeige 4.3's own file against HF's ids and decode in
+//                    tests/data/nanbeige43_tokenizer.json (skipped, with a message, for a file of another sha256)
+#include "engine/output_parser.h"
 #include "tokenizer/tokenizer.h"
 
 #include <nlohmann/json.hpp>
 
+#include <CommonCrypto/CommonDigest.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -146,9 +152,145 @@ std::string ids_str(const std::vector<int>& ids) {
   return s;
 }
 
+// Metaspace with byte fallback: ▁ for a space and in front of the input's first text, raw UTF-8 tokens, a character
+// outside the vocabulary as its <0xXX> tokens, merges by rank. Each case's tokens are HF's on the same tokenizer.json.
+const Case kMetaspaceCases[] = {
+    {"▁ in front of the input only, not after an added token", "hi<think>hi hi", {"▁hi", "<think>", "hi", "▁hi"}},
+    {"a run of spaces", "a  b", {"▁a", "▁▁", "b"}},
+    {"a leading space is the ▁, none added; the lower rank merges first", "  a", {"▁", "▁a"}},
+    {"rank order: b c before a b", "abc", {"▁a", "bc"}},
+    {"equal ranks merge leftmost first", "<think>aaa", {"<think>", "aa", "a"}},
+    {"a ▁ in the text is a space", "<think>\u2581a", {"<think>", "▁a"}},
+    {"a trailing space", "hi ", {"▁hi", "▁"}},
+    {"byte fallback for an emoji and a letter outside the vocabulary", "a\U0001F600\u00E9x",
+     {"▁a", "<0xF0>", "<0x9F>", "<0x98>", "<0x80>", "<0xC3>", "<0xA9>", "<0x78>"}},
+    {"empty", "", {}},
+};
+
+void metaspace() {
+  std::vector<std::string> toks = {"<unk>", "<s>", "</s>"};
+  for (int b = 0; b < 256; ++b) {
+    char name[8];
+    snprintf(name, sizeof name, "<0x%02X>", b);
+    toks.push_back(name);
+  }
+  for (const char* t : {"\u2581", "a", "b", "c", "h", "i"}) toks.push_back(t);
+  const std::vector<std::pair<std::string, std::string>> merges = {
+      {"b", "c"}, {"a", "b"}, {"\u2581", "a"}, {"h", "i"}, {"\u2581", "hi"}, {"\u2581", "\u2581"}, {"a", "a"},
+      {"ab", "c"}};
+  json vocab = json::object(), m = json::array();
+  for (const auto& [a, b] : merges) {
+    if (std::find(toks.begin(), toks.end(), a + b) == toks.end()) toks.push_back(a + b);
+    m.push_back({a, b});
+  }
+  for (size_t i = 0; i < toks.size(); ++i) vocab[toks[i]] = int(i);
+  json added = json::array();
+  for (int i = 0; i < 3; ++i) added.push_back({{"id", i}, {"content", toks[i]}, {"special", true}});
+  added.push_back({{"id", int(toks.size())}, {"content", "<think>"}, {"special", false}});
+  const json j = {
+      {"added_tokens", added}, {"normalizer", nullptr},
+      {"pre_tokenizer",
+       {{"type", "Metaspace"}, {"replacement", "\u2581"}, {"prepend_scheme", "first"}, {"split", false}}},
+      {"model", {{"type", "BPE"}, {"unk_token", "<unk>"}, {"fuse_unk", true}, {"byte_fallback", true},
+                 {"vocab", vocab}, {"merges", m}}}};
+  ni::Tokenizer tok;
+  load(tok, j);
+  for (const Case& c : kMetaspaceCases) {
+    std::vector<int> want;
+    for (const auto& p : c.pieces) want.push_back(tok.find(p));
+    const std::vector<int> got = tok.encode(c.text);
+    check(got == want, std::string("Metaspace: ") + c.what, "ids " + ids_str(got) + ", want " + ids_str(want));
+    // HF's decode: a ▁ is a space, and the text loses one leading space (the ▁ put in front, or the text's own when
+    // none was); a StreamDecoder that starts the text the same, one that starts within a text keeps every space
+    std::string raw = c.text;
+    for (size_t k; (k = raw.find("\u2581")) != std::string::npos;) raw.replace(k, 3, " ");
+    if (!raw.empty() && raw[0] != ' ' && raw[0] != '<') raw.insert(0, " ");
+    const std::string back = !raw.empty() && raw[0] == ' ' ? raw.substr(1) : raw;
+    check(tok.decode(got) == back, std::string("Metaspace decode: ") + c.what,
+          "\"" + tok.decode(got) + "\", want \"" + back + "\"");
+    ni::StreamDecoder starts(tok, true), within(tok);
+    std::string s, w;
+    for (int id : got) s += starts.push(id), w += within.push(id);
+    s += starts.flush(), w += within.flush();
+    check(s == back && w == raw, std::string("Metaspace StreamDecoder: ") + c.what,
+          "\"" + s + "\" and \"" + w + "\", want \"" + back + "\" and \"" + raw + "\"");
+  }
+  // a reply: its own leading space goes, as in HF's decode of the reply; after a tag that opens it, a space stays
+  // (HF's decode starts with the tag, so it strips nothing)
+  const int think = tok.find("<think>");
+  auto reply = [&](const std::vector<int>& ids) {
+    ni::OutputParser p(tok, think, -1, -1, -1, false, false, ni::ojson::object());
+    ni::ChatDelta all;
+    for (int id : ids) {
+      const ni::ChatDelta d = p.push(id);
+      all.reasoning += d.reasoning, all.content += d.content;
+    }
+    const ni::ChatDelta d = p.finish();
+    return all.reasoning + "|" + all.content + d.reasoning + d.content;
+  };
+  const std::string r1 = reply(tok.encode(" hi hi")), r2 = reply(tok.encode("<think> hi"));
+  check(r1 == "|hi hi" && r2 == " hi|", "Metaspace reply: the leading space goes, not one after <think>",
+        "\"" + r1 + "\" and \"" + r2 + "\"");
+}
+
+std::string sha256_file(const std::string& path) {
+  std::ifstream f(path, std::ios::binary);
+  if (!f) return "";
+  const std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  unsigned char d[CC_SHA256_DIGEST_LENGTH];
+  CC_SHA256(data.data(), CC_LONG(data.size()), d);
+  char hex[2 * CC_SHA256_DIGEST_LENGTH + 1];
+  for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; ++i) snprintf(hex + 2 * i, 3, "%02x", d[i]);
+  return hex;
+}
+
+// Nanbeige 4.3's own tokenizer.json against tests/data/nanbeige43_tokenizer.json (tests/nanbeige43_tokenizer_fixture.py
+// writes it): HF's ids and decode of each text, against encode, decode and a StreamDecoder fed one token at a time.
+void nanbeige43(const std::string& path) {
+  const std::string src = __FILE__;
+  const std::string fixture = src.substr(0, src.rfind('/')) + "/../tests/data/nanbeige43_tokenizer.json";
+  std::ifstream f(fixture);
+  if (!f) return check(false, "Nanbeige 4.3 fixture", "cannot read " + fixture);
+  const json j = json::parse(f);
+  const std::string sha = sha256_file(path), want_sha = j["tokenizer_sha256"];
+  if (sha.empty()) return check(false, "Nanbeige 4.3 tokenizer.json", "cannot read " + path);
+  if (sha != want_sha) {
+    printf("SKIP Nanbeige 4.3 fixture: %s has sha256 %s, the fixture is of %s\n", path.c_str(), sha.c_str(),
+           want_sha.c_str());
+    return;
+  }
+  ni::Tokenizer tok;
+  tok.load(path);
+  auto q = [](const std::string& s) { return json(s).dump(-1, ' ', false, json::error_handler_t::replace); };
+  auto add = [](std::string& to, const std::string& s) { to += (to.empty() ? "" : "\n     ") + s; };
+  int n = 0;
+  std::string enc_bad, dec_bad, stream_bad;
+  for (const auto& c : j["cases"]) {
+    const std::string text = c["text"], back = c["decode"];
+    const std::vector<int> ids = c["ids"], got = tok.encode(text);
+    ni::StreamDecoder sd(tok, true);
+    std::string s;
+    for (int id : ids) s += sd.push(id);
+    s += sd.flush();
+    const std::string at = "case " + std::to_string(n++) + " " + q(text);
+    if (got != ids) add(enc_bad, at + ": ids " + ids_str(got) + ", want " + ids_str(ids));
+    if (tok.decode(ids) != back) add(dec_bad, at + ": " + q(tok.decode(ids)) + ", want " + q(back));
+    if (s != back) add(stream_bad, at + ": " + q(s) + ", want " + q(back));
+  }
+  const std::string version = j["tokenizers_version"];
+  const std::string of = " on " + std::to_string(n) + " texts (HF tokenizers " + version + ")";
+  check(enc_bad.empty(), "Nanbeige 4.3 encode gives HF's ids" + of, enc_bad);
+  check(dec_bad.empty(), "Nanbeige 4.3 decode gives HF's text" + of, dec_bad);
+  check(stream_bad.empty(), "Nanbeige 4.3 StreamDecoder, one token at a time, gives HF's text" + of, stream_bad);
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+  if (argc > 2 || (argc == 2 && argv[1][0] == '-')) {
+    fprintf(stderr, "usage: tokenizer_test [path/to/nanbeige/tokenizer.json]\n");
+    return 2;
+  }
   // the vocabulary: the 256 bytes, then every run of adjacent pieces (between added tokens) of every case
   json vocab = json::object();
   auto add = [&](const std::string& s) {
@@ -184,6 +326,18 @@ int main() {
   load(other, j);
   const Case& digits = kCases[3];  // digits in threes
   check(other.encode(digits.text) != want(digits), "a Sequence other than Flint's keeps the default split");
+
+  // byte-level: every space is a token's own, none is stripped (a StreamDecoder that starts the text keeps it too)
+  const std::vector<int> spaced = tok.encode(" world, it's");
+  ni::StreamDecoder starts(tok, true);
+  std::string s;
+  for (int id : spaced) s += starts.push(id);
+  s += starts.flush();
+  check(tok.decode(spaced) == " world, it's" && s == " world, it's", "byte-level decode keeps a leading space",
+        "\"" + tok.decode(spaced) + "\" and \"" + s + "\"");
+
+  metaspace();
+  if (argc == 2) nanbeige43(argv[1]);
 
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;
