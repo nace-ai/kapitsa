@@ -1,0 +1,155 @@
+2026-10-25 08:57:36,918 - omlx.settings - INFO - Saved settings to <run-root>/state/omlx/bolt/base-plain/settings.json
+INFO:     Uvicorn running on http://127.0.0.1:8242 (Press CTRL+C to quit)
+2026-10-25 08:57:38,450 - omlx.scheduler - INFO - ChunkedKVCache patch: methods already present upstream, skipped: size
+2026-10-25 08:57:38,747 - omlx.server - INFO - Headless mode: serving the API without the web UI
+2026-10-25 08:57:38,753 - omlx.server - INFO - CORS origins: ['*']
+2026-10-25 08:57:38,753 - omlx.model_settings - INFO - Loaded settings for 1 models
+2026-10-25 08:57:38,822 - omlx.model_discovery - INFO - Discovered model: nemotron-3.5-bolt-24gb (type: vlm, engine: vlm, size: 23.55GB, text-only: 22.27GB)
+2026-10-25 08:57:38,822 - omlx.engine_pool - INFO - Discovered 1 models
+2026-10-25 08:57:38,822 - omlx.server_metrics - INFO - Loaded all-time stats from <run-root>/state/omlx/bolt/base-plain/stats.json
+2026-10-25 08:57:38,826 - omlx.server - INFO - Server initialized with 1 models
+2026-10-25 08:57:38,826 - omlx.server - INFO - Default model: nemotron-3.5-bolt-24gb
+2026-10-25 08:57:38,826 - omlx.server - INFO - Memory guard tier: aggressive (guard on)
+2026-10-25 08:57:38,826 - omlx.server - INFO - Default max tokens: 32768
+2026-10-25 08:57:38,826 - omlx.server - INFO - HF Downloader initialized
+2026-10-25 08:57:38,830 - omlx.server - INFO - ModelScope SDK not installed, MS downloader disabled
+2026-10-25 08:57:38,833 - omlx.server - INFO - oQ Quantizer initialized
+2026-10-25 08:57:38,875 - omlx.server - INFO - HF Uploader initialized
+INFO:     Started server process [81536]
+INFO:     Waiting for application startup.
+2026-10-25 08:57:38,908 - omlx.process_memory_enforcer - WARNING - Metal cap (107.5GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (125.4GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_limit_mb=124518
+2026-10-25 08:57:38,909 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=107.7GB, interval=1.0s)
+INFO:     Application startup complete.
+2026-10-25 08:57:39,117 - omlx.engine_pool - INFO - Loading model: nemotron-3.5-bolt-24gb
+2026-10-25 08:57:39,132 - omlx.utils.model_loading - INFO - M5 sorted gather_qmm reroute installed (issue #2267)
+2026-10-25 08:57:39,313 - omlx.patches.mlx_lm_mtp.qwen35_model - INFO - Qwen3.5/3.6 MTP model patch applied (PR 990)
+2026-10-25 08:57:39,316 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+2026-10-25 08:57:39,319 - omlx.patches.qwen35_verify_qmm - INFO - MTP verify qmm patch applied (rows 2..6 split-K, 7..8 sg8, 9..24 mma)
+2026-10-25 08:57:41,885 - omlx.engine.vlm - INFO - Vision feature cache enabled (SSD: <run-root>/state/omlx/bolt/base-plain/kv-cache/vision_features)
+2026-10-25 08:57:42,220 - omlx.scheduler - INFO - Loaded 1 additional EOS token(s) from generation_config.json: {2}
+2026-10-25 08:57:42,220 - omlx.scheduler - INFO - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+2026-10-25 08:57:42,227 - omlx.scheduler - INFO - Decode KV cache materialization interval set to 256 tokens
+2026-10-25 08:57:42,227 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)
+2026-10-25 08:57:42,243 - omlx.memory_monitor - INFO - Model info set: 88 layers (8 KVCache), 2 KV heads, 32 Q heads, 128 head_dim. Estimated memory per 64-token block: 512.00 KB
+2026-10-25 08:57:42,243 - omlx.scheduler - INFO - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+2026-10-25 08:57:42,243 - omlx.cache.paged_cache - INFO - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+2026-10-25 08:57:42,244 - omlx.cache.paged_ssd_cache - INFO - Scanning SSD cache directory: <run-root>/state/omlx/bolt/base-plain/kv-cache
+2026-10-25 08:57:42,244 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=0, indexed=0, errors=0, total_size=0 B, gdn_sidecars=0
+2026-10-25 08:57:42,244 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager initialized: dir=<run-root>/state/omlx/bolt/base-plain/kv-cache, max_size=4.00 GB, hot_cache=4.00 GB, auto_size=False, existing_files=0, disk_free=1563.42 GB, cache_used=0 B, incompatible_files=0
+2026-10-25 08:57:42,244 - omlx.cache.paged_cache - INFO - paged SSD cache manager connected to PagedCacheManager
+2026-10-25 08:57:42,244 - omlx.scheduler - INFO - paged SSD cache enabled: cache_dir=<run-root>/state/omlx/bolt/base-plain/kv-cache, max_size=4.00 GB, block_size=2048 tokens
+2026-10-25 08:57:42,244 - omlx.scheduler - INFO - paged SSD cache enabled: <run-root>/state/omlx/bolt/base-plain/kv-cache, block_size=2048, max_blocks=100000
+2026-10-25 08:57:42,251 - omlx.engine_core - INFO - Engine started
+2026-10-25 08:57:42,252 - omlx.patches.sdpa256_attention - INFO - sdpa256 attention patch applied (head_dim=256 prefill, kv_len>=8192, always force bounded for qualifying calls (#2025))
+2026-10-25 08:57:42,254 - omlx.patches.qwen35_fa256_attention - INFO - Qwen FA-256 steel patch skipped: NAX GPU, MLX native fused SDPA is faster
+2026-10-25 08:57:42,261 - omlx.patches.qwen35_gdn_prework - INFO - mlx-vlm Qwen3.5 GDN q/k normalization follows mlx-lm normalize_qk
+2026-10-25 08:57:42,261 - omlx.patches.qwen35_gdn_verify_fused - INFO - GDN verify replay commit patch applied
+2026-10-25 08:57:42,261 - omlx.patches.qwen35_gdn_prework - INFO - Qwen fused GDN prework patch applied
+2026-10-25 08:57:42,263 - omlx.patches.qwen35_verify_sdpa_split - INFO - Qwen3.5/3.6 verify-width causal vector attention patch applied
+2026-10-25 08:57:42,264 - omlx.patches.qwen35_gdn_chunked - INFO - Qwen3.5/3.6 GDN prefill kernel patch applied (Metal, impl=pipelined, min_t=64)
+2026-10-25 08:57:42,267 - omlx.patches.qwen35_q4_mlp - INFO - Qwen quantized MLP prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+2026-10-25 08:57:42,273 - omlx.patches.qwen35_moe_router - INFO - Qwen MoE fused router top-k patch applied
+2026-10-25 08:57:42,275 - omlx.patches.qwen35_moe_routed_decode - INFO - Qwen MoE fused routed-expert decode patch applied
+2026-10-25 08:57:42,278 - omlx.patches.qwen35_moe_weighted_sum - INFO - Qwen3.5/3.6 MoE weighted-sum patch applied (min_tokens=1024)
+2026-10-25 08:57:42,278 - omlx.patches.qwen35_ragged_decode - INFO - qwen3_5 ragged decode threadgroup fallback patch applied
+2026-10-25 08:57:42,280 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager updated layer cache signature (48 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=no, numerics=None)
+2026-10-25 08:57:42,303 - omlx.engine.vlm - INFO - VLM tool calling enabled: parser=qwen3_coder
+2026-10-25 08:57:42,304 - omlx.engine.vlm - INFO - VLMBatchedEngine loaded: <run-root>/state/omlx/bolt/models/nemotron-3.5-bolt-24gb
+2026-10-25 08:57:42,360 - omlx.engine_pool - INFO - Loaded model: nemotron-3.5-bolt-24gb (actual: 23.27GB, local estimate: 23.55GB, full model: 23.55GB, total: 23.55GB)
+2026-10-25 08:57:42,366 - omlx.engine.vlm - INFO - Structured output requires xgrammar. Install with: pip install 'omlx[grammar]'
+2026-10-25 08:57:42,412 - omlx.scheduler - INFO - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+2026-10-25 08:57:44,449 - omlx.scheduler - INFO - Reserved prefill capacity for 2930 tokens across 8 caches (+0.01GB)
+2026-10-25 08:57:46,514 - omlx.scheduler - INFO - Using boundary cache snapshot for 60edc668-19d9-4f04-bb9c-c467ea5b5f55: storing 2924/2994 tokens (tail terminal, 1 intermediate snapshots)
+2026-10-25 08:57:46,514 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=1.8ms/1, prefix_cache_lookup=0.3ms/1, store_cache_main_boundary=6.7ms/1, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1
+2026-10-25 08:57:46,515 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 64 tokens in 4.11s (62.5 tok/s), prompt: 2930, finish_reason=length, max_tokens=64, request_max_tokens=64, stream_model_ttft=3.09s, stream_visible_ttft=3.19s
+2026-10-25 08:57:47,630 - omlx.scheduler - INFO - Using boundary cache snapshot for 44b21dd9-176e-4229-8eab-3ec76ce792c9: storing 459/491 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 08:57:47,630 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=3.7ms/2, prefix_cache_lookup=0.3ms/2, store_cache_main_boundary=13.6ms/2, store_cache_main_collect=0.0ms/2, store_cache_main_dispatch=0.2ms/2, store_cache_worker_sync=0.2ms/1
+2026-10-25 08:57:47,631 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 26 tokens in 1.11s (68.4 tok/s), prompt: 465, finish_reason=tool_calls, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.73s, stream_visible_ttft=0.73s
+2026-10-25 09:02:56,425 - omlx.scheduler - INFO - Using boundary cache snapshot for ec032e14-6524-4c48-bb5c-e91a5c658f93: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:02:56,425 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=5.6ms/3, prefix_cache_lookup=0.3ms/3, store_cache_main_boundary=19.9ms/3, store_cache_main_collect=0.0ms/3, store_cache_main_dispatch=0.3ms/3, store_cache_worker_sync=0.3ms/2
+2026-10-25 09:02:56,426 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.65s (70.9 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.42s, stream_visible_ttft=0.42s
+2026-10-25 09:03:04,077 - omlx.scheduler - INFO - Using boundary cache snapshot for d96aa57e-1f4d-4881-873d-18ae54b98d8e: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:04,077 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=7.4ms/4, prefix_cache_lookup=0.3ms/4, store_cache_main_boundary=26.3ms/4, store_cache_main_collect=0.1ms/4, store_cache_main_dispatch=0.4ms/4, store_cache_worker_sync=0.3ms/3
+2026-10-25 09:03:04,078 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.65s (70.9 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.43s, stream_visible_ttft=0.43s
+2026-10-25 09:03:11,749 - omlx.scheduler - INFO - Using boundary cache snapshot for ba2f9468-76a5-4232-a8f7-ae7d56d65b54: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:11,749 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=9.2ms/5, prefix_cache_lookup=0.4ms/5, store_cache_main_boundary=32.6ms/5, store_cache_main_collect=0.1ms/5, store_cache_main_dispatch=0.4ms/5, store_cache_worker_sync=0.4ms/4
+2026-10-25 09:03:11,750 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.67s (70.7 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.43s, stream_visible_ttft=0.43s
+2026-10-25 09:03:19,430 - omlx.scheduler - INFO - Using boundary cache snapshot for 3bb04797-3e11-4afe-bc0a-f475f35b51b6: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:19,431 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=11.1ms/6, prefix_cache_lookup=0.4ms/6, store_cache_main_boundary=39.0ms/6, store_cache_main_collect=0.1ms/6, store_cache_main_dispatch=0.5ms/6, store_cache_worker_sync=0.4ms/5
+2026-10-25 09:03:19,431 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.68s (70.7 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.43s, stream_visible_ttft=0.43s
+2026-10-25 09:03:27,285 - omlx.scheduler - INFO - Using boundary cache snapshot for ad3bae97-ed98-449c-a600-db5afbe2ab59: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:27,285 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=12.9ms/7, prefix_cache_lookup=0.4ms/7, store_cache_main_boundary=45.7ms/7, store_cache_main_collect=0.1ms/7, store_cache_main_dispatch=0.6ms/7, store_cache_worker_sync=0.5ms/6
+2026-10-25 09:03:27,286 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.85s (69.2 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.45s, stream_visible_ttft=0.45s
+2026-10-25 09:03:35,218 - omlx.scheduler - INFO - Using boundary cache snapshot for 52580132-548c-4239-abed-1715764bc0ea: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:35,218 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=14.8ms/8, prefix_cache_lookup=0.5ms/8, store_cache_main_boundary=52.9ms/8, store_cache_main_collect=0.1ms/8, store_cache_main_dispatch=0.7ms/8, store_cache_worker_sync=0.6ms/7
+2026-10-25 09:03:35,219 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.85s (69.1 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.44s, stream_visible_ttft=0.44s
+2026-10-25 09:03:43,194 - omlx.scheduler - INFO - Using boundary cache snapshot for 46f140dc-d603-4620-9b47-c1ed609f9ec6: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:43,194 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=16.7ms/9, prefix_cache_lookup=0.5ms/9, store_cache_main_boundary=59.4ms/9, store_cache_main_collect=0.1ms/9, store_cache_main_dispatch=0.8ms/9, store_cache_worker_sync=0.6ms/8
+2026-10-25 09:03:43,195 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.97s (68.2 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.47s, stream_visible_ttft=0.47s
+2026-10-25 09:03:51,178 - omlx.scheduler - INFO - Using boundary cache snapshot for 0481a632-2709-4967-88c0-e08f32b9ccf8: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:51,178 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=18.7ms/10, prefix_cache_lookup=0.5ms/10, store_cache_main_boundary=66.1ms/10, store_cache_main_collect=0.1ms/10, store_cache_main_dispatch=0.9ms/10, store_cache_worker_sync=0.7ms/9
+2026-10-25 09:03:51,179 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.98s (68.1 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.47s, stream_visible_ttft=0.47s
+2026-10-25 09:03:59,139 - omlx.scheduler - INFO - Using boundary cache snapshot for cca62a18-7e7b-477d-91da-e450ba5ab5ad: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:03:59,140 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=20.6ms/11, prefix_cache_lookup=0.6ms/11, store_cache_main_boundary=72.7ms/11, store_cache_main_collect=0.2ms/11, store_cache_main_dispatch=1.0ms/11, store_cache_worker_sync=0.7ms/10
+2026-10-25 09:03:59,140 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 7.96s (68.3 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.47s, stream_visible_ttft=0.47s
+2026-10-25 09:04:07,333 - omlx.scheduler - INFO - Using boundary cache snapshot for 2f178610-dd0f-4a4a-b3bc-933c364efcab: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:04:07,334 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=22.7ms/12, prefix_cache_lookup=0.6ms/12, store_cache_main_boundary=79.3ms/12, store_cache_main_collect=0.2ms/12, store_cache_main_dispatch=1.0ms/12, store_cache_worker_sync=0.8ms/11
+2026-10-25 09:04:07,334 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 8.19s (66.3 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.47s, stream_visible_ttft=0.47s
+2026-10-25 09:04:09,620 - omlx.scheduler - INFO - Reserved prefill capacity for 4182 tokens across 8 caches (+0.02GB)
+2026-10-25 09:04:12,785 - omlx.scheduler - INFO - Using boundary cache snapshot for 53b84b33-c10a-4fa0-8fad-929a728d1ac1: storing 4176/4225 tokens (tail terminal, 2 intermediate snapshots)
+2026-10-25 09:04:12,785 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=24.6ms/13, prefix_cache_lookup=0.9ms/13, store_cache_main_boundary=85.8ms/13, store_cache_main_collect=0.2ms/13, store_cache_main_dispatch=1.1ms/13, store_cache_worker_sync=0.8ms/12
+2026-10-25 09:04:12,786 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 43 tokens in 5.36s (65.9 tok/s), prompt: 4182, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=4.71s, stream_visible_ttft=4.71s
+2026-10-25 09:04:13,837 - omlx.scheduler - INFO - Prefix cache restore for 6e480533-e092-4c8a-a740-3e675aee5634: source=paged cached=4176 suffix=71 blocks=3 lookup=0.263ms reconstruct=11.969ms promote=True
+2026-10-25 09:04:13,846 - omlx.scheduler - INFO - Reserved prefill capacity for 4247 tokens across 8 caches (+0.00GB)
+2026-10-25 09:04:14,462 - omlx.scheduler - INFO - Using boundary cache snapshot for 6e480533-e092-4c8a-a740-3e675aee5634: storing 4241/4263 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:04:14,462 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=26.5ms/14, prefix_cache_lookup=1.1ms/14, prefix_cache_reconstruct=12.0ms/1, store_cache_main_boundary=89.7ms/14, store_cache_main_collect=0.2ms/14, store_cache_main_dispatch=1.2ms/14, store_cache_worker_sync=0.9ms/13
+2026-10-25 09:04:14,463 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 16 tokens in 0.65s (66.6 tok/s), prompt: 4247, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.41s, stream_visible_ttft=0.41s
+2026-10-25 09:04:15,499 - omlx.scheduler - INFO - Prefix cache restore for ac16db3f-4ec1-4d27-9b83-599b855a738e: source=paged cached=4241 suffix=49 blocks=3 lookup=0.212ms reconstruct=10.281ms promote=True
+2026-10-25 09:04:15,510 - omlx.scheduler - INFO - Reserved prefill capacity for 4290 tokens across 8 caches (+0.00GB)
+2026-10-25 09:04:16,047 - omlx.scheduler - INFO - Using boundary cache snapshot for ac16db3f-4ec1-4d27-9b83-599b855a738e: storing 4284/4305 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:04:16,047 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=28.5ms/15, prefix_cache_lookup=1.3ms/15, prefix_cache_reconstruct=22.2ms/2, store_cache_main_boundary=93.4ms/15, store_cache_main_collect=0.2ms/15, store_cache_main_dispatch=1.3ms/15, store_cache_worker_sync=0.9ms/14
+2026-10-25 09:04:16,048 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 15 tokens in 0.57s (67.1 tok/s), prompt: 4290, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.34s, stream_visible_ttft=0.35s
+2026-10-25 09:04:17,098 - omlx.scheduler - INFO - Prefix cache restore for 2dce857f-214d-4d69-a3e0-76acc0fa5bf2: source=paged cached=4284 suffix=41 blocks=3 lookup=0.256ms reconstruct=11.974ms promote=True
+2026-10-25 09:04:17,109 - omlx.scheduler - INFO - Reserved prefill capacity for 4325 tokens across 8 caches (+0.00GB)
+2026-10-25 09:04:20,621 - omlx.scheduler - INFO - Using boundary cache snapshot for 2dce857f-214d-4d69-a3e0-76acc0fa5bf2: storing 4319/4546 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:04:20,621 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=30.2ms/16, prefix_cache_lookup=1.6ms/16, prefix_cache_reconstruct=34.2ms/3, store_cache_main_boundary=97.5ms/16, store_cache_main_collect=0.2ms/16, store_cache_main_dispatch=1.4ms/16, store_cache_worker_sync=1.0ms/15
+2026-10-25 09:04:20,622 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 221 tokens in 3.55s (68.6 tok/s), prompt: 4325, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.33s, stream_visible_ttft=0.33s
+2026-10-25 09:04:22,639 - omlx.scheduler - INFO - Reserved prefill capacity for 16512 tokens across 8 caches (+0.11GB)
+2026-10-25 09:04:37,644 - omlx.scheduler - INFO - Using boundary cache snapshot for ad026417-0225-46f7-a986-f6662b23c669: storing 16506/16544 tokens (tail terminal, 8 intermediate snapshots)
+2026-10-25 09:04:37,644 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=32.2ms/17, prefix_cache_lookup=2.2ms/17, prefix_cache_reconstruct=34.2ms/3, store_cache_main_boundary=104.2ms/17, store_cache_main_collect=0.2ms/17, store_cache_main_dispatch=1.5ms/17, store_cache_worker_sync=1.0ms/16
+2026-10-25 09:04:37,645 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 32 tokens in 16.92s (65.7 tok/s), prompt: 16512, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=16.43s, stream_visible_ttft=16.43s
+2026-10-25 09:04:38,740 - omlx.scheduler - INFO - Prefix cache restore for a70acf15-c4ad-4d5b-b2ef-88896ab40f74: source=paged cached=16506 suffix=60 blocks=9 lookup=0.615ms reconstruct=18.969ms promote=True
+2026-10-25 09:04:38,755 - omlx.scheduler - INFO - Reserved prefill capacity for 16566 tokens across 8 caches (+0.00GB)
+2026-10-25 09:04:39,298 - omlx.scheduler - INFO - Using boundary cache snapshot for a70acf15-c4ad-4d5b-b2ef-88896ab40f74: storing 16560/16578 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:04:39,298 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=34.3ms/18, prefix_cache_lookup=2.8ms/18, prefix_cache_reconstruct=53.2ms/4, store_cache_main_boundary=108.6ms/18, store_cache_main_collect=0.2ms/18, store_cache_main_dispatch=1.6ms/18, store_cache_worker_sync=1.1ms/17
+2026-10-25 09:04:39,299 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 12 tokens in 0.61s (64.7 tok/s), prompt: 16566, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.42s, stream_visible_ttft=0.42s
+2026-10-25 09:04:40,395 - omlx.scheduler - INFO - Prefix cache restore for 9008e84d-1fce-4070-9505-595f96f6350a: source=paged cached=16560 suffix=45 blocks=9 lookup=0.578ms reconstruct=19.152ms promote=True
+2026-10-25 09:04:40,411 - omlx.scheduler - INFO - Reserved prefill capacity for 16605 tokens across 8 caches (+0.00GB)
+2026-10-25 09:04:40,953 - omlx.scheduler - INFO - Using boundary cache snapshot for 9008e84d-1fce-4070-9505-595f96f6350a: storing 16599/16620 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:04:40,953 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=36.1ms/19, prefix_cache_lookup=3.4ms/19, prefix_cache_reconstruct=72.3ms/5, store_cache_main_boundary=113.3ms/19, store_cache_main_collect=0.3ms/19, store_cache_main_dispatch=1.6ms/19, store_cache_worker_sync=1.1ms/18
+2026-10-25 09:04:40,954 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 15 tokens in 0.61s (65.1 tok/s), prompt: 16605, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.38s, stream_visible_ttft=0.38s
+2026-10-25 09:04:42,050 - omlx.scheduler - INFO - Prefix cache restore for 2ee6da51-73d2-4290-a3a5-895b8830360a: source=paged cached=16599 suffix=41 blocks=9 lookup=0.580ms reconstruct=18.726ms promote=True
+2026-10-25 09:04:42,068 - omlx.scheduler - INFO - Reserved prefill capacity for 16640 tokens across 8 caches (+0.00GB)
+2026-10-25 09:04:45,006 - omlx.scheduler - INFO - Using boundary cache snapshot for 2ee6da51-73d2-4290-a3a5-895b8830360a: storing 16634/16815 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-25 09:04:45,006 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=38.0ms/20, prefix_cache_lookup=3.9ms/20, prefix_cache_reconstruct=91.0ms/6, store_cache_main_boundary=117.9ms/20, store_cache_main_collect=0.3ms/20, store_cache_main_dispatch=1.7ms/20, store_cache_worker_sync=1.2ms/19
+2026-10-25 09:04:45,007 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 175 tokens in 3.00s (66.4 tok/s), prompt: 16640, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.37s, stream_visible_ttft=0.37s
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-10-25 09:04:45,277 - omlx.process_memory_enforcer - INFO - Process memory enforcer stopped
+2026-10-25 09:04:45,277 - omlx.server - INFO - Process memory enforcer stopped
+2026-10-25 09:04:45,277 - omlx.admin.hf_downloader - INFO - HF Downloader shut down
+2026-10-25 09:04:45,277 - omlx.server - INFO - HF Downloader stopped
+2026-10-25 09:04:45,277 - omlx.engine_pool - INFO - Unloading model: nemotron-3.5-bolt-24gb (immediate abort)
+2026-10-25 09:04:45,278 - omlx.engine_core - INFO - Engine stopped
+2026-10-25 09:04:45,282 - omlx.scheduler - INFO - Scheduler shutdown initiated...
+2026-10-25 09:04:45,284 - omlx.cache.paged_ssd_cache - INFO - Shutting down PagedSSDCacheManager...
+2026-10-25 09:04:45,284 - omlx.cache.paged_ssd_cache - INFO - Flushed 27 hot cache blocks to SSD
+2026-10-25 09:04:45,322 - omlx.scheduler - INFO - Scheduler shutdown completed
+2026-10-25 09:04:45,322 - omlx.cache.paged_cache - INFO - PagedCacheManager cleared (reset to 256 initial blocks)
+2026-10-25 09:04:45,357 - omlx.scheduler - INFO - Deep reset completed - all caches cleared
+2026-10-25 09:04:45,421 - omlx.engine.vlm - INFO - VLMBatchedEngine stopped
+2026-10-25 09:04:46,040 - omlx.engine_pool - INFO - Unloaded model: nemotron-3.5-bolt-24gb, freed=22.63GB (expected>=21.55GB), active_memory: 1.02KB (settled)
+2026-10-25 09:04:46,084 - omlx.engine_pool - INFO - Engine pool shutdown complete
+2026-10-25 09:04:46,084 - omlx.server - INFO - Engine pool shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [81536]
