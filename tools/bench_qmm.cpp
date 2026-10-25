@@ -54,6 +54,8 @@ static uint32_t threads_for(const std::string& name) {
   if (getenv("QMM_THREADS")) return atoi(getenv("QMM_THREADS"));
   std::smatch m;
   if (std::regex_search(name, m, std::regex("_w([0-9])([0-9])_"))) return 32 * std::stoi(m[1]) * std::stoi(m[2]);
+  if (name.rfind("qmti8s", 0) == 0 && std::regex_search(name, m, std::regex("_m([0-9]+)_n([0-9]+)")))
+    return std::stoi(m[1]) * std::stoi(m[2]) / 32;  // one 32 x 32 simdgroup each
   return 128;
 }
 
@@ -104,6 +106,7 @@ int main(int argc, char** argv) {
     // weights sized for 8 bits (4-bit kernels read the first half), rows of 2K for the *_ld kernels' view
     Buffer W = g.alloc(size_t(N) * K * 2), S = g.alloc(size_t(N) * K / 64 * 4), B = g.alloc(size_t(N) * K / 64 * 4);
     Buffer X = g.alloc(size_t(M) * K * 2), Y = g.alloc(size_t(M) * N * 4);
+    Buffer XQ = g.alloc(size_t(M) * K), XS = g.alloc(size_t(M) * K / 64 * 8);  // qmti8_*: qx8_g64's int8 X
     Buffer W2 = g.alloc(size_t(N) * K * 2), S2 = g.alloc(size_t(N) * K / 64 * 4), B2 = g.alloc(size_t(N) * K / 64 * 4);
     std::uniform_real_distribution<float> d(-1, 1);
     for (auto [w, sc, bi] : {std::tuple{&W, &S, &B}, std::tuple{&W2, &S2, &B2}}) {
@@ -117,19 +120,32 @@ int main(int argc, char** argv) {
     const double flop = 2.0 * M * N * K;
     const int reps = std::max(3, int(1.5e12 / flop));
     std::vector<Pipeline> pipes;
+    Pipeline qx8;
+    const bool nopre = getenv("QMM_I8_NOPRE") != nullptr;  // qmti8_*: time the GEMM alone (X quantized once)
     for (auto& k : kerns) {
       if (k.name.rfind("qmt", 0) == 0) g.compile_extra("tensor", kTensorKernelSource, true);
       pipes.push_back(g.pipeline(k.name));
+      if (k.name.rfind("qmti8", 0) == 0) qx8 = g.pipeline("qx8_g64");
     }
+    struct { uint32_t M, K, x_ld; } qxp{M, K, K};
+    auto quant = [&](Encoder* e) {
+      e->use(qx8);
+      e->buf(0, X); e->buf(1, XQ); e->buf(2, XS); e->val(3, qxp);
+      e->dispatch((M * (K / 64) * 8 + 255) / 256, 1, 1, 256);
+    };
     QmmParams prm{M, N, K, K, N, 0, 64, 0, 0};
     struct { QmmParams q; uint32_t w_ld, s_ld; } ldprm{prm, 2 * K / 8, 2 * K / 64};  // 4-bit rows of 2K
     auto run = [&](size_t ki, int n) {
       const Kern& k = kerns[ki];
       auto e = g.begin();
+      const bool i8 = k.name.rfind("qmti8", 0) == 0;
+      if (i8 && nopre) quant(e.get());
       e->use(pipes[ki]);
       for (int r = 0; r < n; ++r) {
-        e->buf(0, X); e->buf(1, W); e->buf(2, S); e->buf(3, B); e->buf(4, Y);
-        if (k.ld) e->val(5, ldprm); else e->val(5, prm);
+        if (i8 && !nopre) { quant(e.get()); e->use(pipes[ki]); }
+        e->buf(0, i8 ? XQ : X);
+        if (i8) { QmmParams q8 = prm; q8.x_ld = K; e->val(5, q8); e->buf(6, XS); } e->buf(1, W); e->buf(2, S); e->buf(3, B); e->buf(4, Y);
+        if (k.ld) e->val(5, ldprm); else if (!i8) e->val(5, prm);
         if (k.gu) { e->buf(6, W2); e->buf(7, S2); e->buf(8, B2); }
         const int cb = k.name.rfind("qmtg", 0) == 0 ? k.bn / 2 : k.bn;
         e->dispatch((N + cb - 1) / cb, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
@@ -173,10 +189,11 @@ int main(int argc, char** argv) {
       std::vector<double> v = ms[ki];
       std::sort(v.begin(), v.end());
       double med = v[v.size() / 2], best = v[0];
-      const double kf = kerns[ki].gu ? 2.0 * flop : flop, tol = kerns[ki].gu ? 4e-3 : 1e-3;
+      const double kf = kerns[ki].gu ? 2.0 * flop : flop,
+                   tol = kerns[ki].name.rfind("qmti8", 0) == 0 ? 3e-2 : kerns[ki].gu ? 4e-3 : 1e-3;
       printf("%-26s M=%5u N=%5u K=%5u  %8.1f us  med %5.2f  best %5.2f TFLOP/s  err=%.1e%s\n", kerns[ki].name.c_str(), M, N,
              K, med * 1000, kf / (med * 1e-3) / 1e12, kf / (best * 1e-3) / 1e12, maxrel, maxrel > tol ? "  FAIL" : "");
     }
-    for (Buffer* b : {&W, &S, &B, &W2, &S2, &B2, &X, &Y}) g.release(*b);
+    for (Buffer* b : {&W, &S, &B, &W2, &S2, &B2, &X, &Y, &XQ, &XS}) g.release(*b);
   }
 }

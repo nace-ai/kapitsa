@@ -2347,6 +2347,28 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
   else e.dispatch(nt, mt, 1, th);
 }
 
+// NI_QMT_I8 (read once; default 0, experiment): the 4-bit dense prefill GEMMs as W4A8 on the M5's int8 matrix units
+// (tensor/qmti8.metal: X quantized per row per group of 64 by qx8_g64, then qmti8s_m64_n128). bench_qmm, M = 4096
+// with the quantize pass timed: 27.9 / 25.2 TFLOP/s against qmt_m64_n64's 23.4 / 19.8 (N 10240 K 2560, N 2560
+// K 6144). Lossy (activation rounding): judge by NLL, not by the bitwise gate.
+static bool qmt_i8_on() {
+  static const bool on = env_int("NI_QMT_I8", 0) != 0 && qmt_on();
+  return on;
+}
+// a ring of scratch slots for the quantized X: a grouped encoder may overlap a few independent GEMMs
+static std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k) {
+  struct Slot { Buffer q, s; size_t cap = 0; };
+  static Slot ring[4];
+  static unsigned next = 0;
+  Slot& sl = ring[next++ % 4];
+  if (sl.cap < m * k) {
+    sl.q = Gpu::get().alloc(m * k, "qmti8_x");
+    sl.s = Gpu::get().alloc(m * k / 64 * 8, "qmti8_xs");
+    sl.cap = m * k;
+  }
+  return {sl.q, sl.s};
+}
+
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
@@ -2359,6 +2381,21 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     e.val(5, p);
     if (mfast) e.dispatch((M + bm - 1) / bm, (L.N + bn - 1) / bn, 1, 128);
     else e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, 128);
+    return;
+  }
+  if (q.on && qmt_i8_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+    const Pipeline& gemm = pipe("qmti8s_m64_n128");  // first: compiles the tensor library qx8_g64 lives in
+    auto [xq, xs] = qmt_i8_scratch(size_t(M), L.K);
+    struct { uint32_t M, K, x_ld; } qp{uint32_t(M), L.K, L.K};
+    e.use(pipe("qx8_g64"));
+    e.buf(0, xh); e.buf(1, xq); e.buf(2, xs); e.val(3, qp);
+    e.dispatch((uint32_t(M) * (L.K / 64) * 8 + 255) / 256, 1, 1, 256);
+    e.barrier();
+    e.use(gemm);
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xq); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p); e.buf(6, xs);
+    e.dispatch((L.N + 127) / 128, (uint32_t(M) + 63) / 64, 1, 256);
     return;
   }
   if (q.on && qmt_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
