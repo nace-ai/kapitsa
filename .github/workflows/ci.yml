@@ -185,16 +185,30 @@ jobs:
       - name: Offline-compile every Metal source
         run: |
           set -euo pipefail
-          # Take the newest language version this Xcode has: the driver picks 3.1, 3.2 or 4.0 (src/metal/gpu.mm).
+          echo "::group::toolchain"
+          xcodebuild -version || true
+          xcrun -sdk macosx metal --version || true
+          sw_vers || true
+          echo "::endgroup::"
+          # Probe the language version with a throwaway kernel: the question is whether this Xcode
+          # accepts -std=metalN, not whether our sources compile. Probing with src/kernels/qwen4.metal
+          # conflated the two - a source error then read as "no language version", and the probe hid
+          # the compiler's stderr, so the first run said nothing a person could act on.
+          cat > "$RUNNER_TEMP/probe.metal" <<'PROBE'
+          #include <metal_stdlib>
+          using namespace metal;
+          kernel void probe(device int *o [[buffer(0)]]) { o[0] = 1; }
+          PROBE
           std=""
-          for candidate in metal3.2 metal3.1; do
-            if xcrun -sdk macosx metal -std="$candidate" -I src/kernels -c src/kernels/qwen4.metal -o "$RUNNER_TEMP/metal-probe.air" 2>/dev/null; then
+          for candidate in metal3.2 metal3.1 metal3.0; do
+            echo "probe: -std=$candidate"
+            if xcrun -sdk macosx metal -std="$candidate" -c "$RUNNER_TEMP/probe.metal" -o "$RUNNER_TEMP/probe.air"; then
               std="$candidate"
               break
             fi
           done
           if [ -z "$std" ]; then
-            echo "::error::no usable -std=metal3.x on this runner"
+            echo "::error::no usable -std=metal3.x on this runner (probe output above)"
             exit 1
           fi
           echo "compiling with -std=$std"
