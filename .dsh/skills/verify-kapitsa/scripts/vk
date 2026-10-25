@@ -9,6 +9,8 @@
 #   vk checks [BASE]           what a PR's changed files require (BASE...HEAD, default origin/main)
 #   vk ref [BASE] [TARGET...]  build BASE (default origin/main) once per commit, outside this checkout, for the output
 #                              check and speed A/B (default targets: kapitsa logit_dump); prints its build dir
+#   vk gpu [run ...]           which Mac's GPU is free soonest (this one or a Tailscale peer); `gpu run` queues a job
+#                              on one with a declared ETA (scripts/gpu.py; read-only until `run`)
 #   vk serve MODEL [ARGS...]   GPU: kapitsa serve under the GPU lock on 127.0.0.1:$VK_PORT, waits for /health
 #   vk stop                    stop the server this run started (never anything else)
 #   vk cleanup                 vk stop, then delete this run's scratch state; evidence stays
@@ -194,6 +196,7 @@ cmd_cleanup() { cmd_stop; rm -rf "${STATE:?}"; echo "removed $STATE; evidence ke
 c="${1:-}"; shift || true
 case "$c" in
   doctor) cmd_doctor ;; build) cmd_build "$@" ;; cli) cmd_cli "$@" ;; cpu-tests) cmd_cpu_tests ;;
+  gpu) exec python3 "$SKILL/scripts/gpu.py" "$@" ;;
   checks) cmd_checks "$@" ;; ref) cmd_ref "$@" ;; serve) cmd_serve "$@" ;; stop) cmd_stop ;; cleanup) cmd_cleanup ;;
-  *) sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; [[ -z "$c" ]] ;;
+  *) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; [[ -z "$c" ]] ;;
 esac

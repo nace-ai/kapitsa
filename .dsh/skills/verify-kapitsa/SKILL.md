@@ -48,6 +48,38 @@ $V serve "$NACE_MODELS/qwen3.5-4b-4bit-mtp" --slots 1 --context 32k   # extra ar
 $VK_PORT` (default 8090). It returns once `/health` and `/v1/models` both answer 200, the readiness check
 `kapitsa bench` uses. The server log is `<evidence>/serve.log`.
 
+## Which GPU
+
+Each Mac has one GPU lock, and the queue for it is whoever is blocked in `lockf`. Before a GPU leg, see which Mac
+frees up first:
+
+```bash
+$V gpu                                                    # every Mac: lock holder, waiters and their ETAs, free memory; ends with "pick:"
+$V gpu --model qwen3.8-27b-4bit --chip M5 --min-macos 26  # only the Macs that can run this leg
+$V gpu run --eta 25 --label "#590 4B logit gate" -- bash leg.sh       # queue on this Mac, declaring 25 min of GPU
+$V gpu run --host m3pro --eta 40 --cwd ~/kq/x --log /tmp/leg.log -- bash leg.sh   # queue on another Mac, detached there
+```
+
+- **Macs** come from `~/.config/verify-kapitsa/hosts` (`$VK_HOSTS`), one per line: `name user@host [socks=HOST:PORT]`.
+  On a Mac where Tailscale runs in userspace mode, ssh goes through its SOCKS proxy: `socks=localhost:1065`. `vk gpu`
+  lists tailnet Macs that are missing from the file, so you can add them. The probe is read-only: `sysctl`, `vm_stat`,
+  `lsof`, `ps` and the model folders.
+- **The estimate** adds the holder's remaining ETA to every waiter's ETA. A job without a declared ETA counts as 20
+  min (`$VK_GPU_DEFAULT_ETA`). A job past its ETA counts as 5 more min. A model process loaded without the lock makes
+  the Mac busy. Only jobs started with `gpu run` declare an ETA. `flock` does not promise FIFO, so the order of the
+  waiters is a guess.
+- **`gpu run`** writes `start ETA label` to `/tmp/kapitsa-gpu.queue/<pid>` on that Mac, then runs `lockf -k
+  /tmp/kapitsa-gpu.lock CMD` with `NI_LOCK_HELD=1`, so it takes the lock exactly once. Do not put `lockf` or
+  `vk serve` inside CMD. A nested `lockf` waits forever on its own parent's hold, and `vk serve` fails at once
+  (exit 75). Start `kapitsa serve` directly in the leg script instead. On this Mac, a job over 10 min goes under `detach.py`: `detach.py run --name
+  <job> -- $V gpu run --eta N -- CMD`.
+- **Choosing the Mac.** Both arms of an A/B, and both dumps of an output check, run on one Mac. A floor file is a
+  measurement on the Mac named in its `measured.mac` field. Tensor-unit kernels (`src/kernels/tensor/`, the M5
+  defaults in AGENTS.md) need `--chip M5 --min-macos 26`. A remote Mac runs a build of your commit, never its own
+  old checkouts: build there first. Label every number with the Mac, chip, RAM and macOS.
+- **A remote job is yours.** Stop its servers and processes when you are done. Delete files on another Mac only with
+  the user's OK. Never load a second model on a Mac whose lock is held.
+
 ## Doctor
 
 ```bash
@@ -104,6 +136,8 @@ measurements.
   lock, cleanup
 - `scripts/required_checks.py`: changed paths to tier, checks and models (`--files a b` for a list, `--json`)
 - `scripts/test_required_checks.py`: pins sample paths' tiers and models; run it after changing a rule
+- `scripts/gpu.py` (`vk gpu`): which Mac's GPU frees up first, and `run` to queue a job with an ETA;
+  `scripts/test_gpu.py` pins how it reads holders, waiters and ETAs
 - `references/pr-checks.md`: the tiers, which models and datasets, and what a PR description must carry
 - `references/output-check.md`: the logit gate and the interleaved speed A/B, step by step
 - `features/`: the feature map
