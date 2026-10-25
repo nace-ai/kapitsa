@@ -57,6 +57,27 @@ jobs:
       - run: python3 bench/gen_readme.py --check
       - run: python3 tools/readme_images/readme_images.py --tables --check
 
+  community-table:
+    # bench/community/RESULTS.md is written by tools/community_table.py from bench/community/results. A row merged
+    # without the rewrite leaves main's table stale, and the push-to-main `table` job cannot open the pull request it
+    # needs here, so nothing else would notice. Pure computation over the working tree: no author lookup, no GPU, no
+    # secrets, no fetch-depth. Not a required check (the ruleset requires none): this is the loud pre-merge signal, and
+    # the same run on main flags a table that went stale after the fact.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check the community results table
+        run: |
+          if python3 tools/community_table.py --check; then
+            exit 0
+          fi
+          # show what the table is missing, then fail: the row and its rewrite have to ride in the same pull request
+          python3 tools/community_table.py
+          git --no-pager diff -- bench/community/RESULTS.md || true
+          echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results. Run 'python3 tools/community_table.py' and commit bench/community/RESULTS.md in this pull request."
+          exit 1
+
   agentic-metrics-script:
     # bench/harness/agentic.py against a fake server: no model, no GPU.
     runs-on: ubuntu-latest
