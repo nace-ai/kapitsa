@@ -6,20 +6,33 @@
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
 
-[Quickstart](#quickstart) · [CLI](#cli) · [Benchmarks](#benchmarks) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
+[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [CLI](#cli) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
+
+## Benchmarks
+
+Kapitsa has the fastest decode in 32 of the 36 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
+  <img alt="Poster of prefill / decode speed for Kapitsa and nine other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro, M3 Pro and M1 Pro; the numbers are in the poster and in the Models section's tables" src="docs/assets/benchmarks-light.webp">
+</picture>
+
+<sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer at T 0.6 (Flint at its card's T 1.0). × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
+
+The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
 ## 🔥 What's new
 
-- [2026/10] 🪶 **Flint on a 16 GB Mac: decodes at 61 tok/s vs llama.cpp's 43 on the same 2-bit GGUF.** `--model flint` takes unsloth's 2-bit GGUF on 16-24 GB Macs: its routed experts run as stored, the rest requantized to 3-6 bits. 61 tok/s decode on an M1 Pro, in 11.6 GB ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
-- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: Kapitsa reads prompts faster than Recursive's own engine and decodes faster than llama.cpp.** On the M4 Pro every Kapitsa run read 4K and 16K prompts faster than every run of rec 0.1.0. On the M5 Pro, since Flint's attention moved to the tensor units (#345), both runs read 4K and 16K prompts faster than rec's and llama.cpp's; earlier builds read slower, and both runs carry harness flags. On both Macs every Kapitsa run decodes faster than llama.cpp ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
-- [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **Kapitsa: the fastest decode in 32 of 36 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
-- [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
-- [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (4B, M5 Pro).
-- [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** A 16K-token follow-up on the 35B starts in **0.16 s instead of 17 s**, about 100× (`--disk-cache`).
-- [2026/10] 🧠 **Prefix reuse: subagents start warm.** A new question over the shared system prompt answers in **0.06 s instead of 1.9 s** (4K prompt, 4B, M5 Pro).
-- [2026/10] 🧪 **Output check: speed has to prove it kept the answers.** A default changes only after its logits stay within twice the model's noise floor ([how](CONTRIBUTING.md#output-check)).
-- [2026/10] 📊 **`kapitsa bench compare`: see it on your own Mac.** The same test against every engine installed here, in one command.
+- [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
+- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
+- [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX** ([how it works](docs/kflash.md)).
+- [2026/10] 🏆 **The fastest decode in 32 of 36 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
+- [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B.
+- [2026/10] ⚡ **QMT prefill: prompts read up to 1.5× faster on M5** with the Metal 4 matrix units.
+- [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
+- [2026/10] 🧠 **Prefix reuse: a new question over a shared 4K system prompt answers in 0.06 s instead of 1.9 s.**
+- [2026/10] 🧪 **Output check: a faster default must keep the answers** ([how](CONTRIBUTING.md#output-check)).
+- [2026/10] 📊 **`kapitsa bench compare`: every installed engine on your Mac, one command.**
 
 ## Quickstart
 
@@ -56,19 +69,6 @@ kapitsa update                  # update now (it also updates itself)
 A Mac that cannot hold a model whole uses another Mac on the network that runs it, and two Macs that would each stream
 Flash-Next pair to hold it in memory between them ([Several Macs](docs/usage.md#several-macs)); `--private` keeps a
 server to its own Mac. [Usage guide](docs/usage.md)</sub>
-
-## Benchmarks
-
-Kapitsa has the fastest decode in 32 of the 36 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
-  <img alt="Poster of prefill / decode speed for Kapitsa and nine other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro, M3 Pro and M1 Pro; the numbers are in the poster and in the Models section's tables" src="docs/assets/benchmarks-light.webp">
-</picture>
-
-<sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer at T 0.6 (Flint at its card's T 1.0). × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
-
-The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
 ## Models
 
