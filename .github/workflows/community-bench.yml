@@ -13,7 +13,7 @@ on:
     paths: ["bench/community/results/**"]
   push:
     branches: [main]
-    paths: ["bench/community/results/**", "tools/community_table.py"]
+    paths: ["bench/community/results/**", "tools/community_table.py", "bench/community/RESULTS.md"]
 
 permissions:
   contents: read
@@ -127,3 +127,9 @@ jobs:
             exit 0
           fi
           gh pr merge "$branch" --squash --delete-branch
+          # The merge above is authored by GITHUB_TOKEN, so it does not trigger this workflow: close the drift
+          # issue here, the same way the up-to-date path does on a hand-landed RESULTS.md push.
+          drift=$(gh issue list --state open --limit 100 --search "in:title \"Community results table is stale on main\"" --json number --jq '.[0].number // empty' || true)
+          if [ -n "$drift" ]; then
+            gh issue close "$drift" --comment "The table is current again as of ${GITHUB_SHA::12}." || true
+          fi
