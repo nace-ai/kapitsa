@@ -5,6 +5,8 @@
 //   fn_check kernels                the Flash-Next kernels (src/kernels/qwen4.metal) on small random inputs against a CPU
 //                                   reference in double; one dispatch per command buffer, so it suits
 //                                   MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1
+//   fn_check qsa-time               the qsa_score / qsa_score_rows A/B only, 40 dispatches behind one commit: a timing run,
+//                                   so it wants the layer OFF and an idle GPU, interleaved against the old build (AGENTS.md)
 //   fn_check compile-only           compiles the embedded kernel library and exits: the zero-dispatch gate for a .metal
 //                                   edit (no model, no buffer, no command buffer, ~1 s). A successful C++ build says
 //                                   nothing about the sources (they are embedded as text and compiled at run time), so
@@ -518,7 +520,9 @@ void test_qsa() {
 }
 
 // A/B of two score kernels in one command buffer, reps dispatches behind one commit: the model-level ms/C of the
-// indexer scan is per layer and too small to see through a full token, so it is measured here in isolation. The R
+// indexer scan is per layer and too small to see through a full token, so it is measured here in isolation. A
+// command of its own (`qsa-time`), not part of `kernels`: the numbers mean nothing under MTL_SHADER_VALIDATION, and
+// 320 dispatches would make the correctness pass slower for it. The R
 // sweep separates the two explanations for the scan's cost: time growing with R at fixed nb means every row pays the
 // key bytes (a byte-bound kernel, which fusing fixes), flat time means the rows already share the lines and the cost
 // is the work itself.
@@ -1147,7 +1151,6 @@ int kernels() {
   test_ple();
   test_qsa();
   test_qsa_rows();
-  test_qsa_timing();
   test_qsa_sparse();
   test_qsa_all();
   printf("%s\n", g_fail ? "FAILED" : "all kernels match");
@@ -1158,7 +1161,7 @@ int kernels() {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: fn_check ngram @ids | selftest | kernels | compile-only\n");
+    fprintf(stderr, "usage: fn_check ngram @ids | selftest | kernels | compile-only | qsa-time\n");
     return 2;
   }
   const std::string cmd = argv[1];
@@ -1173,6 +1176,7 @@ int main(int argc, char** argv) {
   }
   if (cmd == "selftest") return selftest();
   if (cmd == "kernels") return kernels();
+  if (cmd == "--qsa-time" || cmd == "qsa-time") { test_qsa_timing(); return g_fail ? 1 : 0; }
   if (cmd == "ngram" && argc >= 3) {
     const std::vector<int> tok = read_ids(argv[2]);
     const NgramHash h = flash_hash();
