@@ -732,7 +732,7 @@ class Qwen35 : public Model {
   // prefill-only
   Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_, ue_, uw_, un_, mh_;
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
-  // NI_HC_PRECOMB (Qwen4Exp's prefill, default off): the MoE's moe_combine dispatch is skipped and its
+  // NI_HC_PRECOMB (Qwen4Exp's prefill; default on for the Q2_0-expert pack, off for the 4-bit pack): the MoE's moe_combine dispatch is skipped and its
   // sum computed inside the next gated residual (hc_pre_comb). arm_: the caller's next combine folds;
   // comb_pending_: the held combine input for the next hc_pre to consume (ys = the shared rows or the
   // shared-fold view of yd_). Only Qwen4Exp's prefill loop arms it; only its gated residual consumes it.

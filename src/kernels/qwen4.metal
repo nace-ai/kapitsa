@@ -91,8 +91,8 @@ NI_HC_PRE(hc_pre_h, half)
 // then the shared slot, the same token-major y addressing) into threadgroup memory, and phase B is
 // hc_pre_impl's loop reading that sum in place of y. yb_ is neither read nor zeroed here: with the
 // combine skipped it stays zero from the previous gated residual's zeroing until the next mixer
-// output overwrites it. Intended to be bitwise identical to moe_combine + hc_pre{,_h} by
-// construction; outputs not yet compared on a GPU. y / ys / wts bind as moe_combine's (ys = the
+// output overwrites it. Bitwise identical to moe_combine + hc_pre{,_h} by construction, and
+// compared on a GPU: Flash-Next Q2 logit_dump, M5 Pro, 25 Oct, every row identical (#567). y / ys / wts bind as moe_combine's (ys = the
 // shared rows, or the shared-fold view of y); the host gate holds cp.D <= 3968 (cp.k is unbounded —
 // phase A's slot loop takes any k).
 struct HcCombParams {

@@ -157,8 +157,7 @@ NI_INLINE void qmt6_tile(const device half* X, const device uint* W, const devic
 // strings) and the fp32 m value never leaving registers, so the sum reads the same bits hc_mix_h would read
 // back from the fp32 buffer. The weight decode, the tile shape, the double-buffered k-loop, the matmul2d call
 // sequence, the mix sum's order, its divisor and its half cast are the two replaced dispatches' unchanged, so
-// the fused output is intended to be bitwise identical to theirs (not verified: no GPU run of this kernel
-// exists yet). X is re-staged per stream run: the tile's total device traffic is qmt6_m64_n64's over the S*D
+// the fused output is bitwise identical to theirs (Flash-Next Q2 logit_dump, M5 Pro, 25 Oct, every row; #567). X is re-staged per stream run: the tile's total device traffic is qmt6_m64_n64's over the S*D
 // weight rows plus the Xn read hc_mix_h did, minus the m buffer's write and read. Requirements (host): the
 // qmt6 tile's, plus D % 64 == 0 and Xn [M, S*D] half rows.
 

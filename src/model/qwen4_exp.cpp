@@ -136,13 +136,15 @@ bool Qwen4Exp::is_model(const std::string& dir) {
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
 
-// NI_HC_PRECOMB (default on; =0 off): the prefill MoE's moe_combine dispatch is skipped and its sum computed
-// inside the next layer's gated residual (hc_pre_comb, qwen4.metal), bitwise identical by construction (the
-// kernel's phase A replicates moe_combine's arithmetic verbatim). Flash-Next Q2 on the M5 Pro, 25 Oct:
-// logit_dump step path every row bitwise identical at chunk 2048 and 4096; 32K prefill ~+1-3%.
-static bool hc_precomb() {
-  static const bool on = !(getenv("NI_HC_PRECOMB") && !strcmp(getenv("NI_HC_PRECOMB"), "0"));  // default on: bitwise identical (W1 dumps 25 Oct)
-  return on;
+// NI_HC_PRECOMB: the prefill MoE's moe_combine dispatch is skipped and its sum computed inside the next layer's
+// gated residual (hc_pre_comb, qwen4.metal), bitwise identical by construction (the kernel's phase A replicates
+// moe_combine's arithmetic verbatim). Default on for the Q2_0-expert pack only, where it was compared: Flash-Next
+// Q2 on the M5 Pro, 25 Oct, logit_dump every row bitwise identical at chunk 2048 and 4096. The 4-bit pack takes
+// the shared-expert fold (comb_pending_ on yd_'s tail rows), which no dump has covered, so there it needs =1.
+// =0 turns it off everywhere.
+static bool hc_precomb(bool q20_pack) {
+  static const char* v = getenv("NI_HC_PRECOMB");
+  return v ? strcmp(v, "0") != 0 : q20_pack;
 }
 
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
@@ -369,7 +371,7 @@ void Qwen4Exp::load(const std::string& dir) {
                                   "ple_rows", "ple_gate_rows", "ple_conv_rows", "ple_ring_rows", "qsa_prep", "qsa_block",
                                   "gdn_step_sg", "gdn_gnorm_sg", "gdn_step_verify_sg", "moe_topk", "moe_topk_rows",
                                   "moe_down2_w", "moe_down_rows_g64_w"};
-    if (hc_precomb()) v.push_back("hc_pre_comb_h");
+    if (hc_precomb(q20_pack_)) v.push_back("hc_pre_comb_h");
     for (const std::string& n : v) Gpu::get().pipeline(n, false);
   }
   ple_ev_ = Gpu::get().new_shared_event();
@@ -1006,8 +1008,8 @@ void Qwen4Exp::enc_gr_prefill(Encoder& e, const GatedRes& g, int T, const Buffer
   // qmt6_m64_n64's k-loop once per stream and drains sigmoid(m) * Xn into a second destination tensor in
   // hc_mix_impl's order, so the [T, S*D] fp32 mix buffer (hcm_) is never written or read back (16K prefill on
   // Flash-Next q20: 84 MB written + 84 MB read and one dispatch per hyper-connection per chunk saved).
-  // Bitwise identical to the two dispatches it replaces (Flash-Next Q2 logit_dump, 25 Oct: every row; 32K prefill
-  // ~+2-3%, three interleaved legs a side).
+  // Bitwise identical to the two dispatches it replaces (Flash-Next Q2 logit_dump, 25 Oct: every row). The fold
+  // touches only the 6-bit hyper-connection weights, which the Q2 pack takes unchanged from the 4-bit pack.
   // Engages only where the up GEMM it replaces is exactly enc_qmm_large's qmt6_m64_n64 branch: qmm_on() (its
   // q.on), qmt6_on(), T >= 64, and not the short-prefill enc_proj detour (!small_t(T), which enc_qmm takes when
   // shortpf() && T <= shortpf_max()). Against any other baseline (qrf, qmr, enc_proj) the fused tile would be a
@@ -1497,7 +1499,7 @@ void Qwen4Exp::enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buf
     // reads yb_ in between — no armed capture of this layer, and no PLE boundary, debug cut or final
     // layer after it (those consume yb_ through enc_inject / enc_hop) — and the kernel's threadgroup
     // sum fits: one float4 per thread of the row's 1024, so D % 4 == 0 and D / 4 <= 992 (D <= 3968).
-    precomb_arm_ = hc_precomb() && i + 1 < hi_ && i + 1 != dbg_layers_ && i + 1 != c4_.ple_layer &&
+    precomb_arm_ = hc_precomb(q20_pack_) && i + 1 < hi_ && i + 1 != dbg_layers_ && i + 1 != c4_.ple_layer &&
                    cfg_.hidden % 4 == 0 && cfg_.hidden <= 3968 && capture_noop(i, pos0, T);
     enc_moe_prefill(e, L, T, yb_, /*xh_ready=*/true);
     precomb_arm_ = false;
