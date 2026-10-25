@@ -137,6 +137,32 @@ def power_flags(power, powermode, low_power=None):
     return [f"POWER: run started {' and '.join(what)} (numbers are not comparable with plugged-in automatic-mode runs)"]
 
 
+def parse_powermode(all_out):
+    """`pmset -g` text -> "0" | "1" | "2" | None. 0 automatic, 1 low power, 2 high power.
+
+    The system-wide `powermode` is read first and `lowpowermode` is the fallback an older release prints instead, the
+    same order src/bench/system.mm uses. Both are anchored at the line start: `lowpowermode 0` contains "powermode",
+    so an unanchored search reads the wrong key on a release that prints both.
+    """
+    for key in ("powermode", "lowpowermode"):
+        m = re.search(r"^\s*" + key + r"\s+(\d+)", all_out or "", re.M)
+        if m:
+            return m.group(1)
+    return None
+
+
+def add_power_flags(flags, power, powermode, low_power=None):
+    """Append the POWER flag to `flags` unless one is already there.
+
+    bench.py adds it from the sample it takes before the run, and compare_engines would otherwise add it again from the
+    same provenance after an --agentic run: the two samples are taken minutes apart and can word the flag differently,
+    and compare_table.py keeps every POWER flag it finds.
+    """
+    if not any(f.startswith("POWER:") for f in flags):
+        flags.extend(power_flags(power, powermode, low_power))
+    return flags
+
+
 def harness_info():
     """The harness's own version: git HEAD of its checkout and whether bench/harness has local changes. A release
     ships a copy with no checkout (packaging/release/build.sh), which says which release it came with in a VERSION
@@ -984,7 +1010,7 @@ def main():
             inv += [f"{name}: {x}" for x in res[name].get("invalid", [])]
             fl += [f"{name}: {x}" for x in res[name].get("flags", [])]
     th = res.get("thermal_start") or {}
-    fl += power_flags("Battery Power" if th.get("battery") else "", th.get("powermode"), th.get("low_power"))
+    add_power_flags(fl, "Battery Power" if th.get("battery") else "", th.get("powermode"), th.get("low_power"))
     for name, m in res["memory"].items():
         if (m.get("swapouts_delta") or 0) > 1000:
             fl.append(f"{name}: {m['swapouts_delta']} pages swapped out during the phase")

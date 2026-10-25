@@ -701,7 +701,7 @@ def system_state():
     d = {"sw_vers": dict(re.findall(r"^(\w+):\s*(.+)$", run(["sw_vers"]), re.M)),
          "hw_model": run(["sysctl", "-n", "hw.model"]), "cpu": run(["sysctl", "-n", "machdep.cpu.brand_string"]),
          "memsize": run(["sysctl", "-n", "hw.memsize"]), "power": run(["pmset", "-g", "batt"]).split("\n")[0],
-         "powermode": (re.search(r"powermode\s+(\d+)", pm_out) or [None, None])[1],
+         "powermode": bench.parse_powermode(pm_out),
          # 0 automatic, 1 low power, 2 high power: the same mapping src/bench/system.mm reads
          "low_power": bool(re.search(r"lowpowermode\s+1|^\s*powermode\s+1", pm_out, re.M)),
          "vm": bench.vm_snapshot(), "gpu_mem": gpu_mem(),
@@ -1243,8 +1243,7 @@ def run_config_keyed(c, args, stamp):
                    "teardown": teardown})
     free0 = ((prov.get("system_start") or {}).get("disk_free_bytes"))
     ss = prov.get("system_start") or {}
-    result.setdefault("flags", []).extend(
-        bench.power_flags(ss.get("power"), ss.get("powermode"), ss.get("low_power")))
+    bench.add_power_flags(result.setdefault("flags", []), ss.get("power"), ss.get("powermode"), ss.get("low_power"))
     if engine_kind(c) in DISK_CACHE_ENGINES and free0 is not None and free0 < DISK_CACHE_FLOOR:
         result.setdefault("flags", []).append(
             f"disk: {free0 / 2**30:.1f} GiB free at start, under the 10 GiB below which {engine_kind(c)} keeps no "

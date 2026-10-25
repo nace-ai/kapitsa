@@ -76,6 +76,20 @@ check(agentic.parse_thermal("", "", " lowpowermode\n highpowermode\n")["low_powe
       "the bare capability tokens pmset -g cap prints are not a mode")
 check(agentic.parse_thermal("", "Now drawing from 'Battery Power'", " powermode            0\n")["battery"] is True,
       "battery is read from pmset -g batt")
+# Both keys on one release: "lowpowermode 0" also contains "powermode", so the read has to be anchored to the line.
+check(bench.parse_powermode("System-wide power settings:\n lowpowermode         0\n powermode            2\n") == "2",
+      "the anchored read takes powermode past a lowpowermode line", bench.parse_powermode(" lowpowermode 0\n powermode 2\n"))
+check(bench.parse_powermode(" lowpowermode         1\n") == "1", "lowpowermode alone still gives the mode")
+check(bench.parse_powermode("") is None, "no pmset text, no mode")
+check(agentic.parse_thermal("", "", " lowpowermode 0\n powermode 2\n")["powermode"] == "2",
+      "both clients read the same mode from the same text")
+# An --agentic run passes through bench.py and then compare_engines; the flag must appear once, not twice.
+f = bench.power_flags("Now drawing from 'Battery Power'", "2")
+check(bench.add_power_flags(f, "Now drawing from 'AC Power'", "2") == f and len(f) == 1,
+      "an existing POWER flag is not duplicated", str(f))
+g = []
+check(bench.add_power_flags(g, "Now drawing from 'AC Power'", "0") == [] and g == [],
+      "no flag when the power state is normal")
 
 # ---------------------------------------------------------------- 2. one protocol, two clients
 

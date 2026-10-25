@@ -121,12 +121,11 @@ def parse_thermal(therm_out, batt_out="", all_out=""):
     """
     d = dict(re.findall(r"(\w+)\s*=\s*(\d+)", therm_out or ""))
     n = lambda k: int(d[k]) if k in d else None
-    pm = re.search(r"^\s*powermode\s+(\d+)", all_out or "", re.M)
     return {"speed_limit": n("CPU_Speed_Limit"), "scheduler_limit": n("CPU_Scheduler_Limit"),
             "battery": "Battery Power" in (batt_out or "") if batt_out else None,
             "low_power": (bool(re.search(r"lowpowermode\s+1|^\s*powermode\s+1", all_out or "", re.M))
                           if all_out else None),
-            "powermode": pm.group(1) if pm else None}
+            "powermode": bench.parse_powermode(all_out)}
 
 
 def thermal_state():
