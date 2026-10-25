@@ -42,7 +42,7 @@ over its OpenAI-compatible API, as a coding agent does. `kapitsa bench` runs the
 | Decode, greedy | The same answer at temperature 0, 5 runs: with the same weights every engine writes nearly the same text. |
 | Prefill, 4K and 16K | A cold prompt of 4,133 / 16,286 tokens cut from the frozen corpus, a random nonce at its start so nothing is reused. Prompt tokens over time to first token. |
 | Cached follow-up | Three follow-up turns on the grown conversation, the median time to first token. |
-| Peak memory | `phys_footprint_peak` of the server's whole process tree; memory-mapped weights listed apart. |
+| Peak memory | `phys_footprint_peak` of the server's whole process tree, in GB of 2^30 bytes (GiB), as every memory and size figure on this page; memory-mapped weights listed apart. |
 
 **What makes a run count.** One engine at a time, under one GPU lock. Every request sets every sampling parameter and
 turns thinking off both ways, and any reasoning text makes the run invalid. Cold prompts must come back within 1% of
@@ -100,7 +100,10 @@ folders; LM Studio, mlx-serve and Ollama's MLX runner read clones of them.
 | MLX (mlx-vlm, MTP) | 673 / 657 | 49 / 51 | 0.35 / 0.52 s | 21.0 GB |
 | LM Studio | 616 / 614 | 31 / 30 | 0.25 / 0.29 s | 21.9 GB |
 
-1. Its prefill phases carry the contention flag (the session's desktop app at about 5% of the GPU).
+1. Its prefill phases carry the contention flag (the session's desktop app at about 5% of the GPU). For most of the
+   session that app was declared ambient, and its load reached 7-29% in some other engines' prefill phases (mlx-serve's
+   27B, MTPLX's 27B, mlx-vlm's Bolt; 4.3% at most in any decode phase); those runs are being repeated without the
+   exemption ([per run](../bench/results/2026-10-25-m5-max/README.md)).
 
 Nemotron 3.5 Bolt 74B-A9B (2/4/8-bit mix): Kapitsa **983 / 158** tok/s (prefill 4K / decode), mlx-vlm 814 / 68, oMLX
 749 / 55 (without a drafter: its LiLiCorr path never became ready in 0.7.3.dev2). One of Kapitsa's five decode answers
