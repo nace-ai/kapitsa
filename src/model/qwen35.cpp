@@ -3152,14 +3152,20 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // 30.77; T 2048 against 4096 / 16384 keys 8.85 / 44.23 ms vs 22.21 / 111.64 (2.4-2.6x). Error against the fp64
   // reference 2.6-3.1e-4 (11r 1.9-2.6e-4; the shipped G = 4 and G = 8 qattn kernels sit the same distance above it).
   static const bool g6_on = env_int("NI_QATTN_G6", 1) != 0;
+  // NI_QATTN_G4D2 (default on, 0 = off): G = 4 (the 4B and 9B, 16 query heads over 4 KV heads) runs qattn_t_g4d2s8, the
+  // same d2 kernel over (token, head) rows, 64 rows (16 tokens) per threadgroup; off, qattn_t_s8k16 as before.
+  // bench_attn on the M5 Max (40 cores, macOS 25E246), the 4B's heads, T 2048 against 4096 / 8192 / 16384 keys: 3.09 /
+  // 7.34 / 15.95 ms vs qattn_t_s8k16's 5.15 / 11.48 / 24.21 (1.67x / 1.56x / 1.52x); s4 4.04 / 9.61 / 21.92, s16 3.54 /
+  // 8.27 / 17.79. Error against the fp64 reference 2.70 / 3.01 / 3.29e-4 (s8k16 2.69 / 3.02 / 3.30e-4).
+  static const bool g4d2_on = env_int("NI_QATTN_G4D2", 1) != 0;
   const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
   const bool qg8 = g8_on && cfg_.hq == 8 * cfg_.hkv;
   const bool qg6 = g6_on && cfg_.hq == 6 * cfg_.hkv;
-  if (qattn && cfg_.head_dim == 256 && qg6) {
-    e.use(pipe("qattn_t_g6d2s8"));
+  if (qattn && cfg_.head_dim == 256 && (qg6 || (qg4 && g4d2_on))) {
+    e.use(pipe(qg6 ? "qattn_t_g6d2s8" : "qattn_t_g4d2s8"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
     e.val(5, fp);
-    e.dispatch((uint32_t(T) * 6 + 63) / 64, cfg_.hkv, 1, 256);   // 4 pairs x 16 rows
+    e.dispatch((uint32_t(T) * (qg6 ? 6 : 4) + 63) / 64, cfg_.hkv, 1, 256);   // 4 pairs x 16 rows
     return;
   }
   if (qattn && cfg_.head_dim == 256 && (qg4 || qg8)) {

@@ -321,3 +321,7 @@ QATTN_TD2(qattn_t_g8d2s8, 8, 8)
 // (24 over 4), T 141 / 512 / 2048 against 16141 / 16512 / 16384 keys: s6 4.10 / 13.74 / 53.33 ms, s8 4.16 / 12.76 /
 // 44.23, s12 3.90 / 13.86 / 45.72, s16 5.11 / 13.00 / 48.65 against attn_prefill11r's 10.93 / 30.77 / 111.64.
 QATTN_TD2(qattn_t_g6d2s8, 8, 6)
+// The 4B and 9B (G = 4): 4 pairs x 16 rows = 64 (token, head) rows, 16 tokens per threadgroup. bench_attn on the M5 Max
+// (40 cores), the 4B's heads, T 2048 against 4096 / 8192 / 16384 keys: s4 4.04 / 9.61 / 21.92 ms, s8 3.09 / 7.34 / 15.95,
+// s16 3.54 / 8.27 / 17.79 against qattn_t_s8k16's 5.15 / 11.48 / 24.21; the three shapes are bitwise identical.
+QATTN_TD2(qattn_t_g4d2s8, 8, 4)
