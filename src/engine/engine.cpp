@@ -721,7 +721,7 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // M5 Pro, 25 Oct, full-table pack, chunk 2048 vs 4096 (#571): TATTN on +0.7% to +13.7%, TATTN off -1.2% to -7.9%, so
   // without TATTN (the default since #585) the pack keeps 2048. Wider chunks halve the expert reads but the per-chunk
   // compute grows faster. The hidden size is 640, so the extra buffers are small.
-  if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10() && Qwen4Exp::tattn_on()) {
+  if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10() && Qwen4Exp::tattn(model_dir)) {
     const MemPlan wide = model_plan(model_dir, 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
   }

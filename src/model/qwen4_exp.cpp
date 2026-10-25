@@ -143,15 +143,21 @@ bool Qwen4Exp::q20_pack(const std::string& dir) {
   }
 }
 
-bool Qwen4Exp::tattn_on() {
+static bool tattn_env() {
   static const bool on = [] {
     const char* v = getenv("NI_QSA_TATTN");
-    if (!v || atoi(v) == 0) return false;
-    if (__builtin_available(macOS 26.0, *)) return Gpu::get().apple_family() >= 10;
-    return false;
+    return v && atoi(v) != 0;
   }();
   return on;
 }
+
+bool Qwen4Exp::tattn(const Qwen35Config& c) {
+  if (!tattn_env() || c.hkv <= 0 || c.hq / c.hkv != 12 || c.head_dim != 256) return false;
+  if (__builtin_available(macOS 26.0, *)) return Gpu::get().apple_family() >= 10;
+  return false;
+}
+
+bool Qwen4Exp::tattn(const std::string& dir) { return is_model(dir) && tattn(read_config(dir)); }
 
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
@@ -1227,13 +1233,9 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
     // The lists on the matrix units (tensor/qsattn_t.metal, qattn_t_sparse_g12d2) where the kernel fits: 12 query
     // heads per KV head, head dim 256, Apple10 and macOS 26 (the Metal 4 library). Else attn_sparse_rows.
     // Opt-in (NI_QSA_TATTN=1): off by default since #585, a 64K decode that ends early and loops with it on.
-    static const bool tat_env = [] {
-      const char* v = getenv("NI_QSA_TATTN");
-      return v && atoi(v) != 0;
-    }();
-    bool tat = false;
-    if (tat_env) {
-      tat = tattn_on() && G == 12 && cfg_.head_dim == 256;
+    // tattn() is also engine.cpp auto_chunk's gate for the Q2_0 pack's 4096-row chunks.
+    const bool tat = tattn(cfg_);
+    if (tattn_env()) {
       static bool logged = false;
       if (!logged) {
         logged = true;
