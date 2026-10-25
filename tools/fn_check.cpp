@@ -5,6 +5,11 @@
 //   fn_check kernels                the Flash-Next kernels (src/kernels/qwen4.metal) on small random inputs against a CPU
 //                                   reference in double; one dispatch per command buffer, so it suits
 //                                   MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1
+//   fn_check compile-only           compiles the embedded kernel library and exits: the zero-dispatch gate for a .metal
+//                                   edit (no model, no buffer, no command buffer, ~1 s). A successful C++ build says
+//                                   nothing about the sources (they are embedded as text and compiled at run time), so
+//                                   this is the cheapest run that can catch a source fault. Device-touching: it takes
+//                                   the GPU lock like any other run, and wants MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1
 #include "metal/gpu.h"
 #include "model/ngram.h"
 #include "util/bf16.h"
@@ -1084,10 +1089,19 @@ int kernels() {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: fn_check ngram @ids | selftest | kernels\n");
+    fprintf(stderr, "usage: fn_check ngram @ids | selftest | kernels | compile-only\n");
     return 2;
   }
   const std::string cmd = argv[1];
+  // The zero-dispatch compile gate (qwen4.metal:345-348's four QSA constants aborted the A9 rider's first pass on a
+  // source fault after 1 s and zero dispatches): compile the library a model and the kernels would use, then stop.
+  if (cmd == "--compile-only" || cmd == "compile-only") {
+    const auto t0 = std::chrono::steady_clock::now();
+    Gpu::get().compile();
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    printf("compile-only: the kernel library compiled in %.0f ms, no dispatch\n", ms);
+    return 0;
+  }
   if (cmd == "selftest") return selftest();
   if (cmd == "kernels") return kernels();
   if (cmd == "ngram" && argc >= 3) {

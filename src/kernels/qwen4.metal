@@ -342,10 +342,10 @@ struct QsaSelParams {
 // The 16,384 B of static threadgroup memory (8 KB of queries + 8 KB of keys) is the most this macOS's validation layer
 // accepts — it counts the static size twice against the 32,768 B cap — so four rows of four indexer heads is the widest
 // block that can also run under the layer.
-constexpr uint QSA_RPG = 4;    // rows per threadgroup
-constexpr uint QSA_SUB = 16;   // key blocks staged per sub-chunk
-constexpr uint QSA_NSUB = 8;   // sub-chunks per threadgroup: 128 blocks
-constexpr uint QSA_NT = QSA_RPG * QSA_SUB;  // one thread per (row, key)
+constant constexpr uint QSA_RPG = 4;    // rows per threadgroup
+constant constexpr uint QSA_SUB = 16;   // key blocks staged per sub-chunk
+constant constexpr uint QSA_NSUB = 8;   // sub-chunks per threadgroup: 128 blocks
+constant constexpr uint QSA_NT = QSA_RPG * QSA_SUB;  // one thread per (row, key)
 [[kernel]] void qsa_score_rows(const device float* iq [[buffer(0)]], const device float* bk [[buffer(1)]],
                                device float* score [[buffer(2)]], constant QsaSelParams& p [[buffer(3)]],
                                uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]]) {
