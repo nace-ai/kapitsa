@@ -449,11 +449,25 @@ const std::vector<CatalogModel>& catalog() {
       {.name = "nanbeige4.3-33b",
        .aliases = {"nanbeige", "nanbeige4.3", "nanbeige-33b"},
        .title = "Nanbeige4.3-33B",
-       .about = "Nanbeige's dense 33B for agents and coding: reasoning and tool calls (bf16: 96 GB+ Macs)",
+       .about = "Nanbeige's dense 33B for agents and coding: reasoning and tool calls (4-bit: 32 GB+ Macs)",
        .brief = "Nanbeige dense 33B: agents and coding",
-       .default_variant = "bf16",
+       .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
+           // Nace AI's MLX packs of the checkpoint below (mlx-lm 0.32.2): AWQ 4-bit layers with the embedding and LM head
+           // at 8 bits (KL 0.163 from bf16 on 768 rows, top-1 92.3%), and plain 8-bit (KL 0.015, top-1 98.6%)
+           {.name = "4bit",
+            .quant = "MLX affine 4-bit AWQ, group 64; 8-bit embedding and LM head",
+            .repo = "kapitsaprime/Nanbeige4.3-33B-MLX-4bit",
+            .revision = "@REV4@",
+            .companions = {},
+            .download_gb = 19.83},
+           {.name = "8bit",
+            .quant = "MLX affine 8-bit, group 64",
+            .repo = "kapitsaprime/Nanbeige4.3-33B-MLX-8bit",
+            .revision = "@REV8@",
+            .companions = {},
+            .download_gb = 35.21},
            // Nanbeige's checkpoint as published (its safetensors as they are)
            {.name = "bf16",
             .quant = "bf16, unquantized",

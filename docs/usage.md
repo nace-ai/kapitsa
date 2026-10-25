@@ -60,7 +60,7 @@ Those start the best model for this Mac, with the same output as before.
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
-| `nanbeige4.3-33b` | `nanbeige`, `nanbeige4.3`, `nanbeige-33b` | Nanbeige4.3-33B: a dense 33B (Llama architecture) for agents and coding, reasoning switched with `enable_thinking`; text only; 96 GB Macs and up in bf16 | 66.3 GB | `bf16` |
+| `nanbeige4.3-33b` | `nanbeige`, `nanbeige4.3`, `nanbeige-33b` | Nanbeige4.3-33B: a dense 33B (Llama architecture) for agents and coding, reasoning switched with `enable_thinking`; text only; 32 GB Macs and up in 4-bit | 19.8 GB | `4bit` (default: AWQ, 8-bit embedding and LM head), `8bit` (35.2 GB), `bf16` (66.3 GB) |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
@@ -160,8 +160,10 @@ takes its top 6, and where a score sits on a rounding boundary a verify pass, wh
 step, can pick another expert, and every layer after it computes something else. The output check met one such row in
 192 (layer 16 at a window's position 1684), at verify passes of 2, 4 and 8 rows alike.
 
-Nanbeige4.3-33B (`--model nanbeige`: [Nanbeige/Nanbeige4.3-33B](https://huggingface.co/Nanbeige/Nanbeige4.3-33B), bf16
-as published) is a dense Llama: 52 layers of full attention (56 query and 8 KV heads of 128, RoPE base 1.2e8) and a
+Nanbeige4.3-33B (`--model nanbeige`: Nace AI's MLX packs of [Nanbeige/Nanbeige4.3-33B](https://huggingface.co/Nanbeige/Nanbeige4.3-33B),
+[4-bit AWQ](https://huggingface.co/kapitsaprime/Nanbeige4.3-33B-MLX-4bit) by default and
+[8-bit](https://huggingface.co/kapitsaprime/Nanbeige4.3-33B-MLX-8bit), or `:bf16` as published; KL from bf16 0.163 and
+0.015 on 768 rows, top-1 92.3% and 98.6%, the repos' cards have the tables) is a dense Llama: 52 layers of full attention (56 query and 8 KV heads of 128, RoPE base 1.2e8) and a
 SwiGLU MLP of 22,016. It runs on Flint's backend as a Flint without sinks, q / k norms, experts or sliding windows
 (`model_type` `llama`; an MLX affine 4-bit or 8-bit group-64 conversion of it runs too). Its tokenizer is
 SentencePiece-style BPE (spaces as U+2581, characters outside the vocabulary as byte tokens), read from its
