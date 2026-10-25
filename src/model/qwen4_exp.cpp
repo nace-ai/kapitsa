@@ -143,6 +143,16 @@ bool Qwen4Exp::q20_pack(const std::string& dir) {
   }
 }
 
+bool Qwen4Exp::tattn_on() {
+  static const bool on = [] {
+    const char* v = getenv("NI_QSA_TATTN");
+    if (!v || atoi(v) == 0) return false;
+    if (__builtin_available(macOS 26.0, *)) return Gpu::get().apple_family() >= 10;
+    return false;
+  }();
+  return on;
+}
+
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
 
@@ -1223,9 +1233,7 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
     }();
     bool tat = false;
     if (tat_env) {
-      bool os = false;
-      if (__builtin_available(macOS 26.0, *)) os = true;
-      tat = os && G == 12 && cfg_.head_dim == 256 && Gpu::get().apple_family() >= 10;
+      tat = tattn_on() && G == 12 && cfg_.head_dim == 256;
       static bool logged = false;
       if (!logged) {
         logged = true;

@@ -73,6 +73,9 @@ class Qwen4Exp : public Qwen35 {
   static bool is_model(const std::string& model_dir);
   // a Flash-Next folder whose routed experts are Q2_0 (tools/qwen4_exp_q20.py)
   static bool q20_pack(const std::string& model_dir);
+  // NI_QSA_TATTN=1 (opt-in since #585) on an Apple10 GPU running macOS 26: prefill sparse attention on the matrix units
+  // (enc_attn_sparse also needs 12 query heads per KV head and head dim 256, which Flash-Next has)
+  static bool tattn_on();
   // the process's split's share of the model (split()), or `split`'s
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, const Split* split = nullptr);
   // For placing a split (src/cluster/place.h), from the headers: each trunk layer's weight bytes as stored (its routed
