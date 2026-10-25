@@ -60,6 +60,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v5
 
@@ -73,6 +74,12 @@ jobs:
         run: |
           if git diff --quiet -- bench/community/RESULTS.md; then
             echo "RESULTS.md is up to date"
+            # symmetric close: if a drift issue is open, this push is its cure
+            stale_title="Community results table is stale on main"
+            open_drift=$(gh issue list --state open --limit 100 --search "in:title \"$stale_title\"" --json number --jq '.[0].number // empty' || true)
+            if [ -n "$open_drift" ]; then
+              gh issue close "$open_drift" --comment "The table is current again as of ${GITHUB_SHA::12}." || true
+            fi
             exit 0
           fi
           branch="community/results-${GITHUB_SHA::12}"
@@ -85,8 +92,38 @@ jobs:
             --body "Rewritten by tools/community_table.py from bench/community/results after ${GITHUB_SHA::12}."; then
             # the repository's "Allow GitHub Actions to create and approve pull requests" is off: no branch left behind
             git push origin --delete "$branch"
-            # a warning, not a failure: the merge already happened and a red main hides real breakage; the review sweep lands RESULTS.md
-            echo "::warning::GitHub Actions may not open pull requests here (Settings, Actions, General: Allow GitHub Actions to create and approve pull requests). Until then run python3 tools/community_table.py and land RESULTS.md in a pull request."
+            # The table is stale on main now and nothing else notices, so record it where a person will see it: an open
+            # issue carrying the fix command, deduped by title (one drift issue at a time, re-used while it stays open).
+            # Still a warning, not a failure: the merge already happened and a red run on the merge commit hides real
+            # breakage; tools/community_table.py and a pull request landing RESULTS.md clear it.
+            title="Community results table is stale on main"
+            body=$(printf '%s\n' \
+              "The push-to-main table job rewrote bench/community/RESULTS.md after ${GITHUB_SHA::12}, but it could not" \
+              "open the pull request that lands it: GitHub Actions may not create pull requests in this organization" \
+              "(Settings, Actions, General: Allow GitHub Actions to create and approve pull requests). The branch was" \
+              "deleted, so main keeps the stale table." \
+              "" \
+              "To clear it:" \
+              '```sh' \
+              "python3 tools/community_table.py   # rewrites bench/community/RESULTS.md from bench/community/results" \
+              "git checkout -b chore/community-results-${GITHUB_SHA::12}" \
+              "git commit -m 'bench/community/RESULTS.md: the community results, rewritten from bench/community/results' -- bench/community/RESULTS.md" \
+              "git push origin HEAD && gh pr create --fill" \
+              '```' \
+              "" \
+              "A new issue is filed if the table drifts again after this one is closed.")
+            # Interlock: the local regen watcher (agent-side fallback) may open a RESULTS.md pull request for the same
+            # drift at the same time. Two signals for one drift is by design, not a bug: both clear on the same push,
+            # and this issue closes itself on the cure push (see the up-to-date path above).
+            # Every gh call is best-effort: a red run on the merge commit would hide real breakage, which is exactly
+            # what this job exists to avoid (bash -e applies inside this if-body too).
+            existing=$(gh issue list --state open --limit 100 --search "in:title \"$title\"" --json number --jq '.[0].number // empty' || true)
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "Still stale after ${GITHUB_SHA::12}." || true
+            else
+              gh issue create --title "$title" --body "$body" || true
+            fi
+            echo "::warning::The community table is stale on main; see the drift issue. GitHub Actions may not open pull requests here, so it has to be landed by hand or by the review sweep."
             exit 0
           fi
           gh pr merge "$branch" --squash --delete-branch
