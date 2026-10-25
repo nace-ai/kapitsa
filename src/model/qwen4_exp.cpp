@@ -10,6 +10,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <dirent.h>
 #include <sys/sysctl.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cmath>
@@ -760,7 +761,20 @@ void Qwen4Exp::init_store(const std::string& dir) {
     // the Mac to itself. `kapitsa doctor` prints the same reason before a load (doctor.cpp).
     q20::AutoStoreIn in;
     in.all = all, in.least = size_t(3) * E * lay.bytes, in.left = left, in.used = used, in.keep = keep;
-    in.ram = size_t(ram), in.avail = q20::available_memory();
+    in.ram = size_t(ram);
+    // NI_EXPERT_SETTLE_MS: how long the guard may wait in all for memory a process that just exited still holds
+    // (default 10000; 0 = one sample); it stops once 3 s pass without 0.5 GB more available
+    const char* sv = getenv("NI_EXPERT_SETTLE_MS");
+    const int settle = sv && *sv ? std::max(0, atoi(sv)) : 10000;
+    const q20::SettledAvail sa = q20::settle_available(std::min(left, all), q20::auto_store_headroom(in.ram), settle, 250, 3000, size_t(500) << 20,
+                                                       [](int ms) {
+                                                         if (ms) usleep(useconds_t(ms) * 1000);
+                                                         return q20::available_memory();
+                                                       });
+    in.avail = sa.avail;
+    if (sa.waited_ms)
+      logi("expert store: the system's available memory %.1f GB at first, %.1f GB after %.2f s", double(sa.first) / 1e9,
+           double(sa.avail) / 1e9, sa.waited_ms / 1e3);
     in.cap = q20::auto_store_cap(Gpu::get().apple10());
     const q20::AutoStore st = q20::auto_store_size(in);
     o.bytes = st.bytes;

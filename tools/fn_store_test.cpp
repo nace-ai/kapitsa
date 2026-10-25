@@ -227,6 +227,44 @@ void check_sums(const StoreStats& s, const char* what) {
         (unsigned long long)s.prefetch_used, (unsigned long long)s.prefetches);
 }
 
+// The settled available memory (q20::settle_available): a process that just exited frees its pages a while later
+void case_settle() {
+  const size_t GB = 1000000000ull, head = size_t(4) << 30, want = size_t(29.9 * GB), grow = size_t(500) << 20;
+  int t = 0, calls = 0;
+  auto run = [&](int wait, std::function<size_t(int)> f) {
+    t = calls = 0;
+    return settle_available(want, head, wait, 250, 3000, grow, [&](int ms) { t += ms, ++calls; return f(t); });
+  };
+  // freed all at once 2.5 s in (2 GB available before, 38 GB after): waits 2.5 s, then the whole budget, no more
+  SettledAvail r = run(10000, [&](int at) { return at >= 2500 ? size_t(38 * GB) : size_t(2 * GB); });
+  CHECK(r.first == size_t(2 * GB) && r.avail == size_t(38 * GB) && r.waited_ms == 2500 && calls == 11,
+        "settle: freed %zu -> %zu after %d ms, %d samples", r.first, r.avail, r.waited_ms, calls);
+  CHECK(auto_store_headroom(size_t(48) << 30) == head && auto_store_headroom(size_t(128) << 30) == (size_t(128) << 30) / 12,
+        "settle: headroom");
+  // freed a little at a time (1 GB a second up to 30 GB): follows it while it grows, then 3 s flat
+  r = run(60000, [&](int at) { return std::min(size_t(30 * GB), size_t(2 * GB) + size_t(at / 1000) * GB); });
+  CHECK(r.avail == size_t(30 * GB) && r.waited_ms == 28000 + 3000, "settle: gradual %zu after %d ms", r.avail, r.waited_ms);
+  // ... but no longer than the whole wait
+  r = run(10000, [&](int at) { return size_t(2 * GB) + size_t(at / 1000) * GB; });
+  CHECK(r.avail == size_t(12 * GB) && r.waited_ms == 10000, "settle: capped %zu after %d ms", r.avail, r.waited_ms);
+  // enough at once: one sample, no wait
+  r = run(10000, [&](int) { return size_t(40 * GB); });
+  CHECK(r.waited_ms == 0 && calls == 1 && r.avail == size_t(40 * GB), "settle: enough %d ms %d samples", r.waited_ms, calls);
+  // another model resident (13 GB available, for good): 3 s flat, keeps 13 GB, so the guard still binds
+  r = run(10000, [&](int) { return size_t(13 * GB); });
+  CHECK(r.waited_ms == 3000 && calls == 13 && r.avail == size_t(13 * GB), "settle: resident %d ms %d samples", r.waited_ms,
+        calls);
+  // small wobbles (under 0.5 GB) do not restart the flat stretch; the largest sample is kept
+  r = run(10000, [&](int at) { return size_t(13 * GB) + (at % 500 ? size_t(100) << 20 : 0); });
+  CHECK(r.waited_ms == 3000 && r.avail == size_t(13 * GB) + (size_t(100) << 20), "settle: wobble %d ms %zu", r.waited_ms,
+        r.avail);
+  // unknown (0) or no wait allowed: one sample
+  r = run(10000, [&](int) { return size_t(0); });
+  CHECK(r.avail == 0 && r.waited_ms == 0 && calls == 1, "settle: unknown");
+  r = run(0, [&](int) { return size_t(2 * GB); });
+  CHECK(r.avail == size_t(2 * GB) && r.waited_ms == 0 && calls == 1, "settle: NI_EXPERT_SETTLE_MS=0");
+}
+
 // The automatic store size (q20::auto_store_size) with Flash-Next's numbers on a 48 GB Mac: 24576 experts of 1.39 MB
 // (34.2 GB), the budget leaving 29.9 GB, 5.3 GB of GPU memory in use, a 1.5 GB reserve.
 void case_auto_size() {
@@ -581,6 +619,7 @@ int main(int argc, char** argv) {
   case_scan(p);
   case_scan_victim(p);
   case_complete(p);
+  case_settle();
   case_auto_size();
   if (keep.empty()) {
     for (const std::string& f : p.files) unlink(f.c_str());
