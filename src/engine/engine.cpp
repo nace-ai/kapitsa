@@ -269,6 +269,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     const int slots = std::max(1, opts_.slots);
     if (opts_.prefill_chunk <= 0) {
       opts_.prefill_chunk = sp.prefill_chunk;
+      narrow_chunk_ = lp.prefill_narrow;
       const int base = opts_.prefill_chunk > 2048 && opts_.prefill_chunk <= prefill_chunk_room(2048)
                            ? 2048  // only its tail room: the 2048-row chunk still fits
                            : opts_.prefill_chunk;
@@ -276,7 +277,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
         logi("memory: %d-row prefill chunks (2048 would leave less than one %d-token conversation in the %.1f GB budget)",
              base, opts_.context, budget_ / 1e9);
       else if (base > 2048)  // the single-slot 35B's wide chunk (auto_prefill_chunk): chosen for speed, memory permitting
-        logi("prefill: %d-row chunks (fewer expert-weight reads; the memory plan fits them)", base);
+        logi("prefill: %d-row chunks (fewer expert-weight reads; the memory plan fits them)%s", base,
+             narrow_chunk_ ? ", for a prefill of at least two of them" : "");
     }
     const StartNeed need = start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots);
     const size_t rws = Gpu::get().recommended_working_set();
@@ -689,7 +691,7 @@ int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even) {
   return rows;
 }
 
-int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget) {
+static int auto_chunk(const std::string& model_dir, int context, int slots, size_t budget, bool q20_wide) {
   // 1024-row buffers need ~45% less than 2048-row ones (35B: 0.75 -> 0.38 GB, 27B: 0.94 -> 0.52) for a few % of
   // prefill speed
   if (NemotronH::is_model(model_dir))
@@ -718,7 +720,7 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
   // Flash-Next's Q2_0 pack (Qwen4Exp) single stream on the M5: 4096-row chunks. 32K Q2 prefill, M5 Pro, 25 Oct, d2 sparse
   // attention: chunk 2048 ~900, 4096 ~1005-1017, 6144 967, 8192 887 tok/s (wider chunks halve the expert reads but
   // the per-chunk compute grows faster). The hidden size is 640, so the extra buffers are small.
-  if (slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10()) {
+  if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10()) {
     const MemPlan wide = model_plan(model_dir, 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
   }
@@ -739,6 +741,14 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
       return prefill_chunk_room(2048);
   }
   return 2048;
+}
+int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget) {
+  return auto_chunk(model_dir, context, slots, budget, true);
+}
+int prefill_narrow_chunk(const std::string& model_dir, int context, int slots, size_t budget) {
+  const int wide = auto_chunk(model_dir, context, slots, budget, true);
+  const int narrow = auto_chunk(model_dir, context, slots, budget, false);
+  return narrow < wide && Qwen4Exp::q20_pack(model_dir) ? narrow : 0;
 }
 
 LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
@@ -788,9 +798,9 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       }
     }
   }
-  lp.prefill_chunk = prefill_chunk > 0 ? prefill_chunk
-                                       : auto_prefill_chunk(model_dir, context, slots,
-                                                            budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0);
+  const size_t left = budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0;
+  lp.prefill_chunk = prefill_chunk > 0 ? prefill_chunk : auto_prefill_chunk(model_dir, context, slots, left);
+  if (prefill_chunk <= 0) lp.prefill_narrow = prefill_narrow_chunk(model_dir, context, slots, left);
   return lp;
 }
 
@@ -2439,7 +2449,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
   } mask_off{s};
   double t0 = now_ms();
-  const int C = model_->prefill_chunk();
+  const int C = prefill_chunk_for(n - start);
   int p = start;
   int last_chunk_row = 0;
   int saved_ckpt = -1;  // the checkpoint this prefill saves (DFlash2: its ring snapshot follows the prompt commit)
@@ -3953,7 +3963,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     lili_->begin_prefill(n, start);
   }
   SamplingParams sp;
-  const int C = model_->prefill_chunk();
+  const int C = prefill_chunk_for(n - start);
   const bool even = prefill_even_chunks() && !model_->ane_split_on();
   // NI_HISTORY_YIELD=1 (default off): a request that arrives while the rows are prefilled waits for one chunk, not for the
   // whole history: the rows done stay, as a history that ends there. Measured on the 4B without its drafter (30 turns,
@@ -4164,7 +4174,7 @@ DraftResult Engine::draft(const std::string& after, const std::string& text) {
   model_->set_rope_positions(s, end, mm.spans);
   if (uck && start == turn_at) save_turn(*e);
   SamplingParams sp;
-  const int C = model_->prefill_chunk();
+  const int C = prefill_chunk_for(end - start);
   const bool even = prefill_even_chunks() && !model_->ane_split_on();
   int p = start;
   bool stopped = false;

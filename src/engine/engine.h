@@ -99,6 +99,9 @@ size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t
 // less than one conversation of `context` tokens in the budget (activations scale with the chunk), less (a multiple of
 // 64, at least 256) when 1024-row ones would leave less than the tokens the engine starts with (the context, up to 8K)
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget);
+// Flash-Next's Q2_0 pack, where auto_prefill_chunk picks 4096 rows: the chunk it would pick without that (what a
+// prefill of fewer than two 4096-row chunks runs), else 0
+int prefill_narrow_chunk(const std::string& model_dir, int context, int slots, size_t budget);
 // Rows of the next prefill chunk with `p` of `n` rows done: min(chunk, n - p), or with `even` those rows split evenly
 // over the chunks that rule would take (a 4130-token prompt at a 2048 chunk is 2048+2048+34 plain, 2065+2065 even), so
 // a prompt a few rows past a multiple of the chunk pays no extra pass. Never more than `chunk` rows, so the planned
@@ -120,6 +123,7 @@ struct LoadPlan {
   size_t dflash_bytes = 0;        // the loaded drafter's weights and rings (live + one per checkpoint, every slot)
   size_t dflash_found_bytes = 0;  // the same for the drafter found, loaded or left out
   int prefill_chunk = 2048;
+  int prefill_narrow = 0;  // prefill_narrow_chunk (an auto prefill_chunk only): a prefill under 2 chunks runs these rows
 };
 // dflash: "auto", "none" / "0" / "off", a drafter directory, or "" (NI_DFLASH if set, else auto); spec_off: --spec 0.
 // auto leaves a drafter out where one conversation of `context` tokens would not fit the budget beside it (context
@@ -666,6 +670,13 @@ class Engine {
   std::vector<int> stop_ids_;  // the config's eos ids plus the tokenizer's eos token (chat turn end)
   bool spec_ = false;
   size_t budget_ = 0;    // GPU memory budget (bytes)
+  // LoadPlan::prefill_narrow: Flash-Next Q2_0's 4096-row chunks only for a prefill that fills two of them. 32K gains
+  // (fewer expert reads); a 4K prompt measured no gain, so it keeps the chunk it ran before (0: always the model's)
+  int narrow_chunk_ = 0;
+  int prefill_chunk_for(int64_t rows) const {
+    const int C = model_->prefill_chunk();
+    return narrow_chunk_ > 0 && narrow_chunk_ < C && rows < 2 * int64_t(C) ? narrow_chunk_ : C;
+  }
   int context_fit_ = 0;  // see context_fit()
   bool prefix_copy_ = true;   // a slot without the prefix checkpoint copies another's (NI_PREFIX_COPY=0: reads it)
   bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)

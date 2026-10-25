@@ -116,9 +116,10 @@ int main(int argc, char** argv) {
   if (dflash_dir == "1" || dflash_dir == "on") dflash_dir = "auto";
 
   Gpu& g = Gpu::get();
-  std::unique_ptr<Qwen35> mp = load_qwen(dir, getenv("NI_CHUNK")                 ? atoi(getenv("NI_CHUNK"))
-                                                  : Qwen4Exp::q20_pack(dir) && g.apple10() ? 4096  // engine.cpp
-                                                                                           : 2048);
+  // Flash-Next's Q2_0 pack on the M5: 4096-row chunks for a prompt that fills two of them (the engine's rule, engine.cpp
+  // auto_prefill_chunk and Engine::prefill_chunk_for)
+  const bool wide = Qwen4Exp::q20_pack(dir) && g.apple10() && ids.size() >= 2 * 4096;
+  std::unique_ptr<Qwen35> mp = load_qwen(dir, getenv("NI_CHUNK") ? atoi(getenv("NI_CHUNK")) : wide ? 4096 : 2048);
   Qwen35& m = *mp;
   if (kv_grow && !dflash_dir.empty()) fatal("--kv-grow covers the plain, MTP and teacher-forced paths, not --dflash");
   auto seq = m.new_seq(std::max(8192, int(ids.size()) + n_gen + 64), kv_grow ? 0 : -1);
