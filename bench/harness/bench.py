@@ -111,23 +111,30 @@ def out_dir():
     return os.path.abspath(os.path.expanduser(os.environ.get("BENCH_OUT") or os.path.join(HERE, "runs")))
 
 
-def power_flags(power, powermode):
+POWER_MODES = {"1": "Low Power Mode", "2": "High Power Mode"}  # pmset powermode: 0 automatic, 1 low, 2 high
+
+
+def power_flags(power, powermode, low_power=None):
     """Flags for a run whose power state makes its timings incomparable with a normal one.
 
     `power` is the first line of `pmset -g batt` ("Now drawing from 'Battery Power'"), `powermode` the system-wide
-    value from `pmset -g`: 0 automatic, 1 high power, 2 low power. Plugged in at powermode 0 gives []; battery, Low
-    Power Mode and High Power Mode each give a flag, because all three change tok/s.
+    value from `pmset -g` — 0 automatic, 1 low power, 2 high power, the same mapping src/bench/system.mm reads — and
+    `low_power` the client's own reading for releases that print `lowpowermode 1` instead. Plugged in at powermode 0
+    gives []; battery, Low Power Mode and High Power Mode each give a flag, because all three change tok/s.
     """
     what = []
     if "Battery Power" in (power or ""):
         what.append("on battery")
     pm = "" if powermode is None else str(powermode)
-    if pm and pm != "0":
-        what.append(f"at pmset powermode {pm}"
-                    + (" (Low Power Mode)" if pm == "2" else " (High Power Mode)" if pm == "1" else ""))
+    if pm in POWER_MODES:
+        what.append(f"at pmset powermode {pm} ({POWER_MODES[pm]})")
+    elif pm and pm != "0":
+        what.append(f"at pmset powermode {pm}")
+    if low_power and pm != "1":
+        what.append("in Low Power Mode")
     if not what:
         return []
-    return [f"POWER: run started {' and '.join(what)} (numbers are not comparable with plugged-in powermode 0 runs)"]
+    return [f"POWER: run started {' and '.join(what)} (numbers are not comparable with plugged-in automatic-mode runs)"]
 
 
 def harness_info():
@@ -977,7 +984,7 @@ def main():
             inv += [f"{name}: {x}" for x in res[name].get("invalid", [])]
             fl += [f"{name}: {x}" for x in res[name].get("flags", [])]
     th = res.get("thermal_start") or {}
-    fl += power_flags("Battery Power" if th.get("battery") else "", th.get("powermode"))
+    fl += power_flags("Battery Power" if th.get("battery") else "", th.get("powermode"), th.get("low_power"))
     for name, m in res["memory"].items():
         if (m.get("swapouts_delta") or 0) > 1000:
             fl.append(f"{name}: {m['swapouts_delta']} pages swapped out during the phase")

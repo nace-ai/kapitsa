@@ -46,25 +46,34 @@ r = run([BENCH_TEST, "self"])
 check(r.returncode == 0, "bench_test self", (r.stdout + r.stderr)[-500:])
 
 # ---------------------------------------------------------------- 1b. the POWER flag
-# The three power states real runs have already been taken in: plugged in at powermode 0, on battery at powermode 2
-# (the M5 Max's 2026-10-25 08:44-09:12 window), and Low Power Mode on AC (13:03, 13:10 the same day).
+# pmset powermode is 0 automatic, 1 low power, 2 high power (the mapping src/bench/system.mm reads), so a table cell
+# may only be compared with cells taken in the same mode; battery is flagged on its own.
 check(bench.power_flags("Now drawing from 'AC Power'", "0") == [], "plugged in at powermode 0 needs no POWER flag")
-one = ["POWER: run started on battery and at pmset powermode 2 (Low Power Mode) (numbers are not comparable with "
-       "plugged-in powermode 0 runs)"]
-check(bench.power_flags("Now drawing from 'Battery Power'", "2") == one, "battery in Low Power Mode is one flag",
+one = ["POWER: run started on battery and at pmset powermode 2 (High Power Mode) (numbers are not comparable with "
+       "plugged-in automatic-mode runs)"]
+check(bench.power_flags("Now drawing from 'Battery Power'", "2") == one, "battery in High Power Mode is one flag",
       str(bench.power_flags("Now drawing from 'Battery Power'", "2")))
-lp = bench.power_flags("Now drawing from 'AC Power'", "2")
-check(lp and "Low Power Mode" in lp[0] and "battery" not in lp[0],
-      "Low Power Mode on AC is flagged without calling it battery", str(lp))
-check("High Power Mode" in (bench.power_flags("Now drawing from 'AC Power'", "1") or [""])[0],
-      "High Power Mode is flagged as itself", str(bench.power_flags("Now drawing from 'AC Power'", "1")))
+lp = bench.power_flags("Now drawing from 'AC Power'", "1")
+check(lp == ["POWER: run started at pmset powermode 1 (Low Power Mode) (numbers are not comparable with plugged-in "
+             "automatic-mode runs)"], "powermode 1 is Low Power Mode on AC", str(lp))
+hp = bench.power_flags("Now drawing from 'AC Power'", "2")
+check(hp and "High Power Mode" in hp[0] and "battery" not in hp[0],
+      "High Power Mode on AC is flagged as itself", str(hp))
 check(bench.power_flags(None, None) == [], "no power state recorded, no claim made")
-check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            2\n")["low_power"] is True,
-      "macOS 26's powermode 2 reads as Low Power Mode")
+# A release that prints no powermode still flags Low Power Mode from the client's own reading.
+check(bench.power_flags("Now drawing from 'AC Power'", None, True) ==
+      ["POWER: run started in Low Power Mode (numbers are not comparable with plugged-in automatic-mode runs)"],
+      "the client's lowpowermode reading raises the flag without a powermode", str(bench.power_flags("", None, True)))
+check(bench.power_flags("Now drawing from 'AC Power'", "1", True) == lp,
+      "powermode 1 and the client's reading are one flag, not two", str(bench.power_flags("", "1", True)))
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            1\n")["low_power"] is True,
+      "powermode 1 reads as Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            2\n")["low_power"] is False,
+      "powermode 2 is High Power Mode, not Low Power Mode")
 check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " lowpowermode         1\n")["low_power"] is True,
       "the older lowpowermode 1 spelling still reads as Low Power Mode")
-check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            0\n")["low_power"] is False,
-      "powermode 0 is not Low Power Mode")
+check(agentic.parse_thermal("", "", " lowpowermode\n highpowermode\n")["low_power"] is False,
+      "the bare capability tokens pmset -g cap prints are not a mode")
 check(agentic.parse_thermal("", "Now drawing from 'Battery Power'", " powermode            0\n")["battery"] is True,
       "battery is read from pmset -g batt")
 
