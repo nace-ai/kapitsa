@@ -157,7 +157,7 @@ new architecture requires more than implementing `Model` if it needs a new draft
   failed chunk on the GPU.
 
 These are implementation mechanisms, not guarantees of a fixed speedup. Measured results and their conditions live
-in the [benchmark reports](benchmarks.md) and the [M5 Max report](benchmarks-m5-max.md).
+in the [benchmark reports](benchmarks.md).
 
 ## Loading, images and memory
 
