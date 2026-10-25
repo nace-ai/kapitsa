@@ -774,7 +774,8 @@ int run(const Options& o) {
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
   // (a dense Llama runs on Flint's backend: Nanbeige4.3, with its own tokenizer's counts and the default settings)
-  const bool llama = Flint::is_model(ref.dir) && Flint::read_config(ref.dir).llama;
+  const ojson cj = ojson::parse(read_file(ref.dir + "/config.json"), nullptr, false);
+  const bool llama = Flint::is_model(ref.dir) && cj.is_object() && cj.value("model_type", std::string()) == "llama";
   const bool flint = Flint::is_model(ref.dir) && !llama;
   s.ref_prompt_tokens = reference_prompt_tokens(flint   ? "flint"
                                                 : llama ? "nanbeige"
