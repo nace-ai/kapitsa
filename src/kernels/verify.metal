@@ -643,6 +643,65 @@ NI_INLINE void topk_stage1_rows_impl(const device float* logits, device float* c
   topk_stage1_rows_impl(logits, cv, ci, p, tg, tid2, ntg2, sv, si);
 }
 
+// Draft confidence for the verify budget (src/model/verify_budget.h): the largest candidate probability of
+// one row of logits. One threadgroup of 1024 over V floats: each thread keeps a running max and a sum of
+// exp(v - max), the simdgroups reduce their pairs, simdgroup 0 reduces those, and lane 0 writes
+// exp(max - (max + log(sum))) = 1 / sum. Non-finite logits leave their thread's pair alone (-inf, 0), so a
+// poisoned row can only reach the host as a confidence outside [0, 1], which observe() drops. (The budget
+// itself is ported from Splash's runtime/model/VerifyBudget.{hpp,cpp}, Apache-2.0; Splash's draft selector
+// writes the confidence inside its sampler, this kernel reads the draft's logits row instead so the sampler
+// itself stays untouched.)
+struct DraftConfParams {
+  uint V;
+};
+[[kernel]] void draft_conf_rows(const device float* logits [[buffer(0)]], device float* conf [[buffer(1)]],
+                                constant DraftConfParams& p [[buffer(2)]],
+                                uint tid [[thread_position_in_threadgroup]],
+                                uint ntg [[threads_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                uint sg [[simdgroup_index_in_threadgroup]]) {
+  float m = -INFINITY, s = 0.0f;
+  for (uint i = tid; i < p.V; i += ntg) {
+    const float v = logits[i];
+    if (v > m) {
+      s = s * exp(m - v) + 1.0f;
+      m = v;
+    } else if (v > -INFINITY) {
+      s += exp(v - m);
+    }
+  }
+  for (uint off = 16; off > 0; off >>= 1) {
+    const float om = simd_shuffle_down(m, off), os = simd_shuffle_down(s, off);
+    if (om > m) {
+      s = s * exp(m - om) + os;
+      m = om;
+    } else if (om > -INFINITY) {
+      s += os * exp(om - m);
+    }
+  }
+  threadgroup float sm[32];
+  threadgroup float ss[32];
+  if (lane == 0) {
+    sm[sg] = m;
+    ss[sg] = s;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg == 0) {
+    const uint nsg = (ntg + 31) >> 5;
+    m = lane < nsg ? sm[lane] : -INFINITY;
+    s = lane < nsg ? ss[lane] : 0.0f;
+    for (uint off = 16; off > 0; off >>= 1) {
+      const float om = simd_shuffle_down(m, off), os = simd_shuffle_down(s, off);
+      if (om > m) {
+        s = s * exp(m - om) + os;
+        m = om;
+      } else if (om > -INFINITY) {
+        s += os * exp(om - m);
+      }
+    }
+    if (lane == 0) conf[0] = 1.0f / s;
+  }
+}
+
 // Per-row stage 2: grid R threadgroups x 1024. Row r reads its candidates, samples with RNG step
 // (step + r) and writes tokens[out_index + r]. Indices >= remap_from map to remap_base + (i - remap_from)
 // (draft heads that score a vocabulary subset made of two row ranges).

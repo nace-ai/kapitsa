@@ -871,8 +871,10 @@ void Qwen35::enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x) {
 // ---- MTP head ----
 
 void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
-                        bool h_trunk) {
+                        bool h_trunk, int conf_idx) {
   if (!mtp_loaded_) fatal("no MTP head");
+  // the verify budget is gated on the MoE MTP target (Qwen4Exp), whose override reports confidences
+  if (conf_idx >= 0) fatal("encode_mtp: confidence reporting is Qwen4Exp-only (conf_idx=%d)", conf_idx);
   if (R > kMaxVerify) fatal("encode_mtp: R=%d", R);
   const int D = cfg_.hidden;
   enc_embed(e, s.tok, tok0, R, mtp_e_);

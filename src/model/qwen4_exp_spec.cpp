@@ -351,10 +351,11 @@ void Qwen4Exp::enc_mtp_layer_rows(Encoder& e, Seq& s, int mpos0, int R, bool moe
 }
 
 void Qwen4Exp::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
-                          bool h_trunk) {
+                          bool h_trunk, int conf_idx) {
   (void)h_trunk;  // trunk rows and the head's own rows are both pre-mix 4-stream states
   if (!mtp_loaded_) fatal("no MTP head");
   if (R > kMaxVerify) fatal("encode_mtp: R=%d", R);
+  if (conf_idx >= kMaxMtpRows - 1) fatal("encode_mtp: conf_idx=%d", conf_idx);
   const uint32_t D = uint32_t(cfg_.hidden), S = uint32_t(c4_.hc), SD = S * D;
   enc_embed(e, s.tok, tok0, R, mtp_e_);
   if (s.embeds) vision::enc_embed_runs(e, *s.embeds, tok0, R, mtp_e_, int(D));  // image rows (prompt history)
@@ -396,6 +397,13 @@ void Qwen4Exp::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const 
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, s.tok);
   e.val(3, sr);
   e.dispatch(1, 1, 1, 1024);
+  if (conf_idx >= 0) {  // the draft's confidence for the verify budget: its largest candidate probability
+    kp::DraftConf dc{V};
+    e.use(pipe4("draft_conf_rows"));
+    e.buf(0, dlog_); e.buf(1, mtp_conf_, size_t(conf_idx) * 4);
+    e.val(2, dc);
+    e.dispatch(1, 1, 1, 1024);
+  }
 }
 
 // MTP history of prompt rows [pos0, pos0 + R): pairs (pre-mix state of row h_row0 + r of the last prefill chunk,

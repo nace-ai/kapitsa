@@ -299,8 +299,10 @@ class Qwen35 : public Model {
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
   // row R-1; with draft_out >= 0 the draft for the next token goes to tokens[draft_out].
   // h_trunk: `h` holds trunk hidden states (pre-norm); false for the MTP's own chained output.
+  // conf_idx >= 0: also write the draft row's largest candidate probability to that index of the
+  // MoE target's mtp_conf() (the verify budget's input); only Qwen4Exp reports them.
   virtual void encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
-                          bool h_trunk = true);
+                          bool h_trunk = true, int conf_idx = -1);
   // Trunk forward of tokens[pos .. pos+R) (R <= kMaxVerify) without committing the recurrent
   // state: the rows go to the tape; samples() gets one sampled token per row and hidden_rows()
   // their pre-norm hidden states. commit_rows() then picks how many of them were accepted.

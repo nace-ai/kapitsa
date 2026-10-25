@@ -1,0 +1,21 @@
+Kapitsa
+Copyright 2026 Nace AI
+
+This product includes software originally developed at incoai as part of Splash
+(https://github.com/incoai/splash), licensed under the Apache License, Version 2.0:
+
+- src/model/verify_budget.{h,cpp}: the learned verify budget for MTP speculative
+  decoding (the acceptance model, the cycle cost fit and the row selection), ported
+  from Splash's runtime/model/VerifyBudget.{hpp,cpp}. Changes: single lane (Kapitsa's
+  MTP cycles decode one stream, so Splash's lane and constrained dimensions and the
+  cross-lane ranking are gone); rows() is a host-side selection replacing Splash's
+  draft_verify_rows Metal kernel (its single-lane case); the Lane struct folds into
+  observe()'s arguments.
+
+- src/kernels/verify.metal, draft_conf_rows: computes the draft confidence the budget
+  reads (a row's largest candidate probability). Splash's draft selector writes that
+  value inside its sampler; this kernel reads the draft's logits row instead, so the
+  sampler stays untouched.
+
+- src/model/expert_store.{h,cpp}: the streamed-expert cache follows the design of
+  Splash 1.4.0's runtime/model/ExpertStore, SlotRecycler and SsdReaders.

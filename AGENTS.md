@@ -30,7 +30,8 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test grammar_test
-structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test`:
+structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test
+verify_budget_test`:
 
 ```bash
 build/api_test
@@ -42,6 +43,7 @@ build/iq_layout_test                         # GGUF IQ experts in the GPU layout
 build/remote_test                            # a split model's reserve on its other Macs (src/model/remote.h)
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
+build/verify_budget_test                     # the learned MTP verify budget's models (src/model/verify_budget.h)
 python3 tests/test_server.py --cli build/kapitsa
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)

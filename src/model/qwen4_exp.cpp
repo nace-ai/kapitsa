@@ -532,6 +532,7 @@ void Qwen4Exp::alloc4() {
   qcnt_ = g.alloc(T * 4 + 16, "qsa_cnt");
   if (mtp_loaded_) {
     mtpX_ = g.alloc(T * SD * 4, "mtp_x4");
+    mtp_conf_ = g.alloc(size_t(kMaxMtpRows - 1) * 4, "mtp_conf4");  // drafts' confidences (verify budget)
     g.release(mtp_post_);
     mtp_post_ = g.alloc(V * SD * 4, "mtp_post4");
   }

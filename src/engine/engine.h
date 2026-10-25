@@ -609,6 +609,7 @@ class Engine {
   EngineOptions opts_;
   std::unique_ptr<Model> model_;
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
+  Qwen4Exp* q4_ = nullptr;   // model_ when it is the MoE MTP target (the verify budget reads its drafts' confidences)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   Dory* dory_ = nullptr;     // model_ when it is a Dory model
   Flint* flint_ = nullptr;   // model_ when it is a Flint model
@@ -685,7 +686,12 @@ class Engine {
   bool prefix_copy_ = true;   // a slot without the prefix checkpoint copies another's (NI_PREFIX_COPY=0: reads it)
   bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
-  long spec_cycles_ = 0, spec_accepted_ = 0;
+  long spec_cycles_ = 0, spec_accepted_ = 0, spec_drafted_ = 0;  // drafted: the verify budget's proposals per cycle
+  // the learned MTP verify budget (NI_MTP_VERIFY=auto; src/model/verify_budget.h): the MoE MTP target drafts every
+  // proposal and the budget picks the cycle's verify rows from their confidences; off verifies every drafted row.
+  // The budget itself is a request's own (like its KfWrap: the confidences and costs are its stream's), declared in
+  // chat()'s MTP branch.
+  bool vbudget_on_ = false;
   ChatRequest defaults_;
   // Structured output: the vocabulary as grammars read it (built by the first request with a grammar, before its GPU
   // turn), and the event a pass's sampler waits on until the host has written the pass's masks (one value per pass,

@@ -126,7 +126,7 @@ class Qwen4Exp : public Qwen35 {
   int default_spec_depth() const override { return 2; }
   size_t hidden_row_bytes() const override { return size_t(c4_.hc) * size_t(cfg_.hidden) * 4; }
   void encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
-                  bool h_trunk = true) override;
+                  bool h_trunk = true, int conf_idx = -1) override;
   void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step,
                      bool v8 = false) override;
   void encode_flush(Encoder& e, Seq& s) override;
@@ -142,6 +142,9 @@ class Qwen4Exp : public Qwen35 {
   void ple_forget() { pend_ = Pending{}; }
   // the last draft's logits (the draft head's rows; the full vocabulary with NI_FULL_DRAFT=1)
   Buffer draft_logits() const { return dlog_; }
+  // the drafts' confidences (their largest candidate probabilities), one float per draft of a cycle,
+  // written by encode_mtp with conf_idx >= 0 (the verify budget's input; src/model/verify_budget.h)
+  Buffer mtp_conf() const { return mtp_conf_; }
   // the n-gram table, for tools
   const NgramTable& ngram_table() const { return table_; }
   const NgramHash& ngram_hash() const { return hash_; }
@@ -279,6 +282,7 @@ class Qwen4Exp : public Qwen35 {
   Buffer ple_pf_[2];          // prefill staging (half [T, hidden]), alternating chunks
   Buffer ple_dec_[4];         // decode / verify staging (fp32 [kMaxVerify, hidden]), a ring
   Buffer mtpX_;               // the MTP head's 4-stream state [T, hc*hidden] (mtp_post_: its rows after the layer)
+  Buffer mtp_conf_;           // drafts' confidences [kMaxMtpRows - 1] fp32 (the verify budget's input)
   Buffer qscore_, qidx_, qcnt_;  // sparse attention: block scores [rows, blocks], key lists [rows, i_ld], counts
   Buffer qmask_;                 // sparse prefill: key bit rows [T, ceil(keys / 32)]
   Buffer xr2_, hinv_;         // one-row gated residual (hc_down / hc_up): the injected row, its streams' inverse RMS

@@ -3,6 +3,7 @@
 #include "engine/output_parser.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
+#include "model/verify_budget.h"
 #include "util/log.h"
 
 #include <minja/chat-template.hpp>
@@ -310,6 +311,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk,
                                         flash_next_model_budget(mp, opts_.slots, opts_.context, budget_));
     q35_ = m.get();
+    q4_ = m.get();
     model_ = std::move(m);
   } else if (Dory::is_model(opts_.model_dir)) {
     LoopKv kv = LoopKv::last_loop;
@@ -387,6 +389,15 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.spec_depth < 0) opts_.spec_depth = q35_ ? q35_->default_spec_depth() : 0;
   spec_ = q35_ && opts_.spec_depth > 0 && q35_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
+  // the learned verify budget on the MoE MTP target (NI_MTP_VERIFY=auto; src/model/verify_budget.h): every proposal is
+  // drafted each cycle and the budget picks the cycle's verify rows from the drafts' confidences (it overrides
+  // --spec's depth there). Default off until an interleaved ABAB bench shows the decode win at 4K and 32K that
+  // CONTRIBUTING.md's default rule asks for; NI_MTP_VERIFY=0 keeps exact mode explicitly.
+  if (q4_ && spec_) {
+    static const char* mtp_verify = getenv("NI_MTP_VERIFY");
+    constexpr bool kVbudgetDefault = false;
+    vbudget_on_ = mtp_verify && *mtp_verify ? !strcmp(mtp_verify, "auto") : kVbudgetDefault;
+  }
   if (q35_ && q35_->block_drafter_ok() && !lp.dflash_off && lp.dflash_left_out.empty()) {
     const std::string& dir = lp.dflash;
     if (dir.empty()) {
@@ -531,6 +542,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                                " drafts per cycle)"
                          : dfl_ && dfl_->tree() ? std::string("KFlash speculative decoding (DFlash2 lattice, tree verify)")
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(dfl_->verify_depth()) + " of 7)"
+                         : vbudget_on_ ? std::string("MTP speculative decoding (learned verify budget, up to ") +
+                                             std::to_string(Qwen35::kMaxMtpRows - 1) + " drafts)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                          : dory_spec_ > 0 ? "speculative decoding (" +
                                                     (dory_spec_kind() == "ngram"  ? std::string("prompt lookup")
@@ -3442,7 +3455,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     fed_until = P;
   } else if (depth > 0) {
     // Speculative decoding: the MTP head drafts `depth` tokens, the trunk verifies them together
-    // with the pending token, accepted rows are committed through the DeltaNet tape.
+    // with the pending token, accepted rows are committed through the DeltaNet tape. With the verify
+    // budget (vbudget_on_) every proposal is drafted and the budget picks the cycle's verify rows.
+    const int dmax = vbudget_on_ ? Qwen35::kMaxMtpRows - 1 : depth;
+    // this request's budget, like its KfWrap: the confidences, labels and cycle costs are its stream's, and the
+    // prior and the seed stand until its own cycles replace them
+    VerifyBudget vbudget;
     int P = n, c = 1, h_row0 = last_chunk_row;
     // the trunk hidden rows the next MTP pass reads: the model's (the last pass's rows), or the slot's copy of them
     // while parked (other requests' passes reuse the model's)
@@ -3459,25 +3477,44 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     };
     bool go = handle(s.tokens()[n]);
     while (go) {
-      if (P + depth + 2 >= s.cap) {
+      if (P + dmax + 2 >= s.cap) {
         // the KV cache grows between cycles; only the prompt's deferred MTP history can still be in flight
         if (mtp_e) mtp_e->wait();
-        if (P + depth + 2 >= s.limit || !grow_kv(std::min(s.limit, P + depth + 3), park)) {
+        if (P + dmax + 2 >= s.limit || !grow_kv(std::min(s.limit, P + dmax + 3), park)) {
           finish = "length";
           res.context_full = true;
           break;
         }
       }
-      auto e2 = g.begin();
-      q35_->encode_mtp(*e2, s, P - c, c, P - c + 1, hsrc, h_row0, P + 1);
-      for (int k = 2; k <= depth; ++k)
-        q35_->encode_mtp(*e2, s, P + k - 2, 1, P + k - 1, q35_->mtp_post(), k == 2 ? c - 1 : 0, P + k, false);
-      q35_->encode_verify(*e2, s, P, depth + 1, sp, uint32_t(P));
-      e2->commit_and_wait();
+      double t0 = 0;
+      int R;                          // the verify's rows: the pending token + the proposals it checks
+      std::unique_ptr<Encoder> ev;    // the encoder holding the verify
+      if (vbudget_on_) {
+        // draft every proposal and wait; the host reads the drafts' confidences and the budget picks the
+        // rows (src/model/verify_budget.h). The split cycle costs one extra commit round trip and buys
+        // not encoding the verify's rows the budget rejects.
+        t0 = now_ms();
+        auto e2 = g.begin();
+        q35_->encode_mtp(*e2, s, P - c, c, P - c + 1, hsrc, h_row0, P + 1, true, 0);
+        for (int k = 2; k <= dmax; ++k)
+          q35_->encode_mtp(*e2, s, P + k - 2, 1, P + k - 1, q35_->mtp_post(), k == 2 ? c - 1 : 0, P + k, false, k - 1);
+        e2->commit_and_wait();
+        R = vbudget.rows(q4_->mtp_conf().as<float>(), Qwen35::kMaxMtpRows);
+        ev = g.begin();
+        q35_->encode_verify(*ev, s, P, R, sp, uint32_t(P));
+      } else {
+        R = depth + 1;
+        ev = g.begin();
+        q35_->encode_mtp(*ev, s, P - c, c, P - c + 1, hsrc, h_row0, P + 1);
+        for (int k = 2; k <= depth; ++k)
+          q35_->encode_mtp(*ev, s, P + k - 2, 1, P + k - 1, q35_->mtp_post(), k == 2 ? c - 1 : 0, P + k, false);
+        q35_->encode_verify(*ev, s, P, R, sp, uint32_t(P));
+      }
+      ev->commit_and_wait();
       const int* y = q35_->samples();
       int* tk = s.tokens();
       int a = 0;
-      while (a < depth && tk[P + 1 + a] == y[a]) ++a;
+      while (a < R - 1 && tk[P + 1 + a] == y[a]) ++a;
       tk[P + a + 1] = y[a];
       // emit up to a+1 tokens; m = how many were consumed before stopping
       int m = 0;
@@ -3490,6 +3527,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       ++spec_cycles_;
       spec_accepted_ += a;
+      if (vbudget_on_) {
+        spec_drafted_ += R - 1;
+        vbudget.observe(q4_->mtp_conf().as<float>(), R, a, now_ms() - t0);
+      }
       cycle_done(m);
       q35_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new pending token
       c = m;
@@ -3676,6 +3717,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   res.kflash_cycles = int(kfw.cycles);
   if ((dfl_ || lili_) && spec_cycles_ > 0)
     logd("%s: %.2f tokens/cycle over %ld cycles", lili_ ? lili_->name() : "dflash", double(spec_accepted_) / spec_cycles_,
+         spec_cycles_);
+  else if (vbudget_on_ && spec_cycles_ > 0)
+    logd("spec: %.2f tokens/cycle, %.2f accepted/drafted over %ld cycles",
+         double(spec_accepted_ + spec_cycles_) / spec_cycles_, double(spec_accepted_) / std::max(spec_drafted_, 1L),
          spec_cycles_);
   else if (depth > 0 && spec_cycles_ > 0)
     logd("spec: %.2f accepted/drafted over %ld cycles", double(spec_accepted_) / (spec_cycles_ * depth), spec_cycles_);

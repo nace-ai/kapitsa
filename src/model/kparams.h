@@ -63,6 +63,10 @@ struct TopkStage {
   uint32_t V, K, chunk;
 };
 
+struct DraftConf {  // draft_conf_rows: one row's largest candidate probability (the verify budget's input)
+  uint32_t V;
+};
+
 struct Sample {
   uint32_t n, K;
   float temp, top_p;
