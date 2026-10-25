@@ -158,7 +158,7 @@ NI_INLINE void hc_pre_comb_impl(device float* X, threadgroup float4* ysum4, cons
       acc += wts[r * (cp.k + 1) + cp.k] * ((const device float4*)(ys + r * cp.D))[d4];                         \
       ysum4[d4] = acc;                                                                                         \
     }                                                                                                          \
-    threadgroup_barrier(mem_flags::mem_threadgroup);                                                           \
+    threadgroup_barrier(mem_threadgroup);                                                                       \
     hc_pre_comb_impl<XN>(X, ysum4, inj_prev, w, winj, xn, inj, p, r, tid, ntg, scratch);                       \
   }
 NI_HC_PRE_COMB(hc_pre_comb, float)
