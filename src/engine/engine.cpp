@@ -715,6 +715,13 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;
   }
+  // Flash-Next (Qwen4Exp) single stream on the M5: 4096-row chunks. 32K Q2 prefill, M5 Pro, 25 Oct, d2 sparse
+  // attention: chunk 2048 ~900, 4096 ~1005-1017, 6144 967, 8192 887 tok/s (wider chunks halve the expert reads but
+  // the per-chunk compute grows faster). The hidden size is 640, so the extra buffers are small.
+  if (slots == 1 && Qwen4Exp::is_model(model_dir) && Gpu::get().apple10()) {
+    const MemPlan wide = model_plan(model_dir, 4096);
+    if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
+  }
   if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) > budget) {
     // 1024-row buffers, or the largest multiple of 64 rows down to 256 that leaves the tokens the engine starts with
     // (the context, up to 8K; fits_small)
