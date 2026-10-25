@@ -1,12 +1,12 @@
-// ---- qmti8: W4A8 dense prefill GEMM on the M5's int8 matrix units (experiment, NI_QMT_I8) ----
+// ---- qmti8: W4A8 dense prefill GEMM on the M5's int8 matrix units (NI_QMT_I8) ----
 // The int8 x int8 -> int32 matmul2d runs at ~64 TOPS on the M5 Pro against ~32 TFLOP/s for half (tools/bench_tops:
 // tp_32_32_64_i8 64.5, tp_32_32_64 32.3, and 58.3 with a per-K-step fp32 rescale, tp_rs_32_32_64).
 // X is quantized first by qx8_g64: int8 per row per group of 64 (scale absmax / 127, round to nearest), the k order
 // inside each 8 permuted to [0,2,4,6,1,3,5,7] (the order a packed 4-bit word splits into with two byte masks, so
 // the weight tile needs no shuffle), plus float2 (sx, sx * sum q) per row-group. With w = q_w * s + b per group:
 //   Y[m, n] = sum_g ( sx * s * C_g + sx * sum(q_x) * b ),  C_g = the int32 dot of the group's 64 codes.
-// Tile: 64 x 64 outputs, 4 simdgroups of 32 x 32, BK = 64 (one weight group per step, a fresh int32 product per
-// step rescaled into fp32), double-buffered as qmt_tile. Not bitwise qmt's (activation rounding): gate with NLL.
+// Then qmti8s: BM x BN outputs, simdgroups of 32 x 32, BK = 64 (one weight group per step, a fresh int32 product per
+// step rescaled into fp32), double-buffered as qmt_tile. Not bitwise qmt's (activation rounding).
 
 [[kernel]] void qx8_g64(const device half* X [[buffer(0)]], device char* Q [[buffer(1)]], device float2* XS [[buffer(2)]],
                         constant uint3& p [[buffer(3)]],  // M, K, x_ld (halves)
@@ -40,174 +40,8 @@
   }
 }
 
-template <int BM, int BN, int MODE = 0>  // MODE (diagnostic): bit 0 no rescale, bit 1 no global loads in the loop, bit 2 ping-pong products
-NI_INLINE void qmti8_tile(const device char* XQ, const device float2* XS, const device uint* W, const device bfloat* S,
-                          const device bfloat* B, device float* Y, constant QmtParams& p, uint m0, uint n0, uint tid,
-                          uint sg, threadgroup int8_t* xs, threadgroup int8_t* ws, threadgroup float2* xsc,
-                          threadgroup float2* wsc) {
-  constexpr int BK = 64, SM = BM / 2, SN = BN / 2, CAP = SM * SN / 32;
-  const uint sm = sg / 2, sn = sg % 2, G = p.K / 64, wld = p.K / 8, sld = p.K / 64;
-  constexpr auto desc =
-      matmul2d_descriptor(SM, SN, BK, false, true, false, matmul2d_descriptor::mode::multiply_accumulate);
-  matmul2d<desc, execution_simdgroup> op;
-  typedef tensor<threadgroup int8_t, dextents<int32_t, 2>, tensor_inline> tg_t;
-  auto tX0 = tg_t(xs + sm * SM * BK, dextents<int32_t, 2>(BK, SM));
-  auto tX1 = tg_t(xs + BM * BK + sm * SM * BK, dextents<int32_t, 2>(BK, SM));
-  auto tW0 = tg_t(ws + sn * SN * BK, dextents<int32_t, 2>(BK, SN));
-  auto tW1 = tg_t(ws + BN * BK + sn * SN * BK, dextents<int32_t, 2>(BK, SN));
-  auto c = op.template get_destination_cooperative_tensor<decltype(tX0), decltype(tW0), int32_t>();
-  float acc[CAP];
-  ushort2 ix[CAP];  // (column in the tile, row in the tile)
-  _Pragma("clang loop unroll(full)")
-  for (uint16_t i = 0; i < CAP; ++i) {
-    acc[i] = 0.0f;
-    const auto d = c.get_multidimensional_index(i);
-    ix[i] = ushort2(sn * SN + d[0], sm * SM + d[1]);
-  }
-  // X: BM rows x 64 bytes, 16 bytes a thread-load; W: BN rows x 32 codes (one uint4) a thread-load
-  constexpr int XP = BM * BK / 16 / 128, WP = BN * BK / 32 / 128;
-  uint xr[XP], xk[XP], xrow[XP];
-  _Pragma("clang loop unroll(full)")
-  for (int i = 0; i < XP; ++i) {
-    const uint j = tid + 128 * i;
-    xr[i] = j / 4;
-    xk[i] = (j % 4) * 16;
-    xrow[i] = m0 + xr[i] < p.M ? m0 + xr[i] : 0xffffffffu;
-  }
-  uint wr[WP], wk[WP], wn[WP];
-  _Pragma("clang loop unroll(full)")
-  for (int i = 0; i < WP; ++i) {
-    const uint j = tid + 128 * i;
-    wr[i] = j / 2;
-    wk[i] = (j % 2) * 32;
-    wn[i] = min(n0 + wr[i], p.N - 1);
-  }
-  const uint srow = m0 + tid;  // tid < BM loads the row scales
-  uint4 xv[XP], wv[WP];
-  float2 xsv = 0, wsv[WP];
-  auto load = [&](uint st) {
-    const uint k0 = st * BK;
-    _Pragma("clang loop unroll(full)")
-    for (int i = 0; i < XP; ++i)
-      xv[i] = xrow[i] != 0xffffffffu ? *(const device uint4*)(XQ + size_t(xrow[i]) * p.x_ld + k0 + xk[i]) : uint4(0);
-    _Pragma("clang loop unroll(full)")
-    for (int i = 0; i < WP; ++i) {
-      wv[i] = *(const device uint4*)(W + size_t(wn[i]) * wld + (k0 + wk[i]) / 8);
-      const size_t gi = size_t(wn[i]) * sld + st;
-      wsv[i] = float2(float(S[gi]), float(B[gi]));
-    }
-    if (tid < uint(BM)) xsv = srow < p.M ? XS[size_t(srow) * G + st] : float2(0);
-  };
-  auto store = [&](uint b, uint sb) {
-    _Pragma("clang loop unroll(full)")
-    for (int i = 0; i < XP; ++i) *(threadgroup uint4*)(xs + b * BM * BK + xr[i] * BK + xk[i]) = xv[i];
-    _Pragma("clang loop unroll(full)")
-    for (int i = 0; i < WP; ++i) {
-      const uint4 w = wv[i];
-      threadgroup uint4* d = (threadgroup uint4*)(ws + b * BN * BK + wr[i] * BK + wk[i]);
-      d[0] = uint4(w.x & 0x0F0F0F0Fu, (w.x >> 4) & 0x0F0F0F0Fu, w.y & 0x0F0F0F0Fu, (w.y >> 4) & 0x0F0F0F0Fu);
-      d[1] = uint4(w.z & 0x0F0F0F0Fu, (w.z >> 4) & 0x0F0F0F0Fu, w.w & 0x0F0F0F0Fu, (w.w >> 4) & 0x0F0F0F0Fu);
-      if (wk[i] == 0) wsc[sb * BN + wr[i]] = wsv[i];
-    }
-    if (tid < uint(BM)) xsc[sb * BM + tid] = xsv;
-  };
-  // The 32 x 32 int32 destination's per-thread layout (probed on the M5, /tmp/qfn-mm/probe.swift): element i sits at
-  // column c0 + (i & 3) + 16 * (i >> 3 & 1), row r0 + 8 * (i >> 2 & 1) + 16 * (i >> 4 & 1): 4 rows x 8 columns, so
-  // one step's rescale reads 12 scale pairs, not 64. Checked against ix (from get_multidimensional_index) below.
-  auto rescale = [&](thread decltype(c)& cc, uint sb) {
-    float2 xr4[4], wc8[8];
-    _Pragma("clang loop unroll(full)")
-    for (int a = 0; a < 4; ++a) xr4[a] = xsc[sb * BM + ix[(a & 1) * 4 + (a >> 1) * 16].y];
-    _Pragma("clang loop unroll(full)")
-    for (int a = 0; a < 8; ++a) wc8[a] = wsc[sb * BN + ix[(a & 3) + (a >> 2) * 8].x];
-    _Pragma("clang loop unroll(full)")
-    for (uint16_t i = 0; i < CAP; ++i) {
-      const float2 xa = xr4[(i >> 2 & 1) + 2 * (i >> 4 & 1)], wb = wc8[(i & 3) + 4 * (i >> 3 & 1)];
-      acc[i] = fma(float(cc[i]), xa.x * wb.x, fma(xa.y, wb.y, acc[i]));
-    }
-  };
-  load(0);
-  store(0, 0);
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (MODE & 4) {
-    auto c1 = op.template get_destination_cooperative_tensor<decltype(tX0), decltype(tW0), int32_t>();
-    for (uint st = 0; st < G; ++st) {
-      const bool more = st + 1 < G;
-      if (more) load(st + 1);
-      if (st & 1) {
-        _Pragma("clang loop unroll(full)")
-        for (uint16_t i = 0; i < CAP; ++i) c1[i] = 0;
-        op.run(tX1, tW1, c1);
-        rescale(c, (st + 2) % 3);
-      } else {
-        _Pragma("clang loop unroll(full)")
-        for (uint16_t i = 0; i < CAP; ++i) c[i] = 0;
-        op.run(tX0, tW0, c);
-        if (st) rescale(c1, (st + 2) % 3);
-      }
-      if (more) store((st & 1) ^ 1, (st + 1) % 3);
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-    }
-    if ((G - 1) & 1) rescale(c1, (G - 1) % 3);
-    else rescale(c, (G - 1) % 3);
-  } else
-  for (uint st = 0; st < G; ++st) {
-    const bool more = st + 1 < G;
-    if (more && !(MODE & 2)) load(st + 1);
-    if (!(MODE & 1)) {
-      _Pragma("clang loop unroll(full)")
-      for (uint16_t i = 0; i < CAP; ++i) c[i] = 0;
-    }
-    const uint b = st & 1;
-    if (b) op.run(tX1, tW1, c);
-    else op.run(tX0, tW0, c);
-    if (!(MODE & 1)) rescale(c, b);
-    if (more) store(b ^ 1, b ^ 1);
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-  }
-  if (MODE & 1)
-    for (uint16_t i = 0; i < CAP; ++i) acc[i] = float(c[i]);
-  _Pragma("clang loop unroll(full)")
-  for (uint16_t i = 0; i < CAP; ++i) {
-    const uint n = n0 + ix[i].x, m = m0 + ix[i].y;
-    if (m >= p.M || n >= p.N) continue;
-    const size_t o = size_t(m) * p.y_ld + n;
-    Y[o] = p.add ? Y[o] + acc[i] : acc[i];
-  }
-}
-
-#define NI_QMTI8(NAME, MODE)                                                                                       \
-  [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                      \
-      const device char* XQ [[buffer(0)]], const device uint* W [[buffer(1)]], const device bfloat* S [[buffer(2)]], \
-      const device bfloat* B [[buffer(3)]], device float* Y [[buffer(4)]], constant QmtParams& p [[buffer(5)]],      \
-      const device float2* XS [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],                             \
-      uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]]) {                       \
-    threadgroup int8_t xs[2 * 64 * 64];                                                                              \
-    threadgroup int8_t ws[2 * 64 * 64];                                                                              \
-    threadgroup float2 xsc[3 * 64];                                                                                  \
-    threadgroup float2 wsc[3 * 64];                                                                                  \
-    qmti8_tile<64, 64, MODE>(XQ, XS, W, S, B, Y, p, tg.y * 64, tg.x * 64, tid, sg, xs, ws, xsc, wsc);               \
-  }
-NI_QMTI8(qmti8a_m64_n64, 1)
-NI_QMTI8(qmti8b_m64_n64, 2)
-NI_QMTI8(qmti8c_m64_n64, 3)
-NI_QMTI8(qmti8p_m64_n64, 4)
-
-// buffers as qmt_m64_n64 but 0 = the int8 X (x_ld bytes a row), plus 6 = its float2 row-group scales (K / 64 a row)
-[[kernel, max_total_threads_per_threadgroup(128)]] void qmti8_m64_n64(
-    const device char* XQ [[buffer(0)]], const device uint* W [[buffer(1)]], const device bfloat* S [[buffer(2)]],
-    const device bfloat* B [[buffer(3)]], device float* Y [[buffer(4)]], constant QmtParams& p [[buffer(5)]],
-    const device float2* XS [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
-    uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]]) {
-  threadgroup int8_t xs[2 * 64 * 64];
-  threadgroup int8_t ws[2 * 64 * 64];
-  threadgroup float2 xsc[3 * 64];
-  threadgroup float2 wsc[3 * 64];
-  qmti8_tile<64, 64>(XQ, XS, W, S, B, Y, p, tg.y * 64, tg.x * 64, tid, sg, xs, ws, xsc, wsc);
-}
-
 // qmti8s: each simdgroup's 32 x 32 as two 32 x 16 products on alternating int32 tiles, so the rescale of one runs
-// while the matrix unit computes the other (qmti8's single product makes every step wait for its own result).
+// while the matrix unit computes the other (one product per step makes every step wait for its own result).
 template <int BM, int BN>
 NI_INLINE void qmti8s_tile(const device char* XQ, const device float2* XS, const device uint* W, const device bfloat* S,
                            const device bfloat* B, device float* Y, constant QmtParams& p, uint m0, uint n0, uint tid,
@@ -284,7 +118,7 @@ NI_INLINE void qmti8s_tile(const device char* XQ, const device float2* XS, const
     }
     if (tid < uint(BM)) xsc[sb * BM + tid] = xsv;
   };
-  // element i: column (i & 3) + c, row 8 * (i >> 2) + r (probed, as qmti8's layout note)
+  // element i: column (i & 3) + c, row 8 * (i >> 2) + r (probed, above)
   auto rescale = [&](thread decltype(c0)& cc, thread float* acc, uint sb, uint coff) {
     float2 xr4[4], wc4[4];
     _Pragma("clang loop unroll(full)")
@@ -341,8 +175,7 @@ NI_INLINE void qmti8s_tile(const device char* XQ, const device float2* XS, const
     threadgroup float2 wsc[3 * BN];                                                                                  \
     qmti8s_tile<BM, BN>(XQ, XS, W, S, B, Y, p, tg.y * BM, tg.x * BN, tid, sg, xs, ws, xsc, wsc);                    \
   }
-NI_QMTI8S(qmti8s_m64_n64, 64, 64)
-NI_QMTI8S(qmti8s_m128_n64, 128, 64)
+// 64 x 128: NI_QMT_I8's tile (enc_qmm_large). Threadgroup memory 29,184 B, past the Metal validation layer's
+// doubled-count cap, so the 32 x 64 instantiation (14,592 B) is the one that runs the same code under the layer.
 NI_QMTI8S(qmti8s_m64_n128, 64, 128)
-NI_QMTI8S(qmti8s_m128_n128, 128, 128)
 NI_QMTI8S(qmti8s_m32_n64, 32, 64)
