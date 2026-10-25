@@ -407,9 +407,17 @@ Flint::Flint(const std::string& path, int prefill_chunk) {
   cfg_ = read_config(path_);
   Gpu::get().compile_extra("Flint", kFlintKernelSource);
   qmt_ = cfg_.bits == 4 && qmt_available();
+  // a dense Llama's 8-bit and bf16 matrices on the same tile (qmt8_m64_n64, qmtf16_m64_n64), and its prefill attention
+  // on the matrix units whatever the weights' format; NI_FLINT_QMTW=0 keeps the simdgroup kernels for them
+  const char* qw = getenv("NI_FLINT_QMTW");
+  qmtw_ = cfg_.llama && qmt_available() && !(qw && !strcmp(qw, "0"));
+  // their tiles in a swizzled order, 8 row tiles sharing each weight tile through the cache (the 4-bit outputs bitwise
+  // qmt_m64_n64's); the 8-bit tile 128 rows tall with X read in place; NI_FLINT_QMTS=0 keeps the plain order
+  const char* qs = getenv("NI_FLINT_QMTS");
+  qmts_ = qmtw_ && !(qs && !strcmp(qs, "0"));
   split_ = split_merges();
   if (split_) logi("Flint: the decode kernels' merges in dispatches of their own (NI_FLINT_SPLIT)");
-  if (qmt_) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+  if (qmt_ || qmtw_) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
   load(prefill_chunk);
 }
 
@@ -986,12 +994,16 @@ void Flint::enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buff
   const kp::Qmm p{uint32_t(M), W.N, W.K, W.K, y_ld ? y_ld : W.N, add ? 1u : 0u, uint32_t(std::max(W.gs, 1)), 0, 0};
   std::string n;
   uint32_t bm = 32, bn = 128, th = 128;
-  if (W.bits == 16) {  // bf16 (the router): qmr's tiles for bf16
+  if (W.bits == 16 && qmtw_ && M >= 64) {  // a dense Llama's bf16 matrices (Flint's bf16 router keeps qrf_f16)
+    n = "qmtf16_m64_n64", bm = 64, bn = 64;
+  } else if (W.bits == 16) {  // bf16 (the router): qmr's tiles for bf16
     if (M <= 8) n = "qrf_f16_m8_n64", bm = 8, bn = 64, th = 64;
     else if (M < 64 || W.N <= 64) n = "qrf_f16_m16_n64", bm = 16, bn = 64;
     else n = "qrf_f16_m32_n128";
-  } else if (W.bits == 4 && qmt_ && M >= 64) {
-    n = "qmt_m64_n64", bm = 64, bn = 64;
+  } else if (W.bits == 4 && (qmt_ || qmtw_) && M >= 64) {
+    n = qmts_ ? "qmt4s8_m64_n64" : "qmt_m64_n64", bm = 64, bn = 64;
+  } else if (W.bits == 8 && qmtw_ && M >= 64) {
+    n = qmts_ ? "qmt8ds8_m128_n64" : "qmt8_m64_n64", bm = qmts_ ? 128 : 64, bn = 64;
   } else if (W.bits == 4) {
     if (M <= 8) n = "qmr_k64_w12_m8_n64", bm = 8, bn = 64, th = 64;
     else if (M < 64 || W.N <= 64) n = "qmr_k64_w14_m16_n64", bm = 16, bn = 64;
@@ -1325,7 +1337,7 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   static const bool qat_env = !getenv("NI_FLINT_QATTN") || atoi(getenv("NI_FLINT_QATTN")) != 0;
   // (a dense Llama with 7 query heads per KV head, Nanbeige4.3: the _g7 forms, each token's eighth row a spare)
   const bool g7 = c.llama && c.hq == 7 * c.hkv;
-  const bool qat = qat_env && qmt_ && c.hd == 128 && (c.hq == 8 * c.hkv || g7);
+  const bool qat = qat_env && (qmt_ || qmtw_) && c.hd == 128 && (c.hq == 8 * c.hkv || g7);
   const uint32_t qat_tok = small_tiles() ? 8 : 16;   // 2 tokens a simdgroup, NS 4 or 8 simdgroups
   if (qat) e.use(pipe(std::string(small_tiles() ? "qattn_flint_s4k16" : "qattn_flint_s8k32p") + (g7 ? "_g7" : "")));
   else e.use(pipe(small_tiles() ? "flint_attn_prefill_k16" : "flint_attn_prefill"));

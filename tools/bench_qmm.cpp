@@ -7,7 +7,8 @@
 // (incl. the last row/column) against a double-precision reference on the dequantized halfs.
 // qmr_gu_* kernels (fused gate/up/SwiGLU, half output) get a second weight set; their TFLOP/s
 // count both projections. *_ld kernels (QmmLdParams) read the leading K columns of weight rows 2K long.
-// QMM_SCALE=<f> multiplies the random scales (1e-3: below half's normal range).
+// QMM_SCALE=<f> multiplies the random scales (1e-3: below half's normal range). Kernels named *f16* (qrf_f16_*, qmtf16_*)
+// get bf16 weights (uniform in +-0.05) and qmt8_* / qmr8_* 8-bit codes.
 // Shapes: default (35B-like), SHAPES27=1 (27B prefill), SMALLM=1, or QMM_SHAPES="M,N,K;M,N,K".
 #include "metal/gpu.h"
 #include "util/bf16.h"
@@ -48,7 +49,10 @@ struct Kern {
   int bits; // 8 for qmr8_* / *_b8_* kernels, else 4
   bool ld;  // *_ld: QmmLdParams, weight / scale rows of 2K columns
 };
-static int bits_for(const std::string& n) { return n.rfind("qmr8", 0) == 0 || n.find("_b8_") != std::string::npos ? 8 : 4; }
+static int bits_for(const std::string& n) {
+  if (n.find("f16") != std::string::npos) return 16;  // bf16 weights (qrf_f16_*, qmtf16_*)
+  return n.rfind("qmr8", 0) == 0 || n.rfind("qmt8", 0) == 0 || n.find("_b8_") != std::string::npos ? 8 : 4;
+}
 
 static uint32_t threads_for(const std::string& name) {
   if (getenv("QMM_THREADS")) return atoi(getenv("QMM_THREADS"));
@@ -116,6 +120,9 @@ int main(int argc, char** argv) {
         bi->as<uint16_t>()[i] = f32_to_bf16(0.05f * d(rng));
       }
     }
+    if (std::any_of(kerns.begin(), kerns.end(), [](const Kern& k) { return k.bits == 16; }))
+      for (Buffer* w : {&W, &W2})  // bf16 weights for the *f16* kernels (the codes' kernels read them as codes)
+        for (size_t i = 0; i < size_t(N) * K; ++i) w->as<uint16_t>()[i] = f32_to_bf16(0.05f * d(rng));
     for (size_t i = 0; i < size_t(M) * K; ++i) X.as<uint16_t>()[i] = f2h(d(rng));
     const double flop = 2.0 * M * N * K;
     const int reps = getenv("QMM_REPS") ? atoi(getenv("QMM_REPS")) : std::max(3, int(1.5e12 / flop));  // small shapes: cap it
@@ -124,6 +131,7 @@ int main(int argc, char** argv) {
     const bool nopre = getenv("QMM_I8_NOPRE") != nullptr;  // qmti8_*: time the GEMM alone (X quantized once)
     for (auto& k : kerns) {
       if (k.name.rfind("qmt", 0) == 0) g.compile_extra("tensor", kTensorKernelSource, true);
+      if (k.name.rfind("qrf", 0) == 0) g.compile_formats();
       pipes.push_back(g.pipeline(k.name));
       if (k.name.rfind("qmti8", 0) == 0) qx8 = g.pipeline("qx8_g64");
     }
@@ -169,9 +177,14 @@ int main(int argc, char** argv) {
           double r = 0;
           for (uint32_t k = 0; k < K; ++k) {
             const size_t ik = size_t(n) * wk + k;
-            uint32_t q = kerns[ki].bits == 8 ? (w.as<uint32_t>()[ik / 4] >> (8 * (k % 4))) & 255
-                                             : (w.as<uint32_t>()[ik / 8] >> (4 * (k % 8))) & 15;
-            float wv = bf16_to_f32(sc.as<uint16_t>()[ik / 64]) * q + bf16_to_f32(bi.as<uint16_t>()[ik / 64]);
+            float wv;
+            if (kerns[ki].bits == 16) {
+              wv = bf16_to_f32(w.as<uint16_t>()[ik]);
+            } else {
+              uint32_t q = kerns[ki].bits == 8 ? (w.as<uint32_t>()[ik / 4] >> (8 * (k % 4))) & 255
+                                               : (w.as<uint32_t>()[ik / 8] >> (4 * (k % 8))) & 15;
+              wv = bf16_to_f32(sc.as<uint16_t>()[ik / 64]) * q + bf16_to_f32(bi.as<uint16_t>()[ik / 64]);
+            }
             r += double(float(__fp16(wv))) * h2f(X.as<uint16_t>()[size_t(m) * K + k]);
           }
           return r;

@@ -145,7 +145,9 @@ new architecture requires more than implementing `Model` if it needs a new draft
   (`src/kernels/tensor/qmt_moe_q20.metal`: the same 64-row tile on the Q2_0 weight rows, the qrm kernels' per-element
   arithmetic kept — the decode is exact and the products accumulate in fp32 — so only the tiling reassociates the K
   reduction; `NI_MOE_QTM_Q20=0` keeps the simdgroup kernels), and Flint's prefill attention (head dim 128, 8 query heads per
-  KV head: `tensor/qattn_t_flint.metal`, `NI_FLINT_QATTN=0` keeps `flint_attn_prefill`). Measured on the 4B (dense),
+  KV head: `tensor/qattn_t_flint.metal`, `NI_FLINT_QATTN=0` keeps `flint_attn_prefill`). A dense Llama on Flint's backend (Nanbeige4.3) runs its 8-bit and bf16 prefill GEMMs on the same tile too
+  (`tensor/qmtw.metal`, `NI_FLINT_QMTW=0` keeps the simdgroup kernels) and its 4-/8-bit tiles in a swizzled order that
+  shares weight tiles through the cache (`NI_FLINT_QMTS=0` keeps the plain order). Measured on the 4B (dense),
   the 35B-A3B and Flash-Next (experts): none is bit-identical to the simdgroup paths, since the tile reassociates each output's
   K reduction, so the experts' tile is gated by `tools/logit_compare.py --reorder` (AGENTS.md) rather than the model's
   noise floor.

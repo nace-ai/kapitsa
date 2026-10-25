@@ -187,6 +187,8 @@ class Flint : public Model {
   int tmax_ = 2048;
   size_t mem_budget_ = 0;
   bool qmt_ = false;             // dense 4-bit prefill GEMMs on Metal 4's tensor_ops (M5)
+  bool qmtw_ = false;            // a dense Llama's 8-bit and bf16 prefill GEMMs there too (tensor/qmtw.metal)
+  bool qmts_ = false;            // ... and its tiles in the swizzled order (qmt4s8_m64_n64, qmt8ds8_m128_n64)
   bool split_ = false;           // the decode kernels' merges in a dispatch of their own (split_merges)
 
   // decode / verify activations (kMaxRows rows)
