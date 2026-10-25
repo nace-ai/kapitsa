@@ -32,7 +32,8 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test grammar_test
-structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test`:
+structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test
+logit_dump`:
 
 ```bash
 build/api_test
@@ -52,6 +53,7 @@ python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
 python3 tests/test_pr_size.py
 python3 tests/test_logit_compare.py
+python3 tests/test_logit_dump.py build      # its output directory only, before the lock and the model
 python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
 ```
 

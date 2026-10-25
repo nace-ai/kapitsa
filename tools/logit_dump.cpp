@@ -27,7 +27,9 @@
 // --rows W = 24 (192 rows in all). --from DIR scores the records of an earlier dump instead (Kapitsa's or another
 // engine's): per sequence, its scored prefixes form the window, and the files keep DIR's lines in DIR's order.
 //
-// out_dir/<path>/ (the layout of Splash's teacher-forced dumps, so that either engine's dumps compare with the other's):
+// out_dir/<path>/ (the layout of Splash's teacher-forced dumps, so that either engine's dumps compare with the other's;
+// out_dir and any missing parents are made before the model loads, so a nested path such as dumps/x/ref works and a
+// path that cannot be made fails in a second, not after the model's load):
 //   sequences.txt  one window's token ids per line (as far as its last scored prefix's next token)
 //   records.txt    per scored prefix: its sequence's line (from 0) and the prefix's length L; the row predicts token L
 //   logits.f32     per record, in order, the vocabulary's logits (fp32, little-endian)
@@ -54,6 +56,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -222,6 +225,11 @@ int main(int argc, char** argv) {
     if (p != "step" && p != "verify" && p != "batch") fatal("--paths: unknown path %s (step, verify, batch)", p.c_str());
   if (n_windows < 1 || rows < 1 || chunk < 1 || members < 1 || members > 8)
     fatal("--windows, --rows, --chunk: positive; --batch: 1 to 8");
+  {
+    std::error_code ec;
+    std::filesystem::create_directories(out, ec);
+    if (ec) fatal("cannot make %s: %s", out.c_str(), ec.message().c_str());
+  }
 
   // ---- the windows and their records ----
   std::vector<std::pair<long, long>> records;  // (sequence, prefix length), records.txt's order
@@ -328,8 +336,7 @@ int main(int argc, char** argv) {
     return W;
   };
 
-  // ---- the output files ----
-  mkdir(out.c_str(), 0755);
+  // ---- the output files (out_dir was made at the start) ----
   std::string seq_txt, rec_txt;
   for (const Window& w : wins) {
     for (size_t t = 0; t < w.toks.size(); ++t) seq_txt += (t ? " " : "") + std::to_string(w.toks[t]);
