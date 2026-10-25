@@ -39,6 +39,18 @@ check("waiters oldest first, child excluded", [w["pid"] for w in e["waiters"]], 
 check("waiter without ETA gets the default", e["waiters"][1]["known"], False)
 check("free in = 20 left + waiter's full 5 + default", round(e["wait_min"]), 25 + round(gpu.DEFAULT_ETA))
 
+# gpu run -- bash leg.sh: lockf 500 holds, bash 501 and its kapitsa grandchild 502 inherit the fd; lockf 600 waits
+d, e = run([
+    "open 500 1 03:00 lockf -k L bash leg.sh", "anc 500",
+    "open 501 500 03:00 bash leg.sh", "anc 501 500",
+    "open 502 501 02:50 kapitsa serve --model m", "anc 502 501 500",
+    "lockf 500 1 03:00 lockf -k L bash leg.sh", "lockf 600 1 01:00 lockf -k L bash other.sh",
+])
+check("holder's grandchild is not a waiter", (e["holder"]["pid"], [w["pid"] for w in e["waiters"]]), (500, [600]))
+
+q = gpu.queue_script(5, "x", ["true"], "/tmp/L", "~/kq/x")
+check("~/ in --cwd expands on the running Mac, before the queue entry", q.startswith('cd "$HOME"/kq/x || exit 1; mkdir'), True)
+
 # past its ETA: assumed OVERDUE more minutes, marked overdue
 d, e = run(["open 100 1 1-02:00:00 lockf -k L sleep", "lockf 100 1 1-02:00:00 lockf -k L sleep", f"eta 100 {NOW - 7200} 30 x"])
 check("day-long etime parses", e["holder"]["age_s"], 93600)

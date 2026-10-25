@@ -57,7 +57,7 @@ frees up first:
 $V gpu                                                    # every Mac: lock holder, waiters and their ETAs, free memory; ends with "pick:"
 $V gpu --model qwen3.8-27b-4bit --chip M5 --min-macos 26  # only the Macs that can run this leg
 $V gpu run --eta 25 --label "#590 4B logit gate" -- bash leg.sh       # queue on this Mac, declaring 25 min of GPU
-$V gpu run --host m3pro --eta 40 --cwd ~/kq/x --log /tmp/leg.log -- bash leg.sh   # queue on another Mac, detached there
+$V gpu run --host m3pro --eta 40 --cwd '~/kq/x' --log /tmp/leg.log -- bash leg.sh   # queue on another Mac, detached there
 ```
 
 - **Macs** come from `~/.config/verify-kapitsa/hosts` (`$VK_HOSTS`), one per line: `name user@host [socks=HOST:PORT]`.

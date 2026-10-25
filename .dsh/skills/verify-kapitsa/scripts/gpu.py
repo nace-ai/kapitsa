@@ -28,7 +28,8 @@ echo "chip $(sysctl -n machdep.cpu.brand_string)"; echo "memsize $(sysctl -n hw.
 echo "macos $(sw_vers -productVersion)"; echo "now $(date +%s)"
 vm_stat | awk '/page size/{print "pagesize",$8} /Pages free/{print "free",$3} /Pages inactive/{print "inactive",$3}
   /Pages speculative/{print "speculative",$3} /Pages purgeable/{print "purgeable",$3}'
-for p in $(lsof -t "$L" 2>/dev/null); do echo "open $p $(ps -o ppid=,etime=,command= -p $p | cut -c1-200)"; done
+for p in $(lsof -t "$L" 2>/dev/null); do echo "open $p $(ps -o ppid=,etime=,command= -p $p | cut -c1-200)"
+  a=""; q=$p; while q=$(ps -o ppid= -p "$q" | tr -d ' '); [ -n "$q" ] && [ "$q" -gt 1 ]; do a="$a $q"; done; echo "anc $p$a"; done
 for p in $(pgrep -f "^(/usr/bin/)?lockf .*$L"); do echo "lockf $p $(ps -o ppid=,etime=,command= -p $p | cut -c1-200)"; done
 for f in "$Q"/*; do [ -f "$f" ] || continue; p=${f##*/}; kill -0 "$p" 2>/dev/null && echo "eta $p $(head -1 "$f") " && sed -n 's/^held /held '"$p"' /p' "$f"; done
 ps -axo rss=,pid=,etime=,command= | awk '$1>3000000' | cut -c1-200 | sed 's/^ */big /'
@@ -67,7 +68,7 @@ def etime_s(s):  # ps etime: [[dd-]hh:]mm:ss
 
 
 def parse(text):
-    d = {"open": [], "lockf": [], "eta": {}, "big": [], "models": []}
+    d = {"open": [], "lockf": [], "eta": {}, "big": [], "models": [], "anc": {}}
     vm = {}
     for line in text.splitlines():
         key, _, rest = line.partition(" ")
@@ -79,6 +80,10 @@ def parse(text):
             f = rest.split(None, 3)
             if len(f) >= 3:
                 d["eta"][int(f[0])] = {"start": int(f[1]), "eta_min": float(f[2]), "label": f[3].strip() if len(f) > 3 else ""}
+        elif key == "anc":
+            f = [int(x) for x in rest.split()]
+            if f:
+                d["anc"][f[0]] = set(f[1:])
         elif key == "held":
             f = rest.split()
             if len(f) == 2 and int(f[0]) in d["eta"]:
@@ -116,8 +121,12 @@ def estimate(d):
     lockf_pids = {p["pid"] for p in d["lockf"]}
     opens = sorted(d["open"], key=lambda p: -p["age_s"])
     holder = next((p for p in opens if p["pid"] in lockf_pids), opens[0] if opens else None)
-    # the holder's children inherit its fd (lockf's kapitsa child shows in lsof too): they are the holder, not waiters
-    waiters = [p for p in d["lockf"] + d["open"] if not holder or holder["pid"] not in (p["pid"], p["ppid"])]
+    # every descendant of the holder inherits its fd (lockf -> bash leg.sh -> kapitsa serve all show in lsof):
+    # they are the holder, not waiters
+    def under_holder(p):
+        return holder and holder["pid"] in {p["pid"], p["ppid"]} | d["anc"].get(p["pid"], set())
+
+    waiters = [p for p in d["lockf"] + d["open"] if not under_holder(p)]
     seen, q = set(), []
     for p in sorted(waiters, key=lambda p: -p["age_s"]):  # flock does not promise FIFO; oldest first is a guess
         if p["pid"] not in seen:
@@ -160,8 +169,13 @@ def tailnet_peers():
         st = json.loads(subprocess.run(argv, capture_output=True, text=True, timeout=10).stdout)
     except Exception:
         return []
-    return [(p.get("HostName", "?"), (p.get("TailscaleIPs") or ["?"])[0], p.get("Online"))
-            for p in (st.get("Peer") or {}).values()]
+    out = []
+    for p in (st.get("Peer") or {}).values():
+        dns = (p.get("DNSName") or "").rstrip(".")
+        ips = p.get("TailscaleIPs") or ["?"]
+        # every name a hosts file may use for it: the IPs, the MagicDNS name and its short form
+        out.append((p.get("HostName", "?"), ips[0], p.get("Online"), set(ips) | {dns, dns.split(".")[0]} - {""}))
+    return out
 
 
 def describe(j):
@@ -210,10 +224,10 @@ def cmd_status(a):
               + (f"   (skipped: {', '.join(d['ineligible'])})" if d["ineligible"] else ""))
     # a Mac commented out in the hosts file was looked at and left out on purpose: do not offer it again
     known = set(re.findall(r"@([\w.:-]+)", open(hosts_file()).read())) if os.path.exists(hosts_file()) else set()
-    extra = [p for p in tailnet_peers() if p[1] not in known]
+    extra = [p for p in tailnet_peers() if not p[3] & known]
     if extra:
         print("on the tailnet, not in " + hosts_file() + ": "
-              + ", ".join(f"{n} ({ip}{'' if on else ', offline'})" for n, ip, on in extra))
+              + ", ".join(f"{n} ({ip}{'' if on else ', offline'})" for n, ip, on, _ in extra))
     if not pick:
         print("pick: none (every Mac is unreachable or skipped)")
         return 1
@@ -224,9 +238,13 @@ def cmd_status(a):
 def queue_script(eta, label, cmd, lock, cwd):
     """sh that records this shell's pid in the queue, then becomes lockf: the queue file names lockf's pid."""
     label = re.sub(r"\s+", " ", label).strip()[:100]
-    return (f"mkdir -p {QUEUE}; for f in {QUEUE}/*; do [ -f \"$f\" ] && ! kill -0 \"${{f##*/}}\" 2>/dev/null"
+    # cd first, so a bad directory leaves no queue entry; ~/ expands on the Mac that runs the job, not the caller's
+    go = ""
+    if cwd:
+        go = f"cd \"$HOME\"/{shlex.quote(cwd[2:])} || exit 1; " if cwd.startswith("~/") else f"cd {shlex.quote(cwd)} || exit 1; "
+    return (go + f"mkdir -p {QUEUE}; for f in {QUEUE}/*; do [ -f \"$f\" ] && ! kill -0 \"${{f##*/}}\" 2>/dev/null"
             f" && rm -f \"$f\"; done; echo \"$(date +%s) {eta:g} {label}\""
-            f" > {QUEUE}/$$; " + (f"cd {shlex.quote(cwd)} && " if cwd else "")
+            f" > {QUEUE}/$$; "
             + f"NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1 exec lockf -k {shlex.quote(lock)} "
             # once the lock is ours, note when (the holder's ETA counts from here), then become CMD
             + "sh -c " + shlex.quote(f'echo "held $(date +%s)" >> {QUEUE}/' + "$1; shift; exec \"$@\"")
@@ -263,7 +281,7 @@ def main():
         p.add_argument("--host")
         p.add_argument("--eta", type=float, required=True, help="minutes the job expects to hold the GPU")
         p.add_argument("--label")
-        p.add_argument("--cwd", help="directory to run in (on the remote Mac for --host)")
+        p.add_argument("--cwd", help="directory to run in (on the remote Mac for --host); quote a leading ~ ('~/kq/x') so it is that Mac's home")
         p.add_argument("--log", help="remote only: run detached, output to this file on that Mac")
         argv = sys.argv[2:]
         cmd = argv[argv.index("--") + 1:] if "--" in argv else []
