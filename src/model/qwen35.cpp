@@ -2350,7 +2350,7 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
 // NI_QMT_I8 (read once): the 4-bit dense prefill GEMMs as W4A8 on the M5's int8 matrix units (tensor/qmti8.metal: X
 // quantized per row per group of 64 by qx8_g64, then qmti8s_m64_n128). bench_qmm, M = 4096 with the quantize pass
 // timed: 27.9 / 25.2 TFLOP/s against qmt_m64_n64's 23.4 / 19.8 (N 10240 K 2560, N 2560 K 6144). Lossy (activation
-// rounding), so it is on by default only where its drift was measured within Splash's (qmt_i8_default_: Flash-Next's
+// rounding), so it is on by default only where its drift is measured (qmt_i8_default_: Flash-Next's
 // Q2_0 pack); 1 turns it on elsewhere, 0 off.
 static bool qmt_i8_on(bool dflt) {
   static const int env = env_int("NI_QMT_I8", -1);  // -1: unset

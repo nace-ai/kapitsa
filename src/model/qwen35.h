@@ -716,7 +716,7 @@ class Qwen35 : public Model {
   // 3-row verify GEMVs on the fp32 kernels instead of qmvht_t3_r4's half products (Qwen4Exp: accuracy first)
   bool no_qmvh_ = false;
   // NI_QMT_I8's default (W4A8 dense prefill GEMMs, enc_qmm_large): on for Flash-Next's Q2_0 pack (Qwen4Exp), the one
-  // measured within Splash's drift; off elsewhere
+  // whose drift is measured (docs/usage.md); off elsewhere
   bool qmt_i8_default_ = false;
   virtual void grow_kv(Seq& s, int cap);
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
