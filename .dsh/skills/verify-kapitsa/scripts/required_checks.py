@@ -14,7 +14,7 @@ The tiers (the skill's pr-checks.md explains each):
   computation) is a claim of the PR, not of its paths: such a PR fails the gate on purpose and adds quality numbers.
 Stdlib only.
 """
-import argparse, fnmatch, json, os, subprocess, sys
+import argparse, fnmatch, json, os, re, subprocess, sys
 
 # ---- models: floor file stem -> folder name under $NACE_MODELS (this Mac's copies) ----
 MODELS = {
@@ -28,6 +28,10 @@ MODELS = {
 }
 # a diff here can change decode tokens or speed: vk checks prints the decode-leg rules of output-check.md
 DECODE_GLOBS = ["src/model/*", "src/engine/spec*", "tools/ni_run*"]
+# tools that put a model on the GPU and print the numbers a PR quotes
+GPU_TOOLS = ["tools/logit_dump*", "tools/batch_check*", "tools/backend-benchmark*", "tools/*bench*", "tools/fn_store_test*",
+             "tools/ni_run*"]
+TOKS = re.compile(r"tok/s|tokens/s")
 SHARED = ["qwen3.5-4b-4bit", "qwen3.6-35b-a3b-4bit"]  # one dense, one MoE: the floor for code every model runs
 
 # ---- rules: first match wins; (glob, tier, models or None, why) ----
@@ -45,6 +49,9 @@ rule(0, None, "community results: regenerate bench/README.md with `python3 bench
 rule(0, None, "agent skills and review rules", ".dsh/*", ".cursor/*", ".claude/*")
 rule(0, None, "docs", "docs/*", "*.md", "LICENSE*", "NOTICE*")
 rule(0, None, "CI workflow: keep community-bench.yml's posture, PR text only through env:", ".github/*")
+rule(0, None, "CPU test of the bench client (AGENTS.md's CPU list)", "tools/bench_test*")
+rule(1, "shared", "GPU-measuring tool: its output is the evidence a PR quotes; run it from the old and the new build "
+     "under the GPU lock on the models below and compare", *GPU_TOOLS)
 rule(0, None, "noise floor: changes only in its own re-measuring PR (tools/logit_floor.py), never to pass a change",
      "tools/logit_floors/*")
 rule(0, None, "CPU-side tests and Python tools", "tests/test_*.py", "tools/*.py", "bench/*.py", "bench/*/*.py",
@@ -101,6 +108,32 @@ def classify(path):
         if fnmatch.fnmatch(path, g):
             return tier, models, why
     return 1, "shared", "unclassified path: treated as host code on the hot path until a rule says otherwise"
+
+def emits_toks(repo, path):
+    """True when a GPU-measuring tool in the diff prints a decode speed: its tok/s rows need the decode legs."""
+    if not any(fnmatch.fnmatch(path, g) for g in GPU_TOOLS):
+        return False
+    try:
+        return bool(TOKS.search(open(os.path.join(repo, path), errors="replace").read()))
+    except OSError:
+        return False
+
+def added_tools_lines(repo, base):
+    """Lines a diff adds under tools/ (committed since BASE, and uncommitted)."""
+    out = ""
+    for rng in ([f"{base}...HEAD"], []):
+        out += subprocess.run(["git", "-C", repo, "diff", "-U0", *rng, "--", "tools/"], capture_output=True, text=True).stdout
+    return [l[1:] for l in out.splitlines() if l.startswith("+") and not l.startswith("+++")]
+
+def decode_legs_why(files, toks_files, added):
+    """Why the decode-leg rules apply (empty: they do not)."""
+    if any(fnmatch.fnmatch(f, g) for f in files for g in DECODE_GLOBS):
+        return "decode path"
+    if toks_files:
+        return "prints tok/s: " + ", ".join(toks_files)
+    if any(TOKS.search(l) for l in added):
+        return "a tools/ diff adds a tok/s string"
+    return ""
 
 def changed_files(repo, base):
     out = subprocess.run(["git", "-C", repo, "diff", "--name-only", f"{base}...HEAD"], capture_output=True, text=True)
@@ -182,8 +215,9 @@ def main():
                       "(static threadgroup memory > 16,384 B: say the layer cannot run it, with the size)")
         checks.append("if the PR means to move outputs (tier 3): it fails the gate and says so with numbers, plus "
                       "ni_eval against bf16 (bench/quality) and, for a default, bench/reasoning math500-quick")
-    if any(fnmatch.fnmatch(f, g) for f in files for g in DECODE_GLOBS):
-        checks.append("decode legs (references/output-check.md \"Decode legs\"): (a) assert non-empty text and print "
+    why = decode_legs_why(files, [f for f in files if emits_toks(repo, f)], [] if a.files else added_tools_lines(repo, a.base))
+    if why:
+        checks.append(f"decode legs ({why}; references/output-check.md \"Decode legs\"): (a) assert non-empty text and print "
                       "the token count before any md5/ids comparison, else VOID; (b) print the count of 248044/248046 "
                       "(<|endoftext|>/<|im_end|>) in the first N ids and the ids before the first, on a chat-templated "
                       "prompt that gives >=256 tokens before <|im_end|>; (c) a speculative row prints the drafter load "

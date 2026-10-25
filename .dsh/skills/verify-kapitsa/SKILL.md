@@ -31,6 +31,9 @@ Mac do not see each other's state.
 `src/engine`) around the current directory, else the checkout the skill lives in. One copy of the skill (for example
 symlinked at `~/.agents/skills/verify-kapitsa`) serves every worktree: `cd` into yours and run it by its full path.
 `vk doctor` prints which checkout it picked. The `V=` line below assumes you are in a checkout that has the skill.
+A branch cut before the skill was merged (#590) has no `.dsh/skills/verify-kapitsa`: fetch the PR's head, then run
+the installed skill with `VK_ROOT` set to that checkout. `vk checks` reads its diff against `origin/main`, so no rebase is
+needed.
 
 ```bash
 V=.dsh/skills/verify-kapitsa/scripts/vk
@@ -50,35 +53,35 @@ $VK_PORT` (default 8090). It returns once `/health` and `/v1/models` both answer
 
 ## Which GPU
 
-Each Mac has one GPU lock, and the queue for it is whoever is blocked in `lockf`. Before a GPU leg, see which Mac
-frees up first:
+Each Mac has one GPU lock, and the queue for it is whoever is blocked in `lockf`. Before a GPU leg, see who holds
+each Mac's lock and which frees up first:
 
 ```bash
-$V gpu                                                    # every Mac: lock holder, waiters and their ETAs, free memory; ends with "pick:"
+$V gpu                                                    # every Mac: holder, waiters, ETAs, detach jobs, memory, swap; ends with "pick:"
 $V gpu --model qwen3.8-27b-4bit --chip M5 --min-macos 26  # only the Macs that can run this leg
-$V gpu run --eta 25 --label "#590 4B logit gate" -- bash leg.sh       # queue on this Mac, declaring 25 min of GPU
-$V gpu run --host m3pro --eta 40 --cwd '~/kq/x' --log /tmp/leg.log -- bash leg.sh   # queue on another Mac, detached there
+$V gpu run --eta 25 --label "#590 4B logit gate" -- bash leg.sh       # queue behind this Mac's lock, declaring 25 min
 ```
 
+- **Advice only.** The pick never outranks the orchestrator's ROUND priority. `gpu run` queues on this Mac alone, and
+  never reorders, kills or preempts another holder or waiter. Nothing launches on another Mac. A leg there is started
+  by the session that owns it, under that Mac's own `lockf`, after checking `ps` and free memory.
 - **Macs** come from `~/.config/verify-kapitsa/hosts` (`$VK_HOSTS`), one per line: `name user@host [socks=HOST:PORT]`.
   On a Mac where Tailscale runs in userspace mode, ssh goes through its SOCKS proxy: `socks=localhost:1065`. `vk gpu`
-  lists tailnet Macs that are missing from the file, so you can add them. The probe is read-only: `sysctl`, `vm_stat`,
-  `lsof`, `ps` and the model folders.
-- **The estimate** adds the holder's remaining ETA to every waiter's ETA. A job without a declared ETA counts as 20
-  min (`$VK_GPU_DEFAULT_ETA`). A job past its ETA counts as 5 more min. A model process loaded without the lock makes
-  the Mac busy. Only jobs started with `gpu run` declare an ETA. `flock` does not promise FIFO, so the order of the
-  waiters is a guess.
-- **`gpu run`** writes `start ETA label` to `/tmp/kapitsa-gpu.queue/<pid>` on that Mac, then runs `lockf -k
-  /tmp/kapitsa-gpu.lock CMD` with `NI_LOCK_HELD=1`, so it takes the lock exactly once. Do not put `lockf` or
-  `vk serve` inside CMD. A nested `lockf` waits forever on its own parent's hold, and `vk serve` fails at once
-  (exit 75). Start `kapitsa serve` directly in the leg script instead. On this Mac, a job over 10 min goes under `detach.py`: `detach.py run --name
-  <job> -- $V gpu run --eta N -- CMD`.
+  lists tailnet Macs that are missing from the file. Add one only with the user's OK. The probe is read-only:
+  `sysctl`, `vm_stat`, `lsof`, `ps`, the `detach.py` job files and the model folders.
+- **Each lock user** shows its start time, its declared ETA, the `detach.py` job it runs under and that job log's last
+  line. **The estimate** adds the holder's remaining ETA to every waiter's ETA. A job without a declared ETA counts as
+  20 min (`$VK_GPU_DEFAULT_ETA`). A job past its ETA counts as 5 more min. A model process loaded without the lock
+  makes the Mac busy. `flock` does not promise FIFO, so the order of the waiters is a guess.
+- **`gpu run`** writes `start ETA label` to `/tmp/kapitsa-gpu.queue/<pid>`, then runs `lockf -k /tmp/kapitsa-gpu.lock
+  CMD` with `NI_LOCK_HELD=1`, so the job takes the lock exactly once. Run preflight waits (free memory, a build)
+  before it, outside the lock. Do not put `lockf` or `vk serve` inside CMD: a nested `lockf` waits forever on its own
+  parent's hold, and `vk serve` fails at once (exit 75). Start `kapitsa serve` directly in the leg script. A job over
+  10 min goes under `detach.py`, with the lock inside: `detach.py run --name <job> -- $V gpu run --eta N -- CMD`.
 - **Choosing the Mac.** Both arms of an A/B, and both dumps of an output check, run on one Mac. A floor file is a
   measurement on the Mac named in its `measured.mac` field. Tensor-unit kernels (`src/kernels/tensor/`, the M5
-  defaults in AGENTS.md) need `--chip M5 --min-macos 26`. A remote Mac runs a build of your commit, never its own
-  old checkouts: build there first. Label every number with the Mac, chip, RAM and macOS.
-- **A remote job is yours.** Stop its servers and processes when you are done. Delete files on another Mac only with
-  the user's OK. Never load a second model on a Mac whose lock is held.
+  defaults in AGENTS.md) need `--chip M5 --min-macos 26`. Another Mac runs a build of your commit, never its own old
+  checkouts. Label every number with the Mac, chip, RAM and macOS.
 
 ## Doctor
 

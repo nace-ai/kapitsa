@@ -9,7 +9,7 @@
 #   vk checks [BASE]           what a PR's changed files require (BASE...HEAD, default origin/main)
 #   vk ref [BASE] [TARGET...]  build BASE (default origin/main) once per commit, outside this checkout, for the output
 #                              check and speed A/B (default targets: kapitsa logit_dump); prints its build dir
-#   vk gpu [run ...]           which Mac's GPU is free soonest (this one or a Tailscale peer); `gpu run` queues a job
+#   vk gpu [run ...]           which Mac's GPU frees up first (advice); `gpu run` queues a job behind this Mac's lock
 #                              on one with a declared ETA (scripts/gpu.py; read-only until `run`)
 #   vk serve MODEL [ARGS...]   GPU: kapitsa serve under the GPU lock on 127.0.0.1:$VK_PORT, waits for /health
 #   vk stop                    stop the server this run started (never anything else)

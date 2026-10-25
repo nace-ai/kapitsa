@@ -34,6 +34,14 @@ CASES = [  # path, tier, models (None = no model run; "shared" = the 4B and the 
     ("src/model/dflash2.cpp", 2, SHARED + ["qwen3.8-27b-4bit", "flash-next-q20"]),
     ("src/model/kflash_budget.cpp", 2, SHARED + ["qwen3.8-27b-4bit", "flash-next-q20"]),
     ("src/model/qwen4_exp.cpp", 2, ["flash-next-q20"]),
+    ("tools/logit_dump.cpp", 1, "shared"),
+    ("tools/batch_check.cpp", 1, "shared"),
+    ("tools/backend-benchmark.py", 1, "shared"),
+    ("tools/flint_bench.cpp", 1, "shared"),
+    ("tools/fn_store_test.cpp", 1, "shared"),
+    ("tools/ni_run.cpp", 1, "shared"),
+    ("tools/bench_test.cpp", 0, None),
+    ("tools/logit_compare.py", 0, None),
 ]
 
 bad = 0
@@ -43,4 +51,26 @@ for path, tier, models in CASES:
         print(f"FAIL {path}: got tier {t} models {m} ({why}), want tier {tier} models {models}")
         bad += 1
 print(f"{len(CASES) - bad}/{len(CASES)} classifications as pinned")
+
+# decode legs: a GPU tool whose source prints tok/s, or a tools/ diff that adds a tok/s string; not a plain GPU tool
+import tempfile  # noqa: E402
+with tempfile.TemporaryDirectory() as repo:
+    os.makedirs(os.path.join(repo, "tools"))
+    open(os.path.join(repo, "tools/x_bench.cpp"), "w").write('printf("%.1f tok/s\\n", r);')
+    open(os.path.join(repo, "tools/logit_dump.cpp"), "w").write("int main() { return 0; }")
+    open(os.path.join(repo, "tools/notes.py"), "w").write("print('tok/s')")
+    LEGS = [
+        ("GPU tool printing tok/s", ["tools/x_bench.cpp"], [], "prints tok/s: tools/x_bench.cpp"),
+        ("GPU tool without tok/s", ["tools/logit_dump.cpp"], [], ""),
+        ("non-GPU tool printing tok/s", ["tools/notes.py"], [], ""),
+        ("tools/ diff adds a tok/s string", ["tools/logit_dump.cpp"], ['  fprintf(stderr, "%g tokens/s", t);'],
+         "a tools/ diff adds a tok/s string"),
+        ("decode path wins", ["src/model/qwen35.cpp", "tools/x_bench.cpp"], [], "decode path"),
+    ]
+    for name, files, added, want in LEGS:
+        got = rc.decode_legs_why(files, [f for f in files if rc.emits_toks(repo, f)], added)
+        if got != want:
+            print(f"FAIL decode legs, {name}: got {got!r}, want {want!r}")
+            bad += 1
+    print(f"{len(LEGS)} decode-leg cases checked")
 sys.exit(1 if bad else 0)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pins gpu.py's reading of a probe: who holds the lock, who waits, and when the GPU is expected free (stdlib only)."""
-import importlib.util, os, sys
+import importlib.util, os, subprocess, sys
 
 spec = importlib.util.spec_from_file_location("gpu", os.path.join(os.path.dirname(os.path.abspath(__file__)), "gpu.py"))
 gpu = importlib.util.module_from_spec(spec)
@@ -48,8 +48,20 @@ d, e = run([
 ])
 check("holder's grandchild is not a waiter", (e["holder"]["pid"], [w["pid"] for w in e["waiters"]]), (500, [600]))
 
-q = gpu.queue_script(5, "x", ["true"], "/tmp/L", "~/kq/x")
-check("~/ in --cwd expands on the running Mac, before the queue entry", q.startswith('cd "$HOME"/kq/x || exit 1; mkdir'), True)
+# the holder runs under detach.py job 499 (an ancestor): named, with its log's last line; swap is read in GB
+d, e = run(["open 500 499 03:00 lockf -k L bash leg.sh", "anc 500 499", "lockf 500 499 03:00 lockf -k L bash leg.sh",
+            "job 499 df2-leg", "jobtail 499 step 3/8 ok", "job 777 other", "swap total = 7168.00M  used = 5969.00M  free = 1199.00M"])
+check("holder's detach job and log tail", (e["holder"]["job"], e["holder"]["log_tail"]), ("df2-leg", "step 3/8 ok"))
+check("holder's start time", e["holder"]["start"], NOW - 180)
+check("swap used", round(d["swap_gb"], 2), 5.83)
+
+# run is local only: no --host, and a bad --cwd stops before any queue entry
+r = subprocess.run([sys.executable, gpu.__file__, "run", "--host", "m3pro", "--eta", "1", "--", "true"], capture_output=True, text=True)
+check("run --host is refused", (r.returncode, "unrecognized arguments: --host" in r.stderr), (2, True))
+r = subprocess.run([sys.executable, gpu.__file__, "run", "--eta", "1", "--cwd", "/nonexistent-vk", "--", "true"],
+                   capture_output=True, text=True, env={**os.environ, "BENCH_GPU_LOCK": "/tmp/vk-test-never.lock"})
+check("bad --cwd exits before queueing", (r.returncode, "--cwd /nonexistent-vk" in r.stderr), (1, True))
+check("queue script has no remote or cd step", gpu.queue_script(5, "x", ["true"], "/tmp/L").startswith("mkdir -p"), True)
 
 # past its ETA: assumed OVERDUE more minutes, marked overdue
 d, e = run(["open 100 1 1-02:00:00 lockf -k L sleep", "lockf 100 1 1-02:00:00 lockf -k L sleep", f"eta 100 {NOW - 7200} 30 x"])

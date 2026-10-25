@@ -3,11 +3,14 @@
 
   gpu.py [--model NAME] [--chip M5] [--min-macos 26] [--json]
       Probe this Mac and every Mac in the hosts file (read-only: sysctl, vm_stat, lsof, ps over ssh), print each one's
-      GPU lock holder and waiters with their declared ETAs, and pick the Mac expected to be free first.
-  gpu.py run [--host NAME] --eta MIN [--label TEXT] [--cwd DIR] [--log FILE] -- CMD...
-      Queue CMD for that Mac's GPU lock: record "started, ETA, label" in /tmp/kapitsa-gpu.queue/<pid>, then exec
+      GPU lock holder and waiters (start time, declared ETA, detach.py job and its log's last line), free memory and
+      swap, and name the Mac expected to be free first. Advisory only: orchestrator priority wins, and a leg on
+      another Mac is launched there by the session that owns it.
+  gpu.py run --eta MIN [--label TEXT] [--cwd DIR] -- CMD...
+      Queue CMD behind this Mac's GPU lock: record "started, ETA, label" in /tmp/kapitsa-gpu.queue/<pid>, then exec
       `lockf -k /tmp/kapitsa-gpu.lock CMD` with NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1, so tools that take the lock
-      themselves (logit_dump, kapitsa bench) do not wait on their own hold. --log runs it detached on a remote Mac.
+      themselves (logit_dump, kapitsa bench) do not wait on their own hold. It never reorders, kills or preempts
+      another holder or waiter, and never launches anything on another Mac.
 
 Hosts file: $VK_HOSTS, default ~/.config/verify-kapitsa/hosts, one Mac per line: `name user@host [socks=HOST:PORT]`
 (socks= when Tailscale runs in userspace mode, as on the orchestrator Mac: socks=localhost:1065).
@@ -25,13 +28,25 @@ MODELISH = re.compile(r"kapitsa|ollama|llama|mlx|lms|LM Studio|logit_dump|ni_run
 PROBE = r"""
 L=${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}; Q=/tmp/kapitsa-gpu.queue
 echo "chip $(sysctl -n machdep.cpu.brand_string)"; echo "memsize $(sysctl -n hw.memsize)"
-echo "macos $(sw_vers -productVersion)"; echo "now $(date +%s)"
+echo "macos $(sw_vers -productVersion)"; echo "now $(date +%s)"; echo "swap $(sysctl -n vm.swapusage)"
 vm_stat | awk '/page size/{print "pagesize",$8} /Pages free/{print "free",$3} /Pages inactive/{print "inactive",$3}
   /Pages speculative/{print "speculative",$3} /Pages purgeable/{print "purgeable",$3}'
+R=""  # every pid that uses the lock, and its ancestors
 for p in $(lsof -t "$L" 2>/dev/null); do echo "open $p $(ps -o ppid=,etime=,command= -p $p | cut -c1-200)"
-  a=""; q=$p; while q=$(ps -o ppid= -p "$q" | tr -d ' '); [ -n "$q" ] && [ "$q" -gt 1 ]; do a="$a $q"; done; echo "anc $p$a"; done
-for p in $(pgrep -f "^(/usr/bin/)?lockf .*$L"); do echo "lockf $p $(ps -o ppid=,etime=,command= -p $p | cut -c1-200)"; done
+  a=""; q=$p; while q=$(ps -o ppid= -p "$q" | tr -d ' '); [ -n "$q" ] && [ "$q" -gt 1 ]; do a="$a $q"; done; echo "anc $p$a"; R="$R $p$a"; done
+for p in $(pgrep -f "^(/usr/bin/)?lockf .*$L"); do echo "lockf $p $(ps -o ppid=,etime=,command= -p $p | cut -c1-200)"
+  a=""; q=$p; while q=$(ps -o ppid= -p "$q" | tr -d ' '); [ -n "$q" ] && [ "$q" -gt 1 ]; do a="$a $q"; done; echo "anc $p$a"; R="$R $p$a"; done
 for f in "$Q"/*; do [ -f "$f" ] || continue; p=${f##*/}; kill -0 "$p" 2>/dev/null && echo "eta $p $(head -1 "$f") " && sed -n 's/^held /held '"$p"' /p' "$f"; done
+# the detach.py job among those pids (pid and start time both match), named with its log's last line: one awk pass
+# over the job files, which can number in the thousands
+[ -n "$R" ] && set -- ~/.agents/jobs/*.json && [ -f "$1" ] && awk -v R="$R " '
+  function out() { if (p != "" && index(R, " " p " ")) print p "\t" n "\t" s "\t" g }
+  function val(  v) { v = $0; sub(/^ *"[a-z]+": *"?/, "", v); sub(/"?,? *$/, "", v); return v }
+  FNR == 1 { out(); p = n = s = g = "" }
+  /^ *"pid":/ { p = val() } /^ *"name":/ { n = val() } /^ *"lstart":/ { s = val() } /^ *"log":/ { g = val() }
+  END { out() }' "$@" | while IFS="$(printf '\t')" read -r p n s g; do
+  [ "$(ps -o lstart= -p "$p" 2>/dev/null | sed 's/^ *//;s/ *$//')" = "$s" ] || continue
+  echo "job $p $n"; echo "jobtail $p $(tail -c 4000 "$g" 2>/dev/null | tr '\r' '\n' | grep -v '^ *$' | tail -1 | cut -c1-160)"; done
 ps -axo rss=,pid=,etime=,command= | awk '$1>3000000' | cut -c1-200 | sed 's/^ */big /'
 echo "models $( (ls ~/.cache/kapitsa/models; [ -n "$NACE_MODELS" ] && ls "$NACE_MODELS") 2>/dev/null | tr '\n' ' ')"
 """
@@ -68,7 +83,7 @@ def etime_s(s):  # ps etime: [[dd-]hh:]mm:ss
 
 
 def parse(text):
-    d = {"open": [], "lockf": [], "eta": {}, "big": [], "models": [], "anc": {}}
+    d = {"open": [], "lockf": [], "eta": {}, "big": [], "models": [], "anc": {}, "jobs": {}}
     vm = {}
     for line in text.splitlines():
         key, _, rest = line.partition(" ")
@@ -84,6 +99,13 @@ def parse(text):
             f = [int(x) for x in rest.split()]
             if f:
                 d["anc"][f[0]] = set(f[1:])
+        elif key in ("job", "jobtail"):
+            f = rest.split(None, 1)
+            if f and f[0].isdigit():
+                d["jobs"].setdefault(int(f[0]), {})["name" if key == "job" else "tail"] = f[1].strip() if len(f) > 1 else ""
+        elif key == "swap":
+            m = re.search(r"used = ([\d.]+)M", rest)
+            d["swap_gb"] = float(m.group(1)) / 1024 if m else 0.0
         elif key == "held":
             f = rest.split()
             if len(f) == 2 and int(f[0]) in d["eta"]:
@@ -110,6 +132,9 @@ def estimate(d):
     now = d.get("now", int(time.time()))
 
     def job(p, holding=False):
+        # the detach.py job this process runs under, if any: itself or an ancestor
+        dj = next((d["jobs"][a] for a in [p["pid"], *sorted(d["anc"].get(p["pid"], ()), reverse=True)] if a in d["jobs"]), {})
+        p = {**p, "start": now - p["age_s"], "job": dj.get("name", ""), "log_tail": dj.get("tail", "")}
         e = d["eta"].get(p["pid"])
         if e:  # an ETA is minutes of hold: a waiter has all of it ahead, the holder counts down from acquiring
             left = (e.get("held", e["start"]) + e["eta_min"] * 60 - now) / 60 if holding else e["eta_min"]
@@ -184,7 +209,9 @@ def describe(j):
     lab = j["label"] or j["cmd"][:60]
     eta = f"~{j['left_min']:.0f}m left" if j["known"] is True else (
         "past its ETA" if j["known"] == "overdue" else f"no ETA, {DEFAULT_ETA:.0f}m assumed")
-    return f"pid {j['pid']} {j['age_s'] // 60}m in, {eta}: {lab}"
+    job = f" [detach job {j['job']}]" if j.get("job") else ""
+    tail = f"\n          log: {j['log_tail'][:110]}" if j.get("log_tail") else ""
+    return f"pid {j['pid']} since {time.strftime('%H:%M', time.localtime(j['start']))} ({j['age_s'] // 60}m), {eta}: {lab}{job}{tail}"
 
 
 def cmd_status(a):
@@ -214,7 +241,7 @@ def cmd_status(a):
             print(f"{head}: {d['error']}")
             continue
         print(f"{head}: {d.get('chip')}, {d.get('memsize', 0) / 2**30:.0f} GB, macOS {d.get('macos')}, "
-              f"{d.get('avail_gb', 0):.0f} GB available")
+              f"{d.get('avail_gb', 0):.0f} GB available, swap {d.get('swap_gb', 0):.1f} GB used")
         print(f"  lock:   {describe(d['holder'])}")
         for i, w in enumerate(d["waiters"], 1):
             print(f"  wait {i}: {describe(w)}")
@@ -231,20 +258,16 @@ def cmd_status(a):
     if not pick:
         print("pick: none (every Mac is unreachable or skipped)")
         return 1
-    print(f"pick: {pick['name']} ({'free now' if pick['wait_min'] == 0 else 'free in ~%.0f min' % pick['wait_min']})")
+    print(f"pick: {pick['name']} ({'free now' if pick['wait_min'] == 0 else 'free in ~%.0f min' % pick['wait_min']})"
+          + ("" if pick["name"] == "local" else "; advice only: build and launch it there yourself, and clean it up"))
     return 0
 
 
-def queue_script(eta, label, cmd, lock, cwd):
+def queue_script(eta, label, cmd, lock):
     """sh that records this shell's pid in the queue, then becomes lockf: the queue file names lockf's pid."""
     label = re.sub(r"\s+", " ", label).strip()[:100]
-    # cd first, so a bad directory leaves no queue entry; ~/ expands on the Mac that runs the job, not the caller's
-    go = ""
-    if cwd:
-        go = f"cd \"$HOME\"/{shlex.quote(cwd[2:])} || exit 1; " if cwd.startswith("~/") else f"cd {shlex.quote(cwd)} || exit 1; "
-    return (go + f"mkdir -p {QUEUE}; for f in {QUEUE}/*; do [ -f \"$f\" ] && ! kill -0 \"${{f##*/}}\" 2>/dev/null"
-            f" && rm -f \"$f\"; done; echo \"$(date +%s) {eta:g} {label}\""
-            f" > {QUEUE}/$$; "
+    return (f"mkdir -p {QUEUE}; for f in {QUEUE}/*; do [ -f \"$f\" ] && ! kill -0 \"${{f##*/}}\" 2>/dev/null"
+            f" && rm -f \"$f\"; done; echo \"$(date +%s) {eta:g} {label}\" > {QUEUE}/$$; "
             + f"NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1 exec lockf -k {shlex.quote(lock)} "
             # once the lock is ours, note when (the holder's ETA counts from here), then become CMD
             + "sh -c " + shlex.quote(f'echo "held $(date +%s)" >> {QUEUE}/' + "$1; shift; exec \"$@\"")
@@ -257,32 +280,20 @@ def cmd_run(a):
     label = a.label or os.path.basename(a.cmd[0])
     if "'" in label or '"' in label or "$" in label or "`" in label:
         sys.exit("gpu.py run: keep quotes, $ and backticks out of --label")
-    if a.host in (None, "local"):
-        lock = os.environ.get("BENCH_GPU_LOCK", LOCK)
-        script = queue_script(a.eta, label, a.cmd, lock, a.cwd)
-        os.execvp("sh", ["sh", "-c", script])
-    h = next((h for h in read_hosts() if h["name"] == a.host), None)
-    if not h:
-        sys.exit(f"gpu.py run: no host {a.host!r} in {hosts_file()}")
-    script = queue_script(a.eta, label, a.cmd, LOCK, a.cwd)
-    if a.log:  # survives the ssh connection: nohup'd sh whose $$ becomes lockf
-        script = f"nohup sh -c {shlex.quote(script)} > {shlex.quote(a.log)} 2>&1 < /dev/null & echo \"queued pid $!, log {a.log}\""
-    # ssh hands this to the login shell (zsh on macOS, which aborts on an empty glob): run it under sh
-    remote = f"sh -c {shlex.quote(script)}"
-    if os.environ.get("VK_GPU_DRY"):
-        print(remote)
-        return 0
-    os.execvp("ssh", ssh_argv(h, remote))
+    if a.cwd:
+        try:  # before the queue entry, so a bad directory leaves none
+            os.chdir(os.path.expanduser(a.cwd))
+        except OSError as e:
+            sys.exit(f"gpu.py run: --cwd {a.cwd}: {e.strerror}")
+    os.execvp("sh", ["sh", "-c", queue_script(a.eta, label, a.cmd, os.environ.get("BENCH_GPU_LOCK", LOCK))])
 
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "run":
         p = argparse.ArgumentParser(prog="gpu.py run")
-        p.add_argument("--host")
         p.add_argument("--eta", type=float, required=True, help="minutes the job expects to hold the GPU")
         p.add_argument("--label")
-        p.add_argument("--cwd", help="directory to run in (on the remote Mac for --host); quote a leading ~ ('~/kq/x') so it is that Mac's home")
-        p.add_argument("--log", help="remote only: run detached, output to this file on that Mac")
+        p.add_argument("--cwd", help="directory to run in")
         argv = sys.argv[2:]
         cmd = argv[argv.index("--") + 1:] if "--" in argv else []
         a = p.parse_args(argv[:argv.index("--")] if "--" in argv else argv)
