@@ -177,12 +177,14 @@ jobs:
     # The kernels are embedded as source and built by the GPU driver when a model loads, so nothing else here
     # compiles them: a token like `threadgroup_barrier(mem_threadgroup)` (missing `mem_flags::`) passes the build
     # and kills every model at startup. The offline compiler is the one place a GitHub runner can see this class.
+    # The unit of compilation is a whole library (all of src/kernels/*.metal concatenated behind common.h by
+    # cmake/embed_kernels.cmake), not one file at a time - see the step below.
     # It cannot see wrong arithmetic, races or the 32 KB threadgroup budget - those still need an on-GPU run.
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      - name: Offline-compile every Metal source
+      - name: Offline-compile every Metal library the binary embeds
         run: |
           set -euo pipefail
           echo "::group::toolchain"
@@ -190,33 +192,41 @@ jobs:
           xcrun -sdk macosx metal --version || true
           sw_vers || true
           echo "::endgroup::"
-          # Probe the language version with a throwaway kernel: the question is whether this Xcode
-          # accepts -std=metalN, not whether our sources compile. Probing with src/kernels/qwen4.metal
-          # conflated the two - a source error then read as "no language version", and the probe hid
-          # the compiler's stderr, so the first run said nothing a person could act on.
-          cat > "$RUNNER_TEMP/probe.metal" <<'PROBE'
-          #include <metal_stdlib>
-          using namespace metal;
-          kernel void probe(device int *o [[buffer(0)]]) { o[0] = 1; }
-          PROBE
-          std=""
-          for candidate in metal3.2 metal3.1 metal3.0; do
-            echo "probe: -std=$candidate"
-            if xcrun -sdk macosx metal -std="$candidate" -c "$RUNNER_TEMP/probe.metal" -o "$RUNNER_TEMP/probe.air"; then
-              std="$candidate"
-              break
-            fi
-          done
-          if [ -z "$std" ]; then
-            echo "::error::no usable -std=metal3.x on this runner (probe output above)"
-            exit 1
-          fi
-          echo "compiling with -std=$std"
+          # Compile the source the binary actually embeds, built by the same CMake script the build runs - a new
+          # kernel or header must not need a second list here - and compile it the way the driver does: one
+          # translation unit per library. The first run of this job compiled src/kernels/*.metal one file at a
+          # time and failed on `unknown type name 'AttnPrepParams'`: those declarations live in the neighbouring
+          # files, and the driver never sees them apart.
+          cat > "$RUNNER_TEMP/extract.py" <<'PY'
+          import pathlib, re, sys
+          src = pathlib.Path(sys.argv[1]).read_text()
+          m = re.search(r'R"NIKERNEL\((.*)\)NIKERNEL"', src, re.S)
+          if not m:
+              sys.exit(f"no kernel literal in {sys.argv[1]}")
+          pathlib.Path(sys.argv[2]).write_text(m.group(1))
+          PY
           fail=0
-          for f in src/kernels/*.metal; do
-            if ! xcrun -sdk macosx metal -std="$std" -I src/kernels -c "$f" -o "$RUNNER_TEMP/metal-out.air"; then
-              echo "::error file=$f::Metal compile failed"
+          check() { # name, embed script, -std=, extra compiler flags
+            local name=$1 script=$2 std=$3
+            shift 3
+            cmake -DOUT="$RUNNER_TEMP/$name.cpp" -DSRC_DIR="$PWD/src/kernels" -P "cmake/$script"
+            python3 "$RUNNER_TEMP/extract.py" "$RUNNER_TEMP/$name.cpp" "$RUNNER_TEMP/$name.metal"
+            if xcrun -sdk macosx metal -std="$std" "$@" -I src/kernels -c "$RUNNER_TEMP/$name.metal" -o "$RUNNER_TEMP/$name.air"; then
+              echo "ok: $name ($std, $(wc -c < "$RUNNER_TEMP/$name.metal") bytes)"
+            else
+              echo "::error file=cmake/$script::the $name Metal library does not compile offline ($std)"
               fail=1
             fi
-          done
+          }
+          # Language versions are the ones Gpu::compile / compile_library asks for: the base library 3.1 (and the
+          # weight-format pass over the same source, NI_WF_INST), the extra libraries 3.2 (metal32, for
+          # device-scope fences).
+          check base      embed_kernels.cmake       metal3.1
+          check base-wf   embed_kernels.cmake       metal3.1 -DNI_WF_INST=1
+          check nh        embed_kernels_nh.cmake    metal3.2
+          check dory      embed_kernels_dory.cmake  metal3.2
+          check flint     embed_kernels_flint.cmake metal3.2
+          # Not compiled here: src/kernels/tensor/ is Metal 4 (tensor_ops on the M5's matrix units) and a macOS 15
+          # runner has no Metal 4 compiler - the driver on such a Mac does not build that library either.
+          echo "skipping the Metal 4 tensor library: it is built on macOS 26 with matrix units only"
           exit "$fail"
