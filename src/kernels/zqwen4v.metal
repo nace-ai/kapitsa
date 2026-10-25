@@ -296,6 +296,116 @@ NI_HC_UP_MIX3(hc_up_mix3_c2_b6, 6, 2)
 NI_HC_UP_MIX3(hc_up_mix3_c2_b4, 4, 2)
 NI_HC_UP_MIX3(hc_up_mix3_c2_b8, 8, 2)
 
+// ---- hc_up_mix4: hc_up_mix3 that unpacks each run of 16 weight codes once for every row ----
+// hc_up_mix3 runs the one-row code once per row, so a verify step of R rows unpacks the up weights R times. Here
+// every row's prep runs in one pass (3 barriers in all), then the row loop sits inside the run loop. Per row the
+// arithmetic is hc_up_mix2_out's, with its fma order spelled out in both, so the results stay the one-row kernel's
+// bit for bit (fn_check FN_ROWS, and hc-time at Flash-Next's shape).
+template <int BITS, int CPT>
+NI_INLINE void hc_up_mix4_impl(const device float* part, const device float* X2, const device float* stat,
+                               const device float* w, const device uint32_t* W, const device bfloat* Ws,
+                               const device bfloat* Wb, device float* u, device float* X, device float* y,
+                               device float* inj, constant HcFoldParams& p, uint tg, uint tid, uint sg, uint lane,
+                               threadgroup float (&hs)[4][512], threadgroup float (&hsum)[4][32],
+                               threadgroup float (&inv)[4][4]) {
+  const uint K = p.rank, R = p.R, SD = p.S * p.D;
+  // hc_up_mix2_prep for every row at once
+  if (tid < 4 * R) {
+    const uint r = tid / 4, s = tid % 4;
+    float ss = 0.0f;
+    for (uint c = 0; c < p.kc; ++c) {
+      const uint s_lo = c * 1024 / p.D;
+      if (s_lo == s) ss += stat[(r * p.kc + c) * 10];
+      else if (s_lo + 1 == s) ss += stat[(r * p.kc + c) * 10 + 1];
+    }
+    inv[r][s] = metal::precise::rsqrt(ss / float(p.D) + p.eps);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tg == 0 && p.has_inj && tid < 4 * R) {
+    const uint r = tid / 4, q = tid % 4;
+    float d = 0.0f;
+    for (uint c = 0; c < p.kc; ++c) {
+      const uint s_lo = c * 1024 / p.D;
+      const device float* st = stat + (r * p.kc + c) * 10;
+      d += inv[r][s_lo] * st[2 + q] + (s_lo + 1 < p.S ? inv[r][s_lo + 1] * st[6 + q] : 0.0f);
+    }
+    inj[r * 4 + q] = 2.0f * sigmoid(d / float(p.S));
+  }
+  for (uint i = tid; i < R * K; i += 256) {
+    const uint r = i / K, ii = i - r * K;
+    float t = 0.0f;
+    for (uint c = 0; c < p.kc; ++c) {
+      const uint s_lo = c * 1024 / p.D;
+      const float2 pp = *(const device float2*)(part + ((c * p.R + r) * K + ii) * 2);
+      t += inv[r][s_lo] * pp.x + (s_lo + 1 < p.S ? inv[r][s_lo + 1] * pp.y : 0.0f);
+    }
+    hs[r][ii] = silu(t / float(p.S));
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < R * (K / 16); i += 256) {
+    const uint r = i / (K / 16), ii = i - r * (K / 16);
+    float t = 0.0f;
+    for (uint j = 0; j < 16; ++j) t += hs[r][ii * 16 + j];
+    hsum[r][ii] = t;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  // hc_up_mix2_out with the row loop inside the run loop
+  const uint rl = lane / 4, qq = lane % 4, per = K / 4;
+  for (uint jc = 0; jc < uint(CPT); ++jc) {
+    const uint ch = ((tg * CPT + jc) * 8 + sg) * 2 + rl / 4, s = rl % 4;
+    const uint row = s * p.D + ch;
+    const device uint32_t* wr = W + size_t(row) * (K * BITS / 32);
+    float m[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    for (uint k = qq * per; k < (qq + 1) * per; k += 16) {
+      float q[16];
+      unpack16<BITS>(wr + k * BITS / 32, q);
+      const uint g = row * (K / 64) + k / 64;
+      const float gs = float(Ws[g]), gb = float(Wb[g]);
+      for (uint r = 0; r < 4; ++r) {
+        if (r >= R) break;
+        float d = 0.0f;
+        for (uint j = 0; j < 16; ++j) d = fma(q[j], hs[r][k + j], d);
+        m[r] = fma(gb, hsum[r][k / 16], fma(gs, d, m[r]));  // hc_up_mix2_out's order, spelled out
+      }
+    }
+    for (uint r = 0; r < R; ++r) {
+      float mr = m[r];
+      mr += simd_shuffle_xor(mr, 1);
+      mr += simd_shuffle_xor(mr, 2);
+      float v = 0.0f;
+      if (qq == 0) {
+        const float x = X2[r * SD + row];
+        v = sigmoid(mr) * x * inv[r][s] * w[row];
+        X[r * SD + row] = x;
+      }
+      v += simd_shuffle_xor(v, 4);
+      v += simd_shuffle_xor(v, 8);
+      if ((lane & 15) == 0) {
+        u[r * p.u_ld + ch] = v / float(p.S);
+        if (p.has_y) y[r * p.D + ch] = 0.0f;
+      }
+    }
+  }
+}
+#define NI_HC_UP_MIX4(NAME, BITS, CPT)                                                                         \
+  [[kernel]] void NAME(const device float* part [[buffer(0)]], const device float* X2 [[buffer(1)]],           \
+                       const device float* stat [[buffer(2)]], const device float* w [[buffer(3)]],            \
+                       const device uint32_t* W [[buffer(4)]], const device bfloat* Ws [[buffer(5)]],          \
+                       const device bfloat* Wb [[buffer(6)]], device float* u [[buffer(7)]],                   \
+                       device float* X [[buffer(8)]], device float* y [[buffer(9)]], device float* inj [[buffer(10)]], \
+                       constant HcFoldParams& p [[buffer(11)]], uint tg [[threadgroup_position_in_grid]],      \
+                       uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],   \
+                       uint lane [[thread_index_in_simdgroup]]) {                                              \
+    threadgroup float hs[4][512];                                                                              \
+    threadgroup float hsum[4][32];                                                                             \
+    threadgroup float inv[4][4];                                                                               \
+    hc_up_mix4_impl<BITS, CPT>(part, X2, stat, w, W, Ws, Wb, u, X, y, inj, p, tg, tid, sg, lane, hs, hsum, inv); \
+  }
+NI_HC_UP_MIX4(hc_up_mix4_c2_b6, 6, 2)
+NI_HC_UP_MIX4(hc_up_mix4_c4_b4, 4, 4)
+NI_HC_UP_MIX4(hc_up_mix4_c4_b6, 6, 4)
+NI_HC_UP_MIX4(hc_up_mix4_c4_b8, 8, 4)
+
 // ---- The MoE of up to 8 rows with the decode kernels' arithmetic (moe_gate_up3 / moe_down2_w) ----
 // moe4_unique: the distinct experts of the rows' top-k (idx [R, k]): ue[u], the rows that chose it (bit mask) and
 // each such row's slot (4 bits a row in uslot[u], so the slots of up to 8 rows share one word: k <= 16);

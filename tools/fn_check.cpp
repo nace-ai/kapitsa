@@ -911,8 +911,8 @@ void test_hc_rows(int bits) {
         Out(uint32_t R, uint32_t SD, uint32_t D, uint32_t S, uint32_t KC, uint32_t RK)
             : X(R * SD), y(R * D), u(R * D), inj(R * S), part(KC * R * RK * 2), X2(R * SD), stat(R * KC * 10) {}
       };
-      Out a(R, SD, D, S, KC, RK), b(R, SD, D, S, KC, RK);
-      for (Out* o : {&a, &b}) {
+      Out a(R, SD, D, S, KC, RK), b(R, SD, D, S, KC, RK), c4(R, SD, D, S, KC, RK);
+      for (Out* o : {&a, &b, &c4}) {
         memcpy(o->X.f(), X.f(), R * SD * 4);
         memcpy(o->y.f(), y.f(), R * D * 4);
       }
@@ -935,6 +935,8 @@ void test_hc_rows(int bits) {
       constexpr int nr = 2, cpt = 2;
       run(("hc_down_sk3_n" + std::to_string(nr) + sfx).c_str(), bind_down(b), RK / (8 * nr), KC, 1, 256);
       run(("hc_up_mix3_c" + std::to_string(cpt) + sfx).c_str(), bind_up(b), D / (16 * cpt), 1, 1, 256);
+      run(("hc_down_sk3_n" + std::to_string(nr) + sfx).c_str(), bind_down(c4), RK / (8 * nr), KC, 1, 256);
+      run(("hc_up_mix4_c4" + sfx).c_str(), bind_up(c4), D / (16 * 4), 1, 1, 256);
       auto diff = [](Buf& x, Buf& z) {
         size_t bad = 0;
         double mx = 0;
@@ -948,6 +950,10 @@ void test_hc_rows(int bits) {
       char nm[96];
       snprintf(nm, sizeof nm, "hc_*3%s R=%u %s == one-row", sfx.c_str(), R, mode ? "inject" : "plain");
       report(nm, e, 0);
+      const double e4 = diff(a.X, c4.X) + diff(a.y, c4.y) + diff(a.u, c4.u) + (mode ? diff(a.inj, c4.inj) : 0.0) +
+                        diff(a.part, c4.part) + diff(a.X2, c4.X2) + diff(a.stat, c4.stat);
+      snprintf(nm, sizeof nm, "hc_up_mix4%s R=%u %s == one-row", sfx.c_str(), R, mode ? "inject" : "plain");
+      report(nm, e4, 0);
     }
 }
 
@@ -1116,6 +1122,91 @@ void test_qmvs_single() {
   }
 }
 
+
+// hc-time: the folded gated residual at Flash-Next's shape (D 2560, S 4, rank 320, 6-bit) for R = 1..4 rows, over
+// NL distinct weight sets (so that the weights stream from DRAM as in a step, not from the caches): per variant
+// reps x NL down+up pairs behind one commit, best of 3; then every variant's outputs against the one-row kernels
+void test_hc_timing() {
+  const uint32_t D = 2560, S = 4, SD = S * D, RK = 320, G = 64, KC = SD / 1024, NL = 96, bits = 6;
+  const int reps = getenv("FN_REPS") ? atoi(getenv("FN_REPS")) : 4;
+  std::vector<Buf*> Wd, Sd, Bd, Wu, Su, Bu;
+  for (uint32_t l = 0; l < NL; ++l) {
+    Wd.push_back(new Buf(size_t(RK) * SD * bits / 32)); Sd.push_back(new Buf(RK * SD / G, 2)); Bd.push_back(new Buf(RK * SD / G, 2));
+    Wu.push_back(new Buf(size_t(SD) * RK * bits / 32)); Su.push_back(new Buf(SD * RK / G, 2)); Bu.push_back(new Buf(SD * RK / G, 2));
+    for (size_t i = 0; i < Wd[l]->n; ++i) Wd[l]->b.as<uint32_t>()[i] = uint32_t(rng());
+    for (size_t i = 0; i < Wu[l]->n; ++i) Wu[l]->b.as<uint32_t>()[i] = uint32_t(rng());
+    const float sc = 0.0003f;
+    Sd[l]->fill_bf16(sc / 2, sc), Bd[l]->fill_bf16(-sc * 32, 0), Su[l]->fill_bf16(sc, 2 * sc), Bu[l]->fill_bf16(-sc * 64, 0);
+  }
+  struct V { const char *down, *up; uint32_t nr, cpt; bool one_row; };
+  const V vs[] = {{"hc_down_sk2_b6", "hc_up_mix2_b6", 1, 1, true},
+                  {"hc_down_sk3_n2_b6", "hc_up_mix3_c2_b6", 2, 2, false},
+                  {"hc_down_sk3_n2_b6", "hc_up_mix4_c2_b6", 2, 2, false},
+                  {"hc_down_sk3_n2_b6", "hc_up_mix4_c4_b6", 2, 4, false}};
+  constexpr int NV = sizeof vs / sizeof vs[0];
+  for (uint32_t R = 1; R <= 4; ++R) {
+    Buf X(R * SD), y(R * D), injp(R * S), w(SD), winj(S * SD, 2);
+    X.fill(-2, 2), y.fill(-1, 1), injp.fill(0, 2), w.fill(0.5f, 1.5f), winj.fill_bf16(-0.05f, 0.05f);
+    struct { uint32_t R, D, S, rank, kc, u_ld, has_y, has_inj; float eps; } p{R, D, S, RK, KC, D, 1, 1, 1e-6f};
+    std::vector<Buf*> out;  // per variant: X, y, u, inj, part, X2, stat
+    printf("R=%u:", R);
+    for (int v = 0; v < NV; ++v) {
+      Buf *oX = new Buf(R * SD), *oy = new Buf(R * D), *ou = new Buf(R * D), *oi = new Buf(R * S);
+      Buf *op = new Buf(KC * R * RK * 2), *o2 = new Buf(R * SD), *os = new Buf(R * KC * 10);
+      const V& c = vs[v];
+      auto& gpu = Gpu::get();
+      const Pipeline& pd = gpu.pipeline(c.down);
+      const Pipeline& pu = gpu.pipeline(c.up);
+      const char* only = getenv("FN_HC_ONLY");  // "down" or "up": time one kernel of the pair
+      auto pass = [&](Encoder& e, uint32_t l) {
+        // the residual stream is reset to X each pair (the up kernel writes X = X2 and y = 0)
+        if (only && !strcmp(only, "up")) goto up;
+        e.use(pd);
+        e.buf(0, X.b); e.buf(1, y.b); e.buf(2, injp.b); e.buf(3, w.b); e.buf(4, winj.b); e.buf(5, Wd[l]->b);
+        e.buf(6, Sd[l]->b); e.buf(7, Bd[l]->b); e.buf(8, op->b); e.buf(9, o2->b); e.buf(10, os->b); e.val(11, p);
+        if (c.one_row) e.dispatch(RK / 8, KC, R, 256); else e.dispatch(RK / (8 * c.nr), KC, 1, 256);
+        if (only && !strcmp(only, "down")) return;
+      up:
+        e.use(pu);
+        e.buf(0, op->b); e.buf(1, o2->b); e.buf(2, os->b); e.buf(3, w.b); e.buf(4, Wu[l]->b); e.buf(5, Su[l]->b);
+        e.buf(6, Bu[l]->b); e.buf(7, ou->b); e.buf(8, oX->b); e.buf(9, oy->b); e.buf(10, oi->b); e.val(11, p);
+        if (c.one_row) e.dispatch(D / 16, R, 1, 256); else e.dispatch(D / (16 * c.cpt), 1, 1, 256);
+      };
+      double best = 1e30;
+      for (int t = 0; t < 4; ++t) {
+        auto e = gpu.begin();
+        const int n = t == 0 ? 1 : reps;
+        for (int k = 0; k < n; ++k)
+          for (uint32_t l = 0; l < NL; ++l) pass(*e, l);
+        const auto t0 = std::chrono::steady_clock::now();
+        e->commit_and_wait();
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        if (t) best = std::min(best, ms * 1000.0 / (n * NL));
+      }
+      printf("  %s+%s %.1f us", c.down + 8, c.up + 6, best);
+      for (Buf* b : {oX, oy, ou, oi, op, o2, os}) out.push_back(b);
+    }
+    printf("\n");
+    for (int v = 1; v < NV; ++v) {
+      double bad = 0;
+      for (int k = 0; k < 7; ++k) {
+        size_t nd = 0, first = 0;
+        for (size_t i = 0; i < out[k]->n; ++i)
+          if (memcmp(out[k]->f() + i, out[v * 7 + k]->f() + i, 4)) { if (!nd) first = i; ++nd; }
+        if (nd) {
+          bad += 1;
+          if (getenv("FN_VERBOSE"))
+            printf("   buf %d: %zu of %zu differ, first %zu: %g vs %g\n", k, nd, out[k]->n, first, out[k]->f()[first],
+                   out[v * 7 + k]->f()[first]);
+        }
+      }
+      char nm[96];
+      snprintf(nm, sizeof nm, "R=%u %s+%s == one-row", R, vs[v].down + 8, vs[v].up + 6);
+      report(nm, bad, 0);
+    }
+  }
+}
+
 int kernels() {
   if (getenv("FN_WFMT")) {
     test_wfmt6();
@@ -1178,6 +1269,7 @@ int main(int argc, char** argv) {
   if (cmd == "selftest") return selftest();
   if (cmd == "kernels") return kernels();
   if (cmd == "--qsa-time" || cmd == "qsa-time") { test_qsa_timing(); return g_fail ? 1 : 0; }
+  if (cmd == "hc-time") { test_hc_timing(); return g_fail ? 1 : 0; }
   if (cmd == "ngram" && argc >= 3) {
     const std::vector<int> tok = read_ids(argv[2]);
     const NgramHash h = flash_hash();
