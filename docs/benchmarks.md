@@ -370,8 +370,8 @@ mmap), greedy, no speculative decoding, two legs per engine and length in ABBA o
 **Decode: not comparable, re-measure pending.** These Kapitsa runs did not stop at the end of the turn (`<|im_end|>`) and the 1K and 32K prompts have no assistant header, so at 1K, 4K and 32K the answer ended after 2, 31 and 63 tokens and the rest of the timed tokens is text generated after it; at 16K Kapitsa stopped at 47 tokens against llama.cpp's 128.
 
 **Not the fastest everywhere.** Kapitsa's auto store size here (28-29.9 GB) stopped four runs at memory pressure, so
-the table pins 24 GB; a user's store is larger. The two engines run different quantized weights, so only speed is
-compared.
+the table pins 24 GB; a user's store is larger. The two engines run different quantized weights, so only prefill speed
+is compared, and decode is withheld until the re-measure above.
 
 <a id="run-it-yourself"></a>
 
