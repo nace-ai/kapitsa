@@ -6,6 +6,7 @@
 #include "metal/gpu.h"
 #include "util/log.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
@@ -69,7 +70,6 @@ TP(tp_64_64_64, 64, 64, 64, half, half, false)
 TP(tp_8_64_32, 8, 64, 32, half, half, false)
 TP(tp_8_64_64_u8, 8, 64, 64, half, uint8_t, false)
 TP(tp_8_64_64_u8t, 8, 64, 64, half, uint8_t, true)
-TP(tp_32_32_64h, 32, 32, 64, half, half, false)
 TPD(tp_32_32_64_i8, 32, 32, 64, int8_t, int8_t, false, int32_t)
 TPD(tp_64_64_64_i8, 64, 64, 64, int8_t, int8_t, false, int32_t)
 TPD(tp_32_32_128_i8, 32, 32, 128, int8_t, int8_t, false, int32_t)
@@ -81,10 +81,12 @@ TPD(tp_32_32_64_bf, 32, 32, 64, bfloat, bfloat, false, float)
 // acc += float(ia) * sx[row] * sw[col]  (W8A8 per-group activation scales, group-64 weight scales)
 template <int M, int N, int K>
 inline void tp_rs(device float* out, uint iters, threadgroup int8_t* la, threadgroup int8_t* rb, threadgroup float* sc,
-                  uint lane) {
-  for (uint i = lane; i < M * K; i += 32) la[i] = int8_t((i * 7) % 13);
-  for (uint i = lane; i < K * N; i += 32) rb[i] = int8_t((i * 5) % 11);
-  for (uint i = lane; i < 2 * (M + N); i += 32) sc[i] = 0.001f * float(i % 17);
+                  uint sg, uint lane) {
+  if (sg == 0) {  // one simdgroup fills the shared operands and scales
+    for (uint i = lane; i < M * K; i += 32) la[i] = int8_t((i * 7) % 13);
+    for (uint i = lane; i < K * N; i += 32) rb[i] = int8_t((i * 5) % 11);
+    for (uint i = lane; i < 2 * (M + N); i += 32) sc[i] = 0.001f * float(i % 17);
+  }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   auto tA = tensor<threadgroup int8_t, dextents<int32_t, 2>, tensor_inline>(la, dextents<int32_t, 2>(K, M));
   auto tB = tensor<threadgroup int8_t, dextents<int32_t, 2>, tensor_inline>(rb, dextents<int32_t, 2>(N, K));
@@ -92,7 +94,7 @@ inline void tp_rs(device float* out, uint iters, threadgroup int8_t* la, threadg
   matmul2d<desc, execution_simdgroup> op;
   auto cT = op.template get_destination_cooperative_tensor<decltype(tA), decltype(tB), int32_t>();
   constexpr int CAP = M * N / 32;  // the destination's elements per lane (checked below)
-  if (cT.get_capacity() != CAP) { out[lane] = -1; return; }
+  if (cT.get_capacity() != CAP) { out[lane] = -1; return; }  // the host reads this back and drops the row
   float acc[CAP];
   short2 ix[CAP];
   _Pragma("clang loop unroll(full)")
@@ -119,8 +121,8 @@ inline void tp_rs(device float* out, uint iters, threadgroup int8_t* la, threadg
                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
     threadgroup int8_t la[M * K];                                                                      \
     threadgroup int8_t rb[K * N];                                                                      \
-    threadgroup float sc[4 * (M + N)];                                                                 \
-    tp_rs<M, N, K>(out, iters, la, rb, sc + sg * 0, lane);                                             \
+    threadgroup float sc[2 * (M + N)];  /* two scale sets (row then column), alternated per iteration */                                                                 \
+    tp_rs<M, N, K>(out, iters, la, rb, sc, sg, lane);                                             \
   }
 TRS(tp_rs_32_32_64, 32, 32, 64)
 TRS(tp_rs_64_32_64, 64, 32, 64)
@@ -142,7 +144,7 @@ int main(int argc, char** argv) {
                       {"tp_8_64_64t", 8, 64, 64},    {"tp_64_64_64", 64, 64, 64},
                       {"tp_8_64_32", 8, 64, 32},
                       {"tp_8_64_64_u8", 8, 64, 64},  {"tp_8_64_64_u8t", 8, 64, 64},
-                      {"tp_32_32_64h", 32, 32, 64}, {"tp_32_32_64_i8", 32, 32, 64}, {"tp_64_64_64_i8", 64, 64, 64},
+                      {"tp_32_32_64_i8", 32, 32, 64}, {"tp_64_64_64_i8", 64, 64, 64},
                       {"tp_32_32_128_i8", 32, 32, 128}, {"tp_64_32_64_i8", 64, 32, 64},
                       {"tp_32_32_64_hi8", 32, 32, 64}, {"tp_32_32_64_bf", 32, 32, 64},
                       {"tp_rs_32_32_64", 32, 32, 64}, {"tp_rs_64_32_64", 64, 32, 64}, {"tp_rs_64_64_64", 64, 64, 64}};
@@ -153,6 +155,7 @@ int main(int argc, char** argv) {
       printf("%-18s (no pipeline)\n", s.n);
       continue;
     }
+    std::fill_n(out.as<float>(), 32, 0.0f);
     auto run = [&]() {
       auto e = g.begin();
       e->use(p);
@@ -163,6 +166,10 @@ int main(int argc, char** argv) {
       return e->gpu_ms();
     };
     run();
+    if (std::count(out.as<float>(), out.as<float>() + 32, -1.0f)) {  // tp_rs: destination capacity != M*N/32, nothing ran
+      printf("%-18s (destination capacity mismatch, kernel did no work)\n", s.n);
+      continue;
+    }
     double best = 1e9;
     for (int i = 0; i < 3; ++i) best = std::min(best, run());
     const double flop = 2.0 * s.m * s.nn * s.k * iters * ntg * 4;
