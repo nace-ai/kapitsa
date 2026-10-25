@@ -215,7 +215,7 @@ jobs:
           echo "::endgroup::"
           # Compile the source the binary actually embeds, built by the same CMake script the build runs - a new
           # kernel or header must not need a second list here - and compile it the way the driver does: one
-          # translation unit per library. The first run of this job compiled src/kernels/*.metal one file at a
+          # translation unit per library. The first runs of this job compiled src/kernels/*.metal one file at a
           # time and failed on `unknown type name 'AttnPrepParams'`: those declarations live in the neighbouring
           # files, and the driver never sees them apart.
           cat > "$RUNNER_TEMP/extract.py" <<'PY'
@@ -226,6 +226,13 @@ jobs:
               sys.exit(f"no kernel literal in {sys.argv[1]}")
           pathlib.Path(sys.argv[2]).write_text(m.group(1))
           PY
+          # The language-version probe is a throwaway kernel, never a kernel under test: asking "does this Xcode
+          # accept -std=metalN" with qwen4.metal meant a source error reported as a missing language version.
+          # stderr stays visible so a missing toolchain reads as one.
+          supports() {
+            printf '#include <metal_stdlib>\nusing namespace metal;\nkernel void p(device int* o [[buffer(0)]]) { o[0] = 1; }\n' > "$RUNNER_TEMP/probe.metal"
+            xcrun -sdk macosx metal -std="$1" -c "$RUNNER_TEMP/probe.metal" -o "$RUNNER_TEMP/probe.air" >/dev/null 2>&1
+          }
           fail=0
           check() { # name, embed script, -std=, extra compiler flags
             local name=$1 script=$2 std=$3
@@ -239,15 +246,29 @@ jobs:
               fail=1
             fi
           }
-          # Language versions are the ones Gpu::compile / compile_library asks for: the base library 3.1 (and the
-          # weight-format pass over the same source, NI_WF_INST), the extra libraries 3.2 (metal32, for
-          # device-scope fences).
-          check base      embed_kernels.cmake       metal3.1
-          check base-wf   embed_kernels.cmake       metal3.1 -DNI_WF_INST=1
-          check nh        embed_kernels_nh.cmake    metal3.2
-          check dory      embed_kernels_dory.cmake  metal3.2
-          check flint     embed_kernels_flint.cmake metal3.2
-          # Not compiled here: src/kernels/tensor/ is Metal 4 (tensor_ops on the M5's matrix units) and a macOS 15
-          # runner has no Metal 4 compiler - the driver on such a Mac does not build that library either.
-          echo "skipping the Metal 4 tensor library: it is built on macOS 26 with matrix units only"
+          need() { # std this job must be able to compile at
+            if ! supports "$1"; then
+              echo "::error::this runner's Xcode has no $1, so the libraries the driver builds at it cannot be checked here"
+              fail=1
+              return 1
+            fi
+            echo "runner supports $1"
+          }
+          # The versions Gpu::compile / compile_library ask for: the base library 3.1 (and the weight-format pass
+          # over the same source, NI_WF_INST), the extra libraries 3.2 (metal32, device-scope fences), the tensor
+          # library 4.0 (tensor_ops on matrix units).
+          need metal3.1 && check base    embed_kernels.cmake metal3.1
+          need metal3.1 && check base-wf embed_kernels.cmake metal3.1 -DNI_WF_INST=1
+          need metal3.2 && check nh      embed_kernels_nh.cmake    metal3.2
+          need metal3.2 && check dory    embed_kernels_dory.cmake  metal3.2
+          need metal3.2 && check flint   embed_kernels_flint.cmake metal3.2
+          # The tensor library is Metal 4, and a macOS 15 runner has no Metal 4 compiler - the driver on such a Mac
+          # does not build it either, so this is a skip on this image, not a pass. On a runner that has Metal 4 it is
+          # compiled like the rest, which is how a typo there gets caught instead of shipped.
+          if supports metal4.0; then
+            echo "runner supports metal4.0"
+            check tensor embed_kernels_tensor.cmake metal4.0
+          else
+            echo "skipping the Metal 4 tensor library: this runner has no metal4.0 compiler"
+          fi
           exit "$fail"
