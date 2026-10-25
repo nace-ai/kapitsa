@@ -123,7 +123,8 @@ new architecture requires more than implementing `Model` if it needs a new draft
   grouped expert operations avoid routing all work through general-purpose tensor operators. The Qwen and Nemotron
   backends have separate kernel sets for their shapes and stored weight formats.
 * **QMT prefill.** On Apple10 GPUs (the M5) under macOS 26, the 4-bit dense GEMMs of the Qwen3.5
-  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B) and 8 (the 35B, on
+  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B, `qattn_t_g4d2s8`: the same pair kernel over (token, head) rows;
+  `NI_QATTN_G4D2=0` keeps `qattn_t_s8k16`) and 8 (the 35B, on
   `qattn_t_g8d2s8` by default, which splits the head dim over a pair of simdgroups; `NI_QATTN_D2=0` runs `qattn_t_g8s4k16`) and 6 (the 27B, `qattn_t_g6d2s8`: the same pair kernel over (token, head) rows; `NI_QATTN_G6=0` keeps `attn_prefill11r`) run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off, `NI_QATTN_G8=0` keeps the 35B on `attn_prefill11r`).
   The 6-bit group-64 dense weights of those packs run their prefill GEMMs from 64 rows up on a tile of the same kind
   (`src/kernels/tensor/qmt6.metal`: `qmt6_m64_n64`, `qmt.metal`'s 64x64x32 double-buffered `matmul2d`, one 32-K one per
