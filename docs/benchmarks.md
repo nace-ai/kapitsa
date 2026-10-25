@@ -131,7 +131,8 @@ looped.
   ([Super-VL](../bench/results/2026-10-18-m5-max/README.md), [Lightning](../bench/results/2026-10-18-m5-max-lightning/README.md),
   [the session](../bench/results/2026-10-18-m5-max-session/README.md)). mlx-serve 26.10.2 loads neither Super-VL
   checkpoint; MTPLX runs its text-only conversion without MTP.
-- llama.cpp on the 27B and 35B-A3B: b11669 on 2026-10-18 (MTP, n-max 3 and 2).
+- llama.cpp on the 27B and 35B-A3B: b11669 on 2026-10-18 (MTP, n-max 3 and 2), 516 / 51 and 2,881 / 171 (prefill 4K /
+  decode); not re-measured yet, so the README header's llama.cpp bar (171) is that earlier session's cell.
 - Flint: not measured on this Mac yet.
 
 <a id="m5-pro"></a>
