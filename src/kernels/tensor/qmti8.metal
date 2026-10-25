@@ -65,10 +65,13 @@ NI_INLINE void qmti8s_tile(const device char* XQ, const device float2* XS, const
   float a0[CAP], a1[CAP];
   _Pragma("clang loop unroll(full)")
   for (uint16_t i = 0; i < CAP; ++i) a0[i] = a1[i] = 0.0f;
-  // the 32 x 16 int32 destination's layout (probed on the M5, /tmp/qfn-mm/probe16.swift): element i of lane l sits at
-  // column cl + (i & 3), row rl + 8 * (i >> 2); computed here instead of held as 16 index registers
-  const uint lane = tid & 31;
-  const uint cl = sn * SN + 4 * (lane & 1) + 8 * (lane >> 3 & 1), rl = sm * SM + (lane >> 1 & 3) + 4 * (lane >> 4 & 1);
+  // Where element i of this lane's 32 x 16 int32 product sits, read from the destination tensor (c0 and c1 share
+  // its layout): column cl + dc * (i & 3), row rl + dr * (i >> 2), the four numbers from elements 0, 1 and 4. The M5
+  // has dc 1, dr 8; tools/coop_layout checks that a GPU's layout has this form. Reading every element's index instead
+  // makes the rescale load 32 scales from threadgroup memory rather than 8: 1-2% slower qmti8s_m64_n128.
+  const auto ix0 = c0.get_multidimensional_index(uint16_t(0)), ix1 = c0.get_multidimensional_index(uint16_t(1)),
+             ix4 = c0.get_multidimensional_index(uint16_t(4));
+  const uint cl = sn * SN + ix0[0], rl = sm * SM + ix0[1], dc = ix1[0] - ix0[0], dr = ix4[1] - ix0[1];
   constexpr int XP = (BM * BK / 16 + NT - 1) / NT, WP = (BN * BK / 32 + NT - 1) / NT;
   uint xr[XP], xk[XP], xrow[XP];
   _Pragma("clang loop unroll(full)")
@@ -118,13 +121,12 @@ NI_INLINE void qmti8s_tile(const device char* XQ, const device float2* XS, const
     }
     if (tid < uint(BM)) xsc[sb * BM + tid] = xsv;
   };
-  // element i: column (i & 3) + c, row 8 * (i >> 2) + r (probed, above)
   auto rescale = [&](thread decltype(c0)& cc, thread float* acc, uint sb, uint coff) {
     float2 xr4[4], wc4[4];
     _Pragma("clang loop unroll(full)")
-    for (int a = 0; a < 4; ++a) xr4[a] = xsc[sb * BM + rl + 8 * a];
+    for (int a = 0; a < 4; ++a) xr4[a] = xsc[sb * BM + rl + dr * a];
     _Pragma("clang loop unroll(full)")
-    for (int a = 0; a < 4; ++a) wc4[a] = wsc[sb * BN + cl + a + coff];
+    for (int a = 0; a < 4; ++a) wc4[a] = wsc[sb * BN + cl + dc * a + coff];
     _Pragma("clang loop unroll(full)")
     for (uint16_t i = 0; i < CAP; ++i) {
       const float2 xa = xr4[i >> 2], wb = wc4[i & 3];
@@ -154,9 +156,9 @@ NI_INLINE void qmti8s_tile(const device char* XQ, const device float2* XS, const
   rescale(c1, a1, (G - 1) % 3, HN);
   _Pragma("clang loop unroll(full)")
   for (uint16_t i = 0; i < CAP; ++i) {
-    const uint m = m0 + rl + 8 * (i >> 2);
+    const uint m = m0 + rl + dr * (i >> 2);
     if (m >= p.M) continue;
-    const uint n = n0 + cl + (i & 3), n1 = n + HN;
+    const uint n = n0 + cl + dc * (i & 3), n1 = n + HN;
     const size_t o = size_t(m) * p.y_ld + n;
     if (n < p.N) Y[o] = p.add ? Y[o] + a0[i] : a0[i];
     if (n1 < p.N) Y[o + HN] = p.add ? Y[o + HN] + a1[i] : a1[i];
