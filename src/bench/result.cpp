@@ -170,13 +170,6 @@ std::string str_or(const ojson& o, const char* k, const std::string& def = "") {
 
 bool is_num(const ojson& o, const char* k) { return o.is_object() && o.contains(k) && o[k].is_number(); }
 
-ojson decode_block(const ojson& runs, const ojson& summary) {
-  ojson tps = ojson::array();
-  for (const auto& r : runs)
-    if (r["invalid"].empty() && is_num(r, "decode_tps")) tps.push_back(py_round(r["decode_tps"], 2));
-  return {{"median_tps", is_num(summary, "median_tps") ? summary["median_tps"] : ojson(nullptr)}, {"runs_tps", tps}};
-}
-
 std::string mac_short(const ojson& r) {
   const ojson& m = r["mac"];
   return mac_display(str_or(m, "name"), m.value("year", 0), str_or(m, "chip"), str_or(m, "identifier"));
@@ -203,6 +196,23 @@ std::string py_list(const std::vector<std::string>& v) {
 
 }  // namespace
 
+ojson decode_block(const ojson& runs, const ojson& summary) {
+  ojson tps = ojson::array();
+  std::vector<double> draft_tps, share;  // a speculative server's accepted drafts (its per-request telemetry)
+  for (const auto& r : runs) {
+    if (!r["invalid"].empty() || !is_num(r, "decode_tps")) continue;
+    tps.push_back(py_round(r["decode_tps"], 2));
+    if (!r.contains("diagnostics")) continue;
+    const ojson& d = r["diagnostics"];
+    if (is_num(d, "accepted_draft_tps")) draft_tps.push_back(d["accepted_draft_tps"]);
+    if (is_num(d, "accepted_draft_share")) share.push_back(d["accepted_draft_share"]);
+  }
+  ojson b = {{"median_tps", is_num(summary, "median_tps") ? summary["median_tps"] : ojson(nullptr)}, {"runs_tps", tps}};
+  if (!draft_tps.empty()) b["median_accepted_draft_tps"] = py_round(median(draft_tps), 2);
+  if (!share.empty()) b["median_accepted_draft_share"] = py_round(median(share), 4);
+  return b;
+}
+
 // ---------------------------------------------------------------- the result
 
 std::string decoding_of(const std::string& detail) {
@@ -212,6 +222,32 @@ std::string decoding_of(const std::string& detail) {
 }
 
 bool decoding_has_drafter(const std::string& d) { return d == "KFlash" || d == "DFlash2" || d == "LiLiCorr" || d == "DSpark"; }
+
+bool drafter_kind_is_model(const std::string& k) { return k == "DFlash2" || k == "DFlash" || k == "LiLiCorr" || k == "DSpark"; }
+
+DrafterLine parse_drafter(const std::string& log) {
+  DrafterLine d;
+  size_t at = 0;
+  while (at < log.size()) {
+    size_t end = log.find('\n', at);
+    if (end == std::string::npos) end = log.size();
+    std::string line = log.substr(at, end - at);
+    at = end + 1;
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    // "drafter: ..." as the engine logs it, or after a prefix ending "] " ("[kapitsa] drafter: ...")
+    if (line.rfind("drafter: ", 0) == 0) line.erase(0, 9);
+    else if (const size_t k = line.find("] drafter: "); k != std::string::npos) line.erase(0, k + 11);
+    else continue;
+    const size_t open = line.rfind(" (");
+    if (open == std::string::npos || line.back() != ')') continue;
+    const std::string head = line.substr(0, open);
+    const size_t sp = head.find(' ');
+    d.kind = head.substr(0, sp);
+    d.source = sp == std::string::npos ? "" : head.substr(sp + 1);
+    d.reason = line.substr(open + 2, line.size() - open - 3);
+  }
+  return d;
+}
 
 ojson make_result(const RunInputs& in) {
   const ojson& raw = in.raw;
@@ -273,6 +309,11 @@ ojson make_result(const RunInputs& in) {
   }
   if (battery) flags.push_back("power: on battery (a Mac on battery may run slower)");
   if (low) flags.push_back("power: Low Power Mode (the GPU runs slower)");
+  // a catalog model's drafter that did not decode: the result measures MTP or plain decoding instead
+  if (const ModelInfo& mi = in.model; !mi.drafter_offered.empty() && !mi.drafter_kind.empty() && mi.drafter_kind != "unknown" &&
+                                      !drafter_kind_is_model(mi.drafter_kind))
+    flags.push_back("drafter: the catalog's drafter " + mi.drafter_offered + " was not used (" + mi.drafter_reason +
+                    "); decoding: " + mi.drafter_kind);
   if (!hot.empty()) {
     std::string ph;
     for (const auto& p : hot) ph += (ph.empty() ? "" : ", ") + p;
@@ -344,6 +385,11 @@ ojson make_result(const RunInputs& in) {
                  {"decoding", mi.decoding},
                  {"decoding_detail", mi.decoding_detail},
                  {"drafter", mi.drafter.empty() ? ojson(nullptr) : ojson(mi.drafter)}};
+  if (!mi.drafter_kind.empty()) {  // what the server reported (older results have none of these)
+    model["drafter_kind"] = mi.drafter_kind;
+    model["drafter_source"] = mi.drafter_source.empty() ? ojson(nullptr) : ojson(mi.drafter_source);
+    model["drafter_reason"] = mi.drafter_reason.empty() ? ojson(nullptr) : ojson(mi.drafter_reason);
+  }
   const Settings& s = in.settings;
   ojson protocol = {{"corpus_sha256", sha256_hex(corpus())},
                     {"decode_tokens", s.decode_tokens},

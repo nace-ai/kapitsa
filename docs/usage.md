@@ -1401,6 +1401,20 @@ and accepted draft tokens per cycle for supported speculative modes. Accepted dr
 beyond the one target token per cycle. This is a cycle-yield diagnostic, not a proposed-token acceptance percentage;
 a tree drafter does not expose a suitable denominator here. The JSON retains each run and median/range summaries.
 
+The standard writing runs (decode, T=0.6 and greedy) also ask a Kapitsa server for these cycle counts. Each run then
+records its accepted draft tokens, their share of the tokens written, and accepted draft tokens per second: the run's
+writing rate times that share. The result stores the medians as `median_accepted_draft_tps` and
+`median_accepted_draft_share` under `results.decode` and `results.decode_greedy`, and the summary shows them in a
+`Drafted` row. A server that sends no telemetry (other engines) leaves them out.
+
+The engine logs which drafter decodes once at load, before `engine ready`:
+`drafter: <kind>[ <folder>] (<reason>)`. The kind is `DFlash2`, `DFlash`, `LiLiCorr`, `DSpark`, `MTP` or `none`. The
+reason says where the drafter was found, or why no drafter model decodes: the model takes none, `--dflash none` or
+`--spec 0`, it was left out to keep a full-context conversation in memory, its format does not fit, or none was found.
+A drafter found on disk but not used also logs a `warning:` line. `kapitsa bench` records the line as the model's
+`drafter_kind`, `drafter_source` (the folder's name, never a path) and `drafter_reason`, shows it in a `Drafter` row,
+and flags a result whose catalog drafter did not decode.
+
 ## Updating
 
 `kapitsa update` updates Kapitsa to its latest release, the way it was installed:

@@ -137,6 +137,23 @@ int self_test() {
   check(decoding_has_drafter("KFlash") && decoding_has_drafter("DSpark") && !decoding_has_drafter("prompt-lookup") &&
             !decoding_has_drafter("MTP") && !decoding_has_drafter("plain") && !decoding_has_drafter("unknown"),
         "the methods that record a drafter");
+  // the engine's "drafter: " line (src/engine/engine.cpp drafter_line): the last one, with or without a log prefix
+  {
+    const DrafterLine d = parse_drafter(
+        "[kapitsa] drafter: MTP (found nothing)\n"
+        "warning: drafter Qwen3.8-27B-DFlash2 was found but is not used: left out\n"
+        "12:00:01 [kapitsa] drafter: DFlash2 Qwen3.8 (27B)-DFlash2 (found beside the model)\r\n"
+        "engine ready: x, context 32768, 1 slots, DFlash2 speculative decoding (verify 7 of 7)\n");
+    check(d.kind == "DFlash2" && d.source == "Qwen3.8 (27B)-DFlash2" && d.reason == "found beside the model",
+          "the drafter line's kind, source and reason", d.kind + "|" + d.source + "|" + d.reason);
+    const DrafterLine n = parse_drafter("drafter: none (this model takes no block drafter, prompt lookup only)\n");
+    check(n.kind == "none" && n.source.empty() && n.reason == "this model takes no block drafter, prompt lookup only",
+          "a drafter line without a source", n.kind + "|" + n.source + "|" + n.reason);
+    check(parse_drafter("engine ready: x\ndrafter: broken\n").kind.empty(), "no drafter line: no kind");
+    check(drafter_kind_is_model("DFlash") && drafter_kind_is_model("DSpark") && !drafter_kind_is_model("MTP") &&
+              !drafter_kind_is_model("none") && !drafter_kind_is_model("unknown"),
+          "the drafter kinds that are drafter models");
+  }
   // formats and Python's rounding
   check(py_round(2.675, 2) == 2.67, "round(2.675, 2) is 2.67 (binary value below the tie)");
   check(py_round(0.125, 2) == 0.12, "round(0.125, 2) is 0.12 (tie to even)");

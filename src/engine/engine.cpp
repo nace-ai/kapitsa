@@ -436,6 +436,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.spec_depth < 0) opts_.spec_depth = q35_ ? q35_->default_spec_depth() : 0;
   spec_ = q35_ && opts_.spec_depth > 0 && q35_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
+  std::string dflash_unsupported;  // a drafter auto found that this model's format does not fit
   if (q35_ && q35_->block_drafter_ok() && !lp.dflash_off && lp.dflash_left_out.empty()) {
     const std::string& dir = lp.dflash;
     if (dir.empty()) {
@@ -443,6 +444,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
            opts_.model_dir.c_str());
     } else if (lp.dflash_auto && !DFlash2::supports(*q35_)) {
       logi("DFlash2: %s does not fit this model's embedding / LM head format; not used", dir.c_str());
+      dflash_unsupported = dir;
     } else {
       const size_t a0 = Gpu::get().allocated_bytes();
       // one slot: nothing decodes alongside a request, so a 16-row block's deeper lattice is free to take (with more
@@ -588,6 +590,28 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                                     ", " + (dory_spec_auto_ ? std::string("2-3") : std::to_string(dory_spec_)) +
                                                     " per cycle)"
                                  : std::string("plain decoding");
+  {  // the drafter it decodes with, or why none: one line `kapitsa bench` records, and a warning for one found unused
+    DrafterFacts f;
+    f.model_dir = opts_.model_dir;
+    f.block_path = (q35_ && q35_->block_drafter_ok()) || nh_;
+    f.named = lp.dflash_named;
+    f.off = lp.dflash_off;
+    f.spec_off = spec_asked == 0;
+    if (dfl_) f.loaded = dfl_dir_, f.loaded_kind = dfl_->config().v1 ? "DFlash" : "DFlash2";
+    else if (lili_) f.loaded = lp.dflash, f.loaded_kind = lili_->name();
+    f.left_out = lp.dflash_left_out;
+    f.unsupported = dflash_unsupported;
+    f.unbound = lp.dflash_unbound;
+    f.mtp_depth = spec_ ? opts_.spec_depth : 0;
+    f.self_drafts = flint_ngram_ > 0 || nh_ngram_ > 0                 ? "prompt lookup"
+                    : dory_spec_ > 0 && dory_spec_kind() == "ngram" ? "prompt lookup"
+                    : dory_spec_ > 0 && dory_spec_kind() == "self"  ? "Dory 1-loop drafts"
+                    : dory_spec_ > 0                                 ? "prompt lookup and Dory 1-loop drafts"
+                                                                     : "";
+    const DrafterUse u = drafter_use(f);
+    if (!u.unused.empty()) logi("warning: drafter %s was found but is not used: %s", u.unused.c_str(), u.reason.c_str());
+    logi("%s", drafter_line(u).c_str());
+  }
   // KFlash wraps every decode (src/model/kflash_wrap.h): the source it takes proposals from is named in the line
   const std::string kf_src = kflash_source();
   const std::string looped = dory_ ? ", " + std::to_string(dory_->default_loops()) + " loops by default (requests take 1-" +
@@ -881,6 +905,7 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   if (want == "1" || want == "on") want = "auto";
   lp.dflash_auto = want == "auto";
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
+  lp.dflash_named = !lp.dflash_auto && !lp.dflash_off;
   slots = std::max(1, slots);
   // Clover: the 35B-A3B's DFlash2 drafter for its causal pathway (Clover::find_drafter), unless NI_CLOVER_DECODE keeps
   // its own decoding (self-speculative or block diffusion)
@@ -903,7 +928,10 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
         }
       }
     }
-  } else if (!lp.dflash_off && !Qwen4Exp::is_model(model_dir)) {  // (no block drafter binds to Qwen3.8-Flash-Next)
+  } else if (!lp.dflash_off && Qwen4Exp::is_model(model_dir)) {
+    // no block drafter binds to Qwen3.8-Flash-Next: one found (or named) is only reported, with a warning
+    lp.dflash_unbound = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
+  } else if (!lp.dflash_off) {
     lp.dflash = !lp.dflash_auto ? want
                 : clover         ? Clover::find_drafter(model_dir)
                                  : DFlash2::find(model_dir, Qwen35::read_config(model_dir));
@@ -939,6 +967,63 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   }
   if (prefill_chunk <= 0) lp.prefill_narrow = prefill_narrow_chunk(model_dir, context, slots, left);
   return lp;
+}
+
+namespace {
+std::string trim_slash(std::string p) {
+  while (p.size() > 1 && p.back() == '/') p.pop_back();
+  return p;
+}
+std::string base_name(const std::string& p) {
+  const std::string t = trim_slash(p);
+  return t.substr(t.find_last_of('/') + 1);
+}
+std::string parent_dir(const std::string& p) {
+  const std::string t = trim_slash(p);
+  const size_t k = t.find_last_of('/');
+  return k == std::string::npos ? "" : t.substr(0, k);
+}
+}  // namespace
+
+DrafterUse drafter_use(const DrafterFacts& f) {
+  DrafterUse u;
+  if (!f.loaded.empty()) {
+    u.kind = f.loaded_kind;
+    u.source = base_name(f.loaded);
+    const std::string up = parent_dir(f.loaded), model = trim_slash(f.model_dir);
+    u.reason = f.named                                                ? "named with --dflash"
+               : up == model                                          ? "found in the model's folder"
+               : up == parent_dir(model) || up == parent_dir(model) + "/drafters" ? "found beside the model"
+                                                                      : "found in the drafters cache";
+    return u;
+  }
+  // no block drafter decodes: the first reason that applies
+  if (!f.block_path && !f.unbound.empty())
+    u.reason = base_name(f.unbound) + " found, but this model takes no block drafter", u.unused = base_name(f.unbound);
+  else if (!f.block_path) u.reason = "this model takes no block drafter";
+  else if (f.off) u.reason = f.spec_off ? "--spec 0 turns drafting off" : "turned off with --dflash none or NI_DFLASH";
+  else if (!f.left_out.empty())
+    u.reason = base_name(f.left_out) + " left out: it would keep a full-context conversation from fitting memory",
+    u.unused = base_name(f.left_out);
+  else if (!f.unsupported.empty())
+    u.reason = base_name(f.unsupported) + " does not fit this model's embedding and output layer format",
+    u.unused = base_name(f.unsupported);
+  else u.reason = "no matching drafter found";
+  if (!f.block_path && f.named) u.reason += ", --dflash ignored";
+  if (f.mtp_depth > 0) {
+    u.kind = "MTP";
+    u.reason += ", MTP head drafts depth " + std::to_string(f.mtp_depth);
+  } else {
+    u.kind = "none";
+    if (!f.self_drafts.empty()) u.reason += ", " + f.self_drafts + " only";
+  }
+  for (char& c : u.reason)  // a folder's name in it: the line's parser takes the last parenthesis as the reason's
+    if (c == '(' || c == ')') c = c == '(' ? '[' : ']';
+  return u;
+}
+
+std::string drafter_line(const DrafterUse& u) {
+  return "drafter: " + u.kind + (u.source.empty() ? "" : " " + u.source) + " (" + u.reason + ")";
 }
 
 StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots,

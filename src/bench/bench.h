@@ -119,8 +119,11 @@ struct Stream {
   std::vector<double> ev_t;  // each content-bearing event's arrival
   std::vector<int> ev_c;     // its characters (code points, as Python's len)
 };
-// Throws std::runtime_error ("HTTP 400: ...", or the connection's error)
-Stream stream_chat(const Settings& s, const ojson& body, const std::string& session = "", int timeout_s = 1800);
+// Throws std::runtime_error ("HTTP 400: ...", or the connection's error). telemetry: ask a Kapitsa server for its
+// kapitsa_progress events (X-Kapitsa-Bench-Telemetry; always on with a context window), whose cycle counts give the
+// writing tests' accepted drafts
+Stream stream_chat(const Settings& s, const ojson& body, const std::string& session = "", int timeout_s = 1800,
+                   bool telemetry = false);
 ojson post_json(const Settings& s, const ojson& body, int timeout_s = 1800);  // one non-streamed reply
 
 // The checks and rates (bench.py)
@@ -134,6 +137,9 @@ struct Rate {
 Rate decode_rates(const std::vector<double>& t, const std::vector<int>& c, int ct, int head, int tail);
 double py_round(double x, int digits);  // Python's round(x, digits)
 double median(std::vector<double> v);   // statistics.median
+// results.decode / decode_greedy from the runs and summary(): the median, each valid run's rate and, from a Kapitsa
+// server's cycle counts, the median accepted draft tokens per second and their share of the tokens written
+ojson decode_block(const ojson& runs, const ojson& summary);
 
 // The measurements (bench.py t_decode, t_prefill, t_tools, _summary, tools_pass; compare_engines.py's warm-up). Each
 // returns bench.py's record of it. `progress` (may be null) hears what is happening, for the screen.
@@ -313,7 +319,12 @@ struct ModelInfo {
   std::string repo, revision;
   std::string decoding;        // decoding_of(decoding_detail): "KFlash", "DFlash2", "LiLiCorr", "DSpark", "MTP", ...
   std::string decoding_detail; // that line's decoding part
-  std::string drafter;         // "incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6", "" when none
+  std::string drafter;         // the drafter model that decoded: its catalog "repo@rev7"
+                               // ("incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6"), else its folder's name; "" when none
+  // the server's "drafter: " line (parse_drafter): DFlash2, DFlash, LiLiCorr, DSpark, MTP, none, or "unknown" (a
+  // server kapitsa bench did not start); "" when the line is missing
+  std::string drafter_kind, drafter_source, drafter_reason;
+  std::string drafter_offered;  // the catalog variant's drafter ("repo@rev7"), whether it decoded or not
 };
 // Everything a run produced, for its result file
 struct RunInputs {
@@ -344,6 +355,14 @@ struct RunInputs {
 std::string decoding_of(const std::string& detail);
 // Whether that method runs a drafter model, which the result records ("KFlash", "DFlash2", "LiLiCorr", "DSpark")
 bool decoding_has_drafter(const std::string& decoding);
+// A server log's last "drafter: <kind>[ <source>] (<reason>)" line (the engine's, src/engine/engine.h drafter_line);
+// kind "" when it has none
+struct DrafterLine {
+  std::string kind, source, reason;
+};
+DrafterLine parse_drafter(const std::string& log);
+// Whether a drafter kind is a drafter model (DFlash2, DFlash, LiLiCorr, DSpark), not MTP's head or none
+bool drafter_kind_is_model(const std::string& kind);
 // The result file's content (bench/community/schema.json)
 ojson make_result(const RunInputs& in);
 // A model's title as the README writes it: "Qwen3.6 35B-A3B"

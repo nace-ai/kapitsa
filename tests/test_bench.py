@@ -712,6 +712,14 @@ check(res["results"]["prefill"][0]["prompt_tokens"] == 4133 and len(res["results
 ft = res["results"]["prefill"][0]
 check(ft.get("followup_suffix_tps", 0) > 0 and ft["followup_suffix_tps"] != ft["tps"],
       "the follow-ups' prefill tok/s counts the uncached suffix only (additive field)", str(ft))
+dec = res["results"]["decode"]
+check(res["model"].get("drafter_kind") == "unknown" and res["model"]["drafter"] is None,
+      "an external server's drafter is unknown, none recorded", str(res["model"]))
+check(0 < dec.get("median_accepted_draft_share", 0) < 1 and 0 < dec.get("median_accepted_draft_tps", 0) < dec["median_tps"] and
+      "median_accepted_draft_tps" in res["results"]["decode_greedy"],
+      "writing runs record accepted drafts from the server's cycle counts (additive fields)", str(dec))
+check(re.search(r"decode T=0\.6: median [0-9.]+ tok/s over 3/3 valid, accepted drafts [0-9.]+ tok/s \(\d+\.\d% of tokens\)",
+                r.stderr), "the progress shows the accepted drafts per second", r.stderr[-800:])
 hw = run(["sysctl", "-n", "hw.model"]).stdout.strip()
 check(res["mac"]["identifier"] == hw and res["mac"]["memory_gb"] > 0 and res["mac"]["chip"].startswith("Apple"), "this Mac")
 try:

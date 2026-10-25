@@ -604,6 +604,17 @@ void print_summary(const ojson& r, const std::string& path) {
     if (res["decode_greedy"].is_object() && res["decode_greedy"]["median_tps"].is_number())
       v += dot + bold(fmt_tps(res["decode_greedy"]["median_tps"])) + mark("decode_greedy") + dim("  greedy");
     row("Writing", v);
+    // the accepted drafts' share of it (a Kapitsa server's per-request cycle counts)
+    if (res["decode"].contains("median_accepted_draft_tps") && res["decode"]["median_accepted_draft_tps"].is_number()) {
+      std::string d = bold(fmt_tps(res["decode"]["median_accepted_draft_tps"])) + dim("  T = " + fmt_temp(writing_temperature(r)));
+      if (res["decode_greedy"].is_object() && res["decode_greedy"].contains("median_accepted_draft_tps") &&
+          res["decode_greedy"]["median_accepted_draft_tps"].is_number())
+        d += dot + bold(fmt_tps(res["decode_greedy"]["median_accepted_draft_tps"])) + dim("  greedy");
+      if (res["decode"].contains("median_accepted_draft_share") && res["decode"]["median_accepted_draft_share"].is_number())
+        d += dim("  (" + std::to_string(int(std::lround(res["decode"]["median_accepted_draft_share"].get<double>() * 100))) +
+                 "% of tokens)");
+      row("Drafted", d);
+    }
   }
   std::string reading, follow;
   for (const auto& p : res["prefill"]) {
@@ -628,6 +639,13 @@ void print_summary(const ojson& r, const std::string& path) {
   if (r["protocol"].contains("prefill_chunk"))
     row("Prefill chunk", thousands(r["protocol"]["prefill_chunk"].get<int>()) + " tokens (requested)");
   row("Decoding", m.value("decoding_detail", m.value("decoding", std::string())));
+  if (m.contains("drafter_kind") && m["drafter_kind"].is_string()) {
+    std::string d = m["drafter_kind"].get<std::string>();
+    if (m["drafter"].is_string()) d += " " + m["drafter"].get<std::string>();
+    else if (m["drafter_source"].is_string()) d += " " + m["drafter_source"].get<std::string>();
+    if (m["drafter_reason"].is_string()) d += dim("  " + m["drafter_reason"].get<std::string>());
+    row("Drafter", d);
+  }
   if (r.contains("context")) {
     rows.push_back("");
     for (const auto& [label, value] : context_rows(r)) {
@@ -880,6 +898,7 @@ int run(const Options& o) {
     if (external) {
       mi.decoding = "unknown";
       mi.decoding_detail = "a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)";
+      mi.drafter_kind = "unknown";
       say("Measuring the server on 127.0.0.1:" + std::to_string(external) + " (KAPITSA_BENCH_SERVER)");
     } else {
       const auto t0 = std::chrono::steady_clock::now();
@@ -921,7 +940,18 @@ int run(const Options& o) {
       const std::string detail = decoding_detail(srv.log);
       mi.decoding_detail = detail;
       mi.decoding = decoding_of(detail);
-      if (decoding_has_drafter(mi.decoding)) mi.drafter = drafter_of(ref);
+      // which drafter decodes: its "drafter: " line (the catalog's drafter when it is the one in the model's folder)
+      const DrafterLine dl = parse_drafter(read_file(srv.log));
+      mi.drafter_offered = drafter_of(ref);
+      mi.drafter_kind = dl.kind, mi.drafter_source = dl.source, mi.drafter_reason = dl.reason;
+      if (dl.kind.empty()) {  // no such line: the catalog's drafter where the decoding names one
+        if (decoding_has_drafter(mi.decoding)) mi.drafter = mi.drafter_offered;
+      } else if (drafter_kind_is_model(dl.kind)) {
+        mi.drafter = !mi.drafter_offered.empty() && dl.reason == "found in the model's folder" ? mi.drafter_offered : dl.source;
+      }
+      if (!mi.drafter_offered.empty() && !dl.kind.empty() && !drafter_kind_is_model(dl.kind))
+        warn_line("the catalog's drafter " + mi.drafter_offered + " is not used (" + dl.reason + "); measuring " + dl.kind +
+             " decoding");
       const std::string done = accent(term::kOk) + " Loaded " + what + dim(" in " + term::duration(secs()));
       // beside the logo, each line within the terminal's width: a wrapped line would misplace the logo's last frame
       const int room = std::max(20, term::columns() - ui::kLogoCols - 6);
@@ -1000,6 +1030,15 @@ int run(const Options& o) {
     };
     // the writing runs' temperature, as sampled: 0.6, Flint's 1.0 (set above)
     const std::string writing_t = fmt_temp(s.temperature), writing = "Writing, T = " + writing_t;
+    // ", accepted drafts X tok/s (Y% of tokens)" when the server sent its cycle counts
+    auto drafted = [](const ojson& runs, const ojson& sm) -> std::string {
+      const ojson b = decode_block(runs, sm);
+      if (!b.contains("median_accepted_draft_tps")) return "";
+      char t[96];
+      snprintf(t, sizeof t, ", accepted drafts %.2f tok/s (%.1f%% of tokens)", b["median_accepted_draft_tps"].get<double>(),
+               b.value("median_accepted_draft_share", 0.0) * 100);
+      return t;
+    };
     auto decode_phase = [&](const char* name, bool greedy, int runs, const char* label) {
       Ticker t(label);
       ojson all = ojson::array();
@@ -1033,7 +1072,7 @@ int run(const Options& o) {
       char med[32] = "NA";
       if (sm.contains("median_tps")) snprintf(med, sizeof med, "%.2f", sm["median_tps"].get<double>());
       say("decode T=" + (greedy ? std::string("0") : writing_t) + ": median " + med + " tok/s over " +
-          std::to_string(sm["valid_runs"].get<int>()) + "/" + std::to_string(sm["runs"].get<int>()) + " valid");
+          std::to_string(sm["valid_runs"].get<int>()) + "/" + std::to_string(sm["runs"].get<int>()) + " valid" + drafted(all, sm));
     };
     decode_phase("decode", false, s.decode_runs, writing.c_str());
     decode_phase("decode_greedy", true, s.greedy_runs, "Writing, greedy");

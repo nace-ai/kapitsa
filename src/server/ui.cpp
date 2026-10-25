@@ -477,6 +477,7 @@ ServeLog g_log;
 // use, the Neural Engine unavailable, a conversation's cache given up for memory
 bool worth_showing(const std::string& m) {
   if (m.rfind("DFlash2: no drafter found", 0) == 0) return false;
+  if (m.rfind("drafter: ", 0) == 0) return false;  // the load's summary (its "warning: " line shows instead)
   std::string l = m;
   for (auto& ch : l) ch = char(tolower(uint8_t(ch)));
   for (const char* k : {"left out", "can't", "cannot", "failed", "unavailable", "not used", "insufficient",

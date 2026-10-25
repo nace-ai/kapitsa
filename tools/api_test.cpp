@@ -1820,6 +1820,51 @@ void dump_cases(const std::string& dir) {
   write("anthropic-count.json", api::dump(ojson{{"input_tokens", 1234}}));
 }
 
+// The drafter an engine reports (drafter_use / drafter_line, the line `kapitsa bench` records): a loaded drafter's
+// folder by name only, and the first reason no drafter model decodes. Pure: no model.
+void drafter_report_unit() {
+  auto line = [](const DrafterFacts& f) { return drafter_line(drafter_use(f)); };
+  DrafterFacts q;
+  q.model_dir = "/Users/me/models/Qwen3.8-27B";
+  q.block_path = true;
+  q.mtp_depth = 2;
+  DrafterFacts f = q;
+  f.loaded = q.model_dir + "/dflash2", f.loaded_kind = "DFlash2";
+  check(line(f) == "drafter: DFlash2 dflash2 (found in the model's folder)", "a catalog drafter in the model's folder", line(f));
+  f.loaded = "/Users/me/models/drafters/Qwen3.8-27B-DFlash2/";
+  check(line(f) == "drafter: DFlash2 Qwen3.8-27B-DFlash2 (found beside the model)", "a drafter beside the model", line(f));
+  f.loaded = "/Users/me/.cache/nace-infer-models/drafters/Qwen3.8-27B-DFlash", f.loaded_kind = "DFlash";
+  check(line(f) == "drafter: DFlash Qwen3.8-27B-DFlash (found in the drafters cache)", "a drafter in the cache, no path",
+        line(f));
+  f.named = true;
+  check(drafter_use(f).reason == "named with --dflash", "a named drafter", drafter_use(f).reason);
+  f = q;
+  check(line(f) == "drafter: MTP (no matching drafter found, MTP head drafts depth 2)", "none found: MTP", line(f));
+  check(drafter_use(f).unused.empty(), "none found: nothing to warn about");
+  f.left_out = "/Users/me/models/Qwen3.8-27B/dflash2";
+  DrafterUse u = drafter_use(f);
+  check(u.kind == "MTP" && u.unused == "dflash2" && u.reason.find("dflash2 left out") == 0, "a drafter left out warns", u.reason);
+  f = q, f.unsupported = "/Users/me/models/x (old)", f.mtp_depth = 0;
+  u = drafter_use(f);
+  check(u.kind == "none" && u.unused == "x (old)" && u.reason.find('(') == std::string::npos &&
+            u.reason.find("x [old] does not fit") == 0,
+        "an unsupported drafter warns, the reason without parentheses", u.reason);
+  f = q, f.off = true, f.spec_off = true, f.mtp_depth = 0, f.left_out = "/a/b";
+  u = drafter_use(f);
+  check(u.kind == "none" && u.unused.empty() && u.reason == "--spec 0 turns drafting off", "--spec 0: no warning", u.reason);
+  f = q, f.off = true;
+  check(drafter_use(f).reason == "turned off with --dflash none or NI_DFLASH, MTP head drafts depth 2", "--dflash none",
+        drafter_use(f).reason);
+  f = q, f.block_path = false, f.named = true, f.mtp_depth = 0, f.self_drafts = "prompt lookup";
+  check(line(f) == "drafter: none (this model takes no block drafter, --dflash ignored, prompt lookup only)",
+        "no block-drafter path: --dflash ignored, prompt lookup", line(f));
+  f = q, f.block_path = false, f.mtp_depth = 0, f.unbound = "/Users/me/models/Qwen3.8-Flash-Next-DFlash2";
+  u = drafter_use(f);
+  check(u.kind == "none" && u.unused == "Qwen3.8-Flash-Next-DFlash2" &&
+            u.reason == "Qwen3.8-Flash-Next-DFlash2 found, but this model takes no block drafter",
+        "Flash-Next: a drafter found warns", u.reason);
+}
+
 // A folder whose config.json is an architecture Kapitsa does not run is refused by unsupported_model(), the function
 // the engine's constructor, model_plan and `kapitsa serve|bench|doctor` all refuse with (issue 447: Gemma 4 fell
 // through to the Qwen3.5 loader and aborted in nlohmann instead of a message). CPU only: config.json files, no model.
@@ -1998,6 +2043,7 @@ int main(int argc, char** argv) {
   unsupported_model_unit();
   clover_unit();
   norm_layout_unit();
+  drafter_report_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
