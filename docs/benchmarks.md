@@ -111,7 +111,7 @@ looped.
 
 - **Kapitsa writes fastest on all three models and answers follow-ups fastest; Splash reads prompts fastest.** Splash
   splits a long prompt's FFN between the GPU and the Neural Engine; on the 27B Kapitsa does too, and the two are 6%
-  apart.
+  apart in prefill (805 against 856 tok/s).
 - Since the previous session (2026-10-22, main `fd85910`) Kapitsa's own cells moved from 4,702 / 325 to 5,963 / 339 on
   the 35B-A3B and from 459 / 140 to 805 / 147 on the 27B.
 - Several engines read lower than on their 2026-10-18 releases with the same configs (oMLX 189 against 232 on the
@@ -414,7 +414,7 @@ result files and READMEs stay in [bench/results](../bench/results/); each row li
 | 2026-10-19 | M1 Pro | <a id="macbook-pro-m1-pro-16-gb-2026-10-19"></a>The 16 GB Mac against every engine | [2026-10-19-m1pro-16gb](../bench/results/2026-10-19-m1pro-16gb/README.md) |
 | 2026-10-19 | M5 Pro | <a id="macbook-pro-m5-pro-48-gb-2026-10-19"></a>The M5 Pro against every engine | [2026-10-19-m5pro-48gb](../bench/results/2026-10-19-m5pro-48gb/README.md) |
 | 2026-10-21 | M5 Pro | Prefill re-measured | [2026-10-21-m5pro-48gb](../bench/results/2026-10-21-m5pro-48gb/README.md) |
-| 2026-10-22 | M5 Max | Kapitsa and Splash re-measured on main `fd85910` | [2026-10-22-m5-max](../bench/results/2026-10-22-m5-max/README.md) |
+| 2026-10-22 | M5 Max | Kapitsa and Splash re-measured on main `fd85910`; its Flash-Next, Lightning, Super-VL and Dory Kapitsa cells are still the current ones | [2026-10-22-m5-max](../bench/results/2026-10-22-m5-max/README.md) |
 | 2026-10-22 | M5 Pro | The 16-row drafting block against mlx-serve's draft tree; the 27B's Neural Engine split on the matrix units | [2026-10-22-m5pro-48gb](../bench/results/2026-10-22-m5pro-48gb/README.md), [27b-ane-split](../bench/results/2026-10-22-m5pro-27b-ane-split/README.md) |
 | 2026-10-22 | M5 Pro | Flint on Kapitsa before #345: main `6c13588`, then with #340 (expert GEMMs on the tensor units) | [flint-m5pro](../bench/results/2026-10-22-flint-m5pro/README.md), [flint-m5pro-qtm](../bench/results/2026-10-22-flint-m5pro-qtm/README.md) |
 | 2026-10-22 | M3 Pro | Flint on battery (superseded by the AC run) | [2026-10-22-flint-m3pro](../bench/results/2026-10-22-flint-m3pro/README.md) |
