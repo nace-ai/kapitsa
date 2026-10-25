@@ -752,7 +752,7 @@ int prefill_narrow_chunk(const std::string& model_dir, int context, int slots, s
 }
 
 LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
-                   size_t budget, int prefill_chunk) {
+                   size_t budget, int prefill_chunk, int prefill_chunk_cap) {
   LoadPlan lp;
   std::string want = dflash;
   if (want.empty()) want = getenv("NI_DFLASH") && *getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "auto";
@@ -800,6 +800,15 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   }
   const size_t left = budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0;
   lp.prefill_chunk = prefill_chunk > 0 ? prefill_chunk : auto_prefill_chunk(model_dir, context, slots, left);
+  // A head whose peers take fewer rows a pass (`--split`, pair) plans no wider than they hold: a pass wider than a
+  // stage's own chunk breaks the link (src/cluster/stage.cpp). The plan is kept whenever the peers hold it, so a default
+  // stage changes nothing about a default plan; a wide default they cannot hold (the 4096-row ones, against a default
+  // stage's 2112) falls back to this model's without-the-wide-default chunk, the same rows its shorter prefills run.
+  if (prefill_chunk <= 0 && prefill_chunk_cap > 0 && lp.prefill_chunk > prefill_chunk_cap) {
+    const int plain = std::min(auto_chunk(model_dir, context, slots, left, false), prefill_chunk_cap);
+    logd("prefill chunk %d planned, the peers take %d a pass: %d rows", lp.prefill_chunk, prefill_chunk_cap, plain);
+    lp.prefill_chunk = plain;
+  }
   if (prefill_chunk <= 0) lp.prefill_narrow = prefill_narrow_chunk(model_dir, context, slots, left);
   return lp;
 }
@@ -828,7 +837,8 @@ StartPlan start_plan(const std::string& model_dir, const EngineOptions& opt, siz
   EngineOptions at = opt;
   at.context = sp.context;
   sp.slots = opt.slots > 0 ? opt.slots : auto_slots(model_dir, at, budget);
-  sp.load = plan_load(model_dir, opt.dflash, opt.spec_depth == 0, sp.context, sp.slots, budget, opt.prefill_chunk);
+  sp.load = plan_load(model_dir, opt.dflash, opt.spec_depth == 0, sp.context, sp.slots, budget, opt.prefill_chunk,
+                       opt.prefill_chunk_cap);
   sp.prefill_chunk = opt.prefill_chunk > 0 ? opt.prefill_chunk : sp.load.prefill_chunk;
   return sp;
 }

@@ -46,6 +46,10 @@ struct EngineOptions {
   // (more wait for a free one); 0 = auto_slots()
   int slots = 0;
   int prefill_chunk = 0;       // rows per prefill pass; 0 = 2048, or 1024 when that leaves too little memory
+  // The largest chunk the peers take a pass (a `--split` or pair head: each stage advertises its own room, and a
+  // pass wider than a stage's chunk breaks the link); the plan stays the plan when it fits, and a wider one (the 4096-row
+  // defaults) falls back to this model's own without-the-wide-default chunk. 0 = no cap (a single Mac).
+  int prefill_chunk_cap = 0;
   int spec_depth = -1;         // MTP draft tokens per cycle (0 = no speculative decoding, -1 = model default)
   double mem_budget_gb = 0;    // GPU memory Kapitsa may hold (GB); 0 = default_mem_budget()
   // DFlash2 block drafter (replaces MTP when loaded): "auto" = DFlash2::find() next to the model / in
@@ -110,17 +114,6 @@ int prefill_narrow_chunk(const std::string& model_dir, int context, int slots, s
 int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even);
 // Rows the prefill buffers plan for: `chunk` plus its tail room (2112 for 2048), so an even chunk still fits them
 int prefill_chunk_room(int chunk);
-// The prefill chunk a head plans when its peers accept at most `rows` a pass (`--split` and pair heads): `want` (0 = the
-// plan's own choice) when the link holds it, else `rows`. A stage drops a pass with more rows than its own chunk
-// (src/cluster/stage.cpp) and the link dies, so a head must never plan past its peers' room. `rows` below the room a
-// 2048-row chunk needs means the peers take less than the plain default and everything is clamped; `rows` below
-// prefill_chunk_room(4096) (4224) also clamps the 4096-row defaults (Flash-Next Q2_0's chunk and the 35B's wide one),
-// which a default stage's 2112 rows cannot hold.
-inline int head_chunk_for_link(int want, int rows) {
-  if (rows <= 0) return want;
-  if (want > 0) return want > rows ? rows : want;
-  return rows < prefill_chunk_room(4096) ? rows : 0;
-}
 // NI_BAL (default on; 0 = the chunking before tail room and even chunks), read once
 bool prefill_even_chunks();
 
@@ -140,7 +133,7 @@ struct LoadPlan {
 // auto leaves a drafter out where one conversation of `context` tokens would not fit the budget beside it (context
 // before speed); prefill_chunk 0 = auto_prefill_chunk with the drafter's memory set aside.
 LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
-                   size_t budget, int prefill_chunk);
+                   size_t budget, int prefill_chunk, int prefill_chunk_cap = 0);
 // What an engine starts a model with, as `kapitsa serve` resolves it before loading: the context (opt.context <= 0:
 // default_context, serve's without --context; else as given, which serve has capped at the model's limit with
 // context_within_limit), the slots (opt.slots 0: auto_slots at

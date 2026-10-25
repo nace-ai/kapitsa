@@ -1200,7 +1200,7 @@ static int serve(int argc, char** argv, int first) {
     if (opt.prefill_chunk > link->rows())
       return fail("--prefill-chunk " + std::to_string(opt.prefill_chunk) + ": the stages take at most " +
                   std::to_string(link->rows()) + " rows a pass (kapitsa stage --prefill-chunk).");
-    opt.prefill_chunk = head_chunk_for_link(opt.prefill_chunk, int(link->rows()));
+    opt.prefill_chunk_cap = int(link->rows());  // a pass wider than a stage's chunk breaks the link
     Qwen4Exp::set_split({0, link->first(), link});
     std::string where;
     for (const cluster::StageInfo& s : link->stages())
