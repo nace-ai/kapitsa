@@ -1116,9 +1116,8 @@ NI_INLINE void hc_up_mix_impl(const device float* part, const device float* xn, 
     unpack16<BITS>(w + k * BITS / 32, q);
     float d = 0.0f;
     const uint g = row * (K / 64) + k / 64;
-    // fma spelled out so the multi-row form (zqwen4v.metal hc_up_mix4) compiles to the same order under fast math
-    for (uint j = 0; j < 16; ++j) d = fma(q[j], hs[k + j], d);
-    m = fma(float(Wb[g]), hsum[k / 16], fma(float(Ws[g]), d, m));
+    for (uint j = 0; j < 16; ++j) d += q[j] * hs[k + j];
+    m += float(Ws[g]) * d + float(Wb[g]) * hsum[k / 16];
   }
   m += simd_shuffle_xor(m, 1);
   m += simd_shuffle_xor(m, 2);
