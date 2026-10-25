@@ -228,10 +228,16 @@ jobs:
           PY
           # The language-version probe is a throwaway kernel, never a kernel under test: asking "does this Xcode
           # accept -std=metalN" with qwen4.metal meant a source error reported as a missing language version.
-          # stderr stays visible so a missing toolchain reads as one.
+          # The compiler's own diagnosis is kept, not discarded: "no metal3.1" and "the Metal Toolchain component
+          # is missing from this Xcode" are different problems, and only stderr tells them apart.
           supports() {
             printf '#include <metal_stdlib>\nusing namespace metal;\nkernel void p(device int* o [[buffer(0)]]) { o[0] = 1; }\n' > "$RUNNER_TEMP/probe.metal"
-            xcrun -sdk macosx metal -std="$1" -c "$RUNNER_TEMP/probe.metal" -o "$RUNNER_TEMP/probe.air" >/dev/null 2>&1
+            xcrun -sdk macosx metal -std="$1" -c "$RUNNER_TEMP/probe.metal" -o "$RUNNER_TEMP/probe.air" \
+              >/dev/null 2>"$RUNNER_TEMP/probe-$1.err"
+          }
+          diagnose() { # std - the probe's compiler output, indented, first lines
+            # sed, not head: head closing the pipe early would SIGPIPE sed and, under pipefail, fail the job
+            sed -n '1,12p' "$RUNNER_TEMP/probe-$1.err" 2>/dev/null | sed 's/^/    /'
           }
           fail=0
           check() { # name, embed script, -std=, extra compiler flags
@@ -249,6 +255,9 @@ jobs:
           need() { # std this job must be able to compile at
             if ! supports "$1"; then
               echo "::error::this runner's Xcode has no $1, so the libraries the driver builds at it cannot be checked here"
+              echo "::group::metal -std=$1 probe output"
+              diagnose "$1"
+              echo "::endgroup::"
               fail=1
               return 1
             fi
@@ -270,5 +279,8 @@ jobs:
             check tensor embed_kernels_tensor.cmake metal4.0
           else
             echo "skipping the Metal 4 tensor library: this runner has no metal4.0 compiler"
+            echo "::group::metal -std=metal4.0 probe output"
+            diagnose metal4.0
+            echo "::endgroup::"
           fi
           exit "$fail"
