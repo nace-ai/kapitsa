@@ -1411,9 +1411,12 @@ The engine logs which drafter decodes once at load, before `engine ready`:
 `drafter: <kind>[ <folder>] (<reason>)`. The kind is `DFlash2`, `DFlash`, `LiLiCorr`, `DSpark`, `MTP` or `none`. The
 reason says where the drafter was found, or why no drafter model decodes: the model takes none, `--dflash none` or
 `--spec 0`, it was left out to keep a full-context conversation in memory, its format does not fit, or none was found.
-A drafter found on disk but not used also logs a `warning:` line. `kapitsa bench` records the line as the model's
-`drafter_kind`, `drafter_source` (the folder's name, never a path) and `drafter_reason`, shows it in a `Drafter` row,
-and flags a result whose catalog drafter did not decode.
+A model that takes no block drafter but had one in its folder logs a `warning:` line that names it; a drafter the load
+already logs (the one left out, with its size and token count, or the one whose format does not fit) is not repeated as
+a warning. A `--dflash` folder that is not on disk is reported as a name, not as a find, and is not warned about.
+`kapitsa bench` records the line as the model's `drafter_kind`, `drafter_source` (the folder's name, never a path; a
+drafter that lives in the model's own folder as `dflash2/` is `dflash2`) and `drafter_reason`, shows it in a `Drafter`
+row, and flags a result whose catalog drafter did not decode.
 
 ## Updating
 

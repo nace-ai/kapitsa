@@ -1821,7 +1821,8 @@ void dump_cases(const std::string& dir) {
 }
 
 // The drafter an engine reports (drafter_use / drafter_line, the line `kapitsa bench` records): a loaded drafter's
-// folder by name only, and the first reason no drafter model decodes. Pure: no model.
+// folder by name only, and the first reason no drafter model decodes. CPU only: no model, one temporary config.json
+// for the plan's named-drafter check.
 void drafter_report_unit() {
   auto line = [](const DrafterFacts& f) { return drafter_line(drafter_use(f)); };
   DrafterFacts q;
@@ -1843,12 +1844,14 @@ void drafter_report_unit() {
   check(drafter_use(f).unused.empty(), "none found: nothing to warn about");
   f.left_out = "/Users/me/models/Qwen3.8-27B/dflash2";
   DrafterUse u = drafter_use(f);
-  check(u.kind == "MTP" && u.unused == "dflash2" && u.reason.find("dflash2 left out") == 0, "a drafter left out warns", u.reason);
+  // the constructor already logs the drafter left out with its GB and token count: the warning would repeat it
+  check(u.kind == "MTP" && u.unused.empty() && u.reason.find("dflash2 left out") == 0,
+        "a drafter left out: its own line, no second warning", u.reason);
   f = q, f.unsupported = "/Users/me/models/x (old)", f.mtp_depth = 0;
   u = drafter_use(f);
-  check(u.kind == "none" && u.unused == "x (old)" && u.reason.find('(') == std::string::npos &&
+  check(u.kind == "none" && u.unused.empty() && u.reason.find('(') == std::string::npos &&
             u.reason.find("x [old] does not fit") == 0,
-        "an unsupported drafter warns, the reason without parentheses", u.reason);
+        "an unsupported drafter: its own line, no second warning; the reason without parentheses", u.reason);
   f = q, f.off = true, f.spec_off = true, f.mtp_depth = 0, f.left_out = "/a/b";
   u = drafter_use(f);
   check(u.kind == "none" && u.unused.empty() && u.reason == "--spec 0 turns drafting off", "--spec 0: no warning", u.reason);
@@ -1863,6 +1866,35 @@ void drafter_report_unit() {
   check(u.kind == "none" && u.unused == "Qwen3.8-Flash-Next-DFlash2" &&
             u.reason == "Qwen3.8-Flash-Next-DFlash2 found, but this model takes no block drafter",
         "Flash-Next: a drafter found warns", u.reason);
+  // a name typed wrong (the case a person actually hits) is never reported as a find, and nothing is warned about
+  f = q, f.block_path = false, f.mtp_depth = 0, f.named = true, f.unbound = "/Users/me/typo/dflash2", f.unbound_missing = true;
+  u = drafter_use(f);
+  check(u.kind == "none" && u.unused.empty() && u.reason == "dflash2 named with --dflash, but no such folder",
+        "Flash-Next: a name that is not on disk is not a find", u.reason);
+  f.unbound_missing = false;  // on disk, named, no block drafter binds it: reported and warned, once
+  u = drafter_use(f);
+  check(u.kind == "none" && u.unused == "dflash2" && u.reason == "dflash2 named with --dflash, but this model takes no block drafter",
+        "Flash-Next: a named drafter on disk warns without the found claim", u.reason);
+  {  // what plan_load settles for a Flash-Next folder: a named drafter that is not on disk is flagged as such
+    char tmpl[] = "/tmp/kap-api-drafter-XXXXXX";
+    const char* root = mkdtemp(tmpl);
+    check(root != nullptr, "drafter plan: a temporary folder");
+    if (root) {
+      const std::string dir = std::string(root) + "/flashnext", typo = std::string(root) + "/typo";
+      mkdir(dir.c_str(), 0700);
+      if (FILE* cf = fopen((dir + "/config.json").c_str(), "w")) {
+        fwrite("{\"model_type\": \"qwen4_exp\"}", 1, 27, cf);
+        fclose(cf);
+      }
+      const size_t budget = size_t(40) << 30;
+      const LoadPlan a = plan_load(dir, typo, false, 32768, 1, budget, 2048);
+      check(a.dflash_unbound == typo && a.dflash_unbound_missing, "a named drafter that is not on disk: flagged",
+            a.dflash_unbound);
+      const LoadPlan b = plan_load(dir, root, false, 32768, 1, budget, 2048);
+      check(b.dflash_unbound == root && !b.dflash_unbound_missing, "a named drafter that is a folder: not flagged",
+            b.dflash_unbound);
+    }
+  }
 }
 
 // A folder whose config.json is an architecture Kapitsa does not run is refused by unsupported_model(), the function

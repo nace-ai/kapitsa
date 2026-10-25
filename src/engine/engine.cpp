@@ -602,6 +602,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     f.left_out = lp.dflash_left_out;
     f.unsupported = dflash_unsupported;
     f.unbound = lp.dflash_unbound;
+    f.unbound_missing = lp.dflash_unbound_missing;
     f.mtp_depth = spec_ ? opts_.spec_depth : 0;
     f.self_drafts = flint_ngram_ > 0 || nh_ngram_ > 0                 ? "prompt lookup"
                     : dory_spec_ > 0 && dory_spec_kind() == "ngram" ? "prompt lookup"
@@ -929,8 +930,16 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       }
     }
   } else if (!lp.dflash_off && Qwen4Exp::is_model(model_dir)) {
-    // no block drafter binds to Qwen3.8-Flash-Next: one found (or named) is only reported, with a warning
-    lp.dflash_unbound = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
+    // no block drafter binds to Qwen3.8-Flash-Next: one found (or named) is only reported, with a warning for one
+    // that is on disk. A name that is not a folder is reported as a name, not as a find: a typo is the one input a
+    // person types here, and "found" would be the opposite of true
+    if (lp.dflash_auto) {
+      lp.dflash_unbound = DFlash2::find(model_dir, Qwen35::read_config(model_dir));
+    } else {
+      struct stat st;
+      lp.dflash_unbound = want;
+      lp.dflash_unbound_missing = stat(want.c_str(), &st) != 0;
+    }
   } else if (!lp.dflash_off) {
     lp.dflash = !lp.dflash_auto ? want
                 : clover         ? Clover::find_drafter(model_dir)
@@ -998,18 +1007,32 @@ DrafterUse drafter_use(const DrafterFacts& f) {
     return u;
   }
   // no block drafter decodes: the first reason that applies
-  if (!f.block_path && !f.unbound.empty())
-    u.reason = base_name(f.unbound) + " found, but this model takes no block drafter", u.unused = base_name(f.unbound);
-  else if (!f.block_path) u.reason = "this model takes no block drafter";
+  bool said = false;  // a named drafter's own wording, which already says it is not used
+  if (!f.block_path && !f.unbound.empty()) {
+    const std::string name = base_name(f.unbound);
+    if (f.unbound_missing) {
+      // only a named path is stat()ed, so this is a name and not a find: nothing is reported as found, and nothing is
+      // warned about, because there is no drafter to warn about
+      u.reason = name + " named with --dflash, but no such folder";
+      said = true;
+    } else if (f.named) {
+      u.reason = name + " named with --dflash, but this model takes no block drafter";
+      u.unused = name;  // on disk and ignored: the warning is the only line that says so
+      said = true;
+    } else {
+      u.reason = name + " found, but this model takes no block drafter";
+      u.unused = name;
+    }
+  } else if (!f.block_path) u.reason = "this model takes no block drafter";
   else if (f.off) u.reason = f.spec_off ? "--spec 0 turns drafting off" : "turned off with --dflash none or NI_DFLASH";
+  // a drafter left out, or one whose format does not fit, already logs its own line with its size and tokens (the
+  // engine's constructor): the warning is for a drafter nothing else mentions
   else if (!f.left_out.empty())
-    u.reason = base_name(f.left_out) + " left out: it would keep a full-context conversation from fitting memory",
-    u.unused = base_name(f.left_out);
+    u.reason = base_name(f.left_out) + " left out: it would keep a full-context conversation from fitting memory";
   else if (!f.unsupported.empty())
-    u.reason = base_name(f.unsupported) + " does not fit this model's embedding and output layer format",
-    u.unused = base_name(f.unsupported);
+    u.reason = base_name(f.unsupported) + " does not fit this model's embedding and output layer format";
   else u.reason = "no matching drafter found";
-  if (!f.block_path && f.named) u.reason += ", --dflash ignored";
+  if (!f.block_path && f.named && !said) u.reason += ", --dflash ignored";
   if (f.mtp_depth > 0) {
     u.kind = "MTP";
     u.reason += ", MTP head drafts depth " + std::to_string(f.mtp_depth);

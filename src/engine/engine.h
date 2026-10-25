@@ -154,6 +154,7 @@ struct LoadPlan {
   std::string dflash;             // the drafter to load ("" = none: MTP or plain decoding)
   std::string dflash_left_out;    // the drafter auto found and leaves out (it would cost context, below)
   std::string dflash_unbound;     // a drafter found (or named) for a model no block drafter binds to: Flash-Next
+  bool dflash_unbound_missing = false;  // that one was named with --dflash and is not a folder on disk
   size_t dflash_bytes = 0;        // the loaded drafter's weights and rings (live + one per checkpoint, every slot)
   size_t dflash_found_bytes = 0;  // the same for the drafter found, loaded or left out
   int prefill_chunk = 2048;
@@ -178,6 +179,7 @@ struct DrafterFacts {
   std::string left_out;     // a drafter found and left out for the context it would cost
   std::string unsupported;  // a drafter found whose format this model's embedding / output layer does not fit
   std::string unbound;      // a drafter found for a model that takes none (Flash-Next: LoadPlan::dflash_unbound)
+  bool unbound_missing = false;  // the name given is not on disk: reported as a name, never as a find
   int mtp_depth = 0;        // MTP speculative decoding's depth (0: off)
   std::string self_drafts;  // drafting without a drafter model: "prompt lookup", Dory's "1-loop drafts", ...
 };
