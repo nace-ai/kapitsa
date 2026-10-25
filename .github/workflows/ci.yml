@@ -242,24 +242,36 @@ jobs:
           # A compile error in the generated blob names base.metal:7287 - a line that exists in no file in the
           # tree. The blob is written by cmake/embed_kernels.cmake, which puts every file behind a
           # `// ---- <name> ----` marker and copies its lines one for one, so the file line is the blob line minus
-          # the marker's line. The mapping is used only when the two lines are byte-identical, so a wrong guess
-          # prints that it could not name the source instead of naming the wrong file.
-          blame() { # blob, compiler log - annotate the first error with the file a developer opens
-            local blob=$1 log=$2 rel first lineno msg hit src line
-            rel=$(basename "$blob")
-            first=$(grep -m1 -E "/$rel:[0-9]+:[0-9]+: error:" "$log") || return 0
-            msg=${first#*: error: }
-            lineno=${first#*"/$rel:"}
-            lineno=${lineno%%:*}
-            hit=$(awk -v L="$lineno" '
+          # the marker's line. An error inside a macro is reported at the macro's use, with a note naming its
+          # definition: the definition is the line to open, because the bad token is there, not at the call.
+          # A mapping is printed only when the blob line and the source line it maps to are byte-identical, so a
+          # section this job cannot follow prints that it could not name the file instead of naming a wrong one.
+          section_line() { # blob file, blob line - "<file in src/kernels>\t<line>" if the line sits in a marked section
+            awk '
               /^\/\/ ---- / { s = $0; sub(/^\/\/ ---- /, "", s); sub(/ ----$/, "", s); print NR "\t" s }
-            ' "$blob" | while IFS=$'\t' read -r at name; do
-              [ "$at" -lt "$lineno" ] || continue
+            ' "$1" | while IFS=$'\t' read -r at name; do
+              [ "$at" -lt "$2" ] || continue
               [ -f "src/kernels/$name" ] || continue
-              if [ "$(sed -n "$((lineno - at))p" "src/kernels/$name")" = "$(sed -n "${lineno}p" "$blob")" ]; then
-                printf '%s\t%d' "$name" "$((lineno - at))"
+              if [ "$(sed -n "$(($2 - at))p" "src/kernels/$name")" = "$(sed -n "$2p" "$1")" ]; then
+                printf '%s\t%d' "$name" "$(($2 - at))"
               fi
-            done | tail -1)
+            done | tail -1
+          }
+          blame() { # blob file, compiler log - annotate the first error with the file a developer opens
+            local blob=$1 log=$2 rel err msg at lineno note hit src line
+            rel=$(basename "$blob")
+            err=$(grep -m1 -E "/$rel:[0-9]+:[0-9]+: error:" "$log") || return 0
+            msg=${err#*: error: }
+            at=${err#*"/$rel:"}
+            lineno=${at%%:*}
+            at=$(awk -v pat="$err" 'index($0, pat) { print NR; exit }' "$log")
+            if [ -n "$at" ]; then
+              note=$(sed -n "${at},$((at + 12))p" "$log" | grep -m1 'note: expanded from macro' || true)
+              if [[ $note =~ (^|/)"$rel":([0-9]+):[0-9]+: ]]; then
+                lineno=${BASH_REMATCH[2]}
+              fi
+            fi
+            hit=$(section_line "$blob" "$lineno")
             src=${hit%%$'\t'*}
             line=${hit##*$'\t'}
             if [ -n "$src" ] && [ "$(sed -n "${line}p" "src/kernels/$src")" = "$(sed -n "${lineno}p" "$blob")" ]; then
