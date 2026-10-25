@@ -49,14 +49,21 @@ rule(0, None, "noise floor: changes only in its own re-measuring PR (tools/logit
      "tools/logit_floors/*")
 rule(0, None, "CPU-side tests and Python tools", "tests/test_*.py", "tools/*.py", "bench/*.py", "bench/*/*.py",
      "bench/*.sh", "bench/*/*.sh", "*.toml", ".pre-commit-config.yaml", "install.sh", "scripts/*")
-rule(0, None, "CLI, HTTP API, downloads, updates, several Macs, bench client: no compute",
-     "src/api/*", "src/hub/*", "src/update/*", "src/cluster/*", "src/bench/*", "src/server/*", "src/systemone/*",
-     "src/util/*")
+rule(0, None, "CLI, HTTP API, downloads, updates, bench client, cluster discovery and placement: no model path",
+     "src/api/*", "src/hub/*", "src/update/*", "src/bench/*", "src/util/*", "src/server/cluster_cmd*",
+     "src/server/update_cmd*", "src/server/ui*", "src/server/picker*", "src/server/bench_cmd*", "src/server/chat.html",
+     "src/cluster/cluster.*", "src/cluster/discovery*", "src/cluster/place*")
 rule(0.5, None, "tokens in or out on the CPU: tokenizer, chat template, output parser, grammar, tool arguments",
      "src/tokenizer/*", "src/engine/grammar.*", "src/engine/output_parser.h", "src/engine/tool_args.h",
      "src/engine/reasoning_memory.h", "src/model/logit_mask.cpp", "third_party/minja/*")
 rule(1, "shared", "SSD prefix cache: a change to what a saved state's bytes mean bumps kStateFormat "
      "(src/engine/engine_disk.cpp); run tests/test_disk_cache.py", "src/engine/engine_disk.cpp", "src/engine/disk_*.h")
+rule(1, "shared", "server request path (serve, beam search, history prefill and reload, routing, pairing): "
+     "also tests/test_server.py URL; beam search changes which tokens come out", "src/server/*")
+rule(1, "shared", "split model: a peer runs a stage's layers (also tests/test_split.py, tests/test_pair.py)",
+     "src/cluster/*")
+rule(1, "shared", "Drex decision model: rows encoded and scored by a pointer head on the backbone (also "
+     "tests/test_systemone.py with a Drex folder, e.g. ~/.cache/kapitsa/models/drex-v2.0-q4)", "src/systemone/*")
 rule(1, "shared", "engine: scheduling, slots, prefix cache, batching on the hot path", "src/engine/*")
 rule(1, "shared", "model loading and memory plan", "src/loader/*")
 rule(1, "shared", "vision: also run tests/vision/check_cpu.py with a model folder", "src/vision/*")
@@ -72,6 +79,18 @@ rule(2, ["flash-next-q20"], "Flash-Next: Q2_0 experts streamed from the SSD", "s
 rule(2, ["qwen3.6-35b-a3b-4bit"], "GGUF IQ experts (35B GGUF variants)", "src/model/iq_experts*",
      "src/kernels/wfmt_iq*")
 rule(2, SHARED + ["qwen3.8-27b-4bit"], "Qwen3.5/3.6/3.8 model code", "src/model/qwen35*")
+rule(2, ["flint-4bit"], "Flint prefill attention on the M5's tensor units", "src/kernels/tensor/qattn_t_flint*")
+rule(2, ["nemotron-labs-dory1.0-4b-nvfp4"], "Dory prefill attention on the M5's tensor units",
+     "src/kernels/tensor/nh_dory_*")
+rule(2, ["nemotron-3.5-lightning-nvfp4", "nemotron-labs-dory1.0-4b-nvfp4"], "Nemotron-H kernels on the M5's tensor "
+     "units (nh_x2t is Nemotron 3.5 Bolt's IQ2_XXS expert: no Bolt folder on this Mac, say so)",
+     "src/kernels/tensor/nh_*")
+rule(2, ["flash-next-q20"], "Flash-Next: hyper-connections, PLE, the sparse-attention indexer, Q2_0 routed experts",
+     "src/kernels/qwen4.metal", "src/kernels/zq2moe*")
+rule(2, ["flash-next-q20", "flint-4bit"], "verify kernels Flash-Next's and Flint's speculative paths share",
+     "src/kernels/zqwen4v*")
+rule(2, SHARED + ["qwen3.8-27b-4bit", "flash-next-q20"], "DFlash2 and KFlash drafting: the Qwen family and Flash-Next",
+     "src/model/dflash2*", "src/model/kflash*", "src/kernels/kflash*")
 rule(2, "shared+", "M5 tensor_ops kernels: engage only on an Apple10 GPU with macOS 26; run on an M5",
      "src/kernels/tensor/*")
 rule(2, "shared+", "kernel or model code every model may reach", "src/kernels/*", "src/model/*", "src/metal/*",

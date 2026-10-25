@@ -15,9 +15,9 @@ The highest tier among the changed files is the PR's tier. A tier includes every
 
 | Tier | Paths (first match wins; `required_checks.py` has the full list) | Why | Required |
 | --- | --- | --- | --- |
-| 0 | docs, `.github/`, `tests/*.py`, `tools/*.py`, `bench/` scripts, `src/{api,hub,update,cluster,bench,server,systemone,util}/` | cannot change what runs on the GPU or which token comes out | `vk cpu-tests`, `prek run --all-files` |
+| 0 | docs, `.github/`, `tests/*.py`, `tools/*.py`, `bench/` scripts, `src/{api,hub,update,bench,util}/`, the CLI-only parts of `src/server/` (`cluster_cmd`, `update_cmd`, `ui`, `picker`, `bench_cmd`, `chat.html`), cluster discovery and placement | cannot change what runs on the GPU or which token comes out | `vk cpu-tests`, `prek run --all-files` |
 | 0.5 | `src/tokenizer/`, `src/engine/grammar.*`, the output parser, tool arguments, logit masks, minja | changes tokens on the CPU: same weights, different text in or out | + `tests/test_structured.py --cli build MODEL_DIR`, `build/parser_test MODEL_DIR` on a model folder's tokenizer (no GPU) |
-| 1 | `src/engine/`, `src/loader/`, `src/vision/`, `src/gguf/`, any path no rule names | host code on the hot path: scheduling, slots, caches, memory plan | + GPU: `tests/test_server.py` against `vk serve`, the logit gate, one interleaved speed A/B |
+| 1 | `src/engine/`, `src/loader/`, `src/vision/`, `src/gguf/`, the rest of `src/server/` (serve, beam search, history prefill), `src/cluster/` stages and pipes, `src/systemone/`, any path no rule names | host code on the hot path: scheduling, slots, caches, memory plan | + GPU: `tests/test_server.py` against `vk serve`, the logit gate, one interleaved speed A/B |
 | 2 | `src/kernels/`, `src/model/`, `src/metal/`, `src/ane/`, `CMakeLists.txt`, `cmake/` | the computation itself | + changed kernels at small sizes under the Metal validation layer |
 | 3 | not a path: the PR *means* to move outputs (a precision, a different computation) | the gate fails on purpose | + say so with the numbers, `bench/quality` (`ni_eval` against bf16), and for a default `bench/reasoning` `math500-quick` |
 

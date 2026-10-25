@@ -76,8 +76,9 @@ feature, what to run and what you should see; start at `features/README.md`.
 
 ## Evidence
 
-Everything lands in `/tmp/verify-kapitsa/evidence/<run>/` (`$VK_EVIDENCE` moves it). `<run>` is `<checkout
-dir>-<HEAD>`, or `$VK_RUN`:
+Everything lands in `/tmp/verify-kapitsa/evidence/<run>/<HEAD>/` (`$VK_EVIDENCE` moves it), one folder per commit.
+`<run>` is `<checkout dir>-<hash of its path>`, or `$VK_RUN`. It does not change when you commit or rebase, so
+`vk stop` still finds a server started before the commit:
 
 - `cli/NNN.{cmd,out,err,rc}`: each `vk cli` call: the exact command with its environment, stdout, stderr, exit code
 - `cpu-tests/<test>.log`, `build.log`, `cmake.log`
@@ -102,6 +103,7 @@ measurements.
 - `scripts/vk`: build, doctor, offline CLI runner, CPU tests, the base build (`ref`), serve and stop under the GPU
   lock, cleanup
 - `scripts/required_checks.py`: changed paths to tier, checks and models (`--files a b` for a list, `--json`)
+- `scripts/test_required_checks.py`: pins sample paths' tiers and models; run it after changing a rule
 - `references/pr-checks.md`: the tiers, which models and datasets, and what a PR description must carry
 - `references/output-check.md`: the logit gate and the interleaved speed A/B, step by step
 - `features/`: the feature map

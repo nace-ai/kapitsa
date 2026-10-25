@@ -14,8 +14,9 @@
 #   vk cleanup                 vk stop, then delete this run's scratch state; evidence stays
 #
 # Checkout: $VK_ROOT, else the Kapitsa checkout around $PWD, else the one holding this script.
-# Run id: $VK_RUN, default <checkout dir>-<short HEAD>, so separate checkouts never share state.
-# Evidence: $VK_EVIDENCE (default /tmp/verify-kapitsa/evidence)/<run>/   Scratch: /tmp/verify-kapitsa/state/<run>/
+# Run id: $VK_RUN, default <checkout dir>-<hash of its path>: one per checkout, the same across commits, so a server
+# started before a commit or rebase is still found by vk stop. Separate checkouts never share state.
+# Evidence: $VK_EVIDENCE (default /tmp/verify-kapitsa/evidence)/<run>/<short HEAD>/   Scratch: /tmp/verify-kapitsa/state/<run>/
 set -euo pipefail
 
 # The skill's own files (required_checks.py), wherever it is installed or symlinked from.
@@ -27,8 +28,8 @@ ROOT="${VK_ROOT:-$(kapitsa_top "$PWD" || kapitsa_top "$SKILL" || true)}"
 [[ -n "$ROOT" && -d "$ROOT/src/engine" ]] || { echo "vk: not in a Kapitsa checkout (cd into one or set VK_ROOT)" >&2; exit 2; }
 ROOT="$(cd "$ROOT" && pwd -P)"
 HEAD_SHORT="$(git -C "$ROOT" rev-parse --short=8 HEAD)"
-RUN="${VK_RUN:-$(basename "$ROOT")-$HEAD_SHORT}"
-EVID="${VK_EVIDENCE:-/tmp/verify-kapitsa/evidence}/$RUN"
+RUN="${VK_RUN:-$(basename "$ROOT")-$(printf %s "$ROOT" | shasum | cut -c1-6)}"
+EVID="${VK_EVIDENCE:-/tmp/verify-kapitsa/evidence}/$RUN/$HEAD_SHORT"
 STATE="/tmp/verify-kapitsa/state/$RUN"
 PORT="${VK_PORT:-8090}"
 LOCK="${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}"
