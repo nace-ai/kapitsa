@@ -906,6 +906,18 @@ bool Qwen35::moe_wide() const { return cfg_.moe && (cfg_.top_k + 1) * std::max(c
 Qwen35::~Qwen35() {
   // a background ANE compile only touches its own copies (no Metal objects): let it finish on its own
   if (ane_thread_.joinable()) ane_thread_.detach();
+  // NI_QMT_I8's scratch (qmt_i8_scratch): released once the queue has finished everything committed before
+  bool any = !qmt_i8_retired_.empty();
+  for (const QmtI8Slot& sl : qmt_i8_ring_) any = any || bool(sl.q);
+  if (any) {
+    Gpu& g = Gpu::get();
+    g.begin()->commit_and_wait();  // a queue runs its command buffers in commit order
+    for (QmtI8Slot& sl : qmt_i8_ring_) {
+      g.release(sl.q);
+      g.release(sl.s);
+    }
+    for (Buffer& b : qmt_i8_retired_) g.release(b);
+  }
 }
 
 // NI_QMM_GU without its log line (enc_qmm_gu logs it): the dense gate/up/SwiGLU fused on qmr
@@ -2371,16 +2383,18 @@ static bool qmt_i8_on(bool dflt) {
   }();
   return fits;
 }
-// a ring of scratch slots for the quantized X: a grouped encoder may overlap a few independent GEMMs
-static std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k) {
-  struct Slot { Buffer q, s; size_t cap = 0; };
-  static Slot ring[4];
-  static unsigned next = 0;
-  Slot& sl = ring[next++ % 4];
+// The quantized X of enc_qmm_large's W4A8 path. A grouped encoder may run a few independent GEMMs of one pass at once
+// (at most three: q/k/v, gate/up), so each call takes the next of four slots; this assumes one thread encodes for
+// this model (as for every other activation buffer). A slot is sized for tmax_ rows of the K asked for, so it grows
+// only when a larger K comes; the buffer it replaces may still be read by a committed command buffer (they hold
+// unretained references), so it is kept until the destructor releases everything after the queue is idle.
+std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
+  QmtI8Slot& sl = qmt_i8_ring_[qmt_i8_next_++ % 4];
   if (sl.cap < m * k) {
-    sl.q = Gpu::get().alloc(m * k, "qmti8_x");
-    sl.s = Gpu::get().alloc(m * k / 64 * 8, "qmti8_xs");
-    sl.cap = m * k;
+    if (sl.q) qmt_i8_retired_.insert(qmt_i8_retired_.end(), {sl.q, sl.s});
+    sl.cap = std::max(m, size_t(tmax_)) * k;
+    sl.q = Gpu::get().alloc(sl.cap, "qmti8_x");
+    sl.s = Gpu::get().alloc(sl.cap / 64 * 8, "qmti8_xs");
   }
   return {sl.q, sl.s};
 }

@@ -718,6 +718,15 @@ class Qwen35 : public Model {
   // NI_QMT_I8's default (W4A8 dense prefill GEMMs, enc_qmm_large): on for Flash-Next's Q2_0 pack (Qwen4Exp), the one
   // whose drift is measured (docs/usage.md); off elsewhere
   bool qmt_i8_default_ = false;
+  // NI_QMT_I8's quantized-X scratch: a ring of four slots and the buffers grown out of them (qmt_i8_scratch)
+  struct QmtI8Slot {
+    Buffer q, s;
+    size_t cap = 0;
+  };
+  QmtI8Slot qmt_i8_ring_[4];
+  unsigned qmt_i8_next_ = 0;
+  std::vector<Buffer> qmt_i8_retired_;
+  std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k);
   virtual void grow_kv(Seq& s, int cap);
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
