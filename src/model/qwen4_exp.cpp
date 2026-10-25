@@ -1200,8 +1200,7 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
     const AttnSparseParams p{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), maxn, uint32_t(cap), scale, 1, qidx_ld_};
     // The lists on the matrix units (tensor/qsattn_t.metal, qattn_t_sparse_g12d2) where the kernel fits: 12 query
     // heads per KV head, head dim 256, Apple10 and macOS 26 (the Metal 4 library). Else attn_sparse_rows.
-    // On by default: its drift from attn_sparse_rows is within Splash's on every metric (docs/usage.md); NI_QSA_TATTN=0
-    // keeps attn_sparse_rows.
+    // On by default (docs/usage.md has its drift against Splash's); NI_QSA_TATTN=0 keeps attn_sparse_rows.
     static const bool tat_env = [] {
       const char* v = getenv("NI_QSA_TATTN");
       return !(v && *v) || atoi(v) != 0;
