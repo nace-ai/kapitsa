@@ -26,6 +26,7 @@ BUILD = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO,
 BENCH_TEST, KAPITSA = os.path.join(BUILD, "bench_test"), os.path.join(BUILD, "kapitsa")
 sys.path.insert(0, os.path.join(REPO, "bench", "harness"))
 import bench  # noqa: E402  (bench/harness/bench.py)
+import agentic  # noqa: E402  (bench/harness/agentic.py)
 
 FAILS = []
 
@@ -43,6 +44,29 @@ def run(args, **kw):
 # ---------------------------------------------------------------- 1. self checks
 r = run([BENCH_TEST, "self"])
 check(r.returncode == 0, "bench_test self", (r.stdout + r.stderr)[-500:])
+
+# ---------------------------------------------------------------- 1b. the POWER flag
+# The three power states real runs have already been taken in: plugged in at powermode 0, on battery at powermode 2
+# (the M5 Max's 2026-10-25 08:44-09:12 window), and Low Power Mode on AC (13:03, 13:10 the same day).
+check(bench.power_flags("Now drawing from 'AC Power'", "0") == [], "plugged in at powermode 0 needs no POWER flag")
+one = ["POWER: run started on battery and at pmset powermode 2 (Low Power Mode) (numbers are not comparable with "
+       "plugged-in powermode 0 runs)"]
+check(bench.power_flags("Now drawing from 'Battery Power'", "2") == one, "battery in Low Power Mode is one flag",
+      str(bench.power_flags("Now drawing from 'Battery Power'", "2")))
+lp = bench.power_flags("Now drawing from 'AC Power'", "2")
+check(lp and "Low Power Mode" in lp[0] and "battery" not in lp[0],
+      "Low Power Mode on AC is flagged without calling it battery", str(lp))
+check("High Power Mode" in (bench.power_flags("Now drawing from 'AC Power'", "1") or [""])[0],
+      "High Power Mode is flagged as itself", str(bench.power_flags("Now drawing from 'AC Power'", "1")))
+check(bench.power_flags(None, None) == [], "no power state recorded, no claim made")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            2\n")["low_power"] is True,
+      "macOS 26's powermode 2 reads as Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " lowpowermode         1\n")["low_power"] is True,
+      "the older lowpowermode 1 spelling still reads as Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            0\n")["low_power"] is False,
+      "powermode 0 is not Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'Battery Power'", " powermode            0\n")["battery"] is True,
+      "battery is read from pmset -g batt")
 
 # ---------------------------------------------------------------- 2. one protocol, two clients
 

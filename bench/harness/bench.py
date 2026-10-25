@@ -111,6 +111,25 @@ def out_dir():
     return os.path.abspath(os.path.expanduser(os.environ.get("BENCH_OUT") or os.path.join(HERE, "runs")))
 
 
+def power_flags(power, powermode):
+    """Flags for a run whose power state makes its timings incomparable with a normal one.
+
+    `power` is the first line of `pmset -g batt` ("Now drawing from 'Battery Power'"), `powermode` the system-wide
+    value from `pmset -g`: 0 automatic, 1 high power, 2 low power. Plugged in at powermode 0 gives []; battery, Low
+    Power Mode and High Power Mode each give a flag, because all three change tok/s.
+    """
+    what = []
+    if "Battery Power" in (power or ""):
+        what.append("on battery")
+    pm = "" if powermode is None else str(powermode)
+    if pm and pm != "0":
+        what.append(f"at pmset powermode {pm}"
+                    + (" (Low Power Mode)" if pm == "2" else " (High Power Mode)" if pm == "1" else ""))
+    if not what:
+        return []
+    return [f"POWER: run started {' and '.join(what)} (numbers are not comparable with plugged-in powermode 0 runs)"]
+
+
 def harness_info():
     """The harness's own version: git HEAD of its checkout and whether bench/harness has local changes. A release
     ships a copy with no checkout (packaging/release/build.sh), which says which release it came with in a VERSION
@@ -958,8 +977,7 @@ def main():
             inv += [f"{name}: {x}" for x in res[name].get("invalid", [])]
             fl += [f"{name}: {x}" for x in res[name].get("flags", [])]
     th = res.get("thermal_start") or {}
-    if th.get("battery") or th.get("low_power"):
-        fl.append("POWER: run started on battery or in Low Power Mode (numbers are not comparable with plugged-in runs)")
+    fl += power_flags("Battery Power" if th.get("battery") else "", th.get("powermode"))
     for name, m in res["memory"].items():
         if (m.get("swapouts_delta") or 0) > 1000:
             fl.append(f"{name}: {m['swapouts_delta']} pages swapped out during the phase")

@@ -1239,6 +1239,8 @@ def run_config_keyed(c, args, stamp):
                                     harness_lock=f"held {lock.why}" if isinstance(lock, NoLock) else "flock by the harness"),
                    "teardown": teardown})
     free0 = ((prov.get("system_start") or {}).get("disk_free_bytes"))
+    ss = prov.get("system_start") or {}
+    result.setdefault("flags", []).extend(bench.power_flags(ss.get("power"), ss.get("powermode")))
     if engine_kind(c) in DISK_CACHE_ENGINES and free0 is not None and free0 < DISK_CACHE_FLOOR:
         result.setdefault("flags", []).append(
             f"disk: {free0 / 2**30:.1f} GiB free at start, under the 10 GiB below which {engine_kind(c)} keeps no "
