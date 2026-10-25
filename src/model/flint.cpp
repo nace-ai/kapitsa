@@ -203,8 +203,14 @@ FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
     if (q.value("mode", std::string("affine")) != "affine" || (c.bits != 4 && c.bits != 8) || c.gs != 64)
       fatal("%s: a Llama in %s %d-bit group %d is not supported (MLX affine 4-bit or 8-bit group 64, or bf16)",
             dir.c_str(), q.value("mode", std::string("affine")).c_str(), c.bits, c.gs);
+    // per-module entries (mlx-lm writes one for every module of a mixed recipe, or of AWQ / GPTQ / DWQ): 4 or 8 bits
+    // in groups of 64, or false for a module kept unquantized (the norms). Nanbeige4.3's 4-bit keeps its first layer
+    // at 8 bits; load() holds each matvec's matrices (q / k / v, gate / up) to one format
     for (const auto& [k, v] : q.items())
-      if (v.is_object()) fatal("%s: a Llama with per-module quantization (%s) is not supported", dir.c_str(), k.c_str());
+      if (v.is_object() && ((v.value("bits", c.bits) != 4 && v.value("bits", c.bits) != 8) ||
+                            v.value("group_size", c.gs) != 64 || v.value("mode", std::string("affine")) != "affine"))
+        fatal("%s: a Llama with %s in %d-bit group %d is not supported (MLX affine 4 or 8 bits, group 64)", dir.c_str(),
+              k.c_str(), v.value("bits", 0), v.value("group_size", 0));
     c.embed_bits = c.bits;
   }
   // head dim 128 (the attention kernels'), at most 8 query heads per KV head (one simdgroup each), the matvecs' and
@@ -370,6 +376,23 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
                                           (eb == 16 ? std::string("bf16") : std::to_string(eb) + "-bit") + " embedding" +
                                           (hb != c.bits ? ", " + std::to_string(hb) + "-bit LM head" : "") +
                                           (c.llama ? "" : ", bf16 router");
+  if (c.llama && c.bits != 16) {
+    // a mixed recipe (Nanbeige4.3's 4-bit: layer 0 in 8 bits): its layers in another format, and what a decode step
+    // reads from the tensors as stored (every weight but the embedding, of which a step reads one row)
+    std::string other;
+    for (int l = 0; l < c.layers; ++l) {
+      const std::string p = "model.layers." + std::to_string(l) + ".";
+      int b = c.bits;
+      for (const char* n : {"self_attn.q_proj", "self_attn.o_proj", "mlp.gate_proj", "mlp.down_proj"})
+        if (bits_of(p + n, c.bits) != c.bits) b = bits_of(p + n, c.bits);
+      if (b != c.bits) other += (other.empty() ? "" : ",") + std::to_string(l) + ":" + std::to_string(b) + "-bit";
+    }
+    if (!other.empty()) m.formats += ", layers " + other;
+    size_t embed = 0;
+    for (const char* t : {"model.embed_tokens.weight", "model.embed_tokens.scales", "model.embed_tokens.biases"})
+      if (const SafetensorsIndex::Entry* e = idx.find(t)) embed += e->len;
+    m.decode_bytes = m.weights - embed;
+  }
   std::map<std::string, int> iq;
   for (const auto& [mod, t] : c.iq) ++iq[gguf::type_name(t)];
   for (const auto& [t, n] : iq) m.formats += " + " + std::to_string(n) + " modules " + t;
@@ -485,11 +508,14 @@ void Flint::load(int prefill_chunk) {
     if (L.q.N != uint32_t(c.hq * c.hd) || L.k.N != uint32_t(c.hkv * c.hd) || L.v.N != L.k.N ||
         L.o.K != uint32_t(c.hq * c.hd) || L.o.N != uint32_t(c.hidden) || (L.sinks && L.sinks->numel() != c.hq))
       fatal("%s: layer %d's attention shapes differ from the config", path_.c_str(), l);
-    // a dense Llama: every projection in the config's one format (the matvec segments share theirs)
+    // a dense Llama: q / k / v in one format (one matvec's segments), 4 or 8 bits (a mixed recipe's layers may
+    // differ), or bf16 throughout
     if (c.llama)
       for (const FlintMat* m : {&L.q, &L.k, &L.v, &L.o})
-        if (m->bits != c.bits) fatal("%s: layer %d's attention is %d-bit (the config: %d)", path_.c_str(), l, m->bits,
-                                     c.bits);
+        if ((c.bits == 16) != (m->bits == 16) || (m->bits != 4 && m->bits != 8 && m->bits != 16) ||
+            L.k.bits != L.q.bits || L.v.bits != L.q.bits)
+          fatal("%s: layer %d's attention is %d / %d / %d / %d-bit (a dense Llama: q, k, v alike, 4 or 8 bits, or "
+                "bf16 throughout)", path_.c_str(), l, L.q.bits, L.k.bits, L.v.bits, L.o.bits);
     if (L.dense) {
       L.mg = mat(p + "mlp.gate_proj");
       L.mu = mat(p + "mlp.up_proj");
@@ -497,8 +523,9 @@ void Flint::load(int prefill_chunk) {
       if (L.mg.N != uint32_t(c.ffn) || L.mu.N != L.mg.N || L.md.K != L.mg.N)
         fatal("%s: layer %d's MLP shapes differ from the config", path_.c_str(), l);
       for (const FlintMat* m : {&L.mg, &L.mu, &L.md})
-        if (m->bits == 6 || (c.llama && m->bits != c.bits))
-          fatal("%s: layer %d's MLP is %d-bit (Flint: 4 or 8; a dense Llama: its config's)", path_.c_str(), l, m->bits);
+        if (m->bits == 6 || (c.llama && ((c.bits == 16) != (m->bits == 16) || L.mu.bits != L.mg.bits)))
+          fatal("%s: layer %d's MLP is %d / %d / %d-bit (Flint: 4 or 8; a dense Llama: gate and up alike, or bf16 "
+                "throughout)", path_.c_str(), l, L.mg.bits, L.mu.bits, L.md.bits);
     } else {
       const uint32_t E = uint32_t(c.experts);
       L.router = mat(p + "mlp.gate");
@@ -548,6 +575,13 @@ std::string Flint::formats_summary() const {
   auto f = [](int bits) { return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group 64"; };
   std::string s = f(cfg_.bits) + " (embedding " + f(embed_.bits) + ", LM head " + f(head_.bits) +
                   (cfg_.llama ? "" : ", router bf16");
+  if (cfg_.llama) {  // a mixed recipe's layers in another format (Nanbeige4.3's 4-bit: layer 0 in 8 bits)
+    std::string other;
+    for (size_t l = 0; l < layers_.size(); ++l)
+      if (layers_[l].q.bits != cfg_.bits || layers_[l].mg.bits != cfg_.bits || layers_[l].md.bits != cfg_.bits)
+        other += (other.empty() ? "" : ",") + std::to_string(l);
+    if (!other.empty()) s += ", layers " + other + " in other formats";
+  }
   if (!iq_bufs_.empty()) {
     std::map<std::string, int> n;
     for (const FlintLayer& L : layers_)
