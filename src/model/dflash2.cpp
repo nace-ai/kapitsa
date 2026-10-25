@@ -379,12 +379,19 @@ bool DFlash2::rows16_tensor_ok() const {
 // shipping-binary sweep (4K AND 32K, ids match, ABBA >= 8) settles it. A genuine cap below the full depth
 // keeps the chains and the 8-row plan even where the trees are explicitly asked -- a capped verify cannot tree
 // the lattice (set_tree keeps the trees only at the full depth), and rows16_auto_ok / plan_block_rows read the
-// same answer; with the cap unset or a no-op, NI_KFLASH / NI_DFLASH_TREE decide as before. (The Nemotron-H
+// same answer; an explicit NI_DFLASH_VERIFY overrides the cap here as it overrides the depth below, and with the
+// cap unset or a no-op, NI_KFLASH / NI_DFLASH_TREE decide as before. (The Nemotron-H
 // side, in Engine, keeps its own default.)
 static bool kf_tree_default(int full) {
+  // NI_DFLASH_VERIFY set: the cap does not decide the trees. The depth the verify asked for is the depth that
+  // runs (the constructor below), and a cap dropping the trees under it would silently chain an asked-for tree
+  // -- CAP=2 + VERIFY=7 wants the full-depth walk at 7 on an 8-row block, exactly the plan VERIFY=7 alone
+  // gives (Cursor review 4368392777). VERIFY below the full depth chains anyway: set_tree's full-depth guard.
+  const char* vv = getenv("NI_DFLASH_VERIFY");
   const char* cv = getenv("NI_DFLASH_CAP");
   const int c = cv && *cv ? atoi(cv) : 0;
-  if (c >= 1 && c < full) return false;  // a genuine cap: a capped verify cannot tree the lattice, knobs or not
+  if (!(vv && *vv) && c >= 1 && c < full)
+    return false;  // a genuine cap: a capped verify cannot tree the lattice, knobs or not
   const char* tv = getenv("NI_DFLASH_TREE");
   if (tv && *tv) return atoi(tv) != 0;
   const char* kf = getenv("NI_KFLASH");
