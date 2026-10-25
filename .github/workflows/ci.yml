@@ -247,15 +247,22 @@ jobs:
           # A mapping is printed only when the blob line and the source line it maps to are byte-identical, so a
           # section this job cannot follow prints that it could not name the file instead of naming a wrong one.
           section_line() { # blob file, blob line - "<file in src/kernels>\t<line>" if the line sits in a marked section
-            awk '
-              /^\/\/ ---- / { s = $0; sub(/^\/\/ ---- /, "", s); sub(/ ----$/, "", s); print NR "\t" s }
-            ' "$1" | while IFS=$'\t' read -r at name; do
-              [ "$at" -lt "$2" ] || continue
+            # The nearest header that names a real file either justifies the line or nothing does. Two things
+            # force that shape. Bodies carry comment lines in the marker's shape, so a header has to name a
+            # file in src/kernels to count - and scanning past a header whose own section fails the byte check
+            # would let a blank line or a brace in a later section match an earlier section at another
+            # offset, naming the wrong file with a line that verifies.
+            local at name
+            while IFS=$'\t' read -r at name; do
               [ -f "src/kernels/$name" ] || continue
-              if [ "$(sed -n "$(($2 - at))p" "src/kernels/$name")" = "$(sed -n "$2p" "$1")" ]; then
-                printf '%s\t%d' "$name" "$(($2 - at))"
-              fi
-            done | tail -1
+              [ "$(sed -n "$(($2 - at))p" "src/kernels/$name")" = "$(sed -n "$2p" "$1")" ] || return 0
+              printf '%s\t%d' "$name" "$(($2 - at))"
+              return 0
+            done <<<"$(awk -v L="$2" '
+              /^\/\/ ---- / { s = $0; sub(/^\/\/ ---- /, "", s); sub(/ ----$/, "", s); if (NR < L) { at[++n] = NR; nm[n] = s } }
+              END { for (i = n; i >= 1; i--) printf "%d\t%s\n", at[i], nm[i] }
+            ' "$1")"
+            return 0
           }
           blame() { # blob file, compiler log - annotate the first error with the file a developer opens
             local blob=$1 log=$2 rel err msg at lineno note hit src line
@@ -266,7 +273,11 @@ jobs:
             lineno=${at%%:*}
             at=$(awk -v pat="$err" 'index($0, pat) { print NR; exit }' "$log")
             if [ -n "$at" ]; then
-              note=$(sed -n "${at},$((at + 12))p" "$log" | grep -m1 'note: expanded from macro' || true)
+              # The window starts after the error line and stops at the next diagnostic: a later error or
+              # warning can carry its own `note: expanded from macro`, and taking that one would annotate a
+              # real line belonging to a different finding.
+              note=$(sed -n "$((at + 1)),$((at + 12))p" "$log" \
+                | awk '/: (error|warning|fatal error): / { exit } /note: expanded from macro/ { print; exit }' || true)
               if [[ $note =~ (^|/)"$rel":([0-9]+):[0-9]+: ]]; then
                 lineno=${BASH_REMATCH[2]}
               fi
