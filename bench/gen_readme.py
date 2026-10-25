@@ -99,6 +99,8 @@ def row(path, r, who):
     p4, p16 = prefill(r, 4000), prefill(r, 16000)
     agent = ((r.get("agent") or {}).get("summary") or {}).get("write_tps")
     notes = []
+    if os.path.basename(os.path.dirname(path)) == "aborted":  # a run stopped or set aside; its session README says why
+        notes.append("aborted")
     if r.get("invalid"):
         notes.append("invalid")
     if any(str(f).startswith("CONTENTION") for f in r.get("flags") or []):
