@@ -189,10 +189,12 @@ ojson tools_messages() {
 
 std::map<int, int> reference_prompt_tokens(const std::string& family) {
   // bench.py REF_PROMPT_TOKENS (Qwen3.6 / Qwen3.8 chat templates, thinking off; Qwen3.5-4B comes within 1%), and
-  // configs/bolt.json's and configs/flint.json's --ref-prompt-tokens for Nemotron 3.5 Bolt and Recursive's Flint
+  // configs/bolt.json's, configs/flint.json's and configs/nanbeige.json's --ref-prompt-tokens for Nemotron 3.5 Bolt,
+  // Recursive's Flint and Nanbeige4.3
   if (family == "qwen3.5") return {{4000, 4133}, {16000, 16286}};
   if (family == "nemotron-h") return {{4000, 4183}, {16000, 16514}};
   if (family == "flint") return {{4000, 3874}, {16000, 15066}};
+  if (family == "nanbeige") return {{4000, 5088}, {16000, 19954}};
   return {};
 }
 

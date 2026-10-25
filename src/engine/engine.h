@@ -202,7 +202,7 @@ std::string chat_template_source(const std::string& model_dir);
 // no minja polyfills and system messages after the first stay where they are.
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images = false, bool native = false);
-// Flint's chat template rewritten for minja (engine.cpp)
+// Flint's (and Nanbeige4.3's) chat template rewritten for minja (engine.cpp)
 std::string flint_template(std::string src);
 // A request followed by its answer as the client sends it back (content, and the reasoning when the client sends
 // reasoning back: it asks to keep every turn's thinking, or an earlier assistant turn came back with it), as the next
@@ -611,7 +611,9 @@ class Engine {
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   Dory* dory_ = nullptr;     // model_ when it is a Dory model
-  Flint* flint_ = nullptr;   // model_ when it is a Flint model
+  Flint* flint_ = nullptr;   // model_ when it is a Flint model (or a dense Llama on Flint's backend)
+  bool flint_chat_ = false;  // Recursive's Flint itself: its own chat template's markup and GLM's tool calls (a dense
+                             // Llama on the backend, Nanbeige4.3, writes Qwen's: <|im_start|> turns, XML tool calls)
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   int dory_spec_ = 0;        // Dory speculative decoding (per-loop KV): drafts per cycle (0: plain decoding)
   bool dory_spec_auto_ = false;  // drafts per cycle by the request's loops (no --spec)

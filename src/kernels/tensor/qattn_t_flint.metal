@@ -12,6 +12,8 @@ using namespace mpp::tensor_ops;
 // pos without a window). Online softmax in base 2 with fp32 statistics, every row starting from its head's sink
 // (max = sink, sum = 1). q: fp32 [T][Hq][128] (scaled by scale * log2 e before rounding to half, as flint_attn_prefill);
 // out: half [T][Hq][128]. grid: (ceil(T / (2 NS)), Hkv) x 32 NS threads; the latest token blocks start first.
+// G = 7 (qattn_flint_*_g7: a dense Llama on Flint's kernels, Nanbeige4.3, whose sinks are -inf): the tile's rows keep
+// 8 slots a token, the eighth a copy of the seventh head's that is computed and not written.
 
 struct FlintAttnTP {  // = FlintAttnPfP
   uint T, pos0, Hq, Hkv;
@@ -19,23 +21,26 @@ struct FlintAttnTP {  // = FlintAttnPfP
   float scale;
 };
 
-template <int NS, int BK, int LD>
+template <int NS, int BK, int LD, int G = 8>
 NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, const device half* vc,
                                 const device half* ck, const device half* cv, const device bfloat* sinks,
                                 device half* out, constant FlintAttnTP& p, uint2 tg, uint sg, ushort lane,
                                 threadgroup half* kt, threadgroup half* vt) {
-  constexpr int D = 128, G = 8, KT = BK / 16, TT = 2;
+  constexpr int D = 128, KT = BK / 16, TT = 2;
+  static_assert(G == 7 || G == 8, "a row's 8 slots hold the KV head's 7 or 8 query heads");
   const uint ntg = (p.T + NS * TT - 1) / (NS * TT);
   const uint kvh = tg.y, tgt0 = (ntg - 1 - tg.x) * NS * TT, t0 = tgt0 + sg * TT;   // heaviest (latest) blocks first
   const bool live = t0 < p.T;
   const uint tid = sg * 32 + lane;
   const short qid = lane >> 2, fm = (qid & 4) | ((lane >> 1) & 3), fn = ((qid & 2) | (lane & 1)) * 4;
   uint tk[2], hd[2], lim[2], lo[2];
+  bool slot[2];  // the row is one of the KV head's heads (G 7: the eighth slot of a token is not)
   _Pragma("clang loop unroll(full)")
   for (short i = 0; i < 2; ++i) {
     const short r = fm + 8 * i;
     tk[i] = t0 + (r >> 3);
-    hd[i] = kvh * G + (r & (G - 1));
+    slot[i] = (r & 7) < G;
+    hd[i] = kvh * G + min(r & 7, G - 1);
     lim[i] = p.pos0 + min(tk[i], p.T - 1);
     lo[i] = p.window && lim[i] + 1 > p.window ? lim[i] + 1 - p.window : 0u;
   }
@@ -149,7 +154,7 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
   }
   _Pragma("clang loop unroll(full)")
   for (short i = 0; i < 2; ++i) {
-    if (!live || tk[i] >= p.T) continue;
+    if (!live || tk[i] >= p.T || !slot[i]) continue;
     const float inv = 1.0f / l[i];
     device half* dst = out + (size_t(tk[i]) * p.Hq + hd[i]) * D;
     _Pragma("clang loop unroll(full)")
@@ -160,7 +165,7 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
   }
 }
 
-#define QATTN_FLINT(NAME, NS, BK, LD)                                                                                  \
+#define QATTN_FLINT(NAME, NS, BK, LD, G)                                                                               \
   [[kernel, max_total_threads_per_threadgroup(32 * NS)]] void NAME(                                                 \
       const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]], \
       const device half* ck [[buffer(3)]], const device half* cv [[buffer(4)]],                                      \
@@ -168,9 +173,11 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],                        \
       uint lane [[thread_index_in_simdgroup]]) {                                                                     \
     threadgroup half kt[BK * LD], vt[BK * LD];                                                                       \
-    qattn_flint_impl<NS, BK, LD>(q, kc, vc, ck, cv, sinks, out, p, tg, sg, ushort(lane), kt, vt);                   \
+    qattn_flint_impl<NS, BK, LD, G>(q, kc, vc, ck, cv, sinks, out, p, tg, sg, ushort(lane), kt, vt);                \
   }
 // NS 8 / BK 32 with rows padded to 136 halves (kt / vt bank spread) is the measured best on the M5 Pro;
 // small_tiles() (shader validation, NI_FLINT_K16=1) takes NS 4 / BK 16, half the threadgroup memory.
-QATTN_FLINT(qattn_flint_s8k32p, 8, 32, 136)
-QATTN_FLINT(qattn_flint_s4k16, 4, 16, 128)
+QATTN_FLINT(qattn_flint_s8k32p, 8, 32, 136, 8)
+QATTN_FLINT(qattn_flint_s4k16, 4, 16, 128, 8)
+QATTN_FLINT(qattn_flint_s8k32p_g7, 8, 32, 136, 7)
+QATTN_FLINT(qattn_flint_s4k16_g7, 4, 16, 128, 7)

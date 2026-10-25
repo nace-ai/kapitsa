@@ -145,12 +145,83 @@ size_t FlintMat::row_bytes() const {
 // ---- config ----
 bool Flint::is_model(const std::string& dir) {
   const nlohmann::json j = read_json(dir + "/config.json");
-  return j.is_object() && j.value("model_type", std::string()) == "flint";
+  if (!j.is_object()) return false;
+  const std::string mt = j.value("model_type", std::string());
+  return mt == "flint" || mt == "llama";
 }
+
+namespace {
+
+// A dense Llama (LlamaForCausalLM) on Flint's kernels: the shapes and options they take (Nanbeige4.3-33B's), every
+// other config refused by name
+FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
+  auto num = [&](const char* k, double d) {
+    const auto it = j.find(k);
+    return it != j.end() && it->is_number() ? it->get<double>() : d;
+  };
+  FlintConfig c;
+  c.llama = true;
+  c.hidden = int(num("hidden_size", 0));
+  c.vocab = int(num("vocab_size", 0));
+  c.layers = int(num("num_hidden_layers", 0));
+  c.hq = int(num("num_attention_heads", 0));
+  c.hkv = int(num("num_key_value_heads", c.hq));
+  c.hd = int(num("head_dim", c.hq ? c.hidden / c.hq : 0));
+  c.ffn = int(num("intermediate_size", 0));
+  c.eps = float(num("rms_norm_eps", 1e-6));
+  c.theta = num("rope_theta", 1e4);
+  if (j.contains("rope_scaling") && !j["rope_scaling"].is_null())
+    fatal("%s: a Llama with rope_scaling is not supported (Kapitsa runs the default RoPE)", dir.c_str());
+  if (j.contains("rope_parameters") && j["rope_parameters"].is_object()) {
+    const auto& rp = j["rope_parameters"];
+    if (rp.value("rope_type", std::string("default")) != "default")
+      fatal("%s: a Llama with RoPE other than the default is not supported", dir.c_str());
+    c.theta = rp.value("rope_theta", c.theta);
+  }
+  if (j.value("hidden_act", std::string("silu")) != "silu")
+    fatal("%s: a Llama with activation %s is not supported (SwiGLU)", dir.c_str(), j.value("hidden_act", "").c_str());
+  if (j.value("attention_bias", false) || j.value("mlp_bias", false))
+    fatal("%s: a Llama with biased projections is not supported", dir.c_str());
+  if (j.value("tie_word_embeddings", false)) fatal("%s: a Llama with tied embeddings is not supported", dir.c_str());
+  if (j.contains("sliding_window") && !j["sliding_window"].is_null())
+    fatal("%s: a Llama with a sliding window is not supported", dir.c_str());
+  c.kind.assign(size_t(std::max(c.layers, 0)), 'F');
+  c.rope.assign(size_t(std::max(c.layers, 0)), true);
+  c.dense.assign(size_t(std::max(c.layers, 0)), true);
+  if (j.contains("eos_token_id")) {
+    const auto& e = j["eos_token_id"];
+    if (e.is_array()) c.eos = e.get<std::vector<int>>();
+    else if (e.is_number()) c.eos = {e.get<int>()};
+  }
+  c.bos = int(num("bos_token_id", -1));
+  // MLX affine 4 / 8-bit group 64 (mlx_lm.convert, one format for every module) or bf16 as published
+  const nlohmann::json q = j.value("quantization", nlohmann::json::object());
+  c.bits = 16, c.gs = 64, c.embed_bits = 16;
+  if (q.is_object() && !q.empty()) {
+    c.bits = q.value("bits", 0);
+    c.gs = q.value("group_size", 64);
+    if (q.value("mode", std::string("affine")) != "affine" || (c.bits != 4 && c.bits != 8) || c.gs != 64)
+      fatal("%s: a Llama in %s %d-bit group %d is not supported (MLX affine 4-bit or 8-bit group 64, or bf16)",
+            dir.c_str(), q.value("mode", std::string("affine")).c_str(), c.bits, c.gs);
+    for (const auto& [k, v] : q.items())
+      if (v.is_object()) fatal("%s: a Llama with per-module quantization (%s) is not supported", dir.c_str(), k.c_str());
+    c.embed_bits = c.bits;
+  }
+  // head dim 128 (the attention kernels'), at most 8 query heads per KV head (one simdgroup each), the matvecs' and
+  // GEMMs' multiples of 512 and 64
+  if (c.hidden <= 0 || c.hidden % 512 || c.vocab <= 0 || c.layers <= 0 || c.hq <= 0 || c.hkv <= 0 || c.hq % c.hkv ||
+      c.hq / c.hkv > 8 || c.hd != 128 || (c.hq * c.hd) % 512 || c.ffn <= 0 || c.ffn % 512)
+    fatal("%s: a Llama shape Kapitsa does not run (hidden %d, heads %d / %d of %d, MLP %d)", dir.c_str(), c.hidden,
+          c.hq, c.hkv, c.hd, c.ffn);
+  return c;
+}
+
+}  // namespace
 
 FlintConfig Flint::read_config(const std::string& dir) {
   const nlohmann::json j = read_json(dir + "/config.json");
   if (!j.is_object()) fatal("%s: no readable config.json", dir.c_str());
+  if (j.value("model_type", std::string()) == "llama") return read_llama(dir, j);
   auto num = [&](const char* k, double d) {
     const auto it = j.find(k);
     return it != j.end() && it->is_number() ? it->get<double>() : d;
@@ -283,8 +354,8 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
   m.head_row_bytes = size_t(double(D) * bpw);
   m.hidden = c.hidden;
   m.layers = c.layers;
-  m.ffn = 0;
-  m.dense = false;
+  m.ffn = c.llama ? c.ffn : 0;
+  m.dense = c.llama;
   m.ffn_ane = false;
   // the embedding's and LM head's bits from their headers (a GGUF import's differ from the config's)
   auto bits_of = [&](const std::string& n, int def) {
@@ -297,7 +368,8 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
   const int eb = bits_of("model.embed_tokens", c.embed_bits), hb = bits_of("lm_head", c.bits);
   m.formats = c.bits == 16 ? "bf16" : std::to_string(c.bits) + "-bit group " + std::to_string(c.gs) + " + " +
                                           (eb == 16 ? std::string("bf16") : std::to_string(eb) + "-bit") + " embedding" +
-                                          (hb != c.bits ? ", " + std::to_string(hb) + "-bit LM head" : "") + ", bf16 router";
+                                          (hb != c.bits ? ", " + std::to_string(hb) + "-bit LM head" : "") +
+                                          (c.llama ? "" : ", bf16 router");
   std::map<std::string, int> iq;
   for (const auto& [mod, t] : c.iq) ++iq[gguf::type_name(t)];
   for (const auto& [t, n] : iq) m.formats += " + " + std::to_string(n) + " modules " + t;
@@ -385,8 +457,9 @@ void Flint::load(int prefill_chunk) {
   head_ = mat("lm_head");
   final_norm_ = vec("model.norm.weight");
   if (embed_.N != uint32_t(c.vocab) || embed_.K != uint32_t(c.hidden) || head_.N != uint32_t(c.vocab) ||
-      head_.K != uint32_t(c.hidden) || (embed_.bits != 3 && embed_.bits != 4 && embed_.bits != 8) ||
-      (head_.bits != 4 && head_.bits != 6 && head_.bits != 8))
+      head_.K != uint32_t(c.hidden) ||
+      (embed_.bits != 3 && embed_.bits != 4 && embed_.bits != 8 && !(c.llama && embed_.bits == 16)) ||
+      (head_.bits != 4 && head_.bits != 6 && head_.bits != 8 && !(c.llama && head_.bits == 16)))
     fatal("%s: embedding or LM head shape differs from the config", path_.c_str());
   layers_.resize(size_t(c.layers));
   for (int l = 0; l < c.layers; ++l) {
@@ -397,9 +470,11 @@ void Flint::load(int prefill_chunk) {
     L.dense = c.dense[size_t(l)];
     L.in_norm = vec(p + "input_layernorm.weight");
     L.post_norm = vec(p + "post_attention_layernorm.weight");
-    L.qn = vec(p + "self_attn.q_norm.weight");
-    L.kn = vec(p + "self_attn.k_norm.weight");
-    L.sinks = vec(p + "self_attn.softmax_offset");
+    if (!c.llama) {  // (a dense Llama has neither)
+      L.qn = vec(p + "self_attn.q_norm.weight");
+      L.kn = vec(p + "self_attn.k_norm.weight");
+      L.sinks = vec(p + "self_attn.softmax_offset");
+    }
     L.q = mat(p + "self_attn.q_proj");
     L.k = mat(p + "self_attn.k_proj");
     L.v = mat(p + "self_attn.v_proj");
@@ -408,8 +483,13 @@ void Flint::load(int prefill_chunk) {
     for (const FlintMat* m : {&L.q, &L.k, &L.v, &L.o})
       if (m->bits == 6) fatal("%s: layer %d's attention is 6-bit (Flint: 4 or 8)", path_.c_str(), l);
     if (L.q.N != uint32_t(c.hq * c.hd) || L.k.N != uint32_t(c.hkv * c.hd) || L.v.N != L.k.N ||
-        L.o.K != uint32_t(c.hq * c.hd) || L.o.N != uint32_t(c.hidden) || L.sinks->numel() != c.hq)
+        L.o.K != uint32_t(c.hq * c.hd) || L.o.N != uint32_t(c.hidden) || (L.sinks && L.sinks->numel() != c.hq))
       fatal("%s: layer %d's attention shapes differ from the config", path_.c_str(), l);
+    // a dense Llama: every projection in the config's one format (the matvec segments share theirs)
+    if (c.llama)
+      for (const FlintMat* m : {&L.q, &L.k, &L.v, &L.o})
+        if (m->bits != c.bits) fatal("%s: layer %d's attention is %d-bit (the config: %d)", path_.c_str(), l, m->bits,
+                                     c.bits);
     if (L.dense) {
       L.mg = mat(p + "mlp.gate_proj");
       L.mu = mat(p + "mlp.up_proj");
@@ -417,7 +497,8 @@ void Flint::load(int prefill_chunk) {
       if (L.mg.N != uint32_t(c.ffn) || L.mu.N != L.mg.N || L.md.K != L.mg.N)
         fatal("%s: layer %d's MLP shapes differ from the config", path_.c_str(), l);
       for (const FlintMat* m : {&L.mg, &L.mu, &L.md})
-        if (m->bits == 6) fatal("%s: layer %d's MLP is 6-bit (Flint: 4 or 8)", path_.c_str(), l);
+        if (m->bits == 6 || (c.llama && m->bits != c.bits))
+          fatal("%s: layer %d's MLP is %d-bit (Flint: 4 or 8; a dense Llama: its config's)", path_.c_str(), l, m->bits);
     } else {
       const uint32_t E = uint32_t(c.experts);
       L.router = mat(p + "mlp.gate");
@@ -447,17 +528,26 @@ void Flint::load(int prefill_chunk) {
   inv_freq_ = g.alloc(size_t(c.hd / 2) * 4, "flint_rope", false);
   for (int i = 0; i < c.hd / 2; ++i)
     inv_freq_.as<float>()[i] = float(1.0 / std::pow(c.theta, double(2 * i) / double(c.hd)));
+  if (c.llama) {  // no sinks: -inf joins each softmax as exp(-inf) = 0 (bf16 0xFF80)
+    nosink_ = g.alloc(size_t(c.hq) * 2, "flint_nosink", false);
+    for (int h = 0; h < c.hq; ++h) nosink_.as<uint16_t>()[h] = 0xFF80;
+  }
   alloc_buffers();
   load_iq_experts();
   g.make_resident(ws_.buffers());
   g.make_resident(iq_bufs_);
-  logi("Flint: %d layers (%d full attention), %s, loaded in %.1f s", c.layers,
-       int(std::count(c.kind.begin(), c.kind.end(), 'F')), formats_summary().c_str(), (now_ms() - t0) / 1000.0);
+  if (c.llama)
+    logi("Llama (dense, on Flint's kernels): %d layers, %d / %d heads, %s, loaded in %.1f s", c.layers, c.hq, c.hkv,
+         formats_summary().c_str(), (now_ms() - t0) / 1000.0);
+  else
+    logi("Flint: %d layers (%d full attention), %s, loaded in %.1f s", c.layers,
+         int(std::count(c.kind.begin(), c.kind.end(), 'F')), formats_summary().c_str(), (now_ms() - t0) / 1000.0);
 }
 
 std::string Flint::formats_summary() const {
   auto f = [](int bits) { return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group 64"; };
-  std::string s = f(cfg_.bits) + " (embedding " + f(embed_.bits) + ", LM head " + f(head_.bits) + ", router bf16";
+  std::string s = f(cfg_.bits) + " (embedding " + f(embed_.bits) + ", LM head " + f(head_.bits) +
+                  (cfg_.llama ? "" : ", router bf16");
   if (!iq_bufs_.empty()) {
     std::map<std::string, int> n;
     for (const FlintLayer& L : layers_)
@@ -698,8 +788,9 @@ void Flint::restore(Encoder& e, Seq& s, const Checkpoint& c) {
 
 std::string Flint::disk_format() const {
   char b[256];
-  snprintf(b, sizeof b, "flint %s; K, V f16 [%d][cap][%d]; rings of %d; %s", std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(),
-           cfg_.hkv, cfg_.hd, ring_rows_, formats_summary().c_str());
+  snprintf(b, sizeof b, "%s %s; K, V f16 [%d][cap][%d]; rings of %d; %s", cfg_.llama ? "llama" : "flint",
+           std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), cfg_.hkv, cfg_.hd, ring_rows_,
+           formats_summary().c_str());
   return b;
 }
 
@@ -722,10 +813,12 @@ void Flint::disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& 
 void Flint::enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out) {
   const uint32_t D = uint32_t(cfg_.hidden);
   const kp::Embed ep{D, uint32_t(embed_.gs), uint32_t(tok_off)};
-  e.use(pipe(embed_.bits == 4 ? std::string("embed_q4") : "embed_f" + std::to_string(embed_.bits) + "g64"));
+  e.use(pipe(embed_.bits == 4    ? std::string("embed_q4")
+             : embed_.bits == 16 ? std::string("embed_f16")
+                                 : "embed_f" + std::to_string(embed_.bits) + "g64"));
   e.buf(0, embed_.w->buf);
-  e.buf(1, embed_.s->buf);
-  e.buf(2, embed_.b->buf);
+  e.buf(1, embed_.bits == 16 ? embed_.w->buf : embed_.s->buf);
+  e.buf(2, embed_.bits == 16 ? embed_.w->buf : embed_.b->buf);
   e.buf(3, tokens);
   e.buf(4, out);
   e.val(5, ep);
@@ -737,6 +830,7 @@ void Flint::enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, in
   if (segs.empty() || segs.size() > 4 || R < 1 || R > kMaxRows || (gu && segs.size() != 2)) fatal("Flint: bad matvec");
   const int bits = segs[0].M->bits;
   const uint32_t K = segs[0].M->K;
+  if (bits == 16) return enc_mv_bf16(e, segs, x, R, norm, y_ld, gu);
   for (const Seg& s : segs)  // 4/8-bit group 64, or one 6-bit matrix (a GGUF import's LM head, qmvf_b6)
     if (s.M->bits != bits || s.M->K != K || (bits != 4 && bits != 8 && !(bits == 6 && segs.size() == 1 && !gu)) ||
         s.M->gs != 64)
@@ -776,6 +870,72 @@ void Flint::enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, in
   e.buf(18, norm ? norm->buf : x);
   e.buf(19, x);
   e.dispatch(uint32_t(R), tg, 1, 32 * uint32_t(nsg));
+}
+
+void Flint::enc_mv_bf16(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
+                        uint32_t y_ld, bool gu) {
+  const uint32_t K = segs[0].M->K;
+  for (const Seg& s : segs)
+    if (s.M->bits != 16 || s.M->K != K || (s.add && (segs.size() > 1 || norm)) || (gu && !norm))
+      fatal("Flint: bf16 matvec segments of other shapes than wfmt.metal's kernels take");
+  constexpr uint32_t nsg = 8;
+  const size_t xrow = size_t(K) * 4;
+  for (int r = 0; r < R; ++r) {
+    const Buffer xr = x.view(size_t(r) * xrow, xrow);
+    auto yrow = [&](const Seg& s) {
+      const size_t ld = y_ld ? y_ld : s.M->N;
+      return s.y.view(size_t(r) * ld * 4, size_t(s.M->N) * 4);
+    };
+    if (gu) {  // h = silu(gate . xn) * (up . xn), xn = rmsnorm(x)
+      const FlintMat &G = *segs[0].M, &U = *segs[1].M;
+      const kp::Qmv p{G.N, K, K, G.N, cfg_.eps};
+      e.use(pipe("mlp_gate_up_f16"));
+      e.buf(0, G.w->buf); e.buf(1, G.w->buf); e.buf(2, G.w->buf);
+      e.buf(3, U.w->buf); e.buf(4, U.w->buf); e.buf(5, U.w->buf);
+      e.buf(6, xr); e.buf(7, norm->buf); e.buf(8, yrow(segs[0]));
+      e.val(9, p);
+      e.dispatch((G.N + 2 * nsg - 1) / (2 * nsg), 1, 1, 32 * nsg);
+    } else if (segs.size() == 1) {  // one matrix: + the residual, or its input normalized (the LM head), or plain
+      const Seg& sg = segs[0];
+      const bool huge = sg.M->N >= 65536 && !sg.add;
+      const uint32_t rows = huge ? 4 : 2, n = huge ? 4 : nsg;
+      const kp::Qmv p{sg.M->N, K, K, sg.M->N, cfg_.eps};
+      const Buffer y = yrow(sg);
+      e.use(pipe(std::string("qmvg_f16_r") + (huge ? "4" : "2") + (sg.add ? "_add" : norm ? "_norm" : "")));
+      e.buf(0, sg.M->w->buf); e.buf(1, sg.M->w->buf); e.buf(2, sg.M->w->buf);
+      e.buf(3, xr); e.buf(4, y);
+      e.val(5, p);
+      e.buf(6, y); e.buf(7, norm ? norm->buf : y);
+      e.dispatch((sg.M->N + rows * n - 1) / (rows * n), 1, 1, 32 * n);
+    } else {  // matrices sharing x (q | k | v), its norm folded
+      kp::QmvMulti2 p{};
+      p.K = K;
+      p.nseg = uint32_t(segs.size());
+      p.eps = cfg_.eps;
+      p.norm = norm ? 1u : 0u;
+      uint32_t tg = 0;
+      for (size_t i = 0; i < 4; ++i) {
+        const Seg& sg = segs[std::min(i, segs.size() - 1)];
+        if (i < segs.size()) {
+          p.N[i] = sg.M->N;
+          p.bits[i] = 16;
+          p.tg_begin[i] = tg;
+          tg += (sg.M->N + 2 * nsg - 1) / (2 * nsg);
+        }
+        e.buf(int(i * 4 + 0), sg.M->w->buf);
+        e.buf(int(i * 4 + 1), sg.M->w->buf);
+        e.buf(int(i * 4 + 2), sg.M->w->buf);
+        e.buf(int(i * 4 + 3), yrow(sg));
+      }
+      p.tg_begin[segs.size()] = tg;
+      e.use(pipe("qmvg_multi_f16"));
+      e.buf(16, xr);
+      e.val(17, p);
+      e.buf(18, norm ? norm->buf : xr);
+      e.buf(19, xr);
+      e.dispatch(tg, 1, 1, 32 * nsg);
+    }
+  }
 }
 
 void Flint::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T) {
@@ -849,7 +1009,9 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
   const uint32_t k0 = window && uint32_t(pos0) + 1 > window ? uint32_t(pos0) + 1 - window : 0u;
   // NI_FLINT_ATTN=0: a decode row on the verify rows' three dispatches instead (prep, partial, reduce)
   static const bool attn1 = !getenv("NI_FLINT_ATTN") || atoi(getenv("NI_FLINT_ATTN")) != 0;
-  if (R == 1 && attn1 && c.hq / c.hkv == 8 && c.hd == 128) {
+  // (a dense Llama with 7 query heads per KV head, Nanbeige4.3: its _g7n forms, no q / k norms, the -inf sinks)
+  const bool d2_g7 = c.llama && c.hq == 7 * c.hkv;
+  if (R == 1 && attn1 && c.hd == 128 && ((c.hq == 8 * c.hkv && !c.llama) || d2_g7)) {
     // one decode row in one dispatch: q / k norms, RoPE, the cache write, split-K attention over 32-key tiles (16 under
     // shader validation) and the merge (M4 Pro, 1K context: 9 against 19 us a sliding-window layer, 15 against 29 a
     // full-attention one for prep + partial + reduce; 7.95 against 8.3 ms a token). At most 12 splits per KV head up
@@ -866,14 +1028,14 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
       uint32_t split;
     } ap{uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, L.rope ? 1u : 0u, k0, tps, S, c.eps,
          1.0f / std::sqrt(float(c.hd)), split_ ? 1u : 0u};
-    e.use(pipe(small_tiles() ? "flint_attn_d2_t16" : "flint_attn_d2"));
+    e.use(pipe(std::string(small_tiles() ? "flint_attn_d2_t16" : "flint_attn_d2") + (d2_g7 ? "_g7n" : "")));
     e.buf(0, qkv_);
-    e.buf(1, L.qn->buf);
-    e.buf(2, L.kn->buf);
+    e.buf(1, L.qn ? L.qn->buf : inv_freq_);  // (unread without norms)
+    e.buf(2, L.kn ? L.kn->buf : inv_freq_);
     e.bytes(3, rope_cs(pos0), size_t(c.hd) * 4);
     e.buf(4, s.kc[size_t(li)]);
     e.buf(5, s.vc[size_t(li)]);
-    e.buf(6, L.sinks->buf);
+    e.buf(6, sinks(L));
     e.buf(7, ao_);
     e.buf(8, part_o_);
     e.buf(9, part_ml_);
@@ -881,8 +1043,8 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     e.bytes(11, &ap, sizeof ap);
     e.dispatch(S, uint32_t(c.hkv), 1, 128);
     if (ap.split && S > 1) {
-      e.use(pipe("flint_attn_d2_merge"));
-      e.buf(6, L.sinks->buf);
+      e.use(pipe(d2_g7 ? "flint_attn_d2_merge_g7" : "flint_attn_d2_merge"));
+      e.buf(6, sinks(L));
       e.buf(7, ao_);
       e.buf(8, part_o_);
       e.buf(9, part_ml_);
@@ -892,11 +1054,11 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
   } else {
     const PrepP pp{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u,
                    L.rope ? 1u : 0u, 0, QKV, c.eps, 0};
-    e.use(pipe("flint_prep"));
+    e.use(pipe(c.llama ? "flint_prep_nonorm" : "flint_prep"));
     e.buf(0, qkv_);
     e.buf(1, q_);
-    e.buf(2, L.qn->buf);
-    e.buf(3, L.kn->buf);
+    e.buf(2, L.qn ? L.qn->buf : inv_freq_);  // (unread without norms)
+    e.buf(3, L.kn ? L.kn->buf : inv_freq_);
     e.buf(4, inv_freq_);
     e.buf(5, s.kc[size_t(li)]);
     e.buf(6, s.vc[size_t(li)]);
@@ -923,7 +1085,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     e.use(pipe("flint_attn_reduce"));
     e.buf(0, part_o_);
     e.buf(1, part_ml_);
-    e.buf(2, L.sinks->buf);
+    e.buf(2, sinks(L));
     e.buf(3, ao_);
     e.val(4, ap);
     e.dispatch(uint32_t(c.hq), uint32_t(R), 1, uint32_t(c.hd));
@@ -1111,11 +1273,11 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   enc_gemm(e, L.v, pxh_, pqkv_.view(size_t(QD + KD) * 4, pqkv_.size - size_t(QD + KD) * 4), T, false, QKV);
   const PrepP pp{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), uint32_t(T), 0, L.rope ? 1u : 0u, 1,
                  QKV, c.eps, 0};
-  e.use(pipe("flint_prep"));
+  e.use(pipe(c.llama ? "flint_prep_nonorm" : "flint_prep"));
   e.buf(0, pqkv_);
   e.buf(1, pq_);
-  e.buf(2, L.qn->buf);
-  e.buf(3, L.kn->buf);
+  e.buf(2, L.qn ? L.qn->buf : inv_freq_);  // (unread without norms)
+  e.buf(3, L.kn ? L.kn->buf : inv_freq_);
   e.buf(4, inv_freq_);
   e.buf(5, pck_);
   e.buf(6, pcv_);
@@ -1127,16 +1289,18 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   // NI_FLINT_QATTN: the attention's two products on the matrix units (tensor/qattn_t_flint.metal) where the dense
   // GEMMs use them (qmt_: an Apple10 GPU on macOS 26); NI_FLINT_QATTN=0 keeps flint_attn_prefill
   static const bool qat_env = !getenv("NI_FLINT_QATTN") || atoi(getenv("NI_FLINT_QATTN")) != 0;
-  const bool qat = qat_env && qmt_ && c.hd == 128 && c.hq == 8 * c.hkv;
+  // (a dense Llama with 7 query heads per KV head, Nanbeige4.3: the _g7 forms, each token's eighth row a spare)
+  const bool g7 = c.llama && c.hq == 7 * c.hkv;
+  const bool qat = qat_env && qmt_ && c.hd == 128 && (c.hq == 8 * c.hkv || g7);
   const uint32_t qat_tok = small_tiles() ? 8 : 16;   // 2 tokens a simdgroup, NS 4 or 8 simdgroups
-  if (qat) e.use(pipe(small_tiles() ? "qattn_flint_s4k16" : "qattn_flint_s8k32p"));
+  if (qat) e.use(pipe(std::string(small_tiles() ? "qattn_flint_s4k16" : "qattn_flint_s8k32p") + (g7 ? "_g7" : "")));
   else e.use(pipe(small_tiles() ? "flint_attn_prefill_k16" : "flint_attn_prefill"));
   e.buf(0, pq_);
   e.buf(1, s.kc[size_t(li)]);
   e.buf(2, s.vc[size_t(li)]);
   e.buf(3, pck_);
   e.buf(4, pcv_);
-  e.buf(5, L.sinks->buf);
+  e.buf(5, sinks(L));
   e.buf(6, pao_);
   e.val(7, ap);
   if (qat) e.dispatch((uint32_t(T) + qat_tok - 1) / qat_tok, uint32_t(c.hkv), 1, 16 * qat_tok);

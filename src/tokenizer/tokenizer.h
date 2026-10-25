@@ -2,6 +2,9 @@
 // tokens; Qwen2/3/3.5's pre-tokenizer split with NFC normalization, the Tekken split (Mistral, Nemotron 3.5: no
 // normalization, cased letter runs, single digits) with whole-word vocabulary hits first (ignore_merges), or Flint's
 // (Recursive: no normalization, digits in threes, CJK and kana runs, cased letter runs with their contractions).
+// Also SentencePiece-style BPE (Llama's tokenizer.json, Nanbeige4.3): no byte-level mapping, a Metaspace pre-tokenizer
+// (spaces as U+2581, one prepended at the text's start) and byte fallback (a character missing from the vocabulary as
+// its <0xXX> byte tokens).
 #pragma once
 #include <cstdint>
 #include <mutex>
@@ -20,6 +23,10 @@ class Tokenizer {
   // ids as a prefix (text between added tokens is encoded independently); else left unchanged.
   std::vector<int> encode(const std::string& text, size_t split_at = std::string::npos,
                           int* split_index = nullptr) const;
+  // `text` as it continues other text (a reply after its prompt): encode()'s ids but for SentencePiece-style BPE, whose
+  // Metaspace prepends its U+2581 at a text's start only, not here
+  std::vector<int> encode_continuation(const std::string& text) const;
+  // The ids' bytes (SentencePiece-style: without the one leading space HF's decoder strips, Strip(start=1))
   std::string decode(const std::vector<int>& ids) const;
   // Raw bytes of one token (may be a partial UTF-8 sequence).
   const std::string& token_bytes(int id) const;
@@ -33,8 +40,11 @@ class Tokenizer {
   static const char* const kFlintSplit[3];
 
  private:
+  std::vector<int> encode_impl(const std::string& text, size_t split_at, int* split_index, bool begins) const;
   void bpe(const std::string& word, std::vector<int>& out) const;
-  void encode_plain(const std::string& text, std::vector<int>& out) const;
+  void bpe_spm(const std::string& word, std::vector<int>& out) const;
+  // text between added tokens; at_start: it begins the text (where Metaspace's prepend_scheme "first" prepends)
+  void encode_plain(const std::string& text, std::vector<int>& out, bool at_start = false) const;
 
   std::unordered_map<std::string, int> vocab_;        // byte-level string -> id
   std::vector<std::string> id_to_bytes_;              // id -> raw bytes
@@ -47,6 +57,15 @@ class Tokenizer {
   Split split_ = Split::Qwen;
   bool nfc_ = true;             // NFC-normalize the text first (Qwen; Tekken and Flint have no normalizer)
   bool ignore_merges_ = false;  // a word found whole in the vocabulary is one token (HF BPE ignore_merges)
+  // SentencePiece-style BPE (pre_tokenizer Metaspace, byte_fallback): vocab_ holds the pieces as they are (U+2581 for a
+  // space), id_to_bytes_ their text (U+2581 -> ' ', <0xXX> -> that byte), byte_id_ the <0xXX> tokens
+  bool spm_ = false;
+  enum class Prepend { First, Always, Never };
+  Prepend spm_prepend_ = Prepend::First;
+  bool spm_split_ = false;  // Metaspace split: each U+2581 starts a word (else the whole text is one word)
+  int unk_id_ = -1;
+  bool fuse_unk_ = false;
+  bool strip_lead_ = false;  // the decoder strips one leading space (Strip, start 1)
   mutable std::unordered_map<std::string, std::vector<int>> cache_;
   mutable std::mutex cache_mu_;
 };

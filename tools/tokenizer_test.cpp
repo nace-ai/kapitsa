@@ -4,6 +4,9 @@
 // Flint's pre_tokenizer, the 256 byte tokens and every run of adjacent pieces as a token, and ignore_merges: with the
 // right split each piece is one token, and a piece cut in two or two pieces taken as one give other ids (HF gives one
 // token per piece on the same tokenizer.json). load() must take the split only for exactly Flint's Sequence.
+// Then SentencePiece-style BPE (Llama's tokenizer.json, Nanbeige4.3's: Metaspace, byte fallback, the decoder's leading
+// space stripped) on a small synthetic vocabulary: the ids are those Hugging Face tokenizers 0.23.3 gives for the same
+// tokenizer.json (prepend_scheme first and split false as Nanbeige's; always with split, as older Llama exports).
 //   tokenizer_test   exit status 1 if any check fails
 #include "tokenizer/tokenizer.h"
 
@@ -146,6 +149,57 @@ std::string ids_str(const std::vector<int>& ids) {
   return s;
 }
 
+// A SentencePiece-style tokenizer.json: <unk> <s> </s>, the 256 byte tokens, a few pieces and merges (U+2581 for a space)
+json spm_tokenizer(bool split) {
+  std::vector<std::string> pieces = {"<unk>", "<s>", "</s>"};
+  for (int b = 0; b < 256; ++b) {
+    char h[8];
+    snprintf(h, sizeof h, "<0x%02X>", b);
+    pieces.push_back(h);
+  }
+  for (const char* p : {"\u2581", "a", "b", "c", "d", "e", "h", "l", "o", "r", "w", "\u4f60", "\u597d", "\u2581h", "el", "lo",
+                        "\u2581hel", "\u2581hello", "\u2581w", "or", "\u2581wor", "\u2581world", "\u2581worl", "aa", "\u2581a",
+                        "\u2581\u2581", "ab", "\u4f60\u597d"})
+    pieces.push_back(p);
+  json vocab = json::object();
+  for (size_t i = 0; i < pieces.size(); ++i) vocab[pieces[i]] = int(i);
+  json merges = json::array();  // (pairs one by one: a braced list of string pairs would make an object)
+  for (const auto& [a, b] : std::vector<std::pair<const char*, const char*>>{
+           {"\u2581", "h"}, {"e", "l"}, {"l", "o"}, {"\u2581h", "el"}, {"\u2581hel", "lo"}, {"\u2581", "w"}, {"o", "r"},
+           {"\u2581w", "or"}, {"\u2581wor", "l"}, {"a", "a"}, {"\u2581", "a"}, {"\u2581", "\u2581"}, {"a", "b"},
+           {"\u4f60", "\u597d"}})
+    merges.push_back(json::array({a, b}));
+  const int n = int(pieces.size());
+  const json added = {{{"id", n}, {"content", "<|im_start|>"}, {"special", true}, {"normalized", false}},
+                      {{"id", n + 1}, {"content", "<think>"}, {"special", false}, {"normalized", true}}};
+  const json decoder = {{"type", "Sequence"},
+                        {"decoders", {{{"type", "Replace"}, {"pattern", {{"String", "\u2581"}}}, {"content", " "}},
+                                      {{"type", "ByteFallback"}},
+                                      {{"type", "Fuse"}},
+                                      {{"type", "Strip"}, {"content", " "}, {"start", 1}, {"stop", 0}}}}};
+  return {{"added_tokens", added},
+          {"normalizer", nullptr},
+          {"pre_tokenizer",
+           {{"type", "Metaspace"}, {"replacement", "\u2581"}, {"prepend_scheme", split ? "always" : "first"}, {"split", split}}},
+          {"decoder", decoder},
+          {"model",
+           {{"type", "BPE"}, {"unk_token", "<unk>"}, {"continuing_subword_prefix", nullptr}, {"end_of_word_suffix", nullptr},
+            {"fuse_unk", true}, {"byte_fallback", true}, {"ignore_merges", false}, {"vocab", vocab}, {"merges", merges}}}};
+}
+
+// a text as a check's name shows it (newlines and tabs escaped)
+std::string shown(const std::string& t) {
+  std::string s;
+  for (char c : t) s += c == '\n' ? "\\n" : c == '\t' ? "\\t" : std::string(1, c);
+  return "\"" + s + "\"";
+}
+
+struct SpmCase {
+  const char* text;
+  std::vector<int> ids;  // Hugging Face tokenizers 0.23.3's on the same tokenizer.json
+  const char* decoded;
+};
+
 }  // namespace
 
 int main() {
@@ -184,6 +238,43 @@ int main() {
   load(other, j);
   const Case& digits = kCases[3];  // digits in threes
   check(other.encode(digits.text) != want(digits), "a Sequence other than Flint's keeps the default split");
+
+  // SentencePiece-style BPE: the whole text between added tokens one word (split false), U+2581 prepended at the text's
+  // start only (not after an added token, not before a U+2581 or a space already there), the lowest-ranked pair merged
+  // first and the leftmost on a tie, characters outside the vocabulary as their <0xXX> bytes; decode drops the one
+  // leading space
+  const SpmCase spm[] = {
+      {"hello world", {276, 281, 263}, "hello world"},
+      {"<|im_start|>hello\n<think>\n", {287, 265, 273, 274, 13, 288, 13}, "<|im_start|>hello\n<think>\n"},
+      {"  aa a", {284, 282, 283}, " aa a"},
+      {"aaa", {259, 282, 260}, "aaa"},
+      {"\u4f60\u597d\U0001F642!", {259, 286, 243, 162, 156, 133, 36}, "\u4f60\u597d\U0001F642!"},
+      {" hello", {276}, "hello"},
+      {"ab\taab", {283, 261, 12, 282, 261}, "ab\taab"},
+      {"hel lo  w", {275, 259, 274, 259, 277}, "hel lo  w"},
+      {"\u2581hello", {276}, "hello"},
+  };
+  ni::Tokenizer sp;
+  load(sp, spm_tokenizer(false));
+  for (const SpmCase& c : spm) {
+    const std::vector<int> got = sp.encode(c.text);
+    check(got == c.ids, "SentencePiece BPE: " + shown(c.text), "ids " + ids_str(got) + ", want " + ids_str(c.ids));
+    check(sp.decode(c.ids) == c.decoded, "SentencePiece decode: " + shown(c.text), sp.decode(c.ids));
+  }
+  check(sp.token_bytes(259) == " " && sp.token_bytes(13) == "\n" && sp.token_bytes(276) == " hello",
+        "SentencePiece token bytes: U+2581 as a space, <0x0A> as a newline");
+  const SpmCase spm_split[] = {
+      {"hello world", {276, 281, 263}, ""},
+      {"<|im_start|>hello\n<think> aa", {287, 276, 13, 288, 259, 282}, ""},
+      {"  aa a", {259, 259, 282, 283}, ""},
+  };
+  ni::Tokenizer sps;
+  load(sps, spm_tokenizer(true));
+  for (const SpmCase& c : spm_split) {
+    const std::vector<int> got = sps.encode(c.text);
+    check(got == c.ids, "SentencePiece BPE, split, always prepended: " + shown(c.text),
+          "ids " + ids_str(got) + ", want " + ids_str(c.ids));
+  }
 
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

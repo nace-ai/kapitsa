@@ -773,8 +773,11 @@ int run(const Options& o) {
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
-  const bool flint = Flint::is_model(ref.dir);
-  s.ref_prompt_tokens = reference_prompt_tokens(flint ? "flint"
+  // (a dense Llama runs on Flint's backend: Nanbeige4.3, with its own tokenizer's counts and the default settings)
+  const bool llama = Flint::is_model(ref.dir) && Flint::read_config(ref.dir).llama;
+  const bool flint = Flint::is_model(ref.dir) && !llama;
+  s.ref_prompt_tokens = reference_prompt_tokens(flint   ? "flint"
+                                                : llama ? "nanbeige"
                                                 : NemotronH::is_model(ref.dir) || Dory::is_model(ref.dir) ? "nemotron-h"
                                                                                                           : "qwen3.5");
   if (flint) {  // as configs/flint.json: its card's temperature, and its reasoning before every answer

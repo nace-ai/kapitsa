@@ -3,7 +3,7 @@
 // the downloader, `pull`, `list`, `--help` and the folder names (<name>-<variant>) follow this table.
 //
 // - Models are listed as the README and the picker show them: Qwen from small to large, then Nemotron from small to
-//   large, then Recursive's Flint. `kapitsa serve` without --model takes the most capable one that fits this Mac (best_model's order,
+//   large, then Recursive's Flint, then Nanbeige4.3. `kapitsa serve` without --model takes the most capable one that fits this Mac (best_model's order,
 //   src/server/main.cpp).
 // - `--model <name>` takes the model's default variant where the engine's memory plan of its headers leaves room for
 //   one --ctx conversation with its drafter, else the first of its fallbacks that does (smaller variants, best
@@ -442,6 +442,25 @@ const std::vector<CatalogModel>& catalog() {
                      .size = 11855541696},
             .companions = {},
             .download_gb = 11.86},
+       }},
+      // Nanbeige's dense 33B (LlamaForCausalLM: 52 layers, 56 query and 8 KV heads of 128), on Flint's backend as a
+      // dense Llama (model/flint.h). No drafter: plain decoding, prompt lookup with --spec. Its own chat template
+      // (Qwen's markup: <think> reasoning, XML tool calls). Not in by_preference: never picked without --model.
+      {.name = "nanbeige4.3-33b",
+       .aliases = {"nanbeige", "nanbeige4.3", "nanbeige-33b"},
+       .title = "Nanbeige4.3-33B",
+       .about = "Nanbeige's dense 33B for agents and coding: reasoning and tool calls (bf16: 96 GB+ Macs)",
+       .brief = "Nanbeige dense 33B: agents and coding",
+       .default_variant = "bf16",
+       .fallbacks = {},
+       .variants = {
+           // Nanbeige's checkpoint as published (its safetensors as they are)
+           {.name = "bf16",
+            .quant = "bf16, unquantized",
+            .repo = "Nanbeige/Nanbeige4.3-33B",
+            .revision = "c1093c501cc6460427c0ac634db7223d0450c0ee",
+            .companions = {},
+            .download_gb = 66.26},
        }}
   };
   return c;

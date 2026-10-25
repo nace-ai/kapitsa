@@ -770,7 +770,7 @@ std::vector<ChatDelta> generate(const TmplModel& m, const std::string& text, boo
   OutputParser p(m.tok, m.tok.find("<think>"), m.tok.find("</think>"), m.tok.find("<tool_call>"), m.tok.find("</tool_call>"),
                  in_think, !tools.empty(), tools, true);
   std::vector<ChatDelta> out;
-  *ids = m.tok.encode(text);
+  *ids = m.tok.encode_continuation(text);  // (the reply after its prompt: no SentencePiece prepend at its start)
   for (int id : *ids) {
     ChatDelta d = p.push(id);
     if (!d.reasoning.empty() || !d.content.empty() || !d.tool_calls.empty()) out.push_back(d);
@@ -1614,16 +1614,18 @@ void template_checks(const TmplModel& m, const std::string& tag) {
                "this model can't read images]\nwhat?<|im_end|>") != std::string::npos &&
             p.find("<|vision_start|>") == std::string::npos,
         tag + "template: a later system message is a system turn in place; an image is a note", p.substr(p.size() > 400 ? p.size() - 400 : 0));
-  // with an image encoder: the image renders as the model's placeholder, without its data
+  // with an image encoder: the image renders as the model's placeholder, without its data (a model whose vocabulary has
+  // no image tokens, Nanbeige4.3's, has no encoder: never rendered with images)
   try {
     p = render_chat(*m.tmpl, r, true, true);
   } catch (const std::exception& e) {
     p = std::string("raised: ") + e.what();
   }
-  check(p.find("<|im_start|>user\nLook:<|vision_start|><|image_pad|><|vision_end|>what?<|im_end|>") != std::string::npos &&
-            p.find("base64") == std::string::npos,
-        tag + "template: with an image encoder, an image is the image placeholder (its data left out)",
-        p.substr(p.size() > 400 ? p.size() - 400 : 0));
+  if (m.tok.find("<|vision_start|>") >= 0)
+    check(p.find("<|im_start|>user\nLook:<|vision_start|><|image_pad|><|vision_end|>what?<|im_end|>") != std::string::npos &&
+              p.find("base64") == std::string::npos,
+          tag + "template: with an image encoder, an image is the image placeholder (its data left out)",
+          p.substr(p.size() > 400 ? p.size() - 400 : 0));
 }
 
 // Read ahead (Engine::draft, POST /v1/draft): what a draft reads is a prefix of the request's prompt once the message
@@ -1881,7 +1883,10 @@ int main(int argc, char** argv) {
     TmplModel m;
     m.dir = dir;
     m.tok.load(dir + "/tokenizer.json");
-    m.tmpl = std::make_unique<minja::chat_template>(chat_template_source(dir), "", "<|im_end|>");
+    // (a dense Llama on Flint's backend, Nanbeige4.3: its template rewritten for minja, as the engine renders it)
+    std::string src = chat_template_source(dir);
+    if (Flint::is_model(dir)) src = flint_template(src);
+    m.tmpl = std::make_unique<minja::chat_template>(src, "", "<|im_end|>");
     const std::string tag = "[" + dir.substr(dir.find_last_of('/') + 1) + "] ";
     anthropic_round_trip(m, tag);
     reasoning_memory(m, tag);

@@ -9,6 +9,11 @@
 // 4-bit group 64. The math is Recursive's (rec's model.py, recursive-oss/rec).
 // Sliding-window layers keep a ring of window + 8 positions (Dory's layout: a ring cannot go back further than its 8
 // spare rows, so checkpoints hold copies of the rings); full-attention layers a cache that grows with the conversation.
+//
+// The same backend runs a dense Llama (LlamaForCausalLM, model_type "llama": Nanbeige4.3-33B) as a Flint without its
+// extras (FlintConfig::llama): every layer full attention with RoPE (NeoX halves, as Flint's sliding-window layers) and
+// a dense SwiGLU MLP, no q / k norms (flint_prep_nonorm) and no sinks (a sink of -inf: the softmax without one, exactly).
+// Its checkpoints: MLX affine 4-bit or 8-bit group 64 (mlx_lm.convert), or the bf16 safetensors as published.
 #pragma once
 #include "loader/safetensors.h"
 #include "model/model.h"
@@ -36,6 +41,7 @@ struct FlintConfig {
   int bits = 4, gs = 64;                // the projections' and experts' format
   int embed_bits = 8;
   std::map<std::string, uint32_t> iq;   // modules kept in llama.cpp's IQ blocks (GGUF imports): their GGUF type
+  bool llama = false;                   // a dense Llama (model_type "llama"): no q / k norms, no sinks, no experts
 };
 
 // An MLX linear (or a stack of E of them): codes (uint32 words or bytes, the same little-endian stream), bf16 scale and
@@ -72,7 +78,7 @@ class Flint : public Model {
 
   explicit Flint(const std::string& path, int prefill_chunk = 2048);
   ~Flint() override;
-  static bool is_model(const std::string& dir);  // config.json's model_type is "flint"
+  static bool is_model(const std::string& dir);  // config.json's model_type is "flint" (or "llama": a dense Llama)
   static FlintConfig read_config(const std::string& dir);
   static MemPlan plan(const std::string& path, int prefill_chunk = 2048);
   // KV cache bytes per position (full-attention layers) and per conversation (sliding-window rings)
@@ -155,6 +161,9 @@ class Flint : public Model {
   };
   void enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm, uint32_t y_ld = 0,
               bool gu = false);
+  // enc_mv's bf16 form (a dense Llama's bf16 checkpoint): wfmt.metal's one-row kernels, row by row
+  void enc_mv_bf16(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm, uint32_t y_ld,
+                   bool gu);
   // GEMM of M half rows: y [M][y_ld] (+)= xh [M][K] W^T
   void enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buffer& y, int M, bool add, uint32_t y_ld = 0);
   void enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T);
@@ -167,6 +176,8 @@ class Flint : public Model {
   std::deque<Tensor> iq_tensors_;  // the IQ experts in the kernels' layout (iq_bufs_), as the FlintMats point at them
   std::vector<Buffer> iq_bufs_;
   const Tensor* final_norm_ = nullptr;
+  Buffer nosink_;                // a dense Llama's sinks: bf16 [hq] of -inf (each head's softmax without a sink)
+  const Buffer& sinks(const FlintLayer& L) const { return L.sinks ? L.sinks->buf : nosink_; }
   Buffer inv_freq_;              // fp32 [hd / 2]: RoPE's inverse frequencies
   // (cos, sin) per frequency at one position, as flint_attn_d2 takes them inline (the last position asked for)
   const float* rope_cs(int pos);
