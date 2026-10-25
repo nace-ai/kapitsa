@@ -6,7 +6,7 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
 1. bench_test self: the Mac table, the names and formats, the embedded corpus.
 2. One protocol, two clients: bench/harness/bench.py and the C++ port run the same steps against one scripted server
    in this process, with the same nonces. Every request must be the same, body for body and key for key in order (the
-   chat template renders the tools as JSON), and their records of the replies alike.
+   chat template renders the tools as JSON), with the same headers, and their records of the replies alike.
 3. The rates and checks on the published runs' own data: decode_rates on every decode run's recorded events, distinct4
    on every saved text, Python's rounding, bench.py's summaries; with edge cases.
 4. The result file: bench/community/schema.json (with jsonschema, when installed) and tools/community_check.py.
@@ -209,7 +209,9 @@ class Script(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(n)
         body = json.loads(raw)
-        Script.log.append({"path": self.path, "session": self.headers.get("X-Session-Id"), "body": body})
+        headers = {k.lower(): v for k, v in self.headers.items()
+                   if k.lower() not in ("host", "user-agent", "accept", "accept-encoding", "content-length", "connection")}
+        Script.log.append({"path": self.path, "headers": dict(sorted(headers.items())), "body": body})
         if self.path == "/v1/messages/count_tokens":
             Script.in_context = True
             if Script.interrupt_pid:
@@ -303,13 +305,16 @@ py_log = Script.log
 # warm-up 2, decode 1, greedy 1, the 4K prompt and its 3 follow-ups, and 3 per tool test (streamed, whole, round trip)
 check(len(cpp_log) == len(py_log) == 14, "both send the same 14 requests", f"{len(cpp_log)} vs {len(py_log)}")
 for i, (c, p) in enumerate(zip(cpp_log, py_log)):
-    same = c["path"] == p["path"] and c["session"] == p["session"] and json.dumps(c["body"]) == json.dumps(p["body"])
+    if c["headers"] != p["headers"]:
+        check(False, f"request {i + 1} sends the same headers", f"{c['headers']} vs {p['headers']}")
+        break
+    same = c["path"] == p["path"] and json.dumps(c["body"]) == json.dumps(p["body"])
     if not same:
         diff = [k for k in set(c["body"]) | set(p["body"]) if json.dumps(c["body"].get(k)) != json.dumps(p["body"].get(k))]
         check(False, f"request {i + 1} is the same", f"keys differ: {diff}; order: {list(c['body'])} vs {list(p['body'])}")
         break
 else:
-    check(bool(cpp_log), "every request is the same, key for key, in order (bodies, paths, session ids)")
+    check(bool(cpp_log), "every request is the same, key for key, in order (bodies, paths, headers)")
 # the prompts themselves: byte for byte the harness's
 four_k = [x for x in py_log if x["body"]["max_tokens"] == 256 and len(x["body"]["messages"]) == 2][0]["body"]["messages"][0]["content"]
 check(four_k == f"[session 0123456789abcdef] {bench.SYS}\n\n# Repository context\n{bench.build_context(4000)}",
