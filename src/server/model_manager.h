@@ -306,7 +306,10 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     auto stale = std::make_shared<std::atomic<bool>>(false);
     std::thread th([this, eng, r, out, epoch, done, stale] {
       if (epoch == model_epoch_.load())
-        eng->prefill_history(r, out, [this, epoch, stale] { return epoch != model_epoch_.load() || stale->load(); });
+        eng->prefill_history(r, out, [this, epoch, stale] {
+          if (epoch != model_epoch_.load()) return Engine::PrefillStop::kModelChanged;
+          return stale->load() ? Engine::PrefillStop::kSuperseded : Engine::PrefillStop::kNone;
+        });
       done->store(true);
     });
     prefill_ths_.push_back({std::move(th), done, stale, out.slot, std::move(hashes)});

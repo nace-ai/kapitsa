@@ -3728,7 +3728,7 @@ int Engine::request_loops(const ChatRequest& r) const {
   return std::clamp(l, 1, Dory::kMaxLoops);
 }
 
-void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<bool()>& cancelled) {
+void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<PrefillStop()>& cancelled) {
   static const bool on = [] {  // default on; NI_HISTORY_PREFILL=0 turns it off
     const char* v = getenv("NI_HISTORY_PREFILL");
     return !(v && !strcmp(v, "0"));
@@ -3766,7 +3766,13 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     const double deadline = now_ms() + wait_ms;
     QuietGate gate(idle_ms, requests_.load(), now_ms());
     for (;;) {
-      if (cancelled && cancelled()) return logd("history: given up, the model changed");
+      if (cancelled) {
+        switch (cancelled()) {
+          case PrefillStop::kNone: break;
+          case PrefillStop::kModelChanged: return logd("history: given up, the model changed");
+          case PrefillStop::kSuperseded: return logd("history: given up, a newer request superseded it");
+        }
+      }
       // (no read of active_ here: it is the turn's; the test under the lock below is the one that counts)
       if (gate.ready(requests_.load(), 0, now_ms())) {
         if (lk.try_lock()) {

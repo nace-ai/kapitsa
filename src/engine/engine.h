@@ -387,6 +387,11 @@ class Engine {
                   const std::function<void(const ChatResult&)>& on_prompt = nullptr,
                   const std::function<bool()>& cancelled = nullptr,
                   const std::function<bool(const ChatResult&)>& on_accepted = nullptr);
+  // Why a history prefill was told to stop before it ran, so that the log says which: the model was replaced (the
+  // slot's state is another model's), or a newer request of the conversation superseded this reply's history (a
+  // request that sends this conversation's messages back, or one of a stream of one-off requests over the pending cap),
+  // which is the common case and not a model swap. Neither writes.
+  enum class PrefillStop { kNone, kModelChanged, kSuperseded };
   // History prefill (NI_HISTORY_PREFILL): after a reply, prefills the conversation as the next request
   // will render it (the template drops this turn's think block, so the generated tokens in the live
   // state do not match it) from the turn-boundary checkpoint, so that a follow-up prefills only its
@@ -396,7 +401,7 @@ class Engine {
   // request used its slot. `cancelled`, if given, is polled while it waits. Only replies that end with "stop" (a user query follows; after tool calls the
   // template keeps the think block and the live state already matches the next request).
   // With DFlash2 the prefilled rows also enter the slot's drafter context ring, as prompt rows do.
-  void prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<bool()>& cancelled = nullptr);
+  void prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<PrefillStop()>& cancelled = nullptr);
   // The reasoning of a turn this engine wrote, put back into the same turn when a client sends it without (reasoning_memory.h)
   void remember_reasoning(const ChatRequest& r, const ChatResult& res);
   int restore_reasoning(ChatRequest& r);
