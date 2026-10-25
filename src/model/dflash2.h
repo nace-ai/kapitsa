@@ -245,6 +245,52 @@ class DFlash2 {
   float dyn_tau() const { return dyn_tau_; }
   // sampled cycles verify with row-independent MoE numerics (Qwen35::set_verify_moe_exact)
   bool exact_moe() const { return exact_moe_; }
+  // The downward depth gate (M3; NI_DFLASH_GATE=<p>[:<win>], off by default): a rolling per-position acceptance
+  // window over the completed cycles. Each observed cycle shifts in two bits per proposal position: tau kept
+  // it (i < kdyn, dfl_depth's choice), and it was accepted. Greedy acceptance is a prefix, so i < a is an
+  // acceptance and i >= a is not -- positions past the rejection were never tested, but the statistic this
+  // gate needs does NOT condition on reaching them: m_i / n_i is the MARGINAL acceptance of position i among
+  // the cycles where tau kept it, P(accepted through i | tau kept i), the same quantity the break-even p was
+  // fitted from (the marginals p1..p7). A reached-conditional hazard would sit near 1 at depth and never cap.
+  // kmax() is the smallest position i >= 1 whose marginal acceptance m_i / n_i fell below the break-even p
+  // with at least kMinN observations behind it, else K: from that proposal on the cycle pays more per
+  // verified row than the position's acceptances buy. Pure host arithmetic, downward only (never above the
+  // static depth), warmup = the first win cycles keep K. The window is a per-request statistic: the engine
+  // calls gate_reset() when a request starts; a park keeps it (with --slots above 1, a request starting while
+  // another is parked clears the parked one's window too -- it re-warms; the gate only moves kmax down, so
+  // that costs warmup cycles, never correctness).
+  struct DepthGate {
+    static constexpr int kPos = kB - 1;  // proposal positions 0..6
+    static constexpr int kWin = 64;      // the rolling window, cycles (one bit per cycle per position)
+    static constexpr int kMinN = 4;      // a position caps only with at least this many kept observations
+    uint64_t keep[kPos] = {}, acc[kPos] = {};
+    uint32_t cycles = 0;  // observed cycles
+    void observe(int kdyn, int a) {
+      for (int i = 0; i < kPos; ++i) {
+        keep[i] = (keep[i] << 1) | uint64_t(i < kdyn);
+        acc[i] = (acc[i] << 1) | uint64_t(i < a && i < kdyn);
+      }
+      ++cycles;
+    }
+    void reset() { *this = DepthGate{}; }  // a request starts: warmup begins again (see gate_reset)
+    int kmax(int K, float p, int win) const {
+      if (K < 2 || cycles < uint32_t(win)) return K;  // warmup: the first win cycles keep the static depth
+      const uint64_t m = win >= kWin ? ~uint64_t(0) : (uint64_t(1) << win) - 1;
+      for (int i = 1; i < K && i < kPos; ++i) {
+        const int n = __builtin_popcountll(keep[i] & m);
+        if (n < kMinN) continue;  // not enough evidence at this position yet
+        if (float(__builtin_popcountll(acc[i] & m)) / float(n) < p) return i;
+      }
+      return K;
+    }
+  };
+  // the gate's break-even marginal acceptance (0 = off) and its window; the cap it applies is per-cycle,
+  // downward only
+  float gate_p() const { return gate_p_; }
+  // a request starts: both windows clear and warm up again (a per-request statistic; a park keeps them).
+  // The engine calls this where the request's speculative loop begins -- not gpu_state_reset, which every
+  // park also hits.
+  void gate_reset();
 
   // results of the last pass (host-visible after the command buffer completed)
   const int* cand_ids() const { return cand_i_.as<int>(); }       // [7][16]
@@ -340,6 +386,17 @@ class DFlash2 {
   float dyn_tau_t_ = 0.0f;  // T > 0
   uint32_t dyn_rule_ = 0;   // dfl_depth rule (NI_DFLASH_DYN_RULE)
   bool exact_moe_ = true;  // MoE targets: row-independent expert numerics, tree verifies at every T and the chain's at T > 0 (NI_DFLASH_EXACT_MOE=0 off)
+  // the downward depth gate (gate_p()): one window per sampling mode (0 = greedy, 1 = sampled: tau differs,
+  // the acceptance statistics must not mix), and the previous chain cycle's bookkeeping -- its (kdyn, accepted) pair is
+  // read when the next chain cycle encodes (the loop waits every verify first, and a drafting half in
+  // flight writes neither acc_ nor kdyn_)
+  float gate_p_ = 0.0f;
+  int gate_win_ = DepthGate::kWin;
+  bool gate_trace_ = false;  // NI_DFLASH_GATE_TRACE=1: one line per cycle with the pair and the cap
+  DepthGate gate_[2];
+  bool gate_prev_ = false;        // acc_/kdyn_ hold a completed chain cycle of this run (gpu_state_reset clears)
+  bool gate_prev_masked_ = false; // that cycle ran under grammar masks: its acceptance is distorted, not observed
+  int gate_prev_mode_ = 0;        // that cycle's mode (gate_ index)
   // KFlash (see tree()): the tree descriptor (int32 [kf::kWords]), the lattice's children tables (clq float
   // [7][16][16], ctok int, the constant successors), the builder's live-row word, the budget
   bool tree_ = false;

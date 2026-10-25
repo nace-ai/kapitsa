@@ -504,6 +504,29 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   }
   if (const char* v = getenv("NI_DFLASH_DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
+  // The downward depth gate (M3, opt-in): NI_DFLASH_GATE=<p>[:<win>] caps each cycle's verify depth at the
+  // first proposal position whose rolling marginal acceptance -- the fraction of the last <win> cycles
+  // (default 64) where position i was accepted among the cycles where tau kept it -- fell below the
+  // break-even fraction p -- e.g. 0.215, the corrected break-even accepted tokens per extra verify row
+  // (ledger §2.16 as corrected through §2.32-E: the clean 6.9 ms/row slope, under which p3 = 0.273 clears
+  // and positions 5-7 do not; p was fitted from the same marginal statistic). It needs the dynamic depth
+  // (an MoE target, NI_DFLASH_DYN > 0): the statistic conditions on what tau kept. Downward only -- the
+  // cap never exceeds verify_depth(). Off by default until the pre-registered trace gate (multi-seed,
+  // tau-conditional p_i on the shipping binary) says tau itself keeps enough negative-value rows for the
+  // cap to pay. See DepthGate in dflash2.h.
+  if (const char* v = getenv("NI_DFLASH_GATE"); v && *v) {
+    if (dyn_tau_ > 0) {
+      gate_p_ = std::clamp(float(atof(v)), 0.0f, 1.0f);
+      if (const char* c = strchr(v, ':')) gate_win_ = std::clamp(atoi(c + 1), DepthGate::kMinN, DepthGate::kWin);
+      if (gate_p_ > 0)
+        logi("DFlash2: NI_DFLASH_GATE -- downward depth gate, break-even %.3f, window %d cycles (a per-cycle cap "
+             "from the rolling marginal acceptance of the tau-kept positions; downward only)",
+             gate_p_, gate_win_);
+    } else {
+      logi("DFlash2: NI_DFLASH_GATE ignored (it needs the dynamic depth: an MoE target with NI_DFLASH_DYN > 0)");
+    }
+  }
+  if (const char* v = getenv("NI_DFLASH_GATE_TRACE")) gate_trace_ = atoi(v) != 0;
   if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
   if (const char* v = getenv("NI_DFLASH_QT")) walk_tf_ = std::max(0.0f, float(atof(v)));
   // KFlash on every target. The budget's cache key: this model, drafter, bit depth, drafting block and chip (a 16-row
@@ -534,6 +557,12 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     const char* kf = getenv("NI_KFLASH");
     const char* v = getenv("NI_DFLASH_TREE");
     set_tree(v && *v ? atoi(v) != 0 : (!(kf && *kf) || atoi(kf) != 0));
+    // The downward depth gate caps a chain's dynamic depth: encode_cycle_verify returns from its tree branch
+    // before the gate code, so an asked-for gate under the (default) trees would log as engaged and then never
+    // observe, cap or trace. Say so here, at load, where tree_ is final (set_tree has no later callers).
+    if (gate_p_ > 0 && tree_)
+      logi("DFlash2: NI_DFLASH_GATE is inert while the KFlash trees are on (it caps the chain's dynamic depth): "
+           "add NI_KFLASH=0 or NI_DFLASH_TREE=0 to run it");
     if (const char* r = getenv("NI_KFLASH_ROWS"); r && *r && !moe) {
       uint32_t want = 0;
       for (const char* c = r; *c;) {
@@ -1839,12 +1868,32 @@ void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const Sampli
     tg_.encode_kv_tree_compact(e, s, P, tree_buf_);
     s.pend_tree = true;
     gst_tree_ = true;
+    gate_prev_ = false;  // kdyn_ is not a tree cycle's: the next chain cycle must not observe it
     return;
   }
   gst_tree_ = false;
+  // The downward depth gate (M3): the last chain cycle's acceptance has completed (the loop waits every
+  // verify before encoding the next, and a drafting half in flight writes neither acc_ nor kdyn_), so its
+  // (verified, accepted) pair is observed here and this cycle's cap comes from the window that includes it.
+  // A masked cycle's acceptance is grammar-distorted (cf. the budget's observe()): run under the cap, but
+  // not observed. One window per mode: greedy and sampled cycles run different taus.
+  const int gmode = sp.temperature > 0 ? 1 : 0;
+  int Kg = K;
+  if (gate_p_ > 0) {  // (the parse refuses it without the dynamic depth, so kdyn_ is this cycle's input)
+    if (gate_prev_) {
+      if (gate_trace_)
+        logi("dfl_gate: prev kdyn %d a %d%s (mode %d, %u cycles)", verified(K), accepted(),
+             gate_prev_masked_ ? " (masked, unobserved)" : "", gate_prev_mode_, gate_[gate_prev_mode_].cycles);
+      if (!gate_prev_masked_) gate_[gate_prev_mode_].observe(verified(K), accepted());
+    }
+    gate_prev_ = true;
+    gate_prev_masked_ = s.mask_event != nullptr;
+    gate_prev_mode_ = gmode;
+    Kg = gate_[gmode].kmax(K, gate_p_, gate_win_);
+  }
   const Buffer rows = kdyn_.view(4, 4);
   if (dyn_tau_ > 0) {
-    kp::DflDepth dp{uint32_t(K), sp.temperature > 0 ? dyn_tau_t_ : dyn_tau_, sp.temperature > 0 ? sp.temperature : 0.0f,
+    kp::DflDepth dp{uint32_t(Kg), sp.temperature > 0 ? dyn_tau_t_ : dyn_tau_, sp.temperature > 0 ? sp.temperature : 0.0f,
                     dyn_rule_};
     e.use(dpipe("dfl_depth"));
     e.buf(0, walk_s_); e.buf(1, walk_k_); e.buf(2, qprob_); e.buf(3, kdyn_);
@@ -1856,11 +1905,11 @@ void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const Sampli
   // independent of how the other (drafted) rows route (see Qwen35::set_verify_moe_exact).
   tg_.set_verify_moe_exact(exact_moe_ && sp.temperature > 0);
   arm_verify(P);
-  tg_.encode_verify(e, s, P, K + 1, sp, uint32_t(P), /*v8=*/true);
+  tg_.encode_verify(e, s, P, Kg + 1, sp, uint32_t(P), /*v8=*/true);
   disarm();
   tg_.set_verify_row_limit(nullptr);
   tg_.set_verify_moe_exact(false);
-  encode_accept(e, s, P, K, sp);
+  encode_accept(e, s, P, Kg, sp);
 }
 
 void DFlash2::gpu_state_reset(int P) {
@@ -1868,6 +1917,16 @@ void DFlash2::gpu_state_reset(int P) {
   g[0] = uint32_t(P);
   g[1] = 0;
   g[2] = uint32_t(P);
+  gate_prev_ = false;  // acc_/kdyn_ predate this run: the first chain cycle must not observe them
+}
+
+// A request starts (the engine calls this where its speculative loop begins): both gate windows clear and
+// warm up again. Deliberately NOT in gpu_state_reset -- every park hits that too, and a park is mid-request:
+// the window is a per-request statistic, so a prose request's cap must not leak into the next code request
+// (and consecutive ABBA legs must not contaminate each other's first win cycles).
+void DFlash2::gate_reset() {
+  gate_[0].reset();
+  gate_[1].reset();
 }
 
 void DFlash2::encode_cycle_draft_gpu(Encoder& e, Seq& s, DFlashSeq& d, int P_max, const SamplingParams& sp) {

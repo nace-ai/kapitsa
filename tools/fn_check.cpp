@@ -680,6 +680,74 @@ void test_qsa_sparse() {
   report("attn_rows_sparse + reduce", cmp(out2.n, [&](size_t i) { return out2.f()[i]; }, [&](size_t i) { return ref[i]; }, 1e-2), 2e-3);
 }
 
+// The fused chain (NI_QSA_FUSE): qsa_all must be bitwise identical to the four dispatches it replaces — run both on
+// the same state and compare ik, bk, score, idx, cnt byte for byte (the chain is the reference; no CPU model)
+void test_qsa_all() {
+  const uint32_t NH = 4, HD = 128, LD = (NH + 1) * HD, ROT = 64, RATIO = 4, TOPB = 8;
+  const float theta = 1e7f;
+  struct { uint32_t mn; int32_t delta; uint32_t sec1, sec2; } mr{0, 0, 33, 30};  // text rows: positions as they are
+  // R9: mid-block start, two re-derived blocks, two completing rows; R1-open / R1-close: the decode shape with a row
+  // that re-derives nothing / completes a block; R9-dense: every block re-derived (jold = 0), the dense select path
+  const uint32_t cfg[4][2] = {{9, 97}, {1, 4093}, {1, 4095}, {9, 3}};
+  const char* tag[4] = {"R9", "R1-open", "R1-close", "R9-dense"};
+  for (int ci = 0; ci < 4; ++ci) {
+    const uint32_t R = cfg[ci][0], pos0 = cfg[ci][1];
+    const uint32_t nbmax = (pos0 + R) / RATIO, ILD = TOPB * RATIO + RATIO;
+    Buf iqk(R * LD), wq(HD), wk(HD), iq(R * NH * HD);
+    Buf ik((pos0 + R) * HD, 2), bk((nbmax + 1) * HD), score(R * nbmax), idx(R * ILD), cnt(R);
+    iqk.fill(-3, 3), wq.fill(0.5f, 1.5f), wk.fill(0.5f, 1.5f);
+    for (size_t i = 0; i < ik.n; ++i) ik.b.as<_Float16>()[i] = _Float16(urand(-3, 3));  // history + future rows
+    bk.fill(-9, 9);  // stale blocks: only the ones these dispatches complete may change, on either side
+    auto init_out = [&] {
+      for (size_t i = 0; i < score.n; ++i) score.f()[i] = 0;
+      for (size_t i = 0; i < R * ILD; ++i) idx.b.as<uint32_t>()[i] = 0xffffffffu;
+      for (uint32_t i = 0; i < R; ++i) cnt.b.as<uint32_t>()[i] = 0;
+    };
+    init_out();
+    const std::vector<uint16_t> ik0(ik.b.as<uint16_t>(), ik.b.as<uint16_t>() + ik.n);
+    const std::vector<float> bk0(bk.f(), bk.f() + bk.n);
+    QsaP p{R, NH, HD, ROT, pos0, RATIO, LD, 1e-6f, theta};
+    struct { uint32_t R, NH, HD, pos0, ratio, topb, s_ld, i_ld; } ps{R, NH, HD, pos0, RATIO, TOPB, nbmax, ILD};
+    run("qsa_prep", [&](Encoder& e) {
+      e.buf(0, iqk.b); e.buf(1, wq.b); e.buf(2, iq.b); e.buf(3, ik.b); e.val(4, p); e.buf(5, iq.b); e.val(6, mr);
+    }, NH + 1, R, 1, HD);
+    run("qsa_block", [&](Encoder& e) {
+      e.buf(0, ik.b); e.buf(1, wk.b); e.buf(2, bk.b); e.val(3, p); e.buf(4, iq.b); e.val(5, mr);
+    }, R, 1, 1, HD);
+    run("qsa_score", [&](Encoder& e) { e.buf(0, iq.b); e.buf(1, bk.b); e.buf(2, score.b); e.val(3, ps); },
+        (nbmax + 255) / 256, R, 1, 256);
+    run("qsa_select", [&](Encoder& e) { e.buf(0, score.b); e.buf(1, idx.b); e.buf(2, cnt.b); e.val(3, ps); }, R, 1, 1, 1024);
+    const std::vector<uint16_t> ikc(ik.b.as<uint16_t>(), ik.b.as<uint16_t>() + ik.n);
+    const std::vector<float> bkc(bk.f(), bk.f() + bk.n), scorec(score.f(), score.f() + score.n);
+    const std::vector<uint32_t> idxc(idx.b.as<uint32_t>(), idx.b.as<uint32_t>() + size_t(R) * ILD);
+    const std::vector<uint32_t> cntc(cnt.b.as<uint32_t>(), cnt.b.as<uint32_t>() + R);
+    // restore the in-place inputs and the outputs, then run the fused chain on the identical state
+    std::copy(ik0.begin(), ik0.end(), ik.b.as<uint16_t>());
+    std::copy(bk0.begin(), bk0.end(), bk.f());
+    init_out();
+    run("qsa_all", [&](Encoder& e) {
+      e.buf(0, iqk.b); e.buf(1, wq.b); e.buf(2, wk.b); e.buf(3, ik.b); e.buf(4, bk.b); e.buf(5, score.b);
+      e.buf(6, idx.b); e.buf(7, cnt.b); e.val(8, p); e.buf(9, iq.b); e.val(10, mr); e.val(11, ps);
+    }, R, 1, 1, 1024);
+    auto diff = [](const void* a, const void* b, size_t bytes) {
+      size_t d = 0;
+      for (const uint8_t *x = (const uint8_t*)a, *y = (const uint8_t*)b, *end = x + bytes; x != end; ++x, ++y) d += *x != *y;
+      return double(d);
+    };
+    char nm[64];
+    snprintf(nm, sizeof nm, "qsa_all %s: ik (bytes)", tag[ci]);
+    report(nm, diff(ik.b.as<uint16_t>(), ikc.data(), ik.n * 2), 0);
+    snprintf(nm, sizeof nm, "qsa_all %s: bk (bytes)", tag[ci]);
+    report(nm, diff(bk.f(), bkc.data(), bk.n * 4), 0);
+    snprintf(nm, sizeof nm, "qsa_all %s: score (bytes)", tag[ci]);
+    report(nm, diff(score.f(), scorec.data(), score.n * 4), 0);
+    snprintf(nm, sizeof nm, "qsa_all %s: idx (bytes)", tag[ci]);
+    report(nm, diff(idx.b.as<uint32_t>(), idxc.data(), size_t(R) * ILD * 4), 0);
+    snprintf(nm, sizeof nm, "qsa_all %s: cnt (bytes)", tag[ci]);
+    report(nm, diff(cnt.b.as<uint32_t>(), cntc.data(), R * 4), 0);
+  }
+}
+
 // the 3-row half-precision verify GEMV on the Flash-Next shapes against fp64 (qmvht_t3_r4; Apple10: qmvhts_t3_r4, as
 // Qwen35 picks it there)
 void test_qmvht() {
@@ -1081,6 +1149,7 @@ int kernels() {
   test_qsa_rows();
   test_qsa_timing();
   test_qsa_sparse();
+  test_qsa_all();
   printf("%s\n", g_fail ? "FAILED" : "all kernels match");
   return g_fail ? 1 : 0;
 }

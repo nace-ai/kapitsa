@@ -109,7 +109,25 @@ over a pair of simdgroups (`qattn_t_g8d2s8`, the 35B's default on the M5 from 20
 `qattn_t_g8s4k16`), only reassociates the score sum over the head dim (two halves of 128) and passes `--reorder`
 against `qattn_t_g8s4k16` (prefill 1.1e-4, decode 6.2-6.5e-4 mean KL, one near-tie flip in 192 rows) but is 1.27x the
 floor's gate: accepted for the default on the same terms. The drift was dumped on the 4-bit pack only; the 35B's 5/6/8-bit
-and bf16 packs take the same attention path (it does not read the weights) and were not dumped.
+and bf16 packs take the same attention path (it does not read the weights) and were not dumped. The fourth,
+Flash-Next q20's 6-bit group-64 dense prefill GEMMs (`qmt6_m64_n64` on the f6g64 slab, `src/kernels/tensor/qmt6.metal`,
+default on the M5 from 2026-10-24, #510; `NI_QMT6=0` keeps `qrf_f6g64_m32_n128`), has a weight decode that is a bitwise
+mirror of the simdgroup path's half-domain affine, so the dequantized halfs and the products over them are bitwise the
+shipped path's and only each output's K reduction is reassociated. It FAILS the floor file's own `reorder_gate` on
+`max_nll_change` by 1.09× (prefill NLL change 3.809e-2 against 0.0349), while passing its other bounds with 0 top-1
+flips and agreement 1.0; a relaxed-bounds rerun (`--max-nll-change 0.1`) passes fully. The exceedance is exactly 2× the
+calibration source's own recorded 8-record prefill drift. Greedy continuations came out bitwise
+identical on all four interleaved ABBA legs (the 4K ids-md5 `2ba67d51…` holds on all four, the 85-token decode dump
+`ef97e361…` on both gate arms) (#510). Acceptance: no explicit user acceptance of this departure was obtained. The acceptance authority is user-set
+governance: the standing user ruling to ship the QMT family default-on without re-asking ('default on, dont ask
+me again'), and the pre-registered decision procedure that executed Branch A (ratify with this recorded departure)
+when the 01:31 local (20:31 UTC, 2026-10-24) decision deadline passed with no user answer. A late explicit user
+decline supersedes this entry and is executed as a one-line default-off revert (NI_QMT6=0) without further
+discussion. The departure stands on an M5-class GPU until the floor file is re-measured with this
+path on, in a PR of its own, and is superseded by any >=192-record prefill NLL measurement should one ever exist. The
+switch takes every 6-bit group-64 dense pack (Qwen3.5/3.6/3.8); the drift dumps and the speed legs are one model
+(Flash-Next q20), and the other packs inherit the reassociation claim by argument — the kernel reads no other weights
+and performs the same half-domain decode — not by measurement on each of them.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.
 

@@ -19,6 +19,7 @@
 #include <unordered_map>
 
 namespace ni {
+extern const char* const kTensorKernelSource;
 
 using json = nlohmann::json;
 
@@ -27,7 +28,13 @@ namespace {
 Pipeline pipe(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
-  if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  if (it == cache.end()) {
+    // The same trigger qwen35.cpp's pipe() carries: the tensor-library kernels (NI_HC_FUSE's qmt6_mix_m64_n64)
+    // live in kTensorKernelSource and Gpu::pipeline() is required-by-default, so without this the first fused
+    // dispatch would fatal("kernel ... not found") in a process that has not compiled the library yet.
+    if (n.rfind("qmt", 0) == 0 || n.rfind("qattn_t", 0) == 0) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+    it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  }
   return it->second;
 }
 
@@ -128,6 +135,15 @@ bool Qwen4Exp::is_model(const std::string& dir) {
 
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
+
+// NI_HC_PRECOMB (default off): the prefill MoE's moe_combine dispatch is skipped and its sum computed
+// inside the next layer's gated residual (hc_pre_comb, qwen4.metal) — intended to be bitwise identical
+// by construction (the kernel's phase A replicates moe_combine's arithmetic verbatim); outputs not yet
+// compared on a GPU, so it stays opt-in until a W1 byte-match and an NI_PROFILE dispatch-count leg ran.
+static bool hc_precomb() {
+  static const bool on = env_on("NI_HC_PRECOMB");
+  return on;
+}
 
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
     : Qwen35(dir, prefill_chunk, NoLoad{}), mem_budget_arg_(mem_budget) {
@@ -353,6 +369,7 @@ void Qwen4Exp::load(const std::string& dir) {
                                   "ple_rows", "ple_gate_rows", "ple_conv_rows", "ple_ring_rows", "qsa_prep", "qsa_block",
                                   "gdn_step_sg", "gdn_gnorm_sg", "gdn_step_verify_sg", "moe_topk", "moe_topk_rows",
                                   "moe_down2_w", "moe_down_rows_g64_w"};
+    if (hc_precomb()) v.push_back("hc_pre_comb_h");
     for (const std::string& n : v) Gpu::get().pipeline(n, false);
   }
   ple_ev_ = Gpu::get().new_shared_event();
@@ -817,6 +834,13 @@ void Qwen4Exp::enc_capture4(Encoder& e, int layer, int pos0, int R) {
   e.dispatch((D + 255) / 256, p.R, 1, 256);
 }
 
+// Whether layer `layer`'s enc_capture4 skips — its early-returns exactly, so the NI_HC_PRECOMB fold
+// gate never takes yb_ away from an armed capture.
+bool Qwen4Exp::capture_noop(int layer, int pos0, int R) const {
+  if (!cap_ || layer >= int(cap_->slot.size()) || cap_->slot[size_t(layer)] < 0) return true;
+  return std::max(pos0, cap_->pos_base) >= std::min(pos0 + R, cap_->pos_base + cap_->rows);
+}
+
 // ---- encoders ----
 
 void Qwen4Exp::enc_expand(Encoder& e, int R) {
@@ -951,17 +975,56 @@ void Qwen4Exp::enc_gr_prefill(Encoder& e, const GatedRes& g, int T, const Buffer
                               const Buffer& inj_prev, const Buffer& inj_out) {
   const uint32_t D = uint32_t(cfg_.hidden), S = uint32_t(c4_.hc);
   const HcParams p{uint32_t(T), D, S, inject ? 1u : 0u, g.inj ? 1u : 0u, cfg_.eps};
-  e.use(pipe("hc_pre_h"));
-  e.buf(0, X); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
-  e.buf(4, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(5, xn4h_); e.buf(6, inj_out);
-  e.val(7, p);
-  e.dispatch(uint32_t(T), 1, 1, 1024);
+  if (comb_pending_.active && !inject) fatal("hc_precomb: pending combine met a non-injecting gated residual");
+  if (comb_pending_.active) {
+    // NI_HC_PRECOMB: hc_pre_comb_h computes the previous MoE's combine sum from yd_ / ys_ / rwts_ (its
+    // phase A is moe_combine verbatim) and injects it from threadgroup memory; yb_ is neither read (it
+    // stays zero from the last gated residual's zeroing) nor written.
+    e.use(pipe("hc_pre_comb_h"));
+    e.buf(0, X); e.buf(1, inj_prev); e.buf(2, g.norm->buf);
+    e.buf(3, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(4, xn4h_); e.buf(5, inj_out);
+    e.val(6, p);
+    e.buf(7, comb_pending_.yd); e.buf(8, comb_pending_.ys); e.buf(9, rwts_);
+    const kp::Combine cp{comb_pending_.D, comb_pending_.k};  // the kernel's HcCombParams is this {D, k} layout
+    e.val(10, cp);
+    e.dispatch(uint32_t(T), 1, 1, 1024);
+    comb_pending_ = CombPending{};  // consumed
+  } else {
+    e.use(pipe("hc_pre_h"));
+    e.buf(0, X); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
+    e.buf(4, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(5, xn4h_); e.buf(6, inj_out);
+    e.val(7, p);
+    e.dispatch(uint32_t(T), 1, 1, 1024);
+  }
   enc_qmm(e, g.down, xn4h_, hch_, T, false);
   const uint32_t n = uint32_t(T) * uint32_t(c4_.hc_rank);
   const float inv_s = 1.0f / float(S);
   e.use(pipe("hc_act_h"));
   e.buf(0, hch_); e.buf(1, hchh_); e.val(2, n); e.val(3, inv_s);
   e.dispatch((n + 255) / 256, 1, 1, 256);
+  // NI_HC_FUSE (default off): the mix folded into the up projection's tensor-ops tile — qmt6_mix_m64_n64 runs
+  // qmt6_m64_n64's k-loop once per stream and drains sigmoid(m) * Xn into a second destination tensor in
+  // hc_mix_impl's order, so the [T, S*D] fp32 mix buffer (hcm_) is never written or read back (16K prefill on
+  // Flash-Next q20: 84 MB written + 84 MB read and one dispatch per hyper-connection per chunk saved).
+  // Intended to be bitwise identical to the two dispatches it replaces; no GPU run of the kernel exists yet.
+  // Engages only where the up GEMM it replaces is exactly enc_qmm_large's qmt6_m64_n64 branch: qmm_on() (its
+  // q.on), qmt6_on(), T >= 64, and not the short-prefill enc_proj detour (!small_t(T), which enc_qmm takes when
+  // shortpf() && T <= shortpf_max()). Against any other baseline (qrf, qmr, enc_proj) the fused tile would be a
+  // reassociation rather than the bitwise claim, so the fold stays off there.
+  static const bool fuse = env_on("NI_HC_FUSE");
+  const uint32_t rank = uint32_t(c4_.hc_rank);
+  if (fuse && qmm_on() && qmt6_on() && T >= 64 && !small_t(T) && g.down.same_format(g.up) && g.up.bits == 6 &&
+      g.up.gs == 64 && rank % 64 == 0 && D % 64 == 0) {
+    const struct {
+      uint32_t M, N, K, x_ld, D, S, u_ld;
+    } mp{uint32_t(T), S * D, rank, rank, D, S, D};
+    e.use(pipe("qmt6_mix_m64_n64"));
+    e.buf(0, hchh_); e.buf(1, g.up.w->buf); e.buf(2, g.up.s->buf); e.buf(3, g.up.b->buf);
+    e.buf(4, xn4h_); e.buf(5, xh_);
+    e.val(6, mp);
+    e.dispatch(D / 64, (uint32_t(T) + 63) / 64, 1, 128);
+    return;
+  }
   enc_qmm(e, g.up, hchh_, hcm_, T, false);
   const uint32_t ld = D;
   e.use(pipe("hc_mix_h"));
@@ -1068,6 +1131,40 @@ void Qwen4Exp::enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int
   e.dispatch(uint32_t(R), 1, 1, 1024);
 }
 
+// The shapes qsa_all's 1024-thread row threadgroups cover (see the kernel): eight head slices of HD = 128, and at
+// most R / 2 <= 8 re-derived blocks per row (a block spans ratio >= 2 rows, so R <= 16 keeps bk4's nine rows free).
+bool Qwen4Exp::qsa_fusable(int R) const {
+  static const bool fuse = env_on("NI_QSA_FUSE");
+  const int ratio = c4_.ix_ratio;
+  return fuse && R >= 1 && R <= 16 && c4_.ix_heads >= 1 && c4_.ix_heads <= 8 && c4_.ix_dim == 128 && ratio >= 2 &&
+         ratio <= 16 && (ratio & (ratio - 1)) == 0;
+}
+
+// enc_qsa + enc_qsa_select as one qsa_all dispatch (NI_QSA_FUSE): intended to be bitwise identical to the four by
+// construction (see the kernel in qwen4.metal), so the callers keep the sparse attention after enc_qsa_select unchanged
+void Qwen4Exp::enc_qsa_fused(Encoder& e, const Seq& s, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R,
+                             int pos0, const Buffer& ik, const Buffer& bk) {
+  const QsaParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(cfg_.rot_dims), uint32_t(pos0),
+                    uint32_t(c4_.ix_ratio), ld, cfg_.eps, cfg_.theta};
+  const struct {
+    uint32_t mn;
+    int32_t delta;
+    uint32_t sec1, sec2;
+  } m{uint32_t(s.rope_n), s.rope_delta, uint32_t(3 * cfg_.mrope[1]), uint32_t(3 * cfg_.mrope[2])};
+  const Buffer& mpos = s.rope_pos ? s.rope_pos : iq_;
+  const uint32_t nb = uint32_t(pos0 + R) / uint32_t(c4_.ix_ratio);  // blocks of the last row
+  const size_t need = size_t(R) * nb * 4;
+  if (qscore_.size < need) regrow(e, qscore_, std::max(need, size_t(4) << 20), "qsa_scores");
+  const QsaSelParams ps{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(pos0),
+                        uint32_t(c4_.ix_ratio), uint32_t(c4_.ix_budget / c4_.ix_ratio), nb, qidx_ld_};
+  e.use(pipe("qsa_all"));
+  e.buf(0, iqk); e.buf(1, F.iqn->buf); e.buf(2, F.ikn->buf); e.buf(3, ik); e.buf(4, bk);
+  e.buf(5, qscore_); e.buf(6, qidx_); e.buf(7, qcnt_);
+  e.val(8, p);
+  e.buf(9, mpos); e.val(10, m); e.val(11, ps);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+}
+
 void Qwen4Exp::enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int row0, uint32_t mwords) {
   const uint32_t nb = uint32_t(pos0 + R) / uint32_t(c4_.ix_ratio);
   const size_t need = size_t(R) * nb * 4, mneed = size_t(row0 + R) * mwords * 4;
@@ -1137,6 +1234,12 @@ void Qwen4Exp::enc_attn4(Encoder& e, Seq& s, int li, const Layer& L, const Qwen4
   e.val(8, ap);
   if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, 1, 1, cfg_.head_dim);
+  if (qsa_fusable(1) && qsa_sparse(pos)) {  // the fused chain (NI_QSA_FUSE): the four dispatches as one
+    enc_qsa_fused(e, s, F, iqk_, F.iqk.N, 1, pos, s.ixk[size_t(li)], s.ixb[size_t(li)]);
+    enc_attn_sparse(e, s.kc[size_t(li)], s.vc[size_t(li)], s.cap, 1, true, 0);
+    enc_qmv(e, L.o, attn_out_, yb_, nullptr, nullptr);
+    return;
+  }
   enc_qsa(e, s, F, iqk_, F.iqk.N, 1, pos, s.ixk[size_t(li)], s.ixb[size_t(li)]);
   if (qsa_sparse(pos)) {  // the selected blocks only
     enc_qsa_select(e, s.ixb[size_t(li)], 1, pos, 0);
@@ -1361,7 +1464,14 @@ void Qwen4Exp::enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buf
       enc_attn4_prefill(e, s, i, L, F, pos0, T);
     }
     enc_gr_prefill(e, F.gm, T, x_, true, injA_, injM_);
+    // NI_HC_PRECOMB: fold this MoE's combine sum into layer i + 1's gated residual only when nothing
+    // reads yb_ in between — no armed capture of this layer, and no PLE boundary, debug cut or final
+    // layer after it (those consume yb_ through enc_inject / enc_hop) — and the kernel's threadgroup
+    // sum fits: one float4 per thread of the row's 1024, so D % 4 == 0 and D / 4 <= 992 (D <= 3968).
+    precomb_arm_ = hc_precomb() && i + 1 < hi_ && i + 1 != dbg_layers_ && i + 1 != c4_.ple_layer &&
+                   cfg_.hidden % 4 == 0 && cfg_.hidden <= 3968 && capture_noop(i, pos0, T);
     enc_moe_prefill(e, L, T, yb_, /*xh_ready=*/true);
+    precomb_arm_ = false;
     enc_capture4(e, i, pos0, T);
     // a command buffer per layer of a long chunk (~1/48 of it), so the desktop's own GPU work is not held up
     if (T >= 256 && i + 1 < cfg_.layers) e.split();
@@ -1385,6 +1495,7 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
   if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, yb_, D);  // image rows
   enc_expand(e, T);
   enc_prefill_layers(e, s, pos0, T, rows, snap, snap_row);
+  if (comb_pending_.active) fatal("hc_precomb: a pending combine outlived the prefill layers");
   // the pre-mix state of every row (the MTP head's history, logits); a split's last Mac injects its last block itself
   if (remote_ && dbg_layers_ < 0) enc_hop(e, Remote::Kind::prefill, s, pos0, T, snap, snap_row);
   else if (dbg_layers_ != 0) enc_inject(e, T, x_, injM_);
@@ -1440,6 +1551,7 @@ void Qwen4Exp::encode_stage(Encoder& e, Seq& s, const Remote::Pass& p, Checkpoin
     case Remote::Kind::prefill:
       if (p.rows > tmax_) fatal("prefill chunk %d > %d", p.rows, tmax_);
       enc_prefill_layers(e, s, p.pos, p.rows, Buffer{}, snap, p.snap_row);
+      if (comb_pending_.active) fatal("hc_precomb: a pending combine outlived the stage's prefill layers");
       if (hi_ == cfg_.layers) enc_inject(e, p.rows, x_, injM_);
       if (snap) snap->pos = p.pos + p.snap_row;
       break;

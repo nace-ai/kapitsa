@@ -3081,6 +3081,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const int K = dfl_->verify_depth();
     int P = n;
     req_cycles = 0;
+    dfl_->gate_reset();  // the gate's window is a per-request statistic (a park keeps it; this clears it -- with
+    // --slots above 1 a request starting while another is parked clears the parked one's window too, which then
+    // re-warms; the gate only ever moves kmax down, so that costs warmup cycles, never correctness)
     bool go = handle(s.tokens()[n]);
     // the KV room a cycle wants: the next anchor (at most P + 8) and its verify's rows (KFlash trees: up to 32; with
     // less room the drafting pass verifies fewer, DFlash2::tree_cap_)

@@ -63,6 +63,14 @@ std::string format_name(int bits, int gs);  // "bf16", "4-bit group 64", ...
 // The per-row MoE kernel (gate/up or down) for routed experts e and shared expert s, "" if none exists.
 // wide: the experts' staged h exceeds 4608 floats (Qwen35::moe_wide), so the down kernel's _w form ("" if none).
 std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bool wide = false);
+// The NI_QMT6 gate (defined in qwen35.cpp): the 6-bit group-64 dense prefill GEMMs on tensor ops. Exported for
+// Qwen4Exp's NI_HC_FUSE mix fold (qmt6_mix_m64_n64), which is that tile's derivative and must share its kill
+// switch rather than carry a second reading of the env.
+bool qmt6_on();
+// The NI_QMM gate (defined in qwen35.cpp): whether the dense prefill GEMMs run through the qmr/qmt selector at
+// all (enc_qmm_large's q.on). Exported for Qwen4Exp's NI_HC_FUSE mix fold, whose host gate must match the
+// tensor-tile branch it replaces exactly.
+bool qmm_on();
 
 struct Qwen35Config {
   int hidden = 0, layers = 0, vocab = 0;
@@ -724,6 +732,16 @@ class Qwen35 : public Model {
   // prefill-only
   Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_, ue_, uw_, un_, mh_;
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
+  // NI_HC_PRECOMB (Qwen4Exp's prefill, default off): the MoE's moe_combine dispatch is skipped and its
+  // sum computed inside the next gated residual (hc_pre_comb). arm_: the caller's next combine folds;
+  // comb_pending_: the held combine input for the next hc_pre to consume (ys = the shared rows or the
+  // shared-fold view of yd_). Only Qwen4Exp's prefill loop arms it; only its gated residual consumes it.
+  bool precomb_arm_ = false;
+  struct CombPending {
+    Buffer yd, ys;
+    uint32_t D = 0, k = 0;
+    bool active = false;
+  } comb_pending_;
   // 8-row verify (allocated on first use)
   bool v8_ready_ = false;
   Buffer v8g_, v8u_;  // split MLP: fp32 gate / up rows [8][I]

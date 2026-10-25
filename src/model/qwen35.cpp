@@ -111,7 +111,7 @@ static bool qmt_on();
 // NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
 // at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
 // qrf_f6g64_m32_n128.
-static bool qmt6_on();
+bool qmt6_on();  // declared in qwen35.h: Qwen4Exp's NI_HC_FUSE mix fold shares this kill switch
 // NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
 // memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
 // bitwise; 0 runs the *_o instantiations with main's stores (the kill switch). M5 Pro, 35B ni_run prefill (chunk
@@ -2277,7 +2277,7 @@ static bool qmt_on() {
 // qrf_load_w's half-domain affine (0x3400|q trick, one half fma with the scale pre-multiplied by 4096), so the
 // dequantized halfs — and the products over them — are bitwise the qrf path's; only the MMA shape differs
 // (one 32-K matmul2d per step instead of four 8-K simdgroup MMAs, as qmt_m64_n64 did for the 4-bit weights).
-static bool qmt6_on() {
+bool qmt6_on() {
   static const bool on = [] {
     if (env_int("NI_QMT6", 1) == 0) return false;
     if (!qmt_on()) return false;
@@ -2286,6 +2286,10 @@ static bool qmt6_on() {
   }();
   return on;
 }
+
+// Exported for Qwen4Exp's NI_HC_FUSE gate (declared in qwen35.h): enc_qmm_large's tensor-tile branches run only
+// under qmr_sel().on, and the mix fold must engage on exactly that same set of calls.
+bool qmm_on() { return qmr_sel().on; }
 
 void Qwen35::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T, int D) {
   e.use(pipe("rows_to_half"));
@@ -2641,12 +2645,17 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
     }
     if (!fold) enc_shared();
   }
-  kp::Combine cp{uint32_t(D), uint32_t(k)};
-  e.use(pipe("moe_combine"));
-  e.buf(0, yd_); e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_); e.buf(2, rwts_);
-  e.buf(3, xbuf);
-  e.val(4, cp);
-  e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
+    comb_pending_ = {yd_, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_, uint32_t(D), uint32_t(k), true};
+  } else {
+    comb_pending_.active = false;
+    kp::Combine cp{uint32_t(D), uint32_t(k)};
+    e.use(pipe("moe_combine"));
+    e.buf(0, yd_); e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_); e.buf(2, rwts_);
+    e.buf(3, xbuf);
+    e.val(4, cp);
+    e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  }
   return true;
 }
 
@@ -2954,13 +2963,18 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
   }
   if (!fold && !q20) enc_shared();
-  kp::Combine cp{uint32_t(D), uint32_t(k)};
-  e.use(pipe("moe_combine"));
-  e.buf(0, yd_);
-  e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_);
-  e.buf(2, rwts_); e.buf(3, xbuf);
-  e.val(4, cp);
-  e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
+    comb_pending_ = {yd_, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_, uint32_t(D), uint32_t(k), true};
+  } else {
+    comb_pending_.active = false;
+    kp::Combine cp{uint32_t(D), uint32_t(k)};
+    e.use(pipe("moe_combine"));
+    e.buf(0, yd_);
+    e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_);
+    e.buf(2, rwts_); e.buf(3, xbuf);
+    e.val(4, cp);
+    e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  }
   return true;
 }
 
