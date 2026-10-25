@@ -29,8 +29,7 @@ MODELS = {
 # a diff here can change decode tokens or speed: vk checks prints the decode-leg rules of output-check.md
 DECODE_GLOBS = ["src/model/*", "src/engine/spec*", "tools/ni_run*"]
 # tools that put a model on the GPU and print the numbers a PR quotes
-GPU_TOOLS = ["tools/logit_dump*", "tools/batch_check*", "tools/backend-benchmark*", "tools/*bench*", "tools/fn_store_test*",
-             "tools/ni_run*"]
+GPU_TOOLS = ["tools/logit_dump*", "tools/batch_check*", "tools/backend-benchmark*", "tools/*bench*", "tools/ni_run*"]
 TOKS = re.compile(r"tok/s|tokens/s")
 SHARED = ["qwen3.5-4b-4bit", "qwen3.6-35b-a3b-4bit"]  # one dense, one MoE: the floor for code every model runs
 
@@ -49,7 +48,8 @@ rule(0, None, "community results: regenerate bench/README.md with `python3 bench
 rule(0, None, "agent skills and review rules", ".dsh/*", ".cursor/*", ".claude/*")
 rule(0, None, "docs", "docs/*", "*.md", "LICENSE*", "NOTICE*")
 rule(0, None, "CI workflow: keep community-bench.yml's posture, PR text only through env:", ".github/*")
-rule(0, None, "CPU test of the bench client (AGENTS.md's CPU list)", "tools/bench_test*")
+rule(0, None, "CPU tests in AGENTS.md's CPU list (bench client, streamed-expert cache)", "tools/bench_test*",
+     "tools/fn_store_test*")
 rule(1, "shared", "GPU-measuring tool: its output is the evidence a PR quotes; run it from the old and the new build "
      "under the GPU lock on the models below and compare", *GPU_TOOLS)
 rule(0, None, "noise floor: changes only in its own re-measuring PR (tools/logit_floor.py), never to pass a change",

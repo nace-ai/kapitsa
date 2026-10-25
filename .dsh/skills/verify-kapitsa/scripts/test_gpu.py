@@ -72,6 +72,8 @@ check("overdue holder", (e["holder"]["known"], e["holder"]["left_min"]), ("overd
 d, e = run(["big 18874368 555 30:00 ./build/kapitsa serve --model x", "pagesize 16384", "free 65536"])
 check("model outside the lock is not free", (e["holder"], e["wait_min"] > 0, len(e["outside"])), (None, True, 1))
 check("available GB from vm_stat", d["avail_gb"], 1.0)
+d, e = run(["big 3500000 556 10:00 python3 bench/harness/compare_engines.py --runs 3"])
+check("a big python process is not a loaded model", (e["wait_min"], len(e["outside"])), (0, 0))
 
 # a flock-only holder (kapitsa bench, no lockf): the oldest fd holds
 d, e = run(["open 400 1 05:00 kapitsa bench", "open 401 1 00:30 logit_dump"])

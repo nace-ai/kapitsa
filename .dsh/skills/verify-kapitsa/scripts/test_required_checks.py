@@ -38,7 +38,7 @@ CASES = [  # path, tier, models (None = no model run; "shared" = the 4B and the 
     ("tools/batch_check.cpp", 1, "shared"),
     ("tools/backend-benchmark.py", 1, "shared"),
     ("tools/flint_bench.cpp", 1, "shared"),
-    ("tools/fn_store_test.cpp", 1, "shared"),
+    ("tools/fn_store_test.cpp", 0, None),
     ("tools/ni_run.cpp", 1, "shared"),
     ("tools/bench_test.cpp", 0, None),
     ("tools/logit_compare.py", 0, None),
