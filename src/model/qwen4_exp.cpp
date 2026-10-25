@@ -1195,6 +1195,30 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
   const size_t qoff = size_t(q_row0) * cfg_.hq * cfg_.head_dim * 4;
   if (!partials) {
     const AttnSparseParams p{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), maxn, uint32_t(cap), scale, 1, qidx_ld_};
+    // NI_QSA_TATTN (M5, 12 query heads per KV head): the lists on the matrix units (tensor/qsattn_t.metal),
+    // 1 = on, 0 = attn_sparse_rows; NI_QSA_TATTN_NS = simdgroups (rows) per threadgroup, 1 / 2 / 4
+    static const int tat = [] {
+      const char* v = getenv("NI_QSA_TATTN");
+      return v && *v ? atoi(v) : 0;
+    }();
+    static const int tns = [] {
+      const char* v = getenv("NI_QSA_TATTN_NS");
+      const int n = v && *v ? atoi(v) : 4;
+      return n == 1 || n == 2 ? n : 4;
+    }();
+    if (tat && G == 12 && cfg_.head_dim == 256 && Gpu::get().apple_family() >= 10) {
+      const uint32_t rr = uint32_t(R);
+      const bool d2 = tat == 2;  // 2 = the head dim split over a pair of simdgroups (qattn_t_sparse_g12d2)
+      e.use(pipe(d2 ? std::string("qattn_t_sparse_g12d2") : "qattn_t_sparse_g12s" + std::to_string(tns)));
+      e.buf(0, qo_, qoff); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_, qoff * 2); e.buf(4, attn_out_, qoff);
+      e.val(5, p);
+      e.buf(6, qidx_); e.buf(7, qcnt_); e.val(8, rr);
+      if (d2)
+        e.dispatch(rr, uint32_t(cfg_.hkv), 1, 64);
+      else
+        e.dispatch((rr + uint32_t(tns) - 1) / uint32_t(tns), uint32_t(cfg_.hkv), 1, 32 * uint32_t(tns));
+      return;
+    }
     e.use(pipe("attn_sparse_rows"));
     e.buf(0, qo_, qoff); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_, qoff * 2); e.buf(4, attn_out_, qoff);
     e.val(5, p);
