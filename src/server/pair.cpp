@@ -214,8 +214,7 @@ void watch_pairs(PairHead h) {
           continue;
         }
         EngineOptions o = alone_opt;
-        if (o.prefill_chunk > l->rows() || (o.prefill_chunk <= 0 && l->rows() < prefill_chunk_room(2048)))
-          o.prefill_chunk = l->rows();
+        o.prefill_chunk = head_chunk_for_link(o.prefill_chunk, int(l->rows()));
         std::string err;
         if (!h.mgr->reload(o, [l] { Qwen4Exp::set_split({0, l->first(), l}); }, [] { Qwen4Exp::set_split({}); }, &err)) {
           h.say("Could not pair with " + names_of(found) + ": " + err, true);

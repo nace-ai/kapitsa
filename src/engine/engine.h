@@ -110,6 +110,17 @@ int prefill_narrow_chunk(const std::string& model_dir, int context, int slots, s
 int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even);
 // Rows the prefill buffers plan for: `chunk` plus its tail room (2112 for 2048), so an even chunk still fits them
 int prefill_chunk_room(int chunk);
+// The prefill chunk a head plans when its peers accept at most `rows` a pass (`--split` and pair heads): `want` (0 = the
+// plan's own choice) when the link holds it, else `rows`. A stage drops a pass with more rows than its own chunk
+// (src/cluster/stage.cpp) and the link dies, so a head must never plan past its peers' room. `rows` below the room a
+// 2048-row chunk needs means the peers take less than the plain default and everything is clamped; `rows` below
+// prefill_chunk_room(4096) (4224) also clamps the 4096-row defaults (Flash-Next Q2_0's chunk and the 35B's wide one),
+// which a default stage's 2112 rows cannot hold.
+inline int head_chunk_for_link(int want, int rows) {
+  if (rows <= 0) return want;
+  if (want > 0) return want > rows ? rows : want;
+  return rows < prefill_chunk_room(4096) ? rows : 0;
+}
 // NI_BAL (default on; 0 = the chunking before tail room and even chunks), read once
 bool prefill_even_chunks();
 
