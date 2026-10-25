@@ -359,13 +359,15 @@ Flash-Next does not fit in 48 GB, so both engines stream routed experts from the
 mmap), greedy, no speculative decoding, two legs per engine and length in ABBA order
 ([results](../bench/results/2026-10-24-m5-pro-flash-next-ssd/README.md)):
 
-| Prompt | Kapitsa prefill / decode | llama.cpp prefill / decode | Prefill | Decode |
+| Prompt | Kapitsa prefill / decode | llama.cpp prefill / decode | Prefill | Decode (not comparable, re-measure pending) |
 | --- | ---: | ---: | --- | --- |
-| 85 tokens | 52.7 / **40.5** | **255.0** / 39.0 | Kapitsa 79% slower | Kapitsa 4.0% faster |
-| 1K | 445.0 / **40.8** | **617.5** / 38.3 | Kapitsa 28% slower | Kapitsa 6.3% faster |
-| 4K | 558.2 / **40.0** | 569.4 / 37.1 | level | Kapitsa 8.0% faster |
-| 16K | 555.0 / 34.7 | 549.7 / **36.5** | level | Kapitsa 5.1% slower |
-| 32K | 549.9 / 32.7 | 535.4 / **35.6** | Kapitsa 2.7% faster | Kapitsa 8.2% slower |
+| 85 tokens | 52.7 / 40.5 | **255.0** / 39.0 | Kapitsa 79% slower | Kapitsa 4.0% faster |
+| 1K | 445.0 / 40.8 | **617.5** / 38.3 | Kapitsa 28% slower | Kapitsa 6.3% faster |
+| 4K | 558.2 / 40.0 | 569.4 / 37.1 | level | Kapitsa 8.0% faster |
+| 16K | 555.0 / 34.7 | 549.7 / 36.5 | level | Kapitsa 5.1% slower |
+| 32K | 549.9 / 32.7 | 535.4 / 35.6 | Kapitsa 2.7% faster | Kapitsa 8.2% slower |
+
+**Decode: not comparable, re-measure pending.** These Kapitsa runs did not stop at the end of the turn (`<|im_end|>`) and the 1K and 32K prompts have no assistant header, so at 1K, 4K and 32K the answer ended after 2, 31 and 63 tokens and the rest of the timed tokens is text generated after it; at 16K Kapitsa stopped at 47 tokens against llama.cpp's 128.
 
 **Not the fastest everywhere.** Kapitsa's auto store size here (28-29.9 GB) stopped four runs at memory pressure, so
 the table pins 24 GB; a user's store is larger. The two engines run different quantized weights, so only speed is

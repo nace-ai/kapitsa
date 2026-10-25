@@ -112,7 +112,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: | ---: |
 | **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2691 / **149**<br><sub>KFlash</sub> | 2072 / 92 | 2138 / 145 |
 
-<sub>Qwen3.8-Flash-Next 180B-A7B does not fit in 48 GB, so both engines stream its experts from the SSD. With Q2_0 weights on both and Kapitsa's expert store pinned at 24 GB (the auto size here is about 29.9 GB, but four runs at that size were stopped at memory pressure), Kapitsa decodes faster than llama.cpp up to 4K tokens of context and slower at 16K and 32K, and its prefill is behind on short prompts, level at 4K and 16K and 2.7% ahead at 32K: not the fastest everywhere ([numbers and caveats](docs/benchmarks.md#qwen38-flash-next-streamed-from-the-ssd-kapitsa-against-llamacpp-m5-pro-48-gb-2026-10-24)).</sub>
+<sub>Qwen3.8-Flash-Next 180B-A7B does not fit in 48 GB, so both engines stream its experts from the SSD. With Q2_0 weights on both and Kapitsa's expert store pinned at 24 GB (the auto size here is about 29.9 GB, but four runs at that size were stopped at memory pressure), Kapitsa's prefill is behind on short prompts, level at 4K and 16K and 2.7% ahead at 32K: not the fastest everywhere ([numbers and caveats](docs/benchmarks.md#qwen38-flash-next-streamed-from-the-ssd-kapitsa-against-llamacpp-m5-pro-48-gb-2026-10-24)).</sub>
 
 </details>
 

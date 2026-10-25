@@ -117,3 +117,16 @@ level (Kapitsa's cold leg 13.9 s, llama.cpp 13.2 s; Kapitsa's second leg is warm
 | llama-cpumoe | pf4 | 2 | ok | 4132 | 142.8 | 28928 | 14.18 | 2.50 | - | 0 |
 | llama-gpu | pf4 | 2 | ok | 4132 | 567.5 | 7281 | 37.06 | 10.44 | - | 0 |
 
+
+## Erratum (2026-10-26)
+
+**What was wrong.** Kapitsa's decode legs above did not stop at the end of the turn (`ni_run` does not stop at
+`<|im_end|>`), and the 1K and 32K prompts have no assistant header. Kapitsa's first end-of-turn token comes at output
+index 2 (1K), 31 (4K) and 63 (32K), so the rest of the 128 timed tokens is text generated after the answer. At 16K
+Kapitsa stopped at 47 tokens and llama.cpp decoded 128.
+
+**Corrected value.** The decode column is not comparable. This run has no valid decode measurement, and a re-measure
+is pending. The prefill columns are unaffected.
+
+**Evidence.** The Flash-Next beat ledger §2.177 (decode-validity audit and re-measure plan) and the per-leg audit
+`/tmp/fnx-def/r242/audit.md` (31 rows, first end-of-turn index read from each leg's `ids:` line in `legs/kap_*.log`).
