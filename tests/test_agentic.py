@@ -89,8 +89,17 @@ c = agentic.summarize_cache({"cold_ttft_s": 2.0, "warm_ttft_s": 0.4, "interleave
 check(c["warm_vs_cold_speedup"] == 5.0 and c["interleave_prefix_kept"] is False, "interleave evicted", str(c))
 check(agentic.summarize_cache({"cold_ttft_s": 2.0, "interleave_ttft_s": 0.3})["interleave_prefix_kept"] is True, "interleave kept")
 th = agentic.parse_thermal("Note: No thermal warning level has been recorded\nCPU_Scheduler_Limit = 100\nCPU_Speed_Limit = 87\n",
-                           "Now drawing from 'Battery Power'\n", " lowpowermode 0\n powermode 2\n")
-check(th == {"speed_limit": 87, "scheduler_limit": 100, "battery": True, "low_power": False}, "pmset parse", str(th))
+                           "Now drawing from 'Battery Power'\n", " powermode            2\n")
+check(th == {"speed_limit": 87, "scheduler_limit": 100, "battery": True, "low_power": True, "powermode": "2"},
+      "pmset parse", str(th))
+# macOS 26 prints the system-wide `powermode` (2 = Low Power Mode) and only bare `lowpowermode`/`highpowermode`
+# tokens, so the old `lowpowermode 1` match never fired; macOS 14 and earlier printed `lowpowermode 1` itself.
+check(agentic.parse_thermal("", "", " lowpowermode            1\n lowpowermode\n")["low_power"] is True,
+      "the older lowpowermode 1 spelling still reads as Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'\n", " powermode            0\n")["low_power"] is False,
+      "powermode 0 on AC is not Low Power Mode")
+check(agentic.parse_thermal("", "", " lowpowermode\n highpowermode\n")["low_power"] is False,
+      "the bare capability tokens macOS 26 prints are not a mode")
 check(agentic.parse_thermal("Note: No CPU power status has been recorded\n")["speed_limit"] is None, "pmset without limits")
 
 # ---- phases against the fake server
