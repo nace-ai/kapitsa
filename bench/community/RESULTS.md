@@ -32,6 +32,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [Mac Studio (2023) · M2 Max 38-core GPU · 64 GB](#mac-studio-2023--m2-max-38-core-gpu--64-gb) | 1 |
 | [MacBook Pro (14-inch, 2023) · M2 Max 30-core GPU · 64 GB](#macbook-pro-14-inch-2023--m2-max-30-core-gpu--64-gb) | 2 |
 | [MacBook Pro (14-inch, Nov 2023) · M3 Max 40-core GPU · 64 GB](#macbook-pro-14-inch-nov-2023--m3-max-40-core-gpu--64-gb) | 2 |
+| [MacBook Pro (16-inch, 2023) · M2 Pro 19-core GPU · 32 GB](#macbook-pro-16-inch-2023--m2-pro-19-core-gpu--32-gb) | 1 |
 | [MacBook Pro (16-inch, Nov 2023) · M3 Max 40-core GPU · 48 GB](#macbook-pro-16-inch-nov-2023--m3-max-40-core-gpu--48-gb) | 2 |
 | [MacBook Pro (16-inch, Nov 2023) · M3 Max 30-core GPU · 96 GB](#macbook-pro-16-inch-nov-2023--m3-max-30-core-gpu--96-gb) | 1 |
 | [MacBook Pro (16-inch, Nov 2023) · M3 Pro 18-core GPU · 36 GB](#macbook-pro-16-inch-nov-2023--m3-pro-18-core-gpu--36-gb) | 16 |
@@ -394,6 +395,14 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-24](results/kapitsa-bench-2026-10-24-m3-max-qwen3.8-27b-4bit-1f309c.json) | 86.3 tok/s | 88.3 tok/s | 210 tok/s | 201 tok/s | 0.19 s | 0.21 s | 19.1 GB | pass | KFlash | 0.2.17 | 15.8.1 | – |
 | [2026-10-24](results/kapitsa-bench-2026-10-24-m3-max-qwen3.8-27b-4bit-9c0686.json) | 84.9 tok/s | 88.6 tok/s | 209 tok/s | 201 tok/s | 0.17 s | 0.20 s | 19.1 GB | pass | KFlash | 0.2.17 | 15.8.1 | – |
+
+## MacBook Pro (16-inch, 2023) · M2 Pro 19-core GPU · 32 GB
+
+### Qwen3.6 35B-A3B · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-25](results/kapitsa-bench-2026-10-25-m2-pro-qwen3.6-35b-a3b-4bit-aca090.json) | 112.8 tok/s | 115.3 tok/s | 682 tok/s | 536 tok/s | 0.09 s | 0.12 s | 20.8 GB | pass | KFlash | 0.2.17 | 26.5.1 | – |
 
 ## MacBook Pro (16-inch, Nov 2023) · M3 Max 40-core GPU · 48 GB
 
