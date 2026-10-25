@@ -6,10 +6,14 @@
 // Binds, params, grids and threads are src/model/qwen4_exp.cpp's enc_gr_prefill and qwen35.cpp's enc_qmm_large
 // (qmt6 branch) and prefill MoE combine. Every buffer has its exact size, so an out-of-bounds access is the
 // validation layer's to report; outputs start as one 0xff pattern, so an output still holding it was not written.
+// Takes the bench GPU lock before its first dispatch (NI_LOCK_HELD=1 when the caller already holds it), the way
+// tools/event_wait_probe.cpp does, so a bare run cannot sit beside someone's measurement.
 //   hc_fold_check          (exit status 1 if any shape fails)
+#include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
+#include "util/log.h"
 
 #include <cmath>
 #include <cstdio>
@@ -191,6 +195,9 @@ bool check_precomb(uint32_t T, uint32_t D, bool fold) {
 }  // namespace
 
 int main() {
+  bench::GpuLock lock;  // a bare run must not land beside a measurement: BENCH_GPU_LOCK, else
+                        // /tmp/kapitsa-gpu.lock (NI_LOCK_HELD=1 when the caller holds it), as event_wait_probe
+  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") && !lock.acquire()) fatal("cannot acquire GPU lock");
   Gpu& g = Gpu::get();
   g.compile_extra("tensor", kTensorKernelSource, true);  // qmt6_*: the tensor_ops library
   printf("%s\n", g.name().c_str());
