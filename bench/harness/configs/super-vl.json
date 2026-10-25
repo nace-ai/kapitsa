@@ -217,7 +217,7 @@
   "label": "super-mlxserve",
   "display": "mlx-serve (MLX 4-bit text-only conversion, no speculation)",
   "engine": "mlx-serve",
-  "version": "26.10.2",
+  "version": "26.10.3",
   "model_name": "Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
   "model_path": "{models}/super-vl-mlx-4bit-rapid",
   "prepare": [{"clean_dir": "{state}/mlx-serve/super"}, {"write_json": {"path": "{state}/mlx-serve/super/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}],

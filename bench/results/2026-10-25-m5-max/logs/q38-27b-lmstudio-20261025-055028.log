@@ -1,0 +1,2177 @@
+Waking up LM Studio service...
+llmster started (PID: 37437).
+llmster v0.0.25+1 is running (PID: 37437)
+LLM ENGINE                                          SELECTED    MODEL FORMAT
+llama.cpp-mac-arm64-apple-metal-advsimd@2.64.0         ✓            GGUF    
+llama.cpp-mac-arm64-apple-metal-advsimd@2.41.0                      GGUF    
+mlx-llm-mac-arm64-apple-metal-advsimd@1.13.1                        MLX     
+mlx-llm-mac-arm64-apple-metal-advsimd@1.11.0                        MLX     
+mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1       ✓            MLX     
+[runtime] Streaming logs from LM Studio
+[runtime] 
+[server] Streaming logs from LM Studio
+[server] 
+[model] Streaming logs from LM Studio
+[model] 
+### lms load qwen/qwen3.8-27b --identifier q38-27b-lmstudio -y --context-length 32768 --parallel 1
+[server] [2026-10-25 05:50:59][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listDownloadedModels] Listing downloaded models
+[server] [2026-10-25 05:50:59][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=loadModel] Loading model: qwen/qwen3.8-27b
+[server] [2026-10-25 05:50:59][DEBUG][LMSAuthenticator][Client=lms-cli][Endpoint=loadModel] Found 1 model(s) for key: qwen/qwen3.8-27b
+[?25l
+Loading qwen/qwen3.8-27b 0% ⠋[?25l
+Loading qwen/qwen3.8-27b 0% ⠙[?25l
+Loading qwen/qwen3.8-27b 2% ⠙[?25l
+Loading qwen/qwen3.8-27b 2% ⠹[?25l
+Loading qwen/qwen3.8-27b 2% ⠸[?25l
+Loading qwen/qwen3.8-27b 4% ⠸[?25l
+Loading qwen/qwen3.8-27b 4% ⠼[?25l
+Loading qwen/qwen3.8-27b 6% ⠼[?25l
+Loading qwen/qwen3.8-27b 6% ⠴[?25l
+Loading qwen/qwen3.8-27b 6% ⠦[?25l
+Loading qwen/qwen3.8-27b 7% ⠦[?25l
+Loading qwen/qwen3.8-27b 7% ⠧[?25l
+Loading qwen/qwen3.8-27b 9% ⠧[?25l
+Loading qwen/qwen3.8-27b 9% ⠇[?25l
+Loading qwen/qwen3.8-27b 9% ⠏[?25l
+Loading qwen/qwen3.8-27b 11% ⠏[?25l
+Loading qwen/qwen3.8-27b 11% ⠋[?25l
+Loading qwen/qwen3.8-27b 12% ⠋[?25l
+Loading qwen/qwen3.8-27b 12% ⠙[?25l
+Loading qwen/qwen3.8-27b 12% ⠹[?25l
+Loading qwen/qwen3.8-27b 14% ⠹[?25l
+Loading qwen/qwen3.8-27b 14% ⠸[?25l
+Loading qwen/qwen3.8-27b 15% ⠸[?25l
+Loading qwen/qwen3.8-27b 15% ⠼[?25l
+Loading qwen/qwen3.8-27b 15% ⠴[?25l
+Loading qwen/qwen3.8-27b 17% ⠴[?25l
+Loading qwen/qwen3.8-27b 17% ⠦[?25l
+Loading qwen/qwen3.8-27b 18% ⠦[?25l
+Loading qwen/qwen3.8-27b 18% ⠧[?25l
+Loading qwen/qwen3.8-27b 18% ⠇[?25l
+Loading qwen/qwen3.8-27b 19% ⠇[?25l
+Loading qwen/qwen3.8-27b 19% ⠏[?25l
+Loading qwen/qwen3.8-27b 21% ⠏[?25l
+Loading qwen/qwen3.8-27b 21% ⠋[?25l
+Loading qwen/qwen3.8-27b 21% ⠙[?25l
+Loading qwen/qwen3.8-27b 22% ⠙[?25l
+Loading qwen/qwen3.8-27b 22% ⠹[?25l
+Loading qwen/qwen3.8-27b 23% ⠹[?25l
+Loading qwen/qwen3.8-27b 23% ⠸[?25l
+Loading qwen/qwen3.8-27b 23% ⠼[?25l
+Loading qwen/qwen3.8-27b 24% ⠼[?25l
+Loading qwen/qwen3.8-27b 24% ⠴[?25l
+Loading qwen/qwen3.8-27b 26% ⠴[?25l
+Loading qwen/qwen3.8-27b 26% ⠦[?25l
+Loading qwen/qwen3.8-27b 26% ⠧[?25l
+Loading qwen/qwen3.8-27b 27% ⠧[?25l
+Loading qwen/qwen3.8-27b 27% ⠇[?25l
+Loading qwen/qwen3.8-27b 28% ⠇[?25l
+Loading qwen/qwen3.8-27b 28% ⠏[?25l
+Loading qwen/qwen3.8-27b 28% ⠋[?25l
+Loading qwen/qwen3.8-27b 29% ⠋[?25l
+Loading qwen/qwen3.8-27b 29% ⠙[?25l
+Loading qwen/qwen3.8-27b 30% ⠙[?25l
+Loading qwen/qwen3.8-27b 30% ⠹[?25l
+Loading qwen/qwen3.8-27b 30% ⠸[?25l
+Loading qwen/qwen3.8-27b 31% ⠸[?25l
+Loading qwen/qwen3.8-27b 31% ⠼[?25l
+Loading qwen/qwen3.8-27b 32% ⠼[?25l
+Loading qwen/qwen3.8-27b 32% ⠴[?25l
+Loading qwen/qwen3.8-27b 32% ⠦[?25l
+Loading qwen/qwen3.8-27b 33% ⠦[?25l
+Loading qwen/qwen3.8-27b 33% ⠧[server] [2026-10-25 05:51:02][DEBUG][disk_budget][INFO]: VLM prompt cache disk budget: stage=provisional cap_gib=30.00
+[server] [2026-10-25 05:51:02][DEBUG][cache_store][INFO]: VLM prompt cache disk store: lifetime=model_load storage=temporary cleanup=model_unload_or_process_exit
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [disk_budget][INFO]: VLM prompt cache disk budget: stage=provisional cap_gib=30.00
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [cache_store][INFO]: VLM prompt cache disk store: lifetime=model_load storage=temporary cleanup=model_unload_or_process_exit
+[?25l
+Loading qwen/qwen3.8-27b 34% ⠧[?25l
+Loading qwen/qwen3.8-27b 34% ⠇[?25l
+Loading qwen/qwen3.8-27b 34% ⠏[?25l
+Loading qwen/qwen3.8-27b 34% ⠏[?25l
+Loading qwen/qwen3.8-27b 34% ⠋[?25l
+Loading qwen/qwen3.8-27b 34% ⠙[?25l
+Loading qwen/qwen3.8-27b 35% ⠙[?25l
+Loading qwen/qwen3.8-27b 35% ⠹[?25l
+Loading qwen/qwen3.8-27b 36% ⠹[?25l
+Loading qwen/qwen3.8-27b 36% ⠸[?25l
+Loading qwen/qwen3.8-27b 37% ⠸[?25l
+Loading qwen/qwen3.8-27b 37% ⠼[?25l
+Loading qwen/qwen3.8-27b 37% ⠴[?25l
+Loading qwen/qwen3.8-27b 38% ⠴[?25l
+Loading qwen/qwen3.8-27b 38% ⠦[?25l
+Loading qwen/qwen3.8-27b 38% ⠧[?25l
+Loading qwen/qwen3.8-27b 38% ⠧[?25l
+Loading qwen/qwen3.8-27b 38% ⠇[?25l
+Loading qwen/qwen3.8-27b 39% ⠇[?25l
+Loading qwen/qwen3.8-27b 39% ⠏[?25l
+Loading qwen/qwen3.8-27b 39% ⠋[?25l
+Loading qwen/qwen3.8-27b 40% ⠋[?25l
+Loading qwen/qwen3.8-27b 40% ⠙[?25l
+Loading qwen/qwen3.8-27b 41% ⠙[?25l
+Loading qwen/qwen3.8-27b 41% ⠹[?25l
+Loading qwen/qwen3.8-27b 41% ⠸[?25l
+Loading qwen/qwen3.8-27b 41% ⠸[?25l
+Loading qwen/qwen3.8-27b 41% ⠼[?25l
+Loading qwen/qwen3.8-27b 42% ⠼[?25l
+Loading qwen/qwen3.8-27b 42% ⠴[?25l
+Loading qwen/qwen3.8-27b 42% ⠦[?25l
+Loading qwen/qwen3.8-27b 43% ⠦[?25l
+Loading qwen/qwen3.8-27b 43% ⠧[?25l
+Loading qwen/qwen3.8-27b 43% ⠧[?25l
+Loading qwen/qwen3.8-27b 43% ⠇[?25l
+Loading qwen/qwen3.8-27b 43% ⠏[?25l
+Loading qwen/qwen3.8-27b 44% ⠏[?25l
+Loading qwen/qwen3.8-27b 44% ⠋[?25l
+Loading qwen/qwen3.8-27b 45% ⠋[?25l
+Loading qwen/qwen3.8-27b 45% ⠙[?25l
+Loading qwen/qwen3.8-27b 45% ⠹[?25l
+Loading qwen/qwen3.8-27b 45% ⠹[?25l
+Loading qwen/qwen3.8-27b 45% ⠸[?25l
+Loading qwen/qwen3.8-27b 46% ⠸[?25l
+Loading qwen/qwen3.8-27b 46% ⠼[?25l
+Loading qwen/qwen3.8-27b 46% ⠴[?25l
+Loading qwen/qwen3.8-27b 46% ⠴[?25l
+Loading qwen/qwen3.8-27b 46% ⠦[?25l
+Loading qwen/qwen3.8-27b 47% ⠦[?25l
+Loading qwen/qwen3.8-27b 47% ⠧[?25l
+Loading qwen/qwen3.8-27b 47% ⠇[?25l
+Loading qwen/qwen3.8-27b 48% ⠇[?25l
+Loading qwen/qwen3.8-27b 48% ⠏[?25l
+Loading qwen/qwen3.8-27b 48% ⠏[?25l
+Loading qwen/qwen3.8-27b 48% ⠋[?25l
+Loading qwen/qwen3.8-27b 48% ⠙[?25l
+Loading qwen/qwen3.8-27b 49% ⠙[?25l
+Loading qwen/qwen3.8-27b 49% ⠹[?25l
+Loading qwen/qwen3.8-27b 49% ⠹[server] [2026-10-25 05:51:05][DEBUG][model_kit][INFO]: Context auto-fit disabled; leaving context unchanged
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [model_kit][INFO]: Context auto-fit disabled; leaving context unchanged
+[?25l
+Loading qwen/qwen3.8-27b 49% ⠸[?25l
+Loading qwen/qwen3.8-27b 100% ⠸
+[K[?25h[server] [2026-10-25 05:51:05][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=getModelInfo] Getting descriptor for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+Model loaded successfully in 6.00s.
+(14.98 GiB)
+To use the model in the API/SDK, use the identifier "q38-27b-lmstudio".
+### loaded in 6s
+[server] [2026-10-25 05:51:05][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listLoaded] Listing loaded models
+[server] [2026-10-25 05:51:05][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listLoaded] Listing loaded models
+[server] [2026-10-25 05:51:05][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=getLoadConfig] Getting load config stack for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+[server] [2026-10-25 05:51:05][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=getModelInfo] Getting descriptor for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+[server] [2026-10-25 05:51:05][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=getLoadConfig] Getting load config stack for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+[server] [2026-10-25 05:51:05][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=getModelInfo] Getting descriptor for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+[server] [2026-10-25 05:51:05][DEBUG][LMSAuthenticator][Client=lms-cli][Endpoint=getInstanceProcessingState] Getting instance processing state for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+
+IDENTIFIER          MODEL               STATUS    SIZE        CONTEXT    PARALLEL    DEVICE    TTL
+q38-27b-lmstudio    qwen/qwen3.8-27b    IDLE      16.08 GB    32768      1           Local        
+
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER] Success! HTTP server listening on port 8197
+[server] [2026-10-25 05:51:06][INFO] 
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER] Supported endpoints:
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]   LM Studio API
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  GET  http://localhost:8197/api/v1/models
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  POST http://localhost:8197/api/v1/chat
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  POST http://localhost:8197/api/v1/models/load
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  POST http://localhost:8197/api/v1/models/download
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  GET http://localhost:8197/api/v1/models/download/status:job_id
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]   OpenAI-compatible
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  GET  http://localhost:8197/v1/models
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  POST http://localhost:8197/v1/responses
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  POST http://localhost:8197/v1/chat/completions
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  POST http://localhost:8197/v1/completions
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER]    ->  POST http://localhost:8197/v1/embeddings
+[server] [2026-10-25 05:51:06][INFO] 
+[server] [2026-10-25 05:51:06][INFO][LM STUDIO SERVER] Logs are saved into ~/.lmstudio/server-logs
+[server] [2026-10-25 05:51:06][INFO] Server started.
+[server] [2026-10-25 05:51:06][INFO] Just-in-time model loading active.
+[server] [2026-10-25 05:51:06][DEBUG] Received request: GET to /lmstudio-greeting
+Success! Server is now running on port 8197
+[server] [2026-10-25 05:51:06][DEBUG] Received request: GET to /lmstudio-greeting
+The server is running on port 8197.
+[server] [2026-10-25 05:51:06][DEBUG] Received request: GET to /v1/models
+[server] [2026-10-25 05:51:06][INFO] Returning {
+[server]   "data": [
+[server]     {
+[server]       "id": "q38-27b-lmstudio",
+[server]       "object": "model",
+[server]       "owned_by": "organization_owner"
+[server]     },
+[server]     {
+[server]       "id": "qwen/qwen3.8-27b",
+[server]       "object": "model",
+[server]       "owned_by": "organization_owner"
+[server]     },
+[server]     {
+[server]       "id": "qwen/qwen3.6-35b-a3b",
+[server]       "object": "model",
+[server]       "owned_by": "organization_owner"
+[server]     },
+[server]     {
+[server]       "id": "text-embedding-nomic-embed-text-v1.5",
+[server]       "object": "model",
+[server]       "owned_by": "organization_owner"
+[server]     }
+[server]   ],
+[server]   "object": "list"
+[server] }
+[server] [2026-10-25 05:51:06][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[warmup fb3e5ed6bfeffd8a] You are Nace, a local co... <Truncated in logs> ...states)\n\n        for h in self.h:\n            hidd"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Summarize the first file in the repository context."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 64,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:51:06][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:51:06][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:51:06][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=2920 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=2920 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:51:06][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:51:10][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=16.0 cap_mib=30720.0 lifetime_evicted_mib=0.0 records=1 lifetime=model_load[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [cache_store][INFO]: VLM prompt cache disk usage: used_mib=16.0 cap_mib=30720.0 lifetime_evicted_mib=0.0 records=1 lifetime=model_load
+
+[server] [2026-10-25 05:51:10][INFO][q38-27b-lmstudio] Prompt processing progress: 70.1%
+[server] [2026-10-25 05:51:11][INFO][q38-27b-lmstudio] Prompt processing progress: 96.4%
+[server] [2026-10-25 05:51:12][INFO][q38-27b-lmstudio] Prompt processing progress: 100.0%
+[server] [2026-10-25 05:51:14][DEBUG][disk_budget][INFO]: VLM prompt cache disk budget: stage=final target_tokens=32,768 desired_gib=20.35 cap_gib=20.35 limiter=max_kv_size[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [disk_budget][INFO]: VLM prompt cache disk budget: stage=final target_tokens=32,768 desired_gib=20.35 cap_gib=20.35 limiter=max_kv_size
+
+[server] [2026-10-25 05:51:14][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:51:14][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are Nace, a local coding agent. You help the u... <Truncated in logs> ...tools when you need to read files or run commands."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Open src/main.py and tell me what the entry point does."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "tools": [
+[server]     {
+[server]       "type": "function",
+[server]       "function": {
+[server]         "name": "read_file",
+[server]         "description": "Read a UTF-8 text file from the user's workspace and return its contents.",
+[server]         "parameters": {
+[server]           "type": "object",
+[server]           "properties": {
+[server]             "path": {
+[server]               "type": "string",
+[server]               "description": "Workspace-relative path"
+[server]             },
+[server]             "start_line": {
+[server]               "type": "integer",
+[server]               "description": "Optional first line (1-based)"
+[server]             }
+[server]           },
+[server]           "required": [
+[server]             "path"
+[server]           ]
+[server]         }
+[server]       }
+[server]     },
+[server]     {
+[server]       "type": "function",
+[server]       "function": {
+[server]         "name": "run_shell",
+[server]         "description": "Run a shell command in the workspace and return stdout/stderr.",
+[server]         "parameters": {
+[server]           "type": "object",
+[server]           "properties": {
+[server]             "command": {
+[server]               "type": "string"
+[server]             },
+[server]             "timeout_s": {
+[server]               "type": "integer"
+[server]             }
+[server]           },
+[server]           "required": [
+[server]             "command"
+[server]           ]
+[server]         }
+[server]       }
+[server]     }
+[server]   ],
+[server]   "tool_choice": "auto",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:51:14][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:51:14][INFO][q38-27b-lmstudio] Streaming response...
+[model] timestamp: 10/25/2026, 5:51:14 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] Looking at the repository context, the first file shown is a fragment of `modeling_ctrl.py` (the PyTorch CTRL model). Let me read the full file to provide an accurate summary.
+[model] 
+[model] <tool_call>
+[model] <function=Read>
+[model] <parameter=file_path>
+[model] /home/nace/repos/transformers/src
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 32.06106870229007
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 6.53
+[model] totalTimeSec: 1.965
+[model] promptTokensCount: 2921
+[model] predictedTokensCount: 63
+[model] totalTokensCount: 2984
+[model] 
+[model] 
+[server] [2026-10-25 05:51:14][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=429 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=429 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:51:14][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:51:15][INFO][q38-27b-lmstudio] Prompt processing progress: 59.5%
+[server] [2026-10-25 05:51:16][INFO][q38-27b-lmstudio] Prompt processing progress: 99.8%
+[model] timestamp: 10/25/2026, 5:51:18 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] <tool_call>
+[model] <function=read_file>
+[model] <parameter=path>
+[model] src/main.py
+[model] </parameter>
+[model] </function>
+[model] </tool_call>
+[model] stopReason: eosFound
+[model] tokensPerSecond: 14.847833079771847
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 1.383
+[model] totalTimeSec: 1.819
+[model] promptTokensCount: 430
+[model] predictedTokensCount: 27
+[model] totalTokensCount: 457
+[model] 
+[model] 
+[server] [2026-10-25 05:51:18][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:51:36][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.807488] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:51:36][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:51:36][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:51:36][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:51:36][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:51:36][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[model] timestamp: 10/25/2026, 5:51:53 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] LRU Cache with TTL Expiry, Thread-Safe Wrapper, and Pytest Test Suite.
+[model] 
+[model] This module provides:
+[model] 1. An LRU (Least Recently Used) cache implementation with TTL (Time To Live) expiry.
+[model] 2. A thread-safe wrapper around the LRU cache.
+[model] 3. A comprehensive pytest test suite.
+[model] 
+[model] The LRU cache uses an OrderedDict to maintain insertion order and provides O(1)
+[model] average time complexity for get and put operations. TTL expiry is handled by
+[model] storing timestamps with each entry and checking validity on access.
+[model] 
+[model] Thread safety is achieved through a wrapper class that uses a threading.Lock
+[model] to ensure atomic operations on the underlying cache.
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] from collections import OrderedDict
+[model] from typing import Any, Optional, Callable, Hashable
+[model] import pytest
+[model] 
+[model] 
+[model] class TTLExpiryError(Exception):
+[model]     """Custom exception raised when a TTL-expired key is accessed."""
+[model]     pass
+[model] 
+[model] 
+[model] class LRUCache:
+[model]     """
+[model]     A Least Recently Used (LRU) cache with TTL (Time To Live) expiry support.
+[model]     
+[model]     This class implements an LRU cache that automatically evicts the least
+[model]     recently used items when the cache reaches its maximum size. Additionally,
+[model]     each cached item can have an optional TTL (time-to-live) after which the
+[model]     item is considered expired and will be removed on next access.
+[model]     
+[model]     The cache maintains an OrderedDict where keys are mapped to (value, 
+[model]     expiry_time) tuples. On each access, if the item has expired, it is removed.
+[model]     When the cache exceeds its capacity, the least recently used item is evicted.
+[model]     
+[model]     Attributes:
+[model]         capacity (int): Maximum number of items the cache can hold.
+[model]         default_ttl (float): Default time-to-live in seconds for items without explicit TTL.
+[model]         _store (OrderedDict): Internal storage mapping keys to (value, expiry_time).
+[model]         _hits (int): Number of successful cache hits.
+[model]         _misses (int): Number of cache misses (including expired items).
+[model]         _evictions (int): Number of times items were evicted due to capacity.
+[model]         _expirations (int): Number of times items were removed due to TTL expiry.
+[model]     """
+[model]     
+[model]     def __init__(self, capacity: int = 100, default_ttl: Optional[float] = None):
+[model]         """
+[model]         Initialize the LRU
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 30.991735537190085
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.292
+[model] totalTimeSec: 16.456
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:51:53][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:51:53][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.237077] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:51:53][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:51:53][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:51:53][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:51:53][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:51:53][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[model] timestamp: 10/25/2026, 5:52:10 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] lru_cache_with_ttl.py
+[model] 
+[model] A comprehensive implementation of an LRU (Least Recently Used) cache with
+[model] TTL (Time To Live) expiry, thread-safe wrapper, and a complete pytest test suite.
+[model] 
+[model] This module provides:
+[model] 1. LRUCache: A thread-safe LRU cache with TTL support
+[model] 2. TTLCache: A base class for TTL-based caching
+[model] 3. ThreadSafeLRUCache: A wrapper providing additional thread safety guarantees
+[model] 4. Complete pytest test suite
+[model] 
+[model] Features:
+[model] - LRU eviction policy
+[model] - TTL-based expiry
+[model] - Thread-safe operations
+[model] - Configurable max size
+[model] - Statistics tracking
+[model] - Support for various key types
+[model] - Memory-efficient design
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] from collections import OrderedDict
+[model] from typing import Any, Optional, Callable, Hashable, Dict, List, Tuple
+[model] import weakref
+[model] from dataclasses import dataclass, field
+[model] from enum import Enum
+[model] import logging
+[model] 
+[model] # Configure logging
+[model] logging.basicConfig(level=logging.INFO)
+[model] logger = logging.getLogger(__name__)
+[model] 
+[model] 
+[model] class CacheStatus(Enum):
+[model]     """Enum representing different cache states."""
+[model]     HIT = "hit"
+[model]     MISS = "miss"
+[model]     EXPIRED = "expired"
+[model]     EVICTED = "evicted"
+[model]     ERROR = "error"
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheStats:
+[model]     """
+[model]     Statistics for cache operations.
+[model]     
+[model]     Attributes:
+[model]         hits: Number of successful cache hits
+[model]         misses: Number of cache misses
+[model]         expirations: Number of items that expired due to TTL
+[model]         evictions: Number of items evicted due to LRU policy
+[model]         sets: Number of items added to cache
+[model]         gets: Total number of get operations
+[model]         errors: Number of errors encountered
+[model]         created: Timestamp when stats were created
+[model]     """
+[model]     hits: int = 0
+[model]     misses: int = 0
+[server] [2026-10-25 05:52:10][INFO][q38-27b-lmstudio] Finished streaming response
+[model]     expirations: int = 0
+[model]     evictions: int = 0
+[model]     sets: int = 0
+[model]     gets: int = 0
+[model]     errors: int = 0
+[model]     created: float = field(default_factory=time.time)
+[model] 
+[model]     def reset(self) -> None:
+[model]         """Reset all statistics to zero."""
+[model]         self.hits = 0
+[model]         self.misses = 0
+[model]         self.expirations = 0
+[model]         self.evictions = 0
+[model]         self.sets = 0
+[model]        
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 30.630409428518814
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.334
+[model] totalTimeSec: 16.291
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:52:10][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.708242] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:52:10][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:52:10][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:52:10][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:52:10][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:52:10][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[server] [2026-10-25 05:52:15][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=1446.6 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=25 lifetime=model_load
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [cache_store][INFO]: VLM prompt cache disk usage: used_mib=1446.6 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=25 lifetime=model_load
+[model] timestamp: 10/25/2026, 5:52:26 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] LRU Cache with TTL Expiry, Thread-Safe Wrapper, and Pytest Test Suite.
+[model] 
+[model] This module provides:
+[model] 1. A base LRU cache implementation with TTL (Time-To-Live) support.
+[model] 2. A thread-safe wrapper around the LRU cache.
+[model] 3. A comprehensive pytest test suite.
+[model] 
+[model] Features:
+[model] - Least Recently Used (LRU) eviction policy
+[model] - Time-To-Live (TTL) based expiration
+[model] - Configurable maximum size
+[model] - Thread safety via locks
+[model] - Detailed documentation and comments
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import heapq
+[model] import weakref
+[model] from typing import Any, Optional, Callable, Hashable
+[model] from collections import OrderedDict
+[model] from dataclasses import dataclass, field
+[model] from enum import Enum
+[model] import logging
+[model] 
+[model] # Configure logging
+[model] logging.basicConfig(level=logging.INFO)
+[model] logger = logging.getLogger(__name__)
+[model] 
+[model] 
+[model] class CacheStatus(Enum):
+[model]     """Enumeration for cache entry status."""
+[model]     ACTIVE = "active"
+[model]     EXPIRED = "expired"
+[model]     EVICTED = "evicted"
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         key: The hashable key for the cache entry.
+[model]         value: The value stored in the cache.
+[model]         created_at: Timestamp when the entry was created.
+[model]         accessed_at: Timestamp when the entry was last accessed.
+[model]         expires_at: Timestamp when the entry expires.
+[model]         status: Current status of the entry.
+[model]         size: Optional size metric for the entry.
+[model]     """
+[model]     key: Hashable
+[model]     value: Any
+[model]     created_at: float = field(default_factory=time.time)
+[model]     accessed_at: float = field(default_factory=time.time)
+[model]     expires_at: float = field(default=0.0)
+[model]     status: CacheStatus = CacheStatus.ACTIVE
+[model]     size: Optional[int] = None
+[model] 
+[model]     def is_expired(self, now: Optional[float] = None) -> bool:
+[model]         """
+[model]         Check if the cache entry has expired.
+[model]         
+[model]         Args:
+[model]             now: Current timestamp. If None, uses time.time().
+[model]             
+[model]         Returns:
+[model]             True if the entry has expired, False otherwise.
+[model]         """
+[model]         if now is None:
+[model]             now = time.time()
+[model]         return self.expires_at > 0 and now >= self.expires_at
+[model] 
+[model]     def touch(self, now
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 31.398140737548484
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.293
+[model] totalTimeSec: 16.243
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:52:26][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:52:26][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.548366] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:52:26][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:52:26][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:52:26][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:52:26][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:52:26][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[model] timestamp: 10/25/2026, 5:52:43 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] A complete, well-commented Python module implementing an LRU cache with TTL expiry,
+[model] a thread-safe wrapper, and a pytest test suite.
+[model] 
+[model] This module provides:
+[model] 1. LRUCache - A thread-safe LRU cache with TTL (Time-To-Live) expiry support.
+[model] 2. ThreadSafeLRUCache - A wrapper that ensures all operations are thread-safe.
+[model] 3. A comprehensive pytest test suite covering basic functionality, TTL expiry,
+[model]    LRU eviction, thread safety, edge cases, and performance characteristics.
+[model] 
+[model] The implementation uses:
+[model] - OrderedDict for O(1) LRU operations
+[model] - threading.RLock for thread safety
+[model] - time.monotonic() for accurate TTL calculations
+[model] - Optional TTL per key and global TTL
+[model] 
+[model] Features:
+[model] - get(key, default=None): Retrieve a value, returning default if missing/expired
+[model] - put(key, value, ttl=None): Store a value with optional per-key TTL
+[model] - delete(key): Remove a key from the cache
+[model] - clear(): Remove all entries
+[model] - keys(): Return a list of currently valid keys
+[model] - values(): Return a list of currently valid values
+[model] - items(): Return a list of (key, value) pairs
+[model] - __len__(): Return the number of valid entries
+[model] - __contains__(key): Check if a key exists and is not expired
+[model] - __iter__(): Iterate over valid keys
+[model] - __getitem__(key): Retrieve a value, raising KeyError if missing
+[model] - __setitem__(key, value): Store a value
+[model] - __delitem__(key): Delete a key
+[model] - statistics(): Return cache statistics (hits, misses, evictions, expirations)
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import collections
+[model] from typing import Any, Optional, Callable, Iterator, List, Tuple, Dict
+[model] from dataclasses import dataclass, field
+[server] [2026-10-25 05:52:43][INFO][q38-27b-lmstudio] Finished streaming response
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         value: The cached value.
+[model]         created_at: The monotonic timestamp when the entry was created.
+[model]         ttl: Time-to-live in seconds. None means no expiry.
+[model]         last_accessed: The monotonic timestamp of the last access.
+[model]     """
+[model]     value: Any
+[model]     created_at: float
+[model]     ttl: Optional[float] = None
+[model]     last_accessed: float = field(default_factory=time.monotonic)
+[model] 
+[model]     def is_expired(self) -> bool
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 31.552948440876815
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.301
+[model] totalTimeSec: 16.195
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:52:43][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.337489] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:52:43][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:52:43][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:52:43][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:52:43][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:52:43][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[model] timestamp: 10/25/2026, 5:52:59 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] A comprehensive LRU cache implementation with TTL (Time-To-Live) expiry,
+[model] thread-safe wrapper, and a complete pytest test suite.
+[model] 
+[model] This module provides:
+[model] 1. LRUCache: A basic LRU cache with TTL support.
+[model] 2. ThreadSafeLRUCache: A thread-safe wrapper around LRUCache.
+[model] 3. Test suite using pytest.
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import collections
+[model] import functools
+[model] import logging
+[model] from typing import Any, Optional, Callable, Dict, List, Tuple
+[model] from dataclasses import dataclass, field
+[model] from collections import OrderedDict
+[model] 
+[model] # Configure logging
+[model] logging.basicConfig(level=logging.INFO)
+[model] logger = logging.getLogger(__name__)
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         value: The cached value.
+[model]         expire_at: The timestamp when the entry expires (None if no TTL).
+[model]         created_at: The timestamp when the entry was created.
+[model]         last_accessed: The timestamp when the entry was last accessed.
+[model]     """
+[model]     value: Any
+[model]     expire_at: Optional[float] = None
+[model]     created_at: float = field(default_factory=time.time)
+[model]     last_accessed: float = field(default_factory=time.time)
+[model]     
+[model]     def is_expired(self, current_time: Optional[float] = None) -> bool:
+[model]         """
+[model]         Check if the entry has expired.
+[model]         
+[model]         Args:
+[model]             current_time: The current time to use for comparison.
+[model]                           If None, uses time.time().
+[model]         
+[model]         Returns:
+[model]             True if the entry has expired, False otherwise.
+[model]         """
+[model]         if self.expire_at is None:
+[model]             return False
+[model]         if current_time is None:
+[model]             current_time = time.time()
+[model]         return current_time >= self.expire_at
+[model] 
+[model] 
+[model] class LRUCache:
+[model]     """
+[model]     A Least Recently Used (LRU) cache with TTL (Time-To-Live) support.
+[model]     
+[model]     This cache maintains a maximum size and evicts the least recently used
+[model]     entries when the capacity is exceeded. Entries can optionally have a
+[model]     time-to-live (TTL) after which they are considered expired and removed.
+[model]     
+[model]     Attributes:
+[model]         capacity: Maximum number of items the cache can hold.
+[model]         default_ttl: Default time-to-live in seconds for new entries.
+[model]         _store: OrderedDict mapping keys to CacheEntry
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 31.255734295675577
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.295
+[model] totalTimeSec: 16.349
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511[server] [2026-10-25 05:52:59][INFO][q38-27b-lmstudio] Finished streaming response
+
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:52:59][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.393427] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0,
+[server]   "top_p": 1,
+[server]   "top_k": 1,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:52:59][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:52:59][INFO][q38-27b-lmstudio] Streaming response...
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:52:59][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:52:59][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:53:00][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[model] timestamp: 10/25/2026, 5:53:16 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] lru_cache_with_ttl.py
+[model] 
+[model] A complete implementation of an LRU (Least Recently Used) cache with TTL (Time To Live)
+[model] expiry, a thread-safe wrapper, and a comprehensive pytest test suite.
+[model] 
+[model] This module provides:
+[model] 1. LRUCache: A basic LRU cache with TTL support.
+[model] 2. ThreadSafeLRUCache: A thread-safe wrapper around LRUCache.
+[model] 3. Comprehensive pytest test suite.
+[model] 
+[model] Features:
+[model] - LRU eviction policy
+[model] - TTL-based expiry
+[model] - Thread safety via locking
+[model] - Configurable capacity
+[model] - Statistics tracking
+[model] - Context manager support
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import collections
+[model] from typing import Any, Optional, Callable, Hashable
+[model] from dataclasses import dataclass, field
+[model] from enum import Enum
+[model] import pytest
+[model] 
+[model] 
+[model] class CacheStatus(Enum):
+[model]     """Enumeration for cache entry status."""
+[model]     ACTIVE = "active"
+[model]     EXPIRED = "expired"
+[model]     EVICTED = "evicted"
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         key: The key for the cache entry.
+[model]         value: The value stored in the cache.
+[model]         created_at: Timestamp when the entry was created.
+[model]         accessed_at: Timestamp when the entry was last accessed.
+[model]         ttl: Time to live in seconds.
+[model]         status: Current status of the entry.
+[model]     """
+[model]     key: Hashable
+[model]     value: Any
+[model]     created_at: float
+[model]     accessed_at: float
+[model]     ttl: Optional[float]
+[model]     status: CacheStatus = CacheStatus.ACTIVE
+[model] 
+[model]     def is_expired(self, current_time: Optional[float] = None) -> bool:
+[model]         """
+[model]         Check if the entry has expired.
+[model]         
+[server] [2026-10-25 05:53:16][INFO][q38-27b-lmstudio] Finished streaming response
+[model]         Args:
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model]             
+[model]         Returns:
+[model]             True if the entry has expired, False otherwise.
+[model]         """
+[model]         if self.ttl is None:
+[model]             return False
+[model]         if current_time is None:
+[model]             current_time = time.time()
+[model]         return (current_time - self.created_at) > self.ttl
+[model] 
+[model]     def touch(self, current_time: Optional[float] = None) -> None:
+[model]         """
+[model]         Update the accessed_at timestamp.
+[model]         
+[model]         Args:
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 31.457769022408275
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.283
+[model] totalTimeSec: 16.244
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:53:16][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.783686] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0,
+[server]   "top_p": 1,
+[server]   "top_k": 1,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:53:16][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:53:16][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:53:16][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+
+[server] [2026-10-25 05:53:16][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:53:16][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[server] [2026-10-25 05:53:22][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=2749.2 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=41 lifetime=model_load
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [cache_store][INFO]: VLM prompt cache disk usage: used_mib=2749.2 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=41 lifetime=model_load
+[model] timestamp: 10/25/2026, 5:53:33 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] lru_cache_with_ttl.py
+[model] 
+[model] A complete implementation of an LRU (Least Recently Used) cache with TTL (Time To Live)
+[model] expiry, a thread-safe wrapper, and a comprehensive pytest test suite.
+[model] 
+[model] This module provides:
+[model] 1. LRUCache: A basic LRU cache with TTL support.
+[model] 2. ThreadSafeLRUCache: A thread-safe wrapper around LRUCache.
+[model] 3. Comprehensive pytest test suite.
+[model] 
+[model] Features:
+[model] - LRU eviction policy
+[model] - TTL-based expiry
+[model] - Thread safety via locking
+[model] - Configurable capacity
+[model] - Statistics tracking
+[model] - Context manager support
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import collections
+[model] from typing import Any, Optional, Callable, Hashable
+[model] from dataclasses import dataclass, field
+[model] from enum import Enum
+[model] import pytest
+[model] 
+[model] 
+[model] class CacheStatus(Enum):
+[model]     """Enumeration for cache entry status."""
+[model]     ACTIVE = "active"
+[model]     EXPIRED = "expired"
+[model]     EVICTED = "evicted"
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         key: The key for the cache entry.
+[model]         value: The value stored in the cache.
+[model]         created_at: Timestamp when the entry was created.
+[model]         accessed_at: Timestamp when the entry was last accessed.
+[model]         ttl: Time to live in seconds.
+[model]         status: Current status of the entry.
+[model]     """
+[model]     key: Hashable
+[model]     value: Any
+[model]     created_at: float
+[model]     accessed_at: float
+[model]     ttl: Optional[float]
+[model]     status: CacheStatus = CacheStatus.ACTIVE
+[model] 
+[model]     def is_expired(self, current_time: Optional[float] = None) -> bool:
+[model]         """
+[model]         Check if the entry has expired.
+[model]         
+[model]         Args:
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model]             [server] [2026-10-25 05:53:33][INFO][q38-27b-lmstudio] Finished streaming response
+
+[model]         Returns:
+[model]             True if the entry has expired, False otherwise.
+[model]         """
+[model]         if self.ttl is None:
+[model]             return False
+[model]         if current_time is None:
+[model]             current_time = time.time()
+[model]         return (current_time - self.created_at) > self.ttl
+[model] 
+[model]     def touch(self, current_time: Optional[float] = None) -> None:
+[model]         """
+[model]         Update the accessed_at timestamp.
+[model]         
+[model]         Args:
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 30.714672116367133
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.336
+[model] totalTimeSec: 16.637
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:53:33][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.966257] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0,
+[server]   "top_p": 1,
+[server]   "top_k": 1,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:53:33][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:53:33][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:53:33][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:53:33][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:53:33][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[model] timestamp: 10/25/2026, 5:53:50 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] lru_cache_with_ttl.py
+[model] 
+[model] A complete implementation of an LRU (Least Recently Used) cache with TTL (Time To Live)
+[model] expiry, a thread-safe wrapper, and a comprehensive pytest test suite.
+[model] 
+[model] This module provides:
+[model] 1. LRUCache: A basic LRU cache with TTL support.
+[model] 2. ThreadSafeLRUCache: A thread-safe wrapper around LRUCache.
+[model] 3. Comprehensive pytest test suite.
+[model] 
+[model] Features:
+[model] - LRU eviction policy
+[model] - TTL-based expiry
+[model] - Thread safety via locking
+[model] - Configurable capacity
+[model] - Statistics tracking
+[model] - Context manager support
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import collections
+[model] from typing import Any, Optional, Callable, Hashable
+[model] from dataclasses import dataclass, field
+[model] from enum import Enum
+[model] import pytest
+[model] 
+[model] 
+[model] class CacheStatus(Enum):
+[model]     """Enumeration for cache entry status."""
+[model]     ACTIVE = "active"
+[model]     EXPIRED = "expired"
+[model]     EVICTED = "evicted"
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         key: The key for the cache entry.
+[model]         value: The value stored in the cache.
+[model]         created_at: Timestamp when the entry was created.
+[model]         accessed_at: Timestamp when the entry was last accessed.
+[model]         ttl: Time to live in seconds.
+[model]         status: Current status of the entry.
+[model]     """
+[model]     key: Hashable
+[model]     value: Any
+[model]     created_at: float
+[model]     accessed_at: float
+[model]     ttl: Optional[float]
+[model]     status: CacheStatus = CacheStatus.ACTIVE
+[model] 
+[model]     def is_expired(self, current_time: Optional[float] = None) -> bool:
+[model]         """
+[model]         Check if the entry has expired.
+[model]         
+[model]         Args:
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model]             
+[model]         Returns:
+[model]             True if the entry has expired, False otherwise.
+[model]         """
+[model]         if self.ttl is None:
+[model]             return False
+[model]         if current_time is None:
+[model]             current_time = time.time()
+[model]         return (current_time - self.created_at) > self.ttl
+[model] 
+[model]     def touch(self, current_time: Optional[float] = None) -> None:
+[model]         """
+[model]         Update the accessed_at timestamp.
+[model]         
+[model]         Args:
+[server] [2026-10-25 05:53:50][INFO][q38-27b-lmstudio] Finished streaming response
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 30.376887409344906
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.37
+[model] totalTimeSec: 16.822
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:53:50][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.711720] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0,
+[server]   "top_p": 1,
+[server]   "top_k": 1,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:53:50][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:53:50][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:53:50][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:53:50][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:53:51][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[model] timestamp: 10/25/2026, 5:54:08 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] LRU Cache with TTL Expiry, Thread-Safe Wrapper, and Pytest Test Suite.
+[model] 
+[model] This module provides:
+[model] 1. A basic LRU cache implementation with TTL (Time-To-Live) support.
+[model] 2. A thread-safe wrapper around the LRU cache.
+[model] 3. A comprehensive pytest test suite.
+[model] 
+[model] The LRU cache evicts the least recently used items when capacity is exceeded.
+[model] TTL support allows items to expire after a specified time period.
+[model] The thread-safe wrapper ensures that all operations are atomic and safe for concurrent access.
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import heapq
+[model] import weakref
+[model] from collections import OrderedDict
+[model] from typing import Any, Optional, Callable, Hashable
+[model] from dataclasses import dataclass, field
+[model] from enum import Enum
+[model] import logging
+[model] 
+[model] # Configure logging
+[model] logging.basicConfig(level=logging.INFO)
+[model] logger = logging.getLogger(__name__)
+[model] 
+[model] 
+[model] class CacheStatus(Enum):
+[model]     """Enumeration for cache operation status."""
+[model]     HIT = "hit"
+[model]     MISS = "miss"
+[model]     EXPIRED = "expired"
+[model]     EVICTED = "evicted"
+[model]     ERROR = "error"
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         key: The hashable key for the cache entry.
+[model]         value: The value stored in the cache.
+[model]         created_at: Timestamp when the entry was created.
+[model]         accessed_at: Timestamp when the entry was last accessed.
+[model]         expires_at: Timestamp when the entry expires (None if no TTL).
+[model]         ttl: Time-to-live in seconds (None if no TTL).
+[model]     """
+[model]     key: Hashable
+[model]     value: Any
+[model]     created_at: float
+[model]     accessed_at: float
+[model]     expires_at: Optional[float]
+[model]     ttl: Optional[float]
+[model] 
+[model]     def is_expired(self, current_time: Optional[float] = None) -> bool:
+[model]         """
+[model]         Check if the entry has expired.
+[model]         
+[model]         Args:
+[model]             current_time: Current timestamp (defaults to time.time()).
+[model]             
+[model]         Returns:
+[model]             True if the entry has expired, False otherwise.
+[model]         """
+[model]         if self.expires_at is None:
+[model]             return False
+[model]         if current_time is None:
+[model]             current_time = time.time()
+[model]         return current_time >= self.expires_at
+[model] 
+[model]     def touch(self, current_time: Optional[float] = None)
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 29.81852132812044
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.358
+[model] totalTimeSec: 17.137
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:54:08][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:54:08][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "You are a helpful coding assistant. Answer with code only."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "[run 0.227667] Write a complete, well-commented Py... <Truncated in logs> ...uite. Write at least 600 lines. Do not stop early."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 512,
+[server]   "temperature": 0,
+[server]   "top_p": 1,
+[server]   "top_k": 1,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:54:08][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:54:08][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:54:08][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=84 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:54:08][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:54:08][INFO][q38-27b-lmstudio] Prompt processing progress: 98.8%
+[server] [2026-10-25 05:54:23][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=3889.0 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=55 lifetime=model_load
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [cache_store][INFO]: VLM prompt cache disk usage: used_mib=3889.0 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=55 lifetime=model_load
+[model] timestamp: 10/25/2026, 5:54:25 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] ```python
+[model] """
+[model] lru_cache_with_ttl.py
+[model] 
+[model] A complete implementation of an LRU (Least Recently Used) cache with TTL (Time To Live)
+[model] expiry, a thread-safe wrapper, and a comprehensive pytest test suite.
+[model] 
+[model] This module provides:
+[model] 1. LRUCache: A basic LRU cache with TTL support.
+[model] 2. ThreadSafeLRUCache: A thread-safe wrapper around LRUCache.
+[model] 3. Comprehensive pytest test suite.
+[model] 
+[model] Features:
+[model] - LRU eviction policy
+[model] - TTL-based expiry
+[model] - Thread safety via locking
+[model] - Configurable capacity
+[model] - Statistics tracking
+[model] - Context manager support
+[model] """
+[model] 
+[model] import time
+[model] import threading
+[model] import collections
+[model] from typing import Any, Optional, Callable, Hashable
+[model] from dataclasses import dataclass, field
+[model] from enum import Enum
+[model] import pytest
+[model] 
+[model] 
+[model] class CacheStatus(Enum):
+[model]     """Enumeration for cache entry status."""
+[model]     ACTIVE = "active"
+[model]     EXPIRED = "expired"
+[model]     EVICTED = "evicted"
+[model] 
+[model] 
+[model] @dataclass
+[model] class CacheEntry:
+[model]     """
+[model]     Represents a single entry in the cache.
+[model]     
+[model]     Attributes:
+[model]         key: The key for the cache entry.
+[model]         value: The value stored in the cache.
+[model]         created_at: Timestamp when the entry was created.
+[model]         accessed_at: Timestamp when the entry was last accessed.
+[model]         ttl: Time to live in seconds.
+[model]         status: Current status of the entry.
+[model]     """
+[server] [2026-10-25 05:54:25][INFO][q38-27b-lmstudio] Finished streaming response
+[model]     key: Hashable
+[model]     value: Any
+[model]     created_at: float
+[model]     accessed_at: float
+[model]     ttl: Optional[float]
+[model]     status: CacheStatus = CacheStatus.ACTIVE
+[model] 
+[model]     def is_expired(self, current_time: Optional[float] = None) -> bool:
+[model]         """
+[model]         Check if the entry has expired.
+[model]         
+[model]         Args:
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model]             
+[model]         Returns:
+[model]             True if the entry has expired, False otherwise.
+[model]         """
+[model]         if self.ttl is None:
+[model]             return False
+[model]         if current_time is None:
+[model]             current_time = time.time()
+[model]         return (current_time - self.created_at) > self.ttl
+[model] 
+[model]     def touch(self, current_time: Optional[float] = None) -> None:
+[model]         """
+[model]         Update the accessed_at timestamp.
+[model]         
+[model]         Args:
+[model]             current_time: Current timestamp. If None, uses time.time().
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 29.597451491456702
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.381
+[model] totalTimeSec: 17.265
+[model] promptTokensCount: 85
+[model] predictedTokensCount: 511
+[model] totalTokensCount: 596
+[model] 
+[model] 
+[server] [2026-10-25 05:54:26][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 33444cdca108ead6] You are Nace, a local c... <Truncated in logs> ...    else:\n            special_audio_mask = input_i"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:54:26][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:54:26][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:54:26][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=4130 lifetime_efficiency=0.00%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=4130 lifetime_efficiency=0.00%
+[server] [2026-10-25 05:54:26][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:54:29][INFO][q38-27b-lmstudio] Prompt processing progress: 49.6%
+[server] [2026-10-25 05:54:32][INFO][q38-27b-lmstudio] Prompt processing progress: 99.2%
+[server] [2026-10-25 05:54:32][INFO][q38-27b-lmstudio] Prompt processing progress: 100.0%
+[model] timestamp: 10/25/2026, 5:54:34 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] The first file in the repository context, `modeling_granite_speech.py`, is a Hugging Face Transformers model implementation for Granite Speech, a multimodal speech-to-text model that combines a Conformer-based audio encoder, a BLIP-2 Q-Former projector, and a language model to process audio inputs and generate text outputs.
+[model] stopReason: eosFound
+[model] tokensPerSecond: 32.32399293430577
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 6.598
+[model] totalTimeSec: 2.166
+[model] promptTokensCount: 4131
+[model] predictedTokensCount: 70
+[model] totalTokensCount: 4201
+[model] 
+[model] 
+[server] [2026-10-25 05:54:34][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:54:35][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 33444cdca108ead6] You are Nace, a local c... <Truncated in logs> ...    else:\n            special_audio_mask = input_i"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "The first file in the repository context, `modelin... <Truncated in logs> ...to process audio inputs and generate text outputs."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Now name one function defined in that file."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:54:35][INFO][q38-27b-lmstudio] Running chat completion on conversation with 4 messages.
+[server] [2026-10-25 05:54:35][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:54:35][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=4201 uncached_tokens=21 lifetime_efficiency=33.50%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=4201 uncached_tokens=21 lifetime_efficiency=33.50%
+[server] [2026-10-25 05:54:35][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:54:36][INFO][q38-27b-lmstudio] Prompt processing progress: 95.5%
+[model] timestamp: 10/25/2026, 5:54:36 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] One function defined in that file is `forward` (for example, in the `GraniteSpeechConformerFeedForward` class).
+[model] stopReason: eosFound
+[model] tokensPerSecond: 33.46769549279082
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.196
+[model] totalTimeSec: 0.837
+[model] promptTokensCount: 4223
+[model] predictedTokensCount: 28
+[model] totalTokensCount: 4251
+[model] 
+[model] 
+[server] [2026-10-25 05:54:36][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:54:37][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 33444cdca108ead6] You are Nace, a local c... <Truncated in logs> ...    else:\n            special_audio_mask = input_i"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "The first file in the repository context, `modelin... <Truncated in logs> ...to process audio inputs and generate text outputs."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Now name one function defined in that file."
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "One function defined in that file is `forward` (for example, in the `GraniteSpeechConformerFeedForward` class)."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Name one class defined in that file, or say there is none."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:54:37][INFO][q38-27b-lmstudio] Running chat completion on conversation with 6 messages.
+[server] [2026-10-25 05:54:37][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:54:37][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=4251 uncached_tokens=26 lifetime_efficiency=50.26%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=4251 uncached_tokens=26 lifetime_efficiency=50.26%
+[server] [2026-10-25 05:54:37][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:54:38][INFO][q38-27b-lmstudio] Prompt processing progress: 96.3%
+[model] timestamp: 10/25/2026, 5:54:38 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] One class defined in that file is `GraniteSpeechModel`.
+[model] stopReason: eosFound
+[model] tokensPerSecond: 34.83059998375501
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.146
+[model] totalTimeSec: 0.402
+[model] promptTokensCount: 4278
+[model] predictedTokensCount: 14
+[model] totalTokensCount: 4292
+[model] 
+[model] 
+[server] [2026-10-25 05:54:38][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:54:39][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 33444cdca108ead6] You are Nace, a local c... <Truncated in logs> ...    else:\n            special_audio_mask = input_i"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "The first file in the repository context, `modelin... <Truncated in logs> ...to process audio inputs and generate text outputs."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Now name one function defined in that file."
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "One function defined in that file is `forward` (for example, in the `GraniteSpeechConformerFeedForward` class)."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Name one class defined in that file, or say there is none."
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "One class defined in that file is `GraniteSpeechModel`."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Which modules does that file import?"
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:54:39][INFO][q38-27b-lmstudio] Running chat completion on conversation with 8 messages.
+[server] [2026-10-25 05:54:39][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:54:39][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=4292 uncached_tokens=19 lifetime_efficiency=60.32%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=4292 uncached_tokens=19 lifetime_efficiency=60.32%
+[server] [2026-10-25 05:54:39][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:54:39][INFO][q38-27b-lmstudio] Prompt processing progress: 95.0%
+[model] timestamp: 10/25/2026, 5:54:48 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] The file `modeling_granite_speech.py` imports the following modules:
+[model] 
+[model] - `math`[server] [2026-10-25 05:54:48][INFO][q38-27b-lmstudio] Finished streaming response
+
+[model] - `dataclasses` (specifically `dataclass`)
+[model] - `torch`
+[model] - `torch.nn.functional` (as `F`)
+[model] - `torch.nn` (as `nn`)
+[model] - `...initialization` (as `init`)
+[model] - `...cache_utils` (specifically `Cache`)
+[model] - `...generation` (specifically `GenerationMixin`)
+[model] - `...modeling_outputs` (specifically `BaseModelOutputWithPast`, `BaseModelOutputWithPooling`, `ModelOutput`)
+[model] - `...modeling_utils` (specifically `PreTrainedModel`)
+[model] - `...processing_utils` (specifically `Unpack`)
+[model] - `...utils` (specifically `TransformersKwargs`, `auto_docstring`, `can_return_tuple`, `is_peft_available`, `logging`, `torch_compilable_check`)
+[model] - `...utils.generic` (specifically `merge_with_config_defaults`)
+[model] - `...utils.output_capturing` (specifically `capture_outputs`)
+[model] - `..auto` (specifically `AutoModel`)
+[model] - `.configuration_granite
+[model] stopReason: maxPredictedTokensReached
+[model] tokensPerSecond: 29.713353530645534
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.139
+[model] totalTimeSec: 8.582
+[model] promptTokensCount: 4312
+[model] predictedTokensCount: 255
+[model] totalTokensCount: 4567
+[model] 
+[model] 
+[server] [2026-10-25 05:54:48][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 085daa4e4f008033] You are Nace, a local c... <Truncated in logs> ...ock(hidden_state)\n        hidden_state = self.conv"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:54:48][INFO][q38-27b-lmstudio] Running chat completion on conversation with 2 messages.
+[server] [2026-10-25 05:54:48][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:54:48][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=16286 lifetime_efficiency=34.06%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=0 uncached_tokens=16286 lifetime_efficiency=34.06%
+[server] [2026-10-25 05:54:48][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:54:51][INFO][q38-27b-lmstudio] Prompt processing progress: 12.6%
+[server] [2026-10-25 05:54:54][INFO][q38-27b-lmstudio] Prompt processing progress: 25.1%
+[server] [2026-10-25 05:54:58][INFO][q38-27b-lmstudio] Prompt processing progress: 37.7%
+[server] [2026-10-25 05:55:01][INFO][q38-27b-lmstudio] Prompt processing progress: 50.3%
+[server] [2026-10-25 05:55:04][INFO][q38-27b-lmstudio] Prompt processing progress: 62.9%
+[server] [2026-10-25 05:55:07][INFO][q38-27b-lmstudio] Prompt processing progress: 75.4%
+[server] [2026-10-25 05:55:11][INFO][q38-27b-lmstudio] Prompt processing progress: 88.0%
+[server] [2026-10-25 05:55:14][INFO][q38-27b-lmstudio] Prompt processing progress: 99.0%
+[server] [2026-10-25 05:55:14][INFO][q38-27b-lmstudio] Prompt processing progress: 100.0%
+[model] timestamp: 10/25/2026, 5:55:16 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] The first file, `modeling_granite_speech.py`, implements the Granite Speech multimodal model, which combines a Conformer-based audio encoder, a Q-Former projector, and a language model to process speech inputs for text generation.
+[model] stopReason: eosFound
+[model] tokensPerSecond: 29.773046012943315
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 26.381
+[model] totalTimeSec: 1.679
+[model] promptTokensCount: 16287
+[model] predictedTokensCount: 50
+[model] totalTokensCount: 16337
+[model] 
+[model] 
+[server] [2026-10-25 05:55:16][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:55:17][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 085daa4e4f008033] You are Nace, a local c... <Truncated in logs> ...ock(hidden_state)\n        hidden_state = self.conv"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "The first file, `modeling_granite_speech.py`, impl... <Truncated in logs> ...odel to process speech inputs for text generation."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Now name one function defined in that file."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:55:17][INFO][q38-27b-lmstudio] Running chat completion on conversation with 4 messages.
+[server] [2026-10-25 05:55:17][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:55:17][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=16337 uncached_tokens=21 lifetime_efficiency=54.08%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=16337 uncached_tokens=21 lifetime_efficiency=54.08%
+[server] [2026-10-25 05:55:17][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:55:17][INFO][q38-27b-lmstudio] Prompt processing progress: 95.5%
+[model] timestamp: 10/25/2026, 5:55:17 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] One function defined in that file is `forward`.
+[model] stopReason: eosFound
+[model] tokensPerSecond: 33.60047410635514
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.17
+[model] totalTimeSec: 0.328
+[model] promptTokensCount: 16359
+[model] predictedTokensCount: 11
+[model] totalTokensCount: 16370
+[model] 
+[model] 
+[server] [2026-10-25 05:55:17][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:55:18][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 085daa4e4f008033] You are Nace, a local c... <Truncated in logs> ...ock(hidden_state)\n        hidden_state = self.conv"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "The first file, `modeling_granite_speech.py`, impl... <Truncated in logs> ...odel to process speech inputs for text generation."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Now name one function defined in that file."
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "One function defined in that file is `forward`."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Name one class defined in that file, or say there is none."
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:55:18][INFO][q38-27b-lmstudio] Running chat completion on conversation with 6 messages.
+[server] [2026-10-25 05:55:18][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:55:19][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=16370 uncached_tokens=26 lifetime_efficiency=64.77%
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=16370 uncached_tokens=26 lifetime_efficiency=64.77%
+[server] [2026-10-25 05:55:19][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:55:19][INFO][q38-27b-lmstudio] Prompt processing progress: 51.9%
+[server] [2026-10-25 05:55:19][INFO][q38-27b-lmstudio] Prompt processing progress: 96.3%
+[model] timestamp: 10/25/2026, 5:55:19 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] One class defined in that file is `GraniteSpeechEncoderProjector`.
+[model] stopReason: eosFound
+[model] tokensPerSecond: 32.47186490486505
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.398
+[model] totalTimeSec: 0.492
+[model] promptTokensCount: 16397
+[model] predictedTokensCount: 16
+[model] totalTokensCount: 16413
+[model] 
+[model] 
+[server] [2026-10-25 05:55:19][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:55:20][DEBUG] Received request: POST to /v1/chat/completions with body {
+[server]   "model": "q38-27b-lmstudio",
+[server]   "messages": [
+[server]     {
+[server]       "role": "system",
+[server]       "content": "[session 085daa4e4f008033] You are Nace, a local c... <Truncated in logs> ...ock(hidden_state)\n        hidden_state = self.conv"
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "In one sentence, what is the first file in the repository context about?"
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "The first file, `modeling_granite_speech.py`, impl... <Truncated in logs> ...odel to process speech inputs for text generation."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Now name one function defined in that file."
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "One function defined in that file is `forward`."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Name one class defined in that file, or say there is none."
+[server]     },
+[server]     {
+[server]       "role": "assistant",
+[server]       "content": "One class defined in that file is `GraniteSpeechEncoderProjector`."
+[server]     },
+[server]     {
+[server]       "role": "user",
+[server]       "content": "Which modules does that file import?"
+[server]     }
+[server]   ],
+[server]   "max_tokens": 256,
+[server]   "temperature": 0.6,
+[server]   "top_p": 0.95,
+[server]   "top_k": 20,
+[server]   "min_p": 0,
+[server]   "presence_penalty": 0,
+[server]   "frequency_penalty": 0,
+[server]   "repeat_penalty": 1,
+[server]   "chat_template_kwargs": {
+[server]     "enable_thinking": false
+[server]   },
+[server]   "reasoning_effort": "none",
+[server]   "stream": true,
+[server]   "stream_options": {
+[server]     "include_usage": true
+[server]   }
+[server] }
+[server] [2026-10-25 05:55:20][INFO][q38-27b-lmstudio] Running chat completion on conversation with 8 messages.
+[server] [2026-10-25 05:55:20][INFO][q38-27b-lmstudio] Streaming response...
+[server] [2026-10-25 05:55:20][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=16413 uncached_tokens=19 lifetime_efficiency=71.44%[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [coordinator][INFO]: Prompt cache restore: cached_tokens=16413 uncached_tokens=19 lifetime_efficiency=71.44%
+
+[server] [2026-10-25 05:55:20][INFO][q38-27b-lmstudio] Prompt processing progress: 0.0%
+[server] [2026-10-25 05:55:21][INFO][q38-27b-lmstudio] Prompt processing progress: 95.0%
+[server] [2026-10-25 05:55:29][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=7109.9 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=150 lifetime=model_load
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 [cache_store][INFO]: VLM prompt cache disk usage: used_mib=7109.9 cap_mib=20840.0 lifetime_evicted_mib=0.0 records=150 lifetime=model_load
+[model] timestamp: 10/25/2026, 5:55:30 AM
+[model] type: llm.prediction.output
+[model] modelIdentifier: q38-27b-lmstudio
+[model] output:
+[model] The file imports the following modules:
+[model] 
+[model] - `math`
+[model] - `dataclasses` (specifically `dataclass`)
+[model] - `torch`
+[model] - `torch.nn.functional` (as `F`)
+[model] - `torch.nn` (as `nn`)
+[model] - `...initialization` (as `init`)
+[model] - `...cache_utils` (`Cache`)
+[model] - `...generation` (`GenerationMixin`)
+[model] - `...modeling_outputs` (`BaseModelOutputWithPast`, `BaseModelOutputWithPooling`, `ModelOutput`)
+[model] - `...modeling_utils` (`PreTrainedModel`)
+[model] - `...processing_utils` (`Unpack`)
+[model] - `...utils` (`TransformersKwargs`, `auto_docstring`, `can_return_tuple`, `is_peft_available`, `logging`, `torch_compilable_check`)
+[model] - `...utils.generic` (`merge_with_config_defaults`)
+[model] - `...utils.output_capturing` (`capture_outputs`)
+[model] - `..auto` (`AutoModel`)
+[model] - `.configuration_granite_speech` (`GraniteSpeechConfig`, `GraniteSpeechEncoderConfig`)
+[model] stopReason: eosFound
+[model] tokensPerSecond: 25.62068354511872
+[model] numGpuLayers: -1
+[model] timeToFirstTokenSec: 0.174
+[model] totalTimeSec: 9.172
+[model] promptTokensCount: 16433
+[model] predictedTokensCount: 235
+[model] totalTokensCount: 16668
+[model] 
+[model] 
+[server] [2026-10-25 05:55:30][INFO][q38-27b-lmstudio] Finished streaming response
+[server] [2026-10-25 05:55:30][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listLoaded] Listing loaded models
+[server] [2026-10-25 05:55:30][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listLoaded] Listing loaded models
+[server] [2026-10-25 05:55:30][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=getModelInfo] Getting descriptor for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+[server] [2026-10-25 05:55:30][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=getModelInfo] Getting descriptor for specifier: {"type":"instanceReference","instanceReference":"Ys80fez+tAOeO1FOj0tI+g09"}
+[server] [2026-10-25 05:55:30][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=unloadModel] Unloading model: q38-27b-lmstudio
+[server] [2026-10-25 05:55:30][DEBUG] stopGenerating() without a request_id is deprecated. Taking no action
+[runtime] [DEBUG] mlx-llm-mac-arm64-apple-metal-nax-advsimd@1.13.1 (mlx-llm) q38-27b-lmstudio pid=37499 stopGenerating() without a request_id is deprecated. Taking no action
+[server] [2026-10-25 05:55:31][DEBUG] Received request: GET to /lmstudio-greeting
+[server] [2026-10-25 05:55:31][INFO] Server stopped.
+[server] [2026-10-25 05:55:31][INFO] Server stopped.

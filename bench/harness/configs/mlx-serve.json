@@ -3,7 +3,7 @@
   "label": "q36-35b-mlxserve-mtp",
   "display": "mlx-serve + MTP (depth up to 2)",
   "engine": "mlx-serve",
-  "version": "26.10.2",
+  "version": "26.10.3",
   "model_name": "Qwen3.6-35B-A3B",
   "model_path": "{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit",
   "prepare": [

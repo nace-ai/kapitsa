@@ -3,7 +3,7 @@
   "label": "q35-4b-mlxvlm",
   "display": "mlx-vlm server (no speculation)",
   "engine": "mlx-lm",
-  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "version": "mlx-vlm 0.7.10, mlx 0.32.4",
   "model_name": "Qwen3.5-4B",
   "model_path": "{models}/qwen3.5-4b-4bit-mtp",
   "cmd": [
@@ -104,7 +104,7 @@
   "note": "mlx-vlm 0.7.8 (the latest release; MLX_VLM_PYTHON = a Python with it, mlx 0.32.4) on the same MLX 4-bit folder every engine reads (lmstudio-community/Qwen3.8-27B-MLX-4bit @6067b15 with the MTP head of MTPLX's 27B release as mtp.safetensors, which is not in the index). Automatic prefix caching on (APC_ENABLED=1, in memory only); 2048-token prefill steps (its default, stated); one sequence at a time. The request's model id is the path the server was started with.",
   "display": "mlx-vlm server (no speculation)",
   "engine": "mlx-lm",
-  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "version": "mlx-vlm 0.7.10, mlx 0.32.4",
   "env": {
    "HF_HUB_OFFLINE": "1",
    "APC_ENABLED": "1",
@@ -159,7 +159,7 @@
   "label": "q36-35b-mlxvlm",
   "display": "mlx-vlm server (no speculation)",
   "engine": "mlx-lm",
-  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "version": "mlx-vlm 0.7.10, mlx 0.32.4",
   "model_name": "Qwen3.6-35B-A3B",
   "model_path": "{models}/qwen3.6-35b-a3b-4bit",
   "cmd": [

@@ -85,7 +85,7 @@
   "label": "flash-mlxvlm",
   "display": "mlx-vlm server (no speculation)",
   "engine": "mlx-lm",
-  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "version": "mlx-vlm 0.7.10, mlx 0.32.4",
   "model_name": "Qwen3.8-Flash-Next",
   "model_path": "{models}/qwen3.8-flash-next-4bit",
   "cmd": [
@@ -585,7 +585,7 @@
   "label": "flash-mlxserve-mtp",
   "display": "mlx-serve + MTP (vendor's iQ-MLX 4.7 bpw pack)",
   "engine": "mlx-serve",
-  "version": "26.10.2",
+  "version": "26.10.3",
   "model_name": "Qwen3.8-Flash-Next",
   "model_path": "{models}/mlx-serve/Qwen3.8-Flash-Next-MLX-Serve-iQ-MLX-4.7bpw",
   "prepare": [{"clean_dir": "{state}/mlx-serve/flash-mtp"}, {"write_json": {"path": "{state}/mlx-serve/flash-mtp/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}],

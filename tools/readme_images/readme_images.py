@@ -121,8 +121,9 @@ def table_cell(row, engine, top, shared=None):
     return s + (f"<br><sub>{sub}</sub>" if sub else "")
 
 
-def family_table(data, rows):
-    """one family's table on one Mac: a column for every engine with a number in these rows, Kapitsa first"""
+def family_table(data, rows, tmac=None):
+    """one family's table on one Mac: a column for every engine with a number in these rows, Kapitsa first; the Mac's
+    own "versions" (tmac) head its columns before the tables' and the poster's"""
     T = data["tables"]
     engines = [e for e in data["engines"] if any(is_num(cell(r, e["name"])[0]) for r in rows)]
     shared = {}                             # an engine whose every number in the table has one detail: it heads the column
@@ -135,7 +136,8 @@ def family_table(data, rows):
             head.append("<mark>**Kapitsa**</mark>")
             continue
         name = e["name"].replace(" ", "&nbsp;").replace("-", "\u2011")
-        ver = shared[e["name"]] or T.get("versions", {}).get(e["name"], e.get("version", "")).replace("\n", " ")
+        ver = (shared[e["name"]] or (tmac or {}).get("versions", {}).get(e["name"])
+               or T.get("versions", {}).get(e["name"], e.get("version", "")).replace("\n", " "))
         head.append(f"<sub>{name}<br>{ver}</sub>" if ver else f"<sub>{name}</sub>")
     out = ["| Model | " + " | ".join(head) + " |", "| --- |" + " ---: |" * len(engines)]
     for r in rows:
@@ -159,7 +161,7 @@ def tables(data):
         n = len(rows)
         out += ["", "<details>", f"<summary><b>{tmac['title']}</b> · {n} model{'s' if n != 1 else ''}</summary>"]
         for name, rs in groups:
-            out += [""] + ([f"**{name}**", ""] if len(groups) > 1 else []) + family_table(data, rs)
+            out += [""] + ([f"**{name}**", ""] if len(groups) > 1 else []) + family_table(data, rs, tmac)
         if tmac.get("caption"):
             out += ["", f"<sub>{tmac['caption']}</sub>"]
         out += ["", "</details>"]
