@@ -1,9 +1,11 @@
 # Pull request checks that need no GPU and no model: the build, the CPU tests and the lint hooks.
 #
-# What this cannot check, and nothing on a GitHub-hosted runner can: the Metal kernels (they are embedded as source
-# and compiled by the GPU driver at run time, so a build passes with a broken kernel), their speed, and whether the
-# outputs are still the same. That evidence comes from the author's runs on a Mac, written in the PR (AGENTS.md,
-# "Changing speed or numerics"), and from review. A green run here means the CPU side is intact, not that the change is right.
+# What this still cannot check: whether the Metal kernels compute the right answer, how fast they run, and whether
+# their outputs are unchanged (the kernels are embedded as source and executed by the GPU driver at run time). That
+# evidence comes from the author's runs on a Mac, written in the PR (AGENTS.md, "Changing speed or numerics"), and
+# from review. `metal-compile` below does catch what a build alone cannot: a kernel that does not compile as source,
+# which is fatal at model load on a machine whose driver tries to build it. A green run here still means the CPU side
+# is intact and the kernels translate, not that the change is right.
 #
 # Runs on `pull_request`: the PR's code runs here with a read-only token and no secrets. Do not switch this to
 # pull_request_target (see community-bench.yml for the posture that event needs).
@@ -170,3 +172,37 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/venv-np"
           "$RUNNER_TEMP/venv-np/bin/pip" install --quiet numpy
           "$RUNNER_TEMP/venv-np/bin/python" tests/test_nh_fp4_requant.py
+
+  metal-compile:
+    # The kernels are embedded as source and built by the GPU driver when a model loads, so nothing else here
+    # compiles them: a token like `threadgroup_barrier(mem_threadgroup)` (missing `mem_flags::`) passes the build
+    # and kills every model at startup. The offline compiler is the one place a GitHub runner can see this class.
+    # It cannot see wrong arithmetic, races or the 32 KB threadgroup budget - those still need an on-GPU run.
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Offline-compile every Metal source
+        run: |
+          set -euo pipefail
+          # Take the newest language version this Xcode has: the driver picks 3.1, 3.2 or 4.0 (src/metal/gpu.mm).
+          std=""
+          for candidate in metal3.2 metal3.1; do
+            if xcrun -sdk macosx metal -std="$candidate" -I src/kernels -c src/kernels/qwen4.metal -o "$RUNNER_TEMP/metal-probe.air" 2>/dev/null; then
+              std="$candidate"
+              break
+            fi
+          done
+          if [ -z "$std" ]; then
+            echo "::error::no usable -std=metal3.x on this runner"
+            exit 1
+          fi
+          echo "compiling with -std=$std"
+          fail=0
+          for f in src/kernels/*.metal; do
+            if ! xcrun -sdk macosx metal -std="$std" -I src/kernels -c "$f" -o "$RUNNER_TEMP/metal-out.air"; then
+              echo "::error file=$f::Metal compile failed"
+              fail=1
+            fi
+          done
+          exit "$fail"
