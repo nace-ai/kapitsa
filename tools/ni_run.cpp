@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
 
   Gpu& g = Gpu::get();
   std::unique_ptr<Qwen35> mp = load_qwen(dir, getenv("NI_CHUNK")                 ? atoi(getenv("NI_CHUNK"))
-                                                  : Qwen4Exp::is_model(dir) && g.apple10() ? 4096  // engine.cpp
+                                                  : Qwen4Exp::q20_pack(dir) && g.apple10() ? 4096  // engine.cpp
                                                                                            : 2048);
   Qwen35& m = *mp;
   if (kv_grow && !dflash_dir.empty()) fatal("--kv-grow covers the plain, MTP and teacher-forced paths, not --dflash");

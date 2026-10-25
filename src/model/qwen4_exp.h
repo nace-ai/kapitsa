@@ -71,6 +71,8 @@ class Qwen4Exp : public Qwen35 {
   ~Qwen4Exp() override;
   // config.json's (text_config's) model_type is qwen4_exp_text / qwen4_exp
   static bool is_model(const std::string& model_dir);
+  // a Flash-Next folder whose routed experts are Q2_0 (tools/qwen4_exp_q20.py)
+  static bool q20_pack(const std::string& model_dir);
   // the process's split's share of the model (split()), or `split`'s
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, const Split* split = nullptr);
   // For placing a split (src/cluster/place.h), from the headers: each trunk layer's weight bytes as stored (its routed

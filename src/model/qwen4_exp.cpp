@@ -133,6 +133,16 @@ bool Qwen4Exp::is_model(const std::string& dir) {
          r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
 }
 
+bool Qwen4Exp::q20_pack(const std::string& dir) {
+  if (!is_model(dir)) return false;
+  std::ifstream f(dir + "/config.json");
+  try {
+    return q20_experts_in(json::parse(f));
+  } catch (...) {
+    return false;
+  }
+}
+
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
 
