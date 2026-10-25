@@ -10,8 +10,9 @@
 //   fn_check compile-only           compiles the embedded kernel library and exits: the zero-dispatch gate for a .metal
 //                                   edit (no model, no buffer, no command buffer, ~1 s). A successful C++ build says
 //                                   nothing about the sources (they are embedded as text and compiled at run time), so
-//                                   this is the cheapest run that can catch a source fault. Device-touching: it takes
-//                                   the GPU lock like any other run, and wants MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1
+//                                   this is the cheapest run that can catch a source fault. Device-touching: fn_check
+//                                   takes no lock itself, so run it under `lockf -k /tmp/kapitsa-gpu.lock` like any other
+//                                   GPU run, with MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1
 #include "metal/gpu.h"
 #include "model/ngram.h"
 #include "util/bf16.h"
