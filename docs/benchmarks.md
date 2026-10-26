@@ -27,7 +27,7 @@ decode over the next fastest engine on that model.
 | [M3 Pro, 36 GB](#m3-pro) | 4B 1.79x · 9B **2.90x** · 27B 1.77x · 35B-A3B 1.84x · Lightning 1.92x · Flint 1.45x · Dory 1.21x | Nano 4B decode: llama.cpp 34.9 against 34.4. Nano 9B v2: mlx-lm 24.9 against 20.9 (both on lighter 4-bit files) |
 | [M1 Pro, 16 GB](#m1-pro) | 4B 1.56x · 9B 1.54x · 35B-A3B 2-bit 1.37x · Flint 2-bit 1.42x · Dory 1.30x · Nano 4B 1.32x · Nano 9B v2 1.39x | — |
 
-Kapitsa has the fastest decode in 32 of the 36 model and Mac pairs.
+Kapitsa has the fastest decode in 33 of the 37 model and Mac pairs.
 
 <a id="how-the-readme-poster-was-measured"></a><a id="the-readmes-tables"></a>
 
