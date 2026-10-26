@@ -1619,10 +1619,18 @@ void Flint::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, u
   enc_sample(e, logits_, s.tok, pos + 1, sp, step);
 }
 
+// A model of full-attention layers only (a dense Llama: Nanbeige4.3) keeps every position in its caches, so a
+// checkpoint is its position alone and a pass records it wherever it falls: the engine does not cut a chunk at a turn
+// boundary (a 51-row prompt was a 42-row and a 9-row pass). The sliding-window rings of Flint's MoE need the cut, as
+// their copies are the state after the boundary's row. NI_FLINT_SNAPSHOT=0 keeps the cut.
+bool Flint::can_snapshot() const {
+  static const bool on = !getenv("NI_FLINT_SNAPSHOT") || atoi(getenv("NI_FLINT_SNAPSHOT")) != 0;
+  return on && std::find(cfg_.kind.begin(), cfg_.kind.end(), 'S') == cfg_.kind.end();
+}
+
 void Flint::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                            Checkpoint* snap, int snap_row) {
-  (void)snap;
-  (void)snap_row;
+  if (snap) save(e, s, *snap, pos0 + snap_row);  // (no rings: the position alone)
   if (T > tmax_) fatal("Flint: prefill of %d rows > chunk %d", T, tmax_);
   Buffer last;
   const size_t row = size_t(cfg_.hidden) * 4;

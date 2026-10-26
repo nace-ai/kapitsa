@@ -110,7 +110,7 @@ class Flint : public Model {
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   int prefill_chunk() const override { return tmax_; }
-  bool can_snapshot() const override { return false; }
+  bool can_snapshot() const override;
   // SSD prefix cache: the full-attention caches as rows, the sliding-window rings whole (a checkpoint's: their copies)
   std::string disk_format() const override;
   void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
