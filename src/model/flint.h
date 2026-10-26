@@ -83,6 +83,9 @@ class Flint : public Model {
   // what in a dense Llama's config.json Kapitsa does not run ("" when it runs it): read_config's refusals, for
   // `kapitsa pull` to give before any download
   static std::string llama_unsupported(const std::string& config_json);
+  // what in a dense Llama's chat template (chat_template.jinja, else tokenizer_config.json's chat_template) Kapitsa does
+  // not run ("" when it is ChatML, as Nanbeige4.3's): the engine writes a Llama's turns in that markup
+  static std::string llama_template_unsupported(const std::string& chat_template);
   static MemPlan plan(const std::string& path, int prefill_chunk = 2048);
   // KV cache bytes per position (full-attention layers) and per conversation (sliding-window rings)
   static size_t kv_per_pos(const FlintConfig& c);
