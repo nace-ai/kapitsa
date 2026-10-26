@@ -12,6 +12,7 @@
 #include "gguf/import.h"
 #include "hub/hub.h"
 #include "hub/http.h"
+#include "model/flint.h"
 #include "util/term.h"
 
 #include <CommonCrypto/CommonDigest.h>
@@ -1092,7 +1093,7 @@ std::string now_iso() {
 // A Hugging Face repo that Kapitsa can run: a Qwen3.5-family hybrid model in MLX format, unquantized (bf16) or MLX
 // affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32), one format or mixed per module (the engine's
 // format_supported, model/qwen35.cpp); or Recursive's Flint in its MLX 4-bit export (model/flint.h); or a dense Llama
-// (Nanbeige4.3) in bf16 or MLX affine 4/8-bit group 64 (Flint's backend; its config checked when it loads).
+// (Nanbeige4.3) in bf16 or MLX affine 4/8-bit group 64 (Flint's backend; config checked here as the loader does).
 void check_supported(HttpClient& c, const Listing& L) {
   const RemoteFile* cfg = L.find("config.json");
   bool st = false;
@@ -1118,13 +1119,11 @@ void check_supported(HttpClient& c, const Listing& L) {
                            "RecursiveSI/flint-int4 (`kapitsa pull flint`).");
     return;
   }
-  if (j.value("model_type", std::string()) == "llama") {
-    const json q = j.value("quantization", json::object());
-    if (q.is_object() && !q.empty() &&
-        (q.value("mode", std::string("affine")) != "affine" || (q.value("bits", 0) != 4 && q.value("bits", 0) != 8) ||
-         q.value("group_size", 0) != 64))
-      throw Error(L.repo + " is a Llama checkpoint quantized as Kapitsa does not run it: it runs bf16 or MLX affine "
-                           "4-bit or 8-bit group 64.");
+  if (j.value("model_type", std::string()) == "llama") {  // the loader's refusals (Flint::read_config), before any download
+    const std::string why = Flint::llama_unsupported(r.body);
+    if (!why.empty())
+      throw Error(L.repo + ": " + why + ". Kapitsa runs dense Llamas as Nanbeige4.3 is built (default RoPE, SwiGLU, no "
+                  "biases, untied embeddings, head dim 128), in bf16 or MLX affine 4-bit or 8-bit group 64.");
     return;
   }
   if (!t.contains("linear_num_value_heads") || !t.contains("num_hidden_layers"))

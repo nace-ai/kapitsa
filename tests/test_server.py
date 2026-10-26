@@ -243,6 +243,21 @@ def cli_checks(kapitsa):
               j.get("model") == name + ":4bit" and j.get("kind") == "catalog" and j.get("repo") == "RecursiveSI/flint-int4"
               and j.get("revision") == "3b93f9053b530488405ae9fca51d4900d6ce21f0" and j.get("companions") == [] and
               j.get("id") == name and j.get("dir") == os.path.join(models, name + "-4bit"), json.dumps(j))
+    # Nanbeige4.3-33B: Nace AI's MLX 4-bit (default) and 8-bit packs, Nanbeige's bf16 as published; no drafter; its repo
+    # by name resolves to the catalog's bf16
+    nb = "nanbeige4.3-33b"
+    for a, dv, repo, rev in [
+            ("nanbeige", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
+            ("nanbeige4.3", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
+            ("nanbeige-33b", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
+            ("nanbeige:8bit", "8bit", "kapitsaprime/Nanbeige4.3-33B-MLX-8bit", "b3302e043d64b12dd8ef7c7bb86aafaf5630bcb2"),
+            ("nanbeige:bf16", "bf16", "Nanbeige/Nanbeige4.3-33B", "c1093c501cc6460427c0ac634db7223d0450c0ee"),
+            ("Nanbeige/Nanbeige4.3-33B", "bf16", "Nanbeige/Nanbeige4.3-33B", "c1093c501cc6460427c0ac634db7223d0450c0ee")]:
+        j = plan(a)
+        check(f"cli: {a} -> {nb}:{dv}, no drafter",
+              j.get("model") == nb + ":" + dv and j.get("kind") == "catalog" and j.get("repo") == repo and
+              j.get("revision") == rev and j.get("companions") == [] and
+              j.get("dir") == os.path.join(models, nb + "-" + dv), json.dumps(j))
     # NVIDIA's Nemotron Nano: the 4B in FP8 (default) and BF16, the 9B v2 in NVFP4; no drafter (prompt lookup)
     nano4, nano9 = "nemotron-3-nano-4b", "nemotron-nano-9b-v2"
     for a, name, dv, default, repo, rev in [

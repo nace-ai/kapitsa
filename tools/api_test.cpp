@@ -1851,6 +1851,28 @@ bool exists(const std::string& p) {
 
 }  // namespace
 
+// a dense Llama's config.json (Nanbeige4.3's): what Kapitsa runs, and the loader's refusals that `kapitsa pull` gives too
+void llama_config_unit() {
+  const std::string ok = R"({"model_type": "llama", "hidden_size": 7168, "intermediate_size": 22016,
+    "num_hidden_layers": 52, "num_attention_heads": 56, "num_key_value_heads": 8, "head_dim": 128, "vocab_size": 166912,
+    "rope_theta": 120000000, "rope_scaling": null, "hidden_act": "silu", "tie_word_embeddings": false})";
+  check(Flint::llama_unsupported(ok).empty(), "llama config: Nanbeige4.3's runs", Flint::llama_unsupported(ok));
+  auto refused = [&](const std::string& from, const std::string& to, const std::string& want) {
+    std::string j = ok;
+    j.replace(j.find(from), from.size(), to);
+    const std::string why = Flint::llama_unsupported(j);
+    check(why.find(want) != std::string::npos, "llama config: refused, " + want, why);
+  };
+  refused(R"("rope_scaling": null)", R"("rope_scaling": {"rope_type": "llama3", "factor": 8.0})", "rope_scaling");
+  refused(R"("tie_word_embeddings": false)", R"("tie_word_embeddings": true)", "tied embeddings");
+  refused(R"("hidden_act": "silu")", R"("hidden_act": "gelu")", "activation gelu");
+  refused(R"("head_dim": 128)", R"("head_dim": 64)", "shape");
+  refused(R"("num_key_value_heads": 8)", R"("num_key_value_heads": 4)", "shape");  // 14 query heads per KV head
+  refused(R"("tie_word_embeddings": false)", R"("tie_word_embeddings": false, "quantization": {"bits": 3, "group_size": 64})",
+          "3-bit group 64");
+  check(!Flint::llama_unsupported("{not json").empty(), "llama config: a broken config.json is refused");
+}
+
 int main(int argc, char** argv) {
   anthropic_mapping();
   responses_mapping();
@@ -1867,6 +1889,7 @@ int main(int argc, char** argv) {
   history_gate_unit();
   kflash_lookup_unit();
   unsupported_model_unit();
+  llama_config_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);

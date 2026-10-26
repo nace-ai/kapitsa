@@ -154,7 +154,17 @@ namespace {
 
 // A dense Llama (LlamaForCausalLM) on Flint's kernels: the shapes and options they take (Nanbeige4.3-33B's), every
 // other config refused by name
-FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
+// a dense Llama's config, or in *why the first thing Kapitsa does not run (the loader's refusal, and `kapitsa pull`'s
+// before any download: Flint::llama_unsupported)
+FlintConfig parse_llama(const nlohmann::json& j, std::string* why) {
+  auto fail = [&](const char* fmt, auto... a) {
+    if (why->empty()) {
+      char m[256];
+      if constexpr (sizeof...(a) == 0) snprintf(m, sizeof m, "%s", fmt);
+      else snprintf(m, sizeof m, fmt, a...);
+      *why = m;
+    }
+  };
   auto num = [&](const char* k, double d) {
     const auto it = j.find(k);
     return it != j.end() && it->is_number() ? it->get<double>() : d;
@@ -171,20 +181,20 @@ FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
   c.eps = float(num("rms_norm_eps", 1e-6));
   c.theta = num("rope_theta", 1e4);
   if (j.contains("rope_scaling") && !j["rope_scaling"].is_null())
-    fatal("%s: a Llama with rope_scaling is not supported (Kapitsa runs the default RoPE)", dir.c_str());
+    fail("a Llama with rope_scaling is not supported (Kapitsa runs the default RoPE)");
   if (j.contains("rope_parameters") && j["rope_parameters"].is_object()) {
     const auto& rp = j["rope_parameters"];
     if (rp.value("rope_type", std::string("default")) != "default")
-      fatal("%s: a Llama with RoPE other than the default is not supported", dir.c_str());
+      fail("a Llama with RoPE other than the default is not supported");
     c.theta = rp.value("rope_theta", c.theta);
   }
   if (j.value("hidden_act", std::string("silu")) != "silu")
-    fatal("%s: a Llama with activation %s is not supported (SwiGLU)", dir.c_str(), j.value("hidden_act", "").c_str());
+    fail("a Llama with activation %s is not supported (SwiGLU)", j.value("hidden_act", "").c_str());
   if (j.value("attention_bias", false) || j.value("mlp_bias", false))
-    fatal("%s: a Llama with biased projections is not supported", dir.c_str());
-  if (j.value("tie_word_embeddings", false)) fatal("%s: a Llama with tied embeddings is not supported", dir.c_str());
+    fail("a Llama with biased projections is not supported");
+  if (j.value("tie_word_embeddings", false)) fail("a Llama with tied embeddings is not supported");
   if (j.contains("sliding_window") && !j["sliding_window"].is_null())
-    fatal("%s: a Llama with a sliding window is not supported", dir.c_str());
+    fail("a Llama with a sliding window is not supported");
   c.kind.assign(size_t(std::max(c.layers, 0)), 'F');
   c.rope.assign(size_t(std::max(c.layers, 0)), true);
   c.dense.assign(size_t(std::max(c.layers, 0)), true);
@@ -201,28 +211,43 @@ FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
     c.bits = q.value("bits", 0);
     c.gs = q.value("group_size", 64);
     if (q.value("mode", std::string("affine")) != "affine" || (c.bits != 4 && c.bits != 8) || c.gs != 64)
-      fatal("%s: a Llama in %s %d-bit group %d is not supported (MLX affine 4-bit or 8-bit group 64, or bf16)",
-            dir.c_str(), q.value("mode", std::string("affine")).c_str(), c.bits, c.gs);
+      fail("a Llama in %s %d-bit group %d is not supported (MLX affine 4-bit or 8-bit group 64, or bf16)",
+           q.value("mode", std::string("affine")).c_str(), c.bits, c.gs);
     // per-module entries (mlx-lm writes one for every module of a mixed recipe, or of AWQ / GPTQ / DWQ): 4 or 8 bits
     // in groups of 64, or false for a module kept unquantized (the norms). Nanbeige4.3's 4-bit keeps its first layer
     // at 8 bits; load() holds each matvec's matrices (q / k / v, gate / up) to one format
     for (const auto& [k, v] : q.items())
       if (v.is_object() && ((v.value("bits", c.bits) != 4 && v.value("bits", c.bits) != 8) ||
                             v.value("group_size", c.gs) != 64 || v.value("mode", std::string("affine")) != "affine"))
-        fatal("%s: a Llama with %s in %d-bit group %d is not supported (MLX affine 4 or 8 bits, group 64)", dir.c_str(),
-              k.c_str(), v.value("bits", 0), v.value("group_size", 0));
+        fail("a Llama with %s in %d-bit group %d is not supported (MLX affine 4 or 8 bits, group 64)",
+             k.c_str(), v.value("bits", 0), v.value("group_size", 0));
     c.embed_bits = c.bits;
   }
   // head dim 128 (the attention kernels'), at most 8 query heads per KV head (one simdgroup each), the matvecs' and
   // GEMMs' multiples of 512 and 64
   if (c.hidden <= 0 || c.hidden % 512 || c.vocab <= 0 || c.layers <= 0 || c.hq <= 0 || c.hkv <= 0 || c.hq % c.hkv ||
       c.hq / c.hkv > 8 || c.hd != 128 || (c.hq * c.hd) % 512 || c.ffn <= 0 || c.ffn % 512)
-    fatal("%s: a Llama shape Kapitsa does not run (hidden %d, heads %d / %d of %d, MLP %d)", dir.c_str(), c.hidden,
+    fail("a Llama shape Kapitsa does not run (hidden %d, heads %d / %d of %d, MLP %d)", c.hidden,
           c.hq, c.hkv, c.hd, c.ffn);
   return c;
 }
 
+FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
+  std::string why;
+  FlintConfig c = parse_llama(j, &why);
+  if (!why.empty()) fatal("%s: %s", dir.c_str(), why.c_str());
+  return c;
+}
+
 }  // namespace
+
+std::string Flint::llama_unsupported(const std::string& config_json) {
+  const nlohmann::json j = nlohmann::json::parse(config_json, nullptr, false);
+  if (!j.is_object()) return "its config.json is not valid JSON";
+  std::string why;
+  parse_llama(j, &why);
+  return why;
+}
 
 FlintConfig Flint::read_config(const std::string& dir) {
   const nlohmann::json j = read_json(dir + "/config.json");
