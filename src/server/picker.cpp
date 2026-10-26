@@ -2,6 +2,7 @@
 #include "server/picker.h"
 
 #include "server/cli.h"
+#include "update/update.h"
 #include "util/log.h"
 #include "util/term.h"
 
@@ -795,6 +796,19 @@ void remember(const hub::ModelRef& r) {
   if (j.contains("model") && j["model"] == name) return;
   j["model"] = name;
   write_state(j);
+}
+
+std::optional<hub::ModelRef> last_pick_here() {
+  if (update::detect(update::self_path()).kind == update::Kind::kApp) return std::nullopt;  // the app names its own
+  const hub::CatalogModel* m = nullptr;
+  const hub::Variant* v = nullptr;
+  if (!remembered(&m, &v)) return std::nullopt;
+  try {
+    hub::ModelRef r = hub::resolve(hub::full_name(*m, *v));
+    if (hub::is_current(r)) return r;
+  } catch (const std::exception&) {
+  }
+  return std::nullopt;
 }
 
 std::string model_label(const std::string& id) {

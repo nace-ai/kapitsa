@@ -44,7 +44,8 @@ const char* kHelp =
     "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with a\n"
     "the model's own context (less where this Mac's memory is tight), and stopped when the agent exits. Its log is in\n"
     "%s/logs/serve-P.log.\n\n"
-    "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: the best for this Mac\n"
+    "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: asked in a terminal; else the\n"
+    "                model picked last if it is downloaded, else the best for this Mac\n"
     "  --port P      the server's port (default 8000)\n"
     "  --context N   its context: tokens, k or m of them (128k, 1m), or max, the model's limit (default: the model's limit, or\n"
     "                the most that keeps the draft model where memory is tight; --ctx N works too)\n"
@@ -112,17 +113,20 @@ int probe(int port, const std::string& key, Running* out, std::string* why) {
   return -1;
 }
 
-// The Homebrew service (`brew services start kapitsa`: a launchd job running `kapitsa serve`, the best model for this
-// Mac, downloaded when it is missing, at each login and again whenever it ends on an error or a signal) when it serves
-// on `port`: the command that stops it, else "". A server found on the port is then most likely that one, which the
-// agent's exit leaves running and Activity Monitor's Quit only restarts (issue 653).
+// The Homebrew service (`brew services start kapitsa`: a launchd job running `kapitsa serve` without --model at each
+// login and again whenever it ends on an error or a signal) when it serves on `port`: the command that stops it, else
+// "". A server found on the port is then most likely that one, which the agent's exit leaves running and Activity
+// Monitor's Quit only restarts (issue 653). Its job's label is sh.brew.kapitsa in current Homebrew (the reporter's),
+// homebrew.mxcl.kapitsa in older ones.
 std::string brew_service_stop(int port) {
   const char* home = getenv("HOME");
-  const std::pair<std::string, const char*> jobs[] = {
-      {home && *home ? std::string(home) + "/Library/LaunchAgents/homebrew.mxcl.kapitsa.plist" : "", "brew services stop kapitsa"},
-      {"/Library/LaunchDaemons/homebrew.mxcl.kapitsa.plist", "sudo brew services stop kapitsa"}};
+  std::vector<std::pair<std::string, std::string>> jobs;
+  for (const char* label : {"sh.brew.kapitsa", "homebrew.mxcl.kapitsa"}) {
+    if (home && *home) jobs.push_back({std::string(home) + "/Library/LaunchAgents/" + label + ".plist", "brew services stop kapitsa"});
+    jobs.push_back({std::string("/Library/LaunchDaemons/") + label + ".plist", "sudo brew services stop kapitsa"});
+  }
   for (const auto& [plist, stop] : jobs) {
-    FILE* f = plist.empty() ? nullptr : fopen(plist.c_str(), "rb");
+    FILE* f = fopen(plist.c_str(), "rb");
     if (!f) continue;
     std::string s;
     char buf[4096];
@@ -408,7 +412,15 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     std::string serve_model = model;
     bool elsewhere = false;  // a Mac on the network runs it whole: the server sends its requests there (route.h)
     try {
-      if (model.empty()) {
+      // nobody asked: the model picked last when it is downloaded, rather than the best for this Mac downloaded again
+      const std::optional<hub::ModelRef> last = model.empty() && !yes ? ui::last_pick_here() : std::nullopt;
+      if (last) {
+        ref = *last;
+        serve_model = hub::short_name(*ref.model, *ref.variant);
+        const std::string say = ref.name + ", the model picked last (downloaded). --model picks another.";
+        if (term::fancy()) ui::note(say);
+        else fprintf(stderr, "kapitsa: no --model given: %s\n", say.c_str());
+      } else if (model.empty()) {
         std::string w;
         if (!best_model(opt, budget, &ref, &w)) return fail(w);
         serve_model = ref.model && ref.variant ? hub::short_name(*ref.model, *ref.variant) : ref.dir;
