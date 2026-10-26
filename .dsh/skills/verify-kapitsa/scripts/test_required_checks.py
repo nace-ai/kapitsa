@@ -49,6 +49,12 @@ CASES = [  # path, tier, models (None = no model run; "shared" = the 4B and the 
     ("tests/tokenizer_fixtures/qwen3.6.json", 0.5, None),
     # the rule is narrow: another fixture under tests/ is not swept in
     ("tests/data/logit_rows.json", 1, "shared"),
+    ("tests/data/chat_templates.json", 0.5, None),
+    ("tests/chat_templates_fixture.py", 0.5, None),
+    ("tools/template_prompts.cpp", 0.5, None),
+    # and the template fixture's consumer, plus the other tools/*_test.cpp, are not swept in with it
+    ("tools/api_test.cpp", 1, "shared"),
+    ("tools/grammar_test.cpp", 1, "shared"),
 ]
 
 bad = 0

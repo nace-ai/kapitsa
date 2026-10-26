@@ -69,6 +69,19 @@ rule(0.5, None, "tokens in or out on the CPU: tokenizer, chat template, output p
 rule(0.5, None, "tokenizer tests and fixtures: no runtime path, but what they pin is ids and text",
      "tools/tokenizer_test*", "tests/data/*tokenizer*.json", "tests/*tokenizer_fixture*.py",
      "tests/tokenizer_fixtures/*")
+# A chat-template fixture moves no default and no runtime path, but what it pins is rendered prompt bytes, and that is
+# what the 0.5 tier's token and template checks read. The two files around it move nothing either: the generator writes
+# that fixture over the network, and template_prompts prints the same bytes for a model folder (it reads the template
+# file, not the weights). Before 2026-10-26 the fallthrough made all three tier 1, which asks for a GPU e2e, a logit
+# gate and an A/B on two models for a file of rendered prompts (#604).
+# Narrow on purpose: the test that consumes the fixture, tools/api_test.cpp, hosts the API checks in general and stays
+# tier 1, and so does every other tools/*_test.cpp (orchestrator R457, R478).
+rule(0.5, None, "chat-template fixture: no runtime path, but what it pins is rendered prompt bytes",
+     "tests/data/chat_templates.json")
+rule(0.5, None, "chat-template fixture generator: fetches and writes that fixture, no runtime path",
+     "tests/chat_templates_fixture.py")
+rule(0.5, None, "template_prompts: prints the prompt bytes a template makes for a model folder, no model path",
+     "tools/template_prompts.cpp")
 rule(1, "shared", "SSD prefix cache: a change to what a saved state's bytes mean bumps kStateFormat "
      "(src/engine/engine_disk.cpp); run tests/test_disk_cache.py", "src/engine/engine_disk.cpp", "src/engine/disk_*.h")
 rule(1, "shared", "server request path (serve, beam search, history prefill and reload, routing, pairing): "
