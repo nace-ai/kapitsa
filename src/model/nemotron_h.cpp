@@ -2,6 +2,7 @@
 #include "model/kflash_budget.h"
 #include "ane/ffn_split.h"
 #include "util/bf16.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -169,12 +170,13 @@ bool not_lm(const std::string& n) {
 bool NemotronH::is_model(const std::string& dir) {
   struct stat st;
   if (stat(dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) return false;
-  return nh_type(text_config(read_json(dir + "/config.json")));
+  return nh_type(text_config(*json_file(dir + "/config.json")));
 }
 
 // ---- config ----
 static NhConfig read_config(const std::string& dir) {
-  const nlohmann::json j = read_json(dir + "/config.json");
+  const auto jp = json_file(dir + "/config.json");
+  const nlohmann::json& j = *jp;
   const nlohmann::json& t = text_config(j);
   if (!nh_type(t)) fatal("%s: config.json is not a Nemotron-H model", dir.c_str());
   auto num = [&](const nlohmann::json& o, const char* k, double def) {

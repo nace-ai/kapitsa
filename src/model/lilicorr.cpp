@@ -1,6 +1,7 @@
 #include "model/lilicorr.h"
 #include "model/dspark.h"
 #include "util/bf16.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -87,7 +88,8 @@ nlohmann::json read_json(const std::string& path) {
 
 // A LiLiCorr drafter folder: config.json of a DFlash drafter with the LiLiCorr projector, and model.safetensors.
 bool is_lilicorr(const std::string& dir, int hidden) {
-  const nlohmann::json c = read_json(dir + "/config.json");
+  const auto cp = json_file(dir + "/config.json");
+  const nlohmann::json& c = *cp;
   if (!c.is_object() || !c.contains("dflash_config") || !c["dflash_config"].is_object()) return false;
   const nlohmann::json& d = c["dflash_config"];
   const bool lili = (d.contains("lilicorr_enabled") && d["lilicorr_enabled"].is_boolean() && d["lilicorr_enabled"].get<bool>()) ||
@@ -116,7 +118,8 @@ std::string LiliCorr::find(const std::string& model_dir) {
   int hidden = 0;
   {
     // the language model's config: llm_config (Nemotron Omni releases), text_config, or the whole file
-    const nlohmann::json j = read_json(model_dir + "/config.json");
+    const auto jp = json_file(model_dir + "/config.json");
+    const nlohmann::json& j = *jp;
     const nlohmann::json* t = &j;
     for (const char* k : {"llm_config", "text_config"})
       if (j.is_object() && j.contains(k) && j[k].is_object()) {

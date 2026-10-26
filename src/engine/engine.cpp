@@ -3,6 +3,7 @@
 #include "engine/output_parser.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <minja/chat-template.hpp>
@@ -618,9 +619,10 @@ size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t
 }
 
 std::string unsupported_model(const std::string& model_dir) {
-  std::ifstream f(model_dir + "/config.json");
-  if (!f) return "";  // (a missing config.json is refused where the folder is resolved)
-  const nlohmann::json j = nlohmann::json::parse(f, nullptr, false);
+  // (a missing config.json is refused where the folder is resolved)
+  if (!std::ifstream(model_dir + "/config.json")) return "";
+  const auto jp = json_file(model_dir + "/config.json");
+  const nlohmann::json& j = *jp;
   if (!j.is_object()) return model_dir + ": its config.json is not valid JSON.";
   if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
       Flint::is_model(model_dir))
@@ -929,9 +931,8 @@ int parse_context(const std::string& s, std::string* why) {
 }
 
 int model_context_limit(const std::string& model_dir) {
-  std::ifstream f(model_dir + "/config.json");
-  if (!f) return 0;
-  const nlohmann::json j = nlohmann::json::parse(f, nullptr, false);
+  const auto jp = json_file(model_dir + "/config.json");
+  const nlohmann::json& j = *jp;
   if (!j.is_object()) return 0;
   // the language model's config where it has one of its own (the Qwen3.5 family: text_config; Bolt: llm_config)
   static const nlohmann::json none;

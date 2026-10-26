@@ -1,5 +1,6 @@
 #include "model/dory.h"
 #include "util/bf16.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -136,12 +137,14 @@ bool parse_loop_kv(const std::string& s, LoopKv* out) {
 bool Dory::is_model(const std::string& dir) {
   struct stat st;
   if (stat(dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) return false;
-  const nlohmann::json j = read_json(dir + "/config.json");
+  const auto jp = json_file(dir + "/config.json");
+  const nlohmann::json& j = *jp;
   return j.is_object() && j.contains("model_type") && j["model_type"] == "dory";
 }
 
 DoryConfig Dory::read_config(const std::string& dir) {
-  const nlohmann::json t = read_json(dir + "/config.json");
+  const auto tp = json_file(dir + "/config.json");
+  const nlohmann::json& t = *tp;
   if (!t.is_object() || !t.contains("model_type") || t["model_type"] != "dory")
     fatal("%s: config.json is not a Dory model", dir.c_str());
   auto num = [&](const char* k, double def) { return t.contains(k) && t[k].is_number() ? t[k].get<double>() : def; };

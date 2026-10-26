@@ -5,6 +5,7 @@
 #include "model/kparams.h"
 #include "model/qwen35.h"
 #include "model/v8.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -157,7 +158,8 @@ size_t FlintMat::row_bytes() const {
 
 // ---- config ----
 bool Flint::is_model(const std::string& dir) {
-  const nlohmann::json j = read_json(dir + "/config.json");
+  const auto jp = json_file(dir + "/config.json");
+  const nlohmann::json& j = *jp;
   if (!j.is_object()) return false;
   const std::string mt = j.value("model_type", std::string());
   return mt == "flint" || mt == "llama";
@@ -288,7 +290,8 @@ std::string Flint::llama_template_unsupported(const std::string& chat_template) 
 }
 
 FlintConfig Flint::read_config(const std::string& dir) {
-  const nlohmann::json j = read_json(dir + "/config.json");
+  const auto jp = json_file(dir + "/config.json");
+  const nlohmann::json& j = *jp;
   if (!j.is_object()) fatal("%s: no readable config.json", dir.c_str());
   if (j.value("model_type", std::string()) == "llama") return read_llama(dir, j);
   auto num = [&](const char* k, double d) {

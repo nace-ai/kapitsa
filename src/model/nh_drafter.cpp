@@ -2,6 +2,7 @@
 #include "model/kflash_budget.h"
 #include "model/dspark.h"
 #include "model/lilicorr.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -15,14 +16,8 @@ namespace {
 
 // the language model's hidden size: llm_config (Nemotron Omni releases), text_config, or the whole config.json
 int target_hidden(const std::string& model_dir) {
-  std::ifstream f(model_dir + "/config.json");
-  if (!f) return 0;
-  nlohmann::json j;
-  try {
-    j = nlohmann::json::parse(f);
-  } catch (...) {
-    return 0;
-  }
+  const auto jp = json_file(model_dir + "/config.json");
+  const nlohmann::json& j = *jp;
   const nlohmann::json* t = &j;
   for (const char* k : {"llm_config", "text_config"})
     if (j.is_object() && j.contains(k) && j[k].is_object()) {

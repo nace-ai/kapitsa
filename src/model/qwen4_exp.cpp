@@ -2,6 +2,7 @@
 #include "loader/safetensors.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
+#include "util/json_file.h"
 #include "util/log.h"
 #include "vision/embed.h"
 
@@ -121,14 +122,9 @@ bool q20_experts_in(const json& root) {
 }  // namespace
 
 bool Qwen4Exp::is_model(const std::string& dir) {
-  std::ifstream f(dir + "/config.json");
-  if (!f) return false;
-  json r;
-  try {
-    r = json::parse(f);
-  } catch (...) {
-    return false;
-  }
+  const auto rp = json_file(dir + "/config.json");
+  const json& r = *rp;
+  if (!r.is_object()) return false;
   if (r.value("model_type", std::string()) == "qwen4_exp") return true;
   return r.contains("text_config") && r["text_config"].is_object() &&
          r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
@@ -136,9 +132,8 @@ bool Qwen4Exp::is_model(const std::string& dir) {
 
 bool Qwen4Exp::q20_pack(const std::string& dir) {
   if (!is_model(dir)) return false;
-  std::ifstream f(dir + "/config.json");
   try {
-    return q20_experts_in(json::parse(f));
+    return q20_experts_in(*json_file(dir + "/config.json"));
   } catch (...) {
     return false;
   }
