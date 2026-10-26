@@ -27,11 +27,14 @@ decode over the next fastest engine on that model.
 | [M3 Pro, 36 GB](#m3-pro) | 4B 1.79x · 9B **2.90x** · 27B 1.77x · 35B-A3B 1.84x · Lightning 1.92x · Flint 1.45x · Dory 1.21x | Nano 4B decode: llama.cpp 34.9 against 34.4. Nano 9B v2: mlx-lm 24.9 against 20.9 (both on lighter 4-bit files) |
 | [M1 Pro, 16 GB](#m1-pro) | 4B 1.56x · 9B 1.54x · 35B-A3B 2-bit 1.37x · Flint 2-bit 1.42x · Dory 1.30x · Nano 4B 1.32x · Nano 9B v2 1.39x | — |
 
-Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs. Counted over the poster's and the tables' rows
-(`tools/readme_images/readme_images.json`): the union of the 39 rows where Kapitsa has a decode cell, less the M3 Pro
-36 GB's Bolt 74B row, which has no rival, gives 38 pairs; the five Kapitsa does not win, two of them ties inside the runs' spread (the M5 Max and M5 Pro 27B against mlx-serve), are in the column above. Each
-pair compares cells in one power mode. The M5 Max Flash-Next pair (Kapitsa 106 against mlx-serve 108) was checked from
-the runs' saved text (`finish=length` on all 10 answers, each cut off at the 512-token limit), not from saved token ids.
+Kapitsa reads the highest decode in 34 of the 38 model and Mac pairs, and the 33 in the headline is the wins count: the
+34th is the M5 Max's Qwen3.8 27B row, 133 against mlx-serve's 128, a tie inside the runs' spread (≈) that is not counted
+as a win. Counted over the poster's and the tables' rows (`tools/readme_images/readme_images.json`): the union of the 39
+rows where Kapitsa has a decode cell, less the M3 Pro 36 GB's Bolt 74B row, which has no rival, gives 38 pairs. The five
+Kapitsa does not win are in the column above: that tie, the Flash-Next and M5 Pro 27B losses to mlx-serve, and the M3
+Pro's Nano 4B and Nano 9B v2. Each pair compares cells in one power mode. The M5 Max Flash-Next pair (Kapitsa 106
+against mlx-serve 108) was checked from the runs' saved text (`finish=length` on all 10 answers, each cut off at the
+512-token limit), not from saved token ids.
 
 <a id="how-the-readme-poster-was-measured"></a><a id="the-readmes-tables"></a>
 
