@@ -2838,10 +2838,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
     // The ring snapshot of the checkpoint saved by this prefill (at the turn boundary, near n) is taken right after
     // the commit: it then holds the window before the checkpoint for a later restore.
-    if (fdfl_ && p == n) {  // the drafter's context: the captured prompt rows into its ring, behind the last chunk
-      fdfl_->end_prefill();
-      fdfl_->encode_prefill_commit(*e, *slot.dseq);
-    }
+    // Nanbeige4.3's drafter likewise: the captured prompt rows into its ring behind the trunk's command buffer (the first
+    // token does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
+    const bool fdfl_commit = fdfl_ && p == n;
+    if (fdfl_commit) fdfl_->end_prefill();
+    if (fdfl_commit && !mtp_defer) fdfl_->encode_prefill_commit(*e, *slot.dseq);
     const bool dfl_commit = dfl_ && p == n;
     auto commit_ring = [&](Encoder& en) {
       dfl_->encode_prefill_commit(en, *slot.dseq);
@@ -2872,6 +2873,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     if (lili_commit && mtp_defer) {
       mtp_e = g.begin();
       commit_lili(*mtp_e);
+    }
+    if (fdfl_commit && mtp_defer) {
+      mtp_e = g.begin();
+      fdfl_->encode_prefill_commit(*mtp_e, *slot.dseq);
     }
     if (mtp_e) mtp_e->commit();  // queued behind the trunk; waited for by the first spec cycle's buffer
     if (p < n) {
