@@ -47,6 +47,12 @@ std::pair<int, ojson> chat_failure(const ChatResult& res) {
   return {400, chat_error(res.error.empty() ? "the request failed" : res.error)};
 }
 
+int chat_max_tokens(const ojson& body) {
+  for (const char* k : {"max_completion_tokens", "max_tokens"})
+    if (body.contains(k) && !body[k].is_null()) return body[k].get<int>();
+  return 16384;
+}
+
 std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tools) {
   auto bad = [](const std::string& m, const std::string& param) {
     throw ApiError(400, "invalid_request_error", m, "", param);

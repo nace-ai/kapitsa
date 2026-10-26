@@ -641,6 +641,22 @@ void chat_events() {
           "chat stream: no prefill time in usage when it holds image encoding or turns given to other requests");
   }
   {
+    // max_tokens: null is absent, so max_completion_tokens (or the default) applies (#546)
+    auto mt = [](const char* body) { return chat_max_tokens(J(body)); };
+    check(mt("{}") == 16384 && mt(R"({"max_tokens": null})") == 16384 && mt(R"({"max_tokens": 50})") == 50 &&
+              mt(R"({"max_completion_tokens": 4096, "max_tokens": null})") == 4096 &&
+              mt(R"({"max_completion_tokens": null, "max_tokens": 50})") == 50 &&
+              mt(R"({"max_completion_tokens": 4096, "max_tokens": 50})") == 4096,
+          "chat: max_completion_tokens, then max_tokens, then 16384; a null one is absent");
+    bool threw = false;
+    try {
+      mt(R"({"max_tokens": "many"})");
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    check(threw, "chat: a max_tokens that is not a number still throws (a 400)");
+  }
+  {
     ChatResult big = result("error");
     big.prompt_tokens = 140000, big.prompt_limit = 131070;
     big.error = "prompt (140000 tokens) exceeds the context window (131072)";

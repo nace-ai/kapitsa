@@ -108,7 +108,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   r.messages = normalize_messages(b.at("messages"));
   if (b.contains("tools") && b["tools"].is_array()) r.tools = b["tools"];
   if (b.contains("tool_choice") && b["tool_choice"].is_string() && b["tool_choice"] == "none") r.tools = json::array();
-  r.max_tokens = b.value("max_completion_tokens", b.value("max_tokens", 16384));
+  r.max_tokens = api::chat_max_tokens(b);
   if (b.contains("temperature") && b["temperature"].is_number()) r.temperature = b["temperature"];
   if (b.contains("top_p") && b["top_p"].is_number()) r.top_p = b["top_p"];
   if (b.contains("top_k") && b["top_k"].is_number()) r.top_k = b["top_k"];

@@ -22,6 +22,10 @@ ojson chat_error(const std::string& message, const std::string& type = "invalid_
 // OpenAI does (code context_length_exceeded, "maximum context length"), which clients answer by compacting.
 std::pair<int, ojson> chat_failure(const ChatResult& res);
 
+// The reply's token limit: max_completion_tokens, else max_tokens, else 16384. A null field counts as absent, as
+// OpenAI's API has it (SDKs send unset fields as null); another non-number throws (a 400).
+int chat_max_tokens(const ojson& body);
+
 // Structured output of a request (src/engine/grammar.h): response_format (json_object; json_schema with its strict),
 // tool_choice (required, or a named function), parallel_tool_calls and strict tools ("strict": true in a function),
 // over `tools`, the request's as the prompt declares them (none for tool_choice "none"). Null when nothing constrains
