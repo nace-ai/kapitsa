@@ -6,6 +6,7 @@
 //   bench_test machine                 this Mac and its conditions now, as the command records them
 //   bench_test run PORT                the protocol against a server on 127.0.0.1:PORT, with fixed nonces
 //   bench_test lock [HOLD_S]           takes the GPU lock (BENCH_GPU_LOCK), holds it HOLD_S seconds
+//   bench_test precision               a folder's precision from its config and weight bytes (exit 1 on a failure)
 #include "bench/bench.h"
 #ifndef KAPITSA_VERSION
 #define KAPITSA_VERSION "0.0.0"
@@ -14,9 +15,14 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <cstdlib>
 #include <thread>
+#include <unistd.h>
 #include <fstream>
 #include <sstream>
+#include <string>
+#include <vector>
 
 using namespace ni::bench;
 
@@ -372,6 +378,61 @@ int machine() {
   return 0;
 }
 
+// A folder's precision, counted in weight bytes: a pack's top-level "bits" is only the default its per-module entries
+// override, and in the Q2_0 Flash-Next pack 91% of the bytes are Q2_0 2-bit experts under a "bits": 4 default.
+int precision_test() {
+  char dir[] = "/tmp/kapitsa-precision-XXXXXX";
+  if (!mkdtemp(dir)) return 1;
+  const std::string d = dir;
+  int bad = 0;
+  auto check = [&](const char* what, const std::string& got, const std::string& want) {
+    const bool ok = got == want;
+    printf("%s %s -> \"%s\" (want \"%s\")\n", ok ? "ok  " : "FAIL", what, got.c_str(), want.c_str());
+    if (!ok) ++bad;
+  };
+  auto write = [&](const std::string& name, const std::string& s) {
+    std::ofstream(d + "/" + name, std::ios::binary) << s;
+  };
+  // a safetensors file is an 8-byte header length, the JSON header, then the tensors: only the byte counts matter here
+  auto shard = [&](const std::string& name, const std::vector<std::pair<std::string, size_t>>& tensors) {
+    ojson h = ojson::object();
+    size_t off = 0;
+    for (auto& [n, bytes] : tensors) {
+      h[n] = {{"dtype", "U32"}, {"shape", {1}}, {"data_offsets", {off, off + bytes}}};
+      off += bytes;
+    }
+    const std::string body = h.dump();
+    uint64_t n = body.size();
+    std::string f(8, '\0');
+    memcpy(f.data(), &n, sizeof n);
+    write(name, f + body + std::string(off, '\0'));
+  };
+  std::string q;
+
+  write("config.json", R"({"quantization": {"bits": 4, "group_size": 64, "a.p": {"bits": 4, "group_size": 64}}})");
+  shard("model-1.safetensors", {{"a.p.weight", 100}, {"b.q.weight", 300}});
+  check("one format: the config's default", folder_precision(d, &q) + " / " + q, "4-bit / 4-bit group 64 100%");
+
+  write("config.json", R"({"quantization": {"bits": 4, "group_size": 64,
+      "a.p": {"bits": 4, "group_size": 64}, "e.x": {"bits": 2, "group_size": 64, "mode": "q2_0"}}})");
+  shard("model-1.safetensors", {{"a.p.weight", 9}, {"e.x.weight", 91}});
+  check("a dominant per-module format", folder_precision(d, &q) + " / " + q,
+        "2-bit (mixed) / 4-bit group 64 9%, Q2_0 2-bit 91%");
+
+  write("config.json", R"({"model_type": "qwen4_exp"})");
+  shard("model-1.safetensors", {{"a.p.weight", 100}});
+  check("no quantization", folder_precision(d, &q) + " / " + q, "bf16 / bf16");
+
+  // the weights unreadable here: the config's default, stated as that and not as a measurement
+  std::remove((d + "/model-1.safetensors").c_str());
+  write("config.json", R"({"quantization": {"bits": 6, "group_size": 64, "a.p": {"bits": 6, "group_size": 64}}})");
+  check("no weights to count", folder_precision(d, &q) + " / " + q, "6-bit / 6-bit group 64");
+
+  std::remove((d + "/config.json").c_str());
+  rmdir(dir);
+  return bad ? 1 : 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -383,6 +444,7 @@ int main(int argc, char** argv) {
   if (cmd == "machine") return machine();
   if (cmd == "run" && argc > 2) return run_protocol(atoi(argv[2]));
   if (cmd == "lock") return lock_test(argc > 2 ? atof(argv[2]) : 0);
-  fprintf(stderr, "usage: bench_test self | protocol CASES.json | result [quick] | plan RESULT.json LOGIN | machine | run PORT | lock [HOLD_S]\n");
+  if (cmd == "precision") return precision_test();
+  fprintf(stderr, "usage: bench_test self | protocol CASES.json | result [quick] | plan RESULT.json LOGIN | machine | run PORT | lock [HOLD_S] | precision\n");
   return 2;
 }

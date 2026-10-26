@@ -32,6 +32,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <climits>
 #include <cmath>
@@ -39,8 +40,10 @@
 #include <ctime>
 #include <dirent.h>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 #ifndef KAPITSA_VERSION
 #define KAPITSA_VERSION "0.2.18"
@@ -307,22 +310,6 @@ std::string precision_of(const hub::Variant& v) {
   std::string s = v.name;
   if (s.size() > 3 && s.compare(s.size() - 3, 3, "bit") == 0) s.insert(s.size() - 3, "-");
   return s;
-}
-
-// A folder's precision from its config.json ("4-bit", "bf16")
-std::string folder_precision(const std::string& dir, std::string* quant) {
-  const ojson c = ojson::parse(read_file(dir + "/config.json"), nullptr, false);
-  if (!c.is_discarded() && c.is_object()) {
-    const ojson q = c.contains("quantization") ? c["quantization"] : c.contains("quantization_config") ? c["quantization_config"] : ojson();
-    if (q.is_object() && q.contains("bits") && q["bits"].is_number()) {
-      const int bits = q["bits"];
-      const int g = q.value("group_size", 64);
-      *quant = "MLX affine " + std::to_string(bits) + "-bit, group " + std::to_string(g);
-      return std::to_string(bits) + "-bit";
-    }
-  }
-  *quant = "bf16";
-  return "bf16";
 }
 
 ModelInfo model_info(const hub::ModelRef& ref) {

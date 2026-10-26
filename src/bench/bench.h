@@ -227,6 +227,12 @@ class GpuLock {
 // Who holds a lock file: "lockf (pid 123), Python (pid 456)"
 std::string lock_holders(const std::string& path);
 
+// A folder's precision and format text, from its config.json and its weights (result.cpp): "4-bit", "2-bit (mixed)",
+// "bf16". A pack's top-level quantization is the default its per-module entries override, so the share is counted in
+// weight bytes and the dominant format names the precision; a folder whose weights cannot be read falls back to the
+// config's default.
+std::string folder_precision(const std::string& dir, std::string* quant);
+
 // ---------------------------------------------------------------- GPU contention (monitor.cpp: gpu_hogs.py)
 
 constexpr double kForeignMaxPct = 5.0;  // other processes' GPU load above this, sustained, flags a phase

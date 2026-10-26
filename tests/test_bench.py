@@ -673,6 +673,13 @@ else:
           "while it holds the lock lockf can't take it; released after", f"{first} {r2.returncode} {r3.returncode}")
     subprocess.run(["chflags", "nouchg", lockfile])
 
+# ---------------------------------------------------------------- 7b. a folder's precision
+# config.json's top-level quantization is a default that per-module entries override: the Q2_0 Flash-Next pack keeps 91%
+# of its weight bytes in Q2_0 2-bit experts under a "bits": 4 default, and reading the default alone called it 4-bit.
+r = run([BENCH_TEST, "precision"])
+check(r.returncode == 0 and r.stdout.count("ok  ") == 4 and "FAIL" not in r.stdout,
+      "folder_precision counts weight bytes: one format, a dominant override, no quantization, no weights", r.stdout)
+
 # ---------------------------------------------------------------- 8. the whole command, against the scripted server
 # KAPITSA_BENCH_SERVER: kapitsa bench measures the scripted server instead of starting one (no download, lock or quiet
 # wait); everything else is the real command: the protocol, the monitor, the result, the screens. Its result is invalid.

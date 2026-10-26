@@ -7,11 +7,114 @@
 // thermal state, the power), with the harness's flags.
 #include "bench/bench.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <dirent.h>
+#include <fstream>
+#include <map>
+#include <sstream>
 #include <tuple>
+#include <vector>
 
 namespace ni::bench {
+
+// ---------------------------------------------------------------- a folder's precision
+
+// A folder's precision from its config.json and weights ("4-bit", "bf16").
+//
+// config.json's top-level quantization is the default a per-module entry overrides, and a pack can use several: the
+// Q2_0 Flash-Next pack (tools/qwen4_exp_q20.py) keeps its 144 routed-expert modules in Q2_0 (2-bit) and 91% of its
+// weight bytes there, under a top-level "bits": 4 that names only its dense modules. So the share is counted in weight
+// bytes, as the engine's own formats_summary does, and the dominant format names the precision; a mixture is spelled
+// out in `quant` rather than passed off as the default.
+std::string folder_precision(const std::string& dir, std::string* quant) {
+  std::string cfg;
+  {
+    std::ifstream in(dir + "/config.json");
+    std::stringstream ss;
+    ss << in.rdbuf();
+    cfg = ss.str();
+  }
+  const ojson c = ojson::parse(cfg, nullptr, false);
+  ojson q;
+  if (!c.is_discarded() && c.is_object())
+    q = c.contains("quantization") ? c["quantization"] : c.contains("quantization_config") ? c["quantization_config"] : ojson();
+  if (!q.is_object() || !q.contains("bits") || !q["bits"].is_number()) {
+    *quant = "bf16";
+    return "bf16";
+  }
+  const auto label = [](const ojson& e) {
+    const int bits = e.value("bits", 4);
+    if (e.value("mode", "affine") == "q2_0") return std::string("Q2_0 2-bit");
+    return std::to_string(bits) + "-bit group " + std::to_string(e.value("group_size", 64));
+  };
+  // the per-module overrides, longest name first so a module's own entry wins over a prefix of it
+  std::vector<std::pair<std::string, std::string>> overrides;
+  for (auto& [k, v] : q.items())
+    if (v.is_object() && v.contains("bits")) overrides.emplace_back(k, label(v));
+  std::sort(overrides.begin(), overrides.end(),
+            [](const auto& a, const auto& b) { return a.first.size() > b.first.size(); });
+  const std::string dflt = label(q);
+  std::map<std::string, size_t> bytes;
+  if (DIR* d = opendir(dir.c_str())) {
+    std::vector<std::string> files;
+    while (dirent* e = readdir(d)) {
+      const std::string n = e->d_name;
+      if (n.size() > 12 && n.compare(n.size() - 12, 12, ".safetensors") == 0) files.push_back(n);
+    }
+    closedir(d);
+    for (const std::string& f : files) {
+      std::string hdr;
+      {
+        // the header only: a shard is gigabytes, and its 8-byte length says how far to read
+        std::ifstream in(dir + "/" + f, std::ios::binary);
+        uint64_t n = 0;
+        if (!in.read(reinterpret_cast<char*>(&n), sizeof n) || n > (64u << 20)) continue;
+        hdr.resize(size_t(n));
+        if (!in.read(hdr.data(), std::streamsize(n))) continue;
+      }
+      const ojson h = ojson::parse(hdr, nullptr, false);
+      if (h.is_discarded() || !h.is_object()) continue;
+      for (auto& [name, v] : h.items()) {
+        if (name == "__metadata__" || !v.contains("data_offsets")) continue;
+        std::string mod = name;
+        for (const char* tail : {".weight", ".scales", ".biases"})
+          if (mod.size() > strlen(tail) && mod.compare(mod.size() - strlen(tail), strlen(tail), tail) == 0) {
+            mod.resize(mod.size() - strlen(tail));
+            break;
+          }
+        std::string fmt = dflt;
+        for (const auto& [k, l] : overrides)
+          if (mod.rfind(k, 0) == 0) {
+            fmt = l;
+            break;
+          }
+        bytes[fmt] += v["data_offsets"][1].get<size_t>() - v["data_offsets"][0].get<size_t>();
+      }
+    }
+  }
+  if (bytes.empty()) {  // the weights are not readable here: the config's default is all that is known
+    *quant = dflt;
+    const int bits = q["bits"];
+    return std::to_string(bits) + "-bit";
+  }
+  size_t tot = 0, top = 0;
+  std::string best;
+  for (auto& [k, v] : bytes) {
+    tot += v;
+    if (v > top) top = v, best = k;
+  }
+  std::string r;
+  for (auto& [k, v] : bytes)
+    r += (r.empty() ? "" : ", ") + k + " " + std::to_string(size_t(100.0 * double(v) / double(std::max<size_t>(tot, 1)) + 0.5)) + "%";
+  *quant = r;
+  // the precision, short (the catalog's own style): the dominant format's bit count, "(mixed)" when more than one
+  if (best == "Q2_0 2-bit") return bytes.size() == 1 ? "2-bit (Q2_0)" : "2-bit (mixed)";
+  const std::string bits = best.substr(0, best.find('-')) + "-bit";
+  return bytes.size() == 1 ? bits : bits + " (mixed)";
+}
 
 // ---------------------------------------------------------------- formats
 
