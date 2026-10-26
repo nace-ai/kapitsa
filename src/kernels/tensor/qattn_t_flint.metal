@@ -21,11 +21,11 @@ struct FlintAttnTP {  // = FlintAttnPfP
   float scale;
 };
 
-template <int NS, int BK, int LD, int G = 8>
+template <int NS, int BK, int LD, int G = 8, bool Q8 = false>
 NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, const device half* vc,
                                 const device half* ck, const device half* cv, const device bfloat* sinks,
                                 device half* out, constant FlintAttnTP& p, uint2 tg, uint sg, ushort lane,
-                                threadgroup half* kt, threadgroup half* vt) {
+                                threadgroup half* kt, threadgroup half* vt, const device half* ks = nullptr, const device half* vs = nullptr) {
   constexpr int D = 128, KT = BK / 16, TT = 2;
   static_assert(G == 7 || G == 8, "a row's 8 slots hold the KV head's 7 or 8 query heads");
   const uint ntg = (p.T + NS * TT - 1) / (NS * TT);
@@ -81,9 +81,15 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
       uint4 kv4 = uint4(0), vv4 = uint4(0);
       if (key >= kfirst && key < kend) {  // (keys outside are zeros: a ring slot past the window holds another's)
         const bool own = key >= p.pos0;
-        const size_t at = own ? size_t(key - p.pos0) * D + c : size_t(p.ring ? key % p.rows : key) * D + c;
-        kv4 = *(const device uint4*)((own ? ckb : kb) + at);
-        vv4 = *(const device uint4*)((own ? cvb : vb) + at);
+        if (Q8 && !own) {  // the 8-bit cache: the head's int8 rows (D bytes each) and its scales
+          const size_t rowi = size_t(kvh) * p.rows + (p.ring ? key % p.rows : key);
+          kv4 = kv8_expand((const device char*)kc + rowi * D, ks + rowi * (D / kKv8G), c);
+          vv4 = kv8_expand((const device char*)vc + rowi * D, vs + rowi * (D / kKv8G), c);
+        } else {
+          const size_t at = own ? size_t(key - p.pos0) * D + c : size_t(p.ring ? key % p.rows : key) * D + c;
+          kv4 = *(const device uint4*)((own ? ckb : kb) + at);
+          vv4 = *(const device uint4*)((own ? cvb : vb) + at);
+        }
       }
       *(threadgroup uint4*)(kt + r * LD + c) = kv4;
       *(threadgroup uint4*)(vt + r * LD + c) = vv4;
@@ -181,3 +187,13 @@ QATTN_FLINT(qattn_flint_s8k32p, 8, 32, 136, 8)
 QATTN_FLINT(qattn_flint_s4k16, 4, 16, 128, 8)
 QATTN_FLINT(qattn_flint_s8k32p_g7, 8, 32, 136, 7)
 QATTN_FLINT(qattn_flint_s4k16_g7, 4, 16, 128, 7)
+// the 8-bit cache's form of qattn_flint_s8k32p_g7: ks / vs (half [Hkv][rows]) at buffers 8 / 9
+[[kernel, max_total_threads_per_threadgroup(32 * 8)]] void qattn_flint_s8k32p_g7_q8(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device half* ck [[buffer(3)]], const device half* cv [[buffer(4)]], const device bfloat* sinks [[buffer(5)]],
+    device half* out [[buffer(6)]], constant FlintAttnTP& p [[buffer(7)]], const device half* ks [[buffer(8)]],
+    const device half* vs [[buffer(9)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup half kt[32 * 136], vt[32 * 136];
+  qattn_flint_impl<8, 32, 136, 7, true>(q, kc, vc, ck, cv, sinks, out, p, tg, sg, ushort(lane), kt, vt, ks, vs);
+}

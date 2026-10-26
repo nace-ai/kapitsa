@@ -42,6 +42,7 @@ struct FlintConfig {
   int embed_bits = 8;
   std::map<std::string, uint32_t> iq;   // modules kept in llama.cpp's IQ blocks (GGUF imports): their GGUF type
   bool llama = false;                   // a dense Llama (model_type "llama"): no q / k norms, no sinks, no experts
+  bool kv8 = false;                     // its KV cache as int8 codes + a half scale per row (NI_FLINT_KV8)
 };
 
 // An MLX linear (or a stack of E of them): codes (uint32 words or bytes, the same little-endian stream), bf16 scale and

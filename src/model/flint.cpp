@@ -113,6 +113,16 @@ bool qmt_available() {
   return false;
 }
 
+// NI_FLINT_KV8: a dense Llama's KV cache as int8 codes and one half scale per row of 128 (absmax / 127, common.h's
+// kv8_expand): half the bytes a long context's attention reads. Built on the tiles it was measured with: the M5's prefill
+// attention (qattn_flint_s8k32p_g7_q8) and the 32-key decode / verify kernels, so not under shader validation's 16-key
+// tiles (small_tiles) nor with NI_FLINT_QATTN=0
+bool kv8_wanted() {
+  const char* v = getenv("NI_FLINT_KV8");
+  const char* qa = getenv("NI_FLINT_QATTN");
+  return v && atoi(v) != 0 && qmt_available() && !small_tiles() && !(qa && atoi(qa) == 0);
+}
+
 // The decode kernels' merges in a dispatch of their own (flint.metal, FLINT_FENCES): always on macOS 14, whose Metal
 // 3.1 has no device-scope fences for the last threadgroup to merge in; NI_FLINT_SPLIT=1 takes them on a newer macOS too.
 // Before Apple9 (M1, M2), every export takes them: single-die chips where the fences do not hold for the last
@@ -241,6 +251,7 @@ FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
   std::string why;
   FlintConfig c = parse_llama(j, &why);
   if (!why.empty()) fatal("%s: %s", dir.c_str(), why.c_str());
+  c.kv8 = c.hd == 128 && c.hq == 7 * c.hkv && kv8_wanted();  // (the _g7 kernels')
   return c;
 }
 
@@ -359,7 +370,7 @@ FlintConfig Flint::read_config(const std::string& dir) {
 
 size_t Flint::kv_per_pos(const FlintConfig& c) {
   const size_t full = size_t(std::count(c.kind.begin(), c.kind.end(), 'F'));
-  return full * 2 * size_t(c.hkv) * size_t(c.hd) * 2;
+  return full * 2 * size_t(c.hkv) * (c.kv8 ? size_t(c.hd) + size_t(c.hd) / 32 * 2 : size_t(c.hd) * 2);  // (kv8: codes, a half scale per 32)
 }
 
 size_t Flint::ring_bytes(const FlintConfig& c) {
@@ -810,7 +821,7 @@ bool Flint::reserve(Seq& s, int need) {
   if (need <= s.cap) return ensure_rings(s);
   if (need > s.limit) return false;
   Gpu& g = Gpu::get();
-  const size_t per = kv_per_pos(cfg_), row = size_t(cfg_.hkv) * cfg_.hd * 2;
+  const size_t per = kv_per_pos(cfg_), row = size_t(cfg_.hkv) * cfg_.hd * (cfg_.kv8 ? 1 : 2);
   auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
   const size_t rings = s.cap > 0 ? 0 : ring_bytes(cfg_);
   auto fits = [&](int c) {
@@ -827,7 +838,7 @@ bool Flint::reserve(Seq& s, int need) {
       Buffer nbuf = g.alloc(row * size_t(target), "flint_kv");
       memset(nbuf.ptr(), 0, nbuf.size);  // (as the rings: flint_attn_dec reads past the last position)
       if (old > 0 && *b) {
-        const uint32_t n16 = uint32_t(cfg_.hd) * 2 / 16;
+        const uint32_t n16 = uint32_t(cfg_.hd) * (cfg_.kv8 ? 1 : 2) / 16;
         const uint32_t p[4] = {uint32_t(old) * n16, uint32_t(target) * n16, uint32_t(cfg_.hkv), 0};
         auto e = g.begin();
         e->use(pipe("kv_regrow"));
@@ -841,13 +852,35 @@ bool Flint::reserve(Seq& s, int need) {
       *b = nbuf;
     }
   }
+  if (cfg_.kv8) {  // the rows' half scales [Hkv][cap][4] (copied as the codes are, 8 bytes a row: 16-byte units of 2 rows)
+    if (s.ksc.size() != size_t(cfg_.layers)) s.ksc.resize(size_t(cfg_.layers)), s.vsc.resize(size_t(cfg_.layers));
+    for (int l = 0; l < cfg_.layers; ++l) {
+      if (cfg_.kind[size_t(l)] != 'F') continue;
+      for (Buffer* b : {&s.ksc[size_t(l)], &s.vsc[size_t(l)]}) {
+        Buffer nbuf = g.alloc(size_t(cfg_.hkv) * size_t(target) * size_t(cfg_.hd) / 32 * 2, "flint_kv_scales");
+        memset(nbuf.ptr(), 0, nbuf.size);
+        if (old > 0 && *b) {
+          const uint32_t p[4] = {uint32_t(old) / 2, uint32_t(target) / 2, uint32_t(cfg_.hkv), 0};
+          auto e = g.begin();
+          e->use(pipe("kv_regrow"));
+          e->buf(0, *b);
+          e->buf(1, nbuf);
+          e->bytes(2, p, sizeof p);
+          e->dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
+          e->commit_and_wait();
+        }
+        if (*b) g.release(*b);
+        *b = nbuf;
+      }
+    }
+  }
   s.cap = target;
   return ensure_rings(s);
 }
 
 void Flint::drop_kv(Seq& s) {
   Gpu& g = Gpu::get();
-  for (auto* v : {&s.kc, &s.vc})
+  for (auto* v : {&s.kc, &s.vc, &s.ksc, &s.vsc})
     for (auto& b : *v) {
       g.release(b);
       b = Buffer{};
@@ -905,7 +938,8 @@ void Flint::restore(Encoder& e, Seq& s, const Checkpoint& c) {
 
 std::string Flint::disk_format() const {
   char b[256];
-  snprintf(b, sizeof b, "%s %s; K, V f16 [%d][cap][%d]; rings of %d; %s", cfg_.llama ? "llama" : "flint",
+  snprintf(b, sizeof b, "%s %s; K, V %s [%d][cap][%d]; rings of %d; %s", cfg_.llama ? "llama" : "flint",
+           cfg_.kv8 ? "int8 + a half scale per 32" : "f16",
            std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), cfg_.hkv, cfg_.hd, ring_rows_,
            formats_summary().c_str());
   return b;
@@ -915,7 +949,13 @@ void Flint::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
   (void)mtp;
   for (int l = 0; l < cfg_.layers; ++l)
     if (cfg_.kind[size_t(l)] == 'F')
-      for (const Buffer* b : {&s.kc[size_t(l)], &s.vc[size_t(l)]}) out.push_back({*b, cfg_.hkv, size_t(cfg_.hd) * 2});
+      for (const Buffer* b : {&s.kc[size_t(l)], &s.vc[size_t(l)]})
+        out.push_back({*b, cfg_.hkv, size_t(cfg_.hd) * (cfg_.kv8 ? 1 : 2)});
+  if (cfg_.kv8)  // the rows' scales, a half per 32 values
+    for (int l = 0; l < cfg_.layers; ++l)
+      if (cfg_.kind[size_t(l)] == 'F')
+        for (const Buffer* b : {&s.ksc[size_t(l)], &s.vsc[size_t(l)]})
+          out.push_back({*b, cfg_.hkv, size_t(cfg_.hd) / 32 * 2});
 }
 
 void Flint::disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& out) const {
@@ -1182,7 +1222,8 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
       uint32_t split;
     } ap{uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, L.rope ? 1u : 0u, k0, tps, S, c.eps,
          1.0f / std::sqrt(float(c.hd)), split_ ? 1u : 0u};
-    e.use(pipe(std::string(small_tiles() ? "flint_attn_d2_t16" : "flint_attn_d2") + (d2_g7 ? "_g7n" : "")));
+    e.use(pipe(c.kv8 ? std::string("flint_attn_d2_g7n_q8")
+                     : std::string(small_tiles() ? "flint_attn_d2_t16" : "flint_attn_d2") + (d2_g7 ? "_g7n" : "")));
     e.buf(0, qkv_);
     e.buf(1, L.qn ? L.qn->buf : inv_freq_);  // (unread without norms)
     e.buf(2, L.kn ? L.kn->buf : inv_freq_);
@@ -1195,6 +1236,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     e.buf(9, part_ml_);
     e.buf(10, acnt_);
     e.bytes(11, &ap, sizeof ap);
+    if (c.kv8) e.buf(12, s.ksc[size_t(li)]), e.buf(13, s.vsc[size_t(li)]);
     e.dispatch(S, uint32_t(c.hkv), 1, 128);
     if (ap.split && S > 1) {
       e.use(pipe(d2_g7 ? "flint_attn_d2_merge_g7" : "flint_attn_d2_merge"));
@@ -1206,19 +1248,33 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
       e.dispatch(uint32_t(c.hkv), 1, 1, 128);
     }
   } else {
+    // kv8: the rows' k / v to the chunk buffers (pck_ / pcv_, [Hkv][R][128]), then into the 8-bit cache
+    if (c.kv8) alloc_prefill();
     const PrepP pp{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u,
-                   L.rope ? 1u : 0u, 0, QKV, c.eps, 0};
+                   L.rope ? 1u : 0u, c.kv8 ? 1u : 0u, QKV, c.eps, 0};
     e.use(pipe(c.llama ? "flint_prep_nonorm" : "flint_prep"));
     e.buf(0, qkv_);
     e.buf(1, q_);
     e.buf(2, L.qn ? L.qn->buf : inv_freq_);  // (unread without norms)
     e.buf(3, L.kn ? L.kn->buf : inv_freq_);
     e.buf(4, inv_freq_);
-    e.buf(5, s.kc[size_t(li)]);
-    e.buf(6, s.vc[size_t(li)]);
+    e.buf(5, c.kv8 ? pck_ : s.kc[size_t(li)]);
+    e.buf(6, c.kv8 ? pcv_ : s.vc[size_t(li)]);
     e.val(7, pp);
     e.buf(8, inv_freq_);  // (no tree)
     e.dispatch(uint32_t(c.hq + 2 * c.hkv), uint32_t(R), 1, 128);
+    if (c.kv8) {
+      const StoreP sp{uint32_t(R), 0, uint32_t(pos0), uint32_t(c.hkv), rows, 0};
+      e.use(pipe("flint_kv_store_q8"));
+      e.buf(0, pck_);
+      e.buf(1, pcv_);
+      e.buf(2, s.kc[size_t(li)]);
+      e.buf(3, s.vc[size_t(li)]);
+      e.val(4, sp);
+      e.buf(5, s.ksc[size_t(li)]);
+      e.buf(6, s.vsc[size_t(li)]);
+      e.dispatch(uint32_t(R), 2 * uint32_t(c.hkv), 1, 32);
+    }
     // keys [k0, pos0 + R) in chunks: one per GPU core and kv head, at least 64 keys, at most 64 chunks
     const uint32_t Lk = uint32_t(pos0 + R) - k0;
     uint32_t chunk = std::max<uint32_t>(64, (Lk + gpu_cores() - 1) / gpu_cores());
@@ -1227,7 +1283,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     const uint32_t nch = (Lk + chunk - 1) / chunk;
     const AttnP ap{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, window, k0,
                    chunk, nch, 1.0f / std::sqrt(float(c.hd))};
-    e.use(pipe(small_tiles() ? "flint_attn_partial_k16" : "flint_attn_partial"));
+    e.use(pipe(c.kv8 ? "flint_attn_partial_q8" : small_tiles() ? "flint_attn_partial_k16" : "flint_attn_partial"));
     e.buf(0, q_);
     e.buf(1, s.kc[size_t(li)]);
     e.buf(2, s.vc[size_t(li)]);
@@ -1235,6 +1291,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     e.buf(4, part_ml_);
     e.val(5, ap);
     e.buf(6, part_ml_);  // (no tree)
+    if (c.kv8) e.buf(7, s.ksc[size_t(li)]), e.buf(8, s.vsc[size_t(li)]);
     e.dispatch(nch, uint32_t(c.hkv), uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
     e.use(pipe("flint_attn_reduce"));
     e.buf(0, part_o_);
@@ -1463,7 +1520,9 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   const bool g7 = c.llama && c.hq == 7 * c.hkv;
   const bool qat = qat_env && (qmt_ || qmtw_) && c.hd == 128 && (c.hq == 8 * c.hkv || g7);
   const uint32_t qat_tok = small_tiles() ? 8 : 16;   // 2 tokens a simdgroup, NS 4 or 8 simdgroups
-  if (qat) e.use(pipe(std::string(small_tiles() ? "qattn_flint_s4k16" : "qattn_flint_s8k32p") + (g7 ? "_g7" : "")));
+  if (c.kv8 && !(qat && g7)) fatal("Flint: the 8-bit KV cache needs the matrix units' prefill attention");
+  if (c.kv8) e.use(pipe("qattn_flint_s8k32p_g7_q8"));
+  else if (qat) e.use(pipe(std::string(small_tiles() ? "qattn_flint_s4k16" : "qattn_flint_s8k32p") + (g7 ? "_g7" : "")));
   else e.use(pipe(small_tiles() ? "flint_attn_prefill_k16" : "flint_attn_prefill"));
   e.buf(0, pq_);
   e.buf(1, s.kc[size_t(li)]);
@@ -1473,16 +1532,18 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   e.buf(5, sinks(L));
   e.buf(6, pao_);
   e.val(7, ap);
+  if (c.kv8) e.buf(8, s.ksc[size_t(li)]), e.buf(9, s.vsc[size_t(li)]);
   if (qat) e.dispatch((uint32_t(T) + qat_tok - 1) / qat_tok, uint32_t(c.hkv), 1, 16 * qat_tok);
   else e.dispatch((uint32_t(T) + 7) / 8, uint32_t(c.hkv), 1, 32 * uint32_t(c.hq / c.hkv));
   const uint32_t t0 = ring && uint32_t(T) > rows ? uint32_t(T) - rows : 0u;
   const StoreP sp{uint32_t(T), t0, uint32_t(pos0), uint32_t(c.hkv), rows, ring ? 1u : 0u};
-  e.use(pipe("flint_kv_store"));
+  e.use(pipe(c.kv8 ? "flint_kv_store_q8" : "flint_kv_store"));
   e.buf(0, pck_);
   e.buf(1, pcv_);
   e.buf(2, s.kc[size_t(li)]);
   e.buf(3, s.vc[size_t(li)]);
   e.val(4, sp);
+  if (c.kv8) e.buf(5, s.ksc[size_t(li)]), e.buf(6, s.vsc[size_t(li)]);
   e.dispatch(uint32_t(T) - t0, 2 * uint32_t(c.hkv), 1, 32);
   enc_gemm(e, L.o, pao_, px_, T, true);
   enc_rows_half(e, px_, L.post_norm, pxh_, T);

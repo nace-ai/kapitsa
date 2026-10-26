@@ -22,6 +22,7 @@ struct Seq {
   Buffer tok;                      // int32 [limit + 8]
   std::vector<Buffer> conv, rec;   // per layer (recurrent layers only: GDN / Mamba-2)
   std::vector<Buffer> kc, vc;      // per layer (attention layers only), half [Hkv, cap, D]
+  std::vector<Buffer> ksc, vsc;    // per layer: an 8-bit KV cache's half scales [Hkv, cap] (Flint's NI_FLINT_KV8)
   // speculative decoding: rows accepted by the last verify, not yet folded into conv/rec
   std::vector<Buffer> pend_qkv, pend_k, pend_g, pend_d;  // per recurrent layer
   int n_pend = 0;
