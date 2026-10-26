@@ -36,7 +36,11 @@ Kapitsa's 27.5-31.7, but Kapitsa's 28.1 is above mlx-vlm's 27.6-27.7. Counted ov
 (`tools/readme_images/readme_images.json`): the union of the 39 rows where Kapitsa has a decode cell, less the M3 Pro
 36 GB's Bolt 74B row, which has no rival, gives 38 pairs. The six Kapitsa does not win are in the column above: those
 two ties, the Flash-Next and M5 Pro 27B losses to mlx-serve, and the M3 Pro's Nano 4B and Nano 9B v2. Each pair
-compares cells in one power mode. The M5 Max Flash-Next pair (Kapitsa 106 against mlx-serve 108) was checked from the
+compares cells in one power mode. Every cell is the build under it, so the count describes the builds those cells ran,
+not the current binary: a later build that moves a row makes a new measurement, and the poster is re-measured rather
+than re-read. The Nanbeige row's Kapitsa cell is `0156392 + #682`, and the drafter's break-even floor was made to rise
+with context after it ([#689](https://github.com/nace-ai/kapitsa/pull/689)), so that row on a later build is a number
+of its own. The M5 Max Flash-Next pair (Kapitsa 106 against mlx-serve 108) was checked from the
 runs' saved text (`finish=length` on all 10 answers, each cut off at the 512-token limit), not from saved token ids.
 
 <a id="how-the-readme-poster-was-measured"></a><a id="the-readmes-tables"></a>
