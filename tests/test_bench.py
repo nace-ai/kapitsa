@@ -45,20 +45,28 @@ def run(args, **kw):
 r = run([BENCH_TEST, "self"])
 check(r.returncode == 0, "bench_test self", (r.stdout + r.stderr)[-500:])
 
-# ---------------------------------------------------------------- 1b. the POWER flag
-# pmset powermode is 0 automatic, 1 low power, 2 high power (the mapping src/bench/system.mm reads), so a table cell
-# may only be compared with cells taken in the same mode; battery is flagged on its own.
+# ---------------------------------------------------------------- 1b. the POWER flag and the POWER-INFO note
+# pmset powermode is 0 automatic, 1 low power, 2 high power (the mapping src/bench/system.mm reads). Only battery and
+# Low Power Mode drop a run: High Power Mode is this Mac's permanent AC state and most committed results sit at it, so
+# it is provenance plus a POWER-INFO line, never a flag (ROUND 311/326).
 check(bench.power_flags("Now drawing from 'AC Power'", "0") == [], "plugged in at powermode 0 needs no POWER flag")
-one = ["POWER: run started on battery and at pmset powermode 2 (High Power Mode) (numbers are not comparable with "
-       "plugged-in automatic-mode runs)"]
+one = ["POWER: run started on battery (High Power Mode) (numbers are not comparable with plugged-in automatic-mode "
+       "runs)"]
 check(bench.power_flags("Now drawing from 'Battery Power'", "2") == one, "battery in High Power Mode is one flag",
       str(bench.power_flags("Now drawing from 'Battery Power'", "2")))
+check(bench.power_flags("Now drawing from 'Battery Power'", "0") ==
+      ["POWER: run started on battery (numbers are not comparable with plugged-in automatic-mode runs)"],
+      "battery at powermode 0 is flagged on the battery alone")
 lp = bench.power_flags("Now drawing from 'AC Power'", "1")
 check(lp == ["POWER: run started at pmset powermode 1 (Low Power Mode) (numbers are not comparable with plugged-in "
              "automatic-mode runs)"], "powermode 1 is Low Power Mode on AC", str(lp))
-hp = bench.power_flags("Now drawing from 'AC Power'", "2")
-check(hp and "High Power Mode" in hp[0] and "battery" not in hp[0],
-      "High Power Mode on AC is flagged as itself", str(hp))
+check(bench.power_flags("Now drawing from 'AC Power'", "2") == [],
+      "AC in High Power Mode raises no flag", str(bench.power_flags("Now drawing from 'AC Power'", "2")))
+check(bench.power_info("Now drawing from 'AC Power'", "2") == ["POWER-INFO: High Power Mode (pmset powermode 2)"],
+      "AC in High Power Mode records one POWER-INFO line", str(bench.power_info("Now drawing from 'AC Power'", "2")))
+check(bench.power_info("Now drawing from 'AC Power'", "0") == [] and bench.power_info("Now drawing from 'AC Power'", "1") == [],
+      "automatic mode and Low Power Mode need no info line (the low one is already a flag)")
+check(bench.power_info(None, None) == [], "no power state recorded, no info note")
 check(bench.power_flags(None, None) == [], "no power state recorded, no claim made")
 # A release that prints no powermode still flags Low Power Mode from the client's own reading.
 check(bench.power_flags("Now drawing from 'AC Power'", None, True) ==
@@ -90,6 +98,22 @@ check(bench.add_power_flags(f, "Now drawing from 'AC Power'", "2") == f and len(
 g = []
 check(bench.add_power_flags(g, "Now drawing from 'AC Power'", "0") == [] and g == [],
       "no flag when the power state is normal")
+notes = bench.add_power_info([], "Now drawing from 'AC Power'", "2")
+check(notes == ["POWER-INFO: High Power Mode (pmset powermode 2)"]
+      and bench.add_power_info(notes, "Now drawing from 'AC Power'", "2") == notes and len(notes) == 1,
+      "the POWER-INFO note appears once, not twice", str(notes))
+# A pair whose two arms started in different modes is not a comparison: both rows are marked and kept out of the
+# best values and the win count (ROUND 326 item 3).
+import compare_table  # noqa: E402  (bench/harness/compare_table.py)
+pair = [{"key": "full", "powermode": "2"}, {"key": "full", "powermode": "0"},
+        {"key": "full", "powermode": "2"}, {"key": "prefill", "powermode": "0"}]
+compare_table.mark_power_mismatch(pair)
+check(all(r.get("power_mismatch") == "power-mode mismatch (0 vs 2)" for r in pair[:3]),
+      "a mixed-mode pair is marked on every arm", str([r.get("power_mismatch") for r in pair]))
+check("power_mismatch" not in pair[3], "a single-mode config is not marked", str(pair[3]))
+check(compare_table.short_flags({"power_mismatch": "power-mode mismatch (0 vs 2)", "invalid": [], "contended": False,
+                                 "flags": []}).startswith("power-mode mismatch"),
+      "the mismatch shows in the flag column")
 
 # ---------------------------------------------------------------- 2. one protocol, two clients
 
