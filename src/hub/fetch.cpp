@@ -1120,7 +1120,23 @@ void check_supported(HttpClient& c, const Listing& L) {
     return;
   }
   if (j.value("model_type", std::string()) == "llama") {  // the loader's refusals (Flint::read_config), before any download
-    const std::string why = Flint::llama_unsupported(r.body);
+    std::string why = Flint::llama_unsupported(r.body);
+    if (why.empty()) {  // and its chat template, as the loader reads it: chat_template.jinja, else tokenizer_config.json's
+      std::string tmpl;
+      for (const char* name : {"chat_template.jinja", "tokenizer_config.json"}) {
+        if (!tmpl.empty() || !L.find(name)) continue;
+        HttpResult t = get_retry(c, file_url(L.repo, L.commit, name));
+        if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
+        if (!t.ok()) throw Error(failure(t, L.repo, L.revision, std::string(name) + " of " + L.repo));
+        if (std::string(name) == "chat_template.jinja") {
+          tmpl = t.body;
+        } else {
+          const json tc = json::parse(t.body, nullptr, false);
+          if (tc.is_object() && tc.contains("chat_template") && tc["chat_template"].is_string()) tmpl = tc["chat_template"];
+        }
+      }
+      why = Flint::llama_template_unsupported(tmpl);
+    }
     if (!why.empty())
       throw Error(L.repo + ": " + why + ". Kapitsa runs dense Llamas as Nanbeige4.3 is built (default RoPE, SwiGLU, no "
                   "biases, untied embeddings, head dim 128), in bf16 or MLX affine 4-bit or 8-bit group 64.");

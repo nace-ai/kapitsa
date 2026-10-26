@@ -1871,6 +1871,13 @@ void llama_config_unit() {
   refused(R"("tie_word_embeddings": false)", R"("tie_word_embeddings": false, "quantization": {"bits": 3, "group_size": 64})",
           "3-bit group 64");
   check(!Flint::llama_unsupported("{not json").empty(), "llama config: a broken config.json is refused");
+  // the chat template: ChatML runs (Nanbeige4.3's), Llama 3's header markup is refused, and so is none
+  check(Flint::llama_template_unsupported("{{ '<|im_start|>' + message['role'] + '\\n' }}").empty(),
+        "llama template: ChatML runs");
+  check(Flint::llama_template_unsupported("{{ '<|start_header_id|>' + message['role'] + '<|end_header_id|>' }}")
+                .find("ChatML") != std::string::npos,
+        "llama template: Llama 3's is refused");
+  check(!Flint::llama_template_unsupported("").empty(), "llama template: none is refused");
 }
 
 int main(int argc, char** argv) {

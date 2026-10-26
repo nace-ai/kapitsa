@@ -239,12 +239,16 @@ FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
   if (!why.empty()) fatal("%s: %s", dir.c_str(), why.c_str());
   // the engine writes a Llama's turns in ChatML with Qwen's tool-call markup (Nanbeige4.3's template): another
   // template's Llama (Llama 3's <|start_header_id|>) would be served the wrong markup
-  std::ifstream t(dir + "/chat_template.jinja"), tc(dir + "/tokenizer_config.json");
+  std::ifstream t(dir + "/chat_template.jinja");
   std::stringstream ss;
-  ss << t.rdbuf() << tc.rdbuf();
-  if (ss.str().find("<|im_start|>") == std::string::npos)
-    fatal("%s: a Llama whose chat template is not ChatML (<|im_start|>) is not supported (Kapitsa runs Nanbeige4.3's "
-          "markup)", dir.c_str());
+  ss << t.rdbuf();
+  std::string tmpl = ss.str();
+  if (tmpl.empty()) {
+    const nlohmann::json tc = read_json(dir + "/tokenizer_config.json");
+    if (tc.is_object() && tc.contains("chat_template") && tc["chat_template"].is_string()) tmpl = tc["chat_template"];
+  }
+  const std::string tw = Flint::llama_template_unsupported(tmpl);
+  if (!tw.empty()) fatal("%s: %s", dir.c_str(), tw.c_str());
   return c;
 }
 
@@ -256,6 +260,14 @@ std::string Flint::llama_unsupported(const std::string& config_json) {
   std::string why;
   parse_llama(j, &why);
   return why;
+}
+
+std::string Flint::llama_template_unsupported(const std::string& chat_template) {
+  if (chat_template.empty()) return "a Llama without a chat template is not supported";
+  if (chat_template.find("<|im_start|>") == std::string::npos)
+    return "a Llama whose chat template is not ChatML (<|im_start|>) is not supported (Kapitsa writes Nanbeige4.3's "
+           "markup)";
+  return "";
 }
 
 FlintConfig Flint::read_config(const std::string& dir) {
