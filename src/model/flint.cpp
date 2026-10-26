@@ -1049,9 +1049,9 @@ void Flint::enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buff
   } else if (W.bits == 4 && (qmt_ || qmtw_) && M >= 64) {
     n = qmts_ ? "qmt4s8_m64_n64" : "qmt_m64_n64", bm = 64, bn = 64;
   } else if (W.bits == 8 && qmtw_ && M >= 64) {
-    // (qmt8ds8's second simdgroup reads its 64 X rows whole once its first row is below M, so a last tile ending more
-    // than 64 rows past M takes the 64-row tile, whose loads are guarded row by row: the same outputs, bitwise)
-    const bool d128 = qmts_ && M % 128 <= 64;
+    // (each of qmt8ds8's simdgroups reads its 64 X rows whole once its first row is below M, so it runs only where M is
+    // a multiple of 64; another M takes the 64-row tile, whose loads are guarded row by row: the same outputs, bitwise)
+    const bool d128 = qmts_ && M % 64 == 0;
     n = d128 ? "qmt8ds8_m128_n64" : "qmt8_m64_n64", bm = d128 ? 128 : 64, bn = 64;
   } else if (W.bits == 4) {
     if (M <= 8) n = "qmr_k64_w12_m8_n64", bm = 8, bn = 64, th = 64;

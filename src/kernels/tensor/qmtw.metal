@@ -195,7 +195,7 @@ NI_INLINE void qmtw_tile(const device half* X, const device uint* W, const devic
 // the decoded weights go through threadgroup memory (double-buffered, BN x BK halfs per
 // buffer), so BM = 128 fits: 4 simdgroups of (BM / 2) x (BN / 2), the weight tile decoded once for 128 token rows. A
 // simdgroup whose first row is at or past M skips its products, but one that starts below M reads all BM / 2 of its rows:
-// the host takes this tile only where M % BM <= BM / 2 (src/model/flint.cpp's enc_gemm), so no read passes row M.
+// the host takes this tile only where M is a multiple of BM / 2 (src/model/flint.cpp's enc_gemm), so no read passes M.
 template <class D, int BM, int BN, int BK>
 NI_INLINE void qmtw_tile_dx(const device half* X, const device uint* W, const device bfloat* S, const device bfloat* B,
                             device float* Y, constant QmtwParams& p, uint m0, uint n0, uint tid, uint sg,
