@@ -97,14 +97,14 @@ int main(int argc, char** argv) {
   const bool split = env_on("NI_DFL_SPLIT");
   double gpu_draft = 0, gpu_verify = 0;
   // The fallback (NI_DFL_GATE=0 turns it off). Drafting cycles keep a moving average (1/8 per cycle) of the tokens
-  // each keeps; under the floor (NI_DFL_FLOOR, default 1.40: an 8-row verify plus the drafting pass cost 1.36 decode
+  // each keeps; under the floor (NI_DFL_FLOOR, default 1.50: an 8-row verify plus the drafting pass cost 1.36 decode
   // steps on the M5 Max) the next `hold` tokens decode plainly, as 1-row cycles without drafts (the decode step's
   // kernels and sampler: the same text), whose captures keep the drafter's context whole. Then a probe: 4 drafting
   // cycles, judged on their own mean; a probe that passes goes back to drafting, one that fails doubles the hold (16
   // .. 256 tokens), so a prose stretch stops paying for probes while code keeps its bursts. Token counts only, no
   // clock: the same request decodes the same text whatever the load.
   const bool gate = !getenv("NI_DFL_GATE") || atoi(getenv("NI_DFL_GATE")) != 0;
-  const double floor_tpc = getenv("NI_DFL_FLOOR") ? atof(getenv("NI_DFL_FLOOR")) : 1.40;
+  const double floor_tpc = getenv("NI_DFL_FLOOR") ? atof(getenv("NI_DFL_FLOOR")) : 1.50;
   const int probe = 4;
   double avg = 2.0;  // prior: a drafting cycle keeps 2 tokens
   int hold = 16, plain_left = 0, probe_left = 0, probe_sum = 0, spec_cycles = 0, plain_cycles = 0;

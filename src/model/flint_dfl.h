@@ -7,15 +7,21 @@
 
 namespace ni {
 
+// The fields of a dense Llama's config the drafter checks (hidden, layers, vocab), from its folder alone
+inline Qwen35Config flint_dfl_config(const FlintConfig& c) {
+  Qwen35Config q;
+  q.hidden = c.hidden;
+  q.layers = c.layers;
+  q.vocab = c.vocab;
+  q.eos = c.eos;
+  return q;
+}
+
 class FlintDflTarget : public DflTarget {
  public:
   explicit FlintDflTarget(Flint& f) : f_(f) {
-    const FlintConfig& c = f.config();
-    if (!c.llama) fatal("DFlash2 on Flint: a dense Llama only (Nanbeige4.3)");
-    cfg_.hidden = c.hidden;
-    cfg_.layers = c.layers;
-    cfg_.vocab = c.vocab;
-    cfg_.eos = c.eos;
+    if (!f.config().llama) fatal("DFlash2 on Flint: a dense Llama only (Nanbeige4.3)");
+    cfg_ = flint_dfl_config(f.config());
     emb_ = ql(f.embed_mat());
     head_ = ql(f.head_mat());
   }

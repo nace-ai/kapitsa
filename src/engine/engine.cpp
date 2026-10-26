@@ -417,6 +417,16 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
   }
 
+  if (flint_ && flint_->config().llama && !lp.dflash_off && lp.dflash_left_out.empty() && !lp.dflash.empty()) {
+    const size_t a0 = Gpu::get().allocated_bytes();
+    fdt_ = std::make_unique<FlintDflTarget>(*flint_);
+    fdfl_ = std::make_unique<DFlash2>(*fdt_, lp.dflash, 0, false);
+    dfl_dir_ = lp.dflash;
+    flint_ngram_ = 0;  // the drafter instead of prompt lookup
+    logi("DFlash2 on %s: %.3f GB at load; a chain of 7 drafts a cycle, plain 1-row cycles while acceptance is under "
+         "break-even", opts_.model_dir.c_str(), (Gpu::get().allocated_bytes() - a0) / 1e9);
+  }
+
   if (nh_ && !lp.dflash_off && lp.dflash_left_out.empty()) {
     if (lp.dflash.empty()) {
       logi("Nemotron-H: no block drafter found next to %s", opts_.model_dir.c_str());
@@ -478,6 +488,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     Slot s;
     s.seq = model_->new_seq(limit, 0);  // KV cache on first use, growing with the conversation
     if (dfl_) s.dseq = dfl_->new_seq();
+    if (fdfl_) s.dseq = fdfl_->new_seq();
     if (lili_) s.lseq = lili_->new_seq();
     s.ckpts.push_back({model_->new_checkpoint()});
     s.ckpts.push_back({model_->new_checkpoint()});
@@ -527,6 +538,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     logi("KFlash: prompt-lookup budget on (extra row %.2f steps)", kf_row_cost_);
   }
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
+                         : fdfl_ ? std::string("DFlash2 speculative decoding (7-draft chain, plain while acceptance is low)")
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
                                                   " drafts per cycle)"
                          : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
@@ -560,6 +572,7 @@ std::string Engine::kflash_source() const {
   if (!kflash_wrap_on()) return "";
   if (lili_) return lili_->name();
   if (dfl_) return "DFlash2";
+  if (fdfl_) return "DFlash2";
   if (flint_ngram_ > 0 || nh_ngram_ > 0) return "prompt lookup";
   if (spec_) return "MTP";
   if (dory_spec_ > 0)
@@ -764,8 +777,28 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   lp.dflash_auto = want == "auto";
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
   slots = std::max(1, slots);
-  if (Dory::is_model(model_dir) || Flint::is_model(model_dir)) {
-    lp.dflash_off = true;  // no block drafter for Dory or Flint
+  const bool flint_llama = Flint::is_model(model_dir) && Flint::read_config(model_dir).llama;
+  if (Dory::is_model(model_dir) || (Flint::is_model(model_dir) && !flint_llama)) {
+    lp.dflash_off = true;  // no block drafter for Dory or Flint's MoE
+  } else if (flint_llama) {
+    // a dense Llama on Flint's backend (Nanbeige4.3): a DFlash2 drafter next to it (auto, DFlash2::find) or the one
+    // named; auto leaves out one that would keep a conversation from its full context
+    if (!lp.dflash_off) {
+      const Qwen35Config dc = flint_dfl_config(Flint::read_config(model_dir));
+      lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, dc, true) : want;
+      if (!lp.dflash.empty()) {
+        size_t per_slot = 0;
+        const size_t head_row = size_t(dc.hidden) + size_t(dc.hidden) / 64 * 4;  // an 8-bit LM head row
+        lp.dflash_bytes = lp.dflash_found_bytes =
+            DFlash2::plan_bytes(lp.dflash, dc, head_row, &per_slot) + per_slot * size_t(slots);
+        if (lp.dflash_auto &&
+            !conversation_fits(model_dir, context, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0)) {
+          lp.dflash_left_out = lp.dflash;
+          lp.dflash.clear();
+          lp.dflash_bytes = 0;
+        }
+      }
+    }
   } else if (NemotronH::is_model(model_dir)) {
     // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
@@ -2469,7 +2502,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
                  std::to_string(best->pos)).c_str()
               : "none usable, prefill from 0");
   }
-  if (dfl_) {
+  if (dfl_ || fdfl_) {
     // the drafter ring keeps the entries of the reused prefix [0, start) that are still in its window
     if (start == 0) DFlash2::reset(*slot.dseq);
     else DFlash2::rewind(*slot.dseq, start);
@@ -2585,6 +2618,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // [max(start, n - 2047), n); the drafter projects them into its context ring after the last chunk.
   if (dfl_) dfl_->begin_prefill(n, start);
   if (lili_) lili_->begin_prefill(n, start);
+  if (fdfl_) fdfl_->begin_prefill(n, start);
   // Other requests take their turns between chunks up to the first row the drafter captures (its capture buffer is
   // shared); from there the prefill runs to its end (at most two chunks).
   const int capture_from = dfl_ ? std::max(start, n - DFlash2::kCtxKeep)
@@ -2802,6 +2836,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
     // The ring snapshot of the checkpoint saved by this prefill (at the turn boundary, near n) is taken right after
     // the commit: it then holds the window before the checkpoint for a later restore.
+    if (fdfl_ && p == n) {  // the drafter's context: the captured prompt rows into its ring, behind the last chunk
+      fdfl_->end_prefill();
+      fdfl_->encode_prefill_commit(*e, *slot.dseq);
+    }
     const bool dfl_commit = dfl_ && p == n;
     auto commit_ring = [&](Encoder& en) {
       dfl_->encode_prefill_commit(en, *slot.dseq);
@@ -3022,7 +3060,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const char* v = getenv("NI_GRAMMAR_SPEC");
     return !(v && v[0] == '0');
   }();
-  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || depth > 0;
+  const bool spec_loop = lili_ || dfl_ || fdfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || depth > 0;
   const bool g_dfl = gm && dfl_ && grammar_spec;
   const bool g_direct = gm && !g_dfl && (g_on || !spec_loop);
   g_in_spec = gm && !g_direct && !g_on;
@@ -3461,6 +3499,86 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     auto e3 = g.begin();
     nh_->encode_flush(*e3, s);
     e3->commit_and_wait();
+    fed_until = P;
+  } else if (fdfl_) {
+    // DFlash2 on a dense Llama (Nanbeige4.3): per cycle the drafter's context commit of the rows the last cycles kept,
+    // its drafting pass from the anchor tokens[P] (7 proposals), the 8-row verify capturing the drafter's next context
+    // and the acceptance, in one command buffer. Where drafting cycles keep fewer tokens than break-even (a moving
+    // average, 1/8 a cycle, under NI_DFL_FLOOR = 1.50: an 8-row verify plus the drafting pass cost 1.36 decode steps on
+    // the M5 Max) the next tokens decode as 1-row cycles without drafts (the decode step's kernels and sampler: the same
+    // text), their captures committed 8 at a time; then 4 drafting cycles probe again, judged on their own mean, and a
+    // failed probe doubles the plain stretch (16 .. 256 tokens). Token counts only, no clock: the same request decodes
+    // the same text whatever the load. NI_DFL_GATE=0 drafts every cycle. (tools/flint_dflash measures it.)
+    DFlashSeq& d = *slot.dseq;
+    constexpr int B = DFlash2::kB, K = B - 1, kProbe = 4;
+    static const double floor_tpc = getenv("NI_DFL_FLOOR") && *getenv("NI_DFL_FLOOR") ? atof(getenv("NI_DFL_FLOOR")) : 1.50;
+    static const bool gate = !getenv("NI_DFL_GATE") || atoi(getenv("NI_DFL_GATE")) != 0;
+    double avg = 2.0;  // prior: a drafting cycle keeps 2 tokens
+    int hold = 16, plain_left = 0, probe_left = 0, probe_sum = 0, pend = 0, cap_base = n;
+    int P = n;
+    req_cycles = 0;
+    bool go = handle(s.tokens()[n]);
+    while (go) {
+      if (P + 2 * B + 2 > s.cap && s.cap < s.limit) {
+        if (mtp_e) mtp_e->wait();
+        grow_kv(std::min(s.limit, P + 2 * B + 2), [] {});
+      }
+      if (P + B + 1 >= s.cap) {
+        finish = "length";
+        res.context_full = true;
+        break;
+      }
+      if (mtp_e) mtp_e->wait();
+      const bool drafting = !gate || plain_left == 0;
+      const int k = drafting ? K : 0;
+      auto e2 = g.begin();
+      if (pend && (drafting || pend >= B)) fdfl_->encode_commit(*e2, d, pend), pend = 0, cap_base = P;
+      if (drafting) fdfl_->encode_draft(*e2, s, d, P, sp);
+      if (drafting) fdfl_->arm_verify(P, k + 1);
+      else fdfl_->arm_verify(cap_base, B);  // a plain row lands in row P - cap_base of the capture
+      flint_->encode_verify(*e2, s, P, k + 1);
+      fdfl_->disarm();
+      flint_->encode_accept(*e2, s, P, k + 1, k, sp);
+      e2->commit_and_wait();
+      const int a = flint_->accepted();
+      if (drafting) {
+        if (probe_left > 0) {
+          probe_sum += a + 1;
+          if (--probe_left == 0) {
+            const double mean = double(probe_sum) / kProbe;
+            if (mean >= floor_tpc) avg = mean, hold = 16;
+            else plain_left = hold, hold = std::min(2 * hold, 256);
+          }
+        } else {
+          avg = 0.875 * avg + 0.125 * (a + 1);
+          if (gate && avg < floor_tpc) plain_left = hold, hold = std::min(2 * hold, 256);
+        }
+        cap_base = P, pend = a + 1;
+      } else {
+        ++pend;
+        if (--plain_left == 0) probe_left = kProbe, probe_sum = 0;
+      }
+      const int* tk = s.tokens();
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += m;
+      cycle_done(m);
+      P += m;
+      if (go && contended()) yield_turn(res);
+    }
+    if (pend) {  // the last rows into the ring: a follow-up turn reuses the prefix with its context
+      auto e3 = g.begin();
+      fdfl_->encode_commit(*e3, d, pend);
+      e3->commit_and_wait();
+    }
     fed_until = P;
   } else if (flint_ngram_ > 0) {
     // Flint: prompt lookup. When the last tokens occurred earlier in the conversation, the tokens that followed them (up

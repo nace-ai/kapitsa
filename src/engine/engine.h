@@ -7,6 +7,7 @@
 #include "engine/reasoning_memory.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
+#include "model/flint_dfl.h"
 #include "model/dory.h"
 #include "model/flint.h"
 #include "model/kflash_budget.h"
@@ -623,6 +624,10 @@ class Engine {
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
   std::string dfl_dir_;              // its folder
+  // DFlash2 on a dense Llama on Flint's backend (Nanbeige4.3): its own loop (a chain of 7 drafts verified in 8 rows,
+  // with the token-count fallback to 1-row cycles), apart from dfl_'s Qwen paths; slot.dseq holds its ring
+  std::unique_ptr<FlintDflTarget> fdt_;
+  std::unique_ptr<DFlash2> fdfl_;
   std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
   // KFlash on the Nemotron-H block drafters (on dense targets; MoE targets keep the chain unless NI_KFLASH=1; src/model/kflash_budget.h): best-first trees of the drafter's
   // lattice under a measured budget instead of its walk's chain

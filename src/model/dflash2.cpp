@@ -1118,7 +1118,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   return w + b + pf;
 }
 
-std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc) {
+std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc, bool flex) {
   namespace fs = std::filesystem;
   auto lower = [](std::string x) {
     for (auto& c : x) c = char(std::tolower(static_cast<unsigned char>(c)));
@@ -1129,7 +1129,7 @@ std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc) 
     if (!f) return false;
     try {
       json c = json::parse(f);
-      return c.value("num_target_layers", tc.layers) == tc.layers && config_problems(c, tc).empty();
+      return c.value("num_target_layers", tc.layers) == tc.layers && config_problems(c, tc, flex).empty();
     } catch (...) {
       return false;
     }

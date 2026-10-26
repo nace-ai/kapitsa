@@ -123,7 +123,8 @@ class DFlash2 {
   // the model directory's name up to a '-', and whose config.json is a DFlash2DraftModel with the
   // target's hidden size, vocabulary and layer count that passes the load-time checks (SPEC §1).
   // The longest name match wins.
-  static std::string find(const std::string& model_dir, const Qwen35Config& target);
+  // flex: a target that is not a Qwen35 (config_problems' flex; Flint's dense Llama)
+  static std::string find(const std::string& model_dir, const Qwen35Config& target, bool flex = false);
   // Memory a drafter takes, from its config.json and safetensors headers only (the engine's fit check): what the
   // constructor allocates (projections quantized to NI_DFLASH_BITS, default 4; norms, codebooks and conv kernels
   // as stored; buffers; the reduced draft head, rows of the target's LM head of head_row_bytes each), the target's
