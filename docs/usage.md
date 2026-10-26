@@ -63,10 +63,10 @@ Those start the best model for this Mac, with the same output as before.
 | `nanbeige4.3-33b` | `nanbeige`, `nanbeige4.3`, `nanbeige-33b` | Nanbeige4.3-33B: a dense 33B (Llama architecture) for agents and coding, reasoning switched with `enable_thinking`; text only; 32 GB Macs and up in 4-bit | 21.8 GB | `4bit` (default: AWQ, 8-bit embedding and LM head), `8bit` (37.2 GB), `bf16` (68.2 GB) |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
-27B, a DFlash2 draft model for Nanbeige (ProCreations' weights), an MTP head and z-lab's DFlash draft model for the 4B,
-NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning; Flash-Next's repo holds its
-MTP head. Dory and Flint have none: they decode without one, as
-does the 35B's `16gb` (its GGUF has no MTP head, and a draft model would not fit beside it).
+27B, a DFlash2 draft model for Nanbeige (ProCreations' weights), an MTP head and z-lab's DFlash draft model for the 4B
+and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning; Flash-Next's
+repo holds its MTP head. Dory and Flint have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
+MTP head, and a draft model would not fit beside it).
 
 Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
 ([nace-ai/Qwen3.8-Flash-Next-MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit), its precision per
@@ -393,10 +393,10 @@ restarted) reads that state back and prefills only what follows it. `usage.promp
   `--disk-cache 16G` caps it at 16 GiB within the same rule; `--disk-cache 0` turns it off. Other models' caches that
   no server uses count against the limit too and go first; one no server has used for 14 days is removed when a server
   starts.
-- **Models.** The Qwen3.5-family models (Qwen3.5 4B, Qwen3.6 35B-A3B, Qwen3.8 27B), with their draft models or the
-  MTP head, and Dory (a state is read back only for the loop count that computed it). Nemotron-H models and
-  Qwen3.8-Flash-Next run without it (the log says so, and so does the screen when `--disk-cache` or `NI_DISK_CACHE`
-  asks for it).
+- **Models.** The Qwen3.5 family (the 4B, 9B, 35B-A3B and 27B), with their draft models or the MTP head; Flint and
+  Nanbeige, which run on Flint's backend; and Dory (a state is read back only for the loop count that computed it).
+  Nemotron-H models and Qwen3.8-Flash-Next run without it (the log says so, and so does the screen when `--disk-cache`
+  or `NI_DISK_CACHE` asks for it).
 
 The server says at start where the cache is, its limit and how many conversations it took back; each read and write
 has a log line (`SSD cache: ...`).
