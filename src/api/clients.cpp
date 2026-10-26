@@ -172,31 +172,41 @@ AgentLaunch opencode(const std::string& path, const AgentServer& s, const std::v
 }
 
 // Pi's provider for the server: an extension that `kapitsa pi` loads for that run (pi -e), so nothing in ~/.pi
-// changes. It reads the server from the environment, so the file stays the same and runs on other ports don't race.
+// changes. It reads the server from the environment, so the file stays the same and runs on other ports do not race.
+// Its models: the one served and, on a server `kapitsa pi` started (--allow-switch), every other downloaded one, each
+// with its context; picking one in Pi switches the server to it (src/server/model_manager.h, switch_to).
 // Anthropic Messages: each turn's reasoning goes back exactly (in our signature; a turn cut short keeps its thinking,
 // with an empty signature), so every request of a tool loop continues the prompt the server has cached. Pi's thinking
 // levels go as efforts (adaptive thinking), which the server maps for the models that have levels.
 const char* const kPiExtension = R"JS(// Kapitsa as a provider for Pi, written by `kapitsa pi`, which loads it for one run (pi -e): the server it started
-// or found, from the environment it gives Pi (KAPITSA_PI_BASE_URL, KAPITSA_PI_MODEL, KAPITSA_PI_CONTEXT, KAPITSA_API_KEY).
+// or found, from the environment it gives Pi (KAPITSA_PI_BASE_URL, KAPITSA_PI_MODEL, KAPITSA_PI_CONTEXT, KAPITSA_API_KEY;
+// KAPITSA_PI_MODELS: every model the server serves or switches to, [{"id", "context"}], the served one first).
 export default function (pi) {
   const env = process.env;
   if (!env.KAPITSA_PI_BASE_URL || !env.KAPITSA_PI_MODEL) return;
-  const context = Number(env.KAPITSA_PI_CONTEXT) || 32768;
+  let list = [{ id: env.KAPITSA_PI_MODEL, context: env.KAPITSA_PI_CONTEXT }];
+  try {
+    const all = JSON.parse(env.KAPITSA_PI_MODELS || "[]");
+    if (Array.isArray(all) && all.length) list = all;
+  } catch {}
   pi.registerProvider("kapitsa", {
     name: "Kapitsa",
     baseUrl: env.KAPITSA_PI_BASE_URL,
     api: "anthropic-messages",
     apiKey: "$KAPITSA_API_KEY",
-    models: [{
-      id: env.KAPITSA_PI_MODEL,
-      name: env.KAPITSA_PI_MODEL + " (Kapitsa)",
-      reasoning: true,
-      input: ["text", "image"],
-      contextWindow: context,
-      maxTokens: Math.min(32768, Math.max(1024, Math.floor(context / 4))),
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      compat: { forceAdaptiveThinking: true, allowEmptySignature: true },
-    }],
+    models: list.map((m) => {
+      const context = Number(m.context) || 32768;
+      return {
+        id: m.id,
+        name: m.id + " (Kapitsa)",
+        reasoning: true,
+        input: ["text", "image"],
+        contextWindow: context,
+        maxTokens: Math.min(32768, Math.max(1024, Math.floor(context / 4))),
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        compat: { forceAdaptiveThinking: true, allowEmptySignature: true },
+      };
+    }),
   });
 }
 )JS";
@@ -209,6 +219,12 @@ AgentLaunch pi(const std::string& path, const AgentServer& s, const std::vector<
            {"KAPITSA_PI_BASE_URL", s.base_url},
            {"KAPITSA_PI_MODEL", s.model},
            {"KAPITSA_PI_CONTEXT", std::to_string(s.context)}};
+  ojson models = ojson::array({{{"id", s.model}, {"context", s.context}}});
+  for (const auto& [id, context] : s.switch_to) models.push_back({{"id", id}, {"context", context}});
+  l.set.push_back({"KAPITSA_PI_MODELS", models.dump()});
+  if (!s.switch_to.empty())
+    l.notes.push_back("Pi lists the other downloaded models too: picking one (/model) loads it in place of " + s.model +
+                      ", which takes a moment.");
   l.argv = {path, "-e", ext, "--provider", "kapitsa", "--model", s.model};
   l.argv.insert(l.argv.end(), args.begin(), args.end());
   return l;

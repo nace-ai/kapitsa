@@ -774,6 +774,17 @@ void clients() {
             p.files[0].second.find("api: \"anthropic-messages\"") != std::string::npos &&
             p.files[0].second.find("export default function (pi)") != std::string::npos,
         "pi: its provider as an extension for the run (pi -e, nothing in ~/.pi), the server in its environment");
+  check(has(p, "KAPITSA_PI_MODELS", R"([{"id":"qwen3.6-35b-a3b:6bit","context":131072}])") && p.notes.empty(),
+        "pi: a server that does not switch models: its one model");
+  AgentServer sw = ks;
+  sw.switch_to = {{"nanbeige4.3-33b:4bit", 65536}, {"qwen3.8-27b:4bit", 262144}};
+  AgentLaunch q = agent_launch("pi", "/bin/pi", sw, {}, {}, -1, "/k/agents");
+  check(has(q, "KAPITSA_PI_MODELS", R"([{"id":"qwen3.6-35b-a3b:6bit","context":131072},)"
+                                    R"({"id":"nanbeige4.3-33b:4bit","context":65536},{"id":"qwen3.8-27b:4bit","context":262144}])") &&
+            has(q, "KAPITSA_PI_MODEL", "qwen3.6-35b-a3b:6bit") && q.argv.back() == "qwen3.6-35b-a3b:6bit" &&
+            q.notes.size() == 1 && q.notes[0].find("other downloaded models") != std::string::npos &&
+            q.files[0].second.find("KAPITSA_PI_MODELS") != std::string::npos,
+        "pi: a server started with --allow-switch: Pi lists every downloaded model, the served one first");
 }
 
 // ---------------------------------------------------------------- round trips through a chat template

@@ -179,7 +179,8 @@ def agent_checks(run, home):
     seen = os.path.join(home, "pi-seen.json")
     with open(os.path.join(bindir, "pi"), "w") as f:
         f.write("#!/usr/bin/env python3\nimport json, os, sys\njson.dump({'argv': sys.argv[1:], 'model': "
-                "os.environ.get('KAPITSA_PI_MODEL'), 'context': os.environ.get('KAPITSA_PI_CONTEXT')}, "
+                "os.environ.get('KAPITSA_PI_MODEL'), 'context': os.environ.get('KAPITSA_PI_CONTEXT'), "
+                "'models': os.environ.get('KAPITSA_PI_MODELS')}, "
                 f"open({seen!r}, 'w'))\n")
     os.chmod(os.path.join(bindir, "pi"), 0o755)
     agents = os.path.join(user, "Library", "LaunchAgents")
@@ -206,8 +207,29 @@ def agent_checks(run, home):
     rc, out, got = pi(None)
     check("cli: pi uses the server on its port: its model and the context that fits, nothing started",
           rc == 0 and got.get("model") == "qwen3.6-35b-a3b" and got.get("context") == "65536" and
-          got.get("argv", [])[-2:] == ["-p", "hi"] and "already running" in out and "brew services" not in out,
+          got.get("argv", [])[-2:] == ["-p", "hi"] and "already running" in out and "brew services" not in out and
+          json.loads(got.get("models") or "[]") == [{"id": "qwen3.6-35b-a3b", "context": 65536}],
           out + json.dumps(got))
+    # Pi's provider (the extension kapitsa pi wrote), run by Node where it is installed: every model it is given, the
+    # served one first, each with its context; one model when it is given one (a server found, which may not switch)
+    ext = os.path.join(home, "agents", "pi-kapitsa.js")
+    node = shutil.which("node")
+    if node and os.path.exists(ext):
+        probe = ("const reg = []; const m = await import(process.argv[1]); m.default({registerProvider: (n, p) => "
+                 "reg.push(p.models.map((x) => [x.id, x.contextWindow, x.maxTokens]))}); console.log(JSON.stringify(reg));")
+        def provider(models):
+            e = dict(os.environ, KAPITSA_PI_BASE_URL="http://127.0.0.1:1", KAPITSA_PI_MODEL="qwen3.6-35b-a3b",
+                     KAPITSA_PI_CONTEXT="65536")
+            if models is not None:
+                e["KAPITSA_PI_MODELS"] = json.dumps(models)
+            p = subprocess.run([node, "--input-type=module", "-e", probe, ext], env=e, capture_output=True, text=True,
+                               timeout=60)
+            return json.loads(p.stdout) if p.returncode == 0 else p.stderr
+        got = provider([{"id": "qwen3.6-35b-a3b", "context": 65536}, {"id": "nanbeige4.3-33b:4bit", "context": 131072}])
+        check("cli: Pi's provider lists every model it is given, the served one first, each with its context",
+              got == [[["qwen3.6-35b-a3b", 65536, 16384], ["nanbeige4.3-33b:4bit", 131072, 32768]]], str(got))
+        got = provider(None)
+        check("cli: Pi's provider without a list: the one model", got == [[["qwen3.6-35b-a3b", 65536, 16384]]], str(got))
     for label in ["sh.brew.kapitsa", "homebrew.mxcl.kapitsa"]:  # current Homebrew's label (the reporter's), older ones'
         rc, out, got = pi(port, label)
         check(f"cli: pi on the Homebrew service's port ({label}) says it is the service, and how to stop it",

@@ -13,6 +13,9 @@ struct AgentServer {
   std::string model;     // the model id the server reports
   int context = 0;       // its context window (tokens)
   std::string api_key;   // the server's --api-key, or "" (the clients still need some key)
+  // The other models it loads when a request names one (a server started with --allow-switch), each with the context
+  // it would run with: Pi lists them beside `model`, and picking one there switches the server to it
+  std::vector<std::pair<std::string, int>> switch_to;
 };
 
 struct AgentLaunch {

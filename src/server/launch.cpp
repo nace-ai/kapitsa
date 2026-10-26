@@ -370,6 +370,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   Running run;
   std::string why;
   pid_t server = 0;
+  std::vector<std::pair<std::string, int>> switch_to;  // Pi's other models (api::AgentServer::switch_to)
   const std::string log = hub::home_dir() + "/logs/serve-" + std::to_string(port) + ".log";
   const int found = probe(port, key, &run, &why);
   if (found < 0) return fail(why);
@@ -445,6 +446,10 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     }
     if (!elsewhere)
       if (const std::string why = unsupported_model(ref.dir); !why.empty()) return fail(why);
+    // Pi's server switches models (--allow-switch): Pi lists every downloaded model, and picking one there loads it in
+    // place of this one, with the context asked for (as each model's own: 0 its default, max its limit)
+    const bool switching = name == "pi" && !elsewhere;
+    const int ctx_asked = ctx;
     // the context first (serve then picks the slots, and caps a context past the model's limit, saying so): as
     // asked, max the model's limit, else serve's default for this Mac (default_context)
     if (elsewhere) {  // that Mac's server has its context
@@ -466,7 +471,9 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     mkdir(hub::home_dir().c_str(), 0755);
     mkdir((hub::home_dir() + "/logs").c_str(), 0755);
     std::vector<std::string> sargv = {self_path(), "serve", "--model", serve_model, "--port", std::to_string(port)};
-    if (ctx > 0) sargv.insert(sargv.end(), {"--context", std::to_string(ctx)});
+    if (switching && ctx_asked == kContextMax) sargv.insert(sargv.end(), {"--context", "max"});
+    else if (ctx > 0 && !(switching && ctx_asked == 0)) sargv.insert(sargv.end(), {"--context", std::to_string(ctx)});
+    if (switching) sargv.push_back("--allow-switch");
     if (!key.empty()) sargv.insert(sargv.end(), {"--api-key", key});
     if (loops > 0) sargv.insert(sargv.end(), {"--loops", std::to_string(loops)});
     std::vector<std::string> senv;
@@ -575,10 +582,30 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       waitpid(server, nullptr, 0);
       return fail("The server started but does not answer as Kapitsa: " + why);
     }
+    // the models it switches to: the other downloaded ones it lists, each with the context it would load it with
+    if (switching) {
+      const Got g = get(port, "/v1/models", key, 5);
+      const json j = json::parse(g.body, nullptr, false);
+      if (g.status == 200 && j.is_object() && j.contains("data") && j["data"].is_array())
+        for (const json& m : j["data"]) {
+          if (!m.is_object() || m.value("active", true) || !m.value("downloaded", false)) continue;
+          const std::string id = m.value("id", "");
+          try {
+            const hub::ModelRef r = hub::resolve(id);
+            if (id.empty() || !unsupported_model(r.dir).empty()) continue;
+            const int limit = model_context_limit(r.dir);
+            int c = ctx_asked == 0 ? default_context(r.dir, opt, budget) : ctx_asked == kContextMax ? limit
+                    : limit > 0 ? std::min(ctx_asked, limit) : ctx_asked;
+            if (c <= 0) c = default_context(r.dir, opt, budget);
+            switch_to.push_back({id, c});
+          } catch (const std::exception&) {
+          }
+        }
+    }
   }
 
   // the agent
-  api::AgentServer s{"http://127.0.0.1:" + std::to_string(port), run.model, run.context, key};
+  api::AgentServer s{"http://127.0.0.1:" + std::to_string(port), run.model, run.context, key, switch_to};
   std::map<std::string, std::string> env;
   for (char** e = environ; *e; ++e) {
     const char* eq = strchr(*e, '=');

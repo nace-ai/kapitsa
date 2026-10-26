@@ -756,7 +756,10 @@ tools and MCP servers work as usual:
   extension adds the provider for that run (`pi -e ~/.cache/kapitsa/agents/pi-kapitsa.js`); `~/.pi` is not changed.
   Each turn's reasoning goes back as it was generated (in the thinking block's signature, a turn cut short included),
   so every request of a tool loop continues the prompt the server has cached; Pi's thinking levels become the model's
-  reasoning efforts. Install it with `npm install -g @earendil-works/pi-coding-agent`.
+  reasoning efforts. The server `kapitsa pi` starts runs with `--allow-switch`: Pi's model list (`/model`) has every
+  downloaded model, each with the context it would run with (as asked with `--context`, else its own default), and
+  picking one loads it in place of the model served (the next request waits for the load). A server it found keeps
+  its one model. Install it with `npm install -g @earendil-works/pi-coding-agent`.
 
 ## Images
 
