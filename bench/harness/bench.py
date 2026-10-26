@@ -124,7 +124,8 @@ def power_flags(power, powermode, low_power=None):
     Only battery and Low Power Mode drop a run: they cut sustained clocks. High Power Mode (powermode 2) does not —
     this Mac sits at 2 on AC permanently and most committed results are at 2 — so it is provenance plus a
     `POWER-INFO:` note (power_info), never a flag. A pair whose two arms ran in different modes is excluded at
-    compare-table time (compare_table.py), because mode differences between rows are what skew a comparison.
+    compare-table time (compare_table.py), which reads this mode from the provenance and treats the mode most of a
+    table's rows recorded as the reference, because mode differences between rows are what skew a comparison.
     """
     on_battery = "Battery Power" in (power or "")
     pm = "" if powermode is None else str(powermode)
