@@ -13,7 +13,7 @@ attempts at the same blocks (03:18-03:55, 04:04-05:44) are contended and only th
 
 **Flint 40B-A2.5B, the poster's new M5 Max row** (one block at 05:47-05:50, at the card's T = 1.0): Kapitsa 0.2.18
 (`ed2b07d`) **5,721 / 267.0** tok/s (prefill 4K / decode), rec 0.1.0 2,863 / 224.4, llama.cpp b11871 3,827 / 129.6.
-Kapitsa writes 19% faster than rec and 2.1x llama.cpp, and reads prompts 49% faster than llama.cpp. rec's cached
+Kapitsa writes 19% faster than rec in this block (1.06-1.25x over the night's runs: rec read 214.5-243.6, Kapitsa 258.8-267.0, so the ranking holds in every pairing) and 2.1x llama.cpp, and reads prompts 49% faster than llama.cpp. rec's cached
 follow-up returned no content in this run (*empty follow-up*), as two of Kapitsa's earlier 0.2.18 attempts did (03:18,
 03:58, both contended); its 05:47 run answered every follow-up.
 
