@@ -206,6 +206,7 @@ class Flint : public Model {
   bool v8_ = false;              // a dense Llama's 3-8 row verify passes on the 8-row verify kernels (NI_FLINT_V8)
   bool in_verify_ = false;       // encoding a verify pass (encode_verify): the only pass v8_ takes
   Buffer v8t_, v8s_, v8g_, v8u_;  // their X8 table and group sums, the gate / up rows
+  Buffer v8tt_;                  // ... and qmm8t's T table, where the 4-bit GEMMs run on the matrix units
   bool split_ = false;           // the decode kernels' merges in a dispatch of their own (split_merges)
 
   // decode / verify activations (kMaxRows rows)

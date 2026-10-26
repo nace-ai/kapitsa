@@ -730,6 +730,9 @@ void Flint::alloc_buffers() {
     v8s_ = g.alloc(W / 64 * 8 * 4, "flint_x8_sums");
     v8g_ = g.alloc(R * size_t(std::max(c.ffn, 1)) * 4, "flint_x8_gate");
     v8u_ = g.alloc(R * size_t(std::max(c.ffn, 1)) * 4, "flint_x8_up");
+    // the 4-bit matrices' GEMMs on the matrix units (qmm8t) where this Mac has them; NI_FLINT_V8T=0 keeps qmm8
+    const char* vt = getenv("NI_FLINT_V8T");
+    if (v8_tensor_ok() && !(vt && !strcmp(vt, "0"))) v8tt_ = g.alloc(W * 8 * 2, "flint_x8_table_t");
   }
 }
 
@@ -993,13 +996,14 @@ void Flint::enc_mv_v8(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
   const int bits = segs[0].M->bits;
   for (const Seg& sg : segs)
     if (sg.M->bits != bits || sg.M->K != K || sg.M->gs != 64) fatal("Flint: 8-row matvec segments of mixed formats");
-  v8_enc_x8(e, x, R, int(K), norm ? &norm->buf : nullptr, cfg_.eps, v8t_, v8s_);
+  const Buffer* tt = v8tt_.size ? &v8tt_ : nullptr;
+  v8_enc_x8(e, x, R, int(K), norm ? &norm->buf : nullptr, cfg_.eps, v8t_, v8s_, tt);
   auto seg = [&](const Seg& sg, const Buffer& y, uint32_t ld, bool add) {
     return V8Seg{&sg.M->w->buf, &sg.M->s->buf, &sg.M->b->buf, sg.M->N, y, ld, add};
   };
   if (gu) {  // gate and up rows, then h = silu(gate) * up into segment 0's y [R][N]
     const uint32_t N = segs[0].M->N;
-    v8_enc_qmm8(e, {seg(segs[0], v8g_, N, false), seg(segs[1], v8u_, N, false)}, R, K, bits, v8t_, v8s_);
+    v8_enc_qmm8(e, {seg(segs[0], v8g_, N, false), seg(segs[1], v8u_, N, false)}, R, K, bits, v8t_, v8s_, tt);
     const uint32_t n = uint32_t(R) * N;
     e.use(pipe("swiglu_f32"));
     e.buf(0, v8g_);
@@ -1011,7 +1015,7 @@ void Flint::enc_mv_v8(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
   }
   std::vector<V8Seg> v;
   for (const Seg& sg : segs) v.push_back(seg(sg, sg.y, y_ld ? y_ld : sg.M->N, sg.add));
-  v8_enc_qmm8(e, v, R, K, bits, v8t_, v8s_);
+  v8_enc_qmm8(e, v, R, K, bits, v8t_, v8s_, tt);
 }
 
 void Flint::enc_mv_bf16(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
