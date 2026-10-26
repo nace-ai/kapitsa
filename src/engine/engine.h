@@ -194,8 +194,11 @@ enum class ContextWhy { kDefault, kModelLimit, kMemory, kMemoryWithDrafter };
 int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why = nullptr);
 
 struct ChatRequest;
-// The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none)
+// The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none),
+// through paren_call_postfix
 std::string chat_template_source(const std::string& model_dir);
+// A template's calls followed by `.` or `[` in parentheses, `(f(x)).y`, which minja reads (it reads `f(x).y` as an error)
+std::string paren_call_postfix(const std::string& src);
 // A request's prompt by a chat template (Engine::render; CPU only, no model needed: tools/api_test checks it).
 // `images`: image parts render as images (their data left out; the engine puts the images' rows in place), else image
 // and video parts become a short note. `native`: the template renders every role and tool call itself (Flint's), so

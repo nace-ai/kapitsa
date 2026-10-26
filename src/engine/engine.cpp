@@ -20,6 +20,7 @@
 #include <mutex>
 #include <fstream>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -1773,13 +1774,82 @@ void Engine::remember_reasoning(const ChatRequest& r, const ChatResult& res) {
 
 int Engine::restore_reasoning(ChatRequest& r) { return reasoning_.restore(r.messages); }
 
+// minja (third_party, not edited) reads no attribute or subscript after a call: `f(x).startswith('a')` fails with
+// "Expected comma in tuple", and Nanbeige 4.3's template calls its visible_text macro so. Inside {{ }} and {% %}, such
+// a call is put in parentheses, `(f(x)).startswith('a')`, which minja reads and which means the same. Keywords (`not(x).y`
+// is `not ((x).y)`), method calls and filters are left alone; a template minja already parses has no such call, so for
+// it this returns the source unchanged.
+std::string paren_call_postfix(const std::string& src) {
+  const size_t n = src.size();
+  auto ident = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+  auto skip_string = [&](size_t k) {  // k at a quote: the index past its closing quote
+    const char q = src[k];
+    for (++k; k < n && src[k] != q; ++k)
+      if (src[k] == '\\') ++k;
+    return std::min(k + 1, n);
+  };
+  static const std::set<std::string> keywords = {"not", "and", "or", "in", "is", "if", "elif", "else", "for",
+                                                 "set", "macro", "call", "filter", "return", "with"};
+  std::vector<std::pair<size_t, char>> inserts;  // (index, '(' or ')'), applied from the back
+  for (size_t i = 0; i < n;) {
+    if (src.compare(i, 2, "{#") == 0) {  // a comment: as written
+      const size_t e = src.find("#}", i + 2);
+      i = e == std::string::npos ? n : e + 2;
+      continue;
+    }
+    if (src.compare(i, 2, "{{") != 0 && src.compare(i, 2, "{%") != 0) {
+      ++i;
+      continue;
+    }
+    const std::string close = src[i + 1] == '{' ? "}}" : "%}";
+    size_t k = i + 2;
+    while (k < n && src.compare(k, 2, close) != 0) {
+      if (src[k] == '\'' || src[k] == '"') {
+        k = skip_string(k);
+        continue;
+      }
+      if (!ident(src[k]) || std::isdigit(static_cast<unsigned char>(src[k]))) {
+        ++k;
+        continue;
+      }
+      const size_t s = k;
+      while (k < n && ident(src[k])) ++k;
+      size_t before = s;
+      while (before > 0 && std::isspace(static_cast<unsigned char>(src[before - 1]))) --before;
+      const char prev = before > 0 ? src[before - 1] : ' ';
+      if (k >= n || src[k] != '(' || prev == '.' || prev == '|' || keywords.count(src.substr(s, k - s))) continue;
+      size_t e = k, depth = 0;  // the call's closing parenthesis
+      while (e < n) {
+        if (src[e] == '\'' || src[e] == '"') {
+          e = skip_string(e);
+          continue;
+        }
+        if (src[e] == '(') ++depth;
+        else if (src[e] == ')' && --depth == 0) break;
+        ++e;
+      }
+      if (e + 1 < n && (src[e + 1] == '.' || src[e + 1] == '[')) {
+        inserts.push_back({s, '('});
+        inserts.push_back({e + 1, ')'});
+      }
+      // the arguments are scanned too (k stays at the parenthesis)
+    }
+    i = k + 2;
+  }
+  if (inserts.empty()) return src;
+  std::sort(inserts.begin(), inserts.end());
+  std::string out = src;
+  for (auto it = inserts.rbegin(); it != inserts.rend(); ++it) out.insert(it->first, 1, it->second);
+  return out;
+}
+
 std::string chat_template_source(const std::string& model_dir) {
   std::string src = read_file(model_dir + "/chat_template.jinja");
   if (src.empty()) {
     auto cfg = nlohmann::json::parse(read_file(model_dir + "/tokenizer_config.json"), nullptr, false);
     if (cfg.is_object() && cfg.contains("chat_template") && cfg["chat_template"].is_string()) src = cfg["chat_template"];
   }
-  return src;
+  return paren_call_postfix(src);
 }
 
 // (the template's own enable_thinking, ns.enable_thinking or namespace(enable_thinking=...), is not the kwarg)

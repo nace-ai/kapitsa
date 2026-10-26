@@ -1244,6 +1244,8 @@ def run_config_keyed(c, args, stamp):
     free0 = ((prov.get("system_start") or {}).get("disk_free_bytes"))
     ss = prov.get("system_start") or {}
     bench.add_power_flags(result.setdefault("flags", []), ss.get("power"), ss.get("powermode"), ss.get("low_power"))
+    bench.add_power_info(result.setdefault("power_info", []), ss.get("power"), ss.get("powermode"),
+                        ss.get("low_power"))
     if engine_kind(c) in DISK_CACHE_ENGINES and free0 is not None and free0 < DISK_CACHE_FLOOR:
         result.setdefault("flags", []).append(
             f"disk: {free0 / 2**30:.1f} GiB free at start, under the 10 GiB below which {engine_kind(c)} keeps no "
