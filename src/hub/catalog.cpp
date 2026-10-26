@@ -61,6 +61,16 @@ Companion dflash27() {
           .files = {"config.json", "model.safetensors"},
           .subdir = "dflash2"};
 }
+// Flash-Next's DFlash2 drafter: downloaded with the model like every companion, but inert unless the user sets
+// NI_DFLASH_FN=1 (Qwen4Exp::dflash_fn(), default off — docs/usage.md); the catalog's schema has no optional
+// companion, so it rides along with the download and the switch decides whether the engine binds it.
+Companion dflash_fn() {
+  return {.kind = "dflash2",
+          .repo = "incoai/Qwen3.8-Flash-Next-DFlash2",
+          .revision = "a22a1744e85c17364dcc54a6a420af7135d4c7f6",
+          .files = {"config.json", "model.safetensors"},
+          .subdir = "dflash2"};
+}
 Companion mtp4() {
   // the MLX packs drop the MTP head: built from the official checkpoint's 15 mtp.* tensors (241 MB by range requests,
   // not the 9.3 GB checkpoint), byte for byte what tools/mtp_sidecar.py makes; bf16, quantized to 4-bit at load
@@ -294,8 +304,8 @@ const std::vector<CatalogModel>& catalog() {
                      "indexer / embedding, 4-bit n-gram table",
             .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-4bit",
             .revision = "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae",
-            .companions = {},
-            .download_gb = 105.86},
+            .companions = {dflash_fn()},
+            .download_gb = 107.07},
        }},
       {.name = "nemotron-labs-dory1.0-4b",
        .aliases = {"dory", "dory-4b", "dory1.0-4b"},

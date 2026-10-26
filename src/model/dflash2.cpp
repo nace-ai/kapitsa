@@ -672,7 +672,9 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     logi("DFlash drafter (v1) %s: blocks of %d rows (trained %d), context window %d positions (trained %d)",
          dir.c_str(), kB, cfg_.trained_block, kCtxKeep, cfg_.trained_window);
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
-       "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
+       "loaded in %.0f ms; tensor path %s, projections %s", dir.c_str(), cfg_.NL, cfg_.H, bits_,
+       resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0, tensor_path_ok() ? "ok (tensor_ops)" : "off (scalar)",
+       rows16_tensor_ok() ? "all 4-bit group-64, K % 64 = 0" : "not all 4-bit group-64");
 }
 
 void DFlash2::alloc_buffers() {

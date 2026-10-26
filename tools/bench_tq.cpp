@@ -686,6 +686,7 @@ int main(int argc, char** argv) {
       e->buf(0, x); e->buf(1, x); e->buf(2, tab); e->buf(3, sm); e->buf(4, x);
       e->val(5, pp);
       e->buf(6, tlo); e->buf(7, slo); e->buf(8, th);
+      e->buf(9, tlo);  // (unused unless write_t_lo)
       e->dispatch(K / 256, 1, 1, 256);
       e->commit_and_wait();
     }
@@ -871,6 +872,7 @@ int main(int argc, char** argv) {
     e->buf(0, x); e->buf(1, x); e->buf(2, table); e->buf(3, sums); e->buf(4, x);
     e->val(5, pp);
     e->buf(6, table); e->buf(7, sums); e->buf(8, table);
+    e->buf(9, table);  // (unused unless write_t_lo)
     e->dispatch(K / 256, 1, 1, 256);
     e->commit_and_wait();
   }

@@ -9,17 +9,43 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <unordered_map>
 
 namespace ni {
+extern const char* const kTensorKernelSource;
 
 namespace {
 
 Pipeline pipe4(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
-  if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  if (it == cache.end()) {
+    // qwen4_exp.cpp's pipe() trigger, extended to NI_FN8T_D's GEMMs and NI_FN8T_E's expert kernels: qmm6t /
+    // qmm8t / qmt8v_* live in kTensorKernelSource and Gpu::pipeline() is required-by-default, so without this
+    // the first fn8t dispatch would fatal("kernel ... not found") in a process that has not compiled the tensor
+    // library yet.
+    if (n.rfind("qmm6t", 0) == 0 || n.rfind("qmm8t", 0) == 0 || n.rfind("qmt8v", 0) == 0)
+      Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+    it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  }
   return it->second;
+}
+
+// The once-per-process engagement line an FN8T gate leg carries: it proves the two-term (hi + lo) prep ran, so
+// the lo tables were written (a leg's evidence is void without it; NI_FN8T_LO = 0 is a single-term diagnostic,
+// never a gate arm).
+void fn8t_log_two_term() {
+  static bool logged = false;
+  if (logged) return;
+  logged = true;
+  fprintf(stderr, "[kapitsa] NI_FN8T: two-term hi/lo prep engaged (lo tables written)\n");
+}
+
+int env_int(const char* n, int def) {
+  const char* v = getenv(n);
+  return v && *v ? atoi(v) : def;
 }
 
 struct HcParams {
@@ -57,6 +83,9 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
     rest = other;
     bool ok = !old && (sp0 || wf0) && K % 64 == 0;
     for (const RowSeg* sg : same) ok = ok && sg->L->K == K;
+    // NI_FN8T_D: the 8-row batch on the tensor units; enc_rows8t returns false when the format or shape has
+    // no tensor path and the simdgroup kernels below stay
+    if (ok && R == 8 && fn8t_d() && enc_rows8t(e, same, x, x_ld, K)) continue;
     if (!ok) {
       for (const RowSeg* sg : same) fallback(*sg);
       continue;
@@ -99,6 +128,244 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
   }
 }
 
+// NI_FN8T_D: the tensor_ops path for one same-format group of an R == 8 enc_rows batch. x8_prep2 writes the
+// batch's x rows as qmm6t / qmm8t's T tables (hi, and with lo the two-term tables: the matrix units' right
+// operand is half, and the lo table takes the input drift from ~1e-3 to ~1e-6) and the per-group sums, then
+// one GEMM dispatch runs the whole batch. The tiling follows enc_qmm8's v8t_plan (qwen35_v8.cpp) with the
+// design's NI_FN8T_NT / _KS / _PF A/B overrides; R == 8 is one row tile, so the grid is the weight tiles
+// alone. Returns false when the format or shape has no tensor path (the caller keeps the simdgroup kernels).
+bool Qwen4Exp::enc_rows8t(Encoder& e, const std::vector<const RowSeg*>& same, const Buffer& x, uint32_t x_ld,
+                          uint32_t K) {
+  const QLinear& f0 = *same[0]->L;
+  const bool b6 = f0.bits == 6 && f0.gs == 64 && !f0.iq;  // f6g64 (qmvs_multi_f6g64's format)
+  const bool b4 = f0.q4();
+  if (!b6 && !b4) return false;
+  if (b4)
+    for (const RowSeg* sg : same)
+      if (!sg->L->q4()) return false;  // enc_rows' sp0 group can mix q4 and q8; qmm8t reads q4 only
+  if (K % 256 != 0) return false;      // x8_prep2's grid; the K = 640 indexer projections stay simdgroup
+  // the T-table set covering K: xrn_'s (K = hidden) or gout_ / attn_out_'s (sized to t8kg_)
+  const Buffer *t8, *t8l, *s8, *s8l, *v8, *v8l;
+  if (t8x_.size && K <= uint32_t(cfg_.hidden)) {
+    t8 = &t8x_; t8l = &t8xl_; s8 = &s8x_; s8l = &s8xl_; v8 = &v8x_; v8l = &v8xl_;
+  } else if (t8g_.size && t8kg_ && K <= t8kg_) {
+    t8 = &t8g_; t8l = &t8gl_; s8 = &s8g_; s8l = &s8gl_; v8 = &v8g_; v8l = &v8gl_;
+  } else return false;
+  // two-term inputs (default on): qmm6t only; qmm8t has no lo variant, so 4-bit stays single-term
+  static const bool lo = env_int("NI_FN8T_LO", 1) != 0;
+  const bool lo6 = lo && b6;
+  kp::X8Prep pp{K, 8u, x_ld ? x_ld : K, 0u, 0u, cfg_.eps, K, lo6 ? 1u : 0u, 0u, 1u, lo6 ? 1u : 0u};
+  e.use(pipe4("x8_prep2"));
+  e.buf(0, x);
+  e.buf(1, x);  // the norm weight: unused (norm = 0)
+  e.buf(2, *v8);
+  e.buf(3, *s8);
+  e.buf(4, x);  // xn: unused (write_xn = 0)
+  e.val(5, pp);
+  e.buf(6, *v8l);
+  e.buf(7, *s8l);
+  e.buf(8, *t8);
+  e.buf(9, *t8l);
+  e.dispatch(K / 256, 1, 1, 256);
+  if (lo6) fn8t_log_two_term();
+  // the GEMM: v8t_plan's rules (qwen35_v8.cpp), the design's A/B knobs over them
+  uint32_t Ntot = 0;
+  for (const RowSeg* sg : same) Ntot += sg->L->N;
+  const uint32_t gpr = K / 64;
+  static const int nt_env = env_int("NI_FN8T_NT", 0), ks_env = env_int("NI_FN8T_KS", 0),
+                   pf_env = env_int("NI_FN8T_PF", -1);
+  int nt = (Ntot + 15) / 16 > 8192 ? 32 : 16;
+  int ks = gpr > 32 && gpr <= 64 ? 4 : 8;
+  int pf = nt == 32 || gpr > 32 ? 1 : 0;
+  if (nt_env == 16 || nt_env == 32) nt = nt_env;
+  if (ks_env >= 1 && ks_env <= 8) ks = ks_env;
+  if (pf_env >= 0) pf = pf_env != 0;
+  while (ks > 1 && gpr < uint32_t(ks)) ks /= 2;
+  const std::string name =
+      std::string(b6 ? (lo6 ? (pf ? "qmm6tp" : "qmm6t") : (pf ? "qmm6t1p" : "qmm6t1")) : (pf ? "qmm8tp" : "qmm8t")) +
+      (b6 ? "_b6_nt" : "_b4_nt") + std::to_string(nt);
+  kp::Qmm8 p{};
+  p.K = K;
+  p.R = 8;
+  p.nseg = uint32_t(same.size());
+  p.ks = uint32_t(ks);
+  uint32_t tg = 0;
+  for (size_t i = 0; i < same.size(); ++i) {
+    p.N[i] = same[i]->L->N;
+    p.y_ld[i] = same[i]->y_ld ? same[i]->y_ld : same[i]->L->N;
+    p.add[i] = same[i]->add ? 1u : 0u;
+    p.tg_begin[i] = tg;
+    tg += (same[i]->L->N + uint32_t(nt) - 1) / uint32_t(nt);
+  }
+  p.tg_begin[same.size()] = tg;
+  e.use(pipe4(name));
+  for (size_t i = 0; i < 4; ++i) {
+    const RowSeg& sg = *same[std::min(i, same.size() - 1)];  // clamped: the kernel reads no segment past nseg
+    e.buf(int(i * 4 + 0), sg.L->w->buf);
+    e.buf(int(i * 4 + 1), sg.L->s->buf);
+    e.buf(int(i * 4 + 2), sg.L->b->buf);
+    e.buf(int(i * 4 + 3), sg.y);
+  }
+  e.buf(16, *t8);
+  e.buf(17, *s8);
+  if (b6) {  // qmm6t binds the lo table / lo sums at 18 / 19 (params at 20); the LO = 0 kernels take them too
+    e.buf(18, *t8l);
+    e.buf(19, *s8l);
+    e.val(20, p);
+  } else {
+    e.val(18, p);
+  }
+  e.dispatch(tg, 1, 1, uint32_t(32 * ks));
+  return true;
+}
+
+// NI_FN8T_E: the tensor_ops path for the Q2_0 experts of an R == 8 verify batch. moe_q20_unique builds the
+// unique planes (the same kernel and ue_ / umask / uslot / un_ outputs q20::enc_verify uses), x8_prep2 turns
+// xrn_'s rows into the dense path's K = D T tables (xrn_ is normalized already: norm = 0), then qmt8v runs the
+// unique planes' gate/up into fp32 h planes, hsum splits those into the downs' T tables + group sums, the two
+// downs write the old out planes, and qmt8v_combine sums them into yb_ in moe_q20_down's slot order (wts row
+// [R, k + 1], slot k the shared expert). The weight decode is bitwise the scalar path's (Q2_0: fma(d, c - xsum)
+// per 64-block; 4-bit affine: fma(s, d, fma(b, xsum))); only the K reduction is reassociated (matrix units).
+// Returns false when the shape has no tensor path (the caller keeps q20::enc_verify).
+bool Qwen4Exp::enc_moe_experts8t(Encoder& e, const q20::Experts& x, const q20::Shared& s, const q20::Shape& sh,
+                                 int R) {
+  if (R != 8 || he8_.size == 0) return false;  // he8_ allocated only for the shapes below (alloc4)
+  const uint32_t D = sh.D, I = sh.I, SI = sh.SI, k = sh.k;
+  if (D % 256 || I % 64 || SI % 64 || k < 1 || k > 16) return false;  // k <= 16: q20::shapes_ok's bound
+  const uint32_t Rk = 8 * k, Imax = std::max(I, SI);
+  static const bool lo = env_int("NI_FN8T_LO", 1) != 0;
+  const uint32_t l = lo ? 1u : 0u;
+  // the gate/up's left operand: xrn_'s rows as the dense path's T tables (K = D; all four expert GEMM types
+  // have LO variants, so the lo tables follow NI_FN8T_LO, unlike enc_rows8t's b4)
+  kp::X8Prep pp{D, 8u, D, 0u, 0u, cfg_.eps, D, l, 0u, 1u, l};
+  e.use(pipe4("x8_prep2"));
+  e.buf(0, xrn_);
+  e.buf(1, xrn_);  // the norm weight: unused (norm = 0)
+  e.buf(2, v8x_);
+  e.buf(3, s8x_);
+  e.buf(4, xrn_);  // xn: unused (write_xn = 0)
+  e.val(5, pp);
+  e.buf(6, v8xl_);
+  e.buf(7, s8xl_);
+  e.buf(8, t8x_);
+  e.buf(9, t8xl_);
+  e.dispatch(D / 256, 1, 1, 256);
+  if (lo) fn8t_log_two_term();
+  const struct {
+    uint32_t R, k;
+  } rk{8u, k};
+  e.use(pipe4("moe_q20_unique"));
+  e.buf(0, ridx_);
+  e.buf(1, ue_);
+  e.buf(2, uw_.view(0, 512));     // umask
+  e.buf(3, uw_.view(1024, 1024)); // uslot
+  e.buf(4, un_);
+  e.val(5, rk);
+  e.dispatch(1, 1, 1, 32);
+  // the GEMMs: enc_rows8t's tiling rules with its A/B knobs off (fixed computed rules; NT = 16 only)
+  auto ks_for = [](uint32_t gpr) {
+    uint32_t ks = gpr > 32 && gpr <= 64 ? 4u : 8u;
+    while (ks > 1 && gpr < ks) ks /= 2;
+    return ks;
+  };
+  const uint32_t ks_gu = ks_for(D / 64), ks_d20 = ks_for(I / 64), ks_d4 = ks_for(SI / 64);
+  const uint32_t pf_gu = D / 64 > 32 ? 1u : 0u, pf_d20 = I / 64 > 32 ? 1u : 0u, pf_d4 = SI / 64 > 32 ? 1u : 0u;
+  kp::Qmt8v p{};
+  p.D = D;
+  p.I = I;
+  p.SI = SI;
+  p.k = k;
+  p.R = 8;
+  p.ks_gu = ks_gu;
+  p.ks_d20 = ks_d20;
+  p.ks_d4 = ks_d4;
+  p.arena = x.arena ? 1u : 0u;
+  p.Imax = Imax;
+  p.lo = l;
+  p.lgc = x.lay.gc;
+  p.lgd = x.lay.gd;
+  p.luc = x.lay.uc;
+  p.lud = x.lay.ud;
+  p.ldc = x.lay.dc;
+  p.ldd = x.lay.dd;
+  const std::string sfx = lo ? "" : "1";
+  // gate/up: the unique planes, then the shared expert (h plane 8 k)
+  e.use(pipe4("qmt8v_gu20" + sfx + (pf_gu ? "p" : "")));
+  if (x.arena) {
+    e.buf(0, x.a0); e.buf(1, x.a1); e.buf(2, x.slots); e.buf(3, x.slots);
+  } else {
+    e.buf(0, x.gc); e.buf(1, x.gd); e.buf(2, x.uc); e.buf(3, x.ud);
+  }
+  e.buf(4, t8x_);
+  e.buf(5, s8x_);
+  e.buf(6, t8xl_);
+  e.buf(7, s8xl_);
+  e.buf(8, he8_);
+  e.buf(9, ue_);
+  e.buf(10, un_);
+  e.val(11, p);
+  e.dispatch(I / 16, 1, Rk, 32 * ks_gu);
+  e.use(pipe4("qmt8v_gu4" + sfx + (pf_gu ? "p" : "")));
+  e.buf(0, s.gw); e.buf(1, s.gs); e.buf(2, s.gb);
+  e.buf(3, s.uw); e.buf(4, s.us); e.buf(5, s.ub);
+  e.buf(6, t8x_);
+  e.buf(7, s8x_);
+  e.buf(8, t8xl_);
+  e.buf(9, s8xl_);
+  e.buf(10, he8_);
+  e.val(11, p);
+  e.dispatch(SI / 16, 1, 1, 32 * ks_gu);
+  // the h planes' T tables + group sums (stride I per routed plane, SI for the shared's)
+  e.use(pipe4("qmt8v_hsum"));
+  e.buf(0, he8_);
+  e.buf(1, ht8_);
+  e.buf(2, ht8l_);
+  e.buf(3, hs8_);
+  e.buf(4, hs8l_);
+  e.buf(5, hst8_);
+  e.buf(6, hst8l_);
+  e.buf(7, hss8_);
+  e.buf(8, hss8l_);
+  e.buf(9, un_);
+  e.val(10, p);
+  e.dispatch((Imax + 255) / 256, 1, Rk + 1, 256);
+  // the downs into the old out planes: the unique planes scatter through uslot, the shared's writes slot k
+  e.use(pipe4("qmt8v_dn20" + sfx + (pf_d20 ? "p" : "")));
+  if (x.arena) {
+    e.buf(0, x.a0); e.buf(1, x.a1); e.buf(2, x.slots);
+  } else {
+    e.buf(0, x.dc); e.buf(1, x.dd); e.buf(2, x.dc);
+  }
+  e.buf(3, ht8_);
+  e.buf(4, hs8_);
+  e.buf(5, ht8l_);
+  e.buf(6, hs8l_);
+  e.buf(7, out8_);
+  e.buf(8, uw_.view(0, 512));     // umask
+  e.buf(9, uw_.view(1024, 1024)); // uslot
+  e.buf(10, ue_);
+  e.buf(11, un_);
+  e.val(12, p);
+  e.dispatch(D / 16, 1, Rk, 32 * ks_d20);
+  e.use(pipe4("qmt8v_dn4" + sfx + (pf_d4 ? "p" : "")));
+  e.buf(0, s.dw); e.buf(1, s.ds); e.buf(2, s.db);
+  e.buf(3, hst8_);
+  e.buf(4, hss8_);
+  e.buf(5, hst8l_);
+  e.buf(6, hss8l_);
+  e.buf(7, out8_);
+  e.val(8, p);
+  e.dispatch(D / 16, 1, 1, 32 * ks_d4);
+  // the slot sum into yb_ (moe_q20_down's order: slots 0 .. k, slot k the shared expert)
+  e.use(pipe4("qmt8v_combine"));
+  e.buf(0, out8_);
+  e.buf(1, rwts_);
+  e.buf(2, yb_);
+  e.val(3, p);
+  e.dispatch((8 * D + 255) / 256, 1, 1, 256);
+  return true;
+}
+
 // The MoE of R rows (input xrn_, output added to yb_): router and shared-expert gate on the row kernels, the top-k
 // of the decode step (moe_topk512) per row, then Qwen35's per-row expert kernels.
 void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) {
@@ -127,8 +394,13 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
   }
   if (L.eg.q20) {
     // Q2_0 experts (check_formats: a 4-bit shared expert): unique experts, gate/up, down for R <= kMaxVerify rows
-    q20::enc_verify(e, q20_rows_fetch(e, L, R, ridx_, pred), q20_shared(L), q20_shape(), R, xrn_, ridx_, rwts_, eh_,
-                    yb_, ue_, uw_.view(0, 512), uw_.view(1024, 1024), un_);
+    const q20::Experts xq = q20_rows_fetch(e, L, R, ridx_, pred);
+    const q20::Shared sq = q20_shared(L);
+    const q20::Shape shq = q20_shape();
+    // NI_FN8T_E: the 8-row verify on the matrix units; false keeps q20::enc_verify below
+    if (R == 8 && fn8t_e() && enc_moe_experts8t(e, xq, sq, shq, R)) return;
+    q20::enc_verify(e, xq, sq, shq, R, xrn_, ridx_, rwts_, eh_, yb_, ue_, uw_.view(0, 512), uw_.view(1024, 1024),
+                    un_);
     return;
   }
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};

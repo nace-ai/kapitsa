@@ -403,6 +403,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       const bool rows16 = block_rows > DFlash2::kB;
       dfl_ = std::make_unique<DFlash2>(*q35_, dir, 0, rows16);
       dfl_dir_ = dir;
+      logi("DFlash2: drafting from %s (%d-row blocks)", dir.c_str(), block_rows);
+      if (!q35_->verify_multi_ok())
+        logi("DFlash2: this target's single-sequence verify is overridden: it has no batched verify to fold batch "
+             "rows with (batch_rows 0), so concurrent requests take turns");
       DFlash2::prewarm_pipelines();
       spec_ = false;
       // the plan against what loading took (rings and the first prefill's buffers come later)
@@ -779,7 +783,10 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
         }
       }
     }
-  } else if (!lp.dflash_off && !Qwen4Exp::is_model(model_dir)) {  // (no block drafter binds to Qwen3.8-Flash-Next)
+  } else if (!lp.dflash_off && (Qwen4Exp::dflash_fn() || !Qwen4Exp::is_model(model_dir))) {
+    // (no block drafter binds to Qwen3.8-Flash-Next unless NI_DFLASH_FN=1: Qwen4Exp::dflash_fn(), the switch the
+    // class's own verify flags read — its verifies stay chain-only and a tree drafting pass would verify the
+    // wrong rows, so the whole decode path turns on together or not at all)
     lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
     if (!lp.dflash.empty()) {
       // auto: a drafter that would keep one conversation from its full context is left out (MTP or plain decoding
@@ -787,7 +794,9 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       // conversation come first
       const Qwen35Config dc = Qwen35::read_config(model_dir);
       const int block_rows = DFlash2::plan_block_rows(dc, slots, nullptr, DFlash2::tensor_path_ok());
-      const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024, block_rows > DFlash2::kB);
+      const Qwen35::MemPlan p = Qwen4Exp::is_model(model_dir)
+                                    ? Qwen4Exp::plan(model_dir, 1024)  // its head rows are hc streams wide
+                                    : Qwen35::plan(model_dir, 1024, block_rows > DFlash2::kB);
       size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
       lp.dflash_bytes = lp.dflash_found_bytes =
           DFlash2::plan_bytes(lp.dflash, dc, p.head_row_bytes, &per_slot, nullptr, block_rows) +
@@ -1176,6 +1185,9 @@ int Engine::batch_rows(int n) const {
     return v && *v ? atoi(v) : -1;
   }();
   if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_) || (mode < 0 && !batch_measured_)) return 0;
+  // a model whose single-sequence verify is overridden has no batched verify to fold its rows with (Qwen4Exp): its
+  // requests take turns instead of running Qwen35::encode_verify_multi over a layout it does not walk
+  if (dfl_ && q35_ && !q35_->verify_multi_ok()) return 0;
   // a 16-row drafting block has no batched cycle: it drafts a depth-15 lattice with the pair kernel, and the batch loop
   // drafts 7-token chains (encode_draft with tree = false), so the requests take turns instead
   if (dfl_ && dfl_->block() > DFlash2::kB) return 0;

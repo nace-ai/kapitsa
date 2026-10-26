@@ -68,6 +68,7 @@ struct X8PrepParams {
   uint32_t K, R, x_ld, norm, write_xn;
   float eps;
   uint32_t xn_ld, write_lo, unroll, write_t;
+  uint32_t write_t_lo;  // the lo T table (buffer 9): unused here, kept for the kernel's struct size
 };
 struct Moe8PlanParams {
   uint32_t R, k, E, gu_gx, dn_gx, layer, small, sgu_gx, sdn_gx, rlim, split, shs, sep, edn_gx, topk;
@@ -558,10 +559,11 @@ void case_v8(const Layer& l, uint32_t R) {
     const uint32_t cs = 4;
     if (!(parts & 1)) goto gu;
     {
-    X8PrepParams xp{D, R, D, 0, 0, 1e-6f, D, 0, 1, 0};
+    X8PrepParams xp{D, R, D, 0, 0, 1e-6f, D, 0, 1, 0, 0};
     e.use(pipe("x8_prep2"));
     e.buf(0, x); e.buf(1, x); e.buf(2, table); e.buf(3, sums); e.buf(4, x); e.val(5, xp); e.buf(6, tlo); e.buf(7, slo);
     e.buf(8, tlo);  // the T table: not written (write_t 0)
+    e.buf(9, tlo);  // the lo T table: not written (write_t_lo 0)
     e.dispatch(D / 256, 1, 1, 256);
     // every touched expert on one MMA-layout tile (Qwen35::enc_moe8_iq), the routing given (no top-k in the plan)
     Moe8PlanParams pp{R, k, E, I / 64, D / (8 * uint32_t(nf) * cs), 0, 0, 1, 1, 0, 0, 0, 0, 1, 0};

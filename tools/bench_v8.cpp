@@ -101,6 +101,7 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
     e->val(5, pp);
     e->buf(6, table_lo); e->buf(7, sums_lo);
     e->buf(8, ttab);
+    e->buf(9, table_lo);  // (unused unless write_t_lo)
     e->dispatch(v2 ? K / 256 : 8, 1, 1, 256);
     e->commit_and_wait();
   }
@@ -278,6 +279,7 @@ static void run_dfl_cmp(Gpu& g, const char* what, uint32_t N, uint32_t K, bool g
     e->buf(0, x); e->buf(1, x); e->buf(2, table); e->buf(3, sums); e->buf(4, x);
     e->val(5, pp);
     e->buf(6, table); e->buf(7, sums); e->buf(8, table);
+    e->buf(9, table);  // (unused unless write_t_lo)
     e->dispatch(K / 256, 1, 1, 256);
     e->commit_and_wait();
   }
@@ -368,6 +370,7 @@ static void run_cmp(Gpu& g, uint32_t N, uint32_t K, int reps, const std::vector<
     e->buf(0, x); e->buf(1, x); e->buf(2, tab); e->buf(3, sum); e->buf(4, x);
     e->val(5, pp);
     e->buf(6, tab); e->buf(7, sum); e->buf(8, ttab);
+    e->buf(9, tab);  // (unused unless write_t_lo)
     e->dispatch(K / 256, 1, 1, 256);
     e->commit_and_wait();
   }

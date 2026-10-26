@@ -119,7 +119,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test tree_reduce_test remote_test cluster_test split_place_test logit_dump
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test fn_switch_test ni_cycle_trace_test verify_multi_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test tree_reduce_test remote_test cluster_test split_place_test logit_dump
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -138,6 +138,15 @@ jobs:
       - name: fn_dflash_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/fn_dflash_test
+      - name: fn_switch_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/fn_switch_test
+      - name: ni_cycle_trace_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/ni_cycle_trace_test
+      - name: verify_multi_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/verify_multi_test
       - name: dflash_accept_test --cpu
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/dflash_accept_test --cpu

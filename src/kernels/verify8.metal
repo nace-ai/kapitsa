@@ -100,6 +100,7 @@ struct X8PrepParams {
   uint write_lo;  // 1: also the residual table lo = half(x - hi) and its group sums (two-term inputs)
   uint unroll;    // x8_prep2 with norm: 4 independent sum-of-squares chains (more loads in flight)
   uint write_t;   // x8_prep2: also the T table (buffer 8) of the tensor_ops GEMM (tensor/verify8t.metal)
+  uint write_t_lo;  // x8_prep2: also the lo T table (buffer 9) of qmm6t's two-term inputs (implies write_lo)
 };
 
 // The T table of qmm8t (src/kernels/tensor/verify8t.metal): half rows [8][K], each 64-group's inputs permuted so
@@ -162,7 +163,7 @@ NI_INLINE uint v8t_input_of_slot(uint s) {
                          device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
                          device float* xn [[buffer(4)]], constant X8PrepParams& p [[buffer(5)]],
                          device half* table_lo [[buffer(6)]], device float* sums_lo [[buffer(7)]],
-                         device half* table_t [[buffer(8)]],
+                         device half* table_t [[buffer(8)]], device half* table_tl [[buffer(9)]],
                          uint2 tg2 [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup half stg[2][8][256];
@@ -176,6 +177,7 @@ NI_INLINE uint v8t_input_of_slot(uint s) {
     sums += tile * (p.K / 64) * kV8;
     sums_lo += tile * (p.K / 64) * kV8;
     table_t += 8 * tile * p.K;
+    table_tl += 8 * tile * p.K;
   }
   const uint t = sg;  // simdgroup = token row
   const bool live = 8 * tile + t < p.R;
@@ -263,6 +265,14 @@ NI_INLINE uint v8t_input_of_slot(uint s) {
     half o[8];
     for (int i = 0; i < 8; ++i) o[i] = stg[0][tt][gb + v8t_input_of_slot((s0 + i) & 63)];
     *(device uint4*)(table_t + tt * p.K + tg * 256 + s0) =
+        uint4(as_type<uint>(half2(o[0], o[1])), as_type<uint>(half2(o[2], o[3])), as_type<uint>(half2(o[4], o[5])),
+              as_type<uint>(half2(o[6], o[7])));
+  }
+  if (p.write_t_lo) {  // the lo T table (qmm6t's second term): the same permutation over stg[1] (write_lo is on)
+    const uint tt = tid / 32, s0 = (tid % 32) * 8, gb = s0 & ~63u;
+    half o[8];
+    for (int i = 0; i < 8; ++i) o[i] = stg[1][tt][gb + v8t_input_of_slot((s0 + i) & 63)];
+    *(device uint4*)(table_tl + tt * p.K + tg * 256 + s0) =
         uint4(as_type<uint>(half2(o[0], o[1])), as_type<uint>(half2(o[2], o[3])), as_type<uint>(half2(o[4], o[5])),
               as_type<uint>(half2(o[6], o[7])));
   }

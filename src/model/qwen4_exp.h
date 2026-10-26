@@ -73,6 +73,12 @@ class Qwen4Exp : public Qwen35 {
   static bool is_model(const std::string& model_dir);
   // a Flash-Next folder whose routed experts are Q2_0 (tools/qwen4_exp_q20.py)
   static bool q20_pack(const std::string& model_dir);
+  // Whether this class takes the DFlash2 block drafter: NI_DFLASH_FN=1, opt-in, read once at startup. On: the
+  // decode path the fn8t evidence binaries ran — the block drafter binds and the verifies stay chain-only. Off
+  // (the default): the class behaves as it did before DFlash2 support — no block drafter binds (main's literal
+  // false here, plan_load's Qwen4Exp exclusion) and the verify flags are Qwen35's base values. Proven both ways
+  // by tools/fn_switch_test (CPU, no model, no GPU).
+  static bool dflash_fn();
   // Whether the prefill sparse attention runs on the matrix units (qattn_t_sparse_g12d2), the decision enc_attn_sparse
   // makes: NI_QSA_TATTN=1 (opt-in since #585), 12 query heads per KV head, head dim 256, an Apple10 GPU and macOS 26.
   // The model_dir form reads config.json (false for a folder that is not Flash-Next).
@@ -132,7 +138,15 @@ class Qwen4Exp : public Qwen35 {
   void encode_flush(Encoder& e, Seq& s) override;
   void encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0) override;
   std::string formats_summary() const override;
-  bool block_drafter_ok() const override { return false; }
+  bool block_drafter_ok() const override { return dflash_fn(); }
+  // chain-only when dflash_fn(): this class's encode_verify verifies rows linearly (no tree-descriptor path over
+  // the 4-stream GDN and the indexer's KV), so a tree drafting pass would verify the wrong rows; DFlash2's
+  // set_tree reads this and keeps the chain, and the wide verifies stay off on every MoE target (verify_wide_ok)
+  bool verify_tree_ok() const override { return dflash_fn() ? false : Qwen35::verify_tree_ok(); }
+  // no batched verify when dflash_fn(): Qwen35::encode_verify_multi folds rows through the base layout, which
+  // does not know the 4-stream GDN state or the indexer's KV; until this class grows its own batched fold,
+  // batched requests take turns
+  bool verify_multi_ok() const override { return dflash_fn() ? false : Qwen35::verify_multi_ok(); }
 
   // Debug (tools/fn_eval): the residual stream after the last pass, rows of hc * hidden floats
   Buffer residual() const { return x_; }
@@ -150,6 +164,10 @@ class Qwen4Exp : public Qwen35 {
 
  protected:
   void grow_kv(Seq& s, int cap) override;
+  // For a test subclass (tools/fn_switch_test): members only, nothing loaded, no GPU allocation — the Qwen35
+  // NoLoad contract (qwen35.h). The flags above are virtual and read the process env, so a subclass instance
+  // proves the dflash_fn() switch both ways without a model folder.
+  Qwen4Exp(int prefill_chunk, Qwen35::NoLoad nl) : Qwen35("", prefill_chunk, nl) {}
 
  private:
   void load(const std::string& dir);
@@ -178,6 +196,20 @@ class Qwen4Exp : public Qwen35 {
   };
   void enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffer& x, int R, uint32_t x_ld = 0,
                 bool pair8 = false);
+  // tensor_ops 8-row verify (opt-in): R == 8 batches with K % 256 == 0 go to qmm6t (f6g64) / qmm8t (4-bit)
+  // over x8_prep2's T tables instead of the simdgroup row kernels. Apple10 GPUs and macOS 26 only (qmm8t's
+  // operand layout gives wrong logits on an M4 Pro), NI_FN8T_D=1 to engage; NI_FN8T_NT / _KS / _PF / _LO are
+  // the A/B overrides.
+  static bool fn8t_d();
+  // one same-format group of enc_rows as x8_prep2's T tables + group sums, then the tensor GEMM; false when
+  // the format or shape has no tensor path (the caller keeps the simdgroup kernels)
+  bool enc_rows8t(Encoder& e, const std::vector<const RowSeg*>& same, const Buffer& x, uint32_t x_ld, uint32_t K);
+  // tensor_ops 8-row verify of the Q2_0 experts (opt-in): the unique planes' gate/up, down and combine on the
+  // matrix units (src/kernels/tensor/qmt8v.metal) instead of moe_q20v_gate_up / moe_q20_down. NI_FN8T_E=1 to
+  // engage (implies fn8t_d()'s hardware gate and its T-table buffers); false when the shape or format has no
+  // tensor path (the caller keeps q20::enc_verify)
+  static bool fn8t_e();
+  bool enc_moe_experts8t(Encoder& e, const q20::Experts& x, const q20::Shared& s, const q20::Shape& sh, int R);
   // the MoE of R rows of xrn_ into yb_ (router on the row kernels, the 512-expert top-k per row, the experts)
   void enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer);
   // streamed Q2_0 experts (src/model/expert_store.h)
@@ -284,6 +316,16 @@ class Qwen4Exp : public Qwen35 {
   Buffer xr2_, hinv_;         // one-row gated residual (hc_down / hc_up): the injected row, its streams' inverse RMS
   Buffer hpart_;              // row gated residual: hc_down_sk's partial sums [S*D / 1024, kMaxVerify, rank]
   Buffer hx2_, hstat_;        // folded gated residual (NI_HC_FOLD): injected rows [kMaxVerify, S*D], per-chunk stats
+  // NI_FN8T_D's tables: one set for xrn_'s rows (K = hidden), one for gout_ / attn_out_'s (K = t8kg_; the two
+  // never share an enc_rows call). v8x_ / v8g_ are sinks for x8_prep2's unconditional v8-layout table writes —
+  // aliasing them onto the T tables would race the two write blocks.
+  Buffer t8x_, t8xl_, s8x_, s8xl_, v8x_, v8xl_;
+  Buffer t8g_, t8gl_, s8g_, s8gl_, v8g_, v8gl_;
+  uint32_t t8kg_ = 0;         // the K the second set was sized for (0: not allocated)
+  // NI_FN8T_E's expert buffers (qmt8v): he8_ the fp32 h planes [8 k + 1][8][Imax] (plane 8 k the shared expert),
+  // ht8* / hs8* the routed planes' permuted half T tables [8 k][8][I] + lo and group sums [8 k][I / 64][8] + lo,
+  // hst8* / hss8* the shared plane's (stride SI), out8_ the old out planes [8][k + 1][D] qmt8v_combine sums.
+  Buffer he8_, ht8_, ht8l_, hs8_, hs8l_, hst8_, hst8l_, hss8_, hss8l_, out8_;
   uint32_t qidx_ld_ = 0;
   int ple_pf_flip_ = 0, ple_dec_next_ = 0;
   void* ple_ev_ = nullptr;    // MTLSharedEvent: tickets of gathers done by completion handlers

@@ -11,8 +11,10 @@
 // --ref <file with an "ids:" line> (with --dflash, T = 0): at the first token that differs from that
 // reference (plain greedy), prints the target's logits of both tokens three ways (SPEC §12 G2): the
 // DFlash verify row that produced it, plain token-by-token decoding, one multi-row prefill of the prefix.
-// NI_CYCLE_TRACE=1 (DFlash2, double-buffered cycles): the mean host encode time of a verify, the GPU times of the
-// drafting half and the verify, the GPU idle times between them, and the host wake-up latency after a verify.
+// NI_CYCLE_TRACE=1 (DFlash2, double-buffered cycles): where a cycle's wall time goes, as means over the run:
+// the host clock's decomposition (encode the verify, wait for it, the wake-up after the GPU's end), the GPU
+// clock's (the idle times around the drafting half and the verify, and the two passes), and the verify's
+// commit -> GPU start latency, labeled cross-clock (tools/ni_cycle_trace.h).
 // Prints generated ids, prompt/decode speeds; optionally dumps the logits of the first
 // generated position (raw float32) for comparison against a reference implementation.
 #include "metal/gpu.h"
@@ -21,8 +23,10 @@
 #include "model/qwen35.h"
 #include "model/qwen4_exp.h"
 #include "util/log.h"
+#include "ni_cycle_trace.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <mach/mach.h>
 
@@ -384,11 +388,13 @@ int main(int argc, char** argv) {
     const double t = double(std::max<uint64_t>(st.handshakes, 1));
     fprintf(stderr, "expert store, %s: %llu turns, %llu experts looked up: %.1f%% in memory, %.1f%% read ahead and "
             "waited for, %.1f%% read at the turn; %llu read ahead (%llu routed), %.2f GB read; GPU stalled %.3f ms a "
-            "turn (%.3f waiting for reads)\n",
+            "turn (%.3f waiting for reads); distinct experts/layer/turn mean %.1f (keys are deduped per turn: the "
+            "mean is the per-turn union popcount)\n",
             what, (unsigned long long)st.handshakes, (unsigned long long)st.lookups,
             100.0 * st.hits / std::max<double>(1, st.lookups), 100.0 * st.late / std::max<double>(1, st.lookups),
             100.0 * st.misses / std::max<double>(1, st.lookups), (unsigned long long)st.prefetches,
-            (unsigned long long)st.prefetch_used, st.bytes / 1e9, st.stall_ms / t, st.read_wait_ms / t);
+            (unsigned long long)st.prefetch_used, st.bytes / 1e9, st.stall_ms / t, st.read_wait_ms / t,
+            st.lookups / t);
     store->reset_stats();
   };
   store_stats("prompt");
@@ -464,8 +470,8 @@ int main(int argc, char** argv) {
     auto knobs_for = [&](int cycle) { v8_knobs() = (ab && (cycle & 1)) ? knob_b : knob_a; };
     knobs_for(0);
     std::unique_ptr<Encoder> next_draft;  // mode 3: the committed drafting half of the coming cycle
-    double tr[7] = {0, 0, 0, 0, 0, 0, 0}, prev_end = 0;
-    int ntr = 0;
+    CycleTrace ntr;                       // NI_CYCLE_TRACE (mode 3): the cycle wall's decompositions
+    double prev_end = 0;                  // the last verify's GPU end (the cycle's boundary, GPU clock)
     if (mode == 3) {
       dfl->gpu_state_reset(P);  // the GPU is idle here
       next_draft = g.begin();
@@ -476,6 +482,7 @@ int main(int argc, char** argv) {
       if (P + DFlash2::kB + 2 >= s.cap) break;
       const double tc0 = now_ms(), tc0h = Encoder::host_ms();
       double t_commit = tc0h;
+      std::atomic<double> done_host{0};  // NI_CYCLE_TRACE: a host stamp of the verify's GPU end (on_completed)
       std::unique_ptr<Encoder> e1;
       auto e = g.begin();
       if (mode == 1) {
@@ -492,6 +499,9 @@ int main(int argc, char** argv) {
         if (!next_draft) break;  // no room for another drafting pass
         e1 = std::move(next_draft);
         dfl->encode_cycle_verify(*e, s, P, K, sp);
+        // the wake-up latency wants the GPU's end on the host clock: GPUEndTime is Metal's own clock, and a
+        // difference of it against host_ms stamps carries an offset (tools/ni_cycle_trace.h)
+        e->on_completed([&done_host] { done_host.store(Encoder::host_ms(), std::memory_order_relaxed); });
         e->commit();
         t_commit = Encoder::host_ms();
         // the next anchor is at most P + 8: commit its drafting half now (it waits on this verify)
@@ -503,16 +513,17 @@ int main(int argc, char** argv) {
         }
       }
       e->wait();
-      if (mode == 3 && cycles > 0) {  // NI_CYCLE_TRACE: where a cycle's wall time goes (host clock)
+      if (mode == 3 && cycles > 0) {  // NI_CYCLE_TRACE: where a cycle's wall time goes (tools/ni_cycle_trace.h)
         const double h0 = Encoder::host_ms();
-        tr[0] += t_commit - tc0h;                                  // host: encode the verify
-        tr[1] += e1->gpu_end_host_ms() - e1->gpu_start_host_ms();  // GPU: drafting half
-        tr[2] += e->gpu_start_host_ms() - e1->gpu_end_host_ms();   // GPU idle: draft end -> verify start
-        tr[3] += e->gpu_end_host_ms() - e->gpu_start_host_ms();    // GPU: verify
-        tr[4] += h0 - e->gpu_end_host_ms();                        // host wake-up after the verify
-        tr[5] += e->gpu_start_host_ms() - t_commit;                // verify commit -> its GPU start
-        tr[6] += e1->gpu_start_host_ms() - prev_end;                // GPU idle: last verify end -> drafting half start
-        ++ntr;
+        ntr.add({.cycle_begin_host = tc0h,
+                 .verify_commit_host = t_commit,
+                 .verify_done_host = done_host.load(std::memory_order_relaxed),
+                 .wait_back_host = h0,
+                 .draft_start_gpu = e1->gpu_start_host_ms(),
+                 .draft_end_gpu = e1->gpu_end_host_ms(),
+                 .verify_start_gpu = e->gpu_start_host_ms(),
+                 .verify_end_gpu = e->gpu_end_host_ms(),
+                 .prev_verify_end_gpu = prev_end});
       }
       prev_end = e->gpu_end_host_ms();
       const double wall = now_ms() - tc0;
@@ -658,11 +669,18 @@ int main(int argc, char** argv) {
     fprintf(stderr, "; %.2f proposals verified per cycle; acceptance by position", double(verified_sum) / std::max(cycles, 1));
     for (int i = 0; i < K; ++i) fprintf(stderr, " %.2f", reached[i] ? double(acc_pos[i]) / reached[i] : 0.0);
     fprintf(stderr, "\n");
+    store_stats("decode");  // the expert store's turns of the dflash decode (the spec/plain branches print the same)
     if (dfl->tree() && dfl->budget()) fprintf(stderr, "%s\n", dfl->budget()->summary().c_str());
-    if (getenv("NI_CYCLE_TRACE") && ntr)
-      fprintf(stderr, "cycle trace (ms, mean of %d): host encodes the verify %.3f | GPU idle verify->draft %.3f, draft %.3f, "
-              "idle draft->verify %.3f, verify %.3f | verify commit->start %.3f, host wake-up %.3f\n", ntr, tr[0] / ntr,
-              tr[6] / ntr, tr[1] / ntr, tr[2] / ntr, tr[3] / ntr, tr[5] / ntr, tr[4] / ntr);
+    if (getenv("NI_CYCLE_TRACE") && ntr.n()) {
+      const CycleTrace::Mean ct = ntr.mean();
+      fprintf(stderr,
+              "cycle trace (ms, mean of %d): host cycle %.3f = encodes the verify %.3f + waits %.3f (wake-up after "
+              "the verify's GPU end %.3f) | GPU cycle %.3f = idle verify->draft %.3f + draft %.3f + idle "
+              "draft->verify %.3f + verify %.3f | verify commit->GPU start %.3f (cross-clock, offset included)\n",
+              ct.n, ct.host_cycle, ct.host_encode, ct.host_wait, ct.host_wakeup, ct.gpu_cycle,
+              ct.gpu_idle_verify_to_draft, ct.gpu_draft, ct.gpu_idle_draft_to_verify, ct.gpu_verify,
+              ct.commit_to_start_xclock);
+    }
     if (!draft_ms.empty()) {
       std::vector<double> v = draft_ms;
       std::sort(v.begin(), v.end());

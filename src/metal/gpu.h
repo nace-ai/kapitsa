@@ -163,8 +163,10 @@ class Encoder {
   void split();
   void commit_and_wait() { commit(); wait(); }
   double gpu_ms() const;     // GPU time of the finished command buffer
-  // GPU start / end of the finished command buffer on the host clock (mach time, ms), and that
-  // clock now: for commit -> start and end -> wake-up latencies
+  // GPU start / end of the finished command buffer in ms (MTLCommandBuffer.GPUStartTime / GPUEndTime * 1e3), and
+  // the host clock (mach_absolute_time, ms) now. The GPU stamps are Metal's own clock, not host_ms's: a
+  // difference between the two carries an offset and can come out negative (an observed -3.171 ms), so compare
+  // stamps only within one of the two clocks, or label the difference as cross-clock.
   double gpu_start_host_ms() const;
   double gpu_end_host_ms() const;
   static double host_ms();

@@ -160,6 +160,43 @@ bool Qwen4Exp::tattn(const Qwen35Config& c) {
 
 bool Qwen4Exp::tattn(const std::string& dir) { return is_model(dir) && tattn(read_config(dir)); }
 
+// NI_FN8T_D: the tensor_ops GEMMs for enc_rows' 8-row verify batches (qmm6t / qmm8t over x8_prep2's T
+// tables). Mandatory Apple10 + macOS 26 and opt-in, the tattn() pattern: qmm8t's operand layout gives wrong
+// logits on an M4 Pro, so below Apple10 the simdgroup row kernels stay.
+bool Qwen4Exp::fn8t_d() {
+  static const bool env = [] {
+    const char* v = getenv("NI_FN8T_D");
+    return v && atoi(v) != 0;
+  }();
+  if (!env) return false;
+  if (__builtin_available(macOS 26.0, *)) return Gpu::get().apple_family() >= 10;
+  return false;
+}
+
+// NI_FN8T_E: the Q2_0 experts of the 8-row verify on the matrix units (qmt8v.metal). Implies fn8t_d(): the
+// expert gate/up reads x8_prep2's T tables, which fn8t_d()'s alloc4() block allocates, and both paths share the
+// hardware gate (Apple10 + macOS 26, opt-in).
+bool Qwen4Exp::fn8t_e() {
+  static const bool env = [] {
+    const char* v = getenv("NI_FN8T_E");
+    return v && atoi(v) != 0;
+  }();
+  return env && fn8t_d();
+}
+
+// NI_DFLASH_FN: this class's DFlash2 block-drafter support (the #608 review ruling: default off, read once at
+// startup). On: the decode path the fn8t evidence binaries ran — block_drafter_ok() binds a dflash2/ drafter and
+// the verify flags stay chain-only, no-batched-verify. Off: the pre-DFlash2 behaviour — main's literal false for
+// block_drafter_ok(), Qwen35's base values for the verify flags, and plan_load's Qwen4Exp exclusion keeps a found
+// drafter from binding. The companion the catalog downloads for Flash-Next is inert with the switch off.
+bool Qwen4Exp::dflash_fn() {
+  static const bool on = [] {
+    const char* v = getenv("NI_DFLASH_FN");
+    return v && atoi(v) != 0;
+  }();
+  return on;
+}
+
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
 
@@ -531,6 +568,48 @@ void Qwen4Exp::alloc4() {
   qidx_ld_ = uint32_t((c4_.ix_budget + c4_.ix_ratio + 3) / 4 * 4);  // budget + ratio - 1 entries, rounded
   qidx_ = g.alloc(T * qidx_ld_ * 4, "qsa_idx");
   qcnt_ = g.alloc(T * 4 + 16, "qsa_cnt");
+  if (fn8t_d()) {
+    // NI_FN8T_D: x8_prep2's T tables + group sums, one set per row source: xrn_ (K = hidden) and gout_ /
+    // attn_out_ (K = max(VD, hq * head_dim); the two never share an enc_rows call). x8_prep2 also writes
+    // v8-layout tables unconditionally, so v8x_ / v8g_ are those writes' sinks. ~0.55 MB on Flash-Next
+    // (D 2560, KG 6144).
+    const size_t KG = std::max(size_t(cfg_.lin_hv) * cfg_.lin_dv, size_t(cfg_.hq) * cfg_.head_dim);
+    t8kg_ = uint32_t(KG);
+    t8x_ = g.alloc(D * 8 * 2, "fn8t_x");
+    t8xl_ = g.alloc(D * 8 * 2, "fn8t_xlo");
+    s8x_ = g.alloc(D / 64 * 8 * 4, "fn8t_xs");
+    s8xl_ = g.alloc(D / 64 * 8 * 4, "fn8t_xslo");
+    v8x_ = g.alloc(D * 8 * 2, "fn8t_xtab");
+    v8xl_ = g.alloc(D * 8 * 2, "fn8t_xtablo");
+    t8g_ = g.alloc(KG * 8 * 2, "fn8t_g");
+    t8gl_ = g.alloc(KG * 8 * 2, "fn8t_glo");
+    s8g_ = g.alloc(KG / 64 * 8 * 4, "fn8t_gs");
+    s8gl_ = g.alloc(KG / 64 * 8 * 4, "fn8t_gslo");
+    v8g_ = g.alloc(KG * 8 * 2, "fn8t_gtab");
+    v8gl_ = g.alloc(KG * 8 * 2, "fn8t_gtablo");
+  }
+  if (fn8t_e() && cfg_.experts > 0 && cfg_.top_k > 0) {
+    // NI_FN8T_E: qmt8v's expert buffers. he8_ the fp32 h planes [8 k + 1][8][Imax] (plane 8 k the shared
+    // expert), ht8* / hs8* the routed planes' T tables [8 k][8][I] + lo and group sums [8 k][I / 64][8] + lo,
+    // hst8* / hss8* the shared plane's (stride SI), out8_ the old out planes [8][k + 1][D]. Only for shapes
+    // enc_moe_experts8t serves (else it returns false and q20::enc_verify stays). ~4.3 MB on Flash-Next
+    // (k 10, I 640, D 2560). k <= 16: moe_q20's shapes_ok bound; the planes (R k <= 128) stay inside umask's
+    // 128 entries, uslot's 1024 bytes and moe_q20_unique's upos[256].
+    const size_t k = size_t(cfg_.top_k), Rk = 8 * k, I = size_t(cfg_.moe_I), SI = size_t(cfg_.shared_I);
+    const size_t Imax = std::max(I, SI);
+    if (D % 256 == 0 && I % 64 == 0 && SI % 64 == 0 && k <= 16) {
+      he8_ = g.alloc((Rk + 1) * 8 * Imax * 4, "fn8t_he");
+      ht8_ = g.alloc(Rk * 8 * I * 2, "fn8t_ht");
+      ht8l_ = g.alloc(Rk * 8 * I * 2, "fn8t_htlo");
+      hs8_ = g.alloc(Rk * (I / 64) * 8 * 4, "fn8t_hs");
+      hs8l_ = g.alloc(Rk * (I / 64) * 8 * 4, "fn8t_hslo");
+      hst8_ = g.alloc(8 * SI * 2, "fn8t_hst");
+      hst8l_ = g.alloc(8 * SI * 2, "fn8t_hstlo");
+      hss8_ = g.alloc((SI / 64) * 8 * 4, "fn8t_hss");
+      hss8l_ = g.alloc((SI / 64) * 8 * 4, "fn8t_hsslo");
+      out8_ = g.alloc(8 * (k + 1) * D * 4, "fn8t_out");
+    }
+  }
   if (mtp_loaded_) {
     mtpX_ = g.alloc(T * SD * 4, "mtp_x4");
     g.release(mtp_post_);
@@ -880,9 +959,13 @@ void Qwen4Exp::enc_capture4(Encoder& e, int layer, int pos0, int R) {
   const int lo = std::max(pos0, cap_->pos_base), hi = std::min(pos0 + R, cap_->pos_base + cap_->rows);
   if (lo >= hi) return;
   const uint32_t D = uint32_t(cfg_.hidden), S = uint32_t(c4_.hc), r0 = uint32_t(lo - pos0);
+  // ROUND 241(1) diagnostic: NI_DFLASH_CAPY=0 captures the stream mean WITHOUT the pending MoE-output
+  // injection (mean(X) instead of mean(X + injM * y)) — the one feed-convention freedom no local artifact
+  // pins. Default (unset or nonzero): has_y = 1, the documented contract, the identical code path.
+  static const uint32_t hasy = getenv("NI_DFLASH_CAPY") && !atoi(getenv("NI_DFLASH_CAPY")) ? 0u : 1u;
   const struct {
     uint32_t R, D, S, ld, col0, dst_row0, has_y;
-  } p{uint32_t(hi - lo), D, S, cap_->ld, uint32_t(cap_->slot[size_t(layer)]) * D, uint32_t(lo - cap_->pos_base), 1u};
+  } p{uint32_t(hi - lo), D, S, cap_->ld, uint32_t(cap_->slot[size_t(layer)]) * D, uint32_t(lo - cap_->pos_base), hasy};
   e.use(pipe("hc_capture_mean"));
   e.buf(0, x_, size_t(r0) * S * D * 4); e.buf(1, yb_, size_t(r0) * D * 4); e.buf(2, injM_, size_t(r0) * S * 4);
   e.buf(3, cap_->dst);

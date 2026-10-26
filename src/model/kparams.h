@@ -296,6 +296,7 @@ struct X8Prep {
   uint32_t xn_ld, write_lo;
   uint32_t unroll;  // x8_prep2 norm: 4 independent sum-of-squares chains
   uint32_t write_t;  // x8_prep2: also the T table (buffer 8) of qmm8t (src/kernels/tensor/verify8t.metal)
+  uint32_t write_t_lo;  // x8_prep2: also the lo T table (buffer 9) of qmm6t's two-term inputs (implies write_lo)
 };
 
 struct Qmm8 {
@@ -304,6 +305,16 @@ struct Qmm8 {
   uint32_t y_ld[4];
   uint32_t add[4];
   uint32_t tg_begin[5];
+};
+
+// the Q2_0 experts of an 8-row verify on the matrix units (src/kernels/tensor/qmt8v.metal; = Qmt8vParams there)
+struct Qmt8v {
+  uint32_t D, I, SI, k, R;
+  uint32_t ks_gu, ks_d20, ks_d4;  // the gate/up and the two downs' k-slices (gpr D / I / SI over 64)
+  uint32_t arena;                 // 1: expert-store chunks resolved through the slot table
+  uint32_t Imax;                  // max(I, SI): the fp32 h planes' row stride
+  uint32_t lo;                    // informational: the '1' instantiations run single-term
+  uint32_t lgc, lgd, luc, lud, ldc, ldd;  // Q20Slot: the arena planes' byte offsets
 };
 
 struct Qmm8Gu {
