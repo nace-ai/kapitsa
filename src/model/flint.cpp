@@ -462,9 +462,10 @@ Flint::Flint(const std::string& path, int prefill_chunk) {
   // qmt_m64_n64's); the 8-bit tile 128 rows tall with X read in place; NI_FLINT_QMTS=0 keeps the plain order
   const char* qs = getenv("NI_FLINT_QMTS");
   qmts_ = qmtw_ && !(qs && !strcmp(qs, "0"));
-  // a dense Llama's passes of 3-8 rows (verify, prompt lookup, a short prompt's rows) on the 8-row verify kernels, one
-  // weight read for every row: an 8-row verify 141 -> 51 ms on Nanbeige4.3's 4-bit pack (decode 35); NI_FLINT_V8=0
-  // keeps the decode rows' matvecs, one weight read per row
+  // a dense Llama's verify passes of 3-8 rows (speculative decoding) on the 8-row verify kernels, one weight read for
+  // every row: an 8-row verify 141 -> 51 ms on Nanbeige4.3's 4-bit pack (decode 35). Prefill chunks of 3-8 rows (a
+  // prompt's tail, a short suffix after a cache hit) keep the matvecs, so a single stream's text does not change.
+  // NI_FLINT_V8=0 keeps the matvecs for verify too
   const char* v8 = getenv("NI_FLINT_V8");
   v8_ = cfg_.llama && !(v8 && !strcmp(v8, "0"));
   split_ = split_merges();
@@ -932,7 +933,8 @@ void Flint::enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, in
   const int bits = segs[0].M->bits;
   const uint32_t K = segs[0].M->K;
   if (bits == 16) return enc_mv_bf16(e, segs, x, R, norm, y_ld, gu);
-  if (v8_ && R >= 3 && (bits == 4 || bits == 8) && K % 256 == 0) return enc_mv_v8(e, segs, x, R, norm, y_ld, gu);
+  if (v8_ && in_verify_ && R >= 3 && (bits == 4 || bits == 8) && K % 256 == 0)
+    return enc_mv_v8(e, segs, x, R, norm, y_ld, gu);
   for (const Seg& s : segs)  // 4/8-bit group 64, or one 6-bit matrix (a GGUF import's LM head, qmvf_b6)
     if (s.M->bits != bits || s.M->K != K || (bits != 4 && bits != 8 && !(bits == 6 && segs.size() == 1 && !gu)) ||
         s.M->gs != 64)
@@ -1682,8 +1684,10 @@ void Flint::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingPa
 
 // ---- speculative decoding ----
 void Flint::encode_verify(Encoder& e, Seq& s, int pos, int R) {
+  in_verify_ = true;
   enc_rows(e, s, pos, R);
   enc_head(e, x_, R, logits_, size_t(cfg_.vocab));
+  in_verify_ = false;
 }
 
 void Flint::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp) {

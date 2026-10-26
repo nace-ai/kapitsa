@@ -170,8 +170,8 @@ class Flint : public Model {
   // enc_mv's bf16 form (a dense Llama's bf16 checkpoint): wfmt.metal's one-row kernels, row by row
   void enc_mv_bf16(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm, uint32_t y_ld,
                    bool gu);
-  // enc_mv on the 8-row verify kernels (src/model/v8.h): a dense Llama's passes of 3-8 rows read each weight once
-  // instead of once per row (NI_FLINT_V8)
+  // enc_mv on the 8-row verify kernels (src/model/v8.h): a dense Llama's verify passes of 3-8 rows read each weight
+  // once instead of once per row (NI_FLINT_V8)
   void enc_mv_v8(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm, uint32_t y_ld,
                  bool gu);
   // GEMM of M half rows: y [M][y_ld] (+)= xh [M][K] W^T
@@ -199,7 +199,8 @@ class Flint : public Model {
   bool qmt_ = false;             // dense 4-bit prefill GEMMs on Metal 4's tensor_ops (M5)
   bool qmtw_ = false;            // a dense Llama's 8-bit and bf16 prefill GEMMs there too (tensor/qmtw.metal)
   bool qmts_ = false;            // ... and its tiles in the swizzled order (qmt4s8_m64_n64, qmt8ds8_m128_n64)
-  bool v8_ = false;              // a dense Llama's 3-8 row matvecs on the 8-row verify kernels (NI_FLINT_V8)
+  bool v8_ = false;              // a dense Llama's 3-8 row verify passes on the 8-row verify kernels (NI_FLINT_V8)
+  bool in_verify_ = false;       // encoding a verify pass (encode_verify): the only pass v8_ takes
   Buffer v8t_, v8s_, v8g_, v8u_;  // their X8 table and group sums, the gate / up rows
   bool split_ = false;           // the decode kernels' merges in a dispatch of their own (split_merges)
 
