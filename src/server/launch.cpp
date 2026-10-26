@@ -112,6 +112,31 @@ int probe(int port, const std::string& key, Running* out, std::string* why) {
   return -1;
 }
 
+// The Homebrew service (`brew services start kapitsa`: a launchd job running `kapitsa serve`, the best model for this
+// Mac, downloaded when it is missing, at each login and again whenever it ends on an error or a signal) when it serves
+// on `port`: the command that stops it, else "". A server found on the port is then most likely that one, which the
+// agent's exit leaves running and Activity Monitor's Quit only restarts (issue 653).
+std::string brew_service_stop(int port) {
+  const char* home = getenv("HOME");
+  const std::pair<std::string, const char*> jobs[] = {
+      {home && *home ? std::string(home) + "/Library/LaunchAgents/homebrew.mxcl.kapitsa.plist" : "", "brew services stop kapitsa"},
+      {"/Library/LaunchDaemons/homebrew.mxcl.kapitsa.plist", "sudo brew services stop kapitsa"}};
+  for (const auto& [plist, stop] : jobs) {
+    FILE* f = plist.empty() ? nullptr : fopen(plist.c_str(), "rb");
+    if (!f) continue;
+    std::string s;
+    char buf[4096];
+    for (size_t n; (n = fread(buf, 1, sizeof buf, f)) > 0;) s.append(buf, n);
+    fclose(f);
+    // its port: a --port among its arguments (<string>--port</string> <string>P</string>), else serve's 8000
+    int p = 8000;
+    if (size_t a = s.find("<string>--port</string>"); a != std::string::npos)
+      if ((a = s.find("<string>", a + 23)) != std::string::npos) p = atoi(s.c_str() + a + 8);
+    if (p == port) return stop;
+  }
+  return "";
+}
+
 std::string last_log_line(const std::string& path) {
   FILE* f = fopen(path.c_str(), "rb");
   if (!f) return "";
@@ -570,9 +595,14 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   snprintf(ctxs, sizeof ctxs, "%d", run.context);
   const bool tui = term::fancy();
   const long log_from = server > 0 ? 0 : file_size_of(log);  // the requests of this session, for the line at its end
+  const std::string service = server == 0 ? brew_service_stop(port) : "";  // the found server is the Homebrew service's
+  const std::string service_note = "It is the Homebrew service, which starts it again at login and whenever it is killed: `" +
+                                   service + "` stops it.";
   if (tui) {
     if (server == 0 && ask) {  // the question was skipped for it
-      const std::string l = "Using the running server: " + term::bold(ui::model_label(run.model)), why = "stop it to pick another model";
+      const std::string l = "Using the running server: " + term::bold(ui::model_label(run.model)),
+                        why = service.empty() ? "stop it to pick another model"
+                                              : "the Homebrew service: " + service + ", to pick another model";
       if (4 + term::width(l) + 3 + term::width(why) <= term::columns() - 1) ui::ok(l + term::dim(" (" + why + ")"));
       else ui::ok(l), ui::note(why);
     } else if (server == 0) {
@@ -581,6 +611,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       const std::string l = "Kapitsa on " + term::bold("http://127.0.0.1:" + std::to_string(port)) + rest + " " + term::dim("(already running)");
       // in a narrow terminal: shorter
       ui::ok(4 + term::width(l) <= term::columns() - 1 ? l : "Kapitsa already running on " + term::bold(":" + std::to_string(port)) + rest);
+      if (!service.empty()) ui::note(service_note);
     } else
       ui::note("http://127.0.0.1:" + std::to_string(port) + "  " + term::kDot + "  log " + hub::tilde(log));
     for (const auto& n : l.notes) ui::note(n);
@@ -588,6 +619,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   } else {
     fprintf(stderr, "Kapitsa: %s, %s-token context, http://127.0.0.1:%d (%s)\n", run.model.c_str(), ctxs, port,
             server > 0 ? ("started for this session; log " + hub::tilde(log)).c_str() : "already running");
+    if (!service.empty()) fprintf(stderr, "%s\n", service_note.c_str());
     for (const auto& n : l.notes) fprintf(stderr, "%s\n", n.c_str());
   }
 
@@ -680,6 +712,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       l += dot;
     }
     l += server > 0 ? "the server stopped" : "Kapitsa keeps running on :" + std::to_string(port);
+    if (!service.empty()) l += term::dim(" (the Homebrew service: " + service + " stops it)");
     term::line("", stderr);
     ui::ok(l);
   }

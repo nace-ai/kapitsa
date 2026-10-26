@@ -154,6 +154,70 @@ GGUF16 = ("unsloth/Qwen3.6-35B-A3B-GGUF", "a483e9e6cbd595906af30beda3187c2663a11
 GGUFF = ("unsloth/flint-GGUF", "20468edfc38ab43d6914cc88b08cbecb05d0fc62", "flint-UD-IQ2_XXS.gguf",
          "c1fa4a6d5ec67fbeff460c68829984e4aa3eea95dc9d2067691f19e5406deeee", 11855541696)
 
+def agent_checks(run, home):
+    """kapitsa pi with a Kapitsa already on its port (a stand-in answering /v1/models, a stand-in `pi` on the PATH):
+    Pi gets that server's model, nothing downloads or starts, and when the Homebrew service's launchd job serves that
+    port the command says so and how to stop it (issue 653: the service's server, the best model for the Mac, outlived
+    Pi and came back with its model after Activity Monitor's Quit)"""
+    import http.server, threading
+    class Models(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps({"object": "list", "data": [{"id": "qwen3.6-35b-a3b", "object": "model", "owned_by": "nace",
+                                                            "context_length": 262144, "context_fit": 65536}]}).encode()
+            self.send_response(200 if self.path == "/v1/models" else 404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        def log_message(self, *a):
+            pass
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Models)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    bindir, user = os.path.join(home, "bin"), os.path.join(home, "user")
+    os.makedirs(bindir)
+    seen = os.path.join(home, "pi-seen.json")
+    with open(os.path.join(bindir, "pi"), "w") as f:
+        f.write("#!/usr/bin/env python3\nimport json, os, sys\njson.dump({'argv': sys.argv[1:], 'model': "
+                "os.environ.get('KAPITSA_PI_MODEL'), 'context': os.environ.get('KAPITSA_PI_CONTEXT')}, "
+                f"open({seen!r}, 'w'))\n")
+    os.chmod(os.path.join(bindir, "pi"), 0o755)
+    plist = os.path.join(user, "Library", "LaunchAgents", "homebrew.mxcl.kapitsa.plist")
+    def pi(port_in_plist):
+        if os.path.exists(seen):
+            os.remove(seen)
+        if port_in_plist:  # as `brew services start kapitsa` writes it, with a --port so that the job serves this port
+            os.makedirs(os.path.dirname(plist), exist_ok=True)
+            with open(plist, "w") as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n\t<key>Label</key>\n'
+                        '\t<string>homebrew.mxcl.kapitsa</string>\n\t<key>ProgramArguments</key>\n\t<array>\n'
+                        '\t\t<string>/opt/homebrew/opt/kapitsa/bin/kapitsa</string>\n\t\t<string>serve</string>\n'
+                        f'\t\t<string>--port</string>\n\t\t<string>{port_in_plist}</string>\n\t</array>\n</dict>\n</plist>\n')
+        elif os.path.exists(plist):
+            os.remove(plist)
+        rc, out, err = run("pi", "--port", str(port), "--", "-p", "hi",
+                           env_add={"PATH": bindir + ":" + os.environ.get("PATH", ""), "HOME": user,
+                                    "KAPITSA_NO_AUTO_UPDATE": "1"})
+        got = json.load(open(seen)) if os.path.exists(seen) else {}
+        return rc, out + err, got
+    models = os.path.join(home, "models")
+    had = sorted(os.listdir(models)) if os.path.isdir(models) else []
+    rc, out, got = pi(None)
+    check("cli: pi uses the server on its port: its model and the context that fits, nothing started",
+          rc == 0 and got.get("model") == "qwen3.6-35b-a3b" and got.get("context") == "65536" and
+          got.get("argv", [])[-2:] == ["-p", "hi"] and "already running" in out and "brew services" not in out,
+          out + json.dumps(got))
+    rc, out, got = pi(port)
+    check("cli: pi on the Homebrew service's port says it is the service, and how to stop it",
+          rc == 0 and got.get("model") == "qwen3.6-35b-a3b" and "Homebrew service" in out and
+          "brew services stop kapitsa" in out, out)
+    rc, out, got = pi(port + 1 if port < 65535 else port - 1)
+    check("cli: a service on another port is not the server found", rc == 0 and "brew services" not in out, out)
+    check("cli: pi on a running server downloads nothing",
+          (sorted(os.listdir(models)) if os.path.isdir(models) else []) == had, str(had))
+    srv.shutdown()
+    srv.server_close()
+
 def cli_checks(kapitsa):
     home = tempfile.mkdtemp(prefix="kapitsa-test-")
     # a closed port as the Hub: any network access in these checks fails loudly
@@ -619,6 +683,7 @@ def cli_checks(kapitsa):
               j.get("revision") == "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae" and j.get("downloaded") is False, json.dumps(j))
     rc, _, err = run("serve", "--port", str(busy))
     check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)
+    agent_checks(run, home)
     rc, out, _ = run("--help")
     check("cli: --help names the commands and models", rc == 0 and all(w in out for w in ("serve", "pull", "list", "35b", "27b", "4b")), out)
 

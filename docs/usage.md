@@ -728,6 +728,9 @@ Each command checks that the agent is installed (else it says how to install it)
 an error). Otherwise the command downloads the model if needed, starts `kapitsa serve` with serve's default context
 ([Context](#context): the model's limit, less where memory is tight; `--context N` sets it), logging to
 `~/.cache/kapitsa/logs/serve-P.log`, and stops it when the agent exits or the command is killed.
+A server it found keeps running when the agent exits. When that server is the Homebrew service (`brew services start
+kapitsa`, [Running in the background](#running-in-the-background)), the command says so and how to stop it: the
+service serves the best model for this Mac, so the agent sees that model alone.
 
 Without `--model` in a terminal, the command asks which model to start ([Which model](#which-model)); `--yes` skips
 the question. `--api-key K` is the server's key, if it has one. All other arguments go to the agent, and everything after
@@ -1016,8 +1019,10 @@ or Homebrew install needs no clone; it needs macOS Python 3.
 ## Running in the background
 
 Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (the best model for
-this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting it after an error;
-`brew services stop kapitsa` stops it. Its log, the first download's progress too: `/opt/homebrew/var/log/kapitsa.log`.
+this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting it after an error or when it is killed
+(from Activity Monitor too); `brew services stop kapitsa` stops it. It downloads that model again when its folder is
+deleted, and `kapitsa claude|codex|opencode|pi` use it while it runs, its one model, so stop it to pick another. Its
+log, the first download's progress too: `/opt/homebrew/var/log/kapitsa.log`.
 
 ## Environment variables
 
