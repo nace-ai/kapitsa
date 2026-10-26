@@ -63,6 +63,12 @@ rule(0, None, "CLI, HTTP API, downloads, updates, bench client, cluster discover
 rule(0.5, None, "tokens in or out on the CPU: tokenizer, chat template, output parser, grammar, tool arguments",
      "src/tokenizer/*", "src/engine/grammar.*", "src/engine/output_parser.h", "src/engine/tool_args.h",
      "src/engine/reasoning_memory.h", "src/model/logit_mask.cpp", "third_party/minja/*")
+# A tokenizer's test and its fixture move no default and no runtime path, but what they assert is ids and text, so the
+# token checks are the checks to run on them: before 2026-10-26 the fallthrough made them tier 1, which asks for a GPU
+# e2e, a logit gate and an A/B on two models for a file of expected token ids (#603, #610).
+rule(0.5, None, "tokenizer tests and fixtures: no runtime path, but what they pin is ids and text",
+     "tools/tokenizer_test*", "tests/data/*tokenizer*.json", "tests/*tokenizer_fixture*.py",
+     "tests/tokenizer_fixtures/*")
 rule(1, "shared", "SSD prefix cache: a change to what a saved state's bytes mean bumps kStateFormat "
      "(src/engine/engine_disk.cpp); run tests/test_disk_cache.py", "src/engine/engine_disk.cpp", "src/engine/disk_*.h")
 rule(1, "shared", "server request path (serve, beam search, history prefill and reload, routing, pairing): "
