@@ -14,10 +14,13 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-886 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-26 down to 2026-10-16, newest first.
+889 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-26 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-10-26 | – | M5 Max, 128 GB | Nanbeige4.3-33B | bf16 | llama.cpp | b11871 | 25.3 | 25.1 | – | – | – | – | contention | [nb43-33b-llamacpp-20261026-130037](results/2026-10-26-m5-max-nanbeige/harness/nb43-33b-llamacpp-20261026-130037.json) |
+| 2026-10-26 | – | M5 Max, 128 GB | Nanbeige4.3-33B | 4-bit | mlx-lm | mlx_lm 0.32.2 | 27.3 | 27.7 | – | – | – | – | invalid | [nb43-33b-mlxlm-20261026-125022](results/2026-10-26-m5-max-nanbeige/harness/nb43-33b-mlxlm-20261026-125022.json) |
+| 2026-10-26 | – | M5 Max, 128 GB | Nanbeige4.3-33B | 4-bit | Kapitsa | 7886832 | 28.1 | 27.6 | – | – | – | – | contention | [nb43-33b-kapitsa-20261026-123643](results/2026-10-26-m5-max-nanbeige/harness/nb43-33b-kapitsa-20261026-123643.json) |
 | 2026-10-26 | – | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.3 | 124.5 | 138.0 | 763 | 710 | 5.41 | – | – | [q38-27b-mlxserve-dflash2-20261026-060940](results/2026-10-26-m5-max/results/q38-27b-mlxserve-dflash2-20261026-060940.json) |
 | 2026-10-26 | – | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | cd20dcc | 123.2 | 137.2 | 844 | 846 | 4.90 | – | – | [q38-27b-kapitsa-20261026-060749](results/2026-10-26-m5-max/results/q38-27b-kapitsa-20261026-060749.json) |
 | 2026-10-26 | – | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.3 | 131.3 | 144.3 | 764 | 689 | 5.41 | – | – | [q38-27b-mlxserve-dflash2-20261026-060420](results/2026-10-26-m5-max/results/q38-27b-mlxserve-dflash2-20261026-060420.json) |
