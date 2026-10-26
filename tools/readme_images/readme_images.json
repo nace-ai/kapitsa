@@ -104,7 +104,7 @@
    "Nano 9B v2": {"name": "Nemotron Nano 9B v2", "alias": "nano-9b", "about": "hybrid Mamba-2 · NVFP4, 7.9 GB"},
    "Lightning 30B": {"name": "Nemotron 3.5 Lightning 30B-A3B", "alias": "lightning", "about": "hybrid MoE, 3B active · NVFP4, 22.9 GB"},
    "Bolt 74B": {"name": "Nemotron 3.5 Bolt 74B-A9B", "alias": "bolt", "about": "hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB"},
-   "Nanbeige4.3 33B": {"name": "Nanbeige4.3-33B", "alias": "nanbeige", "about": "dense · 4-bit AWQ (8-bit embedding and head), 19.8 GB"},
+   "Nanbeige4.3 33B": {"name": "Nanbeige4.3-33B", "alias": "nanbeige", "about": "dense · 4-bit AWQ (8-bit embedding and head), 21.8 GB"},
    "Super-VL 120B": {"name": "Nemotron 3.5 Super-VL 120B-A12B", "alias": "super", "about": "hybrid MoE, 12B active · NVFP4, 76.4 GB"},
    "Flint 40B": {"name": "Recursive Flint 40B-A2.5B", "alias": "flint", "about": "MoE, 2.5B active · 4-bit, 22.6 GB"},
    "Flint 40B 2-bit": {"name": "Recursive Flint 40B-A2.5B", "alias": "flint:16gb", "about": "MoE, 2.5B active · 2-bit experts (unsloth's GGUF), 11.9 GB"}

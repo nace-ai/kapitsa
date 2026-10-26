@@ -60,11 +60,12 @@ Those start the best model for this Mac, with the same output as before.
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
-| `nanbeige4.3-33b` | `nanbeige`, `nanbeige4.3`, `nanbeige-33b` | Nanbeige4.3-33B: a dense 33B (Llama architecture) for agents and coding, reasoning switched with `enable_thinking`; text only; 32 GB Macs and up in 4-bit | 19.8 GB | `4bit` (default: AWQ, 8-bit embedding and LM head), `8bit` (35.2 GB), `bf16` (66.3 GB) |
+| `nanbeige4.3-33b` | `nanbeige`, `nanbeige4.3`, `nanbeige-33b` | Nanbeige4.3-33B: a dense 33B (Llama architecture) for agents and coding, reasoning switched with `enable_thinking`; text only; 32 GB Macs and up in 4-bit | 21.8 GB | `4bit` (default: AWQ, 8-bit embedding and LM head), `8bit` (37.2 GB), `bf16` (68.2 GB) |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
-27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
-its DSpark draft model for Lightning; Flash-Next's repo holds its MTP head. Dory, Flint and Nanbeige have none: they decode without one, as
+27B, a DFlash2 draft model for Nanbeige (ProCreations' weights), an MTP head and z-lab's DFlash draft model for the 4B,
+NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning; Flash-Next's repo holds its
+MTP head. Dory and Flint have none: they decode without one, as
 does the 35B's `16gb` (its GGUF has no MTP head, and a draft model would not fit beside it).
 
 Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release

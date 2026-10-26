@@ -101,7 +101,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.3.dev2</sub> | <sub>Ollama<br>0.40.11, GGUF runner</sub> | <sub>MLX<br>mlx-vlm 0.7.10</sub> | <sub>llama.cpp<br>b11871</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| **Nanbeige4.3-33B** · `nanbeige`<br><sub>dense · 4-bit AWQ (8-bit embedding and head), 19.8 GB</sub> | 🟩 532 / **29**<br><sub>KFlash</sub> | 766 / 28 | 503 / 26 | 705 / 28 | 496 / 26 |
+| **Nanbeige4.3-33B** · `nanbeige`<br><sub>dense · 4-bit AWQ (8-bit embedding and head), 21.8 GB</sub> | 🟩 532 / **29**<br><sub>KFlash</sub> | 766 / 28 | 503 / 26 | 705 / 28 | 496 / 26 |
 
 <sub>The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell, the Flash-Next row and the Lightning, Super-VL and Dory rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The Flint row is one block on 2026-10-26 (Kapitsa 0.2.18, [results](bench/results/2026-10-26-m5-max/README.md)). The 27B and Bolt rows are each one block of the row on AC power in High Power mode. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
 
