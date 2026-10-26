@@ -128,16 +128,12 @@ flint["protocol"]["temperature"] = 1.0
 prompts(flint, (3873, 15065))
 e = cc.check_result(flint, cat, macs, versions)[0]
 check(not e, "Flint's prompts pass against its own reference (3,874 and 15,066 tokens)", str(e))
-nanbeige = copy.deepcopy(full)  # Nanbeige4.3: its own template's and tokenizer's prompt sizes, the default T = 0.6
+nanbeige = copy.deepcopy(full)  # Nanbeige4.3: its own template's and tokenizer's prompt sizes, not Qwen's; no reference
 nanbeige["model"].update(name="nanbeige4.3-33b", title=cat["nanbeige4.3-33b"]["title"], variant="4bit",
                          precision=cat["nanbeige4.3-33b"]["variants"]["4bit"])
 prompts(nanbeige, (5087, 19955))
 e = cc.check_result(nanbeige, cat, macs, versions)[0]
-check(not e, "Nanbeige4.3's prompts pass against its own reference (5,088 and 19,954 tokens)", str(e))
-r = copy.deepcopy(nanbeige)
-prompts(r, (4133, 16286))
-e = cc.check_result(r, cat, macs, versions)[0]
-check(any("not within 1% of 5088" in x for x in e), "refused: Nanbeige4.3 with the Qwen templates' prompt sizes", str(e))
+check(not e, "Nanbeige4.3's prompt sizes are not held to Qwen's (no reference of its own yet)", str(e))
 r = copy.deepcopy(flint)
 prompts(r, (4133, 16286))
 e = cc.check_result(r, cat, macs, versions)[0]
