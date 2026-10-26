@@ -80,6 +80,16 @@ jobs:
           echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results. Run 'python3 tools/community_table.py' and commit bench/community/RESULTS.md in this pull request."
           exit 1
 
+  docs-links:
+    # The docs' relative links and #anchors resolve. docs/benchmarks.md's old section names survive only as explicit
+    # <a id="..."> anchors (#580) and nothing else notices a later heading rename deleting one. Its own job rather than a
+    # step in bench-readme, so a dead link never reads as a stale bench table to whoever sees the red X.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_docs_links.py
+
   agentic-metrics-script:
     # bench/harness/agentic.py against a fake server: no model, no GPU.
     runs-on: ubuntu-latest
