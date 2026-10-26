@@ -7,8 +7,11 @@
 // an expert in use). Cases: decode rows with next-layer predictions (good and wrong ones), verify rows with repeats,
 // prefill chunks (scan lookups, every next-layer expert read ahead), a chunk seam's whole-layer wrap (the next
 // chunk's layer 0 read ahead during the last layer's turn), a hot set that must survive a prompt's sweep (ARC),
-// direct and widened reads, an arena of every expert (no handshakes), and the statistics' sums.
+// direct and widened reads, an arena of every expert (no handshakes), the statistics' sums, and the layer-major
+// prefill group's two pure sides: the walk's shapes at the merge gate's frozen lengths (the engine's own chunker,
+// no model) and the group slots' eligibility and two-pass store-sizing decision.
 //   fn_store_test [--keep DIR]
+#include "engine/engine.h"
 #include "model/expert_store.h"
 #include "util/log.h"
 
@@ -784,6 +787,159 @@ void case_complete(const Pack& p) {
   printf("an arena of all %u experts: filled at start, every table word right, no handshakes\n", L * E);
 }
 
+// ---- the layer-major group walk's shapes at the merge gate's frozen lengths (PR #628) --------------------
+// The leg table must be computable, not hand-written: the engine's own chunker decides a pass's chunk rows
+// (prefill_chunk_rows, even-balanced - the legs pin --prefill-chunk 2048 and prefill_even_chunks on both arms),
+// and engine.cpp's walk collects the next G chunks into a layer-major group while every one is plain: it breaks
+// on the pass's last chunk (pos + Tc == n - that one samples and runs alone), on a split row count and on a save
+// point inside or at a chunk's end, and under two plain chunks it yields nothing (nc < 2 -> 0) and the chunk
+// path runs one chunk, the next pass retrying the walk from its end. The legs' cells are plain text with no
+// split, no save point and no image or grammar rows, so those are the pinned conditions that make the other
+// break rules inert; this replica keeps the two rules that can fire and calls the real chunker for every row
+// count. A shape here that disagrees with the engine's log ("prefill group of ... rows" against the chunker's
+// "prefill chunk of ...") means the pin or this replica is wrong.
+void case_group_shape() {
+  const int C = 2048;  // --prefill-chunk 2048, pinned on both gate arms
+  struct Shape {
+    std::vector<std::vector<int>> groups;  // the layer-major groups' chunk rows, in pass order
+    std::vector<int> alone;                // the chunks that ran alone (the chunk path), in pass order
+  };
+  auto walk = [&](int64_t n, int g) {
+    Shape sh;
+    int64_t pos = 0;
+    while (pos < n) {
+      int Ts[8], nc = 0;
+      int64_t q = pos;  // the walk's look-ahead cursor; it commits only when a group forms
+      while (nc < g && q < n) {
+        const int Tc = prefill_chunk_rows(C, q, n, true);
+        if (q + Tc == n) break;  // the pass's last chunk: it samples and runs alone
+        Ts[nc++] = Tc;
+        q += Tc;
+      }
+      if (nc < 2) nc = 0;
+      if (nc >= 2) {
+        sh.groups.emplace_back(Ts, Ts + nc);
+        pos = q;
+      } else {
+        const int T = prefill_chunk_rows(C, pos, n, true);
+        sh.alone.push_back(T);
+        pos += T;
+      }
+    }
+    return sh;
+  };
+  auto show = [](const Shape& s) {
+    std::string o;
+    for (const std::vector<int>& gr : s.groups) {
+      if (!o.empty()) o += " ";
+      o += "group[";
+      for (size_t i = 0; i < gr.size(); ++i) o += (i ? "," : "") + std::to_string(gr[i]);
+      o += "]";
+    }
+    if (!s.alone.empty()) {
+      if (!o.empty()) o += " ";
+      o += "alone[";
+      for (size_t i = 0; i < s.alone.size(); ++i) o += (i ? "," : "") + std::to_string(s.alone[i]);
+      o += "]";
+    }
+    return o;
+  };
+  struct Cell {
+    const char* name;
+    int64_t n;
+    int g;
+    std::vector<std::vector<int>> groups;
+    std::vector<int> alone;
+  };
+  // The gate's frozen lengths. The bench cells are not round numbers: pf16_seed33 is 16287 tokens, the frozen 4K
+  // cell is 4132 - an nc=2 group, not the fall-through a 4096-token cell would be - and c64k / c128k are 65535
+  // and 131071. EXACT4096 / EXACT6144 are exact-length prefix slices of pf16_seed33, pinned in the gate package.
+  const std::vector<Cell> cells = {
+      {"EXACT4096 fall-through (nc=1 -> 0)", 4096, 4, {}, {2048, 2048}},
+      {"EXACT6144 smallest real group", 6144, 4, {{2048, 2048}}, {2048}},
+      {"EXACT6144 G=2 diagnostic (1 group, 1 alone)", 6144, 2, {{2048, 2048}}, {2048}},
+      {"pf16_seed33 (h16k)", 16287, 4, {{2036, 2036, 2036, 2036}, {2036, 2036, 2036}}, {2035}},
+      {"c64k (h64k)", 65535, 4,
+       {{2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048}},
+       {2047}},
+      {"c128k (h128k)", 131071, 4,
+       {{2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048}},
+       {2047}},
+      {"frozen 4K cell 4132 (nc=2, not the fall-through)", 4132, 4, {{1378, 1377}}, {1377}},
+      {"6155 roundoff (the warning cell: nc=3)", 6155, 4, {{1539, 1539, 1539}}, {1538}},
+  };
+  for (const Cell& c : cells) {
+    const Shape sh = walk(c.n, c.g);
+    printf("group-shape %-48s n=%lld G=%d: %s\n", c.name, (long long)c.n, c.g, show(sh).c_str());
+    CHECK(sh.groups == c.groups && sh.alone == c.alone, "group-shape %s: got %s", c.name, show(sh).c_str());
+  }
+}
+
+// ---- the group's eligibility and its one accounting (the resident-store invariant, PR #628) --------------
+// Runtime eligibility (q20::group_chunks) gates the three sides that must agree: the engine's walk,
+// alloc4_group's allocation and the memory plan's MemPlan::group_slots. The store sizing's two-pass charge
+// (Qwen4Exp::init_store, mirrored by doctor.cpp's planned_store) sizes the store WITHOUT the slot charge first
+// and charges the slots only when the store comes up incomplete without them: the slots pay for themselves only
+// while there is something for a group to save, and the decision is monotone (more activation charge shrinks the
+// store, it never completes it more), so the second pass is a fixed point - no oscillation, no circularity.
+void case_group_plan() {
+  CHECK(group_chunks(4, false, false, false) == 4, "group_chunks: an incomplete streamed store groups");
+  CHECK(group_chunks(4, false, false, true) == 1, "group_chunks: an all-resident expert set never groups");
+  CHECK(group_chunks(4, true, false, false) == 1, "group_chunks: a split model never groups");
+  CHECK(group_chunks(4, false, true, false) == 1, "group_chunks: a layer-debugging model never groups");
+  CHECK(group_chunks(1, false, false, false) == 1, "group_chunks: G=1 stays the chunk path");
+  CHECK(group_chunks(8, false, false, false) == 8, "group_chunks: G=8 (the env's top) groups");
+  // one formula for the plan, the allocation and the sizing charge: 0 below G=2, linear in G above; the terms are
+  // alloc4_group's buffers per chunk - xg_ T*(hc*D) fp32, yg_ T*D fp32, injAg_ + injM_ 2*T*hc fp32, and the two
+  // alternating sets of n-gram staging (ple_pfg_, 2G of them) T*D fp16
+  const size_t T = 2048, D = 2048, hc = 4;
+  CHECK(group_slot_bytes(0, T, D, hc) == 0 && group_slot_bytes(1, T, D, hc) == 0, "group_slot_bytes: 0 below G=2");
+  CHECK(group_slot_bytes(2, T, D, hc) == 2 * (T * hc * D * 4 + T * D * 4 + 2 * T * hc * 4 + 2 * T * D * 2),
+        "group_slot_bytes: alloc4_group's buffers, expanded");
+  CHECK(group_slot_bytes(4, T, D, hc) == 2 * group_slot_bytes(2, T, D, hc), "group_slot_bytes: linear in G");
+  // the two-pass sizing decision on the pure auto_store_size both call sites use
+  auto two_pass = [](AutoStoreIn in, size_t gsb) {
+    AutoStore st = auto_store_size(in);  // pass 1: no slot charge - no slots are allocated yet
+    bool charged = false;
+    if (st.bytes < in.all && gsb) {  // incomplete without the charge: the slots pay for themselves
+      AutoStoreIn c = in;
+      c.left = in.left > gsb ? in.left - gsb : 0;
+      c.used = in.used + gsb;
+      c.avail = in.avail > gsb ? in.avail - gsb : 0;
+      st = auto_store_size(c);
+      charged = true;
+    }
+    return std::make_pair(st, charged);
+  };
+  const size_t gsb = group_slot_bytes(4, T, D, hc);
+  const size_t G1 = size_t(1) << 30, G20 = size_t(20) << 30, G30 = size_t(30) << 30;
+  const size_t G40 = size_t(40) << 30, G41 = size_t(41) << 30, G44 = size_t(44) << 30, G48 = size_t(48) << 30;
+  // world A: the budget leaves the store short of all the experts -> the charge applies and the store stays
+  // incomplete, so alloc4_group runs and prefill_group() answers G - the same predicate on every side
+  AutoStoreIn a;
+  a.all = G40, a.least = G1, a.left = G30, a.used = G20, a.ram = G48, a.avail = size_t(100) << 30;
+  const auto A = two_pass(a, gsb);
+  CHECK(A.second && A.first.bytes == G30 - gsb && A.first.bytes < G40, "two-pass A: charged to %zu, still incomplete",
+        A.first.bytes);
+  // world B: every expert fits without the charge -> no charge, no slots, and the chunk path keeps its precomb
+  // fold. The order is the invariant: sizing WITH the charge first would clamp this store below all on the avail
+  // guard and allocate slots that then make it incomplete - a world that never settles.
+  AutoStoreIn b = a;
+  b.left = G41;
+  b.avail = G44 + gsb / 2;
+  const auto B = two_pass(b, gsb);
+  CHECK(!B.second && B.first.bytes == G40, "two-pass B: complete without the charge, uncharged");
+  AutoStoreIn bc = b;
+  bc.left = b.left - gsb, bc.used = b.used + gsb, bc.avail = b.avail - gsb;
+  CHECK(auto_store_size(bc).bytes < G40, "two-pass B: charging first would have clamped it below all");
+  printf("group plan: eligibility pinned, slot bytes one formula (%zu B at G=4, T=2048), two-pass sizing settled\n",
+         gsb);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -812,6 +968,8 @@ int main(int argc, char** argv) {
   case_complete(p);
   case_settle();
   case_auto_size();
+  case_group_shape();
+  case_group_plan();
   if (keep.empty()) {
     for (const std::string& f : p.files) unlink(f.c_str());
     rmdir(dir.c_str());

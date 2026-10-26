@@ -448,10 +448,10 @@ int run_doctor(int argc, char** argv) {
     const std::string src = ap.source;
     // a DFlash2 drafter next to the model or in the drafter cache counts when the engine loads it
     const std::string dfl = lp.dflash.empty() ? lp.dflash_left_out : lp.dflash;
-    const size_t fixed = m.fixed(slots) + ane_bytes + lp.dflash_bytes;
-    const size_t start_need = fixed + m.kv_per_pos * size_t(std::min(ctx, 8192));
-    const size_t full_need = fixed + m.kv_per_pos * size_t(ctx) * size_t(slots);
-    const size_t room = budget > fixed ? budget - fixed : 0;
+    size_t fixed = m.fixed(slots) + ane_bytes + lp.dflash_bytes;
+    size_t start_need = fixed + m.kv_per_pos * size_t(std::min(ctx, 8192));
+    size_t full_need = fixed + m.kv_per_pos * size_t(ctx) * size_t(slots);
+    size_t room = budget > fixed ? budget - fixed : 0;
     // a Q2_0 pack's routed experts: the store kapitsa serve picks and why (NI_EXPERT_STORE=<GB> or all sets it instead)
     std::string store_line, store_short;  // the whole reason (plain text, --json); a short one (the styled view)
     nlohmann::ordered_json store_j;
@@ -471,9 +471,38 @@ int run_doctor(int argc, char** argv) {
         so.context = ctx_given ? context_within_limit(dir, ctx) : 0;
         so.slots = slots_opt, so.prefill_chunk = chunk, so.dflash = dflash;
         const StartPlan sp = start_plan(dir, so, budget);
-        const MemPlan sm = sp.prefill_chunk == lp.prefill_chunk ? m : model_plan(dir, sp.prefill_chunk);
-        const q20::AutoStoreIn in = planned_store(sm, sp.slots, sp.context, budget, g.apple10());
-        const q20::AutoStore st = q20::auto_store_size(in);
+        MemPlan sm = sp.prefill_chunk == lp.prefill_chunk ? m : model_plan(dir, sp.prefill_chunk);
+        q20::AutoStoreIn in;
+        q20::AutoStore st;
+        if (sm.group_slots) {
+          // the layer-major groups' two-pass world choice, as init_store runs it: size the store first WITHOUT the
+          // slot charge - the slots are allocated only while the store is incomplete (Qwen4Exp::alloc4_group).
+          // Complete without the charge -> the load never groups and never pays the slots, so the world drops the
+          // charge from its activations (and from the numbers above, when it is this same chunk world). Incomplete
+          // -> the slots are charged and allocated: re-size with the charge, as planned_store already counts it.
+          // Monotone in one direction - more charge shrinks the budget, which never moves the store toward
+          // complete - so one correction is the fixed point and there is no oscillation.
+          MemPlan bare = sm;
+          bare.activations -= sm.group_slots;
+          in = planned_store(bare, sp.slots, sp.context, budget, g.apple10());
+          st = q20::auto_store_size(in);
+          if (st.bytes >= in.all) {
+            sm.activations -= sm.group_slots;
+            if (sp.prefill_chunk == lp.prefill_chunk) {
+              m.activations -= m.group_slots;
+              fixed -= m.group_slots;
+              start_need -= m.group_slots;
+              full_need -= m.group_slots;
+              room = budget > fixed ? budget - fixed : 0;
+            }
+          } else {
+            in = planned_store(sm, sp.slots, sp.context, budget, g.apple10());
+            st = q20::auto_store_size(in);
+          }
+        } else {
+          in = planned_store(sm, sp.slots, sp.context, budget, g.apple10());
+          st = q20::auto_store_size(in);
+        }
         store_line = q20::auto_store_reason(st, in);
         store_short = q20::auto_store_short(st, in);
         store_j = {{"bytes", st.bytes},

@@ -123,8 +123,13 @@ class Qwen4Exp : public Qwen35 {
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   // layer-major prefill groups (NI_PREFILL_GROUP; model.h): G chunks share the per-layer expert reads; the chunks
   // must be plain (engine.cpp only forms such groups: no mid-chunk checkpoint, no split rerun, no image/grammar
-  // rows, not the pass's last chunk). 1 - and the chunk path stays - on a split or debug model.
-  int prefill_group() const override { return dbg_layers_ < 0 && !remote_ ? prefill_group_ : 1; }
+  // rows, not the pass's last chunk). 1 - and the chunk path stays - on a split or debug model, and while every
+  // expert is resident (no store, or a complete one): a group pays the streamed store's reads alone, and an
+  // all-resident model would lose the chunk path's NI_HC_PRECOMB fold and carry slot buffers for nothing
+  // (q20::group_chunks; the same predicate decides alloc4_group and the plan's group_slots).
+  int prefill_group() const override {
+    return q20::group_chunks(prefill_group_, remote_ || lo_ != 0, dbg_layers_ >= 0, !store_ || store_->complete());
+  }
   void encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) override;
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   // speculative decoding (qwen4_exp_spec.cpp)
@@ -161,6 +166,7 @@ class Qwen4Exp : public Qwen35 {
   void load(const std::string& dir);
   void load_mtp4(const std::string& dir);
   void alloc4();
+  void alloc4_group();  // the group slot buffers; init_store calls it only while the store is incomplete
   const Tensor* norm32(const Tensor* t, float offset);  // fp32 copy of a norm weight, + offset
   GatedRes load_gr(const std::string& prefix, bool inject, const class WeightStore* w = nullptr);
   int attn_layers() const;
@@ -206,9 +212,11 @@ class Qwen4Exp : public Qwen35 {
   // draft token - bounded, read-ahead only, and off the prompt paths.
   bool seam_more_ = false;
   // layer-major prefill groups (NI_PREFILL_GROUP=G, 1..8; the shipped default 4; =1 keeps the chunks one at a
-  // time, the merge gate's B arm and debugging alone). The G chunks' state
+  // time, the merge gate's B arm and debugging alone; an all-resident expert set never groups, q20::group_chunks).
+  // The G chunks' state
   // - the residual x_, the block output yb_, the injection weights injA_ / injM_ - lives in per-chunk slots (xg_
-  // etc., alloc4) swapped into the members per turn, because Metal binds buffers at encode time; group_swap /
+  // etc., alloc4_group, allocated only while the streamed store is incomplete) swapped into the members per turn,
+  // because Metal binds buffers at encode time; group_swap /
   // group_restore do the swap. A turn's read-ahead follows the group's successor table, not the chunk path's: the
   // successor of turn (i, c) is (i, c + 1) while chunks remain - the same layer, resident - so an inner turn reads
   // nothing ahead (group_inner_); a visit's last turn admits layer i + 1's whole set for the whole visit; and only
@@ -330,7 +338,8 @@ class Qwen4Exp : public Qwen35 {
   Buffer iqk_, iq_;           // indexer projection [T, 640], queries [T, heads, dim]
   Buffer ple_k_, ple_v_;      // n-gram key [T, hc*hidden] (also gvn), value [T, hidden]
   Buffer ple_pf_[2];          // prefill staging (half [T, hidden]), alternating chunks
-  // layer-major groups (NI_PREFILL_GROUP >= 2; alloc4): the chunks' x_ / yb_ / injA_ / injM_ slots, and two sets of
+  // layer-major groups (NI_PREFILL_GROUP >= 2; alloc4_group, while the store is incomplete): the chunks' x_ / yb_ /
+  // injA_ / injM_ slots, and two sets of
   // G n-gram stagings (the host gathers group g + 1 while the GPU runs g)
   std::vector<Buffer> xg_, yg_, injAg_, injMg_, ple_pfg_;
   Buffer ple_dec_[4];         // decode / verify staging (fp32 [kMaxVerify, hidden]), a ring

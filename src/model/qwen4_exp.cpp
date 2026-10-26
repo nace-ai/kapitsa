@@ -178,7 +178,9 @@ static bool hc_precomb(bool q20_pack) {
 // on). =1 keeps the chunks one at a time, as before, for the merge gate's ABAB legs and debugging alone - there
 // is no supported off posture: the gate losing closes the change unmerged rather than shipping it off. A value
 // outside 1..8 is ignored and the default 4 stands (a bad value warns like NI_PRED_ALL_MIN's does); the group's
-// per-chunk slots cost the plan (qwen4_act_bytes) what they cost alloc4. Defined below, after env_rows.
+// per-chunk slots cost the plan (qwen4_act_bytes) exactly what they cost the allocation (alloc4_group) - one
+// formula, q20::group_slot_bytes - and both sides charge them only while the streamed store is incomplete (an
+// all-resident model never groups, q20::group_chunks). Defined below, after env_rows.
 static int prefill_group_env();
 
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
@@ -187,8 +189,9 @@ Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget,
   lo_ = sp.lo;
   hi_ = sp.hi;  // (-1: load_config's, every layer)
   remote_ = sp.remote;
-  // a split model's head hops mid-pass and a stage runs passes it does not own: neither groups (alloc4 must know
-  // before load, which calls it, and prefill_group() gates the engine on the same condition)
+  // a split model's head hops mid-pass and a stage runs passes it does not own: neither groups. The all-resident
+  // arm of the eligibility (a complete store) is answered at runtime, after init_store sizes the store
+  // (prefill_group(), q20::group_chunks); the slot allocation waits for the same answer (alloc4_group).
   prefill_group_ = remote_ || lo_ != 0 ? 1 : prefill_group_env();
   load(dir);
 }
@@ -505,14 +508,13 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
                               int group = 1) {
   const size_t D = size_t(c.hidden), SD = size_t(c4.hc) * D, Tz = size_t(T), V = size_t(maxv), R = size_t(c4.hc_rank);
   const size_t IQ = size_t(c4.ix_heads + 1) * c4.ix_dim;
-  const size_t G = size_t(std::max(1, group));  // NI_PREFILL_GROUP: the chunks' slots and the second staging set
   return Tz * SD * 4 - Tz * D * 4  // x_ grows from [T, D] to [T, S*D]
          + Tz * D * 4 + 2 * Tz * c4.hc * 4 + V * SD * 4 + Tz * SD * 2 + Tz * R * 4 + Tz * R * 2 + Tz * SD * 4 +
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
          + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
          + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4  // the one-row gated residual's row, hc_down_sk's partials
-         + (G >= 2 ? G : 0) * (Tz * SD * 4 + Tz * D * 4 + 2 * Tz * c4.hc * 4 + 2 * Tz * D * 2);  // group slots, staging
+         + q20::group_slot_bytes(group, Tz, D, size_t(c4.hc));  // the chunks' slots, staging (NI_PREFILL_GROUP)
 }
 
 void Qwen4Exp::alloc4() {
@@ -535,20 +537,6 @@ void Qwen4Exp::alloc4() {
   ple_k_ = g.alloc(T * SD * 4, "ple_key");
   ple_v_ = g.alloc(T * D * 4, "ple_value");
   for (Buffer& b : ple_pf_) b = g.alloc(T * D * 2, "ple_rows");
-  // layer-major groups (NI_PREFILL_GROUP): the chunks' x_ / yb_ / injA_ / injM_ slots, swapped into the members per
-  // turn, and two sets of G n-gram stagings (the host gathers group g + 1's rows while the GPU runs g)
-  if (prefill_group_ >= 2) {
-    const size_t G = size_t(prefill_group_);
-    xg_.resize(G), yg_.resize(G), injAg_.resize(G), injMg_.resize(G), ple_pfg_.resize(2 * G);
-    for (size_t c = 0; c < G; ++c) {
-      xg_[c] = g.alloc(T * SD * 4, "x4g");
-      yg_[c] = g.alloc(T * D * 4, "block_outg");
-      memset(yg_[c].ptr(), 0, yg_[c].size);  // accumulated into, as yb_
-      injAg_[c] = g.alloc(T * c4_.hc * 4, "inject_ag");
-      injMg_[c] = g.alloc(T * c4_.hc * 4, "inject_mg");
-    }
-    for (Buffer& b : ple_pfg_) b = g.alloc(T * D * 2, "ple_rowsg");
-  }
   for (Buffer& b : ple_dec_) b = g.alloc(V * D * 4, "ple_rows_decode");
   hpart_ = g.alloc((SD / 1024 + 1) * V * R * 2 * 4, "hc_part");
   hx2_ = g.alloc(V * SD * 4, "hc_rows");
@@ -563,6 +551,27 @@ void Qwen4Exp::alloc4() {
     g.release(mtp_post_);
     mtp_post_ = g.alloc(V * SD * 4, "mtp_post4");
   }
+}
+
+// The layer-major groups' slot buffers (NI_PREFILL_GROUP): the chunks' x_ / yb_ / injA_ / injM_ slots, swapped into
+// the members per turn, and two sets of G n-gram stagings (the host gathers group g + 1's rows while the GPU runs
+// g). init_store calls this only while the streamed store is incomplete - a group pays the store's reads alone,
+// so an all-resident model never groups (q20::group_chunks) and never pays these bytes; the same conditional
+// decides the plan's MemPlan::group_slots (qwen4_act_bytes via plan(), and doctor.cpp). One formula with the
+// plan's: q20::group_slot_bytes.
+void Qwen4Exp::alloc4_group() {
+  if (prefill_group_ < 2) return;
+  Gpu& g = Gpu::get();
+  const size_t T = size_t(tmax_), D = size_t(cfg_.hidden), SD = size_t(c4_.hc) * D, G = size_t(prefill_group_);
+  xg_.resize(G), yg_.resize(G), injAg_.resize(G), injMg_.resize(G), ple_pfg_.resize(2 * G);
+  for (size_t c = 0; c < G; ++c) {
+    xg_[c] = g.alloc(T * SD * 4, "x4g");
+    yg_[c] = g.alloc(T * D * 4, "block_outg");
+    memset(yg_[c].ptr(), 0, yg_[c].size);  // accumulated into, as yb_
+    injAg_[c] = g.alloc(T * c4_.hc * 4, "inject_ag");
+    injMg_[c] = g.alloc(T * c4_.hc * 4, "inject_mg");
+  }
+  for (Buffer& b : ple_pfg_) b = g.alloc(T * D * 2, "ple_rowsg");
 }
 
 // ---- memory ----
@@ -833,8 +842,27 @@ void Qwen4Exp::init_store(const std::string& dir) {
       logi("expert store: the system's available memory %.1f GB at first, %.1f GB after %.2f s", double(sa.first) / 1e9,
            double(sa.avail) / 1e9, sa.waited_ms / 1e3);
     in.cap = q20::auto_store_cap(Gpu::get().apple10());
-    const q20::AutoStore st = q20::auto_store_size(in);
+    q20::AutoStore st = q20::auto_store_size(in);
     o.bytes = st.bytes;
+    // Layer-major groups' two-pass charge: size the store first WITHOUT the slot bytes - alloc4 has not allocated
+    // them, so `used` above does not carry them - and only if the store stays incomplete in that world do the
+    // slots pay for themselves (re-size: left and avail shrink, used grows). Monotone in one direction - more
+    // activation charge shrinks the store's budget, which only moves it further from complete - so the second
+    // pass is the fixed point, no oscillation; and the allocation at the end of this function follows the same
+    // decision (alloc4_group), so the plan's MemPlan::group_slots and the load's reality agree by construction.
+    // The all-resident world charges nothing and allocates nothing.
+    const size_t gsb =
+        q20::group_slot_bytes(prefill_group_, size_t(tmax_), size_t(cfg_.hidden), size_t(c4_.hc));
+    if (o.bytes < all && gsb) {
+      q20::AutoStoreIn in2 = in;
+      in2.left = in.left > gsb ? in.left - gsb : 0;
+      in2.used = in.used + gsb;
+      in2.avail = in.avail > gsb ? in.avail - gsb : 0;
+      st = q20::auto_store_size(in2);
+      o.bytes = st.bytes;
+      in = in2;
+      logi("expert store: NI_PREFILL_GROUP=%d slots -%.2f GB", prefill_group_, double(gsb) / 1e9);
+    }
     logi("expert store: %s", q20::auto_store_reason(st, in).c_str());
   }
   o.bytes = std::min(o.bytes, all);
@@ -849,6 +877,10 @@ void Qwen4Exp::init_store(const std::string& dir) {
     plog_ = g.alloc(size_t(kMaxVerify) * E * 4, "pred_logits");
     pidx_ = g.alloc(size_t(kMaxVerify) * cfg_.top_k * 4, "pred_idx");
     pwts_ = g.alloc(size_t(kMaxVerify) * (cfg_.top_k + 1) * 4, "pred_wts");
+    // the layer-major groups' slots: only while the store is incomplete, the same predicate that makes
+    // prefill_group() answer G to the engine (q20::group_chunks) - with every expert resident the chunk path
+    // keeps its NI_HC_PRECOMB fold and these buffers stay unallocated
+    alloc4_group();
   }
 }
 
@@ -1682,6 +1714,9 @@ void Qwen4Exp::encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts,
     total += Ts[c];
   }
   if (pos0 + total >= s.cap) fatal("context full (%d)", s.cap);
+  // the two-sided evidence: a pass logs either the chunker's "prefill chunk of ..." or this line, so an engine log
+  // shows which path ran every chunk of the prompt (grep both; an absent line is as loud as a present one)
+  logd("prefill group of %d chunks (%d rows) over layers %d..%d", nc, total, lo_, hi_ - 1);
   const GroupSave saved = group_save();
   in_group_ = true;
   // prologue: gather every chunk's n-gram rows (two sets of staging alternate by group parity: the host gathers
@@ -1965,8 +2000,16 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
   }
   // buffers: Qwen35's for this config (x_ widened, the MTP rows) plus the hyper-connection / indexer / n-gram ones
   for (const ActBuf& a : act_layout(c, chunk, kMaxVerify, m.mtp > 0, size_t(kMaxVerify))) m.activations += a.bytes;
-  m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0,
-                                   sp.remote || sp.lo != 0 ? 1 : prefill_group_env());
+  m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0, 1);
+  // the layer-major groups' slot term (q20::group_slot_bytes, the allocation's one formula): charged while a group
+  // can form at all - the experts stream (there is a store to pay for) and this process holds the trunk from its
+  // first layer. Whether the charge survives to the load depends on the store it funds: a store complete WITHOUT
+  // it never groups and never pays, so the sizer drops it there (init_store's two-pass; doctor.cpp's plan the
+  // same), and an incomplete one re-sizes with it subtracted from what is left.
+  m.group_slots = m.streamed && !(sp.remote || sp.lo != 0)
+                      ? q20::group_slot_bytes(prefill_group_env(), size_t(chunk), size_t(c.hidden), size_t(c4.hc))
+                      : 0;
+  m.activations += m.group_slots;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
   int lin = 0, att = 0;
   for (int i = lo; i < hi; ++i) (c.is_linear[size_t(i)] ? lin : att) += 1;

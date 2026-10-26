@@ -49,6 +49,25 @@ inline int seam_next_layer(int li, int lo, int hi, bool wraps) {
   return li + 1 < hi ? li + 1 - lo : wraps ? 0 : -1;
 }
 
+// The effective NI_PREFILL_GROUP of a model (layer-major prefill groups): a group pays the streamed store's reads
+// alone, so one forms only while that store is incomplete. With every expert resident - no store, or a complete
+// one - the ordinary chunk path is strictly ahead: it keeps its NI_HC_PRECOMB fold and carries no per-chunk slot
+// buffers. That is runtime eligibility, not an off switch: the knob still asks for G, the model just has nothing
+// for a group to save. A split's share and a layer-debugging model never group either.
+inline int group_chunks(int g, bool split, bool debug, bool all_resident) {
+  return g >= 2 && !split && !debug && !all_resident ? g : 1;
+}
+
+// The per-chunk slot bytes of G layer-major groups: the chunks' x_ / yb_ / injA_ / injM_ slots and the two sets
+// of G n-gram stagings. One formula for the sides that must agree - the plan (qwen4_act_bytes, MemPlan's
+// group_slots), the allocation (Qwen4Exp::alloc4_group) and the store sizing's two-pass charge
+// (Qwen4Exp::init_store, doctor.cpp). 0 unless G >= 2.
+inline size_t group_slot_bytes(int g, size_t T, size_t D, size_t hc) {
+  if (g < 2) return 0;
+  const size_t SD = hc * D;
+  return size_t(g) * (T * SD * 4 + T * D * 4 + 2 * T * hc * 4 + 2 * T * D * 2);
+}
+
 struct StoreStats {
   uint64_t handshakes = 0;     // turns (one per streamed layer per pass)
   uint64_t lookups = 0;        // distinct routed experts looked up
