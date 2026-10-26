@@ -208,14 +208,19 @@ class Qwen4Exp : public Qwen35 {
   // layer-major prefill groups (NI_PREFILL_GROUP=G, 2..8; default 1: the chunks one at a time). The G chunks' state
   // - the residual x_, the block output yb_, the injection weights injA_ / injM_ - lives in per-chunk slots (xg_
   // etc., alloc4) swapped into the members per turn, because Metal binds buffers at encode time; group_swap /
-  // group_restore do the swap. group_floor_ is the sweep floor (#624) a visit passes to the store - its own layer's
-  // index, so a visit's sweep cannot evict keys the group's later turns still need; -1 at the wrapping last visit
-  // and outside groups. in_group_ keeps NI_HC_PRECOMB off inside a group (its pending combine folds into the next
-  // layer's gated residual, which crosses turns under grouping). group_parity_ alternates the two sets of n-gram row
-  // staging (ple_pfg_): the host gathers group g + 1's rows while the GPU runs g.
+  // group_restore do the swap. A turn's read-ahead follows the group's successor table, not the chunk path's: the
+  // successor of turn (i, c) is (i, c + 1) while chunks remain - the same layer, resident - so an inner turn reads
+  // nothing ahead (group_inner_); a visit's last turn admits layer i + 1's whole set for the whole visit; and only
+  // the group's final turn wraps to layer 0 (seam_more_), for the chunk after the group. group_floor_ is the sweep
+  // floor (#624) a turn passes to the store - its visit's layer index, so the sweep cannot evict keys the group's
+  // later turns still need; -1 at the wrapping final turn and outside groups. in_group_ keeps NI_HC_PRECOMB off
+  // inside a group (its pending combine folds into the next layer's gated residual, which crosses turns under
+  // grouping). group_parity_ alternates the two sets of n-gram row staging (ple_pfg_): the host gathers group g + 1's
+  // rows while the GPU runs g.
   int prefill_group_ = 1;
   int group_parity_ = 0;
   int group_floor_ = -1;
+  bool group_inner_ = false;
   bool in_group_ = false;
   // DFlash2 capture of layer `layer`'s output rows [pos0, pos0 + R): their 4 streams' mean (stream_mean)
   void enc_capture4(Encoder& e, int layer, int pos0, int R);

@@ -511,7 +511,7 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
          + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
          + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4  // the one-row gated residual's row, hc_down_sk's partials
-         + (G - 1) * (Tz * SD * 4 + Tz * D * 4 + 2 * Tz * c4.hc * 4 + 2 * Tz * D * 2);  // group slots, staging
+         + (G >= 2 ? G : 0) * (Tz * SD * 4 + Tz * D * 4 + 2 * Tz * c4.hc * 4 + 2 * Tz * D * 2);  // group slots, staging
 }
 
 void Qwen4Exp::alloc4() {
@@ -892,7 +892,10 @@ q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, 
   // last chunk can come out short). The prompt's last chunk does not
   // wrap (seam_more_, set by encode_prefill): decode follows it, and decode's first turn is one row routing
   // top-k experts, so a whole-layer sweep there would cost the first token for a read that turn barely uses.
-  const int nl = q20::seam_next_layer(li, lo_, hi_, seam_more_);
+  // group_inner_ (a layer-major group's turn with chunks remaining): its successor is the same layer over the next
+  // chunk, which this turn leaves resident, so the turn reads nothing ahead - the visit's last turn admits the next
+  // layer's whole set once for the visit, and only the group's final turn wraps to layer 0 (seam_more_)
+  const int nl = group_inner_ ? -1 : q20::seam_next_layer(li, lo_, hi_, seam_more_);
   // The read-ahead of the whole next layer costs the store's size on an 85-token prompt (1232 ms of a 1613 ms TTFT),
   // and only a chunk of 64+ rows routes most of that layer anyway: NI_PRED_ALL_MIN is the shortest chunk that pays it
   // (default 64, the constant it replaces). A bad value is warned about and ignored, as NI_EXPERT_CAP's is: parsing
@@ -1659,9 +1662,11 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
 
 // A layer-major prefill group (NI_PREFILL_GROUP): every layer visits every chunk of the group before the next layer
 // runs, so the store reads a layer's experts once per group instead of once per chunk, and the chunk seams inside
-// the group disappear (only the group's last visit wraps to layer 0, for whatever runs next). A visit's sweep admits
-// layer i + 1 for every chunk and passes pred_floor i (#624), so the sweep cannot evict keys the visit's later turns
-// still read; the last visit wraps with no floor, exactly like a chunk's seam wrap. The chunks' state (x_ / yb_ /
+// the group disappear. A turn's read-ahead follows the group's successor table, not the chunk path's: turn (i, c)'s
+// successor is (i, c + 1) while chunks remain - the same layer, left resident, so an inner turn reads nothing ahead
+// - a visit's last turn admits layer i + 1's whole set once for the visit, under pred_floor i (#624) so the sweep
+// cannot evict keys the group's later turns still read, and only the group's final turn wraps to layer 0, with no
+// floor, exactly like a chunk's seam wrap, for the chunk after the group. The chunks' state (x_ / yb_ /
 // injA_ / injM_) lives in per-chunk slots swapped into the members per turn - Metal binds buffers at encode time -
 // and the GDN recurrences and the KV advance in place because a visit's chunks run in position order. The engine
 // only forms plain groups (no checkpoint inside a chunk, no split rerun, no image or grammar rows, never the pass's
@@ -1696,12 +1701,14 @@ void Qwen4Exp::encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts,
     pos += Ts[c];
   }
   // visits: layer i over the chunks in position order (the GDN recurrences and the KV advance in place), then
-  // layer i + 1. A group is never a pass's last chunk, so its last visit wraps to layer 0 (seam_more_).
-  seam_more_ = true;
+  // layer i + 1. A group is never a pass's last chunk, so the group's final turn wraps to layer 0 (seam_more_)
+  // for the chunk after the group; every other turn keeps the successor table above.
   for (int i = lo_; i < hi_; ++i) {
-    group_floor_ = i + 1 < hi_ ? i - lo_ : -1;  // #624: this visit's keys stay out of its sweep's victim set
     int cpos = pos0;
     for (int c = 0; c < nc; ++c) {
+      group_inner_ = c + 1 < nc;
+      seam_more_ = !group_inner_ && i + 1 == hi_;
+      group_floor_ = seam_more_ ? -1 : i - lo_;  // #624: this visit's keys stay out of its sweep's victim set
       group_swap(c);
       enc_prefill_layer(e, s, i, cpos, Ts[c], grow[c], nullptr, 0);
       cpos += Ts[c];
@@ -1709,7 +1716,14 @@ void Qwen4Exp::encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts,
   }
   seam_more_ = false;
   group_floor_ = -1;
+  group_inner_ = false;
   in_group_ = false;
+  // the chunk path's tail: every row's pre-mix state, injected per chunk from its own slots (its last visit left
+  // the final layer's block output in its own yb_), before the MTP fill reads them
+  for (int c = 0; c < nc; ++c) {
+    group_swap(c);
+    enc_inject(e, Ts[c], x_, injM_);
+  }
   group_restore(saved);
   if (comb_pending_.active) fatal("hc_precomb: a pending combine outlived a prefill group");
 }

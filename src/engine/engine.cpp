@@ -2753,7 +2753,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // (pbound / boundary) inside a chunk cuts it and ends the walk; one at a chunk's end is fine as the
     // group's end - the saves below run after the group, whose state is the state after its last chunk - so
     // the walk stops there rather than make it an inner end, where the post-group save would capture the
-    // wrong GDN/KV state. Under two plain chunks the walk yields nothing and the chunk path runs.
+    // wrong GDN/KV state. Under two plain chunks the walk yields nothing and the chunk path runs. A group
+    // runs as one iteration, so the chunk-start contention check above happens once per group: the yield's
+    // granularity becomes the group, bounded at pgroup chunks (<= 8) rather than one.
     int Ts[8];
     int nc = 0;
     if (pgroup >= 2 && !s.embeds && s.mask_rows == 0) {
