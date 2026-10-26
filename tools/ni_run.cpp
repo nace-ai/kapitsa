@@ -658,6 +658,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "; %.2f proposals verified per cycle; acceptance by position", double(verified_sum) / std::max(cycles, 1));
     for (int i = 0; i < K; ++i) fprintf(stderr, " %.2f", reached[i] ? double(acc_pos[i]) / reached[i] : 0.0);
     fprintf(stderr, "\n");
+    store_stats("decode");
     if (dfl->tree() && dfl->budget()) fprintf(stderr, "%s\n", dfl->budget()->summary().c_str());
     if (getenv("NI_CYCLE_TRACE") && ntr)
       fprintf(stderr, "cycle trace (ms, mean of %d): host encodes the verify %.3f | GPU idle verify->draft %.3f, draft %.3f, "
