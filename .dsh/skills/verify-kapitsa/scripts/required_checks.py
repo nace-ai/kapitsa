@@ -75,7 +75,7 @@ rule(0.5, None, "tokenizer tests and fixtures: no runtime path, but what they pi
 # file, not the weights). Before 2026-10-26 the fallthrough made all three tier 1, which asks for a GPU e2e, a logit
 # gate and an A/B on two models for a file of rendered prompts (#604).
 # Narrow on purpose: the test that consumes the fixture, tools/api_test.cpp, hosts the API checks in general and stays
-# tier 1, and so does every other tools/*_test.cpp (orchestrator R457, R478).
+# tier 1, and so does every other tools/*_test.cpp without a more specific rule.
 rule(0.5, None, "chat-template fixture: no runtime path, but what it pins is rendered prompt bytes",
      "tests/data/chat_templates.json")
 rule(0.5, None, "chat-template fixture generator: fetches and writes that fixture, no runtime path",

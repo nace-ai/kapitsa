@@ -40,11 +40,12 @@ not ask for abstractions, interfaces or configuration the change does not need.
   separates a reassociation from a precision change: `tools/bench_moe.cpp`'s `vs qrm` columns (every output within one
   half step of the shipped path's) and both paths' error against the double-precision reference. Anything that changes
   what is computed stays on the floor's gate.
-  Three defaults are accepted past that rule by the user (2026-10-22 and 2026-10-23), see AGENTS.md: the 35B-A3B's
-  routed-expert prefill on the tensor units; its prefill attention `qattn_t_g8s4k16` (`NI_QATTN_G8=0` opts out), 1.10x
-  over the 4-bit floor's gate (mean KL 5.6e-4); and that attention with the head dim split over a pair of simdgroups,
-  `qattn_t_g8d2s8` (#365, `NI_QATTN_D2=0` opts out), 1.27x (mean KL 6.5e-4) — the floor's re-measure pending in a PR
-  of its own. Do not flag those three as a rule break; do flag the next 35B change if it is measured against the stale M4 Pro floor without saying so.
+  Existing 35B defaults from 2026-10-22 and 2026-10-23 have recorded comparisons in docs/numerical-history.md:
+  routed-expert prefill on tensor units; `qattn_t_g8s4k16` (`NI_QATTN_G8=0` opts out), 1.10x the 4-bit floor's
+  gate (mean KL 5.6e-4); and `qattn_t_g8d2s8` (#365, `NI_QATTN_D2=0` opts out), 1.27x (mean KL 6.5e-4).
+  Their floor is an older M4 Pro measurement, not a re-measurement of these M5 kernels. These historical results
+  do not waive the output check for a new change or authorize another default. Do not report an unchanged default
+  as a defect introduced by the PR; flag a new 35B comparison that uses the stale M4 Pro floor without saying so.
 - `tools/logit_floors/*.json` change only through `tools/logit_floor.py` (the file records its build, Mac and date), in
   a PR of their own: flag a floor or gate edited by hand, or loosened in the same PR as a change it lets pass.
 - A PR whose title or description says it was not verified on a GPU is fine; flag it only when the diff is a kernel or

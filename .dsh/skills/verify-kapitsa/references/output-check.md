@@ -47,19 +47,27 @@ Read the result:
 ## 2. Speed A/B
 
 Interleave the old and new builds on an idle GPU: A B A B, at least two of each. `kapitsa bench` takes the GPU lock
-itself. Each run is 3 to 15 minutes, so start the sequence with detach.py (~/.agents/AGENTS.md) and do not wait in
-a shell:
+itself. Each run is 3 to 15 minutes. Run the sequence in a persistent terminal and keep its log; no personal
+agent tools are required:
 
 ```bash
-cat > $E/ab.sh <<EOS
-set -e
+cat > "$E/ab.sh" <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+REF=$1
+NEW=$2
+M=$3
+E=$4
 for i in 1 2; do
-  KAPITSA_NO_AUTO_UPDATE=1 $REF/kapitsa bench --model $M --quick --json --out $E/bench-A\$i.json
-  KAPITSA_NO_AUTO_UPDATE=1 $PWD/build/kapitsa bench --model $M --quick --json --out $E/bench-B\$i.json
+  KAPITSA_NO_AUTO_UPDATE=1 "$REF/kapitsa" bench --model "$M" --quick --json --out "$E/bench-A$i.json"
+  KAPITSA_NO_AUTO_UPDATE=1 "$NEW/kapitsa" bench --model "$M" --quick --json --out "$E/bench-B$i.json"
 done
 EOS
-python3 ~/.agents/skills/session-orchestration/scripts/detach.py run --name vk-ab-$(basename $M) --cwd $PWD -- bash $E/ab.sh
+bash "$E/ab.sh" "$REF" "$PWD/build" "$M" "$E" > "$E/ab.log" 2>&1
 ```
+
+The command runs in the foreground. Keep the terminal open until it exits. A locally installed job runner may
+launch the same script instead, but is not part of the verification requirements.
 
 Report every run in order: decode tok/s, 4K prefill and follow-up TTFT for A1 B1 A2 B2. Report any run flagged for
 contention (another GPU app, low power, thermal state, swap) and rerun the pair. Do not drop it silently. A

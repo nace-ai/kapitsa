@@ -22,7 +22,8 @@ can submit the result as a community pull request. A run takes 3 to 15 minutes a
 ## Driving it with vk
 
 Preconditions: BN1 and BN6 need only `$V build`. BN2–BN5 need the task's GPU permission, an idle GPU (`$V doctor`
-shows the lock free) and a model folder. They run 3–15 minutes, so start them with detach.py (~/.agents/AGENTS.md).
+shows the lock free) and a model folder. Runs take 3 to 15 minutes. Run them in a persistent terminal.
+The [speed A/B example](../references/output-check.md#2-speed-ab) keeps the script and log without external job tools.
 
 | ID | Command | Observable result |
 | --- | --- | --- |

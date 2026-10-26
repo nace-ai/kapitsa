@@ -4,8 +4,8 @@
   gpu.py [--model NAME] [--chip M5] [--min-macos 26] [--json]
       Probe this Mac and every Mac in the hosts file (read-only: sysctl, vm_stat, lsof, ps over ssh), print each one's
       GPU lock holder and waiters (start time, declared ETA, detach.py job and its log's last line), free memory and
-      swap, and name the Mac expected to be free first. Advisory only: orchestrator priority wins, and a leg on
-      another Mac is launched there by the session that owns it.
+      swap, and name the Mac expected to be free first. This estimate does not reserve a GPU or authorize a run.
+      Coordinate remote runs with the machine's owner.
   gpu.py run --eta MIN [--label TEXT] [--cwd DIR] -- CMD...
       Queue CMD behind this Mac's GPU lock: record "started, ETA, label" in /tmp/kapitsa-gpu.queue/<pid>, then exec
       `lockf -k /tmp/kapitsa-gpu.lock CMD` with NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1, so tools that take the lock
@@ -13,7 +13,7 @@
       another holder or waiter, and never launches anything on another Mac.
 
 Hosts file: $VK_HOSTS, default ~/.config/verify-kapitsa/hosts, one Mac per line: `name user@host [socks=HOST:PORT]`
-(socks= when Tailscale runs in userspace mode, as on the orchestrator Mac: socks=localhost:1065).
+Use socks=HOST:PORT when SSH requires a SOCKS proxy, for example with userspace Tailscale.
 """
 import argparse, json, os, re, shlex, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
