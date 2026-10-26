@@ -1,6 +1,6 @@
 // The 8-row verify kernels (src/kernels/verify8.metal) on their own, for a model that is not Qwen35: the X8 table of
 // up to 8 rows (x8_prep2, an RMSNorm folded in) and the qmm8 GEMM over it, with the tiling and the inner loop
-// Qwen35's 8-row verify picks (v8_plan, V8Knobs). Flint's dense Llama (Nanbeige4.3) runs its 2-8 row passes on them.
+// Qwen35's 8-row verify picks (v8_plan, V8Knobs). Flint's dense Llama (Nanbeige4.3) runs its 3-8 row verify passes on them.
 #pragma once
 #include "metal/gpu.h"
 
