@@ -233,22 +233,12 @@ FlintConfig parse_llama(const nlohmann::json& j, std::string* why) {
   return c;
 }
 
+// The config alone: a plan folder (hub::plan_dir: config.json and the safetensors headers, no tokenizer files) reads
+// as a downloaded one does, and the chat template is checked where the model loads (Flint::llama_folder_unsupported)
 FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
   std::string why;
   FlintConfig c = parse_llama(j, &why);
   if (!why.empty()) fatal("%s: %s", dir.c_str(), why.c_str());
-  // the engine writes a Llama's turns in ChatML with Qwen's tool-call markup (Nanbeige4.3's template): another
-  // template's Llama (Llama 3's <|start_header_id|>) would be served the wrong markup
-  std::ifstream t(dir + "/chat_template.jinja");
-  std::stringstream ss;
-  ss << t.rdbuf();
-  std::string tmpl = ss.str();
-  if (tmpl.empty()) {
-    const nlohmann::json tc = read_json(dir + "/tokenizer_config.json");
-    if (tc.is_object() && tc.contains("chat_template") && tc["chat_template"].is_string()) tmpl = tc["chat_template"];
-  }
-  const std::string tw = Flint::llama_template_unsupported(tmpl);
-  if (!tw.empty()) fatal("%s: %s", dir.c_str(), tw.c_str());
   return c;
 }
 
@@ -260,6 +250,20 @@ std::string Flint::llama_unsupported(const std::string& config_json) {
   std::string why;
   parse_llama(j, &why);
   return why;
+}
+
+// the engine writes a Llama's turns in ChatML with Qwen's tool-call markup (Nanbeige4.3's template): another
+// template's Llama (Llama 3's <|start_header_id|>) would be served the wrong markup
+std::string Flint::llama_folder_unsupported(const std::string& dir) {
+  std::ifstream t(dir + "/chat_template.jinja");
+  std::stringstream ss;
+  ss << t.rdbuf();
+  std::string tmpl = ss.str();
+  if (tmpl.empty()) {
+    const nlohmann::json tc = read_json(dir + "/tokenizer_config.json");
+    if (tc.is_object() && tc.contains("chat_template") && tc["chat_template"].is_string()) tmpl = tc["chat_template"];
+  }
+  return llama_template_unsupported(tmpl);
 }
 
 std::string Flint::llama_template_unsupported(const std::string& chat_template) {
@@ -451,6 +455,8 @@ Flint::Flint(const std::string& path, int prefill_chunk) {
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   if (!is_model(path_)) fatal("%s: not a Flint checkpoint folder (config.json)", path.c_str());
   cfg_ = read_config(path_);
+  if (cfg_.llama)
+    if (const std::string tw = llama_folder_unsupported(path_); !tw.empty()) fatal("%s: %s", path_.c_str(), tw.c_str());
   Gpu::get().compile_extra("Flint", kFlintKernelSource);
   qmt_ = cfg_.bits == 4 && qmt_available();
   // a dense Llama's 8-bit and bf16 matrices on the same tile (qmt8_m64_n64, qmtf16_m64_n64), and its prefill attention

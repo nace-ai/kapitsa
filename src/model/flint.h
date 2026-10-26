@@ -86,6 +86,9 @@ class Flint : public Model {
   // what in a dense Llama's chat template (chat_template.jinja, else tokenizer_config.json's chat_template) Kapitsa does
   // not run ("" when it is ChatML, as Nanbeige4.3's): the engine writes a Llama's turns in that markup
   static std::string llama_template_unsupported(const std::string& chat_template);
+  // the chat template of a model folder (chat_template.jinja, else tokenizer_config.json's) checked as above: "" when it
+  // runs. Loading checks it; reading the config does not, so a plan folder (config and headers only) plans
+  static std::string llama_folder_unsupported(const std::string& dir);
   static MemPlan plan(const std::string& path, int prefill_chunk = 2048);
   // KV cache bytes per position (full-attention layers) and per conversation (sliding-window rings)
   static size_t kv_per_pos(const FlintConfig& c);

@@ -2009,6 +2009,22 @@ void llama_config_unit() {
                 .find("ChatML") != std::string::npos,
         "llama template: Llama 3's is refused");
   check(!Flint::llama_template_unsupported("").empty(), "llama template: none is refused");
+  // a plan folder (hub::plan_dir: config.json and the safetensors headers, no tokenizer files) reads as a config, and only
+  // loading asks for the template (#638: kapitsa doctor stopped on Nanbeige4.3's plan)
+  char tmpl_dir[] = "/tmp/kapitsa-llama-plan-XXXXXX";
+  if (mkdtemp(tmpl_dir)) {
+    const std::string d = tmpl_dir;
+    FILE* f = fopen((d + "/config.json").c_str(), "w");
+    if (f) fputs(ok.c_str(), f), fclose(f);
+    check(Flint::read_config(d).llama, "llama plan folder: the config reads without a chat template");
+    check(!Flint::llama_folder_unsupported(d).empty(), "llama plan folder: loading would still ask for the template");
+    f = fopen((d + "/chat_template.jinja").c_str(), "w");
+    if (f) fputs("{{ '<|im_start|>' + message['role'] + '\\n' }}", f), fclose(f);
+    check(Flint::llama_folder_unsupported(d).empty(), "llama folder: its ChatML template runs");
+    remove((d + "/chat_template.jinja").c_str());
+    remove((d + "/config.json").c_str());
+    rmdir(d.c_str());
+  }
 }
 
 int main(int argc, char** argv) {
