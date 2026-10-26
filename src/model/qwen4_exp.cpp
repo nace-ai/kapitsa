@@ -172,6 +172,15 @@ static bool hc_precomb(bool q20_pack) {
   return v ? strcmp(v, "0") != 0 : q20_pack;
 }
 
+// NI_PREFILL_GROUP: how many prefill chunks run as one layer-major group (1..8; the shipped default 4: groups
+// on). =1 keeps the chunks one at a time, as before, for the merge gate's ABAB legs and debugging alone - there
+// is no supported off posture: the gate losing closes the change unmerged rather than shipping it off. A value
+// outside 1..8 is ignored and the default 4 stands (a bad value warns like NI_PRED_ALL_MIN's does); the group's
+// per-chunk slots cost the plan (MemPlan::group_slots, kept out of `activations`) exactly what they cost the
+// allocation (alloc4_group) - one formula, q20::group_slot_bytes - and the store-world choice (q20::group_world:
+// Qwen4Exp::init_store runs it live, ni::planned_group_world predicts it before a load) charges them only while
+// the streamed store is incomplete (an all-resident model never groups, q20::group_chunks). Defined below,
+// after env_rows.
 static int prefill_group_env();
 
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split, int planned_ctx,

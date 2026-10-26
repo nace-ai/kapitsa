@@ -350,6 +350,14 @@ void case_auto_size() {
   setenv("NI_EXPERT_KV_POS", "-3", 1);
   CHECK(auto_store_kv(1000, 4096, 1) == 1000 * 4096, "auto: kv positions negative ignored");
   unsetenv("NI_EXPERT_KV_POS");
+  // the share path (src/cluster/stage.cpp load_share): a stage holds two 32K-token conversations and builds its
+  // Qwen4Exp on that plan (planned context 32768, two slots), so on a Mac where the system's available memory binds
+  // before the budget the guard reserves the KV term `keep` subtracts from the budget as well
+  in.kv = auto_store_kv(per, 32768, 2);
+  CHECK(in.kv == per * 65536, "auto: share kv %zu", in.kv);
+  r = auto_store_size(in);
+  CHECK(r.why == AutoStoreWhy::Avail && r.bytes == in.avail - (size_t(4) << 30) - in.kv, "auto: share avail %zu",
+        r.bytes);
   // the reason line (the engine's log and kapitsa doctor print it) and its JSON name, one per reason
   in = AutoStoreIn{};
   in.all = 24576 * slot, in.least = 3 * 512 * slot, in.left = size_t(29.9 * GB), in.used = size_t(5.3 * GB);

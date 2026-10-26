@@ -211,7 +211,6 @@ class Qwen4Exp : public Qwen35 {
   q20::Experts q20_rows_fetch(Encoder& e, const Layer& L, int R, const Buffer& idx, bool pred);
   void init_store(const std::string& dir);
   size_t mem_budget_arg_ = 0;
-
   // the seam-wrap gate: q20_fetch reads the store's layer 0 ahead at a chunk's last layer only while this is set,
   // and encode_prefill sets it around enc_prefill_layers to q20::seam_wraps(sample) - every chunk but the prompt's
   // last (the engine sets `sample` on exactly that chunk); q20_fetch's choice itself is q20::seam_next_layer, the

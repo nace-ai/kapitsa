@@ -60,7 +60,12 @@ bool load_share(Share& sh, const StageOptions& o, int lo, int hi, std::string* w
     o.status("loading layers " + std::to_string(lo + 1) + "-" + std::to_string(hi) + " (" +
              std::to_string(int(mp.weights / 1e8) / 10.0).substr(0, 4) + " GB)");
   sh.m.reset();
-  sh.m = std::make_unique<Qwen4Exp>(o.model_dir, o.chunk, size_t(std::max(1.0, o.mem - keep)));
+  // The two 32K conversations go to the store as its plan as well: subtracting `keep` from the budget only bounds
+  // the guard from `left`, and on a Mac where the system's available memory binds instead, a share's store sized
+  // without the plan took the headroom its own conversations have to allocate into (the same overshoot the engine's
+  // start plan avoids). The guard's reserve is then `keep`'s own KV term: kv_per_pos times min(32768, the budget's
+  // 32K keep window) times the two slots (q20::auto_store_kv).
+  sh.m = std::make_unique<Qwen4Exp>(o.model_dir, o.chunk, size_t(std::max(1.0, o.mem - keep)), nullptr, 32768, 2);
   sh.m->set_mem_budget(size_t(o.mem));
   sh.lo = lo;
   sh.hi = hi;
