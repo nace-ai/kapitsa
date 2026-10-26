@@ -3,6 +3,7 @@
 #include "gguf/quant.h"
 #include "model/iq_experts.h"
 #include "model/kparams.h"
+#include "model/v8.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -461,6 +462,11 @@ Flint::Flint(const std::string& path, int prefill_chunk) {
   // qmt_m64_n64's); the 8-bit tile 128 rows tall with X read in place; NI_FLINT_QMTS=0 keeps the plain order
   const char* qs = getenv("NI_FLINT_QMTS");
   qmts_ = qmtw_ && !(qs && !strcmp(qs, "0"));
+  // a dense Llama's passes of 3-8 rows (verify, prompt lookup, a short prompt's rows) on the 8-row verify kernels, one
+  // weight read for every row: an 8-row verify 141 -> 51 ms on Nanbeige4.3's 4-bit pack (decode 35); NI_FLINT_V8=0
+  // keeps the decode rows' matvecs, one weight read per row
+  const char* v8 = getenv("NI_FLINT_V8");
+  v8_ = cfg_.llama && !(v8 && !strcmp(v8, "0"));
   split_ = split_merges();
   if (split_) logi("Flint: the decode kernels' merges in dispatches of their own (NI_FLINT_SPLIT)");
   if (qmt_ || qmtw_) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
@@ -706,6 +712,13 @@ void Flint::alloc_buffers() {
   memset(rcnt_.ptr(), 0, 16);
   acnt_ = g.alloc(size_t(std::max(c.hkv, 4)) * 4, "flint_attn_arrivals");
   memset(acnt_.ptr(), 0, acnt_.size);
+  if (v8_) {
+    const size_t W = std::max({D, QD, size_t(std::max(c.ffn, 1))});
+    v8t_ = g.alloc(W * 8 * 2, "flint_x8_table");
+    v8s_ = g.alloc(W / 64 * 8 * 4, "flint_x8_sums");
+    v8g_ = g.alloc(R * size_t(std::max(c.ffn, 1)) * 4, "flint_x8_gate");
+    v8u_ = g.alloc(R * size_t(std::max(c.ffn, 1)) * 4, "flint_x8_up");
+  }
 }
 
 void Flint::alloc_prefill() {
@@ -919,6 +932,7 @@ void Flint::enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, in
   const int bits = segs[0].M->bits;
   const uint32_t K = segs[0].M->K;
   if (bits == 16) return enc_mv_bf16(e, segs, x, R, norm, y_ld, gu);
+  if (v8_ && R >= 3 && (bits == 4 || bits == 8) && K % 256 == 0) return enc_mv_v8(e, segs, x, R, norm, y_ld, gu);
   for (const Seg& s : segs)  // 4/8-bit group 64, or one 6-bit matrix (a GGUF import's LM head, qmvf_b6)
     if (s.M->bits != bits || s.M->K != K || (bits != 4 && bits != 8 && !(bits == 6 && segs.size() == 1 && !gu)) ||
         s.M->gs != 64)
@@ -958,6 +972,33 @@ void Flint::enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, in
   e.buf(18, norm ? norm->buf : x);
   e.buf(19, x);
   e.dispatch(uint32_t(R), tg, 1, 32 * uint32_t(nsg));
+}
+
+void Flint::enc_mv_v8(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
+                      uint32_t y_ld, bool gu) {
+  const uint32_t K = segs[0].M->K;
+  const int bits = segs[0].M->bits;
+  for (const Seg& sg : segs)
+    if (sg.M->bits != bits || sg.M->K != K || sg.M->gs != 64) fatal("Flint: 8-row matvec segments of mixed formats");
+  v8_enc_x8(e, x, R, int(K), norm ? &norm->buf : nullptr, cfg_.eps, v8t_, v8s_);
+  auto seg = [&](const Seg& sg, const Buffer& y, uint32_t ld, bool add) {
+    return V8Seg{&sg.M->w->buf, &sg.M->s->buf, &sg.M->b->buf, sg.M->N, y, ld, add};
+  };
+  if (gu) {  // gate and up rows, then h = silu(gate) * up into segment 0's y [R][N]
+    const uint32_t N = segs[0].M->N;
+    v8_enc_qmm8(e, {seg(segs[0], v8g_, N, false), seg(segs[1], v8u_, N, false)}, R, K, bits, v8t_, v8s_);
+    const uint32_t n = uint32_t(R) * N;
+    e.use(pipe("swiglu_f32"));
+    e.buf(0, v8g_);
+    e.buf(1, v8u_);
+    e.buf(2, segs[0].y);
+    e.val(3, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+    return;
+  }
+  std::vector<V8Seg> v;
+  for (const Seg& sg : segs) v.push_back(seg(sg, sg.y, y_ld ? y_ld : sg.M->N, sg.add));
+  v8_enc_qmm8(e, v, R, K, bits, v8t_, v8s_);
 }
 
 void Flint::enc_mv_bf16(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
