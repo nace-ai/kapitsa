@@ -42,6 +42,13 @@ CASES = [  # path, tier, models (None = no model run; "shared" = the 4B and the 
     ("tools/ni_run.cpp", 1, "shared"),
     ("tools/bench_test.cpp", 0, None),
     ("tools/logit_compare.py", 0, None),
+    ("tools/tokenizer_test.cpp", 0.5, None),
+    ("tools/tokenizer_test2.cpp", 0.5, None),
+    ("tests/data/nanbeige43_tokenizer.json", 0.5, None),
+    ("tests/nanbeige43_tokenizer_fixture.py", 0.5, None),
+    ("tests/tokenizer_fixtures/qwen3.6.json", 0.5, None),
+    # the rule is narrow: another fixture under tests/ is not swept in
+    ("tests/data/logit_rows.json", 1, "shared"),
 ]
 
 bad = 0
