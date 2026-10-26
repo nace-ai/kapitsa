@@ -174,12 +174,21 @@ static bool hc_precomb(bool q20_pack) {
   return v ? strcmp(v, "0") != 0 : q20_pack;
 }
 
+// NI_PREFILL_GROUP: how many prefill chunks run as one layer-major group (2..8; default 1: the chunks one at a
+// time, as shipped). A value outside 2..8 is ignored and the chunk path stays (a bad value warns like
+// NI_PRED_ALL_MIN's does); the group's per-chunk slots cost the plan (qwen4_act_bytes) what they cost alloc4.
+// Defined below, after env_rows.
+static int prefill_group_env();
+
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
     : Qwen35(dir, prefill_chunk, NoLoad{}), mem_budget_arg_(mem_budget) {
   const Split& sp = split ? *split : process_split();
   lo_ = sp.lo;
   hi_ = sp.hi;  // (-1: load_config's, every layer)
   remote_ = sp.remote;
+  // a split model's head hops mid-pass and a stage runs passes it does not own: neither groups (alloc4 must know
+  // before load, which calls it, and prefill_group() gates the engine on the same condition)
+  prefill_group_ = remote_ || lo_ != 0 ? 1 : prefill_group_env();
   load(dir);
 }
 
@@ -491,15 +500,18 @@ void Qwen4Exp::load_mtp4(const std::string& dir) {
 
 // Buffers beside Qwen35's (alloc_state): the 4-stream residual replaces x_, the mix's scratch, the indexer's rows,
 // the n-gram rows. qwen4_act_bytes (plan) adds up the same.
-static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, int T, int maxv, bool mtp) {
+static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, int T, int maxv, bool mtp,
+                              int group = 1) {
   const size_t D = size_t(c.hidden), SD = size_t(c4.hc) * D, Tz = size_t(T), V = size_t(maxv), R = size_t(c4.hc_rank);
   const size_t IQ = size_t(c4.ix_heads + 1) * c4.ix_dim;
+  const size_t G = size_t(std::max(1, group));  // NI_PREFILL_GROUP: the chunks' slots and the second staging set
   return Tz * SD * 4 - Tz * D * 4  // x_ grows from [T, D] to [T, S*D]
          + Tz * D * 4 + 2 * Tz * c4.hc * 4 + V * SD * 4 + Tz * SD * 2 + Tz * R * 4 + Tz * R * 2 + Tz * SD * 4 +
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
          + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
-         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4;  // the one-row gated residual's row, hc_down_sk's partials
+         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4  // the one-row gated residual's row, hc_down_sk's partials
+         + (G - 1) * (Tz * SD * 4 + Tz * D * 4 + 2 * Tz * c4.hc * 4 + 2 * Tz * D * 2);  // group slots, staging
 }
 
 void Qwen4Exp::alloc4() {
@@ -522,6 +534,20 @@ void Qwen4Exp::alloc4() {
   ple_k_ = g.alloc(T * SD * 4, "ple_key");
   ple_v_ = g.alloc(T * D * 4, "ple_value");
   for (Buffer& b : ple_pf_) b = g.alloc(T * D * 2, "ple_rows");
+  // layer-major groups (NI_PREFILL_GROUP): the chunks' x_ / yb_ / injA_ / injM_ slots, swapped into the members per
+  // turn, and two sets of G n-gram stagings (the host gathers group g + 1's rows while the GPU runs g)
+  if (prefill_group_ >= 2) {
+    const size_t G = size_t(prefill_group_);
+    xg_.resize(G), yg_.resize(G), injAg_.resize(G), injMg_.resize(G), ple_pfg_.resize(2 * G);
+    for (size_t c = 0; c < G; ++c) {
+      xg_[c] = g.alloc(T * SD * 4, "x4g");
+      yg_[c] = g.alloc(T * D * 4, "block_outg");
+      memset(yg_[c].ptr(), 0, yg_[c].size);  // accumulated into, as yb_
+      injAg_[c] = g.alloc(T * c4_.hc * 4, "inject_ag");
+      injMg_[c] = g.alloc(T * c4_.hc * 4, "inject_mg");
+    }
+    for (Buffer& b : ple_pfg_) b = g.alloc(T * D * 2, "ple_rowsg");
+  }
   for (Buffer& b : ple_dec_) b = g.alloc(V * D * 4, "ple_rows_decode");
   hpart_ = g.alloc((SD / 1024 + 1) * V * R * 2 * 4, "hc_part");
   hx2_ = g.alloc(V * SD * 4, "hc_rows");
@@ -839,6 +865,14 @@ int env_rows(const char* name, int def) {
 }
 }  // namespace
 
+static int prefill_group_env() {
+  static const int g = [] {
+    const int v = env_rows("NI_PREFILL_GROUP", 1);
+    return v >= 2 && v <= 8 ? v : 1;
+  }();
+  return g;
+}
+
 // a prefill chunk's MoE: a chunk of 64+ rows routes most of the next layer's experts, so every one of them not in
 // memory is read during this layer; shorter ones only read what they route
 q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
@@ -867,7 +901,11 @@ q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, 
   // NI_SCAN_MIN: the shortest chunk whose sweep leaves the recency order alone (default 16, the constant it replaces).
   static const int scan_min = env_rows("NI_SCAN_MIN", 16);
   const bool all = T >= pred_all_min && nl >= 0;
-  store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > scan_min);
+  // group_floor_ (#624): inside a layer-major group a visit's sweep may only evict keys below its own layer's index,
+  // so the keys the group's later turns still read stay; -1 (the chunk path, and a group's wrapping last visit)
+  // leaves the sweep's victim rule as shipped
+  store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > scan_min, /*warm=*/false,
+                group_floor_);
   if (between) between();
   store_->end(e);
   return store_->experts(li - lo_);
@@ -1543,36 +1581,46 @@ void Qwen4Exp::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp
   ple_after_sample(e, s, pos + 1);
 }
 
+// One layer's prefill block over one chunk: the n-gram block on its layer, the gated residual, the token mixer, the
+// MoE and the capture hook. The chunk loop below runs it per layer; the layer-major group path (encode_prefill_group)
+// runs it per visit and chunk, with the chunk's state swapped into the members.
+void Qwen4Exp::enc_prefill_layer(Encoder& e, Seq& s, int i, int pos0, int T, const Buffer& rows, Checkpoint* snap,
+                                 int snap_row) {
+  const Layer& L = layers_[size_t(i)];
+  const Qwen4Layer& F = l4_[size_t(i)];
+  if (i == c4_.ple_layer) {
+    if (i > 0) enc_inject(e, T, x_, injM_);
+    enc_ple_prefill(e, s, T, pos0, rows, snap, snap_row);
+  }
+  enc_gr_prefill(e, F.ga, T, x_, i > 0 && i != c4_.ple_layer, injM_, injA_);
+  if (L.linear) {
+    enc_proj(e, {{&L.qkv, qkv_, false}, {&L.z, zb_, false}, {&L.b, bb_, false}, {&L.a, ab_, false}}, xh_, T);
+    enc_gdn_prefill_par(e, s, i, L, T, snap, snap_row);
+    enc_qmm(e, L.out, hh_, yb_, T, false);
+  } else {
+    enc_attn4_prefill(e, s, i, L, F, pos0, T);
+  }
+  enc_gr_prefill(e, F.gm, T, x_, true, injA_, injM_);
+  // NI_HC_PRECOMB: fold this MoE's combine sum into layer i + 1's gated residual only when nothing
+  // reads yb_ in between — no armed capture of this layer, and no PLE boundary, debug cut or final
+  // layer after it (those consume yb_ through enc_inject / enc_hop) — and the kernel's threadgroup
+  // sum fits: one float4 per thread of the row's 1024, so D % 4 == 0 and D / 4 <= 992 (D <= 3968).
+  // A layer-major group never arms it: the next layer's residual there is another visit's turn, whose
+  // chunk state has moved on (in_group_).
+  precomb_arm_ = !in_group_ && hc_precomb(q20_pack_) && i + 1 < hi_ && i + 1 != dbg_layers_ && i + 1 != c4_.ple_layer &&
+                 cfg_.hidden % 4 == 0 && cfg_.hidden <= 3968 && capture_noop(i, pos0, T);
+  enc_moe_prefill(e, L, T, yb_, /*xh_ready=*/true);
+  precomb_arm_ = false;
+  enc_capture4(e, i, pos0, T);
+  // a command buffer per layer of a long chunk (~1/48 of it), so the desktop's own GPU work is not held up
+  if (T >= 256 && i + 1 < cfg_.layers) e.split();
+}
+
 void Qwen4Exp::enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buffer& rows, Checkpoint* snap,
                                   int snap_row) {
   for (int i = lo_; i < hi_; ++i) {
-    const Layer& L = layers_[size_t(i)];
-    const Qwen4Layer& F = l4_[size_t(i)];
     if (i == dbg_layers_) break;
-    if (i == c4_.ple_layer) {
-      if (i > 0) enc_inject(e, T, x_, injM_);
-      enc_ple_prefill(e, s, T, pos0, rows, snap, snap_row);
-    }
-    enc_gr_prefill(e, F.ga, T, x_, i > 0 && i != c4_.ple_layer, injM_, injA_);
-    if (L.linear) {
-      enc_proj(e, {{&L.qkv, qkv_, false}, {&L.z, zb_, false}, {&L.b, bb_, false}, {&L.a, ab_, false}}, xh_, T);
-      enc_gdn_prefill_par(e, s, i, L, T, snap, snap_row);
-      enc_qmm(e, L.out, hh_, yb_, T, false);
-    } else {
-      enc_attn4_prefill(e, s, i, L, F, pos0, T);
-    }
-    enc_gr_prefill(e, F.gm, T, x_, true, injA_, injM_);
-    // NI_HC_PRECOMB: fold this MoE's combine sum into layer i + 1's gated residual only when nothing
-    // reads yb_ in between — no armed capture of this layer, and no PLE boundary, debug cut or final
-    // layer after it (those consume yb_ through enc_inject / enc_hop) — and the kernel's threadgroup
-    // sum fits: one float4 per thread of the row's 1024, so D % 4 == 0 and D / 4 <= 992 (D <= 3968).
-    precomb_arm_ = hc_precomb(q20_pack_) && i + 1 < hi_ && i + 1 != dbg_layers_ && i + 1 != c4_.ple_layer &&
-                   cfg_.hidden % 4 == 0 && cfg_.hidden <= 3968 && capture_noop(i, pos0, T);
-    enc_moe_prefill(e, L, T, yb_, /*xh_ready=*/true);
-    precomb_arm_ = false;
-    enc_capture4(e, i, pos0, T);
-    // a command buffer per layer of a long chunk (~1/48 of it), so the desktop's own GPU work is not held up
-    if (T >= 256 && i + 1 < cfg_.layers) e.split();
+    enc_prefill_layer(e, s, i, pos0, T, rows, snap, snap_row);
   }
 }
 
@@ -1607,6 +1655,63 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
     ple_after_sample(e, s, pos0 + T);
   }
   if (snap) snap->pos = pos0 + snap_row;
+}
+
+// A layer-major prefill group (NI_PREFILL_GROUP): every layer visits every chunk of the group before the next layer
+// runs, so the store reads a layer's experts once per group instead of once per chunk, and the chunk seams inside
+// the group disappear (only the group's last visit wraps to layer 0, for whatever runs next). A visit's sweep admits
+// layer i + 1 for every chunk and passes pred_floor i (#624), so the sweep cannot evict keys the visit's later turns
+// still read; the last visit wraps with no floor, exactly like a chunk's seam wrap. The chunks' state (x_ / yb_ /
+// injA_ / injM_) lives in per-chunk slots swapped into the members per turn - Metal binds buffers at encode time -
+// and the GDN recurrences and the KV advance in place because a visit's chunks run in position order. The engine
+// only forms plain groups (no checkpoint inside a chunk, no split rerun, no image or grammar rows, never the pass's
+// last chunk), so there is no snapshot, no sample and no precomb here.
+void Qwen4Exp::encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) {
+  if (nc < 2 || nc > prefill_group_) fatal("prefill group of %d chunks (NI_PREFILL_GROUP=%d)", nc, prefill_group_);
+  if (remote_ || lo_ != 0 || dbg_layers_ >= 0) fatal("prefill group on a split or debug model");
+  if (s.embeds || s.mask_rows) fatal("prefill group over image or grammar rows");
+  int total = 0;
+  for (int c = 0; c < nc; ++c) {
+    if (Ts[c] <= 0 || Ts[c] > tmax_) fatal("prefill group chunk %d: %d rows (max %d)", c, Ts[c], tmax_);
+    total += Ts[c];
+  }
+  if (pos0 + total >= s.cap) fatal("context full (%d)", s.cap);
+  const GroupSave saved = group_save();
+  in_group_ = true;
+  // prologue: gather every chunk's n-gram rows (two sets of staging alternate by group parity: the host gathers
+  // group g + 1's rows while the GPU runs g, and the engine waits g - 1 before g + 1 starts) and encode each
+  // chunk's embed + expand into its own slots
+  group_parity_ ^= 1;
+  const size_t set = size_t(group_parity_ & 1) * size_t(prefill_group_);
+  Buffer grow[8];
+  int pos = pos0;
+  for (int c = 0; c < nc; ++c) {
+    if (c4_.ple_layer >= 0) {
+      grow[c] = ple_pfg_[set + size_t(c)];
+      gather_rows(s.tokens(), pos, Ts[c], grow[c].ptr(), true);
+    }
+    group_swap(c);
+    enc_embed(e, s.tok, pos, Ts[c], yb_);
+    enc_expand(e, Ts[c]);
+    pos += Ts[c];
+  }
+  // visits: layer i over the chunks in position order (the GDN recurrences and the KV advance in place), then
+  // layer i + 1. A group is never a pass's last chunk, so its last visit wraps to layer 0 (seam_more_).
+  seam_more_ = true;
+  for (int i = lo_; i < hi_; ++i) {
+    group_floor_ = i + 1 < hi_ ? i - lo_ : -1;  // #624: this visit's keys stay out of its sweep's victim set
+    int cpos = pos0;
+    for (int c = 0; c < nc; ++c) {
+      group_swap(c);
+      enc_prefill_layer(e, s, i, cpos, Ts[c], grow[c], nullptr, 0);
+      cpos += Ts[c];
+    }
+  }
+  seam_more_ = false;
+  group_floor_ = -1;
+  in_group_ = false;
+  group_restore(saved);
+  if (comb_pending_.active) fatal("hc_precomb: a pending combine outlived a prefill group");
 }
 
 // ---- a model split across Macs by layers ----
@@ -1845,7 +1950,8 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
   }
   // buffers: Qwen35's for this config (x_ widened, the MTP rows) plus the hyper-connection / indexer / n-gram ones
   for (const ActBuf& a : act_layout(c, chunk, kMaxVerify, m.mtp > 0, size_t(kMaxVerify))) m.activations += a.bytes;
-  m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0);
+  m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0,
+                                   sp.remote || sp.lo != 0 ? 1 : prefill_group_env());
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
   int lin = 0, att = 0;
   for (int i = lo; i < hi; ++i) (c.is_linear[size_t(i)] ? lin : att) += 1;

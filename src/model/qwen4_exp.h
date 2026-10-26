@@ -121,6 +121,11 @@ class Qwen4Exp : public Qwen35 {
   void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) override;
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
+  // layer-major prefill groups (NI_PREFILL_GROUP; model.h): G chunks share the per-layer expert reads; the chunks
+  // must be plain (engine.cpp only forms such groups: no mid-chunk checkpoint, no split rerun, no image/grammar
+  // rows, not the pass's last chunk). 1 - and the chunk path stays - on a split or debug model.
+  int prefill_group() const override { return dbg_layers_ < 0 && !remote_ ? prefill_group_ : 1; }
+  void encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) override;
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   // speculative decoding (qwen4_exp_spec.cpp)
   int default_spec_depth() const override { return 2; }
@@ -131,6 +136,7 @@ class Qwen4Exp : public Qwen35 {
                      bool v8 = false) override;
   void encode_flush(Encoder& e, Seq& s) override;
   void encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0) override;
+  void encode_mtp_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) override;
   std::string formats_summary() const override;
   bool block_drafter_ok() const override { return false; }
 
@@ -199,6 +205,18 @@ class Qwen4Exp : public Qwen35 {
   // wraps too; decode follows only a draft's fill, where the sweep then costs one layer's read ahead of the first
   // draft token - bounded, read-ahead only, and off the prompt paths.
   bool seam_more_ = false;
+  // layer-major prefill groups (NI_PREFILL_GROUP=G, 2..8; default 1: the chunks one at a time). The G chunks' state
+  // - the residual x_, the block output yb_, the injection weights injA_ / injM_ - lives in per-chunk slots (xg_
+  // etc., alloc4) swapped into the members per turn, because Metal binds buffers at encode time; group_swap /
+  // group_restore do the swap. group_floor_ is the sweep floor (#624) a visit passes to the store - its own layer's
+  // index, so a visit's sweep cannot evict keys the group's later turns still need; -1 at the wrapping last visit
+  // and outside groups. in_group_ keeps NI_HC_PRECOMB off inside a group (its pending combine folds into the next
+  // layer's gated residual, which crosses turns under grouping). group_parity_ alternates the two sets of n-gram row
+  // staging (ple_pfg_): the host gathers group g + 1's rows while the GPU runs g.
+  int prefill_group_ = 1;
+  int group_parity_ = 0;
+  int group_floor_ = -1;
+  bool in_group_ = false;
   // DFlash2 capture of layer `layer`'s output rows [pos0, pos0 + R): their 4 streams' mean (stream_mean)
   void enc_capture4(Encoder& e, int layer, int pos0, int R);
   // whether layer `layer`'s enc_capture4 skips (its early-returns exactly): the NI_HC_PRECOMB fold gate
@@ -250,6 +268,26 @@ class Qwen4Exp : public Qwen35 {
   // ticket: the n-gram rows (the head's)
   void enc_step_layers(Encoder& e, Seq& s, int pos, const PleWait& pw);
   void enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buffer& rows, Checkpoint* snap, int snap_row);
+  // one layer's prefill block over one chunk (the loop body above; the group path calls it per visit and chunk)
+  void enc_prefill_layer(Encoder& e, Seq& s, int i, int pos0, int T, const Buffer& rows, Checkpoint* snap,
+                         int snap_row);
+  // a group's turn binds chunk c's slots to the members the encode functions read; save/restore brackets the group
+  struct GroupSave {
+    Buffer x, yb, injA, injM;
+  };
+  GroupSave group_save() const { return {x_, yb_, injA_, injM_}; }
+  void group_swap(int c) {
+    x_ = xg_[size_t(c)];
+    yb_ = yg_[size_t(c)];
+    injA_ = injAg_[size_t(c)];
+    injM_ = injMg_[size_t(c)];
+  }
+  void group_restore(const GroupSave& sv) {
+    x_ = sv.x;
+    yb_ = sv.yb;
+    injA_ = sv.injA;
+    injM_ = sv.injM;
+  }
   void enc_verify_layers(Encoder& e, Seq& s, int pos, int R, const Buffer& rows, uint64_t ticket);
   // The head of a split model: layers [hi_, layers) of the pass on the other Macs (remote_), its rows' state out of and
   // back into x_ / yb_ / injM_; it waits on the CPU (the pass so far committed, the rest encoded once the rows are
@@ -286,6 +324,9 @@ class Qwen4Exp : public Qwen35 {
   Buffer iqk_, iq_;           // indexer projection [T, 640], queries [T, heads, dim]
   Buffer ple_k_, ple_v_;      // n-gram key [T, hc*hidden] (also gvn), value [T, hidden]
   Buffer ple_pf_[2];          // prefill staging (half [T, hidden]), alternating chunks
+  // layer-major groups (NI_PREFILL_GROUP >= 2; alloc4): the chunks' x_ / yb_ / injA_ / injM_ slots, and two sets of
+  // G n-gram stagings (the host gathers group g + 1 while the GPU runs g)
+  std::vector<Buffer> xg_, yg_, injAg_, injMg_, ple_pfg_;
   Buffer ple_dec_[4];         // decode / verify staging (fp32 [kMaxVerify, hidden]), a ring
   Buffer mtpX_;               // the MTP head's 4-stream state [T, hc*hidden] (mtp_post_: its rows after the layer)
   Buffer qscore_, qidx_, qcnt_;  // sparse attention: block scores [rows, blocks], key lists [rows, i_ld], counts

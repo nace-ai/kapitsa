@@ -2660,6 +2660,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // The last two chunks' command buffers (committed): at most two chunks run ahead of the host, so a request that
   // arrives during a long prefill is seen within a chunk (encoding is far faster than the GPU: a 20K prompt's chunks
   // would all be queued in milliseconds). The GPU still always has the next chunk queued.
+  // NI_PREFILL_GROUP: how many plain chunks the model runs as one layer-major group (1: the chunks one at a time,
+  // as shipped; the engine's own cap keeps Ts[] below in bounds)
+  const int pgroup = std::min(model_->prefill_group(), 8);
   std::unique_ptr<Encoder> last, last2;
   while (p < n) {
     if (last2) {
@@ -2744,7 +2747,36 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
       model_->save(*e, s, *ane_ck_, p);
     }
-    if (vpf) {
+    // NI_PREFILL_GROUP: the next pgroup chunks as one layer-major group, when every one of them is plain - no
+    // checkpoint or split inside one, no image rows or grammar mask (the group path has no snapshot and no
+    // sample), and none of them the pass's last chunk (that one samples and runs alone). A save point
+    // (pbound / boundary) inside a chunk cuts it and ends the walk; one at a chunk's end is fine as the
+    // group's end - the saves below run after the group, whose state is the state after its last chunk - so
+    // the walk stops there rather than make it an inner end, where the post-group save would capture the
+    // wrong GDN/KV state. Under two plain chunks the walk yields nothing and the chunk path runs.
+    int Ts[8];
+    int nc = 0;
+    if (pgroup >= 2 && !s.embeds && s.mask_rows == 0) {
+      const bool even = prefill_even_chunks() && !model_->ane_split_on();
+      int pos = p;
+      while (nc < pgroup && pos < n) {
+        const int Tc = prefill_chunk_rows(C, pos, n, even);
+        if (pos + Tc == n) break;  // the pass's last chunk: it samples and runs alone
+        if (model_->ane_splits(Tc)) break;
+        if ((pbound > pos && pbound < pos + Tc) || (boundary > pos && boundary < pos + Tc)) break;
+        Ts[nc++] = Tc;
+        pos += Tc;
+        if (pbound == pos || boundary == pos) break;  // a save at this end: the group's, never an inner one
+      }
+      if (nc < 2) nc = 0;
+    }
+    if (nc >= 2) {
+      model_->encode_prefill_group(*e, s, p, Ts, nc);
+      // the MTP history: every group row's next token is known (the group is never the pass's last chunk)
+      if (spec_) q35_->encode_mtp_prefill_group(*e, s, p, Ts, nc);
+      T = 0;
+      for (int c = 0; c < nc; ++c) T += Ts[c];  // the common tail below: p += T, the saves, the commit
+    } else if (vpf) {
       int q = p;
       // the suffix's rows [q, upto) as verify passes: as many rows a pass as NI_VPF_ROWS gave the target's verify (32, 24
       // or 16), and 8 for what is left under 16
@@ -2776,7 +2808,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     const bool defer = !vpf && spec_ && mtp_defer && !split && p + T == n;
-    if (!vpf && spec_ && !defer) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    if (nc < 2 && !vpf && spec_ && !defer) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
     if (defer) {
       mtp_e = g.begin();
       q35_->encode_mtp_prefill(*mtp_e, s, p, std::min(p + T, n - 1) - p, 0);

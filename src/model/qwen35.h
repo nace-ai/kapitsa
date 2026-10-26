@@ -347,6 +347,9 @@ class Qwen35 : public Model {
   // MTP history for prompt rows [pos0, pos0 + R) using the trunk hidden states of the last
   // prefill chunk (row offset h_row0 in hidden_rows()); tokens[i + 1] must be known.
   virtual void encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0);
+  // MTP history of a layer-major prefill group's chunks (model.h's prefill_group; Qwen4Exp swaps each chunk's state
+  // in). Base: the chunks one at a time.
+  virtual void encode_mtp_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc);
   const int* samples() { return samp_.as<int>(); }
   // MoE models, after an 8-row verify: distinct routed experts of each layer (0 for dense layers)
   const uint32_t* verify8_experts() { return v8ustat_ ? v8ustat_.as<uint32_t>() : nullptr; }

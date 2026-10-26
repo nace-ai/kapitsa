@@ -150,6 +150,22 @@ class Model {
                               bool sample, Checkpoint* snap = nullptr, int snap_row = 0) = 0;
   virtual int prefill_chunk() const = 0;
   virtual bool can_snapshot() const = 0;
+  // ---- layer-major prefill groups (NI_PREFILL_GROUP; Qwen4Exp with a streamed-expert store) ----
+  // How many prefill chunks may run as one group: every layer visits every chunk of the group before the next layer
+  // runs, so a streamed layer's experts are read once per group instead of once per chunk. 1 (every model but
+  // Qwen4Exp, and Qwen4Exp by default): chunks run one at a time, as before.
+  virtual int prefill_group() const { return 1; }
+  // Encodes one group: the chunks Ts[0..nc) at pos0 into e (the caller commits and advances). Called only when
+  // prefill_group() >= 2 and every chunk is plain - no checkpoint inside one, no split rerun, no image rows or
+  // grammar mask, and none of them the pass's last chunk (that one samples) - so there is no SamplingParams and no
+  // snapshot here; tokens[pos0 .. pos0 + sum(Ts)) are known. Base: the chunks one at a time.
+  virtual void encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) {
+    int pos = pos0;
+    for (int c = 0; c < nc; ++c) {
+      encode_prefill(e, s, pos, Ts[c], SamplingParams{}, 0, /*sample=*/false);
+      pos += Ts[c];
+    }
+  }
   // A model split across Macs (src/cluster/pipe.h): why its other Macs no longer answer ("" while they do). Once it is
   // set, passes still complete but their outputs are garbage: the engine ends the request with it.
   virtual std::string lost() const { return ""; }
