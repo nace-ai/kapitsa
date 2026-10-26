@@ -773,12 +773,15 @@ int run(const Options& o) {
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
-  // (a dense Llama runs on Flint's backend: Nanbeige4.3, with its own tokenizer's counts and the default settings)
+  // (a dense Llama runs on Flint's backend with the default settings; Nanbeige4.3's tokenizer, its 166,912-token
+  // vocabulary, has the counts of its own, another Llama's tokenizer none)
   const ojson cj = ojson::parse(read_file(ref.dir + "/config.json"), nullptr, false);
   const bool llama = Flint::is_model(ref.dir) && cj.is_object() && cj.value("model_type", std::string()) == "llama";
+  const bool nanbeige = llama && cj.value("vocab_size", 0) == 166912;
   const bool flint = Flint::is_model(ref.dir) && !llama;
-  s.ref_prompt_tokens = reference_prompt_tokens(flint   ? "flint"
-                                                : llama ? "nanbeige"
+  s.ref_prompt_tokens = reference_prompt_tokens(flint      ? "flint"
+                                                : nanbeige ? "nanbeige"
+                                                : llama    ? "llama"
                                                 : NemotronH::is_model(ref.dir) || Dory::is_model(ref.dir) ? "nemotron-h"
                                                                                                           : "qwen3.5");
   if (flint) {  // as configs/flint.json: its card's temperature, and its reasoning before every answer

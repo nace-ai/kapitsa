@@ -32,14 +32,16 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test grammar_test
-structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test`:
+structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test
+logit_dump`:
 
 ```bash
 build/api_test
 build/prefix_cache_test
 build/fn_store_test                          # the streamed-expert cache (src/model/expert_store.h)
 build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
-build/tokenizer_test                         # Flint's pre-tokenizer split, SentencePiece BPE (Nanbeige)
+build/tokenizer_test                         # Flint's pre-tokenizer split, the Metaspace BPE (Nanbeige 4.3)
+build/tokenizer_test path/to/tokenizer.json  # and Nanbeige 4.3's own file against tests/data/nanbeige43_tokenizer.json
 build/iq_layout_test                         # GGUF IQ experts in the GPU layout (src/kernels/wfmt_iq.metal)
 build/remote_test                            # a split model's reserve on its other Macs (src/model/remote.h)
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
@@ -52,6 +54,7 @@ python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
 python3 tests/test_pr_size.py
 python3 tests/test_logit_compare.py
+python3 tests/test_logit_dump.py build      # its output directory only, before the lock and the model
 python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
 ```
 

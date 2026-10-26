@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <queue>
 
 namespace ni {
 
@@ -414,6 +415,26 @@ void put_utf8(std::string& s, uint32_t c) {
   else { s += char(0xF0 | (c >> 18)); s += char(0x80 | ((c >> 12) & 0x3F)); s += char(0x80 | ((c >> 6) & 0x3F)); s += char(0x80 | (c & 0x3F)); }
 }
 
+const std::string kMetaspace = "\u2581";
+
+std::string replace_all(const std::string& s, const std::string& from, const std::string& to) {
+  std::string out;
+  out.reserve(s.size());
+  size_t p = 0;
+  for (size_t q; (q = s.find(from, p)) != std::string::npos; p = q + from.size()) out.append(s, p, q - p) += to;
+  return out.append(s, p);
+}
+
+// bytes in the UTF-8 character at s[i]; 1 for a byte that does not start a well-formed one
+size_t utf8_len(const std::string& s, size_t i) {
+  const unsigned char c = s[i];
+  const size_t n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+  if (i + n > s.size()) return 1;
+  for (size_t k = 1; k < n; ++k)
+    if ((s[i + k] & 0xC0) != 0x80) return 1;
+  return n;
+}
+
 } // namespace
 
 const char* const Tokenizer::kFlintSplit[3] = {
@@ -456,28 +477,21 @@ void Tokenizer::load(const std::string& path) {
             p["pattern"]["Regex"] == kTekken)
           split_ = Split::Tekken;
   }
+  // SentencePiece-style BPE (Llama-family files): only the shape HF encodes as one word per text between added tokens
+  if (pt.is_object() && pt.value("type", "") == "Metaspace") {
+    auto unset = [&](const char* k) { return !model.contains(k) || model[k].is_null(); };
+    if (pt.value("replacement", "") != kMetaspace || pt.value("prepend_scheme", "") != "first" ||
+        pt.value("split", true) || !j["normalizer"].is_null() || !model.value("byte_fallback", false) ||
+        model.value("ignore_merges", false) || !unset("dropout") || !unset("continuing_subword_prefix") ||
+        !unset("end_of_word_suffix"))
+      fatal("tokenizer: a Metaspace pre-tokenizer is supported only with replacement U+2581, prepend_scheme \"first\", "
+            "split false, no normalizer, and a BPE model with byte_fallback and without ignore_merges, dropout or "
+            "subword affixes");
+    split_ = Split::Metaspace;
+  }
   if (split_ != Split::Qwen) {
     nfc_ = !j["normalizer"].is_null();
     ignore_merges_ = model.value("ignore_merges", false);
-  }
-  // SentencePiece-style BPE (Llama's tokenizer.json): Metaspace, no normalizer, byte fallback, and the decoder that
-  // undoes them (U+2581 to spaces, <0xXX> to bytes, one leading space stripped or not)
-  if (pt.is_object() && pt.value("type", "") == "Metaspace") {
-    if (!j["normalizer"].is_null() || !model.value("byte_fallback", false) || pt.value("replacement", "") != "\u2581" ||
-        !model["continuing_subword_prefix"].is_null() || !model["end_of_word_suffix"].is_null() ||
-        model.value("ignore_merges", false))
-      fatal("%s: a Metaspace tokenizer other than SentencePiece's BPE with byte fallback", path.c_str());
-    spm_ = true;
-    nfc_ = false;
-    const std::string ps = pt.value("prepend_scheme", pt.value("add_prefix_space", true) ? "always" : "never");
-    spm_prepend_ = ps == "first" ? Prepend::First : ps == "never" ? Prepend::Never : Prepend::Always;
-    spm_split_ = pt.value("split", true);
-    fuse_unk_ = model.value("fuse_unk", false);
-    const auto& dec = j["decoder"];
-    if (dec.is_object() && dec.value("type", "") == "Sequence" && dec.contains("decoders") && dec["decoders"].is_array())
-      for (const auto& d : dec["decoders"])
-        if (d.is_object() && d.value("type", "") == "Strip" && d.value("content", "") == " " && d.value("start", 0) == 1)
-          strip_lead_ = true;
   }
   uint32_t b2u[256];
   byte_unicode(b2u);
@@ -494,38 +508,28 @@ void Tokenizer::load(const std::string& path) {
     int id = idj.get<int>();
     vocab_[tok] = id;
     std::string raw;
-    if (spm_) {  // the piece's text: U+2581 (E2 96 81) as a space, a byte token <0xXX> as that byte
-      if (tok.size() == 6 && tok.compare(0, 3, "<0x") == 0 && tok[5] == '>' && isxdigit((unsigned char)tok[3]) &&
-          isxdigit((unsigned char)tok[4])) {
-        raw = char(std::stoi(tok.substr(3, 2), nullptr, 16));
-      } else {
-        for (size_t i = 0; i < tok.size(); ++i)
-          if (tok.compare(i, 3, "\xE2\x96\x81") == 0) raw += ' ', i += 2;
-          else raw += tok[i];
-      }
-    } else {
-      for (auto& c : to_cps(tok)) {
-        auto it = u2b.find(c.c);
-        raw += it != u2b.end() ? char(it->second) : '?';
-      }
+    for (auto& c : to_cps(tok)) {
+      auto it = u2b.find(c.c);
+      raw += it != u2b.end() ? char(it->second) : '?';
     }
     id_to_bytes_[id] = raw;
   }
   for (int b = 0; b < 256; ++b) {
     std::string u;
-    if (spm_) {
-      char h[8];
-      snprintf(h, sizeof h, "<0x%02X>", b);
-      u = h;
-    } else {
-      put_utf8(u, b2u[b]);
-    }
+    put_utf8(u, b2u[b]);
     auto it = vocab_.find(u);
     byte_id_[b] = it == vocab_.end() ? -1 : it->second;
   }
-  if (spm_ && model.contains("unk_token") && model["unk_token"].is_string()) {
-    const auto it = vocab_.find(model["unk_token"].get<std::string>());
-    unk_id_ = it == vocab_.end() ? -1 : it->second;
+  if (split_ == Split::Metaspace) {  // the tokens are UTF-8 with ▁ for a space, and <0x00>..<0xFF> are bytes
+    for (auto& [tok, id] : vocab_) id_to_bytes_[id] = replace_all(tok, kMetaspace, " ");
+    for (int b = 0; b < 256; ++b) {
+      char name[8];
+      snprintf(name, sizeof name, "<0x%02X>", b);
+      auto it = vocab_.find(name);
+      if (it == vocab_.end()) fatal("tokenizer: byte_fallback without the byte token %s", name);
+      byte_id_[b] = it->second;
+      id_to_bytes_[it->second] = std::string(1, char(b));
+    }
   }
   int rank = 0;
   for (auto& m : model["merges"]) {
@@ -553,8 +557,8 @@ void Tokenizer::load(const std::string& path) {
     added_id_[id] = true;
   }
   std::sort(added_.begin(), added_.end(), [](auto& x, auto& y) { return x.first.size() > y.first.size(); });
-  logi("tokenizer: %zu tokens, %zu merges, %zu added%s (%.0f ms)", vocab_.size(), merges_.size(), added_.size(),
-       spm_ ? ", SentencePiece BPE" : "", now_ms() - t0);
+  logi("tokenizer: %zu tokens, %zu merges, %zu added (%.0f ms)", vocab_.size(), merges_.size(), added_.size(),
+       now_ms() - t0);
 }
 
 void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
@@ -620,101 +624,62 @@ void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
   }
 }
 
-// SentencePiece-style BPE of one word (HF tokenizers' BPE::merge_word and Word::merge_all): its characters as
-// vocabulary pieces (a character the vocabulary lacks as its <0xXX> byte tokens, else <unk>), then the lowest-ranked
-// adjacent pair merged first, the leftmost on a tie, until no pair has a merge. A heap over the pairs with a linked list
-// of symbols, as HF's, since a word here is a whole text between added tokens (Metaspace without its split).
-void Tokenizer::bpe_spm(const std::string& word, std::vector<int>& out) const {
+// One word from its UTF-8 characters, a character outside the vocabulary as its byte tokens, merged as HF's BPE does
+// (lowest rank first, leftmost among equals) with a heap of candidate pairs over a linked list: a Metaspace word is a
+// whole text, 100 KB and more, which the loop in bpe() would take in quadratic time.
+void Tokenizer::bpe_chars(const std::string& word, std::vector<int>& out) const {
   struct Sym {
-    int id, prev, next;
-    bool live;
+    int id, prev, next;  // id -1: merged into its left neighbour
   };
   std::vector<Sym> sym;
   sym.reserve(word.size());
-  auto add = [&](int id) { sym.push_back({id, int(sym.size()) - 1, int(sym.size()) + 1, true}); };
-  bool unk_last = false;
-  for (size_t i = 0; i < word.size();) {
-    const unsigned char b = word[i];
-    size_t n = b < 0x80 ? 1 : (b >> 5) == 6 ? 2 : (b >> 4) == 14 ? 3 : (b >> 3) == 30 ? 4 : 1;
-    n = std::min(n, word.size() - i);
-    const auto it = vocab_.find(word.substr(i, n));
-    if (it != vocab_.end()) {
-      add(it->second);
-      unk_last = false;
-    } else {
-      bool bytes = true;
-      for (size_t k = 0; k < n; ++k) bytes = bytes && byte_id_[(unsigned char)word[i + k]] >= 0;
-      if (bytes) {
-        for (size_t k = 0; k < n; ++k) add(byte_id_[(unsigned char)word[i + k]]);
-        unk_last = false;
-      } else if (unk_id_ >= 0 && !(fuse_unk_ && unk_last)) {
-        add(unk_id_);
-        unk_last = true;
-      }
-    }
-    i += n;
+  auto add = [&](int id) { sym.push_back({id, int(sym.size()) - 1, int(sym.size()) + 1}); };
+  for (size_t i = 0, n; i < word.size(); i += n) {
+    n = utf8_len(word, i);
+    auto it = vocab_.find(word.substr(i, n));
+    if (it != vocab_.end()) add(it->second);
+    else for (size_t k = i; k < i + n; ++k) add(byte_id_[(unsigned char)word[k]]);
   }
   if (sym.empty()) return;
   sym.back().next = -1;
-  struct Pair {
+  struct Cand {
     int rank, pos, id;
-    bool operator<(const Pair& o) const { return rank != o.rank ? rank > o.rank : pos > o.pos; }  // min-heap
   };
-  auto merge_of = [&](int a, int b) -> const std::pair<int, int>* {
-    const auto it = merges_.find((uint64_t(uint32_t(a)) << 32) | uint32_t(b));
-    return it == merges_.end() ? nullptr : &it->second;
+  auto later = [](const Cand& x, const Cand& y) { return x.rank != y.rank ? x.rank > y.rank : x.pos > y.pos; };
+  std::priority_queue<Cand, std::vector<Cand>, decltype(later)> heap(later);
+  auto pair_at = [&](int pos) {
+    const int nx = sym[pos].next;
+    return nx < 0 ? merges_.end() : merges_.find((uint64_t(uint32_t(sym[pos].id)) << 32) | uint32_t(sym[nx].id));
   };
-  std::vector<Pair> heap;
-  heap.reserve(sym.size());
-  for (size_t i = 0; i + 1 < sym.size(); ++i)
-    if (const auto* m = merge_of(sym[i].id, sym[i + 1].id)) heap.push_back({m->first, int(i), m->second});
-  std::make_heap(heap.begin(), heap.end());
+  auto push = [&](int pos) {
+    auto it = pair_at(pos);
+    if (it != merges_.end()) heap.push({it->second.first, pos, it->second.second});
+  };
+  for (int i = 0; i + 1 < int(sym.size()); ++i) push(i);
   while (!heap.empty()) {
-    std::pop_heap(heap.begin(), heap.end());
-    const Pair top = heap.back();
-    heap.pop_back();
-    Sym& l = sym[size_t(top.pos)];
-    if (!l.live || l.next < 0) continue;
-    Sym& r = sym[size_t(l.next)];
-    const auto* m = merge_of(l.id, r.id);
-    if (!m || m->second != top.id) continue;  // an entry the merges since it was pushed made stale
-    l.id = top.id;
-    r.live = false;
-    l.next = r.next;
-    if (l.next >= 0) sym[size_t(l.next)].prev = top.pos;
-    if (l.prev >= 0)
-      if (const auto* p = merge_of(sym[size_t(l.prev)].id, l.id)) {
-        heap.push_back({p->first, l.prev, p->second});
-        std::push_heap(heap.begin(), heap.end());
-      }
-    if (l.next >= 0)
-      if (const auto* p = merge_of(l.id, sym[size_t(l.next)].id)) {
-        heap.push_back({p->first, top.pos, p->second});
-        std::push_heap(heap.begin(), heap.end());
-      }
+    const Cand c = heap.top();
+    heap.pop();
+    if (sym[c.pos].id < 0) continue;
+    auto it = pair_at(c.pos);
+    if (it == merges_.end() || it->second.first != c.rank) continue;  // a neighbour has merged since
+    Sym& a = sym[c.pos];
+    Sym& b = sym[a.next];
+    a.id = c.id;
+    b.id = -1;
+    a.next = b.next;
+    if (a.next >= 0) sym[a.next].prev = c.pos;
+    if (a.prev >= 0) push(a.prev);
+    push(c.pos);
   }
-  for (int i = 0; i >= 0; i = sym[size_t(i)].next) out.push_back(sym[size_t(i)].id);
+  for (int i = 0; i >= 0; i = sym[i].next) out.push_back(sym[i].id);
 }
 
-void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out, bool at_start) const {
+void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out, bool first) const {
   if (text.empty()) return;
-  if (spm_) {  // Metaspace: every space as U+2581, one prepended at the text's start (or every piece's)
-    static const std::string kMeta = "\xE2\x96\x81";
-    std::string s;
-    s.reserve(text.size() + 3 * 16);
-    if ((spm_prepend_ == Prepend::Always || (spm_prepend_ == Prepend::First && at_start)) && text[0] != ' ' &&
-        text.compare(0, 3, kMeta) != 0)
-      s = kMeta;
-    for (char c : text)
-      if (c == ' ') s += kMeta;
-      else s += c;
-    if (!spm_split_) return bpe_spm(s, out);
-    for (size_t a = 0; a < s.size();) {  // MergedWithNext: each U+2581 begins a word
-      size_t b = s.find(kMeta, a + (s.compare(a, 3, kMeta) == 0 ? 3 : 0));
-      if (b == std::string::npos) b = s.size();
-      bpe_spm(s.substr(a, b - a), out);
-      a = b;
-    }
+  if (split_ == Split::Metaspace) {  // split false: the text is one word; "first": ▁ in front only at the input's start
+    std::string s = replace_all(text, " ", kMetaspace);
+    if (first && s.compare(0, kMetaspace.size(), kMetaspace) != 0) s.insert(0, kMetaspace);
+    bpe_chars(s, out);
     return;
   }
   std::vector<std::string> words;
@@ -724,15 +689,7 @@ void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out, boo
   for (auto& w : words) bpe(w, out);
 }
 
-std::vector<int> Tokenizer::encode_continuation(const std::string& text) const {
-  return encode_impl(text, std::string::npos, nullptr, false);
-}
-
 std::vector<int> Tokenizer::encode(const std::string& text, size_t split_at, int* split_index) const {
-  return encode_impl(text, split_at, split_index, true);
-}
-
-std::vector<int> Tokenizer::encode_impl(const std::string& text, size_t split_at, int* split_index, bool begins) const {
   std::vector<int> out;
   size_t start = 0, i = 0;
   while (i < text.size()) {
@@ -740,7 +697,7 @@ std::vector<int> Tokenizer::encode_impl(const std::string& text, size_t split_at
     if (text[i] == '<' || text[i] == '[') {
       for (auto& [content, id] : added_) {
         if (text.compare(i, content.size(), content) == 0) {
-          encode_plain(text.substr(start, i - start), out, begins && start == 0);
+          encode_plain(text.substr(start, i - start), out, start == 0);
           if (split_index && i == split_at) *split_index = int(out.size());
           out.push_back(id);
           i += content.size();
@@ -752,7 +709,7 @@ std::vector<int> Tokenizer::encode_impl(const std::string& text, size_t split_at
     }
     if (!hit) ++i;
   }
-  encode_plain(text.substr(start), out, begins && start == 0);
+  encode_plain(text.substr(start), out, start == 0);
   return out;
 }
 
@@ -774,7 +731,15 @@ int Tokenizer::find(const std::string& token) const {
 std::string Tokenizer::decode(const std::vector<int>& ids) const {
   std::string s;
   for (int id : ids) s += token_bytes(id);
-  if (strip_lead_ && !s.empty() && s[0] == ' ') s.erase(0, 1);
+  if (strips_leading_space() && !s.empty() && s[0] == ' ') s.erase(0, 1);
+  return s;
+}
+
+std::string StreamDecoder::out(std::string s) {
+  if (strip_ && !s.empty()) {
+    if (s[0] == ' ') s.erase(0, 1);
+    strip_ = false;
+  }
   return s;
 }
 
@@ -789,15 +754,15 @@ std::string StreamDecoder::push(int id) {
     if (int(back) < need) cut = n - back;  // incomplete sequence at the end
     break;
   }
-  std::string out = pending_.substr(0, cut);
+  std::string s = pending_.substr(0, cut);
   pending_.erase(0, cut);
-  return utf8_valid(out);
+  return out(utf8_valid(s));
 }
 
 std::string StreamDecoder::flush() {
-  std::string out;
-  out.swap(pending_);
-  return utf8_valid(out);
+  std::string s;
+  s.swap(pending_);
+  return out(utf8_valid(s));
 }
 
 std::string utf8_valid(const std::string& s) {
