@@ -461,6 +461,11 @@ Flint::Flint(const std::string& path, int prefill_chunk) {
   // qmt_m64_n64's); the 8-bit tile 128 rows tall with X read in place; NI_FLINT_QMTS=0 keeps the plain order
   const char* qs = getenv("NI_FLINT_QMTS");
   qmts_ = qmtw_ && !(qs && !strcmp(qs, "0"));
+  // a dense Llama's GEMMs of 16-63 rows (a short prompt, a chat turn's new rows, a prompt's last chunk) on the same
+  // tiles (a partial tile's loads are guarded row by row): their outputs are bitwise those of the same rows in a
+  // 2048-row chunk, where qmr's 16-row tiles drifted from them; NI_FLINT_QMT_MIN=64 keeps qmr below 64 rows
+  if (qmtw_) qmt_min_ = 16;
+  if (const char* v = getenv("NI_FLINT_QMT_MIN"); v && *v) qmt_min_ = std::max(1, atoi(v));
   split_ = split_merges();
   if (split_) logi("Flint: the decode kernels' merges in dispatches of their own (NI_FLINT_SPLIT)");
   if (qmt_ || qmtw_) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
@@ -1040,15 +1045,15 @@ void Flint::enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buff
   const kp::Qmm p{uint32_t(M), W.N, W.K, W.K, y_ld ? y_ld : W.N, add ? 1u : 0u, uint32_t(std::max(W.gs, 1)), 0, 0};
   std::string n;
   uint32_t bm = 32, bn = 128, th = 128;
-  if (W.bits == 16 && qmtw_ && M >= 64) {  // a dense Llama's bf16 matrices (Flint's bf16 router keeps qrf_f16)
+  if (W.bits == 16 && qmtw_ && M >= qmt_min_) {  // a dense Llama's bf16 matrices (Flint's bf16 router keeps qrf_f16)
     n = "qmtf16_m64_n64", bm = 64, bn = 64;
   } else if (W.bits == 16) {  // bf16 (the router): qmr's tiles for bf16
     if (M <= 8) n = "qrf_f16_m8_n64", bm = 8, bn = 64, th = 64;
     else if (M < 64 || W.N <= 64) n = "qrf_f16_m16_n64", bm = 16, bn = 64;
     else n = "qrf_f16_m32_n128";
-  } else if (W.bits == 4 && (qmt_ || qmtw_) && M >= 64) {
+  } else if (W.bits == 4 && (qmt_ || qmtw_) && M >= qmt_min_) {
     n = qmts_ ? "qmt4s8_m64_n64" : "qmt_m64_n64", bm = 64, bn = 64;
-  } else if (W.bits == 8 && qmtw_ && M >= 64) {
+  } else if (W.bits == 8 && qmtw_ && M >= qmt_min_) {
     // (each of qmt8ds8's simdgroups reads its 64 X rows whole once its first row is below M, so it runs only where M is
     // a multiple of 64; another M takes the 64-row tile, whose loads are guarded row by row: the same outputs, bitwise)
     const bool d128 = qmts_ && M % 64 == 0;
