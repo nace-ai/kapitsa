@@ -64,6 +64,18 @@ double auto_store_cap(bool apple10) {
   return cap;
 }
 
+size_t auto_store_kv(size_t kv_per_pos) {
+  long long pos = 16384;
+  const char* kv = getenv("NI_EXPERT_KV_POS");
+  if (kv && *kv) {
+    char* end = nullptr;
+    const long long x = strtoll(kv, &end, 10);
+    if (end != kv && !*end && x >= 0) pos = x;
+    else logi("NI_EXPERT_KV_POS=%s is not a position count of 0 or more, ignored: using %lld", kv, pos);
+  }
+  return kv_per_pos * size_t(pos);
+}
+
 // ---- ExpertCache ----
 
 ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,

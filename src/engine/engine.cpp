@@ -633,6 +633,10 @@ q20::GroupWorld planned_group_world(const MemPlan& m, int slots, int ctx, size_t
   in.keep = size_t(1) << 29;
   in.left = mb > in.used + in.keep ? mb - in.used - in.keep : 0;
   in.ram = engine_ram_bytes(), in.avail = q20::available_memory();
+  // The guard also reserves the KV caches this process's conversations allocate out of the same available
+  // memory (NI_EXPERT_KV_POS positions, default 16384; 0 restores the pre-fix size), exactly as the live load
+  // in Qwen4Exp::init_store does.
+  in.kv = q20::auto_store_kv(m.kv_per_pos);
   in.cap = q20::auto_store_cap(Gpu::get().apple10());
   size_t pin = 0;
   if (q20::store_pin_bytes(getenv("NI_EXPERT_STORE"), m.store_all, pin))
