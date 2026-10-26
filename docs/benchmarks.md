@@ -143,9 +143,10 @@ b11871 and Ollama 0.40.11 read a separate Q4_K_M GGUF. The chat harness ran each
 T 0.6, top_p 0.95 and top_k 20, five decode runs and five greedy runs. The nominal 4K and 16K prompts contain
 5,088 and 19,954 reference tokens.
 
-Kapitsa measured **532 / 29** tok/s for 4K prefill / median decode, rounded from 532.1 / 28.79. Its decode was the highest
-measured, 2.8% above oMLX's 28.0 tok/s, but within noise, not a clear win: the source reports single-run swings of up
-to about 20% and treats gaps under about 10% as noise. oMLX prefills faster, 766 against 532 tok/s at 4K and 634
+Kapitsa measured **532 / 28.8** tok/s for 4K prefill / median decode, rounded from 532.1 / 28.79. Its median decode
+was the highest measured. The 2.8% lead over oMLX uses the raw medians, 28.79 versus 28.0 tok/s. That lead is within
+the source's noise range, not a statistically established advantage. The source reports single-run swings of up to
+about 20% and treats gaps under about 10% as noise. oMLX prefills faster, 766 against 532 tok/s at 4K and 634
 against 483 at 16K. Decode repetition flags affect mlx-vlm and both GGUF engines. Cached-TTFT flags warn that
 length-limited answers may not be cached; oMLX's 16K follow-up explicitly reused zero prefix tokens. The report's
 separate context sweep uses each engine's own benchmark tool, not this chat harness.
