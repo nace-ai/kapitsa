@@ -45,7 +45,8 @@ EXTERNAL = ("http://", "https://", "mailto:", "tel:")
 
 def slug(text):
     """GitHub's anchor for a heading: drop inline code and tags, lowercase, keep letters/digits/`-`/`_`, spaces to `-`."""
-    text = re.sub(r"<[^>]+>", "", text).replace("`", "")
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text).replace("`", "")
     kept = "".join(ch for ch in text.lower() if ch.isalnum() or ch in " -_")
     return kept.replace(" ", "-")
 
@@ -57,10 +58,10 @@ def page_anchors(text):
         if FENCE.match(line):
             in_fence = not in_fence
             continue
-        for a in HTML_ANCHOR.finditer(line):
-            anchors.add(a.group(1))
         if in_fence:
             continue
+        for a in HTML_ANCHOR.finditer(line):
+            anchors.add(a.group(1))
         m = HEADING.match(line)
         if m:
             base = slug(m.group(2))
@@ -142,6 +143,15 @@ def selftest():
     got = check(pages, exists=lambda rel: rel != "missing.md")
     assert got == want, got
     assert check({"a.md": "[up](../../etc/passwd)"}) == [("a.md", 1, "../../etc/passwd", "escapes the repository")]
+
+    # An `<a id>` inside a fenced example is not an anchor GitHub renders, so a link to it is dead.
+    assert slug("[Foo](usage.md)") == "foo", slug("[Foo](usage.md)")
+    assert page_anchors("## [Foo](usage.md)\n") == {"foo"}, page_anchors("## [Foo](usage.md)\n")
+    assert check({"a.md": "# T\n[x](#ghost)\n```html\n<a id=\"ghost\"></a>\n```\n"}) == [
+        ("a.md", 2, "#ghost", "no such heading")]
+    # A heading that is itself a link slugs to its text, so #foo resolves and #foousagemd does not.
+    assert check({"a.md": "## [Foo](usage.md)\n[x](#foo) [y](#foousagemd)\n"},
+                 exists=lambda rel: rel == "usage.md") == [("a.md", 2, "#foousagemd", "no such heading")]
 
 
 def main():
