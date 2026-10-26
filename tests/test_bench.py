@@ -103,7 +103,7 @@ check(notes == ["POWER-INFO: High Power Mode (pmset powermode 2)"]
       and bench.add_power_info(notes, "Now drawing from 'AC Power'", "2") == notes and len(notes) == 1,
       "the POWER-INFO note appears once, not twice", str(notes))
 # A table whose arms started in different modes is not a comparison: a row read in a mode the rest of the table did
-# not record is marked and kept out of the best values and the win count (ROUND 326 item 3). Built through the real
+# not record is marked and kept out of the best values (ROUND 326 item 3). Built through the real
 # path — result files on disk, then load(), then table() — so a wrong key (conditions.power_mode is community-only; the
 # harness writes provenance.system_start.powermode) or grouping by config instead of by the table fails here.
 import compare_table  # noqa: E402  (bench/harness/compare_table.py)

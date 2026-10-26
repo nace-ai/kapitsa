@@ -95,8 +95,9 @@ def mark_power_mismatch(rows):
     macOS's energy mode (pmset powermode: 0 automatic, 1 low, 2 high) moves tok/s by a few percent, so an arm read in
     one mode is not comparable with arms read in another. Rows arrive one per (model, config) — grouping by config can
     never see two modes, so the table is the unit. The mode most of the table's rows recorded is the reference; a row
-    in another mode is tagged `power-mode mismatch (2 vs 0)`, kept out of the best/win values and out of the win count
-    (a best among the reference-mode rows is still a same-mode comparison), and never merged into the contention flag.
+    in another mode is tagged `power-mode mismatch (2 vs 0)` and kept out of the best values (a best among the
+    reference-mode rows is still a same-mode comparison; the win count is untouched), and never merged into the
+    contention flag.
     When no mode holds a majority there is no reference, so every row that has a mode is marked.
     """
     modes = collections.Counter(str(r["powermode"]) for r in rows if r.get("powermode") is not None)

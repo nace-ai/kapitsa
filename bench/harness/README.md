@@ -118,9 +118,10 @@ Each engine has different hidden defaults. The harness sends everything explicit
   `POWER-INFO: High Power Mode (pmset powermode 2)` note instead, which never invalidates a run. A pair whose two
   arms started in different modes (`2 vs 0`) is not a comparison, because a mode difference between rows is what
   skews it: in the compare table the mode most of a table's rows recorded is the reference, a row recorded in any
-  other mode is marked `power-mode mismatch (2 vs 0)` and kept out of the best values and the win count (when no mode
-  holds a majority, every row is marked). The mode is read from `provenance.system_start.powermode`, or from
-  `conditions.power_mode` for a community submission, which is the only file that carries it there.
+  other mode is marked `power-mode mismatch (2 vs 0)` and kept out of the best values (when no mode holds a
+  majority, every row is marked); the win count is untouched. The mode is read from
+  `provenance.system_start.powermode`, or from `conditions.power_mode` for a community submission, which is the
+  only file that carries it there.
   `bench.py` raises the flag and note from the `pmset` sample it records before a `--agentic` run, and
   `compare_engines` from the recorded `provenance.system_start.power`, `.powermode` and `.low_power` after every run.
 
