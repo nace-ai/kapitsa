@@ -350,7 +350,8 @@ static void print_serve_help() {
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
          "  --disk-cache SIZE      SSD prefix cache: conversations kept on the SSD, also across restarts, in\n"
          "                         %s/prefix-cache. auto (default): a quarter of the free space beyond\n"
-         "                         10 GiB, at most 32 GiB; a size (16G) caps it; 0 turns it off\n"
+         "                         10 GiB, at most 32 GiB; a size (16G) caps it; 0 turns it off. Not every model\n"
+         "                         has it yet (the Qwen3.5-family models and Dory do)\n"
          "  --loops N              Dory: the shared block's loops per token, 1-4 (default 2, NVIDIA's recommendation;\n"
          "                         more is latent thinking: slower, more accurate). Requests choose their own with\n"
          "                         \"loops\" or a reasoning effort (low 1, medium 2, high 4)\n"
@@ -957,9 +958,11 @@ static int serve(int argc, char** argv, int first) {
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  bool disk_asked = !opt.disk_cache.empty();  // --disk-cache or NI_DISK_CACHE given, not the default
   if (opt.disk_cache.empty()) {  // the SSD prefix cache: on by default for the server (NI_DISK_CACHE as the option)
     const char* v = getenv("NI_DISK_CACHE");
-    opt.disk_cache = v && *v ? v : "auto";
+    disk_asked = v && *v;
+    opt.disk_cache = disk_asked ? v : "auto";
   }
   // the model and its precision are picked for a conversation of the context asked for, else of 32K (the default
   // context then grows from there where it costs nothing: default_context)
@@ -1639,6 +1642,16 @@ static int serve(int argc, char** argv, int first) {
     }
   } else {
     browser.reset();  // (it only counted the other Macs)
+  }
+  // an SSD prefix cache asked for on a model whose states it cannot keep: said on screen, not only in the log (#651)
+  if (uint64_t quota = 0; disk_asked && pcache::parse_size(opt.disk_cache, &quota) && quota > 0) {
+    const auto eng = model_mgr->current_engine();
+    if (eng && !eng->disk_cache_supported()) {
+      const std::string say = "--disk-cache: " + model_mgr->current_model_id() +
+                              " runs without the SSD prefix cache (only the Qwen3.5-family models and Dory have it yet)";
+      if (tui) ui::warning(say);
+      else fprintf(stderr, "%s\n", say.c_str());
+    }
   }
   const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
   const std::string base =

@@ -588,6 +588,8 @@ bool Engine::streams_experts() const {
   return st && !st->complete();
 }
 
+bool Engine::disk_cache_supported() const { return !model_->disk_format().empty(); }
+
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();
   if (dfl_ && dfl_->budget()) dfl_->budget()->save();

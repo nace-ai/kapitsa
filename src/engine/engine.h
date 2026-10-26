@@ -374,6 +374,8 @@ class Engine {
   // The model reads routed experts from the SSD as it runs (a Qwen3.8-Flash-Next Q2_0 pack whose store holds only part
   // of them): it does not run whole in memory, as `kapitsa serve` tells the other Macs (src/cluster/)
   bool streams_experts() const;
+  // The model's states can be kept on the SSD (--disk-cache): it has a disk_format() (src/engine/engine_disk.cpp)
+  bool disk_cache_supported() const;
   // Why the Macs that hold the rest of a split model no longer answer ("" while they do, and for a model on one Mac)
   std::string lost() const;
   // The sampling settings a request gets when it names none: the model's (Nemotron-H: generation_config.json),
