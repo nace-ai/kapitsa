@@ -21,15 +21,15 @@ decode over the next fastest engine on that model.
 
 | Mac | Kapitsa's decode lead | Where another engine is ahead |
 | --- | --- | --- |
-| [M5 Max, 128 GB](#m5-max) | 27B level with mlx-serve (inside the runs' spread) · 35B-A3B **1.21x** Splash · Bolt **2.3x** oMLX · Lightning 1.41x · Super-VL 1.42x · Dory 1.57x | Flash-Next decode: mlx-serve 108 against 106. Prefill: Splash on the 27B (1,039 against 907) and the 35B-A3B (6,386 against 5,963); mlx-serve, oMLX and MTPLX on Flash-Next |
+| [M5 Max, 128 GB](#m5-max) | 35B-A3B **1.21x** Splash · Bolt **2.3x** oMLX · Lightning 1.41x · Super-VL 1.42x · Dory 1.57x | 27B decode: level with mlx-serve, 133 against 128, inside the runs' spread. Flash-Next decode: mlx-serve 108 against 106. Prefill: Splash on the 27B (1,039 against 907) and the 35B-A3B (6,386 against 5,963); mlx-serve, oMLX and MTPLX on Flash-Next |
 | [M5 Pro, 48 GB](#m5-pro) | 35B-A3B **1.11x** Splash · Lightning 1.28x · Bolt 1.93x · Dory 1.32x · Flint 1.03x rec | 27B decode: mlx-serve 78 against 77, inside the runs' spread. Prefill: Splash on the 35B-A3B (1.25x) and the 27B (1.11x) |
 | [M4 Pro, 48 GB](#m4-pro) | 4B **1.47x** mlx-serve · 27B 1.17x · 35B-A3B 1.19x Splash · Lightning 1.72x · Bolt 1.97x · Dory 1.33x · Flint 1.01x rec | Flint prefill: llama.cpp 977 against 968 |
 | [M3 Pro, 36 GB](#m3-pro) | 4B 1.79x · 9B **2.90x** · 27B 1.77x · 35B-A3B 1.84x · Lightning 1.92x · Flint 1.45x · Dory 1.21x | Nano 4B decode: llama.cpp 34.9 against 34.4. Nano 9B v2: mlx-lm 24.9 against 20.9 (both on lighter 4-bit files) |
 | [M1 Pro, 16 GB](#m1-pro) | 4B 1.56x · 9B 1.54x · 35B-A3B 2-bit 1.37x · Flint 2-bit 1.42x · Dory 1.30x · Nano 4B 1.32x · Nano 9B v2 1.39x | — |
 
-Kapitsa has the fastest decode in 32 of the 36 model and Mac pairs. Counted over the poster's and the tables' rows
+Kapitsa has the fastest decode in 31 of the 36 model and Mac pairs. Counted over the poster's and the tables' rows
 (`tools/readme_images/readme_images.json`): the union of the 37 rows where Kapitsa has a decode cell, less the M3 Pro
-36 GB's Bolt 74B row, which has no rival, gives 36 pairs; the four Kapitsa does not win are in the column above. Each
+36 GB's Bolt 74B row, which has no rival, gives 36 pairs; the five Kapitsa does not win, two of them ties inside the runs' spread (the M5 Max and M5 Pro 27B against mlx-serve), are in the column above. Each
 pair compares cells in one power mode. The M5 Max Flash-Next pair (Kapitsa 106 against mlx-serve 108) was checked from
 the runs' saved text (`finish=length` on all 10 answers, each cut off at the 512-token limit), not from saved token ids.
 

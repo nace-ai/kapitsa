@@ -14,7 +14,7 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-797 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-25 down to 2026-10-16, newest first.
+803 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-25 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
@@ -42,6 +42,12 @@ How to read it:
 | 2026-10-25 | flaminis | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | cd20dcc | 126.2 | 146.5 | 911 | 906 | 4.54 | – | – | [q38-27b-kapitsa-20261025-204858](results/2026-10-25-m5-max/results/q38-27b-kapitsa-20261025-204858.json) |
 | 2026-10-25 | flaminis | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Splash 1.4.0 (DFlash2 drafter) | 1.4.0 | 101.3 | 117.8 | 1013 | 1005 | 4.08 | – | – | [q38-27b-splash-20261025-204639](results/2026-10-25-m5-max/results/q38-27b-splash-20261025-204639.json) |
 | 2026-10-25 | flaminis | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | cd20dcc | 134.8 | 132.9 | 831 | 828 | 4.98 | – | – | [q38-27b-kapitsa-20261025-204445](results/2026-10-25-m5-max/results/q38-27b-kapitsa-20261025-204445.json) |
+| 2026-10-25 | fearampgreed | M5 Max, 128 GB | Nanbeige4.3-33B | Q4_K_M | Ollama | 0.40.11 | 25.6 | 24.8 | 503 | 394 | 10.13 | – | – | [nb43-33b-ollama-20261025-200851](results/2026-10-25-m5-max-nanbeige/results/nb43-33b-ollama-20261025-200851.json) |
+| 2026-10-25 | fearampgreed | M5 Max, 128 GB | Nanbeige4.3-33B | bf16 | llama.cpp | b11871 | 25.9 | 25.4 | 496 | 394 | 10.26 | – | – | [nb43-33b-llamacpp-20261025-200229](results/2026-10-25-m5-max-nanbeige/results/nb43-33b-llamacpp-20261025-200229.json) |
+| 2026-10-25 | fearampgreed | M5 Max, 128 GB | Nanbeige4.3-33B | 4-bit | oMLX | 0.7.3.dev2 | 28.0 | 28.4 | 766 | 634 | 6.65 | – | – | [nb43-33b-omlx-20261025-195537](results/2026-10-25-m5-max-nanbeige/results/nb43-33b-omlx-20261025-195537.json) |
+| 2026-10-25 | fearampgreed | M5 Max, 128 GB | Nanbeige4.3-33B | 4-bit | mlx-vlm server | unknown | 27.6 | 28.0 | 705 | 589 | 7.22 | – | – | [nb43-33b-mlxvlm-20261025-194910](results/2026-10-25-m5-max-nanbeige/results/nb43-33b-mlxvlm-20261025-194910.json) |
+| 2026-10-25 | fearampgreed | M5 Max, 128 GB | Nanbeige4.3-33B | 4-bit | mlx-lm | mlx_lm 0.32.2 | 27.0 | 27.4 | 668 | 573 | 7.62 | – | – | [nb43-33b-mlxlm-20261025-194307](results/2026-10-25-m5-max-nanbeige/results/nb43-33b-mlxlm-20261025-194307.json) |
+| 2026-10-25 | fearampgreed | M5 Max, 128 GB | Nanbeige4.3-33B | 4-bit | Kapitsa | 5bee92c | 28.8 | 28.7 | 532 | 483 | 9.56 | – | – | [nb43-33b-kapitsa-20261025-193648](results/2026-10-25-m5-max-nanbeige/results/nb43-33b-kapitsa-20261025-193648.json) |
 | 2026-10-25 | flaminis | M5 Max, 128 GB | Qwen3.8 27B | Q4_K_M | Ollama GGUF + MTP (shipped depth 4) | 0.40.11 | 52.9 | 56.4 | 623 | 608 | 6.64 | – | – | [q38-27b-ollama-mtp-20261025-170126](results/2026-10-25-m5-max/results/q38-27b-ollama-mtp-20261025-170126.json) |
 | 2026-10-25 | flaminis | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Splash 1.4.0 (DFlash2 drafter) | 1.4.0 | 112.4 | 112.7 | 902 | 913 | 4.58 | – | – | [q38-27b-splash-20261025-165203](results/2026-10-25-m5-max/results/q38-27b-splash-20261025-165203.json) |
 | 2026-10-25 | flaminis | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | cd20dcc | 128.8 | 135.4 | 801 | 814 | 5.16 | – | – | [q38-27b-kapitsa-20261025-165010](results/2026-10-25-m5-max/results/q38-27b-kapitsa-20261025-165010.json) |

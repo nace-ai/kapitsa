@@ -10,7 +10,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 32 of the 36 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 31 of the 36 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
@@ -26,7 +26,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX** ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **The fastest decode in 32 of 36 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **The fastest decode in 31 of 36 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B.
 - [2026/10] ⚡ **QMT prefill: prompts read up to 1.5× faster on M5** with the Metal 4 matrix units.
 - [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
@@ -81,7 +81,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2 / 26.10.3</sub> | <sub>oMLX<br>0.7.1rc1 / 0.7.3.dev2</sub> | <sub>Splash<br>1.4.0</sub> | <sub>Ollama<br>0.40.5 / 0.40.11</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-vlm 0.7.8 / 0.7.10</sub> | <sub>llama.cpp<br>b11669 / b11871</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1 (nax), llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 907 / **133**<br><sub>KFlash · cd20dcc</sub> | 792 / 128<br><sub>DFlash2 · 26.10.3</sub> | 902 / 92<br><sub>DFlash2 · 0.7.3.dev2</sub> | 1039 / 116<br><sub>DFlash2</sub> | 844 / 71<br><sub>MTP · 0.40.11, MLX runner</sub> | 848 / 73<br><sub>MTP</sub> | 856 / 56<br><sub>MTP · mlx-vlm 0.7.10</sub> | 578 / 48<br><sub>MTP · b11871</sub> | 918 / 33<br><sub>MLX runtime 1.13.1 (nax)</sub> |
+| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 907 / **133**<br><sub>KFlash · cd20dcc</sub> | 792 / **≈128**<br><sub>DFlash2 · 26.10.3</sub> | 902 / 92<br><sub>DFlash2 · 0.7.3.dev2</sub> | 1039 / 116<br><sub>DFlash2</sub> | 844 / 71<br><sub>MTP · 0.40.11, MLX runner</sub> | 848 / 73<br><sub>MTP</sub> | 856 / 56<br><sub>MTP · mlx-vlm 0.7.10</sub> | 578 / 48<br><sub>MTP · b11871</sub> | 918 / 33<br><sub>MLX runtime 1.13.1 (nax)</sub> |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 5963 / **339**<br><sub>KFlash · cd20dcc</sub> | 4622 / 235<br><sub>MTP · 26.10.3</sub> | 3005 / 189<br><sub>DFlash2 · 0.7.3.dev2</sub> | 6386 / 281<br><sub>DFlash2</sub> | 3077 / 162<br><sub>MTP · 0.40.11, MLX runner</sub> | 4291 / 130<br><sub>MTP</sub> | 4439 / 138<br><sub>DFlash2 · mlx-vlm 0.7.10</sub> | 2881 / 171<br><sub>MTP · b11669</sub> | 4672 / 136<br><sub>MLX runtime 1.13.1 (nax)</sub> |
 | **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · 4-bit, 105.9 GB</sub> | 1165 / 106<br><sub>KFlash · fd85910</sub> | 🟩 1720 / **108**<br><sub>26.10.2</sub> | 1260 / 107<br><sub>MTP · 0.7.1rc1</sub> | × | 60<br><sub>0.40.6</sub> | 1263 / 88<br><sub>MTP</sub> | 1030 / 77<br><sub>MTP · mlx-vlm 0.7.8</sub> | 842 / 96<br><sub>b11669</sub> | × |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **119**<br><sub>KFlash · 039ddea</sub> | × | × | × | × | × | 76<br><sub>mlx-vlm 0.7.8</sub> | 9<br><sub>b11669</sub> | × |
