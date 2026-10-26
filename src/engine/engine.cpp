@@ -3516,9 +3516,26 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // text), their captures committed 8 at a time; then 4 drafting cycles probe again, judged on their own mean, and a
     // failed probe doubles the plain stretch (16 .. 256 tokens). Token counts only, no clock: the same request decodes
     // the same text whatever the load. NI_DFL_GATE=0 drafts every cycle. (tools/flint_dflash measures it.)
+    // The floor rises with the context: each of the verify's B rows reads the whole KV cache (flint_attn_partial), a
+    // decode step reads it once, so at P keys break-even is (floor + B r P) / (1 + r P), r the KV cache's bytes per
+    // position over the weights' bytes per token (both reads bandwidth-bound; Nanbeige4.3 4-bit: 1 / 87K from its
+    // config, 1 / 81K measured as 34.4 ms + 0.425 us a key per step on the M5 Max). Without it drafting cycles at 32K
+    // cost 3x a step and decode halved (11.0 against 20.0 tok/s writing code); with it the floor is 1.65 at 2K, 2.53
+    // at 16K, 3.28 at 32K.
     DFlashSeq& d = *slot.dseq;
     constexpr int B = DFlash2::kB, K = B - 1, kProbe = 4;
     static const double floor_tpc = getenv("NI_DFL_FLOOR") && *getenv("NI_DFL_FLOOR") ? atof(getenv("NI_DFL_FLOOR")) : 1.50;
+    const double kv_r = [&] {
+      const FlintConfig& c = flint_->config();
+      const double per_group = 4.0 / c.gs;  // a half scale and a half bias per group
+      const double layer = double(c.hidden) * (c.hq + 2 * c.hkv) * c.hd + double(c.hq) * c.hd * c.hidden +
+                           3.0 * c.hidden * c.ffn;
+      const double weights = c.layers * layer * (c.bits / 8.0 + per_group) +
+                             double(c.vocab) * c.hidden * (c.embed_bits / 8.0 + per_group);
+      const double kv = 2.0 * c.layers * c.hkv * c.hd * (c.kv8 ? 1.0 + 2.0 / 32 : 2.0);  // kv8: a half scale per 32
+      return kv / weights;
+    }();
+    const auto floor_at = [&](int pos) { return (floor_tpc + B * kv_r * pos) / (1.0 + kv_r * pos); };
     static const bool gate = !getenv("NI_DFL_GATE") || atoi(getenv("NI_DFL_GATE")) != 0;
     double avg = 2.0;  // prior: a drafting cycle keeps 2 tokens
     int hold = 16, plain_left = 0, probe_left = 0, probe_sum = 0, pend = 0, cap_base = n;
@@ -3553,12 +3570,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
           probe_sum += a + 1;
           if (--probe_left == 0) {
             const double mean = double(probe_sum) / kProbe;
-            if (mean >= floor_tpc) avg = mean, hold = 16;
+            if (mean >= floor_at(P)) avg = mean, hold = 16;
             else plain_left = hold, hold = std::min(2 * hold, 256);
           }
         } else {
           avg = 0.875 * avg + 0.125 * (a + 1);
-          if (gate && avg < floor_tpc) plain_left = hold, hold = std::min(2 * hold, 256);
+          if (gate && avg < floor_at(P)) plain_left = hold, hold = std::min(2 * hold, 256);
         }
         cap_base = P, pend = a + 1;
       } else {
