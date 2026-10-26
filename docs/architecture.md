@@ -90,7 +90,7 @@ two candidates are within the batched pass's rounding of each other, and sampled
 | Backend | `Qwen35` | `NemotronH` | `Dory` | `Flint` |
 | Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) | None |
 | Other layers | Attention; dense FFN or MoE | Attention; LatentMoE (dense relu² MLP in Nemotron Nano 4B / 9B v2) | Sliding-window and full attention, dense MLP; normalized (nGPT) residuals | Sliding-window and full attention with learned sinks; MoE (2 dense layers first) |
-| Default speculation | DFlash2 on 35B/27B; DFlash on 4B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV | None (prompt lookup with `--spec`) |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B and 9B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV | None on Recursive's Flint (prompt lookup with `--spec`); Nanbeige4.3, a dense Llama, drafts with its own DFlash2 drafter |
 | Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint | NVIDIA's safetensors checkpoints | Recursive's MLX export; GGUF imports (unsloth's UD-IQ files) |
 | Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type | NVFP4 or BF16 (on the Nemotron-H kernels; the LM head 8-bit with NVFP4) | Affine 4-bit, 8-bit embedding, BF16 router; a GGUF import's routed experts in their IQ blocks |
 | Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work | None | None |
