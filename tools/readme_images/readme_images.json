@@ -19,11 +19,11 @@
  ],
  "poster": {
   "size": [2400, 2568],
-  "title": "Kapitsa: the Apple silicon engine for Qwen, Nemotron and Flint",
+  "title": "Kapitsa: the Apple silicon engine for Qwen, Nemotron, Flint and Nanbeige",
   "legend": "Each cell: prefill / decode, tokens/s",
   "subtitle": [
    "Prefill on a 4K-token prompt, decode of a 512-token coding answer · decode at T 0.6, median of 5 · each engine in its fastest setup",
-   "Qwen at 4-bit (Q4_K_M on llama.cpp) · Nemotron as NVIDIA's own checkpoints · Flint at 4-bit (Q4_1 on llama.cpp), decoding at its card's T 1.0 · 2-bit: unsloth's GGUFs"
+   "Qwen at 4-bit (Q4_K_M on llama.cpp) · Nemotron as NVIDIA's own checkpoints · Flint at 4-bit (Q4_1 on llama.cpp), decoding at its card's T 1.0 · Nanbeige at 4-bit AWQ (Q4_K_M on llama.cpp) · 2-bit: unsloth's GGUFs"
   ],
   "footer": [
    "Grey: share of the fastest decode in that row · small type: the decoding method (none: no speculative decoding) · the first number is prefill, the second decode (same size: both matter)",
@@ -38,6 +38,7 @@
      {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 339, "method": "KFlash", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 5963, "detail": "cd20dcc"}, "mlx-serve": {"value": 238, "method": "MTP", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 3101, "detail": "26.10.3"}, "oMLX": {"value": 189, "method": "DFlash2", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 3005, "detail": "0.7.3.dev2"}, "Splash": {"value": 281, "method": "DFlash2", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 6386, "detail": "1.4.0"}, "Ollama": {"value": 162, "method": "MTP", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max); the GGUF runner's run is pending", "prefill": 3077, "detail": "0.40.11, MLX runner"}, "MTPLX": {"value": 130, "method": "MTP", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 4291, "detail": "2.12.2"}, "MLX": {"value": 138, "method": "DFlash2", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 4439, "detail": "mlx-vlm 0.7.10"}, "llama.cpp": {"value": 171, "method": "MTP", "note": "2026-10-18 session; the b11871 run is pending", "prefill": 2881, "detail": "b11669"}, "LM Studio": {"value": 136, "method": "no spec", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 4672, "detail": "MLX runtime 1.13.1 (nax)"}, "rec": "x"}},
      {"model": "Flash-Next 180B", "cells": {"Kapitsa": {"value": 106, "method": "MTP", "prefill": 1165, "detail": "fd85910", "note": "2026-10-18 session (Kapitsa: 2026-10-22); not re-measured yet"}, "mlx-serve": {"value": 108, "prefill": 1720, "detail": "26.10.2", "note": "2026-10-18 session (Kapitsa: 2026-10-22); not re-measured yet"}, "oMLX": {"value": 107, "method": "MTP", "prefill": 1260, "detail": "0.7.1rc1", "note": "2026-10-18 session (Kapitsa: 2026-10-22); not re-measured yet"}, "Splash": "x", "Ollama": {"value": 60, "detail": "0.40.6", "note": "2026-10-18 session (Kapitsa: 2026-10-22); not re-measured yet"}, "MTPLX": {"value": 88, "method": "MTP", "prefill": 1263, "detail": "2.12.2", "note": "2026-10-18 session (Kapitsa: 2026-10-22); not re-measured yet"}, "MLX": {"value": 77, "method": "MTP", "prefill": 1030, "detail": "mlx-vlm 0.7.8", "note": "2026-10-18 session (Kapitsa: 2026-10-22); not re-measured yet"}, "llama.cpp": {"value": 96, "prefill": 842, "detail": "b11669", "note": "2026-10-18 session (Kapitsa: 2026-10-22); not re-measured yet"}, "LM Studio": "x", "rec": "x"}},
      {"model": "Bolt 74B", "cells": {"Kapitsa": {"value": 158, "method": "KFlash", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max); one decode run loop-flagged", "prefill": 983, "detail": "cd20dcc"}, "mlx-serve": "x", "oMLX": {"value": 55, "method": "no spec", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max); its LiLiCorr drafter path never became ready (invalid run)", "prefill": 749, "detail": "0.7.3.dev2"}, "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 68, "note": "2026-10-25 session (bench/results/2026-10-25-m5-max)", "prefill": 814, "detail": "mlx-vlm 0.7.10"}, "llama.cpp": "x", "LM Studio": "x", "rec": "x"}},
+     {"model": "Nanbeige4.3 33B", "cells": {"Kapitsa": {"value": 28.8, "method": "no spec", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max-nanbeige)", "prefill": 532, "detail": "5bee92c"}, "mlx-serve": null, "oMLX": {"value": 28.0, "method": "no spec", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max-nanbeige)", "prefill": 766, "detail": "0.7.3.dev2"}, "Splash": "x", "Ollama": {"value": 25.6, "method": "no spec", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max-nanbeige)", "prefill": 503, "detail": "0.40.11, GGUF runner"}, "MTPLX": null, "MLX": {"value": 27.6, "method": "no spec", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max-nanbeige); mlx-lm 0.32.2's server: 27.0 decode, 668 prefill", "prefill": 705, "detail": "mlx-vlm 0.7.10"}, "llama.cpp": {"value": 25.9, "method": "no spec", "note": "2026-10-25 session (bench/results/2026-10-25-m5-max-nanbeige); Q4_K_M from the bf16 checkpoint", "prefill": 496, "detail": "b11871"}, "LM Studio": null, "rec": "x"}},
      {"model": "Flint 40B", "cells": {"Kapitsa": null, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": null, "LM Studio": null, "rec": null}, "todo": "Flint on the M5 Max: not measured yet (configs/flint.json)"}
     ]
    },
@@ -88,7 +89,8 @@
   "versions": {"mlx-serve": "26.10.2", "oMLX": "0.7.1rc1", "Ollama": "0.40.5 / 0.40.6", "LM Studio": "MLX runtime 1.13.1, llama.cpp runtime 2.60.0", "MLX": "mlx-lm 0.32.2, mlx-vlm 0.7.8"},
   "families": [
     {"name": "Qwen and Nemotron", "models": ["Qwen3.5 4B", "Qwen3.5 9B", "Qwen3.8 27B", "Qwen3.6 35B-A3B", "Qwen3.6 35B-A3B 2-bit", "Flash-Next 180B", "Dory1.0 4B", "Nano 4B", "Nano 9B v2", "Lightning 30B", "Bolt 74B", "Super-VL 120B"]},
-    {"name": "Recursive Flint", "models": ["Flint 40B", "Flint 40B 2-bit"]}
+    {"name": "Recursive Flint", "models": ["Flint 40B", "Flint 40B 2-bit"]},
+    {"name": "Nanbeige", "models": ["Nanbeige4.3 33B"]}
   ],
   "models": {
    "Qwen3.5 4B": {"name": "Qwen3.5-4B", "alias": "4b", "about": "dense · 4-bit, 4.6 GB"},
@@ -102,6 +104,7 @@
    "Nano 9B v2": {"name": "Nemotron Nano 9B v2", "alias": "nano-9b", "about": "hybrid Mamba-2 · NVFP4, 7.9 GB"},
    "Lightning 30B": {"name": "Nemotron 3.5 Lightning 30B-A3B", "alias": "lightning", "about": "hybrid MoE, 3B active · NVFP4, 22.9 GB"},
    "Bolt 74B": {"name": "Nemotron 3.5 Bolt 74B-A9B", "alias": "bolt", "about": "hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB"},
+   "Nanbeige4.3 33B": {"name": "Nanbeige4.3-33B", "alias": "nanbeige", "about": "dense · 4-bit AWQ (8-bit embedding and head), 19.8 GB"},
    "Super-VL 120B": {"name": "Nemotron 3.5 Super-VL 120B-A12B", "alias": "super", "about": "hybrid MoE, 12B active · NVFP4, 76.4 GB"},
    "Flint 40B": {"name": "Recursive Flint 40B-A2.5B", "alias": "flint", "about": "MoE, 2.5B active · 4-bit, 22.6 GB"},
    "Flint 40B 2-bit": {"name": "Recursive Flint 40B-A2.5B", "alias": "flint:16gb", "about": "MoE, 2.5B active · 2-bit experts (unsloth's GGUF), 11.9 GB"}
@@ -111,7 +114,7 @@
     "name": "MacBook Pro M5 Max 128 GB",
     "title": "MacBook Pro (16-inch, 2026) · M5 Max · 128 GB",
     "versions": {"mlx-serve": "26.10.2 / 26.10.3", "oMLX": "0.7.1rc1 / 0.7.3.dev2", "Ollama": "0.40.5 / 0.40.11", "MLX": "mlx-vlm 0.7.8 / 0.7.10", "LM Studio": "MLX runtime 1.13.1 (nax), llama.cpp runtime 2.60.0"},
-    "caption": "The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's cells there, the Flash-Next row and the Nemotron rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md).",
+    "caption": "The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's cells there, the Flash-Next row and the Nemotron rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md). The Nanbeige row is the 2026-10-25 harness run (Kapitsa 5bee92c, plain decoding; the GGUF engines on Q4_K_M) in [bench/results/2026-10-25-m5-max-nanbeige](bench/results/2026-10-25-m5-max-nanbeige/README.md).",
     "rows": [
      {"model": "Dory1.0 4B", "cells": {"Kapitsa": {"value": 119, "method": "loops", "note": "2026-10-22 on main 039ddea (after #287), per-loop KV, contention-flagged", "detail": "039ddea"}, "mlx-serve": "x", "oMLX": "x", "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 76, "detail": "mlx-vlm 0.7.8"}, "llama.cpp": {"value": 9, "detail": "b11669"}, "LM Studio": "x", "rec": "x"}},
      {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 267, "method": "KFlash", "note": "2026-10-22 on main fd85910, contention-flagged", "detail": "fd85910"}, "mlx-serve": {"value": 190, "detail": "26.10.2"}, "oMLX": {"value": 190, "detail": "0.7.1rc1"}, "Splash": "x", "Ollama": {"value": 153, "detail": "0.40.5"}, "MTPLX": {"value": 131, "detail": "2.12.2"}, "MLX": {"value": 139, "detail": "mlx-vlm 0.7.8"}, "llama.cpp": {"value": 159, "detail": "b11669"}, "LM Studio": {"value": 110, "detail": "llama.cpp runtime 2.60.0"}, "rec": "x"}},
