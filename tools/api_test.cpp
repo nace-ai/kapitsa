@@ -774,7 +774,16 @@ std::vector<ChatDelta> generate(const TmplModel& m, const std::string& text, boo
   OutputParser p(m.tok, m.tok.find("<think>"), m.tok.find("</think>"), m.tok.find("<tool_call>"), m.tok.find("</tool_call>"),
                  in_think, !tools.empty(), tools, true);
   std::vector<ChatDelta> out;
-  *ids = m.tok.encode(text);
+  // the reply continues its prompt: with a Metaspace tokenizer (Nanbeige 4.3's, prepend_scheme "first") no U+2581 goes
+  // before its first word, as encode() puts before a text's; encoded after an added token, the prompt's last, and
+  // without it
+  const int after = m.tok.find("<|im_start|>");
+  if (m.tok.strips_leading_space() && after >= 0) {
+    *ids = m.tok.encode("<|im_start|>" + text);
+    ids->erase(ids->begin());
+  } else {
+    *ids = m.tok.encode(text);
+  }
   for (int id : *ids) {
     ChatDelta d = p.push(id);
     if (!d.reasoning.empty() || !d.content.empty() || !d.tool_calls.empty()) out.push_back(d);
