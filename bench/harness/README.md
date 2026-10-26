@@ -111,7 +111,11 @@ Each engine has different hidden defaults. The harness sends everything explicit
   decodes.
 - **Provenance.** Each result records the exact server command and environment (secrets redacted), detected engine
   versions, weight files and sizes, macOS version, power source and power mode, swap, GPU memory, the harness's git
-  revision, every contention sample and the server log lines that matter.
+  revision, every contention sample and the server log lines that matter. `pmset`'s `powermode` is 0 automatic, 1 Low
+  Power Mode, 2 High Power Mode, and a cell taken in a mode other than automatic does not compare with the rest: a run
+  that starts on battery, in Low Power Mode or in High Power Mode carries a `POWER:` flag. `bench.py` raises it from the
+  `pmset` sample it records before a `--agentic` run, and `compare_engines` raises it from the recorded
+  `provenance.system_start.power`, `.powermode` and `.low_power` after every run.
 
 `compare_table.py` takes, per config, the newest run with no INVALID reason and no contention flag (else the newest
 valid one, marked), and marks invalid cells with `!`.

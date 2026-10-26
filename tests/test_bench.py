@@ -26,6 +26,7 @@ BUILD = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO,
 BENCH_TEST, KAPITSA = os.path.join(BUILD, "bench_test"), os.path.join(BUILD, "kapitsa")
 sys.path.insert(0, os.path.join(REPO, "bench", "harness"))
 import bench  # noqa: E402  (bench/harness/bench.py)
+import agentic  # noqa: E402  (bench/harness/agentic.py)
 
 FAILS = []
 
@@ -43,6 +44,52 @@ def run(args, **kw):
 # ---------------------------------------------------------------- 1. self checks
 r = run([BENCH_TEST, "self"])
 check(r.returncode == 0, "bench_test self", (r.stdout + r.stderr)[-500:])
+
+# ---------------------------------------------------------------- 1b. the POWER flag
+# pmset powermode is 0 automatic, 1 low power, 2 high power (the mapping src/bench/system.mm reads), so a table cell
+# may only be compared with cells taken in the same mode; battery is flagged on its own.
+check(bench.power_flags("Now drawing from 'AC Power'", "0") == [], "plugged in at powermode 0 needs no POWER flag")
+one = ["POWER: run started on battery and at pmset powermode 2 (High Power Mode) (numbers are not comparable with "
+       "plugged-in automatic-mode runs)"]
+check(bench.power_flags("Now drawing from 'Battery Power'", "2") == one, "battery in High Power Mode is one flag",
+      str(bench.power_flags("Now drawing from 'Battery Power'", "2")))
+lp = bench.power_flags("Now drawing from 'AC Power'", "1")
+check(lp == ["POWER: run started at pmset powermode 1 (Low Power Mode) (numbers are not comparable with plugged-in "
+             "automatic-mode runs)"], "powermode 1 is Low Power Mode on AC", str(lp))
+hp = bench.power_flags("Now drawing from 'AC Power'", "2")
+check(hp and "High Power Mode" in hp[0] and "battery" not in hp[0],
+      "High Power Mode on AC is flagged as itself", str(hp))
+check(bench.power_flags(None, None) == [], "no power state recorded, no claim made")
+# A release that prints no powermode still flags Low Power Mode from the client's own reading.
+check(bench.power_flags("Now drawing from 'AC Power'", None, True) ==
+      ["POWER: run started in Low Power Mode (numbers are not comparable with plugged-in automatic-mode runs)"],
+      "the client's lowpowermode reading raises the flag without a powermode", str(bench.power_flags("", None, True)))
+check(bench.power_flags("Now drawing from 'AC Power'", "1", True) == lp,
+      "powermode 1 and the client's reading are one flag, not two", str(bench.power_flags("", "1", True)))
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            1\n")["low_power"] is True,
+      "powermode 1 reads as Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            2\n")["low_power"] is False,
+      "powermode 2 is High Power Mode, not Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " lowpowermode         1\n")["low_power"] is True,
+      "the older lowpowermode 1 spelling still reads as Low Power Mode")
+check(agentic.parse_thermal("", "", " lowpowermode\n highpowermode\n")["low_power"] is False,
+      "the bare capability tokens pmset -g cap prints are not a mode")
+check(agentic.parse_thermal("", "Now drawing from 'Battery Power'", " powermode            0\n")["battery"] is True,
+      "battery is read from pmset -g batt")
+# Both keys on one release: "lowpowermode 0" also contains "powermode", so the read has to be anchored to the line.
+check(bench.parse_powermode("System-wide power settings:\n lowpowermode         0\n powermode            2\n") == "2",
+      "the anchored read takes powermode past a lowpowermode line", bench.parse_powermode(" lowpowermode 0\n powermode 2\n"))
+check(bench.parse_powermode(" lowpowermode         1\n") == "1", "lowpowermode alone still gives the mode")
+check(bench.parse_powermode("") is None, "no pmset text, no mode")
+check(agentic.parse_thermal("", "", " lowpowermode 0\n powermode 2\n")["powermode"] == "2",
+      "both clients read the same mode from the same text")
+# An --agentic run passes through bench.py and then compare_engines; the flag must appear once, not twice.
+f = bench.power_flags("Now drawing from 'Battery Power'", "2")
+check(bench.add_power_flags(f, "Now drawing from 'AC Power'", "2") == f and len(f) == 1,
+      "an existing POWER flag is not duplicated", str(f))
+g = []
+check(bench.add_power_flags(g, "Now drawing from 'AC Power'", "0") == [] and g == [],
+      "no flag when the power state is normal")
 
 # ---------------------------------------------------------------- 2. one protocol, two clients
 

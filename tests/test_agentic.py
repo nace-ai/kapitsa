@@ -90,7 +90,16 @@ check(c["warm_vs_cold_speedup"] == 5.0 and c["interleave_prefix_kept"] is False,
 check(agentic.summarize_cache({"cold_ttft_s": 2.0, "interleave_ttft_s": 0.3})["interleave_prefix_kept"] is True, "interleave kept")
 th = agentic.parse_thermal("Note: No thermal warning level has been recorded\nCPU_Scheduler_Limit = 100\nCPU_Speed_Limit = 87\n",
                            "Now drawing from 'Battery Power'\n", " lowpowermode 0\n powermode 2\n")
-check(th == {"speed_limit": 87, "scheduler_limit": 100, "battery": True, "low_power": False}, "pmset parse", str(th))
+check(th == {"speed_limit": 87, "scheduler_limit": 100, "battery": True, "low_power": False, "powermode": "2"},
+      "pmset parse", str(th))
+# macOS 26 prints the system-wide `powermode` (0 automatic, 1 low power, 2 high power) and only bare
+# `lowpowermode`/`highpowermode` tokens under `pmset -g cap`; macOS 14 and earlier printed `lowpowermode 1` itself.
+check(agentic.parse_thermal("", "", " powermode            1\n")["low_power"] is True,
+      "powermode 1 reads as Low Power Mode")
+check(agentic.parse_thermal("", "", " lowpowermode            1\n")["low_power"] is True,
+      "the older lowpowermode 1 spelling still reads as Low Power Mode")
+check(agentic.parse_thermal("", "", " lowpowermode\n highpowermode\n")["low_power"] is False,
+      "the bare capability tokens pmset -g cap prints are not a mode")
 check(agentic.parse_thermal("Note: No CPU power status has been recorded\n")["speed_limit"] is None, "pmset without limits")
 
 # ---- phases against the fake server
