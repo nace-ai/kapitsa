@@ -27,8 +27,8 @@ they decode.
    Qwen models a pass of at most 128 rows (a cached turn's message, the reply prefilled while idle, a draft read
    ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
    into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise.
-4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B),
-   otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
+4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B
+   and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
    (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
    not become committed recurrent history. KFlash (every drafter by default; `NI_KFLASH=0` keeps chains, and
    `NI_DFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
