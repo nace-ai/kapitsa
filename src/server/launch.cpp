@@ -44,7 +44,8 @@ const char* kHelp =
     "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with a\n"
     "the model's own context (less where this Mac's memory is tight), and stopped when the agent exits. Its log is in\n"
     "%s/logs/serve-P.log.\n\n"
-    "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: the best for this Mac\n"
+    "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: asked in a terminal; else the\n"
+    "                model picked last if it is downloaded, else the best for this Mac\n"
     "  --port P      the server's port (default 8000)\n"
     "  --context N   its context: tokens, k or m of them (128k, 1m), or max, the model's limit (default: the model's limit, or\n"
     "                the most that keeps the draft model where memory is tight; --ctx N works too)\n"
@@ -408,7 +409,15 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     std::string serve_model = model;
     bool elsewhere = false;  // a Mac on the network runs it whole: the server sends its requests there (route.h)
     try {
-      if (model.empty()) {
+      // nobody asked: the model picked last when it is downloaded, rather than the best for this Mac downloaded again
+      const std::optional<hub::ModelRef> last = model.empty() && !yes ? ui::last_pick_here() : std::nullopt;
+      if (last) {
+        ref = *last;
+        serve_model = hub::short_name(*ref.model, *ref.variant);
+        const std::string say = ref.name + ", the model picked last (downloaded). --model picks another.";
+        if (term::fancy()) ui::note(say);
+        else fprintf(stderr, "kapitsa: no --model given: %s\n", say.c_str());
+      } else if (model.empty()) {
         std::string w;
         if (!best_model(opt, budget, &ref, &w)) return fail(w);
         serve_model = ref.model && ref.variant ? hub::short_name(*ref.model, *ref.variant) : ref.dir;

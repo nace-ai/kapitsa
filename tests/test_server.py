@@ -393,6 +393,36 @@ def cli_checks(kapitsa):
           json.dumps(j))
     rc, out, err = run("pull", "35b:16gb")
     check("cli: a finished 16gb is reused offline", rc == 0 and "already downloaded" in out, out + err)
+    # nobody to ask (no terminal here): the model picked last when it is downloaded, not the best for this Mac
+    # downloaded again (issue 653: the Homebrew service)
+    busy2 = socket.socket()
+    busy2.bind(("127.0.0.1", 0))
+    busy2.listen(128)
+    bport = str(busy2.getsockname()[1])
+    with open(os.path.join(home, "state.json"), "w") as f:
+        json.dump({"model": "qwen3.6-35b-a3b:16gb"}, f)
+    rc, _, err = run("serve", "--port", bport)
+    check("cli: serve unasked starts the model picked last, downloaded (the port fails next)",
+          rc == 1 and "qwen3.6-35b-a3b:16gb, the model picked last" in err and "already in use" in err, err)
+    rc, _, err = run("serve", "--yes", "--port", bport)
+    check("cli: serve --yes still takes the best model for this Mac",
+          rc == 1 and "is the best fit for this Mac" in err and "picked last" not in err, err)
+    pi_bin = os.path.join(home, "bin-last")
+    os.makedirs(pi_bin)
+    with open(os.path.join(pi_bin, "pi"), "w") as f:
+        f.write("#!/bin/sh\nexit 0\n")
+    os.chmod(os.path.join(pi_bin, "pi"), 0o755)
+    agent_env = {"PATH": pi_bin + ":" + os.environ.get("PATH", ""), "KAPITSA_NO_AUTO_UPDATE": "1"}
+    rc, _, err = run("pi", "--port", bport, env_add=agent_env)
+    check("cli: pi unasked starts the model picked last too (the port fails next)",
+          rc == 1 and "qwen3.6-35b-a3b:16gb, the model picked last" in err and "already in use" in err, err)
+    with open(os.path.join(home, "state.json"), "w") as f:
+        json.dump({"model": "qwen3.8-27b:4bit"}, f)  # picked, but not downloaded
+    rc, _, err = run("pi", "--port", bport, env_add=agent_env)
+    check("cli: a last pick that is not downloaded: the best model for this Mac, as before",
+          rc == 1 and "picked last" not in err and "already in use" in err, err)
+    os.remove(os.path.join(home, "state.json"))
+    busy2.close()
     rc, out, _ = run("list", "--json")
     lst = {m["name"]: m for m in json.loads(out)} if rc == 0 else {}
     check("cli: list shows 16gb complete, with its variant",

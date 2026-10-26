@@ -7,7 +7,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 
 | Command | What it does |
 | --- | --- |
-| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`, visible to Kapitsa on the other Macs of the network ([Several Macs](#several-macs)). Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the best model for this Mac ([Server options](#server-options)). |
+| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`, visible to Kapitsa on the other Macs of the network ([Several Macs](#several-macs)). Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the model picked last if it is downloaded, else the best model for this Mac ([Server options](#server-options)). |
 | `kapitsa cluster [--json] [--watch]` | The Macs on this network that run Kapitsa: the model each serves, how, how fast, and the link to it ([Several Macs](#several-macs)). `kapitsa macs` is the same. |
 | `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
 | `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
@@ -42,7 +42,9 @@ already running on its port uses it and says so (stop it to pick another model).
 
 Nothing is asked where nobody could answer: when stdin, stdout or stderr is not a terminal (the Nace Agent app,
 scripts, `brew services`), with `TERM=dumb`, `CI` or `KAPITSA_NO_PROMPT=1` set, with `--yes`, or in a background job.
-Those start the best model for this Mac, with the same output as before.
+Those start the model picked last (the picker's last choice, or a catalog `--model` typed in a terminal) when it is
+downloaded, saying so (`No --model given: ..., the model picked last`), else the best model for this Mac, downloading
+it first, with the same output as before. `--yes` and the Nace Agent app's own Kapitsa always take the best model.
 
 ## Models and downloads
 
@@ -299,7 +301,7 @@ loaded: the server sends its requests there ([Several Macs](#several-macs)). In 
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--model MODEL` | the best model for this Mac | A name, `name:variant`, `org/name[@revision]`, a folder or a `.gguf` file ([Models and downloads](#models-and-downloads)). |
+| `--model MODEL` | asked in a terminal; else the model picked last if downloaded, else the best for this Mac | A name, `name:variant`, `org/name[@revision]`, a folder or a `.gguf` file ([Models and downloads](#models-and-downloads)). |
 | `--host HOST` | `0.0.0.0` | Listen address: every address, this Mac's and its network's ([API keys and network access](#api-keys-and-network-access)). `127.0.0.1` keeps the server to this Mac, as `--private` does. |
 | `--port PORT` | `8000` | Listen port. A port in use is an error, on any address. |
 | `--private` | off | This Mac only: listen on `127.0.0.1`, stay out of sight of Kapitsa on the other Macs and never send them requests ([Several Macs](#several-macs)). |
@@ -730,7 +732,7 @@ an error). Otherwise the command downloads the model if needed, starts `kapitsa 
 `~/.cache/kapitsa/logs/serve-P.log`, and stops it when the agent exits or the command is killed.
 A server it found keeps running when the agent exits. When that server is the Homebrew service (`brew services start
 kapitsa`, [Running in the background](#running-in-the-background)), the command says so and how to stop it: the
-service serves the best model for this Mac, so the agent sees that model alone.
+agent sees the service's one model alone.
 
 Without `--model` in a terminal, the command asks which model to start ([Which model](#which-model)); `--yes` skips
 the question. `--api-key K` is the server's key, if it has one. All other arguments go to the agent, and everything after
@@ -1018,10 +1020,11 @@ or Homebrew install needs no clone; it needs macOS Python 3.
 
 ## Running in the background
 
-Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (the best model for
-this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting it after an error or when it is killed
-(from Activity Monitor too); `brew services stop kapitsa` stops it. It downloads that model again when its folder is
-deleted, and `kapitsa claude|codex|opencode|pi` use it while it runs, its one model, so stop it to pick another. Its
+Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (on `127.0.0.1:8000`)
+in the background and at each login, restarting it after an error or when it is killed (from Activity Monitor too);
+`brew services stop kapitsa` stops it. It serves the model last picked in a terminal when that one is downloaded, else
+the best model for this Mac, downloaded first ([Which model](#which-model)). `kapitsa claude|codex|opencode|pi` use it
+while it runs, its one model, so stop it to pick another. Its
 log, the first download's progress too: `/opt/homebrew/var/log/kapitsa.log`.
 
 ## Environment variables
@@ -1032,7 +1035,7 @@ log, the first download's progress too: `/opt/homebrew/var/log/kapitsa.log`.
 | `KAPITSA_NO_AUTO_UPDATE` | | `1`: no automatic update and no check in the background ([Updating](#updating)); `kapitsa update` still works. |
 | `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
 | `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
-| `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the best model for this Mac ([Which model](#which-model)). |
+| `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the model picked last if downloaded, else the best model for this Mac ([Which model](#which-model)). |
 | `BENCH_GPU_LOCK` | `/tmp/kapitsa-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
 | `BENCH_GPU_AMBIENT` | | `kapitsa bench`: more process names whose GPU use is ambient (recorded, never flagged), comma-separated, as for the harness. |
 | `KAPITSA_BENCH_REPO` | `nace-ai/kapitsa` | `kapitsa bench --submit`: the repository results go to. |

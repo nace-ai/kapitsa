@@ -318,7 +318,8 @@ static void print_serve_help() {
   std::string h = strf("kapitsa serve [--model MODEL] [options]\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
-         "                         once: kapitsa import). Default: the best model for this Mac. Downloaded on first use.\n"
+         "                         once: kapitsa import). Default: asked in a terminal; else the model picked last if\n"
+         "                         it is downloaded, else the best model for this Mac. Downloaded on first use.\n"
          "  --host HOST            listen address (default 0.0.0.0: this Mac and its network; 127.0.0.1: this Mac\n"
          "                         only, like --private)\n"
          "  --port PORT            default 8000\n"
@@ -1029,7 +1030,16 @@ static int serve(int argc, char** argv, int first) {
   hub::ModelRef ref;
   bool last_fallback = false;
   try {
-    if (model.empty()) {
+    // nobody asked: the model picked last when it is downloaded, rather than the best for this Mac downloaded again
+    const std::optional<hub::ModelRef> last = model.empty() && !yes ? ui::last_pick_here() : std::nullopt;
+    if (last) {
+      ref = *last;
+      if (tui)
+        notes.push_back(bold_name(ref.name) + ", the model picked last. --model picks another.");
+      else
+        fprintf(stderr, "No --model given: %s, the model picked last (downloaded). --model picks another.\n",
+                ref.name.c_str());
+    } else if (model.empty()) {
       std::string why;
       if (!best_model(opt, budget, &ref, &why)) return fail(why);
       if (tui)

@@ -8,8 +8,8 @@
 // catalog model updates it too; with no history, the best model for this Mac at the default context.
 //
 // Never asked where it could block a program: stdin, stdout or stderr not a terminal (the app, scripts, a brew
-// service), TERM=dumb, CI, KAPITSA_NO_PROMPT, --yes, a background job. Those keep the plain behavior: the best model
-// for this Mac.
+// service), TERM=dumb, CI, KAPITSA_NO_PROMPT, --yes, a background job. Those start the last choice when it is
+// downloaded (last_pick_here; not with --yes), else the best model for this Mac.
 #pragma once
 #include "engine/engine.h"
 #include "hub/hub.h"
@@ -48,6 +48,12 @@ bool make_room(const hub::SpaceShort& s);
 // Keeps a catalog model named with --model (or picked) as the next picker's first choice, when a person runs the
 // command in a terminal (the app's and scripts' runs leave it alone); other models are not kept
 void remember(const hub::ModelRef& r);
+
+// The model picked last (or named with --model in a terminal), for a run nobody is asked in (a brew service, a script):
+// when it is downloaded at this Kapitsa's pinned revisions, so that it starts without the network, and this kapitsa is
+// not an app's, which names its own model. Else nullopt: the best model for this Mac, as before (issue 653: the Homebrew
+// service downloaded the 35B again whenever it was deleted, while the models the user picked sat unused).
+std::optional<hub::ModelRef> last_pick_here();
 
 // "qwen3.6-35b-a3b · 4-bit": a model id as a server reports it, for a line about the running server
 std::string model_label(const std::string& id);
