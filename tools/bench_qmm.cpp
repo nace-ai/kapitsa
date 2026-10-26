@@ -7,7 +7,8 @@
 // (incl. the last row/column) against a double-precision reference on the dequantized halfs.
 // qmr_gu_* kernels (fused gate/up/SwiGLU, half output) get a second weight set; their TFLOP/s
 // count both projections. *_ld kernels (QmmLdParams) read the leading K columns of weight rows 2K long.
-// QMM_SCALE=<f> multiplies the random scales (1e-3: below half's normal range).
+// QMM_SCALE=<f> multiplies the random scales (1e-3: below half's normal range). Kernels named *f16* (qrf_f16_*, qmtf16_*)
+// get bf16 weights (uniform in +-0.05) and qmt8_* / qmr8_* 8-bit codes.
 // Shapes: default (35B-like), SHAPES27=1 (27B prefill), SMALLM=1, or QMM_SHAPES="M,N,K;M,N,K".
 #include "metal/gpu.h"
 #include "util/bf16.h"
@@ -48,12 +49,17 @@ struct Kern {
   int bits; // 8 for qmr8_* / *_b8_* kernels, else 4
   bool ld;  // *_ld: QmmLdParams, weight / scale rows of 2K columns
 };
-static int bits_for(const std::string& n) { return n.rfind("qmr8", 0) == 0 || n.find("_b8_") != std::string::npos ? 8 : 4; }
+static int bits_for(const std::string& n) {
+  if (n.find("f16") != std::string::npos) return 16;  // bf16 weights (qrf_f16_*, qmtf16_*)
+  return n.rfind("qmr8", 0) == 0 || n.rfind("qmt8", 0) == 0 || n.find("_b8_") != std::string::npos ? 8 : 4;
+}
 
 static uint32_t threads_for(const std::string& name) {
   if (getenv("QMM_THREADS")) return atoi(getenv("QMM_THREADS"));
   std::smatch m;
   if (std::regex_search(name, m, std::regex("_w([0-9])([0-9])_"))) return 32 * std::stoi(m[1]) * std::stoi(m[2]);
+  if (name.rfind("qmti8s", 0) == 0 && std::regex_search(name, m, std::regex("_m([0-9]+)_n([0-9]+)")))
+    return std::stoi(m[1]) * std::stoi(m[2]) / 32;  // one 32 x 32 simdgroup each
   return 128;
 }
 
@@ -104,6 +110,7 @@ int main(int argc, char** argv) {
     // weights sized for 8 bits (4-bit kernels read the first half), rows of 2K for the *_ld kernels' view
     Buffer W = g.alloc(size_t(N) * K * 2), S = g.alloc(size_t(N) * K / 64 * 4), B = g.alloc(size_t(N) * K / 64 * 4);
     Buffer X = g.alloc(size_t(M) * K * 2), Y = g.alloc(size_t(M) * N * 4);
+    Buffer XQ = g.alloc(size_t(M) * K), XS = g.alloc(size_t(M) * K / 64 * 8);  // qmti8_*: qx8_g64's int8 X
     Buffer W2 = g.alloc(size_t(N) * K * 2), S2 = g.alloc(size_t(N) * K / 64 * 4), B2 = g.alloc(size_t(N) * K / 64 * 4);
     std::uniform_real_distribution<float> d(-1, 1);
     for (auto [w, sc, bi] : {std::tuple{&W, &S, &B}, std::tuple{&W2, &S2, &B2}}) {
@@ -113,23 +120,40 @@ int main(int argc, char** argv) {
         bi->as<uint16_t>()[i] = f32_to_bf16(0.05f * d(rng));
       }
     }
+    if (std::any_of(kerns.begin(), kerns.end(), [](const Kern& k) { return k.bits == 16; }))
+      for (Buffer* w : {&W, &W2})  // bf16 weights for the *f16* kernels (the codes' kernels read them as codes)
+        for (size_t i = 0; i < size_t(N) * K; ++i) w->as<uint16_t>()[i] = f32_to_bf16(0.05f * d(rng));
     for (size_t i = 0; i < size_t(M) * K; ++i) X.as<uint16_t>()[i] = f2h(d(rng));
     const double flop = 2.0 * M * N * K;
-    const int reps = std::max(3, int(1.5e12 / flop));
+    const int reps = getenv("QMM_REPS") ? atoi(getenv("QMM_REPS")) : std::max(3, int(1.5e12 / flop));  // small shapes: cap it
     std::vector<Pipeline> pipes;
+    Pipeline qx8;
+    const bool nopre = getenv("QMM_I8_NOPRE") != nullptr;  // qmti8_*: time the GEMM alone (X quantized once)
     for (auto& k : kerns) {
       if (k.name.rfind("qmt", 0) == 0) g.compile_extra("tensor", kTensorKernelSource, true);
+      if (k.name.rfind("qrf", 0) == 0) g.compile_formats();
       pipes.push_back(g.pipeline(k.name));
+      if (k.name.rfind("qmti8", 0) == 0) qx8 = g.pipeline("qx8_g64");
     }
+    struct { uint32_t M, K, x_ld; } qxp{M, K, K};
+    auto quant = [&](Encoder* e) {
+      e->use(qx8);
+      e->buf(0, X); e->buf(1, XQ); e->buf(2, XS); e->val(3, qxp);
+      e->dispatch((M * (K / 64) * 8 + 255) / 256, 1, 1, 256);
+    };
     QmmParams prm{M, N, K, K, N, 0, 64, 0, 0};
     struct { QmmParams q; uint32_t w_ld, s_ld; } ldprm{prm, 2 * K / 8, 2 * K / 64};  // 4-bit rows of 2K
     auto run = [&](size_t ki, int n) {
       const Kern& k = kerns[ki];
       auto e = g.begin();
+      const bool i8 = k.name.rfind("qmti8", 0) == 0;
+      if (i8 && nopre) quant(e.get());
       e->use(pipes[ki]);
       for (int r = 0; r < n; ++r) {
-        e->buf(0, X); e->buf(1, W); e->buf(2, S); e->buf(3, B); e->buf(4, Y);
-        if (k.ld) e->val(5, ldprm); else e->val(5, prm);
+        if (i8 && !nopre) { quant(e.get()); e->use(pipes[ki]); }
+        e->buf(0, i8 ? XQ : X);
+        if (i8) { QmmParams q8 = prm; q8.x_ld = K; e->val(5, q8); e->buf(6, XS); } e->buf(1, W); e->buf(2, S); e->buf(3, B); e->buf(4, Y);
+        if (k.ld) e->val(5, ldprm); else if (!i8) e->val(5, prm);
         if (k.gu) { e->buf(6, W2); e->buf(7, S2); e->buf(8, B2); }
         const int cb = k.name.rfind("qmtg", 0) == 0 ? k.bn / 2 : k.bn;
         e->dispatch((N + cb - 1) / cb, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
@@ -153,9 +177,14 @@ int main(int argc, char** argv) {
           double r = 0;
           for (uint32_t k = 0; k < K; ++k) {
             const size_t ik = size_t(n) * wk + k;
-            uint32_t q = kerns[ki].bits == 8 ? (w.as<uint32_t>()[ik / 4] >> (8 * (k % 4))) & 255
-                                             : (w.as<uint32_t>()[ik / 8] >> (4 * (k % 8))) & 15;
-            float wv = bf16_to_f32(sc.as<uint16_t>()[ik / 64]) * q + bf16_to_f32(bi.as<uint16_t>()[ik / 64]);
+            float wv;
+            if (kerns[ki].bits == 16) {
+              wv = bf16_to_f32(w.as<uint16_t>()[ik]);
+            } else {
+              uint32_t q = kerns[ki].bits == 8 ? (w.as<uint32_t>()[ik / 4] >> (8 * (k % 4))) & 255
+                                               : (w.as<uint32_t>()[ik / 8] >> (4 * (k % 8))) & 15;
+              wv = bf16_to_f32(sc.as<uint16_t>()[ik / 64]) * q + bf16_to_f32(bi.as<uint16_t>()[ik / 64]);
+            }
             r += double(float(__fp16(wv))) * h2f(X.as<uint16_t>()[size_t(m) * K + k]);
           }
           return r;
@@ -173,10 +202,11 @@ int main(int argc, char** argv) {
       std::vector<double> v = ms[ki];
       std::sort(v.begin(), v.end());
       double med = v[v.size() / 2], best = v[0];
-      const double kf = kerns[ki].gu ? 2.0 * flop : flop, tol = kerns[ki].gu ? 4e-3 : 1e-3;
+      const double kf = kerns[ki].gu ? 2.0 * flop : flop,
+                   tol = kerns[ki].name.rfind("qmti8", 0) == 0 ? 3e-2 : kerns[ki].gu ? 4e-3 : 1e-3;
       printf("%-26s M=%5u N=%5u K=%5u  %8.1f us  med %5.2f  best %5.2f TFLOP/s  err=%.1e%s\n", kerns[ki].name.c_str(), M, N,
              K, med * 1000, kf / (med * 1e-3) / 1e12, kf / (best * 1e-3) / 1e12, maxrel, maxrel > tol ? "  FAIL" : "");
     }
-    for (Buffer* b : {&W, &S, &B, &W2, &S2, &B2, &X, &Y}) g.release(*b);
+    for (Buffer* b : {&W, &S, &B, &W2, &S2, &B2, &X, &Y, &XQ, &XS}) g.release(*b);
   }
 }

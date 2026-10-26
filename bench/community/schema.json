@@ -118,6 +118,7 @@
       }
     },
     "flags": {"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 400}, "description": "What could skew the numbers, in the harness's words."},
+    "power_info": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 400}, "description": "Non-dropping power provenance notes, e.g. 'POWER-INFO: High Power Mode (pmset powermode 2)'. Never invalidates a run or a pair, unlike a POWER flag."},
     "invalid": {"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 400}, "description": "Measurements that failed the harness's checks; a result with any is not added."}
   },
   "$defs": {

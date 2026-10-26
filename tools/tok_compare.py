@@ -24,7 +24,7 @@ out = subprocess.run([binary, tj], input=inp.encode(), capture_output=True).stdo
 bad = 0
 for t, line in zip(texts, out):
     ours = [int(x) for x in line.split(",")] if line else []
-    ref = hf.encode(t).ids
+    ref = hf.encode(t, add_special_tokens=False).ids  # (a post-processor's BOS, as Llama's, is not text)
     if ours != ref:
         bad += 1
         if bad <= 5:

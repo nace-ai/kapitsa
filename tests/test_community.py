@@ -40,7 +40,7 @@ cat, macs, versions = cc.catalog(), cc.mac_models(), cc.known_versions(use_git=F
 
 # ---------------------------------------------------------------- what the checker knows
 check(list(cat) == ["qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b", "qwen3.8-flash-next", "nemotron-labs-dory1.0-4b",
-                   "nemotron-3-nano-4b", "nemotron-nano-9b-v2", "nemotron-3.5-lightning", "nemotron-3.5-bolt", "nemotron-3.5-super-vl", "flint"], "the catalog's models, in order",
+                   "nemotron-3-nano-4b", "nemotron-nano-9b-v2", "nemotron-3.5-lightning", "nemotron-3.5-bolt", "nemotron-3.5-super-vl", "flint", "nanbeige4.3-33b"], "the catalog's models, in order",
       str(list(cat)))
 check(cat["qwen3.6-35b-a3b"]["variants"] == {"4bit": "4-bit", "5bit": "5-bit", "6bit": "6-bit", "8bit": "8-bit", "bf16": "bf16",
                                                    "16gb": "2-bit experts"},
@@ -128,6 +128,12 @@ flint["protocol"]["temperature"] = 1.0
 prompts(flint, (3873, 15065))
 e = cc.check_result(flint, cat, macs, versions)[0]
 check(not e, "Flint's prompts pass against its own reference (3,874 and 15,066 tokens)", str(e))
+nanbeige = copy.deepcopy(full)  # Nanbeige4.3: its own template's and tokenizer's prompt sizes, not Qwen's; no reference
+nanbeige["model"].update(name="nanbeige4.3-33b", title=cat["nanbeige4.3-33b"]["title"], variant="4bit",
+                         precision=cat["nanbeige4.3-33b"]["variants"]["4bit"])
+prompts(nanbeige, (5087, 19955))
+e = cc.check_result(nanbeige, cat, macs, versions)[0]
+check(not e, "Nanbeige4.3's prompt sizes are not held to Qwen's (no reference of its own yet)", str(e))
 r = copy.deepcopy(flint)
 prompts(r, (4133, 16286))
 e = cc.check_result(r, cat, macs, versions)[0]
@@ -173,6 +179,16 @@ r = copy.deepcopy(full)
 r["conditions"]["contention"], r["flags"] = [], ["power: on battery (a Mac on battery may run slower)"]
 check(cc.labels_for(r, []) == {"benchmark", "flagged"} and cc.labels_for(r, ["x"]) == {"benchmark", "flagged", "invalid"},
       "labels: flagged, and invalid when a check fails")
+
+# A run on this Mac in High Power Mode (pmset powermode 2) records a POWER-INFO note and no POWER flag, so it must not land
+# in the `flagged` bucket the community table reads: the note is provenance, not a disqualification (ROUND 326/382).
+r = copy.deepcopy(full)
+r["conditions"]["contention"], r["flags"] = [], []
+r["power_info"] = ["POWER-INFO: High Power Mode (pmset powermode 2)"]
+check(cc.labels_for(r, []) == {"benchmark"}, "labels: a High Power Mode run is not flagged", str(cc.labels_for(r, [])))
+r["conditions"]["contention"] = ["a benchmark"]
+check(cc.labels_for(r, []) == {"benchmark", "contention"},
+      "labels: contention still labels an info-noted High Power Mode run", str(cc.labels_for(r, [])))
 
 # ---------------------------------------------------------------- the table
 tmp = tempfile.mkdtemp(prefix="kapitsa-community-test-")

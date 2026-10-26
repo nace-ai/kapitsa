@@ -113,6 +113,13 @@ prefill's grouped GEMMs). Its activations pass half's range in places (up to 757
 SwiGLU stores such rows divided by a power of two and folds the factor back into the row's weight
 (`flint_swiglu_scaled`). It has its own pre-tokenizer split and GLM's tool-call format in the output parser.
 
+Flint's backend also runs a dense Llama (`model_type` `llama`, Nanbeige4.3-33B) as a Flint without its extras: every
+layer full attention with RoPE and a dense SwiGLU MLP, no q / k norms (`flint_prep_nonorm`) and no sinks (a sink of
+-inf, which leaves each softmax as it is without one, exactly). Its 7 query heads per KV head take 7-head forms of
+`flint_attn_d2` and `qattn_t_flint` (written for 8: each token's eighth fragment row is a spare head whose results are
+dropped); bf16 weights run on `wfmt.metal`'s kernels. Its tokenizer is SentencePiece-style BPE (`src/tokenizer`: Metaspace and byte
+fallback) and its chat markup Qwen's (`<think>`, XML tool calls).
+
 All four implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
 Speculative paths remain specialized: the engine also holds backend-specific pointers and drafter state. Adding a
 new architecture requires more than implementing `Model` if it needs a new drafter, tokenizer behavior or vision tower.
@@ -138,7 +145,10 @@ new architecture requires more than implementing `Model` if it needs a new draft
   (`src/kernels/tensor/qmt_moe_q20.metal`: the same 64-row tile on the Q2_0 weight rows, the qrm kernels' per-element
   arithmetic kept — the decode is exact and the products accumulate in fp32 — so only the tiling reassociates the K
   reduction; `NI_MOE_QTM_Q20=0` keeps the simdgroup kernels), and Flint's prefill attention (head dim 128, 8 query heads per
-  KV head: `tensor/qattn_t_flint.metal`, `NI_FLINT_QATTN=0` keeps `flint_attn_prefill`). Measured on the 4B (dense),
+  KV head: `tensor/qattn_t_flint.metal`, `NI_FLINT_QATTN=0` keeps `flint_attn_prefill`). A dense Llama on Flint's backend (Nanbeige4.3) runs its 8-bit and bf16 prefill GEMMs on the same tile too
+  (`tensor/qmtw.metal`, `NI_FLINT_QMTW=0` keeps the simdgroup kernels) and its 4-/8-bit tiles in a swizzled order that
+  shares weight tiles through the cache (`NI_FLINT_QMTS=0` keeps the plain order; the 8-bit 128-row tile only for chunks of
+  a multiple of 64 rows). Measured on the 4B (dense),
   the 35B-A3B and Flash-Next (experts): none is bit-identical to the simdgroup paths, since the tile reassociates each output's
   K reduction, so the experts' tile is gated by `tools/logit_compare.py --reorder` (AGENTS.md) rather than the model's
   noise floor.
@@ -189,7 +199,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal); Q2_0 experts and their store: [`moe_q20.h`](../src/model/moe_q20.h), [`expert_store.h`](../src/model/expert_store.h), [`zq2moe.metal`](../src/kernels/zq2moe.metal) |
 | Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h); KFlash trees: [`kflash_budget.h`](../src/model/kflash_budget.h), [`nh_tree.metal`](../src/kernels/nemotron/nh_tree.metal) |
 | Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
-| Flint backend | [`flint.h`](../src/model/flint.h), [`src/kernels/flint/`](../src/kernels/flint/); the timing tools [`flint_bench.cpp`](../tools/flint_bench.cpp) and [`flint_kbench.cpp`](../tools/flint_kbench.cpp) |
+| Flint backend (and dense Llama models: Nanbeige4.3) | [`flint.h`](../src/model/flint.h), [`src/kernels/flint/`](../src/kernels/flint/); the timing tools [`flint_bench.cpp`](../tools/flint_bench.cpp) and [`flint_kbench.cpp`](../tools/flint_kbench.cpp) |
 | Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |
 | Image encoders and embedding cache | [`src/vision/`](../src/vision/) |

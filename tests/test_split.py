@@ -5,20 +5,27 @@ stage that goes away must end the request in flight with an error that says so. 
 GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless NACE_GPU_LOCK_HELD=1 or NI_LOCK_HELD=1 says the caller
 holds it. The model is a synthetic Flash-Next pack (tools/fn_synth.py: 8 layers at hidden 512, random weights) with a
 Qwen model's tokenizer, so its replies are random tokens, the same ones every time; greedy, thinking off.
+  0. `kapitsa stage`'s own flags, before any model: a prefill chunk below one is a usage error, as bench's is
+     (tests/test_bench.py), and a good one still parses and goes on to look for its model. No GPU, no tokenizer and no
+     peer: it runs first and in a second, or alone with --flags-only
   1. one stage (layers 5-8): short prompts, a long one (two prefill chunks), a follow-up turn, a streamed reply, and two
      requests at once on the split server against each alone on the whole one
   2. two stages (layers 3-4 and 5-8): the ring back through the head's own port
   3. the stage killed in the middle of a reply: that request ends with an error naming the split, the next one at once
-usage: test_split.py <build dir> [--tokenizer QWEN_MODEL_DIR] [--keep]
+usage: test_split.py <build dir> [--tokenizer QWEN_MODEL_DIR] [--keep] [--flags-only]
   --tokenizer: a downloaded Qwen3.5-family folder whose tokenizer the pack takes (default: the first under
                ~/.cache/kapitsa/models with a tokenizer.json and a vocabulary of 248320)
-  --keep: keep the temporary folder (the pack and the logs)"""
+  --keep: keep the temporary folder (the pack and the logs)
+  --flags-only: run section 0 alone (the stage's own flags) and stop before the GPU lock, the tokenizer and the pack"""
 import fcntl, json, os, shutil, signal, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 
 ARGS = sys.argv[1:]
 KEEP = "--keep" in ARGS
 if KEEP:
     ARGS.remove("--keep")
+FLAGS_ONLY = "--flags-only" in ARGS
+if FLAGS_ONLY:
+    ARGS.remove("--flags-only")
 TOKENIZER = ""
 if "--tokenizer" in ARGS:
     i = ARGS.index("--tokenizer")
@@ -98,6 +105,34 @@ def stage(tmp, name, layers, port):
     return s
 
 
+def stage_flags(tmp):
+    """The stage command's own flags, before any model is loaded: a chunk below one is a usage error, as `kapitsa bench`
+    says of its own --prefill-chunk, and a good one still parses and reaches the model lookup. No GPU, no tokenizer, no
+    peer, no lock: a usage error exits in the parse loop (status 2), before anything is loaded. The model is a folder
+    that does not exist and the network is off, so a chunk that parses cannot start anything: the stage stops at the
+    lookup (status 1, "No folder at") and never listens."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("NI_") and not k.startswith("KAPITSA_")}
+    env.update({"KAPITSA_HOME": os.path.join(tmp, "home"), "KAPITSA_NO_AUTO_UPDATE": "1", "KAPITSA_NO_PROMPT": "1",
+                "HF_HUB_OFFLINE": "1"})
+    model = os.path.join(tmp, "no-such-model")
+
+    def run(args):
+        return subprocess.run([KAPITSA] + args, capture_output=True, text=True, timeout=10, env=env)
+
+    missing = run(["stage", "--model", model, "--prefill-chunk"])
+    check(missing.returncode == 2 and "needs a value" in missing.stderr, "prefill chunk requires a value",
+          missing.stderr[:300])
+    for value, why in (("0", "must be a positive integer"), ("-1", "needs a whole number"),
+                       ("abc", "needs a whole number"), ("4096x", "needs a whole number"),
+                       ("99999999999999999", "needs a whole number")):
+        bad = run(["stage", "--model", model, "--prefill-chunk", value])
+        check(bad.returncode == 2 and "--prefill-chunk" in bad.stderr and why in bad.stderr,
+              f"invalid prefill chunk {value!r} is a usage error naming the flag", bad.stderr[:300])
+    good = run(["stage", "--model", model, "--prefill-chunk", "2048"])
+    check(good.returncode == 1 and "No folder at" in good.stderr and "--prefill-chunk" not in good.stderr,
+          "a positive prefill chunk parses and stops at the model lookup", good.stderr[:300])
+
+
 def server(tmp, name, port, split=None):
     args = ["serve", "--model", PACK, "--port", str(port), "--ctx", "16384", "--disk-cache", "0"]
     s = Proc(tmp, name, args + (["--split", split] if split else []))
@@ -166,9 +201,18 @@ def compare(whole, split, label):
 
 def main():
     global PACK
-    lock = gpu_lock()
     tmp = tempfile.mkdtemp(prefix="kapitsa-split-")
     PACK = os.path.join(tmp, "flash-next-synthetic")
+    # 0. the stage command's flags alone: no model, no GPU, no lock
+    stage_flags(tmp)
+    if FLAGS_ONLY:
+        print("FAIL" if fails else "PASS", f"({fails} failed)")
+        if KEEP:
+            print("kept", tmp)
+        else:
+            shutil.rmtree(tmp, ignore_errors=True)
+        sys.exit(1 if fails else 0)
+    lock = gpu_lock()
     procs = []
     try:
         tok = TOKENIZER or find_tokenizer()

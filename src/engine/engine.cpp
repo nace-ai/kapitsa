@@ -20,6 +20,7 @@
 #include <mutex>
 #include <fstream>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -328,6 +329,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   } else if (Flint::is_model(opts_.model_dir)) {
     auto m = std::make_unique<Flint>(opts_.model_dir, opts_.prefill_chunk);
     flint_ = m.get();
+    flint_chat_ = !m->config().llama;
     model_ = std::move(m);
     publisher_sampling();
   } else {
@@ -340,8 +342,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   std::string src = chat_template_source(opts_.model_dir);
   if (src.empty()) fatal("no chat template in %s", opts_.model_dir.c_str());
   if (flint_) src = flint_template(src);
-  tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
-                                                 flint_ ? "<|end_of_text|>" : "<|im_end|>");
+  tmpl_ = std::make_unique<minja::chat_template>(src, flint_chat_ ? "<|begin_of_text|>" : "",
+                                                 flint_chat_ ? "<|end_of_text|>" : "<|im_end|>");
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -620,7 +622,8 @@ std::string unsupported_model(const std::string& model_dir) {
   if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers")) return "";
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
                            "Qwen3.8-Flash-Next (qwen4_exp), NVIDIA's Nemotron-H (nemotron_h: Nemotron Nano, Nemotron 3.5), "
-                           "Nemotron Labs Dory (dory) and Recursive's Flint (flint).";
+                           "Nemotron Labs Dory (dory), Recursive's Flint (flint) and dense Llama models such as "
+                           "Nanbeige4.3 (llama).";
   const std::string what = !mt.empty() ? mt : tt;
   if (what.empty()) return model_dir + " is not a model Kapitsa runs: its config.json names no model_type." + runs;
   return model_dir + " is a " + what + " model (its config.json's model_type), an architecture Kapitsa does not run." +
@@ -717,10 +720,11 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;
   }
-  // Flash-Next's Q2_0 pack (Qwen4Exp) single stream on the M5: 4096-row chunks. 32K Q2 prefill, M5 Pro, 25 Oct, d2 sparse
-  // attention: chunk 2048 ~900, 4096 ~1005-1017, 6144 967, 8192 887 tok/s (wider chunks halve the expert reads but
-  // the per-chunk compute grows faster). The hidden size is 640, so the extra buffers are small.
-  if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10()) {
+  // Flash-Next's Q2_0 pack (Qwen4Exp) single stream on the M5, with NI_QSA_TATTN=1: 4096-row chunks. 32K Q2 prefill,
+  // M5 Pro, 25 Oct, full-table pack, chunk 2048 vs 4096 (#571): TATTN on +0.7% to +13.7%, TATTN off -1.2% to -7.9%, so
+  // without TATTN (the default since #585) the pack keeps 2048. Wider chunks halve the expert reads but the per-chunk
+  // compute grows faster. The hidden size is 640, so the extra buffers are small.
+  if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10() && Qwen4Exp::tattn(model_dir)) {
     const MemPlan wide = model_plan(model_dir, 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
   }
@@ -1772,13 +1776,82 @@ void Engine::remember_reasoning(const ChatRequest& r, const ChatResult& res) {
 
 int Engine::restore_reasoning(ChatRequest& r) { return reasoning_.restore(r.messages); }
 
+// minja (third_party, not edited) reads no attribute or subscript after a call: `f(x).startswith('a')` fails with
+// "Expected comma in tuple", and Nanbeige 4.3's template calls its visible_text macro so. Inside {{ }} and {% %}, such
+// a call is put in parentheses, `(f(x)).startswith('a')`, which minja reads and which means the same. Keywords (`not(x).y`
+// is `not ((x).y)`), method calls and filters are left alone; a template minja already parses has no such call, so for
+// it this returns the source unchanged.
+std::string paren_call_postfix(const std::string& src) {
+  const size_t n = src.size();
+  auto ident = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+  auto skip_string = [&](size_t k) {  // k at a quote: the index past its closing quote
+    const char q = src[k];
+    for (++k; k < n && src[k] != q; ++k)
+      if (src[k] == '\\') ++k;
+    return std::min(k + 1, n);
+  };
+  static const std::set<std::string> keywords = {"not", "and", "or", "in", "is", "if", "elif", "else", "for",
+                                                 "set", "macro", "call", "filter", "return", "with"};
+  std::vector<std::pair<size_t, char>> inserts;  // (index, '(' or ')'), applied from the back
+  for (size_t i = 0; i < n;) {
+    if (src.compare(i, 2, "{#") == 0) {  // a comment: as written
+      const size_t e = src.find("#}", i + 2);
+      i = e == std::string::npos ? n : e + 2;
+      continue;
+    }
+    if (src.compare(i, 2, "{{") != 0 && src.compare(i, 2, "{%") != 0) {
+      ++i;
+      continue;
+    }
+    const std::string close = src[i + 1] == '{' ? "}}" : "%}";
+    size_t k = i + 2;
+    while (k < n && src.compare(k, 2, close) != 0) {
+      if (src[k] == '\'' || src[k] == '"') {
+        k = skip_string(k);
+        continue;
+      }
+      if (!ident(src[k]) || std::isdigit(static_cast<unsigned char>(src[k]))) {
+        ++k;
+        continue;
+      }
+      const size_t s = k;
+      while (k < n && ident(src[k])) ++k;
+      size_t before = s;
+      while (before > 0 && std::isspace(static_cast<unsigned char>(src[before - 1]))) --before;
+      const char prev = before > 0 ? src[before - 1] : ' ';
+      if (k >= n || src[k] != '(' || prev == '.' || prev == '|' || keywords.count(src.substr(s, k - s))) continue;
+      size_t e = k, depth = 0;  // the call's closing parenthesis
+      while (e < n) {
+        if (src[e] == '\'' || src[e] == '"') {
+          e = skip_string(e);
+          continue;
+        }
+        if (src[e] == '(') ++depth;
+        else if (src[e] == ')' && --depth == 0) break;
+        ++e;
+      }
+      if (e + 1 < n && (src[e + 1] == '.' || src[e + 1] == '[')) {
+        inserts.push_back({s, '('});
+        inserts.push_back({e + 1, ')'});
+      }
+      // the arguments are scanned too (k stays at the parenthesis)
+    }
+    i = k + 2;
+  }
+  if (inserts.empty()) return src;
+  std::sort(inserts.begin(), inserts.end());
+  std::string out = src;
+  for (auto it = inserts.rbegin(); it != inserts.rend(); ++it) out.insert(it->first, 1, it->second);
+  return out;
+}
+
 std::string chat_template_source(const std::string& model_dir) {
   std::string src = read_file(model_dir + "/chat_template.jinja");
   if (src.empty()) {
     auto cfg = nlohmann::json::parse(read_file(model_dir + "/tokenizer_config.json"), nullptr, false);
     if (cfg.is_object() && cfg.contains("chat_template") && cfg["chat_template"].is_string()) src = cfg["chat_template"];
   }
-  return src;
+  return paren_call_postfix(src);
 }
 
 // (the template's own enable_thinking, ns.enable_thinking or namespace(enable_thinking=...), is not the kwarg)
@@ -1840,13 +1913,15 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
       return render_chat(*tmpl_, q, add_generation_prompt, images);
     }
   }
-  return render_chat(*tmpl_, r, add_generation_prompt, images, flint_ != nullptr);
+  return render_chat(*tmpl_, r, add_generation_prompt, images, flint_chat_);
 }
 
 // Flint's chat template is written for Jinja2, and minja (third_party, not edited) differs from it in three places the
 // template uses: no replace filter (strings have the replace method), "\x00" read as the text "x00" (the template's
 // removal of NUL characters would delete that text from every message instead; dropped), and no ensure_ascii keyword
-// on tojson (whose output keeps non-ASCII text as ensure_ascii=False does). The source rewritten for minja.
+// on tojson (whose output keeps non-ASCII text as ensure_ascii=False does). The source rewritten for minja. Nanbeige4.3's
+// (a dense Llama on Flint's backend) uses the replace filter too, on a media part's type; its string method on a macro's
+// result (visible_text(message.content).startswith(...)) chat_template_source has parenthesized (paren_call_postfix).
 std::string flint_template(std::string src) {
   auto replace_all = [&](const std::string& a, const std::string& b) {
     for (size_t at = 0; (at = src.find(a, at)) != std::string::npos; at += b.size()) src.replace(at, a.size(), b);
@@ -2136,7 +2211,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // task, an agent's next conversation) then reuses the block however early it diverges.
   int pbound = -1;
   if (prefix_ckpt_ && images.empty()) {
-    const size_t off = text.find(flint_ ? "<|user|>" : "<|im_start|>user");
+    const size_t off = text.find(flint_chat_ ? "<|user|>" : "<|im_start|>user");
     if (off != std::string::npos && off > 0) {
       const std::vector<int> pt = tok_.encode(text.substr(0, off));
       if (pt.size() >= 64 && int(pt.size()) < n && (boundary < 0 || int(pt.size()) < boundary) &&
@@ -2161,7 +2236,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     std::string why;
     if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
-    else if (grammar_calls(*r.grammar) && flint_)
+    else if (grammar_calls(*r.grammar) && flint_chat_)
       why = "Flint writes its tool calls in GLM's markup, which the tool-call grammar does not hold yet: send "
             "tool_choice \"auto\" and non-strict tools";
     else if (think && think_close_ < 0)
@@ -2805,10 +2880,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }();
   // (Nemotron-H, Dory and Flint: the whitespace before </think> stays in the reasoning, as their templates render
   // returned turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text;
-  // Flint's calls in GLM's markup)
+  // Flint's calls in GLM's markup. A dense Llama on Flint's backend, Nanbeige4.3, renders Qwen's turns: as Qwen)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, (nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_, text_tags_,
-                      flint_ ? CallFormat::Glm : CallFormat::QwenXml);
+                      think_tools, (nh_ != nullptr || dory_ != nullptr || flint_chat_) && think_ws_, text_tags_,
+                      flint_chat_ ? CallFormat::Glm : CallFormat::QwenXml);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -3856,7 +3931,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     return;
   }
   const size_t mpos = text.rfind(marker);
-  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_ ? "<|user|>" : "<|im_start|>", mpos);
+  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_chat_ ? "<|user|>" : "<|im_start|>", mpos);
   if (cut == std::string::npos) return logd("history: nothing, no marker in the rendered text");
   text.resize(cut);
   std::vector<int> t2 = tok_.encode(text);

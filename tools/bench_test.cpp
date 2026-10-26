@@ -147,6 +147,7 @@ int self_test() {
   check(reference_prompt_tokens("nemotron-h").at(16000) == 16514, "Nemotron's reference prompt tokens");
   check(reference_prompt_tokens("flint").at(4000) == 3874 && reference_prompt_tokens("flint").at(16000) == 15066,
         "Flint's reference prompt tokens (configs/flint.json's)");
+  check(reference_prompt_tokens("llama").empty(), "a dense Llama has no reference prompt tokens yet");
   // the writing runs' temperature in the texts: the result's own, or for a result written before it was recorded, Flint's
   // 1.0 by its catalog name and 0.6 for any other model
   check(fmt_temp(0.6) == "0.6" && fmt_temp(1.0) == "1.0", "fmt_temp", fmt_temp(1.0));

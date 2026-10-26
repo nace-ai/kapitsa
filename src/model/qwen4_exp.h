@@ -73,6 +73,11 @@ class Qwen4Exp : public Qwen35 {
   static bool is_model(const std::string& model_dir);
   // a Flash-Next folder whose routed experts are Q2_0 (tools/qwen4_exp_q20.py)
   static bool q20_pack(const std::string& model_dir);
+  // Whether the prefill sparse attention runs on the matrix units (qattn_t_sparse_g12d2), the decision enc_attn_sparse
+  // makes: NI_QSA_TATTN=1 (opt-in since #585), 12 query heads per KV head, head dim 256, an Apple10 GPU and macOS 26.
+  // The model_dir form reads config.json (false for a folder that is not Flash-Next).
+  static bool tattn(const Qwen35Config& c);
+  static bool tattn(const std::string& model_dir);
   // the process's split's share of the model (split()), or `split`'s
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, const Split* split = nullptr);
   // For placing a split (src/cluster/place.h), from the headers: each trunk layer's weight bytes as stored (its routed

@@ -23,7 +23,8 @@ RESULTS = os.path.join(COMMUNITY, "results")
 CORPUS_SHA256 = "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2"
 CORPUS_SHA256_V1 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28"  # the first 144,500 characters of it (bench/harness/corpus/NOTICE.md): the same prompts
 # usage.prompt_tokens of the cold prompts by tokenizer, as kapitsa bench checks them (src/bench/protocol.cpp): bench.py
-# REF_PROMPT_TOKENS, configs/bolt.json's for Nemotron, configs/flint.json's for Flint
+# REF_PROMPT_TOKENS, configs/bolt.json's for Nemotron, configs/flint.json's for Flint; a family without an entry (a dense
+# Llama: Nanbeige4.3, until its benchmark config measures them) has its prompt sizes unchecked, as kapitsa bench does
 REFERENCE = {"qwen": {4000: 4133, 16000: 16286}, "nemotron": {4000: 4183, 16000: 16514},
              "flint": {4000: 3874, 16000: 15066}}
 # the writing runs' temperature where it is not 0.6: Flint's model card's, as configs/flint.json (src/server/bench_cmd.cpp)
@@ -166,7 +167,8 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
             errs.append(f"{k}: median {d['median_tps']} is not the median of its runs {d['runs_tps']}")
         if not all(1 <= x <= 2000 for x in d["runs_tps"]):
             errs.append(f"{k}: rates {d['runs_tps']} outside 1-2000 tok/s")
-    family = "flint" if m["name"] == "flint" else "nemotron" if m["name"].startswith("nemotron") else "qwen"
+    family = ("flint" if m["name"] == "flint" else "nemotron" if m["name"].startswith("nemotron")
+              else "nanbeige" if m["name"].startswith("nanbeige") else "qwen")
     sizes = [p["size"] for p in res["prefill"]]
     if sizes != want["sizes"]:
         errs.append(f"prefill sizes {sizes}, the protocol's are {want['sizes']}")
@@ -175,7 +177,7 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
         if None in (p["prompt_tokens"], p["ttft_s"], p["tps"], p["followup_median_s"]):
             errs.append(f"{tag}: a measurement is missing")
             continue
-        ref = REFERENCE[family].get(p["size"])
+        ref = REFERENCE.get(family, {}).get(p["size"])
         if ref and abs(p["prompt_tokens"] - ref) > 0.01 * ref:
             errs.append(f"{tag}: {p['prompt_tokens']} prompt tokens, not within 1% of {ref}")
         if abs(p["prompt_tokens"] / p["ttft_s"] - p["tps"]) > 0.005 * p["tps"] + 0.1:

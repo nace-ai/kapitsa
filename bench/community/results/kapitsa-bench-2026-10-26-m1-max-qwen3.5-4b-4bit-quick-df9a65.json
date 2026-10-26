@@ -1,0 +1,99 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-10-26T03:55:34Z",
+  "kapitsa": {
+    "version": "0.2.17",
+    "commit": "968fb3f"
+  },
+  "mac": {
+    "identifier": "MacBookPro18,2",
+    "name": "MacBook Pro (16-inch, 2021)",
+    "year": 2021,
+    "chip": "Apple M1 Max",
+    "cpu_cores": 10,
+    "gpu_cores": 32,
+    "memory_gb": 64,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "qwen3.5-4b",
+    "title": "Qwen3.5-4B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "c43ee1d",
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "z-lab/Qwen3.5-4B-DFlash@9a1996c"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 155.61,
+      "runs_tps": [
+        155.61,
+        167.43,
+        154.23
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 189.11,
+      "runs_tps": [
+        183.8,
+        189.11,
+        189.64
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4134,
+        "ttft_s": 4.9112,
+        "tps": 841.8,
+        "followup_s": [
+          0.0822,
+          0.0797,
+          0.0721
+        ],
+        "followup_median_s": 0.0797,
+        "followup_suffix_tps": 277.5
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 4.02
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 3.13,
+    "gpu_other_max_pct": 13.6,
+    "gpu_ambient_mean_pct": 0.62,
+    "gpu_users": [
+      "Slack",
+      "com.apple.WebKit.GPU"
+    ],
+    "contention": [
+      "prefill_4000"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000'] (mean 3.13%, top ['Slack', 'com.apple.WebKit.GPU'])"
+  ],
+  "invalid": []
+}

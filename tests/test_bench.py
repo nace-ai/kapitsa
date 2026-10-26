@@ -26,6 +26,7 @@ BUILD = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO,
 BENCH_TEST, KAPITSA = os.path.join(BUILD, "bench_test"), os.path.join(BUILD, "kapitsa")
 sys.path.insert(0, os.path.join(REPO, "bench", "harness"))
 import bench  # noqa: E402  (bench/harness/bench.py)
+import agentic  # noqa: E402  (bench/harness/agentic.py)
 
 FAILS = []
 
@@ -43,6 +44,111 @@ def run(args, **kw):
 # ---------------------------------------------------------------- 1. self checks
 r = run([BENCH_TEST, "self"])
 check(r.returncode == 0, "bench_test self", (r.stdout + r.stderr)[-500:])
+
+# ---------------------------------------------------------------- 1b. the POWER flag and the POWER-INFO note
+# pmset powermode is 0 automatic, 1 low power, 2 high power (the mapping src/bench/system.mm reads). Only battery and
+# Low Power Mode drop a run: High Power Mode is this Mac's permanent AC state and most committed results sit at it, so
+# it is provenance plus a POWER-INFO line, never a flag (ROUND 311/326).
+check(bench.power_flags("Now drawing from 'AC Power'", "0") == [], "plugged in at powermode 0 needs no POWER flag")
+one = ["POWER: run started on battery (High Power Mode) (numbers are not comparable with plugged-in automatic-mode "
+       "runs)"]
+check(bench.power_flags("Now drawing from 'Battery Power'", "2") == one, "battery in High Power Mode is one flag",
+      str(bench.power_flags("Now drawing from 'Battery Power'", "2")))
+check(bench.power_flags("Now drawing from 'Battery Power'", "0") ==
+      ["POWER: run started on battery (numbers are not comparable with plugged-in automatic-mode runs)"],
+      "battery at powermode 0 is flagged on the battery alone")
+lp = bench.power_flags("Now drawing from 'AC Power'", "1")
+check(lp == ["POWER: run started at pmset powermode 1 (Low Power Mode) (numbers are not comparable with plugged-in "
+             "automatic-mode runs)"], "powermode 1 is Low Power Mode on AC", str(lp))
+check(bench.power_flags("Now drawing from 'AC Power'", "2") == [],
+      "AC in High Power Mode raises no flag", str(bench.power_flags("Now drawing from 'AC Power'", "2")))
+check(bench.power_info("Now drawing from 'AC Power'", "2") == ["POWER-INFO: High Power Mode (pmset powermode 2)"],
+      "AC in High Power Mode records one POWER-INFO line", str(bench.power_info("Now drawing from 'AC Power'", "2")))
+check(bench.power_info("Now drawing from 'AC Power'", "0") == [] and bench.power_info("Now drawing from 'AC Power'", "1") == [],
+      "automatic mode and Low Power Mode need no info line (the low one is already a flag)")
+check(bench.power_info(None, None) == [], "no power state recorded, no info note")
+check(bench.power_flags(None, None) == [], "no power state recorded, no claim made")
+# A release that prints no powermode still flags Low Power Mode from the client's own reading.
+check(bench.power_flags("Now drawing from 'AC Power'", None, True) ==
+      ["POWER: run started in Low Power Mode (numbers are not comparable with plugged-in automatic-mode runs)"],
+      "the client's lowpowermode reading raises the flag without a powermode", str(bench.power_flags("", None, True)))
+check(bench.power_flags("Now drawing from 'AC Power'", "1", True) == lp,
+      "powermode 1 and the client's reading are one flag, not two", str(bench.power_flags("", "1", True)))
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            1\n")["low_power"] is True,
+      "powermode 1 reads as Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " powermode            2\n")["low_power"] is False,
+      "powermode 2 is High Power Mode, not Low Power Mode")
+check(agentic.parse_thermal("", "Now drawing from 'AC Power'", " lowpowermode         1\n")["low_power"] is True,
+      "the older lowpowermode 1 spelling still reads as Low Power Mode")
+check(agentic.parse_thermal("", "", " lowpowermode\n highpowermode\n")["low_power"] is False,
+      "the bare capability tokens pmset -g cap prints are not a mode")
+check(agentic.parse_thermal("", "Now drawing from 'Battery Power'", " powermode            0\n")["battery"] is True,
+      "battery is read from pmset -g batt")
+# Both keys on one release: "lowpowermode 0" also contains "powermode", so the read has to be anchored to the line.
+check(bench.parse_powermode("System-wide power settings:\n lowpowermode         0\n powermode            2\n") == "2",
+      "the anchored read takes powermode past a lowpowermode line", bench.parse_powermode(" lowpowermode 0\n powermode 2\n"))
+check(bench.parse_powermode(" lowpowermode         1\n") == "1", "lowpowermode alone still gives the mode")
+check(bench.parse_powermode("") is None, "no pmset text, no mode")
+check(agentic.parse_thermal("", "", " lowpowermode 0\n powermode 2\n")["powermode"] == "2",
+      "both clients read the same mode from the same text")
+# An --agentic run passes through bench.py and then compare_engines; the flag must appear once, not twice.
+f = bench.power_flags("Now drawing from 'Battery Power'", "2")
+check(bench.add_power_flags(f, "Now drawing from 'AC Power'", "2") == f and len(f) == 1,
+      "an existing POWER flag is not duplicated", str(f))
+g = []
+check(bench.add_power_flags(g, "Now drawing from 'AC Power'", "0") == [] and g == [],
+      "no flag when the power state is normal")
+notes = bench.add_power_info([], "Now drawing from 'AC Power'", "2")
+check(notes == ["POWER-INFO: High Power Mode (pmset powermode 2)"]
+      and bench.add_power_info(notes, "Now drawing from 'AC Power'", "2") == notes and len(notes) == 1,
+      "the POWER-INFO note appears once, not twice", str(notes))
+# A table whose arms started in different modes is not a comparison: a row read in a mode the rest of the table did
+# not record is marked and kept out of the best values (ROUND 326 item 3). Built through the real
+# path — result files on disk, then load(), then table() — so a wrong key (conditions.power_mode is community-only; the
+# harness writes provenance.system_start.powermode) or grouping by config instead of by the table fails here.
+import compare_table  # noqa: E402  (bench/harness/compare_table.py)
+
+
+def pair_result(dirpath, name, engine, pm, tps):
+    """One harness result file: schema 2, one prefill point, the mode where compare_engines records it."""
+    d = {"label": name, "config_label": name, "model_name": "Test Model", "schema": 2, "engine": engine,
+         "display": engine, "when": "2026-10-25", "decode_summary": {"median_tps": tps},
+         "prefill": [{"target": 4000, "prefill_tps": 1000.0}],
+         "provenance": {"system_start": {"power": "Now drawing from 'AC Power'", "powermode": pm}}}
+    with open(os.path.join(dirpath, name + ".json"), "w") as fh:
+        json.dump(d, fh)
+
+
+def one_table(dirpath):
+    best, _, _ = compare_table.load([dirpath], False)
+    return compare_table.table("Test Model", [r for (m, _), r in best.items() if m == "Test Model"]), best
+
+
+with tempfile.TemporaryDirectory() as tmp:  # two arms at 0, ours at 2: the 2 row is the odd one out
+    pair_result(tmp, "kapitsa-4bit", "Kapitsa", "2", 100.0)
+    pair_result(tmp, "llamacpp-4bit", "llama.cpp", "0", 200.0)
+    pair_result(tmp, "ollama-4bit", "ollama", "0", 150.0)
+    md, best = one_table(tmp)
+    check(sorted(str(r["powermode"]) for r in best.values()) == ["0", "0", "2"],
+          "the mode is read from provenance.system_start.powermode, where the harness writes it",
+          str([(k, r["powermode"]) for k, r in best.items()]))
+    check("power-mode mismatch (2 vs 0)" in md, "the odd-mode row is marked in the flag column", md[-400:])
+    check("**200.0**" in md and "**100.0**" not in md,
+          "a best among the reference-mode rows still counts; the odd-mode row is out", md[-400:])
+with tempfile.TemporaryDirectory() as tmp:  # one arm each: no reference mode, so no comparison at all
+    pair_result(tmp, "kapitsa-4bit", "Kapitsa", "2", 100.0)
+    pair_result(tmp, "llamacpp-4bit", "llama.cpp", "0", 200.0)
+    md, _ = one_table(tmp)
+    check(md.count("power-mode mismatch (2 vs 0)") == 2, "a two-mode tie marks every arm", md[-400:])
+    check("**" not in md, "a two-mode tie keeps no best values", md[-400:])
+with tempfile.TemporaryDirectory() as tmp:  # same mode everywhere: nothing to mark
+    pair_result(tmp, "kapitsa-4bit", "Kapitsa", "2", 100.0)
+    pair_result(tmp, "llamacpp-4bit", "llama.cpp", "2", 200.0)
+    md, _ = one_table(tmp)
+    check("power-mode mismatch" not in md, "a table whose arms share one mode is not marked", md[-300:])
+check(compare_table.short_flags({"power_mismatch": "power-mode mismatch (2 vs 0)", "invalid": [], "contended": False,
+                                 "flags": []}).startswith("power-mode mismatch"),
+      "the mismatch shows in the flag column")
 
 # ---------------------------------------------------------------- 2. one protocol, two clients
 

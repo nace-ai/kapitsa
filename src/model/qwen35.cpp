@@ -906,6 +906,18 @@ bool Qwen35::moe_wide() const { return cfg_.moe && (cfg_.top_k + 1) * std::max(c
 Qwen35::~Qwen35() {
   // a background ANE compile only touches its own copies (no Metal objects): let it finish on its own
   if (ane_thread_.joinable()) ane_thread_.detach();
+  // NI_QMT_I8's scratch (qmt_i8_scratch): released once the queue has finished everything committed before
+  bool any = !qmt_i8_retired_.empty();
+  for (const QmtI8Slot& sl : qmt_i8_ring_) any = any || bool(sl.q);
+  if (any) {
+    Gpu& g = Gpu::get();
+    g.begin()->commit_and_wait();  // a queue runs its command buffers in commit order
+    for (QmtI8Slot& sl : qmt_i8_ring_) {
+      g.release(sl.q);
+      g.release(sl.s);
+    }
+    for (Buffer& b : qmt_i8_retired_) g.release(b);
+  }
 }
 
 // NI_QMM_GU without its log line (enc_qmm_gu logs it): the dense gate/up/SwiGLU fused on qmr
@@ -2347,6 +2359,45 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
   else e.dispatch(nt, mt, 1, th);
 }
 
+// NI_QMT_I8 (read once): the 4-bit dense prefill GEMMs as W4A8 on the M5's int8 matrix units (tensor/qmti8.metal: X
+// quantized per row per group of 64 by qx8_g64, then qmti8s_m64_n128). bench_qmm, M = 4096 with the quantize pass
+// timed: 27.9 / 25.2 TFLOP/s against qmt_m64_n64's 23.4 / 19.8 (N 10240 K 2560, N 2560 K 6144). Lossy (activation
+// rounding), so off unless NI_QMT_I8=1.
+static bool qmt_i8_on() {
+  static const bool env = env_int("NI_QMT_I8", 0) != 0;
+  if (!(env && qmt_on())) return false;
+  // qmti8s_m64_n128 asks for 29,184 B of static threadgroup memory (58,368 B as the validation layer counts it). A
+  // device, or a layer, whose maxThreadgroupMemoryLength is below what its pipeline reports gets qmt_m64_n64 instead
+  // (checked once, at pipeline creation; a pipeline that fails to build falls back the same way).
+  static const bool fits = [] {
+    Gpu& g = Gpu::get();
+    g.compile_extra("tensor", kTensorKernelSource, true);
+    const Pipeline p = g.pipeline("qmti8s_m64_n128", false);
+    const bool ok = p.pso && p.tg_mem <= g.max_threadgroup_memory();
+    if (ok) logi("NI_QMT_I8: 4-bit dense prefill GEMMs as W4A8 (qmti8s_m64_n128, %u B threadgroup memory)", p.tg_mem);
+    else
+      logi("NI_QMT_I8: qmti8s_m64_n128 %s (%u B threadgroup memory, this GPU allows %zu); qmt_m64_n64 instead",
+           p.pso ? "does not fit" : "did not build", p.tg_mem, g.max_threadgroup_memory());
+    return ok;
+  }();
+  return fits;
+}
+// The quantized X of enc_qmm_large's W4A8 path. A grouped encoder may run a few independent GEMMs of one pass at once
+// (at most three: q/k/v, gate/up), so each call takes the next of four slots; this assumes one thread encodes for
+// this model (as for every other activation buffer). A slot is sized for tmax_ rows of the K asked for, so it grows
+// only when a larger K comes; the buffer it replaces may still be read by a committed command buffer (they hold
+// unretained references), so it is kept until the destructor releases everything after the queue is idle.
+std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
+  QmtI8Slot& sl = qmt_i8_ring_[qmt_i8_next_++ % 4];
+  if (sl.cap < m * k) {
+    if (sl.q) qmt_i8_retired_.insert(qmt_i8_retired_.end(), {sl.q, sl.s});
+    sl.cap = std::max(m, size_t(tmax_)) * k;
+    sl.q = Gpu::get().alloc(sl.cap, "qmti8_x");
+    sl.s = Gpu::get().alloc(sl.cap / 64 * 8, "qmti8_xs");
+  }
+  return {sl.q, sl.s};
+}
+
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
@@ -2359,6 +2410,21 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     e.val(5, p);
     if (mfast) e.dispatch((M + bm - 1) / bm, (L.N + bn - 1) / bn, 1, 128);
     else e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, 128);
+    return;
+  }
+  if (q.on && qmt_i8_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+    const Pipeline& gemm = pipe("qmti8s_m64_n128");  // first: compiles the tensor library qx8_g64 lives in
+    auto [xq, xs] = qmt_i8_scratch(size_t(M), L.K);
+    struct { uint32_t M, K, x_ld; } qp{uint32_t(M), L.K, L.K};
+    e.use(pipe("qx8_g64"));
+    e.buf(0, xh); e.buf(1, xq); e.buf(2, xs); e.val(3, qp);
+    e.dispatch((uint32_t(M) * (L.K / 64) * 8 + 255) / 256, 1, 1, 256);
+    e.barrier();
+    e.use(gemm);
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xq); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p); e.buf(6, xs);
+    e.dispatch((L.N + 127) / 128, (uint32_t(M) + 63) / 64, 1, 256);
     return;
   }
   if (q.on && qmt_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {

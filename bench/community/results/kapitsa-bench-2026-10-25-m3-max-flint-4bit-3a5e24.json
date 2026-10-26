@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-25T20:38:04Z",
+  "kapitsa": {
+    "version": "0.2.17",
+    "commit": "968fb3f"
+  },
+  "mac": {
+    "identifier": "Mac15,9",
+    "name": "MacBook Pro (16-inch, Nov 2023)",
+    "year": 2023,
+    "chip": "Apple M3 Max",
+    "cpu_cores": 16,
+    "gpu_cores": 40,
+    "memory_gb": 48,
+    "macos": "27.0",
+    "macos_build": "26A428"
+  },
+  "model": {
+    "name": "flint",
+    "title": "Recursive Flint 40B-A2.5B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "3b93f90",
+    "decoding": "plain",
+    "decoding_detail": "plain decoding, KFlash (none)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 1.0
+  },
+  "results": {
+    "decode": {
+      "median_tps": 169.33,
+      "runs_tps": [
+        163.83,
+        169.33,
+        173.32,
+        175.4,
+        160.84
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 164.37,
+      "runs_tps": [
+        164.37,
+        164.23,
+        171.61,
+        177.6,
+        163.93
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 3874,
+        "ttft_s": 2.4097,
+        "tps": 1607.7,
+        "followup_s": [
+          0.1302,
+          0.2614,
+          0.1629
+        ],
+        "followup_median_s": 0.1629,
+        "followup_suffix_tps": 57.4
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 15066,
+        "ttft_s": 11.471,
+        "tps": 1313.4,
+        "followup_s": [
+          0.1559,
+          0.3051,
+          0.0743
+        ],
+        "followup_median_s": 0.1559,
+        "followup_suffix_tps": 64.2
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.43
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.62,
+    "gpu_other_max_pct": 6.8,
+    "gpu_ambient_mean_pct": 0.23,
+    "gpu_users": [
+      "Google Chrome"
+    ],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}

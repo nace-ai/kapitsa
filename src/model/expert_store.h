@@ -68,11 +68,13 @@ struct AutoStore {
   AutoStoreWhy why = AutoStoreWhy::Budget;
   size_t headroom = 0;  // the avail guard's
 };
+// The available-memory guard's headroom: max(4 GB, RAM/12)
+inline size_t auto_store_headroom(size_t ram) { return std::max<size_t>(size_t(4) << 30, ram / 12); }
 inline AutoStore auto_store_size(const AutoStoreIn& in) {
   AutoStore r;
   r.bytes = std::min(in.left, in.all);
   r.why = in.left >= in.all ? AutoStoreWhy::All : AutoStoreWhy::Budget;
-  r.headroom = std::max<size_t>(size_t(4) << 30, in.ram / 12);
+  r.headroom = auto_store_headroom(in.ram);
   if (in.avail) {
     const size_t lim = std::max(in.least, in.avail > r.headroom ? in.avail - r.headroom : 0);
     if (lim < r.bytes) r.bytes = lim, r.why = AutoStoreWhy::Avail;
@@ -154,6 +156,30 @@ double auto_store_cap(bool apple10);
 // include file cache, so the automatic store size depends on what the page cache held at launch: back-to-back launches
 // can pick different sizes.
 size_t available_memory();
+// The available memory for the automatic size, given time to settle. A process that has just exited holds its pages
+// a while longer (a killed 6 GB process: ~0.7 s, then all at once, on a 48 GB M5 Pro), and one sample taken while a
+// killed Flash-Next process was still going cut the next one's store to three layers' experts (1536 slots, 2.1 GB;
+// decode 10.1 tok/s against ~50 at 4K, 25 Oct 2026). So while the guard would bind (the sample less the headroom short
+// of want, the size before the guard), sample again every step_ms, keeping the largest sample, until flat_ms pass
+// without it growing by grow bytes (memory another process holds for good: the wait is flat_ms), or wait_ms in all.
+// sample(ms) waits ms, then reads the available memory (0 = unknown: no wait, the guard is off).
+struct SettledAvail {
+  size_t avail = 0, first = 0;
+  int waited_ms = 0;
+};
+inline SettledAvail settle_available(size_t want, size_t headroom, int wait_ms, int step_ms, int flat_ms, size_t grow,
+                                     const std::function<size_t(int)>& sample) {
+  SettledAvail r;
+  r.avail = r.first = sample(0);
+  size_t mark = r.avail;  // the largest sample when the flat stretch began
+  int since = 0;
+  while (r.avail && r.avail < want + headroom && step_ms > 0 && r.waited_ms + step_ms <= wait_ms && since < flat_ms) {
+    r.waited_ms += step_ms, since += step_ms;
+    r.avail = std::max(r.avail, sample(step_ms));
+    if (r.avail >= mark + grow) mark = r.avail, since = 0;
+  }
+  return r;
+}
 
 // One plane of a layer's stacked experts in a pack file: expert e's bytes at off + e * stride, len of them
 struct PlaneSrc {

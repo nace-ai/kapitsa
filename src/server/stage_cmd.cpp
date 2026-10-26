@@ -72,8 +72,13 @@ int run_stage(int argc, char** argv, int first) {
     else if (a == "--port") port = to_int(a, next(), help);
     else if (a == "--host") host = next();
     else if (a == "--mem-budget") budget_gb = atof(next().c_str());
-    else if (a == "--prefill-chunk") chunk = to_int(a, next(), help);
-    else usage_error("unknown option " + a, help);
+    else if (a == "--prefill-chunk") {
+      chunk = to_int(a, next(), help);
+      // serve reads a chunk below one as "size one for me", the engine picking it once the model is planned; a stage
+      // cannot, since it builds its model at this many rows (src/cluster/stage.cpp), so 0 would be a 0-row model.
+      // Rejected here, as bench rejects its own (src/server/bench_cmd.cpp), before anything is resolved.
+      if (chunk <= 0) usage_error("--prefill-chunk must be a positive integer", help);
+    } else usage_error("unknown option " + a, help);
   }
   if (model.empty()) usage_error("--model is needed", help);
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);

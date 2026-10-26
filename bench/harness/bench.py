@@ -111,6 +111,82 @@ def out_dir():
     return os.path.abspath(os.path.expanduser(os.environ.get("BENCH_OUT") or os.path.join(HERE, "runs")))
 
 
+POWER_MODES = {"1": "Low Power Mode", "2": "High Power Mode"}  # pmset powermode: 0 automatic, 1 low, 2 high
+
+
+def power_flags(power, powermode, low_power=None):
+    """Flags for a run whose power state makes its timings incomparable with a plugged-in automatic-mode one.
+
+    `power` is the first line of `pmset -g batt` ("Now drawing from 'Battery Power'"), `powermode` the system-wide
+    value from `pmset -g` — 0 automatic, 1 low power, 2 high power, the same mapping src/bench/system.mm reads — and
+    `low_power` the client's own reading for releases that print `lowpowermode 1` instead.
+
+    Only battery and Low Power Mode drop a run: they cut sustained clocks. High Power Mode (powermode 2) does not —
+    this Mac sits at 2 on AC permanently and most committed results are at 2 — so it is provenance plus a
+    `POWER-INFO:` note (power_info), never a flag. A pair whose two arms ran in different modes is excluded at
+    compare-table time (compare_table.py), which reads this mode from the provenance and treats the mode most of a
+    table's rows recorded as the reference, because mode differences between rows are what skew a comparison.
+    """
+    on_battery = "Battery Power" in (power or "")
+    pm = "" if powermode is None else str(powermode)
+    low = pm == "1" or bool(low_power)
+    what = []
+    if on_battery:
+        # Keep the mode visible on the battery flag: a battery run in High Power Mode is a different animal from
+        # powermode 0 battery, and the label is the only place that stays with the flag.
+        what.append("on battery" + (" (High Power Mode)" if pm == "2" and not low else ""))
+    if pm == "1":
+        what.append("at pmset powermode 1 (Low Power Mode)")
+    elif low:
+        what.append("in Low Power Mode")
+    if not what:
+        return []
+    return [f"POWER: run started {' and '.join(what)} (numbers are not comparable with plugged-in automatic-mode runs)"]
+
+
+def power_info(power, powermode, low_power=None):
+    """Non-dropping notes about the power state, for provenance a reader can see. High Power Mode is the one case:
+    it changes tok/s a little, but it is the permanent state of this Mac and of most committed results, so treating
+    it as contamination would invalidate the archive. Recorded, never a flag."""
+    pm = "" if powermode is None else str(powermode)
+    if pm == "2" and not low_power:
+        return ["POWER-INFO: High Power Mode (pmset powermode 2)"]
+    return []
+
+
+def parse_powermode(all_out):
+    """`pmset -g` text -> "0" | "1" | "2" | None. 0 automatic, 1 low power, 2 high power.
+
+    The system-wide `powermode` is read first and `lowpowermode` is the fallback an older release prints instead, the
+    same order src/bench/system.mm uses. Both are anchored at the line start: `lowpowermode 0` contains "powermode",
+    so an unanchored search reads the wrong key on a release that prints both.
+    """
+    for key in ("powermode", "lowpowermode"):
+        m = re.search(r"^\s*" + key + r"\s+(\d+)", all_out or "", re.M)
+        if m:
+            return m.group(1)
+    return None
+
+
+def add_power_flags(flags, power, powermode, low_power=None):
+    """Append the POWER flag to `flags` unless one is already there.
+
+    bench.py adds it from the sample it takes before the run, and compare_engines would otherwise add it again from the
+    same provenance after an --agentic run: the two samples are taken minutes apart and can word the flag differently,
+    and compare_table.py keeps every POWER flag it finds.
+    """
+    if not any(f.startswith("POWER:") for f in flags):
+        flags.extend(power_flags(power, powermode, low_power))
+    return flags
+
+
+def add_power_info(notes, power, powermode, low_power=None):
+    """Append the POWER-INFO note once, the same way add_power_flags dedupes the flag."""
+    if not any(n.startswith("POWER-INFO:") for n in notes):
+        notes.extend(power_info(power, powermode, low_power))
+    return notes
+
+
 def harness_info():
     """The harness's own version: git HEAD of its checkout and whether bench/harness has local changes. A release
     ships a copy with no checkout (packaging/release/build.sh), which says which release it came with in a VERSION
@@ -958,8 +1034,9 @@ def main():
             inv += [f"{name}: {x}" for x in res[name].get("invalid", [])]
             fl += [f"{name}: {x}" for x in res[name].get("flags", [])]
     th = res.get("thermal_start") or {}
-    if th.get("battery") or th.get("low_power"):
-        fl.append("POWER: run started on battery or in Low Power Mode (numbers are not comparable with plugged-in runs)")
+    add_power_flags(fl, "Battery Power" if th.get("battery") else "", th.get("powermode"), th.get("low_power"))
+    add_power_info(res.setdefault("power_info", []), "Battery Power" if th.get("battery") else "",
+                   th.get("powermode"), th.get("low_power"))
     for name, m in res["memory"].items():
         if (m.get("swapouts_delta") or 0) > 1000:
             fl.append(f"{name}: {m['swapouts_delta']} pages swapped out during the phase")

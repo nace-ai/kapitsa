@@ -112,12 +112,20 @@ def summarize_cache(c):
 
 
 def parse_thermal(therm_out, batt_out="", all_out=""):
-    """pmset -g therm / -g batt / -g text -> {speed_limit, scheduler_limit, battery, low_power}. Missing -> None."""
+    """pmset -g therm / -g batt / -g text -> {speed_limit, scheduler_limit, battery, low_power, powermode}.
+
+    Low Power Mode: macOS 26's `pmset -g` reports the system-wide `powermode` (0 automatic, 1 low power, 2 high
+    power) and only lists `lowpowermode` under `pmset -g cap` without a value, while older releases print
+    `lowpowermode 1`; both spellings are read, so a run on either release is flagged. Missing -> None, except
+    `powermode`, which is the string pmset printed and the caller decides what to do with.
+    """
     d = dict(re.findall(r"(\w+)\s*=\s*(\d+)", therm_out or ""))
     n = lambda k: int(d[k]) if k in d else None
     return {"speed_limit": n("CPU_Speed_Limit"), "scheduler_limit": n("CPU_Scheduler_Limit"),
             "battery": "Battery Power" in (batt_out or "") if batt_out else None,
-            "low_power": bool(re.search(r"lowpowermode\s+1", all_out or "")) if all_out else None}
+            "low_power": (bool(re.search(r"lowpowermode\s+1|^\s*powermode\s+1", all_out or "", re.M))
+                          if all_out else None),
+            "powermode": bench.parse_powermode(all_out)}
 
 
 def thermal_state():

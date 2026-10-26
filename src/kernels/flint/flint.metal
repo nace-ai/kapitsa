@@ -2,7 +2,8 @@
 // 4-bit matrix-vector, GEMM, expert and sampling kernels run its projections, MoE, dense MLP and LM head):
 //  - flint_prep: per-head RMSNorm of q and k, RoPE on the sliding-window layers (NeoX halves, all 128 dims; the
 //    full-attention layers have no positional encoding), k and v into the layer's cache: a sliding-window layer's
-//    ring (slot = position % rows) or a full-attention layer's linear cache, or a prefill chunk's own K / V buffer;
+//    ring (slot = position % rows) or a full-attention layer's linear cache, or a prefill chunk's own K / V buffer
+//    (flint_prep_nonorm: without the norms, for a dense Llama on these kernels, whose sinks are -inf: none);
 //  - flint_attn_d2: one decode row's attention in one dispatch (norms, RoPE, the cache write, split-K, the merge);
 //  - flint_attn_partial / flint_attn_reduce: split-K attention of R <= 8 rows over a cache (verify passes), GQA, the
 //    window; the per-head sink logits join the softmax in the reduce;
@@ -63,15 +64,13 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
 }
 
 // grid: (Hq + 2 Hkv, R) x 128 threads. qkv: fp32 [R][qkv_ld] (q heads | k heads | v heads); q_out: fp32 [R][Hq * 128];
-// inv: fp32 [64], RoPE's inverse frequencies.
-[[kernel]] void flint_prep(const device float* qkv [[buffer(0)]], device float* q_out [[buffer(1)]],
-                           const device bfloat* qn [[buffer(2)]], const device bfloat* kn [[buffer(3)]],
-                           const device float* inv [[buffer(4)]], device half* kc [[buffer(5)]],
-                           device half* vc [[buffer(6)]], constant FlintPrepP& p [[buffer(7)]],
-                           const device int* tree [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],
-                           uint d [[thread_index_in_threadgroup]]) {
-  threadgroup float scratch[32];
-  threadgroup float row[kFD];
+// inv: fp32 [64], RoPE's inverse frequencies. NORM false (flint_prep_nonorm): q and k as they are, then RoPE (a dense
+// Llama on Flint's kernels, Nanbeige4.3: no q / k norms; qn, kn unread).
+template <bool NORM>
+NI_INLINE void flint_prep_impl(const device float* qkv, device float* q_out, const device bfloat* qn,
+                               const device bfloat* kn, const device float* inv, device half* kc, device half* vc,
+                               constant FlintPrepP& p, const device int* tree, uint2 tg, uint d,
+                               threadgroup float* scratch, threadgroup float* row) {
   const uint h = tg.x, t = tg.y;
   const device float* src = qkv + size_t(t) * p.qkv_ld;
   const uint QD = p.Hq * kFD, KD = p.Hkv * kFD;
@@ -82,8 +81,10 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
   }
   const bool is_q = h < p.Hq;
   float x = src[(is_q ? 0 : QD) + (is_q ? h : h - p.Hq) * kFD + d];
-  const float ss = tg_sum(x * x, scratch, d, kFD);
-  x = x * metal::precise::rsqrt(ss / float(kFD) + p.eps) * float(is_q ? qn[d] : kn[d]);
+  if (NORM) {
+    const float ss = tg_sum(x * x, scratch, d, kFD);
+    x = x * metal::precise::rsqrt(ss / float(kFD) + p.eps) * float(is_q ? qn[d] : kn[d]);
+  }
   if (p.rope) {
     row[d] = x;
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -94,6 +95,20 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
   if (is_q) q_out[(size_t(t) * p.Hq + h) * kFD + d] = x;
   else kc[flint_kv_index(p, h - p.Hq, t, d)] = half(x);
 }
+
+#define FLINT_PREP(NAME, NORM)                                                                                        \
+  [[kernel]] void NAME(const device float* qkv [[buffer(0)]], device float* q_out [[buffer(1)]],                     \
+                       const device bfloat* qn [[buffer(2)]], const device bfloat* kn [[buffer(3)]],                 \
+                       const device float* inv [[buffer(4)]], device half* kc [[buffer(5)]],                         \
+                       device half* vc [[buffer(6)]], constant FlintPrepP& p [[buffer(7)]],                          \
+                       const device int* tree [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],              \
+                       uint d [[thread_index_in_threadgroup]]) {                                                     \
+    threadgroup float scratch[32];                                                                                   \
+    threadgroup float row[kFD];                                                                                      \
+    flint_prep_impl<NORM>(qkv, q_out, qn, kn, inv, kc, vc, p, tree, tg, d, scratch, row);                           \
+  }
+FLINT_PREP(flint_prep, true)
+FLINT_PREP(flint_prep_nonorm, false)
 
 // ---- decode / verify attention: split-K over the cache ----
 struct FlintAttnP {
@@ -709,10 +724,12 @@ struct FlintAttnD2P {
 
 // a KV head's S partials (part_o / part_ml) and its heads' sinks into out: thread tid of the head's 128 merges head
 // tid / 16's dims (tid % 16) 8 .. + 7. The same statements as flint_attn_d2_impl's last threadgroup (kept apart, so
-// the fused kernel stays as it was measured)
+// the fused kernel stays as it was measured). G: the KV head's query heads (7: the eighth head's threads idle)
+template <uint G = 8>
 NI_INLINE void flint_attn_d2_merge_impl(const device float* part_o, const device float* part_ml,
                                         const device bfloat* sinks, device float* out, uint S, uint kvh, uint tid) {
-  const uint h = tid / 16, dd = (tid % 16) * 8, hq = kvh * 8 + h;
+  const uint h = tid / 16, dd = (tid % 16) * 8, hq = kvh * G + h;
+  if (G < 8 && h >= G) return;
   const float s2 = float(sinks[hq]) * M_LOG2E_F;
   const device float* ml = part_ml + size_t(hq) * S * 2;
   const device float4* po = (const device float4*)(part_o + size_t(hq) * S * kFD + dd);
@@ -747,11 +764,15 @@ NI_INLINE void flint_d2_load(const device uint4* kb, const device uint4* vb, uin
   }
 }
 
+// NORM false: RoPE alone (a dense Llama's q and k: no norms; w unread)
+template <bool NORM = true>
 NI_INLINE float4 flint_d2_norm_rope(float4 v, const device bfloat* w, uint lane, float eps, uint rope,
                                     constant float2* cs) {
-  const float ss = simd_sum(dot(v, v));
-  v *= metal::precise::rsqrt(ss / float(kFD) + eps);
-  v *= float4(float(w[lane * 4]), float(w[lane * 4 + 1]), float(w[lane * 4 + 2]), float(w[lane * 4 + 3]));
+  if (NORM) {
+    const float ss = simd_sum(dot(v, v));
+    v *= metal::precise::rsqrt(ss / float(kFD) + eps);
+    v *= float4(float(w[lane * 4]), float(w[lane * 4 + 1]), float(w[lane * 4 + 2]), float(w[lane * 4 + 3]));
+  }
   if (rope) {  // dims d and d + 64: lanes l and l ^ 16
     const float4 o = simd_shuffle_xor(v, 16);
     float4 r;
@@ -765,14 +786,17 @@ NI_INLINE float4 flint_d2_norm_rope(float4 v, const device bfloat* w, uint lane,
   return v;
 }
 
-template <uint TK>
+// G: the KV head's query heads, 8 (Flint) or 7 (a dense Llama, Nanbeige4.3: the fragments' eighth row a zero query
+// whose results are dropped); NORM: q / k RMSNorms (Flint's; a dense Llama has none)
+template <uint TK, uint G = 8, bool NORM = true>
 NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* qn, const device bfloat* kn,
                                   constant float2* cs, device half* kc, device half* vc, const device bfloat* sinks,
                                   device float* out, device float* part_o, device float* part_ml,
                                   device atomic_uint* cnt, constant FlintAttnD2P& p, uint2 tg, uint tid, uint sg,
                                   uint lane, threadgroup uint4* kvt, threadgroup float* qs, threadgroup float* xml,
                                   threadgroup uint& last) {
-  constexpr uint G = 8, NK = TK / 8;  // NK simdgroups take the tiles' 8-key blocks
+  constexpr uint NK = TK / 8;  // NK simdgroups take the tiles' 8-key blocks
+  static_assert(G == 7 || G == 8, "the fragments' 8 rows hold the KV head's 7 or 8 query heads");
   const uint split = tg.x, kvh = tg.y;
   const uint QD = p.Hq * kFD, KD = p.Hkv * kFD;
   const float l2e = M_LOG2E_F;
@@ -788,8 +812,11 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
   // q of the G heads (two per simdgroup), normalized, rotated, scaled to base 2
   NI_UNROLL for (uint j = 0; j < 2; ++j) {
     const uint h = sg * 2 + j;
-    float4 v = ((const device float4*)(qkv + (kvh * G + h) * kFD))[lane];
-    v = flint_d2_norm_rope(v, qn, lane, p.eps, p.rope, cs) * (p.scale * l2e);
+    float4 v = 0.0f;  // (G 7: the eighth row's zero query)
+    if (G == 8 || h < G) {
+      v = ((const device float4*)(qkv + (kvh * G + h) * kFD))[lane];
+      v = flint_d2_norm_rope<NORM>(v, qn, lane, p.eps, p.rope, cs) * (p.scale * l2e);
+    }
     ((threadgroup float4*)(qs + h * kFD))[lane] = v;
   }
   // the row's own k / v (the split holding its position): into the cache, and into the tile below
@@ -798,7 +825,7 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
     const uint slot = p.ring ? p.pos % p.rows : p.pos;
     if (sg == 0) {
       const float4 v = ((const device float4*)(qkv + QD + kvh * kFD))[lane];
-      own_kv = half4(flint_d2_norm_rope(v, kn, lane, p.eps, p.rope, cs));
+      own_kv = half4(flint_d2_norm_rope<NORM>(v, kn, lane, p.eps, p.rope, cs));
       ((device half4*)(kbh + size_t(slot) * kFD))[lane] = own_kv;
     } else {
       own_kv = half4(((const device float4*)(qkv + QD + KD + kvh * kFD))[lane]);
@@ -872,32 +899,34 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
-  // the simdgroups merged: their O scaled to the split's max into xo [NK][G][128] (the tiles' memory)
+  // the simdgroups merged: their O scaled to the split's max into xo [NK][8][128] (the tiles' memory)
   if (cc == 0 && sg < NK) {
-    xml[(sg * G + row) * 2 + 0] = m;
-    xml[(sg * G + row) * 2 + 1] = l;
+    xml[(sg * 8 + row) * 2 + 0] = m;
+    xml[(sg * 8 + row) * 2 + 1] = l;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   float M = -1e30f;
-  NI_UNROLL for (uint j = 0; j < NK; ++j) M = max(M, xml[(j * G + row) * 2]);
+  NI_UNROLL for (uint j = 0; j < NK; ++j) M = max(M, xml[(j * 8 + row) * 2]);
   const float w = exp2(m - M);
   threadgroup float* xo = (threadgroup float*)kvt;
   if (sg < NK)
     NI_UNROLL for (uint d = 0; d < kFD / 8; ++d)
-      NI_UNROLL for (uint e = 0; e < 2; ++e) xo[(sg * G + row) * kFD + d * 8 + cc + e] = o[d].thread_elements()[e] * w;
+      NI_UNROLL for (uint e = 0; e < 2; ++e) xo[(sg * 8 + row) * kFD + d * 8 + cc + e] = o[d].thread_elements()[e] * w;
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  // thread tid: head h = tid / 16, dims dd .. dd + 7
+  // thread tid: head h = tid / 16, dims dd .. dd + 7 (G 7: h 7 writes nothing)
   const uint h = tid / 16, dd = (tid % 16) * 8, hq = kvh * G + h;
+  const bool head = G == 8 || h < G;
   float Mh = -1e30f, Lh = 0.0f;
-  NI_UNROLL for (uint j = 0; j < NK; ++j) Mh = max(Mh, xml[(j * G + h) * 2]);
-  NI_UNROLL for (uint j = 0; j < NK; ++j) Lh += xml[(j * G + h) * 2 + 1] * exp2(xml[(j * G + h) * 2] - Mh);
+  NI_UNROLL for (uint j = 0; j < NK; ++j) Mh = max(Mh, xml[(j * 8 + h) * 2]);
+  NI_UNROLL for (uint j = 0; j < NK; ++j) Lh += xml[(j * 8 + h) * 2 + 1] * exp2(xml[(j * 8 + h) * 2] - Mh);
   float4 o0 = 0.0f, o1 = 0.0f;
   NI_UNROLL for (uint j = 0; j < NK; ++j) {
-    o0 += ((const threadgroup float4*)(xo + (j * G + h) * kFD + dd))[0];
-    o1 += ((const threadgroup float4*)(xo + (j * G + h) * kFD + dd))[1];
+    o0 += ((const threadgroup float4*)(xo + (j * 8 + h) * kFD + dd))[0];
+    o1 += ((const threadgroup float4*)(xo + (j * 8 + h) * kFD + dd))[1];
   }
-  const float s2 = float(sinks[hq]) * l2e;
+  const float s2 = head ? float(sinks[hq]) * l2e : 0.0f;
   if (p.S == 1) {
+    if (!head) return;
     const float Mt = max(Mh, s2);
     const float sc = exp2(Mh - Mt) / (Lh * exp2(Mh - Mt) + exp2(s2 - Mt));
     ((device float4*)(out + hq * kFD + dd))[0] = o0 * sc;
@@ -906,11 +935,13 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
   }
   // several splits: this split's partial, then the KV head's last threadgroup merges them
   const size_t pb = size_t(hq) * p.S + split;
-  ((device float4*)(part_o + pb * kFD + dd))[0] = o0;
-  ((device float4*)(part_o + pb * kFD + dd))[1] = o1;
-  if (tid % 16 == 0) {
-    part_ml[pb * 2 + 0] = Mh;
-    part_ml[pb * 2 + 1] = Lh;
+  if (head) {
+    ((device float4*)(part_o + pb * kFD + dd))[0] = o0;
+    ((device float4*)(part_o + pb * kFD + dd))[1] = o1;
+    if (tid % 16 == 0) {
+      part_ml[pb * 2 + 0] = Mh;
+      part_ml[pb * 2 + 1] = Lh;
+    }
   }
   if (!FLINT_FENCES || p.split) return;
 #if FLINT_FENCES
@@ -920,20 +951,22 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (!last) return;
   atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
-  const device float* ml = part_ml + size_t(hq) * p.S * 2;
-  const device float4* po = (const device float4*)(part_o + size_t(hq) * p.S * kFD + dd);
-  float Mx = s2;
-  for (uint t = 0; t < p.S; ++t) Mx = max(Mx, ml[t * 2]);
-  float den = exp2(s2 - Mx);
-  float4 n0 = 0.0f, n1 = 0.0f;
-  _Pragma("clang loop unroll_count(4)") for (uint t = 0; t < p.S; ++t) {
-    const float wt = exp2(ml[t * 2] - Mx);
-    den += wt * ml[t * 2 + 1];
-    n0 += wt * po[t * (kFD / 4)];
-    n1 += wt * po[t * (kFD / 4) + 1];
+  if (head) {
+    const device float* ml = part_ml + size_t(hq) * p.S * 2;
+    const device float4* po = (const device float4*)(part_o + size_t(hq) * p.S * kFD + dd);
+    float Mx = s2;
+    for (uint t = 0; t < p.S; ++t) Mx = max(Mx, ml[t * 2]);
+    float den = exp2(s2 - Mx);
+    float4 n0 = 0.0f, n1 = 0.0f;
+    _Pragma("clang loop unroll_count(4)") for (uint t = 0; t < p.S; ++t) {
+      const float wt = exp2(ml[t * 2] - Mx);
+      den += wt * ml[t * 2 + 1];
+      n0 += wt * po[t * (kFD / 4)];
+      n1 += wt * po[t * (kFD / 4) + 1];
+    }
+    ((device float4*)(out + hq * kFD + dd))[0] = n0 / den;
+    ((device float4*)(out + hq * kFD + dd))[1] = n1 / den;
   }
-  ((device float4*)(out + hq * kFD + dd))[0] = n0 / den;
-  ((device float4*)(out + hq * kFD + dd))[1] = n1 / den;
   if (tid == 0) atomic_store_explicit(cnt + kvh, 0u, memory_order_relaxed);
 #endif
 }
@@ -944,7 +977,14 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
                                     uint tid [[thread_index_in_threadgroup]]) {
   flint_attn_d2_merge_impl(part_o, part_ml, sinks, out, p.S, kvh, tid);
 }
-#define FLINT_ATTN_D2(NAME, TK)                                                                                        \
+// a dense Llama's (7 query heads per KV head, Nanbeige4.3)
+[[kernel]] void flint_attn_d2_merge_g7(const device bfloat* sinks [[buffer(6)]], device float* out [[buffer(7)]],
+                                       const device float* part_o [[buffer(8)]], const device float* part_ml [[buffer(9)]],
+                                       constant FlintAttnD2P& p [[buffer(11)]], uint kvh [[threadgroup_position_in_grid]],
+                                       uint tid [[thread_index_in_threadgroup]]) {
+  flint_attn_d2_merge_impl<7>(part_o, part_ml, sinks, out, p.S, kvh, tid);
+}
+#define FLINT_ATTN_D2(NAME, TK, G, NORM)                                                                               \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                       \
       const device float* qkv [[buffer(0)]], const device bfloat* qn [[buffer(1)]], const device bfloat* kn [[buffer(2)]], \
       constant float2* cs [[buffer(3)]], device half* kc [[buffer(4)]], device half* vc [[buffer(5)]],                \
@@ -957,8 +997,11 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
     threadgroup float qs[8 * kFD];                                                                                    \
     threadgroup float xml[TK / 8 * 8 * 2];                                                                            \
     threadgroup uint last;                                                                                            \
-    flint_attn_d2_impl<TK>(qkv, qn, kn, cs, kc, vc, sinks, out, part_o, part_ml, cnt, p, tg, tid, sg, lane, kvt, qs, \
-                           xml, last);                                                                                \
+    flint_attn_d2_impl<TK, G, NORM>(qkv, qn, kn, cs, kc, vc, sinks, out, part_o, part_ml, cnt, p, tg, tid, sg, lane,  \
+                                    kvt, qs, xml, last);                                                              \
   }
-FLINT_ATTN_D2(flint_attn_d2, 32)
-FLINT_ATTN_D2(flint_attn_d2_t16, 16)
+FLINT_ATTN_D2(flint_attn_d2, 32, 8, true)
+FLINT_ATTN_D2(flint_attn_d2_t16, 16, 8, true)
+// a dense Llama on these kernels: 7 query heads per KV head, no q / k norms (Nanbeige4.3)
+FLINT_ATTN_D2(flint_attn_d2_g7n, 32, 7, false)
+FLINT_ATTN_D2(flint_attn_d2_t16_g7n, 16, 7, false)

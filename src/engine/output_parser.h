@@ -45,7 +45,7 @@ class OutputParser {
   OutputParser(const Tokenizer& t, int think_open, int think_close, int tc_open, int tc_close, bool start_in_think,
                bool parse_tools, const ojson& tools, bool think_tools = false, bool think_ws = false,
                const TextTags& text_tags = {}, CallFormat call_format = CallFormat::QwenXml)
-      : dec_(t), hdec_(t), tt_(text_tags), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
+      : dec_(t, true), hdec_(t), tt_(text_tags), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
         tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools),
         think_tools_(think_tools && parse_tools && !text_tags.any()), think_ws_(think_ws), fmt_(call_format),
         tools_(tools) {}
@@ -98,11 +98,13 @@ class OutputParser {
   void push_plain(ChatDelta& d, int id) {
     if (id == think_open_) {
       flush_text(d);
+      dec_.within_text();  // the text after a tag keeps its leading space (HF strips only the reply's own)
       in_think_ = true;
       return;
     }
     if (id == think_close_) {
       flush_text(d);
+      dec_.within_text();
       if (think_ws_ && in_think_) d.reasoning += held_;
       held_.clear();  // drop whitespace before </think> (think_ws: kept above)
       in_think_ = false;
@@ -111,6 +113,7 @@ class OutputParser {
     }
     if (parse_tools_ && id == tc_open_ && !in_think_) {
       flush_text(d);
+      dec_.within_text();
       held_.clear();
       in_tool_ = true;
       tool_buf_.clear();
@@ -415,8 +418,8 @@ class OutputParser {
     return true;
   }
 
-  StreamDecoder dec_;
-  StreamDecoder hdec_;  // text of held tokens (think_tools)
+  StreamDecoder dec_;   // the reply's text
+  StreamDecoder hdec_;  // text of held tokens (think_tools), within the reply
   TextTags tt_;
   std::string pend_;    // TextTags: decoded text that may begin a tag
   int think_open_, think_close_, tc_open_, tc_close_;
