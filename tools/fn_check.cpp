@@ -969,7 +969,7 @@ void test_qmvs_rows() {
     for (size_t j = 0; j < Wq[i]->n; ++j) Wq[i]->b.as<uint32_t>()[j] = uint32_t(rng());
     Sq[i]->fill_bf16(0.001f, 0.01f), Bq[i]->fill_bf16(-0.05f, 0.0f);
   }
-  for (uint32_t R = 2; R <= 4; ++R) {
+  for (uint32_t R = 2; R <= 8; ++R) {
     Buf x(R * K);
     x.fill(-2, 2);
     std::vector<Buf*> ya, yb;
@@ -1012,11 +1012,18 @@ void test_qmvs_rows() {
       }
       e.buf(16, x.b); e.val(17, q);
     }, tg, 1, 1, 64 * ((R + 1) / 2));
-    e = 0;  // (two token rows per simdgroup: the compiler's fast math orders the sums differently)
-    for (int i = 0; i < 4; ++i)
-      e = std::max(e, cmp(size_t(R) * Ns[i], [&](size_t j) { return yb[i]->f()[j]; }, [&](size_t j) { return ya[i]->f()[j]; }));
+    // (two token rows per simdgroup: the compiler's fast math orders the sums differently.) The error is
+    // max |a - b| / max |b| per segment: the sum-order noise is absolute (~1e-5 on outputs up to ~100), so dividing
+    // by each element (cmp) let the smallest output of a draw decide the gate (#576)
+    e = 0;
+    for (int i = 0; i < 4; ++i) {
+      double d = 0, m = 0;
+      for (size_t j = 0; j < size_t(R) * Ns[i]; ++j)
+        d = std::max(d, std::fabs(double(yb[i]->f()[j]) - ya[i]->f()[j])), m = std::max(m, std::fabs(double(ya[i]->f()[j])));
+      e = std::max(e, d / m);
+    }
     snprintf(nm, sizeof nm, "qmvp_multi R=%u ~ qmv2_multi_r2", R);
-    report(nm, e, 1e-4);
+    report(nm, e, 1e-5);
     for (int i = 0; i < 4; ++i) delete ya[i], delete yb[i];
   }
   for (int i = 0; i < 4; ++i) delete Wq[i], delete Sq[i], delete Bq[i];
