@@ -71,3 +71,39 @@ Against the 2026-10-25 session:
 On the harness's decode prompt the drafter mostly falls back to plain decoding (about 1.1 tokens per cycle).
 
 The README poster's Nanbeige row takes its Kapitsa and llama.cpp cells from this run.
+
+## Peak memory by context
+
+`memory.png` plots each engine's server footprint peak (`phys_footprint_peak_mb`) at the end of each prompt size's phase, from the
+records in `harness/`. The harness runs the sizes in ascending order after decode, so each point is the peak up to that context.
+
+| Context reached | mlx-lm | llama.cpp | Kapitsa |
+| ---: | ---: | ---: | ---: |
+| 532 | 21.9 GB | 28.0 GB | 22.6 GB |
+| 4.1K | 24.9 GB | 29.1 GB | 22.8 GB |
+| 16.1K | 36.7 GB | 32.0 GB | 25.4 GB |
+| 29.5K | 52.1 GB | 35.5 GB | 28.1 GB |
+
+## Writing code with speculative decoding: `kflash-write/`
+
+`kflash-write/stream.py` sends three coding requests (write, edit and explain code), each with a 512-token answer, to an
+OpenAI-compatible server. Each request runs twice at T 0 and twice at T 0.6. The decode rate is measured from the first
+streamed token to the last.
+
+The servers were:
+
+- Kapitsa with its drafter (`kapitsa-auto`, the default) and without it (`NI_DFLASH=none`), on main 4c16060 (before #689).
+- mlx-lm 0.32.2 and llama.cpp b11871, with no speculative decoding.
+
+The records are in `results.jsonl`, and `chart_write.py` draws `spec_write.png` from its write-code rows.
+
+| Task (T 0 / T 0.6), tok/s | Kapitsa + drafter | Kapitsa, no drafter | mlx-lm | llama.cpp |
+| --- | ---: | ---: | ---: | ---: |
+| write code | 36.6 / 32.3 | 27.8 / 27.6 | 27.1 / 26.7 | 24.9 / 24.8 |
+| edit code | 25.1 / 25.3 | 27.2 / 27.0 | 26.2 / 25.8 | 24.0 / 23.8 |
+| explain code | 27.1 / 26.0 | 27.1 / 26.9 | 26.2 / 25.9 | 23.8 / 23.8 |
+
+The drafter pays on writing code. On the edit request it cost about 7% against plain decoding. At long context it
+drafted where drafting loses, until #689 (32K keys: 11.0 to 18.9 tok/s, against 20.0 without the drafter).
+
+`charts.py` draws the other five charts: `charts.py context-sweep OUT harness`.
