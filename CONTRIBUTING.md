@@ -139,6 +139,23 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
   pass, as the engine batches them); `prefill` holds each window's last prompt row as the prefill samples it. Per path
   it writes `sequences.txt`, `records.txt` and `logits.f32` (about 190 MB on the Qwen models: delete them after):
   Splash's layout, so another engine's dump of the same prefixes compares too.
+- `--paths` defaults to `step,verify,batch`. Flint (Nanbeige4.3 too), Dory and Flash-Next decode one request at a
+  time, and `batch` is fatal on them ("... no batch path"): pass `--paths step,verify` to both builds. Dory's `verify`
+  needs `--loop-kv per-loop`; with its default last-loop KV pass `--paths step`. `prefill` is written whatever
+  `--paths` says.
+- Each path feeds a window's scored rows in passes of `k` rows (`verify`: 8, or Flint's `NI_FLINT_VERIFY_ROWS`, or
+  Flash-Next's MTP depth + 1; `batch`: `--batch-rows`; `step`: 1), rounded up to whole passes. A window whose sequence
+  is shorter than its first scored prefix plus that rounded count is fatal ("the verify path's passes of 8 rows need
+  ..."). The corpus's windows hold their scored rows and one token more, so the default 24 rows fit every default pass;
+  a `--rows` or `NI_FLINT_VERIFY_ROWS` whose pass does not divide the rows can fail, and so can a `--from` set whose
+  windows do not fill whole passes.
+- `--from DIR` reads `DIR`'s records (or its `verify`, `step` or `batch` subfolder's). If it stops at
+  `cannot read DIR/sequences.txt`, the reference run most likely failed before it wrote its dumps (they are written
+  after the model loads and the paths are checked): read that run's error, not the new build's.
+- `meta.json`'s `build` names the commit, as `kapitsa --version` does. CMake reads it with `git rev-parse` when it
+  configures (`CMakeLists.txt`), so a `cmake --build` of a build directory configured at another commit keeps the
+  old one, and a `-DKAPITSA_GIT=` value stays in the cache until you pass another. Re-run `cmake -S . -B build`
+  after you check out a commit, and read `meta.json`'s `build` before you cite a dump.
 - `tools/logit_compare.py` matches records by their prefix tokens and reports, in fp64 over the vocabulary, the rows
   that are bitwise the same, the top-1 agreement and every flip with the reference's margin between the two tokens, the
   mean, median, p99 and largest KL of the candidate from the reference, and the change in the next token's negative

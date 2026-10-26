@@ -171,6 +171,13 @@ SentencePiece-style BPE (spaces as U+2581, characters outside the vocabulary as 
 XML tool calls in `<tool_call>`, which come back as tool calls. It keeps every past turn's reasoning in the prompt
 unless `preserve_thinking` is false. No draft model: plain decoding, prompt lookup with `--spec N`.
 
+Another `llama` checkpoint loads only within what the kernels take: head dim 128, at most 8 query heads per KV head, a hidden
+size, query width and MLP size that are multiples of 512, a SwiGLU (`silu`) MLP, no biases, untied embeddings, no
+sliding window and the default RoPE (no `rope_scaling`), in bf16 or MLX affine 4-bit or 8-bit with groups of 64, and a
+ChatML chat template (`<|im_start|>`: Kapitsa writes Nanbeige4.3's markup). The loader and `kapitsa pull` (before the
+download) refuse any other with the first reason; Meta's Llama 3 checkpoints are refused (their chat template is not
+ChatML, and from 3.1 on they scale RoPE).
+
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
 checkpoints in the Hugging Face layout, and weights larger than this Mac's memory budget.
