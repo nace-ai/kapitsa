@@ -231,44 +231,6 @@ NI_QMM_MOE_DN(qmm_moe_dn_b4_m16_n64, 16, 64)
 NI_QMM_MOE_DN(qmm_moe_dn_b4_m32_n64, 32, 64)
 NI_QMM_MOE_DN(qmm_moe_dn_b4_m64_n64, 64, 64)
 
-// Dense form of the same tile with qmm_b4_*'s interface (QmmParams, buffers 0-5), for A/B against
-// qmm_tile in bench_qmm (`bench_qmm qmm2_b4 32 64 64 64`). Needs N % BN == 0.
-#define NI_QMM2(NAME, BM, BN)                                                                              \
-  [[kernel]] void NAME(const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],         \
-                       const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],         \
-                       device float* Y [[buffer(4)]], constant QmmParams& p [[buffer(5)]],                   \
-                       uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],  \
-                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
-    threadgroup uint4 xs4[BM * Q2_LD / 8];                                                                 \
-    threadgroup uint4 ws4[BN * Q2_LD / 8];                                                                 \
-    const uint m0 = tg.y * BM, rows = min(uint(BM), p.M - m0);                                             \
-    const device uint32_t* W[1] = {Wd};                                                                    \
-    const device bfloat* S[1] = {Sd};                                                                      \
-    const device bfloat* B[1] = {Bd};                                                                      \
-    const uint sgm = sg / 2, sgn = sg % 2, n0 = tg.x * BN;                                                 \
-    const int live = q2_live<BM>(rows, sgm);                                                               \
-    simdgroup_float8x8 acc[1][BM / 16][BN / 16];                                                           \
-    q2_tile<BM, BN, 1, false>(X, nullptr, p.x_ld, m0, rows, W, S, B, n0, p.K, p.gs, acc, (threadgroup half*)xs4,  \
-                       (threadgroup half*)ws4, tid, sgm, sgn, live);                                       \
-    const uint2 rc = q2_lane_rc(lane);                                                                     \
-    _Pragma("clang loop unroll(full)")                                                                     \
-    for (int f = 0; f < BM / 16; ++f) {                                                                    \
-      uint m = (2 * f + sgm) * 8 + rc.x;                                                                   \
-      if (f < live && m < rows) {                                                                          \
-        device float* yp = Y + (m0 + m) * p.y_ld + n0 + sgn * (BN / 2) + rc.y;                             \
-        _Pragma("clang loop unroll(full)")                                                                 \
-        for (int j = 0; j < BN / 16; ++j) {                                                                \
-          float2 v = q2_elems(acc[0][f][j]);                                                               \
-          if (p.add) v += *(device float2*)(yp + j * 8);                                                   \
-          *(device float2*)(yp + j * 8) = v;                                                               \
-        }                                                                                                  \
-      }                                                                                                    \
-    }                                                                                                      \
-  }
-
-NI_QMM2(qmm2_b4_m32_n64, 32, 64)
-NI_QMM2(qmm2_b4_m64_n64, 64, 64)
-
 // Groups the T*k (token, slot) pairs by expert like moe_bucket, and with S > 0 appends the shared
 // expert as expert E over S = T token rows. Outputs per sorted row m: yrows[m] (pair id, or P + t
 // for shared rows), xrows[m] (token); tiles[3*i] = (expert, begin, end) of at most BM rows, shared
