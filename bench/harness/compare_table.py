@@ -86,6 +86,34 @@ def hardware(d):
     return f"{cpu}{gb}" + (f", macOS {os_}" if os_ else "")
 
 
+POWER_MODE_NUM = {"automatic": "0", "low": "1", "high": "2"}  # conditions.power_mode -> pmset powermode
+
+
+def mark_power_mismatch(rows):
+    """Mark the rows of one model's table whose run started in a mode the rest of the table did not.
+
+    macOS's energy mode (pmset powermode: 0 automatic, 1 low, 2 high) moves tok/s by a few percent, so an arm read in
+    one mode is not comparable with arms read in another. Rows arrive one per (model, config) — grouping by config can
+    never see two modes, so the table is the unit. The mode most of the table's rows recorded is the reference; a row
+    in another mode is tagged `power-mode mismatch (2 vs 0)` and kept out of the best values (a best among the
+    reference-mode rows is still a same-mode comparison; the win count is untouched), and never merged into the
+    contention flag.
+    When no mode holds a majority there is no reference, so every row that has a mode is marked.
+    """
+    modes = collections.Counter(str(r["powermode"]) for r in rows if r.get("powermode") is not None)
+    if len(modes) < 2:
+        return rows
+    ranked = modes.most_common(2)
+    majority = ranked[0][0] if ranked[0][1] > ranked[1][1] else None
+    tag = f"power-mode mismatch ({' vs '.join(sorted(modes, reverse=True))})"
+    for r in rows:
+        if r.get("powermode") is not None:
+            r["powermode"] = str(r["powermode"])
+            if majority is None or r["powermode"] != majority:
+                r["power_mismatch"] = tag
+    return rows
+
+
 def extract(d, path):
     label = d.get("label", os.path.basename(path))
     schema = d.get("schema", 1)
@@ -132,6 +160,13 @@ def extract(d, path):
     c16, c16b = pref(16000, "cached")
     mem = d.get("peak_memory_mb") or d.get("peak_footprint_mb")
     engine = d.get("engine") or ""
+    # The harness records the mode it started in under provenance.system_start.powermode (a string, as pmset prints
+    # it); a community submission records conditions.power_mode ("automatic" / "low" / "high") instead.
+    powermode = ((d.get("provenance") or {}).get("system_start") or {}).get("powermode")
+    if powermode is None:
+        powermode = POWER_MODE_NUM.get((d.get("conditions") or {}).get("power_mode"))
+    if powermode is not None:
+        powermode = str(powermode)
     return {
         "model": d.get("model_name") or model_of(label), "key": d.get("config_label") or label, "label": label,
         "display": d.get("display") or engine_of(label), "engine": engine,
@@ -143,6 +178,8 @@ def extract(d, path):
         "c4k": c4, "c4k_bad": c4b, "c16k": c16, "c16k_bad": c16b,
         "pt4k": (pf.get(4000) or {}).get("prompt_tokens"), "pt16k": (pf.get(16000) or {}).get("prompt_tokens"),
         "mem_mb": mem, "mapped_mb": d.get("mapped_file_clean_mb"),
+        "powermode": powermode,
+        "power_info": list(d.get("power_info") or []),
         "tools": tok, "invalid": list(d.get("invalid", [])), "flags": flags, "contended": contended,
         "foreign_max": (cont.get("overall") or cont).get("max_foreign_gpu_pct"),
         "ours": engine in OURS or bool(re.search(r"kapitsa|naceinfer", label)),
@@ -210,7 +247,8 @@ def extract_agentic(d, path, base):
     cont_ph = (d.get("contention") or {}).get("phases") or {}
     contended = any((cont_ph.get(k) or {}).get("flagged") for k in ("sweep", "cache", "sustain"))
     invalid = [x for x in d.get("invalid", []) if x.split(":")[0] in ("sweep", "cache", "sustain", "cold start")]
-    r = {k: base[k] for k in ("model", "key", "label", "display", "engine", "version", "when", "file", "hardware", "ours")}
+    r = {k: base[k] for k in ("model", "key", "label", "display", "engine", "version", "when", "file", "hardware", "ours",
+                              "powermode", "power_info")}
     t1, d1, _ = sweep_point(sw, "min")
     t16, d16, _ = sweep_point(sw, "16k")
     tm, dm, ptm = sweep_point(sw, "max")
@@ -249,10 +287,12 @@ AGENTIC_COLS = [  # key, header, fmt, better
 
 
 def agentic_table(model, rows):
+    rows = mark_power_mismatch(rows)
     rows = sorted(rows, key=lambda r: r["display"])
     best = {}
     for key, _, _, how in AGENTIC_COLS:
-        vals = [r[key] for r in rows if r.get(key) is not None and not r["invalid"] and not r["contended"]]
+        vals = [r[key] for r in rows if r.get(key) is not None and not r["invalid"] and not r["contended"]
+                and not r.get("power_mismatch")]
         best[key] = (max(vals) if how == "max" else min(vals)) if vals else None
     hw = collections.Counter(r["hardware"] for r in rows if r.get("hardware")).most_common(1)
     lines = [f"\n### {model}: agent-harness metrics" + (f" ({hw[0][0]})" if hw else "") + "\n",
@@ -291,7 +331,7 @@ def agentic_table(model, rows):
 
 AGENTIC_CSV_COLS = ["model", "display", "key", "engine", "version", "when"] + [k for k, *_ in AGENTIC_COLS] + [
     "max_tokens", "warm_speedup", "followup_hit_rate", "kept", "interleave", "slots", "warm_hit_rate", "sustain_s", "idle_mb", "peak_mb", "invalid",
-    "flags", "contended", "ours", "file"]
+    "flags", "contended", "powermode", "power_mismatch", "power_info", "ours", "file"]
 
 
 def extract_agent(d, path, base):
@@ -303,7 +343,8 @@ def extract_agent(d, path, base):
     ph = ((d.get("contention") or {}).get("phases") or {}).get("agent") or {}
     contended = bool(ph.get("flagged"))
     invalid = list(a.get("invalid") or [])
-    r = {k: base[k] for k in ("model", "key", "label", "display", "engine", "version", "when", "file", "hardware", "ours")}
+    r = {k: base[k] for k in ("model", "key", "label", "display", "engine", "version", "when", "file", "hardware", "ours",
+                              "powermode", "power_info")}
     tr = a.get("trace") or {}
     r.update({"engine_s": s.get("engine_s"), "prefill_s": s.get("prefill_s"), "decode_s": s.get("decode_s"),
               "wall_s": s.get("wall_s"), "write_tps": s.get("write_tps"), "first_ttft": s.get("first_ttft_s"),
@@ -330,10 +371,12 @@ AGENT_COLS = [  # key, header, fmt, better
 
 
 def agent_table(model, rows):
+    rows = mark_power_mismatch(rows)
     rows = sorted(rows, key=lambda r: r["engine_s"] if r["engine_s"] is not None else 1e18)
     best = {}
     for key, _, _, how in AGENT_COLS:
-        vals = [r[key] for r in rows if r.get(key) is not None and not r["invalid"] and not r["contended"]]
+        vals = [r[key] for r in rows if r.get(key) is not None and not r["invalid"] and not r["contended"]
+                and not r.get("power_mismatch")]
         best[key] = (max(vals) if how == "max" else min(vals)) if vals else None
     traces = sorted({f"{r['trace']} ({r['trace_sha']}, tool mode {r['tool_mode']})" for r in rows})
     hw = collections.Counter(r["hardware"] for r in rows if r.get("hardware")).most_common(1)
@@ -389,6 +432,8 @@ def cell(r, key, fmt, best):
 
 def short_flags(r):
     out = []
+    if r.get("power_mismatch"):
+        out.append(r["power_mismatch"])
     if r["invalid"]:
         out.append("INVALID: " + "; ".join(r["invalid"])[:160])
     if r["contended"]:
@@ -400,7 +445,7 @@ def short_flags(r):
 
 
 def table(model, rows):
-    rows = sorted(rows, key=lambda r: -(r["decode"] or 0))
+    rows = sorted(mark_power_mismatch(rows), key=lambda r: -(r["decode"] or 0))
     # cross-engine prompt-length consistency: every engine should see the same prompt (±1%)
     for size, key in ((4000, "pt4k"), (16000, "pt16k")):
         med = _median([r[key] for r in rows])
@@ -410,6 +455,7 @@ def table(model, rows):
     best = {}
     for key, _, _, how in COLS:
         vals = [r[key] for r in rows if r.get(key) is not None and not r.get(key + "_bad") and not r["invalid"] and not r["contended"]
+                and not r.get("power_mismatch")
                 and not (key == "mem_mb" and (r.get("mapped_mb") or 0) > 1024)]  # mmap'd weights are outside phys_footprint
         best[key] = (max(vals) if how == "max" else min(vals)) if vals else None
     hw = collections.Counter(r["hardware"] for r in rows if r.get("hardware")).most_common(1)
@@ -430,13 +476,14 @@ def table(model, rows):
 
 CSV_COLS = ["model", "display", "key", "label", "engine", "version", "when", "decode", "decode_min", "decode_max",
             "decode_e2e", "greedy", "greedy_min", "greedy_max", "p4k", "p16k", "c4k", "c16k", "pt4k", "pt16k",
-            "mem_mb", "mapped_mb", "tools", "invalid", "flags", "contended", "foreign_max", "ours", "schema", "file"]
+            "mem_mb", "mapped_mb", "tools", "invalid", "flags", "contended", "powermode", "power_mismatch", "power_info",
+            "foreign_max", "ours", "schema", "file"]
 
 
 AGENT_CSV_COLS = ["model", "display", "key", "engine", "version", "when", "engine_s", "prefill_s", "decode_s", "wall_s",
                   "write_tps", "first_ttft", "fu_med", "fu_p90", "tokens_out", "tokens_cap", "turns", "turns_ok",
                   "context_max", "mem_mb", "trace", "trace_sha", "tool_mode", "invalid", "flags", "contended",
-                  "foreign_max", "ours", "file"]
+                  "powermode", "power_mismatch", "power_info", "foreign_max", "ours", "file"]
 
 
 def csv_val(v):

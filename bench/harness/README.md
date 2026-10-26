@@ -112,10 +112,18 @@ Each engine has different hidden defaults. The harness sends everything explicit
 - **Provenance.** Each result records the exact server command and environment (secrets redacted), detected engine
   versions, weight files and sizes, macOS version, power source and power mode, swap, GPU memory, the harness's git
   revision, every contention sample and the server log lines that matter. `pmset`'s `powermode` is 0 automatic, 1 Low
-  Power Mode, 2 High Power Mode, and a cell taken in a mode other than automatic does not compare with the rest: a run
-  that starts on battery, in Low Power Mode or in High Power Mode carries a `POWER:` flag. `bench.py` raises it from the
-  `pmset` sample it records before a `--agentic` run, and `compare_engines` raises it from the recorded
-  `provenance.system_start.power`, `.powermode` and `.low_power` after every run.
+  Power Mode, 2 High Power Mode. Only battery and Low Power Mode drop a result: a run that starts on battery or in
+  Low Power Mode carries a `POWER:` flag, because both cut sustained clocks. High Power Mode does not — it is this
+  Mac's permanent state on AC and most committed results sit at it — so a High Power Mode run records a
+  `POWER-INFO: High Power Mode (pmset powermode 2)` note instead, which never invalidates a run. A pair whose two
+  arms started in different modes (`2 vs 0`) is not a comparison, because a mode difference between rows is what
+  skews it: in the compare table the mode most of a table's rows recorded is the reference, a row recorded in any
+  other mode is marked `power-mode mismatch (2 vs 0)` and kept out of the best values (when no mode holds a
+  majority, every row is marked); the win count is untouched. The mode is read from
+  `provenance.system_start.powermode`, or from `conditions.power_mode` for a community submission, which is the
+  only file that carries it there.
+  `bench.py` raises the flag and note from the `pmset` sample it records before a `--agentic` run, and
+  `compare_engines` from the recorded `provenance.system_start.power`, `.powermode` and `.low_power` after every run.
 
 `compare_table.py` takes, per config, the newest run with no INVALID reason and no contention flag (else the newest
 valid one, marked), and marks invalid cells with `!`.
