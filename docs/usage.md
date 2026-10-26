@@ -1020,9 +1020,10 @@ or Homebrew install needs no clone; it needs macOS Python 3.
 
 Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (the best model for
 this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting it after an error or when it is killed
-(from Activity Monitor too); `brew services stop kapitsa` stops it. It downloads that model again when its folder is
-deleted, and `kapitsa claude|codex|opencode|pi` use it while it runs, its one model, so stop it to pick another. Its
-log, the first download's progress too: `/opt/homebrew/var/log/kapitsa.log`.
+(from Activity Monitor too); `brew services stop kapitsa` stops it, or `sudo brew services stop kapitsa` if you
+started the service as root (a launchd job in `/Library/LaunchDaemons`). It downloads that model again when its
+folder is deleted, and `kapitsa claude|codex|opencode|pi` use it while it runs, its one model, so stop it to pick
+another. Its log, the first download's progress too: `/opt/homebrew/var/log/kapitsa.log`.
 
 ## Environment variables
 
@@ -1247,8 +1248,9 @@ again (`curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/instal
 
 ## Uninstalling
 
-`brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the binaries
-`install.sh` placed (`kapitsa`, `kapitsa-systemone` and `kapitsa-drex-pointer`, in `/opt/homebrew/bin`,
-`~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
-folder (the license files, the benchmark harness, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`)
-removes the models, logs, update state and the SSD prefix cache (`prefix-cache/` alone: the cache).
+`brew services stop kapitsa` if you started the service (`sudo` before it if you started it as root), then `brew
+uninstall kapitsa`; or delete the binaries `install.sh` placed (`kapitsa`, `kapitsa-systemone` and
+`kapitsa-drex-pointer`, in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
+folder (the license files, the benchmark harness, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa`
+(or `$KAPITSA_HOME`) removes the models, logs, update state and the SSD prefix cache (`prefix-cache/` alone: the
+cache).
