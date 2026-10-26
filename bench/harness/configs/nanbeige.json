@@ -1,0 +1,319 @@
+[
+ {
+  "label": "nb43-33b-kapitsa",
+  "display": "Kapitsa",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nanbeige4.3-33B",
+  "model_path": "{models}/nanbeige4.3-33b-4bit",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/nanbeige4.3-33b-4bit",
+   "--model-id",
+   "nanbeige4.3-33b",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8402",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8402/v1",
+  "model": "nanbeige4.3-33b",
+  "requires_paths": [
+   "{models}/nanbeige4.3-33b-4bit/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:5088,16000:19954"
+  ],
+  "agent_trace": "none",
+  "note": "Kapitsa's defaults on the MLX 4-bit pack of Nanbeige/Nanbeige4.3-33B @c1093c50 that its catalog ships (`kapitsa pull nanbeige`, kapitsaprime/Nanbeige4.3-33B-MLX-4bit @5901f0d4): every decoder layer in AWQ 4-bit (mlx_lm.awq, affine, group 64), the embedding and LM head in 8-bit, the folder every MLX engine here reads. Plain decoding (no drafter; prompt lookup is off by default). The harness's default sampling (T 0.6, top_p 0.95, top_k 20: Nanbeige's card recommends 0.6 / 0.95 for reasoning and chat). Thinking off through enable_thinking. Its reference prompt tokens (4000: 5088, 16000: 19954) are Nanbeige's chat template rendered by transformers 5.20.2's apply_chat_template, thinking off, and tokenized by tokenizers 0.23.3, the median of 8 nonces (5087-5090, 19953-19957). --slots 1 for parity with the others' single sequence. The SSD prefix cache is a folder in the harness state, emptied before and after each run."
+ },
+ {
+  "label": "nb43-33b-mlxlm",
+  "display": "mlx-lm",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nanbeige4.3-33B",
+  "model_path": "{models}/nanbeige4.3-33b-4bit",
+  "cmd": [
+   "{env:MLX_LM_SERVER=mlx_lm.server}",
+   "--model",
+   "{models}/nanbeige4.3-33b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8081",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "base_url": "http://127.0.0.1:8081/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{models}/nanbeige4.3-33b-4bit/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:5088,16000:19954"
+  ],
+  "agent_trace": "none",
+  "note": "mlx-lm's own server on the same weights directory as Kapitsa (its llama model; no drafter). Settings as for the Qwen models: prompt cache for 4 sequences / 8 GB, 2048-token prefill steps (mlx-lm's default). HF_HUB_OFFLINE: mlx_lm.server would otherwise download whatever model a request names. Request id default_model = the model given with --model."
+ },
+ {
+  "label": "nb43-33b-mlxvlm",
+  "display": "mlx-vlm server",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nanbeige4.3-33B",
+  "model_path": "{models}/nanbeige4.3-33b-4bit",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/nanbeige4.3-33b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8286",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1",
+   "APC_ENABLED": "1",
+   "APC_DISK_ENABLED": "0"
+  },
+  "base_url": "http://127.0.0.1:8286/v1",
+  "model": "{models}/nanbeige4.3-33b-4bit",
+  "ready_timeout": 600,
+  "version_cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-c",
+   "import importlib.metadata as m; print('mlx-vlm', m.version('mlx-vlm'), 'mlx', m.version('mlx'))"
+  ],
+  "requires_paths": [
+   "{models}/nanbeige4.3-33b-4bit/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:5088,16000:19954"
+  ],
+  "agent_trace": "none",
+  "note": "mlx-vlm 0.7.10 (MLX_VLM_PYTHON = a Python with it) on the same MLX 4-bit folder, through its own text llama model. Automatic prefix caching on (APC_ENABLED=1, in memory only); 2048-token prefill steps; one sequence at a time. The request's model id is the path the server was started with."
+ },
+ {
+  "label": "nb43-33b-omlx",
+  "display": "oMLX",
+  "engine": "omlx",
+  "version": "auto",
+  "model_name": "Nanbeige4.3-33B",
+  "model_path": "{models}/nanbeige4.3-33b-4bit",
+  "prepare": [
+   {
+    "symlink": {
+     "src": "{models}/nanbeige4.3-33b-4bit",
+     "dst": "{state}/omlx/nb43-33b/models/nanbeige4.3-33b-4bit"
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/omlx/nb43-33b/base/model_settings.json",
+     "data": {
+      "version": 1,
+      "models": {
+       "nanbeige4.3-33b-4bit": {
+        "mtp_enabled": false
+       }
+      }
+     }
+    }
+   },
+   {
+    "clean_dir": "{state}/omlx/nb43-33b/base/kv-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/omlx/nb43-33b/base/kv-cache"
+   }
+  ],
+  "cmd": [
+   "{env:OMLX_BIN=omlx}",
+   "serve",
+   "--model-dir",
+   "{state}/omlx/nb43-33b/models",
+   "--no-hf-cache",
+   "--headless",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8085",
+   "--base-path",
+   "{state}/omlx/nb43-33b/base",
+   "--paged-ssd-cache-dir",
+   "{state}/omlx/nb43-33b/base/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_clear_prefixes": [
+   "OMLX_"
+  ],
+  "base_url": "http://127.0.0.1:8085/v1",
+  "model": "nanbeige4.3-33b-4bit",
+  "requires_paths": [
+   "{models}/nanbeige4.3-33b-4bit/model.safetensors.index.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:5088,16000:19954"
+  ],
+  "agent_trace": "none",
+  "note": "oMLX's plain autoregressive server on the same weights (no drafter exists for this model), with the settings of the Qwen baselines."
+ },
+ {
+  "label": "nb43-33b-llamacpp",
+  "display": "llama.cpp",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nanbeige4.3-33B",
+  "model_path": "{models}/nanbeige4.3-33b-gguf/Nanbeige4.3-33B-Q4_K_M.gguf (Q4_K_M, converted from the bf16 checkpoint with llama.cpp b11871's convert_hf_to_gguf.py and llama-quantize)",
+  "cmd": [
+   "{env:LLAMA_SERVER={first:llama-server|/opt/homebrew/bin/llama-server}}",
+   "-m",
+   "{models}/nanbeige4.3-33b-gguf/Nanbeige4.3-33B-Q4_K_M.gguf",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8412",
+   "-a",
+   "nanbeige4.3-33b",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--chat-template-file",
+   "{models}/nanbeige4.3-33b-gguf/chat_template.jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--temp",
+   "0.6",
+   "--top-p",
+   "0.95",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--no-webui"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8412/v1",
+  "model": "nanbeige4.3-33b",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{models}/nanbeige4.3-33b-gguf/Nanbeige4.3-33B-Q4_K_M.gguf",
+   "{models}/nanbeige4.3-33b-gguf/chat_template.jinja"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:5088,16000:19954"
+  ],
+  "agent_trace": "none",
+  "note": "Plain llama-server on a Q4_K_M GGUF made from Nanbeige/Nanbeige4.3-33B @c1093c50 with llama.cpp b11871's own tools (convert_hf_to_gguf.py --outtype bf16, llama-quantize Q4_K_M), with two tokenizer metadata fields set false (gguf_set_metadata.py): tokenizer.ggml.add_space_prefix, which as converted puts a U+2581 after every special token, and add_bos_token, which would put a second <|im_start|> before the template's own; with them llama.cpp's tokens of a chat prompt are Hugging Face's. The checkpoint's chat template from a file, with the two minja rewrites Kapitsa's engine makes (llama.cpp's minja parses neither the replace filter nor a method on a macro's result). Flags as the Qwen runs: -c 32768 -np 1, -b/-ub 2048, -lm none, --min-p 0, the harness's sampling. Q4_K_M reads more bytes per token than the MLX 4-bit pack (Q6_K output head and some Q6_K layers), a handicap on bandwidth-bound decode."
+ },
+ {
+  "label": "nb43-33b-ollama",
+  "display": "Ollama",
+  "engine": "ollama",
+  "version": "auto",
+  "model_name": "Nanbeige4.3-33B",
+  "model_path": "ollama:nace/nanbeige4.3:33b-q4_K_M (the llama.cpp config's GGUF, `ollama create`)",
+  "cmd": [
+   "{env:OLLAMA_BIN={first:ollama|/Applications/Ollama.app/Contents/Resources/ollama}}",
+   "serve"
+  ],
+  "env": {
+   "OLLAMA_HOST": "127.0.0.1:8194",
+   "OLLAMA_MODELS": "{env:OLLAMA_MODELS=~/.ollama/models}",
+   "OLLAMA_NOPRUNE": "1",
+   "OLLAMA_CONTEXT_LENGTH": "32768",
+   "OLLAMA_NUM_PARALLEL": "1",
+   "OLLAMA_MAX_LOADED_MODELS": "1",
+   "OLLAMA_KEEP_ALIVE": "-1",
+   "OLLAMA_FLASH_ATTENTION": "1",
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "OLLAMA_",
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8194/v1",
+  "model": "nace/nanbeige4.3:33b-q4_K_M",
+  "requires_ollama_tag": "nace/nanbeige4.3:33b-q4_K_M",
+  "ready_timeout": 300,
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:5088,16000:19954"
+  ],
+  "agent_trace": "none",
+  "note": "Ollama's GGUF runner on the llama.cpp config's Q4_K_M file (its tokenizer metadata fixed as described there), imported with `ollama create nace/nanbeige4.3:33b-q4_K_M` from a Modelfile (Ollama takes the GGUF's own chat template), 32K context, one sequence; thinking off by reasoning_effort none."
+ }
+]
