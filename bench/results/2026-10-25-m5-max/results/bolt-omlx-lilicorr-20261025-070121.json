@@ -1,0 +1,325 @@
+{
+ "label": "bolt-omlx-lilicorr",
+ "schema": 2,
+ "when": "2026-10-25 07:21:35",
+ "invalid": [
+  "harness: server never became ready (900s); see <run-root>/logs/bolt-omlx-lilicorr-20261025-070121.log"
+ ],
+ "flags": [],
+ "config_label": "bolt-omlx-lilicorr",
+ "display": "oMLX + LiLiCorr drafter (the bundle's model file)",
+ "engine": "omlx",
+ "version": "unknown",
+ "version_config": "auto",
+ "model_name": "Nemotron-3.5-Bolt-74B-A9B-24GB",
+ "model_path": "{models}/nemotron-3.5-bolt-24gb",
+ "note": "The checkpoint folder must also hold the MLX model file of NVIDIA's Bolt bundle for MLX (nemotron_bolt.py; Trust Remote Code). The launcher follows that bundle's README: load, unload, load again with DFlash, then open the harness port. In oMLX 0.7.1rc1 every T > 0 request with the drafter fails (its sampled DFlash selection), so this configuration measures only greedy; bolt-omlx-lilicorr-greedy sends temperature 0 in every phase.",
+ "config": {
+  "label": "bolt-omlx-lilicorr",
+  "display": "oMLX + LiLiCorr drafter (the bundle's model file)",
+  "engine": "omlx",
+  "version": "auto",
+  "model_name": "Nemotron-3.5-Bolt-74B-A9B-24GB",
+  "model_path": "{models}/nemotron-3.5-bolt-24gb",
+  "prepare": [
+   {
+    "symlink": {
+     "src": "{models}/nemotron-3.5-bolt-24gb",
+     "dst": "{state}/omlx/bolt/models/nemotron-3.5-bolt-24gb"
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/omlx/bolt/base-lilicorr/model_settings.json",
+     "data": {
+      "version": 1,
+      "models": {
+       "nemotron-3.5-bolt-24gb": {
+        "trust_remote_code": true,
+        "dflash_enabled": true
+       }
+      }
+     }
+    }
+   },
+   {
+    "clean_dir": "{state}/omlx/bolt/base-lilicorr/kv-cache"
+   }
+  ],
+  "cmd": [
+   "{harness}/launchers/omlx_bolt_serve.sh",
+   "8241",
+   "18241",
+   "nemotron-3.5-bolt-24gb",
+   "--model-dir",
+   "{state}/omlx/bolt/models",
+   "--no-hf-cache",
+   "--headless",
+   "--base-path",
+   "{state}/omlx/bolt/base-lilicorr",
+   "--paged-ssd-cache-dir",
+   "{state}/omlx/bolt/base-lilicorr/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_clear_prefixes": [
+   "OMLX_"
+  ],
+  "base_url": "http://127.0.0.1:8241/v1",
+  "model": "nemotron-3.5-bolt-24gb",
+  "ready_timeout": 900,
+  "requires_paths": [
+   "{models}/nemotron-3.5-bolt-24gb/model.safetensors.index.json",
+   "{models}/nemotron-3.5-bolt-24gb/nemotron_bolt.py",
+   "{models}/nemotron-3.5-bolt-24gb/dflash/model.safetensors"
+  ],
+  "log_grep": [
+   "### |DFlash|drafter|LiLiCorr|dflash",
+   "memory|guard",
+   "[Ll]oaded model|Discovered model|remote code",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514"
+  ],
+  "note": "The checkpoint folder must also hold the MLX model file of NVIDIA's Bolt bundle for MLX (nemotron_bolt.py; Trust Remote Code). The launcher follows that bundle's README: load, unload, load again with DFlash, then open the harness port. In oMLX 0.7.1rc1 every T > 0 request with the drafter fails (its sampled DFlash selection), so this configuration measures only greedy; bolt-omlx-lilicorr-greedy sends temperature 0 in every phase."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 74.69,
+    "swapouts": 8364,
+    "swapins": 4085,
+    "pageouts": 185265,
+    "memorystatus_level": 96
+   },
+   "gpu_mem": {
+    "in_use": 1133772800,
+    "alloc": 2821259264,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 1744136654848,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/bench/harness/launchers/omlx_bolt_serve.sh",
+   "8241",
+   "18241",
+   "nemotron-3.5-bolt-24gb",
+   "--model-dir",
+   "<run-root>/state/omlx/bolt/models",
+   "--no-hf-cache",
+   "--headless",
+   "--base-path",
+   "<run-root>/state/omlx/bolt/base-lilicorr",
+   "--paged-ssd-cache-dir",
+   "<run-root>/state/omlx/bolt/base-lilicorr/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "cmd_shell": "<repo>/bench/harness/launchers/omlx_bolt_serve.sh 8241 18241 nemotron-3.5-bolt-24gb --model-dir <run-root>/state/omlx/bolt/models --no-hf-cache --headless --base-path <run-root>/state/omlx/bolt/base-lilicorr --paged-ssd-cache-dir <run-root>/state/omlx/bolt/base-lilicorr/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive",
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_cleared": [
+   "OMLX_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/nemotron-3.5-bolt-24gb",
+   "safetensors_bytes": 24083745496,
+   "safetensors_files": [
+    "model-00001-of-00090.safetensors",
+    "model-00002-of-00090.safetensors",
+    "model-00003-of-00090.safetensors",
+    "model-00004-of-00090.safetensors",
+    "model-00005-of-00090.safetensors",
+    "model-00006-of-00090.safetensors",
+    "model-00007-of-00090.safetensors",
+    "model-00008-of-00090.safetensors",
+    "model-00009-of-00090.safetensors",
+    "model-00010-of-00090.safetensors",
+    "model-00011-of-00090.safetensors",
+    "model-00012-of-00090.safetensors",
+    "model-00013-of-00090.safetensors",
+    "model-00014-of-00090.safetensors",
+    "model-00015-of-00090.safetensors",
+    "model-00016-of-00090.safetensors",
+    "model-00017-of-00090.safetensors",
+    "model-00018-of-00090.safetensors",
+    "model-00019-of-00090.safetensors",
+    "model-00020-of-00090.safetensors",
+    "model-00021-of-00090.safetensors",
+    "model-00022-of-00090.safetensors",
+    "model-00023-of-00090.safetensors",
+    "model-00024-of-00090.safetensors",
+    "model-00025-of-00090.safetensors",
+    "model-00026-of-00090.safetensors",
+    "model-00027-of-00090.safetensors",
+    "model-00028-of-00090.safetensors",
+    "model-00029-of-00090.safetensors",
+    "model-00030-of-00090.safetensors",
+    "model-00031-of-00090.safetensors",
+    "model-00032-of-00090.safetensors",
+    "model-00033-of-00090.safetensors",
+    "model-00034-of-00090.safetensors",
+    "model-00035-of-00090.safetensors",
+    "model-00036-of-00090.safetensors",
+    "model-00037-of-00090.safetensors",
+    "model-00038-of-00090.safetensors",
+    "model-00039-of-00090.safetensors",
+    "model-00040-of-00090.safetensors",
+    "model-00041-of-00090.safetensors",
+    "model-00042-of-00090.safetensors",
+    "model-00043-of-00090.safetensors",
+    "model-00044-of-00090.safetensors",
+    "model-00045-of-00090.safetensors",
+    "model-00046-of-00090.safetensors",
+    "model-00047-of-00090.safetensors",
+    "model-00048-of-00090.safetensors",
+    "model-00049-of-00090.safetensors",
+    "model-00050-of-00090.safetensors",
+    "model-00051-of-00090.safetensors",
+    "model-00052-of-00090.safetensors",
+    "model-00053-of-00090.safetensors",
+    "model-00054-of-00090.safetensors",
+    "model-00055-of-00090.safetensors",
+    "model-00056-of-00090.safetensors",
+    "model-00057-of-00090.safetensors",
+    "model-00058-of-00090.safetensors",
+    "model-00059-of-00090.safetensors",
+    "model-00060-of-00090.safetensors",
+    "model-00061-of-00090.safetensors",
+    "model-00062-of-00090.safetensors",
+    "model-00063-of-00090.safetensors",
+    "model-00064-of-00090.safetensors",
+    "model-00065-of-00090.safetensors",
+    "model-00066-of-00090.safetensors",
+    "model-00067-of-00090.safetensors",
+    "model-00068-of-00090.safetensors",
+    "model-00069-of-00090.safetensors",
+    "model-00070-of-00090.safetensors",
+    "model-00071-of-00090.safetensors",
+    "model-00072-of-00090.safetensors",
+    "model-00073-of-00090.safetensors",
+    "model-00074-of-00090.safetensors",
+    "model-00075-of-00090.safetensors",
+    "model-00076-of-00090.safetensors",
+    "model-00077-of-00090.safetensors",
+    "model-00078-of-00090.safetensors",
+    "model-00079-of-00090.safetensors",
+    "model-00080-of-00090.safetensors",
+    "model-00081-of-00090.safetensors",
+    "model-00082-of-00090.safetensors",
+    "model-00083-of-00090.safetensors",
+    "model-00084-of-00090.safetensors",
+    "model-00085-of-00090.safetensors",
+    "model-00086-of-00090.safetensors",
+    "model-00087-of-00090.safetensors",
+    "model-00088-of-00090.safetensors",
+    "model-00089-of-00090.safetensors",
+    "model-00090-of-00090.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "cd20dcc690ac499a3433c60b1c7c0662e550ca6a",
+   "dirty": true
+  },
+  "config_file": "configs/bolt.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_GPU_LOCK",
+   "BENCH_OUT",
+   "LLAMA_SERVER",
+   "LMS_BIN",
+   "MLX_LM_SERVER",
+   "MLX_SERVE_BIN",
+   "MLX_VLM_MAIN_PYTHON",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS",
+   "OMLX_BIN",
+   "REC_BIN",
+   "SPLASH_ROOT"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "Claude Helper",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [
+   "symlink <run-root>/state/omlx/bolt/models/nemotron-3.5-bolt-24gb -> ~/models/nemotron-3.5-bolt-24gb",
+   "write <run-root>/state/omlx/bolt/base-lilicorr/model_settings.json: {\"version\": 1, \"models\": {\"nemotron-3.5-bolt-24gb\": {\"trust_remote_code\": true, \"dflash_enabled\": true}}}",
+   "empty <run-root>/state/omlx/bolt/base-lilicorr/kv-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "~/models",
+   "BENCH_OUT": "<run-root>",
+   "BENCH_GPU_LOCK": "/tmp/kapitsa-gpu.lock",
+   "LLAMA_SERVER": "~/engines/llama-b11871/llama-b11871/llama-server",
+   "OLLAMA_BIN": "~/engines/ollama-0.40.11/ollama",
+   "OLLAMA_MODELS": "~/.ollama/models",
+   "OLLAMA_MLX_MODELS": "~/models/ollama-mlx",
+   "MLX_LM_SERVER": "~/.local/bin/mlx_lm.server",
+   "MTPLX_BIN": "~/.local/bin/mtplx",
+   "MLX_VLM_PYTHON": "~/engines/venv-mlxvlm/bin/python",
+   "MLX_VLM_MAIN_PYTHON": "~/engines/venv-mlxvlm/bin/python",
+   "LMS_BIN": "~/.lmstudio/bin/lms",
+   "MLX_SERVE_BIN": "~/engines/mlx-serve-26.10.3/mlx-serve-macos-arm64/mlx-serve",
+   "BENCH_GPU_AMBIENT": "Claude Helper",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 900.4
+ },
+ "gpu_lock": {
+  "harness_wait_s": 313.63,
+  "harness_held_s": 905.6,
+  "harness_lock": "flock by the harness"
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 562216960,
+   "alloc": 2433286144,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 66.69,
+   "swapouts": 8364,
+   "swapins": 4201,
+   "pageouts": 185265,
+   "memorystatus_level": 96
+  },
+  "disk_free_bytes": 1735673364480
+ },
+ "server_log": [],
+ "server_log_path": "logs/bolt-omlx-lilicorr-20261025-070121.log"
+}

@@ -1,0 +1,60 @@
+Splash model nace-local/Qwen3.8-27B-4bit is already installed in ~/Library/Application Support/Splash/models/.selections/b02ccbc8e92b5f0df07e43ff82d65ac7bb9377e2880fd769a4e8a1f57bddb64b
+20:50:47 Loading · nace-local/Qwen3.8-27B-4bit
+20:50:47 Chat template · patched to render later system messages in place (the original template rejects them), generation prompt 5-7 tokens
+20:50:49 Weights loaded in 1.88 s.
+20:50:49 Decode cycles verify every row of the draft's block (--verify-rows auto, as nace-local/Qwen3.8-27B-4bit is dense).
+20:50:49 SSD cache: up to 32.0 GiB of temporary files in /var/folders/y7/ldyy12617ds2_dd6xfndzthw0000gn/T/ (its automatic quota, while its volume has room beyond the 10.0 GiB it keeps free); KV pages of 1040 KiB and states of 152 MiB, a state's write staging through 152 MiB of the memory plan; --max-cache-disk 0 turns it off.
+20:50:49 Kernel policy for GPU family 10 with 40 cores.
+20:50:49 Setting up the Neural Engine FFN split (splash serve --disable-ane keeps the FFN on the GPU).
+20:50:50 Neural Engine FFN split at share 0.24 for chunks of 659 rows or more, 2.7% from the GPU alone on the Neural Engine's part (set up as calibrated before in 0.6 s).
+20:50:52 Thermal state: fair
+20:50:53 Ready · nace-local/Qwen3.8-27B-4bit · context 32K · language only · http://127.0.0.1:8151
+20:50:54 Started · input 2,923 · cached 0 · effort none · enable_thinking false · thinking off
+20:50:57 Done · input 2,923 · cached 0 · output 64 · TTFT 2.4s · 73.9 tok/s · 3.0 tok/cycle
+20:50:57 Started · input 430 · cached 0 · effort none · enable_thinking false · thinking off
+20:50:58 Done · input 430 · cached 0 · output 27 · tools 2·0530bda4 · TTFT 0.6s · 151.7 tok/s · 6.5 tok/cycle
+20:50:58 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:02 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 121.2 tok/s · 5.1 tok/cycle
+20:51:02 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:07 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 115.8 tok/s · 4.9 tok/cycle
+20:51:07 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:12 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 112.5 tok/s · 4.7 tok/cycle
+20:51:30 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:35 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 107.3 tok/s · 4.4 tok/cycle
+20:51:35 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:40 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 116.3 tok/s · 4.9 tok/cycle
+20:51:40 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:44 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 116.1 tok/s · 4.9 tok/cycle
+20:51:44 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:49 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 123.4 tok/s · 5.1 tok/cycle
+20:51:49 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:53 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 118.6 tok/s · 5.0 tok/cycle
+20:51:53 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:51:58 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 118.8 tok/s · 5.0 tok/cycle
+20:51:58 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:52:02 Thermal state: fair → nominal
+20:52:02 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 120.1 tok/s · 5.0 tok/cycle
+20:52:02 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:52:07 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 118.9 tok/s · 5.0 tok/cycle
+20:52:07 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:52:11 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 118.6 tok/s · 4.9 tok/cycle
+20:52:11 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+20:52:16 Done · input 85 · cached 0 · output 512 · TTFT 0.2s · 118.7 tok/s · 5.0 tok/cycle
+20:52:16 Started · input 4,133 · cached 0 · effort none · enable_thinking false · thinking off
+20:52:21 Done · input 4,133 · cached 0 · output 62 · TTFT 3.9s · 78.5 tok/s · 3.2 tok/cycle
+20:52:22 Started · input 4,217 · cached 4,096 · effort none · enable_thinking false · thinking off
+20:52:22 Done · input 4,217 · cached 4,096 · deduplicated 96 · output 11 · TTFT 0.2s · 130.5 tok/s · 5.0 tok/cycle
+20:52:23 Started · input 4,255 · cached 4,192 · effort none · enable_thinking false · thinking off
+20:52:23 Done · input 4,255 · cached 4,192 · deduplicated 32 · output 14 · TTFT 0.2s · 171.5 tok/s · 6.5 tok/cycle
+20:52:24 Started · input 4,289 · cached 4,224 · effort none · enable_thinking false · thinking off
+20:52:26 Done · input 4,289 · cached 4,224 · deduplicated 32 · output 256 · TTFT 0.2s · 156.6 tok/s · 6.0 tok/cycle
+20:52:26 Started · input 16,288 · cached 0 · effort none · enable_thinking false · thinking off
+20:52:42 Done · input 16,288 · cached 0 · output 53 · TTFT 15.4s · 74.3 tok/s · 3.2 tok/cycle
+20:52:43 Started · input 16,363 · cached 16,256 · effort none · enable_thinking false · thinking off
+20:52:44 Done · input 16,363 · cached 16,256 · deduplicated 64 · output 13 · TTFT 0.2s · 101.3 tok/s · 4.0 tok/cycle
+20:52:45 Started · input 16,403 · cached 16,352 · effort none · enable_thinking false · thinking off
+20:52:45 Done · input 16,403 · cached 16,352 · output 14 · TTFT 0.2s · 110.1 tok/s · 4.3 tok/cycle
+20:52:46 Thermal state: nominal → fair
+20:52:46 Started · input 16,437 · cached 16,384 · effort none · enable_thinking false · thinking off
+20:52:47 Done · input 16,437 · cached 16,384 · deduplicated 32 · output 124 · TTFT 0.2s · 148.2 tok/s · 5.9 tok/cycle
+20:52:47 Stopping · releasing engine resources
