@@ -49,7 +49,10 @@ static Pipeline dpipe(const std::string& n) {
 // SPEC §1 checks of a drafter's config.json against the target (the kernels hard-code this geometry): the
 // failed checks, empty for a supported drafter. find() applies them too, so the default ("auto") only picks
 // drafters that load.
-static std::vector<std::string> config_problems(const json& c, const Qwen35Config& t) {
+// flex (a target that is not a Qwen35: Nanbeige4.3's drafter): attention heads that lay out as 32 / 8 (each kv head's
+// group of query heads split into groups of 4, DFlash2::init), a selector rank up to 256 (zero-padded) and a top-k of
+// at least 16 (the lattice takes the top 16), full attention (the ring keeps the last 2047 positions) and any eps
+static std::vector<std::string> config_problems(const json& c, const Qwen35Config& t, bool flex = false) {
   std::vector<std::string> bad;
   auto check = [&](bool ok, const char* what) {
     if (!ok) bad.push_back(what);
@@ -103,7 +106,8 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   }
   const int NL = c.value("num_hidden_layers", 0), H = c.value("hidden_size", 0), I = c.value("intermediate_size", 0);
   const int vocab = c.value("vocab_size", 0), nq = c.value("num_attention_heads", 0), nkv = c.value("num_key_value_heads", 0);
-  const int hd = c.value("head_dim", nq ? H / nq : 0), window = c.value("sliding_window", 0);
+  const int hd = c.value("head_dim", nq ? H / nq : 0);
+  const int window = c.contains("sliding_window") && c["sliding_window"].is_number() ? c["sliding_window"].get<int>() : 0;
   const int mask = dc.value("mask_token_id", -1);
   double theta = 0;
   std::string rope_type = "default";
@@ -119,16 +123,22 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   bool sliding = NL > 0 && c.contains("layer_types") && c["layer_types"].size() == size_t(NL);
   if (sliding)
     for (auto& lt : c["layer_types"]) sliding = sliding && lt == "sliding_attention";
-  check(sliding && window == DFlash2::kWin, "all layers sliding, window 2048");
+  bool full = NL > 0 && c.contains("layer_types") && c["layer_types"].size() == size_t(NL);
+  if (full)
+    for (auto& lt : c["layer_types"]) full = full && lt == "full_attention";
+  check((sliding && window == DFlash2::kWin) || (flex && full), "all layers sliding, window 2048");
   check(int(dc.value("conv_kernel_size", 0)) == 2, "conv taps 2");
   check(dc.value("conv_group_size", 0) == 16, "conv group 16");
-  check(dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
+  check(flex ? dc.value("selector_rank", 0) >= 1 && dc.value("selector_rank", 0) <= DFlash2::kRank &&
+                   dc.value("selector_top_k", 0) >= DFlash2::kTopK
+             : dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
         "selector rank 256 / top-k 16");
   check(dc.value("block_size", 0) == DFlash2::kB, "block 8");
   // any theta: the inverse frequencies come from it at load (inv_freq_; incoai's Flash-Next draft has 1e4, the others 1e7)
   check(theta > 0 && rope_type == "default", "default rope");
-  check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
-  check(c.value("rms_norm_eps", 1e-6f) == 1e-6f, "eps 1e-6");
+  const bool relaid = nq > 0 && nkv > 0 && nq % nkv == 0 && nkv * ((nq / nkv + 3) / 4) == 8;
+  check(hd == 128 && ((nq == 32 && nkv == 8) || (flex && relaid)), "heads 32/8 x 128");
+  check(flex || c.value("rms_norm_eps", 1e-6f) == 1e-6f, "eps 1e-6");
   check(dc.value("input_embedding_scale", 1.0) == 1.0 && dc.value("output_multiplier", 1.0) == 1.0 &&
             dc.value("final_logit_softcapping", json()).is_null() && c.value("final_logit_softcapping", json()).is_null(),
         "neutral embedding/output scales, no softcap");
@@ -158,7 +168,7 @@ void DFlash2::load_config(const std::string& dir) {
   if (!f) fatal("DFlash2: cannot read %s/config.json", dir.c_str());
   json c = json::parse(f);
   if (!c.contains("dflash_config")) fatal("DFlash2: %s has no dflash_config", dir.c_str());
-  const std::vector<std::string> bad = config_problems(c, tg_.config());
+  const std::vector<std::string> bad = config_problems(c, tg_.config(), q35_ == nullptr);
   if (!bad.empty()) {
     std::string s;
     for (auto& b : bad) s += " [" + b + "]";
@@ -179,7 +189,7 @@ void DFlash2::load_config(const std::string& dir) {
   cfg_.stream_mean = target_reduction(tg_.config()) == "stream_mean";
   if (cfg_.v1) {  // runs with this pipeline's 8-row block and 2048-position ring (DFlash2Config::v1)
     cfg_.trained_block = dc.value("block_size", 16);
-    cfg_.trained_window = c.value("sliding_window", 0);
+    cfg_.trained_window = c.contains("sliding_window") && c["sliding_window"].is_number() ? c["sliding_window"].get<int>() : 0;
     cfg_.block = kB;
     cfg_.window = kWin;
   } else {
@@ -187,7 +197,8 @@ void DFlash2::load_config(const std::string& dir) {
     cfg_.conv_gs = dc["conv_group_size"];
     cfg_.rank = dc["selector_rank"];
     cfg_.topk = dc["selector_top_k"];
-    cfg_.window = c.value("sliding_window", 0);
+    // a full-attention drafter (null window: Nanbeige4.3's) reads the ring's last 2047 positions
+    cfg_.window = c.contains("sliding_window") && c["sliding_window"].is_number() ? c["sliding_window"].get<int>() : kWin;
   }
   if (c.contains("rope_parameters")) cfg_.theta = float(c["rope_parameters"].value("rope_theta", 0.0));
   else cfg_.theta = float(c.value("rope_theta", 0.0));
@@ -465,20 +476,90 @@ void DFlash2::init(const std::string& dir, int bits, bool rows16) {
     const int64_t H = cfg_.H, I = cfg_.I, V = cfg_.vocab, G4 = 4 * (cfg_.H / cfg_.conv_gs);
     const int64_t nH = int64_t(cfg_.target_layers.size()) * H;
     const bool v1 = cfg_.v1;
+    // Attention heads that are not 32 / 8 (Nanbeige4.3's drafter: 28 / 4) laid out as 32 / 8 (config_problems' flex):
+    // kv head j of the 8 is the source's j / sub, query head n = 4 j + t the source's (j / sub) g + (j % sub) 4 + t
+    // where that is below g, else a zero head; o_proj's columns follow (a zero head's output meets zero columns:
+    // exact). A selector rank under 256 is padded with zeros (zero terms in every dot product: exact).
+    const int nq0 = cfg_.nq, nkv0 = cfg_.nkv, g = nkv0 ? nq0 / nkv0 : 0, sub = (g + 3) / 4;
+    const int64_t rank0 = cfg_.rank > 0 ? cfg_.rank : kRank;
+    const bool relay = !v1 && (nq0 != 32 || nkv0 != 8);
+    std::deque<Tensor> laid;  // the laid-out bf16 tensors, alive until quantized or copied
+    std::vector<Buffer> laid_b;
+    auto blank = [&](std::vector<int64_t> shape, const char* label) -> Tensor& {
+      size_t n = 2;
+      for (int64_t d : shape) n *= size_t(d);
+      Buffer b = Gpu::get().alloc(n, label, false);
+      memset(b.ptr(), 0, n);
+      laid_b.push_back(b);
+      laid.push_back(Tensor{b, DType::BF16, shape});
+      return laid.back();
+    };
+    auto src_head = [&](int n) {
+      const int j = n / 4, qi = (j % sub) * 4 + n % 4;
+      return qi < g ? (j / sub) * g + qi : -1;
+    };
+    const size_t hrow = size_t(128) * size_t(H) * 2;  // one head's rows of a [heads x 128, H] projection
+    auto q_of = [&](const std::string& n) -> const Tensor& {
+      if (!relay) return expect(n, {4096, H});
+      const Tensor& src = expect(n, {int64_t(nq0) * 128, H});
+      Tensor& t = blank({4096, H}, "dfl_q_laid");
+      for (int h = 0; h < 32; ++h)
+        if (const int f = src_head(h); f >= 0)
+          memcpy(t.buf.as<uint8_t>() + size_t(h) * hrow, src.buf.as<uint8_t>() + size_t(f) * hrow, hrow);
+      return t;
+    };
+    auto kv_of = [&](const std::string& n) -> const Tensor& {  // k_proj / v_proj
+      if (!relay) return expect(n, {1024, H});
+      const Tensor& src = expect(n, {int64_t(nkv0) * 128, H});
+      Tensor& t = blank({1024, H}, "dfl_kv_laid");
+      for (int j = 0; j < 8; ++j)
+        memcpy(t.buf.as<uint8_t>() + size_t(j) * hrow, src.buf.as<uint8_t>() + size_t(j / sub) * hrow, hrow);
+      return t;
+    };
+    auto o_of = [&](const std::string& n) -> const Tensor& {
+      if (!relay) return expect(n, {H, 4096});
+      const Tensor& src = expect(n, {H, int64_t(nq0) * 128});
+      Tensor& t = blank({H, 4096}, "dfl_o_laid");
+      for (int64_t r = 0; r < H; ++r)
+        for (int h = 0; h < 32; ++h)
+          if (const int f = src_head(h); f >= 0)
+            memcpy(t.buf.as<uint8_t>() + (size_t(r) * 4096 + size_t(h) * 128) * 2,
+                   src.buf.as<uint8_t>() + (size_t(r) * size_t(nq0) * 128 + size_t(f) * 128) * 2, 256);
+      return t;
+    };
+    auto rank_rows = [&](const std::string& n) -> const Tensor& {  // [rank, H] -> [256, H]
+      if (rank0 == kRank) return expect(n, {kRank, H});
+      const Tensor& src = expect(n, {rank0, H});
+      Tensor& t = blank({kRank, H}, "dfl_sel_laid");
+      memcpy(t.buf.ptr(), src.buf.ptr(), size_t(rank0) * size_t(H) * 2);
+      return t;
+    };
+    auto rank_cols = [&](const std::string& n) -> const Tensor& {  // [V, rank] -> [V, 256]
+      if (rank0 == kRank) return expect(n, {V, kRank});
+      const Tensor& src = expect(n, {V, rank0});
+      Tensor& t = blank({V, kRank}, "dfl_codebook_laid");
+      for (int64_t v = 0; v < V; ++v)
+        memcpy(t.buf.as<uint8_t>() + size_t(v) * kRank * 2, src.buf.as<uint8_t>() + size_t(v) * size_t(rank0) * 2,
+               size_t(rank0) * 2);
+      return t;
+    };
+    if (relay || rank0 != kRank)
+      logi("DFlash2: %d / %d attention heads laid out as 32 / 8, selector rank %lld padded to %d (exact)", nq0, nkv0,
+           (long long)rank0, kRank);
     fc_ = quantize({&expect("fc.weight", {H, nH})}, "dfl_fc");
-    if (!v1) sel_w_ = quantize({&expect("candidate_selector.hidden_projection.weight", {kRank, H})}, "dfl_sel");
+    if (!v1) sel_w_ = quantize({&rank_rows("candidate_selector.hidden_projection.weight")}, "dfl_sel");
     hnorm_ = own(expect("hidden_norm.weight", {H}), "dfl_norm");
     norm_ = own(expect("norm.weight", {H}), "dfl_norm");
     if (!v1) {
-      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
-      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
+      cbA_ = own(rank_cols("candidate_selector.predecessor_codebook"), "dfl_codebook");
+      cbB_ = own(rank_cols("candidate_selector.successor_codebook"), "dfl_codebook");
     }
     // k|v of every layer stacked: one GEMM projects a committed context row for all layers.
     std::vector<const Tensor*> kv_parts;
     for (int l = 0; l < cfg_.NL; ++l) {
       const std::string p = "layers." + std::to_string(l) + ".self_attn.";
-      kv_parts.push_back(&expect(p + "k_proj.weight", {1024, H}));
-      kv_parts.push_back(&expect(p + "v_proj.weight", {1024, H}));
+      kv_parts.push_back(&kv_of(p + "k_proj.weight"));
+      kv_parts.push_back(&kv_of(p + "v_proj.weight"));
     }
     kv_all_ = quantize(kv_parts, "dfl_kv");
     {
@@ -511,13 +592,14 @@ void DFlash2::init(const std::string& dir, int bits, bool rows16) {
         L.ac = quantize({&expect(p + "attention_conv.kernel_projection.weight", {G4, H})}, "dfl_ac", perm);
         L.mc = quantize({&expect(p + "mlp_conv.kernel_projection.weight", {G4, H})}, "dfl_mc", perm);
       }
-      L.q = quantize({&expect(p + "self_attn.q_proj.weight", {4096, H})}, "dfl_q");
-      L.o = quantize({&expect(p + "self_attn.o_proj.weight", {H, 4096})}, "dfl_o");
+      L.q = quantize({&q_of(p + "self_attn.q_proj.weight")}, "dfl_q");
+      L.o = quantize({&o_of(p + "self_attn.o_proj.weight")}, "dfl_o");
       L.gate = quantize({&expect(p + "mlp.gate_proj.weight", {I, H})}, "dfl_gate");
       L.up = quantize({&expect(p + "mlp.up_proj.weight", {I, H})}, "dfl_up");
       L.down = quantize({&expect(p + "mlp.down_proj.weight", {H, I})}, "dfl_down");
       L.kv = row_view(kv_all_, uint32_t(l) * 2048, 2048);
     }
+    for (Buffer& b : laid_b) Gpu::get().release(b);
   }
   // RoPE inverse frequencies in fp32 as HF computes them: 1 / theta^(2i/128).
   inv_freq_ = Gpu::get().alloc(64 * 4, "dfl_inv_freq", false);
