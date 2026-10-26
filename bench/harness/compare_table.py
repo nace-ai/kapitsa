@@ -90,22 +90,26 @@ POWER_MODE_NUM = {"automatic": "0", "low": "1", "high": "2"}  # conditions.power
 
 
 def mark_power_mismatch(rows):
-    """Mark the rows of a config whose arms started at different pmset powermodes.
+    """Mark the rows of one model's table whose run started in a mode the rest of the table did not.
 
-    macOS's energy mode (conditions.power_mode: 0 automatic, 1 low, 2 high) moves tok/s by a few percent, so two rows
-    of one pair read in different modes are not a comparison. Each such row is tagged `power-mode mismatch (2 vs 0)`,
-    kept out of the best/win values and out of the win count, and never merged into the contention flag.
+    macOS's energy mode (pmset powermode: 0 automatic, 1 low, 2 high) moves tok/s by a few percent, so an arm read in
+    one mode is not comparable with arms read in another. Rows arrive one per (model, config) — grouping by config can
+    never see two modes, so the table is the unit. The mode most of the table's rows recorded is the reference; a row
+    in another mode is tagged `power-mode mismatch (2 vs 0)`, kept out of the best/win values and out of the win count
+    (a best among the reference-mode rows is still a same-mode comparison), and never merged into the contention flag.
+    When no mode holds a majority there is no reference, so every row that has a mode is marked.
     """
-    by_key = collections.defaultdict(list)
+    modes = collections.Counter(str(r["powermode"]) for r in rows if r.get("powermode") is not None)
+    if len(modes) < 2:
+        return rows
+    ranked = modes.most_common(2)
+    majority = ranked[0][0] if ranked[0][1] > ranked[1][1] else None
+    tag = f"power-mode mismatch ({' vs '.join(sorted(modes, reverse=True))})"
     for r in rows:
         if r.get("powermode") is not None:
-            by_key[r["key"]].append(r)
-    for group in by_key.values():
-        modes = sorted({r["powermode"] for r in group})
-        if len(modes) < 2:
-            continue
-        for r in group:
-            r["power_mismatch"] = f"power-mode mismatch ({' vs '.join(modes)})"
+            r["powermode"] = str(r["powermode"])
+            if majority is None or r["powermode"] != majority:
+                r["power_mismatch"] = tag
     return rows
 
 
@@ -155,6 +159,13 @@ def extract(d, path):
     c16, c16b = pref(16000, "cached")
     mem = d.get("peak_memory_mb") or d.get("peak_footprint_mb")
     engine = d.get("engine") or ""
+    # The harness records the mode it started in under provenance.system_start.powermode (a string, as pmset prints
+    # it); a community submission records conditions.power_mode ("automatic" / "low" / "high") instead.
+    powermode = ((d.get("provenance") or {}).get("system_start") or {}).get("powermode")
+    if powermode is None:
+        powermode = POWER_MODE_NUM.get((d.get("conditions") or {}).get("power_mode"))
+    if powermode is not None:
+        powermode = str(powermode)
     return {
         "model": d.get("model_name") or model_of(label), "key": d.get("config_label") or label, "label": label,
         "display": d.get("display") or engine_of(label), "engine": engine,
@@ -166,7 +177,7 @@ def extract(d, path):
         "c4k": c4, "c4k_bad": c4b, "c16k": c16, "c16k_bad": c16b,
         "pt4k": (pf.get(4000) or {}).get("prompt_tokens"), "pt16k": (pf.get(16000) or {}).get("prompt_tokens"),
         "mem_mb": mem, "mapped_mb": d.get("mapped_file_clean_mb"),
-        "powermode": POWER_MODE_NUM.get((d.get("conditions") or {}).get("power_mode")),
+        "powermode": powermode,
         "power_info": list(d.get("power_info") or []),
         "tools": tok, "invalid": list(d.get("invalid", [])), "flags": flags, "contended": contended,
         "foreign_max": (cont.get("overall") or cont).get("max_foreign_gpu_pct"),

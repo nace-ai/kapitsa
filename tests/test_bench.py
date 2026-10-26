@@ -102,16 +102,51 @@ notes = bench.add_power_info([], "Now drawing from 'AC Power'", "2")
 check(notes == ["POWER-INFO: High Power Mode (pmset powermode 2)"]
       and bench.add_power_info(notes, "Now drawing from 'AC Power'", "2") == notes and len(notes) == 1,
       "the POWER-INFO note appears once, not twice", str(notes))
-# A pair whose two arms started in different modes is not a comparison: both rows are marked and kept out of the
-# best values and the win count (ROUND 326 item 3).
+# A table whose arms started in different modes is not a comparison: a row read in a mode the rest of the table did
+# not record is marked and kept out of the best values and the win count (ROUND 326 item 3). Built through the real
+# path — result files on disk, then load(), then table() — so a wrong key (conditions.power_mode is community-only; the
+# harness writes provenance.system_start.powermode) or grouping by config instead of by the table fails here.
 import compare_table  # noqa: E402  (bench/harness/compare_table.py)
-pair = [{"key": "full", "powermode": "2"}, {"key": "full", "powermode": "0"},
-        {"key": "full", "powermode": "2"}, {"key": "prefill", "powermode": "0"}]
-compare_table.mark_power_mismatch(pair)
-check(all(r.get("power_mismatch") == "power-mode mismatch (0 vs 2)" for r in pair[:3]),
-      "a mixed-mode pair is marked on every arm", str([r.get("power_mismatch") for r in pair]))
-check("power_mismatch" not in pair[3], "a single-mode config is not marked", str(pair[3]))
-check(compare_table.short_flags({"power_mismatch": "power-mode mismatch (0 vs 2)", "invalid": [], "contended": False,
+
+
+def pair_result(dirpath, name, engine, pm, tps):
+    """One harness result file: schema 2, one prefill point, the mode where compare_engines records it."""
+    d = {"label": name, "config_label": name, "model_name": "Test Model", "schema": 2, "engine": engine,
+         "display": engine, "when": "2026-10-25", "decode_summary": {"median_tps": tps},
+         "prefill": [{"target": 4000, "prefill_tps": 1000.0}],
+         "provenance": {"system_start": {"power": "Now drawing from 'AC Power'", "powermode": pm}}}
+    with open(os.path.join(dirpath, name + ".json"), "w") as fh:
+        json.dump(d, fh)
+
+
+def one_table(dirpath):
+    best, _, _ = compare_table.load([dirpath], False)
+    return compare_table.table("Test Model", [r for (m, _), r in best.items() if m == "Test Model"]), best
+
+
+with tempfile.TemporaryDirectory() as tmp:  # two arms at 0, ours at 2: the 2 row is the odd one out
+    pair_result(tmp, "kapitsa-4bit", "Kapitsa", "2", 100.0)
+    pair_result(tmp, "llamacpp-4bit", "llama.cpp", "0", 200.0)
+    pair_result(tmp, "ollama-4bit", "ollama", "0", 150.0)
+    md, best = one_table(tmp)
+    check(sorted(str(r["powermode"]) for r in best.values()) == ["0", "0", "2"],
+          "the mode is read from provenance.system_start.powermode, where the harness writes it",
+          str([(k, r["powermode"]) for k, r in best.items()]))
+    check("power-mode mismatch (2 vs 0)" in md, "the odd-mode row is marked in the flag column", md[-400:])
+    check("**200.0**" in md and "**100.0**" not in md,
+          "a best among the reference-mode rows still counts; the odd-mode row is out", md[-400:])
+with tempfile.TemporaryDirectory() as tmp:  # one arm each: no reference mode, so no comparison at all
+    pair_result(tmp, "kapitsa-4bit", "Kapitsa", "2", 100.0)
+    pair_result(tmp, "llamacpp-4bit", "llama.cpp", "0", 200.0)
+    md, _ = one_table(tmp)
+    check(md.count("power-mode mismatch (2 vs 0)") == 2, "a two-mode tie marks every arm", md[-400:])
+    check("**" not in md, "a two-mode tie keeps no best values", md[-400:])
+with tempfile.TemporaryDirectory() as tmp:  # same mode everywhere: nothing to mark
+    pair_result(tmp, "kapitsa-4bit", "Kapitsa", "2", 100.0)
+    pair_result(tmp, "llamacpp-4bit", "llama.cpp", "2", 200.0)
+    md, _ = one_table(tmp)
+    check("power-mode mismatch" not in md, "a table whose arms share one mode is not marked", md[-300:])
+check(compare_table.short_flags({"power_mismatch": "power-mode mismatch (2 vs 0)", "invalid": [], "contended": False,
                                  "flags": []}).startswith("power-mode mismatch"),
       "the mismatch shows in the flag column")
 
