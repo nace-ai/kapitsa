@@ -135,6 +135,21 @@ loop.
   against 232 on the 35B-A3B, mlx-serve's MTP 235 against 264); none of those runs is flagged. Their settings were
   chosen on the earlier releases and were not re-tuned.
 
+**2026-10-25: Nanbeige4.3-33B** ([report](../bench/results/2026-10-25-m5-max-nanbeige/README.md),
+[saved results](../bench/results/2026-10-25-m5-max-nanbeige/results/compare_table.csv)).
+M5 Max, 128 GB, macOS 26.4, AC power, no other GPU work. Kapitsa `5bee92c`, mlx-lm 0.32.2, oMLX 0.7.3.dev2 and
+mlx-vlm 0.7.10 read the same AWQ 4-bit group-64 pack at `5901f0d4`, with 8-bit embedding and LM head; llama.cpp
+b11871 and Ollama 0.40.11 read a separate Q4_K_M GGUF. The chat harness ran each engine in turn with thinking off,
+T 0.6, top_p 0.95 and top_k 20, five decode runs and five greedy runs. The nominal 4K and 16K prompts contain
+5,088 and 19,954 reference tokens.
+
+Kapitsa measured **532 / 29** tok/s for 4K prefill / median decode, rounded from 532.1 / 28.79. Its decode was the highest
+measured, 2.8% above oMLX's 28.0 tok/s, but within noise, not a clear win: the source reports single-run swings of up
+to about 20% and treats gaps under about 10% as noise. oMLX prefills faster, 766 against 532 tok/s at 4K and 634
+against 483 at 16K. Decode repetition flags affect mlx-vlm and both GGUF engines. Cached-TTFT flags warn that
+length-limited answers may not be cached; oMLX's 16K follow-up explicitly reused zero prefix tokens. The report's
+separate context sweep uses each engine's own benchmark tool, not this chat harness.
+
 **Cells from earlier sessions, not yet re-measured.**
 
 - Qwen3.8-Flash-Next 180B-A7B: Kapitsa 1,165 / 106 on 2026-10-22 (main `fd85910`, MTP head, contention-flagged); the
