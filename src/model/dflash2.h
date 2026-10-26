@@ -79,6 +79,21 @@ void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out);
 void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit,
                    int valid_lo = 0);
 
+// The target a drafter reads its context from and drafts for: what DFlash2 asks of every target. Qwen35 (and Qwen4Exp)
+// through an adapter (QwenDflTarget, dflash2.cpp); Flint's dense Llama (Nanbeige4.3) through FlintDflTarget
+// (model/flint.h). The Qwen-only paths (its verify with in-pass sampling, the tree verify, the 8-row verify GEMMs) take
+// qwen(), and a target without them (nullptr) runs the drafting pass, the context ring and the chain alone.
+class DflTarget {
+ public:
+  virtual ~DflTarget() = default;
+  virtual const Qwen35Config& config() const = 0;  // hidden, layers, vocab, eos (moe false, hc 1 for a dense Llama)
+  virtual std::string model_dir() const = 0;
+  virtual const QLinear& embed_table() const = 0;
+  virtual const QLinear& lm_head() const = 0;
+  virtual void set_capture(const CaptureHook* h) = 0;
+  virtual Qwen35* qwen() { return nullptr; }
+};
+
 class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
@@ -95,6 +110,9 @@ class DFlash2 {
   // projections and the knobs allow it and NI_DFLASH_BLOCK says nothing (Engine passes slots == 1: a 16-row block has
   // no batched cycle to lose, Engine::batch_rows).
   DFlash2(Qwen35& target, const std::string& dir, int bits = 0, bool rows16 = false);
+  // a target that is not a Qwen35 (Flint's dense Llama): the drafting pass and the context ring; no tree, no batched
+  // or GPU-driven cycles (they read the Qwen verify's sampling)
+  DFlash2(DflTarget& target, const std::string& dir, int bits = 0, bool rows16 = false);
   const DFlash2Config& config() const { return cfg_; }
   int bits() const { return bits_; }
   size_t resident_bytes() const { return resident_; }
@@ -126,6 +144,7 @@ class DFlash2 {
   static size_t plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
                            size_t* per_slot, size_t* at_prefill = nullptr, int block_rows = kB);
   // The target's tensors the drafter borrows have a supported format (4-bit embedding, 4/8-bit g64 LM head).
+  static bool supports(const DflTarget& target);
   static bool supports(const Qwen35& target);
   // The reduction a draft for this target reads its layer outputs with: "stream_mean" for a hyper-connected target
   // (Qwen3.8-Flash-Next's 4 streams), else "none" (dflash_config.target_hidden_reduction; a config without it takes it)
@@ -363,7 +382,11 @@ class DFlash2 {
                          bool tree = false);
   void dbg(Encoder& e, const std::string& name, const Buffer& src, size_t bytes);
 
-  Qwen35& tg_;
+  void init(const std::string& dir, int bits, bool rows16);
+  Qwen35& q() const;  // the Qwen target of the Qwen-only paths (fatal on another target)
+  std::unique_ptr<DflTarget> own_tg_;  // the adapter of a Qwen35 target
+  DflTarget& tg_;
+  Qwen35* q35_ = nullptr;
   std::string dir_;
   DFlash2Config cfg_;
   int bits_ = 4;

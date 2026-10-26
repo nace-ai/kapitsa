@@ -196,7 +196,28 @@ void DFlash2::load_config(const std::string& dir) {
 // The target's embedding table is read by dfl_embed_norm (4-bit group 64) or its wfmt.metal form for the other
 // formats; the draft head is the target's LM head (4/8-bit group 64), or an 8-bit copy of its rows for the other
 // formats (bf16, 6-bit, ...: drafting only, the verify uses the target's own head).
+namespace {
+class QwenDflTarget : public DflTarget {
+ public:
+  explicit QwenDflTarget(Qwen35& t) : t_(t) {}
+  const Qwen35Config& config() const override { return t_.config(); }
+  std::string model_dir() const override { return t_.model_dir(); }
+  const QLinear& embed_table() const override { return t_.embed_table(); }
+  const QLinear& lm_head() const override { return t_.lm_head(); }
+  void set_capture(const CaptureHook* h) override { t_.set_capture(h); }
+  Qwen35* qwen() override { return &t_; }
+
+ private:
+  Qwen35& t_;
+};
+}  // namespace
+
 bool DFlash2::supports(const Qwen35& t) {
+  QwenDflTarget a(const_cast<Qwen35&>(t));
+  return supports(a);
+}
+
+bool DFlash2::supports(const DflTarget& t) {
   const QLinear& emb = t.embed_table();
   const QLinear& head = t.lm_head();
   return (emb.q4() || format_supported(emb.bits, emb.gs)) && format_supported(head.bits, head.gs) &&
@@ -403,14 +424,30 @@ bool DFlash2::rows16_auto_ok() const {
   // the same conditions the load-time gate below refuses NI_DFLASH_BLOCK=16 under, read from the environment here
   // because set_tree() runs after the block must be known: trees on, and a walk deep enough to use all 16 rows (a
   // 15-row lattice is what the block drafts; set_tree keeps the tree only where verify_depth() == block() - 1)
-  if (!tg_.block_drafter_ok() || !tg_.verify_tree_ok() || !tg_.verify_wide_ok()) return false;
+  if (!q35_ || !q35_->block_drafter_ok() || !q35_->verify_tree_ok() || !q35_->verify_wide_ok()) return false;
   if (!kf_tree_default(15)) return false;  // the 16-row block's full depth
   const char* vv = getenv("NI_DFLASH_VERIFY");
   if (vv && *vv && atoi(vv) < 15) return false;
   return rows16_tensor_ok();
 }
 
-DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) : tg_(target), dir_(dir) {
+
+DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16)
+    : own_tg_(std::make_unique<QwenDflTarget>(target)), tg_(*own_tg_), q35_(&target), dir_(dir) {
+  init(dir, bits, rows16);
+}
+
+DFlash2::DFlash2(DflTarget& target, const std::string& dir, int bits, bool rows16)
+    : tg_(target), q35_(target.qwen()), dir_(dir) {
+  init(dir, bits, rows16);
+}
+
+Qwen35& DFlash2::q() const {
+  if (!q35_) fatal("DFlash2: this path needs a Qwen35 target (the drafter runs its drafting pass on this one)");
+  return *q35_;
+}
+
+void DFlash2::init(const std::string& dir, int bits, bool rows16) {
   const double t0 = now_ms(), fp0 = footprint_gb();
   bits_ = bits ? bits : (getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4);
   if (bits_ != 4 && bits_ != 8) fatal("DFlash2: bits must be 4 or 8 (got %d)", bits_);
@@ -637,7 +674,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
         fatal("NI_DFLASH_BLOCK=%d needs KFlash trees (NI_KFLASH=1 or NI_DFLASH_TREE=1; a genuine NI_DFLASH_CAP "
               "below the full depth decides over them -- unset it, or set NI_DFLASH_VERIFY to the full depth)",
               block());
-      if (!tg_.verify_wide_ok()) fatal("NI_DFLASH_BLOCK=%d: this target has no wide tree verify", block());
+      if (!q().verify_wide_ok()) fatal("NI_DFLASH_BLOCK=%d: this target has no wide tree verify", block());
       // and the drafting pass itself must run on the matrix units: a 16-row block drafts its two tiles with the pair
       // kernel and the tensor-path GEMMs, and has no 8-row fallback (encode_draft_impl and enc_qmm8 fatal otherwise).
       // Said here, while the model loads, not on the first request. The knobs that take the drafting pass or the
@@ -661,7 +698,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
     if (block() > kB) kf_budget_->pin_wide();
     if (tree_ && tree_rows_ > kB) {
-      tg_.set_tree_rows(tree_rows_, true);  // the drafter's own block: NI_VPF's default keys on it (Qwen35::drafter_wide)
+      q().set_tree_rows(tree_rows_, true);  // the drafter's own block: NI_VPF's default keys on it (Qwen35::drafter_wide)
       logi("KFlash: tree verifies of %s rows (the size rule picks per cycle)",
            allowed == ((1u << 7) | (1u << 15) | (1u << 31)) ? "8, 16 or 32" : r_list(allowed).c_str());
     }
@@ -724,7 +761,7 @@ void DFlash2::alloc_buffers() {
     // (H 5120) and the 4B's (H 2560: 4-bit 4B, code / prose, 178.2 -> 179.8 / 142.1 -> 144.2 tok/s); the 35B's
     // (H 2048) keeps dfl_qmm8 except for the measured 32-core M1 Max 4-bit MoE case
     const char* v = getenv("NI_DFLASH_V8");
-    v8_ = B == 8 && (v && *v ? atoi(v) != 0 : default_v8(H, tg_.config().moe, tg_.lm_head().q4()));
+    v8_ = q35_ && B == 8 && (v && *v ? atoi(v) != 0 : default_v8(H, tg_.config().moe, tg_.lm_head().q4()));
   }
   if (v8_) {
     v8t_ = g.alloc(8 * H * 2, "dfl_v8_table");
@@ -1453,7 +1490,7 @@ std::string DFlash2::r_list(uint32_t allowed) {
 
 void DFlash2::set_tree(bool on) {
   // NI_DFLASH_VERIFY below 7 keeps the chain
-  tree_ = on && tg_.block_drafter_ok() && tg_.verify_tree_ok() && verify_depth() == block() - 1;
+  tree_ = on && q35_ && q35_->block_drafter_ok() && q35_->verify_tree_ok() && verify_depth() == block() - 1;
   if (on && !tree_)
     logi("DFlash2: tree drafting needs all 8 verify rows and the 8-row verify's attn8m and split GDN paths; the chain "
          "stays");
@@ -1504,14 +1541,14 @@ void DFlash2::encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K,
   const size_t R = size_t(K) + 1;
   kp::DflDist dp{n, uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature, sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
-  e.buf(0, tg_.verify_cand_vals().view(size_t(r0) * n * 4, R * n * 4));
-  e.buf(1, tg_.verify_cand_ids().view(size_t(r0) * n * 4, R * n * 4));
+  e.buf(0, q().verify_cand_vals().view(size_t(r0) * n * 4, R * n * 4));
+  e.buf(1, q().verify_cand_ids().view(size_t(r0) * n * 4, R * n * 4));
   e.buf(2, dist_id_); e.buf(3, dist_p_); e.buf(4, dist_keep_);
   e.val(5, dp);
   e.dispatch(uint32_t(R), 1, 1, 1024);
   kp::DflAccept ap{uint32_t(P), uint32_t(K), sp.temperature, sp.seed, 0u};
   e.use(dpipe("dfl_accept"));
-  e.buf(0, s.tok); e.buf(1, tg_.verify_samples().view(size_t(r0) * 4, R * 4)); e.buf(2, dist_id_); e.buf(3, dist_p_);
+  e.buf(0, s.tok); e.buf(1, q().verify_samples().view(size_t(r0) * 4, R * 4)); e.buf(2, dist_id_); e.buf(3, dist_p_);
   e.buf(4, d.walk.view(0, 448)); e.buf(5, d.walk.view(448, 448)); e.buf(6, d.walk.view(896, 32));
   e.buf(7, d.walk.view(928, 16));
   e.val(8, ap);
@@ -1730,7 +1767,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     dbg(e, "mm" + sfx, mh, size_t(8) * H * 2);
     if (v8_) {  // the target's verify GEMMs (same math; the sums layout is shared, only the table permutes)
       enc_to_v8(e, mh, H, v8t_);
-      if (!(skip & 1024)) tg_.enc_gu8(e, Ly.gate, Ly.up, v8t_, ms, v8h_, v8hs_);
+      if (!(skip & 1024)) q().enc_gu8(e, Ly.gate, Ly.up, v8t_, ms, v8h_, v8hs_);
       if (debug_) {
         kp::DflPerm pp{I};
         e.use(dpipe("dfl_v8_to_x8"));
@@ -1739,7 +1776,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
         e.dispatch((I / 64 + 7) / 8, 1, 1, 256);
       }
       dbg(e, "hgu" + sfx, hh_, size_t(8) * I * 2);
-      if (!(skip & 2048)) tg_.enc_qmm8(e, {{&Ly.down, u_, H, false}}, 8, v8h_, v8hs_);
+      if (!(skip & 2048)) q().enc_qmm8(e, {{&Ly.down, u_, H, false}}, 8, v8h_, v8hs_);
     } else {
       if (skip & 1024) {
       } else if (!(dk & 128) && tw_for({{&Ly.gate, gu_g_, I, 1.0f}, {&Ly.up, gu_u_, I, 1.0f}}, H)) {
@@ -1778,13 +1815,13 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   } else if (v1) {  // no candidate selector
     if (v8_) {
       enc_to_v8(e, xh_, H, v8t_);
-      tg_.enc_qmm8(e, {{&head, logits_, Vd, false}}, 8, v8t_, xs_);
+      q().enc_qmm8(e, {{&head, logits_, Vd, false}}, 8, v8t_, xs_);
     } else {
       enc_qmm8(e, {{&head, logits_, Vd, 1.0f}}, xh_, xs_, H, H, int(BT));
     }
   } else if (v8_ && head.bits == sel_w_.bits) {
     enc_to_v8(e, xh_, H, v8t_);
-    tg_.enc_qmm8(e, {{&head, logits_, Vd, false}, {&sel_w_, sel_, uint32_t(kRank), false}}, 8, v8t_, xs_);
+    q().enc_qmm8(e, {{&head, logits_, Vd, false}, {&sel_w_, sel_, uint32_t(kRank), false}}, 8, v8t_, xs_);
   } else {
     enc_qmm8(e, {{&head, logits_, Vd, 1.0f}, {&sel_w_, sel_, uint32_t(kRank), 1.0f}}, xh_, xs_, H, H, int(BT));
   }
@@ -1868,10 +1905,10 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
 
 void DFlash2::encode_dist(Encoder& e, int R, const SamplingParams& sp) {
   if (R < 1 || R > kB || sp.temperature <= 0) fatal("DFlash2 dist: R=%d T=%g", R, sp.temperature);
-  kp::DflDist dp{tg_.verify_candidates(sp), uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature,
+  kp::DflDist dp{q().verify_candidates(sp), uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature,
                  sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
-  e.buf(0, tg_.verify_cand_vals()); e.buf(1, tg_.verify_cand_ids()); e.buf(2, dist_id_); e.buf(3, dist_p_);
+  e.buf(0, q().verify_cand_vals()); e.buf(1, q().verify_cand_ids()); e.buf(2, dist_id_); e.buf(3, dist_p_);
   e.buf(4, dist_keep_);
   e.val(5, dp);
   e.dispatch(uint32_t(R), 1, 1, 1024);
@@ -1883,7 +1920,7 @@ void DFlash2::encode_accept(Encoder& e, Seq& s, int P, int K, const SamplingPara
   if (sampled) encode_dist(e, K + 1, sp);
   kp::DflAccept ap{uint32_t(P), uint32_t(K), sampled ? sp.temperature : 0.0f, sp.seed, dyn_tau_ > 0 ? 1u : 0u};
   e.use(dpipe("dfl_accept"));
-  e.buf(0, s.tok); e.buf(1, tg_.verify_samples()); e.buf(2, dist_id_); e.buf(3, dist_p_); e.buf(4, cand_i_);
+  e.buf(0, s.tok); e.buf(1, q().verify_samples()); e.buf(2, dist_id_); e.buf(3, dist_p_); e.buf(4, cand_i_);
   e.buf(5, qprob_); e.buf(6, walk_k_); e.buf(7, acc_);
   e.val(8, ap);
   e.buf(9, kdyn_);
@@ -1906,24 +1943,24 @@ void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const Sampli
     // the tree's own kernels run the live rows alone (tree[kKfN]).
     if (!s.pend_path) s.pend_path = Gpu::get().alloc(size_t(kf::kPathWords) * 4, "pend_path");
     const int R = tree_cap_;
-    tg_.set_verify_tree(&tree_buf_);
-    tg_.set_verify_row_limit(&kf_live_);
+    q().set_verify_tree(&tree_buf_);
+    q().set_verify_row_limit(&kf_live_);
     // a row's logits must not depend on how the other rows route (Qwen35::set_verify_moe_exact): at T > 0 for the
     // acceptance, and greedy too, because the live rows follow the budget's state and a reply must not
-    tg_.set_verify_moe_exact(exact_moe_);
+    q().set_verify_moe_exact(exact_moe_);
     arm_verify(P, R);
-    tg_.encode_verify(e, s, P, R, sp, uint32_t(P), /*v8=*/true);
+    q().encode_verify(e, s, P, R, sp, uint32_t(P), /*v8=*/true);
     disarm();
-    tg_.set_verify_moe_exact(false);
-    tg_.set_verify_row_limit(nullptr);
-    tg_.set_verify_tree(nullptr);
+    q().set_verify_moe_exact(false);
+    q().set_verify_row_limit(nullptr);
+    q().set_verify_tree(nullptr);
     const kp::KfAccept ap{uint32_t(P), uint32_t(R), 1u, 0u};
     e.use(dpipe("kf_accept"));
-    e.buf(0, tg_.verify_samples()); e.buf(1, s.tok); e.buf(2, tree_buf_); e.buf(3, acc_);
+    e.buf(0, q().verify_samples()); e.buf(1, s.tok); e.buf(2, tree_buf_); e.buf(3, acc_);
     e.val(4, ap);
     e.buf(5, kf_live_); e.buf(6, s.pend_path); e.buf(7, gst_);
     e.dispatch(1, 1, 1, 32);
-    tg_.encode_kv_tree_compact(e, s, P, tree_buf_);
+    q().encode_kv_tree_compact(e, s, P, tree_buf_);
     s.pend_tree = true;
     gst_tree_ = true;
     gate_prev_ = false;  // kdyn_ is not a tree cycle's: the next chain cycle must not observe it
@@ -1957,16 +1994,16 @@ void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const Sampli
     e.buf(0, walk_s_); e.buf(1, walk_k_); e.buf(2, qprob_); e.buf(3, kdyn_);
     e.val(4, dp);
     e.dispatch(1, 1, 1, 32);
-    tg_.set_verify_row_limit(&rows);
+    q().set_verify_row_limit(&rows);
   }
   // At T > 0 the acceptance needs each row's p(. | prefix) itself: on MoE targets keep a row's numerics
   // independent of how the other (drafted) rows route (see Qwen35::set_verify_moe_exact).
-  tg_.set_verify_moe_exact(exact_moe_ && sp.temperature > 0);
+  q().set_verify_moe_exact(exact_moe_ && sp.temperature > 0);
   arm_verify(P);
-  tg_.encode_verify(e, s, P, Kg + 1, sp, uint32_t(P), /*v8=*/true);
+  q().encode_verify(e, s, P, Kg + 1, sp, uint32_t(P), /*v8=*/true);
   disarm();
-  tg_.set_verify_row_limit(nullptr);
-  tg_.set_verify_moe_exact(false);
+  q().set_verify_row_limit(nullptr);
+  q().set_verify_moe_exact(false);
   encode_accept(e, s, P, Kg, sp);
 }
 
