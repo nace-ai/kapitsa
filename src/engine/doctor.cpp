@@ -51,6 +51,7 @@ uint64_t ram_bytes() {
   return m;
 }
 
+
 }  // namespace
 
 double bandwidth_gbs(const std::string& chip, int cores) {

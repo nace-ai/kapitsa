@@ -335,16 +335,20 @@ void case_auto_size() {
   in.kv = size_t(40 * GB);  // a reserve beyond the sample: no less than three layers' experts
   r = auto_store_size(in);
   CHECK(r.why == AutoStoreWhy::Avail && r.bytes == in.least, "auto: kv least %zu", r.bytes);
-  // the reserve's positions (NI_EXPERT_KV_POS): the default window, an explicit count, 0 = the pre-fix size, a bad
-  // value warned and ignored
+  // the reserve's positions: the plan's — min(planned context, the 32K keep window) times the slots — and, without a
+  // plan, the default budget's keep window; NI_EXPERT_KV_POS overrides with an explicit total, 0 = the pre-fix size,
+  // a bad value warned and ignored (the planned count kept)
   unsetenv("NI_EXPERT_KV_POS");
-  CHECK(auto_store_kv(1000) == 1000 * 16384, "auto: kv positions default");
+  CHECK(auto_store_kv(1000, 0, 0) == 1000 * 16384, "auto: kv positions no plan");
+  CHECK(auto_store_kv(1000, 4096, 1) == 1000 * 4096, "auto: kv positions planned 4k");
+  CHECK(auto_store_kv(1000, 32768, 2) == 1000 * 32768 * 2, "auto: kv positions planned 32k two slots");
+  CHECK(auto_store_kv(1000, 131072, 1) == 1000 * 32768, "auto: kv positions planned past the window");
   setenv("NI_EXPERT_KV_POS", "32768", 1);
-  CHECK(auto_store_kv(1000) == 1000 * 32768, "auto: kv positions 32768");
+  CHECK(auto_store_kv(1000, 4096, 2) == 1000 * 32768, "auto: kv positions 32768 overrides the plan");
   setenv("NI_EXPERT_KV_POS", "0", 1);
-  CHECK(auto_store_kv(1000) == 0, "auto: kv positions 0");
+  CHECK(auto_store_kv(1000, 32768, 2) == 0, "auto: kv positions 0");
   setenv("NI_EXPERT_KV_POS", "-3", 1);
-  CHECK(auto_store_kv(1000) == 1000 * 16384, "auto: kv positions negative ignored");
+  CHECK(auto_store_kv(1000, 4096, 1) == 1000 * 4096, "auto: kv positions negative ignored");
   unsetenv("NI_EXPERT_KV_POS");
   // the reason line (the engine's log and kapitsa doctor print it) and its JSON name, one per reason
   in = AutoStoreIn{};

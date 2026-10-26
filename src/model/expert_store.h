@@ -281,10 +281,16 @@ inline std::string auto_store_short(const AutoStore& st, const AutoStoreIn& in) 
 // The RAM-share cap of a store short of all the experts: 40% of the RAM before Apple10 (M5), none on it; NI_EXPERT_CAP=
 // <share of the RAM, 0..1> sets it on any chip (0 = none; anything else is logged and ignored)
 double auto_store_cap(bool apple10);
-// The avail guard's KV reserve: kv_per_pos times the positions the conversations to come will hold — NI_EXPERT_KV_POS=
-// <positions>, default 16384 (the window the default budget's keep assumes, Qwen4Exp::init_store), 0 = no reserve (the
-// pre-fix size); a bad value is logged and ignored, as NI_EXPERT_CAP's is
-size_t auto_store_kv(size_t kv_per_pos);
+// The KV window the budget's keep assumes: flash_next_model_budget keeps one conversation's KV for min(context,
+// kAutoKvCtxCap) tokens, and the avail guard reserves the same per-slot window for every conversation of the plan
+inline constexpr int kAutoKvCtxCap = 32768;
+// The avail guard's KV reserve: kv_per_pos times the positions the conversations to come will hold. The engine's start
+// plan gives them: min(planned context, kAutoKvCtxCap) times the slots — every conversation's KV grows out of the same
+// available memory the store is sized against. Without a plan (planned_ctx <= 0: tools that build the model directly)
+// the default budget's keep window stands, 16384 positions of one conversation (Qwen4Exp::init_store).
+// NI_EXPERT_KV_POS=<positions> overrides the planned count with an explicit total, 0 = no reserve (the pre-fix size);
+// a bad value is logged and ignored, as NI_EXPERT_CAP's is
+size_t auto_store_kv(size_t kv_per_pos, int planned_ctx, int slots);
 // The system's available memory now (free, inactive and purgeable pages; free_count already includes the speculative ones), 0 if unknown. Inactive pages
 // include file cache, so the automatic store size depends on what the page cache held at launch: back-to-back launches
 // can pick different sizes.

@@ -64,8 +64,14 @@ double auto_store_cap(bool apple10) {
   return cap;
 }
 
-size_t auto_store_kv(size_t kv_per_pos) {
+size_t auto_store_kv(size_t kv_per_pos, int planned_ctx, int slots) {
+  // the plan's positions: min(planned context, kAutoKvCtxCap) per conversation times the slots; without a plan the
+  // default budget's keep window (16384, one conversation)
   long long pos = 16384;
+  if (planned_ctx > 0) {
+    const int c = planned_ctx < kAutoKvCtxCap ? planned_ctx : kAutoKvCtxCap;
+    pos = static_cast<long long>(c) * (slots > 1 ? slots : 1);
+  }
   const char* kv = getenv("NI_EXPERT_KV_POS");
   if (kv && *kv) {
     char* end = nullptr;
