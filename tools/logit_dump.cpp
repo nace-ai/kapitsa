@@ -455,8 +455,12 @@ int main(int argc, char** argv) {
       // engine runs, --chunk 2048 NI_BAL=0 what it ran before, and --chunk 2048 with NI_BAL on changes only the split
       const int C = m.prefill_chunk();
       const bool even = prefill_even_chunks() && !m.ane_split_on();
+      // NI_LOGIT_TAIL=k: the window's last k rows prefilled as a pass of their own, as the engine's chunk cut at a turn
+      // boundary ran a chat prompt's generation prompt (a dense Llama before NI_FLINT_SNAPSHOT; NI_FLINT_SNAPSHOT=0)
+      static const int tail = getenv("NI_LOGIT_TAIL") ? atoi(getenv("NI_LOGIT_TAIL")) : 0;
       for (int p0 = 0; p0 < w.L0;) {
-        const int T = prefill_chunk_rows(C, p0, w.L0, even);
+        int T = prefill_chunk_rows(C, p0, w.L0, even);
+        if (tail > 0 && tail < w.L0 && p0 < w.L0 - tail) T = std::min(T, w.L0 - tail - p0);
         auto e = g.begin();
         m.encode_prefill(*e, s, p0, T, sp, 0, p0 + T == w.L0);
         e->commit_and_wait();
