@@ -171,7 +171,7 @@ SentencePiece-style BPE (spaces as U+2581, characters outside the vocabulary as 
 `tokenizer.json`; its chat template writes Qwen's markup: `<think>` reasoning, on unless `enable_thinking` is false, and
 XML tool calls in `<tool_call>`, which come back as tool calls. It keeps every past turn's reasoning in the prompt
 unless `preserve_thinking` is false. Its DFlash2 drafter ships with it (`kapitsa pull` fetches `dflash2/`,
-ProCreations' weights) and `--dflash auto` uses it, drafting while the text is predictable and falling back to plain
+ProCreations' weights) and `--dflash auto` uses it where it fits, drafting while the text is predictable and falling back to plain
 decoding on prose and edits: writing code 28.3 -> 33.7 tok/s ([#657](https://github.com/nace-ai/kapitsa/pull/657),
 `NI_DFL_FLOOR` below). `--dflash none` or `--spec 0` decodes plainly; `--spec N` drafts by prompt lookup.
 
