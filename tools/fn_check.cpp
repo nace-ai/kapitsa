@@ -685,8 +685,8 @@ void test_qsa_sparse() {
   report("attn_rows_sparse + reduce", cmp(out2.n, [&](size_t i) { return out2.f()[i]; }, [&](size_t i) { return ref[i]; }, 1e-2), 2e-3);
 }
 
-// The fused chain (NI_QSA_FUSE): qsa_all must be bitwise identical to the four dispatches it replaces — run both on
-// the same state and compare ik, bk, score, idx, cnt byte for byte (the chain is the reference; no CPU model)
+// The fused chain (NI_QSA_FUSE) against the four dispatches it replaces, run on the same state (the chain is the
+// reference; no CPU model): ik, idx and cnt byte for byte, bk and score to the last bits (see rel below)
 void test_qsa_all() {
   const uint32_t NH = 4, HD = 128, LD = (NH + 1) * HD, ROT = 64, RATIO = 4, TOPB = 8;
   const float theta = 1e7f;
@@ -739,13 +739,22 @@ void test_qsa_all() {
       for (const uint8_t *x = (const uint8_t*)a, *y = (const uint8_t*)b, *end = x + bytes; x != end; ++x, ++y) d += *x != *y;
       return double(d);
     };
+    // max |a - b| / max |b| over a buffer: the fused chain's block keys (and the scores read from them) can differ
+    // from qsa_block's in the last bits (#574: <= 2.4e-7 on keys up to ~9, in the pass-through dims as well as the
+    // rope'd ones, both paths equally close to an fp64 reference): fast math may contract or reassociate the same
+    // source expressions differently in two kernels. A stale or mis-indexed block is off by O(1)
+    auto rel = [](const float* a, const float* b, size_t n) {
+      double d = 0, m = 0;
+      for (size_t i = 0; i < n; ++i) d = std::max(d, double(std::fabs(a[i] - b[i]))), m = std::max(m, double(std::fabs(b[i])));
+      return d / m;
+    };
     char nm[64];
     snprintf(nm, sizeof nm, "qsa_all %s: ik (bytes)", tag[ci]);
     report(nm, diff(ik.b.as<uint16_t>(), ikc.data(), ik.n * 2), 0);
-    snprintf(nm, sizeof nm, "qsa_all %s: bk (bytes)", tag[ci]);
-    report(nm, diff(bk.f(), bkc.data(), bk.n * 4), 0);
-    snprintf(nm, sizeof nm, "qsa_all %s: score (bytes)", tag[ci]);
-    report(nm, diff(score.f(), scorec.data(), score.n * 4), 0);
+    snprintf(nm, sizeof nm, "qsa_all %s: bk", tag[ci]);
+    report(nm, rel(bk.f(), bkc.data(), bk.n), 1e-5);
+    snprintf(nm, sizeof nm, "qsa_all %s: score", tag[ci]);
+    report(nm, rel(score.f(), scorec.data(), score.n), 1e-5);
     snprintf(nm, sizeof nm, "qsa_all %s: idx (bytes)", tag[ci]);
     report(nm, diff(idx.b.as<uint32_t>(), idxc.data(), size_t(R) * ILD * 4), 0);
     snprintf(nm, sizeof nm, "qsa_all %s: cnt (bytes)", tag[ci]);

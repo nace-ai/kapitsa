@@ -1203,8 +1203,8 @@ bool Qwen4Exp::qsa_fusable(int R) const {
          ratio <= 16 && (ratio & (ratio - 1)) == 0;
 }
 
-// enc_qsa + enc_qsa_select as one qsa_all dispatch (NI_QSA_FUSE): intended to be bitwise identical to the four by
-// construction (see the kernel in qwen4.metal), so the callers keep the sparse attention after enc_qsa_select unchanged
+// enc_qsa + enc_qsa_select as one qsa_all dispatch (NI_QSA_FUSE): the four's computation, with block keys and scores a
+// few ulp off theirs (see the kernel in qwen4.metal); the callers keep the sparse attention after enc_qsa_select
 void Qwen4Exp::enc_qsa_fused(Encoder& e, const Seq& s, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R,
                              int pos0, const Buffer& ik, const Buffer& bk) {
   const QsaParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(cfg_.rot_dims), uint32_t(pos0),

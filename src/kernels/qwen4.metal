@@ -578,8 +578,11 @@ NI_QSA_SELECT(qsa_select, false)
 NI_QSA_SELECT(qsa_select_mask, true)
 
 // ---- The fused QSA chain (NI_QSA_FUSE): qsa_prep + qsa_block + qsa_score + qsa_select in one dispatch ----
-// One threadgroup of 1024 threads per row; grid: R x 1024. Intended to be bitwise identical to the four-dispatch
-// chain (the argument below; fn_check kernels' test_qsa_all compares the two byte for byte, not yet run):
+// One threadgroup of 1024 threads per row; grid: R x 1024. It computes what the four-dispatch chain computes (the
+// argument below), but not bit for bit: fn_check kernels' test_qsa_all (#574) finds the re-derived block keys a few
+// ulp off qsa_block's (<= 2.4e-7, in the pass-through dims too, both equally close to fp64), as fast math may
+// contract or reassociate the same expressions differently in two kernels; the scores read from them follow, and ik,
+// idx and cnt match:
 // - Head h's qsa_prep work runs in the thread slice [h * HD, (h + 1) * HD). tg_sum is purely positional (lane =
 //   tid & 31, sg = tid >> 5, the partials in scratch[sg], read back by lanes < nsg), so a slice's four simdgroup
 //   partials land in the same scratch slots and lanes as qsa_prep's HD-thread threadgroup and reduce the same
