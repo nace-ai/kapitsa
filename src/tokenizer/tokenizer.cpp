@@ -780,6 +780,10 @@ std::string Tokenizer::decode(const std::vector<int>& ids) const {
 
 std::string StreamDecoder::push(int id) {
   pending_ += tok_.token_bytes(id);
+  if (!started_ && !pending_.empty()) {
+    started_ = true;
+    if (tok_.strips_leading_space() && pending_[0] == ' ') pending_.erase(0, 1);
+  }
   // emit the longest prefix that ends on a UTF-8 boundary
   size_t n = pending_.size(), cut = n;
   for (size_t back = 1; back <= 4 && back <= n; ++back) {

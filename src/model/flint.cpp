@@ -12,6 +12,7 @@
 #include <cstring>
 #include <fstream>
 #include <mutex>
+#include <sstream>
 #include <unordered_map>
 
 namespace ni {
@@ -236,6 +237,14 @@ FlintConfig read_llama(const std::string& dir, const nlohmann::json& j) {
   std::string why;
   FlintConfig c = parse_llama(j, &why);
   if (!why.empty()) fatal("%s: %s", dir.c_str(), why.c_str());
+  // the engine writes a Llama's turns in ChatML with Qwen's tool-call markup (Nanbeige4.3's template): another
+  // template's Llama (Llama 3's <|start_header_id|>) would be served the wrong markup
+  std::ifstream t(dir + "/chat_template.jinja"), tc(dir + "/tokenizer_config.json");
+  std::stringstream ss;
+  ss << t.rdbuf() << tc.rdbuf();
+  if (ss.str().find("<|im_start|>") == std::string::npos)
+    fatal("%s: a Llama whose chat template is not ChatML (<|im_start|>) is not supported (Kapitsa runs Nanbeige4.3's "
+          "markup)", dir.c_str());
   return c;
 }
 

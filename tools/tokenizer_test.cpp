@@ -260,6 +260,11 @@ int main() {
     const std::vector<int> got = sp.encode(c.text);
     check(got == c.ids, "SentencePiece BPE: " + shown(c.text), "ids " + ids_str(got) + ", want " + ids_str(c.ids));
     check(sp.decode(c.ids) == c.decoded, "SentencePiece decode: " + shown(c.text), sp.decode(c.ids));
+    ni::StreamDecoder sd(sp);  // the engine's path for a reply: the same text as decode(), its leading space dropped
+    std::string streamed;
+    for (int id : c.ids) streamed += sd.push(id);
+    streamed += sd.flush();
+    check(streamed == c.decoded, "SentencePiece streamed: " + shown(c.text), streamed);
   }
   check(sp.token_bytes(259) == " " && sp.token_bytes(13) == "\n" && sp.token_bytes(276) == " hello",
         "SentencePiece token bytes: U+2581 as a space, <0x0A> as a newline");

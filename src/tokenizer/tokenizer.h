@@ -35,6 +35,8 @@ class Tokenizer {
   bool is_special(int id) const;
   // An added token (tokenizer.json's added_tokens: <|im_end|>, <think>, <tool_call> ...): matched whole, never text
   bool is_added(int id) const;
+  // the decoder strips the one leading space of a text (SentencePiece-style: Strip(start=1)), as decode() does
+  bool strips_leading_space() const { return strip_lead_; }
   // Flint's pre-tokenizer: the regexes of its tokenizer.json's three Isolated splits (before a ByteLevel without its
   // regex), which select Split::Flint (the GGUF importer writes them)
   static const char* const kFlintSplit[3];
@@ -75,7 +77,8 @@ class Tokenizer {
 std::string utf8_valid(const std::string& s);
 
 // Incremental UTF-8-safe detokenizer: feeds token ids, emits only complete, well-formed UTF-8 text. A sequence the
-// generation cut off (flush) or the model wrote ill-formed comes out as U+FFFD.
+// generation cut off (flush) or the model wrote ill-formed comes out as U+FFFD. A text's first space goes where
+// decode() drops it (strips_leading_space()), so a streamed reply reads as decode() of its ids.
 class StreamDecoder {
  public:
   explicit StreamDecoder(const Tokenizer& t) : tok_(t) {}
@@ -85,6 +88,7 @@ class StreamDecoder {
  private:
   const Tokenizer& tok_;
   std::string pending_;
+  bool started_ = false;  // a byte has been emitted (the leading space, if any, is behind)
 };
 
 } // namespace ni
