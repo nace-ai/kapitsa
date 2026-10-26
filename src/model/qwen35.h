@@ -715,6 +715,9 @@ class Qwen35 : public Model {
   bool gdn_sigmoid_ = false;  // the gated norm's gate: sigmoid (Qwen3.8-Flash-Next), else silu
   // 3-row verify GEMVs on the fp32 kernels instead of qmvht_t3_r4's half products (Qwen4Exp: accuracy first)
   bool no_qmvh_ = false;
+  // NI_QMT_I8's default (W4A8 dense prefill GEMMs, enc_qmm_large): on for Flash-Next's Q2_0 pack (Qwen4Exp), the one
+  // measured within Splash's drift; off elsewhere
+  bool qmt_i8_default_ = false;
   // NI_QMT_I8's quantized-X scratch: a ring of four slots and the buffers grown out of them (qmt_i8_scratch)
   struct QmtI8Slot {
     Buffer q, s;

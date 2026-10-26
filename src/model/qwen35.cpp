@@ -2362,10 +2362,11 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
 // NI_QMT_I8 (read once): the 4-bit dense prefill GEMMs as W4A8 on the M5's int8 matrix units (tensor/qmti8.metal: X
 // quantized per row per group of 64 by qx8_g64, then qmti8s_m64_n128). bench_qmm, M = 4096 with the quantize pass
 // timed: 27.9 / 25.2 TFLOP/s against qmt_m64_n64's 23.4 / 19.8 (N 10240 K 2560, N 2560 K 6144). Lossy (activation
-// rounding), so off unless NI_QMT_I8=1.
-static bool qmt_i8_on() {
-  static const bool env = env_int("NI_QMT_I8", 0) != 0;
-  if (!(env && qmt_on())) return false;
+// rounding), so on by default only where its drift was measured within Splash's (qmt_i8_default_: Flash-Next's Q2_0
+// pack); NI_QMT_I8=1 turns it on elsewhere, 0 off.
+static bool qmt_i8_on(bool dflt) {
+  static const int env = env_int("NI_QMT_I8", -1);  // -1: unset
+  if (!((env < 0 ? dflt : env != 0) && qmt_on())) return false;
   // qmti8s_m64_n128 asks for 29,184 B of static threadgroup memory (58,368 B as the validation layer counts it). A
   // device, or a layer, whose maxThreadgroupMemoryLength is below what its pipeline reports gets qmt_m64_n64 instead
   // (checked once, at pipeline creation; a pipeline that fails to build falls back the same way).
@@ -2412,7 +2413,7 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     else e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, 128);
     return;
   }
-  if (q.on && qmt_i8_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+  if (q.on && qmt_i8_on(qmt_i8_default_) && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
     const Pipeline& gemm = pipe("qmti8s_m64_n128");  // first: compiles the tensor library qx8_g64 lives in
     auto [xq, xs] = qmt_i8_scratch(size_t(M), L.K);
     struct { uint32_t M, K, x_ld; } qp{uint32_t(M), L.K, L.K};
