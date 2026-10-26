@@ -171,10 +171,10 @@ SentencePiece-style BPE (spaces as U+2581, characters outside the vocabulary as 
 `tokenizer.json`; its chat template writes Qwen's markup: `<think>` reasoning, on unless `enable_thinking` is false, and
 XML tool calls in `<tool_call>`, which come back as tool calls. It keeps every past turn's reasoning in the prompt
 unless `preserve_thinking` is false. Its DFlash2 drafter ships with it (`kapitsa pull` fetches `dflash2/`;
-ProCreations' weights) and `--dflash auto` uses it where it fits, drafting while the text is predictable and falling
-back to plain decoding on prose and edits: writing code 28.3 -> 33.7 tok/s
-([#657](https://github.com/nace-ai/kapitsa/pull/657), `NI_DFL_FLOOR` below). `--dflash none` or `--spec 0` decodes
-plainly; with no drafter, `--spec N` drafts by prompt lookup.
+ProCreations' weights) and `--dflash auto` uses it where it fits: it drafts while its cycles keep landing, and falls
+back to plain decoding where they stop (writing code 28.3 -> 33.7 tok/s; prose and edits stay at plain speed —
+[#657](https://github.com/nace-ai/kapitsa/pull/657), `NI_DFL_FLOOR` below). `--dflash none` decodes plainly, and so
+does `--spec 0`, which turns drafting off entirely; with the drafter off, `--spec N` drafts by prompt lookup.
 
 Another `llama` checkpoint loads only within what the kernels take: head dim 128, at most 8 query heads per KV head, a hidden
 size, query width and MLP size that are multiples of 512, a SwiGLU (`silu`) MLP, no biases, untied embeddings, no
