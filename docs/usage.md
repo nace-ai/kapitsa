@@ -173,7 +173,7 @@ XML tool calls in `<tool_call>`, which come back as tool calls. It keeps every p
 unless `preserve_thinking` is false. Its DFlash2 drafter ships with it (`kapitsa pull` fetches `dflash2/`,
 ProCreations' weights) and `--dflash auto` uses it where it fits, drafting while the text is predictable and falling back to plain
 decoding on prose and edits: writing code 28.3 -> 33.7 tok/s ([#657](https://github.com/nace-ai/kapitsa/pull/657),
-`NI_DFL_FLOOR` below). `--dflash none` or `--spec 0` decodes plainly; `--spec N` drafts by prompt lookup.
+`NI_DFL_FLOOR` below). `--dflash none` or `--spec 0` decodes plainly; with no drafter, `--spec N` drafts by prompt lookup.
 
 Another `llama` checkpoint loads only within what the kernels take: head dim 128, at most 8 query heads per KV head, a hidden
 size, query width and MLP size that are multiples of 512, a SwiGLU (`silu`) MLP, no biases, untied embeddings, no
