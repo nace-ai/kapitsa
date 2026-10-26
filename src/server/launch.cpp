@@ -113,17 +113,20 @@ int probe(int port, const std::string& key, Running* out, std::string* why) {
   return -1;
 }
 
-// The Homebrew service (`brew services start kapitsa`: a launchd job running `kapitsa serve`, the best model for this
-// Mac, downloaded when it is missing, at each login and again whenever it ends on an error or a signal) when it serves
-// on `port`: the command that stops it, else "". A server found on the port is then most likely that one, which the
-// agent's exit leaves running and Activity Monitor's Quit only restarts (issue 653).
+// The Homebrew service (`brew services start kapitsa`: a launchd job running `kapitsa serve` without --model at each
+// login and again whenever it ends on an error or a signal) when it serves on `port`: the command that stops it, else
+// "". A server found on the port is then most likely that one, which the agent's exit leaves running and Activity
+// Monitor's Quit only restarts (issue 653). Its job's label is sh.brew.kapitsa in current Homebrew (the reporter's),
+// homebrew.mxcl.kapitsa in older ones.
 std::string brew_service_stop(int port) {
   const char* home = getenv("HOME");
-  const std::pair<std::string, const char*> jobs[] = {
-      {home && *home ? std::string(home) + "/Library/LaunchAgents/homebrew.mxcl.kapitsa.plist" : "", "brew services stop kapitsa"},
-      {"/Library/LaunchDaemons/homebrew.mxcl.kapitsa.plist", "sudo brew services stop kapitsa"}};
+  std::vector<std::pair<std::string, std::string>> jobs;
+  for (const char* label : {"sh.brew.kapitsa", "homebrew.mxcl.kapitsa"}) {
+    if (home && *home) jobs.push_back({std::string(home) + "/Library/LaunchAgents/" + label + ".plist", "brew services stop kapitsa"});
+    jobs.push_back({std::string("/Library/LaunchDaemons/") + label + ".plist", "sudo brew services stop kapitsa"});
+  }
   for (const auto& [plist, stop] : jobs) {
-    FILE* f = plist.empty() ? nullptr : fopen(plist.c_str(), "rb");
+    FILE* f = fopen(plist.c_str(), "rb");
     if (!f) continue;
     std::string s;
     char buf[4096];

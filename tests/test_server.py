@@ -159,7 +159,7 @@ def agent_checks(run, home):
     Pi gets that server's model, nothing downloads or starts, and when the Homebrew service's launchd job serves that
     port the command says so and how to stop it (issue 653: the service's server, the best model for the Mac, outlived
     Pi and came back with its model after Activity Monitor's Quit)"""
-    import http.server, threading
+    import http.server, shutil, threading
     class Models(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             body = json.dumps({"object": "list", "data": [{"id": "qwen3.6-35b-a3b", "object": "model", "owned_by": "nace",
@@ -182,19 +182,20 @@ def agent_checks(run, home):
                 "os.environ.get('KAPITSA_PI_MODEL'), 'context': os.environ.get('KAPITSA_PI_CONTEXT')}, "
                 f"open({seen!r}, 'w'))\n")
     os.chmod(os.path.join(bindir, "pi"), 0o755)
-    plist = os.path.join(user, "Library", "LaunchAgents", "homebrew.mxcl.kapitsa.plist")
-    def pi(port_in_plist):
+    agents = os.path.join(user, "Library", "LaunchAgents")
+    def pi(port_in_plist, label="sh.brew.kapitsa"):
+        plist = os.path.join(agents, label + ".plist")
         if os.path.exists(seen):
             os.remove(seen)
         if port_in_plist:  # as `brew services start kapitsa` writes it, with a --port so that the job serves this port
             os.makedirs(os.path.dirname(plist), exist_ok=True)
             with open(plist, "w") as f:
                 f.write('<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n\t<key>Label</key>\n'
-                        '\t<string>homebrew.mxcl.kapitsa</string>\n\t<key>ProgramArguments</key>\n\t<array>\n'
+                        f'\t<string>{label}</string>\n\t<key>ProgramArguments</key>\n\t<array>\n'
                         '\t\t<string>/opt/homebrew/opt/kapitsa/bin/kapitsa</string>\n\t\t<string>serve</string>\n'
                         f'\t\t<string>--port</string>\n\t\t<string>{port_in_plist}</string>\n\t</array>\n</dict>\n</plist>\n')
-        elif os.path.exists(plist):
-            os.remove(plist)
+        else:
+            shutil.rmtree(agents, ignore_errors=True)
         rc, out, err = run("pi", "--port", str(port), "--", "-p", "hi",
                            env_add={"PATH": bindir + ":" + os.environ.get("PATH", ""), "HOME": user,
                                     "KAPITSA_NO_AUTO_UPDATE": "1"})
@@ -207,10 +208,12 @@ def agent_checks(run, home):
           rc == 0 and got.get("model") == "qwen3.6-35b-a3b" and got.get("context") == "65536" and
           got.get("argv", [])[-2:] == ["-p", "hi"] and "already running" in out and "brew services" not in out,
           out + json.dumps(got))
-    rc, out, got = pi(port)
-    check("cli: pi on the Homebrew service's port says it is the service, and how to stop it",
-          rc == 0 and got.get("model") == "qwen3.6-35b-a3b" and "Homebrew service" in out and
-          "brew services stop kapitsa" in out, out)
+    for label in ["sh.brew.kapitsa", "homebrew.mxcl.kapitsa"]:  # current Homebrew's label (the reporter's), older ones'
+        rc, out, got = pi(port, label)
+        check(f"cli: pi on the Homebrew service's port ({label}) says it is the service, and how to stop it",
+              rc == 0 and got.get("model") == "qwen3.6-35b-a3b" and "Homebrew service" in out and
+              "brew services stop kapitsa" in out, out)
+        pi(None)
     rc, out, got = pi(port + 1 if port < 65535 else port - 1)
     check("cli: a service on another port is not the server found", rc == 0 and "brew services" not in out, out)
     check("cli: pi on a running server downloads nothing",
