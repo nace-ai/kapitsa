@@ -205,7 +205,8 @@ class Qwen4Exp : public Qwen35 {
   // wraps too; decode follows only a draft's fill, where the sweep then costs one layer's read ahead of the first
   // draft token - bounded, read-ahead only, and off the prompt paths.
   bool seam_more_ = false;
-  // layer-major prefill groups (NI_PREFILL_GROUP=G, 2..8; default 1: the chunks one at a time). The G chunks' state
+  // layer-major prefill groups (NI_PREFILL_GROUP=G, 1..8; the shipped default 4; =1 keeps the chunks one at a
+  // time, the merge gate's B arm and debugging alone). The G chunks' state
   // - the residual x_, the block output yb_, the injection weights injA_ / injM_ - lives in per-chunk slots (xg_
   // etc., alloc4) swapped into the members per turn, because Metal binds buffers at encode time; group_swap /
   // group_restore do the swap. A turn's read-ahead follows the group's successor table, not the chunk path's: the

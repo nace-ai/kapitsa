@@ -174,10 +174,11 @@ static bool hc_precomb(bool q20_pack) {
   return v ? strcmp(v, "0") != 0 : q20_pack;
 }
 
-// NI_PREFILL_GROUP: how many prefill chunks run as one layer-major group (2..8; default 1: the chunks one at a
-// time, as shipped). A value outside 2..8 is ignored and the chunk path stays (a bad value warns like
-// NI_PRED_ALL_MIN's does); the group's per-chunk slots cost the plan (qwen4_act_bytes) what they cost alloc4.
-// Defined below, after env_rows.
+// NI_PREFILL_GROUP: how many prefill chunks run as one layer-major group (1..8; the shipped default 4: groups
+// on). =1 keeps the chunks one at a time, as before, for the merge gate's ABAB legs and debugging alone - there
+// is no supported off posture: the gate losing closes the change unmerged rather than shipping it off. A value
+// outside 1..8 is ignored and the default 4 stands (a bad value warns like NI_PRED_ALL_MIN's does); the group's
+// per-chunk slots cost the plan (qwen4_act_bytes) what they cost alloc4. Defined below, after env_rows.
 static int prefill_group_env();
 
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
@@ -867,8 +868,8 @@ int env_rows(const char* name, int def) {
 
 static int prefill_group_env() {
   static const int g = [] {
-    const int v = env_rows("NI_PREFILL_GROUP", 1);
-    return v >= 2 && v <= 8 ? v : 1;
+    const int v = env_rows("NI_PREFILL_GROUP", 4);
+    return v >= 1 && v <= 8 ? v : 4;
   }();
   return g;
 }
