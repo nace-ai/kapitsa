@@ -110,10 +110,13 @@ def stage_flags(tmp):
     says of its own --prefill-chunk, and a good one still parses and reaches the model lookup. No GPU, no tokenizer, no
     peer, no lock: a usage error exits in the parse loop (status 2), before anything is loaded. The model is a folder
     that does not exist and the network is off, so a chunk that parses cannot start anything: the stage stops at the
-    lookup (status 1, "No folder at") and never listens."""
+    lookup (status 1, "No folder at") and never listens. Its own HOME and KAPITSA_HOME keep the caller's caches, the
+    catalog and any saved settings out of these runs, as tests/test_bench.py does for its scripted server."""
+    home = os.path.join(tmp, "home")
     env = {k: v for k, v in os.environ.items() if not k.startswith("NI_") and not k.startswith("KAPITSA_")}
-    env.update({"KAPITSA_HOME": os.path.join(tmp, "home"), "KAPITSA_NO_AUTO_UPDATE": "1", "KAPITSA_NO_PROMPT": "1",
-                "HF_HUB_OFFLINE": "1"})
+    env.update({"KAPITSA_HOME": home, "HOME": os.path.join(home, "user"), "KAPITSA_NO_AUTO_UPDATE": "1",
+                "KAPITSA_NO_PROMPT": "1", "HF_HUB_OFFLINE": "1"})
+    os.makedirs(env["HOME"])
     model = os.path.join(tmp, "no-such-model")
 
     def run(args):
