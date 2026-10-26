@@ -110,7 +110,7 @@ class Flint : public Model {
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   int prefill_chunk() const override { return tmax_; }
-  bool can_snapshot() const override { return false; }
+  bool can_snapshot() const override;
   // SSD prefix cache: the full-attention caches as rows, the sliding-window rings whole (a checkpoint's: their copies)
   std::string disk_format() const override;
   void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
@@ -199,6 +199,7 @@ class Flint : public Model {
   bool qmt_ = false;             // dense 4-bit prefill GEMMs on Metal 4's tensor_ops (M5)
   bool qmtw_ = false;            // a dense Llama's 8-bit and bf16 prefill GEMMs there too (tensor/qmtw.metal)
   bool qmts_ = false;            // ... and its tiles in the swizzled order (qmt4s8_m64_n64, qmt8ds8_m128_n64)
+  int qmt_min_ = 64;             // fewest rows a dense GEMM takes the tensor tiles at (16 for a dense Llama)
   bool v8_ = false;              // a dense Llama's 3-8 row verify passes on the 8-row verify kernels (NI_FLINT_V8)
   bool in_verify_ = false;       // encoding a verify pass (encode_verify): the only pass v8_ takes
   Buffer v8t_, v8s_, v8g_, v8u_;  // their X8 table and group sums, the gate / up rows
