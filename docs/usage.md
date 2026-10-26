@@ -17,7 +17,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--prefill-chunk N] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
-| `kapitsa stage --model M [--layers A-B]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
+| `kapitsa stage --model M [--layers A-B] [--port P] [--host H] [--mem-budget GB] [--prefill-chunk N]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
@@ -879,6 +879,12 @@ kapitsa stage --model ~/models/flash-next-q2
 # this Mac: the head
 kapitsa serve --model ~/models/flash-next-q2 --split other-mac.local
 ```
+
+A stage listens on port 9330 (`--port P`; the head connects to it), on every network of the Mac (`--host H`
+narrows that; the default `0.0.0.0` is all of them), and reports the GPU memory it may use (`--mem-budget GB`; the
+default is Metal's working set less a margin) so the head can give it the layers that fit. `--prefill-chunk N` caps the
+rows one pass may bring, 2112 by default, the room the head's 2048-row chunks can take; the head's own chunk must not
+exceed a stage's, and when it does the head stops and names this flag.
 
 The head asks each stage for its GPU memory budget and its memory bandwidth, and gives each Mac the run of layers that
 fits its memory with the fastest pass (`src/cluster/place.h`: a Mac's layers cost their decode bytes over its bandwidth,
