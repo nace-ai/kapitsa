@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-26T12:36:48Z",
+  "kapitsa": {
+    "version": "0.2.17",
+    "commit": "62c9ee0"
+  },
+  "mac": {
+    "identifier": "Mac14,5",
+    "name": "MacBook Pro (14-inch, 2023)",
+    "year": 2023,
+    "chip": "Apple M2 Max",
+    "cpu_cores": 12,
+    "gpu_cores": 38,
+    "memory_gb": 64,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "qwen3.8-flash-next-q2_0",
+    "title": "qwen3.8-flash-next-q2_0",
+    "variant": null,
+    "precision": "4-bit",
+    "catalog": false,
+    "revision": null,
+    "decoding": "MTP",
+    "decoding_detail": "MTP speculative decoding depth 2, KFlash (MTP)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 46.07,
+      "runs_tps": [
+        53.37,
+        45.79,
+        48.29,
+        42.06,
+        46.07
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 43.24,
+      "runs_tps": [
+        42.6,
+        43.43,
+        41.6,
+        45.35,
+        43.24
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 9.5271,
+        "tps": 433.7,
+        "followup_s": [
+          0.1628,
+          0.1688,
+          0.1522
+        ],
+        "followup_median_s": 0.1628,
+        "followup_suffix_tps": 141.2
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16288,
+        "ttft_s": 42.1396,
+        "tps": 386.5,
+        "followup_s": [
+          0.2054,
+          0.1584,
+          0.1469
+        ],
+        "followup_median_s": 0.1584,
+        "followup_suffix_tps": 143.0
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 39.1,
+    "mapped_gb": 5.56
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 191.5,
+    "gpu_other_mean_pct": 5.18,
+    "gpu_other_max_pct": 15.91,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "ZCode"
+    ],
+    "contention": [
+      "prefill_4000",
+      "prefill_16000"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000', 'prefill_16000'] (mean 5.18%, top ['ZCode'])"
+  ],
+  "invalid": []
+}
