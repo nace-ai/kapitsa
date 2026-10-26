@@ -43,8 +43,10 @@ already running on its port uses it and says so (stop it to pick another model).
 Nothing is asked where nobody could answer: when stdin, stdout or stderr is not a terminal (the Nace Agent app,
 scripts, `brew services`), with `TERM=dumb`, `CI` or `KAPITSA_NO_PROMPT=1` set, with `--yes`, or in a background job.
 Those start the model picked last (the picker's last choice, or a catalog `--model` typed in a terminal) when it is
-downloaded, saying so (`No --model given: ..., the model picked last`), else the best model for this Mac, downloading
-it first, with the same output as before. `--yes` and the Nace Agent app's own Kapitsa always take the best model.
+downloaded at the revisions this Kapitsa pins — an upgrade can pin newer files, and the best model for this Mac
+then starts instead — saying so (`No --model given: ..., the model picked last`), else the best model for this Mac,
+downloading it first, with the same output as before. `--yes` and the Nace Agent app's own Kapitsa
+always take the best model.
 
 ## Models and downloads
 
@@ -1023,9 +1025,11 @@ or Homebrew install needs no clone; it needs macOS Python 3.
 Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (on `127.0.0.1:8000`)
 in the background and at each login, restarting it after an error or when it is killed (from Activity Monitor too);
 `brew services stop kapitsa` stops it, or `sudo brew services stop kapitsa` if you started the service as root (a
-launchd job in `/Library/LaunchDaemons`). It serves the model last picked in a terminal when that one is downloaded,
-else the best model for this Mac, downloaded first ([Which model](#which-model)). `kapitsa claude|codex|opencode|pi`
-use it while it runs, its one model, so stop it to pick another. Its log, the first download's progress too:
+launchd job in `/Library/LaunchDaemons`). It serves the model last picked in a terminal when that one is downloaded
+at the revisions this Kapitsa pins (an upgrade can pin newer files, and the best model for this Mac then starts
+instead), else the best model for this Mac, downloaded first ([Which model](#which-model)).
+`kapitsa claude|codex|opencode|pi` use it while it runs, its one model, so stop it to pick another. Its log, the
+first download's progress too:
 `/opt/homebrew/var/log/kapitsa.log`.
 
 ## Environment variables
