@@ -21,7 +21,7 @@ decode over the next fastest engine on that model.
 
 | Mac | Kapitsa's decode lead | Where another engine is ahead |
 | --- | --- | --- |
-| [M5 Max, 128 GB](#m5-max) | 27B **1.04x** mlx-serve · 35B-A3B **1.21x** Splash · Bolt **2.3x** oMLX · Lightning 1.41x · Super-VL 1.42x · Dory 1.57x | Flash-Next decode: mlx-serve 108 against 106. Prefill: Splash on the 27B (1,039 against 907) and the 35B-A3B (6,386 against 5,963); mlx-serve, oMLX and MTPLX on Flash-Next |
+| [M5 Max, 128 GB](#m5-max) | 27B level with mlx-serve (inside the runs' spread) · 35B-A3B **1.21x** Splash · Bolt **2.3x** oMLX · Lightning 1.41x · Super-VL 1.42x · Dory 1.57x | Flash-Next decode: mlx-serve 108 against 106. Prefill: Splash on the 27B (1,039 against 907) and the 35B-A3B (6,386 against 5,963); mlx-serve, oMLX and MTPLX on Flash-Next |
 | [M5 Pro, 48 GB](#m5-pro) | 35B-A3B **1.11x** Splash · Lightning 1.28x · Bolt 1.93x · Dory 1.32x · Flint 1.03x rec | 27B decode: mlx-serve 78 against 77, inside the runs' spread. Prefill: Splash on the 35B-A3B (1.25x) and the 27B (1.11x) |
 | [M4 Pro, 48 GB](#m4-pro) | 4B **1.47x** mlx-serve · 27B 1.17x · 35B-A3B 1.19x Splash · Lightning 1.72x · Bolt 1.97x · Dory 1.33x · Flint 1.01x rec | Flint prefill: llama.cpp 977 against 968 |
 | [M3 Pro, 36 GB](#m3-pro) | 4B 1.79x · 9B **2.90x** · 27B 1.77x · 35B-A3B 1.84x · Lightning 1.92x · Flint 1.45x · Dory 1.21x | Nano 4B decode: llama.cpp 34.9 against 34.4. Nano 9B v2: mlx-lm 24.9 against 20.9 (both on lighter 4-bit files) |
@@ -111,9 +111,11 @@ folders; LM Studio, mlx-serve and Ollama's MLX runner read clones of them.
 The 27B rows are one block of the whole row (2026-10-25 20:44-22:06, one GPU lock, AC power, High Power mode, a quiet
 CPU), with the desktop app's GPU load at 0.5% or less in every phase and no run flagged ([the block](../bench/results/2026-10-25-m5-max/2026-10-26-reruns.md)).
 
-1. The median of three runs, decided before running: Kapitsa's and Splash's in turn (Kapitsa 134.8, 126.2, 133.2;
-   Splash 101.3, 116.4, 119.0 tok/s), and mlx-serve's two more after its first run came out 0.15% from Kapitsa's
-   median (133.0, 127.9, 127.8).
+1. The median of three runs: Kapitsa's and Splash's in turn, decided before running (Kapitsa 134.8, 126.2, 133.2;
+   Splash 101.3, 116.4, 119.0 tok/s). mlx-serve's first run (133.0) came out 0.15% from Kapitsa's median, a tie; its two
+   more runs (127.9, 127.8) were added after that, an hour after Kapitsa's last run and not interleaved with it, so
+   the 27B row is a tie between Kapitsa and mlx-serve inside the runs' spread (Kapitsa 126.2-134.8, mlx-serve
+   127.8-133.0).
 
 The 35B-A3B cells are each config's newest run on AC power without a contention flag on its 4K prefill or decode phase,
 other than the first-pass runs repeated because they had let the app's load through (7-29% in some prefill phases).
@@ -123,7 +125,7 @@ Nemotron 3.5 Bolt 74B-A9B (2/4/8-bit mix), one block of the row on AC (21:54-22:
 never became ready in 0.7.3.dev2), mlx-vlm 936 / 66. Each engine has at least one decode answer flagged for a repetition
 loop.
 
-- **Kapitsa writes fastest on all three models; Splash reads prompts fastest.** Splash splits a long prompt's FFN
+- **Kapitsa writes fastest on the 35B-A3B and Bolt and is level with mlx-serve's draft tree on the 27B; Splash reads prompts fastest.** Splash splits a long prompt's FFN
   between the GPU and the Neural Engine; on the 27B Kapitsa does too, and Splash reads it 15% faster (1,039 against
   907 tok/s). Kapitsa answers follow-ups fastest on the 35B-A3B and Bolt; on the 27B mlx-serve's draft tree does
   (0.08 against 0.13 s at 4K).
