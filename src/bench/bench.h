@@ -214,6 +214,9 @@ std::vector<int> other_kapitsas(int except = 0);
 class GpuLock {
  public:
   static std::string path();
+  // Whether the caller says it already holds the lock: NI_LOCK_HELD or NACE_GPU_LOCK_HELD (AGENTS.md's rule; both names
+  // are in use, the harnesses and tools having grown one each). Unset, empty or "0" means it does not.
+  static bool held_by_caller();
   ~GpuLock() { release(); }
   // Takes it: at once, or after calling waiting() with who holds it and blocking until they release it. False (errno
   // set) when the file can't be opened.

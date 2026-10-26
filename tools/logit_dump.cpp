@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
 
   // ---- the GPU lock, then the model ----
   bench::GpuLock lock;
-  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD")) {
+  if (!bench::GpuLock::held_by_caller()) {
     if (!lock.acquire([](const std::string& who) {
           fprintf(stderr, "waiting for the GPU lock %s%s\n", bench::GpuLock::path().c_str(),
                   who.empty() ? "" : (", held by " + who).c_str());

@@ -74,8 +74,12 @@ Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (
 
 **GPU lock.** Anything that loads a model takes the exclusive flock on `$BENCH_GPU_LOCK` (default
 `/tmp/kapitsa-gpu.lock`), as `lockf -k -t <ms> <file> <command>` does, and a caller that already holds it says so with
-`NI_LOCK_HELD=1` / `NACE_GPU_LOCK_HELD=1`. A new script, workflow or test that uses the GPU takes the lock; a test
-points `BENCH_GPU_LOCK` at a temporary file. See `src/bench/system.mm` (`GpuLock`), `bench/shortpf/locked.sh`.
+`NI_LOCK_HELD=1` / `NACE_GPU_LOCK_HELD=1`, which every tool that takes the lock, and `kapitsa bench`, read through
+`GpuLock::held_by_caller()`. Say it: `flock` is per open file description, so a tool wrapped in `lockf ... <tool>`
+that does not is blocked by the lock it already holds. A tool that takes no lock itself (`tools/flint_moe_check.cpp`,
+`fn_check.cpp`, `fn_q2_bench.cpp`, `ni_handshake.mm`: their headers say so) is meant to be run under
+`lockf -k /tmp/kapitsa-gpu.lock`, and needs no marker. A new script, workflow or test that uses the GPU takes the lock;
+a test points `BENCH_GPU_LOCK` at a temporary file. See `src/bench/system.mm` (`GpuLock`), `bench/shortpf/locked.sh`.
 
 **Metal kernels.** A kernel that reads or writes out of bounds can fault the GPU and take the desktop down. Run a new or
 changed kernel at small sizes first, with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`, and say that you did in the PR.

@@ -582,10 +582,7 @@ int main(int argc, char** argv) {
 
   // A GPU tool takes the harness lock (src/bench/system.mm GpuLock), like every other tool here.
   ni::bench::GpuLock lock;
-  const char* held = std::getenv("NI_LOCK_HELD");
-  const char* held2 = std::getenv("NACE_GPU_LOCK_HELD");
-  const bool lock_held = (held && std::strcmp(held, "0")) || (held2 && std::strcmp(held2, "0"));
-  if (!lock_held) {
+  if (!ni::bench::GpuLock::held_by_caller()) {
     if (!lock.acquire([](const std::string& who) {
           std::fprintf(stderr, "waiting for the GPU lock %s%s\n", ni::bench::GpuLock::path().c_str(),
                        who.empty() ? "" : (", held by " + who).c_str());

@@ -385,6 +385,15 @@ std::string GpuLock::path() {
   return kDefault;
 }
 
+bool GpuLock::held_by_caller() {
+  // AGENTS.md's rule for a caller that already holds the lock. Both names, because the harness scripts took NI_LOCK_HELD
+  // and some tools NACE_GPU_LOCK_HELD, and a caller holding the lock must not have it taken again: flock() is per open
+  // file description, so a second acquire in the same process blocks on the first.
+  for (const char* name : {"NI_LOCK_HELD", "NACE_GPU_LOCK_HELD"})
+    if (const char* v = getenv(name); v && *v && !(v[0] == '0' && v[1] == 0)) return true;
+  return false;
+}
+
 bool GpuLock::acquire(const std::function<void(const std::string&)>& waiting) {
   release();
   const std::string p = path();

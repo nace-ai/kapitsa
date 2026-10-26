@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
   ids.resize(size_t(prompt));
 
   bench::GpuLock lock;
-  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") &&
+  if (!bench::GpuLock::held_by_caller() &&
       !lock.acquire([](const std::string& who) {
         fprintf(stderr, "waiting for the GPU lock%s\n", who.empty() ? "" : (", held by " + who).c_str());
       }))

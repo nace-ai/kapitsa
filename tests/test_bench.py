@@ -680,6 +680,14 @@ r = run([BENCH_TEST, "precision"])
 check(r.returncode == 0 and r.stdout.count("ok  ") == 4 and "FAIL" not in r.stdout,
       "folder_precision counts weight bytes: one format, a dominant override, no quantization, no weights", r.stdout)
 
+# ---------------------------------------------------------------- 7c. a caller that says it holds the lock
+# AGENTS.md's rule: NI_LOCK_HELD or NACE_GPU_LOCK_HELD, unset or "0" meaning no. Getting this wrong deadlocks: flock() is
+# per open file description, so a tool wrapped in `lockf ... <tool>` blocks on the lock it was told it already holds.
+henv = {k: v for k, v in os.environ.items() if k not in ("NI_LOCK_HELD", "NACE_GPU_LOCK_HELD")}
+r = run([BENCH_TEST, "lock-held"], env=henv)
+check(r.returncode == 0 and r.stdout.count("ok  ") == 8 and "FAIL" not in r.stdout,
+      "held_by_caller under each spelling of NI_LOCK_HELD / NACE_GPU_LOCK_HELD", r.stdout)
+
 # ---------------------------------------------------------------- 8. the whole command, against the scripted server
 # KAPITSA_BENCH_SERVER: kapitsa bench measures the scripted server instead of starting one (no download, lock or quiet
 # wait); everything else is the real command: the protocol, the monitor, the result, the screens. Its result is invalid.

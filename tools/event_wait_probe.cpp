@@ -20,7 +20,7 @@ using namespace ni;
 int main(int argc, char** argv) {
   const double secs = argc > 1 ? atof(argv[1]) : 2;
   bench::GpuLock lock;
-  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") && !lock.acquire()) fatal("cannot acquire GPU lock");
+  if (!bench::GpuLock::held_by_caller() && !lock.acquire()) fatal("cannot acquire GPU lock");
   Gpu& g = Gpu::get();
   void* ev = g.new_shared_event();
   Buffer b = g.alloc(64, "probe");

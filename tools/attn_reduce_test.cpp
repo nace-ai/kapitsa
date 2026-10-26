@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
       (argc == 3 && (strcmp(argv[1], "--gpu") || strcmp(argv[2], "--small"))))
     fatal("usage: attn_reduce_test --gpu [--small] | --bench");
   ni::bench::GpuLock lock;
-  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") && !lock.acquire()) fatal("cannot acquire GPU lock");
+  if (!ni::bench::GpuLock::held_by_caller() && !lock.acquire()) fatal("cannot acquire GPU lock");
   Gpu& g = Gpu::get();
   g.compile();
   printf("GPU %s, shared reduction static threadgroup bytes %u\n", g.name().c_str(), g.pipeline("attn_rows_reduce_shared").tg_mem);

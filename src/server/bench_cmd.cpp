@@ -770,9 +770,9 @@ int run(const Options& o) {
   }
 
   // ---- the GPU lock: the harness's (gpu_hogs.GpuLock), held from the server's start until its memory is back, unless
-  // the caller holds it (NACE_GPU_LOCK_HELD, as for bench.py)
+  // the caller holds it (NI_LOCK_HELD / NACE_GPU_LOCK_HELD, AGENTS.md)
   GpuLock lock;
-  if (!env_on("NACE_GPU_LOCK_HELD") && !external) {
+  if (!GpuLock::held_by_caller() && !external) {
     std::unique_ptr<Ticker> t;
     const bool ok = lock.acquire([&](const std::string& who) {
       say("Waiting for the GPU lock " + GpuLock::path() + (who.empty() ? "" : ", held by " + who));

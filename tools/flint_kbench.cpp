@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
   }
   if (names.empty()) names = {"qkvf", "d2", "d2F", "o", "rshared", "gu3r", "dn1_64", "head2"};
   bench::GpuLock lock;
-  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") && !lock.acquire([](const std::string&) {}))
+  if (!bench::GpuLock::held_by_caller() && !lock.acquire([](const std::string&) {}))
     fatal("cannot take the GPU lock: %s", strerror(errno));
   Gpu& g = Gpu::get();
   g.compile_extra("Flint", kFlintKernelSource);

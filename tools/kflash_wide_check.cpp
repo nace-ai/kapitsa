@@ -111,9 +111,7 @@ int main(int argc, char** argv) {
   std::mt19937_64 rng(argc > 4 ? strtoull(argv[4], nullptr, 10) : 1);
 
   bench::GpuLock lock;
-  const char* held = getenv("NI_LOCK_HELD");
-  const char* held2 = getenv("NACE_GPU_LOCK_HELD");
-  if (!(held && !strcmp(held, "1")) && !(held2 && !strcmp(held2, "1"))) {
+  if (!bench::GpuLock::held_by_caller()) {
     if (!lock.acquire([](const std::string& who) {
           fprintf(stderr, "waiting for the GPU lock %s%s\n", bench::GpuLock::path().c_str(),
                   who.empty() ? "" : (", held by " + who).c_str());

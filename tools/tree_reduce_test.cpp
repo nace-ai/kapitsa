@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
   if (argc < 2 || argc > 3 || (strcmp(argv[1], "--gpu") && strcmp(argv[1], "--bench")))
     fatal("usage: tree_reduce_test --gpu [P] | --bench P");
   ni::bench::GpuLock lock;
-  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") && !lock.acquire()) fatal("cannot acquire GPU lock");
+  if (!ni::bench::GpuLock::held_by_caller() && !lock.acquire()) fatal("cannot acquire GPU lock");
   const bool bench = !strcmp(argv[1], "--bench");
   if (bench && argc != 3) fatal("--bench needs a position");
   const unsigned pos = argc > 2 ? unsigned(atoi(argv[2])) : 39;

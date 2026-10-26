@@ -58,8 +58,10 @@ not ask for abstractions, interfaces or configuration the change does not need.
 
 - Anything that loads a model or uses the GPU (scripts, tests, workflows, tools) must take the exclusive flock on
   `$BENCH_GPU_LOCK` (default `/tmp/kapitsa-gpu.lock`, i.e. `lockf -k -t <ms> <file> <command>`), unless the caller sets
-  `NI_LOCK_HELD=1` / `NACE_GPU_LOCK_HELD=1` because it already holds it. Flag a new GPU-using path that skips it. Tests
-  must point `BENCH_GPU_LOCK` at a temporary file, never at the real lock.
+  `NI_LOCK_HELD=1` / `NACE_GPU_LOCK_HELD=1` because it already holds it. Flag a new GPU-using path that skips it, and
+  flag a new C++ tool that takes the lock without asking `GpuLock::held_by_caller()` first: a tool wrapped in `lockf`
+  that does not is blocked by the lock it holds. Tests must point `BENCH_GPU_LOCK` at a temporary file, never at the
+  real lock.
 - `kapitsa bench compare` (bench/harness/kbench.py) must stay a wrapper over the harness's own scripts: one engine at a
   time under the GPU lock, the same protocol for every engine, nothing installed, downloaded or sent for the user. Flag a
   new network call, a telemetry or upload path, an auto-install, or a "reason" in its report that is not derived from a

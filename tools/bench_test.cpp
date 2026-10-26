@@ -7,6 +7,7 @@
 //   bench_test run PORT                the protocol against a server on 127.0.0.1:PORT, with fixed nonces
 //   bench_test lock [HOLD_S]           takes the GPU lock (BENCH_GPU_LOCK), holds it HOLD_S seconds
 //   bench_test precision               a folder's precision from its config and weight bytes (exit 1 on a failure)
+//   bench_test lock-held               GpuLock::held_by_caller() under each spelling of the variable (exit 1 if wrong)
 #include "bench/bench.h"
 #ifndef KAPITSA_VERSION
 #define KAPITSA_VERSION "0.0.0"
@@ -432,6 +433,33 @@ int precision_test() {
   return bad ? 1 : 0;
 }
 
+// AGENTS.md's rule for a caller that already holds the lock, under each spelling: NI_LOCK_HELD or NACE_GPU_LOCK_HELD,
+// unset or "0" meaning no. A caller holding the lock must be recognized: flock() is per open file description, so
+// taking it a second time in the same process blocks on the first, which is what a wrapper script did before this
+// check existed for `kapitsa bench`.
+int lock_held_test() {
+  struct Case {
+    const char* ni;
+    const char* nace;
+    bool want;
+  } cases[] = {{"1", nullptr, true},    {nullptr, "1", true},  {"1", "1", true},  {"0", nullptr, false},
+               {nullptr, "0", false},   {"", nullptr, false},  {nullptr, nullptr, false}, {nullptr, "", false}};
+  int bad = 0;
+  for (const Case& c : cases) {
+    unsetenv("NI_LOCK_HELD");
+    unsetenv("NACE_GPU_LOCK_HELD");
+    if (c.ni) setenv("NI_LOCK_HELD", c.ni, 1);
+    if (c.nace) setenv("NACE_GPU_LOCK_HELD", c.nace, 1);
+    const bool got = GpuLock::held_by_caller();
+    printf("%s NI_LOCK_HELD=%s NACE_GPU_LOCK_HELD=%s -> %s (want %s)\n", got == c.want ? "ok  " : "FAIL",
+           c.ni ? c.ni : "-", c.nace ? c.nace : "-", got ? "held" : "not held", c.want ? "held" : "not held");
+    if (got != c.want) ++bad;
+  }
+  unsetenv("NI_LOCK_HELD");
+  unsetenv("NACE_GPU_LOCK_HELD");
+  return bad ? 1 : 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -444,6 +472,7 @@ int main(int argc, char** argv) {
   if (cmd == "run" && argc > 2) return run_protocol(atoi(argv[2]));
   if (cmd == "lock") return lock_test(argc > 2 ? atof(argv[2]) : 0);
   if (cmd == "precision") return precision_test();
-  fprintf(stderr, "usage: bench_test self | protocol CASES.json | result [quick] | plan RESULT.json LOGIN | machine | run PORT | lock [HOLD_S] | precision\n");
+  if (cmd == "lock-held") return lock_held_test();
+  fprintf(stderr, "usage: bench_test self | protocol CASES.json | result [quick] | plan RESULT.json LOGIN | machine | run PORT | lock [HOLD_S] | precision | lock-held\n");
   return 2;
 }

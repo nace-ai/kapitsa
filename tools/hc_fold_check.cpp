@@ -197,7 +197,7 @@ bool check_precomb(uint32_t T, uint32_t D, bool fold) {
 int main() {
   bench::GpuLock lock;  // a bare run must not land beside a measurement: BENCH_GPU_LOCK, else
                         // /tmp/kapitsa-gpu.lock (NI_LOCK_HELD=1 when the caller holds it), as event_wait_probe
-  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") && !lock.acquire()) fatal("cannot acquire GPU lock");
+  if (!bench::GpuLock::held_by_caller() && !lock.acquire()) fatal("cannot acquire GPU lock");
   Gpu& g = Gpu::get();
   g.compile_extra("tensor", kTensorKernelSource, true);  // qmt6_*: the tensor_ops library
   printf("%s\n", g.name().c_str());
