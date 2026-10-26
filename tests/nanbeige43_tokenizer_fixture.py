@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Writes tests/data/nanbeige43_tokenizer.json: Hugging Face tokenizers' ids and decode of ~100 texts on Nanbeige 4.3's
-tokenizer.json (the Metaspace BPE with byte fallback), which `build/tokenizer_test path/to/tokenizer.json` checks
-Kapitsa's encode, decode and StreamDecoder against.
+tokenizer.json (the Metaspace BPE with byte fallback), and HF's decode of ~60 id lists (byte tokens that are, and are
+not, well-formed UTF-8; a reply cut in the middle of a character), which tokenizer_test checks Kapitsa's encode,
+decode and StreamDecoder against. Also writes tests/data/nanbeige43_tokenizer_small.json, the same file cut to the
+tokens and merges these texts use, which `build/tokenizer_test` checks with no arguments (CI): the 256 byte tokens,
+every token on the way to a text's tokens (all merges giving it, down to characters) and the merges among them, with
+the real file's ids and the rest of its config; the added tokens are in the vocabulary too, at their ids (HF numbers
+an added token outside it from the vocabulary's size). Both files give HF the same ids and decodes (asserted).
 
 usage: uv run --no-project --with tokenizers==0.23.3 --with jinja2 python tests/nanbeige43_tokenizer_fixture.py DIR
   DIR: the model folder (its tokenizer.json, and tokenizer_config.json's chat template, rendered with jinja2 as
@@ -20,6 +25,7 @@ import tokenizers
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "data", "nanbeige43_tokenizer.json")
+SMALL = os.path.join(HERE, "data", "nanbeige43_tokenizer_small.json")
 
 
 def render(template, messages, **kw):
@@ -102,6 +108,31 @@ def fuzz(n, seed=4343):
     return ["".join(rng.choice(pieces) for _ in range(rng.randint(1, 12))) for _ in range(n)]
 
 
+def id_lists(tok, cases, seed=603):
+    # HF's ByteFallback decodes a run of adjacent byte tokens whole: its text if all of it is well-formed UTF-8, else
+    # one U+FFFD per byte (a valid character in the run included)
+    b = lambda *xs: [tok.token_to_id(f"<0x{x:02X}>") for x in xs]  # noqa: E731
+    w = lambda *ts: [tok.token_to_id(t) for t in ts]  # noqa: E731
+    lists = [b(0xE4, 0xB8), b(0xE4, 0xB8, 0x80), b(0xE4, 0xB8, 0x80, 0xE4), b(0x61, 0xE4), b(0x20) + w("hello"),
+             w("hello") + b(0xE4, 0xB8) + w("\u2581hello"), b(0xE4) + w("<think>") + b(0xB8, 0x80),
+             b(0xE2, 0x96, 0x81), b(0xED, 0xA0, 0x80), b(0xC0, 0x80), b(0xF4, 0x90, 0x80, 0x80), b(0x80),
+             w("<think>") + b(0x20, 0x20) + w("hello")]
+    # a reply cut by max_tokens in the middle of a character given as byte tokens
+    cont = set(b(*range(0x80, 0xC0)))  # a UTF-8 continuation byte: the ids before it end within a character
+    for c in cases:
+        ids = c["ids"]
+        for cut in [k for k in range(len(ids)) if ids[k] in cont][:2]:  # after one byte, after two or a token
+            if ids[:cut] not in lists and len(lists) < 21:
+                lists.append(ids[:cut])
+    rng = random.Random(seed)
+    pool = sorted({i for c in cases for i in c["ids"]})
+    for _ in range(48):
+        lists.append([rng.choice(b(rng.choice([rng.randrange(256), rng.randrange(0x80, 0x100)])))
+                      if rng.random() < 0.6 else rng.choice(pool) for _ in range(rng.randint(1, 10))])
+    assert all(None not in ids for ids in lists)
+    return lists
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
@@ -110,21 +141,53 @@ def main():
         sha = hashlib.sha256(f.read()).hexdigest()
     with open(os.path.join(sys.argv[1], "tokenizer_config.json"), encoding="utf-8") as f:
         template = json.load(f)["chat_template"]
+    with open(path, encoding="utf-8") as f:
+        full = json.load(f)
     tok = tokenizers.Tokenizer.from_file(path)
     texts = chats(template) + FIXED + fuzz(16)
     assert len(set(texts)) == len(texts)
-    cases = []
-    for t in texts:
-        ids = tok.encode(t, add_special_tokens=False).ids
-        cases.append({"text": t, "ids": ids, "decode": tok.decode(ids, skip_special_tokens=False)})
-    head = {"tokenizer_sha256": sha, "tokenizers_version": tokenizers.__version__,
+    dec = lambda t, ids: t.decode(ids, skip_special_tokens=False)  # noqa: E731
+    cases = [{"text": t, "ids": tok.encode(t, add_special_tokens=False).ids} for t in texts]
+    for c in cases:
+        c["decode"] = dec(tok, c["ids"])
+    id_cases = [{"ids": ids, "decode": dec(tok, ids)} for ids in id_lists(tok, cases)]
+
+    vocab, model = full["model"]["vocab"], full["model"]
+    token = {i: t for t, i in vocab.items()}
+    makes = {}  # token -> the merges giving it
+    for a, b in model["merges"]:
+        makes.setdefault(a + b, []).append((a, b))
+    keep = {f"<0x{b:02X}>" for b in range(256)}
+    todo = [token[i] for c in cases + id_cases for i in c["ids"] if i in token]
+    while todo:
+        t = todo.pop()
+        if t not in keep:
+            keep.add(t)
+            todo += [p for m in makes.get(t, []) for p in m]
+    small = dict(full, model=dict(model, vocab={t: i for t, i in vocab.items() if t in keep},
+                                  merges=[[a, b] for a, b in model["merges"] if a in keep and b in keep and a + b in keep]))
+    small["model"]["vocab"].update({a["content"]: a["id"] for a in full["added_tokens"]})
+    with open(SMALL, "w", encoding="utf-8") as f:
+        f.write(json.dumps(small, ensure_ascii=False, separators=(",", ":")) + "\n")
+    st = tokenizers.Tokenizer.from_file(SMALL)
+    for c in cases:
+        assert st.encode(c["text"], add_special_tokens=False).ids == c["ids"], c["text"]
+    for c in cases + id_cases:
+        assert dec(st, c["ids"]) == c["decode"], c["ids"]
+    with open(SMALL, "rb") as f:
+        small_sha = hashlib.sha256(f.read()).hexdigest()
+
+    head = {"tokenizer_sha256": sha, "small_sha256": small_sha, "tokenizers_version": tokenizers.__version__,
             "generator": "tests/nanbeige43_tokenizer_fixture.py"}
+    line = lambda c: json.dumps(c, ensure_ascii=False, separators=(",", ":"))  # noqa: E731
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(json.dumps(head, ensure_ascii=False)[:-1] + ', "cases": [\n')
-        f.write(",\n".join(json.dumps(c, ensure_ascii=False, separators=(",", ":")) for c in cases))
-        f.write("\n]}\n")
-    print(f"{OUT}: {len(cases)} cases, {os.path.getsize(OUT)} bytes")
+        f.write(",\n".join(map(line, cases)) + '\n], "id_cases": [\n')
+        f.write(",\n".join(map(line, id_cases)) + "\n]}\n")
+    print(f"{OUT}: {len(cases)} texts, {len(id_cases)} id lists, {os.path.getsize(OUT)} bytes")
+    print(f"{SMALL}: {len(small['model']['vocab'])} tokens, {len(small['model']['merges'])} merges, "
+          f"{os.path.getsize(SMALL)} bytes")
 
 
 if __name__ == "__main__":
