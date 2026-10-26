@@ -1283,16 +1283,23 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     const uint32_t nch = (Lk + chunk - 1) / chunk;
     const AttnP ap{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, window, k0,
                    chunk, nch, 1.0f / std::sqrt(float(c.hd))};
-    e.use(pipe(c.kv8 ? "flint_attn_partial_q8" : small_tiles() ? "flint_attn_partial_k16" : "flint_attn_partial"));
+    // R > 1 on a half cache: flint_attn_partial_rows, the rows in one threadgroup per (chunk, kv head) reading each K /
+    // V tile once (bitwise the per-row kernel's output; NI_FLINT_ATTN_ROWS=0 keeps the per-row grid)
+    static const bool rows1 = !getenv("NI_FLINT_ATTN_ROWS") || atoi(getenv("NI_FLINT_ATTN_ROWS")) != 0;
+    const bool shared_rows = rows1 && R > 1 && !c.kv8;
+    e.use(pipe(c.kv8          ? "flint_attn_partial_q8"
+               : shared_rows  ? (small_tiles() ? "flint_attn_partial_rows_k16" : "flint_attn_partial_rows")
+               : small_tiles() ? "flint_attn_partial_k16"
+                               : "flint_attn_partial"));
     e.buf(0, q_);
     e.buf(1, s.kc[size_t(li)]);
     e.buf(2, s.vc[size_t(li)]);
     e.buf(3, part_o_);
     e.buf(4, part_ml_);
     e.val(5, ap);
-    e.buf(6, part_ml_);  // (no tree)
+    if (!shared_rows) e.buf(6, part_ml_);  // (no tree)
     if (c.kv8) e.buf(7, s.ksc[size_t(li)]), e.buf(8, s.vsc[size_t(li)]);
-    e.dispatch(nch, uint32_t(c.hkv), uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
+    e.dispatch(nch, uint32_t(c.hkv), shared_rows ? 1u : uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
     e.use(pipe("flint_attn_reduce"));
     e.buf(0, part_o_);
     e.buf(1, part_ml_);

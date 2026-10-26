@@ -207,6 +207,87 @@ FLINT_ATTN_PARTIAL(flint_attn_partial, 32, false)
                                            vs);
 }
 FLINT_ATTN_PARTIAL(flint_attn_partial_k16, 16, false)
+
+// flint_attn_partial_rows: the same split-K attention with every row of a verify in one threadgroup per (chunk, kv
+// head), so each K / V tile is read from memory once for the R rows instead of once per row (flint_attn_partial's
+// grid has a threadgroup per row: at 32K keys a verify's 8 rows read the cache 8 times, 3x a decode step). A lane
+// keeps each row's query, accumulator, max and sum; each row walks the keys in the same order with the same updates
+// as flint_attn_partial's threadgroup for it, so part_o / part_ml come out bitwise the same. No tree, no 8-bit cache.
+// grid: (nchunks, Hkv) x (32 G) threads
+template <uint KT>
+NI_INLINE void flint_attn_partial_rows_impl(const device float* q, const device half* kc, const device half* vc,
+                                            device float* part_o, device float* part_ml, constant FlintAttnP& p,
+                                            uint2 tg, uint tid, uint sg, uint lane, uint ntg, threadgroup half4* kt,
+                                            threadgroup half4* vt) {
+  constexpr uint kMR = 8;
+  const uint chunk = tg.x, kvh = tg.y, R = min(p.R, kMR);
+  const uint G = p.Hq / p.Hkv, hq = kvh * G + sg;
+  const uint start = p.k0 + chunk * p.chunk, end = min(start + p.chunk, p.pos0 + R);
+  float4 qv[kMR], acc[kMR];
+  float m[kMR], l[kMR];
+  uint lo[kMR], hi[kMR];
+  NI_UNROLL for (uint r = 0; r < kMR; ++r) {
+    const uint qpos = p.pos0 + r;
+    lo[r] = p.window && qpos + 1 > p.window ? qpos + 1 - p.window : 0u;
+    hi[r] = min(start + p.chunk, qpos + 1);  // this row's keys end here, as its own threadgroup's loop would
+    qv[r] = r < R ? ((const device float4*)(q + (size_t(r) * p.Hq + hq) * kFD))[lane] * p.scale : float4(0.0f);
+    acc[r] = 0.0f;
+    m[r] = -INFINITY;
+    l[r] = 0.0f;
+  }
+  const device half4* kb = (const device half4*)(kc + size_t(kvh) * p.rows * kFD);
+  const device half4* vb = (const device half4*)(vc + size_t(kvh) * p.rows * kFD);
+  for (uint t0 = start; t0 < end; t0 += KT) {
+    const uint n = min(KT, end - t0);
+    for (uint i = tid; i < n * kFD / 4; i += ntg) {
+      const uint key = t0 + i / (kFD / 4);
+      const uint at = (p.ring ? key % p.rows : key) * (kFD / 4) + i % (kFD / 4);
+      kt[i] = kb[at];
+      vt[i] = vb[at];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    // each row runs flint_attn_partial's loop over the tile as it is (its arithmetic as that kernel compiles it)
+    NI_UNROLL for (uint r = 0; r < kMR; ++r) {
+      if (r >= R || t0 >= hi[r]) continue;
+      const uint nr = min(n, hi[r] - t0);
+      float4 a = acc[r];
+      float mm = m[r], ll = l[r];
+      for (uint j = 0; j < nr; ++j) {
+        if (t0 + j < lo[r]) continue;
+        const float s = simd_sum(dot(qv[r], float4(kt[j * kFD / 4 + lane])));
+        const float mn = max(mm, s);
+        const float corr = metal::fast::exp(mm - mn), e = metal::fast::exp(s - mn);
+        ll = ll * corr + e;
+        a = a * corr + e * float4(vt[j * kFD / 4 + lane]);
+        mm = mn;
+      }
+      acc[r] = a, m[r] = mm, l[r] = ll;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  NI_UNROLL for (uint r = 0; r < kMR; ++r) {
+    if (r >= R) continue;
+    const size_t base = (size_t(r) * p.Hq + hq) * p.nchunks + chunk;
+    ((device float4*)(part_o + base * kFD))[lane] = acc[r];
+    if (lane == 0) {
+      part_ml[base * 2 + 0] = m[r];
+      part_ml[base * 2 + 1] = l[r];
+    }
+  }
+}
+#define FLINT_ATTN_PARTIAL_ROWS(NAME, KT)                                                                             \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],                     \
+                       const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],                      \
+                       device float* part_ml [[buffer(4)]], constant FlintAttnP& p [[buffer(5)]],                    \
+                       uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],          \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],          \
+                       uint3 ntg3 [[threads_per_threadgroup]]) {                                                     \
+    threadgroup half4 kt[KT * kFD / 4];                                                                              \
+    threadgroup half4 vt[KT * kFD / 4];                                                                              \
+    flint_attn_partial_rows_impl<KT>(q, kc, vc, part_o, part_ml, p, tg.xy, tid, sg, lane, ntg3.x, kt, vt);          \
+  }
+FLINT_ATTN_PARTIAL_ROWS(flint_attn_partial_rows, 32)
+FLINT_ATTN_PARTIAL_ROWS(flint_attn_partial_rows_k16, 16)
 FLINT_ATTN_PARTIAL(flint_attn_partial_tree, 32, true)
 FLINT_ATTN_PARTIAL(flint_attn_partial_tree_k16, 16, true)
 
