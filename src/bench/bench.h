@@ -82,7 +82,7 @@ struct Settings {
 };
 // The reference prompt_tokens of the cold prompts for a model's tokenizer family (bench.py REF_PROMPT_TOKENS, and
 // configs/bolt.json's for Nemotron): empty when unknown (the check is then reported as unchecked)
-std::map<int, int> reference_prompt_tokens(const std::string& family);  // "qwen3.5" | "nemotron-h" | "flint" | "nanbeige"
+std::map<int, int> reference_prompt_tokens(const std::string& family);  // "qwen3.5" | "nemotron-h" | "flint"
 ojson sampling(const Settings& s, bool greedy);
 ojson no_think();
 ojson think_on(const Settings& s);
