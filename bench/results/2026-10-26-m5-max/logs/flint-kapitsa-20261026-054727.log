@@ -1,0 +1,43 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the Flint kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 1 ms
+[kapitsa] read 22.57 GB of weights in 1815 ms (12.4 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 2.1 s
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (109 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 22.58 GB allocated (model, buffers, 1 slot's state), budget 110.8 GB (recommended working set 115.4 GB): KV room 88.25 GB = 3077798 tokens (28 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] engine ready: flint, context 32768, 1 slots, plain decoding, KFlash (none)
+[kapitsa] SSD prefix cache: ~/kapitsa-bench-runs/2026-10-25-m5-max/state/kapitsa/prefix-cache/dd97de4695d2ad1f08bbd6768caad717, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] listening on http://127.0.0.1:8401
+Ready: chat at http://127.0.0.1:8401, API at http://127.0.0.1:8401/v1 (model "flint"). Ctrl+C stops.
+[kapitsa] compiled the weight-format kernels in 9 ms
+[kapitsa] chat: prompt 2699 (cached 0) in 519 ms (+8.4 ms template/tokenize; last chunk: encoded by 476.3 ms, GPU start +38.3 ms, GPU 4.0 ms, wake +0.1 ms), 64 tokens in 255 ms (247.1 tok/s), length, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] SSD cache: saved the conversation slot 0 held (2698 tokens, 153 MB written) in 70 ms
+[kapitsa] chat: prompt 272 (cached 0) in 138 ms (+17.4 ms template/tokenize; last chunk: encoded by 96.5 ms, GPU start +37.3 ms, GPU 3.8 ms, wake +0.1 ms), 39 tokens in 148 ms (256.9 tok/s), tool_calls, KFlash (none): 38 cycles, 38 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 97 ms (+0.2 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +92.2 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1937 ms (263.8 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 66 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +61.4 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1937 ms (263.8 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 66 ms (+0.2 ms template/tokenize; last chunk: encoded by 0.5 ms, GPU start +62.0 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1937 ms (263.8 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 66 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +61.6 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1939 ms (263.6 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 67 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +62.3 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1937 ms (263.8 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 75 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +70.5 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1927 ms (265.2 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 66 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +61.4 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1926 ms (265.3 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 66 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +61.7 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1927 ms (265.2 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 66 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +61.4 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1928 ms (265.0 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 64 (cached 0) in 66 ms (+0.1 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +61.7 ms, GPU 3.8 ms, wake +0.1 ms), 512 tokens in 1931 ms (264.6 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] chat: prompt 3874 (cached 0) in 649 ms (+22.7 ms template/tokenize; last chunk: encoded by 602.0 ms, GPU start +43.1 ms, GPU 4.1 ms, wake +0.1 ms), 217 tokens in 880 ms (245.6 tok/s), stop, KFlash (none): 216 cycles, 216 rows, 0 drafts accepted
+[kapitsa] chat: prompt 4101 (cached 4091) in 61 ms (+41.3 ms template/tokenize; last chunk: encoded by 1.5 ms, GPU start +55.3 ms, GPU 4.1 ms, wake +0.1 ms), 153 tokens in 622 ms (244.4 tok/s), stop, KFlash (none): 152 cycles, 152 rows, 0 drafts accepted
+[kapitsa] chat: prompt 4269 (cached 4254) in 62 ms (+1.4 ms template/tokenize; last chunk: encoded by 0.9 ms, GPU start +57.4 ms, GPU 4.1 ms, wake +0.1 ms), 170 tokens in 693 ms (243.8 tok/s), stop, KFlash (none): 169 cycles, 169 rows, 0 drafts accepted
+[kapitsa] chat: prompt 4447 (cached 4439) in 41 ms (+2.5 ms template/tokenize; last chunk: encoded by 7.3 ms, GPU start +29.8 ms, GPU 4.1 ms, wake +0.1 ms), 971 tokens in 3988 ms (243.2 tok/s), stop, KFlash (none): 970 cycles, 970 rows, 0 drafts accepted
+[kapitsa] SSD cache: saved the conversation slot 0 held (4446 tokens, 241 MB written) in 71 ms
+[kapitsa] chat: prompt 15064 (cached 0) in 2922 ms (+55.3 ms template/tokenize; last chunk: encoded by 2860.4 ms, GPU start +57.0 ms, GPU 4.7 ms, wake +0.1 ms), 163 tokens in 760 ms (213.1 tok/s), stop, KFlash (none): 162 cycles, 162 rows, 0 drafts accepted
+[kapitsa] SSD cache: saved the conversation slot 0 held (15063 tokens, 508 MB written) in 145 ms
+[kapitsa] SSD cache: read 4446 tokens of a stored conversation into slot 0 (165 MB in 21 ms)
+[kapitsa] history: prefilled 970 tokens of the rendered reply (from 4446, read from the SSD) in 381 ms
+[kapitsa] SSD cache: saved the conversation slot 0 held (5416 tokens, 76 MB written) in 37 ms
+[kapitsa] SSD cache: read 15063 tokens of a stored conversation into slot 0 (470 MB in 46 ms)
+[kapitsa] history: prefilled 162 tokens of the rendered reply (from 15063, read from the SSD) in 203 ms
+[kapitsa] chat: prompt 15237 (cached 15225) in 70 ms (+1.9 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +64.4 ms, GPU 4.7 ms, wake +0.1 ms), 207 tokens in 969 ms (212.6 tok/s), stop, KFlash (none): 206 cycles, 206 rows, 0 drafts accepted
+[kapitsa] chat: prompt 15459 (cached 15444) in 80 ms (+90.2 ms template/tokenize; last chunk: encoded by 0.6 ms, GPU start +74.8 ms, GPU 4.7 ms, wake +0.1 ms), 252 tokens in 1181 ms (212.4 tok/s), stop, KFlash (none): 251 cycles, 251 rows, 0 drafts accepted
+[kapitsa] chat: prompt 15719 (cached 15711) in 41 ms (+4.8 ms template/tokenize; last chunk: encoded by 0.9 ms, GPU start +35.3 ms, GPU 4.7 ms, wake +0.1 ms), 729 tokens in 3438 ms (211.8 tok/s), stop, KFlash (none): 728 cycles, 728 rows, 0 drafts accepted
+[kapitsa] SSD cache: saved slot 0 (15718 tokens, 2 restore points; 2 of 31 KV blocks and 2 states new: 101 MB) in 35 ms
+[kapitsa] SSD prefix cache: 1 conversation saved as the server stops (101 MB in 35 ms)

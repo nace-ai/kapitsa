@@ -10,7 +10,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 32 of the 37 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
@@ -26,7 +26,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX** ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **The fastest decode in 32 of 37 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **The fastest decode in 33 of 38 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B.
 - [2026/10] ⚡ **QMT prefill: prompts read up to 1.5× faster on M5** with the Metal 4 matrix units.
 - [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
@@ -77,7 +77,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 <sub>Each cell: prefill / decode, tokens/s (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured</sub>
 
 <details>
-<summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 8 models</summary>
+<summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 9 models</summary>
 
 **Qwen and Nemotron**
 
@@ -91,13 +91,19 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 1038 / **160**<br><sub>KFlash · cd20dcc</sub> | × | 903 / 71<br><sub>0.7.3.dev2</sub> | × | × | × | 936 / 66<br><sub>mlx-vlm 0.7.10</sub> | × | × |
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid MoE, 12B active · NVFP4, 76.4 GB</sub> | 🟩 **94**<br><sub>KFlash · fd85910</sub> | × | 52<br><sub>0.7.1rc1</sub> | × | 64<br><sub>0.40.5</sub> | 44 | 46<br><sub>mlx-vlm 0.7.8</sub> | 66<br><sub>b11669</sub> | 61<br><sub>llama.cpp runtime 2.60.0</sub> |
 
+**Recursive Flint**
+
+| Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>Q4_1, b11871</sub> | <sub>rec<br>0.1.0</sub> |
+| --- | ---: | ---: | ---: |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 5721 / **267**<br><sub>KFlash</sub> | 3827 / 130 | 2863 / 224 |
+
 **Nanbeige**
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.3.dev2</sub> | <sub>Ollama<br>0.40.11, GGUF runner</sub> | <sub>MLX<br>mlx-vlm 0.7.10</sub> | <sub>llama.cpp<br>b11871</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | **Nanbeige4.3-33B** · `nanbeige`<br><sub>dense · 4-bit AWQ (8-bit embedding and head), 19.8 GB</sub> | 🟩 532 / **29**<br><sub>KFlash</sub> | 766 / 28 | 503 / 26 | 705 / 28 | 496 / 26 |
 
-<sub>The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell, the Flash-Next row and the Lightning, Super-VL and Dory rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The 27B and Bolt rows are each one block of the row on AC power in High Power mode. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
+<sub>The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell, the Flash-Next row and the Lightning, Super-VL and Dory rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The Flint row is one block on 2026-10-26 (Kapitsa 0.2.18, [results](bench/results/2026-10-26-m5-max/README.md)). The 27B and Bolt rows are each one block of the row on AC power in High Power mode. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
 
 </details>
 

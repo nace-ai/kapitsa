@@ -25,7 +25,7 @@ for r in rows:
     if ri.is_num(v):
         n += 1
         assert label == "KFlash", (r["model"], label)
-assert n == 38, n   # every Kapitsa number in readme_images.json; update when cells are added or removed
+assert n == 39, n   # every Kapitsa number in readme_images.json; update when cells are added or removed
 assert all(h["method"] == "KFlash" for h in ri.header_rows(data) if h["kap"] and h["value"] is not None)
 hr = ri.header_rows(data)   # the header SVGs' <desc> (and the README alt text) name Kapitsa's method as KFlash
 assert "Kapitsa with KFlash " in ri.header_desc(data, hr), ri.header_desc(data, hr)

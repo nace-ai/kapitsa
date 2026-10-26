@@ -1,0 +1,55 @@
+Splash model nace-local/Qwen3.6-35B-A3B-4bit is already installed in ~/Library/Application Support/Splash/models/.selections/90dcf4dce6dc02b870bd62c6731f52560568af977eafee46da503a871b06b1d6
+05:55:06 Loading · nace-local/Qwen3.6-35B-A3B-4bit
+05:55:07 Chat template · patched to render later system messages in place (the original template rejects them), generation prompt 5-7 tokens
+05:55:09 Weights loaded in 1.95 s.
+05:55:09 Decode cycles verify the rows the verify budget chooses (--verify-rows auto, as nace-local/Qwen3.6-35B-A3B-4bit is a MoE target): greedy and seeded outputs can differ from run to run.
+05:55:09 SSD cache: up to 32.0 GiB of temporary files in /var/folders/y7/ldyy12617ds2_dd6xfndzthw0000gn/T/ (its automatic quota, while its volume has room beyond the 10.0 GiB it keeps free); KV pages of 336 KiB and states of 63 MiB, a state's write staging through 63 MiB of the memory plan; --max-cache-disk 0 turns it off.
+05:55:09 Kernel policy for GPU family 10 with 40 cores.
+05:55:10 Ready · nace-local/Qwen3.6-35B-A3B-4bit · context 32K · language only · http://127.0.0.1:8151
+05:55:11 Started · input 2,923 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:11 Done · input 2,923 · cached 0 · output 64 · TTFT 0.4s · 245.1 tok/s · 3.2 tok/cycle
+05:55:11 Started · input 430 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:11 Done · input 430 · cached 0 · output 27 · tools 2·0530bda4 · TTFT 0.1s · 167.0 tok/s · 2.6 tok/cycle
+05:55:11 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:14 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 259.5 tok/s · 3.3 tok/cycle
+05:55:14 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:16 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 248.3 tok/s · 3.2 tok/cycle
+05:55:16 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:18 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 268.4 tok/s · 3.5 tok/cycle
+05:55:36 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:38 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 279.6 tok/s · 3.3 tok/cycle
+05:55:38 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:40 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 252.4 tok/s · 3.3 tok/cycle
+05:55:40 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:42 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 263.4 tok/s · 3.6 tok/cycle
+05:55:42 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:44 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 279.8 tok/s · 3.8 tok/cycle
+05:55:44 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:46 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 257.2 tok/s · 3.4 tok/cycle
+05:55:46 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:48 Done · input 85 · cached 0 · output 512 · TTFT 0.1s · 275.8 tok/s · 3.6 tok/cycle
+05:55:48 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:50 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 277.8 tok/s · 3.7 tok/cycle
+05:55:50 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:52 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 251.8 tok/s · 3.4 tok/cycle
+05:55:52 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:54 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 271.8 tok/s · 3.7 tok/cycle
+05:55:54 Started · input 85 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:56 Done · input 85 · cached 0 · output 512 · TTFT 0.0s · 266.5 tok/s · 3.6 tok/cycle
+05:55:56 Started · input 4,134 · cached 0 · effort none · enable_thinking false · thinking off
+05:55:57 Done · input 4,134 · cached 0 · output 41 · TTFT 0.7s · 220.5 tok/s · 3.3 tok/cycle
+05:55:58 Started · input 4,193 · cached 4,096 · effort none · enable_thinking false · thinking off
+05:55:58 Done · input 4,193 · cached 4,096 · deduplicated 32 · output 26 · TTFT 0.1s · 246.9 tok/s · 3.6 tok/cycle
+05:55:59 Started · input 4,242 · cached 4,160 · effort none · enable_thinking false · thinking off
+05:55:59 Done · input 4,242 · cached 4,160 · output 14 · TTFT 0.1s · 307.8 tok/s · 4.3 tok/cycle
+05:56:00 Started · input 4,272 · cached 4,224 · effort none · enable_thinking false · thinking off
+05:56:01 Done · input 4,272 · cached 4,224 · output 256 · TTFT 0.1s · 402.9 tok/s · 5.7 tok/cycle
+05:56:01 Started · input 16,283 · cached 0 · effort none · enable_thinking false · thinking off
+05:56:04 Done · input 16,283 · cached 0 · output 41 · TTFT 2.7s · 241.8 tok/s · 3.3 tok/cycle
+05:56:05 Started · input 16,342 · cached 16,256 · effort none · enable_thinking false · thinking off
+05:56:05 Done · input 16,342 · cached 16,256 · output 19 · TTFT 0.1s · 393.3 tok/s · 6.0 tok/cycle
+05:56:06 Started · input 16,384 · cached 16,320 · effort none · enable_thinking false · thinking off
+05:56:06 Done · input 16,384 · cached 16,320 · output 24 · TTFT 0.1s · 365.9 tok/s · 5.8 tok/cycle
+05:56:07 Started · input 16,424 · cached 16,352 · effort none · enable_thinking false · thinking off
+05:56:08 Done · input 16,424 · cached 16,352 · output 256 · TTFT 0.1s · 361.5 tok/s · 5.3 tok/cycle
+05:56:08 Stopping · releasing engine resources
