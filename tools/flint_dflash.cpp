@@ -90,29 +90,65 @@ int main(int argc, char** argv) {
     e->commit_and_wait();
     dr.end_prefill();
   }
-  int P = n, made = 1, cycles = 0, m_prev = 0;
+  int P = n, made = 1, cycles = 0;
   t0 = Encoder::host_ms();
   // NI_DFL_SPLIT=1: the drafting half (commit + draft) and the verify half (verify + accept) in command buffers of their
   // own, with each one's GPU time summed (a timing split; the default runs a cycle as one command buffer)
   const bool split = env_on("NI_DFL_SPLIT");
   double gpu_draft = 0, gpu_verify = 0;
+  // The fallback (NI_DFL_GATE=0 turns it off). Drafting cycles keep a moving average (1/8 per cycle) of the tokens
+  // each keeps; under the floor (NI_DFL_FLOOR, default 1.40: an 8-row verify plus the drafting pass cost 1.36 decode
+  // steps on the M5 Max) the next `hold` tokens decode plainly, as 1-row cycles without drafts (the decode step's
+  // kernels and sampler: the same text), whose captures keep the drafter's context whole. Then a probe: 4 drafting
+  // cycles, judged on their own mean; a probe that passes goes back to drafting, one that fails doubles the hold (16
+  // .. 256 tokens), so a prose stretch stops paying for probes while code keeps its bursts. Token counts only, no
+  // clock: the same request decodes the same text whatever the load.
+  const bool gate = !getenv("NI_DFL_GATE") || atoi(getenv("NI_DFL_GATE")) != 0;
+  const double floor_tpc = getenv("NI_DFL_FLOOR") ? atof(getenv("NI_DFL_FLOOR")) : 1.40;
+  const int probe = 4;
+  double avg = 2.0;  // prior: a drafting cycle keeps 2 tokens
+  int hold = 16, plain_left = 0, probe_left = 0, probe_sum = 0, spec_cycles = 0, plain_cycles = 0;
+  // The drafter's context: rows captured into its capture buffer and not yet committed (pend, positions cap_base ..),
+  // committed before a drafting pass, or every 8 rows of a plain stretch (one commit for 8 tokens, not one a token)
+  int pend = 0, cap_base = n;
   while (made <= n_tok && P + 16 < n + n_tok + 64) {
+    const bool drafting = !gate || plain_left == 0;
+    const int k = drafting ? K : 0;
     auto e = g.begin();
-    if (m_prev) dr.encode_commit(*e, *d, m_prev);
-    dr.encode_draft(*e, *s, *d, P, greedy);
+    if (pend && (drafting || pend >= 8)) dr.encode_commit(*e, *d, pend), pend = 0, cap_base = P;
+    if (drafting) dr.encode_draft(*e, *s, *d, P, greedy);
     if (split) {
       e->commit_and_wait();
       gpu_draft += e->gpu_ms();
       e = g.begin();
     }
-    dr.arm_verify(P, K + 1);
-    m.encode_verify(*e, *s, P, K + 1);
+    if (drafting) dr.arm_verify(P, k + 1);
+    else dr.arm_verify(cap_base, 8);  // a plain row lands in row P - cap_base
+    m.encode_verify(*e, *s, P, k + 1);
     dr.disarm();
-    m.encode_accept(*e, *s, P, K + 1, K, greedy);
+    m.encode_accept(*e, *s, P, k + 1, k, greedy);
     e->commit_and_wait();
     if (split) gpu_verify += e->gpu_ms();
     const int a = m.accepted();
-    m_prev = a + 1;
+    if (drafting) {
+      ++spec_cycles;
+      if (probe_left > 0) {  // a probe: its own mean decides
+        probe_sum += a + 1;
+        if (--probe_left == 0) {
+          const double mean = double(probe_sum) / probe;
+          if (mean >= floor_tpc) avg = mean, hold = 16;
+          else plain_left = hold, hold = std::min(2 * hold, 256);
+        }
+      } else {
+        avg = 0.875 * avg + 0.125 * (a + 1);
+        if (gate && avg < floor_tpc) plain_left = hold, hold = std::min(2 * hold, 256);
+      }
+    } else {
+      ++plain_cycles;
+      if (--plain_left == 0) probe_left = probe, probe_sum = 0;
+    }
+    if (drafting) cap_base = P, pend = a + 1;
+    else ++pend;
     P += a + 1;
     made += a + 1;
     ++cycles;
@@ -126,6 +162,7 @@ int main(int argc, char** argv) {
          "identical to plain decoding\n",
          K, got, cycles, double(got) / std::max(cycles, 1), spec_ms, got / spec_ms * 1000,
          (got / spec_ms) / (n_tok / plain_ms), same);
+  printf("fallback %s: %d drafting cycles, %d plain cycles\n", gate ? "on" : "off", spec_cycles, plain_cycles);
   if (split)
     printf("per cycle: drafting %.2f ms, verify + accept %.2f ms (GPU)\n", gpu_draft / std::max(cycles, 1),
            gpu_verify / std::max(cycles, 1));

@@ -1511,11 +1511,14 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
 }
 
 // ---- the same kernels without a Qwen35 (src/model/v8.h) ----
+bool v8_tensor_ok() { return v8_knobs().tw && tw_supported(); }
+
 void v8_enc_x8(Encoder& e, const Buffer& x, int R, int K, const Buffer* norm, float eps, const Buffer& table,
-               const Buffer& sums) {
+               const Buffer& sums, const Buffer* table_t) {
   if (K % 256 || R < 1 || R > 8) fatal("x8_prep2: K=%d R=%d", K, R);
+  const bool wt = table_t && v8_tensor_ok() && size_t(K) * 16 <= table_t->size;
   const kp::X8Prep p{uint32_t(K), uint32_t(R), uint32_t(K), norm ? 1u : 0u, 0u, eps,
-                     uint32_t(K), 0u, v8_knobs().prepu ? 1u : 0u, 0u};
+                     uint32_t(K), 0u, v8_knobs().prepu ? 1u : 0u, wt ? 1u : 0u};
   e.use(pipe8("x8_prep2"));
   e.buf(0, x);
   e.buf(1, norm ? *norm : x);
@@ -1525,17 +1528,48 @@ void v8_enc_x8(Encoder& e, const Buffer& x, int R, int K, const Buffer* norm, fl
   e.val(5, p);
   e.buf(6, table);  // (no lo table)
   e.buf(7, sums);
-  e.buf(8, table);  // (no T table)
+  e.buf(8, wt ? *table_t : table);  // the T table of qmm8t (write_t)
   e.dispatch(uint32_t(K / 256), 1, 1, 256);
 }
 
 // as Qwen35::enc_qmm8's 4 / 8-bit group-64 path (one table, no tensor-unit tile)
 void v8_enc_qmm8(Encoder& e, const std::vector<V8Seg>& segs, int R, uint32_t K, int bits, const Buffer& table,
-                 const Buffer& sums) {
+                 const Buffer& sums, const Buffer* table_t) {
   if (segs.empty() || segs.size() > 4 || R < 1 || R > 8 || (bits != 4 && bits != 8) || K % 64)
     fatal("qmm8: %zu segments, R=%d, %d-bit, K=%u", segs.size(), R, bits, K);
   uint32_t Ntot = 0;
   for (const V8Seg& sg : segs) Ntot += sg.N;
+  if (table_t && bits == 4 && v8_tensor_ok() && size_t(K) * 16 <= table_t->size) {
+    // as Qwen35::enc_qmm8's tensor path: qmm8t over the T table x8_prep2 wrote (v8_enc_x8 with the same table_t)
+    const V8tPlan pl = v8t_plan(Ntot, K);
+    kp::Qmm8 p{};
+    p.K = K;
+    p.R = uint32_t(R);
+    p.nseg = uint32_t(segs.size());
+    p.ks = uint32_t(pl.ks);
+    uint32_t tg = 0;
+    e.use(pipe8(std::string(pl.pf ? "qmm8tp" : "qmm8t") + "_b4_nt" + std::to_string(pl.nt)));
+    for (size_t i = 0; i < 4; ++i) {
+      const V8Seg& sg = segs[std::min(i, segs.size() - 1)];
+      if (i < segs.size()) {
+        p.N[i] = sg.N;
+        p.y_ld[i] = sg.y_ld ? sg.y_ld : sg.N;
+        p.add[i] = sg.add ? 1u : 0u;
+        p.tg_begin[i] = tg;
+        tg += (sg.N + pl.nt - 1) / pl.nt;
+      }
+      e.buf(int(i * 4 + 0), *sg.w);
+      e.buf(int(i * 4 + 1), *sg.s);
+      e.buf(int(i * 4 + 2), *sg.b);
+      e.buf(int(i * 4 + 3), sg.y);
+    }
+    p.tg_begin[segs.size()] = tg;
+    e.buf(16, *table_t);
+    e.buf(17, sums);
+    e.val(18, p);
+    e.dispatch(tg, 1, 1, 32 * pl.ks);
+    return;
+  }
   V8Plan pl = v8_plan(Ntot, K, bits == 8 ? 1 : 2);
   if (bits == 8) pl.nf = std::min(pl.nf, 2);
   static const std::string var = getenv("NI_V8_GEMM") && *getenv("NI_V8_GEMM") ? getenv("NI_V8_GEMM") : "pf";
