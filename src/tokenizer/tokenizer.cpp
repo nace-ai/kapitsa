@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <functional>
 #include <queue>
 
 namespace ni {
@@ -435,6 +436,15 @@ size_t utf8_len(const std::string& s, size_t i) {
   return n;
 }
 
+// HF's ByteFallback decoder on a run of adjacent byte tokens: the run's text when all of it is well-formed UTF-8,
+// else one U+FFFD per byte
+std::string byte_run(const std::string& run) {
+  if (utf8_valid(run) == run) return run;
+  std::string s;
+  for (size_t i = 0; i < run.size(); ++i) s += "\xEF\xBF\xBD";
+  return s;
+}
+
 } // namespace
 
 const char* const Tokenizer::kFlintSplit[3] = {
@@ -478,15 +488,35 @@ void Tokenizer::load(const std::string& path) {
           split_ = Split::Tekken;
   }
   // SentencePiece-style BPE (Llama-family files): only the shape HF encodes as one word per text between added tokens
-  if (pt.is_object() && pt.value("type", "") == "Metaspace") {
+  // and decodes with Replace, ByteFallback, Fuse and Strip. A Metaspace anywhere else (in a Sequence) is refused too.
+  std::function<bool(const nlohmann::json&)> metaspace = [&](const nlohmann::json& p) {
+    if (!p.is_object()) return false;
+    if (p.value("type", "") == "Metaspace") return true;
+    if (p.contains("pretokenizers") && p["pretokenizers"].is_array())
+      for (const auto& q : p["pretokenizers"])
+        if (metaspace(q)) return true;
+    return false;
+  };
+  if (metaspace(pt)) {
+    auto need = [&](bool ok, const char* field, const char* want) {
+      if (!ok) fatal("%s: unsupported Metaspace tokenizer: %s must be %s", path.c_str(), field, want);
+    };
     auto unset = [&](const char* k) { return !model.contains(k) || model[k].is_null(); };
-    if (pt.value("replacement", "") != kMetaspace || pt.value("prepend_scheme", "") != "first" ||
-        pt.value("split", true) || !j["normalizer"].is_null() || !model.value("byte_fallback", false) ||
-        model.value("ignore_merges", false) || !unset("dropout") || !unset("continuing_subword_prefix") ||
-        !unset("end_of_word_suffix"))
-      fatal("tokenizer: a Metaspace pre-tokenizer is supported only with replacement U+2581, prepend_scheme \"first\", "
-            "split false, no normalizer, and a BPE model with byte_fallback and without ignore_merges, dropout or "
-            "subword affixes");
+    static const nlohmann::json kDecoder = nlohmann::json::parse(
+        R"({"type":"Sequence","decoders":[{"type":"Replace","pattern":{"String":"\u2581"},"content":" "},)"
+        R"({"type":"ByteFallback"},{"type":"Fuse"},{"type":"Strip","content":" ","start":1,"stop":0}]})");
+    need(pt.value("type", "") == "Metaspace", "pre_tokenizer", "the Metaspace itself, not a Sequence holding one");
+    need(pt.value("replacement", "") == kMetaspace, "pre_tokenizer.replacement", "\"\u2581\" (U+2581)");
+    need(pt.value("prepend_scheme", "") == "first", "pre_tokenizer.prepend_scheme", "\"first\"");
+    need(!pt.value("split", true), "pre_tokenizer.split", "false");
+    need(j["normalizer"].is_null(), "normalizer", "null");
+    need(model.value("byte_fallback", false), "model.byte_fallback", "true");
+    need(!model.value("ignore_merges", false), "model.ignore_merges", "false");
+    need(unset("dropout"), "model.dropout", "null");
+    need(unset("continuing_subword_prefix"), "model.continuing_subword_prefix", "null");
+    need(unset("end_of_word_suffix"), "model.end_of_word_suffix", "null");
+    need(j.contains("decoder") && j["decoder"] == kDecoder, "decoder",
+         "the Sequence Replace(\"\u2581\", \" \"), ByteFallback, Fuse, Strip(\" \", 1, 0)");
     split_ = Split::Metaspace;
   }
   if (split_ != Split::Qwen) {
@@ -507,6 +537,7 @@ void Tokenizer::load(const std::string& path) {
   for (auto& [tok, idj] : model["vocab"].items()) {
     int id = idj.get<int>();
     vocab_[tok] = id;
+    if (split_ == Split::Metaspace) continue;  // its bytes are set below, after the added tokens
     std::string raw;
     for (auto& c : to_cps(tok)) {
       auto it = u2b.find(c.c);
@@ -515,21 +546,14 @@ void Tokenizer::load(const std::string& path) {
     id_to_bytes_[id] = raw;
   }
   for (int b = 0; b < 256; ++b) {
+    char name[8];
+    snprintf(name, sizeof name, "<0x%02X>", b);
     std::string u;
     put_utf8(u, b2u[b]);
-    auto it = vocab_.find(u);
+    auto it = vocab_.find(split_ == Split::Metaspace ? std::string(name) : u);
+    if (it == vocab_.end() && split_ == Split::Metaspace)
+      fatal("%s: unsupported Metaspace tokenizer: model.vocab must hold the byte token %s", path.c_str(), name);
     byte_id_[b] = it == vocab_.end() ? -1 : it->second;
-  }
-  if (split_ == Split::Metaspace) {  // the tokens are UTF-8 with ▁ for a space, and <0x00>..<0xFF> are bytes
-    for (auto& [tok, id] : vocab_) id_to_bytes_[id] = replace_all(tok, kMetaspace, " ");
-    for (int b = 0; b < 256; ++b) {
-      char name[8];
-      snprintf(name, sizeof name, "<0x%02X>", b);
-      auto it = vocab_.find(name);
-      if (it == vocab_.end()) fatal("tokenizer: byte_fallback without the byte token %s", name);
-      byte_id_[b] = it->second;
-      id_to_bytes_[it->second] = std::string(1, char(b));
-    }
   }
   int rank = 0;
   for (auto& m : model["merges"]) {
@@ -555,6 +579,18 @@ void Tokenizer::load(const std::string& path) {
     id_to_bytes_[id] = content;
     special_[id] = a.value("special", false);
     added_id_[id] = true;
+  }
+  if (split_ == Split::Metaspace) {  // HF's decoder on every token, added ones too: Replace ▁ by " ", ByteFallback
+    byte_token_.assign(max_id + 1, false);
+    auto set = [&](const std::string& t, int id) {
+      const bool byte = t.size() == 6 && t.compare(0, 3, "<0x") == 0 && t[5] == '>' && isxdigit((unsigned char)t[3]) &&
+                        isxdigit((unsigned char)t[4]);
+      id_to_bytes_[id] = byte ? std::string(1, char(std::stoi(t.substr(3, 2), nullptr, 16)))
+                              : replace_all(t, kMetaspace, " ");
+      byte_token_[id] = byte;
+    };
+    for (auto& [tok, id] : vocab_) set(tok, id);
+    for (auto& [content, id] : added_) set(content, id);
   }
   std::sort(added_.begin(), added_.end(), [](auto& x, auto& y) { return x.first.size() > y.first.size(); });
   logi("tokenizer: %zu tokens, %zu merges, %zu added (%.0f ms)", vocab_.size(), merges_.size(), added_.size(),
@@ -730,10 +766,25 @@ int Tokenizer::find(const std::string& token) const {
 
 std::string Tokenizer::decode(const std::vector<int>& ids) const {
   std::string s;
-  for (int id : ids) s += token_bytes(id);
-  if (strips_leading_space() && !s.empty() && s[0] == ' ') s.erase(0, 1);
+  if (split_ != Split::Metaspace) {
+    for (int id : ids) s += token_bytes(id);
+    return s;
+  }
+  std::string run;
+  for (int id : ids) {
+    if (byte_token(id)) {
+      run += token_bytes(id);
+      continue;
+    }
+    s += byte_run(run) + token_bytes(id);
+    run.clear();
+  }
+  s += byte_run(run);
+  if (!s.empty() && s[0] == ' ') s.erase(0, 1);
   return s;
 }
+
+bool Tokenizer::byte_token(int id) const { return id >= 0 && id < int(byte_token_.size()) && byte_token_[id]; }
 
 std::string StreamDecoder::out(std::string s) {
   if (strip_ && !s.empty()) {
@@ -744,6 +795,15 @@ std::string StreamDecoder::out(std::string s) {
 }
 
 std::string StreamDecoder::push(int id) {
+  if (tok_.strips_leading_space()) {  // Metaspace: a token is whole UTF-8, a run of byte tokens is decoded whole
+    if (tok_.byte_token(id)) {
+      pending_ += tok_.token_bytes(id);
+      return "";
+    }
+    std::string s = byte_run(pending_) + tok_.token_bytes(id);
+    pending_.clear();
+    return out(s);
+  }
   pending_ += tok_.token_bytes(id);
   // emit the longest prefix that ends on a UTF-8 boundary
   size_t n = pending_.size(), cut = n;
@@ -762,7 +822,7 @@ std::string StreamDecoder::push(int id) {
 std::string StreamDecoder::flush() {
   std::string s;
   s.swap(pending_);
-  return out(utf8_valid(s));
+  return out(tok_.strips_leading_space() ? byte_run(s) : utf8_valid(s));
 }
 
 std::string utf8_valid(const std::string& s) {
