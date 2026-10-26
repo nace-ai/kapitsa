@@ -174,6 +174,16 @@ r["conditions"]["contention"], r["flags"] = [], ["power: on battery (a Mac on ba
 check(cc.labels_for(r, []) == {"benchmark", "flagged"} and cc.labels_for(r, ["x"]) == {"benchmark", "flagged", "invalid"},
       "labels: flagged, and invalid when a check fails")
 
+# A run on this Mac in High Power Mode (pmset powermode 2) records a POWER-INFO note and no POWER flag, so it must not land
+# in the `flagged` bucket the community table reads: the note is provenance, not a disqualification (ROUND 326/382).
+r = copy.deepcopy(full)
+r["conditions"]["contention"], r["flags"] = [], []
+r["power_info"] = ["POWER-INFO: High Power Mode (pmset powermode 2)"]
+check(cc.labels_for(r, []) == {"benchmark"}, "labels: a High Power Mode run is not flagged", str(cc.labels_for(r, [])))
+r["conditions"]["contention"] = ["a benchmark"]
+check(cc.labels_for(r, []) == {"benchmark", "contention"},
+      "labels: contention still labels an info-noted High Power Mode run", str(cc.labels_for(r, [])))
+
 # ---------------------------------------------------------------- the table
 tmp = tempfile.mkdtemp(prefix="kapitsa-community-test-")
 res_dir = os.path.join(tmp, "results")
