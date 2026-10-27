@@ -369,8 +369,9 @@ static void print_serve_help() {
          "  --splash-model DIR     Splash's resolved model folder, the first 6+ characters of its name, or its family (flash-next, 27b; the\n"
          "                         newest of that family's folders; its tokenizer and chat template are used here); when not given: the\n"
          "                         only one under ~/Library/Application Support/Splash, else the last run's, else the most recently resolved\n"
-         "                         (it says which)\n"
+         "                         (it says which). A run that starts writes its binary and model to <kapitsa home>/splash.json (the last run's)\n"
          "  --check                with --engine splash: print the engine binary and model that would run, and what is missing; start nothing\n"
+         "                         (it writes nothing, splash.json included)\n"
          "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0)\n"
          "  --splash-persistent-cache  keep Splash's SSD prefix cache across restarts (--persistent-cache on, in ~/Library/Caches/Kapitsa/\n"
          "                         splash-prefix-cache/<model folder>; writes to your disk; default off)\n"
@@ -921,8 +922,8 @@ static int serve(int argc, char** argv, int first) {
       if (!f.ok()) usage_error(f.error, help);
       opt.splash_binary = f.path;
     }
-    struct stat st;
-    if (opt.splash_model.empty() || (opt.splash_model.find('/') == std::string::npos && stat(opt.splash_model.c_str(), &st) != 0)) {
+    struct stat st;  // a folder is used as given; anything else is a name (which may hold a '/': a source such as org/Model:Q2_0)
+    if (stat(opt.splash_model.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
       splash::Found f = splash::find_model(home ? home : "", opt.splash_model, last.model);  // empty: the only one, the last run's, else the most recently resolved; else a name
       if (!f.ok()) usage_error(f.error, help);
       if (!f.note.empty()) fprintf(stderr, "kapitsa: %s\n", f.note.c_str());

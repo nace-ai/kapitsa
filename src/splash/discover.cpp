@@ -6,6 +6,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 
 #include <unistd.h>
@@ -53,6 +54,7 @@ std::vector<Model> models(const std::string& home) {
   // Splash keeps a symlink per resolved model in ../.selections (<hash> -> .resolved/<folder>), made when it resolves the model:
   // its own time is the better "when", since a folder's modification time also moves when a file in it is rewritten.
   std::error_code sec;
+  std::map<std::string, long long> sel;  // folder name -> its latest selection link's time
   for (fs::directory_iterator it(models_dir(home).parent_path() / ".selections", sec), end; !sec && it != end; it.increment(sec)) {
     struct stat st;
     if (lstat(it->path().c_str(), &st) != 0 || !S_ISLNK(st.st_mode)) continue;
@@ -61,8 +63,10 @@ std::vector<Model> models(const std::string& home) {
     if (rec) continue;
     const long long t = (long long)st.st_mtimespec.tv_sec * 1000000000LL + st.st_mtimespec.tv_nsec;
     for (Model& m : out)
-      if (m.name == target) m.written = t;
+      if (m.name == target) sel[target] = std::max(sel[target], t);  // (several links, one folder: the latest, whatever the order)
   }
+  for (Model& m : out)
+    if (auto f = sel.find(m.name); f != sel.end()) m.written = f->second;
   std::sort(out.begin(), out.end(), [](const Model& a, const Model& b) { return a.name < b.name; });
   return out;
 }
@@ -184,12 +188,12 @@ Check check(const std::string& home, const std::string& splash_home, const std::
   Check out;
   Found b = binary.empty() ? find_binary(home, splash_home, path_env, last.binary) : Found{binary, ""};
   if (!binary.empty() && !is_file(binary)) b = {"", "--splash-binary " + binary + ": no such file"};
+  else if (!binary.empty() && !is_executable_file(binary)) b = {"", "--splash-binary " + binary + ": not an executable file"};
   out.text = b.ok() ? "Splash engine: " + b.path + "\n" : "Splash engine: NOT FOUND\n" + b.error + "\n";
   const std::vector<Model> all = models(home);
   out.text += "\nSplash models in " + models_dir(home).string() + ": " + (all.empty() ? "none" : std::to_string(all.size())) + "\n";
   for (const Model& m : all) out.text += "  " + m.family + "  " + m.name + (m.source.empty() ? "" : "  (" + m.source + ")") + "\n";
-  Found m = model.empty() || (model.find('/') == std::string::npos && !fs::exists(model)) ? find_model(home, model, last.model)
-                                                                                           : Found{model, ""};
+  Found m = fs::is_directory(model) ? Found{model, ""} : find_model(home, model, last.model);  // (as serve: a folder, else a name)
   out.text += m.ok() ? "\nModel to run: " + m.path + "\n" + (m.note.empty() ? "" : m.note + "\n") : "\nModel to run: NOT DECIDED\n" + m.error + "\n";
   if (!m.ok() && !all.empty() && model.empty()) {
     std::string f = all[0].family;

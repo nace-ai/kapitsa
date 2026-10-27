@@ -42,14 +42,14 @@ static void model(const std::string& home, const std::string& name, const std::s
 }
 
 // Splash's "resolved <hours_ago> hours ago": ../.selections/<hash> -> .resolved/<name>, a symlink whose own time is that
-static void selected(const std::string& home, const std::string& name, int hours_ago) {
+static void selected(const std::string& home, const std::string& name, int hours_ago, const std::string& tag = "") {
   fs::path sel = fs::path(home) / "Library/Application Support/Splash/models/.selections";
   fs::create_directories(sel);
-  fs::create_directory_symlink(fs::path(home) / "Library/Application Support/Splash/models/.resolved" / name, sel / ("sel-" + name));
+  fs::create_directory_symlink(fs::path(home) / "Library/Application Support/Splash/models/.resolved" / name, sel / ("sel" + tag + "-" + name));
   timespec t[2];
   t[0].tv_sec = t[1].tv_sec = time(nullptr) - hours_ago * 3600;
   t[0].tv_nsec = t[1].tv_nsec = 0;
-  utimensat(AT_FDCWD, (sel / ("sel-" + name)).c_str(), t, AT_SYMLINK_NOFOLLOW);
+  utimensat(AT_FDCWD, (sel / ("sel" + tag + "-" + name)).c_str(), t, AT_SYMLINK_NOFOLLOW);
 }
 
 int main() {
@@ -108,6 +108,12 @@ int main() {
   selected(home, "bbbbbb3333", 50);
   m = find_model(home, "");
   check(m.ok() && has(m.path, "/aaaaaa2222"), "model: several: a later selection wins, not folder names or folder times", m.path);
+  // two links to one folder (Splash hashes revision, language_only and draft_model): its latest counts, in any directory order
+  selected(home, "aaaaaa2222", 100, "-old");
+  for (int i = 0; i < 3; i++) {
+    m = find_model(home, "");
+    check(m.ok() && has(m.path, "/aaaaaa2222"), "model: several links to one folder: the latest link counts", m.path);
+  }
   // a folder with no selection link falls back to its own time; all equal: the first by name, every time
   fs::remove_all(fs::path(home) / "Library/Application Support/Splash/models/.selections");
   m = find_model(home, "");
@@ -193,6 +199,11 @@ int main() {
         "check: ready", c.text);
   c = check(home, "", "", (tmp / "nope").string(), "", {});
   check(!c.ok && has(c.text, "--splash-binary") && has(c.text, "no such file"), "check: bad --splash-binary", c.text);
+  touch(tmp / "plain/splash", "x");  // a file, not executable
+  c = check(home, "", "", (tmp / "plain/splash").string(), "", {});
+  check(!c.ok && has(c.text, "not an executable file") && !has(c.text, "Ready"), "check: --splash-binary that is not executable", c.text);
+  c = check(home, (tmp / "root").string(), "", "", (tmp / "no/such/folder").string(), {});  // a path that is no folder is a name: no match, not Ready
+  check(!c.ok && has(c.text, "NOT DECIDED") && !has(c.text, "Ready"), "check: --splash-model path that is not a folder", c.text);
   c = check(home, "", "", lbin, "", {lbin, res.string() + "/ffffff6666"});
   check(c.ok && has(c.text, "/ffffff6666"), "check: the last run's model", c.text);
 
