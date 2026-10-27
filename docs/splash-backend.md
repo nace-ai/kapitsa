@@ -110,7 +110,8 @@ one server at a time under the GPU lock.
 ## Options
 
 - `--splash-persistent-cache`: passes `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<model folder>`
-  (one directory per model folder) unless `--splash-arg --cache-dir` is given. It writes to the user's disk; off by default.
+  (one directory per model folder) unless `--splash-arg --cache-dir` is given; a `--splash-arg --persistent-cache` (on or off) wins and the flag adds
+  nothing. It writes to the user's disk; off by default.
 - `--splash-conversation-salt`: a cache salt per conversation (hash of the messages up to the first user message), so
   conversations stop sharing cached prompts such as a common system prompt. Off by default, which is Splash's behaviour
   without a `cache_salt`.
