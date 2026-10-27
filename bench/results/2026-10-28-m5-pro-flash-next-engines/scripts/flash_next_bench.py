@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Qwen3.8-Flash-Next (Q2_0) on one Mac, four engines, one at a time, through the same OpenAI chat endpoint and the same
-frozen prompts (prompts/ctx_*.txt). Run each leg under the GPU lock (lockf -k /tmp/kapitsa-gpu.lock ...): a leg launches the
+frozen prompts (prompts/ctx_*.txt). Run each leg under the GPU lock (lockf -k "${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}" ...): a leg launches the
 server, measures, reaps it; it refuses to start when another model server is running.
 
   flash_next_bench.py leg --arm K|S|N|L --idx I --out DIR [--reps 3] [--smoke]

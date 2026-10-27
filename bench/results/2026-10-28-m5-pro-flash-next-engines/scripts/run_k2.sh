@@ -6,7 +6,7 @@ leg() { # idx arm group
   [ -f "$OUT/leg$1-$2.json" ] && return
   echo "=== leg $1 $2/$3 $(date -u +%FT%TZ)"
   for try in $(seq 10); do
-    nice -n 5 lockf -k -t 120 /tmp/kapitsa-gpu.lock $B leg --arm $2 --group $3 --kbin "$KB" --idx $1 --out "$OUT" --reps 2 > "$OUT/leg$1-$2.out" 2>&1
+    nice -n 5 lockf -k -t 120 "${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}" $B leg --arm $2 --group $3 --kbin "$KB" --idx $1 --out "$OUT" --reps 2 > "$OUT/leg$1-$2.out" 2>&1
     grep -q 'already running, not starting' "$OUT/leg$1-$2.out" || break; echo "  busy (try $try)"; sleep 30
   done
   echo "leg $1 $2 rc=$? $(date -u +%FT%TZ)"; tail -2 "$OUT/leg$1-$2.out"

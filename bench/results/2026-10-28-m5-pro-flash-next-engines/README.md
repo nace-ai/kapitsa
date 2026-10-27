@@ -41,23 +41,21 @@ prompt tokens by the Splash tokenizer (the files are 4,000, 16,400 and 65,600 ch
 
 What the numbers support:
 
-- **K, K2 and S are the same speed within noise.** Decode ranges 49 to 62 tok/s inside every cell, wider than any gap
-  between K, K2 and S. Prefill and turn-2 TTFT differ by under 5% at 1K and 4K; at 16K K2 is 4 to 5% slower than K and S, and S2
-  was 10% slower than S, which points at the machine rather than the build. This bench shows
+- **K, K2 and S are the same speed within noise.** Decode across the Splash cells ranges 45 to 62 tok/s; inside one cell it spans 2.6 to 14.3 tok/s, while the medians of K, K2, S and S2 differ by only 2.2 tok/s at T=0 and 2.9 at T=0.6. Prefill medians of the four Splash sets differ by at most 4.7% at 1K and 3.0% at 4K; at 16K K2 is 0.5% and 1.4% slower than K and S, and S2 was 5.8% slower than S (the same software), which points at the machine rather than the build. This bench shows
   neither a Kapitsa speed-up nor a slowdown for the Splash backend, and not a difference between 7e478053 and ff6151c8.
 - **Kapitsa serving Splash prefills about 1.4 to 1.5x faster than the native engine at 4K and 16K** (1181 vs 847 tok/s at 4K,
   1166 vs 757 at 16K, K2 and N medians) and level at 1K. Native with MTP decodes at the same speed (53.7 vs 55.9 tok/s at T=0; 57.2 vs
-  52.1 at T=0.6, K2 vs N; decode noise is 5 to 10 tok/s), with a much faster turn 2 (0.26 s vs 0.56 s for K2) and a hit of 4,435 of 4,476 prompt tokens against 4,320 of 4,442 on the Splash
+  52.1 at T=0.6, K2 vs N; decode noise is 5 to 10 tok/s), with a much faster turn 2 (0.26 s vs 0.56 s for K2) and a hit of 4,435 of 4,476 prompt tokens against 4,320 of 4,425 to 4,443 on the Splash
   backend.
-- **Memory.** Peak footprint of the serving process tree (two legs each): K2 25.0 GiB, S2 25.4 GiB, native 31.7 GiB; the system used 39.9, 40.0 and 45.7 of 48 GiB at those peaks. System wired peaked at 31.5 to 31.6 GiB on the Splash arms and 36.5 GiB on native. Native hit memory-pressure level 4 and swap growth up to 4.5 GB in three legs, `leg10-N`, `leg22-N` and `leg25-N`, each stopped by the guard late in the leg (16K prefill or turn 2), so N's 16K and turn-2 cells have n 9 against 12; the Splash arms stayed at pressure level 1 with no swap growth in every leg. Splash ran at `--expert-memory 16G` and native at `NI_EXPERT_STORE=24`, neither the arm's default plan, with other sessions using memory on the same Mac.
+- **Memory.** Peak footprint of the serving process tree (two legs each): K2 25.0 GiB, S2 25.4 GiB, native 31.7 GiB; the system used 39.9, 40.0 and 45.7 of 48 GiB at those peaks. System wired peaked at 31.5 to 31.6 GiB on the Splash arms and 36.5 GiB on native. Native hit memory-pressure level 4 and swap growth up to 4.5 GB in three counted legs, `leg10-N`, `leg22-N` and `leg25-N` (a fourth attempt, in `aborted/`, did too), each stopped by the guard late in the leg (16K prefill or turn 2), so N's 16K and turn-2 cells have n 9 against 12; the Splash arms stayed at pressure level 1 with no swap growth in every leg. Splash ran at `--expert-memory 16G` and native at `NI_EXPERT_STORE=24`, neither the arm's default plan, with other sessions using memory on the same Mac.
 - **Turn 2 on the Splash arms is 0.56 s here; #743's 0.20 to 0.26 s was not reproduced on this chat** (4,320 of about 4,430 prompt tokens cached, uncached tail about 106 tokens). `tools/splash_ab.py --turn2` uses a different 4K chat (4,064 of about 4,125 cached, tail about 60 tokens) and builds turn 2 from the reply content rather than replaying a tool-call chat with its reasoning dropped. The cause of the gap was not isolated, and a longer uncached tail alone is too small to explain it at about 1,180 tok/s prefill. Both Splash arms agree with each other here (0.56 and 0.57 s), and native is 0.26 s on this same chat.
 - **No arm is "fastest" on every cell.** Splash-based arms win prefill at long context, native wins turn 2, and decode is a tie.
 
 ## Caveats
 
 - **llama.cpp (L) is not a fair number.** 66 GB of GGUF does not fit in 48 GB, so it streams from the SSD through mmap,
-  and the same machine had other sessions' work in memory (minimum free+reclaimable 11.3 GiB, 2.5 to 4.4 GB of swap in
-  use before each leg started). It decoded at 9 tok/s and prefilled at 30 to 37 tok/s. That is about four times slower
+  and the same machine had other sessions' work in memory (the two L legs started with 2.8 and 9.2 GB of swap already in use, and the second had only 11.3 GiB free+reclaimable at its minimum, which makes it the
+  stronger confounder for the 16K TTFT). It decoded at 9 tok/s and prefilled at 30 to 37 tok/s. That is about four times slower
   than llama.cpp `0a9ef00` in the 2026-10-24 bench on the same GGUF (39 tok/s decode, 570 tok/s at 4K), so a
   difference in the llama.cpp build, flags (`--jinja` here) or memory state, or all three, is likely. n is 2, L's third leg was
   dropped (each leg takes about 19 minutes) and its 4K and 16K TTFT of 111 s and 634 s are what this run produced, not a
@@ -65,9 +63,8 @@ What the numbers support:
 - **Not a controlled machine.** Other sessions ran builds and CPU tests between legs. Legs ran one at a time under the GPU
   lock, ABAB-interleaved (K S N L, three passes; K2/S2 afterwards in a separate run of three pairs), so a drift affects the arms alike
   but is not removed. Minimum free+reclaimable memory dropped to 5.4 GiB on K and 2.3 GiB on N. The memory guard
-  (abort at pressure level 4, free below 3%, swap above 16 GB) stopped one N leg.
-- **Three N legs were stopped at pressure level 4** (`legs/leg10-N`, `leg22-N`, `leg25-N`; a first attempt at leg 10 crashed in the harness and is in
-  `aborted/`). Completed cells are in the medians; the 16K cell and the turn 2 of the second repetition are missing from those legs, so N has fewer
+  (abort at pressure level 4, free below 3%, swap above 16 GB) stopped four N legs (three in `legs/`, one in `aborted/`; next bullet).
+- **Four N attempts were stopped at pressure level 4**: `legs/leg10-N`, `leg22-N` and `leg25-N` are counted; the first attempt at leg 10 (`aborted/N-leg10-pressure4.*`) also hit pressure 4 and then crashed in the harness, so it is kept out. Completed cells are in the medians; the 16K cell and the turn 2 of the second repetition are missing from those legs, so N has fewer
   repetitions there (n 9). The N medians include them; dropping them changes no conclusion.
 - **K and K2 are different binaries from different times; S and S2 are the same Splash.** K2's S2 set is its own
   control. K vs K2 is not a clean A/B.
@@ -88,7 +85,8 @@ What the numbers support:
   [scripts/run_all.sh](scripts/run_all.sh) and [scripts/run_k2.sh](scripts/run_k2.sh) are the drivers. Both take the GPU
   lock per leg. Harness first frozen at `6272f582`; later commits fix the decode prompt, a harness crash after a memory
   abort, and L repetitions.
+- [scripts/readme_numbers.py](scripts/readme_numbers.py) recomputes the figures quoted in the prose above from `legs/summary.json` and the leg JSONs.
 - [prompts/](prompts/): the three frozen prompts. [legs/](legs/): every leg's JSON, harness output and server log, `summary.json`
   (per-arm cells with all values, memory, command, binary version) and `table.md`.
   [aborted/](aborted/): stopped or crashed attempts.
-- Reproduce one leg: `lockf -k -t 120 /tmp/kapitsa-gpu.lock python3 scripts/flash_next_bench.py leg --arm K --idx 1 --out legs --reps 2`.
+- Reproduce one leg: `lockf -k -t 120 "${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}" python3 scripts/flash_next_bench.py leg --arm K --idx 1 --out legs --reps 2`.
