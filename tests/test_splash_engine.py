@@ -96,7 +96,7 @@ try:
     st, r = post(s.base, {"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}}]}]})
     check(st == 400, "image refused with 400, got %s %s" % (st, r))
     st, r = post(s.base, {"messages": MSG, "response_format": {"type": "json_object"}})
-    check(st in (200, 400), "json mode answers: %s" % st)
+    check(st == 400 and "structured output" in json.dumps(r), "json mode refused with 400: %s %s" % (st, r))
     check(s.proc.poll() is None, "server still running")
 
     # sampling: an absent field is Splash's own default (1.0 / 0.95 / 20), a given one goes through, penalties and min_p
@@ -162,6 +162,11 @@ finally:
 r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", "/nonexistent/splash", "--splash-model", MODEL,
                     "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
 check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failure: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
+
+# a model name is no folder: refused at once, nothing looked up or downloaded
+r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "qwen3.5-35b-a3b",
+                    "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
+check(r.returncode != 0 and "is not a folder" in r.stderr + r.stdout, "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)

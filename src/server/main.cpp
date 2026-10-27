@@ -346,7 +346,7 @@ static void print_serve_help() {
          "                         Without --api-key it keeps the server on this Mac, as --private does\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --engine splash        run the model in a Splash child process instead of in this server\n"
-         "                         (docs/splash-backend.md): needs --splash-binary and --splash-model; text chat only\n"
+         "                         needs --splash-binary and --splash-model; text chat only\n"
          "  --splash-binary PATH   the Splash engine binary (splash-1.4.0/engine/splash)\n"
          "  --splash-model DIR     Splash's resolved model folder (its tokenizer and chat template are used here)\n"
          "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0)\n"
@@ -875,6 +875,9 @@ static int serve(int argc, char** argv, int first) {
       usage_error("--engine splash needs --splash-binary and --splash-model", help);
     if (!model.empty() || !split.empty() || allow_switch)
       usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
+    if (struct stat st; stat(opt.splash_model.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+      usage_error("--splash-model " + opt.splash_model + " is not a folder: give Splash's resolved model folder (a model "
+                  "name is not looked up or downloaded here)", help);
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";

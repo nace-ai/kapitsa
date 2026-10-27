@@ -269,6 +269,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     return finish.empty();
   };
 
+  double cancel_ms = 0;
   bool ended = false;  // the engine's own end (on_done / on_error) seen
   splash::Done fin;
   splash::Error err;
@@ -295,9 +296,16 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
       if (!handle(int(t))) break;
     }
     if (finish.empty() && cancelled && cancelled()) finish = "cancelled";
+    // a cancelled reply waits for the engine's end, but not forever: a child that ignores the cancel is the runtime's
+    // to supervise, and this request goes on without it (its late frames fall into a relay nobody reads)
+    if (cancel_sent && !ended && now_ms() - cancel_ms > 30000) {
+      logi("splash: the engine did not end request %llu 30 s after its cancel; the reply goes on without it", (unsigned long long)id);
+      break;
+    }
     // the reply is over here (stop string, max_tokens, client gone): stop the engine's work, then drain it to its end
     if (!finish.empty() && !ended && !cancel_sent) {
       cancel_sent = true;
+      cancel_ms = now_ms();
       splash_->cancel(id);
     }
     if (ended && batch.empty()) {
@@ -328,6 +336,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   res.completion_tokens = gen;
   if (!errored) {
     res.prefill_ms = double(fin.prefill_micros) / 1000.0;
+    res.prefill_exact = fin.prefill_micros > 0;  // the engine's own clock for this request's prefill
     res.decode_ms = double(fin.decode_micros) / 1000.0;
   } else {
     res.decode_ms = now_ms() - t0;
