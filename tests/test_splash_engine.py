@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`kapitsa serve --engine splash` against tests/fake_splash.py (a protocol-v11 stand-in for the Splash binary), CPU only:
 no model, no GPU. It needs Splash's resolved model folder for its tokenizer and chat template (default: the one under
-~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR), and skips without one.
+~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR), and skips the rest without one (the flag and discovery cases above it need none).
 usage: test_splash_engine.py build/kapitsa"""
 import glob, json, os, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
@@ -10,18 +10,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FAKE = os.path.join(HERE, "fake_splash.py")
 dirs = [os.environ["SPLASH_MODEL_DIR"]] if os.environ.get("SPLASH_MODEL_DIR") else sorted(
     glob.glob(os.path.expanduser("~/Library/Application Support/Splash/models/.resolved/*/tokenizer/tokenizer.json")))
-if not dirs:
-    print("test_splash_engine: skipped (no Splash model folder; set SPLASH_MODEL_DIR)")
-    sys.exit(0)
-MODEL = dirs[0] if os.environ.get("SPLASH_MODEL_DIR") else os.path.dirname(os.path.dirname(dirs[0]))
-TOK = json.load(open(MODEL + "/tokenizer/tokenizer.json"))
-VOCAB = TOK["model"]["vocab"]
-ADDED = {a["content"]: a["id"] for a in TOK["added_tokens"]}
-def tid(piece): return ADDED[piece] if piece in ADDED else VOCAB[piece]
-THINK_OPEN, THINK_CLOSE, EOS = tid("<think>"), tid("</think>"), tid("<|im_end|>")
-NL = tid("Ċ")
-# "ok\n</think>\n\nHi there" then the end of turn
-REPLY = [tid("ok"), NL, THINK_CLOSE, tid("ĊĊ"), tid("Hi"), tid("Ġthere"), EOS]
 failures = 0
 def check(c, what):
     global failures
@@ -32,6 +20,39 @@ def check(c, what):
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
+# no model needed: what the flags refuse and what discovery says
+# the flags of the native path do not apply: refused at once, not overwritten or passed on
+for extra in (["--model", "x"], ["--allow-switch"], ["--split", "127.0.0.1:1"]):
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", tempfile.gettempdir(), *extra,
+                        "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
+    check(r.returncode != 0 and "do not apply" in r.stderr + r.stdout, "native flag %s refused: %d %r" % (extra, r.returncode, (r.stderr + r.stdout)[-300:]))
+
+# no flags: the binary and the model are looked for where Splash installs them, and what is missing is named
+with tempfile.TemporaryDirectory() as home:
+    env = {k: v for k, v in os.environ.items() if k != "SPLASH_HOME"}
+    env.update(HOME=home, PATH="/usr/bin:/bin")
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
+    if not os.path.isfile("/Applications/Splash/engine/splash"):  # a system-wide install is looked at too, and HOME= does not hide it
+        check(r.returncode != 0 and "no Splash engine binary found" in r.stderr and "SPLASH_HOME" in r.stderr, "no binary: %r" % r.stderr[-300:])
+    os.makedirs(home + "/Applications/Splash/engine")
+    open(home + "/Applications/Splash/engine/splash", "w").close()
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
+    check(r.returncode != 0 and "no Splash model found" in r.stderr, "no model: %r" % r.stderr[-300:])
+
+
+if not dirs:
+    print("test_splash_engine: the cases that need Splash's tokenizer are skipped (no Splash model folder; set SPLASH_MODEL_DIR)")
+    print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
+    sys.exit(1 if failures else 0)
+MODEL = dirs[0] if os.environ.get("SPLASH_MODEL_DIR") else os.path.dirname(os.path.dirname(dirs[0]))
+TOK = json.load(open(MODEL + "/tokenizer/tokenizer.json"))
+VOCAB = TOK["model"]["vocab"]
+ADDED = {a["content"]: a["id"] for a in TOK["added_tokens"]}
+def tid(piece): return ADDED[piece] if piece in ADDED else VOCAB[piece]
+THINK_OPEN, THINK_CLOSE, EOS = tid("<think>"), tid("</think>"), tid("<|im_end|>")
+NL = tid("Ċ")
+# "ok\n</think>\n\nHi there" then the end of turn
+REPLY = [tid("ok"), NL, THINK_CLOSE, tid("ĊĊ"), tid("Hi"), tid("Ġthere"), EOS]
 last_headers = {}
 def post(base, body, timeout=30):
     req = urllib.request.Request(base + "/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
@@ -167,23 +188,6 @@ check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failu
 r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "/nonexistent/qwen3.5-35b-a3b",
                     "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
 check(r.returncode != 0 and "is not a folder" in r.stderr + r.stdout, "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
-
-# the flags of the native path do not apply: refused at once, not overwritten or passed on
-for extra in (["--model", "x"], ["--allow-switch"], ["--split", "127.0.0.1:1"]):
-    r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", MODEL, *extra,
-                        "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
-    check(r.returncode != 0 and "do not apply" in r.stderr + r.stdout, "native flag %s refused: %d %r" % (extra, r.returncode, (r.stderr + r.stdout)[-300:]))
-
-# no flags: the binary and the model are looked for where Splash installs them, and what is missing is named
-with tempfile.TemporaryDirectory() as home:
-    env = {k: v for k, v in os.environ.items() if k != "SPLASH_HOME"}
-    env.update(HOME=home, PATH="/usr/bin:/bin")
-    r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
-    check(r.returncode != 0 and "no Splash engine binary found" in r.stderr and "SPLASH_HOME" in r.stderr, "no binary: %r" % r.stderr[-300:])
-    os.makedirs(home + "/Applications/Splash/engine")
-    open(home + "/Applications/Splash/engine/splash", "w").close()
-    r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
-    check(r.returncode != 0 and "no Splash model found" in r.stderr, "no model: %r" % r.stderr[-300:])
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)
