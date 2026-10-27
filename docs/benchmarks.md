@@ -313,8 +313,8 @@ of [bench/quality](../bench/quality/README.md) (C++, Python, English prose and a
 | Precision | KL mean | KL median | KL p95 | Same top token | Perplexity | KL on `math` |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | bf16 | | | | | 5.570 | |
-| 8-bit | 0.0168 | 0.0012 | 0.025 | 96.7% | 5.571 | 0.0064 |
-| 6-bit | 0.0228 | 0.0033 | 0.056 | 95.9% | 5.602 | 0.0109 |
+| 8-bit | 0.0168 | 0.0012 | 0.025 | 96.7% | 5.571 | 0.0063 |
+| 6-bit | 0.0228 | 0.0033 | 0.056 | 95.9% | 5.602 | 0.0108 |
 | 4-bit, the `35b` default | 0.1161 | 0.0272 | 0.341 | 89.1% | 5.783 | 0.0925 |
 
 The 4-bit default is the speed choice; `--model 35b:6bit` is five times closer to bf16, with perplexity within 0.6%.
