@@ -1183,7 +1183,8 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
         name.find("visual.") != std::string::npos)
       continue;
     size_t b = v["data_offsets"][1].get<size_t>() - v["data_offsets"][0].get<size_t>();
-    if (mtp && v["dtype"] == "BF16" && v["shape"].size() == 2 && name.size() > 7 &&
+    if (mtp && (v["dtype"] == "BF16" || v["dtype"] == "F16" || v["dtype"] == "F32") && v["shape"].size() == 2 &&
+        name.size() > 7 &&
         name.compare(name.size() - 7, 7, ".weight") == 0 && name.find("norm") == std::string::npos) {
       const size_t N = v["shape"][0], K = v["shape"][1];
       b = N * K * size_t(mtp_bits) / 8 + 2 * (N * K / 64) * 2;  // quantized at load: codes + bf16 scales and biases

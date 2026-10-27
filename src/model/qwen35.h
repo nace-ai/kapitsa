@@ -621,6 +621,10 @@ class Qwen35 : public Model {
   // speculative decoding helpers (qwen35_spec.cpp)
   void load_mtp(const std::string& dir);
   QLinear quantize8(const Tensor& w, int bits = 8);
+  // what quantize8 reads: a 2-D bf16, f16 or f32 matrix
+  static bool quantizable(const Tensor& t) {
+    return t.shape.size() == 2 && (t.dtype == DType::BF16 || t.dtype == DType::F16 || t.dtype == DType::F32);
+  }
   // rows [r0, r0 + n) of a linear in any format -> an owned 4-bit group-64 copy (CPU, MLX rounding)
   QLinear quantize_rows4(const QLinear& src, uint32_t r0, uint32_t n);
   const Tensor* own_copy(const Tensor& t);

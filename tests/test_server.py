@@ -523,8 +523,33 @@ def cli_checks(kapitsa):
             return json.loads(out)["models"][0]
         except (ValueError, KeyError, IndexError):
             return {"error": out + err}
+    # An MLX pack that keeps Qwen's MTP head in its own shards (language_model.mtp.*, as Jundot's oQ -mtp packs, #553):
+    # the head is planned apart from the trunk's weights (a bf16 matrix at the 8 bits a MoE head's are quantized to at
+    # load: codes + bf16 scales and biases per 64) and the model decodes with it
+    fake_mtp = os.path.join(home, "fake-35b-mtp")
+    os.makedirs(fake_mtp)
+    tensors, off = {}, 0
+    for name, dtype, shape, size in [
+            ("language_model.model.layers.0.mlp.switch_mlp.gate_proj.weight", "U8", [11 * 10**9], 11 * 10**9),
+            ("language_model.mtp.fc.weight", "BF16", [2048, 4096], 2048 * 4096 * 2),
+            ("language_model.mtp.layers.0.mlp.switch_mlp.gate_proj.weight", "U8", [10**8], 10**8)]:
+        tensors[name] = {"dtype": dtype, "shape": shape, "data_offsets": [off, off + size]}
+        off += size
+    hdr = json.dumps(tensors).encode()
+    with open(os.path.join(fake_mtp, "config.json"), "w") as f:
+        json.dump(cfg35, f)
+    with open(os.path.join(fake_mtp, "model.safetensors"), "wb") as f:
+        f.write(len(hdr).to_bytes(8, "little") + hdr)
+    mtp_run = subprocess.Popen([kapitsa, "doctor", "--json", "--model", fake_mtp], env=dict(env, NI_MEM_BUDGET="48"),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     budgets = ["48", "16", "14.8"]
     dflt = {b: model(doctor(b)) for b in budgets}  # (the catalog is planned each time: about 40 s; four at once below)
+    mm = model(mtp_run)
+    check("cli: doctor, an MLX pack with its MTP head in the shards (language_model.mtp.*): the head is planned apart "
+          "from the trunk's weights and the model decodes with it",
+          mm.get("weights_bytes") == 11 * 10**9 and mm.get("mtp_bytes") == 2048 * 4096 + 2 * 2048 * 64 * 2 + 10**8 and
+          mm.get("decoding") == "mtp",
+          json.dumps({k: mm.get(k) for k in ("weights_bytes", "mtp_bytes", "decoding", "error")}))
     runs = {(b, c): doctor(b, "--context", str(c)) for b in budgets for c in {131072, dflt[b].get("default_context", 0)}}  # (a set: one run where they are the same)
     for b in budgets:
         D = dflt[b].get("default_context", 0)

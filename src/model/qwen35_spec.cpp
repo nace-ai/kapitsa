@@ -61,10 +61,10 @@ const Tensor* Qwen35::bf16_param(const Tensor* t, int& lossy) {
   return &owned_.back();
 }
 
-// bf16 [N, K] -> MLX affine 8-bit (near lossless; halves the bytes the head reads) or 4-bit (NI_MTP_BITS=4: a
-// quarter), group 64, min/max per group.
+// bf16 (or f16 / f32) [N, K] -> MLX affine 8-bit (near lossless; halves the bytes the head reads) or 4-bit
+// (NI_MTP_BITS=4: a quarter), group 64, min/max per group.
 QLinear Qwen35::quantize8(const Tensor& w, int bits) {
-  if (w.dtype != DType::BF16 || w.shape.size() != 2) fatal("quantize8: expected a 2-D bf16 tensor");
+  if (!quantizable(w)) fatal("quantize8: expected a 2-D float tensor");
   if (bits != 8 && bits != 4) fatal("quantize8: %d bits", bits);
   const uint32_t N = uint32_t(w.shape[0]), K = uint32_t(w.shape[1]);
   if (K % 64) fatal("quantize8: K=%u not a multiple of 64", K);
@@ -73,7 +73,11 @@ QLinear Qwen35::quantize8(const Tensor& w, int bits) {
   Buffer wq = g.alloc(size_t(N) * K * bits / 8, bits == 8 ? "mtp_q8" : "mtp_q4", false);
   Buffer sc = g.alloc(size_t(N) * K / 64 * 2, "mtp_q8s", false);
   Buffer bi = g.alloc(size_t(N) * K / 64 * 2, "mtp_q8b", false);
-  const uint16_t* src = w.buf.as<uint16_t>();
+  auto at = [&](size_t i) {
+    return w.dtype == DType::BF16  ? bf16_to_f32(w.buf.as<uint16_t>()[i])
+           : w.dtype == DType::F16 ? float(w.buf.as<_Float16>()[i])
+                                   : w.buf.as<float>()[i];
+  };
   uint8_t* q = wq.as<uint8_t>();  // value k of a row at bits [bits*k, bits*k + bits) of the little-endian stream
   if (bits == 4) memset(q, 0, wq.size);
   uint16_t* s = sc.as<uint16_t>();
@@ -82,7 +86,7 @@ QLinear Qwen35::quantize8(const Tensor& w, int bits) {
     for (uint32_t g0 = 0; g0 < K; g0 += 64) {
       float lo = INFINITY, hi = -INFINITY;
       for (uint32_t k = 0; k < 64; ++k) {
-        float v = bf16_to_f32(src[size_t(n) * K + g0 + k]);
+        float v = at(size_t(n) * K + g0 + k);
         lo = std::min(lo, v);
         hi = std::max(hi, v);
       }
@@ -93,7 +97,7 @@ QLinear Qwen35::quantize8(const Tensor& w, int bits) {
       s[size_t(n) * (K / 64) + g0 / 64] = sb;
       b[size_t(n) * (K / 64) + g0 / 64] = bb;
       for (uint32_t k = 0; k < 64; ++k) {
-        float v = bf16_to_f32(src[size_t(n) * K + g0 + k]);
+        float v = at(size_t(n) * K + g0 + k);
         long qv = std::lround((v - br) / sr);
         const uint8_t c = uint8_t(std::clamp(qv, 0L, long(qmax)));
         const size_t i = size_t(n) * K + g0 + k;
@@ -266,14 +270,26 @@ void Qwen35::load_mtp(const std::string& dir) {
   }
   // bf16 linears of the head (Hugging Face checkpoints, tools/mtp_sidecar.py) are quantized here (mtp_head_bits).
   const int mtp_bits = mtp_head_bits(cfg_.moe);
-  auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 4-bit here
+  // An MLX pack's head that the kernels cannot read is left off (`off` says why) and the model loads without it: an
+  // unquantized tensor that is not a float matrix (unquantized stacked experts), or scales and biases not in bf16
+  std::string off;
+  auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 (f16, f32) -> 4-bit here
     QLinear L;
+    if (!off.empty()) return L;
     if (!w.has(n + ".scales")) {
+      if (in_shards && !quantizable(get(n + ".weight"))) {
+        off = n + " is unquantized and not a 2-D float matrix";
+        return L;
+      }
       L = quantize8(get(n + ".weight"), mtp_bits);
     } else if (!in_shards) {
       L = own_qlin(w, n);
     } else {  // an MLX pack's own head: the module's format in config.json, read as the trunk's; copied out of `w`
       L = qlin(n, true, false, &w);
+      if (L.s->dtype != DType::BF16 || L.b->dtype != DType::BF16) {
+        off = n + "'s scales and biases are not bf16";
+        return QLinear{};
+      }
       const Tensor** t[3] = {&L.w, &L.s, &L.b};
       const char* part[3] = {".weight", ".scales", ".biases"};
       for (int i = 0; i < 3; ++i)
@@ -332,12 +348,13 @@ void Qwen35::load_mtp(const std::string& dir) {
   }
   // an MLX pack's head in formats the trunk's kernels do not pair (check_formats refuses such a trunk layer): only the
   // head is left off
-  if (in_shards && (cfg_.moe ? !L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
-                                   moe_rows_kernel(true, L.eg, L.sg).empty() ||
-                                   moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty()
-                             : !L.mg.same_format(L.mu))) {
-    logi("MTP head in %s: its MLP's formats (%s) have no kernels here; speculative decoding with the MTP head off",
-         dir.c_str(), (cfg_.moe ? L.eg : L.mg).name().c_str());
+  if (off.empty() && in_shards &&
+      (cfg_.moe ? !L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
+                      moe_rows_kernel(true, L.eg, L.sg).empty() || moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty()
+                : !L.mg.same_format(L.mu)))
+    off = "its MLP's formats (" + (cfg_.moe ? L.eg : L.mg).name() + ") have no kernels here";
+  if (!off.empty()) {
+    logi("MTP head in %s: %s; speculative decoding with the MTP head off", dir.c_str(), off.c_str());
     return;
   }
 
