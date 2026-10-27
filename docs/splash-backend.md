@@ -79,11 +79,19 @@ one server at a time under the GPU lock.
   one trailing newline on the reasoning text, which plain Splash keeps and Kapitsa's output parser strips. The HTTP APIs
   return no ids, so `--tap` puts `tools/splash_tap.py` in front of the engine binary on both sides and compares each
   request's prompt ids and output ids at the native pipe. It was run once (27 Oct 2026, M5 Pro 48 GB, macOS 26.5.2, Splash 1.4.0), at T=0 with seed 1, `--verify-rows all` and `--expert-memory 16 GiB` on both sides. That is not Splash's default memory plan; the expert cache size does not change what is computed, and the default plan was not run for this comparison. Three requests (66, 1031 and 4070 prompt tokens, 16, 128 and 95 output tokens): prompt ids and output ids are identical on both sides, no first divergence, ids md5 `47c93518…`, `605fa935…`, `5f762994…`. One run per side, so it is not a statistical claim.
-- Speed (n=6 per cell, 16 GiB expert cache, legs in the order Kapitsa, Splash, Kapitsa, Splash (`--legs K,S,K,S`), medians;
-  the spread per cell and the Kapitsa commit were not recorded): 1K prompt TTFT 1.41 against 1.43 s,
-  prefill 732 against 719 tok/s, decode 68.2 against 69.7 tok/s; 4K prompt TTFT 3.24 against 3.43 s, prefill 1257 against
-  1188 tok/s, decode 58.7 against 58.2 tok/s. No overhead of the bridge shows in these numbers: Kapitsa is not slower in any cell, and two cells (4K TTFT, 4K prefill)
-  differ by about 6% in its favour, which n=6 without the spread cannot separate from noise.
+- Speed (one run of `--legs K,S,K,S`, n=6 per cell: 3 requests per leg, two legs per side; 16 GiB expert cache; M5 Pro,
+  macOS 26.5.2; 27 Oct 2026; Kapitsa built from the work branch at `eac50728` (before the split into these PRs; this stack
+  was not rebuilt for it), plain Splash 1.4.0). Median, then the range over the 6 requests, Kapitsa against plain Splash:
+
+  | | TTFT, s | prefill, tok/s | decode, tok/s |
+  |---|---|---|---|
+  | 1K prompt (1031 tokens) | 1.41 (1.39-1.52) against 1.43 (1.41-1.52) | 732 against 719 | 68.2 (59.6-77.4) against 69.7 (58.5-76.5) |
+  | 4K prompt (4070 tokens) | 3.24 (3.17-3.40) against 3.43 (3.25-3.54) | 1257 against 1188 | 58.7 (56.4-65.4) against 58.2 (55.2-64.7) |
+
+  The ranges overlap in every cell; decode varies by about 20% inside one side's own six requests (the legs ran at
+  different moments, so that is the Mac, not the engine). Kapitsa's 4K TTFT is lower than plain Splash's in each pair of
+  requests (same position in its leg); the 1K decode median is 2% lower. This run shows no overhead of the bridge it could
+  have measured at this size, and it does not prove there is none.
 - Default memory plan (no `--expert-memory`; 33.0 GiB free and reclaimable at start; n=1 per size, so no comparison):
   engine up in 8.9 s, 1K TTFT 1.41 s, prefill 732 tok/s, decode 74.9 tok/s; 4K TTFT 3.17 s, prefill 1286 tok/s, decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.

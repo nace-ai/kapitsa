@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """`kapitsa serve --engine splash` against tests/fake_splash.py (a protocol-v11 stand-in for the Splash binary), CPU only:
 no model, no GPU. It needs Splash's resolved model folder for its tokenizer and chat template (default: the one under
-~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR), and skips the rest without one (the flag and discovery cases above it need none).
+~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR); without one it uses the small stand-in
+folder tests/fixtures/splash_model, so CI runs every case.
 usage: test_splash_engine.py build/kapitsa"""
 import glob, json, os, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
@@ -46,11 +47,8 @@ with tempfile.TemporaryDirectory() as home:
     check(r.returncode != 0 and "no Splash model found" in r.stderr, "no model: %r" % r.stderr[-300:])
 
 
-if not dirs:
-    print("test_splash_engine: the cases that need Splash's tokenizer are skipped (no Splash model folder; set SPLASH_MODEL_DIR)")
-    print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
-    sys.exit(1 if failures else 0)
-MODEL = dirs[0] if os.environ.get("SPLASH_MODEL_DIR") else os.path.dirname(os.path.dirname(dirs[0]))
+# no Splash installed (CI): the small stand-in folder of tests/fixtures/make_splash_model.py
+MODEL = (dirs[0] if os.environ.get("SPLASH_MODEL_DIR") else os.path.dirname(os.path.dirname(dirs[0]))) if dirs else os.path.join(HERE, "fixtures/splash_model")
 TOK = json.load(open(MODEL + "/tokenizer/tokenizer.json"))
 VOCAB = TOK["model"]["vocab"]
 ADDED = {a["content"]: a["id"] for a in TOK["added_tokens"]}
