@@ -818,8 +818,10 @@ or plain), the image encoder's size and a rough speed estimate; then each catalo
 `--model NAME` takes. It assumes `--context 64k` and, per model, the slots the server would start with (the catalog
 check: 2, or 1 where 2 would not start; `--context`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change
 that), and shows the context `kapitsa serve` takes there by default; `--model M`, repeatable, checks other models,
-downloaded or not; `--json` prints the same for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`,
-`default_context`, `context_limit`, `decoding`, ...).
+downloaded or not; `--models-dir DIR`, repeatable, lists the models under DIR (an external drive) in place of the
+catalog, the store and the folders other tools keep models in (not read when `--model` is given); `--json` prints the
+same for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`, `default_context`, `context_limit`,
+`decoding`, ...).
 
 What fits, for the 4-bit variants at `--context 64k --slots 2`, with the tokens of KV cache that fit in all. macOS sets
 the working set at about 2/3 to 78% of the RAM, depending on its version, hence the ranges:
