@@ -40,6 +40,7 @@
 #include "server/picker.h"
 #include "server/pair.h"
 #include "server/route.h"
+#include "splash/discover.h"
 #include "server/ui.h"
 #include "util/log.h"
 #include "util/term.h"
@@ -346,9 +347,10 @@ static void print_serve_help() {
          "                         Without --api-key it keeps the server on this Mac, as --private does\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --engine splash        run the model in a Splash child process instead of in this server\n"
-         "                         needs --splash-binary and --splash-model; text chat only\n"
-         "  --splash-binary PATH   the Splash engine binary (splash-1.4.0/engine/splash)\n"
-         "  --splash-model DIR     Splash's resolved model folder (its tokenizer and chat template are used here)\n"
+         "                         text chat only; both of the next two are found where Splash installs them when not given\n"
+         "  --splash-binary PATH   the Splash engine binary (<Splash folder>/engine/splash; else $SPLASH_HOME, `splash` on PATH, ~/Applications/Splash)\n"
+         "  --splash-model DIR     Splash's resolved model folder, or the first 6+ characters of its name (its tokenizer and chat template\n"
+         "                         are used here); the only one under ~/Library/Application Support/Splash when not given\n"
          "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
          "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
@@ -871,13 +873,26 @@ static int serve(int argc, char** argv, int first) {
   // Splash's engine: the model runs in its child, so nothing below plans this Mac's memory for it, picks, downloads or
   // routes a model: the folder given is the model, served here and nowhere else
   if (engine_splash) {
-    if (opt.splash_binary.empty() || opt.splash_model.empty())
-      usage_error("--engine splash needs --splash-binary and --splash-model", help);
-    if (!model.empty() || !split.empty() || allow_switch)
-      usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
-    if (struct stat st; stat(opt.splash_model.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+    // not given: where Splash installs them (src/splash/discover.h), else an error that says what is missing
+    const char* home = getenv("HOME");
+    if (opt.splash_binary.empty()) {
+      const char* sh = getenv("SPLASH_HOME");
+      const char* path = getenv("PATH");
+      splash::Found f = splash::find_binary(home ? home : "", sh ? sh : "", path ? path : "");
+      if (!f.ok()) usage_error(f.error, help);
+      opt.splash_binary = f.path;
+    }
+    struct stat st;
+    if (opt.splash_model.empty() || (opt.splash_model.find('/') == std::string::npos && stat(opt.splash_model.c_str(), &st) != 0)) {
+      splash::Found f = splash::find_model(home ? home : "", opt.splash_model);  // empty: the only one; else a name prefix
+      if (!f.ok()) usage_error(f.error, help);
+      opt.splash_model = f.path;
+    }
+    if (struct stat st2; stat(opt.splash_model.c_str(), &st2) != 0 || !S_ISDIR(st2.st_mode))
       usage_error("--splash-model " + opt.splash_model + " is not a folder: give Splash's resolved model folder (a model "
                   "name is not looked up or downloaded here)", help);
+    if (!model.empty() || !split.empty() || allow_switch)
+      usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";

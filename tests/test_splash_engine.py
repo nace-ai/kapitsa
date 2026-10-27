@@ -164,9 +164,20 @@ r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", "/non
 check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failure: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
 
 # a model name is no folder: refused at once, nothing looked up or downloaded
-r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "qwen3.5-35b-a3b",
+r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "/nonexistent/qwen3.5-35b-a3b",
                     "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
 check(r.returncode != 0 and "is not a folder" in r.stderr + r.stdout, "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
+
+# no flags: the binary and the model are looked for where Splash installs them, and what is missing is named
+with tempfile.TemporaryDirectory() as home:
+    env = {k: v for k, v in os.environ.items() if k != "SPLASH_HOME"}
+    env.update(HOME=home, PATH="/usr/bin:/bin")
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
+    check(r.returncode != 0 and "no Splash engine binary found" in r.stderr and "SPLASH_HOME" in r.stderr, "no binary: %r" % r.stderr[-300:])
+    os.makedirs(home + "/Applications/Splash/engine")
+    open(home + "/Applications/Splash/engine/splash", "w").close()
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
+    check(r.returncode != 0 and "no Splash model found" in r.stderr, "no model: %r" % r.stderr[-300:])
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)
