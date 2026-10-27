@@ -31,6 +31,10 @@
 #include <string>
 #include <vector>
 
+namespace ni::splash {
+class Runtime;
+}
+
 namespace minja {
 class chat_template;
 }
@@ -70,6 +74,14 @@ struct EngineOptions {
   // serve`'s default: a quarter of the free space beyond 10 GiB, at most 32 GiB), "0" off, or a size ("16G"). "" =
   // NI_DISK_CACHE if set, else off (tools that construct an engine write nothing unless asked).
   std::string disk_cache;
+  // Splash as the engine (docs/splash-backend.md): a non-empty splash_model is a Splash model folder (the one `splash
+  // serve-native` takes), and the engine runs text generation in a Splash child process from splash_binary instead of
+  // loading a model here. Only the tokenizer, chat template and stop ids are read from that folder; model_dir is unused.
+  // `context` is the child's context (tokens); splash_args follow the positional arguments of serve-native (e.g.
+  // "--verify-rows", "2"). Requests that need what Splash's native protocol does not carry here (images, structured
+  // output) are refused as invalid, never run elsewhere.
+  std::string splash_model, splash_binary;
+  std::vector<std::string> splash_args;
 };
 
 // The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next,
@@ -290,7 +302,14 @@ class Engine {
   ~Engine();
   const std::string& model_id() const { return opts_.model_id; }
   int context_length() const { return opts_.context; }
-  int slots() const { return int(slots_.size()); }  // requests that run at once
+  int slots() const { return splash_ ? splash_slots_ : int(slots_.size()); }  // requests that run at once
+  // Splash mode (EngineOptions::splash_model): generation runs in the Splash child; chat() refuses (it is the native
+  // path), and the caller picks chat_splash(), which has chat()'s signature and results.
+  bool splash_mode() const { return splash_ != nullptr; }
+  ChatResult chat_splash(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
+                         const std::function<void(const ChatResult&)>& on_prompt = nullptr,
+                         const std::function<bool()>& cancelled = nullptr,
+                         const std::function<bool(const ChatResult&)>& on_accepted = nullptr);
   // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
   int context_fit() const { return context_fit_; }
   // The model reads routed experts from the SSD as it runs (a Qwen3.8-Flash-Next Q2_0 pack whose store holds only part
@@ -535,6 +554,9 @@ class Engine {
   void wait_split(Encoder& e);
 
   EngineOptions opts_;
+  void init_splash();  // the constructor in Splash mode (src/engine/engine_splash.cpp)
+  std::unique_ptr<splash::Runtime> splash_;
+  int splash_slots_ = 0;
   std::unique_ptr<Model> model_;
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model

@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""`kapitsa serve --engine splash` against tests/fake_splash.py (a protocol-v11 stand-in for the Splash binary), CPU only:
+no model, no GPU. It needs Splash's resolved model folder for its tokenizer and chat template (default: the one under
+~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR), and skips without one.
+usage: test_splash_engine.py build/kapitsa"""
+import glob, json, os, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
+
+CLI = sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa"
+HERE = os.path.dirname(os.path.abspath(__file__))
+FAKE = os.path.join(HERE, "fake_splash.py")
+dirs = [os.environ["SPLASH_MODEL_DIR"]] if os.environ.get("SPLASH_MODEL_DIR") else sorted(
+    glob.glob(os.path.expanduser("~/Library/Application Support/Splash/models/.resolved/*/tokenizer/tokenizer.json")))
+if not dirs:
+    print("test_splash_engine: skipped (no Splash model folder; set SPLASH_MODEL_DIR)")
+    sys.exit(0)
+MODEL = dirs[0] if os.environ.get("SPLASH_MODEL_DIR") else os.path.dirname(os.path.dirname(dirs[0]))
+TOK = json.load(open(MODEL + "/tokenizer/tokenizer.json"))
+VOCAB = TOK["model"]["vocab"]
+ADDED = {a["content"]: a["id"] for a in TOK["added_tokens"]}
+def tid(piece): return ADDED[piece] if piece in ADDED else VOCAB[piece]
+THINK_OPEN, THINK_CLOSE, EOS = tid("<think>"), tid("</think>"), tid("<|im_end|>")
+NL = tid("Ċ")
+# "ok\n</think>\n\nHi there" then the end of turn
+REPLY = [tid("ok"), NL, THINK_CLOSE, tid("ĊĊ"), tid("Hi"), tid("Ġthere"), EOS]
+failures = 0
+def check(c, what):
+    global failures
+    if not c:
+        failures += 1
+        print("FAIL:", what)
+
+def free_port():
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
+
+def post(base, body, timeout=30):
+    req = urllib.request.Request(base + "/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r: return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+
+class Server:
+    def __init__(self, *fake_args, context=None):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.log = self.tmp.name + "/prompts.jsonl"
+        self.port = free_port()
+        self.base = "http://127.0.0.1:%d" % self.port
+        cmd = [CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", MODEL, "--private",
+               "--port", str(self.port), "--splash-arg", "--prompt-log", "--splash-arg", self.log]
+        for a in fake_args: cmd += ["--splash-arg", a]
+        env = dict(os.environ, HOME=self.tmp.name)
+        self.proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        for _ in range(100):
+            if self.proc.poll() is not None: raise SystemExit("server exited: " + self.proc.stderr.read().decode()[-2000:])
+            try:
+                urllib.request.urlopen(self.base + "/v1/models", timeout=1).read(); return
+            except Exception: time.sleep(0.1)
+        raise SystemExit("server did not start")
+    def prompts(self):
+        return [json.loads(l) for l in open(self.log)] if os.path.exists(self.log) else []
+    def close(self):
+        self.proc.terminate()
+        try: self.proc.wait(10)
+        except subprocess.TimeoutExpired: self.proc.kill()
+        self.tmp.cleanup()
+
+MSG = [{"role": "user", "content": "hello"}]
+s = Server("--reply", ",".join(map(str, REPLY)))
+try:
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 50, "temperature": 0})
+    check(st == 200, "chat 200: %s %s" % (st, r))
+    m = r.get("choices", [{}])[0].get("message", {})
+    check(m.get("content") == "Hi there", "content %r" % m.get("content"))
+    check("ok" in (m.get("reasoning_content") or m.get("reasoning") or ""), "reasoning %r" % m)
+    check(r["choices"][0]["finish_reason"] == "stop", "finish %r" % r["choices"][0]["finish_reason"])
+    check(r["usage"]["completion_tokens"] == len(REPLY), "completion_tokens %r" % r["usage"])
+    p = s.prompts()
+    check(len(p) == 1 and p[0]["prompt"][-2:] == [THINK_OPEN, NL], "prompt ends with <think>\\n: %r" % (p[0]["prompt"][-4:] if p else p))
+    check(p and p[0]["max"] == 50, "max_output_tokens %r" % (p and p[0]["max"]))
+    # max_tokens ends the reply as length and cancels the engine's request
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 4, "temperature": 0})
+    check(st == 200 and r["choices"][0]["finish_reason"] == "length", "length: %s %s" % (st, r))
+    # a stop string ends it at the string
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 50, "stop": ["there"], "temperature": 0})
+    check(st == 200 and r["choices"][0]["message"]["content"] == "Hi ", "stop string: %s %s" % (st, r))
+    # streaming
+    req = urllib.request.Request(s.base + "/v1/chat/completions", json.dumps({"messages": MSG, "max_tokens": 50, "stream": True}).encode(),
+                                 {"Content-Type": "application/json"})
+    body = urllib.request.urlopen(req, timeout=30).read().decode()
+    check("Hi" in body and "[DONE]" in body, "stream: %r" % body[-300:])
+    # refused up front
+    st, r = post(s.base, {"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}}]}]})
+    check(st == 400, "image refused with 400, got %s %s" % (st, r))
+    st, r = post(s.base, {"messages": MSG, "response_format": {"type": "json_object"}})
+    check(st in (200, 400), "json mode answers: %s" % st)
+    check(s.proc.poll() is None, "server still running")
+finally:
+    s.close()
+
+# the client going away cancels the engine's request: the next one is served (the pool is two, a leak would block)
+s = Server("--reply", ",".join(map(str, REPLY * 40)), "--slow", "20")
+try:
+    for _ in range(4):
+        req = urllib.request.Request(s.base + "/v1/chat/completions", json.dumps({"messages": MSG, "max_tokens": 200, "stream": True}).encode(),
+                                     {"Content-Type": "application/json"})
+        r = urllib.request.urlopen(req, timeout=30); r.read(200); r.close()
+    time.sleep(0.5)
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 3, "temperature": 0}, timeout=30)
+    check(st == 200, "served after four abandoned streams: %s %s" % (st, r))
+finally:
+    s.close()
+
+# an engine that cannot start ends the server with its reason and a plain exit status, not an abort
+r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", "/nonexistent/splash", "--splash-model", MODEL,
+                    "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
+check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failure: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
+
+print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
+sys.exit(1 if failures else 0)

@@ -339,6 +339,11 @@ static void print_serve_help() {
          "                         gigabytes; 503 + Retry-After meanwhile). Default off: the \"model\" field is ignored.\n"
          "                         Without --api-key it keeps the server on this Mac, as --private does\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
+         "  --engine splash        run the model in a Splash child process instead of in this server\n"
+         "                         (docs/splash-backend.md): needs --splash-binary and --splash-model; text chat only\n"
+         "  --splash-binary PATH   the Splash engine binary (splash-1.4.0/engine/splash)\n"
+         "  --splash-model DIR     Splash's resolved model folder (its tokenizer and chat template are used here)\n"
+         "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
          "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
          "                         Mac's memory is tight (the most that keeps the draft model). --ctx N works too\n"
@@ -783,7 +788,7 @@ static int serve(int argc, char** argv, int first) {
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
   std::vector<std::string> split;  // --split: the stages' addresses, in the order of their layers
   int port = 8000;
-  bool verbose = false, yes = false, allow_switch = false, priv = false, local = false;
+  bool verbose = false, yes = false, allow_switch = false, priv = false, local = false, engine_splash = false;
   std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
@@ -797,6 +802,14 @@ static int serve(int argc, char** argv, int first) {
       return 0;
     } else if (a == "--model" || a == "-m") model = next();
     else if (a == "--model-id") opt.model_id = next();
+    else if (a == "--engine") {
+      const std::string v = next();
+      if (v != "splash" && v != "native") usage_error("--engine takes native or splash, not \"" + v + "\"", help);
+      engine_splash = v == "splash";
+    }
+    else if (a == "--splash-binary") opt.splash_binary = expand_home(next());
+    else if (a == "--splash-model") opt.splash_model = expand_home(next());
+    else if (a == "--splash-arg") opt.splash_args.push_back(next());
     else if (a == "--host") host = next();
     else if (a == "--port") port = to_int(a, next(), help);
     else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
@@ -848,6 +861,19 @@ static int serve(int argc, char** argv, int first) {
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  // Splash's engine: the model runs in its child, so nothing below plans this Mac's memory for it, picks, downloads or
+  // routes a model: the folder given is the model, served here and nowhere else
+  if (engine_splash) {
+    if (opt.splash_binary.empty() || opt.splash_model.empty())
+      usage_error("--engine splash needs --splash-binary and --splash-model", help);
+    if (!model.empty() || !split.empty() || allow_switch)
+      usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
+    model = opt.splash_model;
+    local = true;
+    opt.disk_cache = "0";
+  } else if (!opt.splash_binary.empty() || !opt.splash_model.empty() || !opt.splash_args.empty()) {
+    usage_error("--splash-binary, --splash-model and --splash-arg need --engine splash", help);
+  }
   bool disk_asked = !opt.disk_cache.empty();  // --disk-cache or NI_DISK_CACHE given, not the default
   if (opt.disk_cache.empty()) {  // the SSD prefix cache: on by default for the server (NI_DISK_CACHE as the option)
     const char* v = getenv("NI_DISK_CACHE");
@@ -856,7 +882,7 @@ static int serve(int argc, char** argv, int first) {
   }
   // the model and its precision are picked for a conversation of the context asked for, else of 32K (the default
   // context then grows from there where it costs nothing: default_context)
-  opt.context = context_req > 0 ? context_req : kMinDefaultContext;
+  opt.context = context_req > 0 ? context_req : engine_splash ? 0 : kMinDefaultContext;  // (Splash: 0 is its auto)
   {  // looped models: the memory plans before the model loads count what it will run
     LoopKv kv = LoopKv::last_loop;
     if (!opt.loop_kv.empty()) parse_loop_kv(opt.loop_kv, &kv);
@@ -1042,7 +1068,7 @@ static int serve(int argc, char** argv, int first) {
       return fail(ref.dir + " has no config.json. --model takes a model folder (config.json, *.safetensors, "
                   "tokenizer.json), a model name (kapitsa --help) or a Hugging Face repo.", 2);
   }
-  if (chosen) ui::remember(ref);
+  if (chosen && !engine_splash) ui::remember(ref);  // (a Splash folder is not a Kapitsa pick)
   // fail now, not after loading the model, when the port is taken
   if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
   const std::string log_path = tui ? ui::serve_log_file(port) : "";
@@ -1079,7 +1105,8 @@ static int serve(int argc, char** argv, int first) {
   } catch (const hub::Error& e) {
     return fail(e.what());
   }
-  if (const std::string why = unsupported_model(opt.model_dir); !why.empty()) return fail(why, 2);
+  if (!engine_splash)
+    if (const std::string why = unsupported_model(opt.model_dir); !why.empty()) return fail(why, 2);
   // --split: the stages hold the layers after this Mac's (src/cluster/pipe.h); every plan of the model and the engine's
   // Qwen4Exp then take this Mac's share
   if (!split.empty()) {
@@ -1118,7 +1145,7 @@ static int serve(int argc, char** argv, int first) {
     else fprintf(stderr, "%s\n", say.c_str());
   }
   // the context: the one asked for, within what the model was trained for, else the default for this Mac
-  {
+  if (!engine_splash) {
     const int limit = model_context_limit(opt.model_dir);
     std::string say;
     if (context_req == kContextMax) {
@@ -1163,7 +1190,12 @@ static int serve(int argc, char** argv, int first) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
-  model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
+  try {
+    model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
+  } catch (const std::exception& e) {
+    if (!engine_splash) throw;
+    return fail(std::string("the Splash engine did not start: ") + e.what());  // (its own reason is in its output above)
+  }
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);
 

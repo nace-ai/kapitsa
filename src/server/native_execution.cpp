@@ -12,7 +12,10 @@ std::shared_ptr<ExecutionSession> native_execution(std::shared_ptr<RequestGuard>
   return detail::ExecutionFactory::bind(
       [guard = std::move(guard), memory](const ChatRequest& r, detail::ChatObserver& events, detail::StopToken stop) {
         auto& engine = guard->engine();
-        auto out = engine.chat(r,
+        // the engine is bound to one backend when it is built: Splash's child process (chat_splash) or this process's
+        // model (chat, which refuses in Splash mode); no request moves from one to the other
+        const auto run = engine.splash_mode() ? &Engine::chat_splash : &Engine::chat;
+        auto out = (engine.*run)(r,
             [&](const ChatDelta& d) { return events.delta(d); },
             [&](const ChatResult& prompt) { events.prompt(prompt); },
             [stop] { return stop.stop_requested(); },

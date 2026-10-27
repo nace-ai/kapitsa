@@ -3,6 +3,7 @@
 #include "engine/output_parser.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
+#include "splash/runtime.h"
 #include "util/json_file.h"
 #include "util/log.h"
 
@@ -237,6 +238,10 @@ static bool newline_before_think_close(const minja::chat_template& tmpl) {
 }
 
 Engine::Engine(const EngineOptions& o) : opts_(o) {
+  if (!opts_.splash_model.empty()) {  // Splash runs the model: nothing below (plans, weights, slots) applies
+    init_splash();
+    return;
+  }
   // thrown, not fatal(): ModelManager::switch_to and reload (src/server/model_manager.h) build an Engine to switch to
   // and catch a std::exception so that a refused switch leaves the server serving, with the old model back (shown as
   // the switch's error); the callers that start a server let it out, so `kapitsa serve` exits on it as it did on the
@@ -569,15 +574,16 @@ std::string Engine::kflash_source() const {
   return "none";
 }
 
-std::string Engine::lost() const { return model_->lost(); }
+std::string Engine::lost() const { return model_ ? model_->lost() : std::string(); }
 
 bool Engine::streams_experts() const {
+  if (!model_) return false;
   auto* q4 = dynamic_cast<Qwen4Exp*>(model_.get());
   const q20::ExpertStore* st = q4 ? q4->expert_store() : nullptr;
   return st && !st->complete();
 }
 
-bool Engine::disk_cache_supported() const { return !model_->disk_format().empty(); }
+bool Engine::disk_cache_supported() const { return model_ && !model_->disk_format().empty(); }
 
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();
@@ -2147,6 +2153,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
                         const std::function<void(const ChatResult&)>& on_prompt,
                         const std::function<bool()>& cancelled,
                         const std::function<bool(const ChatResult&)>& on_accepted) {
+  if (splash_)  // the native path never serves Splash's requests: the caller chose wrongly (chat_splash)
+    throw std::logic_error("Engine::chat: this engine runs Splash; use chat_splash()");
   const uint64_t arrival = ++requests_;
   // a model split across Macs whose other Macs stopped answering runs nothing more (the server needs a restart)
   if (std::string why = model_->lost(); !why.empty()) {
