@@ -126,7 +126,8 @@ with tempfile.TemporaryDirectory() as tmp:
 
 # 4. no script keeps its own spelling of the variable
 SITES = ("bench/harness/bench.py", "bench/quality/eval_mlx.py", "bench/quality/eval_stream.py",
-         "bench/quality/speed_variants.py", "bench/reasoning/reasoning.py", "tools/qwen4_exp_pack.py")
+         "bench/quality/speed_variants.py", "bench/quality/speed_mlx.py", "bench/harness/agent_replay.py",
+         "bench/harness/compare_engines.py", "bench/reasoning/reasoning.py", "tools/qwen4_exp_pack.py")
 own = re.compile(r"""environ(\.get\(|\[)\s*["'](NI_LOCK_HELD|NACE_GPU_LOCK_HELD)["']|getenv\(\s*["'](NI_LOCK_HELD|NACE_GPU_LOCK_HELD)["']""")
 for rel in SITES:
     with open(os.path.join(REPO, rel)) as f:

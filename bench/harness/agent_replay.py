@@ -28,7 +28,7 @@ the follow-up turns (each request that continues the previous one).
 usage:
   agent_replay.py --base-url http://127.0.0.1:8091/v1 --model qwen3.6-35b-a3b [--trace agent-traces/X.json]
                   [--label L] [--tool-mode rendered|api] [--gaps recorded|none|SECONDS] [--max-turns N] [--out x.json]
-The GPU lock is taken for the replay unless the caller holds it (NACE_GPU_LOCK_HELD=1) or --no-gpu-lock. bench.py
+The GPU lock is taken for the replay unless the caller holds it (NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1) or --no-gpu-lock. bench.py
 runs the same replay as its "agent" phase (with the server's memory and, under compare_engines.py, the contention
 monitor and the quiet-GPU wait).
 """
@@ -390,7 +390,7 @@ def main():
                          (["--extra-body", o.extra_body] if o.extra_body else []))
     t = load_trace(o.trace)
     lock = None
-    if not o.no_gpu_lock and not os.environ.get("NACE_GPU_LOCK_HELD"):
+    if not o.no_gpu_lock and not gpu_hogs.held_by_caller():
         lock = gpu_hogs.GpuLock(log=lambda m: print("  " + m, flush=True)).acquire()
     try:
         print(f"== {o.label}: {t.get('name')} ({len(t['requests'])} requests), tool mode {o.tool_mode}", flush=True)
