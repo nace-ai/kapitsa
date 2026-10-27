@@ -484,8 +484,9 @@ curl http://127.0.0.1:8000/v1/draft -H 'Content-Type: application/json' -d '{"mo
   to that checkpoint and reads what one draft of its text would. The request continues the drafts' state when its
   prompt extends it (`usage.prompt_tokens_details.cached_tokens` counts what the drafts read), else resumes from the
   checkpoint.
-- **Never in the way.** Read only while the server is idle (`busy` with a request in flight); a request that arrives
-  stops the reading at the next prefill chunk, keeping what was read. Its KV cache grows within the slot's memory.
+- **Never in the way.** Read only while the server is idle (`busy` with a request in flight, a model switch or a
+  reload in progress); a request that arrives stops the reading at the next prefill chunk, keeping what was read.
+  Its KV cache grows within the slot's memory.
 - **The same reply?** On a dense model's GPU path, yes: the Qwen3.5 4B writes the same tokens with drafts as without
   (`tests/test_draft.py`). A draft cuts the new message into other prefill passes; since `NI_SHORTPF_EXACT` a short pass
   (at most 128 rows) gives a row the same bits whatever its length, on the Qwen3.6 35B-A3B too. Before it, a MoE
@@ -508,7 +509,7 @@ The reply is always 200 (400: a body without `after` and `text` as strings; `"th
 
 | Field | |
 | --- | --- |
-| `status` | `prefilled` (read), `unchanged` (nothing new), `interrupted` (a request arrived: stopped at a chunk, the part read kept), `busy` (a request in flight: nothing done), `no_conversation` (no recent reply is `after`, or its slot has since gone to another conversation), `unsupported` (this model, or an image in the conversation not yet read), `no_room` (beyond the context or the memory for its KV cache) |
+| `status` | `prefilled` (read), `unchanged` (nothing new), `interrupted` (a request arrived: stopped at a chunk, the part read kept), `busy` (a request in flight, a model switch or a reload in progress: nothing done), `no_conversation` (no recent reply is `after`, or its slot has since gone to another conversation), `unsupported` (this model, or an image in the conversation not yet read), `no_room` (beyond the context or the memory for its KV cache) |
 | `prompt_tokens` | The prompt as far as the draft can be read; the slot holds all of it but its last token once read |
 | `cached_tokens` | Of those, what the slot held before (the live state, or the checkpoint it went back to) |
 | `prefilled_tokens` | Read by this call |
