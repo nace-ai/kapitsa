@@ -27,8 +27,9 @@ class ModelManager;
 // RAII guard holding an Engine reference for an in-flight request
 class RequestGuard {
  public:
-  RequestGuard(std::shared_ptr<ModelManager> mgr, std::shared_ptr<Engine> eng);
   ~RequestGuard();
+  RequestGuard(const RequestGuard&) = delete;
+  RequestGuard& operator=(const RequestGuard&) = delete;
 
   Engine& engine() const { return *eng_; }
   Engine* operator->() const { return eng_.get(); }
@@ -36,12 +37,20 @@ class RequestGuard {
   std::shared_ptr<Engine> get() const { return eng_; }
 
  private:
+  friend class ModelManager;
+  explicit RequestGuard(std::shared_ptr<Engine> eng) : eng_(std::move(eng)) {}
   std::shared_ptr<ModelManager> mgr_;
   std::shared_ptr<Engine> eng_;
 };
 
 class ModelManager : public std::enable_shared_from_this<ModelManager> {
  public:
+  struct Error {
+    enum class Code { Invalid, Busy };
+    Code code = Code::Invalid;
+    std::string message;
+  };
+
   ModelManager() = default;
   ~ModelManager() {
     stop_prefill();
@@ -67,49 +76,63 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
   // default: clients send their own model names (Claude Code, Cursor), which the server ignores, as it always did.
   void set_allow_switch(bool on) { allow_switch_ = on; }
   bool allow_switch() const { return allow_switch_; }
-  // True while a switch loads the new model: requests get 503 + Retry-After instead of queueing behind it
+  // True while a switch/reload drains requests or loads the model: reject new requests instead of extending the drain.
   bool switching() const { return switching_.load(); }
 
   // Acquire active engine for a request, switching on demand if another valid model is requested and --allow-switch.
-  std::shared_ptr<RequestGuard> acquire_request(const std::string& requested_model, std::string* error_out = nullptr) {
-    std::shared_ptr<Engine> eng;
+  std::shared_ptr<RequestGuard> acquire_request(const std::string& requested_model, Error* error_out = nullptr) {
+    if (switching_.load()) {
+      if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
+      return nullptr;
+    }
     {
       std::shared_lock<std::shared_mutex> lk(rw_mu_);
-      if (!allow_switch_ || is_current_model_unlocked(requested_model)) {
-        eng = engine_;
+      if (switching_.load()) {
+        if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
+        return nullptr;
       }
+      if (!allow_switch_ || is_current_model_unlocked(requested_model)) return acquire_unlocked();
     }
-    if (!eng) {
-      eng = switch_to(requested_model, error_out);
-      if (!eng) return nullptr;
-    }
-    return std::make_shared<RequestGuard>(shared_from_this(), eng);
+    std::shared_ptr<RequestGuard> guard;
+    switch_to_impl(requested_model, error_out, &guard);
+    return guard;
   }
 
   // The active engine for a request that never switches models (POST /v1/draft): null when `requested_model` names
   // another one (with --allow-switch; without it the server serves its model whatever a request names)
-  std::shared_ptr<RequestGuard> acquire_current(const std::string& requested_model) {
-    std::shared_ptr<Engine> eng;
-    {
-      std::shared_lock<std::shared_mutex> lk(rw_mu_);
-      if (!allow_switch_ || is_current_model_unlocked(requested_model)) eng = engine_;
+  std::shared_ptr<RequestGuard> acquire_current(const std::string& requested_model, Error* error_out = nullptr) {
+    if (switching_.load()) {
+      if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
+      return nullptr;
     }
-    if (!eng) return nullptr;
-    return std::make_shared<RequestGuard>(shared_from_this(), eng);
+    std::shared_lock<std::shared_mutex> lk(rw_mu_);
+    if (switching_.load()) {
+      if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
+      return nullptr;
+    }
+    if (!allow_switch_ || is_current_model_unlocked(requested_model)) return acquire_unlocked();
+    return nullptr;
   }
 
   // Explicitly switch the active model
-  std::shared_ptr<Engine> switch_to(const std::string& target_model, std::string* error_out = nullptr) {
+  std::shared_ptr<Engine> switch_to(const std::string& target_model, Error* error_out = nullptr) {
+    return switch_to_impl(target_model, error_out, nullptr);
+  }
+
+ private:
+  // An on-demand switch registers its request before releasing the selected engine's lock.
+  std::shared_ptr<Engine> switch_to_impl(const std::string& target_model, Error* error_out,
+                                         std::shared_ptr<RequestGuard>* request_out) {
     if (!allow_switch_) {
-      if (error_out) *error_out = "model switching is off (start the server with --allow-switch)";
+      if (error_out) error_out->message = "model switching is off (start the server with --allow-switch)";
       return nullptr;
     }
     if (target_model.empty()) {
-      if (error_out) *error_out = "model name cannot be empty";
+      if (error_out) error_out->message = "model name cannot be empty";
       return nullptr;
     }
     if (switching_.exchange(true)) {
-      if (error_out) *error_out = "another model switch is in progress";
+      if (error_out) *error_out = {Error::Code::Busy, "another model switch is in progress"};
       return nullptr;
     }
     struct Clear {
@@ -119,8 +142,10 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
     std::unique_lock<std::shared_mutex> lk(rw_mu_);
     if (is_current_model_unlocked(target_model)) {
+      if (request_out) *request_out = acquire_unlocked();
       return engine_;
     }
+    lk.unlock();  // resolution/download must not block the old model's request completion
 
     hub::ModelRef new_ref;
     try {
@@ -131,14 +156,14 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         new_ref = pick_variant(*named.model, base_opt_, budget_, &fits);
       }
     } catch (const std::exception& e) {
-      if (error_out) *error_out = e.what();
+      if (error_out) error_out->message = e.what();
       return nullptr;
     }
 
     if (new_ref.kind == hub::ModelRef::kLocal) {
       struct stat st;
       if (stat((new_ref.dir + "/config.json").c_str(), &st) != 0) {
-        if (error_out) *error_out = new_ref.dir + " has no config.json";
+        if (error_out) error_out->message = new_ref.dir + " has no config.json";
         return nullptr;
       }
     }
@@ -148,7 +173,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       hub::PullOptions po;
       new_opt.model_dir = hub::ensure(new_ref, po);
     } catch (const std::exception& e) {
-      if (error_out) *error_out = e.what();
+      if (error_out) error_out->message = e.what();
       return nullptr;
     }
 
@@ -167,21 +192,18 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     // a switch must not cost the running model its place, and the engine's constructor refuses it too, as a backstop
     // for every other caller (`hub::check_supported` only covers the Hub's repos, and this one may be any folder).
     if (const std::string why = unsupported_model(new_opt.model_dir); !why.empty()) {
-      if (error_out) *error_out = why;
+      if (error_out) error_out->message = why;
       return nullptr;
     }
 
+    lk.lock();
+    wait_for_requests(lk);
+    stop_prefill();
     {
       LoopKv kv = LoopKv::last_loop;
       if (!new_opt.loop_kv.empty()) parse_loop_kv(new_opt.loop_kv, &kv);
       Dory::set_serving(new_opt.loops, kv);
     }
-
-    // Wait for in-flight requests on old engine to finish
-    in_flight_cv_.wait(lk, [&] { return in_flight_.load() == 0; });
-
-    // Stop background prefill on old engine
-    stop_prefill();
 
     logi("switching model from %s to %s", ref_.name.c_str(), new_ref.name.c_str());
     if (tui_) ui::note("Switching model to " + term::bold(new_ref.name));
@@ -196,7 +218,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       engine_ = std::make_shared<Engine>(new_opt);
     } catch (const std::exception& e) {
       if (tui_) ui::loading_end(new_ref.name);
-      if (error_out) *error_out = std::string("Engine initialization failed: ") + e.what();
+      if (error_out) error_out->message = std::string("Engine initialization failed: ") + e.what();
       // the old model comes back, so a failed switch (memory, a bad checkpoint) leaves the server serving
       logi("switch to %s failed (%s); reloading %s", new_ref.name.c_str(), e.what(), ref_.name.c_str());
       if (tui_) ui::loading_begin(ref_.name);
@@ -204,7 +226,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         engine_ = std::make_shared<Engine>(opt_);
       } catch (const std::exception& e2) {
         logi("reloading %s failed too: %s", ref_.name.c_str(), e2.what());
-        if (error_out) *error_out += std::string("; reloading the previous model failed too: ") + e2.what();
+        if (error_out) error_out->message += std::string("; reloading the previous model failed too: ") + e2.what();
       }
       if (tui_) ui::loading_end(ref_.name);
       return nullptr;
@@ -214,9 +236,11 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     ref_ = new_ref;
     opt_ = new_opt;
     logi("switched model to %s (id: %s, context: %d)", ref_.name.c_str(), opt_.model_id.c_str(), opt_.context);
+    if (request_out) *request_out = acquire_unlocked();
     return engine_;
   }
 
+ public:
   // The same model loaded again with `opt` (several Macs: a pair's split made or undone, docs/usage.md). Requests in
   // flight finish first (those of a split whose other Macs are lost end at once); new ones get 503 while it loads.
   // `before` runs once the old engine is gone, before the new one loads (Qwen4Exp::set_split); when the new one fails,
@@ -232,7 +256,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       ~Clear() { f = false; }
     } clear{switching_};
     std::unique_lock<std::shared_mutex> lk(rw_mu_);
-    in_flight_cv_.wait(lk, [&] { return in_flight_.load() == 0; });
+    wait_for_requests(lk);
     stop_prefill();
     engine_.reset();
     if (before) before();
@@ -273,10 +297,11 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
   }
 
   void prefill_after(const ChatRequest& r, const ChatResult& out) {
-    {  // the reply is a conversation POST /v1/draft can read ahead in, at once (a stream's was, before its end)
-      std::shared_lock<std::shared_mutex> rlk(rw_mu_);
-      if (engine_) engine_->remember_reply(r, out);
-    }
+    // Selection stays stable through registration; every path takes rw_mu_ before prefill_mu_.
+    std::shared_lock<std::shared_mutex> rlk(rw_mu_);
+    auto eng = engine_;
+    if (!eng) return;
+    eng->remember_reply(r, out);
     std::lock_guard<std::mutex> lk(prefill_mu_);
     // Several replies' history prefills can wait at once (two conversations on two slots finishing together):
     // each runs in its own thread, which waits for a quiet moment and takes the turn; the finished ones are
@@ -295,12 +320,6 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         ++it;
       }
     }
-    std::shared_ptr<Engine> eng;
-    {
-      std::shared_lock<std::shared_mutex> rlk(rw_mu_);
-      eng = engine_;
-    }
-    if (!eng) return;
     uint64_t epoch = model_epoch_.load();
     auto done = std::make_shared<std::atomic<bool>>(false);
     auto stale = std::make_shared<std::atomic<bool>>(false);
@@ -462,14 +481,37 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     return nlohmann::ordered_json::object();
   }
 
-  void add_in_flight() { in_flight_.fetch_add(1); }
-  void remove_in_flight() {
-    if (in_flight_.fetch_sub(1) == 1) {
-      in_flight_cv_.notify_all();
+ private:
+  friend class RequestGuard;
+
+  // rw_mu_ protects selection and registration as one operation. Leave the guard unregistered until all allocation
+  // succeeds: shared_ptr's control-block allocation may delete it here, and its destructor must not relock rw_mu_.
+  std::shared_ptr<RequestGuard> acquire_unlocked() {
+    if (!engine_) return nullptr;
+    auto guard = std::shared_ptr<RequestGuard>(new RequestGuard(engine_));
+    guard->mgr_ = shared_from_this();
+    {
+      std::lock_guard<std::mutex> lk(in_flight_mu_);
+      in_flight_.fetch_add(1);
     }
+    return guard;
   }
 
- private:
+  // Called after the switching gate and exclusive selection lock have excluded all new admissions.
+  void wait_for_requests(std::unique_lock<std::shared_mutex>& selection) {
+    selection.unlock();  // admitted requests still need selection for reply bookkeeping
+    {
+      std::unique_lock<std::mutex> lk(in_flight_mu_);
+      in_flight_cv_.wait(lk, [&] { return in_flight_.load() == 0; });
+    }
+    selection.lock();
+  }
+
+  void remove_in_flight() {
+    std::lock_guard<std::mutex> lk(in_flight_mu_);
+    if (in_flight_.fetch_sub(1) == 1) in_flight_cv_.notify_all();
+  }
+
   bool is_current_model_unlocked(const std::string& model_name) const {
     if (model_name.empty() || model_name == "default") return true;
     if (!engine_) return false;
@@ -523,7 +565,8 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
   bool allow_switch_ = false;
   std::atomic<bool> switching_{false};
   std::atomic<int> in_flight_{0};
-  std::condition_variable_any in_flight_cv_;
+  std::mutex in_flight_mu_;
+  std::condition_variable in_flight_cv_;
 
   std::mutex prefill_mu_;
   struct PrefillThread {
@@ -538,12 +581,8 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
   std::atomic<uint64_t> model_epoch_{0};
 };
 
-inline RequestGuard::RequestGuard(std::shared_ptr<ModelManager> mgr, std::shared_ptr<Engine> eng)
-    : mgr_(std::move(mgr)), eng_(std::move(eng)) {
-  if (mgr_) mgr_->add_in_flight();
-}
-
 inline RequestGuard::~RequestGuard() {
+  eng_.reset();  // A switch may release the old engine as soon as the count reaches zero.
   if (mgr_) mgr_->remove_in_flight();
 }
 

@@ -34,7 +34,9 @@
 #include "hub/hub.h"
 #include "metal/gpu.h"
 #include "server/cli.h"
+#include "server/http_stream.h"
 #include "server/model_manager.h"
+#include "server/native_execution.h"
 #include "server/picker.h"
 #include "server/pair.h"
 #include "server/route.h"
@@ -444,140 +446,27 @@ std::string ni::port_problem(const std::string& host, int port) {
 // the engine takes a slot only once that first chunk is out, so a client gone by then costs no prefill. From then on
 // the connection gets keepalive events while the engine is quiet (a wait for a slot or for memory, a long prefill:
 // clients drop a stream that is idle for minutes), and a client that goes away is noticed within a second.
-struct StreamJob {
-  std::mutex mu;  // the queue, the flags and every call into the writer
-  std::condition_variable cv;
-  std::deque<std::string> out;
-  bool started = false, sent = false, done = false;  // sent: the first event is out
-  std::atomic<bool> cancelled{false};
-  ChatResult result;
-  std::thread worker;
-  void cancel() {  // the client is gone
-    std::lock_guard<std::mutex> lk(mu);
-    cancelled = true;
-    cv.notify_all();
-  }
-  ~StreamJob() {
-    cancel();
-    if (worker.joinable()) worker.join();
-  }
+struct MeterChatEvents final : detail::ChatObserver {
+  const std::shared_ptr<ui::Meter> meter;
+  explicit MeterChatEvents(std::shared_ptr<ui::Meter> m) : meter(std::move(m)) {}
+  bool delta(const ChatDelta&) override { ui::token(meter); return true; }
 };
 
-// Runs `r` and answers it as a stream of `w`'s events, or with failure(result) when it fails before the stream starts:
-// once the prompt is matched against the slot's cache, or `early`, as soon as the request is accepted. Then calls
-// after(result) (the reply is out) from the connection's thread.
+// Native binding, UI effects, and endpoint JSON rendering stay outside the HTTP adapter.
 static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
                          std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter,
                          bool early = false, bool telemetry = false) {
-  auto job = std::make_shared<StreamJob>();
-  job->worker = std::thread([guard, r, w, meter, early, raw = job.get()] {
-    auto start = [&](const ChatResult& prompt) {  // with raw->mu held
-      raw->out.push_back(w->begin(prompt));
-      raw->started = true;
-      raw->cv.notify_all();
-    };
-    ChatResult out = guard->engine().chat(
-        r,
-        [&](const ChatDelta& d) {
-          ui::token(meter);
-          std::lock_guard<std::mutex> lk(raw->mu);
-          std::string s = w->delta(d);
-          if (!s.empty()) raw->out.push_back(std::move(s));
-          raw->cv.notify_all();
-          return !raw->cancelled.load();
-        },
-        [&](const ChatResult& prompt) {
-          if (early) return;
-          std::lock_guard<std::mutex> lk(raw->mu);
-          start(prompt);
-        },
-        [raw] { return raw->cancelled.load(); },
-        [&](const ChatResult& prompt) {
-          if (!early) return true;
-          std::unique_lock<std::mutex> lk(raw->mu);
-          start(prompt);
-          // the engine goes on to a slot once the first event is out: no prefill for a client already gone
-          raw->cv.wait(lk, [&] { return raw->sent || raw->cancelled.load(); });
-          return !raw->cancelled.load();
-        });
-    guard->engine().remember_reply(r, out);  // before the stream ends: a draft (POST /v1/draft) may follow at once
-    std::lock_guard<std::mutex> lk(raw->mu);
-    if (raw->started && out.finish_reason != "cancelled") raw->out.push_back(w->end(out));
-    raw->result = std::move(out);
-    raw->done = true;
-    raw->cv.notify_all();
-  });
-  {
-    std::unique_lock<std::mutex> lk(job->mu);
-    job->cv.wait(lk, [&] { return job->started || job->done; });
-  }
-  if (!job->started) {
-    job->worker.join();
-    ui::done(meter, job->result);
-    auto [status, body] = failure(job->result);
-    res.status = status;
-    res.set_content(api::dump(body), "application/json");
-    return;
-  }
-  res.set_header("Cache-Control", "no-cache");
-  res.set_chunked_content_provider("text/event-stream", [guard, job, w, after, meter, live = r.live, telemetry](size_t, httplib::DataSink& sink) {
-    // the client is gone: the engine stops at its next token, or gives the request up before it takes a slot
-    auto gone = [&] {
-      job->cancel();
-      job->worker.join();
-      ui::done(meter, job->result);
-      return false;
-    };
-    auto last = std::chrono::steady_clock::now();  // the last write
-    bool first = true;
-    auto progress_at = std::chrono::steady_clock::time_point::min();
-    for (;;) {
-      std::deque<std::string> batch;
-      bool done;
-      {
-        std::unique_lock<std::mutex> lk(job->mu);
-        // a second at a time while nothing comes, to see whether the client is still there
-        job->cv.wait_for(lk, std::chrono::seconds(1), [&] { return !job->out.empty() || job->done; });
-        if (job->out.empty() && !job->done && std::chrono::steady_clock::now() - last >= std::chrono::seconds(15))
-          job->out.push_back(w->keepalive());  // 15 s without an event
-        batch.swap(job->out);
-        done = job->done;
-      }
-      // Opt-in benchmark events sample existing atomics from the HTTP thread; no GPU polling or synchronization.
-      if (telemetry && live) {
-        const auto now = std::chrono::steady_clock::now();
-        if (done || progress_at == std::chrono::steady_clock::time_point::min() ||
-            now - progress_at >= std::chrono::seconds(1)) {
-          const int prompt = live->prompt.load(std::memory_order_relaxed);
-          const int cached = live->cached.load(std::memory_order_relaxed);
-          json progress{{"phase", live->phase.load(std::memory_order_relaxed)}, {"prompt_tokens", prompt},
-                        {"cached_tokens", cached}, {"processed_tokens", std::clamp(live->read.load(std::memory_order_relaxed), 0, prompt)},
-                        {"completion_tokens", live->tokens.load(std::memory_order_relaxed)},
-                        {"cycles", live->cycles.load(std::memory_order_relaxed)}, {"speculative", live->spec.load(std::memory_order_relaxed)},
-                        {"final", done}};
-          batch.push_front("event: kapitsa_progress\ndata: " + json{{"kapitsa_progress", progress}}.dump() + "\n\n");
-          progress_at = now;
-        }
-      }
-      if (batch.empty() && !sink.is_writable()) return gone();
-      for (const auto& e : batch)
-        if (!sink.write(e.data(), e.size())) return gone();
-      if (!batch.empty()) last = std::chrono::steady_clock::now();
-      if (!batch.empty() && first) {  // an early stream's engine goes on to a slot now
-        first = false;
-        std::lock_guard<std::mutex> lk(job->mu);
-        job->sent = true;
-        job->cv.notify_all();
-      }
-      if (done) break;
-    }
-    sink.done();
-    job->worker.join();
-    ui::done(meter, job->result);
-    after(job->result);
-    return true;
-  });
+  server::stream_reply(r, std::move(w), res,
+      [guard = std::move(guard)](auto observer) {
+        return native_execution(guard, std::move(observer), NativeReplyMemory::BeforeTerminal);
+      },
+      [failure = std::move(failure)](const ChatResult& result, httplib::Response& response) {
+        auto [status, body] = failure(result);
+        response.status = status;
+        response.set_content(api::dump(body), "application/json");
+      }, std::move(after), {[meter] { ui::token(meter); }, [meter](const ChatResult& result) { ui::done(meter, result); }},
+      early, telemetry);
 }
 
 // What the server keeps when it ends: the KFlash budgets' measurements (Engine::save_kflash: this Mac's cost per verify
@@ -1336,11 +1225,13 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     const std::string prev = model_mgr->current_model_id();
-    std::string err;
+    ModelManager::Error err;
     auto eng = model_mgr->switch_to(target, &err);
     if (!eng) {
-      res.status = 400;
-      json eb{{"error", {{"message", err.empty() ? "Failed to switch model" : err}, {"type", "invalid_request_error"}}}};
+      const bool busy = err.code == ModelManager::Error::Code::Busy;
+      res.status = busy ? 503 : 400;
+      if (busy) res.set_header("Retry-After", "30");
+      json eb{{"error", {{"message", err.message.empty() ? "Failed to switch model" : err.message}, {"type", busy ? "server_error" : "invalid_request_error"}}}};
       res.set_content(eb.dump(), "application/json");
       return;
     }
@@ -1370,12 +1261,14 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     const std::string req_model = body.value("model", "");
-    std::string err;
+    ModelManager::Error err;
     if (reject_while_switching(*model_mgr, res, api::dump(api::chat_error("The server is switching models; retry shortly.")))) return;
     auto guard = model_mgr->acquire_request(req_model, &err);
     if (!guard) {
-      res.status = 400;
-      res.set_content(api::dump(api::chat_error("Model error: " + err)), "application/json");
+      const bool busy = err.code == ModelManager::Error::Code::Busy;
+      res.status = busy ? 503 : 400;
+      if (busy) res.set_header("Retry-After", "30");
+      res.set_content(api::dump(api::chat_error("Model error: " + err.message)), "application/json");
       return;
     }
     ChatRequest r;
@@ -1399,10 +1292,9 @@ static int serve(int argc, char** argv, int first) {
     const bool telemetry = req.get_header_value("X-Kapitsa-Bench-Telemetry") == "1";
     if (telemetry && !r.live) r.live = std::make_shared<LiveDecode>();
     if (!stream) {
-      ChatResult out = guard->engine().chat(r, [&](const ChatDelta&) {
-        ui::token(meter);
-        return true;
-      });
+      auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
+      execution->start(r);
+      const ChatResult& out = execution->wait();
       ui::done(meter, out);
       prefill_after(r, out);
       if (out.finish_reason == "error") {
@@ -1440,12 +1332,14 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     const std::string req_model = body.value("model", "");
-    std::string err;
+    ModelManager::Error err;
     if (reject_while_switching(*model_mgr, res, api::dump(api::messages_error("overloaded_error", "The server is switching models; retry shortly.")))) return;
     auto guard = model_mgr->acquire_request(req_model, &err);
     if (!guard) {
-      res.status = 400;
-      res.set_content(api::dump(api::messages_error("invalid_request_error", "Model error: " + err)), "application/json");
+      const bool busy = err.code == ModelManager::Error::Code::Busy;
+      res.status = busy ? 503 : 400;
+      if (busy) res.set_header("Retry-After", "30");
+      res.set_content(api::dump(api::messages_error(busy ? "overloaded_error" : "invalid_request_error", "Model error: " + err.message)), "application/json");
       return;
     }
     api::MessagesRequest q;
@@ -1465,10 +1359,9 @@ static int serve(int argc, char** argv, int first) {
     const auto meter = ui::meter(req, q.chat);
     q.chat.live = ui::live_of(meter);
     if (!q.stream) {
-      ChatResult out = guard->engine().chat(q.chat, [&](const ChatDelta&) {
-        ui::token(meter);
-        return true;
-      });
+      auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
+      execution->start(q.chat);
+      const ChatResult& out = execution->wait();
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::messages_failure(out);
@@ -1488,10 +1381,13 @@ static int serve(int argc, char** argv, int first) {
       json b = json::parse(req.body);
       const std::string req_model = b.value("model", "");
       if (reject_while_switching(*model_mgr, res, api::dump(api::messages_error("overloaded_error", "The server is switching models; retry shortly.")))) return;
-      auto guard = model_mgr->acquire_request(req_model);
+      ModelManager::Error err;
+      auto guard = model_mgr->acquire_request(req_model, &err);
       if (!guard) {
-        res.status = 400;
-        res.set_content(api::dump(api::messages_error("invalid_request_error", "Model error")), "application/json");
+        const bool busy = err.code == ModelManager::Error::Code::Busy;
+        res.status = busy ? 503 : 400;
+        if (busy) res.set_header("Retry-After", "30");
+        res.set_content(api::dump(api::messages_error(busy ? "overloaded_error" : "invalid_request_error", "Model error")), "application/json");
         return;
       }
       const ChatRequest r = api::messages_prompt(b);
@@ -1518,12 +1414,14 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     const std::string req_model = body.value("model", "");
-    std::string err;
+    ModelManager::Error err;
     if (reject_while_switching(*model_mgr, res, api::dump(api::responses_error("The server is switching models; retry shortly.", "server_error")))) return;
     auto guard = model_mgr->acquire_request(req_model, &err);
     if (!guard) {
-      res.status = 400;
-      res.set_content(api::dump(api::responses_error("Model error: " + err, "invalid_request_error")), "application/json");
+      const bool busy = err.code == ModelManager::Error::Code::Busy;
+      res.status = busy ? 503 : 400;
+      if (busy) res.set_header("Retry-After", "30");
+      res.set_content(api::dump(api::responses_error("Model error: " + err.message, busy ? "server_error" : "invalid_request_error")), "application/json");
       return;
     }
     auto q = std::make_shared<api::ResponsesRequest>();
@@ -1551,10 +1449,9 @@ static int serve(int argc, char** argv, int first) {
     const auto meter = ui::meter(req, q->chat);
     q->chat.live = ui::live_of(meter);
     if (!q->stream) {
-      ChatResult out = guard->engine().chat(q->chat, [&](const ChatDelta&) {
-        ui::token(meter);
-        return true;
-      });
+      auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
+      execution->start(q->chat);
+      const ChatResult& out = execution->wait();
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::responses_failure(out);
@@ -1613,9 +1510,10 @@ static int serve(int argc, char** argv, int first) {
     }
     const std::string req_model =
         body.contains("model") && body["model"].is_string() ? body["model"].get<std::string>() : "";
-    auto guard = model_mgr->acquire_current(req_model);
+    ModelManager::Error err;
+    auto guard = model_mgr->acquire_current(req_model, &err);
     if (!guard) {
-      d.status = "no_conversation";
+      d.status = err.code == ModelManager::Error::Code::Busy ? "busy" : "no_conversation";
       return reply(d);
     }
     reply(guard->engine().draft(body["after"].get<std::string>(), body["text"].get<std::string>()));

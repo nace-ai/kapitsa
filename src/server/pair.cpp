@@ -94,15 +94,19 @@ void watch_pairs(PairHead h) {
     };
     for (;;) {
       std::this_thread::sleep_for(std::chrono::seconds(2));
-      const auto eng = h.mgr->current_engine();
-      if (!eng || h.mgr->switching()) continue;
+      std::string lost;
+      {
+        const auto eng = h.mgr->current_engine();
+        if (!eng || h.mgr->switching()) continue;
+        if (link) lost = eng->lost();
+      }
       const double rate = ui::recent_tok_s();
       const bool fresh = rate != last;  // a reply ended since the last look
       last = rate;
       const cluster::MacInfo me = h.me();
       const std::vector<cluster::MacInfo> peers = h.browser->peers();
       if (link) {
-        const std::string why = eng->lost();
+        const std::string& why = lost;
         if (why.empty() && fresh && alone > 0) slow = rate < 0.8 * alone ? slow + 1 : 0;
         // a stage that joined since: the split again over every stage when a token's pass would be a tenth faster
         bool regrow = false;

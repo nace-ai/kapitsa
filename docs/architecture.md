@@ -88,7 +88,7 @@ two candidates are within the batched pass's rounding of each other, and sampled
 [`ExecutionSession`](../src/engine/execution_session.h) provides one-shot start, cancellation, and join for a bound
 request. [`chat.h`](../src/engine/chat.h) contains the request, result, and delta types without native model headers.
 The private [`ExecutionFactory`](../src/engine/execution_session_internal.h) binds backend work and its observer
-before start. The native HTTP handlers do not use this owner yet.
+before start. The native HTTP handlers use this owner through a server-private binding.
 
 The control owner keeps the session alive through its callbacks. Callbacks must not retain their own session, and
 cannot destroy, start, or wait on it. They can request cancellation. Destruction cancels and joins the worker before releasing the
@@ -105,6 +105,27 @@ Each backend must establish its own native drain.
 
 The [standalone CPU runner](../tools/run_execution_session_test.sh) compiles the production implementation without
 native libraries or Apple frameworks. The same tests run through the CMake `execution_session_test` target.
+
+### HTTP request lifetime
+
+The [native binding](../src/server/native_execution.cpp) retains the selected engine and its `RequestGuard` through
+session destruction. The engine still owns scheduling, slots, RNG, parsing, expert storage and KV state. HTTP adds
+no second inference scheduler and does not enable earlier slot or cache reuse.
+
+The [stream observer](../src/server/http_stream.cpp) owns framing state and meters, with no owning path back to the
+session. Cancellation wakes the early-stream acceptance wait, which holds native slot acquisition until the first
+successful HTTP write or cancellation. A destroyed or abandoned provider cancels and joins its execution. Token
+metering stays at native delta production, not queue consumption. Streamed replies are remembered before terminal
+framing; nonstream handlers retain their prefill and response-store ordering. Pre-stream errors retain endpoint JSON
+responses; failed framing does not complete the HTTP stream.
+
+Model selection and request-lease registration happen under one selection lock. Switch and reload close admission,
+then wait for admitted leases without holding the lock those requests need for reply bookkeeping. A guard releases
+its engine reference before decrementing the lease count. This drains CPU request ownership, not Metal or ANE work.
+
+The [HTTP CPU runner](../tools/run_http_stream_test.sh) and CMake `http_stream_test` target exercise the production
+observer and chunked provider without native/UI linkage or sockets. They cover abandonment, cancellation, framing
+failures and metering, but do not establish native inference equivalence, performance or backend retirement.
 
 ## Four model backends
 
