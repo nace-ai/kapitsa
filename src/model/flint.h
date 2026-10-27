@@ -47,8 +47,6 @@ struct FlintConfig {
 
 // An MLX linear (or a stack of E of them): codes (uint32 words or bytes, the same little-endian stream), bf16 scale and
 // bias per group of gs inputs; bits 16: bf16 weights (s, b null)
-struct CaptureHook;  // model/qwen35.h: a block drafter's capture of the target's layer outputs
-
 struct FlintMat {
   const Tensor* w = nullptr;
   const Tensor* s = nullptr;
@@ -98,13 +96,6 @@ class Flint : public Model {
   static size_t ring_bytes(const FlintConfig& c);
 
   const FlintConfig& config() const { return cfg_; }
-  // ---- a DFlash2 drafter's view of a dense Llama (FlintDflTarget, model/flint_dfl.h) ----
-  const FlintMat& embed_mat() const { return embed_; }
-  const FlintMat& head_mat() const { return head_; }
-  const std::string& model_dir() const { return path_; }
-  // after layer l of every pass, the rows whose positions the hook's window holds copied to it (fp32 -> bf16), as
-  // Qwen35's: the drafter's context (prefill) and its next cycle's rows (verify)
-  void set_capture(const CaptureHook* h) { cap_ = h; }
   int vocab() const override { return cfg_.vocab; }
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
   std::string formats_summary() const;
@@ -196,8 +187,6 @@ class Flint : public Model {
   WeightStore ws_;
   std::vector<FlintLayer> layers_;
   FlintMat embed_, head_;
-  const CaptureHook* cap_ = nullptr;
-  void enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer& x);
   std::deque<Tensor> iq_tensors_;  // the IQ experts in the kernels' layout (iq_bufs_), as the FlintMats point at them
   std::vector<Buffer> iq_bufs_;
   const Tensor* final_norm_ = nullptr;

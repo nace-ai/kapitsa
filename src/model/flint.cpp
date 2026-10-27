@@ -3,7 +3,6 @@
 #include "gguf/quant.h"
 #include "model/iq_experts.h"
 #include "model/kparams.h"
-#include "model/qwen35.h"
 #include "model/v8.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -1475,23 +1474,7 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
 void Flint::enc_rows(Encoder& e, Seq& s, int pos0, int R) {
   if (R < 1 || R > kMaxRows) fatal("Flint: %d rows in one pass", R);
   enc_embed(e, s.tok, pos0, R, x_);
-  for (int l = 0; l < cfg_.layers; ++l) {
-    enc_layer_rows(e, s, l, pos0, R);
-    enc_capture(e, l, pos0, R, x_);
-  }
-}
-
-void Flint::enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer& x) {
-  if (!cap_ || layer >= int(cap_->slot.size()) || cap_->slot[size_t(layer)] < 0) return;
-  const int lo = std::max(pos0, cap_->pos_base), hi = std::min(pos0 + T, cap_->pos_base + cap_->rows);
-  if (lo >= hi) return;
-  const uint32_t D = uint32_t(cfg_.hidden);
-  const kp::DflCapture p{D, cap_->ld, uint32_t(cap_->slot[size_t(layer)]) * D, uint32_t(lo - cap_->pos_base)};
-  e.use(pipe("dfl_capture"));
-  e.buf(0, x, size_t(lo - pos0) * D * 4);
-  e.buf(1, cap_->dst);
-  e.val(2, p);
-  e.dispatch((D / 4 + 255) / 256, uint32_t(hi - lo), 1, 256);
+  for (int l = 0; l < cfg_.layers; ++l) enc_layer_rows(e, s, l, pos0, R);
 }
 
 // One layer of a prefill chunk of T rows (GEMMs on half rows): px_ in place. The chunk's keys go into the layer's cache
@@ -1727,7 +1710,6 @@ void Flint::enc_prefill_rows(Encoder& e, Seq& s, int pos0, int T) {
   enc_embed(e, s.tok, pos0, T, px_);
   for (int l = 0; l < cfg_.layers; ++l) {
     enc_layer_prefill(e, s, l, pos0, T);
-    enc_capture(e, l, pos0, T, px_);
     // a command buffer per layer of a long chunk, so the desktop's own GPU work is not held back behind one long one
     if (T >= 256 && l + 1 < cfg_.layers) e.split();
   }
