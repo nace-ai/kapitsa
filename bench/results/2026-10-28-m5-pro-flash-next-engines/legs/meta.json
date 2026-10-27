@@ -1,0 +1,7 @@
+{"machine": "Mac17,8 (MacBook Pro M5 Pro), 48 GB", "macos": "26.5.2", "date_utc": "2026-10-27",
+ "arms": {"K": "kapitsa 0.2.23 --engine splash, splash-6-ondemand 7e478053 (binary built in a detached worktree)",
+          "K2": "kapitsa 0.2.23 --engine splash, splash-6-plan ff6151c8 (#743 head)",
+          "S / S2": "plain Splash 1.4.0 (server.server + engine/splash), engine sha256 20b36bcc...c29f; S2 is the set paired with K2",
+          "N": "kapitsa 0.2.23 main e840651c, flash-next-q20 native, MTP depth 2 (KFlash), NI_EXPERT_STORE=24",
+          "L": "llama.cpp c7474afc, llama-server -ngl 99 -fa on -c 33280 -np 1, Splash's Q2_0 GGUF shards (mmap)"},
+ "harness_commit": "see git log of this directory; frozen first at 6272f582, later fixes listed in the README"}
