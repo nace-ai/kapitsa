@@ -688,10 +688,14 @@ def cli_checks(kapitsa):
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)
     for args, flag in ((("doctor", "--slots", "abc"), "--slots"), (("doctor", "--prefill-chunk", "-1"), "--prefill-chunk"),
-                       (("doctor", "--mem-budget", "x"), "--mem-budget"), (("import", "x.gguf", "--threads", "abc"), "--threads")):
+                       (("doctor", "--mem-budget", "x"), "--mem-budget"), (("import", "x.gguf", "--threads", "abc"), "--threads"),
+                       (("doctor", "--slots", "99999999999"), "--slots"), (("doctor", "--prefill-chunk", "3000000000"), "--prefill-chunk")):
         rc, _, err = run(*args)  # (a bad number was an uncaught std::invalid_argument: the process aborted)
         check(f"cli: {' '.join(args[:1])} {flag} with a bad number is a usage error (2), not an abort",
               rc == 2 and flag in err and "needs" in err, f"rc={rc} {err}")
+    rc, _, err = run("import", "x.gguf", "--threads", "2000")
+    check("cli: import --threads past 1024 says the range, not 'a whole number'",
+          rc == 2 and "0 to 1024" in err and "whole number" not in err, f"rc={rc} {err}")
     rc, _, err = run("pull", "--dry-run", "./no-such-folder")
     check("cli: a missing model folder is named without a --model flag that pull does not have",
           rc == 2 and "No folder at ./no-such-folder" in err and "--model" not in err, err)

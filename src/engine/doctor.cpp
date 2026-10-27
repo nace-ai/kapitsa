@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <climits>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -243,13 +244,13 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
   fputs(out.c_str(), stdout);
 }
 
-// A whole number (or, when `whole` is false, a decimal one) of at least 0, all of `v`: what --slots, --prefill-chunk and
-// --mem-budget take. std::stoi and stod threw out of main on anything else.
+// A whole number (or, when `whole` is false, a decimal one) of at least 0, all of `v`, and for a whole one no more than an
+// int holds: what --slots, --prefill-chunk and --mem-budget take. std::stoi and stod threw out of main on anything else.
 static bool number(const std::string& v, bool whole, double* out) {
   char* end = nullptr;
   errno = 0;
   const double x = whole ? double(strtol(v.c_str(), &end, 10)) : strtod(v.c_str(), &end);
-  if (v.empty() || *end || errno || !std::isfinite(x) || x < 0) return false;
+  if (v.empty() || *end || errno || !std::isfinite(x) || x < 0 || (whole && x > INT_MAX)) return false;
   *out = x;
   return true;
 }

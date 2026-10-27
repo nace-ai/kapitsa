@@ -1961,8 +1961,9 @@ int run_import(int argc, char** argv) {
       char* end = nullptr;
       const long n = strtol(v.c_str(), &end, 10);
       if (v.empty() || *end || n < 0 || n > 1024) {  // (0: the default)
-        if (term::fancy()) term::error("--threads needs a whole number, not \"" + v + "\"", "kapitsa import --help shows how to use it.");
-        else fprintf(stderr, "kapitsa import: --threads needs a whole number, not \"%s\"\n(kapitsa import --help shows how to use it.)\n", v.c_str());
+        const std::string why = v.empty() || *end || n < 0 ? "--threads needs a whole number, not \"" + v + "\"" : "--threads takes 0 to 1024, not \"" + v + "\"";
+        if (term::fancy()) term::error(why, "kapitsa import --help shows how to use it.");
+        else fprintf(stderr, "kapitsa import: %s\n(kapitsa import --help shows how to use it.)\n", why.c_str());
         return 2;
       }
       o.threads = int(n);
