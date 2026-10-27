@@ -194,6 +194,9 @@ class FrameParser {
   bool next(Event& out);
   size_t buffered() const { return buf_.size() - off_; }
   bool failed() const { return failed_; }
+  // The stream ended (EOF): bytes of a frame left over are protocol_fatal:truncated_frame (as protocol.py's finish()),
+  // returned and the parser refuses further input; nothing left is nullopt.
+  std::optional<Issue> finish();
 
  private:
   std::vector<uint8_t> buf_;

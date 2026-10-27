@@ -144,9 +144,14 @@ static void test_request_validation() {
   expect_request_issue(r, F::kRequestError, C::kInvalidCount, "also_ends inside the end");
   r = base_request(); r.thinking = ThinkingBudget{0xFFFFFFFFu, {5}, 0};
   expect_request_issue(r, F::kRequestError, C::kInvalidCount, "thinking budget is the no-budget marker");
-  // An id of zero cannot name a request: the stream fails instead.
+  // An id of zero cannot name a request: the stream fails instead, whatever else is right or wrong with the request
+  // (protocol.py looks at the id first)
+  r = base_request(); r.request_id = 0;
+  expect_request_issue(r, F::kProtocolFatal, C::kInvalidRequestId, "no request id");
   r = base_request(); r.request_id = 0; r.max_output_tokens = 0;
-  expect_request_issue(r, F::kProtocolFatal, C::kLimitExceeded, "no request id");
+  expect_request_issue(r, F::kProtocolFatal, C::kInvalidRequestId, "no request id, no output either: the id is first");
+  try { encode_cancel(0); CHECK(false); } catch (const ProtocolError& pe) { CHECK(pe.issue.code == C::kInvalidRequestId && pe.issue.failure == F::kProtocolFatal); }
+  CHECK(encode_cancel(1).size() == 24);
 }
 
 static void test_events() {
@@ -210,6 +215,20 @@ static void test_bad_events() {
   }
 }
 
+// What an event says, enough to tell one from another: its kind and its fields
+static std::string key(const Event& e) {
+  std::string k = std::to_string(e.index());
+  auto add = [&](uint64_t v) { k += "," + std::to_string(v); };
+  if (auto* v = std::get_if<Ready>(&e)) add(v->max_concurrent_requests), add(v->max_context_tokens), add(v->vision);
+  else if (auto* v = std::get_if<Start>(&e)) add(v->request_id), add(v->lane), add(v->matched_prompt_tokens);
+  else if (auto* v = std::get_if<PromptProgress>(&e)) add(v->request_id), add(v->processed_tokens), add(v->elapsed_micros);
+  else if (auto* v = std::get_if<Tokens>(&e)) { add(v->request_id); add(v->sequence_offset); for (auto t : v->tokens) add(t); }
+  else if (auto* v = std::get_if<Done>(&e)) add(v->request_id), add(uint64_t(v->reason)), add(v->prompt_tokens), add(v->completion_tokens), add(v->prefill_micros), add(v->decode_micros), add(v->wall_micros);
+  else if (auto* v = std::get_if<Error>(&e)) { add(v->request_id); k += v->code + "|" + v->message; }
+  else if (auto* v = std::get_if<StatusJson>(&e)) { add(v->correlation_id); k += v->json; }
+  return k;
+}
+
 static void test_incremental() {
   // Every event back to back, fed one byte at a time and then in odd chunks, comes out in order and unchanged.
   std::vector<uint8_t> all;
@@ -223,7 +242,7 @@ static void test_incremental() {
     for (size_t i = 0; i < all.size(); i += chunk) {
       p.feed(all.data() + i, std::min(chunk, all.size() - i));
       while (p.next(e)) {
-        CHECK(e.index() == std::get<0>(std::make_tuple(e.index())));
+        CHECK(got < want && key(e) == key(parse_one(EVENT(names[got]))));
         got++;
       }
     }
@@ -238,12 +257,43 @@ static void test_incremental() {
   try { p.next(e); CHECK(false); } catch (const ProtocolError& pe) { CHECK(pe.issue.code == IssueCode::kFrameTooLarge); }
 }
 
+static void test_truncated() {
+  const auto frame = EVENT("done");
+  // EOF between frames is clean; EOF inside a header or a payload is protocol_fatal:truncated_frame, once
+  for (size_t cut : {size_t(0), size_t(5), size_t(15), size_t(16), frame.size() - 1, frame.size()}) {
+    FrameParser p;
+    p.feed(frame.data(), cut);
+    Event e;
+    const bool whole = p.next(e);
+    auto issue = p.finish();
+    if (cut == 0 || cut == frame.size()) {
+      CHECK(!issue && whole == (cut == frame.size()));
+    } else {
+      CHECK(!whole && issue && issue->failure == FailureClass::kProtocolFatal && issue->code == IssueCode::kTruncatedFrame);
+      CHECK(p.failed());
+      bool refused = false;
+      try { p.finish(); } catch (const std::logic_error&) { refused = true; }
+      CHECK(refused);
+    }
+  }
+  FrameParser p;
+  p.feed(frame.data(), 7);
+  CHECK(p.finish()->message == "stream ended after 7 of 16 frame-header bytes");
+  FrameParser q;
+  q.feed(frame.data(), frame.size() - 3);
+  Event e;
+  CHECK(!q.next(e));
+  auto m = q.finish()->message;
+  CHECK(m.find("payload bytes") != std::string::npos);
+}
+
 int main() {
   test_client_frames();
   test_request_validation();
   test_events();
   test_bad_events();
   test_incremental();
+  test_truncated();
   if (failures) { std::printf("%d failure(s)\n", failures); return 1; }
   std::printf("splash_protocol_test: ok\n");
   return 0;

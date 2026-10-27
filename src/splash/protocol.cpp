@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 
@@ -128,6 +129,8 @@ std::string Issue::describe() const {
 
 std::vector<uint8_t> encode_request(const Request& r) {
   const uint64_t rid = r.request_id;
+  // first, as protocol.py's: an id of zero names no request, so the stream fails
+  if (!rid) fatal(IssueCode::kInvalidRequestId, "request id must be non-zero");
   if (r.priority > Priority::kBackground) fail_request(IssueCode::kInvalidEnumValue, "priority is not defined by native protocol", rid);
   if (r.flags & ~uint32_t(kIgnoreEndOfSequence | kReturnProgress))
     fail_request(IssueCode::kInvalidEnumValue, "request flags are not defined by native protocol", rid);
@@ -393,6 +396,26 @@ bool FrameParser::next(Event& out) {
     failed_ = true;
     throw;
   }
+}
+
+std::optional<Issue> FrameParser::finish() {
+  if (failed_) throw std::logic_error("frame parser used after it failed");
+  const size_t held = buf_.size() - off_;
+  if (!held) return std::nullopt;
+  failed_ = true;
+  std::string msg;
+  if (held < kFrameHeaderBytes) {
+    msg = "stream ended after " + std::to_string(held) + " of " + std::to_string(kFrameHeaderBytes) + " frame-header bytes";
+  } else {
+    const uint8_t* h = buf_.data() + off_;
+    uint64_t payload = 0;
+    for (int i = 0; i < 8; i++) payload |= uint64_t(h[8 + i]) << (8 * i);
+    char type[16];
+    std::snprintf(type, sizeof type, "0x%04x", unsigned(h[6] | h[7] << 8));
+    msg = "stream ended after " + std::to_string(held - kFrameHeaderBytes) + " of " + std::to_string(payload) + " " + type +
+          " payload bytes";
+  }
+  return Issue{FailureClass::kProtocolFatal, IssueCode::kTruncatedFrame, 0, std::move(msg)};
 }
 
 }  // namespace ni::splash
