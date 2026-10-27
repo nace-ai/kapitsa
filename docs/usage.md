@@ -451,12 +451,12 @@ kapitsa serve --engine splash --splash-model flash-next  # one of several: a fam
 | `--check` | — | With `--engine splash`: prints the engine binary, the resolved models, the model that would run, and for whatever is missing the error and the flag that fixes it; exits 0 when both are found, 1 otherwise, and starts nothing. A usage error without `--engine splash`. |
 | `--splash-arg ARG` | none | One more argument for `splash serve-native`, repeatable (`--splash-arg --verify-rows --splash-arg 2`). |
 | `--splash-persistent-cache` | off | Splash's SSD prefix cache kept across restarts: `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<model folder>`, unless `--splash-arg` gives either. Off, the child starts with an empty cache and writes nothing. |
-| `--splash-conversation-salt` | off | A cache salt per conversation (a hash of its messages up to the first user message), so conversations stop sharing cached prompts such as a common system prompt; off is one shared cache, as Splash without `cache_salt`. |
+| `--splash-conversation-salt` | off | A cache salt per conversation (a hash of its messages up to the first user message), so conversations stop sharing cached prompts such as a common system prompt; off is one shared cache, as Splash without `cache_salt`. It separates conversations, it is not a speed option. |
 
 All of them need `--engine splash` and are an error without it. The binary and the model the last run used are kept in
 `~/.cache/kapitsa/splash.json` (`KAPITSA_HOME` moves it), so the next run needs neither flag. Splash's model folder is
 the model: `--model`, the catalog, a download, this Mac's memory plan and routing to another Mac do not apply in this
-mode.
+mode, and `--model`, `--split` and `--allow-switch` are usage errors here rather than ones that are ignored.
 
 Splash's own default frees the weights after ten idle minutes and the next request waits about 7 s for them to come
 back, so the child is given `--idle-release off` unless `--splash-arg` says otherwise. Splash takes `off` or a number of
@@ -473,14 +473,21 @@ memory to start` first, then `serve` exits 1 with `the Splash engine did not sta
 engine closed its output`; Splash's own reason is the line above Kapitsa's, and on this Mac it depends on what else
 is running.
 
+What the child was given is one log line — `[kapitsa] splash: engine arguments added: --idle-release off;
+--expert-memory 16G (30 GiB free+reclaimable)` — and its ready line reports the pid, context, concurrent requests and
+where the tokenizer came from.
+
 Text chat only: Splash's native protocol carries text and sampling, so a request with an image, structured output (a
 `response_format` grammar) or a loop count is refused with the error type `invalid_request_error` and the engine's
 reason as the message; a prompt longer than the context is the same 400, with `context_length_exceeded` and the context
 it holds, that Kapitsa's own engine returns. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the
-server's life: one `serve` is one engine, not one per request.
+server's life: one `serve` is one engine, not one per request. Two failures are not refusals: a request that arrives
+while the engine is at its concurrent-request limit is a 503 with `Retry-After` and `the Splash engine is at its
+concurrent-request limit`, and one whose engine has died fails with `the Splash engine is not running`.
 
 A follow-up turn sends the client's history as it is: the reasoning an earlier turn produced is not put back into it as
-Kapitsa's own engine does, so a turn's prompt is still the one plain Splash would build.
+Kapitsa's own engine does, so a turn's prompt is still the one plain Splash would build, and a follow-up turn's TTFT is
+Splash's own prefix cache doing the work — the cache plain Splash has too, not one Kapitsa adds.
 
 Splash's sampler is its own frontend's too: a request that names no sampling gets Splash's defaults — temperature 1.0,
 top_p 0.95, top_k 20 — rather than the per-model ones Kapitsa's own engine would apply, so the same request answers
