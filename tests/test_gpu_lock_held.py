@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Python side of "the caller already holds the GPU lock": NI_LOCK_HELD=1 / NACE_GPU_LOCK_HELD=1.
 
-usage: test_gpu_lock_held.py
+usage: test_gpu_lock_held.py   (no CI step yet; run it by hand)
 
 No model, no Metal, no GPU: every lock here is a temporary file ($BENCH_GPU_LOCK points at it), never /tmp/kapitsa-gpu.lock.
 
