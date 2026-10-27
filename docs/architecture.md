@@ -153,7 +153,10 @@ layers keep a growing cache, and each head's learned sink joins its softmax. A d
 (`flint_attn_d2`: norms, RoPE, the cache write, split-K over 32-key tiles, the merge by the last threadgroup); verify
 passes and prefill chunks use split-K and tiled kernels of their own. Its MoE routes by sigmoid scores with an
 always-on shared expert, on the base library's expert kernels (`moe_gate_up3`, `moe_down`, the 2-4-row `moe4_*`, the
-prefill's grouped GEMMs). Its activations pass half's range in places (up to 75776 at layer 46), so the prefill's
+prefill's grouped GEMMs). A pack with 8-bit routed experts, or 4-bit ones beside an 8-bit shared expert, takes
+`wfmt.metal`'s generic expert kernels instead (`moeg_gu_rows_*` / `moeg_down_rows_*_w` for decode and verify rows,
+`qrmf_gu_f8g64_m32_n64_f32` / `qrmf_dn_f8g64_m32_n128` for prefill), and a quantized router is copied to bf16 at load.
+Its activations pass half's range in places (up to 75776 at layer 46), so the prefill's
 SwiGLU stores such rows divided by a power of two and folds the factor back into the row's weight
 (`flint_swiglu_scaled`). It has its own pre-tokenizer split and GLM's tool-call format in the output parser.
 

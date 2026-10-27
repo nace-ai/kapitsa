@@ -163,6 +163,13 @@ takes its top 6, and where a score sits on a rounding boundary a verify pass, wh
 step, can pick another expert, and every layer after it computes something else. The output check met one such row in
 192 (layer 16 at a window's position 1684), at verify passes of 2, 4 and 8 rows alike.
 
+Flint packs of higher precision than Recursive's run too, each module's format read from its tensors: 8-bit group-64
+routed experts beside an 8-bit shared expert (an MLX 8-bit export, a Q8_0 GGUF's import), or 4-bit routed experts beside
+an 8-bit shared expert (MLX's mixed 4/8-bit recipe), with projections in 4 or 8 bits. A quantized router (that recipe
+quantizes it) is copied to bf16 at load, the format the routing kernels read; its rounding to bf16 can move a top-6
+choice at a near-tie. These experts run the generic expert kernels (`src/kernels/wfmt.metal`), not the 4-bit pack's
+specialized ones, and 8-bit experts read twice the bytes a token.
+
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
 checkpoints in the Hugging Face layout, and weights larger than this Mac's memory budget.
@@ -225,8 +232,10 @@ reads text only.
 
 Flint's GGUFs import their own way. Their routed experts must be IQ blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS or IQ3_S),
 which stay as they are; attention, the dense MLP and the shared expert take 4-bit group 64, the embedding 3-bit group
-64, the LM head 6-bit group 64, and the router stays bf16. A Flint GGUF with other experts (Recursive's Q4_1 file) is
-refused, pointing at `flint:4bit`. unsloth's `flint-UD-IQ2_XXS.gguf`
+64, the LM head 6-bit group 64, and the router stays bf16. A Flint GGUF whose routed experts are all Q8_0 or Q6_K
+(ggml-org's `Flint-Q8_0.gguf`) imports for precision instead: the experts, the shared expert and every other linear in
+8-bit group 64, the router bf16, about twice the 4-bit pack's memory. A Flint GGUF with other experts (Recursive's Q4_1
+file) is refused, pointing at `flint:4bit`. unsloth's `flint-UD-IQ2_XXS.gguf`
 ([unsloth/flint-GGUF](https://huggingface.co/unsloth/flint-GGUF), 11.9 GB; IQ1_S, IQ2_XXS, IQ2_S and IQ3_XXS experts)
 imports in 6 s into 11.73 GB of weights, 13.0 GB on disk in all with the file's 11.9 GB (the experts file is an APFS
 clone of it). In a 16 GB Mac's 12.2 GB budget that leaves room for one conversation of 8K tokens: the engine runs it

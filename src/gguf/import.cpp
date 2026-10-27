@@ -812,19 +812,27 @@ struct Builder {
   // conversation (engine.cpp, fits_small). Against llama.cpp on the file itself (CPU, 192 decode rows), all in 4 bits
   // cost KL 0.29 and +0.15 nats a token; of that, the head kept as stored took back 0.15 and 0.09 (6 bits here: 0.23 and
   // +0.094), the attention 0.13 and 0.04, the shared expert 0.03; the 3-bit embedding adds 0.006 nats.
+  // A file whose routed experts are all 6-8-bit (Q8_0, Q6_K: ggml-org's Flint-Q8_0) is imported for precision instead:
+  // the experts, the shared expert and every other linear in 8-bit group 64, the router bf16 (Flint's generic-format
+  // expert kernels, wfmt.metal's 8-bit pair).
   void build_flint() {
     const Hp& h = P.hp;
     const uint64_t H = uint64_t(h.H), QD = uint64_t(h.hq * h.head_dim), KD = uint64_t(h.hkv * h.head_dim);
     const uint64_t E = uint64_t(h.E), I = uint64_t(h.moe_I), S = uint64_t(h.shared_I), FF = uint64_t(h.ffn);
-    linear(F, get(F, "token_embd.weight"), "model.embed_tokens", uint64_t(h.vocab), H, k3g64);
+    bool hi = h.dense_lead < h.layers;
+    for (int64_t i = h.dense_lead; i < h.layers && hi; ++i)
+      for (const char* n : {"ffn_gate_exps.weight", "ffn_up_exps.weight", "ffn_down_exps.weight"})
+        if (type_class(get(F, "blk." + std::to_string(i) + "." + n)->type) != kC8) hi = false;
+    const Fmt lf = hi ? k8g64 : k4g64;
+    linear(F, get(F, "token_embd.weight"), "model.embed_tokens", uint64_t(h.vocab), H, hi ? k8g64 : k3g64);
     const Tensor* o = get(F, "output.weight");
     check_ne(o, {h.H, h.vocab});
-    linear(F, o, "lm_head", uint64_t(h.vocab), H, k6g64);
+    linear(F, o, "lm_head", uint64_t(h.vocab), H, hi ? k8g64 : k6g64);
     param(F, "output_norm.weight", "model.norm.weight", {h.H}, 1, H);
     auto lin = [&](const std::string& src, const std::string& out, uint64_t N, uint64_t K) {
       const Tensor* t = get(F, src);
       check_ne(t, {int64_t(K), int64_t(N)});
-      linear(F, t, out, N, K, k4g64);
+      linear(F, t, out, N, K, lf);
     };
     for (int64_t i = 0; i < h.layers; ++i) {
       const std::string b = "blk." + std::to_string(i) + ".", out = "model.layers." + std::to_string(i) + ".";
@@ -852,11 +860,21 @@ struct Builder {
       check_ne(g, {h.H, int64_t(I), h.E});
       check_ne(u, {h.H, int64_t(I), h.E});
       check_ne(d, {int64_t(I), h.H, h.E});
+      if (hi) {
+        for (auto [t, n, N, K] : {std::tuple{g, "gate_proj", I, H}, {u, "up_proj", I, H}, {d, "down_proj", H, I}}) {
+          Lin& L = linear(F, t, out + "mlp.switch_mlp." + n, E * N, K, k8g64, {}, 0, false, E, N);
+          L.shape = {int64_t(E), int64_t(N), int64_t(K)};
+        }
+        lin(b + "ffn_gate_shexp.weight", out + "mlp.shared_expert.gate_proj", S, H);
+        lin(b + "ffn_up_shexp.weight", out + "mlp.shared_expert.up_proj", S, H);
+        lin(b + "ffn_down_shexp.weight", out + "mlp.shared_expert.down_proj", H, S);
+        continue;
+      }
       if (!iq_gpu_type(g->type) || u->type != g->type || !iq_gpu_type(d->type))
         throw Error(base_name(F.parts()[0]) + " stores layer " + std::to_string(i) + "'s routed experts as " +
                     type_name(g->type) + " / " + type_name(d->type) + ": Kapitsa imports Flint GGUFs whose experts are "
-                    "in llama.cpp's IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS or IQ3_S blocks (unsloth's UD-IQ files); flint:4bit "
-                    "is Recursive's 4-bit model.");
+                    "in llama.cpp's IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS or IQ3_S blocks (unsloth's UD-IQ files), or all in "
+                    "Q8_0 / Q6_K (imported in 8 bits); flint:4bit is Recursive's 4-bit model.");
       for (auto [t, n, N, K] : {std::tuple{g, "gate_proj", I, H}, {u, "up_proj", I, H}, {d, "down_proj", H, I}}) {
         Lin& L = linear(F, t, out + "mlp.switch_mlp." + n, E * N, K, iq_fmt(t->type));
         L.shape = {int64_t(E), int64_t(N), int64_t(K)};

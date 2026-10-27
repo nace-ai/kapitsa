@@ -1024,10 +1024,12 @@ NI_INLINE void qrmf_acc(const device half* X, const device uint* xrows, bool gat
   }
 }
 
-template <int F, int GS, int FL, int BN, int WN>
+// H: the products silu(gate) * up as half, or as fp32 (HT float: Flint's, whose products can pass half's range and are
+// stored scaled by flint_swiglu_scaled)
+template <int F, int GS, int FL, int BN, int WN, typename HT = half>
 NI_INLINE void qrmf_gu_body(const device half* X, const device uint* xrows, uint x_ld, uint m0, uint rows,
                             const device uint32_t* const thread* W, const device bfloat* const thread* S,
-                            const device bfloat* const thread* B, device half* H, uint y_ld, uint N, uint K, uint n0,
+                            const device bfloat* const thread* B, device HT* H, uint y_ld, uint N, uint K, uint n0,
                             threadgroup half* xs, uint tid, uint sgn, uint2 rc) {
   constexpr int TN = BN / WN, FA = TN / 8;
   simdgroup_float8x8 acc[2 * FA][FL];
@@ -1041,7 +1043,7 @@ NI_INLINE void qrmf_gu_body(const device half* X, const device uint* xrows, uint
       for (int e = 0; e < 2; ++e) {
         const uint m = b * 8 + rc.y + e;
         const float g = acc[a][b].thread_elements()[e], u = acc[FA + a][b].thread_elements()[e];
-        if (m < rows) H[(m0 + m) * y_ld + n] = half(silu(g) * u);
+        if (m < rows) H[(m0 + m) * y_ld + n] = HT(silu(g) * u);
       }
   }
 }
@@ -1068,12 +1070,13 @@ NI_INLINE void qrmf_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
 }
 
 // grid (N / BN, max tiles), 32 * WN threads; Qmm2Params (w_expert_stride in words, s_expert_stride in groups).
-#define NI_QRMF_GU(NAME, F, GS, FB, BN, WN)                                                                  \
+#define NI_QRMF_GU(NAME, F, GS, FB, BN, WN) NI_QRMF_GU_T(NAME, F, GS, FB, BN, WN, half)
+#define NI_QRMF_GU_T(NAME, F, GS, FB, BN, WN, HT)                                                            \
   [[kernel, max_total_threads_per_threadgroup(WN * 32)]] void NAME(                                          \
       const device half* X [[buffer(0)]], const device uint32_t* Wg [[buffer(1)]],                          \
       const device bfloat* Sg [[buffer(2)]], const device bfloat* Bg [[buffer(3)]],                         \
       const device uint32_t* Wu [[buffer(4)]], const device bfloat* Su [[buffer(5)]],                       \
-      const device bfloat* Bu [[buffer(6)]], device half* H [[buffer(7)]], constant Qmm2Params& p [[buffer(8)]], \
+      const device bfloat* Bu [[buffer(6)]], device HT* H [[buffer(7)]], constant Qmm2Params& p [[buffer(8)]], \
       const device uint* tiles [[buffer(9)]], const device uint* ntiles [[buffer(10)]],                     \
       const device uint* xrows [[buffer(11)]], const device uint32_t* SWg [[buffer(12)]],                   \
       const device bfloat* SSg [[buffer(13)]], const device bfloat* SBg [[buffer(14)]],                     \
@@ -1094,16 +1097,16 @@ NI_INLINE void qrmf_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
     threadgroup half* xs = (threadgroup half*)xs4;                                                          \
     const uint live = (rows + 7) / 8;                                                                       \
     if (FB >= 4 && live >= 4)                                                                               \
-      qrmf_gu_body<F, GS, (FB >= 4 ? 4 : 1), BN, WN>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
+      qrmf_gu_body<F, GS, (FB >= 4 ? 4 : 1), BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
                                                      n0, xs, tid, sg, rc);                                  \
     else if (FB >= 3 && live == 3)                                                                          \
-      qrmf_gu_body<F, GS, (FB >= 3 ? 3 : 1), BN, WN>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
+      qrmf_gu_body<F, GS, (FB >= 3 ? 3 : 1), BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
                                                      n0, xs, tid, sg, rc);                                  \
     else if (FB >= 2 && live == 2)                                                                          \
-      qrmf_gu_body<F, GS, (FB >= 2 ? 2 : 1), BN, WN>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
+      qrmf_gu_body<F, GS, (FB >= 2 ? 2 : 1), BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
                                                      n0, xs, tid, sg, rc);                                  \
     else                                                                                                    \
-      qrmf_gu_body<F, GS, 1, BN, WN>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, n0, xs, tid, sg, \
+      qrmf_gu_body<F, GS, 1, BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, n0, xs, tid, sg, \
                                      rc);                                                                   \
   }
 
@@ -1490,6 +1493,8 @@ NI_WF_LOW(NI_WF_PREFILL_SMALL)  // bf16's are in the base library (above)
   NI_QRMF_DN(qrmf_dn_##SFX##_m32_n128, F, GS, 4, 128, 4)             \
   NI_QMMSF_MOE(SFX, F, GS)
 NI_WF_MOE(NI_WF_MOE_PREFILL)
+// Flint's 8-bit routed experts: the gate / up products in fp32 (model/flint.cpp, enc_moe_g_prefill)
+NI_QRMF_GU_T(qrmf_gu_f8g64_m32_n64_f32, 8, 64, 4, 64, 4, float)
 
 // bf16 large-M tiles with M tiles along grid x (weights shared through the cache; qrf_f16_m32_n128_mf: base library)
 NI_QRF(qrf_f16_m64_n64_mf, 16, 64, 64, 64, 1, 4, true)
@@ -1542,6 +1547,7 @@ NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f4g64, 4, 64, 4, 64, 9 * 512)
 // wide experts ((k + 1) * max(I, SI) <= 7168 staged floats: Qwen3.8-Flash-Next's 11 x 640)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f8g64_w, 4, 64, 8, 64, 7168)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64_w, 3, 64, 8, 64, 7168)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f8g64_f8g64_w, 8, 64, 8, 64, 7168)  // (Flint's 7 x 1024)
 
 // Neural Engine split (ane_ffn.metal): weight staging from each format, and the GPU's share of the down projection
 #define NI_WF_ANE(SFX, F, GS) NI_ANE_WF(SFX, F, GS) NI_QRF_LD(qrf_##SFX##_m32_n128_ld, F, GS, 32, 128, 1, 4, false)

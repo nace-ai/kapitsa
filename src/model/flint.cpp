@@ -3,6 +3,7 @@
 #include "gguf/quant.h"
 #include "model/iq_experts.h"
 #include "model/kparams.h"
+#include "util/bf16.h"
 #include "util/json_file.h"
 #include "util/log.h"
 
@@ -210,18 +211,17 @@ FlintConfig Flint::read_config(const std::string& dir) {
     c.gs = q.value("group_size", 64);
     const nlohmann::json x = j.value("mlx_export", nlohmann::json::object());
     c.embed_bits = x.is_object() ? x.value("embedding_bits", c.bits) : c.bits;
-    if (x.is_object() && x.value("routed_expert_bits", c.bits) != c.bits)
-      fatal("%s: routed experts in %d bits (Flint: the projections' %d)", dir.c_str(), x.value("routed_expert_bits", 0),
-            c.bits);
+    if (x.is_object() && x.value("routed_expert_bits", 4) != 4 && x.value("routed_expert_bits", 4) != 8)
+      fatal("%s: routed experts in %d bits (Flint: 4 or 8)", dir.c_str(), x.value("routed_expert_bits", 0));
     for (const auto& [k, v] : q.items())  // modules kept in llama.cpp's IQ blocks (a GGUF import's routed experts)
       if (v.is_object())
         if (const uint32_t t = gguf::iq_mode_type(v.value("mode", std::string()))) c.iq[k] = t;
   } else {
     fatal("%s: an unquantized Flint checkpoint; Kapitsa runs Flint's MLX export (RecursiveSI/flint-int4)", dir.c_str());
   }
-  if (c.bits != 4 || c.gs != 64 || (c.embed_bits != 4 && c.embed_bits != 8))
-    fatal("%s: Flint in %d-bit group %d is not supported (MLX 4-bit group 64, as RecursiveSI/flint-int4)", dir.c_str(),
-          c.bits, c.gs);
+  if ((c.bits != 4 && c.bits != 8) || c.gs != 64 || (c.embed_bits != 4 && c.embed_bits != 8))
+    fatal("%s: Flint in %d-bit group %d is not supported (MLX 4- or 8-bit group 64, as RecursiveSI/flint-int4)",
+          dir.c_str(), c.bits, c.gs);
   if (c.hidden <= 0 || c.hidden % 256 || c.hidden > 4096 || c.vocab <= 0 || c.layers <= 0 || c.hq <= 0 || c.hkv <= 0 ||
       c.hq % c.hkv || c.hq / c.hkv > 8 || c.hd != 128 || c.experts != 256 || c.top_k < 1 || c.top_k > 8 ||
       c.window <= 0 || c.moe_I % 64 || c.shared_I % 64 || c.ffn % 64 ||
@@ -298,9 +298,17 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
     return K > 0 ? int(bits / K) : def;
   };
   const int eb = bits_of("model.embed_tokens", c.embed_bits), hb = bits_of("lm_head", c.bits);
+  // a quantized router (an MLX pack's) also takes a bf16 copy (router_to_bf16)
+  int rb = 16;
+  for (int l = 0; l < c.layers; ++l)
+    if (!c.dense[size_t(l)]) {
+      if ((rb = bits_of("model.layers." + std::to_string(l) + ".mlp.gate", 16)) != 16) m.weights += router;
+      break;
+    }
   m.formats = c.bits == 16 ? "bf16" : std::to_string(c.bits) + "-bit group " + std::to_string(c.gs) + " + " +
                                           (eb == 16 ? std::string("bf16") : std::to_string(eb) + "-bit") + " embedding" +
-                                          (hb != c.bits ? ", " + std::to_string(hb) + "-bit LM head" : "") + ", bf16 router";
+                                          (hb != c.bits ? ", " + std::to_string(hb) + "-bit LM head" : "") +
+                                          (rb == 16 ? ", bf16 router" : ", " + std::to_string(rb) + "-bit router");
   std::map<std::string, int> iq;
   for (const auto& [mod, t] : c.iq) ++iq[gguf::type_name(t)];
   for (const auto& [t, n] : iq) m.formats += " + " + std::to_string(n) + " modules " + t;
@@ -424,8 +432,9 @@ void Flint::load(int prefill_chunk) {
     } else {
       const uint32_t E = uint32_t(c.experts);
       L.router = mat(p + "mlp.gate");
-      if (L.router.bits != 16 || L.router.N != E || L.router.K != uint32_t(c.hidden))
-        fatal("%s: layer %d's router is not bf16 [%d, %d]", path_.c_str(), l, c.experts, c.hidden);
+      if (L.router.N != E || L.router.K != uint32_t(c.hidden))
+        fatal("%s: layer %d's router is not [%d, %d]", path_.c_str(), l, c.experts, c.hidden);
+      if (L.router.bits != 16) router_to_bf16(L.router);
       L.eg = mat(p + "mlp.switch_mlp.gate_proj", E);
       L.eu = mat(p + "mlp.switch_mlp.up_proj", E);
       L.ed = mat(p + "mlp.switch_mlp.down_proj", E);
@@ -435,14 +444,24 @@ void Flint::load(int prefill_chunk) {
       if (L.eg.N != uint32_t(c.moe_I) || L.ed.N != uint32_t(c.hidden) || L.sg.N != uint32_t(c.shared_I) ||
           L.sd.K != uint32_t(c.shared_I))
         fatal("%s: layer %d's MoE shapes differ from the config", path_.c_str(), l);
-      // 4-bit group-64 experts, or IQ routed experts (gate and up of one type) beside a 4-bit shared expert: the shapes
-      // wfmt_iq.metal's kernels take
+      // 4-bit group-64 experts (the specialized kernels); IQ routed experts (gate and up of one type) beside a 4-bit
+      // shared expert, the shapes wfmt_iq.metal's kernels take; or a pair wfmt.metal's generic kernels have for Flint:
+      // 8-bit routed experts, or 4-bit ones, beside an 8-bit shared expert (the config's shape check holds their
+      // staged rows)
+      auto all = [](std::initializer_list<const FlintMat*> ms, int bits) {
+        for (const FlintMat* m : ms)
+          if (m->bits != bits || m->gs != 64 || m->iq) return false;
+        return true;
+      };
       const bool iq = L.eg.iq && L.eu.iq == L.eg.iq && L.ed.iq && c.hidden % 512 == 0 && c.moe_I % 256 == 0 &&
                       c.top_k + 1 <= 17;
-      for (const FlintMat* m : {&L.eg, &L.eu, &L.ed, &L.sg, &L.su, &L.sd})
-        if ((m->bits != 4 || m->gs != 64 || m->iq) && !(iq && m->iq))
-          fatal("%s: layer %d's experts are not 4-bit group 64, or IQ routed experts beside a 4-bit shared expert (the "
-                "MoE kernels' formats)", path_.c_str(), l);
+      const bool shared4 = all({&L.sg, &L.su, &L.sd}, 4), shared8 = all({&L.sg, &L.su, &L.sd}, 8);
+      L.moe4 = all({&L.eg, &L.eu, &L.ed}, 4) && shared4;
+      const bool gen = (all({&L.eg, &L.eu, &L.ed}, 8) || all({&L.eg, &L.eu, &L.ed}, 4)) && shared8;
+      if (!L.moe4 && !(iq && shared4) && !gen)
+        fatal("%s: layer %d's experts are in formats Flint's MoE kernels do not take (4-bit group 64; IQ routed "
+              "experts beside a 4-bit shared expert; 8- or 4-bit routed experts beside an 8-bit shared expert)",
+              path_.c_str(), l);
     }
   }
   // RoPE's inverse frequencies, 1 / theta^(2i / D) (MLX's nn.RoPE, traditional=False)
@@ -454,13 +473,20 @@ void Flint::load(int prefill_chunk) {
   load_iq_experts();
   g.make_resident(ws_.buffers());
   g.make_resident(iq_bufs_);
+  g.make_resident(router_bufs_);
   logi("Flint: %d layers (%d full attention), %s, loaded in %.1f s", c.layers,
        int(std::count(c.kind.begin(), c.kind.end(), 'F')), formats_summary().c_str(), (now_ms() - t0) / 1000.0);
 }
 
 std::string Flint::formats_summary() const {
   auto f = [](int bits) { return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group 64"; };
-  std::string s = f(cfg_.bits) + " (embedding " + f(embed_.bits) + ", LM head " + f(head_.bits) + ", router bf16";
+  std::string s = f(cfg_.bits) + " (embedding " + f(embed_.bits) + ", LM head " + f(head_.bits) + ", router " +
+                  (router_bufs_.empty() ? std::string("bf16") : "quantized, run as bf16");
+  int r8 = 0, s8 = 0;
+  for (const FlintLayer& L : layers_)
+    if (!L.dense) r8 += L.eg.bits == 8, s8 += L.sg.bits == 8;
+  if (r8) s += "; 8-bit routed experts in " + std::to_string(r8) + " layers";
+  if (s8) s += "; 8-bit shared expert in " + std::to_string(s8) + " layers";
   if (!iq_bufs_.empty()) {
     std::map<std::string, int> n;
     for (const FlintLayer& L : layers_)
@@ -500,6 +526,41 @@ void Flint::load_iq_experts() {
     }
   logi("Flint: read %.2f GB of IQ experts in %.0f ms; %.2f GB of weights locked in memory", total / 1e9, now_ms() - t0,
        lock.locked() / 1e9);
+}
+
+// A quantized router (an MLX pack that quantizes it with the projections) as bf16, the weights flint_router_topk,
+// flint_router_shared and the prefill's router GEMM read: each weight fma(scale, code, bias) in fp32 rounded to the
+// nearest bf16 (wf_dequant_bf16's rounding). 256 x 2048 weights a layer: 1 MB each.
+void Flint::router_to_bf16(FlintMat& m) {
+  const int F = m.bits;
+  if (m.iq || F < 2 || F > 8 || !m.s || !m.b || m.gs <= 0 || m.K % uint32_t(m.gs) || (size_t(m.K) * F) % 32)
+    fatal("%s: a router in a format Flint does not convert (%d-bit group %d)", path_.c_str(), F, m.gs);
+  const size_t N = m.N, K = m.K, wpr = K * size_t(F) / 32, gpr = K / size_t(m.gs);
+  const uint32_t* w = static_cast<const uint32_t*>(m.w->buf.ptr());
+  const uint16_t* sc = static_cast<const uint16_t*>(m.s->buf.ptr());
+  const uint16_t* bi = static_cast<const uint16_t*>(m.b->buf.ptr());
+  Buffer b = Gpu::get().alloc(N * K * 2, "flint_router_bf16");
+  uint16_t* out = b.as<uint16_t>();
+  const uint32_t mask = (1u << F) - 1u;
+  for (size_t n = 0; n < N; ++n)
+    for (size_t k = 0; k < K; ++k) {
+      const size_t bit = k * size_t(F), sh = bit % 32;
+      const uint32_t* p = w + n * wpr + bit / 32;
+      uint32_t q = p[0] >> sh;
+      if (sh + size_t(F) > 32) q |= p[1] << (32 - sh);
+      const size_t g = n * gpr + k / size_t(m.gs);
+      out[n * K + k] = f32_to_bf16(std::fma(bf16_to_f32(sc[g]), float(q & mask), bf16_to_f32(bi[g])));
+    }
+  router_bufs_.push_back(b);
+  Tensor t;
+  t.buf = b;
+  t.dtype = DType::BF16;
+  t.shape = {int64_t(N), int64_t(K)};
+  router_tensors_.push_back(t);
+  m.w = &router_tensors_.back();
+  m.s = m.b = nullptr;
+  m.bits = 16;
+  m.gs = 0;
 }
 
 void Flint::alloc_buffers() {
@@ -954,7 +1015,7 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   const uint32_t D = uint32_t(c.hidden), E = uint32_t(c.experts), k = uint32_t(c.top_k);
   const uint32_t I = uint32_t(std::max(c.moe_I, c.shared_I));
   const kp::Moe mp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, c.eps};
-  if (R == 1 && !small_tiles() && D == 2048 && !L.eg.iq) {
+  if (R == 1 && !small_tiles() && D == 2048 && L.moe4) {
     // one decode row: the router with the shared expert's gate / up (its last threadgroup routes; the router's
     // latency overlaps the shared expert's weights; its router rows are 2048 wide, so another hidden size takes the
     // rows' path below), the routed experts' gate / up, then the down products of every slot into the residual
@@ -1017,6 +1078,10 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   }
   if (L.eg.iq) {
     enc_moe_iq_rows(e, L, R);
+    return;
+  }
+  if (!L.moe4) {
+    enc_moe_g_rows(e, L, R);
     return;
   }
   if (small_tiles()) {
@@ -1201,6 +1266,8 @@ void Flint::enc_moe_prefill(Encoder& e, const FlintLayer& L, int T) {
   e.dispatch((uint32_t(T) + 7) / 8, 1, 1, 256);
   if (L.eg.iq) {
     enc_moe_iq_prefill(e, L, T);
+  } else if (L.eg.bits != 4) {
+    enc_moe_g_prefill(e, L, T);
   } else {
     const kp::Bucket bp{P, k, E, bm};
     e.use(pipe("moe_bucket"));
@@ -1324,6 +1391,76 @@ void Flint::enc_moe_iq_prefill(Encoder& e, const FlintLayer& L, int T) {
   e.val(3, dp);
   e.buf(4, tiles_); e.buf(5, ntiles_); e.buf(6, spair_);
   e.dispatch(D / 64, max_tiles, 1, 128);
+}
+
+// Experts in another MLX format (8-bit routed experts, or 4-bit ones, beside an 8-bit shared expert) of R <= kMaxRows
+// rows after flint_router_topk (xn_, eidx_, ewts_; the ungated shared expert's weight 1): wfmt.metal's per-row kernels
+// with the shared expert as slot k (the pairs of Qwen3.5's moe_rows_kernel), the down products of every slot into the
+// residual (the _w form: (k + 1) x 1024 staged floats, Flint's 7 x 1024)
+void Flint::enc_moe_g_rows(Encoder& e, const FlintLayer& L, int R) {
+  const FlintConfig& c = cfg_;
+  const uint32_t D = uint32_t(c.hidden), k = uint32_t(c.top_k), I = uint32_t(std::max(c.moe_I, c.shared_I));
+  const std::string pair = "f" + std::to_string(L.eg.bits) + "g64_f" + std::to_string(L.sg.bits) + "g64";
+  const kp::Moe mp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, c.eps};
+  constexpr uint32_t rows = 2, nsg = 8;
+  e.use(pipe("moeg_gu_rows_" + pair));
+  e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+  e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+  e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
+  e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+  e.buf(12, xn_); e.buf(13, eh_);
+  e.val(14, mp);
+  e.buf(15, eidx_);
+  e.dispatch((I + rows * nsg - 1) / (rows * nsg), k + 1, uint32_t(R), 32 * nsg);
+  const kp::MoeRowsDown dp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, uint32_t(L.sd.bits)};
+  e.use(pipe("moeg_down_rows_" + pair + "_w"));
+  e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+  e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+  e.buf(6, eh_); e.buf(7, eidx_); e.buf(8, ewts_); e.buf(9, x_);
+  e.val(10, dp);
+  e.dispatch((D + rows * nsg - 1) / (rows * nsg), uint32_t(R), 1, 32 * nsg);
+}
+
+// 8-bit routed experts' prefill after flint_route: the IQ experts' pipeline on wfmt.metal's generic kernels. The (row,
+// expert) pairs bucketed by expert into tiles of 32 rows (moe_bucket3), gate / up as fp32 products
+// (qrmf_gu_f8g64_m32_n64_f32), stored as half rows scaled where they would overflow (flint_swiglu_scaled mode 3: the
+// scale goes into the pair's routing weight), and the down products into yd_ by pair id (qrmf_dn_f8g64_m32_n128)
+void Flint::enc_moe_g_prefill(Encoder& e, const FlintLayer& L, int T) {
+  const FlintConfig& c = cfg_;
+  const uint32_t D = uint32_t(c.hidden), E = uint32_t(c.experts), k = uint32_t(c.top_k), I = uint32_t(c.moe_I);
+  const uint32_t P = uint32_t(T) * k;
+  constexpr uint32_t bm = 32;
+  const kp::Bucket2 bp{P, k, E, bm, 0u};
+  e.use(pipe("moe_bucket3"));
+  e.buf(0, pidx_); e.buf(1, spair_); e.buf(2, stok_); e.buf(3, tiles_); e.buf(4, ntiles_);
+  e.val(5, bp);
+  e.dispatch(1, 1, 1, 1024);
+  const uint32_t max_tiles = (P + bm - 1) / bm + E;
+  // stacked [E, N, K]: the strides between experts in words and in groups; no tile is the shared expert's (shared_e E:
+  // the routed experts' own buffers stand in for its)
+  auto qp = [&](const FlintMat& W) {
+    return kp::Qmm2{W.N, W.K, W.K, W.N, uint32_t(W.gs), uint32_t(size_t(W.N) * W.row_bytes() / 4),
+                    W.N * (W.K / uint32_t(W.gs)), E};
+  };
+  e.use(pipe("qrmf_gu_f8g64_m32_n64_f32"));
+  e.buf(0, pxh_);
+  e.buf(1, L.eg.w->buf); e.buf(2, L.eg.s->buf); e.buf(3, L.eg.b->buf);
+  e.buf(4, L.eu.w->buf); e.buf(5, L.eu.s->buf); e.buf(6, L.eu.b->buf);
+  e.buf(7, phg_);
+  e.val(8, qp(L.eg));
+  e.buf(9, tiles_); e.buf(10, ntiles_); e.buf(11, stok_);
+  e.buf(12, L.eg.w->buf); e.buf(13, L.eg.s->buf); e.buf(14, L.eg.b->buf);
+  e.buf(15, L.eu.w->buf); e.buf(16, L.eu.s->buf); e.buf(17, L.eu.b->buf);
+  e.dispatch(I / 64, max_tiles, 1, 128);
+  enc_swiglu(e, phg_, phg_, ehh_, int(P), I, 3, &spair_);
+  e.use(pipe("qrmf_dn_f8g64_m32_n128"));
+  e.buf(0, ehh_);
+  e.buf(1, L.ed.w->buf); e.buf(2, L.ed.s->buf); e.buf(3, L.ed.b->buf);
+  e.buf(4, yd_);
+  e.val(5, qp(L.ed));
+  e.buf(6, tiles_); e.buf(7, ntiles_); e.buf(8, spair_);
+  e.buf(9, L.ed.w->buf); e.buf(10, L.ed.s->buf); e.buf(11, L.ed.b->buf);
+  e.dispatch(D / 128, max_tiles, 1, 128);
 }
 
 void Flint::enc_prefill_rows(Encoder& e, Seq& s, int pos0, int T) {

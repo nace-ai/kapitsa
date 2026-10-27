@@ -6,7 +6,10 @@
 // Checkpoints: MLX safetensors, affine 4-bit group-64 projections and experts, an 8-bit embedding, the router in bf16
 // (Recursive's flint-int4); or a GGUF import (`kapitsa import`, src/gguf/import.cpp: unsloth's flint-UD-IQ2_XXS) with
 // the routed experts in llama.cpp's IQ blocks as stored, run on src/kernels/wfmt_iq.metal's kernels, and the rest in
-// 4-bit group 64. The math is Recursive's (rec's model.py, recursive-oss/rec).
+// 4-bit group 64. Higher-precision packs: 8-bit group-64 routed experts with an 8-bit shared expert (a Q8_0 / Q6_K GGUF's
+// import, an MLX 8-bit export), or 4-bit routed experts beside an 8-bit shared expert (MLX mixed 4/8-bit), on
+// src/kernels/wfmt.metal's generic expert kernels; projections in 4 or 8 bits, a quantized router as a bf16 copy made at
+// load. The math is Recursive's (rec's model.py, recursive-oss/rec).
 // Sliding-window layers keep a ring of window + 8 positions (Dory's layout: a ring cannot go back further than its 8
 // spare rows, so checkpoints hold copies of the rings); full-attention layers a cache that grows with the conversation.
 #pragma once
@@ -63,6 +66,7 @@ struct FlintLayer {
   FlintMat router;          // bf16 [E, hidden]
   FlintMat eg, eu, ed;      // routed experts, stacked [E, N, K]
   FlintMat sg, su, sd;      // shared expert
+  bool moe4 = false;        // routed and shared experts all 4-bit group 64: the specialized kernels (else IQ or generic)
 };
 
 class Flint : public Model {
@@ -138,6 +142,11 @@ class Flint : public Model {
   void load_iq_experts();
   void enc_moe_iq_rows(Encoder& e, const FlintLayer& L, int R);
   void enc_moe_iq_prefill(Encoder& e, const FlintLayer& L, int T);
+  // routed / shared experts in other MLX formats (8-bit, or 4-bit beside an 8-bit shared expert): wfmt.metal's kernels
+  void enc_moe_g_rows(Encoder& e, const FlintLayer& L, int R);
+  void enc_moe_g_prefill(Encoder& e, const FlintLayer& L, int T);
+  // a quantized router (MLX packs that quantize it) as bf16, the format the routing kernels read
+  void router_to_bf16(FlintMat& m);
   // SwiGLU of fp32 gate / up rows into half rows scaled where they would overflow (mode: where the scale goes, as
   // flint_swiglu_scaled's)
   void enc_swiglu(Encoder& e, const Buffer& g, const Buffer& u, const Buffer& h, int rows, uint32_t I, uint32_t mode,
@@ -166,6 +175,8 @@ class Flint : public Model {
   FlintMat embed_, head_;
   std::deque<Tensor> iq_tensors_;  // the IQ experts in the kernels' layout (iq_bufs_), as the FlintMats point at them
   std::vector<Buffer> iq_bufs_;
+  std::deque<Tensor> router_tensors_;  // quantized routers' bf16 copies (router_bufs_)
+  std::vector<Buffer> router_bufs_;
   const Tensor* final_norm_ = nullptr;
   Buffer inv_freq_;              // fp32 [hd / 2]: RoPE's inverse frequencies
   // (cos, sin) per frequency at one position, as flint_attn_d2 takes them inline (the last position asked for)
