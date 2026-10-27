@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Python side of "the caller already holds the GPU lock": NI_LOCK_HELD=1 / NACE_GPU_LOCK_HELD=1.
 
-usage: test_gpu_lock_held.py   (no CI step yet; run it by hand)
+usage: test_gpu_lock_held.py
 
 No model, no Metal, no GPU: every lock here is a temporary file ($BENCH_GPU_LOCK points at it), never /tmp/kapitsa-gpu.lock.
 
@@ -10,7 +10,9 @@ No model, no Metal, no GPU: every lock here is a temporary file ($BENCH_GPU_LOCK
 2. A lock this process holds really blocks a second taker (GpuLock times out), and a caller that says it holds the
    lock is not made to take it again: each name, in a child process, skips the acquire and returns at once.
 3. tools/qwen4_exp_pack.py's own GpuLock.take() does the same on a held temp lock (needs numpy; skipped without).
-4. The scripts that gate on the lock go through held_by_caller(), not their own spelling of the variable.
+4. compare_engines.engine_env(): the environment of a launched engine drops both names, whatever the caller or the
+   config's own env says.
+5. The scripts that gate on the lock go through held_by_caller(), not their own spelling of the variable.
 """
 import os
 import re
@@ -124,7 +126,22 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             print("SKIP qwen4_exp_pack.GpuLock.take() (numpy is not installed)")
 
-# 4. no script keeps its own spelling of the variable
+# 4. the engine child env (compare_engines imports bench, stdlib only)
+import compare_engines  # noqa: E402
+
+os.environ["NI_LOCK_HELD"] = os.environ["NACE_GPU_LOCK_HELD"] = "1"
+os.environ["KEEP_ME_X"], os.environ["DROP_ME_X"] = "a", "b"
+try:
+    env, cleared = compare_engines.engine_env({"env_clear_prefixes": ["DROP_ME_"]}, {"EXTRA_X": "1", "NI_LOCK_HELD": "1"})
+    check("NI_LOCK_HELD" not in env and "NACE_GPU_LOCK_HELD" not in env, "engine env drops both held names", str(sorted(env.keys() & set(NAMES))))
+    check(env.get("KEEP_ME_X") == "a" and env.get("EXTRA_X") == "1" and "DROP_ME_X" not in env and cleared == ["DROP_ME_X"],
+          "engine env keeps the rest, applies the config's env and clear prefixes", f"cleared={cleared}")
+    check(os.environ["NI_LOCK_HELD"] == "1" and os.environ["NACE_GPU_LOCK_HELD"] == "1", "our own env is left alone")
+finally:
+    for n in NAMES + ("KEEP_ME_X", "DROP_ME_X"):
+        os.environ.pop(n, None)
+
+# 5. no script keeps its own spelling of the variable
 SITES = ("bench/harness/bench.py", "bench/quality/eval_mlx.py", "bench/quality/eval_stream.py",
          "bench/quality/speed_variants.py", "bench/quality/speed_mlx.py", "bench/harness/agent_replay.py",
          "bench/harness/compare_engines.py", "bench/reasoning/reasoning.py", "tools/qwen4_exp_pack.py")

@@ -1041,6 +1041,17 @@ class NoLock:
         return time.time() - self.t0 if self.t0 else 0.0
 
 
+def engine_env(c, extra):
+    """The environment of an engine we launch, and the names cleared from ours. The engine is not our caller, so it
+    never inherits "the caller holds the GPU lock" (either spelling): it takes its own lock."""
+    env = {k: v for k, v in os.environ.items() if not any(k.startswith(x) for x in c.get("env_clear_prefixes", []))}
+    cleared = sorted(set(os.environ) - set(env))
+    env.update(extra)
+    for name in gpu_hogs.HELD_NAMES:
+        env.pop(name, None)
+    return env, cleared
+
+
 def run_config(c, args, stamp):
     # the bearer token the server wants (config "api_key"; bench.post sends $BENCH_API_KEY, else "local"): for this
     # config's warm-up in this process and bench.py's requests in its child
@@ -1115,11 +1126,7 @@ def run_config_keyed(c, args, stamp):
         if p["cmd"]:
             if port and port_open(port):
                 raise ResolveError(f"port {port} is already in use (pid {listener_pid(port)}); stop that server first")
-            env = {k: v for k, v in os.environ.items() if not any(k.startswith(x) for x in c.get("env_clear_prefixes", []))}
-            prov["env_cleared"] = sorted(set(os.environ) - set(env))
-            env.update(p["env"])
-            for name in gpu_hogs.HELD_NAMES:  # the engine is not our caller: it takes its own lock
-                env.pop(name, None)
+            env, prov["env_cleared"] = engine_env(c, p["env"])
             prov["env_relevant"] = redact({k: v for k, v in env.items() if k.startswith(RELEVANT_ENV)})
             os.makedirs(LOGS, exist_ok=True)
             os.makedirs(STATE, exist_ok=True)

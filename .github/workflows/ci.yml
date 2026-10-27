@@ -185,6 +185,10 @@ jobs:
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
+      - name: test_gpu_lock_held
+        # temp lock files only: no model, no GPU, never /tmp/kapitsa-gpu.lock
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_gpu_lock_held.py
       - name: test_compare
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_compare.py build
