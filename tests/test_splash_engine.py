@@ -4,7 +4,7 @@ no model, no GPU. It needs Splash's resolved model folder for its tokenizer and 
 ~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR); without one it uses the small stand-in
 folder tests/fixtures/splash_model, so it needs no model (the CI PR, #743, adds it to ci.yml).
 usage: test_splash_engine.py build/kapitsa"""
-import glob, json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
+import glob, json, os, re, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 
 CLI = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa")  # absolute: some cases run it from another folder
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -168,6 +168,14 @@ try:
     if len(got) == len(seeds):
         check(got[4:] == [0, 7, 2**40 + 5, 2**64 - 2, 2**64 - 1], "given seeds are their 64 bits: %r" % got[4:])
         check(len(set(got[:4])) == 4 and max(got[:4]) >= 2**32, "absent and -1 seeds are random 64-bit ones: %r" % got[:4])
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 1, "seed": -2**63})
+    check(st == 200 and s.prompts()[-1]["seed"] == 2**63, "seed -2^63 is its 64 bits: %s %r" % (st, s.prompts()[-1]))
+    # anything else is Splash's 400 (frontend.py:1153-1159), before it is queued
+    n0 = len(s.prompts())
+    for v in [1.5, 5.0, True, None, "7", 2**64, -2**63 - 1]:
+        st, r = post(s.base, {"messages": MSG, "max_tokens": 1, "seed": v})
+        check(st == 400 and "seed must be a 64-bit integer" in json.dumps(r), "seed %r is a 400: %s %s" % (v, st, r))
+    check(len(s.prompts()) == n0, "refused seeds were not queued")
 finally:
     s.close()
 
@@ -187,6 +195,23 @@ try:
                   "%s dead engine: 503 naming it, got %s %s" % (path, st, r))
             check(not last_headers.get("Retry-After"), "%s dead engine: no Retry-After, got %r" % (path, dict(last_headers)))
     check(s.proc.poll() is None, "server still answering after the engine died")
+finally:
+    s.close()
+
+# the engine dying in the middle of a request: that request is the same 503, not a 200 cut short or a 400
+s = Server("--reply", ",".join(map(str, REPLY[:-1] + [tid("Ġthere")] * 200)), "--slow", "50")  # no end of turn: 200 tokens
+try:
+    out = {}
+    t = threading.Thread(target=lambda: out.update(r=post(s.base, {"messages": MSG, "max_tokens": 200, "temperature": 0})))
+    t.start()
+    time.sleep(1.0)  # well inside the reply: 200 tokens at 50 ms each
+    os.kill(int(open(s.pid_file).read()), 9)
+    t.join(30)
+    st, r = out.get("r", (None, None))
+    text = json.dumps(r)
+    check(st == 503 and "Splash engine has exited" in text and "restart kapitsa serve" in text,
+          "engine killed mid-request: 503 naming it, got %s %s" % (st, r))
+    check(not last_headers.get("Retry-After"), "engine killed mid-request: no Retry-After, got %r" % dict(last_headers))
 finally:
     s.close()
 

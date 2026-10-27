@@ -134,10 +134,14 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   if (b.contains("ignore_eos") && b["ignore_eos"].is_boolean()) r.ignore_eos = b["ignore_eos"];
   if (b.contains("cache_salt")) r.cache_salt = b["cache_salt"];
   if (b.contains("seed") && b["seed"].is_number()) r.seed = uint32_t(b["seed"].get<int64_t>());
-  // the Splash backend's seed, as Splash's frontend.py:1153-1162 reads it: -1 (or none) random, else the integer's 64 bits
-  if (b.contains("seed") && b["seed"].is_number_unsigned()) r.splash_seed = b["seed"].get<uint64_t>();
-  else if (b.contains("seed") && b["seed"].is_number_integer() && b["seed"].get<int64_t>() != -1)
-    r.splash_seed = uint64_t(b["seed"].get<int64_t>());
+  // the Splash backend's seed, as Splash's frontend.py:1153-1162 reads it: absent or -1 random, another integer in
+  // [-2^63, 2^64) its 64 bits, anything else refused. JSON integers outside that range parse here as floats, as do 5.0 and 1e3.
+  if (b.contains("seed")) {
+    const json& s = b["seed"];
+    if (s.is_number_unsigned()) r.splash_seed = s.get<uint64_t>();
+    else if (s.is_number_integer() && s.get<int64_t>() != -1) r.splash_seed = uint64_t(s.get<int64_t>());
+    else if (!s.is_number_integer()) r.splash_seed_invalid = true;
+  }
   if (b.contains("stop")) {
     if (b["stop"].is_string()) r.stop.push_back(b["stop"]);
     else if (b["stop"].is_array())

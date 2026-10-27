@@ -191,6 +191,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   if (!r.cache_salt.is_null() && !(r.cache_salt.is_string() && !r.cache_salt.get<std::string>().empty()))
     return bad("cache_salt", "a non-empty string");
   if (r.top_k < -1) return bad("top_k", "0 or -1 (disabled) or a positive integer");
+  if (r.splash_seed_invalid) return bad("seed", "a 64-bit integer");  // Splash's own words (frontend.py:1159)
 
   ChatResult res;
   std::string text, base;
