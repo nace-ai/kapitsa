@@ -364,10 +364,12 @@ static void print_serve_help() {
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --engine splash        run the model in a Splash child process instead of in this server\n"
          "                         text chat only; both of the next two are found where Splash installs them when not given\n"
-         "  --splash-binary PATH   the Splash engine binary (<Splash folder>/engine/splash; else $SPLASH_HOME, `splash` on PATH, ~/Applications/Splash)\n"
+         "  --splash-binary PATH   the Splash engine binary (<Splash folder>/engine/splash; else $SPLASH_HOME, `splash` on PATH, ~/Applications/Splash,\n"
+         "                         the last run's: a Splash installed anywhere needs this once)\n"
          "  --splash-model DIR     Splash's resolved model folder, the first 6+ characters of its name, or its family (flash-next, 27b; the\n"
          "                         newest of that family's folders; its tokenizer and chat template are used here); when not given: the\n"
-         "                         only one under ~/Library/Application Support/Splash, else the most recently resolved (it says which)\n"
+         "                         only one under ~/Library/Application Support/Splash, else the last run's, else the most recently resolved\n"
+         "                         (it says which)\n"
          "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0)\n"
          "  --splash-persistent-cache  keep Splash's SSD prefix cache across restarts (--persistent-cache on, in ~/Library/Caches/Kapitsa/\n"
          "                         splash-prefix-cache/<model folder>; writes to your disk; default off)\n"
@@ -900,16 +902,18 @@ static int serve(int argc, char** argv, int first) {
       usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
     // not given: where Splash installs them (src/splash/discover.h), else an error that says what is missing
     const char* home = getenv("HOME");
+    const std::string last_file = hub::home_dir() + "/splash.json";
+    const splash::Last last = splash::read_last(last_file);  // what the last run used
     if (opt.splash_binary.empty()) {
       const char* sh = getenv("SPLASH_HOME");
       const char* path = getenv("PATH");
-      splash::Found f = splash::find_binary(home ? home : "", sh ? sh : "", path ? path : "");
+      splash::Found f = splash::find_binary(home ? home : "", sh ? sh : "", path ? path : "", {"/Applications/Splash"}, last.binary);
       if (!f.ok()) usage_error(f.error, help);
       opt.splash_binary = f.path;
     }
     struct stat st;
     if (opt.splash_model.empty() || (opt.splash_model.find('/') == std::string::npos && stat(opt.splash_model.c_str(), &st) != 0)) {
-      splash::Found f = splash::find_model(home ? home : "", opt.splash_model);  // empty: the only one, else the most recently resolved; else a name
+      splash::Found f = splash::find_model(home ? home : "", opt.splash_model, last.model);  // empty: the only one, the last run's, else the most recently resolved; else a name
       if (!f.ok()) usage_error(f.error, help);
       if (!f.note.empty()) fprintf(stderr, "kapitsa: %s\n", f.note.c_str());
       opt.splash_model = f.path;
@@ -1245,6 +1249,7 @@ static int serve(int argc, char** argv, int first) {
     if (!engine_splash) throw;
     return fail(std::string("the Splash engine did not start: ") + e.what());  // (its own reason is in its output above)
   }
+  if (engine_splash) splash::write_last(hub::home_dir() + "/splash.json", {opt.splash_binary, opt.splash_model});
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);
 

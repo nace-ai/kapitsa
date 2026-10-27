@@ -70,7 +70,7 @@ std::vector<Model> models(const std::string& home) {
 }  // namespace
 
 Found find_binary(const std::string& home, const std::string& splash_home, const std::string& path_env,
-                  const std::vector<std::string>& system_roots) {
+                  const std::vector<std::string>& system_roots, const std::string& last) {
   if (!splash_home.empty()) {  // named by the user: that install or an error, never another one
     fs::path bin = fs::path(splash_home) / "engine/splash";
     if (is_executable_file(bin)) return {bin.string(), ""};
@@ -94,6 +94,10 @@ Found find_binary(const std::string& home, const std::string& splash_home, const
     if (is_executable_file(bin)) return {bin.string(), ""};
     tried += "\n  " + bin.string();
   }
+  if (!last.empty()) {
+    if (is_executable_file(last)) return {last, ""};
+    tried += "\n  " + last + "  (the last run's)";
+  }
   return {"", "no Splash engine binary found; looked for:" + tried +
                   "\nInstall Splash, set SPLASH_HOME to its folder, or give --splash-binary <path to engine/splash>."};
 }
@@ -104,20 +108,22 @@ std::vector<std::string> list_models(const std::string& home) {
   return out;
 }
 
-Found find_model(const std::string& home, const std::string& want) {
+Found find_model(const std::string& home, const std::string& want, const std::string& last) {
   std::vector<Model> all = models(home);
   const std::string dir = models_dir(home).string();
   if (all.empty())
     return {"", "no Splash model found: " + dir + " has no folder with a tokenizer. Run a model in Splash once, or give --splash-model <folder>."};
   if (want.empty()) {
     if (all.size() == 1) return {dir + "/" + all[0].name, ""};
-    // several: the one Splash resolved last (ties: the first by folder name, so the same one every time)
+    // several: the one the last run used, else the one Splash resolved last (ties: the first by folder name, so the same every time)
     const Model* pick = &all[0];
+    std::string why = "the most recently resolved of " + std::to_string(all.size());
     for (const Model& m : all)
       if (m.written > pick->written) pick = &m;
+    for (const Model& m : all)
+      if (!last.empty() && last == dir + "/" + m.name) pick = &m, why = "the one the last run used";
     return {dir + "/" + pick->name, "",
-            "Splash model: " + pick->family + " " + pick->name + " (the most recently resolved of " + std::to_string(all.size()) +
-                "; --splash-model <family or folder name> picks another)"};
+            "Splash model: " + pick->family + " " + pick->name + " (" + why + "; --splash-model <family or folder name> picks another)"};
   }
   std::vector<const Model*> hit;
   if (want.size() >= 6)
@@ -145,6 +151,32 @@ Found find_model(const std::string& home, const std::string& want) {
     if (m->written > best->written) best = m;
   }
   return {dir + "/" + best->name, ""};
+}
+
+Last read_last(const std::string& file) {
+  Last out;
+  std::ifstream f(file);
+  auto j = nlohmann::json::parse(f, nullptr, false);
+  if (!j.is_object()) return out;
+  if (j.contains("binary") && j["binary"].is_string()) out.binary = j["binary"].get<std::string>();
+  if (j.contains("model") && j["model"].is_string()) out.model = j["model"].get<std::string>();
+  return out;
+}
+
+void write_last(const std::string& file, const Last& last) {
+  if (last.binary.empty() && last.model.empty()) return;
+  const Last old = read_last(file);
+  if (old.binary == last.binary && old.model == last.model) return;
+  std::error_code ec;
+  fs::create_directories(fs::path(file).parent_path(), ec);
+  const std::string tmp = file + ".tmp";
+  {
+    std::ofstream f(tmp);
+    f << nlohmann::json{{"binary", last.binary}, {"model", last.model}}.dump(2) << "\n";
+    if (!f) return;
+  }
+  fs::rename(tmp, file, ec);
+  if (ec) fs::remove(tmp, ec);
 }
 
 }  // namespace ni::splash

@@ -154,6 +154,30 @@ int main() {
   m = find_model(home, "nothing-like-it");
   check(!m.ok() && has(m.error, "family or source name") && has(m.error, "Qwen3.6-35B-A3B  bbbbbb3333"), "family: no match", m.error);
 
+  // the last run's binary and model: tried after the rest, and the way out of "several"
+  const std::string lastf = (tmp / "kapitsa-home/splash.json").string();
+  check(read_last(lastf).binary.empty(), "last: missing file");
+  fs::remove_all(fs::path(home) / "Applications");
+  touch(tmp / "installed/engine/splash");
+  const std::string lbin = (tmp / "installed/engine/splash").string();
+  check(!find_binary(home, "", "", none).ok() && find_binary(home, "", "", none, lbin).path == lbin, "last: binary");
+  check(find_binary(home, (tmp / "root").string(), "", none, lbin).path == (tmp / "root/engine/splash").string(), "last: SPLASH_HOME first");
+  Found lost = find_binary(home, "", "", none, (tmp / "gone/engine/splash").string());
+  check(!lost.ok() && has(lost.error, "gone/engine/splash  (the last run's)"), "last: binary gone", lost.error);
+  write_last(lastf, {lbin, res.string() + "/ffffff6666"});
+  Last got = read_last(lastf);
+  check(got.binary == lbin && got.model == res.string() + "/ffffff6666", "last: round trip");
+  write_last(lastf, {"", ""});
+  check(read_last(lastf).binary == lbin, "last: empty write keeps it");
+  touch(fs::path(lastf), "not json");
+  check(read_last(lastf).binary.empty() && read_last(lastf).model.empty(), "last: bad file");
+  m = find_model(home, "", res.string() + "/ffffff6666");
+  check(m.ok() && has(m.path, "/ffffff6666"), "last: model among several", m.error);
+  m = find_model(home, "", res.string() + "/gone");
+  check(!m.ok() && has(m.error, "resolved models"), "last: model gone", m.error);
+  m = find_model(home, "other-gguf", res.string() + "/eeeeee5555");
+  check(m.ok() && has(m.path, "/ffffff6666"), "last: a name beats it", m.error);
+
   fs::remove_all(tmp);
   if (failures) return 1;
   printf("splash_discover_test: ok\n");
