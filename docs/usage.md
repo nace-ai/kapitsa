@@ -489,7 +489,7 @@ interleaved, decode at temperature 0 with seed 1. No arm leads every row, and no
 | System memory at peak | wired GiB / swap growth / max pressure | 31.6 / 0.00 GB / 1 | 31.6 / 0.00 GB / 1 | 36.5 / 4.47 GB / 4 | 8.6 / 0.00 GB / 1 |
 
 <sub>Runs: `Mac17,8` (M5 Pro, 48 GB), macOS 26.5.2, 2026-10-27, in
-`bench/results/2026-10-28-m5-pro-flash-next-engines` (PR #751, not merged yet) (the
+[bench/results/2026-10-28-m5-pro-flash-next-engines](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md) (PR #751) (the
 table is `legs/summary.json` and `legs/table.md` there). n is the number of requests per cell: Kapitsa on Splash 10, plain
 Splash 10, Kapitsa native 12 (9 for the 19,287-token prompt and turn 2, where three legs were stopped by the memory
 guard), llama.cpp 2. Prompt sizes are the tokens the Splash tokenizer counted (the other arms differ by one).
