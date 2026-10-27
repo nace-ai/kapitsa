@@ -46,7 +46,7 @@
 #include <vector>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.21"
+#define KAPITSA_VERSION "0.2.22"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
