@@ -158,7 +158,7 @@ int main() {
   const std::string lastf = (tmp / "kapitsa-home/splash.json").string();
   check(read_last(lastf).binary.empty(), "last: missing file");
   fs::remove_all(fs::path(home) / "Applications");
-  touch(tmp / "installed/engine/splash");
+  exe(tmp / "installed/engine/splash");
   const std::string lbin = (tmp / "installed/engine/splash").string();
   check(!find_binary(home, "", "", none).ok() && find_binary(home, "", "", none, lbin).path == lbin, "last: binary");
   check(find_binary(home, (tmp / "root").string(), "", none, lbin).path == (tmp / "root/engine/splash").string(), "last: SPLASH_HOME first");
