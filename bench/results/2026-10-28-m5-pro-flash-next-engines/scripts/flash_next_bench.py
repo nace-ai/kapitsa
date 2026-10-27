@@ -35,7 +35,7 @@ BIN = {  # overridable with --kbin / --nbin / --llama
 SPLASH_FLAGS = ["--expert-memory", "17179869184", "--idle-release", "off"]  # K and S alike; every other Splash flag is its default
 CTX = "32768"
 SIZES = {"1K": 4000, "4K": 16400, "16K": 65600}  # characters of context in the system message
-DECODE_PROMPT = "Write a long, detailed essay about the history of the printing press."
+DECODE_PROMPT = "Write the whole numbers from 1 to 1000 in order, separated by spaces. Output only the numbers, nothing else."
 DECODE_TOKENS = 256
 PREFILL_TOKENS = 16
 TOOLS = [{"type": "function", "function": {"name": "read_file", "description": "Read a file of the repository and return its text.",
@@ -314,8 +314,8 @@ def summarize(d, meta=None):
         ls = [l for l in legs if l["arm"] == arm]
         if not ls: continue
         c = {}
-        c["decode_T0_tps"] = stat([r["decode_tps"] for l in ls for r in l["decode"]["T0"] if (r["completion_tokens"] or 0) >= 200])
-        c["decode_T06_tps"] = stat([r["decode_tps"] for l in ls for r in l["decode"]["T06"] if (r["completion_tokens"] or 0) >= 200])
+        c["decode_T0_tps"] = stat([r["decode_tps"] for l in ls for r in l["decode"]["T0"] if (r["completion_tokens"] or 0) >= 250])
+        c["decode_T06_tps"] = stat([r["decode_tps"] for l in ls for r in l["decode"]["T06"] if (r["completion_tokens"] or 0) >= 250])
         for s in SIZES:
             rows = [r for l in ls for r in l["prefill"][s]]
             c["ttft_%s_s" % s] = stat([r["ttft_s"] for r in rows])
