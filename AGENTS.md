@@ -126,7 +126,12 @@ vendored; do not edit it.
 do not reformat files you are not changing.
 
 **Frozen data.** Prompts, token ids, corpora and recorded results under `bench/` are inputs to published numbers. Do not
-reformat, regenerate or "clean" them; hooks and editors must not touch them.
+reformat, regenerate or "clean" them; hooks and editors must not touch them. A results folder that gains a run, a row or
+a chart is normal, and only additions are invisible. A commit that also *changes* a file already under `bench/results/` or
+`bench/community/results/` says so in its subject and why ("re-measured …", "supersedes …", "erratum: …"): the branch no
+longer holds the old copy, so a reader cannot tell a declared erratum from an accident. Transcripts are where that bites
+hardest: a run script that tees `transcripts/<label>.out` overwrites that label's frozen transcript when the label is
+re-run, so commit the new run under a new label, or say in the subject that the transcript is replaced.
 
 **Docs follow numbers.** When a measured number, a default, a flag or a catalog entry changes, grep the repo for the old
 value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy.
