@@ -358,6 +358,18 @@ with tempfile.TemporaryDirectory() as home:
     except subprocess.TimeoutExpired: proc.kill(); err = proc.communicate()[1].decode()
     check(up, "several models, no --splash-model: started: %r" % err[-400:])
     check("Splash model: Qwen3.8-Flash-Next bbbbbb2222" in err and "--splash-model" in err, "several models: says which: %r" % err[-400:])
+    # a started run remembers its binary and model (splash.json, under KAPITSA_HOME)
+    try: saved = json.load(open(home + "/kapitsa/splash.json"))
+    except Exception: saved = {}
+    check(saved.get("binary", "").endswith("Applications/Splash/engine/splash") and saved.get("model", "").endswith("/bbbbbb2222"),
+          "splash.json after a started run: %r" % saved)
+    # --check: says what would run, exit 0 when ready and 1 when not, and writes nothing (not splash.json either)
+    os.remove(home + "/kapitsa/splash.json")
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--check"], capture_output=True, text=True, timeout=60, env=env)
+    check(r.returncode == 0 and "Ready" in r.stdout and "bbbbbb2222" in r.stdout, "--check ready: %d %r" % (r.returncode, r.stdout[-300:]))
+    r2 = subprocess.run([CLI, "serve", "--engine", "splash", "--check", "--splash-model", "no-such-model"], capture_output=True, text=True, timeout=60, env=env)
+    check(r2.returncode == 1 and "NOT DECIDED" in r2.stdout and "Ready" not in r2.stdout, "--check not ready: %d %r" % (r2.returncode, r2.stdout[-300:]))
+    check(not os.path.exists(home + "/kapitsa/splash.json"), "--check wrote splash.json")
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)

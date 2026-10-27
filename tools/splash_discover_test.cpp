@@ -188,6 +188,9 @@ int main() {
   check(got.binary == lbin && got.model == res.string() + "/ffffff6666", "last: round trip");
   write_last(lastf, {"", ""});
   check(read_last(lastf).binary == lbin, "last: empty write keeps it");
+  write_last(lastf, {"", res.string() + "/aaaaaa1111"});  // only one field known: the other stays
+  got = read_last(lastf);
+  check(got.binary == lbin && got.model == res.string() + "/aaaaaa1111", "last: a partial write keeps the other field");
   touch(fs::path(lastf), "not json");
   check(read_last(lastf).binary.empty() && read_last(lastf).model.empty(), "last: bad file");
   m = find_model(home, "", res.string() + "/ffffff6666");

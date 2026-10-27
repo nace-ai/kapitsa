@@ -176,9 +176,12 @@ Last read_last(const std::string& file) {
   return out;
 }
 
-void write_last(const std::string& file, const Last& last) {
-  if (last.binary.empty() && last.model.empty()) return;
+void write_last(const std::string& file, const Last& given) {
   const Last old = read_last(file);
+  Last last = given;  // an empty field keeps what is stored, so a run that knows only one of them forgets neither
+  if (last.binary.empty()) last.binary = old.binary;
+  if (last.model.empty()) last.model = old.model;
+  if (last.binary.empty() && last.model.empty()) return;
   if (old.binary == last.binary && old.model == last.model) return;
   std::error_code ec;
   fs::create_directories(fs::path(file).parent_path(), ec);
@@ -205,7 +208,7 @@ Check check(const std::string& home, const std::string& splash_home, const std::
   Found m = fs::is_directory(model) ? Found{model, ""} : find_model(home, model, last.model);  // (as serve: a folder, else a name)
   out.text += m.ok() ? "\nModel to run: " + m.path + "\n" + (m.note.empty() ? "" : m.note + "\n") : "\nModel to run: NOT DECIDED\n" + m.error + "\n";
   if (!m.ok() && !all.empty() && model.empty()) {
-    std::string f = all[0].family;
+    std::string f = all[0].family == "?" ? all[0].name : all[0].family;  // a model.json without a family: its folder name
     std::transform(f.begin(), f.end(), f.begin(), [](unsigned char c) { return std::tolower(c); });
     out.text += "e.g. kapitsa serve --engine splash --splash-model " + f + "\n";
   }

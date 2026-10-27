@@ -930,8 +930,7 @@ static int serve(int argc, char** argv, int first) {
       opt.splash_model = f.path;
     }
     if (struct stat st2; stat(opt.splash_model.c_str(), &st2) != 0 || !S_ISDIR(st2.st_mode))
-      usage_error("--splash-model " + opt.splash_model + " is not a folder: give Splash's resolved model folder (a model "
-                  "name is not looked up or downloaded here)", help);
+      usage_error("--splash-model " + opt.splash_model + " is not a folder", help);
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";
