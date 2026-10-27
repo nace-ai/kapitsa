@@ -84,7 +84,8 @@ by the start of its folder name when Splash has several resolved. One command:
 kapitsa serve --engine splash
 ```
 
-On an M5 Pro 48 GB, in one run with the memory plans forced, Qwen3.8-Flash-Next Q2_0 decoded at 55.9 tok/s through this
+On an M5 Pro 48 GB, in one run with a forced memory plan (a 16 GiB expert cache on both Splash arms, `NI_EXPERT_STORE=24`
+on Kapitsa's own engine) and other sessions sharing the Mac, Qwen3.8-Flash-Next Q2_0 decoded at 55.9 tok/s through this
 mode and 55.5 tok/s in plain Splash, and the second turn of a 4K chat took 0.56 s and 0.57 s to first token; Kapitsa's own
 engine took 0.26 s, and no engine leads every row ([bench/results/2026-10-28-m5-pro-flash-next-engines](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md), with the
 table and its caveats in [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine)).

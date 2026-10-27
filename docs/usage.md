@@ -531,8 +531,9 @@ Read across it:
   about 4426). Native also reached memory pressure level 4 with up to 4.5 GB of swap growth in three legs with a 24 GB
   expert store, while both Splash arms stayed at level 1 with no swap growth.
 - **llama.cpp is in the table only because it ran.** Its 66 GB Q2_0 GGUF is memory-mapped on a 48 GB Mac, and both
-  of its two legs started with swap already in use. It ran about four times slower than the same file measured two
-  days earlier; the cause was not isolated. That is not a fair number for llama.cpp, and it is printed so that its
+  of its two legs started with swap already in use. It ran about four times slower than llama.cpp `0a9ef00` on the same
+  file on 2026-10-24 (39 tok/s decode, not this run's `c7474afc` with `--jinja`), so the build, the flags or the memory
+  state is likely, and the cause was not isolated. That is not a fair number for llama.cpp, and it is printed so that its
   absence is not read as a claim.
 
 Output text was not compared across the four engines, and no Splash arm passed `--verify-rows`, so the engine default
