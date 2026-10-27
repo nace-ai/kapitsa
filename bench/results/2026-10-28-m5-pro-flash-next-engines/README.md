@@ -34,10 +34,10 @@ whole process tree's maximum; it does not include GPU-wired pages (wired memory 
 What the numbers support:
 
 - **K, K2 and S are the same speed within noise.** Decode ranges 49 to 62 tok/s inside every cell, wider than any gap
-  between K, K2 and S. Prefill and turn-2 TTFT differ by under 4% at 1K and 4K; at 16K K2 is 2 to 6% slower than K and S, and S2
-  was 9% slower than S in the same session, which points at the machine rather than the build. This bench shows
+  between K, K2 and S. Prefill and turn-2 TTFT differ by under 5% at 1K and 4K; at 16K K2 is 4 to 5% slower than K and S, and S2
+  was 10% slower than S, which points at the machine rather than the build. This bench shows
   neither a Kapitsa speed-up nor a slowdown for the Splash backend, and not a difference between 7e478053 and ff6151c8.
-- **Kapitsa serving Splash prefills about 1.4x faster than the native engine at 4K and 16K** (1184 vs 860 tok/s at 4K,
+- **Kapitsa serving Splash prefills about 1.4 to 1.5x faster than the native engine at 4K and 16K** (1184 vs 860 tok/s at 4K,
   1172 vs 754 at 16K) and level at 1K. Native with MTP decodes at the same speed (55.4 vs 56.2 tok/s at T=0; 56.6 vs
   55.1 at T=0.6), with a much faster turn 2 (0.26 s vs 0.53 s) and a hit of 4,435 of 4,476 prompt tokens against 4,320 of 4,442 on the Splash
   backend.
@@ -70,9 +70,9 @@ What the numbers support:
 - Each repetition puts a per-rep nonce at the start of the system message, so nothing is served from a prefix cache
   (`cached 0` on the 1K/4K/16K cells). Turn 2 replays a 4K tool-call chat with the reasoning text dropped on every arm.
   Output text was not compared for equality across arms; decode runs are length-limited at 256 tokens.
-- Native N was not run at its auto expert-store size, and Kapitsa/Splash was not run at its default memory plan. The
-  2026-10-27 Splash-speedups notes saw 54 to 58 tok/s at the default plan against 68 to 70 with a 16 GiB cache in
-  earlier, differently loaded runs; here 16 GiB gave 55 to 58, so the machine was slower on average.
+- Native N was not run at its auto expert-store size, and Kapitsa/Splash was not run at its default memory plan.
+  Earlier Splash-speedups runs saw 68 to 70 tok/s decode with a 16 GiB cache; this run measured 55 to 58 with the same
+  setting, so absolute decode numbers here are lower than on a quieter machine (cause not isolated).
 
 ## Files
 
