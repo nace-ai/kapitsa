@@ -228,10 +228,12 @@ class Leg:
     def close(self):
         self.stop = True
         try: os.killpg(self.proc.pid, signal.SIGTERM)
-        except ProcessLookupError: pass
+        except (ProcessLookupError, PermissionError): pass  # already killed by the memory watch
         try: self.proc.wait(60)
         except subprocess.TimeoutExpired:
-            os.killpg(self.proc.pid, signal.SIGKILL); self.proc.wait(10)
+            try: os.killpg(self.proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError): pass
+            self.proc.wait(10)
         time.sleep(2)
 
 
@@ -273,7 +275,7 @@ def run_leg(a):
                 if r:
                     r = slim(r); pt, c = r["prompt_tokens"], r["cached_tokens"]
                     r["prefill_tps"] = (pt - c) / r["ttft_s"] if pt and r["ttft_s"] else None
-                    res["prefill"][size].append(r); print("  prefill %s: %s tok, ttft %.2fs, %.0f tok/s, cached %s" % (size, pt, r["ttft_s"], r["prefill_tps"] or 0, c), flush=True)
+                    res["prefill"][size].append(r); print("  prefill %s: %s tok, ttft %.2fs, %.0f tok/s, cached %s" % (size, pt, r["ttft_s"] or 0, r["prefill_tps"] or 0, c), flush=True)
             t = attempt("twoturn rep %d" % rep, lambda: leg.two_turn(nonce + "tt", "4K"), err)
             if t:
                 res["twoturn"].append(t)
