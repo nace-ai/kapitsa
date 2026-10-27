@@ -18,7 +18,7 @@ namespace ni {
 size_t dtype_size(DType d) {
   switch (d) {
     case DType::F32: case DType::U32: case DType::I32: return 4;
-    case DType::F16: case DType::BF16: return 2;
+    case DType::F16: case DType::BF16: case DType::U16: return 2;
     case DType::U8: case DType::I8: case DType::F8E4M3: return 1;
     case DType::I64: return 8;
     default: return 0;
@@ -63,6 +63,7 @@ static DType parse_dtype(const std::string& s) {
   if (s == "U32") return DType::U32;
   if (s == "I32") return DType::I32;
   if (s == "U8") return DType::U8;
+  if (s == "U16") return DType::U16;
   if (s == "I8") return DType::I8;
   if (s == "I64") return DType::I64;
   if (s == "F8_E4M3") return DType::F8E4M3;

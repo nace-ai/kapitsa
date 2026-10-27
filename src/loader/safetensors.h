@@ -14,7 +14,7 @@
 
 namespace ni {
 
-enum class DType { F32, F16, BF16, U32, I32, U8, I8, I64, F8E4M3, Unknown };
+enum class DType { F32, F16, BF16, U32, I32, U8, I8, I64, F8E4M3, U16, Unknown };
 size_t dtype_size(DType d);
 
 struct Tensor {
