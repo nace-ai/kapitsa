@@ -106,7 +106,7 @@ target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|splash_protocol_test)\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|splash_protocol_test|splash_runtime_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -136,6 +136,13 @@ add_executable(splash_protocol_test tools/splash_protocol_test.cpp src/splash/pr
 target_include_directories(splash_protocol_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/tools)
 add_test(NAME splash_protocol_test COMMAND splash_protocol_test)
 set_tests_properties(splash_protocol_test PROPERTIES TIMEOUT 30)
+
+# The child-process runtime (src/splash/runtime.*) against a fake engine this test binary re-executes itself as.
+add_executable(splash_runtime_test tools/splash_runtime_test.cpp src/splash/runtime.cpp src/splash/protocol.cpp)
+target_include_directories(splash_runtime_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(splash_runtime_test PRIVATE Threads::Threads)
+add_test(NAME splash_runtime_test COMMAND splash_runtime_test)
+set_tests_properties(splash_runtime_test PROPERTIES TIMEOUT 90)
 
 # Kapitsa's server and CLI: `kapitsa serve --model <name|dir> ...`, with the chat page (src/server/chat.html)
 # embedded, the coding-agent launchers (src/server/launch.cpp) and `kapitsa update` (src/server/update_cmd.cpp). The API
