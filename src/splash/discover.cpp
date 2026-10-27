@@ -190,7 +190,7 @@ Check check(const std::string& home, const std::string& splash_home, const std::
   for (const Model& m : all) out.text += "  " + m.family + "  " + m.name + (m.source.empty() ? "" : "  (" + m.source + ")") + "\n";
   Found m = model.empty() || (model.find('/') == std::string::npos && !fs::exists(model)) ? find_model(home, model, last.model)
                                                                                            : Found{model, ""};
-  out.text += m.ok() ? "\nModel to run: " + m.path + "\n" : "\nModel to run: NOT DECIDED\n" + m.error + "\n";
+  out.text += m.ok() ? "\nModel to run: " + m.path + "\n" + (m.note.empty() ? "" : m.note + "\n") : "\nModel to run: NOT DECIDED\n" + m.error + "\n";
   if (!m.ok() && !all.empty() && model.empty()) {
     std::string f = all[0].family;
     std::transform(f.begin(), f.end(), f.begin(), [](unsigned char c) { return std::tolower(c); });

@@ -174,15 +174,19 @@ int main() {
   m = find_model(home, "", res.string() + "/ffffff6666");
   check(m.ok() && has(m.path, "/ffffff6666"), "last: model among several", m.error);
   m = find_model(home, "", res.string() + "/gone");
-  check(!m.ok() && has(m.error, "resolved models"), "last: model gone", m.error);
+  check(m.ok() && has(m.note, "most recently resolved"), "last: model gone: the most recently resolved instead", m.error + m.note);
+  m = find_model(home, "", res.string() + "/dddddd4444");
+  check(m.ok() && has(m.path, "/dddddd4444") && has(m.note, "the one the last run used"), "last: model beats newest", m.error + m.note);
   m = find_model(home, "other-gguf", res.string() + "/eeeeee5555");
   check(m.ok() && has(m.path, "/ffffff6666"), "last: a name beats it", m.error);
 
   // --check: what is found, what is missing, the fix; nothing is started
   Check c = check(home, "", "", "", "", {});
-  check(!c.ok && has(c.text, "Splash engine: NOT FOUND") && has(c.text, "SPLASH_HOME") && has(c.text, "NOT DECIDED") &&
-            has(c.text, "e.g. kapitsa serve --engine splash --splash-model qwen3.6-35b-a3b"),
-        "check: nothing found, several models", c.text);
+  check(!c.ok && has(c.text, "Splash engine: NOT FOUND") && has(c.text, "SPLASH_HOME") && has(c.text, "Model to run: ") &&
+            has(c.text, "Splash model: ") && !has(c.text, "NOT DECIDED"),
+        "check: nothing found, several models: it still names the pick", c.text);
+  c = check(home, "", "", "", "no-such-model", {});
+  check(!c.ok && has(c.text, "NOT DECIDED"), "check: a name that matches nothing", c.text);
   c = check(home, (tmp / "root").string(), "", "", "other-gguf", {});
   check(c.ok && has(c.text, "Splash engine: " + (tmp / "root/engine/splash").string()) && has(c.text, "Model to run: ") && has(c.text, "/ffffff6666") &&
             has(c.text, "Ready: run the same command without --check"),
