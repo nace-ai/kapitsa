@@ -80,8 +80,7 @@ one server at a time under the GPU lock.
   return no ids, so `--tap` puts `tools/splash_tap.py` in front of the engine binary on both sides and compares each
   request's prompt ids and output ids at the native pipe. It was run once (27 Oct 2026, M5 Pro 48 GB, macOS 26.5.2, Splash 1.4.0), at T=0 with seed 1, `--verify-rows all` and `--expert-memory 16 GiB` on both sides. That is not Splash's default memory plan; the expert cache size does not change what is computed, and the default plan was not run for this comparison. Three requests (66, 1031 and 4070 prompt tokens, 16, 128 and 95 output tokens): prompt ids and output ids are identical on both sides, no first divergence, ids md5 `47c93518…`, `605fa935…`, `5f762994…`. One run per side, so it is not a statistical claim.
 - Speed (one run of `--legs K,S,K,S`, n=6 per cell: 3 requests per leg, two legs per side; 16 GiB expert cache; M5 Pro,
-  macOS 26.5.2; 27 Oct 2026; Kapitsa built from the work branch at `eac50728` (before the split into these PRs; this stack
-  was not rebuilt for it), plain Splash 1.4.0). Median, then the range over the 6 requests, Kapitsa against plain Splash:
+  macOS 26.5.2; 27 Oct 2026; Kapitsa built from the work branch before it was split into these PRs, commit not recorded, so the run is not reproducible from a SHA; plain Splash 1.4.0). Median, then the range over the 6 requests, Kapitsa against plain Splash:
 
   | | TTFT, s | prefill, tok/s | decode, tok/s |
   |---|---|---|---|
