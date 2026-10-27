@@ -7,6 +7,8 @@
 #include <fstream>
 #include <sstream>
 
+#include <unistd.h>
+
 namespace fs = std::filesystem;
 
 namespace ni::splash {
@@ -16,6 +18,8 @@ bool is_file(const fs::path& p) {
   std::error_code ec;
   return fs::is_regular_file(p, ec);
 }
+
+bool is_executable_file(const fs::path& p) { return is_file(p) && access(p.c_str(), X_OK) == 0; }
 
 fs::path models_dir(const std::string& home) { return fs::path(home) / "Library/Application Support/Splash/models/.resolved"; }
 
@@ -44,8 +48,8 @@ std::vector<Model> models(const std::string& home) {
 Found find_binary(const std::string& home, const std::string& splash_home, const std::string& path_env) {
   if (!splash_home.empty()) {  // named by the user: that install or an error, never another one
     fs::path bin = fs::path(splash_home) / "engine/splash";
-    if (is_file(bin)) return {bin.string(), ""};
-    return {"", "SPLASH_HOME is " + splash_home + " but " + bin.string() + " is not a file.\nFix or unset SPLASH_HOME, or give --splash-binary <path to engine/splash>."};
+    if (is_executable_file(bin)) return {bin.string(), ""};
+    return {"", "SPLASH_HOME is " + splash_home + " but " + bin.string() + " is not an executable file.\nFix or unset SPLASH_HOME, or give --splash-binary <path to engine/splash>."};
   }
   std::vector<fs::path> roots;
   std::stringstream ss(path_env);
@@ -62,7 +66,7 @@ Found find_binary(const std::string& home, const std::string& splash_home, const
   std::string tried;
   for (const fs::path& r : roots) {
     fs::path bin = r / "engine/splash";
-    if (is_file(bin)) return {bin.string(), ""};
+    if (is_executable_file(bin)) return {bin.string(), ""};
     tried += "\n  " + bin.string();
   }
   return {"", "no Splash engine binary found; looked for:" + tried +

@@ -26,6 +26,11 @@ static void touch(const fs::path& p, const std::string& body = "x") {
   std::ofstream(p) << body;
 }
 
+static void exe(const fs::path& p) {
+  touch(p, "#!/bin/sh\n");
+  fs::permissions(p, fs::perms::owner_all, fs::perm_options::add);
+}
+
 static void model(const std::string& home, const std::string& name, const std::string& family, bool tokenizer = true) {
   fs::path d = fs::path(home) / "Library/Application Support/Splash/models/.resolved" / name;
   touch(d / "model.json", "{\"family\":\"" + family + "\"}");
@@ -44,18 +49,23 @@ int main() {
   check(!m.ok() && has(m.error, "no Splash model found") && has(m.error, "--splash-model"), "model: nothing", m.error);
 
   // SPLASH_HOME, then PATH (through a symlink), then the default folders
-  touch(tmp / "root/engine/splash");
+  exe(tmp / "root/engine/splash");
   check(find_binary(home, (tmp / "root").string(), "").path == (tmp / "root/engine/splash").string(), "binary: SPLASH_HOME");
-  touch(tmp / "other/engine/splash");
+  exe(tmp / "other/engine/splash");
   fs::create_directories(tmp / "bin");
   fs::create_symlink(tmp / "other/engine/splash", tmp / "bin/splash");
   check(find_binary(home, "", (tmp / "bin").string()).path == fs::canonical(tmp / "other/engine/splash").string(), "binary: PATH symlink");
   check(find_binary(home, (tmp / "root").string(), (tmp / "bin").string()).path == (tmp / "root/engine/splash").string(), "binary: SPLASH_HOME first");
+  // a file that cannot be run is not the engine
+  touch(tmp / "plain/engine/splash");
+  fs::permissions(tmp / "plain/engine/splash", fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec, fs::perm_options::remove);
+  Found np = find_binary(home, (tmp / "plain").string(), "");
+  check(!np.ok() && has(np.error, "not an executable file"), "binary: not executable", np.error);
   // a SPLASH_HOME that is wrong is an error naming it, not another install found on PATH or under ~/Applications
-  touch(fs::path(home) / "Applications/Splash/engine/splash");
+  exe(fs::path(home) / "Applications/Splash/engine/splash");
   Found w = find_binary(home, (tmp / "nope").string(), (tmp / "bin").string());
   check(!w.ok() && has(w.error, (tmp / "nope/engine/splash").string()) && !has(w.error, "Applications"), "binary: SPLASH_HOME wrong", w.error);
-  touch(fs::path(home) / "Applications/Splash/engine/splash");
+  exe(fs::path(home) / "Applications/Splash/engine/splash");
   check(find_binary(home, "", "").ok(), "binary: ~/Applications/Splash");
 
   // models: one is the answer; a folder without a tokenizer is not one
