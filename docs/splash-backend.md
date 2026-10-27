@@ -79,22 +79,22 @@ one server at a time under the GPU lock.
   one trailing newline on the reasoning text, which plain Splash keeps and Kapitsa's output parser strips. The HTTP APIs
   return no ids, so `--tap` puts `tools/splash_tap.py` in front of the engine binary on both sides and compares each
   request's prompt ids and output ids at the native pipe. It was run once (27 Oct 2026, M5 Pro 48 GB, macOS 26.5.2, Splash 1.4.0), at T=0 with seed 1, `--verify-rows all` and `--expert-memory 16 GiB` on both sides. That is not Splash's default memory plan; the expert cache size does not change what is computed, and the default plan was not run for this comparison. Three requests (66, 1031 and 4070 prompt tokens, 16, 128 and 95 output tokens): prompt ids and output ids are identical on both sides, no first divergence, ids md5 `47c93518…`, `605fa935…`, `5f762994…`. One run per side, so it is not a statistical claim.
-- Speed (one run of `--legs K,S,K,S`, n=6 per cell: 3 requests per leg, two legs per side; 16 GiB expert cache; M5 Pro,
-  macOS 26.5.2; 27 Oct 2026; Kapitsa built from the work branch before it was split into these PRs, commit not recorded, so the run is not reproducible from a SHA; plain Splash 1.4.0). Median, then the range over the 6 requests, Kapitsa against plain Splash:
+- Speed: measured in PR #751 (`bench/results/2026-10-28-m5-pro-flash-next-engines/`), not here. There Kapitsa `--engine splash`
+  (`7e478053` and `ff6151c8`) and plain Splash 1.4.0 are level within noise, n 6 to 10 per cell, with the raw legs and
+  commands in that folder. Medians for `ff6151c8` against its paired plain Splash (K2 against S2), all at `--expert-memory 16 GiB --idle-release off`, `--verify-rows` not passed (engine default `auto`), M5 Pro 48 GB, macOS 26.5.2, 27 Oct 2026:
 
-  | | TTFT, s | prefill, tok/s | decode, tok/s |
-  |---|---|---|---|
-  | 1K prompt (1031 tokens) | 1.41 (1.39-1.52) against 1.43 (1.41-1.52) | 732 against 719 | 68.2 (59.6-77.4) against 69.7 (58.5-76.5) |
-  | 4K prompt (4070 tokens) | 3.24 (3.17-3.40) against 3.43 (3.25-3.54) | 1257 against 1188 | 58.7 (56.4-65.4) against 58.2 (55.2-64.7) |
+  | | TTFT 1K, s | TTFT 4K, s | prefill 4K, tok/s | decode T=0, tok/s | turn-2 TTFT, s |
+  |---|---|---|---|---|---|
+  | K2 against S2 | 1.45 against 1.47 | 3.45 against 3.55 | 1181 against 1149 | 55.9 against 55.5 | 0.56 against 0.57 |
 
-  The ranges overlap in every cell; decode varies by about a quarter at 1K (59.6-77.4 around 68.2) and 15% at 4K (56.4-65.4 around 58.7) inside one side's own six requests (the legs ran at
-  different moments, so that is the Mac, not the engine). Kapitsa's 4K TTFT is lower than plain Splash's in each pair of
-  requests (same position in its leg); the 1K decode median is 2% lower. This run shows no overhead of the bridge it could
-  have measured at this size, and it does not prove there is none.
+  Decode ranges 49 to 62 tok/s inside each cell, wider than any gap between the two. This shows neither a speed-up nor a
+  slowdown from the bridge. The numbers are the bench's, and #751 is where its caveats are (other sessions were using the Mac).
+  An earlier single run of this branch before the split (n=6, commit not recorded) is superseded by it and no longer quoted.
 - Default memory plan (no `--expert-memory`; 33.0 GiB free and reclaimable at start; n=1 per size, so no comparison):
   engine up in 8.9 s, 1K TTFT 1.41 s, prefill 732 tok/s, decode 74.9 tok/s; 4K TTFT 3.17 s, prefill 1286 tok/s, decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.
 
-Splash needs about 35.8 GiB to start and refuses when the Mac has less free and reclaimable memory (`not enough free memory
-to start`; plain Splash stops the same way, and `serve` then exits 1 with that reason). On this Mac that depends on what
-else is running.
+Splash refuses to start when the Mac has too little free and reclaimable memory (`not enough free memory to start`; plain
+Splash stops the same way, and `serve` then exits 1 with that reason). The default-plan run above started with 33.0 GiB free
+and reclaimable, so on this Mac the threshold is at or below that figure; no other threshold is claimed here. What is free
+depends on what else is running.
