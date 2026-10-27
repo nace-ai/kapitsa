@@ -23,7 +23,8 @@ struct ExecutionSession::State {
   std::string emergency_reason = "error", emergency_error = "execution failed";
   const std::shared_ptr<std::atomic<bool>> stopped = std::make_shared<std::atomic<bool>>(false);
   std::exception_ptr callback_error;
-  std::mutex join_mu;
+  std::mutex join_mu, terminal_mu;
+  std::atomic<bool> terminal{false};
   std::thread worker;
   Phase phase = Phase::Ready;
 
@@ -32,7 +33,13 @@ struct ExecutionSession::State {
 
   StopToken token() const noexcept { return {stopped}; }
   void cancel() noexcept {
-    if (!stopped->exchange(true)) observer->cancelled();
+    if (stopped->exchange(true) || terminal.load()) return;
+    std::lock_guard<std::mutex> lk(terminal_mu);
+    if (terminal.load()) return;
+    const auto previous = active_execution;
+    active_execution = this;
+    observer->cancelled();
+    active_execution = previous;
   }
 
   struct Callbacks : ChatObserver {
@@ -68,6 +75,8 @@ struct ExecutionSession::State {
   }
 
   void finish() noexcept {
+    std::lock_guard<std::mutex> lk(terminal_mu);
+    terminal = true;
     try { observer->finished(result, token()); }
     catch (...) { failure(std::current_exception()); }
   }
@@ -92,7 +101,7 @@ struct ExecutionSession::State {
 ExecutionSession::ExecutionSession(std::unique_ptr<State> state) : state_(std::move(state)) {}
 ExecutionSession::~ExecutionSession() {
   if (active_execution == state_.get()) std::terminate();
-  cancel();
+  if (state_->phase == State::Phase::Running) cancel();
   std::lock_guard<std::mutex> lk(state_->join_mu);
   if (state_->worker.joinable()) state_->worker.join();
 }

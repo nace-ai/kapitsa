@@ -42,11 +42,11 @@ struct Probe : ChatObserver {
   std::function<void()> on_prompt = [] {}, on_cancel = [] {};
   std::function<bool()> on_delta = [] { return true; };
   std::function<void(const ChatResult&, StopToken)> on_finish = [](auto&, auto) {};
-  std::atomic<int> finished_count{0};
-  bool accepted(const ChatResult&, StopToken stop) override { return on_accept(stop); }
-  void prompt(const ChatResult&) override { on_prompt(); }
-  bool delta(const ChatDelta&) override { return on_delta(); }
-  void cancelled() noexcept override { on_cancel(); }
+  std::atomic<int> accepted_count{0}, prompt_count{0}, delta_count{0}, cancelled_count{0}, finished_count{0};
+  bool accepted(const ChatResult&, StopToken stop) override { ++accepted_count; return on_accept(stop); }
+  void prompt(const ChatResult&) override { ++prompt_count; on_prompt(); }
+  bool delta(const ChatDelta&) override { ++delta_count; return on_delta(); }
+  void cancelled() noexcept override { ++cancelled_count; on_cancel(); }
   void finished(const ChatResult& r, StopToken stop) override { ++finished_count; on_finish(r, stop); }
 };
 
@@ -67,8 +67,35 @@ static void prestart() {
   s->start({});
   CHECK(s->wait().finish_reason == "cancelled");
   CHECK(&s->wait() == &s->wait());
-  CHECK(calls == 0 && p->finished_count == 1);
+  CHECK(calls == 0 && p->cancelled_count == 1 && p->finished_count == 1);
   logic_error([&] { s->start({}); });
+}
+
+static void never_started() {
+  auto p = std::make_shared<Probe>();
+  { auto s = Factory::bind([](auto&, auto&, auto) { return result(); }, p); }
+  CHECK(p->accepted_count == 0 && p->prompt_count == 0 && p->delta_count == 0);
+  CHECK(p->cancelled_count == 0 && p->finished_count == 0);
+}
+
+static void normal_completion() {
+  auto p = std::make_shared<Probe>();
+  {
+    auto s = Factory::bind([](auto&, ChatObserver& events, StopToken stop) {
+      CHECK(events.accepted({}, stop));
+      events.prompt({});
+      CHECK(events.delta({}));
+      return result();
+    }, p);
+    s->start({});
+    CHECK(s->wait().finish_reason == "stop");
+    CHECK(p->accepted_count == 1 && p->prompt_count == 1 && p->delta_count == 1);
+    CHECK(p->cancelled_count == 0 && p->finished_count == 1);
+    s->cancel();
+    s->cancel();
+    CHECK(p->cancelled_count == 0 && p->finished_count == 1);
+  }
+  CHECK(p->cancelled_count == 0 && p->finished_count == 1);
 }
 
 static void accepted_gate(bool abandon) {
@@ -98,7 +125,58 @@ static void accepted_gate(bool abandon) {
     s->cancel();
     CHECK(s->wait().finish_reason == "cancelled");
   }
-  CHECK(returned && p->finished_count == 1);
+  CHECK(returned && p->cancelled_count == 1 && p->finished_count == 1);
+}
+
+static void post_cancel() {
+  Gate entered;
+  auto p = std::make_shared<Probe>();
+  p->on_finish = [&](auto&, auto stop) {
+    CHECK(stop.stop_requested());
+    CHECK(p->accepted_count == 1 && p->prompt_count == 1 && p->delta_count == 1);
+    CHECK(p->cancelled_count == 1);
+  };
+  auto s = Factory::bind([&](auto&, ChatObserver& events, StopToken stop) {
+    CHECK(events.accepted({}, stop));
+    events.prompt({});
+    CHECK(events.delta({}));
+    entered.open();
+    while (!stop.stop_requested()) std::this_thread::yield();
+    CHECK(!events.accepted({}, stop));
+    events.prompt({});
+    CHECK(!events.delta({}));
+    return result("cancelled");
+  }, p);
+  s->start({});
+  entered.wait();
+  s->cancel();
+  s->cancel();
+  CHECK(s->wait().finish_reason == "cancelled");
+  CHECK(p->accepted_count == 1 && p->prompt_count == 1 && p->delta_count == 1);
+  CHECK(p->cancelled_count == 1 && p->finished_count == 1);
+}
+
+static void terminal_order() {
+  Gate entered, release;
+  auto p = std::make_shared<Probe>();
+  auto s = Factory::bind([](auto&, auto&, StopToken stop) {
+    while (!stop.stop_requested()) std::this_thread::yield();
+    return result("cancelled");
+  }, p);
+  auto* raw = s.get();
+  p->on_cancel = [&] {
+    logic_error([&] { raw->wait(); });
+    entered.open();
+    release.wait();
+  };
+  s->start({});
+  std::thread canceller([&] { s->cancel(); });
+  entered.wait();
+  CHECK(p->cancelled_count == 1 && p->finished_count == 0);
+  release.open();
+  canceller.join();
+  CHECK(s->wait().finish_reason == "cancelled");
+  CHECK(p->cancelled_count == 1 && p->finished_count == 1);
 }
 
 static void drain_and_lifetime() {
@@ -120,8 +198,9 @@ static void drain_and_lifetime() {
   }, p);
   owner.reset();
   p->on_delta = [&] { callback_entered.open(); callback_release.wait(); CHECK(!buffer_alive.expired()); return true; };
+  p->on_cancel = [&] { CHECK(!owner_alive.expired() && !buffer_alive.expired()); };
   p->on_finish = [&](auto&, auto) {
-    CHECK(work_returned && !owner_alive.expired());
+    CHECK(work_returned && p->cancelled_count == 1 && !owner_alive.expired());
     terminal_entered.open();
     terminal_release.wait();
     terminal_returned = true;
@@ -214,6 +293,7 @@ static void self_wait() {
   auto s = Factory::bind([](auto&, ChatObserver& events, auto) { events.delta({}); return result(); }, p);
   auto* raw = s.get();
   p->on_delta = [raw] { logic_error([&] { raw->wait(); }); raw->cancel(); return false; };
+  p->on_cancel = [raw] { logic_error([&] { raw->wait(); }); };
   s->start({});
   s->wait();
   CHECK(p->finished_count == 1);
@@ -247,17 +327,22 @@ static void repeated_requests_and_startup_race() {
     cancel.join();
     const auto& out = s->wait();
     CHECK(out.finish_reason == "stop" || out.finish_reason == "cancelled");
-    if (!(i % 2)) CHECK(order == 3 && out.cached_tokens == 9 && out.slot == 2 && out.slot_gen == 7);
+    if (!(i % 2)) CHECK(order == 3 && out.cached_tokens == 9 && out.slot == 2 && out.slot_gen == 7 && p->cancelled_count == 0);
+    const auto cancellations = p->cancelled_count.load();
     s->cancel();
-    CHECK(&s->wait() == &out && p->finished_count == 1);
+    CHECK(&s->wait() == &out && p->finished_count == 1 && p->cancelled_count == cancellations);
   }
 }
 
 int main() {
   alarm(30);
   prestart();
+  never_started();
+  normal_completion();
   accepted_gate(false);
   accepted_gate(true);
+  post_cancel();
+  terminal_order();
   drain_and_lifetime();
   exceptions();
   error_without_allocations();

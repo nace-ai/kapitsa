@@ -90,13 +90,18 @@ request. [`chat.h`](../src/engine/chat.h) contains the request, result, and delt
 The private [`ExecutionFactory`](../src/engine/execution_session_internal.h) binds backend work and its observer
 before start. The native HTTP handlers do not use this owner yet.
 
-The control owner keeps the session alive through its callbacks. Callbacks cannot retain, destroy, start, or wait on
-their own session. They can request cancellation. Destruction cancels and joins the worker before releasing the
-bound work. Concurrent waits return the same completed result. Waiting before start or from a worker callback throws.
+The control owner keeps the session alive through its callbacks. Callbacks must not retain their own session, and
+cannot destroy, start, or wait on it. They can request cancellation. Destruction cancels and joins the worker before releasing the
+bound work. Concurrent waits return the same completed result. Waiting before start or from any observer callback throws.
 
-Observer exceptions cancel further prompt and delta delivery. The terminal callback runs once after work returns,
-including work exceptions and thread-start failure. Terminal delivery proves CPU work returned, not that a backend
-retired its Metal command buffers, callbacks, or ANE evaluations. Each backend must establish its own native drain.
+Observer exceptions cancel further prompt and delta delivery. Cancellation sets the stop token and emits `cancelled`
+on the cancelling thread, which can wake an observer blocked in `accepted`. It can overlap ordinary callbacks, so
+observers must synchronize their own state. `cancelled` and `finished` are serialized, with `finished` always last.
+Normal completion, cancellation after completion, and destruction without start do not emit a late `cancelled`.
+
+The terminal callback runs once after work returns, including work exceptions and thread-start failure. Terminal
+delivery proves CPU work returned, not that a backend retired its Metal command buffers, callbacks, or ANE evaluations.
+Each backend must establish its own native drain.
 
 The [standalone CPU runner](../tools/run_execution_session_test.sh) compiles the production implementation without
 native libraries or Apple frameworks. The same tests run through the CMake `execution_session_test` target.
