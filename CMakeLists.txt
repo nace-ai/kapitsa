@@ -116,6 +116,7 @@ foreach(t ${NI_TOOLS})
   target_compile_definitions(${name} PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
 endforeach()
 
+
 find_package(Threads REQUIRED)
 add_executable(execution_session_test tools/execution_session_test.cpp src/engine/execution_session.cpp)
 target_include_directories(execution_session_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
@@ -130,6 +131,9 @@ target_include_directories(http_stream_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CM
 target_link_libraries(http_stream_test PRIVATE Threads::Threads)
 add_test(NAME http_stream_test COMMAND http_stream_test)
 set_tests_properties(http_stream_test PROPERTIES TIMEOUT 45)
+# Normal static-archive linking uses this object's cache symbols, not naceinfer's hook-free member.
+target_sources(fn_store_test PRIVATE src/model/expert_store.cpp)
+target_compile_definitions(fn_store_test PRIVATE NI_EXPERT_CACHE_TEST)
 
 # Kapitsa's server and CLI: `kapitsa serve --model <name|dir> ...`, with the chat page (src/server/chat.html)
 # embedded, the coding-agent launchers (src/server/launch.cpp) and `kapitsa update` (src/server/update_cmd.cpp). The API

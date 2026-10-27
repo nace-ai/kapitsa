@@ -1,4 +1,7 @@
 #include "model/expert_store.h"
+#ifdef NI_EXPERT_CACHE_TEST
+#include "model/expert_store_test.h"
+#endif
 
 #include "util/log.h"
 
@@ -14,6 +17,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 
 namespace ni::q20 {
 
@@ -25,6 +29,12 @@ inline void relax() {
 #if defined(__aarch64__)
   __asm__ __volatile__("yield");
 #endif
+}
+
+bool valid_extent(const PlaneSrc& p, uint32_t E, uint64_t bytes) {
+  const uint64_t bound = std::min(bytes, uint64_t(std::numeric_limits<off_t>::max()));
+  return p.off <= bound && p.len <= bound - p.off &&
+         (E == 1 || p.stride <= (bound - p.off - p.len) / (E - 1));
 }
 
 // n bytes at off into dst; a short read at the end of the file is allowed down to `need` bytes
@@ -85,12 +95,24 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
     fatal("expert store: %u slots; at least %u (3 layers' experts) or all %zu are needed", nslots_, 3 * E_, keys);
   if (!mem_.per_chunk || nslots_ > 2 * size_t(mem_.per_chunk)) fatal("expert store: the arena has no room for its slots");
   complete_ = nslots_ == keys;
+  std::vector<uint64_t> sizes;
   for (const std::string& f : files) {
-    const int fd = open(f.c_str(), O_RDONLY);
+    const int fd = open(f.c_str(), O_RDONLY | O_NONBLOCK);
     if (fd < 0) fatal("expert store: cannot open %s", f.c_str());
+    struct stat st;
+    if (fstat(fd, &st)) fatal("expert store: cannot stat %s", f.c_str());
+    if (!S_ISREG(st.st_mode)) fatal("expert store: not a regular file: %s", f.c_str());
+    if (st.st_size < 0) fatal("expert store: invalid extent in %s", f.c_str());
+    sizes.push_back(uint64_t(st.st_size));
     fcntl(fd, F_NOCACHE, 1);  // one pass from the SSD: no second copy in the page cache
     fds_.push_back(fd);
   }
+  for (uint32_t l = 0; l < L_; ++l)
+    for (int j = 0; j < 6; ++j) {
+      const PlaneSrc& p = src_[l].p[j];
+      if (!valid_extent(p, E_, sizes[p.file]))
+        fatal("expert store: invalid extent at layer %u plane %d in %s", l, j, files[p.file].c_str());
+    }
   std::memset(mem_.table, 0, keys * 4);
   slot_of_.assign(keys, -1);
   key_of_slot_.assign(nslots_, -1);
@@ -109,7 +131,12 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
   for (uint32_t i = 0; i < nslots_; ++i) free_[i] = int32_t(nslots_ - 1 - i);  // slot 0 first
 
   const int nr = std::max(1, std::min(o.readers, 64));
-  for (int i = 0; i < nr; ++i) readers_.emplace_back([this] { reader_loop(); });
+  for (int i = 0; i < nr; ++i) {
+#ifdef NI_EXPERT_CACHE_TEST
+    ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeWorkerStart);
+#endif
+    readers_.emplace_back([this] { reader_loop(); });
+  }
 
   // fill: every expert, or the same share of each layer (experts 0, 1, ... of every layer in turn)
   const double t0 = now_ms();
@@ -124,15 +151,33 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
       while (pending_[k].load(std::memory_order_acquire) > 0) usleep(500);
   }
   fill_ms_ = now_ms() - t0;
-  if (!complete_) turn_ = std::thread([this] { turn_loop(); });
+  if (!complete_) {
+#ifdef NI_EXPERT_CACHE_TEST
+    ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeWorkerStart);
+#endif
+    turn_ = std::thread([this] { turn_loop(); });
+  }
 }
 
 ExpertCache::~ExpertCache() {
-  stop_ = true;
+  {
+    std::lock_guard<std::mutex> lk(req_mu_);
+    turn_stop_ = true;
+  }
   req_cv_.notify_all();
-  io_cv_.notify_all();
   if (turn_.joinable()) turn_.join();
+  {
+    std::lock_guard<std::mutex> lk(io_mu_);
+    io_closed_ = true;
+  }
+#ifdef NI_EXPERT_CACHE_TEST
+  ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::ReadersClosed);
+#endif
+  io_cv_.notify_all();
   for (std::thread& t : readers_) t.join();
+#ifdef NI_EXPERT_CACHE_TEST
+  ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::ReadersJoined);
+#endif
   for (int fd : fds_) close(fd);
 }
 
@@ -165,7 +210,7 @@ void ExpertCache::wait_gpu(uint64_t value) {
   // spin while a decode layer's turn is near (they come ~0.1-0.5 ms apart), then back off (a prefill layer takes ~0.1 s)
   const double t0 = Encoder::host_ms();
   while (sync_.value() < value) {
-    if (stop_) return;
+    if (turn_stop_) return;
     const double dt = Encoder::host_ms() - t0;
     if (dt < 2.0) relax();
     else usleep(dt < 50.0 ? 20 : 200);
@@ -178,13 +223,13 @@ void ExpertCache::turn_loop() {
     Req r;
     {
       std::unique_lock<std::mutex> lk(req_mu_);
-      req_cv_.wait(lk, [&] { return stop_ || !reqs_.empty(); });
-      if (stop_) return;
+      req_cv_.wait(lk, [&] { return turn_stop_ || !reqs_.empty(); });
+      if (turn_stop_) return;
       r = reqs_.front();
       reqs_.pop_front();
     }
     wait_gpu(r.ready);
-    if (stop_) return;
+    if (turn_stop_) return;
     serve(r);
   }
 }
@@ -470,12 +515,15 @@ void ExpertCache::reader_loop() {
     Job j;
     {
       std::unique_lock<std::mutex> lk(io_mu_);
-      io_cv_.wait(lk, [&] { return stop_ || !urgent_.empty() || !normal_.empty(); });
-      if (stop_) break;
+      io_cv_.wait(lk, [&] { return io_closed_ || !urgent_.empty() || !normal_.empty(); });
+      if (io_closed_ && urgent_.empty() && normal_.empty()) break;
       std::deque<Job>& q = urgent_.empty() ? normal_ : urgent_;
       j = q.front();
       q.pop_front();
     }
+#ifdef NI_EXPERT_CACHE_TEST
+    ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeRead);
+#endif
     // aligned pieces straight into the slot; others widened to their pages unless that reads half as much again
     // (small pieces: tests' shapes; Flash-Next's are 400 KB and 50 KB)
     const bool aligned = j.off % kPage == 0 && j.len % kPage == 0 && uintptr_t(j.dst) % kPage == 0;
@@ -489,6 +537,9 @@ void ExpertCache::reader_loop() {
       bytes_ += b - a;
     }
     pending_[size_t(j.key)].fetch_sub(1, std::memory_order_release);
+#ifdef NI_EXPERT_CACHE_TEST
+    ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::ReadDone);
+#endif
   }
   free(mem);
 }

@@ -355,6 +355,9 @@ class ExpertCache {
   // nslots slots (at least 3 E, or every expert); the files' planes must match lay
   ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E, SlotLayout lay,
               uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o);
+  // Stop external post callers first; keep Memory, the copied request's referenced ids/prediction arrays,
+  // and Sync captures alive until destruction returns.
+  // Joins the active CPU producer and drains reads. The owner must separately retire GPU users of those buffers.
   ~ExpertCache();
   ExpertCache(const ExpertCache&) = delete;
   ExpertCache& operator=(const ExpertCache&) = delete;
@@ -376,6 +379,8 @@ class ExpertCache {
   size_t filled() const { return filled_; }
 
  private:
+  friend struct ExpertCacheTestAccess;
+
   struct Job {
     int fd = -1;
     uint64_t off = 0;
@@ -437,7 +442,8 @@ class ExpertCache {
   std::condition_variable req_cv_, io_cv_;
   std::deque<Req> reqs_;
   std::deque<Job> urgent_, normal_;
-  std::atomic<bool> stop_{false};
+  std::atomic<bool> turn_stop_{false};
+  bool io_closed_ = false;
 
   mutable std::mutex st_mu_;
   StoreStats st_;

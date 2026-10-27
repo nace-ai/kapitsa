@@ -5,6 +5,7 @@
 // ready value, waits for the go and checks that every routed expert's table word points at a slot holding exactly
 // that expert's bytes; it checks the same slots again just before its next ready (read-ahead must not have overwritten
 // an expert in use). Cases: decode rows with next-layer predictions (good and wrong ones), verify rows with repeats,
+
 // prefill chunks (scan lookups, every next-layer expert read ahead), a chunk seam's whole-layer wrap (the next
 // chunk's layer 0 read ahead during the last layer's turn), a hot set that must survive a prompt's sweep (ARC),
 // direct and widened reads, an arena of every expert (no handshakes), the statistics' sums, the layer-major
@@ -21,25 +22,105 @@
 #include "model/expert_store.h"
 #include "model/ngram.h"
 #include "util/bf16.h"
+#include "model/expert_store_test.h"
 #include "util/log.h"
 
 #include <fcntl.h>
+#include <libproc.h>
+#include <mach-o/dyld.h>
+#include <poll.h>
+#include <spawn.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <numeric>
 #include <random>
 #include <string>
 #include <thread>
 #include <vector>
 
+extern char** environ;
+
 using namespace ni;
 using namespace ni::q20;
+
+namespace {
+
+constexpr char admission_setup[] = "ADMISSION_SETUP_COMPLETE\n";
+constexpr char admission_worker[] = "ADMISSION_BEFORE_WORKER_START\n";
+constexpr char admission_read[] = "ADMISSION_BEFORE_READ\n";
+constexpr char admission_returned[] = "ADMISSION_INVALID_CONSTRUCTOR_RETURNED\n";
+constexpr char admission_constructed[] = "ADMISSION_CONSTRUCTED\n";
+constexpr char admission_cold[] = "ADMISSION_COLD_WORKERS_2_READS_0\n";
+constexpr char admission_bytes[] = "ADMISSION_ROUTED_BYTES_OK\n";
+std::atomic<bool> admission_observing{false};
+std::atomic<int> admission_workers{0}, admission_reads{0};
+
+template <size_t N>
+void admission_mark(const char (&marker)[N]) {
+  size_t done = 0;
+  while (done < N - 1) {
+    const ssize_t n = write(STDERR_FILENO, marker + done, N - 1 - done);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) std::_Exit(92);
+    done += size_t(n);
+  }
+}
+
+struct ShutdownProbe;
+std::atomic<ShutdownProbe*> shutdown_probe{nullptr};
+struct ShutdownProbe {
+  explicit ShutdownProbe(bool block = false) : block_first(block) { shutdown_probe = this; }
+  ~ShutdownProbe() { shutdown_probe = nullptr; }
+  const bool block_first;
+  std::atomic<bool> first_read{false}, release_read{false}, closed{false}, returned{false}, joined{false}, pending_zero{false};
+  std::atomic<int> started{0}, completed{0};
+};
+
+}
+
+namespace ni::q20 {
+void ExpertCacheTestAccess::observe(const ExpertCache& cache, Point point) {
+  if (admission_observing.load()) {
+    if (point == Point::BeforeWorkerStart) {
+      ++admission_workers;
+      admission_mark(admission_worker);
+    } else if (point == Point::BeforeRead) {
+      ++admission_reads;
+      admission_mark(admission_read);
+    }
+  }
+  ShutdownProbe* p = shutdown_probe.load();
+  if (!p) return;
+  if (p->returned) fatal("shutdown test: reader callback after destruction returned");
+  switch (point) {
+    case Point::BeforeWorkerStart: break;
+    case Point::BeforeRead:
+      if (p->started.fetch_add(1) == 0 && p->block_first) {
+        p->first_read = true;
+        while (!p->release_read) std::this_thread::yield();
+      }
+      break;
+    case Point::ReadDone: ++p->completed; break;
+    case Point::ReadersClosed: p->closed = true; break;
+    case Point::ReadersJoined:
+      p->pending_zero = all_read(cache);
+      p->joined = true;
+      break;
+  }
+}
+}
 
 namespace {
 
@@ -595,6 +676,7 @@ void case_scan_victim(const Pack& p) {
          (unsigned long long)t.prefetches, t.bytes / 1e6);
 }
 
+
 // The chunk seam's wrap (q20_fetch: a chunk's last layer reads the store's layer 0 ahead unless the chunk is the
 // prompt's last): a prediction never crosses a chunk boundary, the last layer
 // passing pred_layer -1, and layer 0 is also the first victim of every sweep, so without the wrap each chunk's first
@@ -776,6 +858,500 @@ void case_floor(const Pack& p) {
          "%u/%u, unfloored re-reads %llu + %llu experts\n",
          nslots, kept_on, E, kept_off, wkept_on, E, wkept_off, nkept, E, (unsigned long long)off.misses,
          (unsigned long long)woff.misses);
+
+template <typename F>
+void await_test(F done, const char* why) {
+  const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (!done()) {
+    if (std::chrono::steady_clock::now() >= end) fatal("shutdown test: timed out waiting for %s", why);
+    std::this_thread::yield();
+  }
+}
+
+bool expert_exact(const Arena& a, const SlotLayout& lay, uint32_t l, uint32_t e, uint32_t E) {
+  const uint8_t* s = slot_bytes(a, lay, a.table[size_t(l) * E + e]);
+  const uint32_t at[6] = {lay.gc, lay.gd, lay.uc, lay.ud, lay.dc, lay.dd};
+  for (uint32_t j = 0; j < 6; ++j) {
+    const uint32_t len = j % 2 ? lay.ud - lay.gd : lay.uc;
+    for (uint32_t i = 0; i < len; ++i)
+      if (s[at[j] + i] != byte_of(l, j, e, i)) return false;
+  }
+  return true;
+}
+
+enum class AdmissionCase {
+  LateShort, Empty, PastEof, PastOffMax, OffsetWrap, ProductWrap, AdditionWrap,
+  NegativeFile, LargeFile, BadLength, Directory, Device, Fifo, FifoLink, Missing,
+  Regular, RegularLink, ZeroStride, OverlapStride, OneExpert, EofStaged, EofDirect, RuntimeShort
+};
+
+struct AdmissionSpec {
+  const char* name;
+  AdmissionCase kind;
+  const char* diagnostic;
+};
+
+constexpr AdmissionSpec admission_cases[] = {
+    {"late-short", AdmissionCase::LateShort, "expert store: invalid extent"},
+    {"empty", AdmissionCase::Empty, "expert store: invalid extent"},
+    {"past-eof", AdmissionCase::PastEof, "expert store: invalid extent"},
+    {"past-off-max", AdmissionCase::PastOffMax, "expert store: invalid extent"},
+    {"offset-wrap", AdmissionCase::OffsetWrap, "expert store: invalid extent"},
+    {"product-wrap", AdmissionCase::ProductWrap, "expert store: invalid extent"},
+    {"addition-wrap", AdmissionCase::AdditionWrap, "expert store: invalid extent"},
+    {"negative-file", AdmissionCase::NegativeFile, "expert store: a layer's planes do not match the slot layout"},
+    {"large-file", AdmissionCase::LargeFile, "expert store: a layer's planes do not match the slot layout"},
+    {"bad-length", AdmissionCase::BadLength, "expert store: a layer's planes do not match the slot layout"},
+    {"directory", AdmissionCase::Directory, "expert store: not a regular file"},
+    {"device", AdmissionCase::Device, "expert store: not a regular file"},
+    {"fifo", AdmissionCase::Fifo, "expert store: not a regular file"},
+    {"fifo-link", AdmissionCase::FifoLink, "expert store: not a regular file"},
+    {"missing", AdmissionCase::Missing, "expert store: cannot open"},
+    {"regular", AdmissionCase::Regular, nullptr},
+    {"regular-link", AdmissionCase::RegularLink, nullptr},
+    {"zero-stride", AdmissionCase::ZeroStride, nullptr},
+    {"overlap-stride", AdmissionCase::OverlapStride, nullptr},
+    {"one-expert", AdmissionCase::OneExpert, nullptr},
+    {"eof-staged", AdmissionCase::EofStaged, nullptr},
+    {"eof-direct", AdmissionCase::EofDirect, nullptr},
+    {"runtime-short", AdmissionCase::RuntimeShort, "expert store: short read"},
+};
+
+uint64_t admission_file_size(const std::string& path) {
+  struct stat st;
+  if (stat(path.c_str(), &st) || st.st_size < 0) fatal("admission test: cannot stat fixture");
+  return uint64_t(st.st_size);
+}
+
+void admission_truncate(const std::string& path, uint64_t bytes) {
+  if (truncate(path.c_str(), off_t(bytes))) fatal("admission test: cannot truncate fixture");
+}
+
+void admission_relocate_code(Pack& p) {
+  PlaneSrc& pl = p.layers.back().p[4];
+  if (pl.len != 32768) fatal("admission test: EOF fixture must use a 32 KiB code plane");
+  pl.off = admission_file_size(p.files[size_t(pl.file)]) | uint64_t(1);
+  std::vector<uint8_t> bytes(size_t(pl.len) * p.E);
+  for (uint32_t e = 0; e < p.E; ++e)
+    for (uint32_t i = 0; i < pl.len; ++i) bytes[size_t(e) * pl.len + i] = byte_of(3, 4, e, i);
+  const int fd = open(p.files[size_t(pl.file)].c_str(), O_WRONLY);
+  if (fd < 0) fatal("admission test: cannot open EOF fixture");
+  size_t done = 0;
+  while (done < bytes.size()) {
+    const ssize_t n = pwrite(fd, bytes.data() + done, bytes.size() - done, off_t(pl.off + done));
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) fatal("admission test: cannot write EOF fixture");
+    done += size_t(n);
+  }
+  if (close(fd)) fatal("admission test: cannot close EOF fixture");
+  if (admission_file_size(p.files[size_t(pl.file)]) != pl.off + uint64_t(p.E) * pl.len || !(pl.off % 16384))
+    fatal("admission test: code plane is not unaligned at exact EOF");
+}
+
+bool admission_expert_exact(const Arena& a, const Pack& p, AdmissionCase kind, uint32_t l, uint32_t e) {
+  if (kind != AdmissionCase::ZeroStride && kind != AdmissionCase::OverlapStride)
+    return expert_exact(a, p.lay, l, e, p.E);
+  const uint8_t* s = slot_bytes(a, p.lay, a.table[size_t(l) * p.E + e]);
+  const uint32_t at[6] = {p.lay.gc, p.lay.gd, p.lay.uc, p.lay.ud, p.lay.dc, p.lay.dd};
+  for (uint32_t j = 0; j < 6; ++j) {
+    const PlaneSrc& pl = p.layers[l].p[j];
+    for (uint32_t i = 0; i < pl.len; ++i) {
+      const uint64_t pos = l == 3 && j == 4 ? uint64_t(e) * pl.stride + i : uint64_t(e) * pl.len + i;
+      if (s[at[j] + i] != byte_of(l, j, uint32_t(pos / pl.len), uint32_t(pos % pl.len))) return false;
+    }
+  }
+  return true;
+}
+
+int admission_probe(const AdmissionSpec& spec, const std::string& dir) {
+  if (std::signal(SIGALRM, [](int) {
+        constexpr char msg[] = "ADMISSION_WATCHDOG_EXPIRED\n";
+        (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        std::_Exit(124);
+      }) == SIG_ERR) fatal("admission test: cannot install watchdog");
+  sigset_t alarm_signal;
+  sigemptyset(&alarm_signal);
+  sigaddset(&alarm_signal, SIGALRM);
+  if (sigprocmask(SIG_UNBLOCK, &alarm_signal, nullptr)) fatal("admission test: cannot unblock watchdog");
+  alarm(15);
+  Pack p = make_pack(dir, 4, spec.kind == AdmissionCase::OneExpert ? 1 : 4);
+  PlaneSrc& late = p.layers.back().p[5];
+  PlaneSrc& code = p.layers.back().p[4];
+  const uint64_t max = std::numeric_limits<uint64_t>::max();
+  switch (spec.kind) {
+    case AdmissionCase::LateShort:
+      admission_truncate(p.files[1], late.off + uint64_t(p.E - 1) * late.stride + late.len - 1);
+      break;
+    case AdmissionCase::Empty: admission_truncate(p.files[0], 0); break;
+    case AdmissionCase::PastEof: late.off = admission_file_size(p.files[1]) + 1; break;
+    case AdmissionCase::PastOffMax: late.off = uint64_t(std::numeric_limits<off_t>::max()) + 1; break;
+    case AdmissionCase::OffsetWrap: late.off = max - late.len / 2; break;
+    case AdmissionCase::ProductWrap: late.stride = max / 3 + 1; break;
+    case AdmissionCase::AdditionWrap: late.stride = max / 3; break;
+    case AdmissionCase::NegativeFile: late.file = -1; break;
+    case AdmissionCase::LargeFile: late.file = int(p.files.size()); break;
+    case AdmissionCase::BadLength: --late.len; break;
+    case AdmissionCase::Directory:
+      if (mkdir((dir + "/source-dir").c_str(), 0700)) fatal("admission test: cannot create directory fixture");
+      p.files[1] = dir + "/source-dir";
+      break;
+    case AdmissionCase::Device: p.files[1] = "/dev/null"; break;
+    case AdmissionCase::Fifo:
+    case AdmissionCase::FifoLink:
+      if (mkfifo((dir + "/source-fifo").c_str(), 0600)) fatal("admission test: cannot create FIFO fixture");
+      p.files[1] = dir + "/source-fifo";
+      if (spec.kind == AdmissionCase::FifoLink) {
+        if (symlink("source-fifo", (dir + "/fifo-link").c_str())) fatal("admission test: cannot symlink FIFO");
+        p.files[1] = dir + "/fifo-link";
+      }
+      break;
+    case AdmissionCase::Missing: p.files[1] = dir + "/missing"; break;
+    case AdmissionCase::RegularLink:
+      if (symlink("b.safetensors", (dir + "/regular-link").c_str())) fatal("admission test: cannot symlink fixture");
+      p.files[1] = dir + "/regular-link";
+      break;
+    case AdmissionCase::ZeroStride: code.stride = 0; break;
+    case AdmissionCase::OverlapStride: code.stride = code.len / 2; break;
+    case AdmissionCase::OneExpert: code.stride = max; break;
+    case AdmissionCase::EofStaged:
+    case AdmissionCase::EofDirect: admission_relocate_code(p); break;
+    case AdmissionCase::Regular:
+    case AdmissionCase::RuntimeShort: break;
+  }
+  Arena a(p.lay, 3 * p.E, 4, p.E);
+  Event ev;
+  ExpertCache::Options o;
+  o.fill = false;
+  o.readers = 1;
+  o.direct = spec.kind == AdmissionCase::EofDirect;
+  admission_observing = true;
+  admission_mark(admission_setup);
+  {
+    ExpertCache c(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, ev.sync(), o);
+    if (spec.diagnostic && spec.kind != AdmissionCase::RuntimeShort) {
+      admission_mark(admission_returned);
+      std::_Exit(90);
+    }
+    admission_mark(admission_constructed);
+    if (c.complete() || admission_workers != 2 || admission_reads != 0)
+      fatal("admission test: expected incomplete cache, two worker starts and zero construction reads");
+    admission_mark(admission_cold);
+    if (spec.kind == AdmissionCase::RuntimeShort)
+      admission_truncate(p.files[1], late.off + uint64_t(p.E - 1) * late.stride + late.len - 1);
+    uint64_t value = 0;
+    for (uint32_t l = 0; l < 4; ++l)
+      for (uint32_t e = 0; e < p.E; ++e) {
+        if (spec.kind == AdmissionCase::RuntimeShort && (l != 3 || e != p.E - 1)) continue;
+        ExpertCache::Req r;
+        r.layer = int(l);
+        r.ids = &e;
+        r.n = 1;
+        r.ready = ++value;
+        r.go = ++value;
+        c.post(r);
+        ev.v.store(r.ready, std::memory_order_release);
+        while (ev.v.load(std::memory_order_acquire) < r.go) std::this_thread::yield();
+        if (!admission_expert_exact(a, p, spec.kind, l, e)) fatal("admission test: routed bytes differ");
+      }
+    admission_mark(admission_bytes);
+  }
+  admission_observing = false;
+  alarm(0);
+  return 0;
+}
+
+struct AdmissionResult {
+  std::string output;
+  int status = 0, error = 0;
+  bool spawned = false, timed_out = false, reaped = false, eof = false, overflow = false;
+};
+
+AdmissionResult supervise_admission(const std::string& executable, const AdmissionSpec& spec, const std::string& dir) {
+  AdmissionResult r;
+  int pipefd[2];
+  if (pipe(pipefd)) { r.error = errno; return r; }
+  for (int& fd : pipefd) {
+    const int copy = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+    const int saved = errno;
+    close(fd);
+    fd = copy;
+    if (copy < 0) { r.error = saved; break; }
+  }
+  if (!r.error && fcntl(pipefd[0], F_SETFL, O_NONBLOCK) < 0) r.error = errno;
+  posix_spawn_file_actions_t actions;
+  posix_spawnattr_t attr;
+  bool actions_ready = false, attr_ready = false;
+  pid_t pid = -1;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  if (!r.error) {
+    r.error = posix_spawn_file_actions_init(&actions);
+    actions_ready = !r.error;
+  }
+  if (!r.error) {
+    r.error = posix_spawnattr_init(&attr);
+    attr_ready = !r.error;
+  }
+  if (!r.error) r.error = posix_spawn_file_actions_adddup2(&actions, pipefd[1], STDOUT_FILENO);
+  if (!r.error) r.error = posix_spawn_file_actions_adddup2(&actions, pipefd[1], STDERR_FILENO);
+  if (!r.error) r.error = posix_spawn_file_actions_addclose(&actions, pipefd[0]);
+  if (!r.error) r.error = posix_spawn_file_actions_addclose(&actions, pipefd[1]);
+  if (!r.error) r.error = posix_spawnattr_setpgroup(&attr, 0);
+  if (!r.error) r.error = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
+  if (!r.error) {
+    char* args[] = {const_cast<char*>(executable.c_str()), const_cast<char*>("--admission-probe"),
+                    const_cast<char*>(spec.name), const_cast<char*>(dir.c_str()), nullptr};
+    r.error = posix_spawn(&pid, executable.c_str(), &actions, &attr, args, environ);
+    r.spawned = !r.error;
+  }
+  if (attr_ready) posix_spawnattr_destroy(&attr);
+  if (actions_ready) posix_spawn_file_actions_destroy(&actions);
+  if (pipefd[1] >= 0) close(pipefd[1]);
+  if (r.error) {
+    if (pipefd[0] >= 0) close(pipefd[0]);
+    return r;
+  }
+  auto drain = [&] {
+    char buf[4096];
+    for (int i = 0; i < 16 && !r.eof; ++i) {
+      const ssize_t n = read(pipefd[0], buf, sizeof(buf));
+      if (n > 0) {
+        if (r.output.size() + size_t(n) <= 65536) r.output.append(buf, size_t(n));
+        else r.overflow = true;
+      } else if (n == 0) r.eof = true;
+      else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) { r.error = errno; break; }
+      else if (errno != EINTR) break;
+    }
+  };
+  auto pause = [&] {
+    struct pollfd fd = {r.eof ? -1 : pipefd[0], POLLIN, 0};
+    if (poll(&fd, 1, 10) < 0 && errno != EINTR) r.error = errno;
+  };
+  for (;;) {
+    drain();
+    if (std::chrono::steady_clock::now() >= deadline) { r.timed_out = true; break; }
+    siginfo_t info{};
+    const int seen = waitid(P_PID, id_t(pid), &info, WEXITED | WNOHANG | WNOWAIT);
+    if (seen == 0 && info.si_pid == pid) break;
+    if (seen < 0 && errno != EINTR) { r.error = errno; break; }
+    if (r.error) break;
+    pause();
+  }
+  if (kill(-pid, SIGKILL) < 0 && errno != ESRCH) {
+    const int signal_error = errno;
+    bool no_live_members = false;
+    if (signal_error == EPERM) {
+      siginfo_t info{};
+      if (waitid(P_PID, id_t(pid), &info, WEXITED | WNOHANG | WNOWAIT) == 0 && info.si_pid == pid) {
+        pid_t members[2]{};
+        errno = 0;
+        const int bytes = proc_listpids(PROC_PGRP_ONLY, uint32_t(pid), members, sizeof(members));
+        no_live_members = errno == 0 && (bytes == 0 || (bytes == int(sizeof(pid_t)) && members[0] == pid));
+      }
+    }
+    if (!no_live_members) r.error = signal_error;
+  }
+  const auto cleanup_end = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  while (std::chrono::steady_clock::now() < cleanup_end) {
+    drain();
+    const pid_t got = waitpid(pid, &r.status, WNOHANG);
+    if (got == pid) { r.reaped = true; break; }
+    if (got < 0 && errno != EINTR) { r.error = errno; break; }
+    pause();
+  }
+  const auto drain_end = std::min(cleanup_end, std::chrono::steady_clock::now() + std::chrono::milliseconds(250));
+  while (!r.eof && std::chrono::steady_clock::now() < drain_end) { drain(); if (!r.eof) pause(); }
+  close(pipefd[0]);
+  return r;
+}
+
+size_t admission_count(const std::string& output, const char* marker) {
+  size_t count = 0, at = 0;
+  while ((at = output.find(marker, at)) != std::string::npos) { ++count; at += strlen(marker); }
+  return count;
+}
+
+void case_admission() {
+  uint32_t size = 1024;
+  std::vector<char> executable(size);
+  if (_NSGetExecutablePath(executable.data(), &size)) {
+    executable.resize(size);
+    if (_NSGetExecutablePath(executable.data(), &size)) fatal("admission test: cannot resolve self executable");
+  }
+  for (const AdmissionSpec& spec : admission_cases) {
+    const char* tmp = getenv("TMPDIR");
+    const std::string pattern = std::string(tmp && *tmp ? tmp : "/tmp") + "/fn_store_admission.XXXXXX";
+    std::vector<char> name(pattern.begin(), pattern.end());
+    name.push_back('\0');
+    if (!mkdtemp(name.data())) fatal("admission test: mkdtemp failed");
+    const std::string dir = name.data();
+    const AdmissionResult r = supervise_admission(executable.data(), spec, dir);
+    const bool normal = !r.error && !r.timed_out && r.reaped && r.eof && !r.overflow && WIFEXITED(r.status);
+    const bool runtime = spec.kind == AdmissionCase::RuntimeShort;
+    const size_t setup = admission_count(r.output, admission_setup), workers = admission_count(r.output, admission_worker);
+    const size_t reads = admission_count(r.output, admission_read), constructed = admission_count(r.output, admission_constructed);
+    const size_t setup_at = r.output.find(admission_setup);
+    const size_t diagnostic_at = spec.diagnostic ? r.output.find(spec.diagnostic) : std::string::npos;
+    bool ok = normal && setup == 1 && admission_count(r.output, admission_returned) == 0;
+    if (spec.diagnostic && !runtime) {
+      ok = ok && WEXITSTATUS(r.status) == 1 && diagnostic_at != std::string::npos && setup_at < diagnostic_at &&
+           workers == 0 && reads == 0 && constructed == 0;
+    } else {
+      const size_t constructed_at = r.output.find(admission_constructed), cold_at = r.output.find(admission_cold);
+      const size_t read_at = r.output.find(admission_read);
+      ok = ok && workers == 2 && constructed == 1 && admission_count(r.output, admission_cold) == 1 &&
+           setup_at < constructed_at && constructed_at < cold_at && cold_at < read_at && read_at != std::string::npos;
+      if (runtime)
+        ok = ok && WEXITSTATUS(r.status) == 1 && diagnostic_at != std::string::npos && read_at < diagnostic_at &&
+             admission_count(r.output, admission_bytes) == 0;
+      else
+        ok = ok && WEXITSTATUS(r.status) == 0 && admission_count(r.output, admission_bytes) == 1 &&
+             read_at < r.output.find(admission_bytes);
+    }
+    CHECK(ok, "admission %s: status=%d error=%d timeout=%d reaped=%d eof=%d overflow=%d setup=%zu workers=%zu reads=%zu\n%s",
+          spec.name, r.status, r.error, r.timed_out, r.reaped, r.eof, r.overflow, setup, workers, reads, r.output.c_str());
+    printf("admission %s: %s\n", spec.name, ok ? "ok" : "FAILED");
+    if (!r.spawned || r.reaped) {
+      for (const char* file : {"a.safetensors", "b.safetensors", "regular-link", "source-fifo", "fifo-link"})
+        if (unlink((dir + "/" + file).c_str()) && errno != ENOENT) CHECK(false, "admission: cannot unlink owned %s", file);
+      if (rmdir((dir + "/source-dir").c_str()) && errno != ENOENT) CHECK(false, "admission: cannot remove owned source-dir");
+      CHECK(rmdir(dir.c_str()) == 0, "admission: cannot remove owned fixture directory %s", dir.c_str());
+    } else {
+      CHECK(false, "admission: cleanup deadline expired; retained owned fixture directory %s", dir.c_str());
+    }
+  }
+}
+
+void check_drained_arena(const Arena& a, const Pack& p, uint32_t layer, uint32_t expert) {
+  const size_t bytes = size_t(a.m.per_chunk) * p.lay.bytes;
+  for (uint8_t* m : a.mem)
+    if (mprotect(m, bytes, PROT_READ)) fatal("shutdown test: mprotect read-only failed");
+  CHECK(expert_exact(a, p.lay, layer, expert, p.E), "shutdown: expert bytes incomplete after destruction");
+  const uint8_t* used = slot_bytes(a, p.lay, a.m.table[size_t(layer) * p.E + expert]);
+  bool unused_intact = true;
+  for (uint8_t* m : a.mem)
+    for (uint32_t s = 0; s < a.m.per_chunk; ++s) {
+      const uint8_t* slot = m + size_t(s) * p.lay.bytes;
+      if (slot == used) continue;
+      for (uint32_t i = 0; i < p.lay.bytes; ++i) unused_intact &= slot[i] == 0xEE;
+    }
+  CHECK(unused_intact, "shutdown: a read wrote outside its admitted slot");
+  for (uint8_t* m : a.mem)
+    if (mprotect(m, bytes, PROT_READ | PROT_WRITE)) fatal("shutdown test: mprotect restore failed");
+}
+
+void check_shutdown_probe(ShutdownProbe& p) {
+  p.returned = true;
+  CHECK(p.joined && p.pending_zero, "shutdown: pending reads remain after reader joins");
+  CHECK(p.started == 6 && p.completed == 6, "shutdown: read %d, completed %d of six planes", int(p.started),
+        int(p.completed));
+}
+
+void case_shutdown_demand(const Pack& p, bool before_enqueue) {
+  alarm(10);
+  Arena a(p.lay, 3 * p.E, uint32_t(p.layers.size()), p.E);
+  ShutdownProbe probe(!before_enqueue);
+  ExpertCache::Options o;
+  o.fill = false;
+  o.readers = 1;
+  ExpertCache* raw = nullptr;
+  bool valid_go = false;
+  ExpertCache::Sync sync{[] { return uint64_t(1); }, [&](uint64_t v) {
+    valid_go = v == 2 && ExpertCacheTestAccess::pending(*raw, 0) == 0 && expert_exact(a, p.lay, 0, 0, p.E);
+  }};
+  auto c = std::make_unique<ExpertCache>(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, sync, o);
+  raw = c.get();
+  std::unique_lock<std::mutex> io;
+  if (before_enqueue) io = ExpertCacheTestAccess::hold_io(*c);
+  const uint32_t expert = 0;
+  ExpertCache::Req r;
+  r.layer = 0;
+  r.ids = &expert;
+  r.n = 1;
+  r.ready = 1;
+  r.go = 2;
+  c->post(r);
+  if (before_enqueue) {
+    await_test([&] { return ExpertCacheTestAccess::pending(*raw, 0) == 6; }, "demand before enqueue");
+  } else {
+    await_test([&] { return probe.first_read.load(); }, "first dequeued demand read");
+    CHECK(ExpertCacheTestAccess::pending(*raw, 0) == 6, "shutdown demand: reads escaped first-reader gate");
+  }
+  std::thread destroy([owned = std::move(c)]() mutable { owned.reset(); });
+  await_test([&] { return ExpertCacheTestAccess::stopping(*raw); }, "turn stop");
+  if (before_enqueue) io.unlock();
+  else probe.release_read = true;
+  destroy.join();
+  check_shutdown_probe(probe);
+  CHECK(valid_go, "shutdown demand: no completed, pending-zero go");
+  check_drained_arena(a, p, 0, 0);
+  alarm(0);
+  printf("shutdown demand: %s, six planes drained before go and destruction\n",
+         before_enqueue ? "enqueue after stop" : "first reader held with five jobs queued");
+}
+
+void case_shutdown_prefetch(const Pack& p) {
+  alarm(10);
+  Arena a(p.lay, 3 * p.E, uint32_t(p.layers.size()), p.E);
+  ShutdownProbe probe(true);
+  ExpertCache::Options o;
+  o.fill = false;
+  o.readers = 1;
+  std::atomic<bool> at_warm{false}, release_warm{false};
+  ExpertCache::Sync sync{[] { return uint64_t(1); }, [](uint64_t v) {
+    if (v != 2) fatal("shutdown prefetch: unexpected go");
+  }, [&] {
+    at_warm = true;
+    await_test([&] { return release_warm.load(); }, "release of post-go producer");
+  }};
+  auto c = std::make_unique<ExpertCache>(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, sync, o);
+  ExpertCache* raw = c.get();
+  const uint32_t expert = 0;
+  ExpertCache::Req r;
+  r.layer = 0;
+  r.ready = 1;
+  r.go = 2;
+  r.pred_layer = 1;
+  r.pred = &expert;
+  r.npred = 1;
+  r.warm = true;
+  c->post(r);
+  await_test([&] { return at_warm.load(); }, "post-go producer gate");
+  std::thread destroy([owned = std::move(c)]() mutable { owned.reset(); });
+  await_test([&] { return ExpertCacheTestAccess::stopping(*raw); }, "turn stop before prefetch enqueue");
+  release_warm = true;
+  await_test([&] { return probe.first_read.load() && probe.closed.load(); }, "reader queue closed with reads held");
+  probe.release_read = true;
+  destroy.join();
+  check_shutdown_probe(probe);
+  check_drained_arena(a, p, 1, 0);
+  alarm(0);
+  printf("shutdown prefetch: post-go producer finished and normal reads drained\n");
+}
+
+void case_shutdown_waiting(const Pack& p) {
+  alarm(10);
+  Arena a(p.lay, 3 * p.E, uint32_t(p.layers.size()), p.E);
+  ExpertCache::Options o;
+  o.fill = false;
+  o.readers = 1;
+  std::atomic<bool> polled{false};
+  int go_count = 0;
+  ExpertCache::Sync sync{[&] { polled = true; return uint64_t(0); }, [&](uint64_t) { ++go_count; }};
+  {
+    ExpertCache c(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, sync, o);
+    ExpertCache::Req r;
+    r.layer = 0;
+    r.ready = 1;
+    r.go = 2;
+    c.post(r);
+    await_test([&] { return polled.load(); }, "not-ready request");
+  }
+  CHECK(go_count == 0, "shutdown waiting: fabricated go for an unserved request");
+  for (int i = 0; i < 32; ++i) {
+    ExpertCache c(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, sync, o);
+  }
+  alarm(0);
+  printf("shutdown waiting/idle: joined without a synthetic go\n");
 }
 
 void case_complete(const Pack& p) {
@@ -1205,38 +1781,71 @@ void case_ngram_table(const std::string& dir, std::vector<std::string>& files) {
 }
 
 int main(int argc, char** argv) {
-  std::string keep;
-  for (int i = 1; i < argc; ++i)
-    if (!strcmp(argv[i], "--keep") && i + 1 < argc) keep = argv[++i];
-  std::string dir = keep;
-  if (dir.empty()) {
-    const char* t = getenv("TMPDIR");
-    std::string tmpl = std::string(t && *t ? t : "/tmp") + "/fn_store_test.XXXXXX";
-    std::vector<char> b(tmpl.begin(), tmpl.end());
-    b.push_back('\0');
-    if (!mkdtemp(b.data())) fatal("mkdtemp failed");
-    dir = b.data();
-  } else {
-    mkdir(dir.c_str(), 0755);
+  if (setenv("NI_ABORT", "0", 1)) {
+    fprintf(stderr, "fn_store_test: cannot normalize NI_ABORT\n");
+    return 91;
   }
-  Pack p = make_pack(dir, 6, 64);
-  case_decode(p, false);
-  case_decode(p, true);
-  case_verify_prefill(p);
-  case_scan(p);
-  case_scan_victim(p);
-  case_seam(p);
-  case_floor(p);
-  case_complete(p);
-  case_settle();
-  case_auto_size();
-  case_group_shape();
-  case_group_plan();
-  case_group_pin();
-  case_ngram_table(dir, p.files);
-  if (keep.empty()) {
-    for (const std::string& f : p.files) unlink(f.c_str());
-    rmdir(dir.c_str());
+  if (argc > 1 && !strcmp(argv[1], "--admission-probe")) {
+    if (argc != 4) fatal("usage: fn_store_test --admission-probe CASE DIR");
+    for (const AdmissionSpec& spec : admission_cases)
+      if (!strcmp(argv[2], spec.name)) return admission_probe(spec, argv[3]);
+    fatal("admission test: unknown probe case %s", argv[2]);
+  }
+  std::string keep;
+  bool shutdown_only = false, admission_only = false;
+  for (int i = 1; i < argc; ++i) {
+    if (!strcmp(argv[i], "--keep") && i + 1 < argc) keep = argv[++i];
+    else if (!strcmp(argv[i], "--shutdown-only")) shutdown_only = true;
+    else if (!strcmp(argv[i], "--admission-only")) admission_only = true;
+    else fatal("usage: fn_store_test [--shutdown-only | --admission-only] [--keep DIR]");
+  }
+  if (shutdown_only && admission_only) fatal("fn_store_test: suite selectors are mutually exclusive");
+  std::signal(SIGALRM, [](int) {
+    constexpr char msg[] = "fn_store_test: shutdown watchdog expired (blocked teardown)\n";
+    (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
+    _exit(124);
+  });
+  if (!shutdown_only) {
+    if (std::signal(SIGCHLD, SIG_DFL) == SIG_ERR) fatal("admission test: cannot retain child exit status");
+    case_admission();
+  }
+  if (!admission_only) {
+    std::string dir = keep;
+    if (dir.empty()) {
+      const char* t = getenv("TMPDIR");
+      std::string tmpl = std::string(t && *t ? t : "/tmp") + "/fn_store_test.XXXXXX";
+      std::vector<char> b(tmpl.begin(), tmpl.end());
+      b.push_back('\0');
+      if (!mkdtemp(b.data())) fatal("mkdtemp failed");
+      dir = b.data();
+    } else {
+      mkdir(dir.c_str(), 0755);
+    }
+    const Pack p = make_pack(dir, shutdown_only ? 4 : 6, shutdown_only ? 2 : 64);
+    case_shutdown_demand(p, false);
+    case_shutdown_demand(p, true);
+    case_shutdown_prefetch(p);
+    case_shutdown_waiting(p);
+    if (!shutdown_only) {
+      case_decode(p, false);
+      case_decode(p, true);
+      case_verify_prefill(p);
+      case_scan(p);
+      case_scan_victim(p);
+      case_seam(p);
+      case_floor(p);
+      case_complete(p);
+      case_settle();
+      case_auto_size();
+      case_group_shape();
+      case_group_plan();
+      case_group_pin();
+      case_ngram_table(dir, p.files);
+    }
+    if (keep.empty()) {
+      for (const std::string& f : p.files) unlink(f.c_str());
+      rmdir(dir.c_str());
+    }
   }
   if (g_fail) {
     fprintf(stderr, "fn_store_test: %d checks failed\n", g_fail);
