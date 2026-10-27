@@ -1,6 +1,7 @@
 // src/splash/discover.h on a throwaway Splash tree: what is found, and what each error names. CPU only, no Splash needed.
 #include <unistd.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -31,9 +32,10 @@ static void exe(const fs::path& p) {
   fs::permissions(p, fs::perms::owner_all, fs::perm_options::add);
 }
 
-static void model(const std::string& home, const std::string& name, const std::string& family, bool tokenizer = true) {
+static void model(const std::string& home, const std::string& name, const std::string& family, bool tokenizer = true,
+                  const std::string& source = "") {
   fs::path d = fs::path(home) / "Library/Application Support/Splash/models/.resolved" / name;
-  touch(d / "model.json", "{\"family\":\"" + family + "\"}");
+  touch(d / "model.json", "{\"family\":\"" + family + "\"" + (source.empty() ? "" : ",\"model\":\"" + source + "\"") + "}");
   if (tokenizer) touch(d / "tokenizer/tokenizer.json", "{}");
 }
 
@@ -90,10 +92,33 @@ int main() {
   m = find_model(home, "aaaaaa1");
   check(m.ok() && has(m.path, "/aaaaaa1111"), "model: longer prefix", m.error);
   m = find_model(home, "qq");
-  check(!m.ok() && has(m.error, "at least 6"), "model: short prefix", m.error);
+  check(!m.ok() && has(m.error, "family or source name"), "model: short and no family", m.error);
   m = find_model(home, "cccccc");
-  check(!m.ok() && has(m.error, "starts with it"), "model: no match", m.error);
+  check(!m.ok() && has(m.error, "starting with it"), "model: no match", m.error);
   check(list_models(home).size() == 3, "list_models");
+
+  // a family or source name, any case: one model, or the newest of one family and source; else the candidates
+  m = find_model(home, "35b");
+  check(m.ok() && has(m.path, "/bbbbbb3333"), "family: one model", m.error);
+  m = find_model(home, "FLASH-next");
+  check(!m.ok() && has(m.error, "2 different models") && has(m.error, "aaaaaa1111") && has(m.error, "aaaaaa2222"), "family: no source, several", m.error);
+  const fs::path res = fs::path(home) / "Library/Application Support/Splash/models/.resolved";
+  model(home, "dddddd4444", "Qwen3.8-Flash-Next", true, "org/Flash-Next-GGUF:Q2_0");
+  model(home, "eeeeee5555", "Qwen3.8-Flash-Next", true, "org/Flash-Next-GGUF:Q2_0");
+  model(home, "ffffff6666", "Qwen3.8-Flash-Next", true, "org/Other-GGUF:Q4_0");
+  fs::remove_all(res / "aaaaaa1111");
+  fs::remove_all(res / "aaaaaa2222");
+  const auto now = fs::file_time_type::clock::now();
+  fs::last_write_time(res / "dddddd4444", now - std::chrono::hours(2));
+  fs::last_write_time(res / "eeeeee5555", now - std::chrono::hours(1));
+  m = find_model(home, "q2_0");
+  check(m.ok() && has(m.path, "/eeeeee5555"), "source: the newest of one source", m.error);
+  m = find_model(home, "flash-next");
+  check(!m.ok() && has(m.error, "3 different models") && has(m.error, "Other-GGUF"), "family: two sources", m.error);
+  m = find_model(home, "other-gguf");
+  check(m.ok() && has(m.path, "/ffffff6666"), "source: a part of the source name", m.error);
+  m = find_model(home, "nothing-like-it");
+  check(!m.ok() && has(m.error, "family or source name") && has(m.error, "Qwen3.6-35B-A3B  bbbbbb3333"), "family: no match", m.error);
 
   fs::remove_all(tmp);
   if (failures) return 1;

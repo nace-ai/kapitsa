@@ -23,6 +23,8 @@ Found find_binary(const std::string& home, const std::string& splash_home, const
 // A resolved model folder under <home>/Library/Application Support/Splash/models/.resolved/ (the ones with a tokenizer).
 // `want` empty: the only one there is; with several the error lists each (family, folder name) and asks for one.
 // `want` a folder name or a prefix of one (at least 6 characters, unique): that one.
+// `want` else a family or source name, any case, as a part of it ("flash-next", "27b", "Q2_0"): the one model it names; when
+// that is several folders of one family and source (Splash keeps each re-resolution), the newest; else an error that lists them.
 Found find_model(const std::string& home, const std::string& want);
 
 // The same listing, as "family  folder" lines (the order the error uses).
