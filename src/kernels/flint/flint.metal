@@ -23,7 +23,13 @@
 // their partial results, and flint_router_topk_merge / flint_router_shared_merge / flint_attn_d2_merge run the same
 // merge as a dispatch of their own (p.split; Flint's split_merges(), NI_FLINT_SPLIT=1 on a newer macOS). Every export
 // does so before Apple9 (M1, M2) too, where the last threadgroup read stale data behind the fences (the M1 Pro; an M1
-// Max's 4-bit export answered garbage, #478).
+// Max's 4-bit export answered garbage, #478), and so does an Ultra (#421).
+// The arrival (flint_arrive) is Nemotron-H's (nh_moe_a1, nh_x4_mm): the threadgroup's partials behind a device
+// barrier, then thread 0's fence, its count and a second fence, then a device barrier before the merge reads. The
+// kernels used to have each thread fence its own writes before the barrier and thread 0 count after it with no fence
+// of its own, which leaves the count unordered after the other threads' writes. That order read stale partials on
+// the M1 Pro, M1 Max and M5 Ultra; Nemotron-H's fused merges pass their community runs on an M1 Pro, M1 Max, M2 and
+// M5 Ultra (macOS 27).
 
 #ifndef NI_UNROLL
 #define NI_UNROLL _Pragma("clang loop unroll(full)")
@@ -33,6 +39,20 @@
 #define FLINT_FENCES 1
 #else
 #define FLINT_FENCES 0
+#endif
+
+#if FLINT_FENCES
+// a threadgroup's arrival once its partials are written: true in the n-th to arrive, which merges them and resets cnt
+NI_INLINE bool flint_arrive(device atomic_uint* cnt, uint n, uint tid, threadgroup uint& last) {
+  threadgroup_barrier(mem_flags::mem_device);
+  if (tid == 0) {
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    last = atomic_fetch_add_explicit(cnt, 1u, memory_order_relaxed) == n - 1 ? 1u : 0u;
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
+  return last != 0;
+}
 #endif
 
 constant constexpr uint kFD = 128;  // head dim
@@ -629,12 +649,7 @@ NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint l
   if (!FLINT_FENCES || p.split) return;
 #if FLINT_FENCES
   // the last threadgroup to finish: every row's logits are written
-  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
-  threadgroup_barrier(mem_flags::mem_device);
-  if (tid == 0) last = atomic_fetch_add_explicit(cnt, 1u, memory_order_relaxed) == ntgs - 1 ? 1u : 0u;
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (!last) return;
-  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  if (!flint_arrive(cnt, ntgs, tid, last)) return;
   for (uint r = sg; r < p.R; r += nsg)
     flint_topk_row(logits + size_t(r) * p.E, p.E, p.k, lane, idx + r * p.k, wts + r * (p.k + 1));
   if (p.write_xn)
@@ -715,12 +730,7 @@ NI_INLINE void flint_router_shared_impl(const device float* x, const device bflo
       return;
     }
 #if FLINT_FENCES
-    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
-    threadgroup_barrier(mem_flags::mem_device);
-    if (tid == 0) *last = atomic_fetch_add_explicit(cnt, 1u, memory_order_relaxed) == p.nr - 1 ? 1u : 0u;
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (!*last) return;
-    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    if (!flint_arrive(cnt, p.nr, tid, *last)) return;
     if (sg == 0) flint_topk_row(logits, p.E, p.k, lane, idx, wts);
     for (uint i = tid; i < p.D; i += ntg) xn[i] = x[i] * inv * float(nw[i]);
     if (tid == 0) atomic_store_explicit(cnt, 0u, memory_order_relaxed);
@@ -995,12 +1005,7 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
   }
   if (!FLINT_FENCES || p.split) return;
 #if FLINT_FENCES
-  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
-  threadgroup_barrier(mem_flags::mem_device);
-  if (tid == 0) last = atomic_fetch_add_explicit(cnt + kvh, 1u, memory_order_relaxed) == p.S - 1 ? 1u : 0u;
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (!last) return;
-  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  if (!flint_arrive(cnt + kvh, p.S, tid, last)) return;
   const device float* ml = part_ml + size_t(hq) * p.S * 2;
   const device float4* po = (const device float4*)(part_o + size_t(hq) * p.S * kFD + dd);
   float Mx = s2;
