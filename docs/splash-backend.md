@@ -99,14 +99,13 @@ one server at a time under the GPU lock.
   engine up in 8.9 s, 1K TTFT 1.41 s (732 tok/s as prompt tokens / TTFT), decode 74.9 tok/s; 4K TTFT 3.17 s (1286 tok/s the same way), decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.
 
-- Second turn on a ~4K chat (`tools/splash_ab.py --turn2`, 3 reps per side, 16 GiB not set: Splash's plan, 28.7 GiB free at
-  start, 28 Oct 2026 local time). Turn 1 is 4072 prompt tokens; turn 2 is the same chat plus the reply (content only, as clients send it)
-  and a question. Plain Splash turn-2 TTFT 0.26, 0.25, 0.19 s with 4064 cached tokens. Kapitsa with the reasoning put back
-  into the history (as the native path does): 0.38, 0.42, 0.32 s, same 4064 cached tokens, prompt 4183 to 4257 tokens against
-  4122 to 4131. Splash's engine caches prompt blocks, not outputs, so the longer prompt only costs prefill. `chat_splash`
-  therefore sends the client's history as it is, as plain Splash does. After that change (3 reps, 30.3 GiB free at start,
-  one run): turn-2 TTFT 0.26, 0.25, 0.20 s, prompts 4124, 4131, 4122 tokens, 4064 cached: plain Splash's numbers, within
-  noise. Turn 1 is 3.49, 3.23, 3.26 s against plain Splash's 3.49, 3.23, 3.22 s.
+- Second turn on a ~4K chat (`tools/splash_ab.py --turn2`, 3 reps per side, Splash's default memory plan, M5 Pro, 27 Oct 2026).
+  Turn 1 is 4072 prompt tokens; turn 2 is the same chat plus the reply (content only, as clients send it) and a short
+  question. Plain Splash: turn-2 TTFT 0.26, 0.25, 0.19 s, 4064 cached tokens. An earlier version of `chat_splash` put the
+  reasoning back into the history, as the native path does: 0.38, 0.42, 0.32 s with the same 4064 cached tokens and prompts
+  of 4183 to 4257 tokens (plain Splash's: 4122 to 4131). Splash caches prompt blocks, not outputs, so the longer prompt only
+  cost prefill. `chat_splash` therefore sends the client's history as it is, as plain Splash does: turn-2 TTFT 0.26, 0.25,
+  0.20 s, prompts 4124, 4131, 4122 tokens, 4064 cached. One run of 3 reps per row; not a tool-call chat.
 
 ## Options
 
