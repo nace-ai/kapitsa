@@ -90,7 +90,8 @@ engine took 0.26 s, and no engine leads every row ([bench/results/2026-10-28-m5-
 table and its caveats in [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine)).
 
 <sub>Text chat only: an image, structured output or a loop count is refused, never answered by the other engine.
-Kapitsa links neither Splash's engine nor its library; Splash is Apache 2.0, and the Metal kernels adapted from it
+Splash's SSD cache stays off unless `--splash-persistent-cache` is given, and Kapitsa sizes Splash's expert cache for
+the memory this Mac has. Kapitsa links neither Splash's engine nor its library; Splash is Apache 2.0, and the Metal kernels adapted from it
 keep their file headers ([Third-party notices](THIRD_PARTY_NOTICES)). Flags, the failures that are not refusals and
 the measurements against plain Splash and Kapitsa's own engine: [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine).</sub>
 

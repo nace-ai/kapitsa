@@ -447,11 +447,29 @@ kapitsa serve --engine splash --splash-model 6527993     # one of several resolv
 | `--engine native\|splash` | `native` | `splash` runs text generation in a Splash child process; `native` is Kapitsa's own engine. |
 | `--splash-binary PATH` | found | The Splash binary that runs `serve-native`. Not given, it is `engine/splash` under `$SPLASH_HOME` (that variable set to a folder without it is an error, not a reason to look elsewhere), else the install a `splash` on `PATH` resolves into, then `~/Applications/Splash`, `/Applications/Splash` and `~/Splash`. |
 | `--splash-model DIR` | found | Splash's resolved model folder, or the first 6 or more characters of its name. Not given, it is the only folder under `~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer; with several, the error lists them. The folder's own tokenizer and chat template are what this server renders with, so the prompt is the one Splash would build. A name is not looked up or downloaded. |
-| `--splash-arg ARG` | none | One more argument for `splash serve-native`, repeatable (`--splash-arg --verify-rows --splash-arg 2`). Kapitsa adds none of its own: memory, idle release and the prefix cache are Splash's defaults unless you set them here. |
+| `--splash-arg ARG` | none | One more argument for `splash serve-native`, repeatable (`--splash-arg --verify-rows --splash-arg 2`). Kapitsa adds `--idle-release off` and sometimes `--expert-memory` itself (below); an argument given here replaces its own. |
+| `--splash-persistent-cache` | off | Splash's SSD prefix cache kept across restarts: `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<folder name>-<hash>`, unless `--splash-arg` gives either. The hash is of the model folder's real path, so two folders with one name elsewhere do not share a cache. Off, the child starts with an empty cache and writes nothing to disk. |
+| `--splash-conversation-salt` | off | A cache salt per conversation (a hash of its messages up to the first user message), so conversations stop sharing cached prompts such as a common system prompt; off is one shared cache, as Splash without `cache_salt`. It separates conversations; it is not a speed option. |
 
-All three Splash options need `--engine splash` and are an error without it. Splash's model folder is the model:
+All five Splash options need `--engine splash` and are an error without it. Splash's model folder is the model:
 `--model`, `--split` and `--allow-switch` are usage errors in this mode, and this Mac's memory plan, the model catalog,
 downloads and routing to another Mac do not apply.
+
+Splash's own default frees the weights after ten idle minutes and the next request then waits for them to come back,
+so the child is given `--idle-release off` unless `--splash-arg` says otherwise. Splash takes `off` or a number of
+seconds, not `on`.
+
+When this Mac is short of memory, Kapitsa also sizes Splash's expert cache: with 22 to 38 GiB free and reclaimable, and
+no `--expert-memory` in `--splash-arg`, the child gets `--expert-memory` of the free GiB less 14, at least 8. Below
+22 GiB, or with your own `--expert-memory`, the plan is left to Splash, whose default plan needs about 35.8 GiB. The
+formula rests on one measured pass (a 16 GiB cache at 30.4 GiB free) and is not validated across memory states. From 33
+to 38 GiB free it replaces a default plan that can start with a smaller expert cache, which streams experts from the SSD
+and is slower than a full one, and no run compares the two; pass `--splash-arg --expert-memory <size>` to choose. What
+the child was given is one log line, `[kapitsa] splash: engine arguments added: ...`.
+
+A request's own `cache_salt` on `/v1/chat/completions` (a non-empty string, else a 400 naming the field) is hashed as
+Splash's frontend does, so requests share cached prompts only with the same salt, and it wins over
+`--splash-conversation-salt`. The other two endpoints do not read the field.
 
 If Splash exits during its warmup, for example because this Mac has too little free memory, `serve` exits 1 with `the
 Splash engine did not start: engine_exited: the splash engine closed its output`; Splash's own reason is the line
@@ -493,7 +511,7 @@ interleaved, decode at temperature 0 with seed 1. No arm leads every row, and no
 table is `legs/summary.json` and `legs/table.md` there). n is the number of requests per cell: Kapitsa on Splash 10, plain
 Splash 10, Kapitsa native 12 (9 for the 19,287-token prompt and turn 2, where three legs were stopped by the memory
 guard), llama.cpp 2. Prompt sizes are the tokens the Splash tokenizer counted (the other arms differ by one).
-**Kapitsa on Splash is `ff6151c8`, the head of open PR #743, not the code on main**; plain Splash is 1.4.0, Kapitsa
+**Kapitsa on Splash is `ff6151c8`, the head of PR #743 when measured (#743 merged as `f4c826f4`; the request path is the same except `cache_salt`, and the memory plan did not run because it was forced)**; plain Splash is 1.4.0, Kapitsa
 native is `e840651c`, llama.cpp is `c7474afc`. Every arm ran a forced memory plan, not a default: both Splash arms with
 `--splash-arg --expert-memory 17179869184 --splash-arg --idle-release off`, native with `NI_EXPERT_STORE=24`, and
 other sessions shared the Mac. "Prompt tokens / TTFT" is uncached prompt tokens over time to first token, so it
