@@ -254,7 +254,7 @@ def run_leg(a):
     os.makedirs(a.out, exist_ok=True)
     tag = "leg%d-%s" % (a.idx, a.arm)
     leg = Leg(a.arm, "%s/%s.log" % (a.out, tag), a)
-    res = {"arm": a.arm, "idx": a.idx, "cmd": leg.cmd, "env": a.nenv if a.arm == "N" else None, "up_s": leg.up_s, "free_reclaimable_gib_at_start": leg.free_start,
+    res = {"arm": a.arm, "group": a.group or a.arm, "binary": binary_rev(a), "idx": a.idx, "cmd": leg.cmd, "env": a.nenv if a.arm == "N" else None, "up_s": leg.up_s, "free_reclaimable_gib_at_start": leg.free_start,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "decode": {"T0": [], "T06": []}, "prefill": {s: [] for s in SIZES},
            "twoturn": [], "errors": []}
     err = res["errors"]
@@ -301,6 +301,14 @@ def finish(leg, res, a, tag):
     return res
 
 
+def binary_rev(a):
+    exe = {"K": a.kbin, "N": a.nbin, "L": a.llama}.get(a.arm)
+    if not exe: return {"path": SPLASH_BIN, "version": "Splash 1.4.0 (no --version flag; folder splash-1.4.0)",
+                      "sha256": hashlib.sha256(open(SPLASH_BIN, "rb").read()).hexdigest()}
+    out = subprocess.run([exe, "--version"], capture_output=True, text=True)
+    return {"path": exe, "version": (out.stdout or out.stderr).strip().splitlines()[0] if (out.stdout or out.stderr).strip() else None}
+
+
 def stat(vals):
     vals = [v for v in vals if v is not None]
     if not vals: return None
@@ -312,8 +320,8 @@ def summarize(d, meta=None):
     legs = [l for l in legs if "smoke" not in l]  # the smoke leg is kept as raw data only
     legs.sort(key=lambda l: l["idx"])
     out = {"meta": json.load(open(d + "/meta.json")) if os.path.exists(d + "/meta.json") else {}, "order": [l["arm"] for l in legs], "arms": {}}
-    for arm in "KSNL":
-        ls = [l for l in legs if l["arm"] == arm]
+    for arm in ("K", "K2", "S", "N", "L"):
+        ls = [l for l in legs if l.get("group", l["arm"]) == arm]
         if not ls: continue
         c = {}
         c["decode_T0_tps"] = stat([r["decode_tps"] for l in ls for r in l["decode"]["T0"] if (r["completion_tokens"] or 0) >= 250])
@@ -336,9 +344,10 @@ def summarize(d, meta=None):
         c["up_s"] = stat([l["up_s"] for l in ls])
         c["errors"] = [e for l in ls for e in l["errors"]]
         c["cmd"] = ls[0]["cmd"]
+        c["binary"] = ls[0].get("binary")
         out["arms"][arm] = c
     json.dump(out, open(d + "/summary.json", "w"), indent=1)
-    names = {"K": "Kapitsa --engine splash", "S": "plain Splash 1.4.0", "N": "Kapitsa native (MTP)", "L": "llama.cpp"}
+    names = {"K": "Kapitsa --engine splash @7e478053", "K2": "Kapitsa --engine splash @ff6151c8", "S": "plain Splash 1.4.0", "N": "Kapitsa native (MTP)", "L": "llama.cpp"}
     f = lambda c, k, p=1: "not measured" if not c.get(k) else "%.*f (n %d)" % (p, c[k]["median"], c[k]["n"])
     rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prefill %s tok/s" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | peak RSS MiB | min free+reclaimable GiB |",
             "|" + "---|" * (6 + 2 * len(SIZES))]
@@ -356,7 +365,7 @@ def main():
     l = sub.add_parser("leg")
     l.add_argument("--arm", required=True, choices=list("KSNL")); l.add_argument("--idx", type=int, required=True)
     l.add_argument("--out", required=True); l.add_argument("--reps", type=int, default=3); l.add_argument("--smoke", action="store_true")
-    l.add_argument("--kbin", default=BIN["K"]); l.add_argument("--nbin", default=BIN["N"]); l.add_argument("--llama", default=BIN["L"])
+    l.add_argument("--group", default=None, help="summary group, e.g. K2 for a second Kapitsa build"); l.add_argument("--kbin", default=BIN["K"]); l.add_argument("--nbin", default=BIN["N"]); l.add_argument("--llama", default=BIN["L"])
     l.add_argument("--nenv", default="NI_EXPERT_STORE=24", help="env for the N arm, KEY=VAL[,KEY=VAL] or none")
     s = sub.add_parser("summarize"); s.add_argument("dir")
     a = ap.parse_args()
