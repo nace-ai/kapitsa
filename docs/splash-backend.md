@@ -83,16 +83,20 @@ one server at a time under the GPU lock.
   (`7e478053` and `ff6151c8`) and plain Splash 1.4.0 are level within noise, n 6 to 10 per cell, with the raw legs and
   commands in that folder. Medians for `ff6151c8` against its paired plain Splash (K2 against S2), all at `--expert-memory 16 GiB --idle-release off`, `--verify-rows` not passed (engine default `auto`), M5 Pro 48 GB, macOS 26.5.2, 27 Oct 2026:
 
-  | | TTFT 1K, s | TTFT 4K, s | prefill 4K, tok/s |
+  | | TTFT 1K, s | TTFT 4K, s | prompt tokens / TTFT, 4K, tok/s |
   |---|---|---|---|
   | K2 against S2 | 1.45 against 1.47 | 3.45 against 3.55 | 1181 against 1149 |
+
+  The last column is the prompt's token count divided by TTFT (`prefill_tps_median` in `summary.json`). TTFT also holds the
+  request's fixed cost (template, tokenizing, the first decode step, HTTP), so this is not prefill throughput: the same
+  engine reads 732 tok/s at 1K and 1286 at 4K below. Compare the TTFT columns; this one is only a ratio of the two engines.
 
   Decode (T=0 and T=0.6) and turn-2 TTFT for both Splash arms: see `bench/results/2026-10-28-m5-pro-flash-next-engines` (#751),
   which is the record of these runs and of its caveats (other sessions were using the Mac). This shows neither a speed-up nor a
   slowdown from the bridge.
   An earlier single run of this branch before the split (n=6, commit not recorded) is superseded by it and no longer quoted.
 - Default memory plan (no `--expert-memory`; 33.0 GiB free and reclaimable at start; n=1 per size, so no comparison):
-  engine up in 8.9 s, 1K TTFT 1.41 s, prefill 732 tok/s, decode 74.9 tok/s; 4K TTFT 3.17 s, prefill 1286 tok/s, decode
+  engine up in 8.9 s, 1K TTFT 1.41 s (732 tok/s as prompt tokens / TTFT), decode 74.9 tok/s; 4K TTFT 3.17 s (1286 tok/s the same way), decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.
 
 Splash refuses to start when the Mac has too little free and reclaimable memory. Its `not enough free memory to start ...`

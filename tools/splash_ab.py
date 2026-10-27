@@ -216,6 +216,7 @@ def summarize(legs):
             rows = [p for l in legs if l["engine"] == eng for p in l["perf"] if p["size"] == size]
             s["perf"]["%s/%s" % (eng, size)] = {
                 "n": len(rows), "prompt_tokens": sorted({(p["usage"] or {}).get("prompt_tokens") for p in rows}),
+                # prompt tokens / TTFT: TTFT holds the fixed per-request cost, so this is not prefill throughput
                 "prefill_tps_median": med([(p["usage"] or {}).get("prompt_tokens", 0) / p["ttft_s"] for p in rows if p["ttft_s"]]),
                 "ttft_s_median": med([p["ttft_s"] for p in rows]), "ttft_s_all": [round(p["ttft_s"], 2) for p in rows if p["ttft_s"]],
                 "decode_tps_median": med([p["decode_tps"] for p in rows]),
