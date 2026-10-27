@@ -19,11 +19,43 @@ engine, each in its own hold of the GPU lock with 30 s between legs. Cold starts
 available, so before each cold leg the other engine's files were read through the page cache. Scripts are in
 [scripts/](scripts/) and every leg's log is in [legs/](legs/), along with the aborted and refused attempts.
 
-**Verdict: Kapitsa is not the fastest everywhere.** Its prefill is behind at 85 tokens (79% slower) and at 1K (28%
+**Verdict as published (Kapitsa's prefill and TTFT at 1K-32K are corrected in the next section): Kapitsa is not the
+fastest everywhere.** Its prefill is behind at 85 tokens (79% slower) and at 1K (28%
 slower), level at 4K (-2.0%) and 16K (+1.0%), both inside the legs' spread, and slightly ahead at 32K (+2.7%: both Kapitsa legs, 541.7
 and 558.0 tok/s, are above both llama.cpp legs, 535.5 and 535.2, one pair of legs per engine). Its decode
 is ahead up to 4K (+4.0%, +6.3%, +8.0%) and behind at 16K (-5.1%) and 32K (-8.2%). Cold start to the first token is
 level (Kapitsa's cold leg 13.9 s, llama.cpp 13.2 s; Kapitsa's second leg is warm, see below).
+
+## Correction (24 Oct)
+
+The Kapitsa prefill and TTFT means at 1K, 4K, 16K and 32K understate Kapitsa. At these lengths the legs ran llama.cpp,
+Kapitsa, Kapitsa, llama.cpp, so Kapitsa's leg 1 always started right after a llama.cpp leg and its leg 2 after a
+Kapitsa leg. Leg 1 was slower every time. At 1K, leg 1 also paid a one-time 736 ms compile of the tensor kernels
+(`compiled the tensor kernels in 736 ms`; 1 ms in every other leg). The table below gives Kapitsa's leg 2 next to the
+published mean. Leg 2 is one leg (n = 1), and llama.cpp's own legs differ by up to 2.3%, so the verdicts stay cautious.
+
+| Prompt | Kapitsa prefill tok/s: published mean → leg 2 | Kapitsa TTFT ms: published mean → leg 2 | llama.cpp prefill tok/s (mean; leg 2) | Prefill verdict: published → corrected |
+| --- | ---: | ---: | ---: | --- |
+| 1K (1024) | ~~445.0~~ → 533.9 | ~~2396.5~~ → 1918 | 617.5; 624.5 | ~~27.9% slower~~ → 13.5-14.5% slower |
+| 4K (4132) | ~~558.2~~ → 585.2 | ~~7420.0~~ → 7061 | 569.4; 567.5 | ~~behind 2.0%~~ → level (Kapitsa +2.8-3.1% on one warm leg; the published "behind 2.0%" was an artifact of the cold first leg) |
+| 16K (16287) | ~~555.0~~ → 571.1 | ~~29372.0~~ → 28518 | 549.7; 549.9 | ~~+1.0%~~ → Kapitsa ahead by a few percent (+3.9%) |
+| 32K (32768) | ~~549.9~~ → 558.0 | ~~59606.0~~ → 58725 | 535.4; 535.2 | ~~+2.7%~~ → Kapitsa ahead by a few percent (+4.2-4.3%) |
+
+- **Unchanged:** every decode figure (leg 2 is within 0.15 tok/s of the mean on every row) and the whole 85-token
+  (`dec`) row. At `dec`, Kapitsa's leg 2 was the one that followed llama.cpp, and the two legs are within 1.2% (53.0
+  and 52.4 tok/s).
+- **Cold start:** Kapitsa's load of 8.1 s (±49%) is the mean of two different legs. In c1 the load took 12.0 s, of
+  which 6.2 s + 2.8 s was compiling kernels with a cold shader cache (`compiled the weight-format kernels in 6177 ms`,
+  `compiled kernels in 2848 ms`). In c2 the load took 4.1 s, with 27 ms + 15 ms of compiling. c2 read its weights at
+  the same rate as c1 (dense weights 11.4 against 11.8 GB/s, expert store 9.45 against 11.21 GB/s), so the earlier caveat's "its pack stayed cached" is not
+  supported by the logs: the difference between the two legs is the kernel compile.
+- **Cause:** the page cache was displaced by the llama.cpp leg, most likely Kapitsa's 32 GB n-gram table, which is
+  read through the page cache for every prompt token. This was inferred by elimination, not measured directly. The
+  expert store did the same work in both legs (the same GB read, and stalls per turn within 6%). The dense weights
+  read at 11.6-11.9 GB/s in leg 1 and 14.5-15.7 GB/s in leg 2, as a cold against a warm page cache would. At `dec`
+  the pattern is reversed with the order: 14.9 GB/s in leg 1 (after Kapitsa) and 11.8 GB/s in leg 2 (after llama.cpp).
+- The warmed legs of the next Flash-Next run, where every measured leg follows an untimed warm-up leg of the same
+  engine, will supersede these figures.
 
 ## Summary (all model files on the internal disk; ± = half the range over the mean)
 

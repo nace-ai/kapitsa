@@ -394,9 +394,28 @@ mmap), greedy, no speculative decoding, two legs per engine and length in ABBA o
 
 **Decode: not comparable, re-measure pending.** These Kapitsa runs did not stop at the end of the turn (`<|im_end|>`) and the 1K and 32K prompts have no assistant header, so at 1K, 4K and 32K the answer ended after 2, 31 and 63 tokens and the rest of the timed tokens is text generated after it; at 16K Kapitsa stopped at 47 tokens against llama.cpp's 128.
 
+
 **Not the fastest everywhere.** Kapitsa's auto store size here (28-29.9 GB) stopped four runs at memory pressure, so
 the table pins 24 GB; a user's store is larger. The two engines run different quantized weights, so only prefill speed
 is compared, and decode is withheld until the re-measure above.
+
+**Correction (24 Oct).** The Kapitsa prefill means at 1K-32K above understate Kapitsa. Its leg 1 always ran right after
+a llama.cpp leg (ABBA order), and at 1K it also paid a one-time 736 ms tensor-kernel compile. The cause is most likely
+the page cache displaced by the llama.cpp leg (Kapitsa's n-gram table), inferred by elimination and not measured
+directly. Kapitsa's second leg alone (n = 1; llama.cpp's own legs differ by up to 2.3%):
+
+| Prompt | Kapitsa prefill tok/s: published → leg 2 | Prefill: published → corrected |
+| --- | ---: | --- |
+| 1K | ~~445.0~~ → 533.9 | ~~28% slower~~ → 13.5-14.5% slower |
+| 4K | ~~558.2~~ → 585.2 | ~~level (-2.0%)~~ → level (Kapitsa +2.8-3.1% on one warm leg; the published -2.0% was an artifact of the cold first leg) |
+| 16K | ~~555.0~~ → 571.1 | ~~level (+1.0%)~~ → Kapitsa ahead by a few percent (+3.9%) |
+| 32K | ~~549.9~~ → 558.0 | ~~2.7% faster~~ → Kapitsa ahead by a few percent (+4.2-4.3%) |
+
+Neither the 85-token row nor the decode column above is affected: the first was leg 2's own row in the results, and
+decode is withheld pending the re-measurement. Kapitsa's cold-start load of 8.1 s (±49%) mixes c1 (12.0 s, of which
+6.2 s + 2.8 s was compiling kernels with a cold shader cache) and c2 (4.1 s). The TTFT figures and details are in the
+[results README](../bench/results/2026-10-24-m5-pro-flash-next-ssd/README.md#correction-24-oct). The next Flash-Next
+run, where every measured leg follows an untimed warm-up leg of the same engine, will supersede these figures.
 
 <a id="run-it-yourself"></a>
 
