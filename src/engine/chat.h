@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,9 @@ struct ChatRequest {
   float top_p = 0.95f;
   int top_k = 20;
   uint32_t seed = 0;
+  // The request's seed as Splash 1.4.0's frontend takes it (server/frontend.py:1153-1162): absent or -1 is a random seed,
+  // any other integer is its 64 bits (0 included). Only the Splash backend reads it; the native engines keep `seed`.
+  std::optional<uint64_t> splash_seed;
   // Sampling options only the Splash backend honours (OpenAI's names; vLLM's min_p and repetition_penalty, ignore_eos). Every
   // other engine leaves them out, as before; the Splash backend sends them on, or refuses the request naming the field.
   float presence_penalty = 0.0f, frequency_penalty = 0.0f, repetition_penalty = 1.0f, min_p = 0.0f;
@@ -85,6 +89,7 @@ struct ChatResult {
   int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
   bool busy = false;          // "error" because the engine has no capacity for it now: a 503 with Retry-After, not a 400
   bool invalid_request = false;  // "error" because of the request's content (an image that cannot be read, a video)
+  bool engine_down = false;   // "error" because the engine process has exited: a 503 without Retry-After (nothing relaunches it)
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   int reasoning_tokens = 0;   // completion tokens inside the think block
   double prefill_ms = 0, decode_ms = 0;

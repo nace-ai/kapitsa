@@ -44,7 +44,11 @@ and the decode loop. This page records the shape and what the first version does
 Structured-output grammar (needs MASK_REQUEST round trips), image inputs, loop counts, and a prompt longer than the
 engine's context. Each is a 400 `invalid_request_error` before anything is queued, as is a sampling field outside Splash's
 range (the error names the field). A request that finds the engine at its `max_concurrent_requests` gets 503 with
-`Retry-After`. Kapitsa's own model folders and Splash's resolved model are different artifacts (a safetensors
+`Retry-After` (queueing past the pool, as plain Splash's `--queue-size` does, is #756). Once the engine has exited, every
+route (`/v1/chat/completions`, `/v1/messages`, `/v1/responses`) answers 503 `the Splash engine has exited (...); restart
+kapitsa serve`, without `Retry-After`, since nothing relaunches it. On all three routes an omitted temperature, top_p or
+top_k is Splash's default (1.0, 0.95, 20), and a seed follows Splash's `frontend.py`: absent or -1 is random, any other
+integer is used as its 64 bits. Kapitsa's own model folders and Splash's resolved model are different artifacts (a safetensors
 `flash-next-q20` against a GGUF Q2_0 target plus an incoai DFlash2 drafter), so the child is pointed at Splash's resolved
 model directory (`--splash-model`), never at Kapitsa's weights.
 

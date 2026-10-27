@@ -34,6 +34,15 @@ namespace ni {
 
 namespace {
 
+// What a request is told when the engine child has exited: one sentence on every route, without the runtime's own
+// "the splash engine is not running" prefix a second time.
+std::string engine_down_message(std::string why) {
+  for (const std::string lead : {"the splash engine is not running", ": "})
+    if (why.rfind(lead, 0) == 0) why.erase(0, lead.size());
+  return "the Splash engine has exited" + (why.empty() ? std::string() : " (" + why + ")") +
+         "; restart kapitsa serve";
+}
+
 bool is_file(const std::string& p) {
   struct stat st;
   return stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
@@ -233,7 +242,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     q.cache_salt_lo = salt.lo;
     q.cache_salt_hi = salt.hi;
   }
-  q.seed = r.seed ? r.seed : uint64_t(std::random_device{}());
+  // Splash's rule (server/frontend.py:1153-1162): absent or -1 is random, any other integer is its 64 bits, 0 included
+  q.seed = r.splash_seed ? *r.splash_seed : (uint64_t(std::random_device{}()) << 32 | std::random_device{}());
   if (boundary > 0 && boundary < n) q.generation_prompt_tokens = uint32_t(n - boundary);
   if (think && r.thinking_budget > 0 && r.thinking_budget < max_new && think_close_ >= 0) {
     splash::ThinkingBudget tb;
@@ -255,7 +265,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     return res;
   } catch (const splash::EngineUnhealthy& ex) {
     res.finish_reason = "error";
-    res.error = std::string("the Splash engine is not running: ") + ex.what();
+    res.engine_down = true;  // a 503 on every route; nothing relaunches the child, so no Retry-After
+    res.error = engine_down_message(ex.what());
     return res;
   } catch (const splash::ProtocolError& ex) {
     return refuse(std::string("the Splash engine refused the request: ") + ex.what());
@@ -352,6 +363,10 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     if (finish.empty() || finish == "length") {
       finish = "error";
       res.error = err.code.empty() ? err.message : err.code + ": " + err.message;
+      if (err.failure == splash::FailureClass::kEngineUnhealthy) {  // the child died under the request (Runtime::fail_all)
+        res.engine_down = true;
+        res.error = engine_down_message(res.error);
+      }
     }
   } else if (finish.empty()) {
     // the engine ended it: eos it did not send as a token (stop), the length it was asked, or a bound of its own

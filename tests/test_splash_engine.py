@@ -58,8 +58,8 @@ NL = tid("Ċ")
 # "ok\n</think>\n\nHi there" then the end of turn
 REPLY = [tid("ok"), NL, THINK_CLOSE, tid("ĊĊ"), tid("Hi"), tid("Ġthere"), EOS]
 last_headers = {}
-def post(base, body, timeout=30):
-    req = urllib.request.Request(base + "/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
+def post(base, body, timeout=30, path="/v1/chat/completions"):
+    req = urllib.request.Request(base + path, json.dumps(body).encode(), {"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             last_headers.clear(); last_headers.update(r.headers)
@@ -72,10 +72,12 @@ class Server:
     def __init__(self, *fake_args, context=None, extra_serve=(), model=None, cwd=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.log = self.tmp.name + "/prompts.jsonl"
+        self.pid_file = self.tmp.name + "/engine.pid"  # the engine child's pid (fake_splash.py --pid-file)
         self.port = free_port()
         self.base = "http://127.0.0.1:%d" % self.port
         cmd = [CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", model or MODEL, "--private",
-               "--port", str(self.port), *extra_serve, "--splash-arg", "--prompt-log", "--splash-arg", self.log]
+               "--port", str(self.port), *extra_serve, "--splash-arg", "--prompt-log", "--splash-arg", self.log,
+               "--splash-arg", "--pid-file", "--splash-arg", self.pid_file]
         for a in fake_args: cmd += ["--splash-arg", a]
         env = dict(os.environ, HOME=self.tmp.name)
         self.proc = subprocess.Popen(cmd, env=env, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -142,6 +144,49 @@ try:
         st, r = post(s.base, {"messages": MSG, "max_tokens": 3, field: value})
         check(st == 400 and field in json.dumps(r), "%s=%s is a 400 naming it: %s %s" % (field, value, st, r))
     check(len(s.prompts()) == n0 + 2, "refused requests were not queued")
+
+    # /v1/messages and /v1/responses: an absent field is Splash's default too, a given one goes through (#754)
+    for path, body in [("/v1/messages", {"messages": MSG, "max_tokens": 3}), ("/v1/responses", {"input": "hello", "max_output_tokens": 3})]:
+        n0 = len(s.prompts())
+        st, r = post(s.base, body, path=path)
+        check(st == 200, "%s 200: %s %s" % (path, st, r))
+        st, r = post(s.base, dict(body, temperature=0.3, top_p=0.5, top_k=7), path=path)
+        p = s.prompts()[n0:]
+        check(len(p) == 2, "%s: two requests reached the engine: %r" % (path, p))
+        if len(p) == 2:
+            d, g = p[0]["sampling"], p[1]["sampling"]
+            check((d["temperature"], round(d["top_p"], 4), d["top_k"]) == (1.0, 0.95, 20), "%s defaults %r" % (path, d))
+            check((round(g["temperature"], 4), g["top_p"], g["top_k"]) == (0.3, 0.5, 7), "%s given sampling %r" % (path, g))
+
+    # the seed as Splash's frontend.py takes it: absent or -1 random, any other integer its 64 bits, 0 included
+    n0 = len(s.prompts())
+    seeds = [None, -1, None, -1, 0, 7, 2**40 + 5, -2, 2**64 - 1]
+    for v in seeds:
+        post(s.base, dict({"messages": MSG, "max_tokens": 1}, **({} if v is None else {"seed": v})))
+    got = [q["seed"] for q in s.prompts()[n0:]]
+    check(len(got) == len(seeds), "seed requests reached the engine: %r" % got)
+    if len(got) == len(seeds):
+        check(got[4:] == [0, 7, 2**40 + 5, 2**64 - 2, 2**64 - 1], "given seeds are their 64 bits: %r" % got[4:])
+        check(len(set(got[:4])) == 4 and max(got[:4]) >= 2**32, "absent and -1 seeds are random 64-bit ones: %r" % got[:4])
+finally:
+    s.close()
+
+# an engine child that dies under a running server: 503 on every route, naming the dead engine, no Retry-After (#754)
+s = Server("--reply", ",".join(map(str, REPLY)))
+try:
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 3, "temperature": 0})
+    check(st == 200, "served before the engine dies: %s %s" % (st, r))
+    os.kill(int(open(s.pid_file).read()), 9)
+    time.sleep(0.5)
+    for path, body in [("/v1/chat/completions", {"messages": MSG, "max_tokens": 3}), ("/v1/messages", {"messages": MSG, "max_tokens": 3}),
+                       ("/v1/responses", {"input": "hello", "max_output_tokens": 3})]:
+        for attempt in range(2):  # the same answer every time: nothing relaunches the engine
+            st, r = post(s.base, body, path=path)
+            text = json.dumps(r)
+            check(st == 503 and "Splash engine has exited" in text and "restart kapitsa serve" in text and "not running: the" not in text,
+                  "%s dead engine: 503 naming it, got %s %s" % (path, st, r))
+            check(not last_headers.get("Retry-After"), "%s dead engine: no Retry-After, got %r" % (path, dict(last_headers)))
+    check(s.proc.poll() is None, "server still answering after the engine died")
 finally:
     s.close()
 

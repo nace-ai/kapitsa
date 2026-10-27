@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """A stand-in for `splash serve-native` (protocol v11, stdlib only) for tests/test_splash_engine.py: after the
 positionals of serve-native it takes --reply IDS (comma-separated token ids it answers every request with, one frame per
-token, honouring max_output_tokens), --prompt-log FILE (each request's prompt ids, sampling and flags, one JSON line) and --slow MS (a pause
-before every token, for the cancel test). EOF on stdin ends it."""
-import json, select, struct, sys, time
+token, honouring max_output_tokens), --prompt-log FILE (each request's prompt ids, sampling, seed and flags, one JSON line), --slow MS
+(a pause before every token, for the cancel test) and --pid-file FILE (its pid, for the test that kills it). EOF on stdin ends it."""
+import json, os, select, struct, sys, time
 
 args = sys.argv[1:]
 assert args[0] == "serve-native"
@@ -13,6 +13,8 @@ while i < len(args):
     if args[i] == "--reply": reply = [int(x) for x in args[i + 1].split(",")]
     elif args[i] == "--prompt-log": log = args[i + 1]
     elif args[i] == "--slow": slow = int(args[i + 1]) / 1000
+    elif args[i] == "--pid-file":
+        with open(args[i + 1], "w") as f: f.write(str(os.getpid()))
     i += 2
 out, inp = sys.stdout.buffer, sys.stdin.buffer
 
@@ -46,9 +48,10 @@ while True:
         if log:
             salt = struct.unpack_from("<QQ", p, 86)
             temp, top_p, top_k, pres, freq, rep, min_p = struct.unpack_from("<ffIffff", p, 38)
+            seed = struct.unpack_from("<Q", p, 66)[0]
             flags = struct.unpack_from("<I", p, 82)[0]
             sampling = dict(temperature=temp, top_p=top_p, top_k=top_k, presence=pres, frequency=freq, repetition=rep, min_p=min_p)
-            with open(log, "a") as f: f.write(json.dumps({"max": logical_max, "prompt": ids, "sampling": sampling, "flags": flags, "salt": list(salt), "args": args}) + "\n")
+            with open(log, "a") as f: f.write(json.dumps({"max": logical_max, "prompt": ids, "sampling": sampling, "seed": seed, "flags": flags, "salt": list(salt), "args": args}) + "\n")
         frame(0x0101, struct.pack("<QII", rid, 0, 0))
         sent, off = 0, 0
         for t in reply[:logical_max]:

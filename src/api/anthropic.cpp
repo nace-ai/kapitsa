@@ -373,6 +373,7 @@ ojson messages_error(const std::string& type, const std::string& message) {
 
 std::pair<int, ojson> messages_failure(const ChatResult& res) {
   if (res.busy) return {503, messages_error("overloaded_error", res.error)};
+  if (res.engine_down) return {503, messages_error("api_error", res.error)};
   if (res.prompt_limit > 0)
     return {400, messages_error("invalid_request_error", "prompt is too long: " + std::to_string(res.prompt_tokens) +
                                                              " tokens > " + std::to_string(res.prompt_limit) + " maximum")};

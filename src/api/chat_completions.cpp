@@ -40,6 +40,7 @@ ojson chat_error(const std::string& message, const std::string& type, const std:
 
 std::pair<int, ojson> chat_failure(const ChatResult& res) {
   if (res.busy) return {503, chat_error(res.error, "server_error")};
+  if (res.engine_down) return {503, chat_error(res.error, "server_error", "engine_unavailable")};
   if (res.prompt_limit > 0)
     return {400, chat_error("This model's maximum context length is " + std::to_string(res.prompt_limit) +
                                 " tokens. However, your messages resulted in " + std::to_string(res.prompt_tokens) +

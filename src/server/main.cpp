@@ -106,6 +106,17 @@ static json normalize_messages(const json& in) {
   return out;
 }
 
+// /v1/messages and /v1/responses build their ChatRequest from the body alone (src/api); under --engine splash the sampling
+// a body leaves out is Splash's own default (temperature 1.0, top_p 0.95, top_k 20), as parse_request gives chat completions.
+// The native engines keep these routes' defaults as they were.
+static void splash_sampling_defaults(const json& b, const Engine& e, ChatRequest& r) {
+  if (!e.splash_mode()) return;
+  const ChatRequest d = e.request_defaults();
+  if (!(b.contains("temperature") && b["temperature"].is_number())) r.temperature = d.temperature;
+  if (!(b.contains("top_p") && b["top_p"].is_number())) r.top_p = d.top_p;
+  if (!(b.contains("top_k") && b["top_k"].is_number())) r.top_k = d.top_k;
+}
+
 static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   ChatRequest r = defaults;
   r.messages = normalize_messages(b.at("messages"));
@@ -123,6 +134,10 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   if (b.contains("ignore_eos") && b["ignore_eos"].is_boolean()) r.ignore_eos = b["ignore_eos"];
   if (b.contains("cache_salt")) r.cache_salt = b["cache_salt"];
   if (b.contains("seed") && b["seed"].is_number()) r.seed = uint32_t(b["seed"].get<int64_t>());
+  // the Splash backend's seed, as Splash's frontend.py:1153-1162 reads it: -1 (or none) random, else the integer's 64 bits
+  if (b.contains("seed") && b["seed"].is_number_unsigned()) r.splash_seed = b["seed"].get<uint64_t>();
+  else if (b.contains("seed") && b["seed"].is_number_integer() && b["seed"].get<int64_t>() != -1)
+    r.splash_seed = uint64_t(b["seed"].get<int64_t>());
   if (b.contains("stop")) {
     if (b["stop"].is_string()) r.stop.push_back(b["stop"]);
     else if (b["stop"].is_array())
@@ -483,7 +498,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
       [failure = std::move(failure)](const ChatResult& result, httplib::Response& response) {
         auto [status, body] = failure(result);
         response.status = status;
-        if (status == 503) response.set_header("Retry-After", "1");
+        if (status == 503 && !result.engine_down) response.set_header("Retry-After", "1");  // a dead engine: no retry helps
         response.set_content(api::dump(body), "application/json");
       }, std::move(after), {[meter] { ui::token(meter); }, [meter](const ChatResult& result) { ui::done(meter, result); }},
       early, telemetry);
@@ -1365,7 +1380,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_err] = api::chat_failure(out);
         res.status = status;
-        if (status == 503) res.set_header("Retry-After", "1");
+        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_err), "application/json");
         return;
       }
@@ -1411,6 +1426,7 @@ static int serve(int argc, char** argv, int first) {
     api::MessagesRequest q;
     try {
       q = api::messages_request(body);
+      splash_sampling_defaults(body, guard->engine(), q.chat);
     } catch (const api::ApiError& e) {
       res.status = e.status;
       res.set_content(api::dump(api::messages_error(e.type, e.what())), "application/json");
@@ -1432,7 +1448,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::messages_failure(out);
         res.status = status;
-        if (status == 503) res.set_header("Retry-After", "1");
+        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }
@@ -1494,6 +1510,7 @@ static int serve(int argc, char** argv, int first) {
     auto q = std::make_shared<api::ResponsesRequest>();
     try {
       *q = api::responses_request(body, responses);
+      splash_sampling_defaults(body, guard->engine(), q->chat);
     } catch (const api::ApiError& e) {
       res.status = e.status;
       res.set_content(api::dump(api::responses_error(e.what(), e.type, e.code, e.param)), "application/json");
@@ -1523,7 +1540,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::responses_failure(out);
         res.status = status;
-        if (status == 503) res.set_header("Retry-After", "1");
+        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }

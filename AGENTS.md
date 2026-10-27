@@ -33,7 +33,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test json_file_test logit_dump`:
+exl3_test remote_test cluster_test split_place_test json_file_test splash_protocol_test splash_runtime_test logit_dump`:
 
 ```bash
 build/api_test
@@ -49,6 +49,8 @@ build/split_place_test                       # where a split model's layers go (
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
+build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
+build/splash_runtime_test                    # the Splash engine child: start, requests, cancel, death (src/splash/runtime.h)
 python3 tests/test_server.py --cli build/kapitsa
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
