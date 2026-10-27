@@ -31,7 +31,7 @@ for extra in (["--model", "x"], ["--allow-switch"], ["--split", "127.0.0.1:1"]):
 # no flags: the binary and the model are looked for where Splash installs them, and what is missing is named
 with tempfile.TemporaryDirectory() as home:
     env = {k: v for k, v in os.environ.items() if k != "SPLASH_HOME"}
-    env.update(HOME=home, PATH="/usr/bin:/bin")
+    env.update(HOME=home, KAPITSA_HOME=home + "/kapitsa", PATH="/usr/bin:/bin")
     r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
     if not os.path.isfile("/Applications/Splash/engine/splash"):  # a system-wide install is looked at too, and HOME= does not hide it
         check(r.returncode != 0 and "no Splash engine binary found" in r.stderr and "SPLASH_HOME" in r.stderr, "no binary: %r" % r.stderr[-300:])
@@ -79,7 +79,7 @@ class Server:
                "--port", str(self.port), *extra_serve, "--splash-arg", "--prompt-log", "--splash-arg", self.log,
                "--splash-arg", "--pid-file", "--splash-arg", self.pid_file]
         for a in fake_args: cmd += ["--splash-arg", a]
-        env = dict(os.environ, HOME=self.tmp.name)
+        env = dict(os.environ, HOME=self.tmp.name, KAPITSA_HOME=self.tmp.name + "/kapitsa")  # (splash.json goes under it, not into the developer's)
         self.proc = subprocess.Popen(cmd, env=env, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         for _ in range(100):
             if self.proc.poll() is not None: raise SystemExit("server exited: " + self.proc.stderr.read().decode()[-2000:])
@@ -233,10 +233,13 @@ r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", "/non
                     "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
 check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failure: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
 
-# a model name is no folder: refused at once, nothing looked up or downloaded
-r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "/nonexistent/qwen3.5-35b-a3b",
-                    "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
-check(r.returncode != 0 and "is not a folder" in r.stderr + r.stdout, "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
+# a name that matches no resolved model is refused at once, naming it; nothing is downloaded
+with tempfile.TemporaryDirectory() as home:
+    env = dict(os.environ, HOME=home, KAPITSA_HOME=home + "/kapitsa")
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "/nonexistent/qwen3.5-35b-a3b",
+                        "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
+    check(r.returncode != 0 and "no Splash model found" in r.stderr + r.stdout,
+          "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
 
 # turn 2 is what plain Splash sends: the client's own history, no reasoning put back (it only lengthens the prompt: Splash's
 # engine caches prompt blocks, not outputs)
@@ -340,7 +343,7 @@ with tempfile.TemporaryDirectory() as home:
     os.makedirs(home + "/Applications/Splash/engine")
     os.symlink(FAKE, home + "/Applications/Splash/engine/splash")
     env = {k: v for k, v in os.environ.items() if k != "SPLASH_HOME"}
-    env.update(HOME=home, PATH="/usr/bin:/bin")
+    env.update(HOME=home, KAPITSA_HOME=home + "/kapitsa", PATH="/usr/bin:/bin")
     port = free_port()
     proc = subprocess.Popen([CLI, "serve", "--engine", "splash", "--private", "--port", str(port)], env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)

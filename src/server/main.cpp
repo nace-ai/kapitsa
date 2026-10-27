@@ -1260,7 +1260,11 @@ static int serve(int argc, char** argv, int first) {
     if (!engine_splash) throw;
     return fail(std::string("the Splash engine did not start: ") + e.what());  // (its own reason is in its output above)
   }
-  if (engine_splash) splash::write_last(hub::home_dir() + "/splash.json", {opt.splash_binary, opt.splash_model});
+  if (engine_splash) {  // (absolute: the next run may start in another folder)
+    std::error_code abs_ec;
+    const std::filesystem::path bin = std::filesystem::absolute(opt.splash_binary, abs_ec);
+    splash::write_last(hub::home_dir() + "/splash.json", {abs_ec ? opt.splash_binary : bin.string(), opt.splash_model});
+  }
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);
 

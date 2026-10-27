@@ -51,19 +51,28 @@ std::vector<Model> models(const std::string& home) {
     if (j.is_object() && j.contains("model") && j["model"].is_string()) m.source = j["model"].get<std::string>();
     out.push_back(m);
   }
-  // Splash keeps a symlink per resolved model in ../.selections (<hash> -> .resolved/<folder>), made when it resolves the model:
-  // its own time is the better "when", since a folder's modification time also moves when a file in it is rewritten.
-  std::error_code sec;
+  // Splash keeps a symlink per selection, made when it installs or updates a model: models/OWNER/REPO[:VARIANT] for a plain
+  // `--model OWNER/REPO[:VARIANT]` (the usual case), models/.selections/<hash> for one with a revision, a draft or a language-only flag.
+  // Each points to .resolved/<folder>. A link's own time is the better "when" than the folder's, which also moves when a file in it is rewritten.
+  // It means "installed or updated", not "run": Splash does not record a run.
   std::map<std::string, long long> sel;  // folder name -> its latest selection link's time
-  for (fs::directory_iterator it(models_dir(home).parent_path() / ".selections", sec), end; !sec && it != end; it.increment(sec)) {
+  auto note_link = [&](const fs::path& link) {
     struct stat st;
-    if (lstat(it->path().c_str(), &st) != 0 || !S_ISLNK(st.st_mode)) continue;
+    if (lstat(link.c_str(), &st) != 0 || !S_ISLNK(st.st_mode)) return;
     std::error_code rec;
-    const std::string target = fs::read_symlink(it->path(), rec).filename().string();
-    if (rec) continue;
+    const std::string target = fs::read_symlink(link, rec).filename().string();
+    if (rec) return;
     const long long t = (long long)st.st_mtimespec.tv_sec * 1000000000LL + st.st_mtimespec.tv_nsec;
-    for (Model& m : out)
+    for (const Model& m : out)
       if (m.name == target) sel[target] = std::max(sel[target], t);  // (several links, one folder: the latest, whatever the order)
+  };
+  std::error_code sec;
+  for (fs::directory_iterator top(models_dir(home).parent_path(), sec), end; !sec && top != end; top.increment(sec)) {
+    const std::string n = top->path().filename().string();
+    if (n == ".resolved" || (n[0] == '.' && n != ".selections")) continue;  // (.metadata and the lock are no selections)
+    std::error_code dec;
+    if (!fs::is_directory(top->path(), dec)) continue;
+    for (fs::directory_iterator it(top->path(), dec), dend; !dec && it != dend; it.increment(dec)) note_link(it->path());
   }
   for (Model& m : out)
     if (auto f = sel.find(m.name); f != sel.end()) m.written = f->second;

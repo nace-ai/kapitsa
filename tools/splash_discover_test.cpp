@@ -118,6 +118,19 @@ int main() {
   fs::remove_all(fs::path(home) / "Library/Application Support/Splash/models/.selections");
   m = find_model(home, "");
   check(m.ok() && !m.note.empty(), "model: several, no selections: still a pick", m.error);
+  // the usual install: `splash serve --model OWNER/REPO:VARIANT` links models/OWNER/REPO:VARIANT, not .selections/<hash>
+  {
+    const fs::path models = fs::path(home) / "Library/Application Support/Splash/models";
+    fs::create_directories(models / "org");
+    fs::create_directory_symlink(models / ".resolved/aaaaaa1111", models / "org/Repo:Q2_0");
+    timespec t[2];
+    t[0].tv_sec = t[1].tv_sec = time(nullptr) + 3600;  // newer than every folder
+    t[0].tv_nsec = t[1].tv_nsec = 0;
+    utimensat(AT_FDCWD, (models / "org/Repo:Q2_0").c_str(), t, AT_SYMLINK_NOFOLLOW);
+    m = find_model(home, "");
+    check(m.ok() && has(m.path, "/aaaaaa1111"), "model: several: a plain OWNER/REPO link counts as a selection", m.path + m.error);
+    fs::remove_all(models / "org");
+  }
   fs::remove_all(fs::path(home) / "Library/Application Support/Splash/models/.selections");
   selected(home, "aaaaaa1111", 30);
   selected(home, "aaaaaa2222", 20);
