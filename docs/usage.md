@@ -56,7 +56,7 @@ always take the best model.
 | `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.0 GB | `4bit` (default) |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `16gb` (where `4bit` does not fit: 2-bit experts, 10.8 GB; [GGUF files](#gguf-files)) |
-| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs | 105.9 GB | `4bit` |
+| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs, 64 GB with `64gb` | 105.9 GB | `4bit` (default), `64gb` (where `4bit` does not fit: Sushi's EXL3 2-bit experts, 69.6 GB) |
 | `nemotron-labs-dory1.0-4b` | `dory`, `dory-4b`, `dory1.0-4b` | NVIDIA Nemotron Dory1.0 4B: a looped model, its shared block run 1-4 times per token ([thinking depth](#dory-thinking-depth)); text only | 3.2 GB | `nvfp4` (default), `bf16` |
 | `nemotron-3-nano-4b` | `nano-4b`, `nemotron-nano-4b` | NVIDIA Nemotron 3 Nano 4B: hybrid Mamba-2, dense, FP8; text only | 5.3 GB | `fp8` (default), `bf16` |
 | `nemotron-nano-9b-v2` | `nano-9b`, `nemotron-nano-9b` | NVIDIA Nemotron Nano 9B v2: hybrid Mamba-2, dense, NVFP4; reasoning switched with `/think`; text only | 7.9 GB | `nvfp4` |
@@ -75,6 +75,17 @@ Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
 tensor chosen by KL against bf16; Qwen publishes no 4-bit). Its recipe keeps the hyper-connections and attention at 6
 bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB read per token); its 32 GB n-gram table
 (`ple.safetensors`) stays on disk and is read through the page cache.
+
+Flash-Next's `64gb` is [Sushi](https://github.com/beamivalice/sushi)'s 2-bit pack
+([beamster/Qwen3.8-Flash-Next-Sushi-2bpw](https://huggingface.co/beamster/Qwen3.8-Flash-Next-Sushi-2bpw)): its routed
+experts and the MTP head's are EXL3 trellises at 2 bits a weight (turboderp's format with Sushi's MCG codebook and
+15-bit codewords, decoded as they are read: `src/model/moe_exl3.h`), the rest 8-bit affine (36.7 GB of weights with
+the MTP head), its 32 GB n-gram table 4-bit in `ngram_table.bin`. On an M5 Max 128 GB (macOS 26.4) it prefills 4K
+tokens at 728 tok/s and decodes 52.6 tok/s after them (plain), and 78.6 tok/s with the MTP head at depth 3 after a short
+prompt (2.83 tokens a cycle), where the `4bit` does 1,760, 81.6 and 104.7: the `64gb` is for a Mac the `4bit` does not
+fit. Kapitsa reads Sushi's EXL3 packs
+(`"expert_quant": {"format": "exl3", "codebook": "mcg"}`, up to 4 bits a weight) by repo or folder; only the 2bpw one
+has been run. Its STQ packs (`Qwen3.8-Flash-Next-Sushi-STQ-2.75bpw`, `"format": "stq"`) are refused when they load.
 
 `--model` takes a name or alias (`35b`), one with a variant (`35b:6bit`), a Hugging Face repo (`org/name[@revision]`,
 see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./` or `../`), a `.gguf` file
@@ -123,7 +134,7 @@ next-token KL of 7e-6 from the BF16 head, the same top token at 319 of 320 posit
 ### Other models
 
 Any Hugging Face repo of a Qwen3.5-family model (Qwen3.5, Qwen3.6, Qwen3.8) in MLX format runs: bf16, or MLX affine 3,
-4, 5, 6 or 8-bit with groups of 64 (4-bit also 32), mixed recipes included, except ones whose dense MLP gives
+4, 5, 6 or 8-bit with groups of 64 (4-bit also 32, 8-bit also 128), mixed recipes included, except ones whose dense MLP gives
 `gate_proj` and `up_proj` different formats (as `mlx-community/Qwen3.8-27B-OptiQ-4bit`): those are refused when they
 load. Kapitsa reads the repo's `config.json` before any weights, then downloads its top-level files except other formats
 (`.gguf`, `.bin`, images and the like). A catalog variant's repo (`mlx-community/Qwen3.6-35B-A3B-6bit`) comes with that
@@ -820,9 +831,11 @@ the working set at about 2/3 to 78% of the RAM, depending on its version, hence 
 | 48 GB | 33.0-38.6 GB | yes (770K-922K) | yes (685K-837K) | yes (184K-265K) | yes (475K-724K) |
 
 On a 48 GB Mac the 35B also fits in 6-bit with a full conversation and its draft model, in 8-bit only with shorter ones.
-Flash-Next needs a 128 GB Mac: on 48 and 64 GB its weights alone exceed the budget, and on 96 GB (about 72 GB) its fixed
-part with an 8K cache (74.7 GB) does not fit, so it is refused before the download. For Bolt and the other variants,
-run `kapitsa doctor`.
+Flash-Next's `4bit` needs a 128 GB Mac: on 48 and 64 GB its weights alone exceed the budget, and on 96 GB (about 72 GB)
+its fixed part with an 8K cache (74.7 GB) does not fit. `flash-next` takes `64gb` there: 36.7 GB of weights, which on
+a 64 GB Mac (a 44.0-51.5 GB budget) leave room for 134K-371K tokens of KV cache in all. On a 48 GB Mac it needs 37.9 GB
+with an 8K conversation: it is refused at the smaller budget and starts at the larger (38.6 GB) with about 12K tokens of
+KV cache. For Bolt and the other variants, run `kapitsa doctor`.
 
 A Flash-Next folder whose routed experts are in Q2_0 (2.25 bits a weight; `tools/qwen4_exp_q20.py` builds one from
 ISTA-DASLab's GSQ-RCO GGUF and Nace AI's 4-bit pack: 38.3 GB of model files, plus the 32 GB n-gram table; it refuses

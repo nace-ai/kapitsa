@@ -145,7 +145,9 @@ gathered on the CPU from a mapped table) and the sparse-attention indexer. A pac
 ([`moe_q20.h`](../src/model/moe_q20.h)) can keep only part of them in memory: an expert store
 ([`expert_store.h`](../src/model/expert_store.h)) holds them in slots the expert kernels read through a slot table,
 and a handshake between each layer's routing and its expert kernels lets a CPU thread read the missing ones from the
-SSD before the GPU goes on.
+SSD before the GPU goes on. A pack with EXL3 routed experts (Sushi's; [`moe_exl3.h`](../src/model/moe_exl3.h)) keeps
+them resident and runs them through their own decode, verify and prefill kernels: trellis-coded 16 x 16 tiles decoded as
+they are read, between the two Hadamard transforms of each projection.
 
 Recursive's Flint (`Flint`) has no recurrent layers: 35 sliding-window attention layers keep their keys in a ring of
 528 positions per conversation (the window of 513 and 8 spare rows that a verify pass may fill), 14 full-attention
@@ -233,7 +235,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Request lifecycle, slots, turns, batched decoding and generation | [`src/engine/engine.cpp`](../src/engine/engine.cpp) |
 | Shared model contract and sequence state | [`src/model/model.h`](../src/model/model.h) |
 | Qwen backend and drafters | [`qwen35.h`](../src/model/qwen35.h), [`dflash2.h`](../src/model/dflash2.h); KFlash's budgets (trees, batched rows): [`kflash_budget.h`](../src/model/kflash_budget.h) |
-| Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal); Q2_0 experts and their store: [`moe_q20.h`](../src/model/moe_q20.h), [`expert_store.h`](../src/model/expert_store.h), [`zq2moe.metal`](../src/kernels/zq2moe.metal) |
+| Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal); Q2_0 experts and their store: [`moe_q20.h`](../src/model/moe_q20.h), [`expert_store.h`](../src/model/expert_store.h), [`zq2moe.metal`](../src/kernels/zq2moe.metal); EXL3 experts: [`moe_exl3.h`](../src/model/moe_exl3.h), [`exl3moe.metal`](../src/kernels/exl3moe.metal) |
 | Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h); KFlash trees: [`kflash_budget.h`](../src/model/kflash_budget.h), [`nh_tree.metal`](../src/kernels/nemotron/nh_tree.metal) |
 | Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
 | Flint backend | [`flint.h`](../src/model/flint.h), [`src/kernels/flint/`](../src/kernels/flint/); the timing tools [`flint_bench.cpp`](../tools/flint_bench.cpp) and [`flint_kbench.cpp`](../tools/flint_kbench.cpp) |

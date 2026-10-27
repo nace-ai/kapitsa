@@ -31,6 +31,8 @@ static json read_json(const std::string& path) {
 }
 
 static json quant_cfg_;
+// config.json's expert_quant (EXL3 routed experts, src/model/moe_exl3.h): format, codebook, window
+static json expert_quant_;
 static Pipeline pipe(const std::string& n);
 
 // Formats with kernels on every path: the specialized 4-bit and 8-bit group-64 kernels, and the generic ones
@@ -46,11 +48,20 @@ std::string format_name(int bits, int gs) {
 std::string QLinear::fmt() const {
   if (iq) return gguf::iq_suffix(iq);
   if (q20) return "q20";
+  if (exl3) return "exl3";
   return bits == 16 ? std::string("f16") : "f" + std::to_string(bits) + "g" + std::to_string(gs);
 }
-std::string QLinear::name() const { return iq ? gguf::type_name(iq) : q20 ? std::string("Q2_0") : format_name(bits, gs); }
+std::string QLinear::name() const {
+  if (exl3) {
+    char k[16];
+    snprintf(k, sizeof k, "%g", xn / 16.0);
+    return std::string("EXL3 ") + k + "-bit";
+  }
+  return iq ? gguf::type_name(iq) : q20 ? std::string("Q2_0") : format_name(bits, gs);
+}
 size_t QLinear::row_bytes() const {
   if (iq) return size_t(K) / 256 * gguf::iq_block_bytes(iq);
+  if (exl3) return size_t(K) * xn / 8;  // n halfwords per 16 x 16 tile: K n / 8 bytes across 16 rows, as a row's share
   return size_t(K) * size_t(bits) / 8;
 }
 static bool gdn_par();
@@ -456,7 +467,9 @@ void Qwen35::prewarm_pipelines() {
                                &L.su, &L.sd, &L.mg, &L.mu, &L.md})
         see(*q);
       if (L.mg && L.mg.q8()) names.insert("mlp_gate_up_f8g64");
-      if (L.eg.q20) {  // Q2_0 routed experts (src/model/moe_q20.cpp)
+      if (L.eg.exl3) {  // EXL3 routed experts (src/model/moe_exl3.cpp)
+        for (const std::string& n : exl3::kernel_names()) names.insert(n);
+      } else if (L.eg.q20) {  // Q2_0 routed experts (src/model/moe_q20.cpp)
         for (const std::string& n : q20::kernel_names(q20_arena())) names.insert(n);
         // qtm-q20: the bm-64 tensor_ops prefill tiles (enc_moe_prefill_fused's gate; the qrm prefill names above
         // compile anyway, two kernels' worth)
@@ -480,7 +493,7 @@ void Qwen35::prewarm_pipelines() {
         names.insert("qmmsf_moe_gu_" + L.eg.fmt());
         names.insert("qmmsf_moe_dn_" + L.eg.fmt());
       }
-      if (L.eg && !moe_rows_kernel(true, L.eg, L.sg).empty() && !(L.eg.q4() && L.sg.q4())) {
+      if (L.eg && !L.eg.exl3 && !moe_rows_kernel(true, L.eg, L.sg).empty() && !(L.eg.q4() && L.sg.q4())) {
         names.insert(moe_rows_kernel(true, L.eg, L.sg));
         names.insert(moe_rows_kernel(false, L.ed, L.sd, moe_wide()));
         names.insert("moe8g_gu_" + L.eg.fmt() + "_" + L.sg.fmt());  // when instantiated (else not created)
@@ -591,6 +604,7 @@ Qwen35Config Qwen35::read_config(const std::string& dir) {
 void Qwen35::load_config(const std::string& dir) {
   json root = read_json(dir + "/config.json");
   quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();
+  expert_quant_ = root.contains("expert_quant") ? root["expert_quant"] : json::object();
   parse_config(root, cfg_);
   if (hi_ <= 0) hi_ = cfg_.layers;
   if (lo_ < 0 || lo_ >= hi_ || hi_ > cfg_.layers) fatal("layers %d:%d of a %d-layer model", lo_, hi_, cfg_.layers);
@@ -658,6 +672,33 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok) {
   QLinear L;
   const std::string full = tname(name);
   L.w = ws_.find(full + ".weight");
+  if (!L.w && q20_ok) {
+    // EXL3 trellises (src/model/moe_exl3.h): .trellis uint16 [E, K/16, N/16, n], .suh f16 [E, K], .svh f16 [E, N]
+    if (const Tensor* t = ws_.find(full + ".trellis")) {
+      const std::string fmt = expert_quant_.value("format", std::string()), cb = expert_quant_.value("codebook", std::string());
+      if (fmt != "exl3" || cb != "mcg")
+        fatal("%s: EXL3 experts with config.json's expert_quant format \"%s\", codebook \"%s\": Kapitsa decodes the MCG "
+              "codebook (format exl3; Sushi's Qwen3.8-Flash-Next-Sushi-2bpw and -4bpw), not the STQ codebooks (std1, "
+              "spec1, pair1)", full.c_str(), fmt.c_str(), cb.c_str());
+      const Tensor *suh = ws_.find(full + ".suh"), *svh = ws_.find(full + ".svh");
+      const uint32_t n = exl3::rate_of(t->shape);
+      if (t->dtype != DType::U16 || !suh || !svh || suh->dtype != DType::F16 || svh->dtype != DType::F16 || !n ||
+          suh->shape.size() != 2 || svh->shape.size() != 2 || suh->shape[0] != t->shape[0] ||
+          svh->shape[0] != t->shape[0] || suh->shape[1] != t->shape[1] * 16 || svh->shape[1] != t->shape[2] * 16)
+        fatal("%s: EXL3 needs a uint16 trellis [E, in/16, out/16, n] (n even, 16-64: up to 4 bits a weight) with f16 "
+              "suh [E, in] and svh [E, out]", full.c_str());
+      L.w = t;
+      L.s = suh;
+      L.b = svh;
+      L.exl3 = true;
+      L.xn = n;
+      L.bits = int((n + 15) / 16);
+      L.gs = 256;
+      L.K = uint32_t(t->shape[1] * 16);
+      L.N = uint32_t(t->shape[2] * 16);
+      return L;
+    }
+  }
   if (!L.w) {
     if (required) fatal("missing %s.weight", full.c_str());
     return L;
@@ -728,6 +769,23 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok) {
   L.K = uint32_t(words * 32 / bits);
   L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
   if (int64_t(L.K / gs) != L.s->shape.back() || L.K % gs) fatal("%s: bits/group mismatch", full.c_str());
+  if (bits == 8 && gs == 128 && L.s->shape.size() == 2 && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
+    // 8-bit group 128 (Sushi's trunk) as group 64, exactly: each group's scale and bias twice
+    auto split = [&](const Tensor* t) {
+      const size_t rows = size_t(t->shape[0]), g = size_t(t->shape[1]);
+      Buffer b = Gpu::get().alloc(rows * g * 4 + 16, "g128_as_g64", /*tracked=*/false);
+      const uint16_t* src = t->buf.as<uint16_t>();
+      uint16_t* d = b.as<uint16_t>();
+      for (size_t i = 0; i < rows * g; ++i) d[2 * i] = d[2 * i + 1] = src[i];
+      owned_bufs_.push_back(b);
+      owned_.push_back(Tensor{b.view(0, rows * g * 4), DType::BF16, {int64_t(rows), int64_t(g * 2)}});
+      return &owned_.back();
+    };
+    L.s = split(L.s);
+    L.b = split(L.b);
+    gs = 64;
+  }
+  L.gs = gs;
   if (!format_supported(bits, gs))
     fatal("%s: %s weights are not supported (bf16, 3/4/5/6/8-bit group 64 and 4-bit group 32 are)", full.c_str(),
           format_name(bits, gs).c_str());
@@ -740,6 +798,16 @@ q20::Experts Qwen35::q20_experts(const Layer& L) const {
   x.uc = L.eu.w->buf; x.ud = L.eu.s->buf;
   x.dc = L.ed.w->buf; x.dd = L.ed.s->buf;
   return x;
+}
+
+exl3::Experts Qwen35::exl3_experts(const Layer& L) const {
+  auto proj = [](const QLinear& q) { return exl3::Proj{q.w->buf, q.s->buf, q.b->buf, q.xn}; };
+  return exl3::Experts{proj(L.eg), proj(L.eu), proj(L.ed)};
+}
+
+exl3::Shape Qwen35::exl3_shape() const {
+  return exl3::Shape{uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k), uint32_t(cfg_.experts),
+                     expert_quant_.value("window", 16u)};
 }
 
 q20::Shared Qwen35::q20_shared(const Layer& L) const {
@@ -1803,7 +1871,7 @@ void Qwen35::test_transforms() {
     for (QLinear* q : {&L.q, &L.k, &L.v, &L.o}) apply(*q, "attn", i);
     for (QLinear* q : {&L.router, &L.shared_gate}) apply(*q, "router", i);
     for (QLinear* q : {&L.eg, &L.eu, &L.ed})
-      if (!q->iq) apply(*q, "experts", i);
+      if (!q->iq && !q->exl3) apply(*q, "experts", i);
     for (QLinear* q : {&L.sg, &L.su, &L.sd}) apply(*q, "shared", i);
     for (QLinear* q : {&L.mg, &L.mu, &L.md}) apply(*q, "mlp", i);
   }
@@ -1864,6 +1932,15 @@ void Qwen35::check_formats() const {
   if (!cfg_.moe) return;
   auto all = [&](const Layer& L, const char* what) {
     if (!L.eg) return;
+    if (L.eg.exl3 || L.eu.exl3 || L.ed.exl3) {  // EXL3 (src/model/moe_exl3.h)
+      if (!(L.eg.exl3 && L.eu.exl3 && L.ed.exl3)) fatal("%s: experts' gate/up/down differ in format", what);
+      if (L.eg.K != uint32_t(cfg_.hidden) || L.eu.K != L.eg.K || L.eg.N != uint32_t(cfg_.moe_I) || L.eu.N != L.eg.N ||
+          L.ed.K != L.eg.N || L.ed.N != L.eg.K || L.eg.w->shape[0] != cfg_.experts)
+        fatal("%s: EXL3 experts' shapes differ from the config's", what);
+      std::string why;
+      if (!exl3::shapes_ok(exl3_shape(), exl3_experts(L), &why)) fatal("%s: EXL3 experts: %s", what, why.c_str());
+      return;
+    }
     if (L.eg.q20 || L.eu.q20 || L.ed.q20) {  // Q2_0 (src/model/moe_q20.h)
       if (!(L.eg.q20 && L.eu.q20 && L.ed.q20)) fatal("%s: experts' gate/up/down differ in format", what);
       if (!(L.sg.q4() && L.su.q4() && L.sd.q4())) fatal("%s: Q2_0 experts need a 4-bit group-64 shared expert", what);
@@ -2898,7 +2975,49 @@ void Qwen35::enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const B
   e.dispatch((L.N + 63) / 64, max_tiles, 1, 128);
 }
 
+// MoE prefill with EXL3 routed experts (src/model/moe_exl3.h): router and top-k, moe_bucket3's 32-row tiles, the
+// experts' gate / up, SwiGLU and down with their Hadamard transforms (exl3::enc_prefill: yd_ by pair, finished), the
+// shared expert on the dense path, then moe_combine (or the next hc_pre's fold, NI_HC_PRECOMB)
+void Qwen35::enc_moe_prefill_exl3(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
+  const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
+  constexpr int bm = exl3::kTileRows;
+  if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
+  enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
+  enc_topk_rows(e, uint32_t(E), uint32_t(k), cfg_.norm_topk, T);
+  kp::Bucket2 bp{uint32_t(P), uint32_t(k), uint32_t(E), uint32_t(bm), 0u};
+  e.use(pipe(moe_bucket_name()));
+  e.buf(0, ridx_); e.buf(1, spair_); e.buf(2, stok_); e.buf(3, tiles_); e.buf(4, ntiles_);
+  e.val(5, bp);
+  e.dispatch(1, 1, 1, 1024);
+  const uint32_t max_tiles = uint32_t((P + bm - 1) / bm + E);
+  exl3::enc_prefill(e, exl3_experts(L), exl3_shape(), uint32_t(P), max_tiles, xh_, tiles_, ntiles_, stok_, spair_, ridx_,
+                    hg_, hu_, hhalf_, yd_);
+  if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
+    enc_qmm(e, L.sg, xh_, sgb_, T, false);
+    enc_qmm(e, L.su, xh_, sub_, T, false);
+    const uint32_t ns = uint32_t(T * cfg_.shared_I);
+    e.use(pipe("swiglu_half"));
+    e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
+    e.dispatch((ns + 255) / 256, 1, 1, 256);
+  }
+  enc_qmm(e, L.sd, hh_, ys_, T, false);
+  if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum
+    comb_pending_ = {yd_, ys_, uint32_t(D), uint32_t(k), true};
+    return;
+  }
+  comb_pending_.active = false;
+  kp::Combine cp{uint32_t(D), uint32_t(k)};
+  e.use(pipe("moe_combine"));
+  e.buf(0, yd_); e.buf(1, ys_); e.buf(2, rwts_); e.buf(3, xbuf);
+  e.val(4, cp);
+  e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+}
+
 void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
+  if (L.eg.exl3) {
+    enc_moe_prefill_exl3(e, L, T, xbuf, xh_ready);
+    return;
+  }
   if (L.eg.iq) {
     enc_moe_prefill_iq(e, L, T, xbuf, xh_ready);
     return;

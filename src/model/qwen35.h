@@ -6,6 +6,7 @@
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
 #include "model/model.h"
+#include "model/moe_exl3.h"
 #include "model/moe_q20.h"
 #include "vision/embed.h"
 
@@ -28,7 +29,8 @@ struct FfnLayer;
 // little-endian bit stream along each row) with bf16 scale and bias per group of `gs` inputs, or bits = 16: bf16
 // weights [N, K] with no scales / biases (s and b then point at w, so buffer bindings stay valid; no kernel
 // reads them). Routed experts may also be ggml's Q2_0 (q20; src/model/moe_q20.h): 2-bit codes in MLX's order with an
-// fp16 d per 64 inputs in s and no biases (b points at s), weight = (code - 1) d.
+// fp16 d per 64 inputs in s and no biases (b points at s), weight = (code - 1) d. Or EXL3 trellises (exl3;
+// src/model/moe_exl3.h): w the stacked trellis uint16 [E, K/16, N/16, xn], s suh f16 [E, K], b svh f16 [E, N].
 struct QLinear {
   const Tensor* w = nullptr;
   const Tensor* s = nullptr;
@@ -36,6 +38,8 @@ struct QLinear {
   uint32_t N = 0, K = 0;
   int bits = 4, gs = 64;
   bool q20 = false;   // Q2_0 (bits 2, gs 64): routed experts of Qwen3.8-Flash-Next only
+  bool exl3 = false;  // EXL3 trellis (routed experts of Qwen3.8-Flash-Next, Sushi's packs): xn halfwords a 16 x 16 tile
+  uint32_t xn = 0;
   bool mtp = false;   // part of the MTP head (8-bit prefill GEMM on qmr8 since it was introduced)
   bool gate = false;  // the trunk's MoE router / shared-expert gate: their 8-bit prefill GEMMs keep the old kernels
   // Routed experts of a GGUF import kept in llama.cpp's blocks (src/kernels/wfmt_iq.metal): their GGUF type
@@ -51,7 +55,7 @@ struct QLinear {
   std::string fmt() const;
   std::string name() const;  // "4-bit group 64", "bf16", "IQ2_XXS", "Q2_0", ...
   bool same_format(const QLinear& o) const {
-    return iq == o.iq && q20 == o.q20 && bits == o.bits && (bits == 16 || gs == o.gs);
+    return iq == o.iq && q20 == o.q20 && exl3 == o.exl3 && bits == o.bits && (bits == 16 || exl3 || gs == o.gs);
   }
   size_t row_bytes() const;  // weight bytes per row (IQ: the blocks', d included)
   size_t group_row_bytes() const { return bits == 16 || iq ? 0 : size_t(K / gs) * 2; }  // scales (or biases) per row
@@ -492,8 +496,13 @@ class Qwen35 : public Model {
   static std::vector<ActBuf> act_layout(const Qwen35Config& c, int T, int max_verify, bool mtp, size_t hgu_rows);
   size_t dense_hgu_rows() const;
   void ensure_hgu(size_t bytes);
-  // q20_ok: the linear may be Q2_0 (routed experts of Qwen4Exp, whose MoE paths have the Q2_0 kernels)
+  // q20_ok: the linear may be Q2_0 or EXL3 (routed experts of Qwen4Exp, whose MoE paths have their kernels)
   QLinear qlin(const std::string& name, bool required = true, bool q20_ok = false);
+  // A layer's EXL3 routed experts and the MoE's shapes for their kernels (src/model/moe_exl3.h)
+  exl3::Experts exl3_experts(const Layer& L) const;
+  exl3::Shape exl3_shape() const;
+  // The MoE prefill of a layer with EXL3 experts (router, top-k, bucket, the experts, the shared expert, combine)
+  void enc_moe_prefill_exl3(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready);
   // A layer's Q2_0 routed experts as stacked planes, its 4-bit shared expert, the MoE's shapes (src/model/moe_q20.h)
   q20::Experts q20_experts(const Layer& L) const;
   q20::Shared q20_shared(const Layer& L) const;

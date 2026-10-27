@@ -1090,7 +1090,7 @@ std::string now_iso() {
 }
 
 // A Hugging Face repo that Kapitsa can run: a Qwen3.5-family hybrid model in MLX format, unquantized (bf16) or MLX
-// affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32), one format or mixed per module (the engine's
+// affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32, 8-bit also 128), one format or mixed per module (the engine's
 // format_supported, model/qwen35.cpp); or Recursive's Flint in MLX 4- or 8-bit group 64 (its 4-bit export, 8-bit or mixed
 // 4/8-bit packs; model/flint.h, which checks each module's format at load).
 void check_supported(HttpClient& c, const Listing& L) {
@@ -1126,8 +1126,9 @@ void check_supported(HttpClient& c, const Listing& L) {
   auto check = [&](const json& e) {
     const int bits = e.value("bits", q.value("bits", 0)), gs = e.value("group_size", q.value("group_size", 64));
     const std::string mode = e.value("mode", q.value("mode", std::string("affine")));
+    // (8-bit group 128 loads as group 64: each group's scale and bias twice, exactly)
     const bool ok = mode == "affine" && ((gs == 64 && (bits == 3 || bits == 4 || bits == 5 || bits == 6 || bits == 8)) ||
-                                         (gs == 32 && bits == 4));
+                                         (gs == 32 && bits == 4) || (gs == 128 && bits == 8));
     if (!ok)
       throw Error(L.repo + " is quantized as " + mode + " " + std::to_string(bits) + "-bit, group " + std::to_string(gs) +
                   "." + runs + " Try its MLX 4-bit, 6-bit, 8-bit or bf16 conversion.");
@@ -1139,6 +1140,7 @@ void check_supported(HttpClient& c, const Listing& L) {
 
 bool keep_file(const std::string& p) {  // files of a generic repo worth fetching: the top level, no other formats
   if (p.find('/') != std::string::npos || p == ".gitattributes") return false;
+  if (p == "ngram_table.bin") return true;  // Sushi's Qwen3.8-Flash-Next packs: the n-gram table (safetensors inside)
   for (const char* x : {".gguf", ".bin", ".pt", ".pth", ".onnx", ".h5", ".msgpack", ".ckpt", ".png", ".jpg", ".jpeg",
                         ".gif", ".webp", ".mp4"}) {
     const size_t n = strlen(x);

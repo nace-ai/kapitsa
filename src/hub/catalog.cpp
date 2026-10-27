@@ -283,9 +283,9 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"flash-next", "flash"},
        .title = "Qwen3.8-Flash-Next 180B-A7B",
        .about = "Qwen's 180B MoE, 7B active: hyper-connections, sparse attention, a 32 GB n-gram table read from the SSD",
-       .brief = "Qwen 180B MoE: for 128 GB Macs",
+       .brief = "Qwen 180B MoE: for 128 GB Macs (64 GB: Sushi's 2-bit experts)",
        .default_variant = "4bit",
-       .fallbacks = {},
+       .fallbacks = {"64gb"},
        .variants = {
            // Nace AI's quantization of Qwen/Qwen3.8-Flash-Next @ de4b8e4d (bf16; tools/convert_qwen4_exp.py): the MTP
            // head in mtp.safetensors, the n-gram table in ple.safetensors (mapped, outside GPU memory), vision bf16
@@ -296,6 +296,17 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae",
             .companions = {},
             .download_gb = 105.86},
+           // Sushi's pack (beamster/Qwen3.8-Flash-Next-Sushi-2bpw): routed experts and the MTP head's in EXL3 at 2 bits a
+           // weight (MCG codebook, window 15; src/model/moe_exl3.h), everything else 8-bit affine, the n-gram table 4-bit
+           // in ngram_table.bin (mapped, outside GPU memory); 37.6 GB of weights, for 64 GB Macs
+           {.name = "64gb",
+            .quant = "EXL3 2-bit routed experts (Sushi's MCG trellis), 8-bit affine attention / DeltaNet / shared "
+                     "experts / embedding / head, 4-bit n-gram table",
+            .label = "2-bit experts (Sushi EXL3)",
+            .repo = "beamster/Qwen3.8-Flash-Next-Sushi-2bpw",
+            .revision = "cb6c85e4f013ffe994909ac913c64916468292ce",
+            .companions = {},
+            .download_gb = 69.58},
        }},
       {.name = "nemotron-labs-dory1.0-4b",
        .aliases = {"dory", "dory-4b", "dory1.0-4b"},

@@ -102,6 +102,10 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
 // The MoE of R rows (input xrn_, output added to yb_): router and shared-expert gate on the row kernels, the top-k
 // of the decode step (moe_topk512) per row, then Qwen35's per-row expert kernels.
 void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) {
+  if (L.eg.exl3) {
+    enc_moe_exl3_rows(e, L, R);
+    return;
+  }
   const int D = cfg_.hidden, k = cfg_.top_k;
   static const bool old = env_on("NI_ROWS_OLD");
   if (old || cfg_.experts != 512 || k > 16) {
@@ -179,6 +183,26 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
   e.buf(6, eh_); e.buf(7, ridx_); e.buf(8, rwts_); e.buf(9, yb_);
   e.val(10, dp);
   e.dispatch((D + rows * nsg - 1) / (rows * nsg), R, 1, 32 * nsg);
+}
+
+// The MoE of R <= kMaxVerify rows of xrn_ with EXL3 routed experts, added to yb_: the router, the shared-expert gate and
+// the shared expert's gate / up on the row kernels, the 512-expert top-k per row, the shared expert's SwiGLU and down
+// (ys_), then exl3::enc_rows (the routed sum plus wts[r, k] ys_). Scratch: Qwen35's prefill buffers (hg_, hu_,
+// hhalf_, yd_ hold a chunk's T k rows; R k fit).
+void Qwen4Exp::enc_moe_exl3_rows(Encoder& e, const Layer& L, int R) {
+  if (cfg_.experts != 512 || cfg_.top_k > 16) fatal("EXL3 experts: the 512-expert top-k of up to 16 is supported");
+  enc_rows(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}, {&L.sg, sgb_}, {&L.su, sub_}}, xrn_, R);
+  kp::Topk tp{uint32_t(cfg_.experts), uint32_t(cfg_.top_k), cfg_.norm_topk ? 1u : 0u};
+  e.use(pipe4("moe_topk512"));
+  e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
+  e.val(4, tp);
+  e.dispatch(uint32_t(R), 1, 1, 32);
+  const uint32_t ns = uint32_t(R * cfg_.shared_I);
+  e.use(pipe4("swiglu_f32"));
+  e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, sgb_); e.val(3, ns);
+  e.dispatch((ns + 255) / 256, 1, 1, 256);
+  enc_rows(e, {{&L.sd, ys_}}, sgb_, R);
+  exl3::enc_rows(e, exl3_experts(L), exl3_shape(), R, xrn_, ridx_, rwts_, ys_, hg_, hu_, hhalf_, yd_, yb_);
 }
 
 // The MoE's down projection of R <= 4 rows (h in eh_ rows of k + 1 slots, routing idx / wts), added to yb_:

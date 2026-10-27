@@ -196,7 +196,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 </details>
 
 <sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint and the 35B's `16gb` read images. Memory: 16 GB for the 4B and 9B models, 32 GB
-for the 27B, 35B, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next. On a 16 or 24 GB Mac, `35b` and `flint` take their `16gb` variants: unsloth's 2-bit GGUFs, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
+for the 27B, 35B, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next (64 GB with `flash-next:64gb`, Sushi's 2-bit EXL3 experts). On a 16 or 24 GB Mac, `35b` and `flint` take their `16gb` variants: unsloth's 2-bit GGUFs, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
 
 ## How it works
 
