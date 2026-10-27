@@ -99,6 +99,9 @@ class Leg:
         v = vm(); self.free_start, self.free_min, self.wired_max = v["reclaimable_gib"], v["reclaimable_gib"], v["wired_gib"]
         self.level_max, self.pct_min = 1, 100
         env = dict(os.environ, HF_HUB_OFFLINE="1")
+        if arm == "N":  # pinned like the 2026-10-24 bench, for memory headroom; --nenv none = Kapitsa's auto size
+            for kv in a.nenv.split(","):
+                if kv != "none": k, _, v = kv.partition("="); env[k] = v
         self.model = None
         if arm == "K":
             cmd = [a.kbin, "serve", "--engine", "splash", "--splash-binary", SPLASH_BIN, "--splash-model", SPLASH_MODEL,
@@ -249,7 +252,7 @@ def run_leg(a):
     os.makedirs(a.out, exist_ok=True)
     tag = "leg%d-%s" % (a.idx, a.arm)
     leg = Leg(a.arm, "%s/%s.log" % (a.out, tag), a)
-    res = {"arm": a.arm, "idx": a.idx, "cmd": leg.cmd, "up_s": leg.up_s, "free_reclaimable_gib_at_start": leg.free_start,
+    res = {"arm": a.arm, "idx": a.idx, "cmd": leg.cmd, "env": a.nenv if a.arm == "N" else None, "up_s": leg.up_s, "free_reclaimable_gib_at_start": leg.free_start,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "decode": {"T0": [], "T06": []}, "prefill": {s: [] for s in SIZES},
            "twoturn": [], "errors": []}
     err = res["errors"]
@@ -351,6 +354,7 @@ def main():
     l.add_argument("--arm", required=True, choices=list("KSNL")); l.add_argument("--idx", type=int, required=True)
     l.add_argument("--out", required=True); l.add_argument("--reps", type=int, default=3); l.add_argument("--smoke", action="store_true")
     l.add_argument("--kbin", default=BIN["K"]); l.add_argument("--nbin", default=BIN["N"]); l.add_argument("--llama", default=BIN["L"])
+    l.add_argument("--nenv", default="NI_EXPERT_STORE=24", help="env for the N arm, KEY=VAL[,KEY=VAL] or none")
     s = sub.add_parser("summarize"); s.add_argument("dir")
     a = ap.parse_args()
     if a.cmd == "summarize": summarize(a.dir)
