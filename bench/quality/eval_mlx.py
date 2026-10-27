@@ -16,6 +16,9 @@ import mlx.core as mx
 import numpy as np
 from mlx_lm import load
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "harness"))
+import gpu_hogs  # noqa: E402  (bench/harness/gpu_hogs.py: held_by_caller)
+
 args = sys.argv[1:]
 def opt(name, default=None, flag=False):
     if name in args:
@@ -41,7 +44,7 @@ def read_ids(a):
 
 
 ids = [read_ids(s) for s in seqs]
-if not os.environ.get("NI_LOCK_HELD"):  # set by a caller that already holds the lock (lockf ... sh)
+if not gpu_hogs.held_by_caller():  # set by a caller that already holds the lock (lockf ... sh)
     lock = os.fdopen(os.open(os.path.expanduser("/tmp/kapitsa-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
     fcntl.flock(lock, fcntl.LOCK_EX)
 

@@ -33,7 +33,7 @@ Fairness rules built in (see README.md, "What makes a run count"):
     engine sees byte-identical prompts; cold prompt_tokens must be within ±1% of the reference count
     and the engine must not report reused cache tokens on the cold request.
   * the GPU lock (gpu_hogs.LOCK_PATH, default /tmp/kapitsa-gpu.lock) is held for the whole run unless
-    the caller already holds it (compare_engines.py sets NACE_GPU_LOCK_HELD=1).
+    the caller already holds it (compare_engines.py sets NACE_GPU_LOCK_HELD=1; NI_LOCK_HELD=1 works too).
 
 Stdlib only, so it runs with any python3 (even macOS's system 3.9).
 
@@ -868,7 +868,7 @@ def parse_args(argv=None):
     ap.add_argument("--warmup", default="light", choices=["none", "light", "full"],
                     help="light: one tiny request; full: the compare_engines warm-up; none: caller warmed up")
     ap.add_argument("--adaptive-warm", action="store_true", help="with --warmup full: 3 extra full decodes")
-    ap.add_argument("--no-gpu-lock", action="store_true", help=f"do not take the GPU lock {gpu_hogs.LOCK_PATH} (NACE_GPU_LOCK_HELD=1 also skips it)")
+    ap.add_argument("--no-gpu-lock", action="store_true", help=f"do not take the GPU lock {gpu_hogs.LOCK_PATH} (NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1 also skips it)")
     ap.add_argument("--skip", default="", help="comma list of: decode,greedy,prefill,tools,agent,sweep,sustain,cache")
     ap.add_argument("--agentic", action="store_true",
                     help="also run the agent-harness phases (agentic.py): sweep, cache, sustain (last); --skip drops any")
@@ -907,7 +907,7 @@ def main():
     check_sizes(a)
     skip = set(filter(None, a.skip.split(",")))
     lock = None
-    if not a.no_gpu_lock and not os.environ.get("NACE_GPU_LOCK_HELD"):
+    if not a.no_gpu_lock and not gpu_hogs.held_by_caller():
         lock = gpu_hogs.GpuLock(log=lambda m: print("  " + m, flush=True)).acquire()
     mem = MemSampler(a.pid) if a.pid else None
     if mem:
@@ -918,7 +918,7 @@ def main():
            "args": {k: v for k, v in vars(a).items() if not k.startswith("_")},
            "sampling": sampling(a), "sampling_greedy": sampling(a, greedy=True), "no_think": no_think(a),
            "corpus": corpus_record(), "harness": harness_info(), "phases": {}, "memory": {},
-           "gpu_lock": {"held_by": "caller" if os.environ.get("NACE_GPU_LOCK_HELD") else ("bench" if lock else "none"),
+           "gpu_lock": {"held_by": "caller" if gpu_hogs.held_by_caller() else ("bench" if lock else "none"),
                         "path": gpu_hogs.LOCK_PATH, "wait_s": round(lock.wait_s, 2) if lock else None}}
     if not res["corpus"]["frozen"]:
         print(f"  note: corpus sha256 {res['corpus']['sha256'][:12]} is not the frozen corpus; results are not "
