@@ -1,0 +1,16 @@
+  up 8.1s
+  warm-up ttft 1.56
+  decode T0 49.9 tok/s (256 tok, length)
+  decode T06 57.4 tok/s (256 tok, length)
+  prefill 1K: 1036 tok, ttft 1.33s, 777 tok/s, cached 0
+  prefill 4K: 4075 tok, ttft 5.14s, 793 tok/s, cached 0
+  prefill 16K: 19287 tok, ttft 25.24s, 764 tok/s, cached 0
+  twoturn: turn2 ttft 0.26s cached 4435/4476
+  decode T0 57.8 tok/s (256 tok, length)
+  decode T06 60.4 tok/s (256 tok, length)
+  prefill 1K: 1036 tok, ttft 1.72s, 604 tok/s, cached 0
+  prefill 4K: 4075 tok, ttft 5.24s, 778 tok/s, cached 0
+ABORT: pressure level 4
+  prefill 16K: None tok, ttft 0.00s, 0 tok/s, cached 0
+  ERROR twoturn rep 1: URLError(ConnectionRefusedError(61, 'Connection refused'))
+  peak footprint 32461 MiB (69 samples), peak RSS 29528 MiB, free+reclaimable min 2.5 GiB, wired max 35.9 GiB, swap +2.41 GB, pressure 4, ABORTED pressure level 4

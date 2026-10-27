@@ -18,18 +18,17 @@ which is sized from free memory; that default is untested here). N is pinned to 
 
 ## Summary (medians; `n` = measured repetitions; decode counts only runs with at least 250 generated tokens)
 
-| arm | decode T=0 tok/s | decode T=0.6 tok/s | TTFT 1K s | prefill 1K tok/s | TTFT 4K s | prefill 4K tok/s | TTFT 16K s | prefill 16K tok/s | turn-2 TTFT s (4K chat) | peak RSS MiB |
-|---|---|---|---|---|---|---|---|---|---|---|
-| K `7e478053` | 56.2 (n 6) | 55.1 (n 6) | 1.40 | 741 | 3.44 | 1184 | 16.46 | 1172 | 0.53 | 2229 |
-| S | 57.7 (n 6) | 54.8 (n 6) | 1.46 | 711 | 3.51 | 1161 | 16.32 | 1182 | 0.53 | 2938 |
-| K2 `ff6151c8` | 58.2 (n 6) | 53.5 (n 6) | 1.44 | 722 | 3.44 | 1186 | 17.16 | 1124 | 0.54 | 2385 |
-| S2 (paired with K2) | 56.4 (n 6) | 53.8 (n 6) | 1.45 | 713 | 3.62 | 1125 | 18.05 | 1069 | 0.57 | 2756 |
-| N native + MTP | 55.4 (n 8) | 56.6 (n 8) | 1.41 | 733 | 4.74 | 860 | 25.58 (n 7) | 754 | 0.26 (n 7) | 32433 |
-| L llama.cpp | 9.0 (n 2) | 9.0 (n 2) | 28.12 | 37 | 110.74 | 37 | 634.24 | 30 | 3.34 | 32984 |
+| arm | decode T=0 tok/s | decode T=0.6 tok/s | TTFT 1K s | prefill 1K tok/s | TTFT 4K s | prefill 4K tok/s | TTFT 16K s | prefill 16K tok/s | turn-2 TTFT s (4K chat) | peak RSS MiB | peak footprint GiB (tree) | system used GiB at peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| K `7e478053` | 56.2 (n 6) | 55.1 (n 6) | 1.40 (n 6) | 741 (n 6) | 3.44 (n 6) | 1184 (n 6) | 16.46 (n 6) | 1172 (n 6) | 0.53 (n 6) | 2229 | not measured | not measured |
+| S | 57.7 (n 6) | 54.8 (n 6) | 1.46 (n 6) | 711 (n 6) | 3.51 (n 6) | 1161 (n 6) | 16.32 (n 6) | 1182 (n 6) | 0.53 (n 6) | 2938 | not measured | not measured |
+| K2 `ff6151c8` | 55.9 (n 10) | 52.1 (n 10) | 1.45 (n 10) | 715 (n 10) | 3.45 (n 10) | 1181 (n 10) | 16.54 (n 10) | 1166 (n 10) | 0.56 (n 10) | 2385 | 25.0 (2 legs) | 39.9 of 48 |
+| S2 (paired with K2) | 55.5 (n 10) | 54.0 (n 10) | 1.47 (n 10) | 706 (n 10) | 3.55 (n 10) | 1149 (n 10) | 17.32 (n 10) | 1114 (n 10) | 0.57 (n 10) | 2964 | 25.4 (2 legs) | 40.0 of 48 |
+| N native + MTP | 53.7 (n 12) | 57.2 (n 12) | 1.41 (n 12) | 733 (n 12) | 4.81 (n 12) | 847 (n 12) | 25.48 (n 9) | 757 (n 9) | 0.26 (n 9) | 32433 | 31.7 (2 legs) | 45.7 of 48 |
+| L llama.cpp | 9.0 (n 2) | 9.0 (n 2) | 28.12 (n 2) | 37 (n 2) | 110.74 (n 2) | 37 (n 2) | 634.24 (n 2) | 30 (n 2) | 3.34 (n 2) | 32984 | not measured | not measured |
 
-All prefill cells have n 6 (K, K2, S, S2), 8 (N), 2 (L) unless noted. 1K, 4K and 16K are 1035, 4074 and 19286
-prompt tokens by the Splash tokenizer (the files are 4,000, 16,400 and 65,600 characters of the docs corpus). Peak RSS is the
-whole process tree's maximum; it does not include GPU-wired pages (wired memory reached 31.5 GiB on K, K2, S, S2 and 36.5 GiB on N).
+K and S (n 6) are the first rotation; K2 and S2 (n 10) add the footprint pass below; N (n 12, 9 for 16K and turn 2) and L (n 2) as run. Every cell's n is in the table. 1K, 4K and 16K are 1035, 4074 and 19286
+prompt tokens by the Splash tokenizer (the files are 4,000, 16,400 and 65,600 characters of the docs corpus). **Peak RSS** is `ps` RSS of the process tree and leaves out GPU-wired memory, so it is not a memory figure to compare across arms. **Peak footprint** is the `phys_footprint` of the serving process tree (`footprint`; K: kapitsa + splash child, S: the Splash server + engine, N: kapitsa), sampled about every second (67 to 77 samples per leg), with the system-wide memory in use (48 GB minus free, inactive, speculative and purgeable pages) at the moment of that peak. It was added after the first rotation, so it comes from the footprint pass only: two legs each for K2, S2 and N (`legs/leg20` to `leg25`). K, S and L have no footprint (not measured). Wired memory (vm_stat) reached 31.5 GiB on K, K2, S, S2 and 36.5 GiB on N.
 
 What the numbers support:
 
@@ -37,12 +36,11 @@ What the numbers support:
   between K, K2 and S. Prefill and turn-2 TTFT differ by under 5% at 1K and 4K; at 16K K2 is 4 to 5% slower than K and S, and S2
   was 10% slower than S, which points at the machine rather than the build. This bench shows
   neither a Kapitsa speed-up nor a slowdown for the Splash backend, and not a difference between 7e478053 and ff6151c8.
-- **Kapitsa serving Splash prefills about 1.4 to 1.5x faster than the native engine at 4K and 16K** (1184 vs 860 tok/s at 4K,
-  1172 vs 754 at 16K) and level at 1K. Native with MTP decodes at the same speed (55.4 vs 56.2 tok/s at T=0; 56.6 vs
-  55.1 at T=0.6), with a much faster turn 2 (0.26 s vs 0.53 s) and a hit of 4,435 of 4,476 prompt tokens against 4,320 of 4,442 on the Splash
+- **Kapitsa serving Splash prefills about 1.4 to 1.5x faster than the native engine at 4K and 16K** (1181 vs 847 tok/s at 4K,
+  1166 vs 757 at 16K, K2 and N medians) and level at 1K. Native with MTP decodes at the same speed (53.7 vs 55.9 tok/s at T=0; 57.2 vs
+  52.1 at T=0.6, K2 vs N; decode noise is 5 to 10 tok/s), with a much faster turn 2 (0.26 s vs 0.53 s) and a hit of 4,435 of 4,476 prompt tokens against 4,320 of 4,442 on the Splash
   backend.
-- **Native uses far more memory:** 29 to 32 GiB resident against 2 to 3 GiB, with swap use rising (2.5 to 4.4 GB at
-  leg start from other work, growing by up to 3.5 GB) and memory pressure level 2 in three legs and level 4 in one.
+- **Native uses much more memory, and it is the arm that hits memory pressure.** Peak footprint of the serving tree: 25.6 GiB for K2 (two legs: 25.6, 25.6), 26.0 GiB for S2 (26.0, 26.0) and 32.5 GiB for native (32.5, 32.5). With K2 or S2 running, the whole system used 40 of 48 GiB; with native, 44 to 46 GiB. The Splash-based arms are about 6.5 GiB lighter and stayed at pressure level 1 with no swap growth in every leg. Native reached pressure 2 in its first-rotation legs and **pressure level 4 in both footprint legs and in one earlier leg**, each time late in the leg (16K prefill or the two-turn chat), with swap growing by 2.4 to 4.5 GB. The memory guard stopped those legs, so N's 16K and turn-2 cells have fewer repetitions (n 9 against 12). This was with a 24 GB expert store, not the auto size, and with other sessions using memory on the same Mac.
 - **No arm is "fastest" on every cell.** Splash-based arms win prefill at long context, native wins turn 2, and decode is a tie.
 
 ## Caveats
@@ -58,9 +56,9 @@ What the numbers support:
   lock, ABAB-interleaved (K S N L, three passes; K2/S2 afterwards in a separate run of three pairs), so a drift affects the arms alike
   but is not removed. Minimum free+reclaimable memory dropped to 5.4 GiB on K and 2.3 GiB on N. The memory guard
   (abort at pressure level 4, free below 3%, swap above 16 GB) stopped one N leg.
-- **One N leg was stopped at pressure level 4** (`legs/leg10-N.*`; a first attempt of the same leg crashed in the harness and is in
-  `aborted/`). Its completed cells are in the medians (that is why N has n 8 and n 7); the 16K cell and the turn 2 of its second
-  repetition are missing. The N medians include it; dropping it changes no conclusion.
+- **Three N legs were stopped at pressure level 4** (`legs/leg10-N`, `leg22-N`, `leg25-N`; a first attempt at leg 10 crashed in the harness and is in
+  `aborted/`). Completed cells are in the medians; the 16K cell and the turn 2 of the second repetition are missing from those legs, so N has fewer
+  repetitions there (n 9). The N medians include them; dropping them changes no conclusion.
 - **K and K2 are different binaries from different times; S and S2 are the same Splash.** K2's S2 set is its own
   control. K vs K2 is not a clean A/B.
 - The frozen decode prompt changed once before the first kept leg (an essay prompt stopped at about 130 tokens, so

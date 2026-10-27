@@ -1,0 +1,184 @@
+{
+ "arm": "N",
+ "group": "N",
+ "binary": {
+  "path": "/Users/alisheramantay/Documents/nace/kapitsa-bench-main/build/kapitsa",
+  "version": "kapitsa 0.2.23 (e840651c)"
+ },
+ "idx": 25,
+ "cmd": [
+  "/Users/alisheramantay/Documents/nace/kapitsa-bench-main/build/kapitsa",
+  "serve",
+  "--model",
+  "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flash-next-q20",
+  "--context",
+  "32k",
+  "--private",
+  "--port",
+  "54725"
+ ],
+ "env": "NI_EXPERT_STORE=24",
+ "up_s": 8.134893655776978,
+ "free_reclaimable_gib_at_start": 33.00599670410156,
+ "started": "2026-10-27T21:02:38Z",
+ "decode": {
+  "T0": [
+   {
+    "finish": "length",
+    "prompt_tokens": 97,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 1.0154030323028564,
+    "total_s": 6.127555847167969,
+    "decode_tps": 49.881137993080195,
+    "text_md5": "f8a51399215df5e12d00235f1bf40c57"
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 97,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 1.0362811088562012,
+    "total_s": 5.451792240142822,
+    "decode_tps": 57.750958477528826,
+    "text_md5": "3f74553914100d132b7c579e4d306454"
+   }
+  ],
+  "T06": [
+   {
+    "finish": "length",
+    "prompt_tokens": 98,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 0.980565071105957,
+    "total_s": 5.424505949020386,
+    "decode_tps": 57.38150146580555,
+    "text_md5": "bcf4cc6c4c5f4558c7fae3a1e4a0088d"
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 98,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 1.000687837600708,
+    "total_s": 5.2245471477508545,
+    "decode_tps": 60.37132898513503,
+    "text_md5": "164a934627d857609927e512570990e0"
+   }
+  ]
+ },
+ "prefill": {
+  "1K": [
+   {
+    "finish": "length",
+    "prompt_tokens": 1036,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 1.3339760303497314,
+    "total_s": 1.5897977352142334,
+    "decode_tps": 58.63458695947973,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 776.625648759513
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 1036,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 1.7161939144134521,
+    "total_s": 1.984687089920044,
+    "decode_tps": 55.86734177395036,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 603.6613877366394
+   }
+  ],
+  "4K": [
+   {
+    "finish": "length",
+    "prompt_tokens": 4075,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 5.13971471786499,
+    "total_s": 5.380490064620972,
+    "decode_tps": 62.298736984904224,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 792.8455612207079
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 4075,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 5.238584995269775,
+    "total_s": 5.515362024307251,
+    "decode_tps": 54.19524897772135,
+    "text_md5": "1adb167fe9c5624f626680c41e2566ef",
+    "prefill_tps": 777.8818142073777
+   }
+  ],
+  "16K": [
+   {
+    "finish": "length",
+    "prompt_tokens": 19287,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 25.237606048583984,
+    "total_s": 25.49990725517273,
+    "decode_tps": 57.18616469621541,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 764.2166995899416
+   },
+   {
+    "finish": null,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "cached_tokens": 0,
+    "ttft_s": null,
+    "total_s": 5.858481168746948,
+    "decode_tps": null,
+    "text_md5": "93b885adfe0da089cdf634904fd59f71",
+    "prefill_tps": null
+   }
+  ]
+ },
+ "twoturn": [
+  {
+   "turn1": {
+    "finish": "tool_calls",
+    "ttft_s": 6.2794718742370605,
+    "prompt_tokens": 4356,
+    "completion_tokens": 80,
+    "cached_tokens": 0
+   },
+   "turn1_reasoning_chars": 216,
+   "turn2": {
+    "finish": "stop",
+    "ttft_s": 0.2617809772491455,
+    "prompt_tokens": 4476,
+    "completion_tokens": 59,
+    "cached_tokens": 4435,
+    "decode_tps": 57.017531622546976
+   }
+  }
+ ],
+ "errors": [
+  "twoturn rep 1: URLError(ConnectionRefusedError(61, 'Connection refused'))"
+ ],
+ "memory": {
+  "peak_rss_mib": 29528.390625,
+  "peak_footprint_mib": 32461.262283325195,
+  "system_used_gib_at_footprint_peak": 43.55439758300781,
+  "footprint_samples": 69,
+  "footprint_max_processes": 1,
+  "free_reclaimable_gib_start": 33.00599670410156,
+  "free_reclaimable_gib_min": 2.5352630615234375,
+  "wired_gib_max": 35.87455749511719,
+  "swap_gb_start": 1.980166015625,
+  "swap_gb_max": 4.389951171875,
+  "pressure_level_max": 4,
+  "memorystatus_level_min": 10,
+  "aborted": "pressure level 4",
+  "swap_grew_over_1gb": true
+ },
+ "finished": "2026-10-27T21:03:59Z"
+}
