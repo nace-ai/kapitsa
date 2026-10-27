@@ -74,7 +74,7 @@ struct EngineOptions {
   // serve`'s default: a quarter of the free space beyond 10 GiB, at most 32 GiB), "0" off, or a size ("16G"). "" =
   // NI_DISK_CACHE if set, else off (tools that construct an engine write nothing unless asked).
   std::string disk_cache;
-  // Splash as the engine (docs/splash-backend.md): a non-empty splash_model is a Splash model folder (the one `splash
+  // Splash as the engine: a non-empty splash_model is a Splash model folder (the one `splash
   // serve-native` takes), and the engine runs text generation in a Splash child process from splash_binary instead of
   // loading a model here. Only the tokenizer, chat template and stop ids are read from that folder; model_dir is unused.
   // `context` is the child's context (tokens); splash_args follow the positional arguments of serve-native (e.g.

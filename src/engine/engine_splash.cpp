@@ -1,4 +1,4 @@
-// Engine in Splash mode (EngineOptions::splash_model, docs/splash-backend.md): the model runs in a Splash child process
+// Engine in Splash mode (EngineOptions::splash_model): the model runs in a Splash child process
 // (src/splash/runtime.h) and this engine is its codec. It owns what turns a chat request into prompt tokens and the
 // tokens back into reasoning, content and tool calls: the chat template, the tokenizer, the stop ids, OutputParser; both
 // come from the Splash model folder, so the tokens sent are the ones plain Splash would send. Nothing here touches Metal
