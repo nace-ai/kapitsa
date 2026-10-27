@@ -193,6 +193,9 @@ jobs:
       - name: splash_plan_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/splash_plan_test
+      - name: test_splash_engine (fake engine, stand-in tokenizer folder)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: python3 tests/test_splash_engine.py build/kapitsa
       # tests/test_bench.py is not run here: on a hosted runner (a VM, "Apple M1 (Virtual)") `kapitsa bench` aborts on a
       # hardware field the VM does not report and the Mac name fails the result schema. Run it on a real Mac.
       - name: test_server --cli
