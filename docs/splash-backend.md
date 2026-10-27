@@ -60,7 +60,7 @@ its name. When nothing is found the error says where it looked and which flag to
 
 Kapitsa's `flash-next-q20/chat_template.jinja` and Splash's resolved `tokenizer/chat_template.jinja` are not the same file
 (Splash's merges consecutive system messages and maps `high` to `xhigh`), and the two `tokenizer.json` files differ in
-vocabulary size (248320 against 248044) and in how merges are written. So splash mode loads the tokenizer and the template
+vocabulary size (Splash's 248320 against Kapitsa's 248044) and in how merges are written. So splash mode loads the tokenizer and the template
 from Splash's model folder, so the prompt is the one Splash would build.
 
 ## Verification
