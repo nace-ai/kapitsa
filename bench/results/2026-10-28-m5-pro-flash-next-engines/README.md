@@ -18,17 +18,26 @@ which is sized from free memory; that default is untested here). N is pinned to 
 
 ## Summary (medians; `n` = measured repetitions; decode counts only runs with at least 250 generated tokens)
 
-| arm | decode T=0 tok/s | decode T=0.6 tok/s | TTFT 1K s | prefill 1K tok/s | TTFT 4K s | prefill 4K tok/s | TTFT 16K s | prefill 16K tok/s | turn-2 TTFT s (4K chat) | system wired GiB (max) | swap growth GB (max) | memory pressure (max) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| K `7e478053` | 56.2 (n 6) | 55.1 (n 6) | 1.40 (n 6) | 741 (n 6) | 3.44 (n 6) | 1184 (n 6) | 16.46 (n 6) | 1172 (n 6) | 0.53 (n 6) | 31.5 | 0.00 | 1 |
-| S | 57.7 (n 6) | 54.8 (n 6) | 1.46 (n 6) | 711 (n 6) | 3.51 (n 6) | 1161 (n 6) | 16.32 (n 6) | 1182 (n 6) | 0.53 (n 6) | 31.5 | 0.00 | 1 |
-| K2 `ff6151c8` | 55.9 (n 10) | 52.1 (n 10) | 1.45 (n 10) | 715 (n 10) | 3.45 (n 10) | 1181 (n 10) | 16.54 (n 10) | 1166 (n 10) | 0.56 (n 10) | 31.6 | 0.00 | 1 |
-| S2 (paired with K2) | 55.5 (n 10) | 54.0 (n 10) | 1.47 (n 10) | 706 (n 10) | 3.55 (n 10) | 1149 (n 10) | 17.32 (n 10) | 1114 (n 10) | 0.57 (n 10) | 31.6 | 0.00 | 1 |
-| N native + MTP | 53.7 (n 12) | 57.2 (n 12) | 1.41 (n 12) | 733 (n 12) | 4.81 (n 12) | 847 (n 12) | 25.48 (n 9) | 757 (n 9) | 0.26 (n 9) | 36.5 | 4.47 | 4 |
-| L llama.cpp | 9.0 (n 2) | 9.0 (n 2) | 28.12 (n 2) | 37 (n 2) | 110.74 (n 2) | 37 (n 2) | 634.24 (n 2) | 30 (n 2) | 3.34 (n 2) | 8.6 | 0.00 | 1 |
+| arm | decode T=0 tok/s | decode T=0.6 tok/s | TTFT 1K s | prefill 1K tok/s | TTFT 4K s | prefill 4K tok/s | TTFT 16K s | prefill 16K tok/s | turn-2 TTFT s (4K chat) | peak footprint GiB (serving process tree) | system used GiB at that peak | system wired GiB (max) | swap growth GB (max) | memory pressure (max) | peak ps RSS MiB (not a memory comparison) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| K `7e478053` | 56.2 (n 6) | 55.1 (n 6) | 1.40 (n 6) | 741 (n 6) | 3.44 (n 6) | 1184 (n 6) | 16.46 (n 6) | 1172 (n 6) | 0.53 (n 6) | not measured | not measured | 31.5 | 0.00 | 1 | 2229 |
+| S | 57.7 (n 6) | 54.8 (n 6) | 1.46 (n 6) | 711 (n 6) | 3.51 (n 6) | 1161 (n 6) | 16.32 (n 6) | 1182 (n 6) | 0.53 (n 6) | not measured | not measured | 31.5 | 0.00 | 1 | 2938 |
+| K2 `ff6151c8` | 55.9 (n 10) | 52.1 (n 10) | 1.45 (n 10) | 715 (n 10) | 3.45 (n 10) | 1181 (n 10) | 16.54 (n 10) | 1166 (n 10) | 0.56 (n 10) | 25.0 (2 legs) | 39.9 | 31.6 | 0.00 | 1 | 2385 |
+| S2 (paired with K2) | 55.5 (n 10) | 54.0 (n 10) | 1.47 (n 10) | 706 (n 10) | 3.55 (n 10) | 1149 (n 10) | 17.32 (n 10) | 1114 (n 10) | 0.57 (n 10) | 25.4 (2 legs) | 40.0 | 31.6 | 0.00 | 1 | 2964 |
+| N native + MTP | 53.7 (n 12) | 57.2 (n 12) | 1.41 (n 12) | 733 (n 12) | 4.81 (n 12) | 847 (n 12) | 25.48 (n 9) | 757 (n 9) | 0.26 (n 9) | 31.7 (2 legs) | 45.7 | 36.5 | 4.47 | 4 | 32433 |
+| L llama.cpp | 9.0 (n 2) | 9.0 (n 2) | 28.12 (n 2) | 37 (n 2) | 110.74 (n 2) | 37 (n 2) | 634.24 (n 2) | 30 (n 2) | 3.34 (n 2) | not measured | not measured | 8.6 | 0.00 | 1 | 32984 |
 
 n is the number of requests per cell: K and S 6 (3 legs of 2), K2 and S2 10 (5 legs of 2), N 12 (6 legs of 2; 9 for 16K and turn 2 because stopped legs lack them), L 2. Every cell's n is in the table. 1K, 4K and 16K are 1035, 4074 and 19286
-prompt tokens by the Splash tokenizer (the files are 4,000, 16,400 and 65,600 characters of the docs corpus). **Memory columns** are system-wide, sampled about every 2 s during the leg (`vm_stat`, `sysctl vm.swapusage`, `kern.memorystatus_vm_pressure_level`), maximum over the legs of the arm: wired memory of the whole Mac (Metal buffers count as wired), swap growth since the leg started, and memory-pressure level (1 normal, 2 warning, 4 critical). They are not per-process. **Process RSS is not reported as a comparison:** `ps` RSS undercounts Splash, whose expert memory is wired Metal memory that RSS does not count (the per-leg `peak_rss_mib` is still in the JSON, and so is a `phys_footprint` series from a later pass of two legs each for K2, S2 and N).
+prompt tokens by the Splash tokenizer (the files are 4,000, 16,400 and 65,600 characters of the docs corpus). **Memory columns.** *Peak footprint* is the `phys_footprint` (`footprint`) of the serving process tree (K and K2: kapitsa + the Splash child; S2: the Splash server + engine; N: kapitsa), sampled about every second (67 to 77 samples per leg), and *system used at that peak* is the Mac's memory in use (48 GB minus free, inactive, speculative and purgeable pages) at that moment. They were added after the first rotation and come from a pass of two legs each for K2, S2 and N (`legs/leg20` to `leg25`); K, S and L are **not measured**. *System wired*, *swap growth* and *pressure* (1 normal, 2 warning, 4 critical) are system-wide (`vm_stat`, `sysctl vm.swapusage`, `kern.memorystatus_vm_pressure_level`), maximum over all legs of the arm. **ps RSS is not a memory comparison:** it does not count the Metal buffers that hold Splash's expert memory, so it shows 2 to 3 GiB for the Splash arms; it is in the table only so nobody reads it as a result.
+
+**Runs:** 2026-10-27, `Mac17,8` (M5 Pro, 48 GB), macOS 26.5.2. One engine at a time under `/tmp/kapitsa-gpu.lock`, one leg (server start, 2 repetitions per cell) at a time, arms rotated ABAB (K S N L, then K2 S2 with N for the footprint pass), so drift hits the arms alike. Decode at T=0 (seed 1) and T=0.6, temperature passed explicitly on every request. Versions: Kapitsa 0.2.23 at `7e478053` (K), `ff6151c8` (K2) and `e840651c` (N); Splash 1.4.0 (engine sha256 `20b36bcc051145b4`); llama.cpp `c7474afc`.
+
+**Flags:**
+- K, K2: `kapitsa serve --engine splash --splash-binary <Splash 1.4.0 engine> --splash-model <Q2_0 GGUF> --context 32k --private --splash-arg --expert-memory --splash-arg 17179869184 --splash-arg --idle-release --splash-arg off`.
+- S, S2: `python -m server.server <model> --model ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0 --binary <engine> --max-context 32768 --expert-memory 17179869184 --idle-release off`.
+- N: `kapitsa serve --model flash-next-q20 --context 32k --private`, env `NI_EXPERT_STORE=24`. L: `llama-server -ngl 99 -fa on -c 33280 -np 1 --jinja`.
+- **`--verify-rows` was not passed on any Splash arm** (K, K2, S, S2 alike), so the engine default `auto` applies. Each Splash leg's server log says so (`legs/leg*-[KS].log`; `verify_rows_in_engine_log` in `summary.json` is `["auto"]` for all four). The log also warns that with `auto` on this MoE target, greedy and seeded outputs can differ from run to run.
+- The exact command line of every leg is in its JSON (`cmd`, `env`).
 
 What the numbers support:
 
@@ -40,7 +49,8 @@ What the numbers support:
   1166 vs 757 at 16K, K2 and N medians) and level at 1K. Native with MTP decodes at the same speed (53.7 vs 55.9 tok/s at T=0; 57.2 vs
   52.1 at T=0.6, K2 vs N; decode noise is 5 to 10 tok/s), with a much faster turn 2 (0.26 s vs 0.56 s for K2) and a hit of 4,435 of 4,476 prompt tokens against 4,320 of 4,442 on the Splash
   backend.
-- **Memory.** Native peaked at 36.5 GiB wired with swap growth up to 4.5 GB and memory-pressure level 4 (three legs stopped by the guard; 16K and turn-2 cells have n 9 against 12). The Splash-based arms (K, K2, S, S2) peaked at 31.5 to 31.6 GiB wired, no swap growth, pressure level 1 in every leg. Splash ran at `--expert-memory 16G`, native at `NI_EXPERT_STORE=24`; neither is the arm's default memory plan, and other sessions used memory on the same Mac. This table makes no other memory claim.
+- **Memory.** Peak footprint of the serving process tree (two legs each): K2 25.0 GiB, S2 25.4 GiB, native 31.7 GiB; the system used 39.9, 40.0 and 45.7 of 48 GiB at those peaks. System wired peaked at 31.5 to 31.6 GiB on the Splash arms and 36.5 GiB on native. Native hit memory-pressure level 4 and swap growth up to 4.5 GB in three legs, `leg10-N`, `leg22-N` and `leg25-N`, each stopped by the guard late in the leg (16K prefill or turn 2), so N's 16K and turn-2 cells have n 9 against 12; the Splash arms stayed at pressure level 1 with no swap growth in every leg. Splash ran at `--expert-memory 16G` and native at `NI_EXPERT_STORE=24`, neither the arm's default plan, with other sessions using memory on the same Mac.
+- **Turn 2 on the Splash arms is 0.56 s here; #743's 0.20 to 0.26 s was not reproduced on this chat** (4,320 of about 4,430 prompt tokens cached, uncached tail about 106 tokens). `tools/splash_ab.py --turn2` uses a different 4K chat (4,064 of about 4,125 cached, tail about 60 tokens) and builds turn 2 from the reply content rather than replaying a tool-call chat with its reasoning dropped. The cause of the gap was not isolated, and a longer uncached tail alone is too small to explain it at about 1,180 tok/s prefill. Both Splash arms agree with each other here (0.56 and 0.57 s), and native is 0.26 s on this same chat.
 - **No arm is "fastest" on every cell.** Splash-based arms win prefill at long context, native wins turn 2, and decode is a tie.
 
 ## Caveats

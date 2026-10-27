@@ -331,7 +331,10 @@
     "--splash-arg",
     "off"
    ],
-   "binary": null
+   "binary": null,
+   "verify_rows_in_engine_log": [
+    "auto"
+   ]
   },
   "K2": {
    "decode_T0_tps": {
@@ -703,7 +706,10 @@
    "binary": {
     "path": "/Users/alisheramantay/Documents/nace/kapitsa-splash-ff/build/kapitsa",
     "version": "kapitsa 0.2.23 (ff6151c8)"
-   }
+   },
+   "verify_rows_in_engine_log": [
+    "auto"
+   ]
   },
   "S": {
    "decode_T0_tps": {
@@ -993,7 +999,10 @@
     "--idle-release",
     "off"
    ],
-   "binary": null
+   "binary": null,
+   "verify_rows_in_engine_log": [
+    "auto"
+   ]
   },
   "S2": {
    "decode_T0_tps": {
@@ -1362,7 +1371,10 @@
     "path": "/Users/alisheramantay/Documents/nace/splash-1.4.0/engine/splash",
     "version": "Splash 1.4.0 (no --version flag; folder splash-1.4.0)",
     "sha256": "20b36bcc051145b425403dee7489d06cdbb5060460dfdb2e0cfc8d49cebfc29f"
-   }
+   },
+   "verify_rows_in_engine_log": [
+    "auto"
+   ]
   },
   "N": {
    "decode_T0_tps": {

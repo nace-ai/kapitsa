@@ -374,16 +374,24 @@ def summarize(d, meta=None):
         c["errors"] = [e for l in ls for e in l["errors"]]
         c["cmd"] = ls[0]["cmd"]
         c["binary"] = ls[0].get("binary")
+        # Splash legs: --verify-rows is not passed, so the engine default applies; its log line says which mode ran
+        vr = set()
+        for l in ls:
+            try: vr |= set(re.findall(r"--verify-rows (\w+)", open("%s/leg%d-%s.log" % (d, l["idx"], l["arm"])).read()[:20000]))
+            except (OSError, KeyError): pass
+        if arm in ("K", "K2", "S", "S2"): c["verify_rows_in_engine_log"] = sorted(vr)
         out["arms"][arm] = c
     json.dump(out, open(d + "/summary.json", "w"), indent=1)
     names = {"K": "Kapitsa --engine splash @7e478053", "K2": "Kapitsa --engine splash @ff6151c8", "S": "plain Splash 1.4.0", "S2": "plain Splash 1.4.0 (paired with K2)", "N": "Kapitsa native (MTP)", "L": "llama.cpp"}
     f = lambda c, k, p=1: "not measured" if not c.get(k) else "%.*f (n %d)" % (p, c[k]["median"], c[k]["n"])
-    rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prefill %s tok/s" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | system wired GiB (max) | swap growth GB (max) | memory pressure (max) |",
-            "|" + "---|" * (7 + 2 * len(SIZES))]
+    rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prefill %s tok/s" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | peak footprint GiB (serving tree) | system used GiB at that peak | system wired GiB (max) | swap growth GB (max) | memory pressure (max) | peak ps RSS MiB (not a memory comparison) |",
+            "|" + "---|" * (10 + 2 * len(SIZES))]
     for arm, c in out["arms"].items():
-        rows.append("| %s | %s | %s | %s | %s | %s | %s | %s |" % (names[arm], f(c, "decode_T0_tps"), f(c, "decode_T06_tps"),
+        rows.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (names[arm], f(c, "decode_T0_tps"), f(c, "decode_T06_tps"),
                     " | ".join("%s | %s" % (f(c, "ttft_%s_s" % s, 2), f(c, "prefill_%s_tps" % s, 0)) for s in SIZES),
-                    f(c, "turn2_ttft_s", 2), "%.1f" % c["memory"]["wired_gib_max"], "%.2f" % c["memory"]["swap_gb_growth_max"], c["memory"]["pressure_level_max"]))
+                    f(c, "turn2_ttft_s", 2), ("not measured" if not c["memory"]["peak_footprint_mib_max"] else "%.1f (%d legs)" % (c["memory"]["peak_footprint_mib_max"] / 1024, c["memory"]["footprint_legs"])),
+                    ("not measured" if not c["memory"]["peak_footprint_mib_max"] else "%.1f" % c["memory"]["system_used_gib_at_footprint_peak_max"]),
+                    "%.1f" % c["memory"]["wired_gib_max"], "%.2f" % c["memory"]["swap_gb_growth_max"], c["memory"]["pressure_level_max"], "%.0f" % c["memory"]["peak_rss_mib_max"]))
     open(d + "/table.md", "w").write("\n".join(rows) + "\n")
     print("\n".join(rows))
 
