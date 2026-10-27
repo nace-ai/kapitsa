@@ -6,7 +6,7 @@ folder tests/fixtures/splash_model, so it needs no model (the CI PR, #743, adds 
 usage: test_splash_engine.py build/kapitsa"""
 import glob, json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
-CLI = sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa"
+CLI = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa")  # absolute: some cases run it from another folder
 HERE = os.path.dirname(os.path.abspath(__file__))
 FAKE = os.path.join(HERE, "fake_splash.py")
 dirs = [os.environ["SPLASH_MODEL_DIR"]] if os.environ.get("SPLASH_MODEL_DIR") else sorted(
@@ -69,7 +69,7 @@ def post(base, body, timeout=30):
         return e.code, json.loads(e.read() or b"{}")
 
 class Server:
-    def __init__(self, *fake_args, context=None, extra_serve=(), model=None):
+    def __init__(self, *fake_args, context=None, extra_serve=(), model=None, cwd=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.log = self.tmp.name + "/prompts.jsonl"
         self.port = free_port()
@@ -78,7 +78,7 @@ class Server:
                "--port", str(self.port), *extra_serve, "--splash-arg", "--prompt-log", "--splash-arg", self.log]
         for a in fake_args: cmd += ["--splash-arg", a]
         env = dict(os.environ, HOME=self.tmp.name)
-        self.proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        self.proc = subprocess.Popen(cmd, env=env, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         for _ in range(100):
             if self.proc.poll() is not None: raise SystemExit("server exited: " + self.proc.stderr.read().decode()[-2000:])
             try:
@@ -253,6 +253,16 @@ try:
     check(cd3.split("/")[-1] == cd1.split("/")[-1] and "some-link" not in cd3, "symlinked model folder: the real folder's cache dir: %r vs %r" % (cd3, cd1))
 finally:
     s.close()
+# `.` and `..` name a folder too: run from inside the model folder (or its child), the cache dir still carries the folder's real name
+for rel, cwd in (".", os.path.realpath(MODEL)), ("..", os.path.join(os.path.realpath(MODEL), "tokenizer")):
+    s = Server("--reply", ",".join(map(str, REPLY)), extra_serve=["--splash-persistent-cache"], model=rel, cwd=cwd)
+    try:
+        post(s.base, {"messages": MSG, "max_tokens": 5, "temperature": 0})
+        a = s.prompts()[0]["args"]
+        cd4 = a[a.index("--cache-dir") + 1] if "--cache-dir" in a else ""
+        check(cd4.split("/")[-1] == cd1.split("/")[-1] and not cd4.endswith(("/.", "/..")), "--splash-model %s: the real folder's cache dir: %r vs %r" % (rel, cd4, cd1))
+    finally:
+        s.close()
 # a client's cache_salt: honoured (same salt same key, another salt another key), whatever the flag; a bad one is a 400
 s = Server("--reply", ",".join(map(str, REPLY)), extra_serve=["--splash-conversation-salt"])
 try:
