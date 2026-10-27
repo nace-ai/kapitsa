@@ -193,9 +193,9 @@ void write_last(const std::string& file, const Last& last) {
 }
 
 Check check(const std::string& home, const std::string& splash_home, const std::string& path_env, const std::string& binary,
-            const std::string& model, const Last& last) {
+            const std::string& model, const Last& last, const std::vector<std::string>& system_roots) {
   Check out;
-  Found b = binary.empty() ? find_binary(home, splash_home, path_env, last.binary) : Found{binary, ""};
+  Found b = binary.empty() ? find_binary(home, splash_home, path_env, system_roots, last.binary) : Found{binary, ""};
   if (!binary.empty() && !is_file(binary)) b = {"", "--splash-binary " + binary + ": no such file"};
   else if (!binary.empty() && !is_executable_file(binary)) b = {"", "--splash-binary " + binary + ": not an executable file"};
   out.text = b.ok() ? "Splash engine: " + b.path + "\n" : "Splash engine: NOT FOUND\n" + b.error + "\n";

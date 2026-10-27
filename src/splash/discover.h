@@ -51,6 +51,7 @@ struct Check {
   bool ok = false;
 };
 Check check(const std::string& home, const std::string& splash_home, const std::string& path_env, const std::string& binary,
-            const std::string& model, const Last& last);
+            const std::string& model, const Last& last,
+            const std::vector<std::string>& system_roots = {"/Applications/Splash"});
 
 }  // namespace ni::splash

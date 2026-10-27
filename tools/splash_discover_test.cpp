@@ -200,24 +200,24 @@ int main() {
   check(m.ok() && has(m.path, "/ffffff6666"), "last: a name beats it", m.error);
 
   // --check: what is found, what is missing, the fix; nothing is started
-  Check c = check(home, "", "", "", "", {});
+  Check c = check(home, "", "", "", "", {}, none);
   check(!c.ok && has(c.text, "Splash engine: NOT FOUND") && has(c.text, "SPLASH_HOME") && has(c.text, "Model to run: ") &&
             has(c.text, "Splash model: ") && !has(c.text, "NOT DECIDED"),
         "check: nothing found, several models: it still names the pick", c.text);
-  c = check(home, "", "", "", "no-such-model", {});
+  c = check(home, "", "", "", "no-such-model", {}, none);
   check(!c.ok && has(c.text, "NOT DECIDED"), "check: a name that matches nothing", c.text);
-  c = check(home, (tmp / "root").string(), "", "", "other-gguf", {});
+  c = check(home, (tmp / "root").string(), "", "", "other-gguf", {}, none);
   check(c.ok && has(c.text, "Splash engine: " + (tmp / "root/engine/splash").string()) && has(c.text, "Model to run: ") && has(c.text, "/ffffff6666") &&
             has(c.text, "Ready: run the same command without --check"),
         "check: ready", c.text);
-  c = check(home, "", "", (tmp / "nope").string(), "", {});
+  c = check(home, "", "", (tmp / "nope").string(), "", {}, none);
   check(!c.ok && has(c.text, "--splash-binary") && has(c.text, "no such file"), "check: bad --splash-binary", c.text);
   touch(tmp / "plain/splash", "x");  // a file, not executable
-  c = check(home, "", "", (tmp / "plain/splash").string(), "", {});
+  c = check(home, "", "", (tmp / "plain/splash").string(), "", {}, none);
   check(!c.ok && has(c.text, "not an executable file") && !has(c.text, "Ready"), "check: --splash-binary that is not executable", c.text);
-  c = check(home, (tmp / "root").string(), "", "", (tmp / "no/such/folder").string(), {});  // a path that is no folder is a name: no match, not Ready
+  c = check(home, (tmp / "root").string(), "", "", (tmp / "no/such/folder").string(), {}, none);  // a path that is no folder is a name: no match, not Ready
   check(!c.ok && has(c.text, "NOT DECIDED") && !has(c.text, "Ready"), "check: --splash-model path that is not a folder", c.text);
-  c = check(home, "", "", lbin, "", {lbin, res.string() + "/ffffff6666"});
+  c = check(home, "", "", lbin, "", {lbin, res.string() + "/ffffff6666"}, none);
   check(c.ok && has(c.text, "/ffffff6666"), "check: the last run's model", c.text);
 
   fs::remove_all(tmp);
