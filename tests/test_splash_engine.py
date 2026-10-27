@@ -69,12 +69,12 @@ def post(base, body, timeout=30):
         return e.code, json.loads(e.read() or b"{}")
 
 class Server:
-    def __init__(self, *fake_args, context=None, extra_serve=()):
+    def __init__(self, *fake_args, context=None, extra_serve=(), model=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.log = self.tmp.name + "/prompts.jsonl"
         self.port = free_port()
         self.base = "http://127.0.0.1:%d" % self.port
-        cmd = [CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", MODEL, "--private",
+        cmd = [CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", model or MODEL, "--private",
                "--port", str(self.port), *extra_serve, "--splash-arg", "--prompt-log", "--splash-arg", self.log]
         for a in fake_args: cmd += ["--splash-arg", a]
         env = dict(os.environ, HOME=self.tmp.name)
@@ -229,6 +229,14 @@ try:
     check(p[2]["salt"] != p[0]["salt"], "another conversation has another salt")
     a = p[0]["args"]
     check("--persistent-cache" in a and a[a.index("--cache-dir") + 1].endswith("/Library/Caches/Kapitsa/splash-prefix-cache/" + os.path.basename(MODEL.rstrip("/"))), "persistent cache in a per-model dir: %r" % a)
+finally:
+    s.close()
+# a trailing slash on --splash-model must not empty the per-model cache folder (every model would share one)
+s = Server("--reply", ",".join(map(str, REPLY)), extra_serve=["--splash-persistent-cache"], model=MODEL.rstrip("/") + "/")
+try:
+    post(s.base, {"messages": MSG, "max_tokens": 5, "temperature": 0})
+    a = s.prompts()[0]["args"]
+    check("--cache-dir" in a and a[a.index("--cache-dir") + 1].endswith("/splash-prefix-cache/" + os.path.basename(MODEL.rstrip("/"))), "trailing slash: cache dir keeps the model's name: %r" % a)
 finally:
     s.close()
 

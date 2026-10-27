@@ -117,7 +117,9 @@ one server at a time under the GPU lock.
   without a `cache_salt`.
 - The child gets `--idle-release off` unless given, and, when free and reclaimable memory is between 22 and 38 GiB and no
   `--expert-memory` is given, `--expert-memory` of free GiB minus 14 (at least 8). The formula rests on one measured pass
-  (16 GiB at 30.4 GiB free) and Splash's 2 GiB protected for macOS; it is not validated across memory states.
+  (16 GiB at 30.4 GiB free) and Splash's 2 GiB protected for macOS; it is not validated across memory states. In that window the forced `--expert-memory` turns Splash's own "not enough free
+  memory to start" refusal into an engine that starts and streams experts from the SSD, so it is slower than a full cache; pass
+  `--splash-arg --expert-memory <size>` to choose, or free memory first.
 
 Splash refuses to start when the Mac has too little free and reclaimable memory. Its `not enough free memory to start ...`
 is the child's own line on stderr; `serve` then exits 1 with `the Splash engine did not start: engine_exited: the splash engine

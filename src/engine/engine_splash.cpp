@@ -133,8 +133,10 @@ void Engine::init_splash() {
   {
     std::string note;
     const char* home = getenv("HOME");
-    const std::string folder = dir.substr(dir.find_last_of('/') == std::string::npos ? 0 : dir.find_last_of('/') + 1);
-    const std::string cache_dir = home && *home ? std::string(home) + "/Library/Caches/Kapitsa/splash-prefix-cache/" + folder : "";
+    std::string trimmed = dir;  // a trailing slash must not make the folder name empty: every model would share one cache
+    while (trimmed.size() > 1 && trimmed.back() == '/') trimmed.pop_back();
+    const std::string folder = trimmed.substr(trimmed.find_last_of('/') == std::string::npos ? 0 : trimmed.find_last_of('/') + 1);
+    const std::string cache_dir = home && *home && !folder.empty() ? std::string(home) + "/Library/Caches/Kapitsa/splash-prefix-cache/" + folder : "";
     const auto extra = splash::default_engine_args(opts_.splash_args, q20::available_memory(), opts_.splash_persistent_cache,
                                                    cache_dir, &note);
     ro.argv.insert(ro.argv.end(), extra.begin(), extra.end());
