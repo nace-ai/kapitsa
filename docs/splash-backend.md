@@ -83,12 +83,13 @@ one server at a time under the GPU lock.
   (`7e478053` and `ff6151c8`) and plain Splash 1.4.0 are level within noise, n 6 to 10 per cell, with the raw legs and
   commands in that folder. Medians for `ff6151c8` against its paired plain Splash (K2 against S2), all at `--expert-memory 16 GiB --idle-release off`, `--verify-rows` not passed (engine default `auto`), M5 Pro 48 GB, macOS 26.5.2, 27 Oct 2026:
 
-  | | TTFT 1K, s | TTFT 4K, s | prefill 4K, tok/s | decode T=0, tok/s | turn-2 TTFT, s |
-  |---|---|---|---|---|---|
-  | K2 against S2 | 1.45 against 1.47 | 3.45 against 3.55 | 1181 against 1149 | 55.9 against 55.5 | 0.56 against 0.57 |
+  | | TTFT 1K, s | TTFT 4K, s | prefill 4K, tok/s |
+  |---|---|---|---|
+  | K2 against S2 | 1.45 against 1.47 | 3.45 against 3.55 | 1181 against 1149 |
 
-  Decode ranges 49 to 62 tok/s inside each cell, wider than any gap between the two. This shows neither a speed-up nor a
-  slowdown from the bridge. The numbers are the bench's, and #751 is where its caveats are (other sessions were using the Mac).
+  Decode (T=0 and T=0.6) and turn-2 TTFT for both Splash arms: see `bench/results/2026-10-28-m5-pro-flash-next-engines` (#751),
+  which is the record of these runs and of its caveats (other sessions were using the Mac). This shows neither a speed-up nor a
+  slowdown from the bridge.
   An earlier single run of this branch before the split (n=6, commit not recorded) is superseded by it and no longer quoted.
 - Default memory plan (no `--expert-memory`; 33.0 GiB free and reclaimable at start; n=1 per size, so no comparison):
   engine up in 8.9 s, 1K TTFT 1.41 s, prefill 732 tok/s, decode 74.9 tok/s; 4K TTFT 3.17 s, prefill 1286 tok/s, decode
