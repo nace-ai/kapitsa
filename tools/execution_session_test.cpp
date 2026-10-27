@@ -334,20 +334,23 @@ static void repeated_requests_and_startup_race() {
   }
 }
 
+// Name each sub-test on stderr as it starts, so a hang under the one alarm shows which one stalled.
+#define RUN(test) do { std::cerr << "execution_session_test: " #test "\n"; test; } while (false)
+
 int main() {
   alarm(30);
-  prestart();
-  never_started();
-  normal_completion();
-  accepted_gate(false);
-  accepted_gate(true);
-  post_cancel();
-  terminal_order();
-  drain_and_lifetime();
-  exceptions();
-  error_without_allocations();
-  failed_launch();
-  self_wait();
-  repeated_requests_and_startup_race();
+  RUN(prestart());
+  RUN(never_started());
+  RUN(normal_completion());
+  RUN(accepted_gate(false));
+  RUN(accepted_gate(true));
+  RUN(post_cancel());
+  RUN(terminal_order());
+  RUN(drain_and_lifetime());
+  RUN(exceptions());
+  RUN(error_without_allocations());
+  RUN(failed_launch());
+  RUN(self_wait());
+  RUN(repeated_requests_and_startup_race());
   std::cout << "execution_session_test: ok\n";
 }
