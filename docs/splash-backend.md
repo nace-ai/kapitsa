@@ -1,8 +1,9 @@
 # Splash as an engine backend
 
 Kapitsa can serve a model through a Splash engine child process (`splash serve-native`) instead of its own Metal
-runtime. Kapitsa keeps the HTTP server, the API translations, the chat template, the tokenizer and the output parser;
-Splash keeps the weights, the GPU and the decode loop. This page records the shape and what the first version does not do.
+runtime. Kapitsa keeps the HTTP server, the API translations and the output parser, and renders and tokenizes the chat
+(with the template and tokenizer files from Splash's model folder, see "The template"); Splash keeps the weights, the GPU
+and the decode loop. This page records the shape and what the first version does not do.
 
 ## Constraints
 
@@ -34,15 +35,16 @@ Splash keeps the weights, the GPU and the decode loop. This page records the sha
 - The child dying, closing its output, sending a frame that breaks the protocol, or an engine-level ERROR fails every
   held request with `engine_unhealthy` and leaves the Runtime dead. There is no relaunch: the owner starts a new one.
   A protocol failure kills the child, because its stream cannot be trusted afterwards.
-- Admission follows READY's `max_concurrent_requests`; a full pool throws `PendingLimitExceeded`. The id and both deadlines
+- Admission follows READY's `max_concurrent_requests`; a full pool throws `PendingLimitExceeded` (the server answers 503). The id and both deadlines
   are stamped at `submit`, as `runtime.py` does.
 - `shutdown()` closes the child's stdin (it drains and exits), then SIGTERM, then SIGKILL, each after `stop_grace_s`.
 
 ## What the first version refuses
 
-Structured-output grammar (needs MASK_REQUEST round trips), image inputs, loop counts, and any model Splash does not
-serve. Each is a 400 `invalid_request_error` before anything is queued. The protocol codec also leaves out score requests
-and token masks, and `chat_splash` has no `logit_bias`. Kapitsa's own model folders and Splash's resolved model are different artifacts (a safetensors
+Structured-output grammar (needs MASK_REQUEST round trips), image inputs, loop counts, and a prompt longer than the
+engine's context. Each is a 400 `invalid_request_error` before anything is queued, as is a sampling field outside Splash's
+range (the error names the field). A request that finds the engine at its `max_concurrent_requests` gets 503 with
+`Retry-After`. Kapitsa's own model folders and Splash's resolved model are different artifacts (a safetensors
 `flash-next-q20` against a GGUF Q2_0 target plus an incoai DFlash2 drafter), so the child is pointed at Splash's resolved
 model directory (`--splash-model`), never at Kapitsa's weights.
 
