@@ -5,6 +5,8 @@
 // or loads weights.
 #include "engine/engine.h"
 #include "engine/output_parser.h"
+#include "model/expert_store.h"
+#include "splash/plan.h"
 #include "splash/runtime.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -19,6 +21,7 @@
 #include <cmath>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <limits>
@@ -127,6 +130,16 @@ void Engine::init_splash() {
   splash::RuntimeOptions ro;
   ro.argv = {opts_.splash_binary, "serve-native", dir, opts_.context > 0 ? std::to_string(opts_.context) : "auto", "auto"};
   ro.argv.insert(ro.argv.end(), opts_.splash_args.begin(), opts_.splash_args.end());
+  {
+    std::string note;
+    const char* home = getenv("HOME");
+    const std::string folder = dir.substr(dir.find_last_of('/') == std::string::npos ? 0 : dir.find_last_of('/') + 1);
+    const std::string cache_dir = home && *home ? std::string(home) + "/Library/Caches/Kapitsa/splash-prefix-cache/" + folder : "";
+    const auto extra = splash::default_engine_args(opts_.splash_args, q20::available_memory(), opts_.splash_persistent_cache,
+                                                   cache_dir, &note);
+    ro.argv.insert(ro.argv.end(), extra.begin(), extra.end());
+    if (!note.empty()) logi("splash: engine arguments added: %s", note.c_str());
+  }
   ro.log = [](const std::string& s) { logi("splash: %s", s.c_str()); };
   splash_ = std::make_unique<splash::Runtime>(std::move(ro));
   splash_->start();  // READY: the child has loaded and calibrated the model
@@ -143,6 +156,9 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
                                const std::function<bool(const ChatResult&)>& on_accepted) {
   if (!splash_) throw std::logic_error("Engine::chat_splash: this engine is not in Splash mode");
   ++requests_;
+  // No reasoning is put back into assistant turns the client sent without it (the native path does, to extend the KV it
+  // kept): Splash's engine caches a request's prompt blocks, not its output, so a longer prompt only costs prefill. Measured
+  // on a 4K two-turn chat: turn 2 TTFT 0.38 s with it against 0.23 s without (plain Splash's prompt), docs/splash-backend.md.
   // what Splash's native protocol carries here is text with sampling: the rest is refused before anything is queued
   if (r.grammar) return refuse("structured output is not supported by the Splash engine");
   if (!vision::image_sources(r.messages).empty()) return refuse("image input is not supported by the Splash engine");
@@ -198,6 +214,23 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   q.sampling.repetition_penalty = r.repetition_penalty;
   q.sampling.min_p = r.min_p;
   if (r.ignore_eos) q.flags |= splash::kIgnoreEndOfSequence;
+  if (opts_.splash_conversation_salt) {
+    // the conversation is what comes first in it: the messages up to its first user message, which later turns repeat
+    // as they are. Two 64-bit FNV-1a hashes with different bases make the 128 bits.
+    uint64_t lo = 0xcbf29ce484222325ull, hi = 0x84222325cbf29ce4ull;
+    auto mix = [&](const std::string& s) {
+      for (unsigned char c : s) {
+        lo = (lo ^ c) * 0x100000001b3ull;
+        hi = (hi ^ (c + 0x9eu)) * 0x100000001b3ull;
+      }
+    };
+    for (const auto& m : r.messages) {
+      mix(m.dump());
+      if (m.value("role", "") == "user") break;
+    }
+    q.cache_salt_lo = lo;
+    q.cache_salt_hi = hi;
+  }
   q.seed = r.seed ? r.seed : uint64_t(std::random_device{}());
   if (boundary > 0 && boundary < n) q.generation_prompt_tokens = uint32_t(n - boundary);
   if (think && r.thinking_budget > 0 && r.thinking_budget < max_new && think_close_ >= 0) {

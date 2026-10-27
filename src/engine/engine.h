@@ -82,6 +82,8 @@ struct EngineOptions {
   // output) are refused as invalid, never run elsewhere.
   std::string splash_model, splash_binary;
   std::vector<std::string> splash_args;
+  bool splash_conversation_salt = false;  // a cache_salt per conversation: requests share cached prompts only within one
+  bool splash_persistent_cache = false;  // --persistent-cache on for the child (Splash's SSD cache across restarts)
 };
 
 // The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next,

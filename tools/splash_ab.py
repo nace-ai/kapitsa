@@ -47,8 +47,9 @@ def messages(nonce, chars, question):
 def running_model_processes():
     out = subprocess.run(["ps", "-axo", "pid,command"], capture_output=True, text=True).stdout
     return [l.strip() for l in out.splitlines()
-            if re.search(r"serve-native|splash.*server\.server|kapitsa serve|build/kapitsa", l) and "splash_ab" not in l
-            and "ps -axo" not in l]
+            if re.search(r"serve-native|splash.*server\.server|kapitsa (serve|run|bench)", l) and "splash_ab" not in l
+            and "ps -axo" not in l
+            and not re.match(r"\d+\s+(ba|z)?sh -c ", l.strip())]  # a shell running a loop of CLI calls is not a model
 
 
 def reclaimable_gib():
@@ -176,11 +177,24 @@ class Leg:
         return left
 
 
+TURN2 = False  # --turn2: per rep a ~4K first turn, then the same chat plus the reply (content only, as clients send it) and a question
+
+
+def turn2_pair(leg, rep):
+    first = messages("t2r%d" % rep, SIZES["4K"], "What does this repository do?")
+    a = leg.chat(first, 400)
+    second = first + [{"role": "assistant", "content": a["content"]}, {"role": "user", "content": "Name its build command."}]
+    return {"rep": rep, "turn1": a, "turn2": leg.chat(second, 64)}
+
+
 def run_leg(engine, idx, out, reps, smoke):
     leg = Leg(engine, "%s/leg%d-%s.log" % (out, idx, engine))
     res = {"engine": engine, "up_s": leg.up_s, "identity": [], "perf": []}
     try:
-        if smoke:
+        if TURN2:
+            leg.chat(messages("warm", 0, "Say hi."), 16)
+            res["turn2"] = [turn2_pair(leg, rep) for rep in range(reps)]
+        elif smoke:
             res["smoke"] = leg.chat([{"role": "user", "content": IDENTITY[0]}], IDENTITY_MAX)
         else:
             leg.chat(messages("warm", 0, "Say hi."), 16)
@@ -253,6 +267,7 @@ def main():
     ap.add_argument("--speed-only", action="store_true", help="skip the identity prompts")
     ap.add_argument("--wait-gib", type=float, default=0, help="read-only wait until free+reclaimable >= this, then run")
     ap.add_argument("--run-anyway", action="store_true", help="after the wait cap, run instead of exiting")
+    ap.add_argument("--turn2", action="store_true", help="measure a second turn on a ~4K chat instead of the identity and speed prompts")
     ap.add_argument("--tap", action="store_true", help="record prompt and output token ids through tools/splash_tap.py")
     ap.add_argument("--wait-only", action="store_true", help="only the wait (run it before taking the GPU lock)")
     ap.add_argument("--wait-cap-s", type=float, default=1200)
@@ -262,7 +277,7 @@ def main():
     ap.add_argument("--model-dir", default=os.environ.get("SPLASH_MODEL_DIR"),
                     help="Splash's resolved model folder (.../models/.resolved/<hash>); default $SPLASH_MODEL_DIR")
     a = ap.parse_args()
-    global ENGINE_ARGS, IDENTITY, TAP, SPLASH_ROOT, SPLASH_BIN, SPLASH_PY, MODEL_DIR
+    global ENGINE_ARGS, IDENTITY, TAP, TURN2, SPLASH_ROOT, SPLASH_BIN, SPLASH_PY, MODEL_DIR
     SPLASH_ROOT = os.path.abspath(os.path.expanduser(a.splash_root))
     SPLASH_BIN = os.path.abspath(os.path.expanduser(a.binary)) if a.binary else SPLASH_ROOT + "/engine/splash"
     SPLASH_PY = SPLASH_ROOT + "/python/bin/python3"
@@ -271,7 +286,7 @@ def main():
         for what, path, isdir in (("--binary", SPLASH_BIN, False), ("--splash-root's python", SPLASH_PY, False), ("--model-dir (or $SPLASH_MODEL_DIR)", MODEL_DIR, True)):
             if not (os.path.isdir(path) if isdir else os.access(path, os.X_OK)):
                 sys.exit("splash_ab: %s is not usable: %r" % (what, path))
-    TAP = a.tap
+    TAP, TURN2 = a.tap, a.turn2
     if a.default_memory: ENGINE_ARGS = DEFAULT_MEMORY_ARGS
     if a.speed_only: IDENTITY = []
     if a.wait_gib: wait_for_memory(a.wait_gib, a.wait_cap_s, a.run_anyway)
@@ -303,7 +318,12 @@ def main():
         if r["child_left"]: raise SystemExit("child not reaped: %s" % r["child_left"])
     if a.smoke:
         print(json.dumps(legs[0]["smoke"], indent=1)); return
-    s = summarize(legs)
+    if a.turn2:
+        s = {"turn2": {"%d-%s" % (i + 1, l["engine"]): [{k: {"ttft_s": round(p[k]["ttft_s"], 2), "usage": p[k]["usage"], "finish": p[k]["finish"]}
+                                                        for k in ("turn1", "turn2")} for p in l["turn2"]] for i, l in enumerate(legs)},
+             "peak_rss_mib": {"%d-%s" % (i + 1, l["engine"]): round(l["peak_rss_mib"]) for i, l in enumerate(legs)}}
+    else:
+        s = summarize(legs)
     s["free_reclaimable_gib_at_start"] = round(free_at_start, 1)
     json.dump(s, open(a.out + "/summary.json", "w"), indent=1)
     print(json.dumps(s, indent=1))

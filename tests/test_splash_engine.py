@@ -69,13 +69,13 @@ def post(base, body, timeout=30):
         return e.code, json.loads(e.read() or b"{}")
 
 class Server:
-    def __init__(self, *fake_args, context=None):
+    def __init__(self, *fake_args, context=None, extra_serve=()):
         self.tmp = tempfile.TemporaryDirectory()
         self.log = self.tmp.name + "/prompts.jsonl"
         self.port = free_port()
         self.base = "http://127.0.0.1:%d" % self.port
         cmd = [CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", MODEL, "--private",
-               "--port", str(self.port), "--splash-arg", "--prompt-log", "--splash-arg", self.log]
+               "--port", str(self.port), *extra_serve, "--splash-arg", "--prompt-log", "--splash-arg", self.log]
         for a in fake_args: cmd += ["--splash-arg", a]
         env = dict(os.environ, HOME=self.tmp.name)
         self.proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -192,6 +192,45 @@ check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failu
 r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "/nonexistent/qwen3.5-35b-a3b",
                     "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
 check(r.returncode != 0 and "is not a folder" in r.stderr + r.stdout, "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
+
+# turn 2 is what plain Splash sends: the client's own history, no reasoning put back (it only lengthens the prompt: Splash's
+# engine caches prompt blocks, not outputs)
+s = Server("--reply", ",".join(map(str, REPLY)))
+try:
+    u1 = [{"role": "user", "content": "hello " * 50}]
+    st, r = post(s.base, {"messages": u1, "max_tokens": 50, "temperature": 0})
+    m = r["choices"][0]["message"]
+    post(s.base, {"messages": u1 + [{"role": "assistant", "content": m["content"]}, {"role": "user", "content": "and again"}], "max_tokens": 50, "temperature": 0})
+    p = s.prompts()
+    check(tid("ok") not in p[1]["prompt"], "turn 2 carries no restored reasoning")
+finally:
+    s.close()
+
+# the cache salt: zero without --splash-conversation-salt; with it one per conversation, kept by its later turns
+s = Server("--reply", ",".join(map(str, REPLY)))
+try:
+    post(s.base, {"messages": MSG, "max_tokens": 5, "temperature": 0})
+    check(s.prompts()[0]["salt"] == [0, 0], "no salt by default: %r" % s.prompts()[0]["salt"])
+    a = s.prompts()[0]["args"]
+    check("--idle-release" in a and a[a.index("--idle-release") + 1] == "off", "idle release off is passed: %r" % a)
+    check("--persistent-cache" not in a, "persistent cache off by default: %r" % a)
+finally:
+    s.close()
+s = Server("--reply", ",".join(map(str, REPLY)), extra_serve=["--splash-conversation-salt", "--splash-persistent-cache"])
+try:
+    c1 = [{"role": "system", "content": "be brief"}, {"role": "user", "content": "first conversation"}]
+    c2 = [{"role": "system", "content": "be brief"}, {"role": "user", "content": "another conversation"}]
+    st, r = post(s.base, {"messages": c1, "max_tokens": 5, "temperature": 0})
+    m = r["choices"][0]["message"]
+    post(s.base, {"messages": c1 + [{"role": "assistant", "content": m["content"]}, {"role": "user", "content": "more"}], "max_tokens": 5, "temperature": 0})
+    post(s.base, {"messages": c2, "max_tokens": 5, "temperature": 0})
+    p = s.prompts()
+    check(p[0]["salt"] != [0, 0] and p[0]["salt"] == p[1]["salt"], "turn 2 keeps turn 1's salt: %r %r" % (p[0]["salt"], p[1]["salt"]))
+    check(p[2]["salt"] != p[0]["salt"], "another conversation has another salt")
+    a = p[0]["args"]
+    check("--persistent-cache" in a and a[a.index("--cache-dir") + 1].endswith("/Library/Caches/Kapitsa/splash-prefix-cache/" + os.path.basename(MODEL.rstrip("/"))), "persistent cache in a per-model dir: %r" % a)
+finally:
+    s.close()
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)

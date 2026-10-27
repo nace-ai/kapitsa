@@ -99,6 +99,26 @@ one server at a time under the GPU lock.
   engine up in 8.9 s, 1K TTFT 1.41 s (732 tok/s as prompt tokens / TTFT), decode 74.9 tok/s; 4K TTFT 3.17 s (1286 tok/s the same way), decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.
 
+- Second turn on a ~4K chat (`tools/splash_ab.py --turn2`, 3 reps per side, 16 GiB not set: Splash's plan, 28.7 GiB free at
+  start, 28 Oct 2026 local time). Turn 1 is 4072 prompt tokens; turn 2 is the same chat plus the reply (content only, as clients send it)
+  and a question. Plain Splash turn-2 TTFT 0.26, 0.25, 0.19 s with 4064 cached tokens. Kapitsa with the reasoning put back
+  into the history (as the native path does): 0.38, 0.42, 0.32 s, same 4064 cached tokens, prompt 4183 to 4257 tokens against
+  4122 to 4131. Splash's engine caches prompt blocks, not outputs, so the longer prompt only costs prefill. `chat_splash`
+  therefore sends the client's history as it is, as plain Splash does. After that change (3 reps, 30.3 GiB free at start,
+  one run): turn-2 TTFT 0.26, 0.25, 0.20 s, prompts 4124, 4131, 4122 tokens, 4064 cached: plain Splash's numbers, within
+  noise. Turn 1 is 3.49, 3.23, 3.26 s against plain Splash's 3.49, 3.23, 3.22 s.
+
+## Options
+
+- `--splash-persistent-cache`: passes `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<model folder>`
+  (one directory per model folder) unless `--splash-arg --cache-dir` is given. It writes to the user's disk; off by default.
+- `--splash-conversation-salt`: a cache salt per conversation (hash of the messages up to the first user message), so
+  conversations stop sharing cached prompts such as a common system prompt. Off by default, which is Splash's behaviour
+  without a `cache_salt`.
+- The child gets `--idle-release off` unless given, and, when free and reclaimable memory is between 22 and 38 GiB and no
+  `--expert-memory` is given, `--expert-memory` of free GiB minus 14 (at least 8). The formula rests on one measured pass
+  (16 GiB at 30.4 GiB free) and Splash's 2 GiB protected for macOS; it is not validated across memory states.
+
 Splash refuses to start when the Mac has too little free and reclaimable memory. Its `not enough free memory to start ...`
 is the child's own line on stderr; `serve` then exits 1 with `the Splash engine did not start: engine_exited: the splash engine
 closed its output`. Plain Splash stops the same way. The default-plan run above started with 33.0 GiB free and reclaimable, so

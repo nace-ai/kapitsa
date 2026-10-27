@@ -351,7 +351,12 @@ static void print_serve_help() {
          "  --splash-binary PATH   the Splash engine binary (<Splash folder>/engine/splash; else $SPLASH_HOME, `splash` on PATH, ~/Applications/Splash)\n"
          "  --splash-model DIR     Splash's resolved model folder, or the first 6+ characters of its name (its tokenizer and chat template\n"
          "                         are used here); the only one under ~/Library/Application Support/Splash when not given\n"
-         "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0)\n"
+         "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0). Unless given,\n"
+         "                         --idle-release off is added, and --expert-memory sized from the memory free now when that is under ~38 GiB\n"
+         "  --splash-persistent-cache  keep Splash's SSD prefix cache across restarts (--persistent-cache on, in ~/Library/Caches/Kapitsa/\n"
+         "                         splash-prefix-cache/<model folder>; writes to your disk; default off)\n"
+         "  --splash-conversation-salt  a cache salt per conversation (its first user message): conversations no longer share cached\n"
+         "                         prompts, such as a common system prompt (default off: one shared cache, as Splash without cache_salt)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
          "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
          "                         Mac's memory is tight (the most that keeps the draft model). --ctx N works too\n"
@@ -819,6 +824,8 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--splash-binary") opt.splash_binary = expand_home(next());
     else if (a == "--splash-model") opt.splash_model = expand_home(next());
     else if (a == "--splash-arg") opt.splash_args.push_back(next());
+    else if (a == "--splash-persistent-cache") opt.splash_persistent_cache = true;
+    else if (a == "--splash-conversation-salt") opt.splash_conversation_salt = true;
     else if (a == "--host") host = next();
     else if (a == "--port") port = to_int(a, next(), help);
     else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
@@ -896,8 +903,8 @@ static int serve(int argc, char** argv, int first) {
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";
-  } else if (!opt.splash_binary.empty() || !opt.splash_model.empty() || !opt.splash_args.empty()) {
-    usage_error("--splash-binary, --splash-model and --splash-arg need --engine splash", help);
+  } else if (!opt.splash_binary.empty() || !opt.splash_model.empty() || !opt.splash_args.empty() || opt.splash_persistent_cache || opt.splash_conversation_salt) {
+    usage_error("--splash-binary, --splash-model, --splash-arg, --splash-persistent-cache and --splash-conversation-salt need --engine splash", help);
   }
   bool disk_asked = !opt.disk_cache.empty();  // --disk-cache or NI_DISK_CACHE given, not the default
   if (opt.disk_cache.empty()) {  // the SSD prefix cache: on by default for the server (NI_DISK_CACHE as the option)

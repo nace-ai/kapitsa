@@ -106,7 +106,7 @@ target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|splash_protocol_test|splash_runtime_test|splash_discover_test)\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -149,6 +149,12 @@ add_executable(splash_discover_test tools/splash_discover_test.cpp src/splash/di
 target_include_directories(splash_discover_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 add_test(NAME splash_discover_test COMMAND splash_discover_test)
 set_tests_properties(splash_discover_test PROPERTIES TIMEOUT 30)
+
+# What Kapitsa adds to `splash serve-native` (src/splash/plan.*): idle release, expert memory from free memory.
+add_executable(splash_plan_test tools/splash_plan_test.cpp src/splash/plan.cpp)
+target_include_directories(splash_plan_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
+add_test(NAME splash_plan_test COMMAND splash_plan_test)
+set_tests_properties(splash_plan_test PROPERTIES TIMEOUT 30)
 
 # Kapitsa's server and CLI: `kapitsa serve --model <name|dir> ...`, with the chat page (src/server/chat.html)
 # embedded, the coding-agent launchers (src/server/launch.cpp) and `kapitsa update` (src/server/update_cmd.cpp). The API
