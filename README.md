@@ -78,25 +78,21 @@ server to its own Mac. [Usage guide](docs/usage.md)</sub>
 the server: Splash keeps the weights, the GPU and the decode loop; Kapitsa keeps the HTTP server, the chat page,
 the OpenAI and Anthropic APIs and streaming, and renders the prompt with Splash's own tokenizer and chat template, so
 the model, the prompt and the tokens are Splash's. Splash's model folder is the model, and `--splash-model` picks one
-by its family or model name (`flash-next`, `27b`) when Splash has several resolved. One command:
+by the start of its folder name when Splash has several resolved. One command:
 
 ```bash
 kapitsa serve --engine splash
 ```
 
-`--check` prints the engine binary and model it would run, and what is missing, without starting anything.
-
-On an M5 Pro 48 GB, Qwen3.8-Flash-Next Q2_0 through this mode decodes at plain Splash's speed within noise (55.9
-against 55.5 tok/s), prefills 1.39 times faster than Kapitsa's own engine at 4K and 1.54 times at 16K, and holds the
-serving process tree at 25.0 GiB against that engine's 31.7 GiB, while Kapitsa's own engine answers the second turn in
-0.26 s against 0.56 s (`bench/results/2026-10-28-m5-pro-flash-next-engines`); the table and what it does and does not
-say are in [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine).
+On an M5 Pro 48 GB, in one run with the memory plans forced, Qwen3.8-Flash-Next Q2_0 decoded at 55.9 tok/s through this
+mode and 55.5 tok/s in plain Splash, and the second turn of a 4K chat took 0.56 s and 0.57 s to first token; Kapitsa's own
+engine took 0.26 s, and no engine leads every row (`bench/results/2026-10-28-m5-pro-flash-next-engines`, with the
+table and its caveats in [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine)).
 
 <sub>Text chat only: an image, structured output or a loop count is refused, never answered by the other engine.
-Splash's SSD cache stays off unless `--splash-persistent-cache` is given, and Kapitsa sizes Splash's expert cache for
-the memory this Mac has. Kapitsa links neither Splash's engine nor its library; Splash is Apache 2.0, and the Metal
-kernels adapted from it keep their file headers ([Third-party notices](THIRD_PARTY_NOTICES)). Flags, the memory plan
-and Flash-Next measured through Splash against plain Splash: [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine).</sub>
+Kapitsa links neither Splash's engine nor its library; Splash is Apache 2.0, and the Metal kernels adapted from it
+keep their file headers ([Third-party notices](THIRD_PARTY_NOTICES)). Flags, the failures that are not refusals and
+the measurements against plain Splash and Kapitsa's own engine: [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine).</sub>
 
 ## Models
 

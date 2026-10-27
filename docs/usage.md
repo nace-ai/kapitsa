@@ -439,107 +439,90 @@ and the few Metal kernels adapted from Splash keep their own file headers.
 
 ```bash
 kapitsa serve --engine splash                            # the engine and the model, found where Splash installs them
-kapitsa serve --engine splash --check                    # what it would run, and what is missing: nothing is started
-kapitsa serve --engine splash --splash-model flash-next  # one of several: a family or model name
+kapitsa serve --engine splash --splash-model 6527993     # one of several resolved models, by the start of its folder name
 ```
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--engine native\|splash` | `native` | `splash` runs text generation in a Splash child process; `native` is Kapitsa's own engine. |
-| `--splash-binary PATH` | found | The Splash binary that runs `serve-native`: `engine/splash` under `$SPLASH_HOME`, the install a `splash` on `PATH` resolves into, then `~/Applications/Splash`, `/Applications/Splash`, `~/Splash`, and finally the one the last run used, so a Splash installed anywhere needs this once. `$SPLASH_HOME` that holds no `engine/splash` is an error rather than a reason to look elsewhere. |
-| `--splash-model NAME` | found | The model to run: a folder, or a name. A name matches, in any case, a part of the model's family or `model` from its `model.json` (`flash-next`, `27b`, `Q2_0`) — the newest folder when Splash resolved that model more than once — or is one of Splash's folder names or its first 6 or more characters (a name may hold a `/`, as a source such as `org/Model:Q2_0` does); two different models matching is an error that lists them. A path that is not a folder is a usage error, not a name to look up or download. Without it the server runs the only model under `~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer, else the one the last run used, else the most recently resolved, and says which one it picked on stderr. The folder's own tokenizer and chat template are what this server renders with, so the prompt is the one Splash would build. |
-| `--check` | — | With `--engine splash`: prints the engine binary, the resolved models (family, folder name and source), the model that would run, and for whatever is missing the error and the flag that fixes it — it refuses what `serve` refuses, such as a `--splash-binary` that is no executable file or a `--splash-model` that is no folder — then `Ready: run the same command without --check`, or with several models and none named, an `e.g. --splash-model <family>` line. Exits 0 when both are found, 1 otherwise, starts nothing and writes nothing (the last-run record included). A usage error without `--engine splash`. |
-| `--splash-arg ARG` | none | One more argument for `splash serve-native`, repeatable (`--splash-arg --verify-rows --splash-arg 2`). |
-| `--splash-persistent-cache` | off | Splash's SSD prefix cache kept across restarts: `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<model folder>`, unless `--splash-arg` gives either. Off, the child starts with an empty cache and writes nothing. |
-| `--splash-conversation-salt` | off | A cache salt per conversation (a hash of its messages up to the first user message), so conversations stop sharing cached prompts such as a common system prompt; off is one shared cache, as Splash without `cache_salt`. It separates conversations, it is not a speed option. |
+| `--splash-binary PATH` | found | The Splash binary that runs `serve-native`. Not given, it is `engine/splash` under `$SPLASH_HOME` (that variable set to a folder without it is an error, not a reason to look elsewhere), else the install a `splash` on `PATH` resolves into, then `~/Applications/Splash`, `/Applications/Splash` and `~/Splash`. |
+| `--splash-model DIR` | found | Splash's resolved model folder, or the first 6 or more characters of its name. Not given, it is the only folder under `~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer; with several, the error lists them. The folder's own tokenizer and chat template are what this server renders with, so the prompt is the one Splash would build. A name is not looked up or downloaded. |
+| `--splash-arg ARG` | none | One more argument for `splash serve-native`, repeatable (`--splash-arg --verify-rows --splash-arg 2`). Kapitsa adds none of its own: memory, idle release and the prefix cache are Splash's defaults unless you set them here. |
 
-All of them need `--engine splash` and are an error without it. The binary and the model the last run used are kept in
-`~/.cache/kapitsa/splash.json` (`KAPITSA_HOME` moves it), so the next run needs neither flag. Splash's model folder is
-the model: `--model`, the catalog, a download, this Mac's memory plan and routing to another Mac do not apply in this
-mode, and `--model`, `--split` and `--allow-switch` are usage errors here rather than ones that are ignored.
+All three Splash options need `--engine splash` and are an error without it. Splash's model folder is the model:
+`--model`, `--split` and `--allow-switch` are usage errors in this mode, and this Mac's memory plan, the model catalog,
+downloads and routing to another Mac do not apply.
 
-Splash's own default frees the weights after ten idle minutes and the next request waits about 7 s for them to come
-back, so the child is given `--idle-release off` unless `--splash-arg` says otherwise. Splash takes `off` or a number of
-seconds, not `on`: `--splash-arg --idle-release 600` still frees after ten minutes, while `on` is refused with
-`--idle-release requires off or a positive number of seconds`.
-
-Kapitsa also sizes Splash's expert cache when this Mac is short of memory: under about 38 GiB free and reclaimable the
-child gets
-`--expert-memory` of what is free less 14 GiB of headroom, in whole GiB and at least 8 (a 30.4 GiB-free Mac ran a
-16 GiB cache that way). Under 22 GiB, or when `--splash-arg` sets `--expert-memory` itself, the plan is left to
-Splash, whose own plan needs about 35.8 GiB free and reclaimable. When the Mac is short of that — or under memory
-pressure with less reclaimable than the plan asks — Splash exits during its warmup and prints `not enough free
-memory to start` first, then `serve` exits 1 with `the Splash engine did not start: engine_exited: the splash
-engine closed its output`; Splash's own reason is the line above Kapitsa's, and on this Mac it depends on what else
-is running.
-
-What the child was given is one log line — `[kapitsa] splash: engine arguments added: --idle-release off;
---expert-memory 16G (30 GiB free+reclaimable)` — and its ready line reports the pid, context, concurrent requests and
-where the tokenizer came from.
+If Splash exits during its warmup, for example because this Mac has too little free memory, `serve` exits 1 with `the
+Splash engine did not start: engine_exited: the splash engine closed its output`; Splash's own reason is the line
+above Kapitsa's.
 
 Text chat only: Splash's native protocol carries text and sampling, so a request with an image, structured output (a
 `response_format` grammar) or a loop count is refused with the error type `invalid_request_error` and the engine's
-reason as the message; a prompt longer than the context is the same 400, with `context_length_exceeded` and the context
-it holds, that Kapitsa's own engine returns. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the
-server's life: one `serve` is one engine, not one per request. Two failures are not refusals: a request that arrives
-while the engine is at its concurrent-request limit is a 503 with `Retry-After` and `the Splash engine is at its
-concurrent-request limit`, and one whose engine has died fails with `the Splash engine is not running`.
+reason as the message. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the server's life: one
+`serve` is one engine, not one per request. Two failures are not refusals: a request that arrives while the engine is
+at its concurrent-request limit is a 503 with `Retry-After` and `the Splash engine is at its concurrent-request
+limit`, and one whose engine has died fails with `the Splash engine is not running`.
 
-A follow-up turn sends the client's history as it is: the reasoning an earlier turn produced is not put back into it as
-Kapitsa's own engine does, so a turn's prompt is still the one plain Splash would build, and a follow-up turn's TTFT is
-Splash's own prefix cache doing the work — the cache plain Splash has too, not one Kapitsa adds.
+Splash's sampler is its own frontend's: a request that names no sampling gets Splash's defaults — temperature 1.0,
+top_p 0.95, top_k 20 — rather than the per-model ones Kapitsa's own engine applies. Sampling fields Kapitsa's own
+engine does not use (`presence_penalty`, `frequency_penalty`, `repetition_penalty`, `min_p`, `ignore_eos`) are passed
+to it, and a value outside Splash's range (temperature in [0, 2], top_p in (0, 1]) is a 400 naming the field rather
+than a clamp. A thinking budget in the request is honoured, as Kapitsa's own engine honours it.
 
-Splash's sampler is its own frontend's too: a request that names no sampling gets Splash's defaults — temperature 1.0,
-top_p 0.95, top_k 20 — rather than the per-model ones Kapitsa's own engine would apply, so the same request answers
-alike in plain Splash and here. Sampling fields Kapitsa's own engine does not use — OpenAI's `presence_penalty` and
-`frequency_penalty`, and `repetition_penalty`, `min_p` and `ignore_eos` — are passed to it, and a value outside
-Splash's range (temperature in [0, 2], top_p in (0, 1], the two penalties in [-2, 2], a positive
-`repetition_penalty`, min_p in [0, 1]) is a 400 naming the field rather than a clamp. A thinking budget in the request
-is honoured, as Kapitsa's own engine honours it.
+#### Measured on an M5 Pro
 
-The same model, Qwen3.8-Flash-Next Q2_0, four ways on one M5 Pro 48 GB: Splash's engine behind this server, plain
-Splash 1.4.0, Kapitsa's own engine with MTP, and llama.cpp; one engine at a time under the GPU lock, arms interleaved,
-decode at temperature 0 with seed 1:
+The same model, Qwen3.8-Flash-Next Q2_0, four ways on one M5 Pro 48 GB: Kapitsa's server in front of Splash's engine,
+plain Splash 1.4.0, Kapitsa's own engine with MTP, and llama.cpp; one engine at a time under the GPU lock, arms
+interleaved, decode at temperature 0 with seed 1. No arm leads every row, and none is called best here.
 
 | Metric | Prompt | Kapitsa on Splash | plain Splash 1.4.0 | Kapitsa native, MTP | llama.cpp |
 | --- | --- | ---: | ---: | ---: | ---: |
-| TTFT | ~1K tokens | 1.45 s | 1.47 s | 1.41 s | 28.12 s |
-| TTFT | ~4K tokens | 3.45 s | 3.55 s | 4.81 s | 110.74 s |
-| TTFT | ~16K tokens | 16.54 s | 17.32 s | 25.48 s | 634.24 s |
-| Prefill | ~1K tokens | 715 tok/s | 706 tok/s | 733 tok/s | 37 tok/s |
-| Prefill | ~4K tokens | 1181 tok/s | 1149 tok/s | 847 tok/s | 37 tok/s |
-| Prefill | ~16K tokens | 1166 tok/s | 1114 tok/s | 757 tok/s | 30 tok/s |
-| Decode | T=0, ~1K prompt | 55.9 tok/s | 55.5 tok/s | 53.7 tok/s | 9.0 tok/s |
-| Turn-2 TTFT | ~4K chat | 0.56 s | 0.57 s | 0.26 s | 3.34 s |
-| Peak footprint | serving process tree | 25.0 GiB | 25.4 GiB | 31.7 GiB | not measured |
+| TTFT | 1,036 tokens | 1.45 s | 1.47 s | 1.41 s | 28.12 s |
+| TTFT | 4,075 tokens | 3.45 s | 3.55 s | 4.81 s | 110.74 s |
+| TTFT | 19,287 tokens | 16.54 s | 17.32 s | 25.48 s | 634.24 s |
+| Prompt tokens / TTFT | 1,036 tokens | 715 tok/s | 706 tok/s | 733 tok/s | 37 tok/s |
+| Prompt tokens / TTFT | 4,075 tokens | 1181 tok/s | 1149 tok/s | 847 tok/s | 37 tok/s |
+| Prompt tokens / TTFT | 19,287 tokens | 1166 tok/s | 1114 tok/s | 757 tok/s | 30 tok/s |
+| Decode, T=0 | 256 tokens from a short prompt | 55.9 tok/s | 55.5 tok/s | 53.7 tok/s | 9.0 tok/s |
+| Turn-2 TTFT | 4K chat, second turn | 0.56 s | 0.57 s | 0.26 s | 3.34 s |
+| System memory at peak | wired GiB / swap growth / max pressure | 31.6 / 0.00 GB / 1 | 31.6 / 0.00 GB / 1 | 36.5 / 4.47 GB / 4 | 8.6 / 0.00 GB / 1 |
 
-<sub>Runs: `Mac17,8` (M5 Pro, 48 GB), macOS 26.5.2, 2026-10-27; Kapitsa at `ff6151c8` (#743 head) on Splash and `e840651c` native, Splash 1.4.0, llama.cpp c7474afc. The table is recorded in `bench/results/2026-10-28-m5-pro-flash-next-engines`. n is the number of requests per cell: Kapitsa on Splash 10, plain Splash 1.4.0 10, Kapitsa native, MTP 12/9, llama.cpp 2. Every arm ran a forced memory plan, not a default: Splash at `--expert-memory 16G --idle-release off`, native at `NI_EXPERT_STORE=24`, other sessions sharing the Mac. Peak footprint is the `phys_footprint` of the serving process tree (Kapitsa and the Splash child, or Kapitsa alone for the native arm); not measured where no leg sampled it.</sub>
+<sub>Runs: `Mac17,8` (M5 Pro, 48 GB), macOS 26.5.2, 2026-10-27, in
+`bench/results/2026-10-28-m5-pro-flash-next-engines` (PR #751, not merged yet) (the
+table is `legs/summary.json` and `legs/table.md` there). n is the number of requests per cell: Kapitsa on Splash 10, plain
+Splash 10, Kapitsa native 12 (9 for the 19,287-token prompt and turn 2, where three legs were stopped by the memory
+guard), llama.cpp 2. Prompt sizes are the tokens the Splash tokenizer counted (the other arms differ by one).
+**Kapitsa on Splash is `ff6151c8`, the head of open PR #743, not the code on main**; plain Splash is 1.4.0, Kapitsa
+native is `e840651c`, llama.cpp is `c7474afc`. Every arm ran a forced memory plan, not a default: both Splash arms with
+`--splash-arg --expert-memory 17179869184 --splash-arg --idle-release off`, native with `NI_EXPERT_STORE=24`, and
+other sessions shared the Mac. "Prompt tokens / TTFT" is uncached prompt tokens over time to first token, so it
+includes the fixed per-request cost and is not pure prefill throughput. System memory is system-wide (wired
+memory, swap growth, the highest `kern.memorystatus_vm_pressure_level`: 1 normal, 4 critical), the maximum over every
+leg of the arm.</sub>
 
-Read across it, and nothing in it says one engine is fastest:
+Read across it:
 
-- **This server in front of Splash, and plain Splash, are the same speed within noise.** Decode spans 49 to 62 tok/s
-  inside a cell, wider than any gap between the two arms; prefill and turn-2 TTFT agree within 5% at 1K and 4K. The
-  plain-Splash set repeated later in the same run (`S2`) came out 0.7% to 1.1% slower at 1K and 4K and 6% to 7% slower at
-  16K and on the second turn, so the 16K column is the machine, not the front end. Neither a speed-up nor a slowdown for
-  the mode is claimed here.
-- **Against Kapitsa's own engine it is a different trade.** Through Splash's engine the same model prefills 1.39 times
-  faster at 4K and 1.54 times at 16K, level at 1K; decode is the same (53.7 against 55.9 tok/s, inside the noise); the second turn is
-  native's — 0.26 s against 0.56 s, native hitting 4,435 of 4,476 cached prompt tokens. What the mode buys is memory:
-  25.0 GiB of process-tree footprint against native's 31.7 GiB, native at memory pressure level 4 with up to 4.5 GB of
-  swap growth in three legs (each stopped by the guard late in the leg, hence its n of 9 at 16K and turn 2), the
-  Splash arms at level 1 with no swap growth in any leg.
-- **llama.cpp is in the table only because it ran.** The Q2_0 GGUF is 66 GB against 48 GB of memory, so it streamed from
-  the SSD at 9 tok/s, about four times slower than the same build measured on the same file two days earlier, at n=2
-  after a third leg was dropped. That is not a fair number for llama.cpp; it is printed so that its absence is not read
-  as a claim.
+- **This server in front of Splash, and plain Splash, are close.** Decode medians are 55.9 and 55.5 tok/s, with single
+  requests spread from 49 to 62 tok/s across the two arms. The prompt tokens / TTFT figure for the server is
+  +1.3%, +2.8% and +4.7% against plain Splash at 1K, 4K and 19K, and turn-2 TTFT is 0.56 s against 0.57 s. These are
+  medians of 10 requests from a few legs of one run; this is not a measured speed-up.
+- **Against Kapitsa's own engine it is a different trade.** On this prompt-tokens-over-TTFT figure, Splash's engine is
+  1.39 times native at 4K and 1.54 times at 19K, and level at 1K; decode medians are 53.7 tok/s native and 55.9 here, inside the
+  spread; the second turn is native's, 0.26 s against 0.56 s (native cached 4435 of 4476 prompt tokens, the Splash arms 4320 of
+  about 4426). Native also reached memory pressure level 4 with up to 4.5 GB of swap growth in three legs with a 24 GB
+  expert store, while both Splash arms stayed at level 1 with no swap growth.
+- **llama.cpp is in the table only because it ran.** Its 66 GB Q2_0 GGUF is memory-mapped on a 48 GB Mac, and both
+  of its two legs started with swap already in use. It ran about four times slower than the same file measured two
+  days earlier; the cause was not isolated. That is not a fair number for llama.cpp, and it is printed so that its
+  absence is not read as a claim.
 
-The prompts, the prompt token ids and the sampling are Splash's on the Splash arms, as above; output text was not
-compared for equality across the four engines, and each Splash arm ran the engine's default `--verify-rows auto`, which
-on this MoE target can let greedy and seeded outputs differ between runs.
+Output text was not compared across the four engines, and no Splash arm passed `--verify-rows`, so the engine default
+`auto` applied, under which greedy and seeded outputs on this MoE target can differ between runs.
 
 Kapitsa's own engine against plain Splash, each side with its default drafter and sampling, is measured per Mac in
-[benchmarks](benchmarks.md#m5-pro); this table is about the mode itself, at the memory plans named in its caption
-rather than the defaults.
+[benchmarks](benchmarks.md#m5-pro); this table is about the mode itself, at the memory plans named above rather than
+the defaults.
 
 ## APIs
 
