@@ -85,19 +85,6 @@ void parse4(const json& root, Qwen4ExpConfig& c) {
   c.eos = eos.is_array() ? eos[0].get<int>() : eos.get<int>();
 }
 
-// The mean of a float tensor's values (0 for none or another dtype)
-double mean_of(const Tensor* t) {
-  if (!t || !t->buf || t->numel() <= 0) return 0.0;
-  const size_t n = size_t(t->numel());
-  double sum = 0;
-  for (size_t i = 0; i < n; ++i)
-    sum += t->dtype == DType::BF16  ? bf16_to_f32(t->buf.as<uint16_t>()[i])
-           : t->dtype == DType::F16 ? double(t->buf.as<_Float16>()[i])
-           : t->dtype == DType::F32 ? double(t->buf.as<float>()[i])
-                                    : 0.0;
-  return sum / double(n);
-}
-
 // the MTP head's tensors: mtp.* (Nace AI's packs) or language_model.mtp.* (Sushi's)
 bool is_mtp(const std::string& n) { return n.rfind("mtp.", 0) == 0 || n.rfind("language_model.mtp.", 0) == 0; }
 
@@ -310,12 +297,32 @@ void Qwen4Exp::load(const std::string& dir) {
   }
   {
     // The RMSNorm weights are Qwen's zero-centred ones (applied as 1 + w), or a converter added the 1 (Sushi's packs:
-    // the same weights + 1). The first held layer's hyper-connection norm tells which: its mean is near 0 (-0.06 in
-    // Nace AI's 4-bit pack) or near 1 (0.94 in Sushi's).
-    const std::string hc = "model.layers." + std::to_string(lo_) + ".attn_hyper_connection.hc_norm.weight";
-    const double m = mean_of(ws_.find(tname(hc)));
+    // the same weights + 1). The first attention layer's indexer q / k layernorms tell which, read from the files so
+    // every Mac of a split decides alike whatever layers it holds: their means are -0.08 to -0.02 in Nace AI's 4-bit
+    // pack and 0.92 to 0.98 in Sushi's, in every attention layer (the hyper-connection norms reach 0.77 in the 4-bit
+    // pack: too close to tell).
+    int a0 = 0;
+    while (a0 < cfg_.layers - 1 && cfg_.is_linear[size_t(a0)]) ++a0;
+    const std::string ix = tname("model.layers." + std::to_string(a0) + ".self_attn.indexer.");
+    const SafetensorsIndex idx(dir, [&](const std::string& n) { return n.rfind(ix, 0) != 0; });
+    double sum = 0;
+    size_t cnt = 0;
+    for (const char* w : {"q_layernorm.weight", "k_layernorm.weight"}) {
+      const SafetensorsIndex::Entry* t = idx.find(ix + w);
+      if (!t || (t->dtype != DType::BF16 && t->dtype != DType::F16)) continue;
+      std::vector<uint16_t> v(size_t(t->numel()));
+      idx.read(*t, 0, v.data(), v.size() * 2);
+      for (uint16_t h : v) {
+        _Float16 f;
+        memcpy(&f, &h, 2);
+        sum += t->dtype == DType::BF16 ? bf16_to_f32(h) : float(f);
+      }
+      cnt += v.size();
+    }
+    const double m = cnt ? sum / double(cnt) : 0.0;
     norm1_ = m > 0.5 ? 0.0f : 1.0f;
-    if (norm1_ == 0.0f) logi("RMSNorm weights with the 1 added at conversion (hc_norm mean %.2f): read as they are", m);
+    if (norm1_ == 0.0f)
+      logi("RMSNorm weights with the 1 added at conversion (indexer norm mean %.2f): read as they are", m);
   }
   if (head) {
     embed_ = qlin("model.embed_tokens");

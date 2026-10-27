@@ -675,11 +675,12 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok) {
   if (!L.w && q20_ok) {
     // EXL3 trellises (src/model/moe_exl3.h): .trellis uint16 [E, K/16, N/16, n], .suh f16 [E, K], .svh f16 [E, N]
     if (const Tensor* t = ws_.find(full + ".trellis")) {
-      const std::string fmt = expert_quant_.value("format", std::string()), cb = expert_quant_.value("codebook", std::string());
+      const std::string fmt = expert_quant_.value("format", std::string());
+      const std::string cb = expert_quant_.value("codebook", std::string());
       if (fmt != "exl3" || cb != "mcg")
-        fatal("%s: EXL3 experts with config.json's expert_quant format \"%s\", codebook \"%s\": Kapitsa decodes the MCG "
-              "codebook (format exl3; Sushi's Qwen3.8-Flash-Next-Sushi-2bpw and -4bpw), not the STQ codebooks (std1, "
-              "spec1, pair1)", full.c_str(), fmt.c_str(), cb.c_str());
+        fatal("%s: EXL3 experts with config.json's expert_quant format \"%s\", codebook \"%s\": Kapitsa decodes the "
+              "MCG codebook (format exl3; Sushi's Qwen3.8-Flash-Next-Sushi-2bpw and -4bpw), not the STQ codebooks "
+              "(std1, spec1, pair1)", full.c_str(), fmt.c_str(), cb.c_str());
       const Tensor *suh = ws_.find(full + ".suh"), *svh = ws_.find(full + ".svh");
       const uint32_t n = exl3::rate_of(t->shape);
       if (t->dtype != DType::U16 || !suh || !svh || suh->dtype != DType::F16 || svh->dtype != DType::F16 || !n ||
@@ -769,16 +770,19 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok) {
   L.K = uint32_t(words * 32 / bits);
   L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
   if (int64_t(L.K / gs) != L.s->shape.back() || L.K % gs) fatal("%s: bits/group mismatch", full.c_str());
-  if (bits == 8 && gs == 128 && L.s->shape.size() == 2 && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
-    // 8-bit group 128 (Sushi's trunk) as group 64, exactly: each group's scale and bias twice
+  if (bits == 8 && gs == 128 && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
+    // 8-bit group 128 (Sushi's trunk) as group 64, exactly: each group's scale and bias twice (any leading dims: a
+    // matrix [N, K/128] or stacked experts [E, N, K/128])
     auto split = [&](const Tensor* t) {
-      const size_t rows = size_t(t->shape[0]), g = size_t(t->shape[1]);
-      Buffer b = Gpu::get().alloc(rows * g * 4 + 16, "g128_as_g64", /*tracked=*/false);
+      const size_t n = size_t(t->numel());
+      Buffer b = Gpu::get().alloc(n * 4 + 16, "g128_as_g64", /*tracked=*/false);
       const uint16_t* src = t->buf.as<uint16_t>();
       uint16_t* d = b.as<uint16_t>();
-      for (size_t i = 0; i < rows * g; ++i) d[2 * i] = d[2 * i + 1] = src[i];
+      for (size_t i = 0; i < n; ++i) d[2 * i] = d[2 * i + 1] = src[i];
       owned_bufs_.push_back(b);
-      owned_.push_back(Tensor{b.view(0, rows * g * 4), DType::BF16, {int64_t(rows), int64_t(g * 2)}});
+      std::vector<int64_t> shape = t->shape;
+      shape.back() *= 2;
+      owned_.push_back(Tensor{b.view(0, n * 4), DType::BF16, shape});
       return &owned_.back();
     };
     L.s = split(L.s);
@@ -2990,8 +2994,8 @@ void Qwen35::enc_moe_prefill_exl3(Encoder& e, const Layer& L, int T, const Buffe
   e.val(5, bp);
   e.dispatch(1, 1, 1, 1024);
   const uint32_t max_tiles = uint32_t((P + bm - 1) / bm + E);
-  exl3::enc_prefill(e, exl3_experts(L), exl3_shape(), uint32_t(P), max_tiles, xh_, tiles_, ntiles_, stok_, spair_, ridx_,
-                    hg_, hu_, hhalf_, yd_);
+  exl3::enc_prefill(e, exl3_experts(L), exl3_shape(), uint32_t(P), max_tiles, xh_, tiles_, ntiles_, stok_, spair_,
+                    ridx_, hg_, hu_, hhalf_, yd_);
   if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
     enc_qmm(e, L.sg, xh_, sgb_, T, false);
     enc_qmm(e, L.su, xh_, sub_, T, false);

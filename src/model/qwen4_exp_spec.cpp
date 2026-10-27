@@ -185,9 +185,9 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
   e.dispatch((D + rows * nsg - 1) / (rows * nsg), R, 1, 32 * nsg);
 }
 
-// The MoE of R <= kMaxVerify rows of xrn_ with EXL3 routed experts, added to yb_: the router, the shared-expert gate and
-// the shared expert's gate / up on the row kernels, the 512-expert top-k per row, the shared expert's SwiGLU and down
-// (ys_), then exl3::enc_rows (the routed sum plus wts[r, k] ys_). Scratch: Qwen35's prefill buffers (hg_, hu_,
+// The MoE of R <= kMaxVerify rows of xrn_ with EXL3 routed experts, added to yb_: the router, the shared-expert gate
+// and the shared expert's gate / up on the row kernels, the 512-expert top-k per row, the shared expert's SwiGLU and
+// down (ys_), then exl3::enc_rows (the routed sum plus wts[r, k] ys_). Scratch: Qwen35's prefill buffers (hg_, hu_,
 // hhalf_, yd_ hold a chunk's T k rows; R k fit).
 void Qwen4Exp::enc_moe_exl3_rows(Encoder& e, const Layer& L, int R) {
   if (cfg_.experts != 512 || cfg_.top_k > 16) fatal("EXL3 experts: the 512-expert top-k of up to 16 is supported");

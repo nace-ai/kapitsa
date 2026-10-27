@@ -296,9 +296,9 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae",
             .companions = {},
             .download_gb = 105.86},
-           // Sushi's pack (beamster/Qwen3.8-Flash-Next-Sushi-2bpw): routed experts and the MTP head's in EXL3 at 2 bits a
-           // weight (MCG codebook, window 15; src/model/moe_exl3.h), everything else 8-bit affine, the n-gram table 4-bit
-           // in ngram_table.bin (mapped, outside GPU memory); 37.6 GB of weights, for 64 GB Macs
+           // Sushi's pack (beamster/Qwen3.8-Flash-Next-Sushi-2bpw): routed experts and the MTP head's in EXL3 at 2
+           // bits a weight (MCG codebook, window 15; src/model/moe_exl3.h), everything else 8-bit affine, the n-gram
+           // table 4-bit in ngram_table.bin (mapped, outside GPU memory); 36.7 GB of weights, for 64 GB Macs
            {.name = "64gb",
             .quant = "EXL3 2-bit routed experts (Sushi's MCG trellis), 8-bit affine attention / DeltaNet / shared "
                      "experts / embedding / head, 4-bit n-gram table",

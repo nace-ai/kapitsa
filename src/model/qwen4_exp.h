@@ -192,7 +192,8 @@ class Qwen4Exp : public Qwen35 {
                 bool pair8 = false);
   // the MoE of R rows of xrn_ into yb_ (router on the row kernels, the 512-expert top-k per row, the experts)
   void enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer);
-  // the same with EXL3 routed experts (src/model/moe_exl3.h): the shared expert on the row kernels, then the routed ones
+  // the same with EXL3 routed experts (src/model/moe_exl3.h): the shared expert on the row kernels, then the routed
+  // ones
   void enc_moe_exl3_rows(Encoder& e, const Layer& L, int R);
   // streamed Q2_0 experts (src/model/expert_store.h)
   q20::Experts q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
@@ -319,8 +320,8 @@ class Qwen4Exp : public Qwen35 {
   // streamed experts: the store, and the next layer's predicted routing (router logits, top-k ids and weights of up
   // to kMaxVerify rows)
   bool q20_pack_ = false, stream_ = false;
-  // added to the zero-centred RMSNorm weights at load: 1 (Qwen's release, Nace AI's packs), 0 where a converter added it
-  // already (Sushi's packs)
+  // added to the zero-centred RMSNorm weights at load: 1 (Qwen's release, Nace AI's packs), 0 where a converter added
+  // it already (Sushi's packs)
   float norm1_ = 1.0f;
   std::unique_ptr<q20::ExpertStore> store_;
   Buffer plog_, pidx_, pwts_;
