@@ -128,7 +128,9 @@ one server at a time under the GPU lock.
   from 33 to 38 GiB this replaces a working default with a smaller expert cache, and no run compares the two. The 38 GiB bound is
   a margin over one refusal seen at 35.2 GiB under a system pressure warning, not a measured need. In that window the forced `--expert-memory` turns Splash's own "not enough free
   memory to start" refusal into an engine that starts and streams experts from the SSD, so it is slower than a full cache; pass
-  `--splash-arg --expert-memory <size>` to choose, or free memory first.
+  `--splash-arg --expert-memory <size>` to choose, or free memory first. Kept at 38 GiB on purpose: one default-plan start at
+  33.0 GiB and one refusal at 35.2 GiB mean the default plan does not reliably start above 33, and a failed start is worse than
+  an unmeasured slowdown. Follow-up: revisit with an A/B of the default plan against the forced cache at 33 to 38 GiB free.
 
 Splash refuses to start when the Mac has too little free and reclaimable memory. Its `not enough free memory to start ...`
 is the child's own line on stderr; `serve` then exits 1 with `the Splash engine did not start: engine_exited: the splash engine
