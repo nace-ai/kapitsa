@@ -1,6 +1,7 @@
 #include "splash/runtime.h"
 
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
@@ -68,7 +69,9 @@ void Runtime::start() {
   posix_spawn_file_actions_init(&fa);
   posix_spawnattr_init(&at);
   // Only what is named below reaches the child: stdin and stdout are the pipes, stderr is ours (as runtime.py's Popen).
-  posix_spawnattr_setflags(&at, POSIX_SPAWN_CLOEXEC_DEFAULT);
+  // The child leads its own process group, so one signal reaches it and what it started.
+  posix_spawnattr_setflags(&at, POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETPGROUP);
+  posix_spawnattr_setpgroup(&at, 0);
   posix_spawn_file_actions_adddup2(&fa, to_child[0], 0);
   posix_spawn_file_actions_adddup2(&fa, from_child[1], 1);
   posix_spawn_file_actions_addinherit_np(&fa, 2);
@@ -104,10 +107,11 @@ void Runtime::start() {
     dead_reason_ = std::string("cannot start ") + o_.argv[0] + ": " + std::strerror(rc);
     throw EngineUnhealthy(dead_reason_);
   }
-  pid_ = child;
+  { std::lock_guard<std::mutex> pl(pid_m_); pid_ = child; }
   in_fd_ = to_child[1];
+  fcntl(in_fd_, F_SETFL, fcntl(in_fd_, F_GETFL) | O_NONBLOCK);  // write_frame polls, so it can give up
   out_fd_ = from_child[0];
-  say("splash engine pid " + std::to_string(pid_) + " started");
+  say("splash engine pid " + std::to_string(child) + " started");
   reader_ = std::thread([this] { read_loop(); });
 
   std::unique_lock<std::mutex> l(m_);
@@ -115,46 +119,65 @@ void Runtime::start() {
   if (ok && state_ == State::kReady) return;
   std::string why = ok ? dead_reason_ : "the engine was not ready within " + std::to_string(int(o_.ready_timeout_s)) + " s";
   l.unlock();
-  if (!ok) kill(pid_, SIGKILL);
+  if (!ok) signal_child(SIGKILL);
   shutdown();
   throw EngineUnhealthy(why);
 }
 
+void Runtime::signal_child(int sig) {
+  std::lock_guard<std::mutex> l(pid_m_);
+  if (pid_ > 0) killpg(pid_, sig);
+}
+
+// One writer at a time. stdin is non-blocking and polled in 100 ms steps, so a child that stops reading holds neither
+// shutdown() (it sets stopping_ and takes write_m_) nor a Sink that cancels: the writer leaves on stopping_, and on a
+// frame still unwritten after write_timeout_s it kills the child, whose stream would otherwise be cut mid-frame.
 void Runtime::write_frame(const std::vector<uint8_t>& f) {
   std::lock_guard<std::mutex> l(write_m_);
   if (in_fd_ < 0) throw EngineUnhealthy("the splash engine is not running");
+  const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(o_.write_timeout_s));
   size_t off = 0;
   while (off < f.size()) {
     ssize_t n = write(in_fd_, f.data() + off, f.size() - off);
+    if (n > 0) { off += size_t(n); continue; }
     if (n < 0 && errno == EINTR) continue;
-    if (n <= 0) throw EngineUnhealthy(std::string("write to the splash engine failed: ") + std::strerror(errno));
-    off += size_t(n);
+    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      if (stopping_) throw EngineUnhealthy("the splash engine is shutting down");
+      if (Clock::now() >= deadline) {
+        say("splash engine did not read a frame within " + std::to_string(int(o_.write_timeout_s)) + " s: killing it");
+        signal_child(SIGKILL);
+        throw EngineUnhealthy("the splash engine stopped reading its input");
+      }
+      pollfd p{in_fd_, POLLOUT, 0};
+      poll(&p, 1, 100);
+      continue;
+    }
+    throw EngineUnhealthy(std::string("write to the splash engine failed: ") + std::strerror(n < 0 ? errno : EIO));
   }
 }
 
 uint64_t Runtime::submit(Request r, std::shared_ptr<Sink> sink, double deadline_s) {
   uint64_t id;
   {
+    // The slot is taken in the same step as the check, so concurrent submitters cannot pass a full pool together.
     std::lock_guard<std::mutex> l(m_);
     if (state_ != State::kReady) throw EngineUnhealthy("the splash engine is not running" + (dead_reason_.empty() ? "" : ": " + dead_reason_));
     if (pending_.size() >= ready_.max_concurrent_requests) throw PendingLimitExceeded("the splash engine's request capacity is full");
     id = next_id_++;
-  }
-  r.request_id = id;
-  r.remaining_deadline_micros = remaining_micros(deadline_s);
-  uint64_t now = unix_micros();
-  r.absolute_deadline_unix_micros = r.remaining_deadline_micros > UINT64_MAX - now ? UINT64_MAX : now + r.remaining_deadline_micros;
-  std::vector<uint8_t> frame = encode_request(r);  // may throw ProtocolError: nothing is registered yet
-  {
-    std::lock_guard<std::mutex> l(m_);
-    if (state_ != State::kReady) throw EngineUnhealthy("the splash engine is not running" + (dead_reason_.empty() ? "" : ": " + dead_reason_));
     pending_[id] = Pending{std::move(sink), false};  // before the write: the first event can follow it at once
   }
+  std::vector<uint8_t> frame;
   try {
+    r.request_id = id;
+    r.remaining_deadline_micros = remaining_micros(deadline_s);
+    uint64_t now = unix_micros();
+    r.absolute_deadline_unix_micros = r.remaining_deadline_micros > UINT64_MAX - now ? UINT64_MAX : now + r.remaining_deadline_micros;
+    frame = encode_request(r);  // may throw ProtocolError: nothing has been sent
     write_frame(frame);
   } catch (...) {
     std::lock_guard<std::mutex> l(m_);
-    pending_.erase(id);  // if the reader already failed it, it is gone and this is a no-op
+    // Already failed by the reader (it ended the request with on_error): then this is not a second report of it.
+    if (pending_.erase(id) == 0 && state_ == State::kDead) return id;
     throw;
   }
   return id;
@@ -205,27 +228,40 @@ void Runtime::fail_all(const std::string& code, const std::string& message) {
     }
   }
   cv_.notify_all();
-  for (auto& [id, p] : held) p.sink->on_error(unhealthy(id, code, message));
-}
+  for (auto& [id, p] : held) {
+    try { p.sink->on_error(unhealthy(id, code, message)); } catch (...) { say("a splash request's sink threw from on_error"); }
+  }}
 
 void Runtime::reap(double grace_s) {
-  pid_t pid = pid_;
+  pid_t pid;
+  { std::lock_guard<std::mutex> l(pid_m_); pid = pid_; }
   if (pid <= 0) return;
   int st = 0;
+  bool exited = false, killed = false;
   auto until = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(grace_s));
   while (true) {
-    pid_t r = waitpid(pid, &st, WNOHANG);
-    if (r == pid || (r < 0 && errno != EINTR)) break;
-    if (Clock::now() >= until) {
-      kill(pid, SIGKILL);
-      waitpid(pid, &st, 0);
-      break;
+    {
+      std::lock_guard<std::mutex> l(pid_m_);
+      pid_t r = waitpid(pid, &st, WNOHANG);
+      if (r == pid || (r < 0 && errno != EINTR)) {
+        exited = r == pid;
+        killpg(pid, SIGKILL);  // what it started goes with it (ESRCH when nothing is left)
+        pid_ = -1;
+        break;
+      }
+      if (Clock::now() >= until) {
+        if (killed) { pid_ = -1; break; }  // not even SIGKILL took: an uninterruptible child. Do not wait for it forever.
+        killpg(pid, SIGKILL);
+        killed = true;
+        until = Clock::now() + std::chrono::seconds(5);
+      }
     }
     usleep(10000);
   }
-  if (WIFEXITED(st)) say("splash engine exited with status " + std::to_string(WEXITSTATUS(st)));
+  if (!exited && !killed) say("splash engine already gone");
+  else if (!exited) say("splash engine did not exit after SIGKILL; left unreaped");
+  else if (WIFEXITED(st)) say("splash engine exited with status " + std::to_string(WEXITSTATUS(st)));
   else if (WIFSIGNALED(st)) say("splash engine killed by signal " + std::to_string(WTERMSIG(st)));
-  pid_ = -1;
 }
 
 void Runtime::read_loop() {
@@ -235,8 +271,13 @@ void Runtime::read_loop() {
   bool fatal = false;
   try {
     while (true) {
+      pollfd pf{out_fd_, POLLIN, 0};  // a bounded wait, so shutdown() can end this when a descendant keeps the pipe open
+      int pr = poll(&pf, 1, 200);
+      if (pr < 0 && errno == EINTR) continue;
+      if (pr < 0) break;
+      if (pr == 0) { if (abandon_) break; continue; }
       ssize_t n = read(out_fd_, buf.data(), buf.size());
-      if (n < 0 && errno == EINTR) continue;
+      if (n < 0 && (errno == EINTR || errno == EAGAIN)) continue;
       if (n <= 0) break;
       parser.feed(buf.data(), size_t(n));
       Event ev;
@@ -275,23 +316,30 @@ void Runtime::read_loop() {
           else return x.request_id;
         }, ev);
         std::shared_ptr<Sink> sink;
-        bool terminal = std::holds_alternative<Done>(ev) || std::holds_alternative<Error>(ev);
+        bool terminal = std::holds_alternative<Done>(ev) || std::holds_alternative<Error>(ev), unknown = false;
         {
           std::lock_guard<std::mutex> l(m_);
           auto it = pending_.find(id);
-          if (it == pending_.end()) { say("splash engine event for unknown request " + std::to_string(id)); continue; }
-          sink = it->second.sink;
-          if (std::holds_alternative<Start>(ev)) it->second.started = true;
-          if (terminal) pending_.erase(it);
+          if (it == pending_.end()) unknown = true;
+          else {
+            sink = it->second.sink;
+            if (std::holds_alternative<Start>(ev)) it->second.started = true;
+            if (terminal) pending_.erase(it);
+          }
         }
-        std::visit([&](auto& x) {
-          using T = std::decay_t<decltype(x)>;
-          if constexpr (std::is_same_v<T, Start>) sink->on_start(x);
-          else if constexpr (std::is_same_v<T, PromptProgress>) sink->on_progress(x);
-          else if constexpr (std::is_same_v<T, Tokens>) sink->on_tokens(x);
-          else if constexpr (std::is_same_v<T, Done>) sink->on_done(x);
-          else if constexpr (std::is_same_v<T, Error>) sink->on_error(x);
-        }, ev);
+        if (unknown) { say("splash engine event for unknown request " + std::to_string(id)); continue; }  // outside m_: a log callback may call alive()
+        try {
+          std::visit([&](auto& x) {
+            using T = std::decay_t<decltype(x)>;
+            if constexpr (std::is_same_v<T, Start>) sink->on_start(x);
+            else if constexpr (std::is_same_v<T, PromptProgress>) sink->on_progress(x);
+            else if constexpr (std::is_same_v<T, Tokens>) sink->on_tokens(x);
+            else if constexpr (std::is_same_v<T, Done>) sink->on_done(x);
+            else if constexpr (std::is_same_v<T, Error>) sink->on_error(x);
+          }, ev);
+        } catch (...) {
+          say("a splash request's sink threw; the request goes on without it");  // a sink's bug is not the engine's
+        }
         cv_.notify_all();  // a slot is free for a waiting submit-er
       }
       if (fatal) break;
@@ -306,7 +354,7 @@ void Runtime::read_loop() {
     message = e.what();
     fatal = true;
   }
-  if (fatal && pid_ > 0) kill(pid_, SIGKILL);  // an untrusted stream: do not read more of it
+  if (fatal) signal_child(SIGKILL);  // an untrusted stream: do not read more of it
   reap(fatal ? 5 : std::max(0.1, o_.stop_grace_s));
   bool stopping;
   { std::lock_guard<std::mutex> l(m_); stopping = stopping_; }
@@ -321,18 +369,24 @@ void Runtime::shutdown() {
     stopping_ = true;
   }
   {
-    std::lock_guard<std::mutex> l(write_m_);
+    std::lock_guard<std::mutex> l(write_m_);  // a blocked writer leaves on stopping_ within 100 ms
     if (in_fd_ >= 0) { close(in_fd_); in_fd_ = -1; }  // EOF on its stdin: it drains and exits
   }
   if (reader_.joinable()) {
-    std::unique_lock<std::mutex> l(m_);
     auto grace = std::chrono::duration<double>(o_.stop_grace_s);
-    if (!cv_.wait_for(l, grace, [&] { return state_ == State::kDead; }) && pid_ > 0) {
+    auto dead = [&] {
+      std::unique_lock<std::mutex> l(m_);
+      return cv_.wait_for(l, grace, [&] { return state_ == State::kDead; });
+    };
+    if (!dead()) {
       say("splash engine did not exit: SIGTERM");
-      kill(pid_, SIGTERM);
-      if (!cv_.wait_for(l, grace, [&] { return state_ == State::kDead; }) && pid_ > 0) kill(pid_, SIGKILL);
+      signal_child(SIGTERM);
+      if (!dead()) {
+        say("splash engine did not exit: SIGKILL");
+        signal_child(SIGKILL);
+        if (!dead()) abandon_ = true;  // something outside the group still holds its stdout: stop reading it
+      }
     }
-    l.unlock();
     reader_.join();
   }
   if (out_fd_ >= 0) { close(out_fd_); out_fd_ = -1; }

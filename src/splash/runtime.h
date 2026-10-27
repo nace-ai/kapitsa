@@ -46,6 +46,7 @@ struct RuntimeOptions {
   std::vector<std::string> env;   // "NAME=value" added to this process's environment
   double ready_timeout_s = 600;   // a cold start reads and calibrates the whole model
   double stop_grace_s = 10;       // after closing the child's stdin, before SIGTERM; and again before SIGKILL
+  double write_timeout_s = 30;    // a frame the child does not take within this long: the child is wedged and is killed
   std::function<void(const std::string&)> log;
 };
 
@@ -75,8 +76,10 @@ class Runtime {
   // The engine's status JSON, or "" when it does not answer within timeout_s.
   std::string status(double timeout_s = 10);
 
-  // Closes the child's stdin and waits for it to drain and exit, then TERM, then KILL. Pending requests end with an
-  // engine_unhealthy error. Idempotent.
+  // Closes the child's stdin and waits for it to drain and exit, then TERM, then KILL, each after stop_grace_s; the signals
+  // go to the child's process group (it is spawned as its own group leader), so a descendant that holds its stdout does not
+  // keep this from returning. A writer blocked on a child that does not read is released within 100 ms. Pending requests
+  // end with an engine_unhealthy error. Idempotent. Not to be called from a Sink.
   void shutdown();
 
   pid_t pid() const { return pid_; }  // -1 once reaped
@@ -90,6 +93,7 @@ class Runtime {
   void fail_all(const std::string& code, const std::string& message);
   void write_frame(const std::vector<uint8_t>& frame);
   void reap(double grace_s);
+  void signal_child(int sig);  // to the child's process group, only while it is not reaped
   void say(const std::string& s) const { if (o_.log) o_.log(s); }
 
   RuntimeOptions o_;
@@ -106,7 +110,9 @@ class Runtime {
   std::map<uint64_t, Pending> pending_;
   std::map<uint64_t, std::string> status_replies_;  // correlation id -> reply, for a status() still waiting
   uint64_t next_corr_ = 1;
-  bool stopping_ = false;  // shutdown() ran: a dead child is expected
+  std::atomic<bool> stopping_{false};  // shutdown() ran: a dead child is expected
+  std::atomic<bool> abandon_{false};   // shutdown() gave up waiting for the child's stdout to close: the reader stops reading
+  std::mutex pid_m_;  // pid_ is set and cleared, and signalled through, only under this: a signal never reaches a reaped pid
   std::mutex write_m_;  // one writer at a time on the child's stdin
 };
 

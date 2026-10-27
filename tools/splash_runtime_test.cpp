@@ -1,6 +1,7 @@
 // CPU test of src/splash/runtime.{h,cpp}: the Runtime spawns this very binary as a fake `splash serve-native` (argv[1] =
 // "--fake MODE") that speaks the protocol over its stdin and stdout, and drives it through a request, a cancel, a status,
-// a child that dies, one that sends garbage, one that never gets ready, and a full request pool. No model, no GPU.
+// a child that dies, one that sends garbage, one that never gets ready, a full request pool, a child that stops reading its
+// input, a descendant that keeps its stdout, a Sink that throws, and a log callback that calls back in. No model, no GPU.
 #include <signal.h>
 #include <unistd.h>
 
@@ -74,6 +75,18 @@ static uint64_t le(const uint8_t* p, int n) {
 
 static int fake(const std::string& mode) {
   if (mode == "noready") { sleep(60); return 0; }
+  if (mode == "stall") { send_ready(2); sleep(60); return 0; }  // never reads its stdin
+  if (mode == "grandchild" || mode == "orphan") {
+    // A descendant keeps the stdout pipe open. "grandchild" stays in the group and ignores EOF; "orphan" leaves the group
+    // and the session, and the child itself exits on EOF.
+    send_ready(2);
+    pid_t k = fork();
+    if (k == 0) { if (mode == "orphan") setsid(); sleep(mode == "orphan" ? 6 : 60); _exit(0); }
+    if (mode == "grandchild") { sleep(60); return 0; }
+    uint8_t h[16];
+    while (read_all(h, 16)) {}
+    return 0;
+  }
   send_ready(mode == "pool1" ? 1 : 2);
   std::vector<uint64_t> hung;
   while (true) {
@@ -87,6 +100,7 @@ static int fake(const std::string& mode) {
       uint32_t first = uint32_t(le(payload.data() + 114, 4));  // the prompt's first token picks the behaviour
       if (mode == "die") _exit(3);
       if (mode == "garbage") { const char junk[32] = "this is not a frame at all....."; (void)!write(1, junk, 32); sleep(30); }
+      if (mode == "stray") send_tokens(id + 100, 0, {1});  // an event for a request nobody made
       send_start(id);
       if (first == 999) continue;  // hangs until cancelled
       send_tokens(id, 0, {10, 11});
@@ -133,6 +147,15 @@ struct Collect : Sink {
   }
 };
 
+struct Thrower : Collect {
+  void on_tokens(const Tokens&) override { throw std::runtime_error("a sink's bug"); }
+  void on_done(const Done& x) override { Collect::on_done(x); throw std::runtime_error("a sink's bug"); }
+};
+
+static double since(std::chrono::steady_clock::time_point t0) {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+
 static RuntimeOptions opts(const char* self, const char* mode) {
   RuntimeOptions o;
   o.argv = {self, "--fake", mode};
@@ -150,6 +173,7 @@ static Request req(uint32_t first) {
 int main(int argc, char** argv) {
   if (argc == 3 && !std::strcmp(argv[1], "--fake")) return fake(argv[2]);
   const char* self = argv[0];
+  alarm(180);  // a deadlock in the code under test is a failure, not a hung CI job
 
   {  // a request streams its tokens and ends with done; status answers; shutdown drains
     Runtime rt(opts(self, "echo"));
@@ -248,6 +272,124 @@ int main(int argc, char** argv) {
     bool threw = false;
     try { rt.start(); } catch (const EngineUnhealthy&) { threw = true; }
     CHECK(threw);
+  }
+
+  {  // eight submitters race for a one-slot pool: exactly one gets in
+    Runtime rt(opts(self, "pool1"));
+    rt.start();
+    std::atomic<int> in{0}, full{0}, other{0};
+    std::vector<std::thread> ts;
+    for (int i = 0; i < 8; i++)
+      ts.emplace_back([&] {
+        try { rt.submit(req(999), std::make_shared<Collect>(), 30); in++; }
+        catch (const PendingLimitExceeded&) { full++; }
+        catch (...) { other++; }
+      });
+    for (auto& t : ts) t.join();
+    CHECK(in == 1 && full == 7 && other == 0);
+    rt.shutdown();
+  }
+
+  {  // a child that stops reading its stdin, with a request too large for the pipe: shutdown() still returns, and the child is gone
+    RuntimeOptions o = opts(self, "stall");
+    o.stop_grace_s = 0.3;
+    Runtime rt(o);
+    rt.start();
+    pid_t child = rt.pid();
+    Request big = req(1);
+    big.prompt.assign(200000, 7);  // 800 KB: more than a pipe holds
+    std::atomic<bool> threw{false};
+    std::thread w([&] {
+      try { rt.submit(big, std::make_shared<Collect>(), 30); } catch (const EngineUnhealthy&) { threw = true; }
+    });
+    usleep(300000);  // the writer is blocked in the pipe
+    auto t0 = std::chrono::steady_clock::now();
+    rt.shutdown();
+    CHECK(since(t0) < 5);
+    w.join();
+    CHECK(threw);
+    CHECK(kill(child, 0) != 0);
+  }
+
+  {  // the same child, with the default shutdown path out of the picture: the frame times out and the child is killed
+    RuntimeOptions o = opts(self, "stall");
+    o.write_timeout_s = 0.5;
+    Runtime rt(o);
+    rt.start();
+    Request big = req(1);
+    big.prompt.assign(200000, 7);
+    auto c = std::make_shared<Collect>();
+    auto t0 = std::chrono::steady_clock::now();
+    bool threw = false;
+    try { rt.submit(big, c, 30); } catch (const EngineUnhealthy&) { threw = true; }
+    CHECK(threw && since(t0) < 5);
+    usleep(500000);
+    CHECK(c->terminals <= 1);  // told by the throw, or by the reader's on_error when the child's death came first; never twice
+    rt.shutdown();
+    CHECK(!rt.alive());
+  }
+
+  {  // a descendant in the child's group holds its stdout and the child ignores EOF: SIGTERM to the group ends both
+    RuntimeOptions o = opts(self, "grandchild");
+    o.stop_grace_s = 0.3;
+    Runtime rt(o);
+    rt.start();
+    auto t0 = std::chrono::steady_clock::now();
+    rt.shutdown();
+    CHECK(since(t0) < 5);
+    CHECK(!rt.alive());
+  }
+
+  {  // a descendant outside the group holds its stdout after the child exits: shutdown() stops reading and returns
+    RuntimeOptions o = opts(self, "orphan");
+    o.stop_grace_s = 0.3;
+    Runtime rt(o);
+    rt.start();
+    auto t0 = std::chrono::steady_clock::now();
+    rt.shutdown();
+    CHECK(since(t0) < 5);
+    CHECK(!rt.alive());
+  }
+
+  {  // a Sink that throws does not end the process, and the runtime serves the next request
+    Runtime rt(opts(self, "echo"));
+    rt.start();
+    auto t = std::make_shared<Thrower>();
+    rt.submit(req(1), t, 30);
+    CHECK(t->wait());
+    CHECK(rt.alive());
+    auto c = std::make_shared<Collect>();
+    rt.submit(req(1), c, 30);
+    CHECK(c->wait() && c->done);
+    auto h = std::make_shared<Thrower>();  // and one that throws from on_error when the child dies
+    rt.submit(req(999), h, 30);
+    rt.shutdown();
+    CHECK(h->wait(2) && h->errored);
+  }
+
+  {  // a log callback that calls alive() while the reader logs an unknown request does not deadlock
+    RuntimeOptions o = opts(self, "stray");
+    Runtime* rtp = nullptr;
+    std::atomic<int> logs{0};
+    o.log = [&](const std::string&) { if (rtp) { (void)rtp->alive(); logs++; } };
+    Runtime rt(o);
+    rtp = &rt;
+    rt.start();
+    auto c = std::make_shared<Collect>();
+    rt.submit(req(1), c, 30);
+    CHECK(c->wait() && c->done);
+    CHECK(logs > 0);
+    rt.shutdown();
+  }
+
+  {  // shutdown() after the child died on its own: nothing is signalled, nothing hangs
+    Runtime rt(opts(self, "die"));
+    rt.start();
+    auto c = std::make_shared<Collect>();
+    rt.submit(req(1), c, 30);
+    CHECK(c->wait());
+    CHECK(rt.pid() == -1);
+    rt.shutdown();
   }
 
   if (failures) { std::printf("%d failure(s)\n", failures); return 1; }
