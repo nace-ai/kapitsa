@@ -1,0 +1,46 @@
+# Engine architecture
+
+Kapitsa is a native C++20 inference engine for Apple silicon. Its HTTP APIs share one chat engine; model-specific
+backends encode work into Metal command buffers and can offload selected prefill operations to Apple's Neural Engine.
+It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do not imply a runtime dependency.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.svg">
+  <img alt="Kapitsa's architecture: the APIs, the engine with its conversation slots, prefill on the GPU and the Neural Engine, draft-and-verify decoding, the Qwen and Nemotron backends and their Metal kernels." src="assets/architecture-light.svg">
+</picture>
+
+The generation loop repeats until completion, streaming through the API adapter. Image encoders run only for
+supported image requests, and Neural Engine work is limited to selected prefill operations. Conversation slots retain
+state for later turns; requests sent at once take turns on the GPU for their prompts and share batched passes while
+they decode.
+
+## From a request to generated tokens
+
+1. **Normalize the API request.** The server exposes OpenAI Chat Completions, OpenAI Responses and Anthropic
+   Messages. Adapters translate these into `ChatRequest`; output adapters return each protocol's streaming events,
+   reasoning and tool calls. The built-in chat page uses the same server.
+2. **Build the prompt and recover conversation state.** The engine renders the model's Jinja chat template,
+   tokenizes the prompt, chooses a conversation slot and reuses a matching prefix. A slot holds attention KV caches,
+   recurrent state and checkpoints. Only the uncached suffix needs prefill when a compatible checkpoint exists.
+3. **Prefill the target model.** The selected backend processes prompt chunks, using its own attention, recurrent
+   and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows. On the
+   Qwen models a pass of at most 128 rows (a cached turn's message, the reply prefilled while idle, a draft read
+   ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
+   into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise.
+4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B
+   and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
+   (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
+   not become committed recurrent history. KFlash (every drafter by default; `NI_KFLASH=0` keeps chains, and
+   `NI_DFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
+   chains (the trees need the full depth) whose two clean depth-2/3 mode-3 anchors read cheaper per token than any
+   deeper measured arm, ids-identical, with the shipping-binary sweep to
+   decide whether it becomes their default): the
+   drafter's candidates are verified as a best-first tree instead of one chain: each verify row attends to its
+   ancestors only, the recurrent layers run from its own branch's state, and the longest branch that agrees with the
+   target is kept, so the reply is plain decoding's. The tree's size follows this Mac's measured cost per verify row
+   count and the drafter's probabilities as calibrated against its own acceptances: whole 8-row tiles on the dense Qwen
+   models (27B, 4B), where each cycle verifies 8 rows, or 16 or 32 when `NI_KFLASH_ROWS=8,16,32` names them (opt-in, but
+   for the 16-row drafting block below, which sets every cycle to 16 rows on a one-slot engine; the GPU runs the tiles the
+   drafting pass chose, with
+   no host round trip), as many as pay in expected tokens per millisecond on this Mac; on MoE targets (the Qwen
+   35B-A3B, the N
