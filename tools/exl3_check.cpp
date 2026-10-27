@@ -2,13 +2,16 @@
 //  1. with Sushi's fixtures (its src/exl3/fixtures: 128 x 128 matrices made by its converter, each with `inner`, the
 //     weights exllamav3 decodes): exl3::decode_tile of every tile of the MCG ones equal to `inner`, bit for bit;
 //  2. random experts (D 512, I 256, 16 experts, top-4; random trellis words, suh and svh at the magnitudes real packs
-//     have) at rates n 32, 40, 48, 64 and windows 16 and 15: exl3::enc_rows at 1, 3 and 8 rows and exl3::enc_prefill
-//     on moe_bucket3's tiles at 37 and 300 tokens, against exl3::project and the SwiGLU in fp32;
+//     have) at rates n 16, 24, 32, 40, 48, 64 (K1-K4) and windows 16 and 15: exl3::enc_rows at 1, 3 and 8 rows and
+//     exl3::enc_prefill on moe_bucket3's tiles at 37 and 300 tokens, against exl3::project and the SwiGLU in fp32 (the
+//     down projection's input unrounded, as the kernels take it);
 //  3. with a pack folder: the same on layer 0's experts of a Sushi pack (Flash-Next shapes, its own window).
 // Error: max |got - ref| / max |ref| over each output; the bar is 3e-3 (the f16 roundings of transformed values reach
 // about 1.1e-3). A negative control corrupts one tile of every expert's gate (the last row and column of tiles) and
 // must fail the bar.
-//   exl3_check [--fixtures DIR] [--pack DIR]       (needs a GPU; run with MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1)
+//   exl3_check [--fixtures DIR] [--pack DIR]       (needs a GPU; takes the GPU lock unless NI_LOCK_HELD /
+//   NACE_GPU_LOCK_HELD says the caller holds it; run with MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1)
+#include "bench/bench.h"
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
 #include "model/moe_exl3.h"
@@ -17,6 +20,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -111,9 +115,10 @@ exl3::Proj device(const Bank& b) {
                     upload(b.svh.data(), b.svh.size() * 2), b.n};
 }
 
-void project(const Bank& b, uint32_t e, uint32_t window, const float* x, float* y) {
-  exl3::project(b.t.data() + size_t(e) * b.in / 16 * b.out / 16 * b.n, b.suh.data() + size_t(e) * b.in,
-                b.svh.data() + size_t(e) * b.out, b.in, b.out, b.n, window, x, y);
+void project(const Bank& b, uint32_t e, uint32_t window, const float* x, float* y, bool round_in = true) {
+  if (!exl3::project(b.t.data() + size_t(e) * b.in / 16 * b.out / 16 * b.n, b.suh.data() + size_t(e) * b.in,
+                     b.svh.data() + size_t(e) * b.out, b.in, b.out, b.n, window, x, y, round_in))
+    fatal("exl3::project: %u x %u is not on the 128 grid", b.in, b.out);
 }
 
 // expert e's output for input x (D): down(silu(gate x) * up x)
@@ -123,7 +128,7 @@ std::vector<float> expert(const Model& m, uint32_t e, const float* x) {
   project(m.g, e, m.sh.window, x, g.data());
   project(m.u, e, m.sh.window, x, u.data());
   for (uint32_t i = 0; i < I; ++i) h[i] = silu(g[i]) * u[i];
-  project(m.d, e, m.sh.window, h.data(), y.data());
+  project(m.d, e, m.sh.window, h.data(), y.data(), false);
   return y;
 }
 
@@ -283,6 +288,12 @@ void pack(const std::string& dir, std::mt19937& rng) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  bench::GpuLock lock;
+  if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD") &&
+      !lock.acquire([](const std::string& who) {
+        fprintf(stderr, "waiting for the GPU lock %s (%s)\n", bench::GpuLock::path().c_str(), who.c_str());
+      }))
+    fatal("cannot take the GPU lock %s: %s", bench::GpuLock::path().c_str(), strerror(errno));
   std::string fix, pk;
   for (int i = 1; i + 1 < argc; ++i) {
     if (!strcmp(argv[i], "--fixtures")) fix = argv[++i];
@@ -290,7 +301,7 @@ int main(int argc, char** argv) {
   }
   if (!fix.empty()) fixtures(fix);
   std::mt19937 rng(7);
-  for (uint32_t n : {32u, 40u, 48u, 64u})
+  for (uint32_t n : {16u, 24u, 32u, 40u, 48u, 64u})
     for (uint32_t window : {16u, 15u}) {
       if (n != 32 && window != 16) continue;
       Model m;

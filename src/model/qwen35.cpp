@@ -692,6 +692,10 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok) {
       if (const double k = expert_quant_.value("k", 0.0); k > 0 && n > k * 16)
         fatal("%s: an EXL3 rate of %g bits a weight, wider than config.json's expert_quant k (%g)", full.c_str(),
               n / 16.0, k);
+      static bool said = false;  // (absent means 16, Sushi's format says; the two known packs state 15)
+      if (!expert_quant_.contains("window") && !said)
+        logi("EXL3 experts: config.json's expert_quant has no window: 16");
+      said = true;
       L.w = t;
       L.s = suh;
       L.b = svh;

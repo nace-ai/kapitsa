@@ -73,6 +73,9 @@ class Qwen4Exp : public Qwen35 {
   static bool is_model(const std::string& model_dir);
   // a Flash-Next folder whose routed experts are Q2_0 (tools/qwen4_exp_q20.py)
   static bool q20_pack(const std::string& model_dir);
+  // What load adds to the RMSNorm weights, from the mean of the first attention layer's indexer layernorms: 1 for
+  // Qwen's zero-centred weights (a mean of at most 0.25), 0 where a converter added the 1 (at least 0.75), -1 between
+  static float norm_offset(double indexer_norm_mean);
   // Whether the prefill sparse attention runs on the matrix units (qattn_t_sparse_g12d2), the decision enc_attn_sparse
   // makes: NI_QSA_TATTN=1 (opt-in since #585), 12 query heads per KV head, head dim 256, an Apple10 GPU and macOS 26.
   // The model_dir form reads config.json (false for a folder that is not Flash-Next).

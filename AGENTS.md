@@ -33,7 +33,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
-remote_test cluster_test split_place_test json_file_test logit_dump`:
+exl3_test remote_test cluster_test split_place_test json_file_test logit_dump`:
 
 ```bash
 build/api_test
@@ -42,6 +42,7 @@ build/fn_store_test                          # the streamed-expert cache (src/mo
 build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
 build/tokenizer_test                         # Flint's pre-tokenizer split
 build/iq_layout_test                         # GGUF IQ experts in the GPU layout (src/kernels/wfmt_iq.metal)
+build/exl3_test                              # the EXL3 reference decoder (src/model/moe_exl3.h), Flash-Next's norm check
 build/remote_test                            # a split model's reserve on its other Macs (src/model/remote.h)
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)

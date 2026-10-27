@@ -51,6 +51,7 @@ bool shapes_ok(const Shape& sh, const Experts& x, std::string* why) {
   if (sh.D % 512 || sh.I % 128) return no("hidden must be a multiple of 512 and the expert width of 128 (H128 blocks)");
   if (sh.D > 4096 || sh.I > 4096) return no("hidden or expert width over 4096 (the rows kernels stage x in threadgroup memory)");
   if (sh.k == 0 || sh.k > 16) return no("top-k must be 1-16");
+  if (sh.E == 0) return no("no experts");
   if (sh.E > 512) return no("more than 512 experts (moe_bucket3)");
   if (sh.window < 8 || sh.window > 16) return no("a codeword window of " + std::to_string(sh.window) + " bits (8-16)");
   for (const Proj* p : {&x.g, &x.u, &x.d})
@@ -159,7 +160,7 @@ uint32_t perm(uint32_t i) {
 void decode_tile(const uint16_t* words, uint32_t n, uint32_t window, float* w) {
   uint16_t cw[256];
   unpack_tile(words, n, cw);
-  const uint32_t mask = (1u << window) - 1u;
+  const uint32_t mask = window >= 16 ? 0xFFFFu : (1u << window) - 1u;
   for (uint32_t i = 0; i < 256; ++i) w[perm(i)] = h2f(mcg(cw[i] & mask));
 }
 
@@ -173,10 +174,11 @@ void h128(float* v) {
   memcpy(v, t, sizeof t);
 }
 
-void project(const uint16_t* trellis, const uint16_t* suh, const uint16_t* svh, uint32_t in, uint32_t out, uint32_t n,
-             uint32_t window, const float* x, float* y) {
+bool project(const uint16_t* trellis, const uint16_t* suh, const uint16_t* svh, uint32_t in, uint32_t out, uint32_t n,
+             uint32_t window, const float* x, float* y, bool round_in) {
+  if (in == 0 || out == 0 || in % 128 || out % 128) return false;
   std::vector<float> xt(in), inner(out, 0.0f);
-  for (uint32_t i = 0; i < in; ++i) xt[i] = round16(x[i]) * h2f(suh[i]);
+  for (uint32_t i = 0; i < in; ++i) xt[i] = (round_in ? round16(x[i]) : x[i]) * h2f(suh[i]);
   for (uint32_t b = 0; b < in; b += 128) {
     h128(&xt[b]);
     for (uint32_t i = b; i < b + 128; ++i) xt[i] = round16(xt[i]);
@@ -191,6 +193,7 @@ void project(const uint16_t* trellis, const uint16_t* suh, const uint16_t* svh, 
     }
   for (uint32_t b = 0; b < out; b += 128) h128(&inner[b]);
   for (uint32_t c = 0; c < out; ++c) y[c] = round16(inner[c] * h2f(svh[c]));
+  return true;
 }
 
 }  // namespace ni::exl3

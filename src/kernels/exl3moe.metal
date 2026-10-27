@@ -8,8 +8,10 @@
 // 8l .. 8l + 7 are rows 2q, 2q+1, 2q+8, 2q+9 (q = l % 4) of columns l / 4 (the first four) and l / 4 + 8 (the rest).
 // The projection is y = svh * H128(W^T H128(suh * x)), H128 the orthonormal Hadamard transform of each block of 128,
 // suh / svh per expert (f16), the transformed input and output rounded to f16 as the reference rounds them (Sushi's
-// expert_exl3.zig: prepareInput, finishOutput); the SwiGLU between stays fp32, the inner products are fp32.
-// Rates n <= 64 (K <= 4: a lane's 8 codewords lie in the 64 bits ending at its last one).
+// expert_exl3.zig: prepareInput, finishOutput); the inner products are fp32. The SwiGLU between stays fp32 up to the
+// down projection's transform, as Sushi's chain does: an f16 product overflows on large activations (Sushi saw gate and
+// up near 400 on MiMo, a product past 65504), so the down input is rounded to f16 only after H128, where suh has scaled
+// it down. Rates n 16-64 (K1-K4: a lane's 8 codewords lie in the 64 bits ending at its last one).
 
 struct Exl3Params {
   uint D, I, k;     // hidden, expert width, top-k
@@ -275,7 +277,7 @@ NI_INLINE void exl3_mm_store(thread simdgroup_float8x8 (&acc)[4][2], threadgroup
                            uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
                            uint lane [[thread_index_in_simdgroup]]) {
   if (tg.y >= ntiles[0]) return;
-  threadgroup half Xs[kExl3Bm * kExl3Xld];
+  alignas(16) threadgroup half Xs[kExl3Bm * kExl3Xld];  // also the fp32 output staging (exl3_mm_store)
   threadgroup half Ws[16 * kExl3Wld];
   const uint e = tiles[tg.y * 3], b0 = tiles[tg.y * 3 + 1], nr = tiles[tg.y * 3 + 2] - b0;
   const bool up = tg.z != 0;
@@ -296,7 +298,7 @@ NI_INLINE void exl3_mm_store(thread simdgroup_float8x8 (&acc)[4][2], threadgroup
                            uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
                            uint lane [[thread_index_in_simdgroup]]) {
   if (tg.y >= ntiles[0]) return;
-  threadgroup half Xs[kExl3Bm * kExl3Xld];
+  alignas(16) threadgroup half Xs[kExl3Bm * kExl3Xld];  // also the fp32 output staging (exl3_mm_store)
   threadgroup half Ws[16 * kExl3Wld];
   const uint e = tiles[tg.y * 3], b0 = tiles[tg.y * 3 + 1], nr = tiles[tg.y * 3 + 2] - b0;
   const uint ot = p.D / 16;

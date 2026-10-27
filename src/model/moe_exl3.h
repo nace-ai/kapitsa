@@ -30,7 +30,9 @@ struct Shape {
   uint32_t window = 16;  // codeword bits (8..16)
 };
 
-// Whether the kernels take these shapes and rates (why: the first reason they don't)
+// Whether the kernels take these shapes and rates (why: the first reason they don't): the dimensions they index, the
+// rates, and buffers at least as large as the shapes index. The tensors' exact shapes and dtypes are the loader's to
+// check (Qwen35::qlin: uint16 [E, in/16, out/16, n], f16 [E, in] and [E, out]; check_formats: D, I and E).
 bool shapes_ok(const Shape& sh, const Experts& x, std::string* why = nullptr);
 
 // The rate of a trellis tensor's shape [E, in/16, out/16, n]: n, or 0 when it is not one the kernels read (even, 16-64)
@@ -56,19 +58,21 @@ void enc_prefill(Encoder& e, const Experts& x, const Shape& sh, uint32_t P, uint
 // The rows of moe_bucket3's tiles enc_prefill takes
 constexpr int kTileRows = 32;
 
-// ---- CPU reference (tools/exl3_test.cpp, tools/exl3_check.mm) ----
+// ---- CPU reference (tools/exl3_test.cpp: the fixtures' tiles; tools/exl3_check.cpp: the kernels against it) ----
 // The MCG codebook's value of a codeword (already masked to the window), as f16 bits
 uint16_t mcg(uint32_t cw);
 // The 256 codewords of a tile (n halfwords at `words`) in stream order
 void unpack_tile(const uint16_t* words, uint32_t n, uint16_t* cw);
 // Codeword i's place in the 16 x 16 tile, row (input) * 16 + column (output)
 uint32_t perm(uint32_t i);
-// A tile's weights, [16 in][16 out] row-major, the codewords masked to `window` bits
+// A tile's weights, [16 in][16 out] row-major, the codewords masked to `window` bits (16 or more: all of them)
 void decode_tile(const uint16_t* words, uint32_t n, uint32_t window, float* w);
 // H128 of v (128 values) in place, scaled by 1 / sqrt(128)
 void h128(float* v);
-// One projection of one expert for one input (in values): y (out values), with the reference's f16 roundings
-void project(const uint16_t* trellis, const uint16_t* suh, const uint16_t* svh, uint32_t in, uint32_t out, uint32_t n,
-             uint32_t window, const float* x, float* y);
+// One projection of one expert for one input (in values): y (out values), with the reference's f16 roundings; with
+// round_in false the input is not rounded to f16 first (the kernels' down projection, whose input is the fp32 SwiGLU).
+// False, y untouched, when in or out is not a multiple of 128.
+bool project(const uint16_t* trellis, const uint16_t* suh, const uint16_t* svh, uint32_t in, uint32_t out, uint32_t n,
+             uint32_t window, const float* x, float* y, bool round_in = true);
 
 }  // namespace ni::exl3

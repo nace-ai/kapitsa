@@ -131,6 +131,8 @@ bool Qwen4Exp::is_model(const std::string& dir) {
          r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
 }
 
+float Qwen4Exp::norm_offset(double m) { return m <= 0.25 ? 1.0f : m >= 0.75 ? 0.0f : -1.0f; }
+
 bool Qwen4Exp::q20_pack(const std::string& dir) {
   if (!is_model(dir)) return false;
   try {
@@ -321,7 +323,10 @@ void Qwen4Exp::load(const std::string& dir) {
     }
     if (!cnt) fatal("qwen4_exp: no bf16 / f16 indexer layernorms in layer %d, which tell the RMSNorm convention", a0);
     const double m = sum / double(cnt);
-    norm1_ = m > 0.5 ? 0.0f : 1.0f;
+    norm1_ = norm_offset(m);
+    if (norm1_ < 0)
+      fatal("qwen4_exp: layer %d's indexer layernorms average %.2f, between Qwen's zero-centred RMSNorm weights (near "
+            "0) and weights with the 1 added at conversion (near 1): the convention is unclear", a0, m);
     logi("RMSNorm weights %s (indexer norm mean %.2f): read as %s",
          norm1_ ? "zero-centred" : "with the 1 added at conversion", m, norm1_ ? "1 + w" : "they are");
   }
