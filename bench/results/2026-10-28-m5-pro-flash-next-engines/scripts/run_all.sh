@@ -19,5 +19,7 @@ leg 0 L 1 --smoke
 leg 1 K 2; leg 2 S 2; leg 3 N 2
 leg 4 K 2; leg 5 S 2; leg 6 N 2; leg 7 L 1
 leg 8 K 2; leg 9 S 2; leg 10 N 2; leg 11 L 1
+# leg 10 N was stopped by the memory watch at pressure level 4 (kept in aborted/); legs 12 N and 13 L make up n
+leg 12 N 2; leg 13 L 1
 $B summarize "$OUT"
 echo "=== all done $(date -u +%FT%TZ)"
