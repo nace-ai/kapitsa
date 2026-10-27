@@ -461,7 +461,7 @@ seconds, not `on`.
 
 When this Mac is short of memory, Kapitsa also sizes Splash's expert cache: with 22 to 38 GiB free and reclaimable, and
 no `--expert-memory` in `--splash-arg`, the child gets `--expert-memory` of the free GiB less 14, at least 8. Below
-22 GiB, or with your own `--expert-memory`, the plan is left to Splash, whose default plan needs about 35.8 GiB. The
+22 GiB, or with your own `--expert-memory`, the plan is left to Splash, whose default plan has no fixed threshold: it started at 33.0 GiB free and refused at 35.2 GiB under memory pressure. The
 formula rests on one measured pass (a 16 GiB cache at 30.4 GiB free) and is not validated across memory states. From 33
 to 38 GiB free it replaces a default plan that can start with a smaller expert cache, which streams experts from the SSD
 and is slower than a full one, and no run compares the two; pass `--splash-arg --expert-memory <size>` to choose. What
