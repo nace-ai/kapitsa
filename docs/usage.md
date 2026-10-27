@@ -135,8 +135,8 @@ next-token KL of 7e-6 from the BF16 head, the same top token at 319 of 320 posit
 ### Other models
 
 Any Hugging Face repo of a Qwen3.5-family model (Qwen3.5, Qwen3.6, Qwen3.8) in MLX format runs: bf16, or MLX affine 3,
-4, 5, 6 or 8-bit with groups of 64 (4-bit also 32; 8-bit also 128, loaded as group 64 with bf16 scales, which only
-Sushi's Flash-Next trunk has exercised), mixed recipes included, except ones whose dense MLP gives `gate_proj` and
+4, 5, 6 or 8-bit with groups of 64 (4-bit also 32; 8-bit also 128, loaded as group 64 with bf16 scales and biases, which
+only Sushi's Flash-Next trunk has exercised), mixed recipes included, except ones whose dense MLP gives `gate_proj` and
 `up_proj` different formats (as `mlx-community/Qwen3.8-27B-OptiQ-4bit`): those are refused when they load. Kapitsa reads
 the repo's `config.json` before any weights, then downloads its top-level files except other formats (`.gguf`, `.bin`,
 images and the like; a Sushi pack's `ngram_table.bin` is kept). A catalog variant's repo
