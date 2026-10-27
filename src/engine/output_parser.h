@@ -4,7 +4,7 @@
 // TextTags, tags that are no tokens of the vocabulary (Nemotron Nano 9B v2's <think> and <TOOLCALL>[...] JSON calls)
 // are matched in the decoded text.
 #pragma once
-#include "engine/engine.h"
+#include "engine/chat.h"
 #include "engine/tool_args.h"
 #include "tokenizer/tokenizer.h"
 

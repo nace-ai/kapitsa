@@ -1,4 +1,5 @@
 #include "api/common.h"
+#include "model/dory.h"
 
 #include <mutex>
 #include <random>

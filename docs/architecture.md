@@ -83,6 +83,24 @@ One request alone runs the single-stream path unchanged. Requests decoded togeth
 two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
 `NI_BATCH=0` makes them take turns instead.
 
+## Execution session ownership
+
+[`ExecutionSession`](../src/engine/execution_session.h) provides one-shot start, cancellation, and join for a bound
+request. [`chat.h`](../src/engine/chat.h) contains the request, result, and delta types without native model headers.
+The private [`ExecutionFactory`](../src/engine/execution_session_internal.h) binds backend work and its observer
+before start. The native HTTP handlers do not use this owner yet.
+
+The control owner keeps the session alive through its callbacks. Callbacks cannot retain, destroy, start, or wait on
+their own session. They can request cancellation. Destruction cancels and joins the worker before releasing the
+bound work. Concurrent waits return the same completed result. Waiting before start or from a worker callback throws.
+
+Observer exceptions cancel further prompt and delta delivery. The terminal callback runs once after work returns,
+including work exceptions and thread-start failure. Terminal delivery proves CPU work returned, not that a backend
+retired its Metal command buffers, callbacks, or ANE evaluations. Each backend must establish its own native drain.
+
+The [standalone CPU runner](../tools/run_execution_session_test.sh) compiles the production implementation without
+native libraries or Apple frameworks. The same tests run through the CMake `execution_session_test` target.
+
 ## Four model backends
 
 | | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron Dory | Recursive Flint |

@@ -106,7 +106,7 @@ target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/mlx_quant\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -115,6 +115,14 @@ foreach(t ${NI_TOOLS})
   # (KAPITSA_GIT: the commit a dump or measurement says it was built from, as `kapitsa --version` does)
   target_compile_definitions(${name} PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
 endforeach()
+
+find_package(Threads REQUIRED)
+add_executable(execution_session_test tools/execution_session_test.cpp src/engine/execution_session.cpp)
+target_include_directories(execution_session_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
+target_link_libraries(execution_session_test PRIVATE Threads::Threads)
+enable_testing()
+add_test(NAME execution_session_test COMMAND execution_session_test)
+set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
 
 # Kapitsa's server and CLI: `kapitsa serve --model <name|dir> ...`, with the chat page (src/server/chat.html)
 # embedded, the coding-agent launchers (src/server/launch.cpp) and `kapitsa update` (src/server/update_cmd.cpp). The API
