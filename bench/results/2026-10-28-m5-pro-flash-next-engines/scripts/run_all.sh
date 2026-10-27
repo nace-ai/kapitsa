@@ -9,7 +9,10 @@ mkdir -p "$OUT"
 leg() { # idx arm reps [extra]
   [ -f "$OUT/leg$1-$2.json" ] && return
   echo "=== leg $1 $2 $(date -u +%FT%TZ)"
-  nice -n 5 lockf -k -t 120 /tmp/kapitsa-gpu.lock $B leg --arm $2 --idx $1 --out "$OUT" --reps $3 $4 > "$OUT/leg$1-$2.out" 2>&1
+  for try in 1 2 3 4 5 6 7 8 9 10; do  # another worker's short model start makes the leg refuse to start: wait, retry
+    nice -n 5 lockf -k -t 120 /tmp/kapitsa-gpu.lock $B leg --arm $2 --idx $1 --out "$OUT" --reps $3 $4 > "$OUT/leg$1-$2.out" 2>&1
+    rc=$?; grep -q 'already running, not starting' "$OUT/leg$1-$2.out" || break; echo "  busy (try $try), waiting"; sleep 30
+  done
   echo "leg $1 $2 rc=$? $(date -u +%FT%TZ)"; tail -2 "$OUT/leg$1-$2.out"
 }
 leg 0 L 1 --smoke
