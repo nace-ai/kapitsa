@@ -11,6 +11,7 @@ namespace ni::splash {
 // A path found, or why not. `error` names what is missing and where it was looked for, and the flag that replaces it.
 struct Found {
   std::string path, error;
+  std::string note;  // set when the pick was not asked for: which one it is and how to change it (print it)
   bool ok() const { return error.empty(); }
 };
 

@@ -324,6 +324,37 @@ try:
     check(len(s.prompts()) == 4, "a refused request reaches no engine")
 finally:
     s.close()
+# several resolved models and no --splash-model: it still starts, on the one Splash resolved last, and says which
+with tempfile.TemporaryDirectory() as home:
+    models = home + "/Library/Application Support/Splash/models"
+    for i, (name, family, age) in enumerate([("aaaaaa1111", "Qwen3.8-27B", 30), ("bbbbbb2222", "Qwen3.8-Flash-Next", 10), ("cccccc3333", "Qwen3.6-35B-A3B", 20)]):
+        d = "%s/.resolved/%s" % (models, name)
+        os.makedirs(d)
+        for e in os.listdir(MODEL):
+            if e != "model.json": os.symlink(os.path.join(MODEL, e), os.path.join(d, e))
+        json.dump({"family": family}, open(d + "/model.json", "w"))
+        os.makedirs(models + "/.selections", exist_ok=True)
+        link = "%s/.selections/sel%d" % (models, i)
+        os.symlink(d, link)
+        os.utime(link, (time.time() - age * 3600,) * 2, follow_symlinks=False)
+    os.makedirs(home + "/Applications/Splash/engine")
+    os.symlink(FAKE, home + "/Applications/Splash/engine/splash")
+    env = {k: v for k, v in os.environ.items() if k != "SPLASH_HOME"}
+    env.update(HOME=home, PATH="/usr/bin:/bin")
+    port = free_port()
+    proc = subprocess.Popen([CLI, "serve", "--engine", "splash", "--private", "--port", str(port)], env=env,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    up = False
+    for _ in range(100):
+        if proc.poll() is not None: break
+        try:
+            urllib.request.urlopen("http://127.0.0.1:%d/v1/models" % port, timeout=1).read(); up = True; break
+        except Exception: time.sleep(0.1)
+    proc.terminate()
+    try: err = proc.communicate(timeout=15)[1].decode()
+    except subprocess.TimeoutExpired: proc.kill(); err = proc.communicate()[1].decode()
+    check(up, "several models, no --splash-model: started: %r" % err[-400:])
+    check("Splash model: Qwen3.8-Flash-Next bbbbbb2222" in err and "--splash-model" in err, "several models: says which: %r" % err[-400:])
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)

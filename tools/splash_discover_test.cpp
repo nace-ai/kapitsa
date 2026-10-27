@@ -1,4 +1,6 @@
 // src/splash/discover.h on a throwaway Splash tree: what is found, and what each error names. CPU only, no Splash needed.
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <chrono>
@@ -37,6 +39,17 @@ static void model(const std::string& home, const std::string& name, const std::s
   fs::path d = fs::path(home) / "Library/Application Support/Splash/models/.resolved" / name;
   touch(d / "model.json", "{\"family\":\"" + family + "\"" + (source.empty() ? "" : ",\"model\":\"" + source + "\"") + "}");
   if (tokenizer) touch(d / "tokenizer/tokenizer.json", "{}");
+}
+
+// Splash's "resolved <hours_ago> hours ago": ../.selections/<hash> -> .resolved/<name>, a symlink whose own time is that
+static void selected(const std::string& home, const std::string& name, int hours_ago) {
+  fs::path sel = fs::path(home) / "Library/Application Support/Splash/models/.selections";
+  fs::create_directories(sel);
+  fs::create_directory_symlink(fs::path(home) / "Library/Application Support/Splash/models/.resolved" / name, sel / ("sel-" + name));
+  timespec t[2];
+  t[0].tv_sec = t[1].tv_sec = time(nullptr) - hours_ago * 3600;
+  t[0].tv_nsec = t[1].tv_nsec = 0;
+  utimensat(AT_FDCWD, (sel / ("sel-" + name)).c_str(), t, AT_SYMLINK_NOFOLLOW);
 }
 
 int main() {
@@ -80,11 +93,29 @@ int main() {
   model(home, "zzzzzz9999", "Qwen3.8-27B", false);
   m = find_model(home, "");
   check(m.ok() && has(m.path, "/.resolved/aaaaaa1111"), "model: the only one", m.error);
-  // several: an error that lists them, and a prefix picks one
+  // several, no name: the most recently resolved, and it says which and how to change it; a prefix picks another
   model(home, "aaaaaa2222", "Qwen3.8-Flash-Next");
   model(home, "bbbbbb3333", "Qwen3.6-35B-A3B");
   m = find_model(home, "");
-  check(!m.ok() && has(m.error, "3 resolved models") && has(m.error, "Qwen3.6-35B-A3B  bbbbbb3333") && !has(m.error, "zzzzzz9999"), "model: several", m.error);
+  selected(home, "aaaaaa1111", 30);
+  selected(home, "aaaaaa2222", 20);
+  selected(home, "bbbbbb3333", 10);
+  m = find_model(home, "");
+  check(m.ok() && has(m.path, "/bbbbbb3333") && has(m.note, "Qwen3.6-35B-A3B bbbbbb3333") && has(m.note, "most recently resolved of 3") &&
+            has(m.note, "--splash-model") && !has(m.note, "zzzzzz9999"),
+        "model: several, no flag: the latest resolved, and it says so", m.error + m.note);
+  fs::remove(fs::path(home) / "Library/Application Support/Splash/models/.selections/sel-bbbbbb3333");
+  selected(home, "bbbbbb3333", 50);
+  m = find_model(home, "");
+  check(m.ok() && has(m.path, "/aaaaaa2222"), "model: several: a later selection wins, not folder names or folder times", m.path);
+  // a folder with no selection link falls back to its own time; all equal: the first by name, every time
+  fs::remove_all(fs::path(home) / "Library/Application Support/Splash/models/.selections");
+  m = find_model(home, "");
+  check(m.ok() && !m.note.empty(), "model: several, no selections: still a pick", m.error);
+  fs::remove_all(fs::path(home) / "Library/Application Support/Splash/models/.selections");
+  selected(home, "aaaaaa1111", 30);
+  selected(home, "aaaaaa2222", 20);
+  selected(home, "bbbbbb3333", 10);
   m = find_model(home, "bbbbbb");
   check(m.ok() && has(m.path, "/bbbbbb3333"), "model: prefix", m.error);
   m = find_model(home, "aaaaaa");
@@ -113,6 +144,9 @@ int main() {
   fs::last_write_time(res / "eeeeee5555", now - std::chrono::hours(1));
   m = find_model(home, "q2_0");
   check(m.ok() && has(m.path, "/eeeeee5555"), "source: the newest of one source", m.error);
+  selected(home, "dddddd4444", 0);  // Splash resolved it again just now: that beats the folder's older time
+  m = find_model(home, "q2_0");
+  check(m.ok() && has(m.path, "/dddddd4444"), "source: a later selection beats the folder time", m.error);
   m = find_model(home, "flash-next");
   check(!m.ok() && has(m.error, "3 different models") && has(m.error, "Other-GGUF"), "family: two sources", m.error);
   m = find_model(home, "other-gguf");

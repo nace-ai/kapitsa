@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 namespace fs = std::filesystem;
 
@@ -26,7 +27,7 @@ fs::path models_dir(const std::string& home) { return fs::path(home) / "Library/
 
 struct Model {
   std::string name, family, source;  // source: model.json's "model" (e.g. "nace-local/Qwen3.6-35B-A3B-4bit"), "" when absent
-  fs::file_time_type written;
+  long long written = 0;  // ns: when Splash last resolved it (see models()), else the folder's modification time
 };
 
 std::string lower(std::string s) {
@@ -41,13 +42,26 @@ std::vector<Model> models(const std::string& home) {
     const fs::path& d = it->path();
     if (!is_file(d / "tokenizer/tokenizer.json")) continue;
     Model m{d.filename().string(), "?", "", {}};
-    std::error_code tec;
-    m.written = fs::last_write_time(d, tec);
+    struct stat st;
+    if (stat(d.c_str(), &st) == 0) m.written = (long long)st.st_mtimespec.tv_sec * 1000000000LL + st.st_mtimespec.tv_nsec;
     std::ifstream f(d / "model.json");
     auto j = nlohmann::json::parse(f, nullptr, false);
     if (j.is_object() && j.contains("family") && j["family"].is_string()) m.family = j["family"].get<std::string>();
     if (j.is_object() && j.contains("model") && j["model"].is_string()) m.source = j["model"].get<std::string>();
     out.push_back(m);
+  }
+  // Splash keeps a symlink per resolved model in ../.selections (<hash> -> .resolved/<folder>), made when it resolves the model:
+  // its own time is the better "when", since a folder's modification time also moves when a file in it is rewritten.
+  std::error_code sec;
+  for (fs::directory_iterator it(models_dir(home).parent_path() / ".selections", sec), end; !sec && it != end; it.increment(sec)) {
+    struct stat st;
+    if (lstat(it->path().c_str(), &st) != 0 || !S_ISLNK(st.st_mode)) continue;
+    std::error_code rec;
+    const std::string target = fs::read_symlink(it->path(), rec).filename().string();
+    if (rec) continue;
+    const long long t = (long long)st.st_mtimespec.tv_sec * 1000000000LL + st.st_mtimespec.tv_nsec;
+    for (Model& m : out)
+      if (m.name == target) m.written = t;
   }
   std::sort(out.begin(), out.end(), [](const Model& a, const Model& b) { return a.name < b.name; });
   return out;
@@ -97,9 +111,13 @@ Found find_model(const std::string& home, const std::string& want) {
     return {"", "no Splash model found: " + dir + " has no folder with a tokenizer. Run a model in Splash once, or give --splash-model <folder>."};
   if (want.empty()) {
     if (all.size() == 1) return {dir + "/" + all[0].name, ""};
-    std::string e = "Splash has " + std::to_string(all.size()) + " resolved models in " + dir + "; say which with --splash-model <folder or its first 6+ characters>:";
-    for (const Model& m : all) e += "\n  " + m.family + "  " + m.name;
-    return {"", e};
+    // several: the one Splash resolved last (ties: the first by folder name, so the same one every time)
+    const Model* pick = &all[0];
+    for (const Model& m : all)
+      if (m.written > pick->written) pick = &m;
+    return {dir + "/" + pick->name, "",
+            "Splash model: " + pick->family + " " + pick->name + " (the most recently resolved of " + std::to_string(all.size()) +
+                "; --splash-model <family or folder name> picks another)"};
   }
   std::vector<const Model*> hit;
   if (want.size() >= 6)
