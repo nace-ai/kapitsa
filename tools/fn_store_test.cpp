@@ -7,9 +7,11 @@
 // an expert in use). Cases: decode rows with next-layer predictions (good and wrong ones), verify rows with repeats,
 // prefill chunks (scan lookups, every next-layer expert read ahead), a chunk seam's whole-layer wrap (the next
 // chunk's layer 0 read ahead during the last layer's turn), a hot set that must survive a prompt's sweep (ARC),
-// direct and widened reads, an arena of every expert (no handshakes), the statistics' sums, and the layer-major
+// direct and widened reads, an arena of every expert (no handshakes), the statistics' sums, the layer-major
 // prefill group's two pure sides: the walk's shapes at the merge gate's frozen lengths (the engine's own chunker,
-// no model) and the group slots' eligibility and two-pass store-sizing decision.
+// no model) and the group slots' eligibility and two-pass store-sizing decision, and the NI_EXPERT_STORE pin end
+// to end: the environment variable through the live load's one parse into planned_group_world, the prediction
+// `kapitsa doctor` and every pre-load fit number ask (no model, no load).
 //   fn_store_test [--keep DIR]
 #include "engine/engine.h"
 #include "model/expert_store.h"
@@ -960,6 +962,126 @@ void case_group_plan() {
          gsb);
 }
 
+// The NI_EXPERT_STORE pin end to end, the seam the pure sides above stop short of: the environment variable
+// through the one parse the live load shares (q20::store_pin_bytes) into the one prediction every pre-load fit
+// number and `kapitsa doctor` ask (ni::planned_group_world; doctor.cpp publishes its st/in as the expert_store
+// JSON: bytes, reason, group_slot_bytes, budget_leaves_bytes). No model, no load: header-only MemPlans of a
+// streamed Q2_0 pack, the fields plan() fills. Qwen4Exp::init_store runs the identical expression live
+// (qwen4_exp.cpp: getenv -> store_pin_bytes -> q20::group_world); that call site needs a model loaded on the
+// GPU, so the CPU side pins the parser's own cases first, then the env-driven prediction through it.
+void case_group_pin() {
+  // the pin is process-wide: save whatever the case finds, restore it at the end
+  const char* prior = getenv("NI_EXPERT_STORE");
+  const std::string saved = prior ? prior : "";
+  const auto set_es = [](const char* v) {
+    if (v) setenv("NI_EXPERT_STORE", v, 1);
+    else unsetenv("NI_EXPERT_STORE");
+  };
+  const size_t GB = size_t(1e9);  // the parser's GB: atof(es) * 1e9, exact at these values
+  const size_t gsb = group_slot_bytes(4, 2048, 2048, 4);  // case_group_plan's G=4 shape
+  const size_t budget = 20 * GB;
+  const int slots = 2, ctx = 8192;
+
+  // the parser alone, every case a parse regression could hide in: no pin, a pin, an exact size, a clamp, 0,
+  // the values below zero and the infinities (the double->size_t conversion is undefined for all of them:
+  // every clamp happens before it, not after)
+  size_t pb = ~size_t(0);
+  CHECK(!store_pin_bytes(nullptr, 4 * GB, pb) && !store_pin_bytes("", 4 * GB, pb) && !store_pin_bytes("auto", 4 * GB, pb),
+        "store_pin_bytes: unset, the empty string and \"auto\" are no pin");
+  CHECK(store_pin_bytes("all", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"all\" pins the whole store (%zu)", pb);
+  CHECK(store_pin_bytes("0.5", 4 * GB, pb) && pb == 5 * GB / 10, "store_pin_bytes: \"0.5\" is exact (%zu)", pb);
+  CHECK(store_pin_bytes("1e6", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"1e6\" clamps to all (%zu)", pb);
+  CHECK(store_pin_bytes("abc", 4 * GB, pb) && pb == 0, "store_pin_bytes: garbage reads 0, pinned (%zu)", pb);
+  CHECK(store_pin_bytes("-1", 4 * GB, pb) && pb == 0, "store_pin_bytes: a negative pin clamps to 0 (%zu)", pb);
+  CHECK(store_pin_bytes("-0.5", 4 * GB, pb) && pb == 0, "store_pin_bytes: a negative fraction clamps to 0 (%zu)", pb);
+  CHECK(store_pin_bytes("nan", 4 * GB, pb) && pb == 0, "store_pin_bytes: NaN clamps to 0 (%zu)", pb);
+  CHECK(store_pin_bytes("inf", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"inf\" clamps to all, never an undefined conversion (%zu)", pb);
+  CHECK(store_pin_bytes("1e999", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"1e999\" (atof overflows to inf) clamps to all (%zu)", pb);
+
+  // fixture C: a 3-layer pack - the smallest store (3 layers') IS the whole store, so no live sample of the
+  // available memory, no RAM-share cap and no budget can cut the automatic world below all: it is complete on
+  // any machine, and a short pin must reserve the slots anyway (the A2 invariant, through the env seam)
+  MemPlan c;
+  c.store_all = 3 * GB, c.store_least = 3 * GB;
+  c.streamed = c.store_all;
+  c.weights = GB + c.store_least;  // the trunk (1 GB) plus the smallest store, as plan() accounts it
+  c.mtp = 200000000, c.activations = 100000000;
+  c.group_slots = gsb;
+  c.slot_state = 50000000, c.kv_per_pos = 10000;
+  set_es(nullptr);
+  const GroupWorld U = planned_group_world(c, slots, ctx, budget);
+  CHECK(U.st.bytes == c.store_all && U.st.why == AutoStoreWhy::All && U.charge == 0 && U.in.left > U.in.all,
+        "group pin env: unset, the automatic world is complete and pays nothing (bytes %zu, why %d, charge %zu)",
+        U.st.bytes, int(U.st.why), U.charge);
+  set_es("2");  // a short pin: 2 GB of the 3 GB store
+  const GroupWorld P = planned_group_world(c, slots, ctx, budget);
+  CHECK(P.st.bytes == 2 * GB && P.st.why == AutoStoreWhy::Pinned && P.charge == gsb && P.in.left == U.in.left,
+        "group pin env: a short pin reserves where the automatic store was complete (pin bytes %zu, charge %zu)",
+        P.st.bytes, P.charge);
+  CHECK(std::string(auto_store_why_name(P.st.why)) == "NI_EXPERT_STORE" &&
+            auto_store_reason(P.st, P.in).find("NI_EXPERT_STORE pin") != std::string::npos,
+        "group pin env: doctor's reason value and sentence name the pin");
+
+  // fixture P: realistic proportions - a 4-layer pack, the smallest store 3 layers'; the pin branch ignores
+  // budget/avail/cap, so every pin assertion is exact on any machine; only the "auto" row is an invariant (a
+  // live avail sample moves by definition)
+  MemPlan p = c;
+  p.store_all = 4 * GB, p.store_least = 3 * GB;
+  p.streamed = p.store_all;
+  set_es("3.5");  // between the least and all: a realistic short pin
+  const GroupWorld Pp = planned_group_world(p, slots, ctx, budget);
+  CHECK(Pp.st.bytes == 35 * GB / 10 && Pp.st.why == AutoStoreWhy::Pinned && Pp.charge == gsb,
+        "group pin env: the pin's bytes are exact at the parser's scale (bytes %zu, charge %zu)", Pp.st.bytes,
+        Pp.charge);
+  set_es("all");
+  const GroupWorld A = planned_group_world(p, slots, ctx, budget);
+  CHECK(A.st.bytes == p.store_all && A.st.why == AutoStoreWhy::Pinned && A.charge == 0 &&
+            auto_store_reason(A.st, A.in).find("pin: resident") != std::string::npos,
+        "group pin env: a full pin is resident and never pays (charge %zu)", A.charge);
+  set_es("9");  // above the whole store: the parser clamps to all
+  const GroupWorld O = planned_group_world(p, slots, ctx, budget);
+  CHECK(O.st.bytes == p.store_all && O.st.why == AutoStoreWhy::Pinned && O.charge == 0,
+        "group pin env: an over pin clamps to all (bytes %zu)", O.st.bytes);
+  set_es("xyz");  // garbage reads as 0: fail-safe to the incomplete side, reservation charged
+  const GroupWorld G = planned_group_world(p, slots, ctx, budget);
+  CHECK(G.st.bytes == 0 && G.st.why == AutoStoreWhy::Pinned && G.charge == gsb,
+        "group pin env: garbage pins 0 bytes and still reserves (charge %zu)", G.charge);
+  set_es("-1");  // negative: the conversion below zero is undefined and platform-split (arm64 saturates to 0,
+                 // x86-64 reads an indefinite huge value as a full pin); the parser's clamp makes it the
+                 // garbage fail-safe everywhere: pins 0, still reserves
+  const GroupWorld N = planned_group_world(p, slots, ctx, budget);
+  CHECK(N.st.bytes == 0 && N.st.why == AutoStoreWhy::Pinned && N.charge == gsb,
+        "group pin env: a negative pin clamps to 0 and still reserves (charge %zu)", N.charge);
+  set_es("auto");  // the parser's explicit off-pin: the automatic world, never Pinned
+  const GroupWorld V = planned_group_world(p, slots, ctx, budget);
+  CHECK(V.st.why != AutoStoreWhy::Pinned && V.st.bytes >= p.store_least && V.st.bytes <= p.store_all &&
+            V.charge == (V.st.bytes < p.store_all ? gsb : 0),
+        "group pin env: \"auto\" is the automatic world (bytes %zu, why %d, charge %zu)", V.st.bytes, int(V.st.why),
+        V.charge);
+  set_es("3.5");
+  // context: the pin's world is chunk-invariant - the store's bytes and charge identical at 4K and at 128K -
+  // while the world's budget_leaves tracks the context exactly: flash_next_model_budget holds
+  // slots*slot_state + kv_per_pos*min(ctx, 32768), so the 128K world leaves less by the KV term between 4K
+  // and the 32K clamp, and one slot less leaves one slot_state more
+  const GroupWorld W4 = planned_group_world(p, slots, 4096, budget);
+  const GroupWorld W13 = planned_group_world(p, slots, 131072, budget);
+  CHECK(W4.st.bytes == Pp.st.bytes && W4.st.bytes == W13.st.bytes && W4.charge == W13.charge && W4.charge == gsb,
+        "group pin env: the pin is the same world at 4K, 8K and 128K (charge %zu vs %zu)", W4.charge, W13.charge);
+  CHECK(W4.in.left - W13.in.left == p.kv_per_pos * (32768 - 4096),
+        "group pin env: the budget's leaves track the context's KV reserve exactly (%zu vs %zu)", W4.in.left,
+        W13.in.left);
+  const GroupWorld S1 = planned_group_world(p, 1, ctx, budget);
+  CHECK(S1.in.left - Pp.in.left == p.slot_state && S1.charge == gsb,
+        "group pin env: one slot fewer: one slot_state more left, same charge (leaves %zu vs %zu, charge %zu vs %zu)",
+        S1.in.left, Pp.in.left, S1.charge, Pp.charge);
+  // restore the environment: the pin is process-wide and the other cases must see what this one found
+  if (prior) setenv("NI_EXPERT_STORE", saved.c_str(), 1);
+  else unsetenv("NI_EXPERT_STORE");
+  printf("group pin: env -> one parse -> one world: bytes exact, a short pin reserves %zu B, the context moves "
+         "the budget's leaves, never the pin\n",
+         gsb);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -990,6 +1112,7 @@ int main(int argc, char** argv) {
   case_auto_size();
   case_group_shape();
   case_group_plan();
+  case_group_pin();
   if (keep.empty()) {
     for (const std::string& f : p.files) unlink(f.c_str());
     rmdir(dir.c_str());

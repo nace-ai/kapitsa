@@ -123,13 +123,20 @@ inline AutoStore auto_store_size(const AutoStoreIn& in) {
 }
 // The NI_EXPERT_STORE pin, parsed exactly as the live load parses it (Qwen4Exp::init_store): "all" is every
 // expert, a number is GB of store (atof, so garbage reads 0), "auto"/empty/unset is the automatic size
-// (returns false, `bytes` untouched). Any other non-empty value is the number atof reads. The result is
-// clamped to `all` as the load clamps it (init_store's `o.bytes = std::min(o.bytes, all)`), so `bytes` is
-// always a valid store size. One parser, shared by the live load and every pre-load prediction
-// (ni::planned_group_world), so the two never diverge on what the pin means.
+// (returns false, `bytes` untouched). Any other non-empty value is the number atof reads; a negative or NaN
+// reads 0 like garbage - the sign is checked before the double->size_t conversion, which is undefined below
+// zero and platform-split (arm64 saturates to 0, x86-64 to an indefinite huge value that `min` would read as
+// a full pin). A value at or above `all` - including the inf atof reads from "inf"/"1e999", whose conversion
+// is undefined on EVERY platform - is clamped to `all` by the same pre-conversion comparison, so the
+// conversion itself only ever sees a finite value inside (0, all): defined everywhere, and the same clamp the
+// load applies (init_store's `o.bytes = std::min(o.bytes, all)`), so `bytes` is always a valid store size.
+// One parser, shared by the live load and every pre-load
+// prediction (ni::planned_group_world), so the two never diverge on what the pin means.
 inline bool store_pin_bytes(const char* es, size_t all, size_t& bytes) {
   if (!es || !*es || !strcmp(es, "auto")) return false;
-  bytes = !strcmp(es, "all") ? all : std::min(size_t(atof(es) * 1e9), all);
+  if (!strcmp(es, "all")) { bytes = all; return true; }
+  const double gb = atof(es) * 1e9;
+  bytes = !(gb > 0.0) ? 0 : gb >= double(all) ? all : size_t(gb);
   return true;
 }
 // The group slots' store-world choice (PR #628) - one decision, one place, asked by every side:

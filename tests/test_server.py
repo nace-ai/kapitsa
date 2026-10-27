@@ -525,6 +525,33 @@ def cli_checks(kapitsa):
           "past the model's 256K, at 256K as serve caps it)",
           at64.get("context") == 65536 and at64.get("slots") == fn[("--context", "65536")].get("slots") and
           st[("--context", "1m")].get("context") == 262144, seen)
+    # The pin reaches doctor's expert_store through the same one parse the live load uses (q20::store_pin_bytes,
+    # #628): a full pin is resident and never pays the group-slot charge - even where the automatic store is
+    # incomplete on this memory-bound fixture; a short pin is exact to its bytes and reserves; a negative pin
+    # clamps to 0 (the sign is checked before the double->size_t conversion, undefined below zero) and still
+    # reserves, like garbage.
+    pin_args = ("all", "1", "-1")
+    pin_runs = {v: subprocess.Popen([kapitsa, "doctor", "--json", "--model", fnx],
+                                    env=dict(env, NI_MEM_BUDGET="14", NI_EXPERT_STORE=v),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for v in pin_args}
+    pin = {v: model(p) for v, p in pin_runs.items()}
+    pst = {v: m.get("expert_store", {}) for v, m in pin.items()}
+    seen_pin = json.dumps({v: dict({k: s.get(k) for k in keys}, top=pin[v].get("group_slot_bytes"))
+                           for v, s in pst.items()})
+    check("cli: doctor, NI_EXPERT_STORE=all on the memory-bound pack: the pin is resident (its bytes are the whole "
+          "store's), the reason names the pin, and the complete store never pays the group-slot charge - at the "
+          "expert_store level or the top level - even where the automatic store is incomplete",
+          pst["all"].get("reason") == "NI_EXPERT_STORE" and
+          pst["all"].get("bytes") == pst["all"].get("all_bytes") and
+          pst["all"].get("group_slot_bytes", 1) == 0 and pin["all"].get("group_slot_bytes", 1) == 0, seen_pin)
+    check("cli: doctor, NI_EXPERT_STORE=1 (a short pin) on the same pack: the store's bytes are exactly the pin's "
+          "1e9, the reason names the pin, and the incomplete store discloses its reservation at both levels",
+          pst["1"].get("reason") == "NI_EXPERT_STORE" and pst["1"].get("bytes") == 10**9 and
+          pst["1"].get("group_slot_bytes", 0) > 0 and pin["1"].get("group_slot_bytes", 0) > 0, seen_pin)
+    check("cli: doctor, NI_EXPERT_STORE=-1 (a negative pin) on the same pack: it clamps to 0 bytes - never an "
+          "undefined double->size_t conversion - and a 0 pin still reserves, disclosing the charge at both levels",
+          pst["-1"].get("reason") == "NI_EXPERT_STORE" and pst["-1"].get("bytes") == 0 and
+          pst["-1"].get("group_slot_bytes", 0) > 0 and pin["-1"].get("group_slot_bytes", 0) > 0, seen_pin)
     for a in ["flint:16gb", "flint:4bit"]:
         rc, out, err = run("rm", a)
         check(f"cli: rm {a} deletes it", rc == 0 and "Deleted flint:" + a.split(":")[1] in out, out + err)

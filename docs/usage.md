@@ -823,9 +823,10 @@ the CPU at every layer, and on a 48 GB M4 Pro every command buffer took 0.5-3.5 
 passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full speed.
 `kapitsa doctor` counts the smallest such store (2.1 GB) in its weights, lists the rest as streamed, and prints the
 store `kapitsa serve` would pick now and why, the same line the engine logs at load (`expert store: ...`: all experts
-resident, what the budget leaves, capped by the available memory, or capped by the RAM share; `--json`: `expert_store`
-with `bytes`, `reason`, `text`, and the `context` and `slots` it is planned at; the terminal view shows a shorter
-line). Without `--context` it plans at the context serve takes here without one (`default_context`), not at doctor's
+resident, what the budget leaves, capped by the available memory, capped by the RAM share, or the `NI_EXPERT_STORE`
+pin — that world's `reason` value is `NI_EXPERT_STORE`; `--json`: `expert_store` with `bytes`, `reason`, `text`, and
+the `context`, `slots` and `prefill_chunk` it is planned at, plus the `group_slot_bytes` it reserves (nonzero only
+while the predicted store stays incomplete; #628); the terminal view shows a shorter line). The top level of `--json` carries the same `group_slot_bytes` the loaded engine would pay, the terminal view's "prefill buffers" figure adds it, and `activation_bytes` stays the bare plan's: a script reading `activation_bytes` as everything the plan reserves under-reads by exactly that `group_slot_bytes`. Without `--context` it plans at the context serve takes here without one (`default_context`), not at doctor's
 64K, the same way the engine resolves it (`start_plan`). The available memory changes with what else runs and what the
 file cache holds, so the printed size is a snapshot.
 `NI_EXPERT_STORE=<GB>` pins the store's size — a pin below the full store keeps it incomplete, so it pays the prefill-group slot reservation (#628) and can lower the context that fits and serve's default context, while a pin at or above the full store keeps it complete and pays none — `all` keeps every expert, `off` loads them as stacked tensors
