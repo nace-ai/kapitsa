@@ -55,6 +55,13 @@ bool shapes_ok(const Shape& sh, const Experts& x, std::string* why) {
   if (sh.window < 8 || sh.window > 16) return no("a codeword window of " + std::to_string(sh.window) + " bits (8-16)");
   for (const Proj* p : {&x.g, &x.u, &x.d})
     if (p->n < 16 || p->n > 64 || p->n % 2) return no("a rate of " + std::to_string(p->n) + " halfwords a tile (16-64: K1-K4)");
+  // the buffers hold what the kernels index from these shapes (a config that disagrees with the tensors, a short shard)
+  auto holds = [&](const Proj& p, uint32_t in, uint32_t out) {
+    return p.t.size >= size_t(sh.E) * (in / 16) * (out / 16) * p.n * 2 && p.suh.size >= size_t(sh.E) * in * 2 &&
+           p.svh.size >= size_t(sh.E) * out * 2;
+  };
+  if (!holds(x.g, sh.D, sh.I) || !holds(x.u, sh.D, sh.I) || !holds(x.d, sh.I, sh.D))
+    return no("the trellis, suh or svh tensors are smaller than the experts' shapes need");
   return true;
 }
 

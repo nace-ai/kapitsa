@@ -5,7 +5,9 @@
 //     have) at rates n 32, 40, 48, 64 and windows 16 and 15: exl3::enc_rows at 1, 3 and 8 rows and exl3::enc_prefill
 //     on moe_bucket3's tiles at 37 and 300 tokens, against exl3::project and the SwiGLU in fp32;
 //  3. with a pack folder: the same on layer 0's experts of a Sushi pack (Flash-Next shapes, its own window).
-// Error: max |got - ref| / max |ref| over each output; the bar is 1e-2 (f16 roundings of transformed values).
+// Error: max |got - ref| / max |ref| over each output; the bar is 3e-3 (the f16 roundings of transformed values reach
+// about 1.1e-3). A negative control corrupts one tile of every expert's gate (the last row and column of tiles) and
+// must fail the bar.
 //   exl3_check [--fixtures DIR] [--pack DIR]       (needs a GPU; run with MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1)
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
@@ -135,13 +137,16 @@ float rel_err(const float* got, const std::vector<double>& ref) {
   return float(num / std::max(den, 1e-30));
 }
 
+constexpr float kBar = 3e-3f;
+
 void report(const std::string& what, float err) {
-  const bool ok = err < 1e-2f;
+  const bool ok = err < kBar;
   printf("%s %s: max error %.2e of the largest output\n", ok ? "ok" : "FAILED", what.c_str(), err);
   g_fail += !ok;
 }
 
-void check_rows(const Model& m, const exl3::Experts& X, std::mt19937& rng, int R, const std::string& tag) {
+float check_rows(const Model& m, const exl3::Experts& X, std::mt19937& rng, int R, const std::string& tag,
+                 bool report_it = true) {
   const exl3::Shape& sh = m.sh;
   const uint32_t D = sh.D, I = sh.I, k = sh.k, S = uint32_t(R) * k;
   std::normal_distribution<float> nd(0.0f, 1.0f);
@@ -166,15 +171,21 @@ void check_rows(const Model& m, const exl3::Experts& X, std::mt19937& rng, int R
   auto e = g.begin();
   exl3::enc_rows(*e, X, sh, R, bx, bi, bw, bys, hg, hu, md, yd, by);
   e->commit_and_wait();
-  std::vector<double> ref(size_t(R) * D);
+  // the routed sum alone (y less what it started at and the shared term), so the error is measured on what the
+  // experts contribute rather than diluted by y0 and ys
+  std::vector<double> ref(size_t(R) * D, 0.0);
+  std::vector<float> got(size_t(R) * D);
   for (int r = 0; r < R; ++r) {
-    for (uint32_t c = 0; c < D; ++c) ref[r * D + c] = y0[r * D + c] + double(wts[r * (k + 1) + k]) * ys[r * D + c];
+    for (uint32_t c = 0; c < D; ++c)
+      got[r * D + c] = float(double(by.as<float>()[r * D + c]) - y0[r * D + c] - double(wts[r * (k + 1) + k]) * ys[r * D + c]);
     for (uint32_t j = 0; j < k; ++j) {
       const std::vector<float> o = expert(m, idx[r * k + j], &x[size_t(r) * D]);
       for (uint32_t c = 0; c < D; ++c) ref[r * D + c] += double(wts[r * (k + 1) + j]) * o[c];
     }
   }
-  report(tag + " rows R=" + std::to_string(R), rel_err(by.as<float>(), ref));
+  const float err = rel_err(got.data(), ref);
+  if (report_it) report(tag + " rows R=" + std::to_string(R), err);
+  return err;
 }
 
 void check_prefill(const Model& m, const exl3::Experts& X, std::mt19937& rng, int T, const std::string& tag) {
@@ -227,6 +238,18 @@ void check_model(const Model& m, std::mt19937& rng, const std::string& tag, cons
   }
   for (int R : rows) check_rows(m, X, rng, R, tag);
   for (int T : toks) check_prefill(m, X, rng, T, tag);
+  // the negative control: the device copy of one tile of every expert's gate flipped (the last tile row and column,
+  // where tail bugs would sit), the host reference unchanged
+  const uint32_t ot = m.g.out / 16, kt = m.g.in / 16, per = kt * ot * m.g.n;
+  for (uint32_t e = 0; e < m.sh.E; ++e) {
+    uint16_t* t = X.g.t.as<uint16_t>() + size_t(e) * per + size_t((kt - 1) * ot + ot - 1) * m.g.n;
+    for (uint32_t i = 0; i < m.g.n; ++i) t[i] ^= 0x5A5Au;
+  }
+  const float err = check_rows(m, X, rng, 1, tag, false);
+  const bool caught = err >= kBar;
+  printf("%s %s: one corrupted tile %s (max error %.2e)\n", caught ? "ok" : "FAILED", tag.c_str(),
+         caught ? "fails the bar" : "passes the bar: the check cannot see a wrong tile", err);
+  g_fail += !caught;
 }
 
 // layer 0's experts of a Sushi pack (its config.json's window), the first 16 experts
