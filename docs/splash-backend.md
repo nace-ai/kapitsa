@@ -95,7 +95,8 @@ one server at a time under the GPU lock.
   engine up in 8.9 s, 1K TTFT 1.41 s, prefill 732 tok/s, decode 74.9 tok/s; 4K TTFT 3.17 s, prefill 1286 tok/s, decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.
 
-Splash refuses to start when the Mac has too little free and reclaimable memory (`not enough free memory to start`; plain
-Splash stops the same way, and `serve` then exits 1 with that reason). The default-plan run above started with 33.0 GiB free
-and reclaimable, so on this Mac the threshold is at or below that figure; no other threshold is claimed here. What is free
-depends on what else is running.
+Splash refuses to start when the Mac has too little free and reclaimable memory. Its `not enough free memory to start ...`
+is the child's own line on stderr; `serve` then exits 1 with `the Splash engine did not start: engine_exited: the splash engine
+closed its output`. Plain Splash stops the same way. The default-plan run above started with 33.0 GiB free and reclaimable, so
+on this Mac the threshold is at or below that figure; no other threshold is claimed here. It follows memory pressure, not one
+number, and what is free depends on what else is running.
