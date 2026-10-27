@@ -106,6 +106,10 @@ one server at a time under the GPU lock.
   of 4183 to 4257 tokens (plain Splash's: 4122 to 4131). Splash caches prompt blocks, not outputs, so the longer prompt only
   cost prefill. `chat_splash` therefore sends the client's history as it is, as plain Splash does: turn-2 TTFT 0.26, 0.25,
   0.20 s, prompts 4124, 4131, 4122 tokens, 4064 cached. One run of 3 reps per row; not a tool-call chat.
+  The turn-2 speed belongs to Splash's own prefix cache; Kapitsa's bridge only avoids breaking it. The #751 bench did not reproduce
+  these 0.2 s figures on a different 4K tool-call chat (4,320 of about 4,430 prompt tokens cached, reasoning dropped): there turn-2
+  TTFT is 0.56 s for K2 and 0.57 s for plain Splash (0.53 s for K, n 6), the same within noise. The gap to the 0.2 s runs was not
+  isolated; it may be the chat or its longer uncached tail. Quote #751's numbers, not these three reps.
 
 ## Options
 
