@@ -605,30 +605,21 @@ std::string Qwen35::tname(const std::string& canonical) const {
   return canonical;
 }
 
-// Whether a checkpoint's RMSNorm weight is Hugging Face's zero-centred parameterization (applied as 1 + w), read from
-// the values: an MLX weight is every value positive and around 1, HF's is around 0 and as often negative. One negative
-// value settles it — an MLX RMSNorm weight of 0 or below would zero or invert its block's input. A missing tensor says
-// no, and a weight this cannot read says no (the caller keeps its own answer).
-static bool zero_centred_norm(const Tensor* t) {
-  if (!t || t->numel() <= 0) return false;
-  const size_t n = size_t(t->numel());
-  if (n > 1 << 16) return false;  // a norm of the model's width, not a matrix; anything larger is not one
+// One negative value settles it: an MLX RMSNorm weight of 0 or below would zero or invert its block's input. A stray
+// negative alone (a badly quantized pack) is not enough either: the mean has to sit on 0.
+bool Qwen35::zero_centred_norm(const void* data, DType dtype, size_t n) {
+  if (!data || n == 0 || n > 1 << 16) return false;  // wider than any norm of these models: not a norm
+  if (dtype != DType::F32 && dtype != DType::F16 && dtype != DType::BF16) return false;
   double sum = 0;
-  int neg = 0, seen = 0;
+  size_t neg = 0;
   for (size_t i = 0; i < n; ++i) {
-    float v;
-    if (t->dtype == DType::F32) v = t->buf.as<float>()[i];
-    else if (t->dtype == DType::F16) v = float(t->buf.as<_Float16>()[i]);
-    else if (t->dtype == DType::BF16) v = bf16_to_f32(t->buf.as<uint16_t>()[i]);
-    else return false;
+    const float v = dtype == DType::F32   ? static_cast<const float*>(data)[i]
+                    : dtype == DType::F16 ? float(static_cast<const _Float16*>(data)[i])
+                                          : bf16_to_f32(static_cast<const uint16_t*>(data)[i]);
     sum += v;
     if (v < 0) ++neg;
-    ++seen;
   }
-  if (!seen) return false;
-  // HF's norms: a mean near 0 and negatives. MLX's: a mean near 1 and none (a stray negative alone, from a badly
-  // quantized pack, is not enough either: the mean has to sit on 0).
-  return neg > 0 && sum / double(seen) < 0.5;
+  return neg > 0 && sum / double(n) < 0.5;
 }
 
 // A float tensor as bf16 (t itself when it is bf16, else an owned bf16 copy); `offset` is added first (the
@@ -808,8 +799,13 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
       }
     return false;
   }();
-  hf_norms_ = hf_norms_ || hf_conv;
-  if (!hf_norms_ && zero_centred_norm(ws_.find(tname("model.layers.0.input_layernorm.weight")))) {
+  //
+  // What the values cannot settle stays with conv1d: norms stored in another dtype (a quantized norm), and an HF pack
+  // whose first input_layernorm has no negative value, keep the conv1d answer and print no line; an MLX pack whose
+  // first norm averages near 0 with a negative (damaged or untrained) is read as 1 + w.
+  hf_norms_ = hf_conv;
+  const Tensor* n0 = ws_.find(tname("model.layers.0.input_layernorm.weight"));
+  if (!hf_norms_ && n0 && n0->buf && zero_centred_norm(n0->buf.ptr(), n0->dtype, size_t(n0->numel()))) {
     hf_norms_ = true;
     logi("RMSNorm weights are zero-centred under MLX's conv1d layout (a mixed checkpoint): read as 1 + w");
   }
@@ -817,7 +813,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
     std::string what;
     if (hf_names_) what = "model.language_model.* names";
     if (hf_conv) what += (what.empty() ? "" : ", ") + std::string("conv1d [C, 1, 4]");
-    if (hf_norms_ && hf_conv) what += ", RMSNorm weights read as 1 + w";
+    if (!what.empty() && hf_norms_) what += ", RMSNorm weights read as 1 + w";
     if (!what.empty()) logi("Hugging Face checkpoint layout (%s)", what.c_str());
   }
 

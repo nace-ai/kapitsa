@@ -2054,6 +2054,41 @@ void llama_config_unit() {
   }
 }
 
+// Qwen35::zero_centred_norm, which tells Hugging Face's zero-centred RMSNorm weights (applied as 1 + w) from MLX's when
+// a pack has MLX's conv1d layout (#700: Swift 1.5 has HF's norms under it and repeated one token). Layer 0's
+// input_layernorm of each pack below, cut to 8 values: HF-like (mean near 0, negatives) says yes; MLX-like (near 1, all
+// positive), all zeros, one stray negative near 1, no values, a vector wider than a norm and a non-float dtype say no.
+void norm_layout_unit() {
+  auto bf16 = [](const std::vector<float>& v) {
+    std::vector<uint16_t> h;
+    for (float f : v) {
+      uint32_t u;
+      memcpy(&u, &f, 4);
+      h.push_back(uint16_t(u >> 16));
+    }
+    return h;
+  };
+  auto f16 = [](const std::vector<float>& v) { return std::vector<_Float16>(v.begin(), v.end()); };
+  const std::vector<float> hf = {0.031f, -0.012f, 0.054f, 0.12f, -0.07f, 0.008f, 0.02f, 0.14f};
+  const std::vector<float> mlx = {0.97f, 1.03f, 0.95f, 1.1f, 0.88f, 1.0f, 0.99f, 1.02f};
+  const std::vector<float> zeros(8, 0.0f);
+  const std::vector<float> stray = {1.02f, -0.01f, 0.98f, 1.05f, 0.91f, 1.0f, 0.96f, 1.04f};
+  check(Qwen35::zero_centred_norm(hf.data(), DType::F32, hf.size()), "norm layout: zero-centred f32 reads as 1 + w");
+  check(Qwen35::zero_centred_norm(bf16(hf).data(), DType::BF16, hf.size()),
+        "norm layout: zero-centred bf16 reads as 1 + w");
+  check(Qwen35::zero_centred_norm(f16(hf).data(), DType::F16, hf.size()), "norm layout: zero-centred f16 reads as 1 + w");
+  check(!Qwen35::zero_centred_norm(bf16(mlx).data(), DType::BF16, mlx.size()), "norm layout: MLX's norms read as w");
+  check(!Qwen35::zero_centred_norm(mlx.data(), DType::F32, mlx.size()), "norm layout: MLX's f32 norms read as w");
+  check(!Qwen35::zero_centred_norm(zeros.data(), DType::F32, zeros.size()), "norm layout: all zeros is not decided");
+  check(!Qwen35::zero_centred_norm(stray.data(), DType::F32, stray.size()),
+        "norm layout: one stray negative around 1 reads as w");
+  check(!Qwen35::zero_centred_norm(hf.data(), DType::F32, 0), "norm layout: no values is not decided");
+  check(!Qwen35::zero_centred_norm(nullptr, DType::F32, 8), "norm layout: a tensor without bytes is not decided");
+  const std::vector<float> wide((1 << 16) + 1, -0.01f);
+  check(!Qwen35::zero_centred_norm(wide.data(), DType::F32, wide.size()), "norm layout: wider than a norm is not one");
+  check(!Qwen35::zero_centred_norm(hf.data(), DType::U32, hf.size()), "norm layout: a quantized norm is not decided");
+}
+
 int main(int argc, char** argv) {
   anthropic_mapping();
   responses_mapping();
@@ -2072,6 +2107,7 @@ int main(int argc, char** argv) {
   unsupported_model_unit();
   llama_config_unit();
   paren_call_postfix_unit();
+  norm_layout_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
