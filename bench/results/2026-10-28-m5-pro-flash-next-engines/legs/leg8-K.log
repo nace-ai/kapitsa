@@ -1,0 +1,13 @@
+[kapitsa] tokenizer: 248320 tokens, 247587 merges, 33 added (212 ms)
+[kapitsa] splash: splash engine pid 11941 started
+01:08:31 Weights loaded in 2.74 s.
+01:08:31 Table per_layer_token_embd.weight streams from its file: 27465 MiB stay on the SSD; row cache of 4427535 rows in 511 MiB, all that --ple-memory auto leaves it beside the floors and the KV kept resident; 32 readers.
+01:08:31 Routed experts stream from their files: 12086 slots for 24576 experts (49%) in 15933 MiB.
+01:08:31 Decode cycles verify the rows the verify budget chooses (--verify-rows auto, as ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0 is a MoE target): greedy and seeded outputs can differ from run to run.
+01:08:31 SSD cache: up to 32.0 GiB of temporary files in /var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/ (its automatic quota, while its volume has room beyond the 10.0 GiB it keeps free); KV pages of 416 KiB and states of 113 MiB, a state's write staging through 113 MiB of the memory plan; --max-cache-disk 0 turns it off.
+01:08:31 Kernel policy for GPU family 10 with 20 cores.
+01:08:31 Long requests keep their KV on the SSD cache: 262144 tokens of context (bound: model; window 262144, resident 262144, spilled 262144, disk 262144); a request whose KV fits 13274 MiB stays in memory; hot block cache 390 MiB (floor 390 MiB); history staging in 2 buffers; SSD room for active KV 32.0 GiB.
+01:08:34 Thermal state: fair
+[kapitsa] splash: engine ready (pid 11941): context 32768, 4 concurrent request(s), tokenizer from /Users/alisheramantay/Library/Application Support/Splash/models/.resolved/652799347ee912b7acd050042b20d3677ca2163103dc90e7d85138daa15e0c3e/tokenizer
+[kapitsa] listening on http://127.0.0.1:62825
+Ready: chat at http://127.0.0.1:62825, API at http://127.0.0.1:62825/v1 (model "652799347ee912b7acd050042b20d3677ca2163103dc90e7d85138daa15e0c3e"). Ctrl+C stops.

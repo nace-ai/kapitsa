@@ -1,0 +1,45 @@
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+01:09:57 Loading · ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0
+[transformers] You are using a model of type `qwen4_exp` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+[transformers] The tokenizer you are loading from '/Users/alisheramantay/Library/Application Support/Splash/models/.resolved/652799347ee912b7acd050042b20d3677ca2163103dc90e7d85138daa15e0c3e/tokenizer' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.
+01:09:57 Chat template · patched to render later system messages in place (the original template rejects them), generation prompt 5-7 tokens
+01:09:59 Weights loaded in 1.92 s.
+01:09:59 Table per_layer_token_embd.weight streams from its file: 27465 MiB stay on the SSD; row cache of 4427535 rows in 511 MiB, all that --ple-memory auto leaves it beside the floors and the KV kept resident; 32 readers.
+01:09:59 Routed experts stream from their files: 12086 slots for 24576 experts (49%) in 15933 MiB.
+01:09:59 Decode cycles verify the rows the verify budget chooses (--verify-rows auto, as ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0 is a MoE target): greedy and seeded outputs can differ from run to run.
+01:09:59 SSD cache: up to 32.0 GiB of temporary files in /var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/ (its automatic quota, while its volume has room beyond the 10.0 GiB it keeps free); KV pages of 416 KiB and states of 113 MiB, a state's write staging through 113 MiB of the memory plan; --max-cache-disk 0 turns it off.
+01:09:59 Kernel policy for GPU family 10 with 20 cores.
+01:09:59 Long requests keep their KV on the SSD cache: 262144 tokens of context (bound: model; window 262144, resident 262144, spilled 262144, disk 262144); a request whose KV fits 13274 MiB stays in memory; hot block cache 390 MiB (floor 390 MiB); history staging in 2 buffers; SSD room for active KV 32.0 GiB.
+01:10:02 Thermal state: fair
+01:10:03 Ready · ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0 · context 32K · language only · http://127.0.0.1:63001
+01:10:03 Started · input 1,027 · cached 0 · effort absent · thinking on
+01:10:06 Done · input 1,027 · cached 0 · output 8 · TTFT 2.0s · 23.9 tok/s · 1.8 tok/cycle
+01:10:06 Started · input 96 · cached 0 · effort absent · thinking on
+01:10:11 Done · input 96 · cached 0 · deduplicated 32 · output 256 · TTFT 0.7s · 58.4 tok/s · 2.7 tok/cycle
+01:10:11 Started · input 97 · cached 0 · effort absent · thinking on
+01:10:16 Done · input 97 · cached 0 · deduplicated 32 · output 256 · TTFT 0.6s · 58.8 tok/s · 2.8 tok/cycle
+01:10:16 Started · input 1,035 · cached 0 · effort absent · thinking on
+01:10:17 Done · input 1,035 · cached 0 · deduplicated 32 · output 16 · TTFT 1.5s · 59.9 tok/s · 3.2 tok/cycle
+01:10:17 Started · input 4,074 · cached 0 · effort absent · thinking on
+01:10:21 Done · input 4,074 · cached 0 · deduplicated 32 · output 16 · TTFT 3.4s · 51.2 tok/s · 2.7 tok/cycle
+01:10:21 Started · input 19,286 · cached 0 · effort absent · thinking on
+01:10:38 Done · input 19,286 · cached 0 · deduplicated 32 · output 16 · TTFT 16.1s · 53.1 tok/s · 2.7 tok/cycle
+01:10:38 Started · input 4,355 · cached 0 · effort absent · thinking on
+01:10:42 Done · input 4,355 · cached 0 · deduplicated 32 · output 47 · tools 1·0bd5e744 · TTFT 3.7s · 60.6 tok/s · 4.6 tok/cycle
+01:10:42 Started · input 4,425 · cached 4,320 · effort absent · thinking on
+01:10:43 Done · input 4,425 · cached 4,320 · deduplicated 32 · output 56 · tools 1·0bd5e744 · TTFT 0.5s · 63.9 tok/s · 3.4 tok/cycle
+01:10:43 Started · input 96 · cached 0 · effort absent · thinking on
+01:10:49 Done · input 96 · cached 0 · deduplicated 32 · output 256 · TTFT 0.7s · 51.6 tok/s · 2.4 tok/cycle
+01:10:49 Started · input 97 · cached 0 · effort absent · thinking on
+01:10:54 Done · input 97 · cached 0 · deduplicated 32 · output 256 · TTFT 0.6s · 53.1 tok/s · 2.5 tok/cycle
+01:10:54 Started · input 1,035 · cached 0 · effort absent · thinking on
+01:10:56 Done · input 1,035 · cached 0 · deduplicated 32 · output 16 · TTFT 1.4s · 62.8 tok/s · 3.2 tok/cycle
+01:10:56 Started · input 4,074 · cached 0 · effort absent · thinking on
+01:11:00 Done · input 4,074 · cached 0 · deduplicated 32 · output 16 · TTFT 3.2s · 43.2 tok/s · 2.7 tok/cycle
+01:11:00 Started · input 19,286 · cached 0 · effort absent · thinking on
+01:11:16 Done · input 19,286 · cached 0 · deduplicated 32 · output 16 · TTFT 15.9s · 51.9 tok/s · 2.7 tok/cycle
+01:11:16 Started · input 4,355 · cached 0 · effort absent · thinking on
+01:11:20 Done · input 4,355 · cached 0 · deduplicated 288 · output 48 · tools 1·0bd5e744 · TTFT 3.7s · 73.2 tok/s · 5.9 tok/cycle
+01:11:20 Started · input 4,425 · cached 4,320 · effort absent · thinking on
+01:11:21 Done · input 4,425 · cached 4,320 · deduplicated 32 · output 50 · tools 1·0bd5e744 · TTFT 0.6s · 72.8 tok/s · 3.8 tok/cycle
+01:11:21 Stopping · releasing engine resources

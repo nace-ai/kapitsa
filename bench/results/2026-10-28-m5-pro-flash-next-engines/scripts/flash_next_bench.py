@@ -320,7 +320,7 @@ def summarize(d, meta=None):
     legs = [l for l in legs if "smoke" not in l]  # the smoke leg is kept as raw data only
     legs.sort(key=lambda l: l["idx"])
     out = {"meta": json.load(open(d + "/meta.json")) if os.path.exists(d + "/meta.json") else {}, "order": [l["arm"] for l in legs], "arms": {}}
-    for arm in ("K", "K2", "S", "N", "L"):
+    for arm in ("K", "K2", "S", "S2", "N", "L"):
         ls = [l for l in legs if l.get("group", l["arm"]) == arm]
         if not ls: continue
         c = {}
@@ -347,7 +347,7 @@ def summarize(d, meta=None):
         c["binary"] = ls[0].get("binary")
         out["arms"][arm] = c
     json.dump(out, open(d + "/summary.json", "w"), indent=1)
-    names = {"K": "Kapitsa --engine splash @7e478053", "K2": "Kapitsa --engine splash @ff6151c8", "S": "plain Splash 1.4.0", "N": "Kapitsa native (MTP)", "L": "llama.cpp"}
+    names = {"K": "Kapitsa --engine splash @7e478053", "K2": "Kapitsa --engine splash @ff6151c8", "S": "plain Splash 1.4.0", "S2": "plain Splash 1.4.0 (paired with K2)", "N": "Kapitsa native (MTP)", "L": "llama.cpp"}
     f = lambda c, k, p=1: "not measured" if not c.get(k) else "%.*f (n %d)" % (p, c[k]["median"], c[k]["n"])
     rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prefill %s tok/s" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | peak RSS MiB | min free+reclaimable GiB |",
             "|" + "---|" * (6 + 2 * len(SIZES))]

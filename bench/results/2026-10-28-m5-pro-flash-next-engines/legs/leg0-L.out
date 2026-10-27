@@ -1,0 +1,27 @@
+  up 13.2s
+  warm-up ttft 45.25
+{
+ "reasoning": "We need answer user: \"Explain in two sentences why the sky is blue.\" Need final two sentences. Ensure short.\n",
+ "content": "The sky is blue because sunlight scatters off air molecules, and shorter blue wavelengths scatter more strongly than longer red wavelengths. This scattered blue light reaches our eyes from all directions, making",
+ "finish": "length",
+ "tool_calls": [],
+ "prompt_tokens": 74,
+ "completion_tokens": 64,
+ "cached_tokens": 0,
+ "ttft_s": 4.407622814178467,
+ "total_s": 11.807477951049805,
+ "decode_tps": 8.513680178155004,
+ "text_md5": "82551199af1d98f61f466436f8a1e76d",
+ "engine_timings": {
+  "cache_n": 0,
+  "prompt_n": 74,
+  "prompt_ms": 4299.03,
+  "prompt_per_token_ms": 58.095,
+  "prompt_per_second": 17.213185299939756,
+  "predicted_n": 64,
+  "predicted_ms": 7399.795,
+  "predicted_per_token_ms": 117.4570634920635,
+  "predicted_per_second": 8.513749367381124
+ }
+}
+  peak RSS 33262 MiB, free+reclaimable min 18.5 GiB, wired max 7.1 GiB, swap +0.00 GB, pressure 1

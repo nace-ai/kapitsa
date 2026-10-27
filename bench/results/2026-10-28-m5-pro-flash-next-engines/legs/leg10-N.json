@@ -1,0 +1,175 @@
+{
+ "arm": "N",
+ "idx": 10,
+ "cmd": [
+  "/Users/alisheramantay/Documents/nace/kapitsa-bench-main/build/kapitsa",
+  "serve",
+  "--model",
+  "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flash-next-q20",
+  "--context",
+  "32k",
+  "--private",
+  "--port",
+  "65144"
+ ],
+ "env": "NI_EXPERT_STORE=24",
+ "up_s": 4.366289138793945,
+ "free_reclaimable_gib_at_start": 21.969772338867188,
+ "started": "2026-10-27T20:33:25Z",
+ "decode": {
+  "T0": [
+   {
+    "finish": "length",
+    "prompt_tokens": 97,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 1.0664339065551758,
+    "total_s": 6.2555389404296875,
+    "decode_tps": 49.141421947591795,
+    "text_md5": "1a082ea3aaa26c752c09f5dc3c0812b4"
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 97,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 1.0301101207733154,
+    "total_s": 5.267910003662109,
+    "decode_tps": 60.17273279694684,
+    "text_md5": "25be9f39ca161066654f663c52c40793"
+   }
+  ],
+  "T06": [
+   {
+    "finish": "length",
+    "prompt_tokens": 98,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 1.0006928443908691,
+    "total_s": 5.5366950035095215,
+    "decode_tps": 56.216904457899695,
+    "text_md5": "ea08d25abada9c0635fdd3cd1e12d080"
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 98,
+    "completion_tokens": 256,
+    "cached_tokens": 0,
+    "ttft_s": 1.0278339385986328,
+    "total_s": 5.3445820808410645,
+    "decode_tps": 59.07224410538219,
+    "text_md5": "a67b3fa77e107ca9f3745b444ee28d84"
+   }
+  ]
+ },
+ "prefill": {
+  "1K": [
+   {
+    "finish": "length",
+    "prompt_tokens": 1036,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 1.3825302124023438,
+    "total_s": 1.6233220100402832,
+    "decode_tps": 62.29448073872671,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 749.3507127050786
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 1036,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 1.6791770458221436,
+    "total_s": 1.9349942207336426,
+    "decode_tps": 58.635625247559354,
+    "text_md5": "1adb167fe9c5624f626680c41e2566ef",
+    "prefill_tps": 616.9688911467719
+   }
+  ],
+  "4K": [
+   {
+    "finish": "length",
+    "prompt_tokens": 4075,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 4.678745985031128,
+    "total_s": 4.938151121139526,
+    "decode_tps": 57.82460681014389,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 870.959871093085
+   },
+   {
+    "finish": "length",
+    "prompt_tokens": 4075,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 4.660816192626953,
+    "total_s": 4.893781900405884,
+    "decode_tps": 64.38715870678283,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 874.3103850450767
+   }
+  ],
+  "16K": [
+   {
+    "finish": "length",
+    "prompt_tokens": 19287,
+    "completion_tokens": 16,
+    "cached_tokens": 0,
+    "ttft_s": 25.582355976104736,
+    "total_s": 25.82794499397278,
+    "decode_tps": 61.0776496857025,
+    "text_md5": "abf50019f86bf800ee70e5c2376145db",
+    "prefill_tps": 753.9180526615716
+   },
+   {
+    "finish": null,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "cached_tokens": 0,
+    "ttft_s": null,
+    "total_s": 6.8971991539001465,
+    "decode_tps": null,
+    "text_md5": "93b885adfe0da089cdf634904fd59f71",
+    "prefill_tps": null
+   }
+  ]
+ },
+ "twoturn": [
+  {
+   "turn1": {
+    "finish": "tool_calls",
+    "ttft_s": 6.325473070144653,
+    "prompt_tokens": 4356,
+    "completion_tokens": 80,
+    "cached_tokens": 0
+   },
+   "turn1_reasoning_chars": 216,
+   "turn2": {
+    "finish": "stop",
+    "ttft_s": 0.2788548469543457,
+    "prompt_tokens": 4476,
+    "completion_tokens": 59,
+    "cached_tokens": 4435,
+    "decode_tps": 56.92904066453119
+   }
+  }
+ ],
+ "errors": [
+  "twoturn rep 1: URLError(ConnectionRefusedError(61, 'Connection refused'))"
+ ],
+ "memory": {
+  "peak_rss_mib": 31558.375,
+  "free_reclaimable_gib_start": 21.969772338867188,
+  "free_reclaimable_gib_min": 2.3231353759765625,
+  "wired_gib_max": 35.935394287109375,
+  "swap_gb_start": 2.50921875,
+  "swap_gb_max": 6.00482421875,
+  "pressure_level_max": 4,
+  "memorystatus_level_min": 9,
+  "aborted": "pressure level 4",
+  "swap_grew_over_1gb": true
+ },
+ "finished": "2026-10-27T20:34:47Z"
+}

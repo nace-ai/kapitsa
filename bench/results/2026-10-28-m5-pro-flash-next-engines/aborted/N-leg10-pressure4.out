@@ -1,0 +1,38 @@
+  up 3.8s
+  warm-up ttft 1.93
+  decode T0 50.8 tok/s (256 tok, length)
+  decode T06 52.6 tok/s (256 tok, length)
+  prefill 1K: 1036 tok, ttft 1.32s, 785 tok/s, cached 0
+  prefill 4K: 4075 tok, ttft 4.74s, 860 tok/s, cached 0
+  prefill 16K: 19287 tok, ttft 24.80s, 778 tok/s, cached 0
+  twoturn: turn2 ttft 0.26s cached 4435/4476
+  decode T0 59.7 tok/s (256 tok, length)
+  decode T06 53.2 tok/s (256 tok, length)
+  prefill 1K: 1036 tok, ttft 1.69s, 613 tok/s, cached 0
+  prefill 4K: 4075 tok, ttft 5.27s, 773 tok/s, cached 0
+ABORT: pressure level 4
+Traceback (most recent call last):
+  File "/Users/alisheramantay/Documents/nace/kapitsa-bench-results/bench/results/2026-10-28-m5-pro-flash-next-engines/scripts/flash_next_bench.py", line 276, in run_leg
+    res["prefill"][size].append(r); print("  prefill %s: %s tok, ttft %.2fs, %.0f tok/s, cached %s" % (size, pt, r["ttft_s"], r["prefill_tps"] or 0, c), flush=True)
+                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+TypeError: must be real number, not NoneType
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/alisheramantay/Documents/nace/kapitsa-bench-results/bench/results/2026-10-28-m5-pro-flash-next-engines/scripts/flash_next_bench.py", line 366, in <module>
+    main()
+    ~~~~^^
+  File "/Users/alisheramantay/Documents/nace/kapitsa-bench-results/bench/results/2026-10-28-m5-pro-flash-next-engines/scripts/flash_next_bench.py", line 362, in main
+    else: run_leg(a)
+          ~~~~~~~^^^
+  File "/Users/alisheramantay/Documents/nace/kapitsa-bench-results/bench/results/2026-10-28-m5-pro-flash-next-engines/scripts/flash_next_bench.py", line 283, in run_leg
+    finish(leg, res, a, tag)
+    ~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/alisheramantay/Documents/nace/kapitsa-bench-results/bench/results/2026-10-28-m5-pro-flash-next-engines/scripts/flash_next_bench.py", line 289, in finish
+    leg.close()
+    ~~~~~~~~~^^
+  File "/Users/alisheramantay/Documents/nace/kapitsa-bench-results/bench/results/2026-10-28-m5-pro-flash-next-engines/scripts/flash_next_bench.py", line 230, in close
+    try: os.killpg(self.proc.pid, signal.SIGTERM)
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted

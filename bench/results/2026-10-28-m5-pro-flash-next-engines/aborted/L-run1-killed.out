@@ -1,0 +1,6 @@
+  up 12.7s
+  warm-up ttft 42.38
+  decode T0 9.0 tok/s (256 tok, length)
+  decode T06 9.5 tok/s (256 tok, length)
+  prefill 1K: 1035 tok, ttft 25.83s, 40 tok/s, cached 0
+  prefill 4K: 4074 tok, ttft 110.09s, 37 tok/s, cached 0

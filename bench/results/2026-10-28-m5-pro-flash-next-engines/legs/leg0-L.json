@@ -1,0 +1,75 @@
+{
+ "arm": "L",
+ "idx": 0,
+ "cmd": [
+  "/Users/alisheramantay/Documents/nace/llama.cpp/build/bin/llama-server",
+  "-m",
+  "/Users/alisheramantay/Library/Application Support/Splash/models/.resolved/652799347ee912b7acd050042b20d3677ca2163103dc90e7d85138daa15e0c3e/target/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf",
+  "-ngl",
+  "99",
+  "-fa",
+  "on",
+  "-c",
+  "33280",
+  "-np",
+  "1",
+  "--jinja",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "49160",
+  "--no-webui"
+ ],
+ "env": null,
+ "up_s": 13.15733790397644,
+ "free_reclaimable_gib_at_start": 32.45137023925781,
+ "started": "2026-10-27T19:27:56Z",
+ "decode": {
+  "T0": [],
+  "T06": []
+ },
+ "prefill": {
+  "1K": [],
+  "4K": [],
+  "16K": []
+ },
+ "twoturn": [],
+ "errors": [],
+ "smoke": {
+  "reasoning": "We need answer user: \"Explain in two sentences why the sky is blue.\" Need final two sentences. Ensure short.\n",
+  "content": "The sky is blue because sunlight scatters off air molecules, and shorter blue wavelengths scatter more strongly than longer red wavelengths. This scattered blue light reaches our eyes from all directions, making",
+  "finish": "length",
+  "tool_calls": [],
+  "prompt_tokens": 74,
+  "completion_tokens": 64,
+  "cached_tokens": 0,
+  "ttft_s": 4.407622814178467,
+  "total_s": 11.807477951049805,
+  "decode_tps": 8.513680178155004,
+  "text_md5": "82551199af1d98f61f466436f8a1e76d",
+  "engine_timings": {
+   "cache_n": 0,
+   "prompt_n": 74,
+   "prompt_ms": 4299.03,
+   "prompt_per_token_ms": 58.095,
+   "prompt_per_second": 17.213185299939756,
+   "predicted_n": 64,
+   "predicted_ms": 7399.795,
+   "predicted_per_token_ms": 117.4570634920635,
+   "predicted_per_second": 8.513749367381124
+  }
+ },
+ "memory": {
+  "peak_rss_mib": 33261.84375,
+  "free_reclaimable_gib_start": 32.45137023925781,
+  "free_reclaimable_gib_min": 18.474685668945312,
+  "wired_gib_max": 7.0621185302734375,
+  "swap_gb_start": 2.634462890625,
+  "swap_gb_max": 2.634462890625,
+  "pressure_level_max": 1,
+  "memorystatus_level_min": 77,
+  "aborted": null,
+  "swap_grew_over_1gb": false
+ },
+ "finished": "2026-10-27T19:28:56Z"
+}
