@@ -37,6 +37,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -1955,7 +1956,17 @@ int run_import(int argc, char** argv) {
       return 0;
     } else if (a == "--name") o.name = next();
     else if (a == "--mtp") o.mtp = next();
-    else if (a == "--threads") o.threads = atoi(next().c_str());
+    else if (a == "--threads") {
+      const std::string v = next();
+      char* end = nullptr;
+      const long n = strtol(v.c_str(), &end, 10);
+      if (v.empty() || *end || n < 0 || n > 1024) {  // (0: the default)
+        if (term::fancy()) term::error("--threads needs a whole number, not \"" + v + "\"", "kapitsa import --help shows how to use it.");
+        else fprintf(stderr, "kapitsa import: --threads needs a whole number, not \"%s\"\n(kapitsa import --help shows how to use it.)\n", v.c_str());
+        return 2;
+      }
+      o.threads = int(n);
+    }
     else if (a == "--force") o.force = true;
     else if (a == "--dry-run") o.dry_run = true;
     else if (!a.empty() && a[0] != '-' && o.file.empty()) o.file = a;

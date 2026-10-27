@@ -20,6 +20,7 @@
 #include <sys/sysctl.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -242,6 +243,17 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
   fputs(out.c_str(), stdout);
 }
 
+// A whole number (or, when `whole` is false, a decimal one) of at least 0, all of `v`: what --slots, --prefill-chunk and
+// --mem-budget take. std::stoi and stod threw out of main on anything else.
+static bool number(const std::string& v, bool whole, double* out) {
+  char* end = nullptr;
+  errno = 0;
+  const double x = whole ? double(strtol(v.c_str(), &end, 10)) : strtod(v.c_str(), &end);
+  if (v.empty() || *end || errno || !std::isfinite(x) || x < 0) return false;
+  *out = x;
+  return true;
+}
+
 }  // namespace
 
 int run_doctor(int argc, char** argv) {
@@ -270,9 +282,19 @@ int run_doctor(int argc, char** argv) {
         return 2;
       }
     }
-    else if (a == "--slots") slots_opt = std::stoi(next());
-    else if (a == "--prefill-chunk") chunk = std::stoi(next());
-    else if (a == "--mem-budget") budget_gb = std::stod(next());
+    else if (a == "--slots" || a == "--prefill-chunk" || a == "--mem-budget") {
+      const std::string v = next();
+      double x = 0;
+      if (!number(v, a != "--mem-budget", &x)) {
+        const std::string why = a + " needs " + (a == "--mem-budget" ? "a number of GB" : "a whole number") + ", not \"" + v + "\"";
+        if (term::fancy()) term::error(why, "kapitsa doctor --help shows how to use it.");
+        else fprintf(stderr, "kapitsa doctor: %s\n", why.c_str());
+        return 2;
+      }
+      if (a == "--slots") slots_opt = int(x);
+      else if (a == "--prefill-chunk") chunk = int(x);
+      else budget_gb = x;
+    }
     else if (a == "--dflash") dflash = next();
     else if (a == "--json") as_json = true;
     else {

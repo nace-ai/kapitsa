@@ -150,7 +150,7 @@ ModelRef resolve(const std::string& arg0) {
   std::string arg = arg0;
   while (!arg.empty() && std::isspace(static_cast<unsigned char>(arg.back()))) arg.pop_back();
   while (!arg.empty() && std::isspace(static_cast<unsigned char>(arg.front()))) arg.erase(arg.begin());
-  if (arg.empty()) throw Error("--model needs a value: one of " + choices() + ", a Hugging Face repo (org/name) or a folder.");
+  if (arg.empty()) throw Error("No model given: one of " + choices() + ", a Hugging Face repo (org/name) or a folder.");
   ModelRef r;
   auto local = [&](const std::string& path) {
     r.kind = ModelRef::kLocal;
@@ -167,7 +167,7 @@ ModelRef resolve(const std::string& arg0) {
     if (!is_dir(p) && p.size() > 5 && strcasecmp(p.c_str() + p.size() - 5, ".gguf") == 0 && access(p.c_str(), R_OK) == 0)
       throw Error(arg + " is a GGUF file: `kapitsa import " + arg + "` converts it into a model folder (kapitsa serve "
                   "--model " + arg + " converts it on first use).");
-    if (!is_dir(p)) throw Error("No folder at " + arg + ". --model takes a model folder, a name (" + choices() +
+    if (!is_dir(p)) throw Error("No folder at " + arg + ". A model is a folder, a name (" + choices() +
                                 ") or a Hugging Face repo (org/name).");
     return local(p);
   }
