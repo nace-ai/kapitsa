@@ -11,7 +11,7 @@ N = Kapitsa's native engine (MTP), L = llama.cpp llama-server on the same Q2_0 G
 Per leg: warm-up, then REPS each of: decode 256 tokens at T=0 and T=0.6; cold prefill at ~1K/4K/16K prompt tokens (a nonce
 at the start of every prompt, so no prefix-cache hit); the second turn of a ~4K tool-call chat (the first turn's reasoning is
 not sent back, as clients do). TTFT is the time to the first streamed token (reasoning or content); decode tok/s is
-(completion_tokens-1)/(end-first token); prefill tok/s is uncached prompt tokens / TTFT.
+(completion_tokens-1)/(end-first token); "prompt tokens / TTFT" (tok/s) is uncached prompt tokens / TTFT, including the fixed per-request cost.
 Memory: peak RSS of the server's process tree (it does not count GPU-wired pages) and, system-wide, the lowest
 free+reclaimable memory, highest wired memory, swap and pressure level while the leg ran."""
 import tempfile, argparse, hashlib, json, os, re, signal, socket, statistics, subprocess, sys, threading, time, urllib.request
@@ -384,7 +384,7 @@ def summarize(d, meta=None):
     json.dump(out, open(d + "/summary.json", "w"), indent=1)
     names = {"K": "Kapitsa --engine splash @7e478053", "K2": "Kapitsa --engine splash @ff6151c8", "S": "plain Splash 1.4.0", "S2": "plain Splash 1.4.0 (paired with K2)", "N": "Kapitsa native (MTP)", "L": "llama.cpp"}
     f = lambda c, k, p=1: "not measured" if not c.get(k) else "%.*f (n %d)" % (p, c[k]["median"], c[k]["n"])
-    rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prefill %s tok/s" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | peak footprint GiB (serving tree) | system used GiB at that peak | system wired GiB (max) | swap growth GB (max) | memory pressure (max) | peak ps RSS MiB (not a memory comparison) |",
+    rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prompt tokens / TTFT %s (tok/s)" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | peak footprint GiB (serving tree) | system used GiB at that peak | system wired GiB (max) | swap growth GB (max) | memory pressure (max) | peak ps RSS MiB (not a memory comparison) |",
             "|" + "---|" * (10 + 2 * len(SIZES))]
     for arm, c in out["arms"].items():
         rows.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (names[arm], f(c, "decode_T0_tps"), f(c, "decode_T06_tps"),
