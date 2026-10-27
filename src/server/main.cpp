@@ -873,6 +873,8 @@ static int serve(int argc, char** argv, int first) {
   // Splash's engine: the model runs in its child, so nothing below plans this Mac's memory for it, picks, downloads or
   // routes a model: the folder given is the model, served here and nowhere else
   if (engine_splash) {
+    if (!model.empty() || !split.empty() || allow_switch)
+      usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
     // not given: where Splash installs them (src/splash/discover.h), else an error that says what is missing
     const char* home = getenv("HOME");
     if (opt.splash_binary.empty()) {
@@ -891,8 +893,6 @@ static int serve(int argc, char** argv, int first) {
     if (struct stat st2; stat(opt.splash_model.c_str(), &st2) != 0 || !S_ISDIR(st2.st_mode))
       usage_error("--splash-model " + opt.splash_model + " is not a folder: give Splash's resolved model folder (a model "
                   "name is not looked up or downloaded here)", help);
-    if (!model.empty() || !split.empty() || allow_switch)
-      usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";

@@ -42,8 +42,12 @@ std::vector<Model> models(const std::string& home) {
 }  // namespace
 
 Found find_binary(const std::string& home, const std::string& splash_home, const std::string& path_env) {
+  if (!splash_home.empty()) {  // named by the user: that install or an error, never another one
+    fs::path bin = fs::path(splash_home) / "engine/splash";
+    if (is_file(bin)) return {bin.string(), ""};
+    return {"", "SPLASH_HOME is " + splash_home + " but " + bin.string() + " is not a file.\nFix or unset SPLASH_HOME, or give --splash-binary <path to engine/splash>."};
+  }
   std::vector<fs::path> roots;
-  if (!splash_home.empty()) roots.push_back(splash_home);
   std::stringstream ss(path_env);
   for (std::string dir; std::getline(ss, dir, ':');) {
     if (dir.empty()) continue;

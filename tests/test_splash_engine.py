@@ -168,6 +168,12 @@ r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE,
                     "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
 check(r.returncode != 0 and "is not a folder" in r.stderr + r.stdout, "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
 
+# the flags of the native path do not apply: refused at once, not overwritten or passed on
+for extra in (["--model", "x"], ["--allow-switch"], ["--split", "127.0.0.1:1"]):
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", MODEL, *extra,
+                        "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
+    check(r.returncode != 0 and "do not apply" in r.stderr + r.stdout, "native flag %s refused: %d %r" % (extra, r.returncode, (r.stderr + r.stdout)[-300:]))
+
 # no flags: the binary and the model are looked for where Splash installs them, and what is missing is named
 with tempfile.TemporaryDirectory() as home:
     env = {k: v for k, v in os.environ.items() if k != "SPLASH_HOME"}

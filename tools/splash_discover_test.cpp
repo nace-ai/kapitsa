@@ -51,6 +51,10 @@ int main() {
   fs::create_symlink(tmp / "other/engine/splash", tmp / "bin/splash");
   check(find_binary(home, "", (tmp / "bin").string()).path == fs::canonical(tmp / "other/engine/splash").string(), "binary: PATH symlink");
   check(find_binary(home, (tmp / "root").string(), (tmp / "bin").string()).path == (tmp / "root/engine/splash").string(), "binary: SPLASH_HOME first");
+  // a SPLASH_HOME that is wrong is an error naming it, not another install found on PATH or under ~/Applications
+  touch(fs::path(home) / "Applications/Splash/engine/splash");
+  Found w = find_binary(home, (tmp / "nope").string(), (tmp / "bin").string());
+  check(!w.ok() && has(w.error, (tmp / "nope/engine/splash").string()) && !has(w.error, "Applications"), "binary: SPLASH_HOME wrong", w.error);
   touch(fs::path(home) / "Applications/Splash/engine/splash");
   check(find_binary(home, "", "").ok(), "binary: ~/Applications/Splash");
 
