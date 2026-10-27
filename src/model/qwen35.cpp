@@ -1033,8 +1033,9 @@ void Qwen35::check_shapes() const {
 bool Qwen35::moe_wide() const { return cfg_.moe && (cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) > 4608; }
 
 Qwen35::~Qwen35() {
-  // a background ANE compile only touches its own copies (no Metal objects): let it finish on its own
-  if (ane_thread_.joinable()) ane_thread_.detach();
+  // The background compile only touches its own copies (no Metal objects), so this cannot race the model's own teardown;
+  // it is here so the thread cannot outlive the process's model, as an unjoined std::thread would
+  if (ane_thread_.joinable()) ane_thread_.join();
   // NI_QMT_I8's scratch (qmt_i8_scratch): released once the queue has finished everything committed before
   bool any = !qmt_i8_retired_.empty();
   for (const QmtI8Slot& sl : qmt_i8_ring_) any = any || bool(sl.q);

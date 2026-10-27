@@ -138,6 +138,9 @@ void Qwen35::init_ane() {
     c.compile_only = true;
     auto st = std::make_shared<std::atomic<int>>(1);
     ane_async_st_ = st;
+    // A compile released under memory pressure is still joining here; its result was dropped, and this is the one place
+    // that waits for it (the release path must not, and ~Qwen35 is the other).
+    if (ane_thread_.joinable()) ane_thread_.join();
     ane_thread_ = std::thread([st, c, ls = ane_layers()]() mutable {
       const double t0 = now_ms();
       try {
@@ -184,7 +187,8 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
 
 bool Qwen35::ane_release() {
   if (ane_async_st_) {  // a compile still running in the background: never build the split
-    if (ane_thread_.joinable()) ane_thread_.detach();
+    // Dropped, not waited for: this runs on the memory-pressure path, where a ~40 s compile would stall the release.
+    // The thread keeps its own copies and is joined before the next compile or in ~Qwen35.
     ane_async_st_.reset();
   }
   if (!ane_) return false;

@@ -583,6 +583,9 @@ void NemotronH::init_ane() {
     cc.compile_only = true;
     auto st = std::make_shared<std::atomic<int>>(1);
     ane_async_ = st;
+    // A compile released under memory pressure is still joining here; its result was dropped, and this is the one place
+    // that waits for it (the release path must not, and ~NemotronH is the other).
+    if (ane_thread_.joinable()) ane_thread_.join();
     ane_thread_ = std::thread([this, st, cc] {
       const double t0 = now_ms();
       try {
@@ -663,7 +666,8 @@ void NemotronH::ane_abort(const std::string& why) {
 
 bool NemotronH::ane_release() {
   if (ane_async_) {  // a compile still running in the background: never build the split
-    if (ane_thread_.joinable()) ane_thread_.detach();
+    // Dropped, not waited for: this runs on the memory-pressure path, where a ~40 s compile would stall the release.
+    // The thread keeps its own copies and is joined before the next compile or in ~NemotronH.
     ane_async_.reset();
   }
   if (!ane_) return false;
