@@ -64,11 +64,9 @@ always take the best model.
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
-| `nanbeige4.3-33b` | `nanbeige`, `nanbeige4.3`, `nanbeige-33b` | Nanbeige4.3-33B: a dense 33B (Llama architecture) for agents and coding, reasoning switched with `enable_thinking`; text only; 32 GB Macs and up in 4-bit | 21.8 GB | `4bit` (default: AWQ, 8-bit embedding and LM head), `8bit` (37.2 GB), `bf16` (68.2 GB) |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
-27B, a DFlash2 draft model for Nanbeige (ProCreations' weights), an MTP head and z-lab's DFlash draft model for the 4B
-and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning; Flash-Next's
+27B, an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning; Flash-Next's
 repo holds its MTP head. Dory and Flint have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
 MTP head, and a draft model would not fit beside it).
 
@@ -164,28 +162,6 @@ can part from plain decoding's beyond a near-tie of the next token: Flint's rout
 takes its top 6, and where a score sits on a rounding boundary a verify pass, which sums in another order than a decode
 step, can pick another expert, and every layer after it computes something else. The output check met one such row in
 192 (layer 16 at a window's position 1684), at verify passes of 2, 4 and 8 rows alike.
-
-Nanbeige4.3-33B (`--model nanbeige`: Nace AI's MLX packs of [Nanbeige/Nanbeige4.3-33B](https://huggingface.co/Nanbeige/Nanbeige4.3-33B),
-[4-bit AWQ](https://huggingface.co/kapitsaprime/Nanbeige4.3-33B-MLX-4bit) by default and
-[8-bit](https://huggingface.co/kapitsaprime/Nanbeige4.3-33B-MLX-8bit), or `:bf16` as published; KL from bf16 0.163 and
-0.015 on 768 rows, top-1 92.3% and 98.6%, the repos' cards have the tables) is a dense Llama: 52 layers of full attention (56 query and 8 KV heads of 128, RoPE base 1.2e8) and a
-SwiGLU MLP of 22,016. It runs on Flint's backend as a Flint without sinks, q / k norms, experts or sliding windows
-(`model_type` `llama`; an MLX affine 4-bit or 8-bit group-64 conversion of it runs too). Its tokenizer is
-SentencePiece-style BPE (spaces as U+2581, characters outside the vocabulary as byte tokens), read from its
-`tokenizer.json`; its chat template writes Qwen's markup: `<think>` reasoning, on unless `enable_thinking` is false, and
-XML tool calls in `<tool_call>`, which come back as tool calls. It keeps every past turn's reasoning in the prompt
-unless `preserve_thinking` is false. Its DFlash2 drafter ships with it (`kapitsa pull` fetches `dflash2/`;
-ProCreations' weights) and `--dflash auto` uses it where it fits: it drafts while its cycles keep landing, and falls
-back to plain decoding where they stop (writing code 28.3 -> 33.7 tok/s; prose and edits stay at plain speed —
-[#657](https://github.com/nace-ai/kapitsa/pull/657), `NI_DFL_FLOOR` below). `--dflash none` decodes plainly, and so
-does `--spec 0`, which turns drafting off entirely; with the drafter off, `--spec N` drafts by prompt lookup.
-
-Another `llama` checkpoint loads only within what the kernels take: head dim 128, at most 8 query heads per KV head, a hidden
-size, query width and MLP size that are multiples of 512, a SwiGLU (`silu`) MLP, no biases, untied embeddings, no
-sliding window and the default RoPE (no `rope_scaling`), in bf16 or MLX affine 4-bit or 8-bit with groups of 64, and a
-ChatML chat template (`<|im_start|>`: Kapitsa writes Nanbeige4.3's markup). The loader and `kapitsa pull` (before the
-download) refuse any other with the first reason; Meta's Llama 3 checkpoints are refused (their chat template is not
-ChatML, and from 3.1 on they scale RoPE).
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
@@ -314,7 +290,7 @@ loaded: the server sends its requests there ([Several Macs](#several-macs)). In 
 | `--context N` | the model's limit (256K, 1M), less where memory is tight | Context per conversation: tokens (`131072`), `k` or `m` of them (`128k`, `1m`), or `max`, the model's own limit ([Context](#context)). `--ctx N` works too. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--context` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
-| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). Dense Nemotron-H (Nemotron Nano): prompt lookup's drafts per cycle (by default 4 with BF16 or FP8 MLP layers, off with NVFP4). Flint and Nanbeige: prompt lookup's drafts per cycle (off by default). |
+| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). Dense Nemotron-H (Nemotron Nano): prompt lookup's drafts per cycle (by default 4 with BF16 or FP8 MLP layers, off with NVFP4). Flint: prompt lookup's drafts per cycle (off by default). |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. On a 32-core M1 Max and on the M5 (Apple10 GPUs), a single slot with the 35B-A3B 4-bit group-64 model uses `4096` when its memory plan fits. An MoE model's pass holds up to 1/32 more rows than the chunk (`2112` for `2048`), and the prompt is split evenly over the passes it needs, so a prompt a few tokens past a multiple of the chunk does not pay a pass of its own for them. `NI_BAL=0` restores the plain chunking. |
 | `--disk-cache SIZE` | `auto` | The SSD prefix cache: conversations kept on the SSD, also across restarts ([SSD prefix cache](#ssd-prefix-cache)). `auto`: a quarter of the free space beyond 10 GiB, at most 32 GiB; a size (`16G`, `512M`) caps it within that; `0` turns it off. Not every model has it yet ([Models](#ssd-prefix-cache) lists them): the others run without it and, when the option is given, say so at start. |
@@ -401,8 +377,7 @@ restarted) reads that state back and prefills only what follows it. `usage.promp
   `--disk-cache 16G` caps it at 16 GiB within the same rule; `--disk-cache 0` turns it off. Other models' caches that
   no server uses count against the limit too and go first; one no server has used for 14 days is removed when a server
   starts.
-- **Models.** The Qwen3.5 family (the 4B, 9B, 35B-A3B and 27B), with their draft models or the MTP head; Flint and
-  Nanbeige, which run on Flint's backend; and Dory (a state is read back only for the loop count that computed it).
+- **Models.** The Qwen3.5 family (the 4B, 9B, 35B-A3B and 27B), with their draft models or the MTP head; Flint; and Dory (a state is read back only for the loop count that computed it).
   Nemotron-H models and Qwen3.8-Flash-Next run without it (the log says so, and so does the screen when `--disk-cache`
   or `NI_DISK_CACHE` asks for it).
 
@@ -502,7 +477,7 @@ curl http://127.0.0.1:8000/v1/draft -H 'Content-Type: application/json' -d '{"mo
   default for chunks of 512 rows or more) computes the FFN in 8 bits, so after a long draft the request's last rows
   are the GPU's: in one series on the 4B a paste's reply changed, in the table's rounds it did not. `NI_ANE=0` keeps
   the prompt on the GPU.
-- **Models.** The Qwen3.5 family with its drafters, the MTP head or none. Nemotron-H models, Dory, Flint and Nanbeige answer
+- **Models.** The Qwen3.5 family with its drafters, the MTP head or none. Nemotron-H models, Dory and Flint answer
   `unsupported`. Text without spaces (Chinese, Japanese) is read only up to its last whitespace.
 
 The reply is always 200 (400: a body without `after` and `text` as strings; `"think": true`, not supported yet):
@@ -794,7 +769,7 @@ Kapitsa holds at most a budget of GPU memory: Metal's recommended working set, w
 Fixed at start are the weights, the MTP head, the prefill buffers (they scale with `--prefill-chunk`), each slot's
 recurrent state and, where used, the Neural Engine split's buffers and the draft model. Each conversation's KV cache
 grows as it fills: 36 KB per token on the 4B, 68 KB on the 27B, 22 KB on the 35B, 28 KB on Flint (plus 38 MB for its
-sliding-window rings), 8 KB on Bolt and on Super-VL, 6 KB on Lightning, 31 KB on Flash-Next, 208 KB on Nanbeige4.3-33B. Flash-Next's n-gram table
+sliding-window rings), 8 KB on Bolt and on Super-VL, 6 KB on Lightning, 31 KB on Flash-Next. Flash-Next's n-gram table
 (32 GB) is not in the budget: it is mapped from its file, and each token reads 16 rows of it on the CPU, so macOS keeps
 the parts in use in the page cache and can drop them under pressure. When memory is short:
 

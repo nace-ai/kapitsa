@@ -21,26 +21,22 @@ decode over the next fastest engine on that model.
 
 | Mac | Kapitsa's decode lead | Where another engine is ahead |
 | --- | --- | --- |
-| [M5 Max, 128 GB](#m5-max) | 35B-A3B **1.21x** Splash · Bolt **2.3x** oMLX · Flint 1.2x rec (1.06-1.25x over the night's runs) · Lightning 1.41x · Super-VL 1.42x · Dory 1.57x | 27B decode: level with mlx-serve, 133 against 128, inside the runs' spread. Nanbeige decode: level with oMLX, 28.1 against 28.0, inside both runs' spreads. Flash-Next decode: mlx-serve 108 against 106. Prefill: Splash on the 27B (1,039 against 907) and the 35B-A3B (6,386 against 5,963); oMLX on the Nanbeige (766 against 511); mlx-serve, oMLX and MTPLX on Flash-Next |
+| [M5 Max, 128 GB](#m5-max) | 35B-A3B **1.21x** Splash · Bolt **2.3x** oMLX · Flint 1.2x rec (1.06-1.25x over the night's runs) · Lightning 1.41x · Super-VL 1.42x · Dory 1.57x | 27B decode: level with mlx-serve, 133 against 128, inside the runs' spread. Flash-Next decode: mlx-serve 108 against 106. Prefill: Splash on the 27B (1,039 against 907) and the 35B-A3B (6,386 against 5,963); mlx-serve, oMLX and MTPLX on Flash-Next |
 | [M5 Pro, 48 GB](#m5-pro) | 35B-A3B **1.11x** Splash · Lightning 1.28x · Bolt 1.93x · Dory 1.32x · Flint 1.03x rec | 27B decode: mlx-serve 78 against 77, inside the runs' spread. Prefill: Splash on the 35B-A3B (1.25x) and the 27B (1.11x) |
 | [M4 Pro, 48 GB](#m4-pro) | 4B **1.47x** mlx-serve · 27B 1.17x · 35B-A3B 1.19x Splash · Lightning 1.72x · Bolt 1.97x · Dory 1.33x · Flint 1.01x rec | Flint prefill: llama.cpp 977 against 968 |
 | [M3 Pro, 36 GB](#m3-pro) | 4B 1.79x · 9B **2.90x** · 27B 1.77x · 35B-A3B 1.84x · Lightning 1.92x · Flint 1.45x · Dory 1.21x | Nano 4B decode: llama.cpp 34.9 against 34.4. Nano 9B v2: mlx-lm 24.9 against 20.9 (both on lighter 4-bit files) |
 | [M1 Pro, 16 GB](#m1-pro) | 4B 1.56x · 9B 1.54x · 35B-A3B 2-bit 1.37x · Flint 2-bit 1.42x · Dory 1.30x · Nano 4B 1.32x · Nano 9B v2 1.39x | — |
 
-Kapitsa reads the highest decode in 34 of the 38 model and Mac pairs, and the 32 in the headline is the wins count:
-two of the 34 are ties (≈) that are not counted as wins. A tie is the row's fastest rival, the one the tables pair
-with Kapitsa, standing inside each other's measured range: the M5 Max's Qwen3.8 27B row (133 against mlx-serve's 128)
-and its Nanbeige4.3-33B row (28.1 against oMLX's 28.0, 28.1 inside 27.3-28.2 and 28.0 inside 27.5-31.7). Rivals
-further down the poster are not marked, and that is why the mark is not on all of them: mlx-vlm's 27.6 sits inside
-Kapitsa's 27.5-31.7, but Kapitsa's 28.1 is above mlx-vlm's 27.6-27.7. Counted over the poster's and the tables' rows
-(`tools/readme_images/readme_images.json`): the union of the 39 rows where Kapitsa has a decode cell, less the M3 Pro
-36 GB's Bolt 74B row, which has no rival, gives 38 pairs. The six Kapitsa does not win are in the column above: those
-two ties, the Flash-Next and M5 Pro 27B losses to mlx-serve, and the M3 Pro's Nano 4B and Nano 9B v2. Each pair
+Kapitsa reads the highest decode in 33 of the 37 model and Mac pairs, and the 32 in the headline is the wins count:
+one of the 33 is a tie (≈) that is not counted as a win. A tie is the row's fastest rival, the one the tables pair
+with Kapitsa, standing inside each other's measured range: the M5 Max's Qwen3.8 27B row (133 against mlx-serve's 128).
+Counted over the poster's and the tables' rows (`tools/readme_images/readme_images.json`): the union of the 38 rows
+where Kapitsa has a decode cell, less the M3 Pro 36 GB's Bolt 74B row, which has no rival, gives 37 pairs. The five
+Kapitsa does not win are in the column above: that tie, the Flash-Next and M5 Pro 27B losses to mlx-serve, and the M3
+Pro's Nano 4B and Nano 9B v2. Each pair
 compares cells in one power mode. Every cell is the build under it, so the count describes the builds those cells ran,
 not the current binary: a later build that moves a row makes a new measurement, and the poster is re-measured rather
-than re-read. The Nanbeige row's Kapitsa cell is `0156392 + #682`, and the drafter's break-even floor was made to rise
-with context after it ([#689](https://github.com/nace-ai/kapitsa/pull/689)), so that row on a later build is a number
-of its own. The M5 Max Flash-Next pair (Kapitsa 106 against mlx-serve 108) was checked from the
+than re-read. The M5 Max Flash-Next pair (Kapitsa 106 against mlx-serve 108) was checked from the
 runs' saved text (`finish=length` on all 10 answers, each cut off at the 512-token limit), not from saved token ids.
 
 <a id="how-the-readme-poster-was-measured"></a><a id="the-readmes-tables"></a>
@@ -144,26 +140,6 @@ loop.
 - Several engines read lower than on their 2026-10-18 releases with the same configs (oMLX's DFlash2 config 189
   against 232 on the 35B-A3B, mlx-serve's MTP 235 against 264); none of those runs is flagged. Their settings were
   chosen on the earlier releases and were not re-tuned.
-
-**2026-10-25: Nanbeige4.3-33B** ([report](../bench/results/2026-10-25-m5-max-nanbeige/README.md),
-[saved results](../bench/results/2026-10-25-m5-max-nanbeige/results/compare_table.csv)).
-M5 Max, 128 GB, macOS 26.4, AC power, no other GPU work. Kapitsa `5bee92c`, mlx-lm 0.32.2, oMLX 0.7.3.dev2 and
-mlx-vlm 0.7.10 read the same AWQ 4-bit group-64 pack at `5901f0d4`, with 8-bit embedding and LM head; llama.cpp
-b11871 and Ollama 0.40.11 read a separate Q4_K_M GGUF. The chat harness ran each engine in turn with thinking off,
-T 0.6, top_p 0.95 and top_k 20, five decode runs and five greedy runs. The nominal 4K and 16K prompts contain
-5,088 and 19,954 reference tokens.
-
-Kapitsa measured **532 / 28.8** tok/s for 4K prefill / median decode, rounded from 532.1 / 28.79. Its median decode
-was the highest measured. The 2.8% lead over oMLX uses the raw medians, 28.79 versus 28.0 tok/s. That lead is within
-the source's noise range, not a statistically established advantage. The source reports single-run swings of up to
-about 20% and treats gaps under about 10% as noise. The poster's cells were re-run on 2026-10-26 with the DFlash2
-drafter, 28.1 for Kapitsa against oMLX's 28.0 ([results](../bench/results/2026-10-26-m5-max-nanbeige/README.md)): the
-same picture, so the poster marks the row a tie and does not count it as a win. oMLX prefills faster: it read 766
-against 532 tok/s at 4K and 634 against 483 at 16K in that 2026-10-25 run, and the re-run measured Kapitsa's prefill
-only, 511 / 485 at 4K / 16K (oMLX was not re-run), so the poster's 766 against 511 is a pair of cells from different
-sessions. Decode repetition flags affect mlx-vlm and both GGUF engines. Cached-TTFT flags warn that length-limited
-answers may not be cached; oMLX's 16K follow-up explicitly reused zero prefix tokens. The report's separate context
-sweep uses each engine's own benchmark tool, not this chat harness.
 
 **Cells from earlier sessions, not yet re-measured.**
 

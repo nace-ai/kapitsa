@@ -225,9 +225,9 @@ def agent_checks(run, home):
             p = subprocess.run([node, "--input-type=module", "-e", probe, ext], env=e, capture_output=True, text=True,
                                timeout=60)
             return json.loads(p.stdout) if p.returncode == 0 else p.stderr
-        got = provider([{"id": "qwen3.6-35b-a3b", "context": 65536}, {"id": "nanbeige4.3-33b:4bit", "context": 131072}])
+        got = provider([{"id": "qwen3.6-35b-a3b", "context": 65536}, {"id": "flint:4bit", "context": 131072}])
         check("cli: Pi's provider lists every model it is given, the served one first, each with its context",
-              got == [[["qwen3.6-35b-a3b", 65536, 16384], ["nanbeige4.3-33b:4bit", 131072, 32768]]], str(got))
+              got == [[["qwen3.6-35b-a3b", 65536, 16384], ["flint:4bit", 131072, 32768]]], str(got))
         got = provider(None)
         check("cli: Pi's provider without a list: the one model", got == [[["qwen3.6-35b-a3b", 65536, 16384]]], str(got))
     for label in ["sh.brew.kapitsa", "homebrew.mxcl.kapitsa"]:  # current Homebrew's label (the reporter's), older ones'
@@ -332,23 +332,6 @@ def cli_checks(kapitsa):
               j.get("model") == name + ":4bit" and j.get("kind") == "catalog" and j.get("repo") == "RecursiveSI/flint-int4"
               and j.get("revision") == "3b93f9053b530488405ae9fca51d4900d6ce21f0" and j.get("companions") == [] and
               j.get("id") == name and j.get("dir") == os.path.join(models, name + "-4bit"), json.dumps(j))
-    # Nanbeige4.3-33B: Nace AI's MLX 4-bit (default) and 8-bit packs, Nanbeige's bf16 as published, each with the DFlash2
-    # drafter in dflash2/; its repo by name resolves to the catalog's bf16
-    nb = "nanbeige4.3-33b"
-    nb_dfl = [("dflash2", "kapitsaprime/Nanbeige4.3-33B-DFlash2", "264f1f7f3d4c35d7c23be30de09471365a0a2604", "dflash2")]
-    for a, dv, repo, rev in [
-            ("nanbeige", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
-            ("nanbeige4.3", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
-            ("nanbeige-33b", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
-            ("nanbeige:8bit", "8bit", "kapitsaprime/Nanbeige4.3-33B-MLX-8bit", "b3302e043d64b12dd8ef7c7bb86aafaf5630bcb2"),
-            ("nanbeige:bf16", "bf16", "Nanbeige/Nanbeige4.3-33B", "c1093c501cc6460427c0ac634db7223d0450c0ee"),
-            ("Nanbeige/Nanbeige4.3-33B", "bf16", "Nanbeige/Nanbeige4.3-33B", "c1093c501cc6460427c0ac634db7223d0450c0ee")]:
-        j = plan(a)
-        got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-        check(f"cli: {a} -> {nb}:{dv}, with its DFlash2 drafter",
-              j.get("model") == nb + ":" + dv and j.get("kind") == "catalog" and j.get("repo") == repo and
-              j.get("revision") == rev and got == nb_dfl and
-              j.get("dir") == os.path.join(models, nb + "-" + dv), json.dumps(j))
     # NVIDIA's Nemotron Nano: the 4B in FP8 (default) and BF16, the 9B v2 in NVFP4; no drafter (prompt lookup)
     nano4, nano9 = "nemotron-3-nano-4b", "nemotron-nano-9b-v2"
     for a, name, dv, default, repo, rev in [
