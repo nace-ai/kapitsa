@@ -99,9 +99,11 @@ struct MemPlan {
   size_t store_all = 0, store_least = 0;  // the store's bytes for every streamed expert / its smallest size (3 layers')
   size_t mtp = 0;          // MTP head as loaded (bf16 linears become 4-bit), 0 without mtp.safetensors
   size_t activations = 0;  // prefill-chunk buffers (scale with the chunk)
-  // the NI_PREFILL_GROUP per-chunk slot term inside `activations` (q20::group_slot_bytes; a streamed Qwen4Exp pack
-  // only): charged while the store predicted without it is still incomplete, dropped when that store is complete -
-  // an all-resident model never groups and never pays (Qwen4Exp::init_store, doctor.cpp)
+  // the NI_PREFILL_GROUP per-chunk slot term (q20::group_slot_bytes; a streamed Qwen4Exp pack only), kept OUT of
+  // `activations`: whether a load allocates it at all is the store-world choice (q20::group_world) - the store is
+  // sized without it first and the slots pay only while it stays incomplete, so an all-resident model never groups
+  // and never pays. A pre-load fit number that must carry the reservation adds the predicted charge
+  // (ni::planned_group_world); Qwen4Exp::init_store decides live.
   size_t group_slots = 0;
   size_t slot_state = 0;   // per slot: recurrent state, its two checkpoints and the verify tape
   size_t kv_per_pos = 0;   // per slot and position

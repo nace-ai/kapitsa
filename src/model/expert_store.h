@@ -26,6 +26,8 @@
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -59,9 +61,10 @@ inline int group_chunks(int g, bool split, bool debug, bool all_resident) {
 }
 
 // The per-chunk slot bytes of G layer-major groups: the chunks' x_ / yb_ / injA_ / injM_ slots and the two sets
-// of G n-gram stagings. One formula for the sides that must agree - the plan (qwen4_act_bytes, MemPlan's
-// group_slots), the allocation (Qwen4Exp::alloc4_group) and the store sizing's two-pass charge
-// (Qwen4Exp::init_store, doctor.cpp). 0 unless G >= 2.
+// of G n-gram stagings. One formula for the sides that must agree - the plan (plan() sets MemPlan::group_slots
+// to it, kept OUT of `activations`), the allocation (Qwen4Exp::alloc4_group) and the store-world charge
+// (group_world below: Qwen4Exp::init_store runs it live, ni::planned_group_world predicts it before a load).
+// 0 unless G >= 2.
 inline size_t group_slot_bytes(int g, size_t T, size_t D, size_t hc) {
   if (g < 2) return 0;
   const size_t SD = hc * D;
@@ -94,7 +97,7 @@ struct AutoStoreIn {
   size_t all = 0, least = 0, left = 0, used = 0, keep = 0, ram = 0, avail = 0;
   double cap = 0;
 };
-enum class AutoStoreWhy { Budget, All, Avail, Cap };
+enum class AutoStoreWhy { Budget, All, Avail, Cap, Pinned };  // Pinned: NI_EXPERT_STORE set the size
 struct AutoStore {
   size_t bytes = 0;
   AutoStoreWhy why = AutoStoreWhy::Budget;
@@ -118,12 +121,75 @@ inline AutoStore auto_store_size(const AutoStoreIn& in) {
   }
   return r;
 }
-// The automatic size's reason, for logs and JSON: "all", "budget", "available_memory", "ram_share_cap"
+// The NI_EXPERT_STORE pin, parsed exactly as the live load parses it (Qwen4Exp::init_store): "all" is every
+// expert, a number is GB of store (atof, so garbage reads 0), "auto"/empty/unset is the automatic size
+// (returns false, `bytes` untouched). Any other non-empty value is the number atof reads. The result is
+// clamped to `all` as the load clamps it (init_store's `o.bytes = std::min(o.bytes, all)`), so `bytes` is
+// always a valid store size. One parser, shared by the live load and every pre-load prediction
+// (ni::planned_group_world), so the two never diverge on what the pin means.
+inline bool store_pin_bytes(const char* es, size_t all, size_t& bytes) {
+  if (!es || !*es || !strcmp(es, "auto")) return false;
+  bytes = !strcmp(es, "all") ? all : std::min(size_t(atof(es) * 1e9), all);
+  return true;
+}
+// The group slots' store-world choice (PR #628) - one decision, one place, asked by every side:
+// Qwen4Exp::init_store at load time (live, authoritative) and ni::planned_group_world before one (the engine's
+// fit checks, `kapitsa doctor`'s displayed plan). The store is sized first WITHOUT the charge (`bare`: the
+// plan's activations carry none of it and nothing has allocated slots yet); complete without it, the world
+// never groups and never pays - charge 0, the bare inputs and sizing stand, and every fit number stays the
+// bare one (a reservation no load allocates must not shrink a context ladder - the full default context rides
+// on this). Incomplete, the slots pay for themselves: the charge is the slot term and the world is the charged
+// one (group_charged_in). Monotone in one direction - more charge shrinks the budget the store gets, which
+// never moves the store toward complete - so the one correction is the fixed point: no oscillation, no
+// circularity.
+struct GroupWorld {
+  AutoStoreIn in;     // the chosen world's sizing inputs (the bare ones when charge == 0)
+  AutoStore st;       // ... and the store that world sizes (st.bytes >= in.all when complete)
+  size_t charge = 0;  // the group-slot bytes this world pays (0: never groups, never pays)
+};
+// The charged world's inputs: the bare ones with the slot bytes taken out of what is left for the store and
+// added to what the process already uses (the clamps Qwen4Exp::init_store ran before this existed).
+inline AutoStoreIn group_charged_in(const AutoStoreIn& in, size_t slots) {
+  AutoStoreIn c = in;
+  c.left = in.left > slots ? in.left - slots : 0;
+  c.used = in.used + slots;
+  c.avail = in.avail > slots ? in.avail - slots : 0;
+  return c;
+}
+inline GroupWorld group_world(size_t slots, const AutoStoreIn& bare, const size_t* pin = nullptr) {
+  GroupWorld w;
+  w.in = bare;
+  if (pin) {
+    // The NI_EXPERT_STORE pin is authoritative (Qwen4Exp::init_store sizes the store to it): the store is
+    // the pin's bytes (the parser already clamped to all), never re-sized by budget/avail/cap. A pin short
+    // of every expert stays incomplete, so the groups pay and alloc4_group allocates the slots on top (the
+    // store's size is unchanged; the sizing inputs stay the bare ones - the pin overrides them); a pin that
+    // holds every expert is complete, never groups and never pays. The pin's world is chunk-invariant
+    // (complete or incomplete depends only on the pin against all); only the charge's magnitude scales with
+    // the plan's rows. This is what makes a short pin reserve even where the automatic store (the `bare`
+    // inputs below) would come out complete.
+    w.st.bytes = *pin;
+    w.st.headroom = auto_store_headroom(bare.ram);
+    w.st.why = AutoStoreWhy::Pinned;
+    if (slots && *pin < bare.all) w.charge = slots;
+    return w;
+  }
+  w.st = auto_store_size(w.in);
+  if (slots && w.st.bytes < w.in.all) {
+    w.charge = slots;
+    w.in = group_charged_in(bare, slots);
+    w.st = auto_store_size(w.in);
+  }
+  return w;
+}
+// The automatic size's reason, for logs and JSON: "all", "budget", "available_memory", "ram_share_cap",
+// "NI_EXPERT_STORE" (the pin)
 inline const char* auto_store_why_name(AutoStoreWhy w) {
   switch (w) {
     case AutoStoreWhy::All: return "all";
     case AutoStoreWhy::Avail: return "available_memory";
     case AutoStoreWhy::Cap: return "ram_share_cap";
+    case AutoStoreWhy::Pinned: return "NI_EXPERT_STORE";
     case AutoStoreWhy::Budget: break;
   }
   return "budget";
@@ -159,6 +225,14 @@ inline std::string auto_store_reason(const AutoStore& st, const AutoStoreIn& in)
                "NI_EXPERT_CAP=0 lifts it)",
                double(st.bytes) / 1e9, left, in.cap * 100);
       break;
+    case AutoStoreWhy::Pinned:
+      if (st.bytes >= in.all)
+        snprintf(b, sizeof b, "all %.1f GB of experts, the NI_EXPERT_STORE pin: resident, no SSD reads",
+                 double(in.all) / 1e9);
+      else
+        snprintf(b, sizeof b, "%.1f GB of the %.1f GB of experts, the NI_EXPERT_STORE pin", st.bytes / 1e9,
+                 double(in.all) / 1e9);
+      break;
   }
   return b;
 }
@@ -177,6 +251,10 @@ inline std::string auto_store_short(const AutoStore& st, const AutoStoreIn& in) 
     case AutoStoreWhy::Cap:
       snprintf(b, sizeof b, "%.1f GB, not the %.1f GB the budget leaves: the %.0f%% RAM-share cap (NI_EXPERT_CAP=0 lifts it)",
                gb, left, in.cap * 100);
+      break;
+    case AutoStoreWhy::Pinned:
+      if (st.bytes >= in.all) snprintf(b, sizeof b, "all %.1f GB of experts, pinned resident", all);
+      else snprintf(b, sizeof b, "%.1f of %.1f GB of experts, the pin", gb, all);
       break;
   }
   return b;

@@ -99,6 +99,17 @@ size_t default_mem_budget();
 // conversation's KV cache (up to 32K tokens) set apart; a Q2_0 pack's expert store takes what that leaves after the
 // weights (the engine and `kapitsa doctor` share it). At least 1 byte.
 size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t budget);
+// The group-slot store-world a pre-load fit check sees (PR #628): the automatic expert store the load will pick
+// for a Q2_0 Flash-Next pack, planned as `kapitsa doctor` displays it, run through q20::group_world - the
+// store-world choice, one decision in one place. A store complete without the charge never groups and never
+// pays (.charge 0; every fit number stays the bare one, which is what keeps a full default-context ladder); an
+// incomplete one allocates MemPlan::group_slots (Qwen4Exp::init_store decides live - the authority), and every
+// pre-load fit number that must carry the reservation adds `.charge` (start_need, conversation_fits, the chunk
+// picks). An NI_EXPERT_STORE pin decides its own world exactly as the load does (q20::store_pin_bytes, one
+// shared parser), so a short pin reserves the slots even where the automatic store would come out complete,
+// and a pin holding every expert never groups and never pays. group_slots is 0 for every model but a streamed
+// Q2_0 trunk pack, so for everything else this is the plain planned sizing, uncharged.
+q20::GroupWorld planned_group_world(const MemPlan& m, int slots, int ctx, size_t budget);
 // The prefill chunk (rows) the engine picks when none is given: 2048, or 1024 when 2048-row buffers would leave
 // less than one conversation of `context` tokens in the budget (activations scale with the chunk), less (a multiple of
 // 64, at least 256) when 1024-row ones would leave less than the tokens the engine starts with (the context, up to 8K)
@@ -145,16 +156,18 @@ struct StartPlan {
 };
 StartPlan start_plan(const std::string& model_dir, const EngineOptions& opt, size_t budget);
 // What the engine needs to start a model (it refuses to load it past the budget): the weights, the MTP head, the
-// drafter plan_load keeps, prefill buffers for `prefill_chunk` rows, the slots' state and an 8k-token conversation
-// (min(context, 8192)). From config.json and the safetensors headers alone, so `kapitsa serve` can check a model
-// before downloading it (hub::plan_dir).
+// drafter plan_load keeps, prefill buffers for `prefill_chunk` rows plus the group-slot charge the store-world
+// choice predicts for `budget` (planned_group_world; 0 for every model but a streamed Q2_0 pack whose predicted
+// store stays incomplete), the slots' state and an 8k-token conversation (min(context, 8192)). From config.json
+// and the safetensors headers alone, so `kapitsa serve` can check a model before downloading it (hub::plan_dir).
 struct StartNeed {
   size_t bytes = 0;
   std::string parts;  // what each part needs, for the "insufficient memory" message
   size_t weights = 0;   // the weights alone
   std::string formats;  // their formats ("bf16", "4-bit g64 + 8-bit g64" ...)
 };
-StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots);
+StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots,
+                     size_t budget);
 // One conversation of `context` tokens fits within `budget` beside the model (1024-row prefill buffers, the slots'
 // state, the Neural Engine split): plan_load's test before it keeps a drafter, and the test `kapitsa serve` without
 // --model applies to pick the best model for this Mac.

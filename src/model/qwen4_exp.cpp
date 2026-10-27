@@ -178,9 +178,11 @@ static bool hc_precomb(bool q20_pack) {
 // on). =1 keeps the chunks one at a time, as before, for the merge gate's ABAB legs and debugging alone - there
 // is no supported off posture: the gate losing closes the change unmerged rather than shipping it off. A value
 // outside 1..8 is ignored and the default 4 stands (a bad value warns like NI_PRED_ALL_MIN's does); the group's
-// per-chunk slots cost the plan (qwen4_act_bytes) exactly what they cost the allocation (alloc4_group) - one
-// formula, q20::group_slot_bytes - and both sides charge them only while the streamed store is incomplete (an
-// all-resident model never groups, q20::group_chunks). Defined below, after env_rows.
+// per-chunk slots cost the plan (MemPlan::group_slots, kept out of `activations`) exactly what they cost the
+// allocation (alloc4_group) - one formula, q20::group_slot_bytes - and the store-world choice (q20::group_world:
+// Qwen4Exp::init_store runs it live, ni::planned_group_world predicts it before a load) charges them only while
+// the streamed store is incomplete (an all-resident model never groups, q20::group_chunks). Defined below,
+// after env_rows.
 static int prefill_group_env();
 
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
@@ -557,7 +559,8 @@ void Qwen4Exp::alloc4() {
 // the members per turn, and two sets of G n-gram stagings (the host gathers group g + 1's rows while the GPU runs
 // g). init_store calls this only while the streamed store is incomplete - a group pays the store's reads alone,
 // so an all-resident model never groups (q20::group_chunks) and never pays these bytes; the same conditional
-// decides the plan's MemPlan::group_slots (qwen4_act_bytes via plan(), and doctor.cpp). One formula with the
+// decides the plan's MemPlan::group_slots (plan() sizes it apart from `activations`, and
+// ni::planned_group_world predicts which store world pays it). One formula with the
 // plan's: q20::group_slot_bytes.
 void Qwen4Exp::alloc4_group() {
   if (prefill_group_ < 2) return;
@@ -797,11 +800,21 @@ void Qwen4Exp::init_store(const std::string& dir) {
   const q20::SlotLayout lay = q20::slot_layout(uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I));
   const size_t all = size_t(hi_ - lo_) * E * lay.bytes;
   q20::ExpertStore::Options o;
-  const char* es = getenv("NI_EXPERT_STORE");
-  if (es && !strcmp(es, "all")) {
-    o.bytes = all;
-  } else if (es && *es && strcmp(es, "auto")) {
-    o.bytes = size_t(atof(es) * 1e9);
+  // The store-world decision is one function (q20::group_world) the live load and every pre-load prediction
+  // (ni::planned_group_world) share, and the NI_EXPERT_STORE pin is one parse (q20::store_pin_bytes) both
+  // sides share, so the load and the fit numbers never diverge on what the pin means or what the store costs.
+  // A pin decides its own world: the store is the pin's bytes (the parser clamped to all), and a pin short of
+  // every expert stays incomplete, so alloc4_group below allocates the slots on top (the same predicate,
+  // !store_->complete()) - no settle wait, no budget/avail/cap sizing, the pin overrides them.
+  size_t pin = 0;
+  if (q20::store_pin_bytes(getenv("NI_EXPERT_STORE"), all, pin)) {
+    const size_t gsb = q20::group_slot_bytes(prefill_group_, size_t(tmax_), size_t(cfg_.hidden), size_t(c4_.hc));
+    q20::AutoStoreIn in;
+    in.all = all, in.least = size_t(3) * E * lay.bytes;
+    const q20::GroupWorld gw = q20::group_world(gsb, in, &pin);
+    o.bytes = gw.st.bytes;
+    if (gw.charge) logi("expert store: NI_PREFILL_GROUP=%d slots -%.2f GB", prefill_group_, double(gw.charge) / 1e9);
+    logi("expert store: %s", q20::auto_store_reason(gw.st, gw.in).c_str());
   } else {
     // what the budget leaves: the engine's (mem_budget, its conversations' KV caches and slots' state already set
     // apart) less 0.5 GB, or the default budget less a 16K-token KV cache and 1.5 GB (tools)
@@ -842,27 +855,22 @@ void Qwen4Exp::init_store(const std::string& dir) {
       logi("expert store: the system's available memory %.1f GB at first, %.1f GB after %.2f s", double(sa.first) / 1e9,
            double(sa.avail) / 1e9, sa.waited_ms / 1e3);
     in.cap = q20::auto_store_cap(Gpu::get().apple10());
-    q20::AutoStore st = q20::auto_store_size(in);
-    o.bytes = st.bytes;
-    // Layer-major groups' two-pass charge: size the store first WITHOUT the slot bytes - alloc4 has not allocated
-    // them, so `used` above does not carry them - and only if the store stays incomplete in that world do the
-    // slots pay for themselves (re-size: left and avail shrink, used grows). Monotone in one direction - more
-    // activation charge shrinks the store's budget, which only moves it further from complete - so the second
-    // pass is the fixed point, no oscillation; and the allocation at the end of this function follows the same
-    // decision (alloc4_group), so the plan's MemPlan::group_slots and the load's reality agree by construction.
-    // The all-resident world charges nothing and allocates nothing.
+    // The layer-major groups' store-world choice (q20::group_world - the one function every side asks;
+    // ni::planned_group_world predicts it before a load): the store is sized WITHOUT the slot bytes first -
+    // alloc4_group has not allocated them, so `used` above does not carry them - and only a store that stays
+    // incomplete in that world pays them (the charged world re-sizes: left and avail shrink, used grows).
+    // Monotone in one direction - more charge shrinks the store's budget, which only moves it further from
+    // complete - so the one correction is the fixed point, no oscillation; and the allocation at the end of
+    // this function follows the same decision (alloc4_group behind !store_->complete()), so the plan's
+    // MemPlan::group_slots and the load's reality agree by construction. The all-resident world charges
+    // nothing and allocates nothing.
     const size_t gsb =
         q20::group_slot_bytes(prefill_group_, size_t(tmax_), size_t(cfg_.hidden), size_t(c4_.hc));
-    if (o.bytes < all && gsb) {
-      q20::AutoStoreIn in2 = in;
-      in2.left = in.left > gsb ? in.left - gsb : 0;
-      in2.used = in.used + gsb;
-      in2.avail = in.avail > gsb ? in.avail - gsb : 0;
-      st = q20::auto_store_size(in2);
-      o.bytes = st.bytes;
-      in = in2;
-      logi("expert store: NI_PREFILL_GROUP=%d slots -%.2f GB", prefill_group_, double(gsb) / 1e9);
-    }
+    const q20::GroupWorld gw = q20::group_world(gsb, in);
+    const q20::AutoStore& st = gw.st;
+    in = gw.in;
+    o.bytes = st.bytes;
+    if (gw.charge) logi("expert store: NI_PREFILL_GROUP=%d slots -%.2f GB", prefill_group_, double(gw.charge) / 1e9);
     logi("expert store: %s", q20::auto_store_reason(st, in).c_str());
   }
   o.bytes = std::min(o.bytes, all);
@@ -2001,15 +2009,16 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
   // buffers: Qwen35's for this config (x_ widened, the MTP rows) plus the hyper-connection / indexer / n-gram ones
   for (const ActBuf& a : act_layout(c, chunk, kMaxVerify, m.mtp > 0, size_t(kMaxVerify))) m.activations += a.bytes;
   m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0, 1);
-  // the layer-major groups' slot term (q20::group_slot_bytes, the allocation's one formula): charged while a group
-  // can form at all - the experts stream (there is a store to pay for) and this process holds the trunk from its
-  // first layer. Whether the charge survives to the load depends on the store it funds: a store complete WITHOUT
-  // it never groups and never pays, so the sizer drops it there (init_store's two-pass; doctor.cpp's plan the
-  // same), and an incomplete one re-sizes with it subtracted from what is left.
+  // the layer-major groups' slot term (q20::group_slot_bytes, the allocation's one formula): the plan sizes it
+  // while a group can form at all - the experts stream (there is a store to pay for) and this process holds the
+  // trunk from its first layer - but keeps it OUT of `activations`. Whether anything ever pays it is the
+  // store-world choice (q20::group_world): the store is sized WITHOUT the term first, and a store complete
+  // without it never groups and never allocates it (init_store), so no fit number may carry it there; an
+  // incomplete store's world charges it, and the pre-load fit numbers that must carry the reservation add the
+  // predicted charge (ni::planned_group_world: the engine's fit checks, start_need, doctor.cpp).
   m.group_slots = m.streamed && !(sp.remote || sp.lo != 0)
                       ? q20::group_slot_bytes(prefill_group_env(), size_t(chunk), size_t(c.hidden), size_t(c4.hc))
                       : 0;
-  m.activations += m.group_slots;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
   int lin = 0, att = 0;
   for (int i = lo; i < hi; ++i) (c.is_linear[size_t(i)] ? lin : att) += 1;

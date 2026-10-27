@@ -337,7 +337,8 @@ void case_auto_size() {
   in.left = size_t(29.9 * GB), in.avail = size_t(13 * GB), r = auto_store_size(in), t = auto_store_short(r, in);
   CHECK(t == "8.7 GB, not the 29.9 GB the budget leaves: 13.0 GB available less 4.3 headroom", "auto: avail short '%s'",
         t.c_str());
-  for (AutoStoreWhy w : {AutoStoreWhy::All, AutoStoreWhy::Budget, AutoStoreWhy::Avail, AutoStoreWhy::Cap}) {
+  for (AutoStoreWhy w : {AutoStoreWhy::All, AutoStoreWhy::Budget, AutoStoreWhy::Avail, AutoStoreWhy::Cap,
+                         AutoStoreWhy::Pinned}) {
     AutoStoreIn big;
     big.all = big.left = big.avail = big.ram = size_t(999.9 * GB), big.cap = 1.0;
     AutoStore b;
@@ -881,11 +882,14 @@ void case_group_shape() {
 
 // ---- the group's eligibility and its one accounting (the resident-store invariant, PR #628) --------------
 // Runtime eligibility (q20::group_chunks) gates the three sides that must agree: the engine's walk,
-// alloc4_group's allocation and the memory plan's MemPlan::group_slots. The store sizing's two-pass charge
-// (Qwen4Exp::init_store, mirrored by doctor.cpp's planned_store) sizes the store WITHOUT the slot charge first
-// and charges the slots only when the store comes up incomplete without them: the slots pay for themselves only
-// while there is something for a group to save, and the decision is monotone (more activation charge shrinks the
-// store, it never completes it more), so the second pass is a fixed point - no oscillation, no circularity.
+// alloc4_group's allocation and the memory plan's MemPlan::group_slots. The slot term stays OUT of
+// MemPlan::activations: whether it is charged at all is the store-world choice - q20::group_world, the one
+// function Qwen4Exp::init_store runs live and ni::planned_group_world predicts before a load (the engine's fit
+// checks, doctor.cpp). The store is sized WITHOUT the charge first; complete already, the group never forms,
+// the bytes are never allocated and no fit number may carry them - that is what keeps a full default-context
+// ladder from shrinking under a reservation no load pays. Incomplete, the slots pay for themselves and the
+// chosen world carries the charge. The decision is monotone (more charge shrinks the store, it never completes
+// it more), so the one correction is a fixed point - no oscillation, no circularity.
 void case_group_plan() {
   CHECK(group_chunks(4, false, false, false) == 4, "group_chunks: an incomplete streamed store groups");
   CHECK(group_chunks(4, false, false, true) == 1, "group_chunks: an all-resident expert set never groups");
@@ -901,20 +905,8 @@ void case_group_plan() {
   CHECK(group_slot_bytes(2, T, D, hc) == 2 * (T * hc * D * 4 + T * D * 4 + 2 * T * hc * 4 + 2 * T * D * 2),
         "group_slot_bytes: alloc4_group's buffers, expanded");
   CHECK(group_slot_bytes(4, T, D, hc) == 2 * group_slot_bytes(2, T, D, hc), "group_slot_bytes: linear in G");
-  // the two-pass sizing decision on the pure auto_store_size both call sites use
-  auto two_pass = [](AutoStoreIn in, size_t gsb) {
-    AutoStore st = auto_store_size(in);  // pass 1: no slot charge - no slots are allocated yet
-    bool charged = false;
-    if (st.bytes < in.all && gsb) {  // incomplete without the charge: the slots pay for themselves
-      AutoStoreIn c = in;
-      c.left = in.left > gsb ? in.left - gsb : 0;
-      c.used = in.used + gsb;
-      c.avail = in.avail > gsb ? in.avail - gsb : 0;
-      st = auto_store_size(c);
-      charged = true;
-    }
-    return std::make_pair(st, charged);
-  };
+  // the store-world choice on the pure auto_store_size both the live (init_store) and the predicted
+  // (planned_group_world) sides use
   const size_t gsb = group_slot_bytes(4, T, D, hc);
   const size_t G1 = size_t(1) << 30, G20 = size_t(20) << 30, G30 = size_t(30) << 30;
   const size_t G40 = size_t(40) << 30, G41 = size_t(41) << 30, G44 = size_t(44) << 30, G48 = size_t(48) << 30;
@@ -922,21 +914,49 @@ void case_group_plan() {
   // incomplete, so alloc4_group runs and prefill_group() answers G - the same predicate on every side
   AutoStoreIn a;
   a.all = G40, a.least = G1, a.left = G30, a.used = G20, a.ram = G48, a.avail = size_t(100) << 30;
-  const auto A = two_pass(a, gsb);
-  CHECK(A.second && A.first.bytes == G30 - gsb && A.first.bytes < G40, "two-pass A: charged to %zu, still incomplete",
-        A.first.bytes);
-  // world B: every expert fits without the charge -> no charge, no slots, and the chunk path keeps its precomb
-  // fold. The order is the invariant: sizing WITH the charge first would clamp this store below all on the avail
-  // guard and allocate slots that then make it incomplete - a world that never settles.
+  const GroupWorld A = group_world(gsb, a);
+  CHECK(A.charge == gsb && A.st.bytes == G30 - gsb && A.st.bytes < G40,
+        "group_world A: charged to %zu, still incomplete", A.st.bytes);
+  CHECK(A.in.left == G30 - gsb && A.in.used == G20 + gsb && A.in.avail == (size_t(100) << 30) - gsb,
+        "group_world A: the chosen inputs are the charged ones");
+  // world B: every expert fits without the charge -> no charge, no slots, the bare world stands, and the chunk
+  // path keeps its precomb fold. Every fit number that asks this world gets the bare sizing back - an unpaid
+  // reservation must not shrink a default-context ladder. The order is the invariant: sizing WITH the charge
+  // first would clamp this store below all on the avail guard and allocate slots that then make it incomplete -
+  // a world that never settles.
   AutoStoreIn b = a;
   b.left = G41;
   b.avail = G44 + gsb / 2;
-  const auto B = two_pass(b, gsb);
-  CHECK(!B.second && B.first.bytes == G40, "two-pass B: complete without the charge, uncharged");
-  AutoStoreIn bc = b;
-  bc.left = b.left - gsb, bc.used = b.used + gsb, bc.avail = b.avail - gsb;
-  CHECK(auto_store_size(bc).bytes < G40, "two-pass B: charging first would have clamped it below all");
-  printf("group plan: eligibility pinned, slot bytes one formula (%zu B at G=4, T=2048), two-pass sizing settled\n",
+  const GroupWorld B = group_world(gsb, b);
+  CHECK(B.charge == 0 && B.st.bytes == G40 && B.in.left == G41 && B.in.used == G20,
+        "group_world B: complete without the charge, bare world, charge %zu", B.charge);
+  AutoStoreIn bc = group_charged_in(b, gsb);
+  CHECK(auto_store_size(bc).bytes < G40, "group_world B: charging first would have clamped it below all");
+  // no term (G=1, or the split/all-resident worlds): the bare sizing, untouched
+  const GroupWorld Z = group_world(0, a);
+  CHECK(Z.charge == 0 && Z.st.bytes == auto_store_size(a).bytes && Z.in.left == a.left,
+        "group_world: a zero term leaves the sizing alone");
+  // the NI_EXPERT_STORE pin's world (A2): one parse (q20::store_pin_bytes) feeds group_world's pin branch, and
+  // a pin decides its own world in the live load (init_store) and in every pre-load prediction
+  // (planned_group_world) alike - chunk-invariant, only the charge's magnitude scales with the plan's rows
+  // pinned-short: the store IS the pin's bytes (the parser clamped to all), the world stays incomplete so the
+  // slots are charged, and the sizing inputs stay the bare ones - the pin overrides budget/avail/cap
+  const size_t pin = G20;
+  const GroupWorld P = group_world(gsb, a, &pin);
+  CHECK(P.charge == gsb && P.st.bytes == pin && P.st.why == AutoStoreWhy::Pinned && P.in.left == a.left,
+        "group_world pin: a short pin %zu charges %zu, why %d, sizing inputs stay bare", P.st.bytes, P.charge,
+        int(P.st.why));
+  // pinned-complete: a pin holding every expert is complete - never groups, never pays
+  const size_t pin_all = a.all;
+  const GroupWorld Q = group_world(gsb, a, &pin_all);
+  CHECK(Q.charge == 0 && Q.st.bytes == a.all && Q.st.why == AutoStoreWhy::Pinned,
+        "group_world pin: a full pin never charges, charge %zu", Q.charge);
+  // the pin overrides the automatic world (the A2 mandatory fix): world B's automatic store is complete, yet a
+  // short pin still reserves the slots - what keeps the pin and every fit number on one decision
+  const GroupWorld R = group_world(gsb, b, &pin);
+  CHECK(auto_store_size(b).bytes >= b.all && R.charge == gsb && R.st.bytes == pin,
+        "group_world pin: a short pin reserves where the automatic store would be complete");
+  printf("group plan: eligibility pinned, slot bytes one formula (%zu B at G=4, T=2048), store-world choice settled\n",
          gsb);
 }
 

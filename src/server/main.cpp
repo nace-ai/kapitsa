@@ -1102,7 +1102,7 @@ static int serve(int argc, char** argv, int first) {
       po.context = context_within_limit(dir, opt.context);
       const int slots = po.slots > 0 ? po.slots : auto_slots(dir, po, budget);
       const LoadPlan lp = plan_load(dir, po.dflash, po.spec_depth == 0, po.context, slots, budget, po.prefill_chunk);
-      const StartNeed need = start_need(dir, lp, lp.prefill_chunk, po.context, slots);
+      const StartNeed need = start_need(dir, lp, lp.prefill_chunk, po.context, slots, budget);
       if (need.bytes > budget) {
         // a variant of the same model that fits, else the best model that does
         bool fits = false;

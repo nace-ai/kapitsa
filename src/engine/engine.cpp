@@ -9,6 +9,7 @@
 #include <minja/minja.hpp>
 
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 
 #include <algorithm>
 #include <cctype>
@@ -281,7 +282,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
         logi("prefill: %d-row chunks (fewer expert-weight reads; the memory plan fits them)%s", base,
              narrow_chunk_ ? ", for a prefill of at least two of them" : "");
     }
-    const StartNeed need = start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots);
+    const StartNeed need =
+        start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots,
+                   budget_ ? budget_ : default_mem_budget());  // the budget its group-world charge is planned at
     const size_t rws = Gpu::get().recommended_working_set();
     if (need.weights > budget_)  // nothing but a smaller variant helps: say so before the itemized message
       fatal("%s does not fit this Mac: its weights alone (%.1f GB, %s) exceed the GPU memory Kapitsa may use here "
@@ -602,6 +605,48 @@ size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t
   return budget > keep ? budget - keep : 1;
 }
 
+static size_t engine_ram_bytes() {
+  int64_t m = 0;
+  size_t n = sizeof m;
+  sysctlbyname("hw.memsize", &m, &n, nullptr, 0);
+  return size_t(m);
+}
+
+q20::GroupWorld planned_group_world(const MemPlan& m, int slots, int ctx, size_t budget) {
+  // The automatic expert store `kapitsa serve` will pick for a Q2_0 Flash-Next pack (Qwen4Exp::init_store with
+  // NI_EXPERT_STORE unset), before any load - the model's budget (flash_next_model_budget) less its GPU memory
+  // before the store (the plan's weights without the smallest store, MTP head and prefill buffers) and
+  // init_store's 0.5 GB, through the store-world choice (q20::group_world): the store sized WITHOUT the
+  // group-slot charge first (the plan's activations carry none of it; nothing has allocated slots yet).
+  // Complete without it, the world never groups and never pays (.charge 0 - every fit number stays bare,
+  // which is what keeps a full default-context ladder); incomplete, .charge is MemPlan::group_slots and the
+  // sizing is the charged world's. The load decides live (init_store); this is the pre-load prediction every
+  // fit site shares (the engine's fit checks, start_need, doctor.cpp). An NI_EXPERT_STORE pin decides its own
+  // world exactly as the load does (q20::store_pin_bytes, one parser both sides share): a short pin reserves
+  // the slots even where the automatic store would come out complete, and a pin holding every expert never
+  // groups and never pays.
+  q20::AutoStoreIn in;
+  const size_t mb = flash_next_model_budget(m, slots, ctx, budget);
+  in.all = m.store_all, in.least = m.store_least;
+  in.used = m.weights - std::min(m.weights, m.store_least) + m.mtp + m.activations;
+  in.keep = size_t(1) << 29;
+  in.left = mb > in.used + in.keep ? mb - in.used - in.keep : 0;
+  in.ram = engine_ram_bytes(), in.avail = q20::available_memory();
+  in.cap = q20::auto_store_cap(Gpu::get().apple10());
+  size_t pin = 0;
+  if (q20::store_pin_bytes(getenv("NI_EXPERT_STORE"), m.store_all, pin))
+    return q20::group_world(m.group_slots, in, &pin);
+  return q20::group_world(m.group_slots, in);
+}
+
+// The group-slot reservation a pre-load fit number carries (#628): the predicted store-world's charge. 0 for
+// every model but a streamed Q2_0 trunk pack (the only plan() that sets group_slots), and 0 for one whose
+// predicted store is complete - a reservation no load allocates must not shrink a fit. Fits fold it in as a
+// reservation: start_need adds it to n.bytes; the `<= budget` checks add it to the need side.
+static size_t group_world_charge(const MemPlan& m, int slots, int ctx, size_t budget) {
+  return m.group_slots ? planned_group_world(m, slots, ctx, budget).charge : 0;
+}
+
 std::string unsupported_model(const std::string& model_dir) {
   std::ifstream f(model_dir + "/config.json");
   if (!f) return "";  // (a missing config.json is refused where the folder is resolved)
@@ -666,7 +711,11 @@ static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
 // 8K (default_context: 8K there). Prefill on the M1 Pro, 4,352 tokens: 11.7 s at 256 rows, 9.5 at 512, 8.0 at 2048.
 static bool fits_small(const std::string& model_dir, int context, int slots, size_t budget) {
   const MemPlan p = model_plan(model_dir, 256);
-  return p.fixed(slots) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+  // + the group-slot reservation the load's store world pays (#628; 0 off a streamed Q2_0 pack, and 0 for one
+  // whose predicted store is complete)
+  return p.fixed(slots) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) +
+             group_world_charge(p, slots, context, budget) <=
+         budget;
 }
 
 // Tail room: a prompt a few rows past a chunk multiple should not pay a whole extra chunk of weight streaming for
@@ -726,22 +775,28 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // compute grows faster. The hidden size is 640, so the extra buffers are small.
   if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10() && Qwen4Exp::tattn(model_dir)) {
     const MemPlan wide = model_plan(model_dir, 4096);
-    if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
+    if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) +
+            group_world_charge(wide, 1, context, budget) <= budget)
+      return 4096;
   }
-  if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) > budget) {
+  if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) +
+          group_world_charge(p, std::max(1, slots), context, budget) >
+      budget) {
     // 1024-row buffers, or the largest multiple of 64 rows down to 256 that leaves the tokens the engine starts with
     // (the context, up to 8K; fits_small)
     for (int c = 1024; c > 256; c -= 64) {
       const MemPlan pc = model_plan(model_dir, c);
       if (pc.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, pc) +
-              pc.kv_per_pos * size_t(std::min(context, 8192)) <= budget)
+              pc.kv_per_pos * size_t(std::min(context, 8192)) +
+              group_world_charge(pc, std::max(1, slots), context, budget) <= budget)
         return c;
     }
     return 256;
   }
   if (room) {
     const MemPlan r = model_plan(model_dir, prefill_chunk_room(2048));
-    if (r.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, r) + r.kv_per_pos * size_t(context) <= budget)
+    if (r.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, r) + r.kv_per_pos * size_t(context) +
+            group_world_charge(r, std::max(1, slots), context, budget) <= budget)
       return prefill_chunk_room(2048);
   }
   return 2048;
@@ -817,12 +872,17 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   return lp;
 }
 
-StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots) {
+StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots,
+                     size_t budget) {
   slots = std::max(1, slots);
   const int min_ctx = std::min(context, 8192);
   const MemPlan mp = model_plan(model_dir, prefill_chunk);
+  // the group-slot reservation the store world pays (#628): a streamed Q2_0 pack whose predicted store stays
+  // incomplete allocates it (init_store), so the start gate carries it; a complete store never groups and
+  // never pays - 0 here, and the default-context ladder keeps its full rungs. 0 for every other model.
+  const size_t gcharge = group_world_charge(mp, slots, context, budget);
   StartNeed n;
-  n.bytes = mp.fixed(slots) + lp.dflash_bytes + mp.kv_per_pos * size_t(min_ctx);
+  n.bytes = mp.fixed(slots) + gcharge + lp.dflash_bytes + mp.kv_per_pos * size_t(min_ctx);
   n.weights = mp.weights;
   n.formats = mp.formats;
   char b[400];
@@ -830,7 +890,7 @@ StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefi
            "%d slot%s (weights %.1f GB, MTP head %.1f, DFlash2 drafter %.1f, buffers for %d-token prefill chunks %.1f, "
            "conversation state %.1f, KV cache for %d tokens %.1f)",
            slots, slots > 1 ? "s" : "", mp.weights / 1e9, mp.mtp / 1e9, lp.dflash_bytes / 1e9, prefill_chunk,
-           mp.activations / 1e9, slots * mp.slot_state / 1e9, min_ctx, mp.kv_per_pos * min_ctx / 1e9);
+           (mp.activations + gcharge) / 1e9, slots * mp.slot_state / 1e9, min_ctx, mp.kv_per_pos * min_ctx / 1e9);
   n.parts = b;
   return n;
 }
@@ -869,13 +929,35 @@ int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t bu
 
 bool conversation_fits(const std::string& model_dir, int context, int slots, size_t budget) {
   const MemPlan p = model_plan(model_dir, 1024);
-  return p.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+  // + the group-slot reservation the load's store world pays (#628) - at this probe's 1024-row plan; the
+  // engine's real gate (start_need) carries the started chunk's. 0 off a streamed Q2_0 pack, and 0 for one
+  // whose predicted store is complete: an unpaid reservation must not shrink the default-context ladder.
+  // Probing at 1024 does not under-reserve the budget. The live chunk is auto_prefill_chunk's bare return
+  // (opts_.prefill_chunk -> Qwen4Exp tmax_), and alloc4_group/init_store charge group_slot_bytes(G, tmax_,
+  // D, hc) there. Every auto_chunk return a streamed Q2_0 pack can reach gates that chunk's
+  // group_world_charge inside budget - 2048 and room(2048)=2112 at the full context, the tattn Q2_0-wide
+  // 4096, the fallback bare c <= 1024 at min(context, 8192) - and the two returns that omit the term
+  // (NemotronH wide, 35B-A3B 4-bit wide) are non-streamed models whose group_world_charge is identically 0.
+  // The probe draws its charge from the same planned_group_world the load's init_store uses, so it honors
+  // the same NI_EXPERT_STORE pin and complete/incomplete world. So charge(tmax_) can exceed this probe's
+  // charge(1024) only when tmax_ > 1024, by group_slot_bytes(G, tmax_ - 1024, D, hc) (linear in tmax_) - at
+  // most 267,526,144 B (~0.2675 GB at G=4/D=2560/hc=4) on the default 2112 path, more on the non-default
+  // tattn 4096 path - and only on a return that already verified fixed + ane + kv*context + charge(tmax_) <=
+  // budget, so the budget holds; the fallback's bare c <= 1024 keeps charge(tmax_) <= charge(1024).
+  // start_need is the hard startup gate (charge(tmax_) with min(context, 8192) KV); the full context's KV
+  // grows lazily into the store's headroom, never stolen from the group slots (flash_next_model_budget
+  // funds KV first).
+  return p.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) +
+             group_world_charge(p, std::max(1, slots), context, budget) <=
+         budget;
 }
 
 bool small_start_fits(const std::string& model_dir, int context, int slots, size_t budget) {
   if (slots > 1) return false;
   const MemPlan p = model_plan(model_dir, auto_prefill_chunk(model_dir, context, 1, budget));
-  return p.fixed(1) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+  return p.fixed(1) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) +
+             group_world_charge(p, 1, context, budget) <=
+         budget;
 }
 
 int parse_context(const std::string& s, std::string* why) {
