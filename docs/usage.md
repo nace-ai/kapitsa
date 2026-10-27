@@ -856,8 +856,11 @@ passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full 
 store `kapitsa serve` would pick now and why, the same line the engine logs at load (`expert store: ...`: all experts
 resident, what the budget leaves, capped by the available memory, capped by the RAM share, or the `NI_EXPERT_STORE`
 pin — that world's `reason` value is `NI_EXPERT_STORE`; `--json`: `expert_store` with `bytes`, `reason`, `text`, and
-the `context`, `slots` and `prefill_chunk` it is planned at, plus the `group_slot_bytes` it reserves and the `kv_reserve_bytes` the available-memory guard keeps for them (nonzero only
-while the predicted store stays incomplete; #628); the terminal view shows a shorter line). The top level of `--json` carries the same `group_slot_bytes` the loaded engine would pay, the terminal view's "prefill buffers" figure adds it, and `activation_bytes` stays the bare plan's: a script reading `activation_bytes` as everything the plan reserves under-reads by exactly that `group_slot_bytes`. Without `--context` it plans at the context serve takes here without one (`default_context`), not at doctor's
+the `context`, `slots` and `prefill_chunk` it is planned at, plus the `group_slot_bytes` it reserves (nonzero only
+while the predicted store stays incomplete; #628) and the `kv_reserve_bytes` the available-memory guard keeps for the
+conversations' caches (the plan's `min(context, 32768)` positions times the slots, or `NI_EXPERT_KV_POS`'s explicit
+total, at the model's KV bytes per position; 0 with `NI_EXPERT_KV_POS=0`; an `NI_EXPERT_STORE` pin sizes the store
+itself, so the guard applies none of it even though the number is still printed); the terminal view shows a shorter line). The top level of `--json` carries the same `group_slot_bytes` the loaded engine would pay, the terminal view's "prefill buffers" figure adds it, and `activation_bytes` stays the bare plan's: a script reading `activation_bytes` as everything the plan reserves under-reads by exactly that `group_slot_bytes`. Without `--context` it plans at the context serve takes here without one (`default_context`), not at doctor's
 64K, the same way the engine resolves it (`start_plan`). The available memory changes with what else runs and what the
 file cache holds, so the printed size is a snapshot.
 
