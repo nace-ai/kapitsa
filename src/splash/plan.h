@@ -27,6 +27,9 @@ std::vector<std::string> default_engine_args(const std::vector<std::string>& use
 // first user message, which every later turn repeats as it is, so a conversation keeps its salt and another one gets its own.
 // A history with no user message hashes all of it. Two 64-bit FNV-1a hashes with different bases make the 128 bits.
 struct Salt { uint64_t lo = 0, hi = 0; };
+// A client's own cache_salt, hashed as Splash's frontend does (BLAKE2b, 16-byte digest, person "splash-salt"); the engine keys
+// its cache by it, so a request shares cached prompts only with requests of the same salt.
+Salt client_salt(const std::string& salt);
 Salt conversation_salt(const nlohmann::ordered_json& messages);
 
 }  // namespace ni::splash

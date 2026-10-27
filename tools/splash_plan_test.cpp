@@ -49,6 +49,13 @@ int main() {
   check(!same(salt({sys, u1}), salt({u1})), "salt: another system prompt, another salt");
   check(salt({sys, u1}).lo != 0 && salt({sys, u1}).hi != 0 && salt({sys, u1}).lo != salt({sys, u1}).hi, "salt: 128 distinct bits, not zero");
   check(!same(salt({sys}), salt({sys, u1})) && same(salt({sys}), salt({sys})), "salt: a system-only history is stable and not a conversation's");
+  // a client's cache_salt: Python hashlib.blake2b(digest_size=16, person=b"splash-salt") of the same string, as Splash's frontend computes it
+  auto cs = [](const std::string& t) { return ni::splash::client_salt(t); };
+  check(cs("tenant-a").lo == 4268102603047165630ull && cs("tenant-a").hi == 14543633796230781686ull, "client salt: short string");
+  check(cs("x").lo != cs("y").lo && !same(cs("tenant-a"), cs("tenant-b")), "client salt: another string, another salt");
+  check(cs(std::string(300, 'x')).lo == 16612783538970333422ull && cs(std::string(300, 'x')).hi == 11575204618970738073ull, "client salt: 300 bytes");
+  check(cs(std::string(128, 'a')).lo == 12653317393471799425ull && cs(std::string(128, 'a')).hi == 16940112665974098766ull, "client salt: exactly one block");
+  check(cs(std::string(256, 'a')).lo == 10747077782074702016ull && cs(std::string(256, 'a')).hi == 17198004416459853536ull, "client salt: exactly two blocks");
   if (failures) return 1;
   std::puts("splash_plan_test: ok");
   return 0;

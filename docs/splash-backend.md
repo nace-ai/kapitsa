@@ -109,11 +109,15 @@ one server at a time under the GPU lock.
 
 ## Options
 
-- `--splash-persistent-cache`: passes `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<model folder>`
-  (one directory per model folder) unless `--splash-arg --cache-dir` is given; a `--splash-arg --persistent-cache` (on or off) wins and the flag adds
+- `--splash-persistent-cache`: passes `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<name>-<hash>`
+  (one directory per model: the model folder's real path, symlinks and a trailing slash resolved, gives the name and a 64-bit hash of the path, so two folders with the same name elsewhere do not share one) unless `--splash-arg --cache-dir` is given; a `--splash-arg --persistent-cache` (on or off) wins and the flag adds
   nothing. It writes to the user's disk; off by default.
+- A request's own `cache_salt` (`/v1/chat/completions`; a string, else a 400 naming the field) is hashed as Splash's frontend does
+  (BLAKE2b, 16 bytes, person `splash-salt`, checked against Python's `hashlib` in `splash_plan_test`), so requests share cached
+  prompts only with the same salt, as with plain Splash, whatever the flags below. It wins over the conversation salt. The
+  other two endpoints do not read the field yet.
 - `--splash-conversation-salt`: a cache salt per conversation (hash of the messages up to the first user message), so
-  conversations stop sharing cached prompts such as a common system prompt. Off by default, which is Splash's behaviour
+  conversations stop sharing cached prompts such as a common system prompt, for requests that bring no `cache_salt`. Off by default, which is Splash's behaviour
   without a `cache_salt`.
 - The child gets `--idle-release off` unless given, and, when free and reclaimable memory is between 22 and 38 GiB and no
   `--expert-memory` is given, `--expert-memory` of free GiB minus 14 (at least 8). The formula rests on one measured pass

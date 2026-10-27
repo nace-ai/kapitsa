@@ -121,6 +121,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
                              {"min_p", &r.min_p}})
     if (b.contains(name) && b[name].is_number()) *field = b[name];
   if (b.contains("ignore_eos") && b["ignore_eos"].is_boolean()) r.ignore_eos = b["ignore_eos"];
+  if (b.contains("cache_salt")) r.cache_salt = b["cache_salt"];
   if (b.contains("seed") && b["seed"].is_number()) r.seed = uint32_t(b["seed"].get<int64_t>());
   if (b.contains("stop")) {
     if (b["stop"].is_string()) r.stop.push_back(b["stop"]);

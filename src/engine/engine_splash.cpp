@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cmath>
 #include <chrono>
+#include <climits>
 #include <condition_variable>
 #include <cstdlib>
 #include <deque>
@@ -133,10 +134,15 @@ void Engine::init_splash() {
   {
     std::string note;
     const char* home = getenv("HOME");
-    std::string trimmed = dir;  // a trailing slash must not make the folder name empty: every model would share one cache
+    // the real path of the model folder: a symlink or a trailing slash must not make the folder name another model's (or empty)
+    char resolved[PATH_MAX];
+    std::string trimmed = realpath(dir.c_str(), resolved) ? std::string(resolved) : dir;
     while (trimmed.size() > 1 && trimmed.back() == '/') trimmed.pop_back();
     const std::string folder = trimmed.substr(trimmed.find_last_of('/') == std::string::npos ? 0 : trimmed.find_last_of('/') + 1);
-    const std::string cache_dir = home && *home && !folder.empty() ? std::string(home) + "/Library/Caches/Kapitsa/splash-prefix-cache/" + folder : "";
+    // <name>-<hash of the real path>: two folders with the same name elsewhere are other models and keep apart
+    char tag[17];
+    snprintf(tag, sizeof tag, "%016llx", (unsigned long long)splash::client_salt(trimmed).lo);
+    const std::string cache_dir = home && *home && !folder.empty() ? std::string(home) + "/Library/Caches/Kapitsa/splash-prefix-cache/" + folder + "-" + tag : "";
     const auto extra = splash::default_engine_args(opts_.splash_args, q20::available_memory(), opts_.splash_persistent_cache,
                                                    cache_dir, &note);
     ro.argv.insert(ro.argv.end(), extra.begin(), extra.end());
@@ -173,6 +179,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   if (!(r.frequency_penalty >= -2 && r.frequency_penalty <= 2)) return bad("frequency_penalty", "a number in [-2, 2]");
   if (!(r.repetition_penalty > 0 && std::isfinite(r.repetition_penalty))) return bad("repetition_penalty", "a positive number");
   if (!(r.min_p >= 0 && r.min_p <= 1)) return bad("min_p", "a number in [0, 1]");
+  if (!r.cache_salt.is_null() && !(r.cache_salt.is_string() && !r.cache_salt.get<std::string>().empty()))
+    return bad("cache_salt", "a non-empty string");
   if (r.top_k < -1) return bad("top_k", "0 or -1 (disabled) or a positive integer");
 
   ChatResult res;
@@ -216,7 +224,11 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   q.sampling.repetition_penalty = r.repetition_penalty;
   q.sampling.min_p = r.min_p;
   if (r.ignore_eos) q.flags |= splash::kIgnoreEndOfSequence;
-  if (opts_.splash_conversation_salt) {
+  if (r.cache_salt.is_string()) {  // the client's own salt wins: it decides who shares cached prompts, as with plain Splash
+    const auto salt = splash::client_salt(r.cache_salt.get<std::string>());
+    q.cache_salt_lo = salt.lo;
+    q.cache_salt_hi = salt.hi;
+  } else if (opts_.splash_conversation_salt) {
     const auto salt = splash::conversation_salt(r.messages);
     q.cache_salt_lo = salt.lo;
     q.cache_salt_hi = salt.hi;

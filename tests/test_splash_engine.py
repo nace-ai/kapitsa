@@ -4,7 +4,7 @@ no model, no GPU. It needs Splash's resolved model folder for its tokenizer and 
 ~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR); without one it uses the small stand-in
 folder tests/fixtures/splash_model, so it needs no model (the CI PR, #743, adds it to ci.yml).
 usage: test_splash_engine.py build/kapitsa"""
-import glob, json, os, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
+import glob, json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 CLI = sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -228,7 +228,8 @@ try:
     check(p[0]["salt"] != [0, 0] and p[0]["salt"] == p[1]["salt"], "turn 2 keeps turn 1's salt: %r %r" % (p[0]["salt"], p[1]["salt"]))
     check(p[2]["salt"] != p[0]["salt"], "another conversation has another salt")
     a = p[0]["args"]
-    check("--persistent-cache" in a and a[a.index("--cache-dir") + 1].endswith("/Library/Caches/Kapitsa/splash-prefix-cache/" + os.path.basename(MODEL.rstrip("/"))), "persistent cache in a per-model dir: %r" % a)
+    cd1 = a[a.index("--cache-dir") + 1] if "--cache-dir" in a else ""
+    check("--persistent-cache" in a and re.search(r"/Library/Caches/Kapitsa/splash-prefix-cache/" + re.escape(os.path.basename(os.path.realpath(MODEL))) + r"-[0-9a-f]{16}$", cd1), "persistent cache in a per-model dir: %r" % a)
 finally:
     s.close()
 # a trailing slash on --splash-model must not empty the per-model cache folder (every model would share one)
@@ -236,7 +237,36 @@ s = Server("--reply", ",".join(map(str, REPLY)), extra_serve=["--splash-persiste
 try:
     post(s.base, {"messages": MSG, "max_tokens": 5, "temperature": 0})
     a = s.prompts()[0]["args"]
-    check("--cache-dir" in a and a[a.index("--cache-dir") + 1].endswith("/splash-prefix-cache/" + os.path.basename(MODEL.rstrip("/"))), "trailing slash: cache dir keeps the model's name: %r" % a)
+    cd2 = a[a.index("--cache-dir") + 1] if "--cache-dir" in a else ""
+    check(re.search(r"/splash-prefix-cache/" + re.escape(os.path.basename(os.path.realpath(MODEL))) + r"-[0-9a-f]{16}$", cd2) and cd2.split("/")[-1] == cd1.split("/")[-1], "trailing slash: the same per-model cache dir: %r vs %r" % (cd2, cd1))
+finally:
+    s.close()
+
+# a symlink to the model folder is the same model: its cache dir carries the real folder's name and hash, not the link's
+link = os.path.join(tempfile.mkdtemp(), "some-link")
+os.symlink(os.path.realpath(MODEL), link)
+s = Server("--reply", ",".join(map(str, REPLY)), extra_serve=["--splash-persistent-cache"], model=link)
+try:
+    post(s.base, {"messages": MSG, "max_tokens": 5, "temperature": 0})
+    a = s.prompts()[0]["args"]
+    cd3 = a[a.index("--cache-dir") + 1] if "--cache-dir" in a else ""
+    check(cd3.split("/")[-1] == cd1.split("/")[-1] and "some-link" not in cd3, "symlinked model folder: the real folder's cache dir: %r vs %r" % (cd3, cd1))
+finally:
+    s.close()
+# a client's cache_salt: honoured (same salt same key, another salt another key), whatever the flag; a bad one is a 400
+s = Server("--reply", ",".join(map(str, REPLY)), extra_serve=["--splash-conversation-salt"])
+try:
+    for salt in ("tenant-a", "tenant-a", "tenant-b"):
+        post(s.base, {"messages": MSG, "max_tokens": 5, "temperature": 0, "cache_salt": salt})
+    post(s.base, {"messages": MSG, "max_tokens": 5, "temperature": 0})
+    p = s.prompts()
+    check(p[0]["salt"] == [4268102603047165630, 14543633796230781686], "tenant-a's salt is Splash's blake2b of it: %r" % p[0]["salt"])
+    check(p[0]["salt"] == p[1]["salt"] and p[2]["salt"] != p[0]["salt"], "same salt same key, another salt another key")
+    check(p[3]["salt"] not in (p[0]["salt"], p[2]["salt"]) and p[3]["salt"] != [0, 0], "no client salt: the conversation's, shared with no tenant")
+    for bad in ("", 5, ["x"]):
+        st, r = post(s.base, {"messages": MSG, "max_tokens": 5, "cache_salt": bad})
+        check(st == 400 and "cache_salt" in json.dumps(r), "cache_salt %r is a 400 naming the field: %s %r" % (bad, st, r))
+    check(len(s.prompts()) == 4, "a refused request reaches no engine")
 finally:
     s.close()
 
