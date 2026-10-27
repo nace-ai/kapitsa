@@ -605,6 +605,32 @@ std::string Qwen35::tname(const std::string& canonical) const {
   return canonical;
 }
 
+// Whether a checkpoint's RMSNorm weight is Hugging Face's zero-centred parameterization (applied as 1 + w), read from
+// the values: an MLX weight is every value positive and around 1, HF's is around 0 and as often negative. One negative
+// value settles it — an MLX RMSNorm weight of 0 or below would zero or invert its block's input. A missing tensor says
+// no, and a weight this cannot read says no (the caller keeps its own answer).
+static bool zero_centred_norm(const Tensor* t) {
+  if (!t || t->numel() <= 0) return false;
+  const size_t n = size_t(t->numel());
+  if (n > 1 << 16) return false;  // a norm of the model's width, not a matrix; anything larger is not one
+  double sum = 0;
+  int neg = 0, seen = 0;
+  for (size_t i = 0; i < n; ++i) {
+    float v;
+    if (t->dtype == DType::F32) v = t->buf.as<float>()[i];
+    else if (t->dtype == DType::F16) v = float(t->buf.as<_Float16>()[i]);
+    else if (t->dtype == DType::BF16) v = bf16_to_f32(t->buf.as<uint16_t>()[i]);
+    else return false;
+    sum += v;
+    if (v < 0) ++neg;
+    ++seen;
+  }
+  if (!seen) return false;
+  // HF's norms: a mean near 0 and negatives. MLX's: a mean near 1 and none (a stray negative alone, from a badly
+  // quantized pack, is not enough either: the mean has to sit on 0).
+  return neg > 0 && sum / double(seen) < 0.5;
+}
+
 // A float tensor as bf16 (t itself when it is bf16, else an owned bf16 copy); `offset` is added first (the
 // zero-centred RMSNorm weights of Hugging Face checkpoints are applied as 1 + w).
 const Tensor* Qwen35::bf16_copy(const Tensor* t, float offset) {
@@ -765,15 +791,35 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   else fatal("unrecognized weight naming");
   // Hugging Face checkpoints store the RMSNorm weights zero-centred (applied as 1 + w; MLX conversions add the
   // 1) and conv1d as [C, 1, 4] (MLX: [C, 4, 1]); mlx-lm tells them apart by the conv1d shape, and so does this.
-  for (int i = 0; i < cfg_.layers && !hf_norms_; ++i)
-    if (cfg_.is_linear[i]) {
-      const Tensor* cw = ws_.find(tname("model.layers." + std::to_string(i) + ".linear_attn.conv1d.weight"));
-      hf_norms_ = cw && cw->shape.size() == 3 && cw->shape.back() != 1;
-      break;
-    }
-  if (hf_names_ || hf_norms_)
-    logi("Hugging Face checkpoint layout (%s%s)", hf_names_ ? "model.language_model.* names" : "conv1d [C, 1, 4]",
-         hf_norms_ ? ", RMSNorm weights read as 1 + w" : "");
+  //
+  // The conv1d shape is not enough. A checkpoint can carry HF's zero-centred norms and MLX's conv1d layout at once: a
+  // converter that transposes conv1d into MLX's layout but keeps the source's norms (Swift 1.5 does both, and its own
+  // mlx-lm patch reads them as OffsetRMSNorm, weight + 1) reads as an MLX pack here, the 1 is never added, and every
+  // RMSNorm then feeds the layers a weight around -1 instead of 0: the logits collapse and the model repeats one token
+  // (a 27B Swift pack answered with the same id for every row). So the norms themselves decide it, which is what the
+  // layouts differ in: MLX's weights are ~1 and all positive, HF's are ~0 and about as often negative. One negative
+  // value in the first layer's input_layernorm cannot be an MLX weight (RMSNorm at 0 would zero its block's input), and
+  // the 48 DeltaNet gated norms stay plain w either way, as the 1 + w loop below leaves them.
+  const bool hf_conv = [&] {
+    for (int i = 0; i < cfg_.layers; ++i)
+      if (cfg_.is_linear[i]) {
+        const Tensor* cw = ws_.find(tname("model.layers." + std::to_string(i) + ".linear_attn.conv1d.weight"));
+        return cw && cw->shape.size() == 3 && cw->shape.back() != 1;
+      }
+    return false;
+  }();
+  hf_norms_ = hf_norms_ || hf_conv;
+  if (!hf_norms_ && zero_centred_norm(ws_.find(tname("model.layers.0.input_layernorm.weight")))) {
+    hf_norms_ = true;
+    logi("RMSNorm weights are zero-centred under MLX's conv1d layout (a mixed checkpoint): read as 1 + w");
+  }
+  {
+    std::string what;
+    if (hf_names_) what = "model.language_model.* names";
+    if (hf_conv) what += (what.empty() ? "" : ", ") + std::string("conv1d [C, 1, 4]");
+    if (hf_norms_ && hf_conv) what += ", RMSNorm weights read as 1 + w";
+    if (!what.empty()) logi("Hugging Face checkpoint layout (%s)", what.c_str());
+  }
 
   embed_ = qlin("model.embed_tokens");
   // tied embeddings (the small Qwen3.5 models): the output layer is the embedding table, stored in the
