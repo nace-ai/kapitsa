@@ -319,10 +319,11 @@ void Qwen4Exp::load(const std::string& dir) {
       }
       cnt += v.size();
     }
-    const double m = cnt ? sum / double(cnt) : 0.0;
+    if (!cnt) fatal("qwen4_exp: no bf16 / f16 indexer layernorms in layer %d, which tell the RMSNorm convention", a0);
+    const double m = sum / double(cnt);
     norm1_ = m > 0.5 ? 0.0f : 1.0f;
-    if (norm1_ == 0.0f)
-      logi("RMSNorm weights with the 1 added at conversion (indexer norm mean %.2f): read as they are", m);
+    logi("RMSNorm weights %s (indexer norm mean %.2f): read as %s",
+         norm1_ ? "zero-centred" : "with the 1 added at conversion", m, norm1_ ? "1 + w" : "they are");
   }
   if (head) {
     embed_ = qlin("model.embed_tokens");
@@ -1941,14 +1942,14 @@ std::vector<Qwen4Exp::LayerBytes> Qwen4Exp::layer_bytes(const std::string& dir, 
       for (auto& [name, v] : j.items()) {
         if (name == "__metadata__" || name.find("vision_tower") != std::string::npos ||
             name.find("visual.") != std::string::npos || name.find(".ngram_embedding.") != std::string::npos ||
-            (!mtp && name.rfind("mtp.", 0) == 0))
+            (!mtp && is_mtp(name)))
           continue;
         const double b = double(v["data_offsets"][1].get<size_t>() - v["data_offsets"][0].get<size_t>());
         const int l = trunk_layer(name);
         LayerBytes& t = l >= 0 && l < c.layers ? out[size_t(l)] : *head;
         t.weights += b;
         if (is_trunk_expert(name)) t.experts += b;
-        if (name.find("embed_tokens") == std::string::npos && name.rfind("mtp.", 0) != 0)
+        if (name.find("embed_tokens") == std::string::npos && !is_mtp(name))
           t.decode += name.find("switch_mlp") != std::string::npos ? b * share : b;
       }
     }

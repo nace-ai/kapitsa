@@ -688,6 +688,10 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok) {
           svh->shape[0] != t->shape[0] || suh->shape[1] != t->shape[1] * 16 || svh->shape[1] != t->shape[2] * 16)
         fatal("%s: EXL3 needs a uint16 trellis [E, in/16, out/16, n] (n even, 16-64: up to 4 bits a weight) with f16 "
               "suh [E, in] and svh [E, out]", full.c_str());
+      // expert_quant's k is the widest rate the pack's banks use (Sushi's contract): a bank wider than it is refused
+      if (const double k = expert_quant_.value("k", 0.0); k > 0 && n > k * 16)
+        fatal("%s: an EXL3 rate of %g bits a weight, wider than config.json's expert_quant k (%g)", full.c_str(),
+              n / 16.0, k);
       L.w = t;
       L.s = suh;
       L.b = svh;

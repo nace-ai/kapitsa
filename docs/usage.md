@@ -79,8 +79,9 @@ bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB r
 Flash-Next's `64gb` is [Sushi](https://github.com/beamivalice/sushi)'s 2-bit pack
 ([beamster/Qwen3.8-Flash-Next-Sushi-2bpw](https://huggingface.co/beamster/Qwen3.8-Flash-Next-Sushi-2bpw)): its routed
 experts and the MTP head's are EXL3 trellises at 2 bits a weight (turboderp's format with Sushi's MCG codebook and
-15-bit codewords, decoded as they are read: `src/model/moe_exl3.h`), the rest 8-bit affine (36.7 GB of weights with
-the MTP head), its 32 GB n-gram table 4-bit in `ngram_table.bin`. On an M5 Max 128 GB (macOS 26.4) it prefills 4K
+15-bit codewords, decoded as they are read: `src/model/moe_exl3.h`), the rest 8-bit affine (36.7 GB of weights in
+memory with the MTP head; 37.6 GB of files with the vision tower, which loads with the first image), its 32 GB n-gram
+table 4-bit in `ngram_table.bin`. On an M5 Max 128 GB (macOS 26.4) it prefills 4K
 tokens at 728 tok/s and decodes 52.6 tok/s after them (plain), and 78.6 tok/s with the MTP head at depth 3 after a short
 prompt (2.83 tokens a cycle), where the `4bit` does 1,760, 81.6 and 104.7: the `64gb` is for a Mac the `4bit` does not
 fit. Kapitsa reads Sushi's EXL3 packs
