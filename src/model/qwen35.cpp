@@ -668,6 +668,20 @@ static uint32_t iq_mode(const std::string& full, const std::string& name) {
   return 0;
 }
 
+void Qwen35::quant_of(const std::string& full, const std::string& name, int& bits, int& gs, std::string& mode) const {
+  bits = quant_cfg_.value("bits", 4);
+  gs = quant_cfg_.value("group_size", 64);
+  mode = quant_cfg_.value("mode", std::string("affine"));
+  // per-module overrides are keyed by the module path without ".weight"
+  for (auto key : {full, name}) {
+    if (quant_cfg_.contains(key) && quant_cfg_[key].is_object()) {
+      bits = quant_cfg_[key].value("bits", bits);
+      gs = quant_cfg_[key].value("group_size", gs);
+      mode = quant_cfg_[key].value("mode", mode);
+    }
+  }
+}
+
 QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const WeightStore* from) {
   QLinear L;
   const std::string full = from ? name : tname(name);
@@ -744,16 +758,9 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
     if (L.K % 64) fatal("%s: input width %u is not a multiple of 64", full.c_str(), L.K);
     return L;
   }
-  int bits = quant_cfg_.value("bits", 4), gs = quant_cfg_.value("group_size", 64);
-  std::string mode = quant_cfg_.value("mode", std::string("affine"));
-  // per-module overrides are keyed by the module path without ".weight"
-  for (auto key : {full, name}) {
-    if (quant_cfg_.contains(key) && quant_cfg_[key].is_object()) {
-      bits = quant_cfg_[key].value("bits", bits);
-      gs = quant_cfg_[key].value("group_size", gs);
-      mode = quant_cfg_[key].value("mode", mode);
-    }
-  }
+  int bits = 0, gs = 0;
+  std::string mode;
+  quant_of(full, name, bits, gs, mode);
   if (mode == "q2_0") {
     // ggml Q2_0 (src/model/moe_q20.h): codes [.., N, K/16] uint32 in MLX's 2-bit order, fp16 d [.., N, K/64], no biases
     if (!q20_ok) fatal("%s: Q2_0 weights are supported for Qwen3.8-Flash-Next's routed experts only", full.c_str());

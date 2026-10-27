@@ -502,6 +502,8 @@ class Qwen35 : public Model {
   // q20_ok: the linear may be Q2_0 or EXL3 (routed experts of Qwen4Exp, whose MoE paths have their kernels); `from`:
   // another store than the trunk's, `name` then in full (an MLX pack's own MTP head, read as the trunk's linears are)
   QLinear qlin(const std::string& name, bool required = true, bool q20_ok = false, const WeightStore* from = nullptr);
+  // config.json's quantization of a module (the default, then entries keyed by its full or canonical name)
+  void quant_of(const std::string& full, const std::string& name, int& bits, int& gs, std::string& mode) const;
   // A layer's EXL3 routed experts and the MoE's shapes for their kernels (src/model/moe_exl3.h)
   exl3::Experts exl3_experts(const Layer& L) const;
   exl3::Shape exl3_shape() const;

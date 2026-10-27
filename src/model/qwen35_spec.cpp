@@ -271,7 +271,8 @@ void Qwen35::load_mtp(const std::string& dir) {
   // bf16 linears of the head (Hugging Face checkpoints, tools/mtp_sidecar.py) are quantized here (mtp_head_bits).
   const int mtp_bits = mtp_head_bits(cfg_.moe);
   // An MLX pack's head that the kernels cannot read is left off (`off` says why) and the model loads without it: an
-  // unquantized tensor that is not a float matrix (unquantized stacked experts), or scales and biases not in bf16
+  // unquantized tensor that is not a float matrix (unquantized stacked experts), or a module whose config.json format
+  // qlin() would refuse (checked here first: qlin's refusals end the load)
   std::string off;
   auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 (f16, f32) -> 4-bit here
     QLinear L;
@@ -285,11 +286,21 @@ void Qwen35::load_mtp(const std::string& dir) {
     } else if (!in_shards) {
       L = own_qlin(w, n);
     } else {  // an MLX pack's own head: the module's format in config.json, read as the trunk's; copied out of `w`
-      L = qlin(n, true, false, &w);
-      if (L.s->dtype != DType::BF16 || L.b->dtype != DType::BF16) {
-        off = n + "'s scales and biases are not bf16";
-        return QLinear{};
+      int bits = 0, gs = 0;
+      std::string mode;
+      quant_of(n, n, bits, gs, mode);
+      const Tensor &q = get(n + ".weight"), &sc = get(n + ".scales");
+      const Tensor* bi = w.find(n + ".biases");
+      const int64_t K = bits > 0 ? q.shape.back() * 32 / bits : 0;
+      // (qlin reads 8-bit group 128 as group 64: each scale and bias twice)
+      if (mode != "affine" || !bi || q.dtype != DType::U32 || sc.dtype != DType::BF16 || bi->dtype != DType::BF16 ||
+          gs <= 0 || K % gs || K / gs != sc.shape.back() || !format_supported(bits, bits == 8 && gs == 128 ? 64 : gs)) {
+        off = n + " is " + (mode == "affine" ? format_name(bits, gs) : mode) + " with " +
+              (bi && bi->dtype == DType::BF16 && sc.dtype == DType::BF16 ? "bf16" : "other") +
+              " scales and biases, not a format the kernels read";
+        return L;
       }
+      L = qlin(n, true, false, &w);
       const Tensor** t[3] = {&L.w, &L.s, &L.b};
       const char* part[3] = {".weight", ".scales", ".biases"};
       for (int i = 0; i < 3; ++i)
