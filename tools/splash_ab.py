@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Kapitsa's Splash backend against plain Splash 1.4.0, one engine at a time (never side by side), for the T=0 identity
-check and the TTFT / decode tok/s overhead of the bridge. Run it under the GPU lock (lockf -k /tmp/kapitsa-gpu.lock ...):
-it launches, measures and reaps each server itself, and refuses to start when a Splash or Kapitsa model process is up.
+check and the TTFT / decode tok/s overhead of the bridge. It takes the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) itself and holds it for the run, unless
+NI_LOCK_HELD or NACE_GPU_LOCK_HELD says the caller does (lockf -k ... works as before); --wait-only stays outside it. It launches, measures and reaps each server itself, and refuses to start when a Splash or Kapitsa model process is up.
 
   python3 tools/splash_ab.py --legs K,S,K,S --out DIR [--reps 3] [--smoke]
 
@@ -10,7 +10,7 @@ flags (--verify-rows all, --expert-memory, --idle-release off, 32768 context), s
 Per leg: one warm-up request, the 3 identity prompts, then REPS requests each at ~1K and ~4K prompt tokens (a nonce per
 rep keeps every prompt cold, and identical on both engines). --tap runs the engine binary through tools/splash_tap.py on
 both sides and adds each request's prompt-id md5, output-id md5 and first divergence to summary.json. Writes DIR/leg<N>-<engine>.json and DIR/summary.json."""
-import argparse, hashlib, json, os, re, signal, socket, statistics, subprocess, sys, threading, time, urllib.request
+import argparse, fcntl, hashlib, json, os, re, signal, socket, statistics, subprocess, sys, threading, time, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPLASH_ROOT = os.path.expanduser("~/Documents/nace/splash-1.4.0")
@@ -258,6 +258,10 @@ def main():
     if a.speed_only: IDENTITY = []
     if a.wait_gib: wait_for_memory(a.wait_gib, a.wait_cap_s, a.run_anyway)
     if a.wait_only: return
+    if not (os.environ.get("NI_LOCK_HELD") or os.environ.get("NACE_GPU_LOCK_HELD")):
+        lock = open(os.environ.get("BENCH_GPU_LOCK", "/tmp/kapitsa-gpu.lock"), "a")  # held until this process ends
+        print("waiting for the GPU lock ...", flush=True)
+        fcntl.flock(lock, fcntl.LOCK_EX)
     CORPUS = corpus()
     os.makedirs(a.out, exist_ok=True)
     busy = running_model_processes()

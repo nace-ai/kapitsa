@@ -17,7 +17,9 @@ bad=0
 try:
     for t in texts:
         post(s.base,{"messages":[{"role":"system","content":"You are terse."},{"role":"user","content":t}],"max_tokens":1})
-    for t,p in zip(texts,s.prompts()):
+    prompts=s.prompts()
+    assert len(prompts)==len(texts),"%d prompts logged for %d texts"%(len(prompts),len(texts))
+    for t,p in zip(texts,prompts):
         text=ref.decode(p["prompt"],skip_special_tokens=False)
         again=ref.encode(text,add_special_tokens=False).ids
         ok= again==p["prompt"]
@@ -28,3 +30,4 @@ try:
         bad+= (not ok) or (not inside)
 finally: s.close()
 print("mismatches",bad)
+sys.exit(1 if bad else 0)

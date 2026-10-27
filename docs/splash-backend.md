@@ -70,6 +70,7 @@ one server at a time under the GPU lock.
 
 - CPU: `splash_protocol_test`, `splash_runtime_test`, `splash_discover_test` and `tests/test_splash_engine.py` (the
   server against `tests/fake_splash.py`, with Splash's real tokenizer and template). No model or GPU.
+  They run locally (`ctest`, or the binaries in `build/`); CI does not run the three C++ tests until #743.
 - Tokenizer (`tools/splash_tokenizer_check.py`): Kapitsa loading Splash's `tokenizer.json` gives the ids the `tokenizers`
   library gives, on 7 texts (Latin, Cyrillic, CJK, emoji, code with tabs, digits, URL, special-token text, NBSP and CR),
   0 mismatches.
@@ -78,9 +79,11 @@ one server at a time under the GPU lock.
   one trailing newline on the reasoning text, which plain Splash keeps and Kapitsa's output parser strips. The HTTP APIs
   return no ids, so `--tap` puts `tools/splash_tap.py` in front of the engine binary on both sides and compares each
   request's prompt ids and output ids at the native pipe. It was run once (27 Oct 2026, M5 Pro 48 GB, macOS 26.5.2, Splash 1.4.0), at T=0 with seed 1, `--verify-rows all` and `--expert-memory 16 GiB` on both sides. That is not Splash's default memory plan; the expert cache size does not change what is computed, and the default plan was not run for this comparison. Three requests (66, 1031 and 4070 prompt tokens, 16, 128 and 95 output tokens): prompt ids and output ids are identical on both sides, no first divergence, ids md5 `47c93518…`, `605fa935…`, `5f762994…`. One run per side, so it is not a statistical claim.
-- Speed (n=6 per cell, 16 GiB expert cache, kapitsa then plain Splash, medians): 1K prompt TTFT 1.41 against 1.43 s,
+- Speed (n=6 per cell, 16 GiB expert cache, legs in the order Kapitsa, Splash, Kapitsa, Splash (`--legs K,S,K,S`), medians;
+  the spread per cell and the Kapitsa commit were not recorded): 1K prompt TTFT 1.41 against 1.43 s,
   prefill 732 against 719 tok/s, decode 68.2 against 69.7 tok/s; 4K prompt TTFT 3.24 against 3.43 s, prefill 1257 against
-  1188 tok/s, decode 58.7 against 58.2 tok/s. The differences are within run-to-run noise.
+  1188 tok/s, decode 58.7 against 58.2 tok/s. No overhead of the bridge shows in these numbers: Kapitsa is not slower in any cell, and two cells (4K TTFT, 4K prefill)
+  differ by about 6% in its favour, which n=6 without the spread cannot separate from noise.
 - Default memory plan (no `--expert-memory`; 33.0 GiB free and reclaimable at start; n=1 per size, so no comparison):
   engine up in 8.9 s, 1K TTFT 1.41 s, prefill 732 tok/s, decode 74.9 tok/s; 4K TTFT 3.17 s, prefill 1286 tok/s, decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.
