@@ -25,7 +25,7 @@ and the decode loop. This page records the shape and what the first version does
 | Server binding: `kapitsa serve --engine splash [--splash-binary P] [--splash-model DIR] [--splash-arg A]...` (skips memory planning, model pick, download, routing and the disk cache) | `src/server/main.cpp` | done |
 | Discovery: the binary and the model folder when the flags are not given, with an error that names what is missing | `src/splash/discover.*` | done, tested on a throwaway tree (`tools/splash_discover_test`) |
 | A/B against plain Splash: identity (text, and token ids through the tap) and speed | `tools/splash_ab.py`, `tools/splash_tap.py` | done; see Verification |
-| CPU test: `tests/test_splash_engine.py build/kapitsa` with `tests/fake_splash.py` (a protocol-v11 stand-in), skips without a Splash model folder | `tests/` | done; not yet in `ci.yml` (it needs Splash's tokenizer files, which CI does not have) |
+| CPU test: `tests/test_splash_engine.py build/kapitsa` with `tests/fake_splash.py` (a protocol-v11 stand-in); with no Splash model folder it uses the stand-in `tests/fixtures/splash_model` | `tests/` | done; in `ci.yml` from the CI PR (#743), not before |
 
 ## Runtime contract
 
@@ -87,7 +87,7 @@ one server at a time under the GPU lock.
   | 1K prompt (1031 tokens) | 1.41 (1.39-1.52) against 1.43 (1.41-1.52) | 732 against 719 | 68.2 (59.6-77.4) against 69.7 (58.5-76.5) |
   | 4K prompt (4070 tokens) | 3.24 (3.17-3.40) against 3.43 (3.25-3.54) | 1257 against 1188 | 58.7 (56.4-65.4) against 58.2 (55.2-64.7) |
 
-  The ranges overlap in every cell; decode varies by about 20% inside one side's own six requests (the legs ran at
+  The ranges overlap in every cell; decode varies by about a quarter at 1K (59.6-77.4 around 68.2) and 15% at 4K (56.4-65.4 around 58.7) inside one side's own six requests (the legs ran at
   different moments, so that is the Mac, not the engine). Kapitsa's 4K TTFT is lower than plain Splash's in each pair of
   requests (same position in its leg); the 1K decode median is 2% lower. This run shows no overhead of the bridge it could
   have measured at this size, and it does not prove there is none.

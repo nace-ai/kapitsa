@@ -2,7 +2,7 @@
 """`kapitsa serve --engine splash` against tests/fake_splash.py (a protocol-v11 stand-in for the Splash binary), CPU only:
 no model, no GPU. It needs Splash's resolved model folder for its tokenizer and chat template (default: the one under
 ~/Library/Application Support/Splash/models/.resolved, or give SPLASH_MODEL_DIR); without one it uses the small stand-in
-folder tests/fixtures/splash_model, so CI runs every case.
+folder tests/fixtures/splash_model, so it needs no model (the CI PR, #743, adds it to ci.yml).
 usage: test_splash_engine.py build/kapitsa"""
 import glob, json, os, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
