@@ -497,32 +497,49 @@ Splash's range (temperature in [0, 2], top_p in (0, 1], the two penalties in [-2
 `repetition_penalty`, min_p in [0, 1]) is a 400 naming the field rather than a clamp. A thinking budget in the request
 is honoured, as Kapitsa's own engine honours it.
 
-The same Flash-Next model, three ways to run it on the M5 Pro 48 GB (macOS 26.5.2, Splash 1.4.0, one engine at a time
-under the GPU lock, n=3 or more per cell, interleaved arm by arm, temperature 0):
+The same model, Qwen3.8-Flash-Next Q2_0, four ways on one M5 Pro 48 GB: Splash's engine behind this server, plain
+Splash 1.4.0, Kapitsa's own engine with MTP, and llama.cpp; one engine at a time under the GPU lock, arms interleaved,
+decode at temperature 0 with seed 1:
 
-<!-- TODO(numbers): every cell comes from the results JSON of the rerun, never hand-typed; a metric the JSON does not
-     have stays "not measured". Until that run lands, the table says "not measured" and the caption links no record. -->
+| Metric | Prompt | Kapitsa on Splash | plain Splash 1.4.0 | Kapitsa native, MTP | llama.cpp |
+| --- | --- | ---: | ---: | ---: | ---: |
+| TTFT | ~1K tokens | 1.45 s | 1.47 s | 1.41 s | 28.12 s |
+| TTFT | ~4K tokens | 3.45 s | 3.55 s | 4.81 s | 110.74 s |
+| TTFT | ~16K tokens | 16.54 s | 17.32 s | 25.48 s | 634.24 s |
+| Prefill | ~1K tokens | 715 tok/s | 706 tok/s | 733 tok/s | 37 tok/s |
+| Prefill | ~4K tokens | 1181 tok/s | 1149 tok/s | 847 tok/s | 37 tok/s |
+| Prefill | ~16K tokens | 1166 tok/s | 1114 tok/s | 757 tok/s | 30 tok/s |
+| Decode | T=0, ~1K prompt | 55.9 tok/s | 55.5 tok/s | 53.7 tok/s | 9.0 tok/s |
+| Turn-2 TTFT | ~4K chat | 0.56 s | 0.57 s | 0.26 s | 3.34 s |
+| Peak footprint | serving process tree | 25.0 GiB | 25.4 GiB | 31.7 GiB | not measured |
 
-| Metric | Prompt | Kapitsa on Splash | plain Splash 1.4.0 | Kapitsa native, MTP |
-| --- | --- | ---: | ---: | ---: |
-| TTFT | ~1K tokens | not measured | not measured | not measured |
-| TTFT | ~4K tokens | not measured | not measured | not measured |
-| TTFT | ~16K tokens | not measured | not measured | not measured |
-| Prefill | ~1K tokens | not measured | not measured | not measured |
-| Prefill | ~4K tokens | not measured | not measured | not measured |
-| Prefill | ~16K tokens | not measured | not measured | not measured |
-| Decode | T=0, ~1K prompt | not measured | not measured | not measured |
-| Turn-2 TTFT | ~4K chat | not measured | not measured | not measured |
-| Peak RSS | engine process | not measured | not measured | not measured |
+<sub>Runs: `Mac17,8` (M5 Pro, 48 GB), macOS 26.5.2, 2026-10-27; Kapitsa at `ff6151c8` (#743 head) on Splash and `e840651c` native, Splash 1.4.0, llama.cpp c7474afc. The table is recorded in `bench/results/2026-10-28-m5-pro-flash-next-engines`. n is the number of requests per cell: Kapitsa on Splash 10, plain Splash 1.4.0 10, Kapitsa native, MTP 12/9, llama.cpp 2. Every arm ran a forced memory plan, not a default: Splash at `--expert-memory 16G --idle-release off`, native at `NI_EXPERT_STORE=24`, other sessions sharing the Mac. Peak footprint is the `phys_footprint` of the serving process tree (Kapitsa and the Splash child, or Kapitsa alone for the native arm); not measured where no leg sampled it.</sub>
 
-<!-- llama.cpp is a row only if it was measured; otherwise a footnote naming the recorded reason. -->
+Read across it, and nothing in it says one engine is fastest:
 
-<sub>Identity: the same prompt ids and output ids on the two Splash arms at T=0 with seed 1 (`tools/splash_tap.py`, three
-requests of 66, 1031 and 4070 prompt tokens), so the prompt and the tokens are Splash's and not a re-render with another
-tokenizer or template. One run per side, so that is a spot check, not a statistical claim.</sub>
+- **This server in front of Splash, and plain Splash, are the same speed within noise.** Decode spans 49 to 62 tok/s
+  inside a cell, wider than any gap between the two arms; prefill and turn-2 TTFT agree within 5% at 1K and 4K. The
+  plain-Splash set repeated later in the same run (`S2`) came out 0.7% to 1.1% slower at 1K and 4K and 6% to 7% slower at
+  16K and on the second turn, so the 16K column is the machine, not the front end. Neither a speed-up nor a slowdown for
+  the mode is claimed here.
+- **Against Kapitsa's own engine it is a different trade.** Through Splash's engine the same model prefills 1.39 times
+  faster at 4K and 1.54 times at 16K, level at 1K; decode is the same (53.7 against 55.9 tok/s, inside the noise); the second turn is
+  native's — 0.26 s against 0.56 s, native hitting 4,435 of 4,476 cached prompt tokens. What the mode buys is memory:
+  25.0 GiB of process-tree footprint against native's 31.7 GiB, native at memory pressure level 4 with up to 4.5 GB of
+  swap growth in three legs (each stopped by the guard late in the leg, hence its n of 9 at 16K and turn 2), the
+  Splash arms at level 1 with no swap growth in any leg.
+- **llama.cpp is in the table only because it ran.** The Q2_0 GGUF is 66 GB against 48 GB of memory, so it streamed from
+  the SSD at 9 tok/s, about four times slower than the same build measured on the same file two days earlier, at n=2
+  after a third leg was dropped. That is not a fair number for llama.cpp; it is printed so that its absence is not read
+  as a claim.
 
-Native Kapitsa against plain Splash, each with its own default drafter and sampling, is measured per Mac in
-[benchmarks](benchmarks.md#m5-pro); this table is about the mode itself.
+The prompts, the prompt token ids and the sampling are Splash's on the Splash arms, as above; output text was not
+compared for equality across the four engines, and each Splash arm ran the engine's default `--verify-rows auto`, which
+on this MoE target can let greedy and seeded outputs differ between runs.
+
+Kapitsa's own engine against plain Splash, each side with its default drafter and sampling, is measured per Mac in
+[benchmarks](benchmarks.md#m5-pro); this table is about the mode itself, at the memory plans named in its caption
+rather than the defaults.
 
 ## APIs
 
