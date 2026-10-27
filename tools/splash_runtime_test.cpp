@@ -87,6 +87,12 @@ static int fake(const std::string& mode) {
     while (read_all(h, 16)) {}
     return 0;
   }
+  if (mode == "truncate") {  // a frame cut short by the child's death
+    send_ready(2);
+    uint8_t h[16];
+    if (read_all(h, 16)) { std::vector<uint8_t> pl(le(h + 8, 8)); read_all(pl.data(), pl.size()); (void)!write(1, "SPLH\x0b\0", 6); }
+    _exit(0);
+  }
   send_ready(mode == "pool1" ? 1 : 2);
   std::vector<uint64_t> hung;
   while (true) {
@@ -99,6 +105,12 @@ static int fake(const std::string& mode) {
       uint64_t id = le(payload.data(), 8);
       uint32_t first = uint32_t(le(payload.data() + 114, 4));  // the prompt's first token picks the behaviour
       if (mode == "die") _exit(3);
+      if (mode == "sigpipe") {  // SIGPIPE's disposition as the done's token count: 7 default, 9 ignored
+        struct sigaction sa;
+        sigaction(SIGPIPE, nullptr, &sa);
+        send_start(id), send_done(id, 0, sa.sa_handler == SIG_DFL ? 7 : 9);
+        continue;
+      }
       if (mode == "garbage") { const char junk[32] = "this is not a frame at all....."; (void)!write(1, junk, 32); sleep(30); }
       if (mode == "stray") send_tokens(id + 100, 0, {1});  // an event for a request nobody made
       send_start(id);
@@ -243,6 +255,18 @@ int main(int argc, char** argv) {
     CHECK(threw);
   }
 
+  {  // the child's SIGPIPE is the default, though the server's is ignored
+    Runtime rt(opts(self, "sigpipe")); rt.start();
+    auto c = std::make_shared<Collect>(); rt.submit(req(1), c, 30);
+    CHECK(c->wait(5) && c->done && c->d.completion_tokens == 7);
+  }
+
+  {  // a child that dies mid-frame: the request fails as truncated_frame, not as a clean exit
+    Runtime rt(opts(self, "truncate")); rt.start();
+    auto c = std::make_shared<Collect>(); rt.submit(req(1), c, 30);
+    CHECK(c->wait(5) && c->errored && c->e.code == "truncated_frame");
+  }
+
   {  // garbage on its stdout: the request fails with a protocol error and the child is killed, not waited for
     Runtime rt(opts(self, "garbage"));
     rt.start();
@@ -309,6 +333,20 @@ int main(int argc, char** argv) {
     w.join();
     CHECK(threw);
     CHECK(kill(child, 0) != 0);
+  }
+
+  {  // cancel() from a Sink (the reader thread) or anywhere does not wait behind a request frame that is blocked in the pipe
+    RuntimeOptions o = opts(self, "stall");
+    o.stop_grace_s = 0.3;
+    Runtime rt(o); rt.start();
+    Request big = req(1);
+    big.prompt.assign(200000, 7);
+    std::thread w([&] { try { rt.submit(big, std::make_shared<Collect>(), 30); } catch (const EngineUnhealthy&) {} });
+    usleep(300000);  // the writer holds the pipe; its request is id 1
+    auto t0 = std::chrono::steady_clock::now();
+    rt.cancel(1);
+    CHECK(since(t0) < 0.2);
+    rt.shutdown(), w.join();
   }
 
   {  // the same child, with the default shutdown path out of the picture: the frame times out and the child is killed

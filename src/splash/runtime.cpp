@@ -70,8 +70,13 @@ void Runtime::start() {
   posix_spawnattr_init(&at);
   // Only what is named below reaches the child: stdin and stdout are the pipes, stderr is ours (as runtime.py's Popen).
   // The child leads its own process group, so one signal reaches it and what it started.
-  posix_spawnattr_setflags(&at, POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETPGROUP);
+  // SIGPIPE is ignored here but default in the child, as when Splash's own runtime spawns it.
+  sigset_t dfl;
+  sigemptyset(&dfl);
+  sigaddset(&dfl, SIGPIPE);
+  posix_spawnattr_setflags(&at, POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
   posix_spawnattr_setpgroup(&at, 0);
+  posix_spawnattr_setsigdefault(&at, &dfl);
   posix_spawn_file_actions_adddup2(&fa, to_child[0], 0);
   posix_spawn_file_actions_adddup2(&fa, from_child[1], 1);
   posix_spawn_file_actions_addinherit_np(&fa, 2);
@@ -133,7 +138,34 @@ void Runtime::signal_child(int sig) {
 // shutdown() (it sets stopping_ and takes write_m_) nor a Sink that cancels: the writer leaves on stopping_, and on a
 // frame still unwritten after write_timeout_s it kills the child, whose stream would otherwise be cut mid-frame.
 void Runtime::write_frame(const std::vector<uint8_t>& f) {
-  std::lock_guard<std::mutex> l(write_m_);
+  {
+    std::lock_guard<std::mutex> l(write_m_);
+    write_locked(f);
+  }
+  flush_cancels();
+}
+
+// Cancels never wait behind a frame in flight (a Sink cancels from the reader thread): one that finds the writer busy is
+// queued, and the writer sends it after its frame; the re-check after the unlock catches one queued as it let go.
+void Runtime::flush_cancels() {
+  try {
+    while (true) {
+      {
+        std::unique_lock<std::mutex> l(write_m_, std::try_to_lock);
+        if (!l) return;  // the holder flushes after its frame
+        std::vector<uint64_t> ids;
+        { std::lock_guard<std::mutex> c(cancel_m_); ids.swap(cancels_); }
+        for (uint64_t id : ids) write_locked(encode_cancel(id));
+      }
+      std::lock_guard<std::mutex> c(cancel_m_);
+      if (cancels_.empty()) return;
+    }
+  } catch (const EngineUnhealthy&) {
+    // dead: the reader ends the requests
+  }
+}
+
+void Runtime::write_locked(const std::vector<uint8_t>& f) {
   if (in_fd_ < 0) throw EngineUnhealthy("the splash engine is not running");
   const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(o_.write_timeout_s));
   size_t off = 0;
@@ -188,11 +220,8 @@ void Runtime::cancel(uint64_t id) {
     std::lock_guard<std::mutex> l(m_);
     if (!pending_.count(id)) return;  // done already
   }
-  try {
-    write_frame(encode_cancel(id));
-  } catch (const EngineUnhealthy&) {
-    // dead: the reader ends the request
-  }
+  { std::lock_guard<std::mutex> c(cancel_m_); cancels_.push_back(id); }
+  flush_cancels();
 }
 
 std::string Runtime::status(double timeout_s) {
@@ -268,7 +297,7 @@ void Runtime::read_loop() {
   FrameParser parser;
   std::vector<uint8_t> buf(1 << 16);
   std::string code = "engine_exited", message = "the splash engine closed its output";
-  bool fatal = false;
+  bool fatal = false, eof = false;
   try {
     while (true) {
       pollfd pf{out_fd_, POLLIN, 0};  // a bounded wait, so shutdown() can end this when a descendant keeps the pipe open
@@ -278,6 +307,7 @@ void Runtime::read_loop() {
       if (pr == 0) { if (abandon_) break; continue; }
       ssize_t n = read(out_fd_, buf.data(), buf.size());
       if (n < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+      if (n == 0) eof = true;
       if (n <= 0) break;
       parser.feed(buf.data(), size_t(n));
       Event ev;
@@ -344,6 +374,13 @@ void Runtime::read_loop() {
       }
       if (fatal) break;
     }
+    if (eof && !fatal)  // a frame cut short is not a clean exit (as protocol.py's finish())
+      if (auto issue = parser.finish()) {
+        code = "truncated_frame";
+        message = issue->message;
+        fatal = true;
+        say("splash protocol failure: " + issue->describe());
+      }
   } catch (const ProtocolError& e) {
     code = "protocol_error";
     message = e.what();

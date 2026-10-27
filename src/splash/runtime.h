@@ -14,7 +14,6 @@
 #include <condition_variable>
 #include <functional>
 #include <map>
-#include <set>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -114,6 +113,10 @@ class Runtime {
   std::atomic<bool> abandon_{false};   // shutdown() gave up waiting for the child's stdout to close: the reader stops reading
   std::mutex pid_m_;  // pid_ is set and cleared, and signalled through, only under this: a signal never reaches a reaped pid
   std::mutex write_m_;  // one writer at a time on the child's stdin
+  std::mutex cancel_m_;            // cancels_ only, never held across a write
+  std::vector<uint64_t> cancels_;  // cancel frames waiting for the writer
+  void write_locked(const std::vector<uint8_t>& frame);  // write_m_ held
+  void flush_cancels();
 };
 
 }  // namespace ni::splash
