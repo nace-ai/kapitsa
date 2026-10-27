@@ -5,13 +5,16 @@
   * every other tensor and mtp.safetensors byte for byte the pack's; the index lists every output tensor;
   * --verify passes, and refuses a GGUF whose gate and up are swapped;
   * the check command; a sparse table: the chosen rows equal the pack's, the others read zero, holes on disk; rows
-    added later (the rows command) write only the missing ones and only into the pack's table.
+    added later (the rows command) write only the missing ones and only into the pack's table;
+  * --table gguf: the GGUF's table part (IQ4_NL) cloned as ple.gguf, no ple.safetensors or ple_manifest.json, its rows
+    verified against the pack's (a table shifted by one row is refused), and the rows command refuses the folder.
   python3 tools/qwen4_exp_q20_test.py [--keep DIR]   (--keep: write the synthetic pack and its conversion to DIR,
   e.g. for build/fn_q2_bench pack DIR/out)
 """
 import argparse
 import json
 import os
+import shutil
 import struct
 import sys
 import tempfile
@@ -48,16 +51,16 @@ def q2_0_encode(w):
     return out.tobytes()
 
 
-def rtn4(w):
-    """float32 [..., K] -> MLX 4-bit affine group 64 (codes uint32, scales / biases bf16), round to nearest."""
-    g = w.reshape(-1, 64)
+def rtn4(w, gs=64):
+    """float32 [..., K] -> MLX 4-bit affine group gs (codes uint32, scales / biases bf16), round to nearest."""
+    g = w.reshape(-1, gs)
     lo, hi = g.min(axis=1), g.max(axis=1)
     s = np.maximum((hi - lo) / 15.0, 1e-8)
     q = np.clip(np.rint((g - lo[:, None]) / s[:, None]), 0, 15).astype(np.uint32).reshape(w.shape[:-1] + (-1,))
     words = np.zeros(w.shape[:-1] + (w.shape[-1] // 8,), np.uint32)
     for j in range(8):
         words |= q[..., j::8] << np.uint32(4 * j)
-    sh = w.shape[:-1] + (w.shape[-1] // 64,)
+    sh = w.shape[:-1] + (w.shape[-1] // gs,)
     return words, P.f32_to_bf16(s).reshape(sh), P.f32_to_bf16(lo).reshape(sh)
 
 
@@ -95,6 +98,25 @@ def write_gguf(path, tensors, kv=None):
             f.write(raw)
 
 
+def iq4_nl_encode(x):
+    """float32 [rows, dim] -> GGUF IQ4_NL bytes (per 32 values d = the extreme / its level, codes the nearest level)."""
+    g = x.reshape(-1, 32)
+    ext = g[np.arange(len(g)), np.abs(g).argmax(axis=1)]
+    d = (ext / -127.0).astype(np.float16)
+    dd = np.where(d == 0, 1, d).astype(np.float32)
+    c = np.abs(g[..., None] / dd[:, None, None] - Q.IQ4_LEVELS).argmin(axis=-1).astype(np.uint8)
+    q = c[:, :16] | (c[:, 16:] << 4)
+    return np.concatenate([d.view(np.uint8).reshape(-1, 2), q], axis=1).tobytes()
+
+
+def table_values(pack):
+    """The synthetic pack's table rows, dequantized: float32 [rows, 160]."""
+    t = P.Local(pack)
+    sh = "language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shards.{}."
+    return np.concatenate([P.dequantize_np(t.array(sh.format(k) + "weight"), t.array(sh.format(k) + "scales"),
+                                           t.array(sh.format(k) + "biases"), 4, 32) for k in range(2)])
+
+
 def make_sources(root, swap_gate_up=False):
     """The synthetic pack (root/pack) and GGUF (root/q2_0.gguf); the same float weights quantized both ways."""
     pack = os.path.join(root, "pack")
@@ -128,17 +150,17 @@ def make_sources(root, swap_gate_up=False):
              {"mtp.layers.0.mlp.switch_mlp.gate_proj.weight": rng.integers(0, 2**32, (E, I, D // 8), dtype=np.uint32)})
     shard = "language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shards.{}"
     table = {}
-    for k in range(2):
-        table[shard.format(k) + ".weight"] = rng.integers(1, 2**32, (1000, 20), dtype=np.uint32)
-        table[shard.format(k) + ".scales"] = rng.integers(1, 2**16, (1000, 5), dtype=np.uint16)
-        table[shard.format(k) + ".biases"] = rng.integers(1, 2**16, (1000, 5), dtype=np.uint16)
+    for k in range(2):  # 4-bit group 32, 160 values a row (the pack's layout)
+        words, sc, bi = rtn4((rng.standard_normal((1000, 160)) * 0.05).astype(np.float32), 32)
+        table[shard.format(k) + ".weight"], table[shard.format(k) + ".scales"], table[shard.format(k) + ".biases"] = (
+            words, sc, np.where(bi == 0, np.uint16(1), bi))  # (no all-zero row: the sparse checks read zeros as holes)
     write_st(os.path.join(pack, "ple.safetensors"), table)
     q = {"group_size": 64, "bits": 4, "mode": "affine", "language_model.model.layers.0.mlp.gate": {"group_size": 64,
                                                                                                   "bits": 8}}
     json.dump({"model_type": "qwen4_exp", "quantization": q, "quantization_config": dict(q),
                "text_config": {"hidden_size": D, "moe_intermediate_size": I, "num_experts": E}},
               open(os.path.join(pack, "config.json"), "w"))
-    for f in ("tokenizer.json", "chat_template.jinja", "LICENSE"):
+    for f in ("tokenizer.json", "chat_template.jinja", "LICENSE", "ple_manifest.json"):
         open(os.path.join(pack, f), "w").write(f"synthetic {f}\n")
     path = os.path.join(root, "q2_0_swapped.gguf" if swap_gate_up else "q2_0.gguf")
     write_gguf(path, gg + [("output_norm.weight", [D], 0, rng.random(D, np.float32).tobytes())])
@@ -217,7 +239,6 @@ def main():
     rows = [0, 5, 999, 1000, 1500, 1999]
     size, nrows, wrote = Q.write_sparse_table(pk, sp, rows)
     check(wrote == len(rows), "sparse table: every chosen row written")
-    import shutil
     d2 = os.path.join(root, "sparse")
     os.makedirs(d2, exist_ok=True)
     tp = os.path.join(d2, "ple.safetensors")
@@ -257,6 +278,54 @@ def main():
     _, _, wrote2 = Q.write_sparse_table(pk, tp2, more, add=True, stream=True, piece=240)
     check(wrote == len(rows) and wrote2 == 2, f"streamed sparse table: {wrote} rows, then the 2 missing ({wrote2})")
     check(open(tp2, "rb").read() == open(tp, "rb").read(), "streamed sparse table: the same file as row by row")
+    print("table from the GGUF")
+    vals = table_values(pack)
+    with open(gguf, "rb") as fh:
+        first = fh.read()
+    for f, x in (("split-00001-of-00002.gguf", None), ("split-00002-of-00002.gguf", vals),
+                 ("shifted-00001-of-00002.gguf", None), ("shifted-00002-of-00002.gguf", np.roll(vals, 1, axis=0))):
+        if x is None:
+            open(os.path.join(root, f), "wb").write(first)
+        else:
+            write_gguf(os.path.join(root, f), [(Q.GGUF_TABLE, [160, len(x)], Q.IQ4_NL, iq4_nl_encode(x))],
+                       {"split.no": "1"})
+    part1, part2 = os.path.join(root, "split-00001-of-00002.gguf"), os.path.join(root, "split-00002-of-00002.gguf")
+    g2 = Q.Gguf(lambda x, y: open(part2, "rb").read()[x:y], part2)
+    rows, dim, _, toff, rb = g2.table()
+    dec = Q.table_rows(open(part2, "rb").read()[toff:toff + rows * rb]).reshape(rows, dim)
+    check(rows == len(vals) and np.corrcoef(dec.reshape(-1), vals.reshape(-1))[0, 1] > 0.95,
+          "the IQ4_NL table decodes to the rows it encodes")
+    outg = os.path.join(root, "out_gguf")
+    Q.cmd_convert(args(out=outg, pack=pack, gguf=part1, table="gguf"))
+    shutil.copytree(outg, os.path.join(root, "out_gguf2"))
+    rec = json.load(open(os.path.join(outg, "conversion_q20.json")))
+    check(open(os.path.join(outg, Q.GTABLE), "rb").read() == open(part2, "rb").read(),
+          "ple.gguf is the GGUF's table part byte for byte")
+    check(not os.path.exists(os.path.join(outg, Q.TABLE)) and not os.path.exists(os.path.join(outg, "ple_manifest.json"))
+          and os.path.exists(os.path.join(out, "ple_manifest.json")), "no ple.safetensors or ple_manifest.json")
+    check(rec["table"] == "gguf" and rec["table_gguf"] == part2 and rec["worst_row_correlation"]["table"] > 0.9,
+          f"the record names the part and its rows' correlation ({rec['worst_row_correlation'].get('table')})")
+    check(Q.cmd_check(types.SimpleNamespace(dir=outg)) == 0, "the check command (table from the GGUF)")
+    gb = bytearray(open(os.path.join(outg, Q.GTABLE), "rb").read())
+    gb[toff + 3] ^= 1
+    os.remove(os.path.join(outg, Q.GTABLE))  # (a new file: ple.gguf may be a hard link of the part)
+    open(os.path.join(outg, Q.GTABLE), "wb").write(gb)
+    check(Q.cmd_check(types.SimpleNamespace(dir=outg)) == 1, "the check command finds a changed byte of ple.gguf")
+    os.remove(os.path.join(outg, ".q20.done.json"))
+    Q.cmd_convert(args(out=outg, pack=pack, gguf=gguf, table="link"))
+    check(not os.path.exists(os.path.join(outg, Q.GTABLE)) and os.path.exists(os.path.join(outg, Q.TABLE)),
+          "a later run with another --table removes ple.gguf")
+    try:
+        Q.cmd_convert(args(out=os.path.join(root, "out_shifted"), pack=pack,
+                           gguf=os.path.join(root, "shifted-00001-of-00002.gguf"), table="gguf"))
+        check(False, "a GGUF table shifted by one row is refused")
+    except ValueError as e:
+        check("correlate" in str(e), f"a GGUF table shifted by one row is refused ({e})")
+    try:
+        Q.cmd_rows(types.SimpleNamespace(dir=os.path.join(root, "out_gguf2"), ids=["@x"], stream=False, conns=2))
+        check(False, "the rows command refuses a folder whose table is the GGUF's")
+    except SystemExit as e:
+        check("GGUF" in str(e), "the rows command refuses a folder whose table is the GGUF's")
     print(f"\n{'all checks passed' if not fails else f'{len(fails)} FAILED'}")
     if tmp:
         tmp.cleanup()

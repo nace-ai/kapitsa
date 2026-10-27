@@ -1,4 +1,6 @@
 #include "model/ngram.h"
+#include "gguf/gguf.h"
+#include "gguf/quant.h"
 #include "loader/safetensors.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -13,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <thread>
 
 namespace ni {
@@ -97,34 +100,37 @@ NgramTable::~NgramTable() {
   for (auto& [p, n] : maps_) munmap(p, n);
 }
 
+// clean file pages: the page cache keeps what is used, outside the process footprint
+std::pair<const uint8_t*, size_t> NgramTable::map_file(const std::string& path) {
+  const int fd = ::open(path.c_str(), O_RDONLY);
+  if (fd < 0) fatal("n-gram table: cannot open %s", path.c_str());
+  struct stat st;
+  fstat(fd, &st);
+  void* p = mmap(nullptr, size_t(st.st_size), PROT_READ, MAP_SHARED, fd, 0);
+  ::close(fd);
+  if (p == MAP_FAILED) fatal("n-gram table: mapping %s failed", path.c_str());
+  madvise(p, size_t(st.st_size), MADV_RANDOM);
+  maps_.push_back({p, size_t(st.st_size)});
+  mapped_ += size_t(st.st_size);
+  return {static_cast<const uint8_t*>(p), size_t(st.st_size)};
+}
+
 void NgramTable::open(const std::vector<Part>& parts, Fmt fmt, int dim, int bits, int gs, float scale) {
   fmt_ = fmt;
   dim_ = dim;
   bits_ = bits;
   gs_ = gs;
   scale_ = scale;
-  // headers of the files the parts name, then one read-only shared mapping per file (clean file pages: the page
-  // cache keeps what is used, outside the process footprint)
+  // headers of the files the parts name, then one read-only shared mapping per file
   std::map<std::string, std::pair<const uint8_t*, size_t>> files;
-  auto map_file = [&](const std::string& path) -> const uint8_t* {
+  auto mapped = [&](const std::string& path) -> const uint8_t* {
     auto it = files.find(path);
-    if (it != files.end()) return it->second.first;
-    const int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) fatal("n-gram table: cannot open %s", path.c_str());
-    struct stat st;
-    fstat(fd, &st);
-    void* p = mmap(nullptr, size_t(st.st_size), PROT_READ, MAP_SHARED, fd, 0);
-    ::close(fd);
-    if (p == MAP_FAILED) fatal("n-gram table: mapping %s failed", path.c_str());
-    madvise(p, size_t(st.st_size), MADV_RANDOM);
-    maps_.push_back({p, size_t(st.st_size)});
-    mapped_ += size_t(st.st_size);
-    files[path] = {static_cast<const uint8_t*>(p), size_t(st.st_size)};
-    return static_cast<const uint8_t*>(p);
+    if (it == files.end()) it = files.emplace(path, map_file(path)).first;
+    return it->second.first;
   };
   // tensor offsets from each file's header
   auto entry = [&](const std::string& path, const std::string& name, size_t& off, std::vector<int64_t>& shape) {
-    const uint8_t* base = map_file(path);
+    const uint8_t* base = mapped(path);
     uint64_t n = 0;
     memcpy(&n, base, 8);
     const std::string h(reinterpret_cast<const char*>(base) + 8, size_t(n));
@@ -164,21 +170,55 @@ void NgramTable::open(const std::vector<Part>& parts, Fmt fmt, int dim, int bits
     size_t off = 0;
     std::vector<int64_t> shape;
     entry(p.file, p.w, off, shape);
-    m.w = files[p.file].first + off;
+    m.w = mapped(p.file) + off;
     if (shape.size() != 2) fatal("n-gram table: %s is not 2-D", p.w.c_str());
     m.rows = shape[0];
     const size_t want = fmt == Fmt::Affine ? row_bytes_ / 4 : size_t(dim);
     if (size_t(shape[1]) != want) fatal("n-gram table: %s has %lld columns, expected %zu", p.w.c_str(), (long long)shape[1], want);
     if (fmt == Fmt::Affine) {
       entry(p.file, p.s, off, shape);
-      m.s = files[p.file].first + off;
+      m.s = mapped(p.file) + off;
       entry(p.file, p.b, off, shape);
-      m.b = files[p.file].first + off;
+      m.b = mapped(p.file) + off;
     }
     m.first = rows_;
     rows_ += m.rows;
     parts_.push_back(m);
   }
+}
+
+void NgramTable::open_gguf(const std::string& file, const std::string& name, int dim) {
+  uint64_t off = 0, rows = 0;
+  {
+    std::unique_ptr<gguf::File> g;
+    try {
+      g = std::make_unique<gguf::File>(file);
+    } catch (const gguf::Error& e) {
+      fatal("n-gram table: %s", e.what());
+    }
+    const gguf::Tensor* t = g->find(name);
+    if (!t) fatal("n-gram table: %s has no tensor %s", file.c_str(), name.c_str());
+    uint32_t be = 0, bb = 0;
+    if (t->ne.size() != 2 || t->ne[0] != uint64_t(dim))
+      fatal("n-gram table: %s is not [rows, %d] (ne[0] = %llu)", name.c_str(), dim, (unsigned long long)t->ne[0]);
+    if (!gguf::can_dequantize(t->type) || !gguf::type_block(t->type, &be, &bb) || dim % int(be))
+      fatal("n-gram table: %s is %s, which is not read here in rows of %d values", name.c_str(),
+            gguf::type_name(t->type).c_str(), dim);
+    gtype_ = t->type;
+    row_bytes_ = size_t(dim / int(be)) * bb;
+    off = t->offset;
+    rows = t->ne[1];
+  }
+  fmt_ = Fmt::Gguf;
+  dim_ = dim;
+  group_row_bytes_ = 0;
+  const auto [base, size] = map_file(file);
+  if (off + rows * row_bytes_ > size) fatal("n-gram table: %s ends before its tensor %s", file.c_str(), name.c_str());
+  Map m;
+  m.w = base + off;
+  m.rows = int64_t(rows);
+  parts_ = {m};
+  rows_ = int64_t(rows);
 }
 
 bool NgramTable::has_tensor(const std::string& file, const std::string& name) {
@@ -197,7 +237,10 @@ bool NgramTable::has_tensor(const std::string& file, const std::string& name) {
 std::string NgramTable::describe() const {
   char b[160];
   snprintf(b, sizeof b, "%lld x %d, %s, %.1f GB mapped", (long long)rows_, dim_,
-           fmt_ == Fmt::BF16 ? "bf16" : fmt_ == Fmt::F8E4M3 ? "fp8 e4m3" : (std::to_string(bits_) + "-bit group " + std::to_string(gs_)).c_str(),
+           fmt_ == Fmt::BF16     ? "bf16"
+           : fmt_ == Fmt::F8E4M3 ? "fp8 e4m3"
+           : fmt_ == Fmt::Gguf   ? ("GGUF " + gguf::type_name(gtype_)).c_str()
+                                 : (std::to_string(bits_) + "-bit group " + std::to_string(gs_)).c_str(),
            mapped_ / 1e9);
   return b;
 }
@@ -260,6 +303,9 @@ void NgramTable::row(int64_t r, float* out) const {
       }
       break;
     }
+    case Fmt::Gguf:
+      gguf::dequantize(gtype_, w, out, size_t(dim_));
+      break;
   }
 }
 

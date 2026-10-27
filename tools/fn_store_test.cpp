@@ -11,10 +11,16 @@
 // prefill group's two pure sides: the walk's shapes at the merge gate's frozen lengths (the engine's own chunker,
 // no model) and the group slots' eligibility and two-pass store-sizing decision, and the NI_EXPERT_STORE pin end
 // to end: the environment variable through the live load's one parse into planned_group_world, the prediction
-// `kapitsa doctor` and every pre-load fit number ask (no model, no load).
+// `kapitsa doctor` and every pre-load fit number ask (no model, no load). Last, the PLE n-gram table's reader
+// (src/model/ngram.h): rows of a GGUF table (IQ4_NL, Q8_0) equal gguf::dequantize of their blocks, and the affine
+// safetensors table (two shards in one file, mapped once) decodes as MLX's affine map.
 //   fn_store_test [--keep DIR]
 #include "engine/engine.h"
+#include "gguf/gguf.h"
+#include "gguf/quant.h"
 #include "model/expert_store.h"
+#include "model/ngram.h"
+#include "util/bf16.h"
 #include "util/log.h"
 
 #include <fcntl.h>
@@ -1084,6 +1090,120 @@ void case_group_pin() {
 
 }  // namespace
 
+// a GGUF v3 file of one tensor, name [rows, dim] (ne {dim, rows}) of `type`, from its raw blocks
+void write_gguf_table(const std::string& path, const std::string& name, uint32_t type, uint64_t dim, uint64_t rows,
+                      const std::vector<uint8_t>& data) {
+  std::vector<uint8_t> h;
+  auto put = [&](const void* p, size_t n) { h.insert(h.end(), static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n); };
+  auto u32 = [&](uint32_t v) { put(&v, 4); };
+  auto u64 = [&](uint64_t v) { put(&v, 8); };
+  auto str = [&](const std::string& v) { u64(v.size()), put(v.data(), v.size()); };
+  put("GGUF", 4), u32(3), u64(1), u64(1);
+  str("general.architecture"), u32(8), str("qwen4exp");
+  str(name), u32(2), u64(dim), u64(rows), u32(type), u64(0);
+  h.resize((h.size() + 31) / 32 * 32, 0);
+  h.insert(h.end(), data.begin(), data.end());
+  FILE* f = fopen(path.c_str(), "wb");
+  fwrite(h.data(), 1, h.size(), f);
+  fclose(f);
+}
+
+void case_ngram_table(const std::string& dir, std::vector<std::string>& files) {
+  constexpr int dim = 160;
+  constexpr int64_t rows = 37;
+  const int f0 = g_fail;
+  std::mt19937 rng(11);
+  std::vector<int64_t> ids;
+  for (int64_t r = 0; r < rows; ++r) ids.push_back((r * 7) % rows);
+  for (const auto& [type, name] : {std::pair<uint32_t, const char*>{gguf::kIQ4_NL, "IQ4_NL"}, {gguf::kQ8_0, "Q8_0"}}) {
+    uint32_t be = 0, bb = 0;
+    gguf::type_block(type, &be, &bb);
+    const size_t rb = dim / be * bb;
+    std::vector<uint8_t> data(rb * rows);
+    for (auto& b : data) b = uint8_t(rng());
+    for (size_t o = 0; o < data.size(); o += bb) {  // a finite fp16 d per block, 2^-10 .. 2^-3
+      const _Float16 d = _Float16(std::ldexp(1.0 + double(rng() % 1024) / 1024, -int(3 + rng() % 8)));
+      memcpy(&data[o], &d, 2);
+    }
+    const std::string path = dir + "/ple_" + name + ".gguf";
+    write_gguf_table(path, "per_layer_token_embd.weight", type, dim, rows, data);
+    files.push_back(path);
+    NgramTable t;
+    t.open_gguf(path, "per_layer_token_embd.weight", dim);
+    CHECK(t.rows() == rows && t.dim() == dim, "GGUF %s table: %lld x %d", name, (long long)t.rows(), t.dim());
+    CHECK(t.describe().find(name) != std::string::npos, "GGUF %s table: described as %s", name, t.describe().c_str());
+    std::vector<float> got(dim), want(dim), all(size_t(rows) * dim);
+    int bad = 0;
+    for (int64_t r = 0; r < rows; ++r) {
+      t.row(r, got.data());
+      gguf::dequantize(type, &data[size_t(r) * rb], want.data(), dim);
+      bad += memcmp(got.data(), want.data(), dim * 4) != 0;
+    }
+    CHECK(!bad, "GGUF %s table: %d of %lld rows differ from gguf::dequantize", name, bad, (long long)rows);
+    t.gather(ids.data(), int(rows), 1, all.data());
+    for (int64_t i = 0; i < rows; ++i) {
+      gguf::dequantize(type, &data[size_t(ids[size_t(i)]) * rb], want.data(), dim);
+      bad += memcmp(&all[size_t(i) * dim], want.data(), dim * 4) != 0;
+    }
+    CHECK(!bad, "GGUF %s table: %d gathered rows differ", name, bad);
+  }
+  // the affine table: 4-bit codes, bf16 scale and bias per 32, two shards of one safetensors file
+  const int64_t sr[2] = {20, 17};
+  std::string hdr = "{";
+  std::vector<uint8_t> body;
+  std::vector<std::vector<uint8_t>> parts;
+  for (int k = 0; k < 2; ++k)
+    for (const auto& [suf, width] : {std::pair<const char*, int>{"weight", 80}, {"scales", 10}, {"biases", 10}}) {
+      std::vector<uint8_t> v(size_t(sr[k]) * width);
+      for (size_t i = 0; i < v.size(); ++i) v[i] = uint8_t(rng());
+      if (suf[0] != 'w')
+        for (size_t i = 0; i < v.size(); i += 2) {  // finite bf16 values, |x| in 2^-8 .. 2^-1
+          const uint16_t b = uint16_t(0x3B80 + rng() % 0x380) | uint16_t(rng() % 2 << 15);
+          memcpy(&v[i], &b, 2);
+        }
+      char e[256];
+      snprintf(e, sizeof e, "%s\"s.%d.%s\":{\"dtype\":\"%s\",\"shape\":[%lld,%d],\"data_offsets\":[%zu,%zu]}",
+               hdr.size() > 1 ? "," : "", k, suf, suf[0] == 'w' ? "U32" : "BF16", (long long)sr[k],
+               suf[0] == 'w' ? width / 4 : width / 2, body.size(), body.size() + v.size());
+      hdr += e;
+      body.insert(body.end(), v.begin(), v.end());
+      parts.push_back(v);
+    }
+  hdr += "}";
+  hdr.resize((hdr.size() + 7) / 8 * 8, ' ');
+  const std::string path = dir + "/ple.safetensors";
+  {
+    FILE* f = fopen(path.c_str(), "wb");
+    const uint64_t n = hdr.size();
+    fwrite(&n, 8, 1, f);
+    fwrite(hdr.data(), 1, hdr.size(), f);
+    fwrite(body.data(), 1, body.size(), f);
+    fclose(f);
+  }
+  files.push_back(path);
+  NgramTable t;
+  t.open({{path, "s.0.weight", "s.0.scales", "s.0.biases"}, {path, "s.1.weight", "s.1.scales", "s.1.biases"}},
+         NgramTable::Fmt::Affine, dim);
+  CHECK(t.rows() == sr[0] + sr[1] && t.file_bytes() == 8 + hdr.size() + body.size(),
+        "affine table: %lld rows, %zu bytes mapped (the file once)", (long long)t.rows(), t.file_bytes());
+  int bad = 0;
+  std::vector<float> got(dim);
+  for (int64_t r = 0; r < t.rows(); ++r) {
+    const int k = r < sr[0] ? 0 : 1;
+    const size_t j = size_t(r - (k ? sr[0] : 0));
+    const uint8_t* w = &parts[size_t(3 * k)][j * 80];
+    const uint16_t* sc = reinterpret_cast<const uint16_t*>(&parts[size_t(3 * k + 1)][j * 10]);
+    const uint16_t* bi = reinterpret_cast<const uint16_t*>(&parts[size_t(3 * k + 2)][j * 10]);
+    t.row(r, got.data());
+    for (int i = 0; i < dim; ++i) {
+      const int c = (w[i / 2] >> (4 * (i % 2))) & 15;
+      bad += got[size_t(i)] != bf16_to_f32(sc[i / 32]) * float(c) + bf16_to_f32(bi[i / 32]);
+    }
+  }
+  CHECK(!bad, "affine table: %d values differ from MLX's affine map", bad);
+  printf("n-gram table: GGUF IQ4_NL and Q8_0 rows, affine shards: %s\n", g_fail > f0 ? "FAILED" : "ok");
+}
+
 int main(int argc, char** argv) {
   std::string keep;
   for (int i = 1; i < argc; ++i)
@@ -1099,7 +1219,7 @@ int main(int argc, char** argv) {
   } else {
     mkdir(dir.c_str(), 0755);
   }
-  const Pack p = make_pack(dir, 6, 64);
+  Pack p = make_pack(dir, 6, 64);
   case_decode(p, false);
   case_decode(p, true);
   case_verify_prefill(p);
@@ -1113,6 +1233,7 @@ int main(int argc, char** argv) {
   case_group_shape();
   case_group_plan();
   case_group_pin();
+  case_ngram_table(dir, p.files);
   if (keep.empty()) {
     for (const std::string& f : p.files) unlink(f.c_str());
     rmdir(dir.c_str());

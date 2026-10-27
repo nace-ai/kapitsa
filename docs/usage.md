@@ -131,7 +131,8 @@ variant's MTP head and draft model; other repos use the MTP head they contain, i
 
 A folder needs `config.json`, the `*.safetensors` weights and `tokenizer.json`, and may hold an MTP head in
 `mtp.safetensors`. The official Hugging Face checkpoints of the dense models run as well. A Qwen3.8-Flash-Next
-(`qwen4_exp`) folder also needs its `ple.safetensors` table.
+(`qwen4_exp`) folder also needs its n-gram table: `ple.safetensors`, or a GGUF's in `ple.gguf` (read when present; see
+the Q2_0 folders below).
 
 NVIDIA's dense Nemotron-H checkpoints run from a folder too (`kapitsa serve --model DIR`): Mamba-2, attention and dense
 MLP layers, no experts, as [Nemotron Nano 4B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16) (BF16) and
@@ -815,8 +816,10 @@ part with an 8K cache (74.7 GB) does not fit, so it is refused before the downlo
 run `kapitsa doctor`.
 
 A Flash-Next folder whose routed experts are in Q2_0 (2.25 bits a weight; `tools/qwen4_exp_q20.py` builds one from
-ISTA-DASLab's GSQ-RCO GGUF and Nace AI's 4-bit pack: 38.3 GB of model files, plus the 32 GB n-gram table) does not
-need them all in memory: it keeps as many as the budget leaves after its other weights, its buffers, the slots'
+ISTA-DASLab's GSQ-RCO GGUF and Nace AI's 4-bit pack: 38.3 GB of model files, plus the 32 GB n-gram table; it refuses
+experts of any other GGUF type, such as the IQ2_S, IQ2_XXS and IQ1_M ones among the Q2_0 experts of ISTA-DASLab's
+IQ2_XS packing, which this path does not read) does not need them all in memory: it keeps as many as the budget
+leaves after its other weights, its buffers, the slots'
 state and one conversation's KV cache of up to 32K tokens, with the process's GPU memory within 40% of the RAM before the
 M5 (no such cap on it) and no more than the system's available memory less max(4 GB, RAM/12), and reads the others from
 the SSD when a token routes them (`src/model/expert_store.h`). Why 40% before the M5: such a store waits on
@@ -849,6 +852,15 @@ prefill chunk reads nearly every expert (~40 GB), so 4096-row chunks halve the r
 or more reads every expert of each layer: an 85-token one waits 6-8 s for its first token. The n-gram table of those
 runs held only the rows of their prompts and (mostly) their answers; a full table adds reads of its rows for other
 text.
+
+The GGUF carries the n-gram table too: its second part is that one tensor (`per_layer_token_embd.weight`, 320,001,536
+rows of 160 values in IQ4_NL, 28.8 GB, the same file in all four of ISTA-DASLab's packings). `--table gguf` takes it
+instead of the pack's `ple.safetensors`, as `ple.gguf` (an APFS clone or hard link of a local GGUF's part, else a
+download), and Kapitsa reads it in place; from a local GGUF the pack then supplies 5.9 GB (its other tensors and MTP
+head) instead of 37.9. It is another 4-bit quantization of the same rows, not the pack's: 233 rows of each correlate
+0.992-0.994 and differ by 10.6% (median), and against the bf16 checkpoint 120 random rows err by 7.6% (median relative
+error) where the pack's err by 7.3%. So a folder built with it does not produce the pack table's tokens; its speed and
+outputs were not measured on a GPU.
 
 Super-VL's weights alone are 70.1 GB, so it needs a 96 GB+ Mac: on 128 GB (a 110.8 GB budget) it runs with its draft
 model (3.5 GB at two slots) and room for millions of tokens of KV cache; on 96 GB it starts without the draft model

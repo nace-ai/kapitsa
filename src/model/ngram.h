@@ -30,7 +30,7 @@ struct NgramHash {
 // read through mmap. Rows decode to fp32.
 class NgramTable {
  public:
-  enum class Fmt { BF16, F8E4M3, Affine };
+  enum class Fmt { BF16, F8E4M3, Affine, Gguf };
   struct Part {
     std::string file;         // safetensors file
     std::string w, s, b;      // tensor names: codes (or bf16 / fp8 values), scales, biases (Affine)
@@ -39,6 +39,9 @@ class NgramTable {
   // fmt Affine: MLX affine `bits`-bit codes with bf16 scale and bias per group of `gs` (0: from the shapes);
   // F8E4M3: one fp32 scale for the whole table (`scale`); the parts' rows concatenate to the table
   void open(const std::vector<Part>& parts, Fmt fmt, int dim, int bits = 0, int gs = 0, float scale = 1.0f);
+  // fmt Gguf: one tensor of a GGUF file, ne = {dim, rows}, in a block type gguf::dequantize reads whose blocks tile a
+  // row (ISTA-DASLab's Flash-Next GGUFs: per_layer_token_embd.weight in IQ4_NL), read in place as llama.cpp decodes it
+  void open_gguf(const std::string& file, const std::string& name, int dim);
   // whether a safetensors file's header lists the tensor
   static bool has_tensor(const std::string& file, const std::string& name);
   bool ok() const { return !parts_.empty(); }
@@ -61,10 +64,12 @@ class NgramTable {
     int64_t rows = 0, first = 0;
   };
   const Map& part_of(int64_t r) const;
+  std::pair<const uint8_t*, size_t> map_file(const std::string& path);  // a read-only shared mapping of the file
   std::vector<Map> parts_;
   std::vector<std::pair<void*, size_t>> maps_;
   Fmt fmt_ = Fmt::BF16;
   int dim_ = 0, bits_ = 0, gs_ = 0;
+  uint32_t gtype_ = 0;  // Gguf: the ggml type
   float scale_ = 1.0f;
   int64_t rows_ = 0;
   size_t mapped_ = 0;

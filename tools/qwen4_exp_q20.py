@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """A Qwen3.8-Flash-Next (qwen4_exp) pack with Q2_0 routed experts for Kapitsa (src/model/moe_q20.h): the experts of
-ISTA-DASLab's GSQ-RCO Q2_0 GGUF, every other tensor, the MTP head and the PLE n-gram table from Nace AI's MLX 4-bit pack.
-Either source can be a local file / folder or Hugging Face (HTTP range reads): only the GGUF's expert tensors and the
-pack's non-expert tensors are fetched, straight into the output files.
+ISTA-DASLab's GSQ-RCO Q2_0 GGUF, every other tensor, the MTP head and the PLE n-gram table from Nace AI's MLX 4-bit pack
+(or the table from the GGUF: --table gguf). Either source can be a local file / folder or Hugging Face (HTTP range
+reads): only the GGUF's expert tensors and the pack's non-expert tensors are fetched, straight into the output files.
 
   qwen4_exp_q20.py convert --out DIR [--pack DIR | --pack-repo REPO@REV] [--gguf FILE | --gguf-repo REPO@REV:PATH]
-                           [--table full|link|sparse] [--rows-ids @f ...] [--stream] [--verify N] [--conns 16]
+                           [--table full|link|sparse|gguf] [--rows-ids @f ...] [--stream] [--verify N] [--conns 16]
   qwen4_exp_q20.py check DIR    the output's experts against its GGUF again (bytes) and its config
   qwen4_exp_q20.py rows DIR @f ... [--stream]   adds the token sequences' rows to DIR's sparse table (e.g. a
                                      generated continuation, so a speed run reads the rows the model would)
@@ -22,13 +22,18 @@ Everything else keeps the source pack's files and names; model-000NN files hold 
 quantizations of the same weights, ~0 for another expert, a gate/up swap or a transposition).
 --table: full (ple.safetensors copied: 32 GB), link (an APFS clone or hard link of a local pack's), sparse (the file at
 full size, holes but for the rows of the --rows-ids token sequences: teacher-forced evaluation of those sequences is
-exact, other rows read as zero).
+exact, other rows read as zero), gguf (no ple.safetensors: the GGUF's own table, per_layer_token_embd.weight, the
+whole second part of ISTA-DASLab's files (28.8 GB, IQ4_NL, the same file in all four of their packings), as ple.gguf:
+an APFS clone or hard link of a local GGUF's part, else downloaded; Kapitsa reads it in place). The gguf table is
+another 4-bit quantization of the same rows (--verify N: 8N of its rows must correlate > 0.6 with the pack's; ~0.99
+for the published files), so its outputs are not the pack table's.
 Resumable: finished files are listed in DIR/.q20.done.json.
 """
 import argparse
 import bisect
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -45,6 +50,12 @@ PACK_REPO = "nace-ai/Qwen3.8-Flash-Next-MLX-4bit@5d423f9f563c1f1b7ca7945b268e65c
 GGUF_REPO = ("ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF@ed59f92082b1e93c0e96d60a8b11aab089b52f09:"
              "Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf")
 Q2_0, Q2_0_BYTES = 42, 18
+GGML = {0: "F32", 1: "F16", 2: "Q4_0", 3: "Q4_1", 8: "Q8_0", 10: "Q2_K", 11: "Q3_K", 12: "Q4_K", 13: "Q5_K",
+        14: "Q6_K", 16: "IQ2_XXS", 17: "IQ2_XS", 18: "IQ3_XXS", 19: "IQ1_S", 20: "IQ4_NL", 21: "IQ3_S", 22: "IQ2_S",
+        23: "IQ4_XS", 29: "IQ1_M", 30: "BF16", 39: "MXFP4", 42: "Q2_0"}
+IQ4_NL = 20
+IQ4_LEVELS = np.array([-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113], np.float32)
+GGUF_TABLE = "per_layer_token_embd.weight"
 EXPERT = "language_model.model.layers.{}.mlp.switch_mlp.{}_proj"
 GGUF_EXPERT = {"gate": "blk.{}.ffn_gate_exps.weight", "up": "blk.{}.ffn_up_exps.weight",
                "down": "blk.{}.ffn_down_exps.weight"}
@@ -52,6 +63,7 @@ SMALL = ["config.json", "tokenizer.json", "tokenizer_config.json", "vocab.json",
          "generation_config.json", "preprocessor_config.json", "video_preprocessor_config.json", "ple_manifest.json",
          "LICENSE"]
 TABLE = "ple.safetensors"
+GTABLE = "ple.gguf"  # --table gguf: the GGUF part holding GGUF_TABLE (src/model/qwen4_exp.cpp reads it in place)
 log = P.log
 
 
@@ -125,13 +137,24 @@ class Gguf:
         align = int(self.kv.get("general.alignment", 32))
         self.data0 = (r.p + align - 1) // align * align
 
+    def table(self):
+        """(rows, dim, ggml type, absolute offset, row bytes) of the n-gram table, else None; IQ4_NL only (the one
+        type table_rows decodes and the published files carry; Kapitsa itself reads any block type that tiles a row)."""
+        if GGUF_TABLE not in self.tensors:
+            return None
+        (dim, rows), typ, off = self.tensors[GGUF_TABLE]
+        if typ != IQ4_NL or dim % 32:
+            raise ValueError(f"{self.name}: {GGUF_TABLE} is {GGML.get(typ, typ)} in rows of {dim}, not IQ4_NL")
+        return rows, dim, typ, self.data0 + off, dim // 32 * 18
+
     def expert(self, name):
         """(E, N, K, absolute offset, bytes) of a Q2_0 expert tensor."""
         if name not in self.tensors:
             raise KeyError(f"{self.name}: no tensor {name}")
         (K, N, E), typ, off = self.tensors[name]
         if typ != Q2_0:
-            raise ValueError(f"{name}: ggml type {typ}, not Q2_0 ({Q2_0})")
+            raise ValueError(f"{name}: ggml type {typ} ({GGML.get(typ, '?')}), not Q2_0 ({Q2_0}): Kapitsa's Flash-Next "
+                             "routed experts are Q2_0 or the pack's MLX affine (no IQ types)")
         if K % 64:
             raise ValueError(f"{name}: rows of {K} are not whole 64-blocks")
         return E, N, K, self.data0 + off, E * N * (K // 64) * Q2_0_BYTES
@@ -153,6 +176,15 @@ def q20_dequant_blocks(raw, E, N, K):
     q = b[..., 2:]
     codes = np.stack([(q >> (2 * j)) & 3 for j in range(4)], axis=-1).reshape(E, N, K // 64, 64)
     return ((codes.astype(np.float32) - 1.0) * d).reshape(E, N, K)
+
+
+def table_rows(raw):
+    """IQ4_NL bytes of whole rows -> float32 values (ggml's dequantize_row_iq4_nl: per 32 values an fp16 d and 16 bytes,
+    value j = d * level[byte j & 15], value j + 16 = d * level[byte j >> 4])."""
+    b = np.frombuffer(raw, np.uint8).reshape(-1, 18)
+    d = b[:, :2].copy().view("<f2").astype(np.float32)
+    q = b[:, 2:]
+    return (np.concatenate([IQ4_LEVELS[q & 15], IQ4_LEVELS[q >> 4]], axis=1) * d).reshape(-1)
 
 
 def q20_dequant_planes(codes, d):
@@ -239,15 +271,36 @@ class GgufSource:
         self.pool = pool
         if a.gguf:
             path = a.gguf
-            fd = os.open(path, os.O_RDONLY)
-            self.read = lambda x, y: os.pread(fd, y - x, x)
-            self.where = os.path.abspath(path)
+            self.local, self.path = True, os.path.abspath(path)
+            self.read = self._reader(path)
+            self.where = self.path
         else:
             repo, rev, path = parse_repo(a.gguf_repo, GGUF_REPO)
             r = P.Remote(repo, rev)
-            self.read = lambda x, y: r.read(path, x, y)
+            self.local, self.path, self.remote = False, path, r
+            self.read = self._reader(path)
             self.where = f"{repo}@{r.rev}:{path}"
         self.g = Gguf(self.read, self.where)
+
+    def _reader(self, path):
+        if self.local:
+            fd = os.open(path, os.O_RDONLY)
+            return lambda x, y: os.pread(fd, y - x, x)
+        return lambda x, y: self.remote.read(path, x, y)
+
+    def part_where(self, path):
+        return path if self.local else f"{self.remote.repo}@{self.remote.rev}:{path}"
+
+    def table_part(self):
+        """(path, Gguf, table) of the part of a split GGUF (name-0000k-of-0000n.gguf) that holds the n-gram table."""
+        m = re.match(r"(.*)-(\d{5})-of-(\d{5})\.gguf$", self.path)
+        paths = [f"{m.group(1)}-{k:05d}-of-{m.group(3)}.gguf" for k in range(1, int(m.group(3)) + 1)] if m else [self.path]
+        for path in paths:
+            g = self.g if path == self.path else Gguf(self._reader(path), self.part_where(path))
+            t = g.table()
+            if t:
+                return path, g, t
+        raise ValueError(f"{self.where}: no part holds {GGUF_TABLE}")
 
     def fetch(self, off, nbytes, piece=32 << 20):
         buf = bytearray(nbytes)
@@ -292,6 +345,37 @@ def verify_rows(pack, layer, mat, codes, d, n, rng):
         q2 = q20_dequant_planes(codes[e, r][None], d[e, r][None])[0]
         c = float(np.corrcoef(ref, q2)[0, 1])
         worst = min(worst, c)
+    return worst
+
+
+def verify_table(pack, read, t, n, rng):
+    """The worst correlation of n random rows (and the first and last) of the GGUF's table with the pack's."""
+    rows, dim, _, off, rb = t
+    h, first, shards = pack.index, 0, []
+    names = sorted({k.rsplit(".", 1)[0] for k in h if h[k][0] == TABLE}, key=lambda s: int(s.rsplit(".", 1)[1]))
+    for s in names:
+        shards.append((first, s))
+        first += h[s + ".weight"][4][0]
+    if first != rows:
+        raise ValueError(f"the GGUF's table has {rows} rows, the pack's {first}")
+    w0, s0 = h[names[0] + ".weight"][4], h[names[0] + ".scales"][4]
+    bits, gs = w0[1] * 32 // dim, dim // s0[1]
+    if bits * dim != w0[1] * 32 or gs * s0[1] != dim:
+        raise ValueError(f"the GGUF's table has rows of {dim} values, the pack's {w0[1]} words and {s0[1]} groups")
+    worst = 1.0
+    for r in [0, rows - 1] + [int(x) for x in rng.integers(0, rows, n)]:
+        k = bisect.bisect_right([f for f, _ in shards], r) - 1
+        j = r - shards[k][0]
+        parts = []
+        for suf, width in ((".weight", w0[1] * 4), (".scales", s0[1] * 2), (".biases", s0[1] * 2)):
+            f, o = h[shards[k][1] + suf][:2]
+            parts.append(pack.rows(f, [(o + j * width, o + (j + 1) * width)])[0])
+        ref = P.dequantize_np(np.frombuffer(parts[0], "<u4")[None], np.frombuffer(parts[1], "<u2")[None],
+                              np.frombuffer(parts[2], "<u2")[None], bits, gs)[0]
+        got = table_rows(read(off + r * rb, off + (r + 1) * rb))
+        if ref.std() == 0 and got.std() == 0:
+            continue
+        worst = min(worst, float(np.corrcoef(ref, got)[0, 1]))
     return worst
 
 
@@ -454,9 +538,46 @@ def cmd_convert(a):
         pack.copy_file(f, os.path.join(a.out, f))
         finish(f)
         log(f"{f}: copied")
-    # the n-gram table
+    # the n-gram table (one of TABLE and GTABLE: Kapitsa reads GTABLE when the folder has it)
     tpath = os.path.join(a.out, TABLE)
-    if TABLE in files and TABLE not in done:
+    table_src = None
+    other = GTABLE if a.table != "gguf" else TABLE
+    if os.path.exists(os.path.join(a.out, other)):
+        os.remove(os.path.join(a.out, other))
+        done.discard(other)
+        log(f"{other}: removed (an earlier run's table)")
+    if a.table == "gguf":
+        path, g, t = gg.table_part()
+        table_src = gg.part_where(path)
+        if GTABLE not in done:
+            if a.verify:
+                c = verify_table(pack, g.read, t, 8 * a.verify, rng)
+                if c < 0.6:
+                    raise ValueError(f"{table_src}: its table's rows correlate {c:.3f} with the pack's")
+                worst["table"] = c
+            gpath = os.path.join(a.out, GTABLE)
+            if gg.local:
+                if subprocess.call(["cp", "-c", path, gpath], stderr=subprocess.DEVNULL) != 0:
+                    try:
+                        os.link(path, gpath)
+                    except OSError:
+                        shutil.copyfile(path, gpath)
+                log(f"{GTABLE}: {table_src} cloned ({t[0]} rows of {t[1]}, IQ4_NL)" +
+                    (f"; worst row correlation with the pack's {worst['table']:.3f}" if a.verify else ""))
+            else:
+                if len(g.tensors) != 1:
+                    raise ValueError(f"{table_src} holds more than the table: download it and pass --gguf")
+                size = t[3] + t[0] * t[4]
+                fd = os.open(gpath, os.O_RDWR | os.O_CREAT, 0o644)
+                try:
+                    os.ftruncate(fd, size)
+                    piece = 64 << 20
+                    list(pool.map(lambda x: os.pwrite(fd, g.read(x, min(size, x + piece)), x), range(0, size, piece)))
+                finally:
+                    os.close(fd)
+                log(f"{GTABLE}: {table_src} downloaded ({size / 1e9:.1f} GB)")
+            finish(GTABLE)
+    elif TABLE in files and TABLE not in done:
         if a.table == "sparse":
             rows = sparse_rows(a.rows_ids or [])
             size, nrows, _ = write_sparse_table(pack, tpath, rows, stream=a.stream)
@@ -475,7 +596,7 @@ def cmd_convert(a):
 
     # config, index, small files, conversion record
     for f in SMALL:
-        b = pack.small(f)
+        b = pack.small(f) if not (a.table == "gguf" and f == "ple_manifest.json") else None  # (it maps TABLE)
         if b is None:
             continue
         if f == "config.json":
@@ -501,7 +622,7 @@ def cmd_convert(a):
               open(os.path.join(a.out, "model.safetensors.index.json"), "w"), indent=2)
     rec = {"tool": "tools/qwen4_exp_q20.py", "date": time.strftime("%Y-%m-%d %H:%M:%S"), "pack": pack.where,
            "gguf": gg.where, "experts": "Q2_0 (ggml 42): .weight U32 codes [E, N, K/16], .scales F16 d [E, N, K/64]",
-           "table": a.table, "rows_ids": a.rows_ids, "verify_rows": a.verify,
+           "table": a.table, "table_gguf": table_src, "rows_ids": a.rows_ids, "verify_rows": a.verify,
            "worst_row_correlation": worst, "files": {f: os.path.getsize(os.path.join(a.out, f))
                                                      for f in sorted(os.listdir(a.out)) if not f.startswith(".")}}
     json.dump(rec, open(os.path.join(a.out, "conversion_q20.json"), "w"), indent=2)
@@ -513,17 +634,31 @@ def cmd_check(a):
     rec = json.load(open(os.path.join(a.dir, "conversion_q20.json")))
     cfg = json.load(open(os.path.join(a.dir, "config.json")))
     out = P.Local(a.dir)
-    src = rec["gguf"]
-    if os.path.exists(src):
-        fd = os.open(src, os.O_RDONLY)
-        read = lambda x, y: os.pread(fd, y - x, x)  # noqa: E731
-    else:
+
+    def reader(src):  # a local file or REPO@REV:PATH
+        if os.path.exists(src):
+            fd = os.open(src, os.O_RDONLY)
+            return lambda x, y: os.pread(fd, y - x, x)
         repo, rev, path = parse_repo(src, None)
         r = P.Remote(repo, rev)
-        read = lambda x, y: r.read(path, x, y)  # noqa: E731
+        return lambda x, y: r.read(path, x, y)
+    src = rec["gguf"]
+    read = reader(src)
     g = Gguf(read, src)
     rng = np.random.default_rng(2)
     bad = 0
+    if rec.get("table") == "gguf":  # ple.gguf: its header and some rows against the part it came from
+        tread = reader(rec["table_gguf"])
+        rows, _, _, off, rb = Gguf(tread, rec["table_gguf"]).table()
+        fd = os.open(os.path.join(a.dir, GTABLE), os.O_RDONLY)
+        try:
+            for x, y in [(0, off)] + [(off + int(r) * rb, off + (int(r) + 1) * rb)
+                                      for r in [0, rows - 1] + list(rng.integers(0, rows, 4))]:
+                if os.pread(fd, y - x, x) != tread(x, y):
+                    bad += 1
+                    log(f"{GTABLE}: bytes [{x}, {y}) differ from {rec['table_gguf']}")
+        finally:
+            os.close(fd)
     layers = sorted({expert_of(k)[0] for k in out.index if expert_of(k)})
     for L in layers:
         for mat, gname in GGUF_EXPERT.items():
@@ -549,6 +684,8 @@ def cmd_check(a):
 def cmd_rows(a):
     """More token sequences' rows into the output's sparse table, from the pack named in its conversion record."""
     rec = json.load(open(os.path.join(a.dir, "conversion_q20.json")))
+    if rec.get("table") == "gguf":
+        raise SystemExit(f"{a.dir}: its table is the GGUF's whole one ({GTABLE}): no rows to add")
     a.pack, a.pack_repo = (rec["pack"], None) if os.path.isdir(rec["pack"]) else (None, rec["pack"])
     with ThreadPoolExecutor(a.conns) as pool:
         pack = PackSource(a, pool)
@@ -567,7 +704,7 @@ def main():
     c.add_argument("--pack-repo", default=PACK_REPO)
     c.add_argument("--gguf", help="local Q2_0 GGUF file (default: --gguf-repo)")
     c.add_argument("--gguf-repo", default=GGUF_REPO)
-    c.add_argument("--table", choices=["full", "link", "sparse"], default="full")
+    c.add_argument("--table", choices=["full", "link", "sparse", "gguf"], default="full")
     c.add_argument("--rows-ids", nargs="*", help="token id files (@path) whose table rows --table sparse writes")
     c.add_argument("--stream", action="store_true", help="--table sparse: rows cut from whole reads of the table's "
                    "tensors (16 MB pieces) instead of three small reads a row: for many rows from a remote pack")

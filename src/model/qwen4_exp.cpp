@@ -368,7 +368,8 @@ void Qwen4Exp::load(const std::string& dir) {
   check_shapes();
   check_formats();
 
-  // the n-gram table: ple.safetensors' row shards, mapped (never in GPU memory); the head's
+  // the n-gram table: ple.safetensors' row shards, or a GGUF's own table (ple.gguf: tools/qwen4_exp_q20.py --table
+  // gguf), mapped (never in GPU memory); the head's
   if (head && c4_.ple_layer >= 0) {
     hash_ = NgramHash::make(cfg_.vocab, c4_.seed, 0, c4_.ngram_base, c4_.per_ngram, c4_.ngram, c4_.eos);
     const std::string tp = prefix_ + "model.layers." + std::to_string(c4_.ple_layer) + ".ple.ple_embedding.";
@@ -380,17 +381,21 @@ void Qwen4Exp::load(const std::string& dir) {
       for (int i = 0; i < std::min<int>(hash_.heads, int(hs->numel())); ++i)
         if (hs->buf.as<int64_t>()[i] != hash_.mod[size_t(i)]) fatal("qwen4_exp: the n-gram head sizes differ from the config's");
     std::vector<NgramTable::Part> parts;
-    const std::string file = dir + "/ple.safetensors";
-    if (!std::ifstream(file)) fatal("%s: missing (the n-gram table)", file.c_str());
-    for (int k = 0;; ++k) {
-      const std::string n = tp + "ngram_embedding.shards." + std::to_string(k);
-      // the shard count from the header: the parts are listed until one is missing
-      NgramTable::Part pt{file, n + ".weight", n + ".scales", n + ".biases"};
-      if (!NgramTable::has_tensor(file, pt.w)) break;
-      parts.push_back(pt);
+    const std::string file = dir + "/ple.safetensors", gfile = dir + "/ple.gguf";
+    if (std::ifstream(gfile)) {
+      table_.open_gguf(gfile, "per_layer_token_embd.weight", cfg_.hidden / hash_.heads);
+    } else {
+      if (!std::ifstream(file)) fatal("%s: missing (the n-gram table)", file.c_str());
+      for (int k = 0;; ++k) {
+        const std::string n = tp + "ngram_embedding.shards." + std::to_string(k);
+        // the shard count from the header: the parts are listed until one is missing
+        NgramTable::Part pt{file, n + ".weight", n + ".scales", n + ".biases"};
+        if (!NgramTable::has_tensor(file, pt.w)) break;
+        parts.push_back(pt);
+      }
+      if (parts.empty()) fatal("%s: no n-gram table shards", file.c_str());
+      table_.open(parts, NgramTable::Fmt::Affine, cfg_.hidden / hash_.heads);
     }
-    if (parts.empty()) fatal("%s: no n-gram table shards", file.c_str());
-    table_.open(parts, NgramTable::Fmt::Affine, cfg_.hidden / hash_.heads);
     if (table_.rows() < hash_.rows) fatal("qwen4_exp: the n-gram table has %lld rows, the hash needs %lld",
                                           (long long)table_.rows(), (long long)hash_.rows);
     if (table_.dim() * hash_.heads != cfg_.hidden) fatal("qwen4_exp: n-gram rows of %d values", table_.dim());
