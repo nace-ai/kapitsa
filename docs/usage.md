@@ -79,9 +79,9 @@ bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB r
 Flash-Next's `64gb` is [Sushi](https://github.com/beamivalice/sushi)'s 2-bit pack
 ([beamster/Qwen3.8-Flash-Next-Sushi-2bpw](https://huggingface.co/beamster/Qwen3.8-Flash-Next-Sushi-2bpw)): its routed
 experts and the MTP head's are EXL3 trellises at 2 bits a weight (turboderp's format with Sushi's MCG codebook and
-15-bit codewords, decoded as they are read: `src/model/moe_exl3.h`), the rest 8-bit affine (36.7 GB of weights in
-memory with the MTP head; 37.6 GB of files with the vision tower, which loads with the first image), its 32 GB n-gram
-table 4-bit in `ngram_table.bin`. On an M5 Max 128 GB (macOS 26.4) it prefills 4K
+15-bit codewords, decoded as they are read: `src/model/moe_exl3.h`), the rest of the text trunk 8-bit affine (36.7 GB of
+weights in memory with the MTP head; 37.6 GB of files with the vision tower, which loads with the first image), its 32 GB
+n-gram table 4-bit in `ngram_table.bin`. On an M5 Max 128 GB (macOS 26.4) it prefills 4K
 tokens at 728 tok/s and decodes 52.6 tok/s after them (plain), and 78.6 tok/s with the MTP head at depth 3 after a short
 prompt (2.83 tokens a cycle), where the `4bit` does 1,760, 81.6 and 104.7: the `64gb` is for a Mac the `4bit` does not
 fit. Kapitsa reads Sushi's EXL3 packs
@@ -138,13 +138,15 @@ Any Hugging Face repo of a Qwen3.5-family model (Qwen3.5, Qwen3.6, Qwen3.8) in M
 4, 5, 6 or 8-bit with groups of 64 (4-bit also 32, 8-bit also 128), mixed recipes included, except ones whose dense MLP gives
 `gate_proj` and `up_proj` different formats (as `mlx-community/Qwen3.8-27B-OptiQ-4bit`): those are refused when they
 load. Kapitsa reads the repo's `config.json` before any weights, then downloads its top-level files except other formats
-(`.gguf`, `.bin`, images and the like). A catalog variant's repo (`mlx-community/Qwen3.6-35B-A3B-6bit`) comes with that
-variant's MTP head and draft model; other repos use the MTP head they contain, if any.
+(`.gguf`, `.bin`, images and the like); a Sushi pack's `ngram_table.bin` is kept even though it ends in `.bin`. A
+catalog variant's repo (`mlx-community/Qwen3.6-35B-A3B-6bit`) comes with that variant's MTP head and draft model; other
+repos use the MTP head they contain, if any.
 
 A folder needs `config.json`, the `*.safetensors` weights and `tokenizer.json`, and may hold an MTP head in
 `mtp.safetensors`. The official Hugging Face checkpoints of the dense models run as well. A Qwen3.8-Flash-Next
 (`qwen4_exp`) folder also needs its n-gram table: `ple.safetensors`, or a GGUF's in `ple.gguf` (read when present; see
-the Q2_0 folders below).
+the Q2_0 folders below), or, for Sushi's packs, the table as one affine or bf16 tensor in the folder's own
+`ngram_table.bin` (read when `ple.safetensors` is absent; `ple.gguf` wins over both: `src/model/qwen4_exp.cpp`).
 
 NVIDIA's dense Nemotron-H checkpoints run from a folder too (`kapitsa serve --model DIR`): Mamba-2, attention and dense
 MLP layers, no experts, as [Nemotron Nano 4B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16) (BF16) and
