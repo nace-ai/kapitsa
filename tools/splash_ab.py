@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Kapitsa's Splash backend against plain Splash 1.4.0, one engine at a time (never side by side), for the T=0 identity
 check and the TTFT / decode tok/s overhead of the bridge. It takes the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) itself and holds it for the run, unless
-NI_LOCK_HELD or NACE_GPU_LOCK_HELD says the caller does (lockf -k ... works as before); --wait-only stays outside it. It launches, measures and reaps each server itself, and refuses to start when a Splash or Kapitsa model process is up.
+NI_LOCK_HELD or NACE_GPU_LOCK_HELD says the caller does (a `lockf -k ...` wrapper holds it on its own file description, so under one this script's flock would wait for ever: export NI_LOCK_HELD=1 too, or run it bare; it gives up after --lock-timeout-s); --wait-only stays outside it. It launches, measures and reaps each server itself, and refuses to start when a Splash or Kapitsa model process is up.
 
   python3 tools/splash_ab.py --legs K,S,K,S --out DIR [--reps 3] [--smoke]
 
@@ -251,6 +251,7 @@ def main():
     ap.add_argument("--tap", action="store_true", help="record prompt and output token ids through tools/splash_tap.py")
     ap.add_argument("--wait-only", action="store_true", help="only the wait (run it before taking the GPU lock)")
     ap.add_argument("--wait-cap-s", type=float, default=1200)
+    ap.add_argument("--lock-timeout-s", type=int, default=600, help="how long to wait for the GPU lock before exiting (like lockf -t)")
     a = ap.parse_args()
     global ENGINE_ARGS, IDENTITY, TAP
     TAP = a.tap
@@ -260,8 +261,17 @@ def main():
     if a.wait_only: return
     if not (os.environ.get("NI_LOCK_HELD") or os.environ.get("NACE_GPU_LOCK_HELD")):
         lock = open(os.environ.get("BENCH_GPU_LOCK", "/tmp/kapitsa-gpu.lock"), "a")  # held until this process ends
-        print("waiting for the GPU lock ...", flush=True)
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        print("waiting for the GPU lock (up to %d s) ..." % a.lock_timeout_s, flush=True)
+        end = time.time() + a.lock_timeout_s
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB); break
+            except OSError:
+                if time.time() >= end:
+                    raise SystemExit("could not take the GPU lock in %d s: another run holds it. If you started this under `lockf -k ...`"
+                                     " (the wrapper holds it, and this script's own flock then waits behind it for good), export NI_LOCK_HELD=1 "
+                                     "for the script, or drop the wrapper." % a.lock_timeout_s)
+                time.sleep(2)
     CORPUS = corpus()
     os.makedirs(a.out, exist_ok=True)
     busy = running_model_processes()
