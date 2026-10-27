@@ -16,7 +16,6 @@
 #include "api/chat_completions.h"
 #include "api/clients.h"
 #include "api/responses.h"
-#include "bench/bench.h"
 #include "engine/output_parser.h"
 #include "engine/disk_wait.h"
 #include "engine/disk_saved.h"
@@ -24,7 +23,6 @@
 #include "engine/history_gate.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
-#include "hub/hub.h"
 #include "model/kflash_wrap.h"
 #include "tokenizer/tokenizer.h"
 
@@ -35,8 +33,6 @@
 #include <sys/stat.h>
 
 #include <cstdio>
-#include <filesystem>
-#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
@@ -777,10 +773,10 @@ void clients() {
   check(has(p, "KAPITSA_PI_MODELS", R"([{"id":"qwen3.6-35b-a3b:6bit","context":131072}])") && p.notes.empty(),
         "pi: a server that does not switch models: its one model");
   AgentServer sw = ks;
-  sw.switch_to = {{"nanbeige4.3-33b:4bit", 65536}, {"qwen3.8-27b:4bit", 262144}};
+  sw.switch_to = {{"flint:4bit", 65536}, {"qwen3.8-27b:4bit", 262144}};
   AgentLaunch q = agent_launch("pi", "/bin/pi", sw, {}, {}, -1, "/k/agents");
   check(has(q, "KAPITSA_PI_MODELS", R"([{"id":"qwen3.6-35b-a3b:6bit","context":131072},)"
-                                    R"({"id":"nanbeige4.3-33b:4bit","context":65536},{"id":"qwen3.8-27b:4bit","context":262144}])") &&
+                                    R"({"id":"flint:4bit","context":65536},{"id":"qwen3.8-27b:4bit","context":262144}])") &&
             has(q, "KAPITSA_PI_MODEL", "qwen3.6-35b-a3b:6bit") && q.argv.back() == "qwen3.6-35b-a3b:6bit" &&
             q.notes.size() == 1 && q.notes[0].find("other downloaded models") != std::string::npos &&
             q.files[0].second.find("KAPITSA_PI_MODELS") != std::string::npos,
@@ -801,16 +797,7 @@ std::vector<ChatDelta> generate(const TmplModel& m, const std::string& text, boo
   OutputParser p(m.tok, m.tok.find("<think>"), m.tok.find("</think>"), m.tok.find("<tool_call>"), m.tok.find("</tool_call>"),
                  in_think, !tools.empty(), tools, true);
   std::vector<ChatDelta> out;
-  // the reply continues its prompt: with a Metaspace tokenizer (Nanbeige 4.3's, prepend_scheme "first") no U+2581 goes
-  // before its first word, as encode() puts before a text's; encoded after an added token, the prompt's last, and
-  // without it
-  const int after = m.tok.find("<|im_start|>");
-  if (m.tok.strips_leading_space() && after >= 0) {
-    *ids = m.tok.encode("<|im_start|>" + text);
-    ids->erase(ids->begin());
-  } else {
-    *ids = m.tok.encode(text);
-  }
+  *ids = m.tok.encode(text);
   for (int id : *ids) {
     ChatDelta d = p.push(id);
     if (!d.reasoning.empty() || !d.content.empty() || !d.tool_calls.empty()) out.push_back(d);
@@ -1654,18 +1641,16 @@ void template_checks(const TmplModel& m, const std::string& tag) {
                "this model can't read images]\nwhat?<|im_end|>") != std::string::npos &&
             p.find("<|vision_start|>") == std::string::npos,
         tag + "template: a later system message is a system turn in place; an image is a note", p.substr(p.size() > 400 ? p.size() - 400 : 0));
-  // with an image encoder: the image renders as the model's placeholder, without its data (a model whose vocabulary has
-  // no image tokens, Nanbeige4.3's, has no encoder: never rendered with images)
+  // with an image encoder: the image renders as the model's placeholder, without its data
   try {
     p = render_chat(*m.tmpl, r, true, true);
   } catch (const std::exception& e) {
     p = std::string("raised: ") + e.what();
   }
-  if (m.tok.find("<|vision_start|>") >= 0)
-    check(p.find("<|im_start|>user\nLook:<|vision_start|><|image_pad|><|vision_end|>what?<|im_end|>") != std::string::npos &&
-              p.find("base64") == std::string::npos,
-          tag + "template: with an image encoder, an image is the image placeholder (its data left out)",
-          p.substr(p.size() > 400 ? p.size() - 400 : 0));
+  check(p.find("<|im_start|>user\nLook:<|vision_start|><|image_pad|><|vision_end|>what?<|im_end|>") != std::string::npos &&
+            p.find("base64") == std::string::npos,
+        tag + "template: with an image encoder, an image is the image placeholder (its data left out)",
+        p.substr(p.size() > 400 ? p.size() - 400 : 0));
 }
 
 // Read ahead (Engine::draft, POST /v1/draft): what a draft reads is a prefix of the request's prompt once the message
@@ -1835,124 +1820,6 @@ void dump_cases(const std::string& dir) {
   write("anthropic-count.json", api::dump(ojson{{"input_tokens", 1234}}));
 }
 
-// paren_call_postfix: minja reads no `.`/`[` after a call (Nanbeige 4.3's template, `visible_text(m).startswith(...)`,
-// aborted kapitsa serve at load), so chat_template_source puts such calls in parentheses. CPU only, no model.
-void paren_call_postfix_unit() {
-  const std::string macro = "{%- macro f(x) %}{{ x }}{% endmacro %}";
-  auto render = [&](const std::string& src) {
-    try {
-      auto t = minja::Parser::parse(paren_call_postfix(src), {});
-      auto ctx = minja::Context::make(minja::Value(nlohmann::ordered_json{{"s", "<a>x</a>"}}));
-      return t->render(ctx);
-    } catch (const std::exception& e) {
-      return std::string("error: ") + e.what();
-    }
-  };
-  // the Nanbeige 4.3 template's line, cut down
-  check(render(macro + "{{ s is string and not(f(s).startswith('<a>') and f(s).endswith('</a>')) }}") == "False",
-        "paren_call_postfix: not(f(s).startswith(..) and f(s).endswith(..)) renders as Jinja does");
-  check(render(macro + "{{ f(f(s)[1:3]).upper() }}") == "A>", "paren_call_postfix: nested calls with a subscript");
-  // left as written: keywords, method calls, filters, strings, comments and text outside the tags
-  for (const std::string& same :
-       {std::string("{{ not(s).startswith('<') }}"), std::string("{{ s.upper().lower()[0] }}"),
-        std::string("{{ s|replace('a', 'b')|length }}"), std::string("{{ 'f(x).y' }}{# f(x).y #} f(x).y"),
-        std::string("{% if (s) %}{% for c in range(2) %}{{ c }}{% endfor %}{% endif %}")})
-    check(paren_call_postfix(same) == same, "paren_call_postfix: unchanged: " + same);
-  check(paren_call_postfix(macro + "{{ f(s).y }}") == macro + "{{ (f(s)).y }}", "paren_call_postfix: the rewrite");
-}
-
-// A folder's template as written: what chat_template_source reads (chat_template.jinja, else tokenizer_config.json's
-// chat_template string), before its rewrite
-std::string template_as_written(const std::string& dir) {
-  auto slurp = [](const std::string& p) {
-    std::ifstream f(p, std::ios::binary);
-    return std::string(std::istreambuf_iterator<char>(f), {});
-  };
-  std::string src = slurp(dir + "/chat_template.jinja");
-  if (src.empty()) {
-    auto cfg = nlohmann::json::parse(slurp(dir + "/tokenizer_config.json"), nullptr, false);
-    if (cfg.is_object() && cfg.contains("chat_template") && cfg["chat_template"].is_string())
-      src = cfg["chat_template"].get<std::string>();
-  }
-  return src;
-}
-
-// Every chat template kapitsa loads, through chat_template_source's rewrite: each catalog variant's template at its
-// pinned revision, the model folders the fixture was made from (tests/data/chat_templates.json, regenerated by
-// tests/chat_templates_fixture.py), and the model folders on this Mac. The rewrite hands minja each of them exactly as
-// written, except the template it exists for, Nanbeige 4.3's, whose two rewritten calls are spelled out here. A catalog
-// variant without a fixture entry fails, so a model added to the catalog cannot skip the sweep.
-void chat_template_sweep(std::vector<std::string> dirs) {
-  const std::string here = __FILE__;
-  const std::string path = here.substr(0, here.rfind('/')) + "/../tests/data/chat_templates.json";
-  std::ifstream f(path, std::ios::binary);
-  const auto fx = nlohmann::json::parse(std::string(std::istreambuf_iterator<char>(f), {}), nullptr, false);
-  const bool read = fx.is_object() && fx.contains("sources") && fx.contains("templates");
-  check(read, "chat templates: " + path + " read");
-  if (!read) return;
-
-  // Nanbeige 4.3's template (fcmeyer/Nanbeige4.3-33B-MLX-4bit's chat_template.jinja), by sha256, and the exact rewrite
-  // of its two calls
-  const std::string nanbeige43 = "f2b1e2a1be25d277e8c903a2aa4d69ca5fd8a0fcb37d4792088e72426df5b91c";
-  const std::vector<std::pair<std::string, std::string>> nanbeige43_calls = {
-      {"not(visible_text(message.content).startswith(", "not((visible_text(message.content)).startswith("},
-      {" and visible_text(message.content).endswith(", " and (visible_text(message.content)).endswith("}};
-  auto expected = [&](const std::string& t) {
-    if (bench::sha256_hex(t) != nanbeige43) return t;
-    std::string want = t;
-    for (const auto& [from, to] : nanbeige43_calls) {
-      const size_t at = want.find(from);
-      check(at != std::string::npos && want.find(from, at + 1) == std::string::npos,
-            "chat templates: Nanbeige 4.3's template has `" + from + "` once");
-      if (at != std::string::npos) want.replace(at, from.size(), to);
-    }
-    return want;
-  };
-
-  int nanbeige_sources = 0;
-  for (const auto& [key, sha] : fx["sources"].items()) {
-    const std::string h = sha.get<std::string>();
-    const std::string t = fx["templates"].contains(h) ? fx["templates"][h].get<std::string>() : std::string();
-    check(bench::sha256_hex(t) == h, "chat templates: " + key + "'s text has its sha256");
-    nanbeige_sources += h == nanbeige43;
-    check(paren_call_postfix(t) == expected(t),
-          "chat template " + key +
-              (h == nanbeige43 ? ": the rewrite parenthesizes Nanbeige 4.3's two calls, nothing else"
-                               : ": the rewrite leaves it byte-for-byte as written"));
-  }
-  check(nanbeige_sources > 0, "chat templates: the fixture has Nanbeige 4.3's template");
-
-  int variants = 0;
-  for (const auto& m : hub::catalog())
-    for (const auto& v : m.variants) {
-      ++variants;
-      const std::string key = "hf:" + v.repo + "@" + v.revision + (v.gguf.path.empty() ? "" : "/" + v.gguf.path);
-      check(fx["sources"].contains(key), "chat templates: the fixture has " + m.name + ":" + v.name + "'s (" + key + ")",
-            "rerun python3 tests/chat_templates_fixture.py");
-    }
-
-  // this Mac's model folders: the ones given, and every folder in kapitsa's and $NACE_MODELS' model directories
-  const char* home = getenv("HOME");
-  const char* nace = getenv("NACE_MODELS");
-  for (const std::string root : {std::string(home ? home : "") + "/.cache/kapitsa/models", std::string(nace ? nace : "")}) {
-    std::error_code ec;
-    if (!root.empty())
-      for (const auto& e : std::filesystem::directory_iterator(root, ec))
-        if (e.is_directory(ec)) dirs.push_back(e.path().string());
-  }
-  int local = 0;
-  for (const auto& dir : dirs) {
-    const std::string t = template_as_written(dir);
-    if (t.empty()) continue;
-    ++local;
-    check(chat_template_source(dir) == expected(t),
-          "chat template " + dir + ": chat_template_source returns it as written" +
-              (bench::sha256_hex(t) == nanbeige43 ? ", Nanbeige 4.3's two calls parenthesized" : ""));
-  }
-  printf("chat templates: %zu fixture sources (%zu distinct texts), %d catalog variants, %d in this Mac's folders\n",
-         fx["sources"].size(), fx["templates"].size(), variants, local);
-}
-
 // A folder whose config.json is an architecture Kapitsa does not run is refused by unsupported_model(), the function
 // the engine's constructor, model_plan and `kapitsa serve|bench|doctor` all refuse with (issue 447: Gemma 4 fell
 // through to the Qwen3.5 loader and aborted in nlohmann instead of a message). CPU only: config.json files, no model.
@@ -2009,51 +1876,6 @@ bool exists(const std::string& p) {
 
 }  // namespace
 
-// a dense Llama's config.json (Nanbeige4.3's): what Kapitsa runs, and the loader's refusals that `kapitsa pull` gives too
-void llama_config_unit() {
-  const std::string ok = R"({"model_type": "llama", "hidden_size": 7168, "intermediate_size": 22016,
-    "num_hidden_layers": 52, "num_attention_heads": 56, "num_key_value_heads": 8, "head_dim": 128, "vocab_size": 166912,
-    "rope_theta": 120000000, "rope_scaling": null, "hidden_act": "silu", "tie_word_embeddings": false})";
-  check(Flint::llama_unsupported(ok).empty(), "llama config: Nanbeige4.3's runs", Flint::llama_unsupported(ok));
-  auto refused = [&](const std::string& from, const std::string& to, const std::string& want) {
-    std::string j = ok;
-    j.replace(j.find(from), from.size(), to);
-    const std::string why = Flint::llama_unsupported(j);
-    check(why.find(want) != std::string::npos, "llama config: refused, " + want, why);
-  };
-  refused(R"("rope_scaling": null)", R"("rope_scaling": {"rope_type": "llama3", "factor": 8.0})", "rope_scaling");
-  refused(R"("tie_word_embeddings": false)", R"("tie_word_embeddings": true)", "tied embeddings");
-  refused(R"("hidden_act": "silu")", R"("hidden_act": "gelu")", "activation gelu");
-  refused(R"("head_dim": 128)", R"("head_dim": 64)", "shape");
-  refused(R"("num_key_value_heads": 8)", R"("num_key_value_heads": 4)", "shape");  // 14 query heads per KV head
-  refused(R"("tie_word_embeddings": false)", R"("tie_word_embeddings": false, "quantization": {"bits": 3, "group_size": 64})",
-          "3-bit group 64");
-  check(!Flint::llama_unsupported("{not json").empty(), "llama config: a broken config.json is refused");
-  // the chat template: ChatML runs (Nanbeige4.3's), Llama 3's header markup is refused, and so is none
-  check(Flint::llama_template_unsupported("{{ '<|im_start|>' + message['role'] + '\\n' }}").empty(),
-        "llama template: ChatML runs");
-  check(Flint::llama_template_unsupported("{{ '<|start_header_id|>' + message['role'] + '<|end_header_id|>' }}")
-                .find("ChatML") != std::string::npos,
-        "llama template: Llama 3's is refused");
-  check(!Flint::llama_template_unsupported("").empty(), "llama template: none is refused");
-  // a plan folder (hub::plan_dir: config.json and the safetensors headers, no tokenizer files) reads as a config, and only
-  // loading asks for the template (#638: kapitsa doctor stopped on Nanbeige4.3's plan)
-  char tmpl_dir[] = "/tmp/kapitsa-llama-plan-XXXXXX";
-  if (mkdtemp(tmpl_dir)) {
-    const std::string d = tmpl_dir;
-    FILE* f = fopen((d + "/config.json").c_str(), "w");
-    if (f) fputs(ok.c_str(), f), fclose(f);
-    check(Flint::read_config(d).llama, "llama plan folder: the config reads without a chat template");
-    check(!Flint::llama_folder_unsupported(d).empty(), "llama plan folder: loading would still ask for the template");
-    f = fopen((d + "/chat_template.jinja").c_str(), "w");
-    if (f) fputs("{{ '<|im_start|>' + message['role'] + '\\n' }}", f), fclose(f);
-    check(Flint::llama_folder_unsupported(d).empty(), "llama folder: its ChatML template runs");
-    remove((d + "/chat_template.jinja").c_str());
-    remove((d + "/config.json").c_str());
-    rmdir(d.c_str());
-  }
-}
-
 int main(int argc, char** argv) {
   anthropic_mapping();
   responses_mapping();
@@ -2070,14 +1892,11 @@ int main(int argc, char** argv) {
   history_gate_unit();
   kflash_lookup_unit();
   unsupported_model_unit();
-  llama_config_unit();
-  paren_call_postfix_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
     else dirs.push_back(argv[i]);
   }
-  chat_template_sweep(dirs);
   if (dirs.empty()) {
     const char* home = getenv("HOME");
     const std::string base = std::string(home ? home : "") + "/.cache/kapitsa/models/";
@@ -2089,10 +1908,7 @@ int main(int argc, char** argv) {
     TmplModel m;
     m.dir = dir;
     m.tok.load(dir + "/tokenizer.json");
-    // (a dense Llama on Flint's backend, Nanbeige4.3: its template rewritten for minja, as the engine renders it)
-    std::string src = chat_template_source(dir);
-    if (Flint::is_model(dir)) src = flint_template(src);
-    m.tmpl = std::make_unique<minja::chat_template>(src, "", "<|im_end|>");
+    m.tmpl = std::make_unique<minja::chat_template>(chat_template_source(dir), "", "<|im_end|>");
     const std::string tag = "[" + dir.substr(dir.find_last_of('/') + 1) + "] ";
     anthropic_round_trip(m, tag);
     reasoning_memory(m, tag);

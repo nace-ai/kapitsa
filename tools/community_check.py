@@ -175,7 +175,7 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
         if None in (p["prompt_tokens"], p["ttft_s"], p["tps"], p["followup_median_s"]):
             errs.append(f"{tag}: a measurement is missing")
             continue
-        ref = REFERENCE.get(family, {}).get(p["size"])
+        ref = REFERENCE[family].get(p["size"])
         if ref and abs(p["prompt_tokens"] - ref) > 0.01 * ref:
             errs.append(f"{tag}: {p['prompt_tokens']} prompt tokens, not within 1% of {ref}")
         if abs(p["prompt_tokens"] / p["ttft_s"] - p["tps"]) > 0.005 * p["tps"] + 0.1:

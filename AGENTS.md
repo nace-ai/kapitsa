@@ -40,8 +40,7 @@ build/api_test
 build/prefix_cache_test
 build/fn_store_test                          # the streamed-expert cache (src/model/expert_store.h)
 build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
-build/tokenizer_test                         # Flint's split, the Metaspace BPE: Nanbeige 4.3's file cut to the fixture
-build/tokenizer_test path/to/tokenizer.json  # and Nanbeige 4.3's own file against tests/data/nanbeige43_tokenizer.json
+build/tokenizer_test                         # Flint's pre-tokenizer split
 build/iq_layout_test                         # GGUF IQ experts in the GPU layout (src/kernels/wfmt_iq.metal)
 build/remote_test                            # a split model's reserve on its other Macs (src/model/remote.h)
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
@@ -62,7 +61,6 @@ python3 tests/test_structured.py --cli build    # with a model folder's tokenize
 ```
 
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
-`template_prompts MODEL_DIR...` (a template dump and the rewrite's `--assert-unchanged`, CPU only),
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,
 `tests/test_structured.py URL`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
 `tests/test_ane_split_abort.py`, `tests/test_systemone.py`): run it only when allowed, and report it as run.

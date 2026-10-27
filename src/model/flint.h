@@ -9,11 +9,6 @@
 // 4-bit group 64. The math is Recursive's (rec's model.py, recursive-oss/rec).
 // Sliding-window layers keep a ring of window + 8 positions (Dory's layout: a ring cannot go back further than its 8
 // spare rows, so checkpoints hold copies of the rings); full-attention layers a cache that grows with the conversation.
-//
-// The same backend runs a dense Llama (LlamaForCausalLM, model_type "llama": Nanbeige4.3-33B) as a Flint without its
-// extras (FlintConfig::llama): every layer full attention with RoPE (NeoX halves, as Flint's sliding-window layers) and
-// a dense SwiGLU MLP, no q / k norms (flint_prep_nonorm) and no sinks (a sink of -inf: the softmax without one, exactly).
-// Its checkpoints: MLX affine 4-bit or 8-bit group 64 (mlx_lm.convert), or the bf16 safetensors as published.
 #pragma once
 #include "loader/safetensors.h"
 #include "model/model.h"
@@ -41,8 +36,6 @@ struct FlintConfig {
   int bits = 4, gs = 64;                // the projections' and experts' format
   int embed_bits = 8;
   std::map<std::string, uint32_t> iq;   // modules kept in llama.cpp's IQ blocks (GGUF imports): their GGUF type
-  bool llama = false;                   // a dense Llama (model_type "llama"): no q / k norms, no sinks, no experts
-  bool kv8 = false;                     // its KV cache as int8 codes + a half scale per row (NI_FLINT_KV8)
 };
 
 // An MLX linear (or a stack of E of them): codes (uint32 words or bytes, the same little-endian stream), bf16 scale and
@@ -79,17 +72,8 @@ class Flint : public Model {
 
   explicit Flint(const std::string& path, int prefill_chunk = 2048);
   ~Flint() override;
-  static bool is_model(const std::string& dir);  // config.json's model_type is "flint" (or "llama": a dense Llama)
+  static bool is_model(const std::string& dir);  // config.json's model_type is "flint"
   static FlintConfig read_config(const std::string& dir);
-  // what in a dense Llama's config.json Kapitsa does not run ("" when it runs it): read_config's refusals, for
-  // `kapitsa pull` to give before any download
-  static std::string llama_unsupported(const std::string& config_json);
-  // what in a dense Llama's chat template (chat_template.jinja, else tokenizer_config.json's chat_template) Kapitsa does
-  // not run ("" when it is ChatML, as Nanbeige4.3's): the engine writes a Llama's turns in that markup
-  static std::string llama_template_unsupported(const std::string& chat_template);
-  // the chat template of a model folder (chat_template.jinja, else tokenizer_config.json's) checked as above: "" when it
-  // runs. Loading checks it; reading the config does not, so a plan folder (config and headers only) plans
-  static std::string llama_folder_unsupported(const std::string& dir);
   static MemPlan plan(const std::string& path, int prefill_chunk = 2048);
   // KV cache bytes per position (full-attention layers) and per conversation (sliding-window rings)
   static size_t kv_per_pos(const FlintConfig& c);
@@ -114,7 +98,7 @@ class Flint : public Model {
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   int prefill_chunk() const override { return tmax_; }
-  bool can_snapshot() const override;
+  bool can_snapshot() const override { return false; }
   // SSD prefix cache: the full-attention caches as rows, the sliding-window rings whole (a checkpoint's: their copies)
   std::string disk_format() const override;
   void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
@@ -171,13 +155,6 @@ class Flint : public Model {
   };
   void enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm, uint32_t y_ld = 0,
               bool gu = false);
-  // enc_mv's bf16 form (a dense Llama's bf16 checkpoint): wfmt.metal's one-row kernels, row by row
-  void enc_mv_bf16(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm, uint32_t y_ld,
-                   bool gu);
-  // enc_mv on the 8-row verify kernels (src/model/v8.h): a dense Llama's verify passes of 3-8 rows read each weight
-  // once instead of once per row (NI_FLINT_V8)
-  void enc_mv_v8(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm, uint32_t y_ld,
-                 bool gu);
   // GEMM of M half rows: y [M][y_ld] (+)= xh [M][K] W^T
   void enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buffer& y, int M, bool add, uint32_t y_ld = 0);
   void enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T);
@@ -190,8 +167,6 @@ class Flint : public Model {
   std::deque<Tensor> iq_tensors_;  // the IQ experts in the kernels' layout (iq_bufs_), as the FlintMats point at them
   std::vector<Buffer> iq_bufs_;
   const Tensor* final_norm_ = nullptr;
-  Buffer nosink_;                // a dense Llama's sinks: bf16 [hq] of -inf (each head's softmax without a sink)
-  const Buffer& sinks(const FlintLayer& L) const { return L.sinks ? L.sinks->buf : nosink_; }
   Buffer inv_freq_;              // fp32 [hd / 2]: RoPE's inverse frequencies
   // (cos, sin) per frequency at one position, as flint_attn_d2 takes them inline (the last position asked for)
   const float* rope_cs(int pos);
@@ -201,13 +176,6 @@ class Flint : public Model {
   int tmax_ = 2048;
   size_t mem_budget_ = 0;
   bool qmt_ = false;             // dense 4-bit prefill GEMMs on Metal 4's tensor_ops (M5)
-  bool qmtw_ = false;            // a dense Llama's 8-bit and bf16 prefill GEMMs there too (tensor/qmtw.metal)
-  bool qmts_ = false;            // ... and its tiles in the swizzled order (qmt4s8_m64_n64, qmt8ds8_m128_n64)
-  int qmt_min_ = 64;             // fewest rows a dense GEMM takes the tensor tiles at (16 for a dense Llama)
-  bool v8_ = false;              // a dense Llama's 3-8 row verify passes on the 8-row verify kernels (NI_FLINT_V8)
-  bool in_verify_ = false;       // encoding a verify pass (encode_verify): the only pass v8_ takes
-  Buffer v8t_, v8s_, v8g_, v8u_;  // their X8 table and group sums, the gate / up rows
-  Buffer v8tt_;                  // ... and qmm8t's T table, where the 4-bit GEMMs run on the matrix units
   bool split_ = false;           // the decode kernels' merges in a dispatch of their own (split_merges)
 
   // decode / verify activations (kMaxRows rows)

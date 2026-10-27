@@ -208,18 +208,15 @@ enum class ContextWhy { kDefault, kModelLimit, kMemory, kMemoryWithDrafter };
 int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why = nullptr);
 
 struct ChatRequest;
-// The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none),
-// through paren_call_postfix
+// The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none)
 std::string chat_template_source(const std::string& model_dir);
-// A template's calls followed by `.` or `[` in parentheses, `(f(x)).y`, which minja reads (it reads `f(x).y` as an error)
-std::string paren_call_postfix(const std::string& src);
 // A request's prompt by a chat template (Engine::render; CPU only, no model needed: tools/api_test checks it).
 // `images`: image parts render as images (their data left out; the engine puts the images' rows in place), else image
 // and video parts become a short note. `native`: the template renders every role and tool call itself (Flint's), so
 // no minja polyfills and system messages after the first stay where they are.
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images = false, bool native = false);
-// Flint's (and Nanbeige4.3's) chat template rewritten for minja (engine.cpp)
+// Flint's chat template rewritten for minja (engine.cpp)
 std::string flint_template(std::string src);
 // A request followed by its answer as the client sends it back (content, and the reasoning when the client sends
 // reasoning back: it asks to keep every turn's thinking, or an earlier assistant turn came back with it), as the next
@@ -542,9 +539,7 @@ class Engine {
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   Dory* dory_ = nullptr;     // model_ when it is a Dory model
-  Flint* flint_ = nullptr;   // model_ when it is a Flint model (or a dense Llama on Flint's backend)
-  bool flint_chat_ = false;  // Recursive's Flint itself: its own chat template's markup and GLM's tool calls (a dense
-                             // Llama on the backend, Nanbeige4.3, writes Qwen's: <|im_start|> turns, XML tool calls)
+  Flint* flint_ = nullptr;   // model_ when it is a Flint model
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   int dory_spec_ = 0;        // Dory speculative decoding (per-loop KV): drafts per cycle (0: plain decoding)
   bool dory_spec_auto_ = false;  // drafts per cycle by the request's loops (no --spec)
