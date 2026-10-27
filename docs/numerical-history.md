@@ -115,7 +115,7 @@ The decode rows use the prefill-scale gate, not the file's `decode_gate` of 1.02
 The changed prefill produces the KV inherited by decode. With `NI_ANE=0`, the same switch moves the 4B's
 decode paths at the 1e-7 scale.
 
-The 9B has hidden size 4096, no ANE split and no floor file of its own. The PR measured it on an M5 Max:
+At that measurement, the 9B (hidden size 4096) had no ANE split and no floor file of its own. The PR measured it on an M5 Max:
 prefill mean KL 1.4e-7, decode mean KL 2.6e-7 to 5.8e-7, 0 flips in 192 rows. Applied for scale, the 4B's
 gate passes by four orders of magnitude. The M5 Pro pair shows the same order of magnitude with the split
 off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this path enabled requires a separate PR.

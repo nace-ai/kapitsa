@@ -21,6 +21,7 @@ The bound is shortened because the shipped 60 s is not a test's to wait out; wit
 2 s per-job watchdog retires a job that started and never reported, so the bound is the backstop for a chunk stuck
 before that watchdog).
 usage: test_ane_split_abort.py <kapitsa> <model dir> [--port 8199] [--rows 700] [--tokens 24] [--split-ms 250] [--keep]
+  NI_ANE_H4096=1: also exercise the experimental 4096-hidden split (for example Qwen3.5-9B)
   --rows: tokens of each leg's prompt (over the split's floor, under one prefill chunk)
   --keep: keep the temporary folder (the three servers' logs)
 With no arguments it prints "SKIP" and exits 0: CI has no model folder, GPU or Neural Engine, so it must not fail
@@ -89,6 +90,8 @@ class Server:
         self.log_path = os.path.join(root, leg + ".log")
         os.makedirs(self.home, exist_ok=True)
         e = {k: v for k, v in os.environ.items() if not k.startswith("NI_") and not k.startswith("KAPITSA_")}
+        if "NI_ANE_H4096" in os.environ:
+            e["NI_ANE_H4096"] = os.environ["NI_ANE_H4096"]
         e.update({"KAPITSA_HOME": self.home, "KAPITSA_NO_AUTO_UPDATE": "1", "KAPITSA_NO_PROMPT": "1"})
         e.update(env)
         self.log = open(self.log_path, "w")

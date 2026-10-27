@@ -1716,7 +1716,13 @@ std::string Qwen35::disk_format() const {
            kinds.c_str(), kv_i8() ? "i8" : "f16", cfg_.hkv, int(kv_row_bytes(cfg_.head_dim)),
            kv_i8() ? " (int8 codes, an f32 scale a row)" : "", mtp_loaded_ ? " (MTP head too)" : "",
            2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv, cfg_.lin_hv, cfg_.lin_dv, cfg_.lin_dk);
-  return b;
+  std::string format = b;
+  // The optional W8A8 prefill may leave different KV and recurrent values. Its saved prefixes must
+  // not be used by the default GPU-only 4096-hidden path after a restart. The layout itself is unchanged.
+  if (!cfg_.moe && cfg_.hidden == 4096 && ane::FfnSplit::input_segment(4096) &&
+      !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")))
+    format += "; prefill: experimental ANE W8A8 H4096";
+  return format;
 }
 
 void Qwen35::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
