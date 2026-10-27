@@ -14,7 +14,7 @@ not sent back, as clients do). TTFT is the time to the first streamed token (rea
 (completion_tokens-1)/(end-first token); prefill tok/s is uncached prompt tokens / TTFT.
 Memory: peak RSS of the server's process tree (it does not count GPU-wired pages) and, system-wide, the lowest
 free+reclaimable memory, highest wired memory, swap and pressure level while the leg ran."""
-import argparse, hashlib, json, os, re, signal, socket, statistics, subprocess, sys, threading, time, urllib.request
+import tempfile, argparse, hashlib, json, os, re, signal, socket, statistics, subprocess, sys, threading, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.dirname(HERE)
@@ -95,6 +95,8 @@ class Leg:
     def __init__(self, arm, log, a):
         self.arm, self.port, self.a = arm, free_port(), a
         self.rss_peak, self.aborted = 0, None
+        self.fp_peak, self.sys_used_at_fp_peak, self.fp_samples, self.fp_pids = 0, None, 0, 0
+        self.memsize_gib = sysctl_int('hw.memsize') / 2**30
         self.swap0 = self.swap_max = swap_gb()
         v = vm(); self.free_start, self.free_min, self.wired_max = v["reclaimable_gib"], v["reclaimable_gib"], v["wired_gib"]
         self.level_max, self.pct_min = 1, 100
@@ -132,7 +134,21 @@ class Leg:
         else: raise SystemExit("arm %s did not come up in 900 s" % arm)
         self.up_s = time.time() - self.t0
 
+    def tree_footprint_bytes(self):
+        """phys_footprint of the serving process tree (`footprint`), one number for every arm."""
+        pids = sorted(self.tree_pids())
+        out = os.path.join(tempfile.gettempdir(), "fnb-fp-%d.json" % os.getpid())
+        subprocess.run(["footprint", "-j", out] + [str(p) for p in pids], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+        self.fp_pids = max(self.fp_pids, len(pids))
+        return int(json.load(open(out))["total footprint"])
+
+    def tree_pids(self):
+        return self._tree(None)
+
     def tree_rss_kib(self):
+        return self._tree("rss")
+
+    def _tree(self, what):
         rows = {}
         for l in sh("ps", "-axo", "pid=,ppid=,rss=").splitlines():
             p = l.split()
@@ -140,6 +156,7 @@ class Leg:
         kids, total = {self.proc.pid}, 0
         for _ in range(8):
             kids |= {pid for pid, (pp, _) in rows.items() if pp in kids}
+        if what is None: return {p for p in kids if p in rows}
         return sum(rows[p][1] for p in kids if p in rows)
 
     def sample(self):
@@ -148,6 +165,12 @@ class Leg:
             n += 1
             try: self.rss_peak = max(self.rss_peak, self.tree_rss_kib())
             except Exception: pass
+            if n % 2 == 0:  # about every 1 s
+                try:
+                    fp = self.tree_footprint_bytes(); self.fp_samples += 1
+                    if fp > self.fp_peak:
+                        self.fp_peak = fp; self.sys_used_at_fp_peak = self.memsize_gib - vm()["reclaimable_gib"]
+                except Exception: pass
             if n % 4 == 0: self.watch()
             time.sleep(0.5)
 
@@ -289,14 +312,15 @@ def run_leg(a):
 
 def finish(leg, res, a, tag):
     leg.close()
-    res["memory"] = {"peak_rss_mib": leg.rss_peak / 1024, "free_reclaimable_gib_start": leg.free_start, "free_reclaimable_gib_min": leg.free_min,
+    res["memory"] = {"peak_rss_mib": leg.rss_peak / 1024, "peak_footprint_mib": leg.fp_peak / 2**20, "system_used_gib_at_footprint_peak": leg.sys_used_at_fp_peak,
+                     "footprint_samples": leg.fp_samples, "footprint_max_processes": leg.fp_pids, "free_reclaimable_gib_start": leg.free_start, "free_reclaimable_gib_min": leg.free_min,
                      "wired_gib_max": leg.wired_max, "swap_gb_start": leg.swap0, "swap_gb_max": leg.swap_max,
                      "pressure_level_max": leg.level_max, "memorystatus_level_min": leg.pct_min, "aborted": leg.aborted,
                      "swap_grew_over_1gb": leg.swap_max - leg.swap0 > 1.0}
     res["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     json.dump(res, open("%s/%s.json" % (a.out, tag), "w"), indent=1)
-    print("  peak RSS %.0f MiB, free+reclaimable min %.1f GiB, wired max %.1f GiB, swap +%.2f GB, pressure %d%s" % (
-        res["memory"]["peak_rss_mib"], leg.free_min, leg.wired_max, leg.swap_max - leg.swap0, leg.level_max,
+    print("  peak footprint %.0f MiB (%d samples), peak RSS %.0f MiB, free+reclaimable min %.1f GiB, wired max %.1f GiB, swap +%.2f GB, pressure %d%s" % (
+        res["memory"]["peak_footprint_mib"], leg.fp_samples, res["memory"]["peak_rss_mib"], leg.free_min, leg.wired_max, leg.swap_max - leg.swap0, leg.level_max,
         ", ABORTED " + leg.aborted if leg.aborted else ""), flush=True)
     return res
 
@@ -341,6 +365,11 @@ def summarize(d, meta=None):
                        "free_reclaimable_gib_start": [m["free_reclaimable_gib_start"] for m in mem], "wired_gib_max": max(m["wired_gib_max"] for m in mem),
                        "swap_gb_growth_max": max(m["swap_gb_max"] - m["swap_gb_start"] for m in mem), "pressure_level_max": max(m["pressure_level_max"] for m in mem),
                        "aborted": [m["aborted"] for m in mem if m["aborted"]], "legs": len(ls)}
+        fpm = [m for m in mem if m.get("peak_footprint_mib")]
+        c["memory"]["footprint_legs"] = len(fpm)
+        c["memory"]["peak_footprint_mib_per_leg"] = [round(m["peak_footprint_mib"]) for m in fpm]
+        c["memory"]["peak_footprint_mib_max"] = max((m["peak_footprint_mib"] for m in fpm), default=None)
+        c["memory"]["system_used_gib_at_footprint_peak_max"] = max((m["system_used_gib_at_footprint_peak"] for m in fpm), default=None)
         c["up_s"] = stat([l["up_s"] for l in ls])
         c["errors"] = [e for l in ls for e in l["errors"]]
         c["cmd"] = ls[0]["cmd"]
@@ -349,12 +378,14 @@ def summarize(d, meta=None):
     json.dump(out, open(d + "/summary.json", "w"), indent=1)
     names = {"K": "Kapitsa --engine splash @7e478053", "K2": "Kapitsa --engine splash @ff6151c8", "S": "plain Splash 1.4.0", "S2": "plain Splash 1.4.0 (paired with K2)", "N": "Kapitsa native (MTP)", "L": "llama.cpp"}
     f = lambda c, k, p=1: "not measured" if not c.get(k) else "%.*f (n %d)" % (p, c[k]["median"], c[k]["n"])
-    rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prefill %s tok/s" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | peak RSS MiB | min free+reclaimable GiB |",
-            "|" + "---|" * (6 + 2 * len(SIZES))]
+    rows = ["| arm | decode T=0 tok/s | decode T=0.6 tok/s | " + " | ".join("TTFT %s s | prefill %s tok/s" % (s, s) for s in SIZES) + " | turn-2 TTFT s (4K chat) | peak RSS MiB | peak footprint MiB (tree) | system used GiB at peak | min free+reclaimable GiB |",
+            "|" + "---|" * (8 + 2 * len(SIZES))]
     for arm, c in out["arms"].items():
-        rows.append("| %s | %s | %s | %s | %s | %s | %s |" % (names[arm], f(c, "decode_T0_tps"), f(c, "decode_T06_tps"),
+        rows.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (names[arm], f(c, "decode_T0_tps"), f(c, "decode_T06_tps"),
                     " | ".join("%s | %s" % (f(c, "ttft_%s_s" % s, 2), f(c, "prefill_%s_tps" % s, 0)) for s in SIZES),
-                    f(c, "turn2_ttft_s", 2), "%.0f" % c["memory"]["peak_rss_mib_max"], "%.1f" % c["memory"]["free_reclaimable_gib_min"]))
+                    f(c, "turn2_ttft_s", 2), "%.0f" % c["memory"]["peak_rss_mib_max"],
+                    "not measured" if not c["memory"]["peak_footprint_mib_max"] else "%.0f (%d legs)" % (c["memory"]["peak_footprint_mib_max"], c["memory"]["footprint_legs"]),
+                    "not measured" if not c["memory"]["peak_footprint_mib_max"] else "%.1f" % c["memory"]["system_used_gib_at_footprint_peak_max"], "%.1f" % c["memory"]["free_reclaimable_gib_min"]))
     open(d + "/table.md", "w").write("\n".join(rows) + "\n")
     print("\n".join(rows))
 
