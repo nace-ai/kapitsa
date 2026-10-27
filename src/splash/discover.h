@@ -15,8 +15,10 @@ struct Found {
 };
 
 // The engine binary (<root>/engine/splash), looked for in: $SPLASH_HOME (`splash_home`), the directory a `splash` on PATH
-// resolves into (<root>/bin/.. or the binary itself), then <home>/Applications/Splash, /Applications/Splash and <home>/Splash.
-Found find_binary(const std::string& home, const std::string& splash_home, const std::string& path_env);
+// resolves into (<root>/bin/.. or the binary itself), then <home>/Applications/Splash, the `system_roots` (default
+// /Applications/Splash) and <home>/Splash. A test passes {} so the Mac it runs on does not decide the result.
+Found find_binary(const std::string& home, const std::string& splash_home, const std::string& path_env,
+                  const std::vector<std::string>& system_roots = {"/Applications/Splash"});
 
 // A resolved model folder under <home>/Library/Application Support/Splash/models/.resolved/ (the ones with a tokenizer).
 // `want` empty: the only one there is; with several the error lists each (family, folder name) and asks for one.

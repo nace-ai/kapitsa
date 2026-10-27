@@ -41,9 +41,10 @@ int main() {
   fs::path tmp = fs::temp_directory_path() / ("splash_discover_" + std::to_string(getpid()));
   fs::remove_all(tmp);
   const std::string home = (tmp / "home").string();
+  const std::vector<std::string> none;  // no system-wide root: the Mac the test runs on must not decide the result
 
   // nothing installed: every place looked at is named, and the flag that replaces them
-  Found b = find_binary(home, "", "");
+  Found b = find_binary(home, "", "", none);
   check(!b.ok() && has(b.error, home + "/Applications/Splash/engine/splash") && has(b.error, "--splash-binary") && has(b.error, "SPLASH_HOME"), "binary: nothing", b.error);
   Found m = find_model(home, "");
   check(!m.ok() && has(m.error, "no Splash model found") && has(m.error, "--splash-model"), "model: nothing", m.error);
@@ -54,7 +55,7 @@ int main() {
   exe(tmp / "other/engine/splash");
   fs::create_directories(tmp / "bin");
   fs::create_symlink(tmp / "other/engine/splash", tmp / "bin/splash");
-  check(find_binary(home, "", (tmp / "bin").string()).path == fs::canonical(tmp / "other/engine/splash").string(), "binary: PATH symlink");
+  check(find_binary(home, "", (tmp / "bin").string(), none).path == fs::canonical(tmp / "other/engine/splash").string(), "binary: PATH symlink");
   check(find_binary(home, (tmp / "root").string(), (tmp / "bin").string()).path == (tmp / "root/engine/splash").string(), "binary: SPLASH_HOME first");
   // a file that cannot be run is not the engine
   touch(tmp / "plain/engine/splash");
@@ -66,7 +67,11 @@ int main() {
   Found w = find_binary(home, (tmp / "nope").string(), (tmp / "bin").string());
   check(!w.ok() && has(w.error, (tmp / "nope/engine/splash").string()) && !has(w.error, "Applications"), "binary: SPLASH_HOME wrong", w.error);
   exe(fs::path(home) / "Applications/Splash/engine/splash");
-  check(find_binary(home, "", "").ok(), "binary: ~/Applications/Splash");
+  check(find_binary(home, "", "", none).ok(), "binary: ~/Applications/Splash");
+  // a system-wide install is looked at only where the caller says (the test never sees the real /Applications)
+  fs::remove(fs::path(home) / "Applications/Splash/engine/splash");
+  exe(tmp / "sys/engine/splash");
+  check(!find_binary(home, "", "", none).ok() && find_binary(home, "", "", {(tmp / "sys").string()}).path == (tmp / "sys/engine/splash").string(), "binary: system root");
 
   // models: one is the answer; a folder without a tokenizer is not one
   model(home, "aaaaaa1111", "Qwen3.8-Flash-Next");

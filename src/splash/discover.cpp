@@ -45,7 +45,8 @@ std::vector<Model> models(const std::string& home) {
 
 }  // namespace
 
-Found find_binary(const std::string& home, const std::string& splash_home, const std::string& path_env) {
+Found find_binary(const std::string& home, const std::string& splash_home, const std::string& path_env,
+                  const std::vector<std::string>& system_roots) {
   if (!splash_home.empty()) {  // named by the user: that install or an error, never another one
     fs::path bin = fs::path(splash_home) / "engine/splash";
     if (is_executable_file(bin)) return {bin.string(), ""};
@@ -61,7 +62,7 @@ Found find_binary(const std::string& home, const std::string& splash_home, const
     roots.push_back(exe.parent_path().parent_path());  // <root>/engine/splash or <root>/bin/splash
   }
   roots.push_back(fs::path(home) / "Applications/Splash");
-  roots.push_back("/Applications/Splash");
+  for (const std::string& r : system_roots) roots.push_back(r);
   roots.push_back(fs::path(home) / "Splash");
   std::string tried;
   for (const fs::path& r : roots) {

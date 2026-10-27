@@ -34,10 +34,13 @@ with tempfile.TemporaryDirectory() as home:
     r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
     if not os.path.isfile("/Applications/Splash/engine/splash"):  # a system-wide install is looked at too, and HOME= does not hide it
         check(r.returncode != 0 and "no Splash engine binary found" in r.stderr and "SPLASH_HOME" in r.stderr, "no binary: %r" % r.stderr[-300:])
-    os.makedirs(home + "/Applications/Splash/engine")
-    open(home + "/Applications/Splash/engine/splash", "w").close()
-    r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
-    check(r.returncode != 0 and "no Splash engine binary found" in r.stderr, "a file that cannot be run is not the engine: %r" % r.stderr[-300:])
+    if not os.path.isfile("/Applications/Splash/engine/splash"):  # same reason: a system-wide install would be found after this one
+        os.makedirs(home + "/Applications/Splash/engine")
+        open(home + "/Applications/Splash/engine/splash", "w").close()
+        r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
+        check(r.returncode != 0 and "no Splash engine binary found" in r.stderr, "a file that cannot be run is not the engine: %r" % r.stderr[-300:])
+    os.makedirs(home + "/Applications/Splash/engine", exist_ok=True)
+    open(home + "/Applications/Splash/engine/splash", "a").close()
     os.chmod(home + "/Applications/Splash/engine/splash", 0o755)
     r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
     check(r.returncode != 0 and "no Splash model found" in r.stderr, "no model: %r" % r.stderr[-300:])
