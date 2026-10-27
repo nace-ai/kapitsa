@@ -25,7 +25,7 @@ and the decode loop. This page records the shape and what the first version does
 | Server binding: `kapitsa serve --engine splash [--splash-binary P] [--splash-model DIR] [--splash-arg A]...` (skips memory planning, model pick, download, routing and the disk cache) | `src/server/main.cpp` | done |
 | Discovery: the binary and the model folder when the flags are not given, with an error that names what is missing | `src/splash/discover.*` | done, tested on a throwaway tree (`tools/splash_discover_test`) |
 | A/B against plain Splash: identity (text, and token ids through the tap) and speed | `tools/splash_ab.py`, `tools/splash_tap.py` | done; see Verification |
-| CPU test: `tests/test_splash_engine.py build/kapitsa` with `tests/fake_splash.py` (a protocol-v11 stand-in); without a Splash model folder it uses `tests/fixtures/splash_model` | `tests/` | done; run in `ci.yml` by the CI PR (#743) |
+| CPU test: `tests/test_splash_engine.py build/kapitsa` with `tests/fake_splash.py` (a protocol-v11 stand-in); without a Splash model folder it uses `tests/fixtures/splash_model` | `tests/` | done; run in `ci.yml` by this PR |
 
 ## Runtime contract
 
