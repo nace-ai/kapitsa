@@ -36,6 +36,10 @@ struct ChatRequest {
   float top_p = 0.95f;
   int top_k = 20;
   uint32_t seed = 0;
+  // Sampling options only the Splash backend honours (OpenAI's names; vLLM's min_p and repetition_penalty, ignore_eos). Every
+  // other engine leaves them out, as before; the Splash backend sends them on, or refuses the request naming the field.
+  float presence_penalty = 0.0f, frequency_penalty = 0.0f, repetition_penalty = 1.0f, min_p = 0.0f;
+  bool ignore_eos = false;
   std::vector<std::string> stop;
   std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
   // Looped models (Dory): the loop count asked for ("loops" in the body, 0: none), else derived from the reasoning
@@ -78,6 +82,7 @@ struct ChatResult {
   std::string stop_sequence;  // "stop" at one of the request's stop strings: that string
   bool context_full = false;  // "length" because the context window (or the memory for it) ran out, not max_tokens
   int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
+  bool busy = false;          // "error" because the engine has no capacity for it now: a 503 with Retry-After, not a 400
   bool invalid_request = false;  // "error" because of the request's content (an image that cannot be read, a video)
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   int reasoning_tokens = 0;   // completion tokens inside the think block

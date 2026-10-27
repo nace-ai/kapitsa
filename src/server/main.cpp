@@ -114,6 +114,12 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   if (b.contains("temperature") && b["temperature"].is_number()) r.temperature = b["temperature"];
   if (b.contains("top_p") && b["top_p"].is_number()) r.top_p = b["top_p"];
   if (b.contains("top_k") && b["top_k"].is_number()) r.top_k = b["top_k"];
+  for (auto [name, field] : {std::pair<const char*, float*>{"presence_penalty", &r.presence_penalty},
+                             {"frequency_penalty", &r.frequency_penalty},
+                             {"repetition_penalty", &r.repetition_penalty},
+                             {"min_p", &r.min_p}})
+    if (b.contains(name) && b[name].is_number()) *field = b[name];
+  if (b.contains("ignore_eos") && b["ignore_eos"].is_boolean()) r.ignore_eos = b["ignore_eos"];
   if (b.contains("seed") && b["seed"].is_number()) r.seed = uint32_t(b["seed"].get<int64_t>());
   if (b.contains("stop")) {
     if (b["stop"].is_string()) r.stop.push_back(b["stop"]);
@@ -469,6 +475,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
       [failure = std::move(failure)](const ChatResult& result, httplib::Response& response) {
         auto [status, body] = failure(result);
         response.status = status;
+        if (status == 503) response.set_header("Retry-After", "1");
         response.set_content(api::dump(body), "application/json");
       }, std::move(after), {[meter] { ui::token(meter); }, [meter](const ChatResult& result) { ui::done(meter, result); }},
       early, telemetry);
@@ -1332,6 +1339,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_err] = api::chat_failure(out);
         res.status = status;
+        if (status == 503) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_err), "application/json");
         return;
       }
@@ -1398,6 +1406,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::messages_failure(out);
         res.status = status;
+        if (status == 503) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }
@@ -1488,6 +1497,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::responses_failure(out);
         res.status = status;
+        if (status == 503) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }

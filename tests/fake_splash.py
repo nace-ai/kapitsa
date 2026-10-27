@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A stand-in for `splash serve-native` (protocol v11, stdlib only) for tests/test_splash_engine.py: after the
 positionals of serve-native it takes --reply IDS (comma-separated token ids it answers every request with, one frame per
-token, honouring max_output_tokens), --prompt-log FILE (each request's prompt ids, one JSON line) and --slow MS (a pause
+token, honouring max_output_tokens), --prompt-log FILE (each request's prompt ids, sampling and flags, one JSON line) and --slow MS (a pause
 before every token, for the cancel test). EOF on stdin ends it."""
 import json, select, struct, sys, time
 
@@ -44,7 +44,10 @@ while True:
         logical_max, count = struct.unpack_from("<II", p, 26)
         ids = list(struct.unpack_from("<%dI" % count, p, 114))
         if log:
-            with open(log, "a") as f: f.write(json.dumps({"max": logical_max, "prompt": ids}) + "\n")
+            temp, top_p, top_k, pres, freq, rep, min_p = struct.unpack_from("<ffIffff", p, 38)
+            flags = struct.unpack_from("<I", p, 82)[0]
+            sampling = dict(temperature=temp, top_p=top_p, top_k=top_k, presence=pres, frequency=freq, repetition=rep, min_p=min_p)
+            with open(log, "a") as f: f.write(json.dumps({"max": logical_max, "prompt": ids, "sampling": sampling, "flags": flags}) + "\n")
         frame(0x0101, struct.pack("<QII", rid, 0, 0))
         sent, off = 0, 0
         for t in reply[:logical_max]:

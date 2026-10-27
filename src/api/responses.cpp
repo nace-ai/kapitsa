@@ -386,6 +386,7 @@ ojson responses_error(const std::string& message, const std::string& type, const
 }
 
 std::pair<int, ojson> responses_failure(const ChatResult& res) {
+  if (res.busy) return {503, responses_error(res.error, "server_error", "server_error")};
   if (res.prompt_limit > 0)
     return {400, responses_error("Your input exceeds the context window of this model (" + std::to_string(res.prompt_tokens) +
                                      " tokens > " + std::to_string(res.prompt_limit) +

@@ -32,11 +32,16 @@ def check(c, what):
 def free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
+last_headers = {}
 def post(base, body, timeout=30):
     req = urllib.request.Request(base + "/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r: return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            last_headers.clear(); last_headers.update(r.headers)
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        last_headers.clear(); last_headers.update(e.headers)
+        return e.code, json.loads(e.read() or b"{}")
 
 class Server:
     def __init__(self, *fake_args, context=None):
@@ -93,6 +98,49 @@ try:
     st, r = post(s.base, {"messages": MSG, "response_format": {"type": "json_object"}})
     check(st in (200, 400), "json mode answers: %s" % st)
     check(s.proc.poll() is None, "server still running")
+
+    # sampling: an absent field is Splash's own default (1.0 / 0.95 / 20), a given one goes through, penalties and min_p
+    # included, ignore_eos is the engine's flag; an out-of-range value is a 400 naming the field and queues nothing
+    n0 = len(s.prompts())
+    post(s.base, {"messages": MSG, "max_tokens": 3})
+    post(s.base, {"messages": MSG, "max_tokens": 3, "temperature": 0.3, "top_p": 0.5, "top_k": 7, "presence_penalty": 0.5,
+                  "frequency_penalty": -0.5, "repetition_penalty": 1.25, "min_p": 0.125, "ignore_eos": True})
+    p = s.prompts()[n0:]
+    check(len(p) == 2, "two sampling requests reached the engine: %r" % p)
+    if len(p) == 2:
+        d, g = p[0]["sampling"], p[1]["sampling"]
+        check((d["temperature"], round(d["top_p"], 4), d["top_k"]) == (1.0, 0.95, 20) and p[0]["flags"] == 0, "defaults %r" % p[0])
+        check((round(g["temperature"], 4), g["top_p"], g["top_k"], g["presence"], g["frequency"], g["repetition"], g["min_p"]) ==
+              (0.3, 0.5, 7, 0.5, -0.5, 1.25, 0.125) and p[1]["flags"] == 1, "given sampling %r" % p[1])
+    for field, value in [("temperature", 3), ("top_p", 0), ("presence_penalty", 5), ("frequency_penalty", -3),
+                         ("repetition_penalty", 0), ("min_p", 2)]:
+        st, r = post(s.base, {"messages": MSG, "max_tokens": 3, field: value})
+        check(st == 400 and field in json.dumps(r), "%s=%s is a 400 naming it: %s %s" % (field, value, st, r))
+    check(len(s.prompts()) == n0 + 2, "refused requests were not queued")
+finally:
+    s.close()
+
+# the engine's request capacity (the stand-in's is two) answers the third at once: 503 with Retry-After, before a stream starts
+s = Server("--reply", ",".join(map(str, REPLY * 40)), "--slow", "50")
+try:
+    held = []
+    for _ in range(2):
+        req = urllib.request.Request(s.base + "/v1/chat/completions", json.dumps({"messages": MSG, "max_tokens": 200, "stream": True}).encode(),
+                                     {"Content-Type": "application/json"})
+        r = urllib.request.urlopen(req, timeout=30); r.read(20); held.append(r)
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 3})
+    check(st == 503 and last_headers.get("Retry-After"), "full engine: 503 + Retry-After, got %s %s %r" % (st, r, dict(last_headers)))
+    req = urllib.request.Request(s.base + "/v1/chat/completions", json.dumps({"messages": MSG, "max_tokens": 3, "stream": True}).encode(),
+                                 {"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=30).read()
+        check(False, "a streamed request to a full engine is a 503 before the stream")
+    except urllib.error.HTTPError as e:
+        check(e.code == 503 and e.headers.get("Retry-After"), "streamed: 503 + Retry-After, got %s" % e.code)
+    for r in held: r.close()
+    time.sleep(1.0)
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 3, "temperature": 0}, timeout=30)
+    check(st == 200, "served once the held ones are gone: %s %s" % (st, r))
 finally:
     s.close()
 
@@ -103,6 +151,7 @@ try:
         req = urllib.request.Request(s.base + "/v1/chat/completions", json.dumps({"messages": MSG, "max_tokens": 200, "stream": True}).encode(),
                                      {"Content-Type": "application/json"})
         r = urllib.request.urlopen(req, timeout=30); r.read(200); r.close()
+        time.sleep(0.5)  # the server sees the client gone at its next write and cancels; a full engine answers 503
     time.sleep(0.5)
     st, r = post(s.base, {"messages": MSG, "max_tokens": 3, "temperature": 0}, timeout=30)
     check(st == 200, "served after four abandoned streams: %s %s" % (st, r))

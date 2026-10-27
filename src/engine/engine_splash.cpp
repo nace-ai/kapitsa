@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
@@ -118,6 +119,11 @@ void Engine::init_splash() {
       if (id >= 0 && std::find(stop_ids_.begin(), stop_ids_.end(), id) == stop_ids_.end()) stop_ids_.push_back(id);
     }
   }
+  // What a request that names no sampling gets is Splash's own default (frontend.py: temperature 1.0, top_p 0.95, top_k 20), not
+  // Kapitsa's 0.6 for Qwen: plain Splash and this backend then answer the same request alike.
+  defaults_.temperature = 1.0f;
+  defaults_.top_p = 0.95f;
+  defaults_.top_k = 20;
   splash::RuntimeOptions ro;
   ro.argv = {opts_.splash_binary, "serve-native", dir, opts_.context > 0 ? std::to_string(opts_.context) : "auto", "auto"};
   ro.argv.insert(ro.argv.end(), opts_.splash_args.begin(), opts_.splash_args.end());
@@ -141,6 +147,15 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   if (r.grammar) return refuse("structured output is not supported by the Splash engine");
   if (!vision::image_sources(r.messages).empty()) return refuse("image input is not supported by the Splash engine");
   if (r.loops > 0) return refuse("loop counts are not supported by the Splash engine");
+  // Splash's own ranges (frontend.py SAMPLING_NUMBERS): a value outside them is a 400 naming the field, not a clamp
+  auto bad = [&](const char* name, const char* want) { return refuse(std::string(name) + " must be " + want); };
+  if (!(r.temperature >= 0 && r.temperature <= 2)) return bad("temperature", "a number in [0, 2]");
+  if (!(r.top_p > 0 && r.top_p <= 1)) return bad("top_p", "a number in (0, 1]");
+  if (!(r.presence_penalty >= -2 && r.presence_penalty <= 2)) return bad("presence_penalty", "a number in [-2, 2]");
+  if (!(r.frequency_penalty >= -2 && r.frequency_penalty <= 2)) return bad("frequency_penalty", "a number in [-2, 2]");
+  if (!(r.repetition_penalty > 0 && std::isfinite(r.repetition_penalty))) return bad("repetition_penalty", "a positive number");
+  if (!(r.min_p >= 0 && r.min_p <= 1)) return bad("min_p", "a number in [0, 1]");
+  if (r.top_k < -1) return bad("top_k", "0 or -1 (disabled) or a positive integer");
 
   ChatResult res;
   std::string text, base;
@@ -164,10 +179,6 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     res.error = "the prompt is " + std::to_string(n) + " tokens; the context holds " + std::to_string(ctx);
     return res;
   }
-  if (on_accepted && !on_accepted(res)) {
-    res.finish_reason = "cancelled";
-    return res;
-  }
   // reasoning is on when the generation prompt opens the think block (as Engine::chat decides it)
   static const std::string kOpen = "<think>\n";
   const bool think = text.size() >= kOpen.size() && text.compare(text.size() - kOpen.size(), kOpen.size(), kOpen) == 0;
@@ -180,8 +191,13 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   q.prompt.assign(prompt.begin(), prompt.end());
   // the sampler: the frontend's rules (a nonzero temperature below 0.01 is raised to it; top_k <= 0 is every token)
   q.sampling.temperature = r.temperature <= 0 ? 0.0f : std::max(r.temperature, 0.01f);
-  q.sampling.top_p = r.top_p > 0 && r.top_p <= 1 ? r.top_p : 1.0f;
+  q.sampling.top_p = r.top_p;
   q.sampling.top_k = r.top_k > 0 ? uint32_t(r.top_k) : 0;
+  q.sampling.presence_penalty = r.presence_penalty;
+  q.sampling.frequency_penalty = r.frequency_penalty;
+  q.sampling.repetition_penalty = r.repetition_penalty;
+  q.sampling.min_p = r.min_p;
+  if (r.ignore_eos) q.flags |= splash::kIgnoreEndOfSequence;
   q.seed = r.seed ? r.seed : uint64_t(std::random_device{}());
   if (boundary > 0 && boundary < n) q.generation_prompt_tokens = uint32_t(n - boundary);
   if (think && r.thinking_budget > 0 && r.thinking_budget < max_new && think_close_ >= 0) {
@@ -199,6 +215,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     id = splash_->submit(std::move(q), relay, std::numeric_limits<double>::infinity());
   } catch (const splash::PendingLimitExceeded& ex) {
     res.finish_reason = "error";
+    res.busy = true;  // a 503 with Retry-After, before a stream's first byte (on_accepted comes after the submit for that)
     res.error = std::string("the Splash engine is at its concurrent-request limit: ") + ex.what();
     return res;
   } catch (const splash::EngineUnhealthy& ex) {
@@ -209,6 +226,13 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     return refuse(std::string("the Splash engine refused the request: ") + ex.what());
   }
 
+  // after the submit, so a full pool answers before a stream has started; a client that is gone by now ends the request
+  if (on_accepted && !on_accepted(res)) {
+    splash_->cancel(id);
+    res.finish_reason = "cancelled";
+    return res;
+  }
+
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools, true, false,
                       text_tags_, CallFormat::QwenXml);
   std::string content_so_far, finish;
@@ -217,7 +241,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   // one token: the native handle's rules (eos, parser, stop strings); false once the reply is over
   auto handle = [&](int t) -> bool {
     ++gen;
-    if (std::find(stop_ids_.begin(), stop_ids_.end(), t) != stop_ids_.end()) {
+    if (!r.ignore_eos && std::find(stop_ids_.begin(), stop_ids_.end(), t) != stop_ids_.end()) {
       finish = "stop";
       return false;
     }
