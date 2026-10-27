@@ -7,7 +7,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 
 | Command | What it does |
 | --- | --- |
-| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`, visible to Kapitsa on the other Macs of the network ([Several Macs](#several-macs)). Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the model picked last if it is downloaded, else the best model for this Mac ([Server options](#server-options)). |
+| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`, visible to Kapitsa on the other Macs of the network ([Several Macs](#several-macs)). Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the model picked last if it is downloaded, else the best model for this Mac ([Server options](#server-options)). `--engine splash` runs the model in Splash's own engine behind these APIs ([Splash's engine](#splashs-engine)). |
 | `kapitsa cluster [--json] [--watch]` | The Macs on this network that run Kapitsa: the model each serves, how, how fast, and the link to it ([Several Macs](#several-macs)). `kapitsa macs` is the same. |
 | `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
 | `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
@@ -426,6 +426,96 @@ awake). From the SSD the second turn writes the slot's text, token for token.
 A save writes the KV rows the SSD lacks and the states of its new restore points (the recurrent state and the draft
 model's context: about 110 MB each on the 35B, 200 MB on the 27B), so each turn the server idles after writes a few
 hundred MB (the table's turn 2).
+
+### Splash's engine
+
+`kapitsa serve --engine splash` runs [Splash](https://github.com/incoai/splash) as the engine and this server as the
+front: Splash keeps the weights, the GPU and the decode loop; Kapitsa keeps the HTTP server and its chat page, the
+OpenAI and Anthropic APIs, streaming and the output parser, and renders the prompt with Splash's own tokenizer and
+chat template, so the model, the prompt and the tokens are Splash's. Its engine is a child process (`splash
+serve-native`) spoken to over its native protocol on a pipe, so Kapitsa links neither the engine nor its library and
+Splash's own Apache-2.0 licence and notices apply ([THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES)); the ANE declarations
+and the few Metal kernels adapted from Splash keep their own file headers.
+
+```bash
+kapitsa serve --engine splash                            # the engine and the model, found where Splash installs them
+kapitsa serve --engine splash --check                    # what it would run, and what is missing: nothing is started
+kapitsa serve --engine splash --splash-model flash-next  # one of several: a family or model name
+```
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--engine native\|splash` | `native` | `splash` runs text generation in a Splash child process; `native` is Kapitsa's own engine. |
+| `--splash-binary PATH` | found | The Splash binary that runs `serve-native`: `engine/splash` under `$SPLASH_HOME`, the install a `splash` on `PATH` resolves into, then `~/Applications/Splash`, `/Applications/Splash`, `~/Splash`, and finally the one the last run used, so a Splash installed anywhere needs this once. `$SPLASH_HOME` that holds no `engine/splash` is an error rather than a reason to look elsewhere. |
+| `--splash-model NAME` | found | The model to run: a folder, or a name. A name matches, in any case, a part of the model's family or `model` from its `model.json` (`flash-next`, `27b`, `Q2_0`) — the newest folder when Splash resolved that model more than once — or is one of Splash's folder names or its first 6 or more characters; two different models matching is an error that lists them. Without it the server runs the only model under `~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer, else the one the last run used, else the most recently resolved, and says which one it picked on stderr. The folder's own tokenizer and chat template are what this server renders with, so the prompt is the one Splash would build. |
+| `--check` | — | With `--engine splash`: prints the engine binary, the resolved models, the model that would run, and for whatever is missing the error and the flag that fixes it; exits 0 when both are found, 1 otherwise, and starts nothing. A usage error without `--engine splash`. |
+| `--splash-arg ARG` | none | One more argument for `splash serve-native`, repeatable (`--splash-arg --verify-rows --splash-arg 2`). |
+| `--splash-persistent-cache` | off | Splash's SSD prefix cache kept across restarts: `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<model folder>`, unless `--splash-arg` gives either. Off, the child starts with an empty cache and writes nothing. |
+| `--splash-conversation-salt` | off | A cache salt per conversation (a hash of its messages up to the first user message), so conversations stop sharing cached prompts such as a common system prompt; off is one shared cache, as Splash without `cache_salt`. |
+
+All of them need `--engine splash` and are an error without it. The binary and the model the last run used are kept in
+`~/.cache/kapitsa/splash.json` (`KAPITSA_HOME` moves it), so the next run needs neither flag. Splash's model folder is
+the model: `--model`, the catalog, a download, this Mac's memory plan and routing to another Mac do not apply in this
+mode.
+
+Splash's own default frees the weights after ten idle minutes and the next request waits about 7 s for them to come
+back, so the child is given `--idle-release off` unless `--splash-arg` says otherwise. Splash takes `off` or a number of
+seconds, not `on`: `--splash-arg --idle-release 600` still frees after ten minutes, while `on` is refused with
+`--idle-release requires off or a positive number of seconds`.
+
+Kapitsa also sizes Splash's expert cache when this Mac is short of memory: under about 38 GiB free and reclaimable the
+child gets
+`--expert-memory` of what is free less 14 GiB of headroom, in whole GiB and at least 8 (a 30.4 GiB-free Mac ran a
+16 GiB cache that way). Under 22 GiB, or when `--splash-arg` sets `--expert-memory` itself, the plan is left to
+Splash, whose own plan needs about 35.8 GiB free and reclaimable. When the Mac is short of that — or under memory
+pressure with less reclaimable than the plan asks — Splash exits during its warmup and prints `not enough free
+memory to start` first, then `serve` exits 1 with `the Splash engine did not start: engine_exited: the splash
+engine closed its output`; Splash's own reason is the line above Kapitsa's, and on this Mac it depends on what else
+is running.
+
+Text chat only: Splash's native protocol carries text and sampling, so a request with an image, structured output (a
+`response_format` grammar) or a loop count is refused with the error type `invalid_request_error` and the engine's
+reason as the message; a prompt longer than the context is the same 400, with `context_length_exceeded` and the context
+it holds, that Kapitsa's own engine returns. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the
+server's life: one `serve` is one engine, not one per request.
+
+A follow-up turn sends the client's history as it is: the reasoning an earlier turn produced is not put back into it as
+Kapitsa's own engine does, so a turn's prompt is still the one plain Splash would build.
+
+Splash's sampler is its own frontend's too: a request that names no sampling gets Splash's defaults — temperature 1.0,
+top_p 0.95, top_k 20 — rather than the per-model ones Kapitsa's own engine would apply, so the same request answers
+alike in plain Splash and here. Sampling fields Kapitsa's own engine does not use — OpenAI's `presence_penalty` and
+`frequency_penalty`, and `repetition_penalty`, `min_p` and `ignore_eos` — are passed to it, and a value outside
+Splash's range (temperature in [0, 2], top_p in (0, 1], the two penalties in [-2, 2], a positive
+`repetition_penalty`, min_p in [0, 1]) is a 400 naming the field rather than a clamp. A thinking budget in the request
+is honoured, as Kapitsa's own engine honours it.
+
+The same Flash-Next model, three ways to run it on the M5 Pro 48 GB (macOS 26.5.2, Splash 1.4.0, one engine at a time
+under the GPU lock, n=3 or more per cell, interleaved arm by arm, temperature 0):
+
+<!-- TODO(numbers): every cell comes from the results JSON of the rerun, never hand-typed; a metric the JSON does not
+     have stays "not measured". Until that run lands, the table says "not measured" and the caption links no record. -->
+
+| Metric | Prompt | Kapitsa on Splash | plain Splash 1.4.0 | Kapitsa native, MTP |
+| --- | --- | ---: | ---: | ---: |
+| TTFT | ~1K tokens | not measured | not measured | not measured |
+| TTFT | ~4K tokens | not measured | not measured | not measured |
+| TTFT | ~16K tokens | not measured | not measured | not measured |
+| Prefill | ~1K tokens | not measured | not measured | not measured |
+| Prefill | ~4K tokens | not measured | not measured | not measured |
+| Prefill | ~16K tokens | not measured | not measured | not measured |
+| Decode | T=0, ~1K prompt | not measured | not measured | not measured |
+| Turn-2 TTFT | ~4K chat | not measured | not measured | not measured |
+| Peak RSS | engine process | not measured | not measured | not measured |
+
+<!-- llama.cpp is a row only if it was measured; otherwise a footnote naming the recorded reason. -->
+
+<sub>Identity: the same prompt ids and output ids on the two Splash arms at T=0 with seed 1 (`tools/splash_tap.py`, three
+requests of 66, 1031 and 4070 prompt tokens), so the prompt and the tokens are Splash's and not a re-render with another
+tokenizer or template. One run per side, so that is a spot check, not a statistical claim.</sub>
+
+Native Kapitsa against plain Splash, each with its own default drafter and sampling, is measured per Mac in
+[benchmarks](benchmarks.md#m5-pro); this table is about the mode itself.
 
 ## APIs
 
