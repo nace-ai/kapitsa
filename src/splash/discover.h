@@ -43,4 +43,14 @@ struct Last {
 Last read_last(const std::string& file);
 void write_last(const std::string& file, const Last& last);
 
+// What `kapitsa serve --engine splash --check` prints: the engine binary and the model it would run (given, or found as above),
+// the resolved models there are, and for whatever is missing the error find_binary / find_model gives, with the command that
+// fixes it. `ok` when both are found. Pure: nothing is started.
+struct Check {
+  std::string text;
+  bool ok = false;
+};
+Check check(const std::string& home, const std::string& splash_home, const std::string& path_env, const std::string& binary,
+            const std::string& model, const Last& last);
+
 }  // namespace ni::splash

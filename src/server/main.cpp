@@ -370,6 +370,7 @@ static void print_serve_help() {
          "                         newest of that family's folders; its tokenizer and chat template are used here); when not given: the\n"
          "                         only one under ~/Library/Application Support/Splash, else the last run's, else the most recently resolved\n"
          "                         (it says which)\n"
+         "  --check                with --engine splash: print the engine binary and model that would run, and what is missing; start nothing\n"
          "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0)\n"
          "  --splash-persistent-cache  keep Splash's SSD prefix cache across restarts (--persistent-cache on, in ~/Library/Caches/Kapitsa/\n"
          "                         splash-prefix-cache/<model folder>; writes to your disk; default off)\n"
@@ -820,7 +821,7 @@ static int serve(int argc, char** argv, int first) {
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
   std::vector<std::string> split;  // --split: the stages' addresses, in the order of their layers
   int port = 8000;
-  bool verbose = false, yes = false, allow_switch = false, priv = false, local = false, engine_splash = false;
+  bool verbose = false, yes = false, allow_switch = false, priv = false, local = false, engine_splash = false, check_only = false;
   std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
@@ -844,6 +845,7 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--splash-arg") opt.splash_args.push_back(next());
     else if (a == "--splash-persistent-cache") opt.splash_persistent_cache = true;
     else if (a == "--splash-conversation-salt") opt.splash_conversation_salt = true;
+    else if (a == "--check") check_only = true;
     else if (a == "--host") host = next();
     else if (a == "--port") port = to_int(a, next(), help);
     else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
@@ -897,6 +899,7 @@ static int serve(int argc, char** argv, int first) {
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
   // Splash's engine: the model runs in its child, so nothing below plans this Mac's memory for it, picks, downloads or
   // routes a model: the folder given is the model, served here and nowhere else
+  if (check_only && !engine_splash) usage_error("--check needs --engine splash", help);
   if (engine_splash) {
     if (!model.empty() || !split.empty() || allow_switch)
       usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
@@ -904,6 +907,13 @@ static int serve(int argc, char** argv, int first) {
     const char* home = getenv("HOME");
     const std::string last_file = hub::home_dir() + "/splash.json";
     const splash::Last last = splash::read_last(last_file);  // what the last run used
+    if (check_only) {  // what would be run, and what is missing: nothing is started
+      const char* sh = getenv("SPLASH_HOME");
+      const char* path = getenv("PATH");
+      const splash::Check c = splash::check(home ? home : "", sh ? sh : "", path ? path : "", opt.splash_binary, opt.splash_model, last);
+      fputs(c.text.c_str(), stdout);
+      return c.ok ? 0 : 1;
+    }
     if (opt.splash_binary.empty()) {
       const char* sh = getenv("SPLASH_HOME");
       const char* path = getenv("PATH");

@@ -178,6 +178,20 @@ int main() {
   m = find_model(home, "other-gguf", res.string() + "/eeeeee5555");
   check(m.ok() && has(m.path, "/ffffff6666"), "last: a name beats it", m.error);
 
+  // --check: what is found, what is missing, the fix; nothing is started
+  Check c = check(home, "", "", "", "", {});
+  check(!c.ok && has(c.text, "Splash engine: NOT FOUND") && has(c.text, "SPLASH_HOME") && has(c.text, "NOT DECIDED") &&
+            has(c.text, "e.g. kapitsa serve --engine splash --splash-model qwen3.6-35b-a3b"),
+        "check: nothing found, several models", c.text);
+  c = check(home, (tmp / "root").string(), "", "", "other-gguf", {});
+  check(c.ok && has(c.text, "Splash engine: " + (tmp / "root/engine/splash").string()) && has(c.text, "Model to run: ") && has(c.text, "/ffffff6666") &&
+            has(c.text, "Ready: run the same command without --check"),
+        "check: ready", c.text);
+  c = check(home, "", "", (tmp / "nope").string(), "", {});
+  check(!c.ok && has(c.text, "--splash-binary") && has(c.text, "no such file"), "check: bad --splash-binary", c.text);
+  c = check(home, "", "", lbin, "", {lbin, res.string() + "/ffffff6666"});
+  check(c.ok && has(c.text, "/ffffff6666"), "check: the last run's model", c.text);
+
   fs::remove_all(tmp);
   if (failures) return 1;
   printf("splash_discover_test: ok\n");

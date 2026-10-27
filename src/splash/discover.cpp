@@ -179,4 +179,26 @@ void write_last(const std::string& file, const Last& last) {
   if (ec) fs::remove(tmp, ec);
 }
 
+Check check(const std::string& home, const std::string& splash_home, const std::string& path_env, const std::string& binary,
+            const std::string& model, const Last& last) {
+  Check out;
+  Found b = binary.empty() ? find_binary(home, splash_home, path_env, last.binary) : Found{binary, ""};
+  if (!binary.empty() && !is_file(binary)) b = {"", "--splash-binary " + binary + ": no such file"};
+  out.text = b.ok() ? "Splash engine: " + b.path + "\n" : "Splash engine: NOT FOUND\n" + b.error + "\n";
+  const std::vector<Model> all = models(home);
+  out.text += "\nSplash models in " + models_dir(home).string() + ": " + (all.empty() ? "none" : std::to_string(all.size())) + "\n";
+  for (const Model& m : all) out.text += "  " + m.family + "  " + m.name + (m.source.empty() ? "" : "  (" + m.source + ")") + "\n";
+  Found m = model.empty() || (model.find('/') == std::string::npos && !fs::exists(model)) ? find_model(home, model, last.model)
+                                                                                           : Found{model, ""};
+  out.text += m.ok() ? "\nModel to run: " + m.path + "\n" : "\nModel to run: NOT DECIDED\n" + m.error + "\n";
+  if (!m.ok() && !all.empty() && model.empty()) {
+    std::string f = all[0].family;
+    std::transform(f.begin(), f.end(), f.begin(), [](unsigned char c) { return std::tolower(c); });
+    out.text += "e.g. kapitsa serve --engine splash --splash-model " + f + "\n";
+  }
+  out.ok = b.ok() && m.ok();
+  if (out.ok) out.text += "\nReady: run the same command without --check.\n";
+  return out;
+}
+
 }  // namespace ni::splash
