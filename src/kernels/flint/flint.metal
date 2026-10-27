@@ -27,9 +27,9 @@
 // The arrival (flint_arrive) is Nemotron-H's (nh_moe_a1, nh_x4_mm): the threadgroup's partials behind a device
 // barrier, then thread 0's fence, its count and a second fence, then a device barrier before the merge reads. The
 // kernels used to have each thread fence its own writes before the barrier and thread 0 count after it with no fence
-// of its own, which leaves the count unordered after the other threads' writes. That order read stale partials on
-// the M1 Pro, M1 Max and M5 Ultra; Nemotron-H's fused merges pass their community runs on an M1 Pro, M1 Max, M2 and
-// M5 Ultra (macOS 27).
+// of its own: the order that read stale partials on the M1 Pro, M1 Max and M5 Ultra. Nemotron-H's fused merges, in
+// the order here, pass their community runs on an M1 Pro, M1 Max, M2 and M5 Ultra (macOS 27), so the old order is the
+// likely cause; Flint's fused path has not been run on those Macs in this one, which would show it.
 
 #ifndef NI_UNROLL
 #define NI_UNROLL _Pragma("clang loop unroll(full)")

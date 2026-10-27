@@ -128,9 +128,10 @@ bool qmt_available() {
 // the M5 Ultra's 4-bit export and IQ import both turned to garbage once the context passed a 32-key tile, when the
 // decode attention starts to merge splits (#421), and the name test covers those chips because their apple_family is 9+
 // and they would otherwise take the fused path. NI_FLINT_SPLIT=0 keeps the fused kernels anyway. Those failures were
-// all on the fused kernels' old arrival, which left thread 0's count unordered after the other threads' partials; the
-// kernels now arrive as Nemotron-H's do (flint_arrive), whose fused merges pass on an M1 Pro, M1 Max, M2 and M5 Ultra.
-// Flint's fused path has not been run on those Macs with it, so they keep the split merges until one is.
+// all on the fused kernels' old arrival (thread 0 counted with no fence of its own after the other threads' partials),
+// the likely cause: the kernels now arrive as Nemotron-H's do (flint_arrive), whose fused merges pass on an M1 Pro,
+// M1 Max, M2 and M5 Ultra. Flint's fused path has not been run on those Macs with it, so they keep the split merges
+// until one is.
 bool split_merges() {
   if (env_on("NI_FLINT_SPLIT")) return true;
   if (__builtin_available(macOS 15.0, *)) {
