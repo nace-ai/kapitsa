@@ -50,6 +50,9 @@ struct Check {
   std::string text;
   bool ok = false;
 };
+// The rule for a --splash-binary given by the user, used by serve and --check alike: a file that can be run, else the error.
+Found explicit_binary(const std::string& path);
+
 Check check(const std::string& home, const std::string& splash_home, const std::string& path_env, const std::string& binary,
             const std::string& model, const Last& last,
             const std::vector<std::string>& system_roots = {"/Applications/Splash"});

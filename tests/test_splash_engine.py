@@ -229,9 +229,25 @@ finally:
     s.close()
 
 # an engine that cannot start ends the server with its reason and a plain exit status, not an abort
-r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", "/nonexistent/splash", "--splash-model", MODEL,
-                    "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
-check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failure: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
+with tempfile.TemporaryDirectory() as d:
+    bad = d + "/splash"
+    open(bad, "w").write("#!/bin/sh\nexit 3\n")
+    os.chmod(bad, 0o755)
+    r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", bad, "--splash-model", MODEL,
+                        "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
+    check(r.returncode == 1 and "did not start" in r.stderr + r.stdout, "start failure: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
+    # a --splash-binary that is missing or not executable: serve and --check refuse it with the same words, before anything starts
+    plain = d + "/plain"
+    open(plain, "w").write("x")
+    for path, words in (("/nonexistent/splash", "no such file"), (plain, "not an executable file")):
+        out = []
+        for extra in ([], ["--check"]):
+            r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", path, "--splash-model", MODEL, *extra,
+                                "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60)
+            out.append(r)
+            check(r.returncode != 0 and "--splash-binary " + path + ": " + words in r.stderr + r.stdout,
+                  "--splash-binary %s %s: %d %r" % (path, extra, r.returncode, (r.stderr + r.stdout)[-300:]))
+            check("did not start" not in r.stderr + r.stdout, "refused before starting: %s %s" % (path, extra))
 
 # a name that matches no resolved model is refused at once, naming it; nothing is downloaded
 with tempfile.TemporaryDirectory() as home:

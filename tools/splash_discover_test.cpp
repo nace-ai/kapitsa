@@ -220,6 +220,7 @@ int main() {
   check(!c.ok && has(c.text, "not an executable file") && !has(c.text, "Ready"), "check: --splash-binary that is not executable", c.text);
   c = check(home, (tmp / "root").string(), "", "", (tmp / "no/such/folder").string(), {}, none);  // a path that is no folder is a name: no match, not Ready
   check(!c.ok && has(c.text, "NOT DECIDED") && !has(c.text, "Ready"), "check: --splash-model path that is not a folder", c.text);
+  check(!explicit_binary((tmp / "nope").string()).ok() && !explicit_binary((tmp / "plain/splash").string()).ok() && explicit_binary(lbin).ok(), "explicit binary: same rule as check");
   c = check(home, "", "", lbin, "", {lbin, res.string() + "/ffffff6666"}, none);
   check(c.ok && has(c.text, "/ffffff6666"), "check: the last run's model", c.text);
 

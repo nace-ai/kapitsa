@@ -195,6 +195,12 @@ void write_last(const std::string& file, const Last& given) {
   if (ec) fs::remove(tmp, ec);
 }
 
+Found explicit_binary(const std::string& path) {
+  if (!is_file(path)) return {"", "--splash-binary " + path + ": no such file"};
+  if (!is_executable_file(path)) return {"", "--splash-binary " + path + ": not an executable file"};
+  return {path, ""};
+}
+
 Check check(const std::string& home, const std::string& splash_home, const std::string& path_env, const std::string& binary,
             const std::string& model, const Last& last, const std::vector<std::string>& system_roots) {
   Check out;

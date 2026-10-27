@@ -915,7 +915,10 @@ static int serve(int argc, char** argv, int first) {
       fputs(c.text.c_str(), stdout);
       return c.ok ? 0 : 1;
     }
-    if (opt.splash_binary.empty()) {
+    if (!opt.splash_binary.empty()) {  // the same rule as --check
+      splash::Found f = splash::explicit_binary(opt.splash_binary);
+      if (!f.ok()) usage_error(f.error, help);
+    } else {
       const char* sh = getenv("SPLASH_HOME");
       const char* path = getenv("PATH");
       splash::Found f = splash::find_binary(home ? home : "", sh ? sh : "", path ? path : "", {"/Applications/Splash"}, last.binary);
