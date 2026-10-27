@@ -31,9 +31,9 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test grammar_test
-structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test
-json_file_test logit_dump`:
+CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
+update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
+remote_test cluster_test split_place_test json_file_test logit_dump`:
 
 ```bash
 build/api_test
@@ -47,6 +47,8 @@ build/remote_test                            # a split model's reserve on its ot
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
+build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
+build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 python3 tests/test_server.py --cli build/kapitsa
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
