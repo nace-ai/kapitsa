@@ -41,7 +41,7 @@ const char* kHelp =
     "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--context N] [--loops N] [--api-key K] [agent arguments]\n"
     "                                 [-- agent arguments]\n\n"
     "Starts Claude Code, Codex, opencode or Pi on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default\n"
-    "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with a\n"
+    "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with\n"
     "the model's own context (less where this Mac's memory is tight), and stopped when the agent exits. Its log is in\n"
     "%s/logs/serve-P.log.\n\n"
     "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: asked in a terminal; else the\n"
