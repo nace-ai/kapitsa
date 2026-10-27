@@ -129,6 +129,10 @@ const store = { get(k, d) { try { const v = localStorage.getItem("kapitsa." + k)
 let messages = store.get("chat", []);   // {role, content, images?, reasoning?, stats?}
 let pending = [];                       // data: URLs of the images to send with the next message
 let modelId = "", busy = null;
+// The active model's usable context in tokens: the reply's own budget, reasoning included, so a page that sends a
+// request without max_tokens does not fall back to the API's 16384 and cut a thinking model off mid-thought.
+let contextFit = 0;
+let contextTries = 10;  // loadModel's retries while the engine is still coming up and reports no context yet
 $("think").checked = store.get("think", true);
 $("think").onchange = () => store.set("think", $("think").checked);
 
@@ -222,6 +226,7 @@ function statsText(s) {
   if (s.prefillTps && TIMING !== "ttft") p.push(Math.round(s.prefillTps).toLocaleString() + " tok/s prefill" + (s.cached ? " on the " + s.fresh + " uncached prompt tokens" : ""));
   if (s.cached) p.push(s.cached + " prompt tokens cached");
   if (s.stopped) p.push("stopped");
+  else if (s.finish === "length") p.push("cut off: the context is full, or the reply hit the server's token limit");
   return p.join(" · ");
 }
 function renderBot(el, m, live) {
@@ -286,6 +291,11 @@ async function loadModel() {
     const list = (j.data && Array.isArray(j.data)) ? j.data : [];
     const active = list.find((m) => m.active) || list[0];
     modelId = (active && active.id) || (list[0] && list[0].id) || "";
+    contextFit = (active && (active.context_fit || active.context_length)) || 0;
+    // The engine reports no context until it is up: a page opened while a model loads would otherwise send no max_tokens
+    // and take the API's 16384 for the rest of the session, the very cap this budget exists to avoid. Ten tries over
+    // ~20 s covers a model load; past that the page keeps working with the API's default.
+    if (!contextFit && contextTries-- > 0) setTimeout(() => { if (!contextFit) loadModel(); }, 2000);
     $("model").textContent = modelId || "no model";
     document.title = modelId ? "Kapitsa · " + modelId : "Kapitsa";
 
@@ -413,6 +423,11 @@ async function ask() {
     stream: true, stream_options: { include_usage: true },
     chat_template_kwargs: { enable_thinking: $("think").checked },
   };
+  // The reply's budget is the model's context: without a max_tokens the API caps it at 16384, which a reasoning model
+  // spends on its thinking and then has nothing left to answer with. The engine stops at the end of the turn on its
+  // own, and at the context's end when the prompt and the reply together fill it (finish_reason "length"), so naming
+  // the whole context costs nothing and the reply gets whatever room the conversation left.
+  if (contextFit > 0) body.max_tokens = contextFit;
   const t0 = performance.now();
   let tFirst = null, tThinkEnd = null, frame = 0;
   const paint = () => { frame = 0; renderBot(el, m, true); if (stick) toBottom(); };
@@ -443,6 +458,8 @@ async function ask() {
           }
           if (d.reasoning_content) m.reasoning += d.reasoning_content;
           if (d.content) m.content += d.content;
+          const fin = c.choices && c.choices[0] && c.choices[0].finish_reason;
+          if (fin) m.stats.finish = fin;
           if (c.usage) {
             const n = c.usage.completion_tokens, secs = (performance.now() - (tFirst || t0)) / 1000;
             m.stats.tokens = n;
@@ -467,7 +484,9 @@ async function ask() {
   send.hidden = false; stop.hidden = true;
   renderBot(el, m, false);
   if (stick) toBottom();
-  $("status").textContent = m.error ? "Error: " + m.error : "Answer complete. " + statsText(m.stats);
+  const cut = m.stats && m.stats.finish === "length" && !m.stats.stopped;
+  $("status").textContent = m.error ? "Error: " + m.error
+    : (cut ? "Reply cut off. " : "Answer complete. ") + statsText(m.stats);
   if (m.error && !m.content) messages.splice(-2, 2); else save();
   updateSend();
   input.focus();

@@ -828,6 +828,13 @@ st, _, body = get("/v1/models", auth())
 models_ok = st == 200 and json.loads(body)["data"][0]["id"]
 check("/v1/models lists the model" + (f" as {MODEL_ID}" if MODEL_ID else ""),
       bool(models_ok) and (not MODEL_ID or json.loads(body)["data"][0]["id"] == MODEL_ID), body[:200].decode())
+# The page sends the model's context as max_tokens: without it the API caps a reply at 16384 (chat_max_tokens), which a
+# reasoning model spends on its thinking and then has nothing left to answer with. The page reads the field and the
+# server serves it: asserted together, so a rename on either side fails here rather than in a silent 16384 cap.
+check("chat page budgets the reply by the model's context, not the API's 16384 default",
+      "context_fit" in html and re.search(r"body\.max_tokens\s*=\s*contextFit", html) is not None and
+      st == 200 and json.loads(body)["data"][0].get("context_fit", 0) > 0,
+      "page reads context_fit and sets max_tokens from it; the server serves a positive context_fit")
 if API_KEY:
     check("--api-key: the page loads without a key", get("/")[0] == 200)
     check("--api-key: the API needs it", get("/v1/models")[0] == 401 and get("/v1/models", auth())[0] == 200)

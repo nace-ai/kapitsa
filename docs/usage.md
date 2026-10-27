@@ -564,7 +564,7 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `GET /v1/models/:model` | Information about a specific model. |
 | `POST /v1/models/switch` | With `--allow-switch`: switches the active model, `{"model": "<name>"}` (403 without the flag). While it loads, other requests get 503 with `Retry-After`. A model that fails to load leaves the previous one serving. |
 | `GET /health` | `{"status":"ok"}` |
-| `GET /` | The chat page: one file with dynamic client-side model selection dropdown that talks only to this server and keeps its conversations in the browser. |
+| `GET /` | The chat page: one file with dynamic client-side model selection dropdown that talks only to this server and keeps its conversations in the browser. Its requests name the model's context as `max_tokens`, so a reply may use whatever room the conversation has left (the budget is refreshed when the page loads and after a model switch the page itself makes, not after one another client makes); a client that names neither `max_tokens` nor `max_completion_tokens` gets the 16384 cap above instead, which a reasoning model can spend entirely on its thinking. A reply the engine cut off says so ("cut off: the context is full, or the reply hit the server's token limit"). |
 
 Every API streams (server-sent events) or answers in one JSON reply. A prompt longer than the context is a 400 error,
 streamed or not (Messages: "prompt is too long", which Claude Code answers by compacting; Responses and Chat
