@@ -858,6 +858,433 @@ void case_floor(const Pack& p) {
          "%u/%u, unfloored re-reads %llu + %llu experts\n",
          nslots, kept_on, E, kept_off, wkept_on, E, wkept_off, nkept, E, (unsigned long long)off.misses,
          (unsigned long long)woff.misses);
+}
+
+void case_complete(const Pack& p) {
+  const uint32_t L = uint32_t(p.layers.size()), E = p.E;
+  Arena a(p.lay, L * E, L, E);
+  Event ev;
+  ExpertCache::Options o;
+  ExpertCache c(p.files, p.layers, E, p.lay, L * E + 100, a.m, ev.sync(), o);
+  CHECK(c.complete(), "complete: not complete");
+  int bad = 0;
+  for (uint32_t l = 0; l < L; ++l)
+    for (uint32_t e = 0; e < E; ++e) bad += !expert_ok(a, p.lay, l, e, E);
+  CHECK(bad == 0, "complete: %d experts wrong", bad);
+  // nothing is served: post is a no-op
+  ExpertCache::Req r;
+  c.post(r);
+  CHECK(c.stats().handshakes == 0, "complete: a handshake was served");
+  printf("an arena of all %u experts: filled at start, every table word right, no handshakes\n", L * E);
+}
+
+// ---- the layer-major group walk's shapes at the merge gate's frozen lengths (PR #628) --------------------
+// The leg table must be computable, not hand-written: the engine's own chunker decides a pass's chunk rows
+// (prefill_chunk_rows, even-balanced - the legs pin --prefill-chunk 2048 and prefill_even_chunks on both arms),
+// and engine.cpp's walk collects the next G chunks into a layer-major group while every one is plain: it breaks
+// on the pass's last chunk (pos + Tc == n - that one samples and runs alone), on a split row count and on a save
+// point inside or at a chunk's end, and under two plain chunks it yields nothing (nc < 2 -> 0) and the chunk
+// path runs one chunk, the next pass retrying the walk from its end. The legs' cells are plain text with no
+// split, no save point and no image or grammar rows, so those are the pinned conditions that make the other
+// break rules inert; this replica keeps the two rules that can fire and calls the real chunker for every row
+// count. A shape here that disagrees with the engine's log ("prefill group of ... rows" against the chunker's
+// "prefill chunk of ...") means the pin or this replica is wrong.
+void case_group_shape() {
+  const int C = 2048;  // --prefill-chunk 2048, pinned on both gate arms
+  struct Shape {
+    std::vector<std::vector<int>> groups;  // the layer-major groups' chunk rows, in pass order
+    std::vector<int> alone;                // the chunks that ran alone (the chunk path), in pass order
+  };
+  auto walk = [&](int64_t n, int g) {
+    Shape sh;
+    int64_t pos = 0;
+    while (pos < n) {
+      int Ts[8], nc = 0;
+      int64_t q = pos;  // the walk's look-ahead cursor; it commits only when a group forms
+      while (nc < g && q < n) {
+        const int Tc = prefill_chunk_rows(C, q, n, true);
+        if (q + Tc == n) break;  // the pass's last chunk: it samples and runs alone
+        Ts[nc++] = Tc;
+        q += Tc;
+      }
+      if (nc < 2) nc = 0;
+      if (nc >= 2) {
+        sh.groups.emplace_back(Ts, Ts + nc);
+        pos = q;
+      } else {
+        const int T = prefill_chunk_rows(C, pos, n, true);
+        sh.alone.push_back(T);
+        pos += T;
+      }
+    }
+    return sh;
+  };
+  auto show = [](const Shape& s) {
+    std::string o;
+    for (const std::vector<int>& gr : s.groups) {
+      if (!o.empty()) o += " ";
+      o += "group[";
+      for (size_t i = 0; i < gr.size(); ++i) o += (i ? "," : "") + std::to_string(gr[i]);
+      o += "]";
+    }
+    if (!s.alone.empty()) {
+      if (!o.empty()) o += " ";
+      o += "alone[";
+      for (size_t i = 0; i < s.alone.size(); ++i) o += (i ? "," : "") + std::to_string(s.alone[i]);
+      o += "]";
+    }
+    return o;
+  };
+  struct Cell {
+    const char* name;
+    int64_t n;
+    int g;
+    std::vector<std::vector<int>> groups;
+    std::vector<int> alone;
+  };
+  // The gate's frozen lengths. The bench cells are not round numbers: pf16_seed33 is 16287 tokens, the frozen 4K
+  // cell is 4132 - an nc=2 group, not the fall-through a 4096-token cell would be - and c64k / c128k are 65535
+  // and 131071. EXACT4096 / EXACT6144 are exact-length prefix slices of pf16_seed33, pinned in the gate package.
+  const std::vector<Cell> cells = {
+      {"EXACT4096 fall-through (nc=1 -> 0)", 4096, 4, {}, {2048, 2048}},
+      {"EXACT6144 smallest real group", 6144, 4, {{2048, 2048}}, {2048}},
+      {"EXACT6144 G=2 diagnostic (1 group, 1 alone)", 6144, 2, {{2048, 2048}}, {2048}},
+      {"pf16_seed33 (h16k)", 16287, 4, {{2036, 2036, 2036, 2036}, {2036, 2036, 2036}}, {2035}},
+      {"c64k (h64k)", 65535, 4,
+       {{2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048}},
+       {2047}},
+      {"c128k (h128k)", 131071, 4,
+       {{2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
+        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048}},
+       {2047}},
+      {"frozen 4K cell 4132 (nc=2, not the fall-through)", 4132, 4, {{1378, 1377}}, {1377}},
+      {"6155 roundoff (the warning cell: nc=3)", 6155, 4, {{1539, 1539, 1539}}, {1538}},
+  };
+  for (const Cell& c : cells) {
+    const Shape sh = walk(c.n, c.g);
+    printf("group-shape %-48s n=%lld G=%d: %s\n", c.name, (long long)c.n, c.g, show(sh).c_str());
+    CHECK(sh.groups == c.groups && sh.alone == c.alone, "group-shape %s: got %s", c.name, show(sh).c_str());
+  }
+}
+
+// ---- the group's eligibility and its one accounting (the resident-store invariant, PR #628) --------------
+// Runtime eligibility (q20::group_chunks) gates the three sides that must agree: the engine's walk,
+// alloc4_group's allocation and the memory plan's MemPlan::group_slots. The slot term stays OUT of
+// MemPlan::activations: whether it is charged at all is the store-world choice - q20::group_world, the one
+// function Qwen4Exp::init_store runs live and ni::planned_group_world predicts before a load (the engine's fit
+// checks, doctor.cpp). The store is sized WITHOUT the charge first; complete already, the group never forms,
+// the bytes are never allocated and no fit number may carry them - that is what keeps a full default-context
+// ladder from shrinking under a reservation no load pays. Incomplete, the slots pay for themselves and the
+// chosen world carries the charge. The decision is monotone (more charge shrinks the store, it never completes
+// it more), so the one correction is a fixed point - no oscillation, no circularity.
+void case_group_plan() {
+  CHECK(group_chunks(4, false, false, false) == 4, "group_chunks: an incomplete streamed store groups");
+  CHECK(group_chunks(4, false, false, true) == 1, "group_chunks: an all-resident expert set never groups");
+  CHECK(group_chunks(4, true, false, false) == 1, "group_chunks: a split model never groups");
+  CHECK(group_chunks(4, false, true, false) == 1, "group_chunks: a layer-debugging model never groups");
+  CHECK(group_chunks(1, false, false, false) == 1, "group_chunks: G=1 stays the chunk path");
+  CHECK(group_chunks(8, false, false, false) == 8, "group_chunks: G=8 (the env's top) groups");
+  // one formula for the plan, the allocation and the sizing charge: 0 below G=2, linear in G above; the terms are
+  // alloc4_group's buffers per chunk - xg_ T*(hc*D) fp32, yg_ T*D fp32, injAg_ + injM_ 2*T*hc fp32, and the two
+  // alternating sets of n-gram staging (ple_pfg_, 2G of them) T*D fp16
+  const size_t T = 2048, D = 2048, hc = 4;
+  CHECK(group_slot_bytes(0, T, D, hc) == 0 && group_slot_bytes(1, T, D, hc) == 0, "group_slot_bytes: 0 below G=2");
+  CHECK(group_slot_bytes(2, T, D, hc) == 2 * (T * hc * D * 4 + T * D * 4 + 2 * T * hc * 4 + 2 * T * D * 2),
+        "group_slot_bytes: alloc4_group's buffers, expanded");
+  CHECK(group_slot_bytes(4, T, D, hc) == 2 * group_slot_bytes(2, T, D, hc), "group_slot_bytes: linear in G");
+  // the store-world choice on the pure auto_store_size both the live (init_store) and the predicted
+  // (planned_group_world) sides use
+  const size_t gsb = group_slot_bytes(4, T, D, hc);
+  const size_t G1 = size_t(1) << 30, G20 = size_t(20) << 30, G30 = size_t(30) << 30;
+  const size_t G40 = size_t(40) << 30, G41 = size_t(41) << 30, G44 = size_t(44) << 30, G48 = size_t(48) << 30;
+  // world A: the budget leaves the store short of all the experts -> the charge applies and the store stays
+  // incomplete, so alloc4_group runs and prefill_group() answers G - the same predicate on every side
+  AutoStoreIn a;
+  a.all = G40, a.least = G1, a.left = G30, a.used = G20, a.ram = G48, a.avail = size_t(100) << 30;
+  const GroupWorld A = group_world(gsb, a);
+  CHECK(A.charge == gsb && A.st.bytes == G30 - gsb && A.st.bytes < G40,
+        "group_world A: charged to %zu, still incomplete", A.st.bytes);
+  CHECK(A.in.left == G30 - gsb && A.in.used == G20 + gsb && A.in.avail == (size_t(100) << 30) - gsb,
+        "group_world A: the chosen inputs are the charged ones");
+  // world B: every expert fits without the charge -> no charge, no slots, the bare world stands, and the chunk
+  // path keeps its precomb fold. Every fit number that asks this world gets the bare sizing back - an unpaid
+  // reservation must not shrink a default-context ladder. The order is the invariant: sizing WITH the charge
+  // first would clamp this store below all on the avail guard and allocate slots that then make it incomplete -
+  // a world that never settles.
+  AutoStoreIn b = a;
+  b.left = G41;
+  b.avail = G44 + gsb / 2;
+  const GroupWorld B = group_world(gsb, b);
+  CHECK(B.charge == 0 && B.st.bytes == G40 && B.in.left == G41 && B.in.used == G20,
+        "group_world B: complete without the charge, bare world, charge %zu", B.charge);
+  AutoStoreIn bc = group_charged_in(b, gsb);
+  CHECK(auto_store_size(bc).bytes < G40, "group_world B: charging first would have clamped it below all");
+  // no term (G=1, or the split/all-resident worlds): the bare sizing, untouched
+  const GroupWorld Z = group_world(0, a);
+  CHECK(Z.charge == 0 && Z.st.bytes == auto_store_size(a).bytes && Z.in.left == a.left,
+        "group_world: a zero term leaves the sizing alone");
+  // the NI_EXPERT_STORE pin's world (A2): one parse (q20::store_pin_bytes) feeds group_world's pin branch, and
+  // a pin decides its own world in the live load (init_store) and in every pre-load prediction
+  // (planned_group_world) alike - chunk-invariant, only the charge's magnitude scales with the plan's rows
+  // pinned-short: the store IS the pin's bytes (the parser clamped to all), the world stays incomplete so the
+  // slots are charged, and the sizing inputs stay the bare ones - the pin overrides budget/avail/cap
+  const size_t pin = G20;
+  const GroupWorld P = group_world(gsb, a, &pin);
+  CHECK(P.charge == gsb && P.st.bytes == pin && P.st.why == AutoStoreWhy::Pinned && P.in.left == a.left,
+        "group_world pin: a short pin %zu charges %zu, why %d, sizing inputs stay bare", P.st.bytes, P.charge,
+        int(P.st.why));
+  // pinned-complete: a pin holding every expert is complete - never groups, never pays
+  const size_t pin_all = a.all;
+  const GroupWorld Q = group_world(gsb, a, &pin_all);
+  CHECK(Q.charge == 0 && Q.st.bytes == a.all && Q.st.why == AutoStoreWhy::Pinned,
+        "group_world pin: a full pin never charges, charge %zu", Q.charge);
+  // the pin overrides the automatic world (the A2 mandatory fix): world B's automatic store is complete, yet a
+  // short pin still reserves the slots - what keeps the pin and every fit number on one decision
+  const GroupWorld R = group_world(gsb, b, &pin);
+  CHECK(auto_store_size(b).bytes >= b.all && R.charge == gsb && R.st.bytes == pin,
+        "group_world pin: a short pin reserves where the automatic store would be complete");
+  printf("group plan: eligibility pinned, slot bytes one formula (%zu B at G=4, T=2048), store-world choice settled\n",
+         gsb);
+}
+
+// The NI_EXPERT_STORE pin end to end, the seam the pure sides above stop short of: the environment variable
+// through the one parse the live load shares (q20::store_pin_bytes) into the one prediction every pre-load fit
+// number and `kapitsa doctor` ask (ni::planned_group_world; doctor.cpp publishes its st/in as the expert_store
+// JSON: bytes, reason, group_slot_bytes, budget_leaves_bytes). No model, no load: header-only MemPlans of a
+// streamed Q2_0 pack, the fields plan() fills. Qwen4Exp::init_store runs the identical expression live
+// (qwen4_exp.cpp: getenv -> store_pin_bytes -> q20::group_world); that call site needs a model loaded on the
+// GPU, so the CPU side pins the parser's own cases first, then the env-driven prediction through it.
+void case_group_pin() {
+  // the pin is process-wide: save whatever the case finds, restore it at the end
+  const char* prior = getenv("NI_EXPERT_STORE");
+  const std::string saved = prior ? prior : "";
+  const auto set_es = [](const char* v) {
+    if (v) setenv("NI_EXPERT_STORE", v, 1);
+    else unsetenv("NI_EXPERT_STORE");
+  };
+  const size_t GB = size_t(1e9);  // the parser's GB: atof(es) * 1e9, exact at these values
+  const size_t gsb = group_slot_bytes(4, 2048, 2048, 4);  // case_group_plan's G=4 shape
+  const size_t budget = 20 * GB;
+  const int slots = 2, ctx = 8192;
+
+  // the parser alone, every case a parse regression could hide in: no pin, a pin, an exact size, a clamp, 0,
+  // the values below zero and the infinities (the double->size_t conversion is undefined for all of them:
+  // every clamp happens before it, not after)
+  size_t pb = ~size_t(0);
+  CHECK(!store_pin_bytes(nullptr, 4 * GB, pb) && !store_pin_bytes("", 4 * GB, pb) && !store_pin_bytes("auto", 4 * GB, pb),
+        "store_pin_bytes: unset, the empty string and \"auto\" are no pin");
+  CHECK(store_pin_bytes("all", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"all\" pins the whole store (%zu)", pb);
+  CHECK(store_pin_bytes("0.5", 4 * GB, pb) && pb == 5 * GB / 10, "store_pin_bytes: \"0.5\" is exact (%zu)", pb);
+  CHECK(store_pin_bytes("1e6", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"1e6\" clamps to all (%zu)", pb);
+  CHECK(store_pin_bytes("abc", 4 * GB, pb) && pb == 0, "store_pin_bytes: garbage reads 0, pinned (%zu)", pb);
+  CHECK(store_pin_bytes("-1", 4 * GB, pb) && pb == 0, "store_pin_bytes: a negative pin clamps to 0 (%zu)", pb);
+  CHECK(store_pin_bytes("-0.5", 4 * GB, pb) && pb == 0, "store_pin_bytes: a negative fraction clamps to 0 (%zu)", pb);
+  CHECK(store_pin_bytes("nan", 4 * GB, pb) && pb == 0, "store_pin_bytes: NaN clamps to 0 (%zu)", pb);
+  CHECK(store_pin_bytes("inf", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"inf\" clamps to all, never an undefined conversion (%zu)", pb);
+  CHECK(store_pin_bytes("1e999", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"1e999\" (atof overflows to inf) clamps to all (%zu)", pb);
+
+  // fixture C: a 3-layer pack - the smallest store (3 layers') IS the whole store, so no live sample of the
+  // available memory, no RAM-share cap and no budget can cut the automatic world below all: it is complete on
+  // any machine, and a short pin must reserve the slots anyway (the A2 invariant, through the env seam)
+  MemPlan c;
+  c.store_all = 3 * GB, c.store_least = 3 * GB;
+  c.streamed = c.store_all;
+  c.weights = GB + c.store_least;  // the trunk (1 GB) plus the smallest store, as plan() accounts it
+  c.mtp = 200000000, c.activations = 100000000;
+  c.group_slots = gsb;
+  c.slot_state = 50000000, c.kv_per_pos = 10000;
+  set_es(nullptr);
+  const GroupWorld U = planned_group_world(c, slots, ctx, budget);
+  CHECK(U.st.bytes == c.store_all && U.st.why == AutoStoreWhy::All && U.charge == 0 && U.in.left > U.in.all,
+        "group pin env: unset, the automatic world is complete and pays nothing (bytes %zu, why %d, charge %zu)",
+        U.st.bytes, int(U.st.why), U.charge);
+  set_es("2");  // a short pin: 2 GB of the 3 GB store
+  const GroupWorld P = planned_group_world(c, slots, ctx, budget);
+  CHECK(P.st.bytes == 2 * GB && P.st.why == AutoStoreWhy::Pinned && P.charge == gsb && P.in.left == U.in.left,
+        "group pin env: a short pin reserves where the automatic store was complete (pin bytes %zu, charge %zu)",
+        P.st.bytes, P.charge);
+  CHECK(std::string(auto_store_why_name(P.st.why)) == "NI_EXPERT_STORE" &&
+            auto_store_reason(P.st, P.in).find("NI_EXPERT_STORE pin") != std::string::npos,
+        "group pin env: doctor's reason value and sentence name the pin");
+
+  // fixture P: realistic proportions - a 4-layer pack, the smallest store 3 layers'; the pin branch ignores
+  // budget/avail/cap, so every pin assertion is exact on any machine; only the "auto" row is an invariant (a
+  // live avail sample moves by definition)
+  MemPlan p = c;
+  p.store_all = 4 * GB, p.store_least = 3 * GB;
+  p.streamed = p.store_all;
+  set_es("3.5");  // between the least and all: a realistic short pin
+  const GroupWorld Pp = planned_group_world(p, slots, ctx, budget);
+  CHECK(Pp.st.bytes == 35 * GB / 10 && Pp.st.why == AutoStoreWhy::Pinned && Pp.charge == gsb,
+        "group pin env: the pin's bytes are exact at the parser's scale (bytes %zu, charge %zu)", Pp.st.bytes,
+        Pp.charge);
+  set_es("all");
+  const GroupWorld A = planned_group_world(p, slots, ctx, budget);
+  CHECK(A.st.bytes == p.store_all && A.st.why == AutoStoreWhy::Pinned && A.charge == 0 &&
+            auto_store_reason(A.st, A.in).find("pin: resident") != std::string::npos,
+        "group pin env: a full pin is resident and never pays (charge %zu)", A.charge);
+  set_es("9");  // above the whole store: the parser clamps to all
+  const GroupWorld O = planned_group_world(p, slots, ctx, budget);
+  CHECK(O.st.bytes == p.store_all && O.st.why == AutoStoreWhy::Pinned && O.charge == 0,
+        "group pin env: an over pin clamps to all (bytes %zu)", O.st.bytes);
+  set_es("xyz");  // garbage reads as 0: fail-safe to the incomplete side, reservation charged
+  const GroupWorld G = planned_group_world(p, slots, ctx, budget);
+  CHECK(G.st.bytes == 0 && G.st.why == AutoStoreWhy::Pinned && G.charge == gsb,
+        "group pin env: garbage pins 0 bytes and still reserves (charge %zu)", G.charge);
+  set_es("-1");  // negative: the conversion below zero is undefined and platform-split (arm64 saturates to 0,
+                 // x86-64 reads an indefinite huge value as a full pin); the parser's clamp makes it the
+                 // garbage fail-safe everywhere: pins 0, still reserves
+  const GroupWorld N = planned_group_world(p, slots, ctx, budget);
+  CHECK(N.st.bytes == 0 && N.st.why == AutoStoreWhy::Pinned && N.charge == gsb,
+        "group pin env: a negative pin clamps to 0 and still reserves (charge %zu)", N.charge);
+  set_es("auto");  // the parser's explicit off-pin: the automatic world, never Pinned
+  const GroupWorld V = planned_group_world(p, slots, ctx, budget);
+  CHECK(V.st.why != AutoStoreWhy::Pinned && V.st.bytes >= p.store_least && V.st.bytes <= p.store_all &&
+            V.charge == (V.st.bytes < p.store_all ? gsb : 0),
+        "group pin env: \"auto\" is the automatic world (bytes %zu, why %d, charge %zu)", V.st.bytes, int(V.st.why),
+        V.charge);
+  set_es("3.5");
+  // context: the pin's world is chunk-invariant - the store's bytes and charge identical at 4K and at 128K -
+  // while the world's budget_leaves tracks the context exactly: flash_next_model_budget holds
+  // slots*slot_state + kv_per_pos*min(ctx, 32768), so the 128K world leaves less by the KV term between 4K
+  // and the 32K clamp, and one slot less leaves one slot_state more
+  const GroupWorld W4 = planned_group_world(p, slots, 4096, budget);
+  const GroupWorld W13 = planned_group_world(p, slots, 131072, budget);
+  CHECK(W4.st.bytes == Pp.st.bytes && W4.st.bytes == W13.st.bytes && W4.charge == W13.charge && W4.charge == gsb,
+        "group pin env: the pin is the same world at 4K, 8K and 128K (charge %zu vs %zu)", W4.charge, W13.charge);
+  CHECK(W4.in.left - W13.in.left == p.kv_per_pos * (32768 - 4096),
+        "group pin env: the budget's leaves track the context's KV reserve exactly (%zu vs %zu)", W4.in.left,
+        W13.in.left);
+  const GroupWorld S1 = planned_group_world(p, 1, ctx, budget);
+  CHECK(S1.in.left - Pp.in.left == p.slot_state && S1.charge == gsb,
+        "group pin env: one slot fewer: one slot_state more left, same charge (leaves %zu vs %zu, charge %zu vs %zu)",
+        S1.in.left, Pp.in.left, S1.charge, Pp.charge);
+  // restore the environment: the pin is process-wide and the other cases must see what this one found
+  if (prior) setenv("NI_EXPERT_STORE", saved.c_str(), 1);
+  else unsetenv("NI_EXPERT_STORE");
+  printf("group pin: env -> one parse -> one world: bytes exact, a short pin reserves %zu B, the context moves "
+         "the budget's leaves, never the pin\n",
+         gsb);
+}
+
+}  // namespace
+
+// a GGUF v3 file of one tensor, name [rows, dim] (ne {dim, rows}) of `type`, from its raw blocks
+void write_gguf_table(const std::string& path, const std::string& name, uint32_t type, uint64_t dim, uint64_t rows,
+                      const std::vector<uint8_t>& data) {
+  std::vector<uint8_t> h;
+  auto put = [&](const void* p, size_t n) { h.insert(h.end(), static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n); };
+  auto u32 = [&](uint32_t v) { put(&v, 4); };
+  auto u64 = [&](uint64_t v) { put(&v, 8); };
+  auto str = [&](const std::string& v) { u64(v.size()), put(v.data(), v.size()); };
+  put("GGUF", 4), u32(3), u64(1), u64(1);
+  str("general.architecture"), u32(8), str("qwen4exp");
+  str(name), u32(2), u64(dim), u64(rows), u32(type), u64(0);
+  h.resize((h.size() + 31) / 32 * 32, 0);
+  h.insert(h.end(), data.begin(), data.end());
+  FILE* f = fopen(path.c_str(), "wb");
+  fwrite(h.data(), 1, h.size(), f);
+  fclose(f);
+}
+
+void case_ngram_table(const std::string& dir, std::vector<std::string>& files) {
+  constexpr int dim = 160;
+  constexpr int64_t rows = 37;
+  const int f0 = g_fail;
+  std::mt19937 rng(11);
+  std::vector<int64_t> ids;
+  for (int64_t r = 0; r < rows; ++r) ids.push_back((r * 7) % rows);
+  for (const auto& [type, name] : {std::pair<uint32_t, const char*>{gguf::kIQ4_NL, "IQ4_NL"}, {gguf::kQ8_0, "Q8_0"}}) {
+    uint32_t be = 0, bb = 0;
+    gguf::type_block(type, &be, &bb);
+    const size_t rb = dim / be * bb;
+    std::vector<uint8_t> data(rb * rows);
+    for (auto& b : data) b = uint8_t(rng());
+    for (size_t o = 0; o < data.size(); o += bb) {  // a finite fp16 d per block, 2^-10 .. 2^-3
+      const _Float16 d = _Float16(std::ldexp(1.0 + double(rng() % 1024) / 1024, -int(3 + rng() % 8)));
+      memcpy(&data[o], &d, 2);
+    }
+    const std::string path = dir + "/ple_" + name + ".gguf";
+    write_gguf_table(path, "per_layer_token_embd.weight", type, dim, rows, data);
+    files.push_back(path);
+    NgramTable t;
+    t.open_gguf(path, "per_layer_token_embd.weight", dim);
+    CHECK(t.rows() == rows && t.dim() == dim, "GGUF %s table: %lld x %d", name, (long long)t.rows(), t.dim());
+    CHECK(t.describe().find(name) != std::string::npos, "GGUF %s table: described as %s", name, t.describe().c_str());
+    std::vector<float> got(dim), want(dim), all(size_t(rows) * dim);
+    int bad = 0;
+    for (int64_t r = 0; r < rows; ++r) {
+      t.row(r, got.data());
+      gguf::dequantize(type, &data[size_t(r) * rb], want.data(), dim);
+      bad += memcmp(got.data(), want.data(), dim * 4) != 0;
+    }
+    CHECK(!bad, "GGUF %s table: %d of %lld rows differ from gguf::dequantize", name, bad, (long long)rows);
+    t.gather(ids.data(), int(rows), 1, all.data());
+    for (int64_t i = 0; i < rows; ++i) {
+      gguf::dequantize(type, &data[size_t(ids[size_t(i)]) * rb], want.data(), dim);
+      bad += memcmp(&all[size_t(i) * dim], want.data(), dim * 4) != 0;
+    }
+    CHECK(!bad, "GGUF %s table: %d gathered rows differ", name, bad);
+  }
+  // the affine table: 4-bit codes, bf16 scale and bias per 32, two shards of one safetensors file
+  const int64_t sr[2] = {20, 17};
+  std::string hdr = "{";
+  std::vector<uint8_t> body;
+  std::vector<std::vector<uint8_t>> parts;
+  for (int k = 0; k < 2; ++k)
+    for (const auto& [suf, width] : {std::pair<const char*, int>{"weight", 80}, {"scales", 10}, {"biases", 10}}) {
+      std::vector<uint8_t> v(size_t(sr[k]) * width);
+      for (size_t i = 0; i < v.size(); ++i) v[i] = uint8_t(rng());
+      if (suf[0] != 'w')
+        for (size_t i = 0; i < v.size(); i += 2) {  // finite bf16 values, |x| in 2^-8 .. 2^-1
+          const uint16_t b = uint16_t(0x3B80 + rng() % 0x380) | uint16_t(rng() % 2 << 15);
+          memcpy(&v[i], &b, 2);
+        }
+      char e[256];
+      snprintf(e, sizeof e, "%s\"s.%d.%s\":{\"dtype\":\"%s\",\"shape\":[%lld,%d],\"data_offsets\":[%zu,%zu]}",
+               hdr.size() > 1 ? "," : "", k, suf, suf[0] == 'w' ? "U32" : "BF16", (long long)sr[k],
+               suf[0] == 'w' ? width / 4 : width / 2, body.size(), body.size() + v.size());
+      hdr += e;
+      body.insert(body.end(), v.begin(), v.end());
+      parts.push_back(v);
+    }
+  hdr += "}";
+  hdr.resize((hdr.size() + 7) / 8 * 8, ' ');
+  const std::string path = dir + "/ple.safetensors";
+  {
+    FILE* f = fopen(path.c_str(), "wb");
+    const uint64_t n = hdr.size();
+    fwrite(&n, 8, 1, f);
+    fwrite(hdr.data(), 1, hdr.size(), f);
+    fwrite(body.data(), 1, body.size(), f);
+    fclose(f);
+  }
+  files.push_back(path);
+  NgramTable t;
+  t.open({{path, "s.0.weight", "s.0.scales", "s.0.biases"}, {path, "s.1.weight", "s.1.scales", "s.1.biases"}},
+         NgramTable::Fmt::Affine, dim);
+  CHECK(t.rows() == sr[0] + sr[1] && t.file_bytes() == 8 + hdr.size() + body.size(),
+        "affine table: %lld rows, %zu bytes mapped (the file once)", (long long)t.rows(), t.file_bytes());
+  int bad = 0;
+  std::vector<float> got(dim);
+  for (int64_t r = 0; r < t.rows(); ++r) {
+    const int k = r < sr[0] ? 0 : 1;
+    const size_t j = size_t(r - (k ? sr[0] : 0));
+    const uint8_t* w = &parts[size_t(3 * k)][j * 80];
+    const uint16_t* sc = reinterpret_cast<const uint16_t*>(&parts[size_t(3 * k + 1)][j * 10]);
+    const uint16_t* bi = reinterpret_cast<const uint16_t*>(&parts[size_t(3 * k + 2)][j * 10]);
+    t.row(r, got.data());
+    for (int i = 0; i < dim; ++i) {
+      const int c = (w[i / 2] >> (4 * (i % 2))) & 15;
+      bad += got[size_t(i)] != bf16_to_f32(sc[i / 32]) * float(c) + bf16_to_f32(bi[i / 32]);
+    }
+  }
+  CHECK(!bad, "affine table: %d values differ from MLX's affine map", bad);
+  printf("n-gram table: GGUF IQ4_NL and Q8_0 rows, affine shards: %s\n", g_fail > f0 ? "FAILED" : "ok");
+}
 
 template <typename F>
 void await_test(F done, const char* why) {
@@ -1354,432 +1781,6 @@ void case_shutdown_waiting(const Pack& p) {
   printf("shutdown waiting/idle: joined without a synthetic go\n");
 }
 
-void case_complete(const Pack& p) {
-  const uint32_t L = uint32_t(p.layers.size()), E = p.E;
-  Arena a(p.lay, L * E, L, E);
-  Event ev;
-  ExpertCache::Options o;
-  ExpertCache c(p.files, p.layers, E, p.lay, L * E + 100, a.m, ev.sync(), o);
-  CHECK(c.complete(), "complete: not complete");
-  int bad = 0;
-  for (uint32_t l = 0; l < L; ++l)
-    for (uint32_t e = 0; e < E; ++e) bad += !expert_ok(a, p.lay, l, e, E);
-  CHECK(bad == 0, "complete: %d experts wrong", bad);
-  // nothing is served: post is a no-op
-  ExpertCache::Req r;
-  c.post(r);
-  CHECK(c.stats().handshakes == 0, "complete: a handshake was served");
-  printf("an arena of all %u experts: filled at start, every table word right, no handshakes\n", L * E);
-}
-
-// ---- the layer-major group walk's shapes at the merge gate's frozen lengths (PR #628) --------------------
-// The leg table must be computable, not hand-written: the engine's own chunker decides a pass's chunk rows
-// (prefill_chunk_rows, even-balanced - the legs pin --prefill-chunk 2048 and prefill_even_chunks on both arms),
-// and engine.cpp's walk collects the next G chunks into a layer-major group while every one is plain: it breaks
-// on the pass's last chunk (pos + Tc == n - that one samples and runs alone), on a split row count and on a save
-// point inside or at a chunk's end, and under two plain chunks it yields nothing (nc < 2 -> 0) and the chunk
-// path runs one chunk, the next pass retrying the walk from its end. The legs' cells are plain text with no
-// split, no save point and no image or grammar rows, so those are the pinned conditions that make the other
-// break rules inert; this replica keeps the two rules that can fire and calls the real chunker for every row
-// count. A shape here that disagrees with the engine's log ("prefill group of ... rows" against the chunker's
-// "prefill chunk of ...") means the pin or this replica is wrong.
-void case_group_shape() {
-  const int C = 2048;  // --prefill-chunk 2048, pinned on both gate arms
-  struct Shape {
-    std::vector<std::vector<int>> groups;  // the layer-major groups' chunk rows, in pass order
-    std::vector<int> alone;                // the chunks that ran alone (the chunk path), in pass order
-  };
-  auto walk = [&](int64_t n, int g) {
-    Shape sh;
-    int64_t pos = 0;
-    while (pos < n) {
-      int Ts[8], nc = 0;
-      int64_t q = pos;  // the walk's look-ahead cursor; it commits only when a group forms
-      while (nc < g && q < n) {
-        const int Tc = prefill_chunk_rows(C, q, n, true);
-        if (q + Tc == n) break;  // the pass's last chunk: it samples and runs alone
-        Ts[nc++] = Tc;
-        q += Tc;
-      }
-      if (nc < 2) nc = 0;
-      if (nc >= 2) {
-        sh.groups.emplace_back(Ts, Ts + nc);
-        pos = q;
-      } else {
-        const int T = prefill_chunk_rows(C, pos, n, true);
-        sh.alone.push_back(T);
-        pos += T;
-      }
-    }
-    return sh;
-  };
-  auto show = [](const Shape& s) {
-    std::string o;
-    for (const std::vector<int>& gr : s.groups) {
-      if (!o.empty()) o += " ";
-      o += "group[";
-      for (size_t i = 0; i < gr.size(); ++i) o += (i ? "," : "") + std::to_string(gr[i]);
-      o += "]";
-    }
-    if (!s.alone.empty()) {
-      if (!o.empty()) o += " ";
-      o += "alone[";
-      for (size_t i = 0; i < s.alone.size(); ++i) o += (i ? "," : "") + std::to_string(s.alone[i]);
-      o += "]";
-    }
-    return o;
-  };
-  struct Cell {
-    const char* name;
-    int64_t n;
-    int g;
-    std::vector<std::vector<int>> groups;
-    std::vector<int> alone;
-  };
-  // The gate's frozen lengths. The bench cells are not round numbers: pf16_seed33 is 16287 tokens, the frozen 4K
-  // cell is 4132 - an nc=2 group, not the fall-through a 4096-token cell would be - and c64k / c128k are 65535
-  // and 131071. EXACT4096 / EXACT6144 are exact-length prefix slices of pf16_seed33, pinned in the gate package.
-  const std::vector<Cell> cells = {
-      {"EXACT4096 fall-through (nc=1 -> 0)", 4096, 4, {}, {2048, 2048}},
-      {"EXACT6144 smallest real group", 6144, 4, {{2048, 2048}}, {2048}},
-      {"EXACT6144 G=2 diagnostic (1 group, 1 alone)", 6144, 2, {{2048, 2048}}, {2048}},
-      {"pf16_seed33 (h16k)", 16287, 4, {{2036, 2036, 2036, 2036}, {2036, 2036, 2036}}, {2035}},
-      {"c64k (h64k)", 65535, 4,
-       {{2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
-        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048}},
-       {2047}},
-      {"c128k (h128k)", 131071, 4,
-       {{2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
-        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
-        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048},
-        {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048, 2048}, {2048, 2048, 2048}},
-       {2047}},
-      {"frozen 4K cell 4132 (nc=2, not the fall-through)", 4132, 4, {{1378, 1377}}, {1377}},
-      {"6155 roundoff (the warning cell: nc=3)", 6155, 4, {{1539, 1539, 1539}}, {1538}},
-  };
-  for (const Cell& c : cells) {
-    const Shape sh = walk(c.n, c.g);
-    printf("group-shape %-48s n=%lld G=%d: %s\n", c.name, (long long)c.n, c.g, show(sh).c_str());
-    CHECK(sh.groups == c.groups && sh.alone == c.alone, "group-shape %s: got %s", c.name, show(sh).c_str());
-  }
-}
-
-// ---- the group's eligibility and its one accounting (the resident-store invariant, PR #628) --------------
-// Runtime eligibility (q20::group_chunks) gates the three sides that must agree: the engine's walk,
-// alloc4_group's allocation and the memory plan's MemPlan::group_slots. The slot term stays OUT of
-// MemPlan::activations: whether it is charged at all is the store-world choice - q20::group_world, the one
-// function Qwen4Exp::init_store runs live and ni::planned_group_world predicts before a load (the engine's fit
-// checks, doctor.cpp). The store is sized WITHOUT the charge first; complete already, the group never forms,
-// the bytes are never allocated and no fit number may carry them - that is what keeps a full default-context
-// ladder from shrinking under a reservation no load pays. Incomplete, the slots pay for themselves and the
-// chosen world carries the charge. The decision is monotone (more charge shrinks the store, it never completes
-// it more), so the one correction is a fixed point - no oscillation, no circularity.
-void case_group_plan() {
-  CHECK(group_chunks(4, false, false, false) == 4, "group_chunks: an incomplete streamed store groups");
-  CHECK(group_chunks(4, false, false, true) == 1, "group_chunks: an all-resident expert set never groups");
-  CHECK(group_chunks(4, true, false, false) == 1, "group_chunks: a split model never groups");
-  CHECK(group_chunks(4, false, true, false) == 1, "group_chunks: a layer-debugging model never groups");
-  CHECK(group_chunks(1, false, false, false) == 1, "group_chunks: G=1 stays the chunk path");
-  CHECK(group_chunks(8, false, false, false) == 8, "group_chunks: G=8 (the env's top) groups");
-  // one formula for the plan, the allocation and the sizing charge: 0 below G=2, linear in G above; the terms are
-  // alloc4_group's buffers per chunk - xg_ T*(hc*D) fp32, yg_ T*D fp32, injAg_ + injM_ 2*T*hc fp32, and the two
-  // alternating sets of n-gram staging (ple_pfg_, 2G of them) T*D fp16
-  const size_t T = 2048, D = 2048, hc = 4;
-  CHECK(group_slot_bytes(0, T, D, hc) == 0 && group_slot_bytes(1, T, D, hc) == 0, "group_slot_bytes: 0 below G=2");
-  CHECK(group_slot_bytes(2, T, D, hc) == 2 * (T * hc * D * 4 + T * D * 4 + 2 * T * hc * 4 + 2 * T * D * 2),
-        "group_slot_bytes: alloc4_group's buffers, expanded");
-  CHECK(group_slot_bytes(4, T, D, hc) == 2 * group_slot_bytes(2, T, D, hc), "group_slot_bytes: linear in G");
-  // the store-world choice on the pure auto_store_size both the live (init_store) and the predicted
-  // (planned_group_world) sides use
-  const size_t gsb = group_slot_bytes(4, T, D, hc);
-  const size_t G1 = size_t(1) << 30, G20 = size_t(20) << 30, G30 = size_t(30) << 30;
-  const size_t G40 = size_t(40) << 30, G41 = size_t(41) << 30, G44 = size_t(44) << 30, G48 = size_t(48) << 30;
-  // world A: the budget leaves the store short of all the experts -> the charge applies and the store stays
-  // incomplete, so alloc4_group runs and prefill_group() answers G - the same predicate on every side
-  AutoStoreIn a;
-  a.all = G40, a.least = G1, a.left = G30, a.used = G20, a.ram = G48, a.avail = size_t(100) << 30;
-  const GroupWorld A = group_world(gsb, a);
-  CHECK(A.charge == gsb && A.st.bytes == G30 - gsb && A.st.bytes < G40,
-        "group_world A: charged to %zu, still incomplete", A.st.bytes);
-  CHECK(A.in.left == G30 - gsb && A.in.used == G20 + gsb && A.in.avail == (size_t(100) << 30) - gsb,
-        "group_world A: the chosen inputs are the charged ones");
-  // world B: every expert fits without the charge -> no charge, no slots, the bare world stands, and the chunk
-  // path keeps its precomb fold. Every fit number that asks this world gets the bare sizing back - an unpaid
-  // reservation must not shrink a default-context ladder. The order is the invariant: sizing WITH the charge
-  // first would clamp this store below all on the avail guard and allocate slots that then make it incomplete -
-  // a world that never settles.
-  AutoStoreIn b = a;
-  b.left = G41;
-  b.avail = G44 + gsb / 2;
-  const GroupWorld B = group_world(gsb, b);
-  CHECK(B.charge == 0 && B.st.bytes == G40 && B.in.left == G41 && B.in.used == G20,
-        "group_world B: complete without the charge, bare world, charge %zu", B.charge);
-  AutoStoreIn bc = group_charged_in(b, gsb);
-  CHECK(auto_store_size(bc).bytes < G40, "group_world B: charging first would have clamped it below all");
-  // no term (G=1, or the split/all-resident worlds): the bare sizing, untouched
-  const GroupWorld Z = group_world(0, a);
-  CHECK(Z.charge == 0 && Z.st.bytes == auto_store_size(a).bytes && Z.in.left == a.left,
-        "group_world: a zero term leaves the sizing alone");
-  // the NI_EXPERT_STORE pin's world (A2): one parse (q20::store_pin_bytes) feeds group_world's pin branch, and
-  // a pin decides its own world in the live load (init_store) and in every pre-load prediction
-  // (planned_group_world) alike - chunk-invariant, only the charge's magnitude scales with the plan's rows
-  // pinned-short: the store IS the pin's bytes (the parser clamped to all), the world stays incomplete so the
-  // slots are charged, and the sizing inputs stay the bare ones - the pin overrides budget/avail/cap
-  const size_t pin = G20;
-  const GroupWorld P = group_world(gsb, a, &pin);
-  CHECK(P.charge == gsb && P.st.bytes == pin && P.st.why == AutoStoreWhy::Pinned && P.in.left == a.left,
-        "group_world pin: a short pin %zu charges %zu, why %d, sizing inputs stay bare", P.st.bytes, P.charge,
-        int(P.st.why));
-  // pinned-complete: a pin holding every expert is complete - never groups, never pays
-  const size_t pin_all = a.all;
-  const GroupWorld Q = group_world(gsb, a, &pin_all);
-  CHECK(Q.charge == 0 && Q.st.bytes == a.all && Q.st.why == AutoStoreWhy::Pinned,
-        "group_world pin: a full pin never charges, charge %zu", Q.charge);
-  // the pin overrides the automatic world (the A2 mandatory fix): world B's automatic store is complete, yet a
-  // short pin still reserves the slots - what keeps the pin and every fit number on one decision
-  const GroupWorld R = group_world(gsb, b, &pin);
-  CHECK(auto_store_size(b).bytes >= b.all && R.charge == gsb && R.st.bytes == pin,
-        "group_world pin: a short pin reserves where the automatic store would be complete");
-  printf("group plan: eligibility pinned, slot bytes one formula (%zu B at G=4, T=2048), store-world choice settled\n",
-         gsb);
-}
-
-// The NI_EXPERT_STORE pin end to end, the seam the pure sides above stop short of: the environment variable
-// through the one parse the live load shares (q20::store_pin_bytes) into the one prediction every pre-load fit
-// number and `kapitsa doctor` ask (ni::planned_group_world; doctor.cpp publishes its st/in as the expert_store
-// JSON: bytes, reason, group_slot_bytes, budget_leaves_bytes). No model, no load: header-only MemPlans of a
-// streamed Q2_0 pack, the fields plan() fills. Qwen4Exp::init_store runs the identical expression live
-// (qwen4_exp.cpp: getenv -> store_pin_bytes -> q20::group_world); that call site needs a model loaded on the
-// GPU, so the CPU side pins the parser's own cases first, then the env-driven prediction through it.
-void case_group_pin() {
-  // the pin is process-wide: save whatever the case finds, restore it at the end
-  const char* prior = getenv("NI_EXPERT_STORE");
-  const std::string saved = prior ? prior : "";
-  const auto set_es = [](const char* v) {
-    if (v) setenv("NI_EXPERT_STORE", v, 1);
-    else unsetenv("NI_EXPERT_STORE");
-  };
-  const size_t GB = size_t(1e9);  // the parser's GB: atof(es) * 1e9, exact at these values
-  const size_t gsb = group_slot_bytes(4, 2048, 2048, 4);  // case_group_plan's G=4 shape
-  const size_t budget = 20 * GB;
-  const int slots = 2, ctx = 8192;
-
-  // the parser alone, every case a parse regression could hide in: no pin, a pin, an exact size, a clamp, 0,
-  // the values below zero and the infinities (the double->size_t conversion is undefined for all of them:
-  // every clamp happens before it, not after)
-  size_t pb = ~size_t(0);
-  CHECK(!store_pin_bytes(nullptr, 4 * GB, pb) && !store_pin_bytes("", 4 * GB, pb) && !store_pin_bytes("auto", 4 * GB, pb),
-        "store_pin_bytes: unset, the empty string and \"auto\" are no pin");
-  CHECK(store_pin_bytes("all", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"all\" pins the whole store (%zu)", pb);
-  CHECK(store_pin_bytes("0.5", 4 * GB, pb) && pb == 5 * GB / 10, "store_pin_bytes: \"0.5\" is exact (%zu)", pb);
-  CHECK(store_pin_bytes("1e6", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"1e6\" clamps to all (%zu)", pb);
-  CHECK(store_pin_bytes("abc", 4 * GB, pb) && pb == 0, "store_pin_bytes: garbage reads 0, pinned (%zu)", pb);
-  CHECK(store_pin_bytes("-1", 4 * GB, pb) && pb == 0, "store_pin_bytes: a negative pin clamps to 0 (%zu)", pb);
-  CHECK(store_pin_bytes("-0.5", 4 * GB, pb) && pb == 0, "store_pin_bytes: a negative fraction clamps to 0 (%zu)", pb);
-  CHECK(store_pin_bytes("nan", 4 * GB, pb) && pb == 0, "store_pin_bytes: NaN clamps to 0 (%zu)", pb);
-  CHECK(store_pin_bytes("inf", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"inf\" clamps to all, never an undefined conversion (%zu)", pb);
-  CHECK(store_pin_bytes("1e999", 4 * GB, pb) && pb == 4 * GB, "store_pin_bytes: \"1e999\" (atof overflows to inf) clamps to all (%zu)", pb);
-
-  // fixture C: a 3-layer pack - the smallest store (3 layers') IS the whole store, so no live sample of the
-  // available memory, no RAM-share cap and no budget can cut the automatic world below all: it is complete on
-  // any machine, and a short pin must reserve the slots anyway (the A2 invariant, through the env seam)
-  MemPlan c;
-  c.store_all = 3 * GB, c.store_least = 3 * GB;
-  c.streamed = c.store_all;
-  c.weights = GB + c.store_least;  // the trunk (1 GB) plus the smallest store, as plan() accounts it
-  c.mtp = 200000000, c.activations = 100000000;
-  c.group_slots = gsb;
-  c.slot_state = 50000000, c.kv_per_pos = 10000;
-  set_es(nullptr);
-  const GroupWorld U = planned_group_world(c, slots, ctx, budget);
-  CHECK(U.st.bytes == c.store_all && U.st.why == AutoStoreWhy::All && U.charge == 0 && U.in.left > U.in.all,
-        "group pin env: unset, the automatic world is complete and pays nothing (bytes %zu, why %d, charge %zu)",
-        U.st.bytes, int(U.st.why), U.charge);
-  set_es("2");  // a short pin: 2 GB of the 3 GB store
-  const GroupWorld P = planned_group_world(c, slots, ctx, budget);
-  CHECK(P.st.bytes == 2 * GB && P.st.why == AutoStoreWhy::Pinned && P.charge == gsb && P.in.left == U.in.left,
-        "group pin env: a short pin reserves where the automatic store was complete (pin bytes %zu, charge %zu)",
-        P.st.bytes, P.charge);
-  CHECK(std::string(auto_store_why_name(P.st.why)) == "NI_EXPERT_STORE" &&
-            auto_store_reason(P.st, P.in).find("NI_EXPERT_STORE pin") != std::string::npos,
-        "group pin env: doctor's reason value and sentence name the pin");
-
-  // fixture P: realistic proportions - a 4-layer pack, the smallest store 3 layers'; the pin branch ignores
-  // budget/avail/cap, so every pin assertion is exact on any machine; only the "auto" row is an invariant (a
-  // live avail sample moves by definition)
-  MemPlan p = c;
-  p.store_all = 4 * GB, p.store_least = 3 * GB;
-  p.streamed = p.store_all;
-  set_es("3.5");  // between the least and all: a realistic short pin
-  const GroupWorld Pp = planned_group_world(p, slots, ctx, budget);
-  CHECK(Pp.st.bytes == 35 * GB / 10 && Pp.st.why == AutoStoreWhy::Pinned && Pp.charge == gsb,
-        "group pin env: the pin's bytes are exact at the parser's scale (bytes %zu, charge %zu)", Pp.st.bytes,
-        Pp.charge);
-  set_es("all");
-  const GroupWorld A = planned_group_world(p, slots, ctx, budget);
-  CHECK(A.st.bytes == p.store_all && A.st.why == AutoStoreWhy::Pinned && A.charge == 0 &&
-            auto_store_reason(A.st, A.in).find("pin: resident") != std::string::npos,
-        "group pin env: a full pin is resident and never pays (charge %zu)", A.charge);
-  set_es("9");  // above the whole store: the parser clamps to all
-  const GroupWorld O = planned_group_world(p, slots, ctx, budget);
-  CHECK(O.st.bytes == p.store_all && O.st.why == AutoStoreWhy::Pinned && O.charge == 0,
-        "group pin env: an over pin clamps to all (bytes %zu)", O.st.bytes);
-  set_es("xyz");  // garbage reads as 0: fail-safe to the incomplete side, reservation charged
-  const GroupWorld G = planned_group_world(p, slots, ctx, budget);
-  CHECK(G.st.bytes == 0 && G.st.why == AutoStoreWhy::Pinned && G.charge == gsb,
-        "group pin env: garbage pins 0 bytes and still reserves (charge %zu)", G.charge);
-  set_es("-1");  // negative: the conversion below zero is undefined and platform-split (arm64 saturates to 0,
-                 // x86-64 reads an indefinite huge value as a full pin); the parser's clamp makes it the
-                 // garbage fail-safe everywhere: pins 0, still reserves
-  const GroupWorld N = planned_group_world(p, slots, ctx, budget);
-  CHECK(N.st.bytes == 0 && N.st.why == AutoStoreWhy::Pinned && N.charge == gsb,
-        "group pin env: a negative pin clamps to 0 and still reserves (charge %zu)", N.charge);
-  set_es("auto");  // the parser's explicit off-pin: the automatic world, never Pinned
-  const GroupWorld V = planned_group_world(p, slots, ctx, budget);
-  CHECK(V.st.why != AutoStoreWhy::Pinned && V.st.bytes >= p.store_least && V.st.bytes <= p.store_all &&
-            V.charge == (V.st.bytes < p.store_all ? gsb : 0),
-        "group pin env: \"auto\" is the automatic world (bytes %zu, why %d, charge %zu)", V.st.bytes, int(V.st.why),
-        V.charge);
-  set_es("3.5");
-  // context: the pin's world is chunk-invariant - the store's bytes and charge identical at 4K and at 128K -
-  // while the world's budget_leaves tracks the context exactly: flash_next_model_budget holds
-  // slots*slot_state + kv_per_pos*min(ctx, 32768), so the 128K world leaves less by the KV term between 4K
-  // and the 32K clamp, and one slot less leaves one slot_state more
-  const GroupWorld W4 = planned_group_world(p, slots, 4096, budget);
-  const GroupWorld W13 = planned_group_world(p, slots, 131072, budget);
-  CHECK(W4.st.bytes == Pp.st.bytes && W4.st.bytes == W13.st.bytes && W4.charge == W13.charge && W4.charge == gsb,
-        "group pin env: the pin is the same world at 4K, 8K and 128K (charge %zu vs %zu)", W4.charge, W13.charge);
-  CHECK(W4.in.left - W13.in.left == p.kv_per_pos * (32768 - 4096),
-        "group pin env: the budget's leaves track the context's KV reserve exactly (%zu vs %zu)", W4.in.left,
-        W13.in.left);
-  const GroupWorld S1 = planned_group_world(p, 1, ctx, budget);
-  CHECK(S1.in.left - Pp.in.left == p.slot_state && S1.charge == gsb,
-        "group pin env: one slot fewer: one slot_state more left, same charge (leaves %zu vs %zu, charge %zu vs %zu)",
-        S1.in.left, Pp.in.left, S1.charge, Pp.charge);
-  // restore the environment: the pin is process-wide and the other cases must see what this one found
-  if (prior) setenv("NI_EXPERT_STORE", saved.c_str(), 1);
-  else unsetenv("NI_EXPERT_STORE");
-  printf("group pin: env -> one parse -> one world: bytes exact, a short pin reserves %zu B, the context moves "
-         "the budget's leaves, never the pin\n",
-         gsb);
-}
-
-}  // namespace
-
-// a GGUF v3 file of one tensor, name [rows, dim] (ne {dim, rows}) of `type`, from its raw blocks
-void write_gguf_table(const std::string& path, const std::string& name, uint32_t type, uint64_t dim, uint64_t rows,
-                      const std::vector<uint8_t>& data) {
-  std::vector<uint8_t> h;
-  auto put = [&](const void* p, size_t n) { h.insert(h.end(), static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n); };
-  auto u32 = [&](uint32_t v) { put(&v, 4); };
-  auto u64 = [&](uint64_t v) { put(&v, 8); };
-  auto str = [&](const std::string& v) { u64(v.size()), put(v.data(), v.size()); };
-  put("GGUF", 4), u32(3), u64(1), u64(1);
-  str("general.architecture"), u32(8), str("qwen4exp");
-  str(name), u32(2), u64(dim), u64(rows), u32(type), u64(0);
-  h.resize((h.size() + 31) / 32 * 32, 0);
-  h.insert(h.end(), data.begin(), data.end());
-  FILE* f = fopen(path.c_str(), "wb");
-  fwrite(h.data(), 1, h.size(), f);
-  fclose(f);
-}
-
-void case_ngram_table(const std::string& dir, std::vector<std::string>& files) {
-  constexpr int dim = 160;
-  constexpr int64_t rows = 37;
-  const int f0 = g_fail;
-  std::mt19937 rng(11);
-  std::vector<int64_t> ids;
-  for (int64_t r = 0; r < rows; ++r) ids.push_back((r * 7) % rows);
-  for (const auto& [type, name] : {std::pair<uint32_t, const char*>{gguf::kIQ4_NL, "IQ4_NL"}, {gguf::kQ8_0, "Q8_0"}}) {
-    uint32_t be = 0, bb = 0;
-    gguf::type_block(type, &be, &bb);
-    const size_t rb = dim / be * bb;
-    std::vector<uint8_t> data(rb * rows);
-    for (auto& b : data) b = uint8_t(rng());
-    for (size_t o = 0; o < data.size(); o += bb) {  // a finite fp16 d per block, 2^-10 .. 2^-3
-      const _Float16 d = _Float16(std::ldexp(1.0 + double(rng() % 1024) / 1024, -int(3 + rng() % 8)));
-      memcpy(&data[o], &d, 2);
-    }
-    const std::string path = dir + "/ple_" + name + ".gguf";
-    write_gguf_table(path, "per_layer_token_embd.weight", type, dim, rows, data);
-    files.push_back(path);
-    NgramTable t;
-    t.open_gguf(path, "per_layer_token_embd.weight", dim);
-    CHECK(t.rows() == rows && t.dim() == dim, "GGUF %s table: %lld x %d", name, (long long)t.rows(), t.dim());
-    CHECK(t.describe().find(name) != std::string::npos, "GGUF %s table: described as %s", name, t.describe().c_str());
-    std::vector<float> got(dim), want(dim), all(size_t(rows) * dim);
-    int bad = 0;
-    for (int64_t r = 0; r < rows; ++r) {
-      t.row(r, got.data());
-      gguf::dequantize(type, &data[size_t(r) * rb], want.data(), dim);
-      bad += memcmp(got.data(), want.data(), dim * 4) != 0;
-    }
-    CHECK(!bad, "GGUF %s table: %d of %lld rows differ from gguf::dequantize", name, bad, (long long)rows);
-    t.gather(ids.data(), int(rows), 1, all.data());
-    for (int64_t i = 0; i < rows; ++i) {
-      gguf::dequantize(type, &data[size_t(ids[size_t(i)]) * rb], want.data(), dim);
-      bad += memcmp(&all[size_t(i) * dim], want.data(), dim * 4) != 0;
-    }
-    CHECK(!bad, "GGUF %s table: %d gathered rows differ", name, bad);
-  }
-  // the affine table: 4-bit codes, bf16 scale and bias per 32, two shards of one safetensors file
-  const int64_t sr[2] = {20, 17};
-  std::string hdr = "{";
-  std::vector<uint8_t> body;
-  std::vector<std::vector<uint8_t>> parts;
-  for (int k = 0; k < 2; ++k)
-    for (const auto& [suf, width] : {std::pair<const char*, int>{"weight", 80}, {"scales", 10}, {"biases", 10}}) {
-      std::vector<uint8_t> v(size_t(sr[k]) * width);
-      for (size_t i = 0; i < v.size(); ++i) v[i] = uint8_t(rng());
-      if (suf[0] != 'w')
-        for (size_t i = 0; i < v.size(); i += 2) {  // finite bf16 values, |x| in 2^-8 .. 2^-1
-          const uint16_t b = uint16_t(0x3B80 + rng() % 0x380) | uint16_t(rng() % 2 << 15);
-          memcpy(&v[i], &b, 2);
-        }
-      char e[256];
-      snprintf(e, sizeof e, "%s\"s.%d.%s\":{\"dtype\":\"%s\",\"shape\":[%lld,%d],\"data_offsets\":[%zu,%zu]}",
-               hdr.size() > 1 ? "," : "", k, suf, suf[0] == 'w' ? "U32" : "BF16", (long long)sr[k],
-               suf[0] == 'w' ? width / 4 : width / 2, body.size(), body.size() + v.size());
-      hdr += e;
-      body.insert(body.end(), v.begin(), v.end());
-      parts.push_back(v);
-    }
-  hdr += "}";
-  hdr.resize((hdr.size() + 7) / 8 * 8, ' ');
-  const std::string path = dir + "/ple.safetensors";
-  {
-    FILE* f = fopen(path.c_str(), "wb");
-    const uint64_t n = hdr.size();
-    fwrite(&n, 8, 1, f);
-    fwrite(hdr.data(), 1, hdr.size(), f);
-    fwrite(body.data(), 1, body.size(), f);
-    fclose(f);
-  }
-  files.push_back(path);
-  NgramTable t;
-  t.open({{path, "s.0.weight", "s.0.scales", "s.0.biases"}, {path, "s.1.weight", "s.1.scales", "s.1.biases"}},
-         NgramTable::Fmt::Affine, dim);
-  CHECK(t.rows() == sr[0] + sr[1] && t.file_bytes() == 8 + hdr.size() + body.size(),
-        "affine table: %lld rows, %zu bytes mapped (the file once)", (long long)t.rows(), t.file_bytes());
-  int bad = 0;
-  std::vector<float> got(dim);
-  for (int64_t r = 0; r < t.rows(); ++r) {
-    const int k = r < sr[0] ? 0 : 1;
-    const size_t j = size_t(r - (k ? sr[0] : 0));
-    const uint8_t* w = &parts[size_t(3 * k)][j * 80];
-    const uint16_t* sc = reinterpret_cast<const uint16_t*>(&parts[size_t(3 * k + 1)][j * 10]);
-    const uint16_t* bi = reinterpret_cast<const uint16_t*>(&parts[size_t(3 * k + 2)][j * 10]);
-    t.row(r, got.data());
-    for (int i = 0; i < dim; ++i) {
-      const int c = (w[i / 2] >> (4 * (i % 2))) & 15;
-      bad += got[size_t(i)] != bf16_to_f32(sc[i / 32]) * float(c) + bf16_to_f32(bi[i / 32]);
-    }
-  }
-  CHECK(!bad, "affine table: %d values differ from MLX's affine map", bad);
-  printf("n-gram table: GGUF IQ4_NL and Q8_0 rows, affine shards: %s\n", g_fail > f0 ? "FAILED" : "ok");
-}
-
 int main(int argc, char** argv) {
   if (setenv("NI_ABORT", "0", 1)) {
     fprintf(stderr, "fn_store_test: cannot normalize NI_ABORT\n");
@@ -1800,11 +1801,15 @@ int main(int argc, char** argv) {
     else fatal("usage: fn_store_test [--shutdown-only | --admission-only] [--keep DIR]");
   }
   if (shutdown_only && admission_only) fatal("fn_store_test: suite selectors are mutually exclusive");
-  std::signal(SIGALRM, [](int) {
-    constexpr char msg[] = "fn_store_test: shutdown watchdog expired (blocked teardown)\n";
-    (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
-    _exit(124);
-  });
+  if (std::signal(SIGALRM, [](int) {
+        constexpr char msg[] = "fn_store_test: shutdown watchdog expired (blocked teardown)\n";
+        (void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        _exit(124);
+      }) == SIG_ERR) fatal("shutdown test: cannot install watchdog");
+  sigset_t alarm_signal;
+  sigemptyset(&alarm_signal);
+  sigaddset(&alarm_signal, SIGALRM);
+  if (sigprocmask(SIG_UNBLOCK, &alarm_signal, nullptr)) fatal("shutdown test: cannot unblock watchdog");
   if (!shutdown_only) {
     if (std::signal(SIGCHLD, SIG_DFL) == SIG_ERR) fatal("admission test: cannot retain child exit status");
     case_admission();
@@ -1821,7 +1826,7 @@ int main(int argc, char** argv) {
     } else {
       mkdir(dir.c_str(), 0755);
     }
-    const Pack p = make_pack(dir, shutdown_only ? 4 : 6, shutdown_only ? 2 : 64);
+    Pack p = make_pack(dir, shutdown_only ? 4 : 6, shutdown_only ? 2 : 64);
     case_shutdown_demand(p, false);
     case_shutdown_demand(p, true);
     case_shutdown_prefetch(p);
