@@ -144,7 +144,9 @@ images and the like; a Sushi pack's `ngram_table.bin` is kept). A catalog varian
 they contain, if any.
 
 A folder needs `config.json`, the `*.safetensors` weights and `tokenizer.json`, and may hold an MTP head in
-`mtp.safetensors`. The official Hugging Face checkpoints of the dense models run as well. A Qwen3.8-Flash-Next
+`mtp.safetensors` or in its own shards: the official checkpoints' `mtp.*`, or `language_model.mtp.*` in MLX packs that
+keep Qwen's head (Jundot's oQ `-mtp` packs; quantized as their `config.json` says, the experts of a MoE head stacked as
+the trunk's). The official Hugging Face checkpoints of the dense models run as well. A Qwen3.8-Flash-Next
 (`qwen4_exp`) folder also needs its n-gram table: `ple.safetensors`, a GGUF's in `ple.gguf` (read when present; see
 the Q2_0 folders below), or a Sushi pack's `ngram_table.bin` (read when there is no `ple.safetensors`).
 
