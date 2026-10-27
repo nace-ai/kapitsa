@@ -307,6 +307,7 @@ def stat(vals):
 
 def summarize(d, meta=None):
     legs = [json.load(open(os.path.join(d, f))) for f in sorted(os.listdir(d)) if re.match(r"leg\d+-[KSNL]\.json$", f)]
+    legs = [l for l in legs if "smoke" not in l]  # the smoke leg is kept as raw data only
     legs.sort(key=lambda l: l["idx"])
     out = {"meta": json.load(open(d + "/meta.json")) if os.path.exists(d + "/meta.json") else {}, "order": [l["arm"] for l in legs], "arms": {}}
     for arm in "KSNL":
