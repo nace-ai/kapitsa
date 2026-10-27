@@ -25,13 +25,13 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 - [2026/10] 🧩 **Flash-Next fits a 64 GB Mac**: `flash-next:64gb` runs Sushi's 2-bit EXL3 experts, 36.7 GB of weights in memory and 69.6 GB to download ([variants](docs/usage.md#models-and-downloads)).
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
-- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
-- [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX** ([how it works](docs/kflash.md)).
+- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, and on the M4 Pro reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
+- [2026/10] 🚀 **KFlash: tree speculative decoding** ([how it works](docs/kflash.md)).
 - [2026/10] 🏆 **The fastest decode in 32 of 37 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
-- [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B.
-- [2026/10] ⚡ **QMT prefill: prompts read up to 1.5× faster on M5** with the Metal 4 matrix units.
+- [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B ([#207](https://github.com/nace-ai/kapitsa/pull/207), [KFlash](docs/kflash.md#limitations)).
+- [2026/10] ⚡ **QMT prefill: prompts read up to 25% faster on M5** with the Metal 4 matrix units ([measured](docs/usage.md#environment-variables)).
 - [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
-- [2026/10] 🧠 **Prefix reuse: a new question over a shared 4K system prompt answers in 0.06 s instead of 1.9 s.**
+- [2026/10] 🧠 **Prefix reuse: a new question over a shared 4K system prompt answers in 0.06 s instead of 3.8 s.**
 - [2026/10] 🧪 **Output check: a faster default must keep the answers** ([how](CONTRIBUTING.md#output-check)).
 - [2026/10] 📊 **`kapitsa bench compare`: every installed engine on your Mac, one command.**
 
