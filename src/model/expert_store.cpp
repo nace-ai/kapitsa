@@ -246,7 +246,7 @@ void ExpertCache::serve(const Req& r) {
       const int k = int(uint32_t(r.pred_layer) * E_ + e);
       const Where w = Where(where_[size_t(k)]);
       if (w == kT1 || w == kT2) return;
-      admit(k, true);
+      admit(k, true, r.pred_floor);
       prefetched_[size_t(k)] = 1;
       load(k, false);
       ++pf;
@@ -344,17 +344,22 @@ void ExpertCache::hit(int k, bool scan, bool first) {
 // over every key: a turn's sweep then re-reads the whole store. Evicting a slot whose layer the sweep has already
 // passed instead keeps the layer being read resident: a rotating cursor over the slots, at most one lap, and the ARC
 // rule picks the victim when no slot qualifies. Decode never sets scan: its replacement is unchanged.
-int ExpertCache::scan_victim(int k) {
+int ExpertCache::scan_victim(int k, int floor_layer) {
   const int layer = k / int(E_);
-  // A T1 slot below this layer is the victim the sweep wants, and the per-layer counts say whether one exists: with a
+  // The floor: a layer-major visit's sweep passes the layer the visit is running, so the visit's own layer's keys —
+  // the ones its remaining chunks still route, unpinned between its turns — are not victims of the read-ahead for
+  // the next layer while any lower layer's T1 key remains; when none does, the ARC rule below decides and the
+  // visit's own keys can be eaten. -1 (every chunk-major turn, decode, fill): the admitted key's layer is the floor.
+  const int limit = floor_layer >= 0 ? floor_layer : layer;
+  // A T1 slot below the floor is the victim the sweep wants, and the per-layer counts say whether one exists: with a
   // lower layer holding only T2 keys (decoding's hot experts) or slots above, no scan can find one, and the ARC rule
   // below is the answer without a lap. A lap here would cost nslots slot reads per admit, a whole store per turn.
-  if (low_t1_ >= layer) return -1;
+  if (low_t1_ >= limit) return -1;
   for (uint32_t i = 0; i < nslots_; ++i) {
     const int slot = int(scan_cursor_);
     scan_cursor_ = scan_cursor_ + 1 == nslots_ ? 0 : scan_cursor_ + 1;
     const int v = key_of_slot_[size_t(slot)];
-    if (v < 0 || v / int(E_) >= layer) continue;
+    if (v < 0 || v / int(E_) >= limit) continue;
     if (Where(where_[size_t(v)]) != kT1) continue;  // T2 holds decoding's hot experts: a sweep leaves them (ARC's rule)
     if (pin_[size_t(v)] || pending_[size_t(v)].load(std::memory_order_relaxed)) continue;
     return v;
@@ -362,7 +367,7 @@ int ExpertCache::scan_victim(int k) {
   return -1;
 }
 
-int ExpertCache::admit(int k, bool scan) {
+int ExpertCache::admit(int k, bool scan, int floor_layer) {
   const Where w = Where(where_[size_t(k)]);
   const double c = double(nslots_);
   if (w == kB1 || w == kB2) {
@@ -377,7 +382,7 @@ int ExpertCache::admit(int k, bool scan) {
     slot = free_.back();
     free_.pop_back();
   } else {
-    int v = scan && scan_victim_on_ ? scan_victim(k) : -1;
+    int v = scan && scan_victim_on_ ? scan_victim(k, floor_layer) : -1;
     if (v < 0) {
       const bool t1_first = scan || (t1_.size >= 1 && ((w == kB2 && double(t1_.size) >= p_) || double(t1_.size) > p_));
       v = lru_free(t1_first ? t1_ : t2_);
@@ -577,7 +582,7 @@ std::vector<Buffer> ExpertStore::buffers() const {
 }
 
 void ExpertStore::begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, const Buffer* pred, uint32_t npred,
-                        int pred_layer, bool pred_all, bool scan, bool warm) {
+                        int pred_layer, bool pred_all, bool scan, bool warm, int pred_floor) {
   if (cache_->complete()) return;
   ExpertCache::Req r;
   r.layer = layer;
@@ -588,6 +593,7 @@ void ExpertStore::begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, co
   r.pred_layer = pred_layer;
   r.pred_all = pred_all;
   r.scan = scan;
+  r.pred_floor = pred_floor;
   // Heater (Gpu::heat_on: M5 by default), decode / verify only: the pass's first wait comes before any go
   if (warm && Gpu::heat_on()) Gpu::get().keep_warm(kHeatMs);
   r.warm = warm;

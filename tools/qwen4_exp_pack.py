@@ -19,6 +19,7 @@ import json
 import os
 import struct
 import subprocess
+import sys
 import threading
 import time
 import urllib.parse
@@ -31,6 +32,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 WORK = os.path.expanduser(os.environ.get("KAPITSA_WORK", "~/.cache/kapitsa/work"))
 GPU_LOCK = os.path.expanduser("/tmp/kapitsa-gpu.lock")
+sys.path.insert(0, os.path.join(REPO_ROOT, "bench", "harness"))
+import gpu_hogs  # noqa: E402  (held_by_caller)
 
 NP_DT = {"BF16": np.uint16, "F32": np.float32, "F16": np.float16, "U32": np.uint32, "I32": np.int32,
          "U8": np.uint8, "I64": np.int64, "F8_E4M3": np.uint8}
@@ -509,12 +512,12 @@ def sha256_file(path, chunk=64 << 20):
 
 
 class GpuLock:
-    """/tmp/kapitsa-gpu.lock, shared with the other GPU jobs on this Mac (NI_LOCK_HELD=1: the caller holds it)."""
+    """/tmp/kapitsa-gpu.lock, shared with the other GPU jobs on this Mac (NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1: the caller holds it)."""
     held = None
 
     @staticmethod
     def take():
-        if os.environ.get("NI_LOCK_HELD") or GpuLock.held is not None:
+        if gpu_hogs.held_by_caller() or GpuLock.held is not None:
             return
         f = os.fdopen(os.open(GPU_LOCK, os.O_RDONLY | os.O_CREAT, 0o644))
         t = time.time()

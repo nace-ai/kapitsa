@@ -226,6 +226,48 @@ struct AttnRowsParams {
   out[(r * p.Hq + h) * kHD + d] = (num / den) * sigmoid(gate);
 }
 
+// Shared statistics adapted with reference to Splash's splash_attention_combine_splits
+// (incoai/splash, Apache-2.0, runtime/metal/kernels/common/paged_attention_tile.h).
+// Changes for Kapitsa: partial layout, strided work for up to 1024 splits, empty-split skips,
+// FP32 sigmoid-gated output and the short-split fallback. See THIRD_PARTY_NOTICES for the
+// review revision and LICENSE for the Apache-2.0 terms.
+// The shared setup pays for itself from eight splits; shorter rows keep attn_rows_reduce.
+[[kernel]] void attn_rows_reduce_shared(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
+                                        const device float* qg [[buffer(2)]], device float* out [[buffer(3)]],
+                                        constant AttnRowsParams& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                                        uint2 tid2 [[thread_position_in_threadgroup]]) {
+  const uint h = tg.x, r = tg.y, d = tid2.x;
+  const uint base = (r * p.Hq + h) * p.nchunks;
+  // Every output dimension uses the same split weights. The callers cap R * nchunks at 1024;
+  // distribute their maximum and exponentials across the row instead of repeating them 256 times.
+  threadgroup float maxima[kHD / 32];
+  threadgroup float weights[1024];
+  const uint lane = d % 32, sg = d / 32;
+  float m = -INFINITY;
+  for (uint c = d; c < p.nchunks; c += kHD) m = max(m, part_ml[(base + c) * 2]);
+  m = simd_max(m);
+  if (lane == 0) maxima[sg] = m;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const float M = simd_max(lane < kHD / 32 ? maxima[lane] : -INFINITY);
+  for (uint c = d; c < p.nchunks; c += kHD) {
+    const float mc = part_ml[(base + c) * 2];
+    weights[c] = mc == -INFINITY ? 0.0f : metal::fast::exp(mc - M);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  // Keep both accumulations in their original split order, including the empty-split skip:
+  // a parallel denominator sum can move the logits and speculative acceptance.
+  float num = 0.0f, den = 0.0f;
+  for (uint c = 0; c < p.nchunks; ++c) {
+    float mc = part_ml[(base + c) * 2];
+    if (mc == -INFINITY) continue;
+    float w = weights[c];
+    num += w * part_o[(base + c) * kHD + d];
+    den += w * part_ml[(base + c) * 2 + 1];
+  }
+  float gate = qg[(r * p.Hq + h) * 2 * kHD + kHD + d];
+  out[(r * p.Hq + h) * kHD + d] = (num / den) * sigmoid(gate);
+}
+
 // ---- per-row MoE (R tokens, each with its own k experts) ----
 // gate/up grid: (row tiles over max(I,SI), k+1 slots, R rows). xn: [R, D] normalized inputs.
 // h: [R, k+1, Imax]. idx: [R, k].

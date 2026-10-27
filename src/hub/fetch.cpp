@@ -12,7 +12,6 @@
 #include "gguf/import.h"
 #include "hub/hub.h"
 #include "hub/http.h"
-#include "model/flint.h"
 #include "util/term.h"
 
 #include <CommonCrypto/CommonDigest.h>
@@ -1092,8 +1091,7 @@ std::string now_iso() {
 
 // A Hugging Face repo that Kapitsa can run: a Qwen3.5-family hybrid model in MLX format, unquantized (bf16) or MLX
 // affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32), one format or mixed per module (the engine's
-// format_supported, model/qwen35.cpp); or Recursive's Flint in its MLX 4-bit export (model/flint.h); or a dense Llama
-// (Nanbeige4.3) in bf16 or MLX affine 4/8-bit group 64 (Flint's backend; config checked here as the loader does).
+// format_supported, model/qwen35.cpp); or Recursive's Flint in its MLX 4-bit export (model/flint.h).
 void check_supported(HttpClient& c, const Listing& L) {
   const RemoteFile* cfg = L.find("config.json");
   bool st = false;
@@ -1117,29 +1115,6 @@ void check_supported(HttpClient& c, const Listing& L) {
     if (!q.is_object() || q.value("bits", 0) != 4 || q.value("group_size", 0) != 64)
       throw Error(L.repo + " is a Flint checkpoint Kapitsa does not run: it runs Flint's MLX 4-bit export, "
                            "RecursiveSI/flint-int4 (`kapitsa pull flint`).");
-    return;
-  }
-  if (j.value("model_type", std::string()) == "llama") {  // the loader's refusals (Flint::read_config), before any download
-    std::string why = Flint::llama_unsupported(r.body);
-    if (why.empty()) {  // and its chat template, as the loader reads it: chat_template.jinja, else tokenizer_config.json's
-      std::string tmpl;
-      for (const char* name : {"chat_template.jinja", "tokenizer_config.json"}) {
-        if (!tmpl.empty() || !L.find(name)) continue;
-        HttpResult t = get_retry(c, file_url(L.repo, L.commit, name));
-        if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
-        if (!t.ok()) throw Error(failure(t, L.repo, L.revision, std::string(name) + " of " + L.repo));
-        if (std::string(name) == "chat_template.jinja") {
-          tmpl = t.body;
-        } else {
-          const json tc = json::parse(t.body, nullptr, false);
-          if (tc.is_object() && tc.contains("chat_template") && tc["chat_template"].is_string()) tmpl = tc["chat_template"];
-        }
-      }
-      why = Flint::llama_template_unsupported(tmpl);
-    }
-    if (!why.empty())
-      throw Error(L.repo + ": " + why + ". Kapitsa runs dense Llamas as Nanbeige4.3 is built (default RoPE, SwiGLU, no "
-                  "biases, untied embeddings, head dim 128), in bf16 or MLX affine 4-bit or 8-bit group 64.");
     return;
   }
   if (!t.contains("linear_num_value_heads") || !t.contains("num_hidden_layers"))

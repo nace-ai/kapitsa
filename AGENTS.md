@@ -31,22 +31,23 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test grammar_test
-structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test
-json_file_test logit_dump`:
+CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
+update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
+remote_test cluster_test split_place_test json_file_test logit_dump`:
 
 ```bash
 build/api_test
 build/prefix_cache_test
 build/fn_store_test                          # the streamed-expert cache (src/model/expert_store.h)
 build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
-build/tokenizer_test                         # Flint's split, the Metaspace BPE: Nanbeige 4.3's file cut to the fixture
-build/tokenizer_test path/to/tokenizer.json  # and Nanbeige 4.3's own file against tests/data/nanbeige43_tokenizer.json
+build/tokenizer_test                         # Flint's pre-tokenizer split
 build/iq_layout_test                         # GGUF IQ experts in the GPU layout (src/kernels/wfmt_iq.metal)
 build/remote_test                            # a split model's reserve on its other Macs (src/model/remote.h)
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
+build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
+build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 python3 tests/test_server.py --cli build/kapitsa
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
@@ -60,7 +61,6 @@ python3 tests/test_structured.py --cli build    # with a model folder's tokenize
 ```
 
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
-`template_prompts MODEL_DIR...` (a template dump and the rewrite's `--assert-unchanged`, CPU only),
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,
 `tests/test_structured.py URL`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
 `tests/test_ane_split_abort.py`, `tests/test_systemone.py`): run it only when allowed, and report it as run.
@@ -126,7 +126,12 @@ vendored; do not edit it.
 do not reformat files you are not changing.
 
 **Frozen data.** Prompts, token ids, corpora and recorded results under `bench/` are inputs to published numbers. Do not
-reformat, regenerate or "clean" them; hooks and editors must not touch them.
+reformat, regenerate or "clean" them; hooks and editors must not touch them. A results folder that gains a run, a row or
+a chart is normal, and only additions are invisible. A commit that also *changes* a file already under `bench/results/` or
+`bench/community/results/` says so in its subject and why ("re-measured …", "supersedes …", "erratum: …"): the branch no
+longer holds the old copy, so a reader cannot tell a declared erratum from an accident. Transcripts are where that bites
+hardest: a run script that tees `transcripts/<label>.out` overwrites that label's frozen transcript when the label is
+re-run, so commit the new run under a new label, or say in the subject that the transcript is replaced.
 
 **Docs follow numbers.** When a measured number, a default, a flag or a catalog entry changes, grep the repo for the old
 value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy.

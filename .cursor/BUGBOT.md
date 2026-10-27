@@ -65,7 +65,10 @@ not ask for abstractions, interfaces or configuration the change does not need.
   new network call, a telemetry or upload path, an auto-install, or a "reason" in its report that is not derived from a
   configuration fact or a measured number.
 - Benchmark and quality inputs (bench/prompts, bench/quality/ids_*, bench/quality/src, bench/results, bench/community/results)
-  are frozen: flag edits to them that are not clearly intended, and any regenerated or reformatted copy.
+  are frozen: flag edits to them that are not clearly intended, and any regenerated or reformatted copy. Additions to a
+  results folder are normal; flag a commit that changes a file already under bench/results or bench/community/results
+  without naming it in its subject (a re-measured cell, a superseded transcript, an erratum), and flag a transcript
+  rewritten under the same label, which is a re-run wearing the old run's name.
 
 ## Security and workflows (.github/**)
 

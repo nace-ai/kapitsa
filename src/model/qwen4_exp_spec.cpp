@@ -434,4 +434,17 @@ void Qwen4Exp::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row
   enc_qsa(e, s, mtp4_, iqk_, mtp4_.iqk.N, R, pos0, s.mtp_ixk, s.mtp_ixb);
 }
 
+// The MTP history of a layer-major group's chunks: each chunk's 4-stream state and injections are in its group
+// slots, so the swap the group path uses brackets each chunk's fill (the base's one-at-a-time loop, with the swap).
+void Qwen4Exp::encode_mtp_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) {
+  const GroupSave saved = group_save();
+  int pos = pos0;
+  for (int c = 0; c < nc; ++c) {
+    group_swap(c);
+    encode_mtp_prefill(e, s, pos, Ts[c], 0);
+    pos += Ts[c];
+  }
+  group_restore(saved);
+}
+
 }  // namespace ni

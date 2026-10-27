@@ -24,6 +24,14 @@ The private AppleNeuralEngine interface declarations and method-signature table 
 ane_rotate_block helper in src/kernels/ane_ffn.metal are adapted from Splash. Their file headers note the changes.
 
 Review reference: be3b083c5f413673d44e44881042e875e674e333 (not an assertion of the original import revision).
+
+The shared-statistics reduction attn_rows_reduce_shared in src/kernels/verify.metal is adapted with reference to
+Splash's splash_attention_combine_splits in runtime/metal/kernels/common/paged_attention_tile.h.
+Attention reduction review reference: 1744cfafee415fb463b289449cec59a864e768e9.
+Changes for Kapitsa: its partial-output layout, strided work for up to 1024 splits, explicit empty-split skips,
+FP32 sigmoid-gated output and a fallback to the original kernel for fewer than eight splits. The numerator and
+denominator retain Kapitsa's original accumulation order. The adapted kernel carries a notice of these changes.
+
 The Apache License 2.0 text is included in LICENSE. These portions remain under Apache-2.0.
 
 ================================================================================

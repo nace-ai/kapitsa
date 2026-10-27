@@ -51,22 +51,6 @@ uint64_t ram_bytes() {
   return m;
 }
 
-// The automatic expert store `kapitsa serve` will pick for a Q2_0 Flash-Next pack (Qwen4Exp::init_store with
-// NI_EXPERT_STORE unset), before any load: the model's budget (flash_next_model_budget) less its GPU memory before the
-// store (the plan's weights without the smallest store, MTP head and prefill buffers) and init_store's 0.5 GB, then
-// q20::auto_store_size with this Mac's available memory now and its chip's RAM-share cap.
-q20::AutoStoreIn planned_store(const MemPlan& m, int slots, int ctx, size_t budget, bool apple10) {
-  q20::AutoStoreIn in;
-  const size_t mb = flash_next_model_budget(m, slots, ctx, budget);
-  in.all = m.store_all, in.least = m.store_least;
-  in.used = m.weights - std::min(m.weights, m.store_least) + m.mtp + m.activations;
-  in.keep = size_t(1) << 29;
-  in.left = mb > in.used + in.keep ? mb - in.used - in.keep : 0;
-  in.ram = size_t(ram_bytes()), in.avail = q20::available_memory();
-  in.cap = q20::auto_store_cap(apple10);
-  return in;
-}
-
 }  // namespace
 
 double bandwidth_gbs(const std::string& chip, int cores) {
@@ -448,44 +432,70 @@ int run_doctor(int argc, char** argv) {
     const std::string src = ap.source;
     // a DFlash2 drafter next to the model or in the drafter cache counts when the engine loads it
     const std::string dfl = lp.dflash.empty() ? lp.dflash_left_out : lp.dflash;
-    const size_t fixed = m.fixed(slots) + ane_bytes + lp.dflash_bytes;
-    const size_t start_need = fixed + m.kv_per_pos * size_t(std::min(ctx, 8192));
-    const size_t full_need = fixed + m.kv_per_pos * size_t(ctx) * size_t(slots);
-    const size_t room = budget > fixed ? budget - fixed : 0;
+    // the group-slot charge the numbers below carry (#628): the store-world choice, ONE path for the pin and
+    // the automatic size - planned_group_world honors the NI_EXPERT_STORE pin exactly as the load does: a pin
+    // holding every expert never groups, never pays; a short pin allocates the slots (init_store:
+    // !store_->complete()) and pays. 0 for every model but a streamed Q2_0 trunk pack.
+    size_t group_charge = 0;
+    size_t fixed = m.fixed(slots) + ane_bytes + lp.dflash_bytes;
+    size_t start_need = fixed + m.kv_per_pos * size_t(std::min(ctx, 8192));
+    size_t full_need = fixed + m.kv_per_pos * size_t(ctx) * size_t(slots);
+    size_t room = budget > fixed ? budget - fixed : 0;
+    // The charge these numbers carry comes from THIS load plan (m, at lp.prefill_chunk) - the same plan the
+    // JSON's prefill_chunk and activation_bytes below report - so group_slot_bytes stays consistent with them
+    // and the reservation is never dropped when serve's start_plan (the store world shown further down) picks
+    // a different prefill chunk. 0 unless a streamed Q2_0 trunk pack whose predicted store is incomplete.
+    if (m.group_slots) {
+      group_charge = planned_group_world(m, slots, ctx, budget).charge;
+      if (group_charge) {
+        fixed += group_charge, start_need += group_charge, full_need += group_charge;
+        room = budget > fixed ? budget - fixed : 0;
+      }
+    }
     // a Q2_0 pack's routed experts: the store kapitsa serve picks and why (NI_EXPERT_STORE=<GB> or all sets it instead)
     std::string store_line, store_short;  // the whole reason (plain text, --json); a short one (the styled view)
     nlohmann::ordered_json store_j;
     if (m.streamed) {
-      const char* es = getenv("NI_EXPERT_STORE");
-      if (es && *es && strcmp(es, "auto")) {
-        const size_t b = std::min(m.store_all, !strcmp(es, "all") ? m.store_all : size_t(atof(es) * 1e9));
-        char t[160];
-        snprintf(t, sizeof t, "%.1f GB of the %.1f GB of experts (NI_EXPERT_STORE=%s)", b / 1e9, m.store_all / 1e9, es);
-        store_line = store_short = t;
-        store_j = {{"bytes", b}, {"all_bytes", m.store_all}, {"reason", "NI_EXPERT_STORE"}, {"text", store_line}};
-      } else {
-        // planned as `kapitsa serve` starts this model (start_plan, as Engine's constructor): without --context at
-        // serve's default context here (default_context) and the slots and prefill chunk that go with it, not at
-        // doctor's 64K; with --context at it, within the model's limit as serve takes it
-        EngineOptions so;
-        so.context = ctx_given ? context_within_limit(dir, ctx) : 0;
-        so.slots = slots_opt, so.prefill_chunk = chunk, so.dflash = dflash;
-        const StartPlan sp = start_plan(dir, so, budget);
-        const MemPlan sm = sp.prefill_chunk == lp.prefill_chunk ? m : model_plan(dir, sp.prefill_chunk);
-        const q20::AutoStoreIn in = planned_store(sm, sp.slots, sp.context, budget, g.apple10());
-        const q20::AutoStore st = q20::auto_store_size(in);
-        store_line = q20::auto_store_reason(st, in);
-        store_short = q20::auto_store_short(st, in);
-        store_j = {{"bytes", st.bytes},
-                   {"all_bytes", m.store_all},
-                   {"reason", q20::auto_store_why_name(st.why)},
-                   {"context", sp.context},
-                   {"slots", sp.slots},
-                   {"budget_leaves_bytes", in.left},
-                   {"available_memory_bytes", in.avail},
-                   {"ram_share_cap", in.cap},
-                   {"text", store_line}};
-      }
+      // The pin and the automatic size now share ONE path: planned_group_world honors the NI_EXPERT_STORE pin
+      // itself (q20::store_pin_bytes, the one parse the live load shares), so doctor no longer carries a
+      // bespoke pin branch that could drift from the engine's fit numbers.
+      // planned as `kapitsa serve` starts this model (start_plan, as Engine's constructor): without --context at
+      // serve's default context here (default_context) and the slots and prefill chunk that go with it, not at
+      // doctor's 64K; with --context at it, within the model's limit as serve takes it
+      EngineOptions so;
+      so.context = ctx_given ? context_within_limit(dir, ctx) : 0;
+      so.slots = slots_opt, so.prefill_chunk = chunk, so.dflash = dflash;
+      const StartPlan sp = start_plan(dir, so, budget);
+      MemPlan sm = sp.prefill_chunk == lp.prefill_chunk ? m : model_plan(dir, sp.prefill_chunk);
+      // the layer-major groups' store-world choice - the one function every side asks (q20::group_world),
+      // predicted as Qwen4Exp::init_store runs it live, here at the SERVE plan (sm): the store sized WITHOUT
+      // the slot charge first (the plan's activations carry none of it; nothing has allocated slots yet).
+      // Complete -> the load never groups and never pays. Incomplete -> the slots are charged and allocated.
+      // Monotone in one direction, so the one correction is the fixed point. A pin decides its own world in
+      // the same call: short of every expert it charges the slots; holding every expert it never groups and
+      // never pays. This world feeds serve's expert_store JSON below; the fit numbers above carry the doctor
+      // load plan's charge (the same function, at lp.prefill_chunk), so when serve's chunk differs from
+      // doctor's the two plans' charges are both shown - never one silently dropped for the other.
+      const q20::GroupWorld gw = planned_group_world(sm, sp.slots, sp.context, budget);
+      const q20::AutoStoreIn& in = gw.in;
+      const q20::AutoStore& st = gw.st;
+      store_line = q20::auto_store_reason(st, in);
+      store_short = q20::auto_store_short(st, in);
+      // This store world is `kapitsa serve`'s (start_plan sp, at serve's context and prefill chunk), shown
+      // apart from doctor's own numbers above (at doctor's --context / 64K probe, lp.prefill_chunk). When the
+      // two chunks differ, the two plans carry different group-slot charges: serve's is disclosed here,
+      // doctor's above in group_slot_bytes. Two plans, both shown; no single number, no parity claimed.
+      store_j = {{"bytes", st.bytes},
+                 {"all_bytes", m.store_all},
+                 {"reason", q20::auto_store_why_name(st.why)},
+                 {"context", sp.context},
+                 {"slots", sp.slots},
+                 {"prefill_chunk", sp.prefill_chunk},
+                 {"group_slot_bytes", gw.charge},
+                 {"budget_leaves_bytes", in.left},
+                 {"available_memory_bytes", in.avail},
+                 {"ram_share_cap", in.cap},
+                 {"text", store_line}};
     }
     const size_t tokens = room / std::max<size_t>(m.kv_per_pos, 1);
     const double dec = bw > 0 && m.decode_bytes ? 0.75 * bw * 1e9 / double(m.decode_bytes) : 0;
@@ -501,6 +511,9 @@ int run_doctor(int argc, char** argv) {
     o["prefill_chunk"] = ch;
     o["slots"] = slots;
     o["activation_bytes"] = m.activations;
+    // the store-world charge the fit numbers carry (#628): 0 when the predicted store is complete, the pin
+    // holds every expert, or the model is not a streamed pack; activation_bytes stays the bare plan's
+    o["group_slot_bytes"] = group_charge;
     o["slot_state_bytes"] = m.slot_state;
     o["kv_bytes_per_token"] = m.kv_per_pos;
     o["ane_units"] = units;
@@ -550,7 +563,7 @@ int run_doctor(int argc, char** argv) {
     printf("  %s (%s, %d layers, hidden %d; weights %s)\n", name.c_str(), m.dense ? "dense" : "MoE", m.layers, m.hidden,
            m.formats.c_str());
     printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d %s state %.2f, KV %.0f KB/token%s%s\n",
-           m.weights / 1e9, m.mtp / 1e9, ch, m.activations / 1e9, slots, slots > 1 ? "slots'" : "slot's",
+           m.weights / 1e9, m.mtp / 1e9, ch, (m.activations + group_charge) / 1e9, slots, slots > 1 ? "slots'" : "slot's",
            slots * m.slot_state / 1e9, m.kv_per_pos / 1024.0,
            ane_bytes ? (", Neural Engine split " + std::to_string(int(ane_bytes / 1e6)) + " MB").c_str() : "",
            lp.dflash_bytes ? (std::string(", ") + drafter + " " + std::to_string(int(lp.dflash_bytes / 1e6)) + " MB").c_str() : "");
@@ -618,7 +631,7 @@ int run_doctor(int argc, char** argv) {
         // whether it starts: with the slots the engine would take (one where two cannot start: auto_slots)
         const int s = slots_opt > 0 ? slots : std::min(slots, auto_slots(d, eo, budget));
         const LoadPlan lp = plan_load(d, dflash, false, ctx, s, budget, chunk);
-        const StartNeed need = start_need(d, lp, lp.prefill_chunk, ctx, s);
+        const StartNeed need = start_need(d, lp, lp.prefill_chunk, ctx, s, budget);
         char b[64];
         if (need.bytes > budget) snprintf(b, sizeof b, "needs %.1f GB", need.bytes / 1e9);
         else snprintf(b, sizeof b, "starts, but not with a full --ctx conversation and its drafter");

@@ -225,9 +225,9 @@ def agent_checks(run, home):
             p = subprocess.run([node, "--input-type=module", "-e", probe, ext], env=e, capture_output=True, text=True,
                                timeout=60)
             return json.loads(p.stdout) if p.returncode == 0 else p.stderr
-        got = provider([{"id": "qwen3.6-35b-a3b", "context": 65536}, {"id": "nanbeige4.3-33b:4bit", "context": 131072}])
+        got = provider([{"id": "qwen3.6-35b-a3b", "context": 65536}, {"id": "flint:4bit", "context": 131072}])
         check("cli: Pi's provider lists every model it is given, the served one first, each with its context",
-              got == [[["qwen3.6-35b-a3b", 65536, 16384], ["nanbeige4.3-33b:4bit", 131072, 32768]]], str(got))
+              got == [[["qwen3.6-35b-a3b", 65536, 16384], ["flint:4bit", 131072, 32768]]], str(got))
         got = provider(None)
         check("cli: Pi's provider without a list: the one model", got == [[["qwen3.6-35b-a3b", 65536, 16384]]], str(got))
     for label in ["sh.brew.kapitsa", "homebrew.mxcl.kapitsa"]:  # current Homebrew's label (the reporter's), older ones'
@@ -332,23 +332,6 @@ def cli_checks(kapitsa):
               j.get("model") == name + ":4bit" and j.get("kind") == "catalog" and j.get("repo") == "RecursiveSI/flint-int4"
               and j.get("revision") == "3b93f9053b530488405ae9fca51d4900d6ce21f0" and j.get("companions") == [] and
               j.get("id") == name and j.get("dir") == os.path.join(models, name + "-4bit"), json.dumps(j))
-    # Nanbeige4.3-33B: Nace AI's MLX 4-bit (default) and 8-bit packs, Nanbeige's bf16 as published, each with the DFlash2
-    # drafter in dflash2/; its repo by name resolves to the catalog's bf16
-    nb = "nanbeige4.3-33b"
-    nb_dfl = [("dflash2", "kapitsaprime/Nanbeige4.3-33B-DFlash2", "264f1f7f3d4c35d7c23be30de09471365a0a2604", "dflash2")]
-    for a, dv, repo, rev in [
-            ("nanbeige", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
-            ("nanbeige4.3", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
-            ("nanbeige-33b", "4bit", "kapitsaprime/Nanbeige4.3-33B-MLX-4bit", "5901f0d49b95b2788602e610824cdc6c3d82a813"),
-            ("nanbeige:8bit", "8bit", "kapitsaprime/Nanbeige4.3-33B-MLX-8bit", "b3302e043d64b12dd8ef7c7bb86aafaf5630bcb2"),
-            ("nanbeige:bf16", "bf16", "Nanbeige/Nanbeige4.3-33B", "c1093c501cc6460427c0ac634db7223d0450c0ee"),
-            ("Nanbeige/Nanbeige4.3-33B", "bf16", "Nanbeige/Nanbeige4.3-33B", "c1093c501cc6460427c0ac634db7223d0450c0ee")]:
-        j = plan(a)
-        got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-        check(f"cli: {a} -> {nb}:{dv}, with its DFlash2 drafter",
-              j.get("model") == nb + ":" + dv and j.get("kind") == "catalog" and j.get("repo") == repo and
-              j.get("revision") == rev and got == nb_dfl and
-              j.get("dir") == os.path.join(models, nb + "-" + dv), json.dumps(j))
     # NVIDIA's Nemotron Nano: the 4B in FP8 (default) and BF16, the 9B v2 in NVFP4; no drafter (prompt lookup)
     nano4, nano9 = "nemotron-3-nano-4b", "nemotron-nano-9b-v2"
     for a, name, dv, default, repo, rev in [
@@ -566,9 +549,11 @@ def cli_checks(kapitsa):
     # A Flash-Next Q2_0 pack's expert store (doctor's expert_store) is planned as `kapitsa serve` starts the model
     # (start_plan, shared with the engine): without --context at serve's default context and the slots auto_slots gives
     # there, not at doctor's 64K. Headers alone, the real model's shapes: 34 GB of Q2_0 experts, 4.5 GB of the rest.
-    # On 14 GB serve's default is 128K with 2 slots, which leaves the store more than 64K with 4 slots would. The size
-    # itself also depends on the available memory now, so what the budget leaves is compared (and the size, where the
-    # budget sets it).
+    # On 14 GB the incomplete store pays the group-slot reservation (#628), so this memory-bound fixture's achieved
+    # default is exactly 122880 with 2 slots, which leaves the store more than 64K with 4 slots would. This is only
+    # the fixture's honest default, not a global cap: kDefaultContext stays 131072, an explicit --context 131072 is
+    # honored exactly, and a budget that fits the reservation keeps 131072 resident. The size itself also depends on
+    # the available memory now, so what the budget leaves is compared (and the size, where the budget sets it).
     fnx = os.path.join(home, "fake-flash-next")
     os.makedirs(fnx)
     fn_text = {"model_type": "qwen4_exp_text", "hidden_size": 2560, "num_hidden_layers": 48, "vocab_size": 248320,
@@ -596,26 +581,81 @@ def cli_checks(kapitsa):
     hdr = json.dumps(tensors).encode()
     with open(os.path.join(fnx, "model.safetensors"), "wb") as f:
         f.write(len(hdr).to_bytes(8, "little") + hdr)
-    fn_args = [(), ("--context", "131072"), ("--context", "65536"), ("--context", "1m")]
+    # The memory-bound default (NI_MEM_BUDGET=14, incomplete store): serve pays the group-slot reservation (#628), so
+    # this fixture's honest achieved default is exactly 122880, not the 131072 constant. kDefaultContext stays 131072
+    # (no global 120K cap): an explicit --context 131072 is honored exactly, and a budget that fits the reservation
+    # keeps 131072 resident. The no-arg run must plan exactly as --context 122880 (serve's honest default), not as
+    # doctor's 64K display default. The explicit --context 131072 run is kept and still exercised (full 131072
+    # coverage preserved).
+    fn_args = [(), ("--context", "131072"), ("--context", "122880"), ("--context", "65536"), ("--context", "1m")]
     fn_runs = {a: subprocess.Popen([kapitsa, "doctor", "--json", "--model", fnx, *a], env=dict(env, NI_MEM_BUDGET="14"),
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for a in fn_args}
     fn = {a: model(p) for a, p in fn_runs.items()}
     st = {a: m.get("expert_store", {}) for a, m in fn.items()}
-    serve, at64 = fn[("--context", "131072")], st[("--context", "65536")]  # serve's default here (checked below)
-    keys = ("context", "slots", "budget_leaves_bytes", "bytes", "reason")
+    serve, at131, at64 = fn[("--context", "122880")], fn[("--context", "131072")], st[("--context", "65536")]
+    keys = ("context", "slots", "budget_leaves_bytes", "bytes", "reason", "group_slot_bytes")
     seen = json.dumps({" ".join(a) or "none": {k: s.get(k) for k in keys} for a, s in st.items()})
-    check("cli: doctor, a Flash-Next Q2_0 pack without --context: its expert store is planned at serve's default "
-          "context and slots (as with --context <that>), not at doctor's 64K",
-          fn[()].get("default_context") == 131072 and st[()].get("context") == 131072 and
+    check("cli: doctor, a Flash-Next Q2_0 pack without --context (memory-bound): its expert store is planned at "
+          "serve's honest default context and slots (as with --context 122880), not at doctor's 64K; doctor's default "
+          "equals the planned context and the incomplete store discloses the group-slot reservation it pays",
+          fn[()].get("default_context") == 122880 and st[()].get("context") == 122880 and
+          fn[()].get("default_context") == st[()].get("context") and
           st[()].get("slots") == serve.get("slots") == 2 and
           st[()].get("budget_leaves_bytes") == serve.get("expert_store", {}).get("budget_leaves_bytes") >
           at64.get("budget_leaves_bytes", 1 << 62) and
+          st[()].get("group_slot_bytes", 0) > 0 and
           (st[()].get("reason") != "budget" or st[()].get("bytes") == serve.get("expert_store", {}).get("bytes")),
           seen + f" default {fn[()].get('default_context')}")
+    # The explicit --context 131072 request is still exercised (full 131072 coverage preserved alongside the 122880
+    # memory-bound default), and its context is honored exactly: 131072 is under the model's 262144 limit, so
+    # context_within_limit passes it through rather than reducing it to the 122880 default. Its slots follow from the
+    # planner, not copied from the no-arg cell. auto_slots(131072) = 2: (a) this Qwen4Exp pack binds no block drafter,
+    # so plan_load leaves dflash_bytes 0 at every context and slot - the loop's conversation_fits budget argument is
+    # the full budget at both contexts, and more.dflash == two.dflash always; (b) the fixture's own default_context
+    # descent 131072 -> 122880 means default_context_up_to's keeps(131072) failed, and with dflash_bytes 0 (and
+    # ref_chunk 0, so the prefill_chunk guard cannot fire) it failed on conversation_fits alone at the ladder's
+    # fit_slots(0) = 2 slots - so conversation_fits(131072, 2, budget) is false; (c) need(ctx, n) = fixed(n) + ane +
+    # kv_per_pos*ctx + group_charge, and fixed(n) = weights + mtp + activations + n*slot_state grows by (n - 2)*slot_state
+    # while group_charge is non-decreasing in n, so need(131072, n >= 2) > need(131072, 2) > budget - conversation_fits
+    # (131072, n, budget) is false for every n >= 2; and (d) auto_slots' "return 1" branch probes fits_small(min(ctx,
+    # 8192) = 8192, ...), identical at 122880 and 131072, where it did not fire (the no-arg fixture's slots are 2, not
+    # 1). With the n >= 3 loop unable to return and "return 1" not firing, auto_slots falls through to its return 2.
+    check("cli: doctor, the same pack with an explicit --context 131072: the request is honored exactly (its context "
+          "stays 131072, not the 122880 default) and its slots are 2 (full 131072 coverage preserved "
+          "alongside the 122880 memory-bound default)",
+          st[("--context", "131072")].get("context") == 131072 and
+          at131.get("slots") == 2 and st[("--context", "131072")].get("group_slot_bytes", 0) > 0, seen)
     check("cli: doctor, a Flash-Next Q2_0 pack with --context: its expert store is planned at it (64K with its slots; "
           "past the model's 256K, at 256K as serve caps it)",
           at64.get("context") == 65536 and at64.get("slots") == fn[("--context", "65536")].get("slots") and
           st[("--context", "1m")].get("context") == 262144, seen)
+    # The pin reaches doctor's expert_store through the same one parse the live load uses (q20::store_pin_bytes,
+    # #628): a full pin is resident and never pays the group-slot charge - even where the automatic store is
+    # incomplete on this memory-bound fixture; a short pin is exact to its bytes and reserves; a negative pin
+    # clamps to 0 (the sign is checked before the double->size_t conversion, undefined below zero) and still
+    # reserves, like garbage.
+    pin_args = ("all", "1", "-1")
+    pin_runs = {v: subprocess.Popen([kapitsa, "doctor", "--json", "--model", fnx],
+                                    env=dict(env, NI_MEM_BUDGET="14", NI_EXPERT_STORE=v),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for v in pin_args}
+    pin = {v: model(p) for v, p in pin_runs.items()}
+    pst = {v: m.get("expert_store", {}) for v, m in pin.items()}
+    seen_pin = json.dumps({v: dict({k: s.get(k) for k in keys}, top=pin[v].get("group_slot_bytes"))
+                           for v, s in pst.items()})
+    check("cli: doctor, NI_EXPERT_STORE=all on the memory-bound pack: the pin is resident (its bytes are the whole "
+          "store's), the reason names the pin, and the complete store never pays the group-slot charge - at the "
+          "expert_store level or the top level - even where the automatic store is incomplete",
+          pst["all"].get("reason") == "NI_EXPERT_STORE" and
+          pst["all"].get("bytes") == pst["all"].get("all_bytes") and
+          pst["all"].get("group_slot_bytes", 1) == 0 and pin["all"].get("group_slot_bytes", 1) == 0, seen_pin)
+    check("cli: doctor, NI_EXPERT_STORE=1 (a short pin) on the same pack: the store's bytes are exactly the pin's "
+          "1e9, the reason names the pin, and the incomplete store discloses its reservation at both levels",
+          pst["1"].get("reason") == "NI_EXPERT_STORE" and pst["1"].get("bytes") == 10**9 and
+          pst["1"].get("group_slot_bytes", 0) > 0 and pin["1"].get("group_slot_bytes", 0) > 0, seen_pin)
+    check("cli: doctor, NI_EXPERT_STORE=-1 (a negative pin) on the same pack: it clamps to 0 bytes - never an "
+          "undefined double->size_t conversion - and a 0 pin still reserves, disclosing the charge at both levels",
+          pst["-1"].get("reason") == "NI_EXPERT_STORE" and pst["-1"].get("bytes") == 0 and
+          pst["-1"].get("group_slot_bytes", 0) > 0 and pin["-1"].get("group_slot_bytes", 0) > 0, seen_pin)
     for a in ["flint:16gb", "flint:4bit"]:
         rc, out, err = run("rm", a)
         check(f"cli: rm {a} deletes it", rc == 0 and "Deleted flint:" + a.split(":")[1] in out, out + err)

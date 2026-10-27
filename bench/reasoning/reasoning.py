@@ -256,7 +256,7 @@ def cmd_run(a):
         items = items[:a.limit]
     _, _, samples_default, mt_default = SETS.get(set_name, (None, None, 1, 32768))
     samples = a.samples or samples_default
-    held = os.environ.get("NACE_GPU_LOCK_HELD") or os.environ.get("NI_LOCK_HELD")
+    held = gpu_hogs.held_by_caller()
     lock = server = None
     try:
         # the lock before the server: loading the model is GPU work too (the harness holds it from server start)

@@ -2,12 +2,12 @@
 // and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors, Qwen3.8-Flash-Next
 // included), Nemotron-H models (NVIDIA's safetensors) and Recursive's Flint (MLX safetensors).
 #pragma once
+#include "engine/chat.h"
 #include "engine/grammar.h"
 #include "engine/prefix_cache.h"
 #include "engine/reasoning_memory.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
-#include "model/flint_dfl.h"
 #include "model/dory.h"
 #include "model/flint.h"
 #include "model/kflash_budget.h"
@@ -100,6 +100,17 @@ size_t default_mem_budget();
 // conversation's KV cache (up to 32K tokens) set apart; a Q2_0 pack's expert store takes what that leaves after the
 // weights (the engine and `kapitsa doctor` share it). At least 1 byte.
 size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t budget);
+// The group-slot store-world a pre-load fit check sees (PR #628): the automatic expert store the load will pick
+// for a Q2_0 Flash-Next pack, planned as `kapitsa doctor` displays it, run through q20::group_world - the
+// store-world choice, one decision in one place. A store complete without the charge never groups and never
+// pays (.charge 0; every fit number stays the bare one, which is what keeps a full default-context ladder); an
+// incomplete one allocates MemPlan::group_slots (Qwen4Exp::init_store decides live - the authority), and every
+// pre-load fit number that must carry the reservation adds `.charge` (start_need, conversation_fits, the chunk
+// picks). An NI_EXPERT_STORE pin decides its own world exactly as the load does (q20::store_pin_bytes, one
+// shared parser), so a short pin reserves the slots even where the automatic store would come out complete,
+// and a pin holding every expert never groups and never pays. group_slots is 0 for every model but a streamed
+// Q2_0 trunk pack, so for everything else this is the plain planned sizing, uncharged.
+q20::GroupWorld planned_group_world(const MemPlan& m, int slots, int ctx, size_t budget);
 // The prefill chunk (rows) the engine picks when none is given: 2048, or 1024 when 2048-row buffers would leave
 // less than one conversation of `context` tokens in the budget (activations scale with the chunk), less (a multiple of
 // 64, at least 256) when 1024-row ones would leave less than the tokens the engine starts with (the context, up to 8K)
@@ -146,16 +157,18 @@ struct StartPlan {
 };
 StartPlan start_plan(const std::string& model_dir, const EngineOptions& opt, size_t budget);
 // What the engine needs to start a model (it refuses to load it past the budget): the weights, the MTP head, the
-// drafter plan_load keeps, prefill buffers for `prefill_chunk` rows, the slots' state and an 8k-token conversation
-// (min(context, 8192)). From config.json and the safetensors headers alone, so `kapitsa serve` can check a model
-// before downloading it (hub::plan_dir).
+// drafter plan_load keeps, prefill buffers for `prefill_chunk` rows plus the group-slot charge the store-world
+// choice predicts for `budget` (planned_group_world; 0 for every model but a streamed Q2_0 pack whose predicted
+// store stays incomplete), the slots' state and an 8k-token conversation (min(context, 8192)). From config.json
+// and the safetensors headers alone, so `kapitsa serve` can check a model before downloading it (hub::plan_dir).
 struct StartNeed {
   size_t bytes = 0;
   std::string parts;  // what each part needs, for the "insufficient memory" message
   size_t weights = 0;   // the weights alone
   std::string formats;  // their formats ("bf16", "4-bit g64 + 8-bit g64" ...)
 };
-StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots);
+StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots,
+                     size_t budget);
 // One conversation of `context` tokens fits within `budget` beside the model (1024-row prefill buffers, the slots'
 // state, the Neural Engine split): plan_load's test before it keeps a drafter, and the test `kapitsa serve` without
 // --model applies to pick the best model for this Mac.
@@ -195,18 +208,15 @@ enum class ContextWhy { kDefault, kModelLimit, kMemory, kMemoryWithDrafter };
 int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why = nullptr);
 
 struct ChatRequest;
-// The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none),
-// through paren_call_postfix
+// The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none)
 std::string chat_template_source(const std::string& model_dir);
-// A template's calls followed by `.` or `[` in parentheses, `(f(x)).y`, which minja reads (it reads `f(x).y` as an error)
-std::string paren_call_postfix(const std::string& src);
 // A request's prompt by a chat template (Engine::render; CPU only, no model needed: tools/api_test checks it).
 // `images`: image parts render as images (their data left out; the engine puts the images' rows in place), else image
 // and video parts become a short note. `native`: the template renders every role and tool call itself (Flint's), so
 // no minja polyfills and system messages after the first stay where they are.
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images = false, bool native = false);
-// Flint's (and Nanbeige4.3's) chat template rewritten for minja (engine.cpp)
+// Flint's chat template rewritten for minja (engine.cpp)
 std::string flint_template(std::string src);
 // A request followed by its answer as the client sends it back (content, and the reasoning when the client sends
 // reasoning back: it asks to keep every turn's thinking, or an earlier assistant turn came back with it), as the next
@@ -228,57 +238,6 @@ struct DraftPrompt {
 DraftPrompt draft_prompt(const ChatRequest& answered, const std::string& draft,
                          const std::function<std::string(const ChatRequest&)>& render);
 
-// One request's progress while it runs, for a live display (`kapitsa serve`'s dashboard in a terminal): the caller
-// passes it in ChatRequest::live and reads it from any thread; the engine writes it with relaxed atomic stores between
-// decode cycles, never on the GPU's path.
-struct LiveDecode {
-  std::atomic<int> phase{0};               // 0 waiting for the engine, 1 reading the prompt, 2 writing, 3 done
-  std::atomic<int> prompt{0}, cached{0};   // prompt tokens, of which reused from the cache
-  std::atomic<int> read{0};                // prompt tokens read so far: the cached ones, then each prefill chunk the
-                                           // GPU has finished
-  std::atomic<int> tokens{0};              // tokens written
-  std::atomic<int> cycles{0};              // decode cycles: a speculative cycle's verify, or a plain step
-  std::atomic<int> last{0};                // tokens the last cycle wrote (its accepted drafts + 1)
-  std::atomic<int> spec{0};                // 0 plain decoding, 1 MTP, 2 DFlash2, 3 LiLiCorr
-};
-
-struct ChatRequest {
-  ojson messages = ojson::array();
-  ojson tools = ojson::array();
-  ojson template_kwargs = ojson::object(); // e.g. enable_thinking, reasoning_effort
-  int max_tokens = 8192;
-  float temperature = 0.6f;
-  float top_p = 0.95f;
-  int top_k = 20;
-  uint32_t seed = 0;
-  std::vector<std::string> stop;
-  std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
-  // Looped models (Dory): the loop count asked for ("loops" in the body, 0: none), else derived from the reasoning
-  // effort (OpenAI's reasoning_effort / reasoning.effort: minimal and low 1, medium 2, high and xhigh 4; none, which
-  // only turns thinking off, the default) or Anthropic's thinking (disabled 1, a budget by its size); "" / -1: the
-  // server's default
-  int loops = 0;
-  std::string effort;
-  int thinking_budget = -1;     // Anthropic thinking.budget_tokens; 0: thinking disabled
-  // Structured output (src/engine/grammar.h: a JSON schema, any JSON object, tool calls the request forces or strict
-  // tools): what the reply must follow after its reasoning, or null. The engine samples each token under its mask.
-  std::shared_ptr<const Grammar> grammar;
-};
-
-struct ToolCall {
-  std::string id, name;
-  std::string arguments; // JSON object text
-};
-
-// Tags the model writes as text (a tokenizer without <think> / tool-call tokens: Nemotron Nano 9B v2's), which the
-// output parser matches in the decoded text instead of by token id.
-struct TextTags {
-  bool think = false;             // <think> / </think>
-  std::string tc_open, tc_close;  // a tool call's tags, e.g. <TOOLCALL> / </TOOLCALL> (empty: none)
-  bool json_calls = false;        // the call's body: a JSON list of {"name": ..., "arguments": ...} (Nano 9B v2's)
-  bool any() const { return think || !tc_open.empty(); }
-};
-
 // Nemotron Nano 9B v2's chat conventions (CPU only; tools/nh_chat_check checks them): a template that switches
 // thinking with "/think" / "/no_think" in a message and reads no enable_thinking; the request with its enable_thinking
 // as that flag at the end of the last user message (else the first system message), or as it is without one; the tags
@@ -287,43 +246,6 @@ struct TextTags {
 bool think_flag_template(const std::string& template_source);
 ChatRequest think_flag_request(const ChatRequest& r);
 TextTags text_tags_for(const Tokenizer& tok, const std::string& template_source);
-
-struct ChatDelta {
-  std::string reasoning;
-  std::string content;
-  std::vector<ToolCall> tool_calls; // complete calls, emitted when their closing tag arrives
-};
-
-struct ChatResult {
-  std::string reasoning, content;
-  std::vector<ToolCall> tool_calls;
-  std::string finish_reason;  // stop | length | tool_calls | cancelled | error
-  std::string error;
-  std::string stop_sequence;  // "stop" at one of the request's stop strings: that string
-  bool context_full = false;  // "length" because the context window (or the memory for it) ran out, not max_tokens
-  int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
-  bool invalid_request = false;  // "error" because of the request's content (an image that cannot be read, a video)
-  int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
-  int reasoning_tokens = 0;   // completion tokens inside the think block
-  double prefill_ms = 0, decode_ms = 0;
-  // prefill_ms is the time to read the uncached prompt tokens: no image rows (their encoder runs before the clock
-  // starts) and no turn given to another request in between (--slots > 1); a rate from it is shown only then
-  bool prefill_exact = false;
-  // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply, the
-  // request's images (what the processor made of them, without pixels)
-  int slot = -1;
-  uint64_t slot_gen = 0, req_seq = 0;
-  std::shared_ptr<const std::vector<vision::Prepared>> images;
-  // concurrency: time this request waited for a free slot, and the GPU turns it gave to other requests
-  double queue_ms = 0;
-  int yields = 0;
-  int batched = 0;  // decode cycles it ran in one pass with other requests' (batched decode)
-  int loops = 0;    // looped models: the loop count the request ran (0: not a looped model)
-  // KFlash around the decode (src/model/kflash_wrap.h): the proposal source ("DFlash2", "MTP", "prompt lookup", "none":
-  // plain decoding, 1 row per cycle) and the cycles it ran; empty source: the wrapper is off (NI_KFLASH=0)
-  std::string kflash_source;
-  int kflash_cycles = 0;
-};
 
 // What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).
 struct DraftResult {
@@ -617,19 +539,13 @@ class Engine {
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   Dory* dory_ = nullptr;     // model_ when it is a Dory model
-  Flint* flint_ = nullptr;   // model_ when it is a Flint model (or a dense Llama on Flint's backend)
-  bool flint_chat_ = false;  // Recursive's Flint itself: its own chat template's markup and GLM's tool calls (a dense
-                             // Llama on the backend, Nanbeige4.3, writes Qwen's: <|im_start|> turns, XML tool calls)
+  Flint* flint_ = nullptr;   // model_ when it is a Flint model
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   int dory_spec_ = 0;        // Dory speculative decoding (per-loop KV): drafts per cycle (0: plain decoding)
   bool dory_spec_auto_ = false;  // drafts per cycle by the request's loops (no --spec)
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
   std::string dfl_dir_;              // its folder
-  // DFlash2 on a dense Llama on Flint's backend (Nanbeige4.3): its own loop (a chain of 7 drafts verified in 8 rows,
-  // with the token-count fallback to 1-row cycles), apart from dfl_'s Qwen paths; slot.dseq holds its ring
-  std::unique_ptr<FlintDflTarget> fdt_;
-  std::unique_ptr<DFlash2> fdfl_;
   std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
   // KFlash on the Nemotron-H block drafters (on dense targets; MoE targets keep the chain unless NI_KFLASH=1; src/model/kflash_budget.h): best-first trees of the drafter's
   // lattice under a measured budget instead of its walk's chain

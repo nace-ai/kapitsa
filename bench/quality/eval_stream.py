@@ -58,6 +58,9 @@ import mlx.nn as nn
 import numpy as np
 from mlx_lm.models import qwen3_5
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "harness"))
+import gpu_hogs  # noqa: E402  (bench/harness/gpu_hogs.py: held_by_caller)
+
 UA = {"User-Agent": "kapitsa-quant-eval"}
 LOCK = os.path.expanduser("/tmp/kapitsa-gpu.lock")
 NP_DT = {"BF16": np.uint16, "F32": np.float32, "F16": np.float16, "U32": np.uint32, "I32": np.int32, "U8": np.uint8}
@@ -73,7 +76,7 @@ class GpuLock:
 
     @staticmethod
     def take():
-        if os.environ.get("NI_LOCK_HELD"):  # the caller holds the lock for the whole run
+        if gpu_hogs.held_by_caller():  # the caller holds the lock for the whole run
             return
         if GpuLock.held is None:
             f = os.fdopen(os.open(LOCK, os.O_RDONLY | os.O_CREAT, 0o644))

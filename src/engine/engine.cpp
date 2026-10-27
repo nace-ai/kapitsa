@@ -10,6 +10,7 @@
 #include <minja/minja.hpp>
 
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 
 #include <algorithm>
 #include <cctype>
@@ -21,7 +22,6 @@
 #include <mutex>
 #include <fstream>
 #include <random>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -282,7 +282,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
         logi("prefill: %d-row chunks (fewer expert-weight reads; the memory plan fits them)%s", base,
              narrow_chunk_ ? ", for a prefill of at least two of them" : "");
     }
-    const StartNeed need = start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots);
+    const StartNeed need =
+        start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots,
+                   budget_ ? budget_ : default_mem_budget());  // the budget its group-world charge is planned at
     const size_t rws = Gpu::get().recommended_working_set();
     if (need.weights > budget_)  // nothing but a smaller variant helps: say so before the itemized message
       fatal("%s does not fit this Mac: its weights alone (%.1f GB, %s) exceed the GPU memory Kapitsa may use here "
@@ -330,7 +332,6 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   } else if (Flint::is_model(opts_.model_dir)) {
     auto m = std::make_unique<Flint>(opts_.model_dir, opts_.prefill_chunk);
     flint_ = m.get();
-    flint_chat_ = !m->config().llama;
     model_ = std::move(m);
     publisher_sampling();
   } else {
@@ -343,8 +344,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   std::string src = chat_template_source(opts_.model_dir);
   if (src.empty()) fatal("no chat template in %s", opts_.model_dir.c_str());
   if (flint_) src = flint_template(src);
-  tmpl_ = std::make_unique<minja::chat_template>(src, flint_chat_ ? "<|begin_of_text|>" : "",
-                                                 flint_chat_ ? "<|end_of_text|>" : "<|im_end|>");
+  tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
+                                                 flint_ ? "<|end_of_text|>" : "<|im_end|>");
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -418,16 +419,6 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
   }
 
-  if (flint_ && flint_->config().llama && !lp.dflash_off && lp.dflash_left_out.empty() && !lp.dflash.empty()) {
-    const size_t a0 = Gpu::get().allocated_bytes();
-    fdt_ = std::make_unique<FlintDflTarget>(*flint_);
-    fdfl_ = std::make_unique<DFlash2>(*fdt_, lp.dflash, 0, false);
-    dfl_dir_ = lp.dflash;
-    flint_ngram_ = 0;  // the drafter instead of prompt lookup
-    logi("DFlash2 on %s: %.3f GB at load; a chain of 7 drafts a cycle, plain 1-row cycles while acceptance is under "
-         "break-even", opts_.model_dir.c_str(), (Gpu::get().allocated_bytes() - a0) / 1e9);
-  }
-
   if (nh_ && !lp.dflash_off && lp.dflash_left_out.empty()) {
     if (lp.dflash.empty()) {
       logi("Nemotron-H: no block drafter found next to %s", opts_.model_dir.c_str());
@@ -489,7 +480,6 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     Slot s;
     s.seq = model_->new_seq(limit, 0);  // KV cache on first use, growing with the conversation
     if (dfl_) s.dseq = dfl_->new_seq();
-    if (fdfl_) s.dseq = fdfl_->new_seq();
     if (lili_) s.lseq = lili_->new_seq();
     s.ckpts.push_back({model_->new_checkpoint()});
     s.ckpts.push_back({model_->new_checkpoint()});
@@ -539,7 +529,6 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     logi("KFlash: prompt-lookup budget on (extra row %.2f steps)", kf_row_cost_);
   }
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
-                         : fdfl_ ? std::string("DFlash2 speculative decoding (7-draft chain, plain while acceptance is low)")
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
                                                   " drafts per cycle)"
                          : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
@@ -573,7 +562,6 @@ std::string Engine::kflash_source() const {
   if (!kflash_wrap_on()) return "";
   if (lili_) return lili_->name();
   if (dfl_) return "DFlash2";
-  if (fdfl_) return "DFlash2";
   if (flint_ngram_ > 0 || nh_ngram_ > 0) return "prompt lookup";
   if (spec_) return "MTP";
   if (dory_spec_ > 0)
@@ -618,6 +606,48 @@ size_t flash_next_model_budget(const MemPlan& mp, int slots, int context, size_t
   return budget > keep ? budget - keep : 1;
 }
 
+static size_t engine_ram_bytes() {
+  int64_t m = 0;
+  size_t n = sizeof m;
+  sysctlbyname("hw.memsize", &m, &n, nullptr, 0);
+  return size_t(m);
+}
+
+q20::GroupWorld planned_group_world(const MemPlan& m, int slots, int ctx, size_t budget) {
+  // The automatic expert store `kapitsa serve` will pick for a Q2_0 Flash-Next pack (Qwen4Exp::init_store with
+  // NI_EXPERT_STORE unset), before any load - the model's budget (flash_next_model_budget) less its GPU memory
+  // before the store (the plan's weights without the smallest store, MTP head and prefill buffers) and
+  // init_store's 0.5 GB, through the store-world choice (q20::group_world): the store sized WITHOUT the
+  // group-slot charge first (the plan's activations carry none of it; nothing has allocated slots yet).
+  // Complete without it, the world never groups and never pays (.charge 0 - every fit number stays bare,
+  // which is what keeps a full default-context ladder); incomplete, .charge is MemPlan::group_slots and the
+  // sizing is the charged world's. The load decides live (init_store); this is the pre-load prediction every
+  // fit site shares (the engine's fit checks, start_need, doctor.cpp). An NI_EXPERT_STORE pin decides its own
+  // world exactly as the load does (q20::store_pin_bytes, one parser both sides share): a short pin reserves
+  // the slots even where the automatic store would come out complete, and a pin holding every expert never
+  // groups and never pays.
+  q20::AutoStoreIn in;
+  const size_t mb = flash_next_model_budget(m, slots, ctx, budget);
+  in.all = m.store_all, in.least = m.store_least;
+  in.used = m.weights - std::min(m.weights, m.store_least) + m.mtp + m.activations;
+  in.keep = size_t(1) << 29;
+  in.left = mb > in.used + in.keep ? mb - in.used - in.keep : 0;
+  in.ram = engine_ram_bytes(), in.avail = q20::available_memory();
+  in.cap = q20::auto_store_cap(Gpu::get().apple10());
+  size_t pin = 0;
+  if (q20::store_pin_bytes(getenv("NI_EXPERT_STORE"), m.store_all, pin))
+    return q20::group_world(m.group_slots, in, &pin);
+  return q20::group_world(m.group_slots, in);
+}
+
+// The group-slot reservation a pre-load fit number carries (#628): the predicted store-world's charge. 0 for
+// every model but a streamed Q2_0 trunk pack (the only plan() that sets group_slots), and 0 for one whose
+// predicted store is complete - a reservation no load allocates must not shrink a fit. Fits fold it in as a
+// reservation: start_need adds it to n.bytes; the `<= budget` checks add it to the need side.
+static size_t group_world_charge(const MemPlan& m, int slots, int ctx, size_t budget) {
+  return m.group_slots ? planned_group_world(m, slots, ctx, budget).charge : 0;
+}
+
 std::string unsupported_model(const std::string& model_dir) {
   // (a missing config.json is refused where the folder is resolved)
   if (!std::ifstream(model_dir + "/config.json")) return "";
@@ -639,8 +669,7 @@ std::string unsupported_model(const std::string& model_dir) {
   if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers")) return "";
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
                            "Qwen3.8-Flash-Next (qwen4_exp), NVIDIA's Nemotron-H (nemotron_h: Nemotron Nano, Nemotron 3.5), "
-                           "Nemotron Labs Dory (dory), Recursive's Flint (flint) and dense Llama models such as "
-                           "Nanbeige4.3 (llama).";
+                           "Nemotron Labs Dory (dory) and Recursive's Flint (flint).";
   const std::string what = !mt.empty() ? mt : tt;
   if (what.empty()) return model_dir + " is not a model Kapitsa runs: its config.json names no model_type." + runs;
   return model_dir + " is a " + what + " model (its config.json's model_type), an architecture Kapitsa does not run." +
@@ -683,7 +712,11 @@ static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
 // 8K (default_context: 8K there). Prefill on the M1 Pro, 4,352 tokens: 11.7 s at 256 rows, 9.5 at 512, 8.0 at 2048.
 static bool fits_small(const std::string& model_dir, int context, int slots, size_t budget) {
   const MemPlan p = model_plan(model_dir, 256);
-  return p.fixed(slots) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+  // + the group-slot reservation the load's store world pays (#628; 0 off a streamed Q2_0 pack, and 0 for one
+  // whose predicted store is complete)
+  return p.fixed(slots) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) +
+             group_world_charge(p, slots, context, budget) <=
+         budget;
 }
 
 // Tail room: a prompt a few rows past a chunk multiple should not pay a whole extra chunk of weight streaming for
@@ -743,22 +776,28 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // compute grows faster. The hidden size is 640, so the extra buffers are small.
   if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10() && Qwen4Exp::tattn(model_dir)) {
     const MemPlan wide = model_plan(model_dir, 4096);
-    if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
+    if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) +
+            group_world_charge(wide, 1, context, budget) <= budget)
+      return 4096;
   }
-  if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) > budget) {
+  if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) +
+          group_world_charge(p, std::max(1, slots), context, budget) >
+      budget) {
     // 1024-row buffers, or the largest multiple of 64 rows down to 256 that leaves the tokens the engine starts with
     // (the context, up to 8K; fits_small)
     for (int c = 1024; c > 256; c -= 64) {
       const MemPlan pc = model_plan(model_dir, c);
       if (pc.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, pc) +
-              pc.kv_per_pos * size_t(std::min(context, 8192)) <= budget)
+              pc.kv_per_pos * size_t(std::min(context, 8192)) +
+              group_world_charge(pc, std::max(1, slots), context, budget) <= budget)
         return c;
     }
     return 256;
   }
   if (room) {
     const MemPlan r = model_plan(model_dir, prefill_chunk_room(2048));
-    if (r.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, r) + r.kv_per_pos * size_t(context) <= budget)
+    if (r.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, r) + r.kv_per_pos * size_t(context) +
+            group_world_charge(r, std::max(1, slots), context, budget) <= budget)
       return prefill_chunk_room(2048);
   }
   return 2048;
@@ -781,28 +820,8 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   lp.dflash_auto = want == "auto";
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
   slots = std::max(1, slots);
-  const bool flint_llama = Flint::is_model(model_dir) && Flint::read_config(model_dir).llama;
-  if (Dory::is_model(model_dir) || (Flint::is_model(model_dir) && !flint_llama)) {
-    lp.dflash_off = true;  // no block drafter for Dory or Flint's MoE
-  } else if (flint_llama) {
-    // a dense Llama on Flint's backend (Nanbeige4.3): a DFlash2 drafter next to it (auto, DFlash2::find) or the one
-    // named; auto leaves out one that would keep a conversation from its full context
-    if (!lp.dflash_off) {
-      const Qwen35Config dc = flint_dfl_config(Flint::read_config(model_dir));
-      lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, dc, true) : want;
-      if (!lp.dflash.empty()) {
-        size_t per_slot = 0;
-        const size_t head_row = size_t(dc.hidden) + size_t(dc.hidden) / 64 * 4;  // an 8-bit LM head row
-        lp.dflash_bytes = lp.dflash_found_bytes =
-            DFlash2::plan_bytes(lp.dflash, dc, head_row, &per_slot) + per_slot * size_t(slots);
-        if (lp.dflash_auto &&
-            !conversation_fits(model_dir, context, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0)) {
-          lp.dflash_left_out = lp.dflash;
-          lp.dflash.clear();
-          lp.dflash_bytes = 0;
-        }
-      }
-    }
+  if (Dory::is_model(model_dir) || Flint::is_model(model_dir)) {
+    lp.dflash_off = true;  // no block drafter for Dory or Flint
   } else if (NemotronH::is_model(model_dir)) {
     // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
@@ -854,12 +873,17 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   return lp;
 }
 
-StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots) {
+StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots,
+                     size_t budget) {
   slots = std::max(1, slots);
   const int min_ctx = std::min(context, 8192);
   const MemPlan mp = model_plan(model_dir, prefill_chunk);
+  // the group-slot reservation the store world pays (#628): a streamed Q2_0 pack whose predicted store stays
+  // incomplete allocates it (init_store), so the start gate carries it; a complete store never groups and
+  // never pays - 0 here, and the default-context ladder keeps its full rungs. 0 for every other model.
+  const size_t gcharge = group_world_charge(mp, slots, context, budget);
   StartNeed n;
-  n.bytes = mp.fixed(slots) + lp.dflash_bytes + mp.kv_per_pos * size_t(min_ctx);
+  n.bytes = mp.fixed(slots) + gcharge + lp.dflash_bytes + mp.kv_per_pos * size_t(min_ctx);
   n.weights = mp.weights;
   n.formats = mp.formats;
   char b[400];
@@ -867,7 +891,7 @@ StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefi
            "%d slot%s (weights %.1f GB, MTP head %.1f, DFlash2 drafter %.1f, buffers for %d-token prefill chunks %.1f, "
            "conversation state %.1f, KV cache for %d tokens %.1f)",
            slots, slots > 1 ? "s" : "", mp.weights / 1e9, mp.mtp / 1e9, lp.dflash_bytes / 1e9, prefill_chunk,
-           mp.activations / 1e9, slots * mp.slot_state / 1e9, min_ctx, mp.kv_per_pos * min_ctx / 1e9);
+           (mp.activations + gcharge) / 1e9, slots * mp.slot_state / 1e9, min_ctx, mp.kv_per_pos * min_ctx / 1e9);
   n.parts = b;
   return n;
 }
@@ -906,13 +930,35 @@ int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t bu
 
 bool conversation_fits(const std::string& model_dir, int context, int slots, size_t budget) {
   const MemPlan p = model_plan(model_dir, 1024);
-  return p.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+  // + the group-slot reservation the load's store world pays (#628) - at this probe's 1024-row plan; the
+  // engine's real gate (start_need) carries the started chunk's. 0 off a streamed Q2_0 pack, and 0 for one
+  // whose predicted store is complete: an unpaid reservation must not shrink the default-context ladder.
+  // Probing at 1024 does not under-reserve the budget. The live chunk is auto_prefill_chunk's bare return
+  // (opts_.prefill_chunk -> Qwen4Exp tmax_), and alloc4_group/init_store charge group_slot_bytes(G, tmax_,
+  // D, hc) there. Every auto_chunk return a streamed Q2_0 pack can reach gates that chunk's
+  // group_world_charge inside budget - 2048 and room(2048)=2112 at the full context, the tattn Q2_0-wide
+  // 4096, the fallback bare c <= 1024 at min(context, 8192) - and the two returns that omit the term
+  // (NemotronH wide, 35B-A3B 4-bit wide) are non-streamed models whose group_world_charge is identically 0.
+  // The probe draws its charge from the same planned_group_world the load's init_store uses, so it honors
+  // the same NI_EXPERT_STORE pin and complete/incomplete world. So charge(tmax_) can exceed this probe's
+  // charge(1024) only when tmax_ > 1024, by group_slot_bytes(G, tmax_ - 1024, D, hc) (linear in tmax_) - at
+  // most 267,526,144 B (~0.2675 GB at G=4/D=2560/hc=4) on the default 2112 path, more on the non-default
+  // tattn 4096 path - and only on a return that already verified fixed + ane + kv*context + charge(tmax_) <=
+  // budget, so the budget holds; the fallback's bare c <= 1024 keeps charge(tmax_) <= charge(1024).
+  // start_need is the hard startup gate (charge(tmax_) with min(context, 8192) KV); the full context's KV
+  // grows lazily into the store's headroom, never stolen from the group slots (flash_next_model_budget
+  // funds KV first).
+  return p.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) +
+             group_world_charge(p, std::max(1, slots), context, budget) <=
+         budget;
 }
 
 bool small_start_fits(const std::string& model_dir, int context, int slots, size_t budget) {
   if (slots > 1) return false;
   const MemPlan p = model_plan(model_dir, auto_prefill_chunk(model_dir, context, 1, budget));
-  return p.fixed(1) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+  return p.fixed(1) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) +
+             group_world_charge(p, 1, context, budget) <=
+         budget;
 }
 
 int parse_context(const std::string& s, std::string* why) {
@@ -1812,82 +1858,13 @@ void Engine::remember_reasoning(const ChatRequest& r, const ChatResult& res) {
 
 int Engine::restore_reasoning(ChatRequest& r) { return reasoning_.restore(r.messages); }
 
-// minja (third_party, not edited) reads no attribute or subscript after a call: `f(x).startswith('a')` fails with
-// "Expected comma in tuple", and Nanbeige 4.3's template calls its visible_text macro so. Inside {{ }} and {% %}, such
-// a call is put in parentheses, `(f(x)).startswith('a')`, which minja reads and which means the same. Keywords (`not(x).y`
-// is `not ((x).y)`), method calls and filters are left alone; a template minja already parses has no such call, so for
-// it this returns the source unchanged.
-std::string paren_call_postfix(const std::string& src) {
-  const size_t n = src.size();
-  auto ident = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
-  auto skip_string = [&](size_t k) {  // k at a quote: the index past its closing quote
-    const char q = src[k];
-    for (++k; k < n && src[k] != q; ++k)
-      if (src[k] == '\\') ++k;
-    return std::min(k + 1, n);
-  };
-  static const std::set<std::string> keywords = {"not", "and", "or", "in", "is", "if", "elif", "else", "for",
-                                                 "set", "macro", "call", "filter", "return", "with"};
-  std::vector<std::pair<size_t, char>> inserts;  // (index, '(' or ')'), applied from the back
-  for (size_t i = 0; i < n;) {
-    if (src.compare(i, 2, "{#") == 0) {  // a comment: as written
-      const size_t e = src.find("#}", i + 2);
-      i = e == std::string::npos ? n : e + 2;
-      continue;
-    }
-    if (src.compare(i, 2, "{{") != 0 && src.compare(i, 2, "{%") != 0) {
-      ++i;
-      continue;
-    }
-    const std::string close = src[i + 1] == '{' ? "}}" : "%}";
-    size_t k = i + 2;
-    while (k < n && src.compare(k, 2, close) != 0) {
-      if (src[k] == '\'' || src[k] == '"') {
-        k = skip_string(k);
-        continue;
-      }
-      if (!ident(src[k]) || std::isdigit(static_cast<unsigned char>(src[k]))) {
-        ++k;
-        continue;
-      }
-      const size_t s = k;
-      while (k < n && ident(src[k])) ++k;
-      size_t before = s;
-      while (before > 0 && std::isspace(static_cast<unsigned char>(src[before - 1]))) --before;
-      const char prev = before > 0 ? src[before - 1] : ' ';
-      if (k >= n || src[k] != '(' || prev == '.' || prev == '|' || keywords.count(src.substr(s, k - s))) continue;
-      size_t e = k, depth = 0;  // the call's closing parenthesis
-      while (e < n) {
-        if (src[e] == '\'' || src[e] == '"') {
-          e = skip_string(e);
-          continue;
-        }
-        if (src[e] == '(') ++depth;
-        else if (src[e] == ')' && --depth == 0) break;
-        ++e;
-      }
-      if (e + 1 < n && (src[e + 1] == '.' || src[e + 1] == '[')) {
-        inserts.push_back({s, '('});
-        inserts.push_back({e + 1, ')'});
-      }
-      // the arguments are scanned too (k stays at the parenthesis)
-    }
-    i = k + 2;
-  }
-  if (inserts.empty()) return src;
-  std::sort(inserts.begin(), inserts.end());
-  std::string out = src;
-  for (auto it = inserts.rbegin(); it != inserts.rend(); ++it) out.insert(it->first, 1, it->second);
-  return out;
-}
-
 std::string chat_template_source(const std::string& model_dir) {
   std::string src = read_file(model_dir + "/chat_template.jinja");
   if (src.empty()) {
     auto cfg = nlohmann::json::parse(read_file(model_dir + "/tokenizer_config.json"), nullptr, false);
     if (cfg.is_object() && cfg.contains("chat_template") && cfg["chat_template"].is_string()) src = cfg["chat_template"];
   }
-  return paren_call_postfix(src);
+  return src;
 }
 
 // (the template's own enable_thinking, ns.enable_thinking or namespace(enable_thinking=...), is not the kwarg)
@@ -1949,15 +1926,13 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
       return render_chat(*tmpl_, q, add_generation_prompt, images);
     }
   }
-  return render_chat(*tmpl_, r, add_generation_prompt, images, flint_chat_);
+  return render_chat(*tmpl_, r, add_generation_prompt, images, flint_ != nullptr);
 }
 
 // Flint's chat template is written for Jinja2, and minja (third_party, not edited) differs from it in three places the
 // template uses: no replace filter (strings have the replace method), "\x00" read as the text "x00" (the template's
 // removal of NUL characters would delete that text from every message instead; dropped), and no ensure_ascii keyword
-// on tojson (whose output keeps non-ASCII text as ensure_ascii=False does). The source rewritten for minja. Nanbeige4.3's
-// (a dense Llama on Flint's backend) uses the replace filter too, on a media part's type; its string method on a macro's
-// result (visible_text(message.content).startswith(...)) chat_template_source has parenthesized (paren_call_postfix).
+// on tojson (whose output keeps non-ASCII text as ensure_ascii=False does). The source rewritten for minja.
 std::string flint_template(std::string src) {
   auto replace_all = [&](const std::string& a, const std::string& b) {
     for (size_t at = 0; (at = src.find(a, at)) != std::string::npos; at += b.size()) src.replace(at, a.size(), b);
@@ -2247,7 +2222,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // task, an agent's next conversation) then reuses the block however early it diverges.
   int pbound = -1;
   if (prefix_ckpt_ && images.empty()) {
-    const size_t off = text.find(flint_chat_ ? "<|user|>" : "<|im_start|>user");
+    const size_t off = text.find(flint_ ? "<|user|>" : "<|im_start|>user");
     if (off != std::string::npos && off > 0) {
       const std::vector<int> pt = tok_.encode(text.substr(0, off));
       if (pt.size() >= 64 && int(pt.size()) < n && (boundary < 0 || int(pt.size()) < boundary) &&
@@ -2272,7 +2247,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     std::string why;
     if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
-    else if (grammar_calls(*r.grammar) && flint_chat_)
+    else if (grammar_calls(*r.grammar) && flint_)
       why = "Flint writes its tool calls in GLM's markup, which the tool-call grammar does not hold yet: send "
             "tool_choice \"auto\" and non-strict tools";
     else if (think && think_close_ < 0)
@@ -2505,7 +2480,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
                  std::to_string(best->pos)).c_str()
               : "none usable, prefill from 0");
   }
-  if (dfl_ || fdfl_) {
+  if (dfl_) {
     // the drafter ring keeps the entries of the reused prefix [0, start) that are still in its window
     if (start == 0) DFlash2::reset(*slot.dseq);
     else DFlash2::rewind(*slot.dseq, start);
@@ -2621,7 +2596,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // [max(start, n - 2047), n); the drafter projects them into its context ring after the last chunk.
   if (dfl_) dfl_->begin_prefill(n, start);
   if (lili_) lili_->begin_prefill(n, start);
-  if (fdfl_) fdfl_->begin_prefill(n, start);
   // Other requests take their turns between chunks up to the first row the drafter captures (its capture buffer is
   // shared); from there the prefill runs to its end (at most two chunks).
   const int capture_from = dfl_ ? std::max(start, n - DFlash2::kCtxKeep)
@@ -2697,6 +2671,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // The last two chunks' command buffers (committed): at most two chunks run ahead of the host, so a request that
   // arrives during a long prefill is seen within a chunk (encoding is far faster than the GPU: a 20K prompt's chunks
   // would all be queued in milliseconds). The GPU still always has the next chunk queued.
+  // NI_PREFILL_GROUP: how many plain chunks the model runs as one layer-major group (1: the chunks one at a time,
+  // as shipped; the engine's own cap keeps Ts[] below in bounds)
+  const int pgroup = std::min(model_->prefill_group(), 8);
   std::unique_ptr<Encoder> last, last2;
   while (p < n) {
     if (last2) {
@@ -2781,7 +2758,38 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
       model_->save(*e, s, *ane_ck_, p);
     }
-    if (vpf) {
+    // NI_PREFILL_GROUP: the next pgroup chunks as one layer-major group, when every one of them is plain - no
+    // checkpoint or split inside one, no image rows or grammar mask (the group path has no snapshot and no
+    // sample), and none of them the pass's last chunk (that one samples and runs alone). A save point
+    // (pbound / boundary) inside a chunk cuts it and ends the walk; one at a chunk's end is fine as the
+    // group's end - the saves below run after the group, whose state is the state after its last chunk - so
+    // the walk stops there rather than make it an inner end, where the post-group save would capture the
+    // wrong GDN/KV state. Under two plain chunks the walk yields nothing and the chunk path runs. A group
+    // runs as one iteration, so the chunk-start contention check above happens once per group: the yield's
+    // granularity becomes the group, bounded at pgroup chunks (<= 8) rather than one.
+    int Ts[8];
+    int nc = 0;
+    if (pgroup >= 2 && !s.embeds && s.mask_rows == 0) {
+      const bool even = prefill_even_chunks() && !model_->ane_split_on();
+      int pos = p;
+      while (nc < pgroup && pos < n) {
+        const int Tc = prefill_chunk_rows(C, pos, n, even);
+        if (pos + Tc == n) break;  // the pass's last chunk: it samples and runs alone
+        if (model_->ane_splits(Tc)) break;
+        if ((pbound > pos && pbound < pos + Tc) || (boundary > pos && boundary < pos + Tc)) break;
+        Ts[nc++] = Tc;
+        pos += Tc;
+        if (pbound == pos || boundary == pos) break;  // a save at this end: the group's, never an inner one
+      }
+      if (nc < 2) nc = 0;
+    }
+    if (nc >= 2) {
+      model_->encode_prefill_group(*e, s, p, Ts, nc);
+      // the MTP history: every group row's next token is known (the group is never the pass's last chunk)
+      if (spec_) q35_->encode_mtp_prefill_group(*e, s, p, Ts, nc);
+      T = 0;
+      for (int c = 0; c < nc; ++c) T += Ts[c];  // the common tail below: p += T, the saves, the commit
+    } else if (vpf) {
       int q = p;
       // the suffix's rows [q, upto) as verify passes: as many rows a pass as NI_VPF_ROWS gave the target's verify (32, 24
       // or 16), and 8 for what is left under 16
@@ -2813,7 +2821,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     const bool defer = !vpf && spec_ && mtp_defer && !split && p + T == n;
-    if (!vpf && spec_ && !defer) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    if (nc < 2 && !vpf && spec_ && !defer) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
     if (defer) {
       mtp_e = g.begin();
       q35_->encode_mtp_prefill(*mtp_e, s, p, std::min(p + T, n - 1) - p, 0);
@@ -2839,11 +2847,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
     // The ring snapshot of the checkpoint saved by this prefill (at the turn boundary, near n) is taken right after
     // the commit: it then holds the window before the checkpoint for a later restore.
-    // Nanbeige4.3's drafter likewise: the captured prompt rows into its ring behind the trunk's command buffer (the first
-    // token does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
-    const bool fdfl_commit = fdfl_ && p == n;
-    if (fdfl_commit) fdfl_->end_prefill();
-    if (fdfl_commit && !mtp_defer) fdfl_->encode_prefill_commit(*e, *slot.dseq);
     const bool dfl_commit = dfl_ && p == n;
     auto commit_ring = [&](Encoder& en) {
       dfl_->encode_prefill_commit(en, *slot.dseq);
@@ -2874,10 +2877,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     if (lili_commit && mtp_defer) {
       mtp_e = g.begin();
       commit_lili(*mtp_e);
-    }
-    if (fdfl_commit && mtp_defer) {
-      mtp_e = g.begin();
-      fdfl_->encode_prefill_commit(*mtp_e, *slot.dseq);
     }
     if (mtp_e) mtp_e->commit();  // queued behind the trunk; waited for by the first spec cycle's buffer
     if (p < n) {
@@ -2926,10 +2925,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }();
   // (Nemotron-H, Dory and Flint: the whitespace before </think> stays in the reasoning, as their templates render
   // returned turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text;
-  // Flint's calls in GLM's markup. A dense Llama on Flint's backend, Nanbeige4.3, renders Qwen's turns: as Qwen)
+  // Flint's calls in GLM's markup)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, (nh_ != nullptr || dory_ != nullptr || flint_chat_) && think_ws_, text_tags_,
-                      flint_chat_ ? CallFormat::Glm : CallFormat::QwenXml);
+                      think_tools, (nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_, text_tags_,
+                      flint_ ? CallFormat::Glm : CallFormat::QwenXml);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -3068,7 +3067,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const char* v = getenv("NI_GRAMMAR_SPEC");
     return !(v && v[0] == '0');
   }();
-  const bool spec_loop = lili_ || dfl_ || fdfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || depth > 0;
+  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || depth > 0;
   const bool g_dfl = gm && dfl_ && grammar_spec;
   const bool g_direct = gm && !g_dfl && (g_on || !spec_loop);
   g_in_spec = gm && !g_direct && !g_on;
@@ -3507,103 +3506,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     auto e3 = g.begin();
     nh_->encode_flush(*e3, s);
     e3->commit_and_wait();
-    fed_until = P;
-  } else if (fdfl_) {
-    // DFlash2 on a dense Llama (Nanbeige4.3): per cycle the drafter's context commit of the rows the last cycles kept,
-    // its drafting pass from the anchor tokens[P] (7 proposals), the 8-row verify capturing the drafter's next context
-    // and the acceptance, in one command buffer. Where drafting cycles keep fewer tokens than break-even (a moving
-    // average, 1/8 a cycle, under NI_DFL_FLOOR = 1.50: an 8-row verify plus the drafting pass cost 1.36 decode steps on
-    // the M5 Max) the next tokens decode as 1-row cycles without drafts (the decode step's kernels and sampler: the same
-    // text), their captures committed 8 at a time; then 4 drafting cycles probe again, judged on their own mean, and a
-    // failed probe doubles the plain stretch (16 .. 256 tokens). Token counts only, no clock: the same request decodes
-    // the same text whatever the load. NI_DFL_GATE=0 drafts every cycle. (tools/flint_dflash measures it.)
-    // The floor rises with the context: each of the verify's B rows reads the whole KV cache (flint_attn_partial), a
-    // decode step reads it once, so at P keys break-even is (floor + B r P) / (1 + r P), r the KV cache's bytes per
-    // position over the weights' bytes per token (both reads bandwidth-bound; Nanbeige4.3 4-bit: 1 / 87K from its
-    // config, 1 / 81K measured as 34.4 ms + 0.425 us a key per step on the M5 Max). Without it drafting cycles at 32K
-    // cost 3x a step and decode halved (11.0 against 20.0 tok/s writing code); with it the floor is 1.65 at 2K, 2.53
-    // at 16K, 3.28 at 32K.
-    DFlashSeq& d = *slot.dseq;
-    constexpr int B = DFlash2::kB, K = B - 1, kProbe = 4;
-    static const double floor_tpc = getenv("NI_DFL_FLOOR") && *getenv("NI_DFL_FLOOR") ? atof(getenv("NI_DFL_FLOOR")) : 1.50;
-    const double kv_r = [&] {
-      const FlintConfig& c = flint_->config();
-      const double per_group = 4.0 / c.gs;  // a half scale and a half bias per group
-      const double layer = double(c.hidden) * (c.hq + 2 * c.hkv) * c.hd + double(c.hq) * c.hd * c.hidden +
-                           3.0 * c.hidden * c.ffn;
-      const double weights = c.layers * layer * (c.bits / 8.0 + per_group) +
-                             double(c.vocab) * c.hidden * (c.embed_bits / 8.0 + per_group);
-      const double kv = 2.0 * c.layers * c.hkv * c.hd * (c.kv8 ? 1.0 + 2.0 / 32 : 2.0);  // kv8: a half scale per 32
-      return kv / weights;
-    }();
-    const auto floor_at = [&](int pos) { return (floor_tpc + B * kv_r * pos) / (1.0 + kv_r * pos); };
-    static const bool gate = !getenv("NI_DFL_GATE") || atoi(getenv("NI_DFL_GATE")) != 0;
-    double avg = 2.0;  // prior: a drafting cycle keeps 2 tokens
-    int hold = 16, plain_left = 0, probe_left = 0, probe_sum = 0, pend = 0, cap_base = n;
-    int P = n;
-    req_cycles = 0;
-    bool go = handle(s.tokens()[n]);
-    while (go) {
-      if (P + 2 * B + 2 > s.cap && s.cap < s.limit) {
-        if (mtp_e) mtp_e->wait();
-        grow_kv(std::min(s.limit, P + 2 * B + 2), [] {});
-      }
-      if (P + B + 1 >= s.cap) {
-        finish = "length";
-        res.context_full = true;
-        break;
-      }
-      if (mtp_e) mtp_e->wait();
-      const bool drafting = !gate || plain_left == 0;
-      const int k = drafting ? K : 0;
-      auto e2 = g.begin();
-      if (pend && (drafting || pend >= B)) fdfl_->encode_commit(*e2, d, pend), pend = 0, cap_base = P;
-      if (drafting) fdfl_->encode_draft(*e2, s, d, P, sp);
-      if (drafting) fdfl_->arm_verify(P, k + 1);
-      else fdfl_->arm_verify(cap_base, B);  // a plain row lands in row P - cap_base of the capture
-      flint_->encode_verify(*e2, s, P, k + 1);
-      fdfl_->disarm();
-      flint_->encode_accept(*e2, s, P, k + 1, k, sp);
-      e2->commit_and_wait();
-      const int a = flint_->accepted();
-      if (drafting) {
-        if (probe_left > 0) {
-          probe_sum += a + 1;
-          if (--probe_left == 0) {
-            const double mean = double(probe_sum) / kProbe;
-            if (mean >= floor_at(P)) avg = mean, hold = 16;
-            else plain_left = hold, hold = std::min(2 * hold, 256);
-          }
-        } else {
-          avg = 0.875 * avg + 0.125 * (a + 1);
-          if (gate && avg < floor_at(P)) plain_left = hold, hold = std::min(2 * hold, 256);
-        }
-        cap_base = P, pend = a + 1;
-      } else {
-        ++pend;
-        if (--plain_left == 0) probe_left = kProbe, probe_sum = 0;
-      }
-      const int* tk = s.tokens();
-      int m = 0;
-      while (m < a + 1) {
-        ++m;
-        if (!handle(tk[P + m])) {
-          go = false;
-          break;
-        }
-      }
-      ++spec_cycles_;
-      ++req_cycles;
-      spec_accepted_ += m;
-      cycle_done(m);
-      P += m;
-      if (go && contended()) yield_turn(res);
-    }
-    if (pend) {  // the last rows into the ring: a follow-up turn reuses the prefix with its context
-      auto e3 = g.begin();
-      fdfl_->encode_commit(*e3, d, pend);
-      e3->commit_and_wait();
-    }
     fed_until = P;
   } else if (flint_ngram_ > 0) {
     // Flint: prompt lookup. When the last tokens occurred earlier in the conversation, the tokens that followed them (up
@@ -4074,7 +3976,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     return;
   }
   const size_t mpos = text.rfind(marker);
-  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_chat_ ? "<|user|>" : "<|im_start|>", mpos);
+  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_ ? "<|user|>" : "<|im_start|>", mpos);
   if (cut == std::string::npos) return logd("history: nothing, no marker in the rendered text");
   text.resize(cut);
   std::vector<int> t2 = tok_.encode(text);

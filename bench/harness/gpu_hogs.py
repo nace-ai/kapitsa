@@ -16,6 +16,7 @@ Contention is measured by diffing each process's accumulatedGPUTime in ioreg (AG
                                                 in a child)
 
 Library use (compare_engines.py, bench.py):
+  held_by_caller  True when NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1 says the caller holds the lock
   GpuLock         exclusive flock on the GPU lock file, the same lock `lockf -k <file> <cmd>` takes
                   (BSD flock(2)); every timed benchmark phase must hold it
   proc_tree       pid set of one or more process trees (one `ps` call)
@@ -50,6 +51,20 @@ def configure():
 
 
 configure()
+
+HELD_NAMES = ("NI_LOCK_HELD", "NACE_GPU_LOCK_HELD")
+
+
+def env_on(name):
+    """Same rule as env_on() in src/util/log.h: unset, empty or "0" is off, anything else is on."""
+    v = os.environ.get(name)
+    return bool(v) and v != "0"
+
+
+def held_by_caller():
+    """True when the caller says it already holds the GPU lock (NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1), as
+    GpuLock::held_by_caller() does in src/bench/system.mm. Taking the lock again would block on our own flock."""
+    return any(env_on(n) for n in HELD_NAMES)
 
 
 def _comm(name):

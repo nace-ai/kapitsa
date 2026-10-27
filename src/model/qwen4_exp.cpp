@@ -169,12 +169,27 @@ static bool hc_precomb(bool q20_pack) {
   return v ? strcmp(v, "0") != 0 : q20_pack;
 }
 
+// NI_PREFILL_GROUP: how many prefill chunks run as one layer-major group (1..8; the shipped default 4: groups
+// on). =1 keeps the chunks one at a time, as before, for the merge gate's ABAB legs and debugging alone - there
+// is no supported off posture: the gate losing closes the change unmerged rather than shipping it off. A value
+// outside 1..8 is ignored and the default 4 stands (a bad value warns like NI_PRED_ALL_MIN's does); the group's
+// per-chunk slots cost the plan (MemPlan::group_slots, kept out of `activations`) exactly what they cost the
+// allocation (alloc4_group) - one formula, q20::group_slot_bytes - and the store-world choice (q20::group_world:
+// Qwen4Exp::init_store runs it live, ni::planned_group_world predicts it before a load) charges them only while
+// the streamed store is incomplete (an all-resident model never groups, q20::group_chunks). Defined below,
+// after env_rows.
+static int prefill_group_env();
+
 Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
     : Qwen35(dir, prefill_chunk, NoLoad{}), mem_budget_arg_(mem_budget) {
   const Split& sp = split ? *split : process_split();
   lo_ = sp.lo;
   hi_ = sp.hi;  // (-1: load_config's, every layer)
   remote_ = sp.remote;
+  // a split model's head hops mid-pass and a stage runs passes it does not own: neither groups. The all-resident
+  // arm of the eligibility (a complete store) is answered at runtime, after init_store sizes the store
+  // (prefill_group(), q20::group_chunks); the slot allocation waits for the same answer (alloc4_group).
+  prefill_group_ = remote_ || lo_ != 0 ? 1 : prefill_group_env();
   load(dir);
 }
 
@@ -486,7 +501,8 @@ void Qwen4Exp::load_mtp4(const std::string& dir) {
 
 // Buffers beside Qwen35's (alloc_state): the 4-stream residual replaces x_, the mix's scratch, the indexer's rows,
 // the n-gram rows. qwen4_act_bytes (plan) adds up the same.
-static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, int T, int maxv, bool mtp) {
+static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, int T, int maxv, bool mtp,
+                              int group = 1) {
   const size_t D = size_t(c.hidden), SD = size_t(c4.hc) * D, Tz = size_t(T), V = size_t(maxv), R = size_t(c4.hc_rank);
   const size_t IQ = size_t(c4.ix_heads + 1) * c4.ix_dim;
   return Tz * SD * 4 - Tz * D * 4  // x_ grows from [T, D] to [T, S*D]
@@ -494,7 +510,8 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
          + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
-         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4;  // the one-row gated residual's row, hc_down_sk's partials
+         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4  // the one-row gated residual's row, hc_down_sk's partials
+         + q20::group_slot_bytes(group, Tz, D, size_t(c4.hc));  // the chunks' slots, staging (NI_PREFILL_GROUP)
 }
 
 void Qwen4Exp::alloc4() {
@@ -531,6 +548,28 @@ void Qwen4Exp::alloc4() {
     g.release(mtp_post_);
     mtp_post_ = g.alloc(V * SD * 4, "mtp_post4");
   }
+}
+
+// The layer-major groups' slot buffers (NI_PREFILL_GROUP): the chunks' x_ / yb_ / injA_ / injM_ slots, swapped into
+// the members per turn, and two sets of G n-gram stagings (the host gathers group g + 1's rows while the GPU runs
+// g). init_store calls this only while the streamed store is incomplete - a group pays the store's reads alone,
+// so an all-resident model never groups (q20::group_chunks) and never pays these bytes; the same conditional
+// decides the plan's MemPlan::group_slots (plan() sizes it apart from `activations`, and
+// ni::planned_group_world predicts which store world pays it). One formula with the
+// plan's: q20::group_slot_bytes.
+void Qwen4Exp::alloc4_group() {
+  if (prefill_group_ < 2) return;
+  Gpu& g = Gpu::get();
+  const size_t T = size_t(tmax_), D = size_t(cfg_.hidden), SD = size_t(c4_.hc) * D, G = size_t(prefill_group_);
+  xg_.resize(G), yg_.resize(G), injAg_.resize(G), injMg_.resize(G), ple_pfg_.resize(2 * G);
+  for (size_t c = 0; c < G; ++c) {
+    xg_[c] = g.alloc(T * SD * 4, "x4g");
+    yg_[c] = g.alloc(T * D * 4, "block_outg");
+    memset(yg_[c].ptr(), 0, yg_[c].size);  // accumulated into, as yb_
+    injAg_[c] = g.alloc(T * c4_.hc * 4, "inject_ag");
+    injMg_[c] = g.alloc(T * c4_.hc * 4, "inject_mg");
+  }
+  for (Buffer& b : ple_pfg_) b = g.alloc(T * D * 2, "ple_rowsg");
 }
 
 // ---- memory ----
@@ -756,11 +795,21 @@ void Qwen4Exp::init_store(const std::string& dir) {
   const q20::SlotLayout lay = q20::slot_layout(uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I));
   const size_t all = size_t(hi_ - lo_) * E * lay.bytes;
   q20::ExpertStore::Options o;
-  const char* es = getenv("NI_EXPERT_STORE");
-  if (es && !strcmp(es, "all")) {
-    o.bytes = all;
-  } else if (es && *es && strcmp(es, "auto")) {
-    o.bytes = size_t(atof(es) * 1e9);
+  // The store-world decision is one function (q20::group_world) the live load and every pre-load prediction
+  // (ni::planned_group_world) share, and the NI_EXPERT_STORE pin is one parse (q20::store_pin_bytes) both
+  // sides share, so the load and the fit numbers never diverge on what the pin means or what the store costs.
+  // A pin decides its own world: the store is the pin's bytes (the parser clamped to all), and a pin short of
+  // every expert stays incomplete, so alloc4_group below allocates the slots on top (the same predicate,
+  // !store_->complete()) - no settle wait, no budget/avail/cap sizing, the pin overrides them.
+  size_t pin = 0;
+  if (q20::store_pin_bytes(getenv("NI_EXPERT_STORE"), all, pin)) {
+    const size_t gsb = q20::group_slot_bytes(prefill_group_, size_t(tmax_), size_t(cfg_.hidden), size_t(c4_.hc));
+    q20::AutoStoreIn in;
+    in.all = all, in.least = size_t(3) * E * lay.bytes;
+    const q20::GroupWorld gw = q20::group_world(gsb, in, &pin);
+    o.bytes = gw.st.bytes;
+    if (gw.charge) logi("expert store: NI_PREFILL_GROUP=%d slots -%.2f GB", prefill_group_, double(gw.charge) / 1e9);
+    logi("expert store: %s", q20::auto_store_reason(gw.st, gw.in).c_str());
   } else {
     // what the budget leaves: the engine's (mem_budget, its conversations' KV caches and slots' state already set
     // apart) less 0.5 GB, or the default budget less a 16K-token KV cache and 1.5 GB (tools)
@@ -801,8 +850,22 @@ void Qwen4Exp::init_store(const std::string& dir) {
       logi("expert store: the system's available memory %.1f GB at first, %.1f GB after %.2f s", double(sa.first) / 1e9,
            double(sa.avail) / 1e9, sa.waited_ms / 1e3);
     in.cap = q20::auto_store_cap(Gpu::get().apple10());
-    const q20::AutoStore st = q20::auto_store_size(in);
+    // The layer-major groups' store-world choice (q20::group_world - the one function every side asks;
+    // ni::planned_group_world predicts it before a load): the store is sized WITHOUT the slot bytes first -
+    // alloc4_group has not allocated them, so `used` above does not carry them - and only a store that stays
+    // incomplete in that world pays them (the charged world re-sizes: left and avail shrink, used grows).
+    // Monotone in one direction - more charge shrinks the store's budget, which only moves it further from
+    // complete - so the one correction is the fixed point, no oscillation; and the allocation at the end of
+    // this function follows the same decision (alloc4_group behind !store_->complete()), so the plan's
+    // MemPlan::group_slots and the load's reality agree by construction. The all-resident world charges
+    // nothing and allocates nothing.
+    const size_t gsb =
+        q20::group_slot_bytes(prefill_group_, size_t(tmax_), size_t(cfg_.hidden), size_t(c4_.hc));
+    const q20::GroupWorld gw = q20::group_world(gsb, in);
+    const q20::AutoStore& st = gw.st;
+    in = gw.in;
     o.bytes = st.bytes;
+    if (gw.charge) logi("expert store: NI_PREFILL_GROUP=%d slots -%.2f GB", prefill_group_, double(gw.charge) / 1e9);
     logi("expert store: %s", q20::auto_store_reason(st, in).c_str());
   }
   o.bytes = std::min(o.bytes, all);
@@ -817,6 +880,10 @@ void Qwen4Exp::init_store(const std::string& dir) {
     plog_ = g.alloc(size_t(kMaxVerify) * E * 4, "pred_logits");
     pidx_ = g.alloc(size_t(kMaxVerify) * cfg_.top_k * 4, "pred_idx");
     pwts_ = g.alloc(size_t(kMaxVerify) * (cfg_.top_k + 1) * 4, "pred_wts");
+    // the layer-major groups' slots: only while the store is incomplete, the same predicate that makes
+    // prefill_group() answer G to the engine (q20::group_chunks) - with every expert resident the chunk path
+    // keeps its NI_HC_PRECOMB fold and these buffers stay unallocated
+    alloc4_group();
   }
 }
 
@@ -834,6 +901,14 @@ int env_rows(const char* name, int def) {
 }
 }  // namespace
 
+static int prefill_group_env() {
+  static const int g = [] {
+    const int v = env_rows("NI_PREFILL_GROUP", 4);
+    return v >= 1 && v <= 8 ? v : 4;
+  }();
+  return g;
+}
+
 // a prefill chunk's MoE: a chunk of 64+ rows routes most of the next layer's experts, so every one of them not in
 // memory is read during this layer; shorter ones only read what they route
 q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
@@ -841,7 +916,22 @@ q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, 
   const int li = layer_index(L);
   if (!store_ || li < 0) return Qwen35::q20_fetch(e, L, ids, n, T, between);
   // (the store's layers are this Mac's: trunk layer li is its li - lo_)
-  const int nl = li + 1 < hi_ ? li + 1 - lo_ : -1;
+  // Seam wrap: a chunk's last layer has the store's layer 0 - the next chunk's first - read ahead instead of
+  // nothing. The prediction never crosses a chunk boundary, and layer 0 is also the first victim of every sweep (a
+  // scan admits its keys over the T1 keys of the layers below them), so without the wrap each seam turn re-reads
+  // its whole routed set with the GPU blocked: on a 128K prompt the (chunks - 1) seam turns took ~40% of the
+  // prompt's expert-store stall (measured with the wrap off). Only the whole-layer read can wrap - the next
+  // chunk's rows are not these rows, so a routed prediction at the seam would name the wrong experts - and a
+  // chunk below NI_PRED_ALL_MIN passes no prediction at all, where the wrap does nothing: on the engine's
+  // automatic chunking (auto_chunk returns 256 rows or more) every chunk of a prompt but its last is above the
+  // gate (prefill_chunk_rows gives min(chunk, left), or an even split's ceil(left / k) above chunk / 2; only the
+  // last chunk can come out short). The prompt's last chunk does not
+  // wrap (seam_more_, set by encode_prefill): decode follows it, and decode's first turn is one row routing
+  // top-k experts, so a whole-layer sweep there would cost the first token for a read that turn barely uses.
+  // group_inner_ (a layer-major group's turn with chunks remaining): its successor is the same layer over the next
+  // chunk, which this turn leaves resident, so the turn reads nothing ahead - the visit's last turn admits the next
+  // layer's whole set once for the visit, and only the group's final turn wraps to layer 0 (seam_more_)
+  const int nl = group_inner_ ? -1 : q20::seam_next_layer(li, lo_, hi_, seam_more_);
   // The read-ahead of the whole next layer costs the store's size on an 85-token prompt (1232 ms of a 1613 ms TTFT),
   // and only a chunk of 64+ rows routes most of that layer anyway: NI_PRED_ALL_MIN is the shortest chunk that pays it
   // (default 64, the constant it replaces). A bad value is warned about and ignored, as NI_EXPERT_CAP's is: parsing
@@ -850,7 +940,11 @@ q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, 
   // NI_SCAN_MIN: the shortest chunk whose sweep leaves the recency order alone (default 16, the constant it replaces).
   static const int scan_min = env_rows("NI_SCAN_MIN", 16);
   const bool all = T >= pred_all_min && nl >= 0;
-  store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > scan_min);
+  // group_floor_ (#624): inside a layer-major group a visit's sweep may only evict keys below its own layer's index,
+  // so the keys the group's later turns still read stay; -1 (the chunk path, and a group's wrapping last visit)
+  // leaves the sweep's victim rule as shipped
+  store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > scan_min, /*warm=*/false,
+                group_floor_);
   if (between) between();
   store_->end(e);
   return store_->experts(li - lo_);
@@ -1526,36 +1620,46 @@ void Qwen4Exp::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp
   ple_after_sample(e, s, pos + 1);
 }
 
+// One layer's prefill block over one chunk: the n-gram block on its layer, the gated residual, the token mixer, the
+// MoE and the capture hook. The chunk loop below runs it per layer; the layer-major group path (encode_prefill_group)
+// runs it per visit and chunk, with the chunk's state swapped into the members.
+void Qwen4Exp::enc_prefill_layer(Encoder& e, Seq& s, int i, int pos0, int T, const Buffer& rows, Checkpoint* snap,
+                                 int snap_row) {
+  const Layer& L = layers_[size_t(i)];
+  const Qwen4Layer& F = l4_[size_t(i)];
+  if (i == c4_.ple_layer) {
+    if (i > 0) enc_inject(e, T, x_, injM_);
+    enc_ple_prefill(e, s, T, pos0, rows, snap, snap_row);
+  }
+  enc_gr_prefill(e, F.ga, T, x_, i > 0 && i != c4_.ple_layer, injM_, injA_);
+  if (L.linear) {
+    enc_proj(e, {{&L.qkv, qkv_, false}, {&L.z, zb_, false}, {&L.b, bb_, false}, {&L.a, ab_, false}}, xh_, T);
+    enc_gdn_prefill_par(e, s, i, L, T, snap, snap_row);
+    enc_qmm(e, L.out, hh_, yb_, T, false);
+  } else {
+    enc_attn4_prefill(e, s, i, L, F, pos0, T);
+  }
+  enc_gr_prefill(e, F.gm, T, x_, true, injA_, injM_);
+  // NI_HC_PRECOMB: fold this MoE's combine sum into layer i + 1's gated residual only when nothing
+  // reads yb_ in between — no armed capture of this layer, and no PLE boundary, debug cut or final
+  // layer after it (those consume yb_ through enc_inject / enc_hop) — and the kernel's threadgroup
+  // sum fits: one float4 per thread of the row's 1024, so D % 4 == 0 and D / 4 <= 992 (D <= 3968).
+  // A layer-major group never arms it: the next layer's residual there is another visit's turn, whose
+  // chunk state has moved on (in_group_).
+  precomb_arm_ = !in_group_ && hc_precomb(q20_pack_) && i + 1 < hi_ && i + 1 != dbg_layers_ && i + 1 != c4_.ple_layer &&
+                 cfg_.hidden % 4 == 0 && cfg_.hidden <= 3968 && capture_noop(i, pos0, T);
+  enc_moe_prefill(e, L, T, yb_, /*xh_ready=*/true);
+  precomb_arm_ = false;
+  enc_capture4(e, i, pos0, T);
+  // a command buffer per layer of a long chunk (~1/48 of it), so the desktop's own GPU work is not held up
+  if (T >= 256 && i + 1 < cfg_.layers) e.split();
+}
+
 void Qwen4Exp::enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buffer& rows, Checkpoint* snap,
                                   int snap_row) {
   for (int i = lo_; i < hi_; ++i) {
-    const Layer& L = layers_[size_t(i)];
-    const Qwen4Layer& F = l4_[size_t(i)];
     if (i == dbg_layers_) break;
-    if (i == c4_.ple_layer) {
-      if (i > 0) enc_inject(e, T, x_, injM_);
-      enc_ple_prefill(e, s, T, pos0, rows, snap, snap_row);
-    }
-    enc_gr_prefill(e, F.ga, T, x_, i > 0 && i != c4_.ple_layer, injM_, injA_);
-    if (L.linear) {
-      enc_proj(e, {{&L.qkv, qkv_, false}, {&L.z, zb_, false}, {&L.b, bb_, false}, {&L.a, ab_, false}}, xh_, T);
-      enc_gdn_prefill_par(e, s, i, L, T, snap, snap_row);
-      enc_qmm(e, L.out, hh_, yb_, T, false);
-    } else {
-      enc_attn4_prefill(e, s, i, L, F, pos0, T);
-    }
-    enc_gr_prefill(e, F.gm, T, x_, true, injA_, injM_);
-    // NI_HC_PRECOMB: fold this MoE's combine sum into layer i + 1's gated residual only when nothing
-    // reads yb_ in between — no armed capture of this layer, and no PLE boundary, debug cut or final
-    // layer after it (those consume yb_ through enc_inject / enc_hop) — and the kernel's threadgroup
-    // sum fits: one float4 per thread of the row's 1024, so D % 4 == 0 and D / 4 <= 992 (D <= 3968).
-    precomb_arm_ = hc_precomb(q20_pack_) && i + 1 < hi_ && i + 1 != dbg_layers_ && i + 1 != c4_.ple_layer &&
-                   cfg_.hidden % 4 == 0 && cfg_.hidden <= 3968 && capture_noop(i, pos0, T);
-    enc_moe_prefill(e, L, T, yb_, /*xh_ready=*/true);
-    precomb_arm_ = false;
-    enc_capture4(e, i, pos0, T);
-    // a command buffer per layer of a long chunk (~1/48 of it), so the desktop's own GPU work is not held up
-    if (T >= 256 && i + 1 < cfg_.layers) e.split();
+    enc_prefill_layer(e, s, i, pos0, T, rows, snap, snap_row);
   }
 }
 
@@ -1575,7 +1679,11 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
   enc_embed(e, s.tok, pos0, T, yb_);
   if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, yb_, D);  // image rows
   enc_expand(e, T);
+  // the seam-wrap gate: every chunk but the prompt's last reads the store's layer 0 ahead at its last layer - the
+  // engine sets `sample` on exactly the prompt's last chunk, and decode follows that one (q20_fetch's seam wrap)
+  seam_more_ = q20::seam_wraps(sample);
   enc_prefill_layers(e, s, pos0, T, rows, snap, snap_row);
+  seam_more_ = false;
   if (comb_pending_.active) fatal("hc_precomb: a pending combine outlived the prefill layers");
   // the pre-mix state of every row (the MTP head's history, logits); a split's last Mac injects its last block itself
   if (remote_ && dbg_layers_ < 0) enc_hop(e, Remote::Kind::prefill, s, pos0, T, snap, snap_row);
@@ -1586,6 +1694,77 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
     ple_after_sample(e, s, pos0 + T);
   }
   if (snap) snap->pos = pos0 + snap_row;
+}
+
+// A layer-major prefill group (NI_PREFILL_GROUP): every layer visits every chunk of the group before the next layer
+// runs, so the store reads a layer's experts once per group instead of once per chunk, and the chunk seams inside
+// the group disappear. A turn's read-ahead follows the group's successor table, not the chunk path's: turn (i, c)'s
+// successor is (i, c + 1) while chunks remain - the same layer, left resident, so an inner turn reads nothing ahead
+// - a visit's last turn admits layer i + 1's whole set once for the visit, under pred_floor i (#624) so the sweep
+// cannot evict keys the group's later turns still read, and only the group's final turn wraps to layer 0, with no
+// floor, exactly like a chunk's seam wrap, for the chunk after the group. The chunks' state (x_ / yb_ /
+// injA_ / injM_) lives in per-chunk slots swapped into the members per turn - Metal binds buffers at encode time -
+// and the GDN recurrences and the KV advance in place because a visit's chunks run in position order. The engine
+// only forms plain groups (no checkpoint inside a chunk, no split rerun, no image or grammar rows, never the pass's
+// last chunk), so there is no snapshot, no sample and no precomb here.
+void Qwen4Exp::encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) {
+  if (nc < 2 || nc > prefill_group_) fatal("prefill group of %d chunks (NI_PREFILL_GROUP=%d)", nc, prefill_group_);
+  if (remote_ || lo_ != 0 || dbg_layers_ >= 0) fatal("prefill group on a split or debug model");
+  if (s.embeds || s.mask_rows) fatal("prefill group over image or grammar rows");
+  int total = 0;
+  for (int c = 0; c < nc; ++c) {
+    if (Ts[c] <= 0 || Ts[c] > tmax_) fatal("prefill group chunk %d: %d rows (max %d)", c, Ts[c], tmax_);
+    total += Ts[c];
+  }
+  if (pos0 + total >= s.cap) fatal("context full (%d)", s.cap);
+  // the two-sided evidence: a pass logs either the chunker's "prefill chunk of ..." or this line, so an engine log
+  // shows which path ran every chunk of the prompt (grep both; an absent line is as loud as a present one)
+  logd("prefill group of %d chunks (%d rows) over layers %d..%d", nc, total, lo_, hi_ - 1);
+  const GroupSave saved = group_save();
+  in_group_ = true;
+  // prologue: gather every chunk's n-gram rows (two sets of staging alternate by group parity: the host gathers
+  // group g + 1's rows while the GPU runs g, and the engine waits g - 1 before g + 1 starts) and encode each
+  // chunk's embed + expand into its own slots
+  group_parity_ ^= 1;
+  const size_t set = size_t(group_parity_ & 1) * size_t(prefill_group_);
+  Buffer grow[8];
+  int pos = pos0;
+  for (int c = 0; c < nc; ++c) {
+    if (c4_.ple_layer >= 0) {
+      grow[c] = ple_pfg_[set + size_t(c)];
+      gather_rows(s.tokens(), pos, Ts[c], grow[c].ptr(), true);
+    }
+    group_swap(c);
+    enc_embed(e, s.tok, pos, Ts[c], yb_);
+    enc_expand(e, Ts[c]);
+    pos += Ts[c];
+  }
+  // visits: layer i over the chunks in position order (the GDN recurrences and the KV advance in place), then
+  // layer i + 1. A group is never a pass's last chunk, so the group's final turn wraps to layer 0 (seam_more_)
+  // for the chunk after the group; every other turn keeps the successor table above.
+  for (int i = lo_; i < hi_; ++i) {
+    int cpos = pos0;
+    for (int c = 0; c < nc; ++c) {
+      group_inner_ = c + 1 < nc;
+      seam_more_ = !group_inner_ && i + 1 == hi_;
+      group_floor_ = seam_more_ ? -1 : i - lo_;  // #624: this visit's keys stay out of its sweep's victim set
+      group_swap(c);
+      enc_prefill_layer(e, s, i, cpos, Ts[c], grow[c], nullptr, 0);
+      cpos += Ts[c];
+    }
+  }
+  seam_more_ = false;
+  group_floor_ = -1;
+  group_inner_ = false;
+  in_group_ = false;
+  // the chunk path's tail: every row's pre-mix state, injected per chunk from its own slots (its last visit left
+  // the final layer's block output in its own yb_), before the MTP fill reads them
+  for (int c = 0; c < nc; ++c) {
+    group_swap(c);
+    enc_inject(e, Ts[c], x_, injM_);
+  }
+  group_restore(saved);
+  if (comb_pending_.active) fatal("hc_precomb: a pending combine outlived a prefill group");
 }
 
 // ---- a model split across Macs by layers ----
@@ -1631,6 +1810,8 @@ void Qwen4Exp::encode_stage(Encoder& e, Seq& s, const Remote::Pass& p, Checkpoin
       break;
     case Remote::Kind::prefill:
       if (p.rows > tmax_) fatal("prefill chunk %d > %d", p.rows, tmax_);
+      // seam_more_ stays false here: a Remote::Pass carries no chunk end, so a split model's tail never wraps a
+      // seam (q20_fetch); its last chunk's layer 0 misses as it did before the wrap
       enc_prefill_layers(e, s, p.pos, p.rows, Buffer{}, snap, p.snap_row);
       if (comb_pending_.active) fatal("hc_precomb: a pending combine outlived the stage's prefill layers");
       if (hi_ == cfg_.layers) enc_inject(e, p.rows, x_, injM_);
@@ -1822,7 +2003,17 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
   }
   // buffers: Qwen35's for this config (x_ widened, the MTP rows) plus the hyper-connection / indexer / n-gram ones
   for (const ActBuf& a : act_layout(c, chunk, kMaxVerify, m.mtp > 0, size_t(kMaxVerify))) m.activations += a.bytes;
-  m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0);
+  m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0, 1);
+  // the layer-major groups' slot term (q20::group_slot_bytes, the allocation's one formula): the plan sizes it
+  // while a group can form at all - the experts stream (there is a store to pay for) and this process holds the
+  // trunk from its first layer - but keeps it OUT of `activations`. Whether anything ever pays it is the
+  // store-world choice (q20::group_world): the store is sized WITHOUT the term first, and a store complete
+  // without it never groups and never allocates it (init_store), so no fit number may carry it there; an
+  // incomplete store's world charges it, and the pre-load fit numbers that must carry the reservation add the
+  // predicted charge (ni::planned_group_world: the engine's fit checks, start_need, doctor.cpp).
+  m.group_slots = m.streamed && !(sp.remote || sp.lo != 0)
+                      ? q20::group_slot_bytes(prefill_group_env(), size_t(chunk), size_t(c.hidden), size_t(c4.hc))
+                      : 0;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
   int lin = 0, att = 0;
   for (int i = lo; i < hi; ++i) (c.is_linear[size_t(i)] ? lin : att) += 1;

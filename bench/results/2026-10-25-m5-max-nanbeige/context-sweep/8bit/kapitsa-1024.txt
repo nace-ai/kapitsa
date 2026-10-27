@@ -1,8 +1,0 @@
-[kapitsa] tokenizer: 166100 tokens, 296888 merges, 10 added, SentencePiece BPE (160 ms)
-[kapitsa] compiled kernels in 7 ms
-[kapitsa] compiled the Flint kernels in 0 ms
-[kapitsa] compiled the tensor kernels in 1 ms
-[kapitsa] read 35.19 GB of weights in 2651 ms (13.3 GB/s)
-[kapitsa] Llama (dense, on Flint's kernels): 52 layers, 56 / 8 heads, 8-bit group 64 (embedding 8-bit group 64, LM head 8-bit group 64), loaded in 2.8 s
-[kapitsa] compiled the weight-format kernels in 9 ms
-rep 0: prefill 1024 tokens 1539.9 ms (665 tok/s, GPU 1516.8 ms); decode 64 steps 4109.1 ms = 64.21 ms/step (15.6 tok/s; GPU 64.13 ms/step)

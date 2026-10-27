@@ -40,7 +40,7 @@ bool runs_whole_here(const hub::ModelRef& ref, const EngineOptions& opt, size_t 
     po.context = context_within_limit(dir, opt.context);
     const int slots = po.slots > 0 ? po.slots : auto_slots(dir, po, budget);
     const LoadPlan lp = plan_load(dir, po.dflash, po.spec_depth == 0, po.context, slots, budget, po.prefill_chunk);
-    const StartNeed need = start_need(dir, lp, lp.prefill_chunk, po.context, slots);
+    const StartNeed need = start_need(dir, lp, lp.prefill_chunk, po.context, slots, budget);
     if (need.bytes > budget) return false;
     // streamed experts (a Qwen3.8-Flash-Next Q2_0 pack): whole when the budget holds every one of them besides
     const MemPlan mp = model_plan(dir, lp.prefill_chunk);

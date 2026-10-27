@@ -26,6 +26,8 @@
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -35,6 +37,39 @@
 #include <vector>
 
 namespace ni::q20 {
+
+// The seam-wrap decision as pure functions, so the engine and the CPU test drive one definition instead of the test
+// re-deriving the rule: a prefill chunk wraps when it is not the prompt's last - the engine sets `sample` on exactly
+// that chunk, and decode follows it with one row routing top-k experts, which a whole-layer read-ahead would only
+// delay. At trunk layer `li` of a pass over this Mac's trunk layers [lo, hi) - store layer li - lo - the store layer
+// to read ahead is the pass's next one; at the pass's last layer it is the store's layer 0 (the next chunk's first)
+// only when the chunk wraps, and nothing (-1) otherwise. Passes that never run encode_prefill's gate (decode, verify,
+// a split model's later stages: a Remote::Pass carries no chunk end) pass wraps=false and never wrap; a split model's
+// first Mac does wrap - it runs the prompt's chunks, so its last stage layer ends a chunk like any other.
+inline bool seam_wraps(bool sample) { return !sample; }
+inline int seam_next_layer(int li, int lo, int hi, bool wraps) {
+  return li + 1 < hi ? li + 1 - lo : wraps ? 0 : -1;
+}
+
+// The effective NI_PREFILL_GROUP of a model (layer-major prefill groups): a group pays the streamed store's reads
+// alone, so one forms only while that store is incomplete. With every expert resident - no store, or a complete
+// one - the ordinary chunk path is strictly ahead: it keeps its NI_HC_PRECOMB fold and carries no per-chunk slot
+// buffers. That is runtime eligibility, not an off switch: the knob still asks for G, the model just has nothing
+// for a group to save. A split's share and a layer-debugging model never group either.
+inline int group_chunks(int g, bool split, bool debug, bool all_resident) {
+  return g >= 2 && !split && !debug && !all_resident ? g : 1;
+}
+
+// The per-chunk slot bytes of G layer-major groups: the chunks' x_ / yb_ / injA_ / injM_ slots and the two sets
+// of G n-gram stagings. One formula for the sides that must agree - the plan (plan() sets MemPlan::group_slots
+// to it, kept OUT of `activations`), the allocation (Qwen4Exp::alloc4_group) and the store-world charge
+// (group_world below: Qwen4Exp::init_store runs it live, ni::planned_group_world predicts it before a load).
+// 0 unless G >= 2.
+inline size_t group_slot_bytes(int g, size_t T, size_t D, size_t hc) {
+  if (g < 2) return 0;
+  const size_t SD = hc * D;
+  return size_t(g) * (T * SD * 4 + T * D * 4 + 2 * T * hc * 4 + 2 * T * D * 2);
+}
 
 struct StoreStats {
   uint64_t handshakes = 0;     // turns (one per streamed layer per pass)
@@ -62,7 +97,7 @@ struct AutoStoreIn {
   size_t all = 0, least = 0, left = 0, used = 0, keep = 0, ram = 0, avail = 0;
   double cap = 0;
 };
-enum class AutoStoreWhy { Budget, All, Avail, Cap };
+enum class AutoStoreWhy { Budget, All, Avail, Cap, Pinned };  // Pinned: NI_EXPERT_STORE set the size
 struct AutoStore {
   size_t bytes = 0;
   AutoStoreWhy why = AutoStoreWhy::Budget;
@@ -86,12 +121,82 @@ inline AutoStore auto_store_size(const AutoStoreIn& in) {
   }
   return r;
 }
-// The automatic size's reason, for logs and JSON: "all", "budget", "available_memory", "ram_share_cap"
+// The NI_EXPERT_STORE pin, parsed exactly as the live load parses it (Qwen4Exp::init_store): "all" is every
+// expert, a number is GB of store (atof, so garbage reads 0), "auto"/empty/unset is the automatic size
+// (returns false, `bytes` untouched). Any other non-empty value is the number atof reads; a negative or NaN
+// reads 0 like garbage - the sign is checked before the double->size_t conversion, which is undefined below
+// zero and platform-split (arm64 saturates to 0, x86-64 to an indefinite huge value that `min` would read as
+// a full pin). A value at or above `all` - including the inf atof reads from "inf"/"1e999", whose conversion
+// is undefined on EVERY platform - is clamped to `all` by the same pre-conversion comparison, so the
+// conversion itself only ever sees a finite value inside (0, all): defined everywhere, and the same clamp the
+// load applies (init_store's `o.bytes = std::min(o.bytes, all)`), so `bytes` is always a valid store size.
+// One parser, shared by the live load and every pre-load
+// prediction (ni::planned_group_world), so the two never diverge on what the pin means.
+inline bool store_pin_bytes(const char* es, size_t all, size_t& bytes) {
+  if (!es || !*es || !strcmp(es, "auto")) return false;
+  if (!strcmp(es, "all")) { bytes = all; return true; }
+  const double gb = atof(es) * 1e9;
+  bytes = !(gb > 0.0) ? 0 : gb >= double(all) ? all : size_t(gb);
+  return true;
+}
+// The group slots' store-world choice (PR #628) - one decision, one place, asked by every side:
+// Qwen4Exp::init_store at load time (live, authoritative) and ni::planned_group_world before one (the engine's
+// fit checks, `kapitsa doctor`'s displayed plan). The store is sized first WITHOUT the charge (`bare`: the
+// plan's activations carry none of it and nothing has allocated slots yet); complete without it, the world
+// never groups and never pays - charge 0, the bare inputs and sizing stand, and every fit number stays the
+// bare one (a reservation no load allocates must not shrink a context ladder - the full default context rides
+// on this). Incomplete, the slots pay for themselves: the charge is the slot term and the world is the charged
+// one (group_charged_in). Monotone in one direction - more charge shrinks the budget the store gets, which
+// never moves the store toward complete - so the one correction is the fixed point: no oscillation, no
+// circularity.
+struct GroupWorld {
+  AutoStoreIn in;     // the chosen world's sizing inputs (the bare ones when charge == 0)
+  AutoStore st;       // ... and the store that world sizes (st.bytes >= in.all when complete)
+  size_t charge = 0;  // the group-slot bytes this world pays (0: never groups, never pays)
+};
+// The charged world's inputs: the bare ones with the slot bytes taken out of what is left for the store and
+// added to what the process already uses (the clamps Qwen4Exp::init_store ran before this existed).
+inline AutoStoreIn group_charged_in(const AutoStoreIn& in, size_t slots) {
+  AutoStoreIn c = in;
+  c.left = in.left > slots ? in.left - slots : 0;
+  c.used = in.used + slots;
+  c.avail = in.avail > slots ? in.avail - slots : 0;
+  return c;
+}
+inline GroupWorld group_world(size_t slots, const AutoStoreIn& bare, const size_t* pin = nullptr) {
+  GroupWorld w;
+  w.in = bare;
+  if (pin) {
+    // The NI_EXPERT_STORE pin is authoritative (Qwen4Exp::init_store sizes the store to it): the store is
+    // the pin's bytes (the parser already clamped to all), never re-sized by budget/avail/cap. A pin short
+    // of every expert stays incomplete, so the groups pay and alloc4_group allocates the slots on top (the
+    // store's size is unchanged; the sizing inputs stay the bare ones - the pin overrides them); a pin that
+    // holds every expert is complete, never groups and never pays. The pin's world is chunk-invariant
+    // (complete or incomplete depends only on the pin against all); only the charge's magnitude scales with
+    // the plan's rows. This is what makes a short pin reserve even where the automatic store (the `bare`
+    // inputs below) would come out complete.
+    w.st.bytes = *pin;
+    w.st.headroom = auto_store_headroom(bare.ram);
+    w.st.why = AutoStoreWhy::Pinned;
+    if (slots && *pin < bare.all) w.charge = slots;
+    return w;
+  }
+  w.st = auto_store_size(w.in);
+  if (slots && w.st.bytes < w.in.all) {
+    w.charge = slots;
+    w.in = group_charged_in(bare, slots);
+    w.st = auto_store_size(w.in);
+  }
+  return w;
+}
+// The automatic size's reason, for logs and JSON: "all", "budget", "available_memory", "ram_share_cap",
+// "NI_EXPERT_STORE" (the pin)
 inline const char* auto_store_why_name(AutoStoreWhy w) {
   switch (w) {
     case AutoStoreWhy::All: return "all";
     case AutoStoreWhy::Avail: return "available_memory";
     case AutoStoreWhy::Cap: return "ram_share_cap";
+    case AutoStoreWhy::Pinned: return "NI_EXPERT_STORE";
     case AutoStoreWhy::Budget: break;
   }
   return "budget";
@@ -127,6 +232,14 @@ inline std::string auto_store_reason(const AutoStore& st, const AutoStoreIn& in)
                "NI_EXPERT_CAP=0 lifts it)",
                double(st.bytes) / 1e9, left, in.cap * 100);
       break;
+    case AutoStoreWhy::Pinned:
+      if (st.bytes >= in.all)
+        snprintf(b, sizeof b, "all %.1f GB of experts, the NI_EXPERT_STORE pin: resident, no SSD reads",
+                 double(in.all) / 1e9);
+      else
+        snprintf(b, sizeof b, "%.1f GB of the %.1f GB of experts, the NI_EXPERT_STORE pin", st.bytes / 1e9,
+                 double(in.all) / 1e9);
+      break;
   }
   return b;
 }
@@ -145,6 +258,10 @@ inline std::string auto_store_short(const AutoStore& st, const AutoStoreIn& in) 
     case AutoStoreWhy::Cap:
       snprintf(b, sizeof b, "%.1f GB, not the %.1f GB the budget leaves: the %.0f%% RAM-share cap (NI_EXPERT_CAP=0 lifts it)",
                gb, left, in.cap * 100);
+      break;
+    case AutoStoreWhy::Pinned:
+      if (st.bytes >= in.all) snprintf(b, sizeof b, "all %.1f GB of experts, pinned resident", all);
+      else snprintf(b, sizeof b, "%.1f of %.1f GB of experts, the pin", gb, all);
       break;
   }
   return b;
@@ -216,7 +333,12 @@ class ExpertCache {
   // One layer's handshake: the routing ids (n uint32 expert ids of `layer`, repeats allowed) are readable once the
   // event reaches `ready`; the turn sets it to `go` when every routed expert is in its slot. pred / npred: ids predicted
   // for pred_layer, read ahead after the go (pred_all: every expert of pred_layer; pred_layer -1: none). scan: a prefill
-  // chunk's lookups (no promotion, no adaptation).
+  // chunk's lookups (no promotion, no adaptation). pred_floor: a sweep's eviction floor — with pred_floor >= 0 the
+  // read-ahead prefers victims among the T1 keys of layers below pred_floor, not below the admitted layer, so a
+  // layer-major visit's turns keep their own layer's experts (its sweep for the next layer must not evict what its
+  // remaining chunks still route) while any lower layer's T1 key remains resident; when none does, ARC's
+  // oldest-first rule still decides and the visit's own keys can be eaten. -1 (every chunk-major turn, decode,
+  // fill): the admitted layer is the floor, as before.
   struct Req {
     int layer = 0;
     const uint32_t* ids = nullptr;
@@ -224,6 +346,7 @@ class ExpertCache {
     const uint32_t* pred = nullptr;
     uint32_t npred = 0;
     int pred_layer = -1;
+    int pred_floor = -1;
     bool pred_all = false, scan = false;
     bool warm = false;  // a decode / verify pass's turn: Sync::warm after the go (never a prefill chunk's)
     uint64_t ready = 0, go = 0;
@@ -274,9 +397,10 @@ class ExpertCache {
   void lst_push(List& L, int k);
   List& list_of(Where w);
   int lru_free(const List& L) const;  // least recent key neither pinned nor being read, -1 if none
-  int scan_victim(int k);             // a sweep's victim: a slot below k's layer, rotating over the slots, -1 if none
+  // a sweep's victim: a T1 slot below the floor (floor -1: below k's layer), rotating over the slots, -1 if none
+  int scan_victim(int k, int floor_layer);
   void hit(int k, bool scan, bool first);  // first: k was read ahead and is routed for the first time
-  int admit(int k, bool scan);        // a slot for absent key k (evicting if needed); k into T1 / T2
+  int admit(int k, bool scan, int floor_layer = -1);  // a slot for absent key k (evicting if needed); k into T1 / T2
   void evict(int k);
   void trim_ghosts();
   void load(int k, bool urgent);      // reads of k's planes into its slot
@@ -343,9 +467,9 @@ class ExpertStore {
   std::vector<Buffer> buffers() const;  // the arena and the slot tables (residency)
   // A layer's handshake: begin() after the dispatches that write its routing (ids: n uint32 expert ids, in GPU memory),
   // end() before its expert kernels; work encoded between them does not need the experts and overlaps the turn. See
-  // ExpertCache::Req for pred / pred_layer / pred_all / scan.
+  // ExpertCache::Req for pred / pred_layer / pred_all / pred_floor / scan.
   void begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, const Buffer* pred, uint32_t npred, int pred_layer,
-             bool pred_all, bool scan, bool warm = false);
+             bool pred_all, bool scan, bool warm = false, int pred_floor = -1);
   void end(Encoder& e);
   StoreStats stats() const { return cache_->stats(); }
   void reset_stats() { cache_->reset_stats(); }

@@ -2,7 +2,8 @@
 // through an opaque field, reasoning effort, and the stream writer interface the server drives (Chat Completions uses
 // it too).
 #pragma once
-#include "engine/engine.h"
+#include "engine/chat.h"
+#include "engine/grammar.h"
 
 #include <stdexcept>
 #include <string>

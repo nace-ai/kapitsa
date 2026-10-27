@@ -80,6 +80,16 @@ jobs:
           echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results. Run 'python3 tools/community_table.py' and commit bench/community/RESULTS.md in this pull request."
           exit 1
 
+  docs-links:
+    # The docs' relative links and #anchors resolve. docs/benchmarks.md's old section names survive only as explicit
+    # <a id="..."> anchors (#580) and nothing else notices a later heading rename deleting one. Its own job rather than a
+    # step in bench-readme, so a dead link never reads as a stale bench table to whoever sees the red X.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_docs_links.py
+
   agentic-metrics-script:
     # bench/harness/agentic.py against a fake server: no model, no GPU.
     runs-on: ubuntu-latest
@@ -119,7 +129,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test tree_reduce_test remote_test cluster_test split_place_test json_file_test logit_dump
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test tree_reduce_test remote_test cluster_test split_place_test json_file_test execution_session_test http_stream_test logit_dump
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -162,6 +172,12 @@ jobs:
       - name: json_file_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/json_file_test
+      - name: execution_session_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/execution_session_test
+      - name: http_stream_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/http_stream_test
       # tests/test_bench.py is not run here: on a hosted runner (a VM, "Apple M1 (Virtual)") `kapitsa bench` aborts on a
       # hardware field the VM does not report and the Mac name fails the result schema. Run it on a real Mac.
       - name: test_server --cli
@@ -179,6 +195,10 @@ jobs:
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
+      - name: test_gpu_lock_held
+        # temp lock files only: no model, no GPU, never /tmp/kapitsa-gpu.lock
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_gpu_lock_held.py
       - name: test_compare
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_compare.py build
