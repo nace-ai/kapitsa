@@ -166,7 +166,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   ++requests_;
   // No reasoning is put back into assistant turns the client sent without it (the native path does, to extend the KV it
   // kept): Splash's engine caches a request's prompt blocks, not its output, so a longer prompt only costs prefill. Measured
-  // on a 4K two-turn chat: turn 2 TTFT 0.38 s with it against 0.23 s without (plain Splash's prompt), docs/splash-backend.md.
+  // on a 4K two-turn chat it was slower than sending the history as is, as plain Splash does; the runs are in docs/splash-backend.md.
   // what Splash's native protocol carries here is text with sampling: the rest is refused before anything is queued
   if (r.grammar) return refuse("structured output is not supported by the Splash engine");
   if (!vision::image_sources(r.messages).empty()) return refuse("image input is not supported by the Splash engine");

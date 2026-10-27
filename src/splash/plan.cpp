@@ -7,7 +7,9 @@ namespace ni::splash {
 namespace {
 
 constexpr uint64_t kGiB = 1ull << 30;
-constexpr uint64_t kAutoPlanNeeds = 38 * kGiB;  // Splash's auto plan (about 35.8 GiB) and a margin over it
+// Splash's auto plan has no fixed threshold (its refusal is dynamic): one start was refused at 35.2 GiB under a system pressure
+// warning, and one started at 33.0 GiB. 38 is a margin over the refusal seen, not a measured need; docs/splash-backend.md.
+constexpr uint64_t kAutoPlanNeeds = 38 * kGiB;
 constexpr uint64_t kHeadroom = 14 * kGiB;       // 2 GiB protected for macOS, the rest for everything else running
 constexpr uint64_t kMinCache = 8 * kGiB;
 

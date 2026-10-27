@@ -70,7 +70,7 @@ one server at a time under the GPU lock.
 
 - CPU: `splash_protocol_test`, `splash_runtime_test`, `splash_discover_test` and `tests/test_splash_engine.py` (the
   server against `tests/fake_splash.py`, with Splash's real tokenizer and template). No model or GPU.
-  They run locally (`ctest`, or the binaries in `build/`); CI runs the three C++ tests and `tests/test_splash_engine.py` (`ci.yml`).
+  They run locally (`ctest`, or the binaries in `build/`); CI runs the four C++ tests and `tests/test_splash_engine.py` (`ci.yml`).
 - Tokenizer (`tools/splash_tokenizer_check.py`): Kapitsa loading Splash's `tokenizer.json` gives the ids the `tokenizers`
   library gives, on 7 texts (Latin, Cyrillic, CJK, emoji, code with tabs, digits, URL, special-token text, NBSP and CR),
   0 mismatches.
@@ -124,7 +124,9 @@ one server at a time under the GPU lock.
   without a `cache_salt`.
 - The child gets `--idle-release off` unless given, and, when free and reclaimable memory is between 22 and 38 GiB and no
   `--expert-memory` is given, `--expert-memory` of free GiB minus 14 (at least 8). The formula rests on one measured pass
-  (16 GiB at 30.4 GiB free) and Splash's 2 GiB protected for macOS; it is not validated across memory states. In that window the forced `--expert-memory` turns Splash's own "not enough free
+  (16 GiB at 30.4 GiB free) and Splash's 2 GiB protected for macOS; it is not validated across memory states. At 33.0 GiB free the default plan started and ran without it (Verification), so
+  from 33 to 38 GiB this replaces a working default with a smaller expert cache, and no run compares the two. The 38 GiB bound is
+  a margin over one refusal seen at 35.2 GiB under a system pressure warning, not a measured need. In that window the forced `--expert-memory` turns Splash's own "not enough free
   memory to start" refusal into an engine that starts and streams experts from the SSD, so it is slower than a full cache; pass
   `--splash-arg --expert-memory <size>` to choose, or free memory first.
 
