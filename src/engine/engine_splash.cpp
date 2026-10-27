@@ -217,21 +217,9 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   q.sampling.min_p = r.min_p;
   if (r.ignore_eos) q.flags |= splash::kIgnoreEndOfSequence;
   if (opts_.splash_conversation_salt) {
-    // the conversation is what comes first in it: the messages up to its first user message, which later turns repeat
-    // as they are. Two 64-bit FNV-1a hashes with different bases make the 128 bits.
-    uint64_t lo = 0xcbf29ce484222325ull, hi = 0x84222325cbf29ce4ull;
-    auto mix = [&](const std::string& s) {
-      for (unsigned char c : s) {
-        lo = (lo ^ c) * 0x100000001b3ull;
-        hi = (hi ^ (c + 0x9eu)) * 0x100000001b3ull;
-      }
-    };
-    for (const auto& m : r.messages) {
-      mix(m.dump());
-      if (m.value("role", "") == "user") break;
-    }
-    q.cache_salt_lo = lo;
-    q.cache_salt_hi = hi;
+    const auto salt = splash::conversation_salt(r.messages);
+    q.cache_salt_lo = salt.lo;
+    q.cache_salt_hi = salt.hi;
   }
   q.seed = r.seed ? r.seed : uint64_t(std::random_device{}());
   if (boundary > 0 && boundary < n) q.generation_prompt_tokens = uint32_t(n - boundary);

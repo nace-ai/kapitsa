@@ -33,6 +33,22 @@ int main() {
   check(default_engine_args({}, 40 * G, true, "/c/m1", nullptr) == V({"--idle-release", "off", "--persistent-cache", "on", "--cache-dir", "/c/m1"}), "cache dir with persistent cache");
   check(default_engine_args({"--cache-dir", "/mine"}, 40 * G, true, "/c/m1", nullptr) == V({"--idle-release", "off", "--persistent-cache", "on"}), "user's cache dir kept");
   check(default_engine_args({}, 40 * G, false, "/c/m1", nullptr) == V({"--idle-release", "off"}), "no cache dir without persistent cache");
+  // `--flag=value` is the user's flag too: not doubled
+  check(default_engine_args({"--idle-release=30m", "--expert-memory=off"}, a, true, "", nullptr) == V({"--persistent-cache", "on"}), "--flag=value kept");
+  check(default_engine_args({"--persistent-cache=on", "--cache-dir=/mine"}, 40 * G, true, "/c/m1", nullptr) == V({"--idle-release", "off"}), "--persistent-cache=on and --cache-dir=x kept");
+  check(default_engine_args({"--idle-release-x", "1"}, 40 * G, false, "", nullptr) == V({"--idle-release", "off"}), "a longer flag is not the flag");
+  // the conversation salt
+  using J = nlohmann::ordered_json;
+  const J sys = {{"role", "system"}, {"content", "be brief"}}, u1 = {{"role", "user"}, {"content", "first"}},
+          as = {{"role", "assistant"}, {"content", "ok"}}, u2 = {{"role", "user"}, {"content", "more"}}, other = {{"role", "user"}, {"content", "another"}};
+  auto salt = [](std::initializer_list<J> m) { return ni::splash::conversation_salt(J(m)); };
+  auto same = [](ni::splash::Salt x, ni::splash::Salt y) { return x.lo == y.lo && x.hi == y.hi; };
+  check(same(salt({sys, u1}), salt({sys, u1, as, u2})), "salt: later turns keep the conversation's salt");
+  check(same(salt({sys, u1, as, u2}), salt({sys, u1, as, u2, as, other})), "salt: turn 3 too");
+  check(!same(salt({sys, u1}), salt({sys, other})), "salt: another first user message, another salt");
+  check(!same(salt({sys, u1}), salt({u1})), "salt: another system prompt, another salt");
+  check(salt({sys, u1}).lo != 0 && salt({sys, u1}).hi != 0 && salt({sys, u1}).lo != salt({sys, u1}).hi, "salt: 128 distinct bits, not zero");
+  check(!same(salt({sys}), salt({sys, u1})) && same(salt({sys}), salt({sys})), "salt: a system-only history is stable and not a conversation's");
   if (failures) return 1;
   std::puts("splash_plan_test: ok");
   return 0;

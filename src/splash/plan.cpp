@@ -11,7 +11,10 @@ constexpr uint64_t kAutoPlanNeeds = 38 * kGiB;  // Splash's auto plan (about 35.
 constexpr uint64_t kHeadroom = 14 * kGiB;       // 2 GiB protected for macOS, the rest for everything else running
 constexpr uint64_t kMinCache = 8 * kGiB;
 
-bool has(const std::vector<std::string>& v, const char* flag) { return std::find(v.begin(), v.end(), flag) != v.end(); }
+// argparse takes `--flag value` and `--flag=value`: both mean the user gave it
+bool has(const std::vector<std::string>& v, const std::string& flag) {
+  return std::any_of(v.begin(), v.end(), [&](const std::string& a) { return a == flag || a.compare(0, flag.size() + 1, flag + "=") == 0; });
+}
 
 }  // namespace
 
@@ -44,6 +47,21 @@ std::vector<std::string> default_engine_args(const std::vector<std::string>& use
   }
   if (note) *note = n;
   return out;
+}
+
+Salt conversation_salt(const nlohmann::ordered_json& messages) {
+  Salt s{0xcbf29ce484222325ull, 0x84222325cbf29ce4ull};
+  auto mix = [&](const std::string& t) {
+    for (unsigned char c : t) {
+      s.lo = (s.lo ^ c) * 0x100000001b3ull;
+      s.hi = (s.hi ^ (c + 0x9eu)) * 0x100000001b3ull;
+    }
+  };
+  for (const auto& m : messages) {
+    mix(m.dump());
+    if (m.value("role", "") == "user") break;
+  }
+  return s;
 }
 
 }  // namespace ni::splash

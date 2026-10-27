@@ -2,6 +2,8 @@
 // function of the user's arguments and the memory free now, so a test needs no Splash and no Mac state.
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -20,5 +22,11 @@ namespace ni::splash {
 std::vector<std::string> default_engine_args(const std::vector<std::string>& user, uint64_t available_bytes,
                                              bool persistent_cache, const std::string& cache_dir,
                                              std::string* note);
+
+// The 128-bit cache_salt of a conversation (--splash-conversation-salt): a hash of its messages up to and including the
+// first user message, which every later turn repeats as it is, so a conversation keeps its salt and another one gets its own.
+// A history with no user message hashes all of it. Two 64-bit FNV-1a hashes with different bases make the 128 bits.
+struct Salt { uint64_t lo = 0, hi = 0; };
+Salt conversation_salt(const nlohmann::ordered_json& messages);
 
 }  // namespace ni::splash
