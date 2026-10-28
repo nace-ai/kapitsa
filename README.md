@@ -203,8 +203,8 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669 / b11871</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1, llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 1930 / **201**<br><sub>KFlash</sub> | 874 / 137<br><sub>MTP</sub> | 803 / 102<br><sub>MTP</sub> | × | 758 / 109<br><sub>MTP</sub> | 780 / 104<br><sub>MTP</sub> | 843 / 88<br><sub>MTP</sub> | 650 / 70<br><sub>MTP</sub> | 801 / 81 |
-| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 396 / **63**<br><sub>KFlash</sub> | 129 / 54<br><sub>DFlash2</sub> | 136 / 45<br><sub>DFlash2</sub> | 251 / 50<br><sub>DFlash2 · 1.4.1 †</sub> | 124 / 32<br><sub>MTP</sub> | 126 / 36<br><sub>MTP</sub> | 131 / 28<br><sub>MTP</sub> | 84 / 18<br><sub>MTP</sub> | 127 / 15 |
-| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 1168 / **161**<br><sub>KFlash</sub> | 986 / 124<br><sub>MTP</sub> | 1035 / 127<br><sub>DFlash2</sub> | 1056 / 140<br><sub>DFlash2 · 1.4.1 †</sub> | 892 / 89<br><sub>MTP</sub> | 918 / 80<br><sub>MTP</sub> | 985 / 86<br><sub>DFlash2</sub> | 663 / 69<br><sub>MTP</sub> | 957 / 86 |
+| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 396 / **63**<br><sub>KFlash</sub> | 129 / 54<br><sub>DFlash2</sub> | 136 / 45<br><sub>DFlash2</sub> | 53<br><sub>DFlash2</sub> | 124 / 32<br><sub>MTP</sub> | 126 / 36<br><sub>MTP</sub> | 131 / 28<br><sub>MTP</sub> | 84 / 18<br><sub>MTP</sub> | 127 / 15 |
+| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 1168 / **161**<br><sub>KFlash</sub> | 986 / 124<br><sub>MTP</sub> | 1035 / 127<br><sub>DFlash2</sub> | 135<br><sub>DFlash2</sub> | 892 / 89<br><sub>MTP</sub> | 918 / 80<br><sub>MTP</sub> | 985 / 86<br><sub>DFlash2</sub> | 663 / 69<br><sub>MTP</sub> | 957 / 86 |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **64**<br><sub>KFlash</sub> | × | × | × | × | × | 48 | 6 | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 945 / **112**<br><sub>KFlash</sub> | — | — | × | — | — | 721 / 65<br><sub>DSpark</sub> | — | — |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 519 / **69**<br><sub>KFlash</sub> | — | 298 / 35 | × | — | — | 300 / 32 | × | — |
@@ -215,7 +215,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: | ---: |
 | **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 968 / **128**<br><sub>KFlash</sub> | 977 / 80 | 796 / 127 |
 
-<sub>† Splash needs macOS 26.4 or later; this MacBook Pro is on macOS 27.0.1 and had Splash 1.4.0 measured for decode only. These two cells are Splash 1.4.1 on an AWS EC2 Mac mini M4 Pro (48 GB, macOS 26.7), 2026-10-28, in the same protocol, not on this MacBook. Kapitsa on that Mac read 1171 / 169 on the 35B-A3B and 392 / 65 on the 27B, within 5% of the Kapitsa cells here ([record](bench/results/2026-10-28-m4pro-ec2-macos26/README.md)).</sub>
+<sub>Splash's cells are Splash 1.4.0 at decode only (2026-10-21): Splash needs macOS 26.4 or later, and this MacBook is on 27.0.1. On an AWS EC2 Mac mini M4 Pro (48 GB, macOS 26.7) on 2026-10-28, Splash 1.4.1 read 1056 / 140 on the 35B-A3B and 251 / 50 on the 27B, against Kapitsa 0.2.23's 1171 / 169 and 392 / 65 on the same Mac ([record](bench/results/2026-10-28-m4pro-ec2-macos26/README.md)).</sub>
 
 </details>
 

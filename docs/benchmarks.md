@@ -215,8 +215,8 @@ MacBook Pro (16-inch, 2024), 20-core GPU, macOS 27.0.1, High Power mode, AC powe
   2026-10-21 ([KFlash](#kflash-trees-m4-pro-2026-10-21)). Prefill from the newest unflagged runs (2026-10-19).
 - **The other engines:** the 2026-10-17 to 10-19 sessions ([first comparison](../bench/results/2026-10-17/),
   [the table filled in](../bench/results/2026-10-19-m4pro/README.md)); Splash 1.4.0 (27B 53, 35B-A3B 135 tok/s) on
-  2026-10-21 in the KFlash session, without a prefill run. The README's Splash cells (251 / 50 and 1056 / 140) are
-  not from this MacBook: they are Splash 1.4.1 on an EC2 Mac mini, [below](#m4-pro-ec2).
+  2026-10-21 in the KFlash session, without a prefill run. Splash 1.4.1 with prefill was measured on an EC2 Mac
+  mini, [below](#m4-pro-ec2), and the README's M4 Pro table quotes it under the table.
 - **Lightning and Bolt:** NVIDIA's NVFP4 Lightning with its DSpark drafter on Kapitsa and mlx-vlm (oMLX and llama.cpp
   not measured); Bolt's 24 GB checkpoint on Kapitsa, oMLX and mlx-vlm.
 - **Dory:** 2 loops; Kapitsa per-loop KV, llama.cpp NVIDIA's Dory fork on its Q5_K_M, mlx-lm's Dory pull request on a
@@ -232,8 +232,7 @@ MacBook Pro (16-inch, 2024), 20-core GPU, macOS 27.0.1, High Power mode, AC powe
 
 Two AWS `mac-m4pro.metal` instances (Mac16,11, Apple M4 Pro, 14 CPU cores, 20 GPU cores, 48 GB), `powermode 2`, AC power,
 sleep off, nothing else running; Kapitsa 0.2.23 (the release binary) in the harness's protocol. This is a Mac mini, not the
-MacBook Pro above, on other macOS versions, so it is its own section and the README's MacBook Pro cells are unchanged,
-except the two Splash cells it fills.
+MacBook Pro above, on other macOS versions, so it is its own section and the README's MacBook Pro cells are unchanged.
 
 - **macOS 26.7: Splash 1.4.1 against Kapitsa on one Mac** ([record](../bench/results/2026-10-28-m4pro-ec2-macos26/README.md)).
   Splash needs macOS 26.4 or later. Same weights, drafters and corpus, one config at a time, the GPU lock held:
