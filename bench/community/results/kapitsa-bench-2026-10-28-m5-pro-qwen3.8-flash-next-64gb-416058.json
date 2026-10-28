@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-28T01:08:05Z",
+  "kapitsa": {
+    "version": "0.2.23",
+    "commit": "6e721e6"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 64,
+    "macos": "27.2",
+    "macos_build": "26B123"
+  },
+  "model": {
+    "name": "qwen3.8-flash-next",
+    "title": "Qwen3.8-Flash-Next 180B-A7B",
+    "variant": "64gb",
+    "precision": "2-bit experts",
+    "catalog": true,
+    "revision": "cb6c85e",
+    "decoding": "MTP",
+    "decoding_detail": "MTP speculative decoding depth 2, KFlash (MTP)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 44.91,
+      "runs_tps": [
+        45.07,
+        47.66,
+        41.99,
+        44.53,
+        44.91
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 47.46,
+      "runs_tps": [
+        46.37,
+        47.46,
+        47.46,
+        47.7,
+        46.99
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4131,
+        "ttft_s": 10.9135,
+        "tps": 378.5,
+        "followup_s": [
+          0.32,
+          0.3372,
+          0.2729
+        ],
+        "followup_median_s": 0.32,
+        "followup_suffix_tps": 76.9
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16286,
+        "ttft_s": 44.4276,
+        "tps": 366.6,
+        "followup_s": [
+          0.2803,
+          0.3356,
+          0.2683
+        ],
+        "followup_median_s": 0.2803,
+        "followup_suffix_tps": 82.1
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 37.01,
+    "mapped_gb": 5.46
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.01,
+    "gpu_other_max_pct": 0.69,
+    "gpu_ambient_mean_pct": 0.12,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
