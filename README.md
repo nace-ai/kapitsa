@@ -25,7 +25,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 319 tok/s on an M5 Max** ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🌊 **Kapitsa runs Splash's engine**: `kapitsa serve --engine splash` puts Inco's Splash behind Kapitsa's chat page, OpenAI API and Anthropic API ([backends](#supported-backends)).
-- [2026/10] 🗄️ **A 180B model answers on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD, and the model peaks at 31.6 GiB wired with no swap growth ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
+- [2026/10] 🗄️ **A 180B model answers on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD, and through `--engine splash` it peaks at 31.6 GiB wired with no swap growth ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
 - [2026/10] 🏆 **The fastest decode in 32 of the 38 model and Mac pairs** measured against nine engines ([poster](#benchmarks)).
 
 ## Quickstart
@@ -50,9 +50,9 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - **Bigger than the memory**: a model's routed experts stream from the SSD, as many as the budget holds.
 - **Conversations on the SSD**: a 16K follow-up after a restart starts in 0.16 s instead of 17 s (`--disk-cache`).
 - **OpenAI and Anthropic APIs, and a chat page**: `/v1/chat/completions`, `/v1/messages` and `/v1/responses`, with streaming, tool calls and JSON-schema output, on `http://127.0.0.1:8000`.
-- **An agent in one command**: `kapitsa claude`, `codex`, `opencode` and `pi` start on the local model.
+- **An agent in one command**: `kapitsa claude`, `kapitsa codex`, `kapitsa opencode` and `kapitsa pi` start on the local model.
 - **Several Macs, one model**: a Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
-- **Images**: screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons.
+- **Images**: screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint and the 35B's `16gb`.
 
 ## CLI
 
@@ -127,7 +127,7 @@ What `kapitsa serve <name>` runs of a catalog model on a Mac of each size: the v
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super-vl` | — | — | — | — |
 | **Recursive Flint 40B-A2.5B** · `flint` | 2-bit† | 2-bit | 4-bit† | 4-bit† |
 
-<sub>**4-bit** and **2-bit** are the Qwen and Flint variants, **NVFP4** and **FP8** the Nemotron ones. † that Mac needs macOS's working set at the top of its range, about two thirds to 78% of the RAM; — `kapitsa serve` does not start the model there. A cell is the variant `kapitsa serve` picks, planned as `kapitsa doctor` plans it: 64K of context and two conversations where they fit, less context where they do not (the 27B keeps 32K on a 24 GB Mac). The 16 and 36 GB columns also hold for the peaks measured on an M1 Pro and an M3 Pro ([per-Mac tables](#models)); nothing has been run on 24 or 32 GB, those columns are planned. Flash-Next needs 64 GB or more: `64gb` on a 64 GB Mac, `4bit` on a 128 GB Mac, and 48 GB with its Q2_0 pack streamed from the SSD. Super-VL needs a 96 GB+ Mac.</sub>
+<sub>**4-bit**, **NVFP4** and **FP8** are the catalog's variants (`4bit`, `nvfp4`, `fp8`), **2-bit** the `16gb` build of the 35B and Flint and the `24gb` one of Bolt. † that Mac needs macOS's working set at the top of its range, about two thirds to 78% of the RAM; — `kapitsa serve` does not start the model there. A cell is the variant `kapitsa serve` picks, planned as `kapitsa doctor` plans it: 64K of context and two conversations where they fit, less context where they do not (the 27B keeps 32K on a 24 GB Mac). The 16 and 36 GB columns also hold for the peaks measured on an M1 Pro and an M3 Pro ([per-Mac tables](#models)); nothing has been run on 24 or 32 GB, those columns are planned. Flash-Next needs 64 GB or more: `64gb` on a 64 GB Mac, `4bit` on a 128 GB Mac, and 48 GB with its Q2_0 pack streamed from the SSD. Super-VL needs a 96 GB+ Mac.</sub>
 
 ## Models
 
