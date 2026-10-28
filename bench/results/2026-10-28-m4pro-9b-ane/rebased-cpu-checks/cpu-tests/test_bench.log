@@ -1,0 +1,182 @@
+PASS bench_test self
+PASS plugged in at powermode 0 needs no POWER flag
+PASS battery in High Power Mode is one flag
+PASS battery at powermode 0 is flagged on the battery alone
+PASS powermode 1 is Low Power Mode on AC
+PASS AC in High Power Mode raises no flag
+PASS AC in High Power Mode records one POWER-INFO line
+PASS automatic mode and Low Power Mode need no info line (the low one is already a flag)
+PASS no power state recorded, no info note
+PASS no power state recorded, no claim made
+PASS the client's lowpowermode reading raises the flag without a powermode
+PASS powermode 1 and the client's reading are one flag, not two
+PASS powermode 1 reads as Low Power Mode
+PASS powermode 2 is High Power Mode, not Low Power Mode
+PASS the older lowpowermode 1 spelling still reads as Low Power Mode
+PASS the bare capability tokens pmset -g cap prints are not a mode
+PASS battery is read from pmset -g batt
+PASS the anchored read takes powermode past a lowpowermode line
+PASS lowpowermode alone still gives the mode
+PASS no pmset text, no mode
+PASS both clients read the same mode from the same text
+PASS an existing POWER flag is not duplicated
+PASS no flag when the power state is normal
+PASS the POWER-INFO note appears once, not twice
+PASS the mode is read from provenance.system_start.powermode, where the harness writes it
+PASS the odd-mode row is marked in the flag column
+PASS a best among the reference-mode rows still counts; the odd-mode row is out
+PASS a two-mode tie marks every arm
+PASS a two-mode tie keeps no best values
+PASS a table whose arms share one mode is not marked
+PASS the mismatch shows in the flag column
+PASS the C++ protocol runs against the scripted server
+PASS both send the same 14 requests
+PASS every request is the same, key for key, in order (bodies, paths, session ids)
+PASS the 4K prompt is the harness's, from the frozen corpus
+PASS t_decode (decode) records alike
+PASS t_decode (decode): the same rate method over the same events
+PASS t_decode (greedy) records alike
+PASS t_decode (greedy): the same rate method over the same events
+PASS t_prefill records alike
+PASS the follow-ups alike
+PASS the follow-ups' checks alike
+PASS t_tools (tools_off): the streamed call alike
+PASS t_tools (tools_off): the whole reply alike
+PASS t_tools (tools_off): the round trip passes in both
+PASS t_tools (tools_on): the streamed call alike
+PASS t_tools (tools_on): the whole reply alike
+PASS t_tools (tools_on): the round trip passes in both
+PASS the scripted tool checks pass
+PASS the warm-up alike
+PASS bench_test protocol
+PASS build_context(4000, offset 0) is the harness's, byte for byte
+PASS build_context(16000, offset 0) is the harness's, byte for byte
+PASS build_context(2700, offset 100000) is the harness's, byte for byte
+PASS TOOLS, key for key
+PASS the follow-up questions
+PASS the tool test's messages
+PASS the decode prompt (with the same nonce)
+PASS the 4K prefill messages
+PASS the warm-up messages
+PASS the decode request body
+PASS the greedy request body
+PASS the thinking-on tool request body
+PASS decode_rates on 400 published runs' events and the edge cases (0 differ)
+PASS distinct4 on 406 texts
+PASS thinking_leak
+PASS Python's round()
+PASS bench.py's _summary
+PASS the full result validates against schema.json
+PASS the quick result validates against schema.json
+PASS schema.json refuses an extra field (a serial number) and a wrong type
+PASS tools/community_check.py accepts both
+PASS the result is small enough to read and to travel in an address
+PASS the result records its writing runs' temperature
+PASS no user name in the result
+PASS no home path in the result
+PASS no serial number in the result
+PASS no LocalHostName in the result
+PASS no ComputerName in the result
+PASS no HostName in the result
+PASS the pull request's title
+PASS the file's path
+PASS the fork, and nothing in the way
+PASS the plan has no issue form: a pull request is the only way in
+PASS Flint's card: writing at T = 1.0 (recorded result)
+PASS Flint's card: writing at T = 1.0 (older result)
+PASS the card's conditions line: DFlash2 drafter
+PASS the card's conditions line: KFlash decoding
+PASS the card's conditions line: prompt-lookup decoding
+PASS submit --dry-run with gh: prints the gh commands and no issue form
+PASS the dry run only asked gh who is logged in
+PASS --dry-run without --submit is a usage error
+PASS submit --dry-run without gh: says so and shows the pull request, no issue form
+PASS submit without gh: explains how to get gh, offers no other path
+PASS without a terminal nothing is submitted
+PASS and gh was asked for nothing else
+PASS a no sends nothing and names the saved file
+PASS nothing but the login was asked of gh
+PASS the result stays where it was saved
+PASS submitting a saved result shows its card first, with who used the GPU in words
+PASS a saved Flint result's card on screen: T = 1.0
+PASS one question, and Enter opens the pull request
+PASS the calls: login, fork, base, its head, the branch, the file, the pull request
+PASS the file sent is the saved file, byte for byte
+PASS the pull request: head, base, title and the summary table
+PASS a model that can't be downloaded stops the run before any server starts
+PASS a folder that is not a model is refused
+PASS --help
+PASS waits for lockf's holder of an immutable lock file, and names it
+PASS while it holds the lock lockf can't take it; released after
+PASS folder_precision counts weight bytes: one format, a dominant override, no quantization, no weights
+PASS held_by_caller under each spelling of NI_LOCK_HELD / NACE_GPU_LOCK_HELD
+PASS plain: a quick run against the scripted server completes and is saved
+PASS the quick protocol's 18 requests (warm-up 2, writing 3 + 3, the 4K prompt and 3 follow-ups, tools 6)
+PASS its result is invalid (an external server), so it can't be submitted
+PASS the model and the mode
+PASS the quick protocol: 3 + 3 runs, the 4K prompt
+PASS the prompt, the follow-ups and the tool check as the server answered
+PASS the follow-ups' prefill tok/s counts the uncached suffix only (additive field)
+PASS this Mac
+PASS the run's result validates against schema.json
+PASS plain: the summary table on stdout, the progress on stderr
+PASS --submit refuses an invalid result
+PASS --json: the result on stdout, the progress on stderr
+PASS a terminal: the phases and the summary card
+PASS Flint from a folder: its writing at T = 1.0, shown and recorded
+PASS --ctx selects a labelled custom-context run
+PASS standard checkpoint is a standalone result saved before the context stage
+PASS atomic result writes leave no temporary files
+PASS 64k appends a separate context stage and retains the standard protocol
+PASS reading AND writing prompts fill the selected context
+PASS standard decode runs first, followed by six long-context decode requests
+PASS context fitting uses the same thinking-off template options as measured requests
+PASS standard reading and tool tests finish before context preparation
+PASS actual per-run context writing prompt counts are saved separately
+PASS three independent cold/cached pairs
+PASS telemetry is excluded from content event counts and reports per-request cycle yield
+PASS context speculative diagnostics summarize three measured writing runs
+PASS TTFT starts at content after early progress events, not at telemetry arrival
+PASS TTFT speedup uses each matched cold/cached pair
+PASS cold and cached TTFT each have three samples, median and range
+PASS cached throughput excludes reused tokens and cache percentage uses actual usage
+PASS context validity and standard measurements are preserved independently
+PASS custom-context JSON validates
+PASS saved custom runs cannot be submitted as standard benchmarks
+PASS --ctx rejects '0' before starting a benchmark
+PASS --ctx rejects '-1' before starting a benchmark
+PASS --ctx rejects 'max' before starting a benchmark
+PASS --ctx rejects '2k' before starting a benchmark
+PASS --ctx rejects 'abc' before starting a benchmark
+PASS --ctx rejects '9999999999999k' before starting a benchmark
+PASS --ctx --submit rejected before model loading
+PASS custom run refuses a server with a smaller context
+PASS failed context stage retains completed standard results
+PASS missing cache counts never produce a derived throughput or reuse summary
+PASS missing cache usage is explicitly flagged while TTFT stays usable
+PASS inconsistent cache counts never produce a derived throughput or reuse summary
+PASS impossible cache counts are rejected and excluded from summaries
+PASS reasoning-only models keep their benchmark temperature and extra reply headroom
+PASS interrupting the context stage retains the standard checkpoint and reports its location
+PASS omitting prefill chunk keeps the automatic default report
+PASS standalone chunk 1024: requested chunk and full/quick mode
+PASS standalone chunk: Markdown displays requested size
+PASS standalone chunk 1024: schema validates
+PASS standalone chunk 1024: saved custom report refused for standard submission
+PASS standalone chunk 4096: requested chunk and full/quick mode
+PASS standalone chunk: --json matches saved report
+PASS standalone chunk 4096: schema validates
+PASS standalone chunk 4096: saved custom report refused for standard submission
+PASS standalone chunk 2048: requested chunk and full/quick mode
+PASS standalone chunk: --json matches saved report
+PASS standalone chunk 2048: schema validates
+PASS standalone chunk 2048: saved custom report refused for standard submission
+PASS prefill chunk requires a value
+PASS invalid prefill chunk '0' rejected before loading
+PASS invalid prefill chunk '-1' rejected before loading
+PASS invalid prefill chunk 'abc' rejected before loading
+PASS invalid prefill chunk '4096x' rejected before loading
+PASS invalid prefill chunk '99999999999999999' rejected before loading
+PASS custom chunk submission rejected before loading
+
+ok: 0 failed

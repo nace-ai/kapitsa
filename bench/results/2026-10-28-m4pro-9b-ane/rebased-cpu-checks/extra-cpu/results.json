@@ -1,0 +1,64 @@
+[
+  {
+    "command": [
+      "build/execution_session_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/http_stream_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/exl3_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/json_file_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/splash_protocol_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/splash_runtime_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/splash_discover_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/splash_plan_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/ane_segment_check"
+    ],
+    "returncode": 0
+  },
+  {
+    "command": [
+      "build/pr-python/bin/python",
+      "tests/test_logit_dump.py",
+      "build"
+    ],
+    "returncode": 0
+  }
+]

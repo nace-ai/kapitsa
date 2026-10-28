@@ -1,0 +1,21 @@
+[kapitsa] tokenizer: 1501 tokens, 0 merges, 5 added (14 ms)
+[kapitsa] tokenizer: 1501 tokens, 0 merges, 5 added (11 ms)
+PASS Flint split: words, a contraction, punctuation
+PASS Flint split: contractions in any case, after the letters (U+017F folds to s)
+PASS Flint split: no contraction: U+2019, a quote before letters, after spaces or digits
+PASS Flint split: digits in threes; a piece's trailing spaces stay whole
+PASS Flint split: numbers other than ASCII digits (No, Nd, Nl)
+PASS Flint split: CJK and kana runs, split again by the word split
+PASS Flint split: the ends of the CJK and kana ranges
+PASS Flint split: emoji: a ZWJ is a piece of its own; a variation selector joins a symbol that starts a piece
+PASS Flint split: accents, combining marks, title case, case changes
+PASS Flint split: whitespace other than spaces, control and format characters
+PASS Flint split: CR LF, tabs, spaces at the end
+PASS Flint split: code
+PASS Flint split: punctuation and symbol runs
+PASS Flint split: added tokens
+PASS Flint split: only spaces
+PASS Flint split: only newlines and a space
+PASS Flint split: a lone quote
+PASS a Sequence other than Flint's keeps the default split
+18 passed, 0 failed

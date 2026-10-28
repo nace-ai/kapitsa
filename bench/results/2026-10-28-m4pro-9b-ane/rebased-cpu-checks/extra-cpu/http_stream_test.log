@@ -1,0 +1,19 @@
+{"case":"completion-setup-failure","passed":true,"started":false,"ran":false}
+{"case":"success","failures":[],"provider_ok":true,"chunk_ok":true,"sink_done":1,"after":1,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n1a\r\nevent: delta\ndata: token\n\n\r\n17\r\nevent: end\ndata: stop\n\n\r\n0\r\n\r\n"}
+{"case":"empty-end","failures":[],"provider_ok":true,"chunk_ok":true,"sink_done":1,"after":1,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n1a\r\nevent: delta\ndata: token\n\n\r\n0\r\n\r\n"}
+{"case":"framed-engine-error","failures":[],"provider_ok":true,"chunk_ok":true,"sink_done":1,"after":1,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n18\r\nevent: end\ndata: error\n\n\r\n0\r\n\r\n"}
+{"case":"pre-stream-error","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"begin-throws","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"delta-throws","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n"}
+{"case":"end-throws","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n1a\r\nevent: delta\ndata: token\n\n\r\n"}
+{"case":"early-success","failures":[],"provider_ok":true,"chunk_ok":true,"sink_done":1,"after":1,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n1a\r\nevent: delta\ndata: token\n\n\r\n17\r\nevent: end\ndata: stop\n\n\r\n0\r\n\r\n"}
+{"case":"early-failed-first-write","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"failed-first-write","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"idle-disconnect","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"abandoned-provider","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"completed-abandoned-provider","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"sink-throws","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"telemetry","failures":[],"provider_ok":true,"chunk_ok":true,"sink_done":1,"after":1,"meter_done":1,"work_exited":true,"wire":"b7\r\nevent: kapitsa_progress\ndata: {\"kapitsa_progress\":{\"phase\":0,\"prompt_tokens\":0,\"cached_tokens\":0,\"processed_tokens\":0,\"completion_tokens\":0,\"cycles\":0,\"speculative\":0,\"final\":true}}\n\n\r\n17\r\nevent: begin\ndata: {}\n\n\r\n1a\r\nevent: delta\ndata: token\n\n\r\n17\r\nevent: end\ndata: stop\n\n\r\n0\r\n\r\n"}
+{"case":"abandoned-throwing-meter","failures":[],"provider_ok":false,"chunk_ok":false,"sink_done":0,"after":0,"meter_done":1,"work_exited":true,"wire":""}
+{"case":"throwing-meter","failures":[],"provider_ok":true,"chunk_ok":true,"sink_done":1,"after":1,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n1a\r\nevent: delta\ndata: token\n\n\r\n17\r\nevent: end\ndata: stop\n\n\r\n0\r\n\r\n"}
+{"case":"throwing-token-meter","failures":[],"provider_ok":true,"chunk_ok":true,"sink_done":1,"after":1,"meter_done":1,"work_exited":true,"wire":"17\r\nevent: begin\ndata: {}\n\n\r\n1a\r\nevent: delta\ndata: token\n\n\r\n17\r\nevent: end\ndata: stop\n\n\r\n0\r\n\r\n"}
