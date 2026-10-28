@@ -5629,8 +5629,8 @@
       "telemetry_client_names_pseudonymized": false
     },
     "README.md": {
-      "published_sha256": "756b377424f0a4d1fd5a93a6a20b600cc7144b0c78e2b1d7b0ec4263476254e8",
-      "bytes": 12550,
+      "published_sha256": "89719442d8ae1ad5a25584da7d041e1a444c571d4b14721109dff85f1369f2c4",
+      "bytes": 12996,
       "origin": "derived report or archive verification script"
     },
     "RUNS.md": {
@@ -5639,9 +5639,10 @@
       "origin": "derived report or archive verification script"
     },
     "verify_archive.py": {
-      "published_sha256": "796bddf70489561630c974b71f828fb21ea792d8d050b9bfeaea91583555230e",
-      "bytes": 3720,
+      "published_sha256": "c51275fce826ebdc2d7b7a5f315ea507544678705894c188564231e53923fe1b",
+      "bytes": 4444,
       "origin": "derived report or archive verification script"
     }
-  }
+  },
+  "verification_erratum": "Only the verifier and its documentation changed: Python 3.9/3.12 can differ by 1-2 binary64 ulps in derived GPU-activity means. Allow at most four ulps for that field alone. All other telemetry, decisions and aggregate statistics remain exact; recorded evidence and thresholds are unchanged."
 }

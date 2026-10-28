@@ -98,6 +98,8 @@ Run `python3 verify_archive.py` to check the published hashes, re-evaluate all t
 
 The [earlier M4 Pro numerical/PPL study](../2026-10-28-m4pro-9b-ane/README.md), pinned to `92e8b88`, remains unchanged. Its 768-row and 8192-position samples are not pooled with this rerun, and its PPL comparison uses 4-bit GPU references rather than bf16.
 
+Archive-verifier erratum: runs used Python 3.12.15. Replaying with macOS's Python 3.9.6 changes nine derived GPU-activity means by only 1–2 binary64 ulps. `verify_archive.py` allows up to four ulps for that mean field alone; hashes, all other telemetry, eligibility/rejection decisions, and aggregate timing statistics still match exactly. Both Python versions pass. No recorded measurement, threshold, pair selection or aggregate was edited.
+
 ## Not verified
 
 - M5 or other Macs; the current 27B default, 35B-A3B MoE, other hidden-4096 models, and partial ANE shares were not run here.

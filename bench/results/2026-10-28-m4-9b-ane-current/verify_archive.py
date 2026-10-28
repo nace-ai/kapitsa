@@ -3,6 +3,7 @@ import ast
 import hashlib
 import importlib.util
 import json
+import math
 from pathlib import Path
 import shutil
 import subprocess
@@ -19,6 +20,19 @@ def digest(data):
 
 def read(path):
     return json.loads(path.read_text())
+
+
+def check_telemetry(actual, expected, label):
+    assert actual.keys() == expected.keys(), label
+    for key, value in actual.items():
+        saved = expected[key]
+        if key == 'other_gpu_including_desktop_mean_pct':
+            # statistics.fmean differs by up to two binary64 ulps on Python 3.9/3.12.
+            # Only this derived mean gets roundoff tolerance; eligibility and reasons stay exact.
+            assert math.isfinite(value) and math.isfinite(saved), (label, key)
+            assert abs(value - saved) <= 4 * max(math.ulp(value), math.ulp(saved)), (label, key)
+        else:
+            assert value == saved, (label, key)
 
 
 def main():
@@ -60,8 +74,8 @@ def main():
             ttft = confirmation.phase(samples, metrics['begin_epoch'],
                                       metrics['begin_epoch'] + metrics['ttft_s'], before['swapouts'])
             total = confirmation.phase(samples, metrics['begin_epoch'], metrics['end_epoch'], before['swapouts'])
-            assert ttft == metrics['ttft_telemetry'], (label, name, 'TTFT')
-            assert total == metrics['total_telemetry'], (label, name, 'HTTP')
+            check_telemetry(ttft, metrics['ttft_telemetry'], (label, name, 'TTFT'))
+            check_telemetry(total, metrics['total_telemetry'], (label, name, 'HTTP'))
             requests += 1
 
     with tempfile.TemporaryDirectory(prefix='kapitsa-pr775-replay-') as folder:
@@ -76,7 +90,8 @@ def main():
         assert actual == expected, 'Published aggregation differs from the retained evidence'
 
     print(f'PASS {len(manifest["files"])} file hashes, JSON/JSONL and Python syntax; '
-          f'{requests} requests and telemetry gates; aggregate analysis reproduced exactly.')
+          f'{requests} requests and exact telemetry gates (derived means within 4 ulps); '
+          'aggregate analysis reproduced exactly.')
 
 
 if __name__ == '__main__':
