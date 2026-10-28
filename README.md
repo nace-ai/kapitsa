@@ -6,7 +6,7 @@
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
 
-[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [CLI](#cli) · [Backends](#supported-backends) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
+[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [Features](#features) · [CLI](#cli) · [Backends](#supported-backends) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
 
 ## Benchmarks
 
@@ -23,20 +23,10 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 ## 🔥 What's new
 
-- [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, runs on Kapitsa: 319 tok/s decode on the M5 Max.** Convert the Hub checkpoint with `tools/convert_clover.py` and serve the folder: Clover's causal pathway decodes with the 35B's draft model, or self-speculatively as DiffuSpace's SGLang does ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
-- [2026/10] 🌊 **Kapitsa runs Splash's engine: `kapitsa serve --engine splash`** puts Inco's Splash behind Kapitsa's server — the chat page, the OpenAI and Anthropic APIs and streaming, Splash's model folders and `--check` — the Splash backend stack #738-#746 ([backends](#supported-backends), [55.9 tok/s](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
-- [2026/10] 🗄️ **A 180B model on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD; through `--engine splash` the model peaks at 31.6 GiB wired with no swap growth and memory pressure 1, where Kapitsa's own engine at its 24 GB store reached memory pressure 4 ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md), [#751](https://github.com/nace-ai/kapitsa/pull/751)).
-- [2026/10] 🧩 **Flash-Next fits a 64 GB Mac**: `flash-next:64gb` runs Sushi's 2-bit EXL3 experts, 36.7 GB of weights in memory and 69.6 GB to download ([variants](docs/usage.md#models-and-downloads)).
-- [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
-- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, and on the M4 Pro reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
-- [2026/10] 🚀 **KFlash: tree speculative decoding** ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **The fastest decode in 32 of 38 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
-- [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B ([#207](https://github.com/nace-ai/kapitsa/pull/207), [KFlash](docs/kflash.md#limitations)).
-- [2026/10] ⚡ **QMT prefill: 25% off the time to first token on the M5 Pro** (Qwen3.6 35B-A3B at 4K, 20% at 16K) with the Metal 4 matrix units ([measured](docs/usage.md#environment-variables)).
-- [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
-- [2026/10] 🧠 **Prefix reuse: a 4,359-token follow-up answers in 0.06 s instead of 3.8 s** (Qwen3.6 35B-A3B, M4 Pro).
-- [2026/10] 🧪 **Output check: a faster default must keep the answers** ([how](CONTRIBUTING.md#output-check)).
-- [2026/10] 📊 **`kapitsa bench compare`: every installed engine on your Mac, one command.**
+- [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 319 tok/s on an M5 Max** ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
+- [2026/10] 🌊 **Kapitsa runs Splash's engine**: `kapitsa serve --engine splash` puts Inco's Splash behind Kapitsa's chat page, OpenAI API and Anthropic API ([backends](#supported-backends)).
+- [2026/10] 🗄️ **A 180B model answers on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD, and the model peaks at 31.6 GiB wired with no swap growth ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
+- [2026/10] 🏆 **The fastest decode in 32 of the 38 model and Mac pairs** measured against nine engines ([poster](#benchmarks)).
 
 ## Quickstart
 
@@ -52,6 +42,17 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 ```
 
 <sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies.</sub>
+
+## Features
+
+- **KFlash, tree speculative decoding**: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
+- **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
+- **Bigger than the memory**: a model's routed experts stream from the SSD, as many as the budget holds.
+- **Conversations on the SSD**: a 16K follow-up after a restart starts in 0.16 s instead of 17 s (`--disk-cache`).
+- **OpenAI and Anthropic APIs, and a chat page**: `/v1/chat/completions`, `/v1/messages` and `/v1/responses`, with streaming, tool calls and JSON-schema output, on `http://127.0.0.1:8000`.
+- **An agent in one command**: `kapitsa claude`, `codex`, `opencode` and `pi` start on the local model.
+- **Several Macs, one model**: a Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
+- **Images**: screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons.
 
 ## CLI
 
@@ -106,6 +107,27 @@ sized, the failures that are not refusals and the measurements against plain Spl
   client's `cache_salt` on `/v1/messages` and `/v1/responses` ([#765](https://github.com/nace-ai/kapitsa/issues/765)),
   and expert-cache headroom with turn-2 time to first token ([#753](https://github.com/nace-ai/kapitsa/issues/753)).
 - **Kapitsa's own engine** — KV cache quantization ([#547](https://github.com/nace-ai/kapitsa/issues/547)).
+
+## Supported models
+
+What `kapitsa serve <name>` runs of a catalog model on a Mac of each size: the variant it picks where that fits, else the first smaller variant that does. Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
+
+| Model | 16 GB | 24 GB | 32 GB | 36 GB |
+| --- | --- | --- | --- | --- |
+| **Qwen3.5-4B** · `4b` | 4-bit | 4-bit | 4-bit | 4-bit |
+| **Qwen3.5-9B** · `9b` | 4-bit | 4-bit | 4-bit | 4-bit |
+| **Qwen3.8-27B** · `27b` | — | 4-bit† | 4-bit | 4-bit |
+| **Qwen3.6-35B-A3B** · `35b` | 2-bit† | 2-bit | 4-bit† | 4-bit |
+| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next` | — | — | — | — |
+| **Nemotron Dory1.0 4B** · `dory` | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
+| **Nemotron 3 Nano 4B** · `nano-4b` | FP8 | FP8 | FP8 | FP8 |
+| **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
+| **Nemotron 3.5 Lightning 30B-A3B** · `lightning` | — | NVFP4† | NVFP4 | NVFP4 |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt` | — | — | 2-bit† | 2-bit |
+| **Nemotron 3.5 Super-VL 120B-A12B** · `super-vl` | — | — | — | — |
+| **Recursive Flint 40B-A2.5B** · `flint` | 2-bit† | 2-bit | 4-bit† | 4-bit† |
+
+<sub>**4-bit** and **2-bit** are the Qwen and Flint variants, **NVFP4** and **FP8** the Nemotron ones. † that Mac needs macOS's working set at the top of its range, about two thirds to 78% of the RAM; — `kapitsa serve` does not start the model there. A cell is the variant `kapitsa serve` picks, planned as `kapitsa doctor` plans it: 64K of context and two conversations where they fit, less context where they do not (the 27B keeps 32K on a 24 GB Mac). The 16 and 36 GB columns also hold for the peaks measured on an M1 Pro and an M3 Pro ([per-Mac tables](#models)); nothing has been run on 24 or 32 GB, those columns are planned. Flash-Next needs 64 GB or more: `64gb` on a 64 GB Mac, `4bit` on a 128 GB Mac, and 48 GB with its Q2_0 pack streamed from the SSD. Super-VL needs a 96 GB+ Mac.</sub>
 
 ## Models
 
@@ -239,8 +261,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 </details>
 
-<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint and the 35B's `16gb` read images. Memory: 16 GB for the 4B and 9B models, 32 GB
-for the 27B, 35B, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next (64 GB with `flash-next:64gb`, Sushi's 2-bit EXL3 experts). On a 16 or 24 GB Mac, `35b` and `flint` take their `16gb` variants: unsloth's 2-bit GGUFs, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
+<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint and the 35B's `16gb` read images. What runs on a Mac of each size: [Supported models](#supported-models). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
 
 ## How it works
 
