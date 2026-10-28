@@ -82,7 +82,10 @@ def write_gguf(path, tensors, kv=None):
     kv = kv or {"general.architecture": "qwen4exp"}
     head = b"GGUF" + struct.pack("<IQQ", 3, len(tensors), len(kv))
     for k, v in kv.items():
-        head += s(k) + struct.pack("<I", 8) + s(v)
+        if isinstance(v, int):  # split.no / split.count are integers, as in a real set
+            head += s(k) + struct.pack("<II", 4, v)
+        else:
+            head += s(k) + struct.pack("<I", 8) + s(v)
     off, infos, datas = 0, b"", []
     for name, dims, typ, raw in tensors:
         infos += s(name) + struct.pack("<I", len(dims)) + b"".join(struct.pack("<Q", x) for x in dims)
@@ -163,8 +166,9 @@ def make_sources(root, swap_gate_up=False):
     for f in ("tokenizer.json", "chat_template.jinja", "LICENSE", "ple_manifest.json"):
         open(os.path.join(pack, f), "w").write(f"synthetic {f}\n")
     path = os.path.join(root, "q2_0_swapped.gguf" if swap_gate_up else "q2_0.gguf")
-    write_gguf(path, gg + [("output_norm.weight", [D], 0, rng.random(D, np.float32).tobytes())])
-    return pack, path
+    tensors = gg + [("output_norm.weight", [D], 0, rng.random(D, np.float32).tobytes())]
+    write_gguf(path, tensors)
+    return pack, path, tensors
 
 
 def args(**k):
@@ -183,7 +187,7 @@ def main():
         tmp = tempfile.TemporaryDirectory()
         root = tmp.name
     os.makedirs(root, exist_ok=True)
-    pack, gguf = make_sources(root)
+    pack, gguf, tensors = make_sources(root)
     out = os.path.join(root, "out")
     print(f"synthetic pack {pack}, GGUF {gguf} -> {out}")
     Q.cmd_convert(args(out=out, pack=pack, gguf=gguf))
@@ -223,10 +227,59 @@ def main():
                                                                           "rb").read(), "mtp.safetensors unchanged")
     check(Q.cmd_check(types.SimpleNamespace(dir=out)) == 0, "the check command")
 
+    print("a split GGUF set")
+    # The published GSQ-RCO files are a set of two shards and all 144 expert tensors sit in shard 1 of 2; passing shard
+    # 2 used to fail with a bare KeyError naming the file, so the tool now searches every shard and says which one is
+    # missing when none has the tensor.
+    split = os.path.join(root, "split")
+    os.makedirs(split, exist_ok=True)
+    # the whole tensor table of the set's source, taken from the file itself
+    experts_only = [t for t in tensors if "exps.weight" in t[0]]
+    table_only = [t for t in tensors if "exps.weight" not in t[0]]
+    check(experts_only and table_only, "a synthetic split has both expert and other tensors")
+    write_gguf(os.path.join(split, "q2_0-00001-of-00002.gguf"), experts_only,
+               {"general.architecture": "qwen4exp", "split.no": 0, "split.count": 2})
+    write_gguf(os.path.join(split, "q2_0-00002-of-00002.gguf"), table_only,
+               {"general.architecture": "qwen4exp", "split.no": 1, "split.count": 2})
+    out_split = os.path.join(root, "out-split")
+    Q.cmd_convert(args(out=out_split, pack=pack, gguf=split, table="link"))
+    same = all(np.array_equal(np.asarray(dst.array(k)).view(np.uint8),
+                              np.asarray(P.Local(out_split).array(k)).view(np.uint8))
+               for k in dst.index if Q.expert_of(k))
+    check(same, "a folder of the set converts to the same expert planes")
+    check(Q.cmd_check(args(dir=out_split)) == 0, "the check command on a set")
+    # the shard that has no experts still names the set when a tensor is missing
+    try:
+        Q.cmd_convert(args(out=os.path.join(root, "out-shard2"), pack=pack,
+                           gguf=os.path.join(split, "q2_0-00002-of-00002.gguf")))
+        check(False, "one shard of a set is refused when it holds no expert tensors")
+    except KeyError as e:
+        check("shard 2 of 2" in str(e), f"one shard of a set names its shard in the error ({e})")
+
+    # A folder of parts is not "every .gguf in it": a converted pack's ple.gguf must not join the set, and a tensor that
+    # two shards both hold is refused rather than silently taken from the first in order (the wrong-planes case).
+    with open(os.path.join(split, Q.GTABLE), "wb") as fh:
+        fh.write(b"not a model part")
+    check(sorted(os.path.basename(p) for p in Q.gguf_paths(split)) ==
+          ["q2_0-00001-of-00002.gguf", "q2_0-00002-of-00002.gguf"],
+          "a folder's parts are enumerated by the set's name, not every .gguf (ple.gguf is not one)")
+    dup = os.path.join(root, "dup")
+    os.makedirs(dup, exist_ok=True)
+    write_gguf(os.path.join(dup, "q2_0-00001-of-00002.gguf"), experts_only,
+               {"general.architecture": "qwen4exp", "split.no": 0, "split.count": 2})
+    write_gguf(os.path.join(dup, "q2_0-00002-of-00002.gguf"), experts_only + table_only,
+               {"general.architecture": "qwen4exp", "split.no": 1, "split.count": 2})
+    try:
+        Q.cmd_convert(args(out=os.path.join(root, "out-dup"), pack=pack, gguf=dup, table="link"))
+        check(False, "a tensor in two shards is refused, not taken from the first in order")
+    except ValueError as e:
+        check("two shards" in str(e), f"a tensor in two shards is refused ({e})")
+    os.remove(os.path.join(split, Q.GTABLE))
+
     print("verification against the 4-bit pack")
     root2 = os.path.join(root, "swapped")
     os.makedirs(root2, exist_ok=True)
-    pack2, bad_gguf = make_sources(root2, swap_gate_up=True)  # its own pack: only gate and up are exchanged
+    pack2, bad_gguf, _ = make_sources(root2, swap_gate_up=True)  # its own pack: only gate and up are exchanged
     try:
         Q.cmd_convert(args(out=os.path.join(root2, "out"), pack=pack2, gguf=bad_gguf, verify=8))
         check(False, "a GGUF with gate and up swapped is refused")
