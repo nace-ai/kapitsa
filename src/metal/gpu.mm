@@ -230,20 +230,62 @@ static void commit_cb(id<MTLCommandBuffer> cb) {
   [cb commit];
 }
 
+static std::atomic<Gpu*> initialized_gpu{nullptr};
+static std::atomic<unsigned> allocation_scopes{0};
+
 Gpu& Gpu::get() {
-  static Gpu* g = new Gpu();
+  static Gpu* g = [] {
+    Gpu* value = new Gpu();
+    initialized_gpu.store(value);
+    return value;
+  }();
   return *g;
 }
 
-Gpu::Gpu() : impl_(new Impl) {
+Gpu::AllocationScope::AllocationScope() {
+  if (Gpu* g = initialized_gpu.load()) {
+    std::lock_guard<std::mutex> lock(g->impl_->mu);
+    before_ = (__bridge_retained void*)[NSSet setWithArray:g->impl_->retained];
+  }
+  ++allocation_scopes;
+}
+
+Gpu::AllocationScope::~AllocationScope() {
+  @autoreleasepool {
+    if (Gpu* g = initialized_gpu.load()) {
+      // A loader may have submitted conversions before failing. Drain the queue
+      // without fatal()/exceptions while unwinding; no worker may still submit.
+      id<MTLCommandBuffer> tail = [(__bridge id<MTLCommandQueue>)g->queue_ commandBuffer];
+      if (tail) { [tail commit]; [tail waitUntilCompleted]; }
+      NSArray* buffers;
+      {
+        std::lock_guard<std::mutex> lock(g->impl_->mu);
+        buffers = [g->impl_->retained copy];
+      }
+      NSSet* before = (__bridge NSSet*)before_;
+      for (id<MTLBuffer> b in buffers) {
+        if ([before containsObject:b]) continue;
+        Buffer buffer{(__bridge void*)b, nullptr, 0, 0};
+        g->release_now(buffer);
+      }
+    }
+    if (before_) CFRelease(before_);
+  }
+  --allocation_scopes;
+}
+
+Gpu::Gpu() : impl_(nullptr) {
+  auto pending = std::make_unique<Impl>();
   id<MTLDevice> d = MTLCreateSystemDefaultDevice();
   if (!d) fatal("no Metal device");
-  device_ = (__bridge_retained void*)d;
   // The GPU + Neural Engine prefill splits end a command buffer at every event signal: a 2048-row chunk of the 27B
   // is 65 command buffers and one of Nemotron-H 121, with up to two chunks queued, so the queue must allow more than
   // Metal's default 64 in flight (fewer would deadlock on the waits). Nemotron-H splits by default, so always 512.
   id<MTLCommandQueue> q = [d newCommandQueueWithMaxCommandBufferCount:512];
+  if (!q) fatal("could not create Metal command queue");
+  device_ = (__bridge_retained void*)d;
   queue_ = (__bridge_retained void*)q;
+  impl_ = pending.release();
 }
 
 std::string Gpu::name() const { return [[dev(device_) name] UTF8String]; }
@@ -326,6 +368,7 @@ const char* Gpu::thermal_state() {
 // even after the last reference is released), so release() could not return its memory.
 Buffer Gpu::alloc(size_t bytes, const char* label, bool tracked) {
   if (bytes == 0) bytes = 16;
+  if (bytes > max_buffer_length()) fatal("Metal alloc of %zu bytes exceeds the device's maximum buffer length", bytes);
   @autoreleasepool {
     id<MTLBuffer> b = [dev(device_) newBufferWithLength:bytes
                                                 options:MTLResourceStorageModeShared |
@@ -341,14 +384,16 @@ Buffer Gpu::alloc(size_t bytes, const char* label, bool tracked) {
   }
 }
 
-Buffer Gpu::wrap(void* ptr, size_t bytes, const char* label, bool tracked) {
+Buffer Gpu::wrap(void* ptr, size_t bytes, const char* label, bool tracked, std::shared_ptr<void> owner) {
   @autoreleasepool {
+    void (^cleanup)(void*, NSUInteger) = nil;
+    if (owner) cleanup = ^(void*, NSUInteger) { (void)owner; };
     id<MTLBuffer> b = [dev(device_) newBufferWithBytesNoCopy:ptr
                                                       length:bytes
                                                      options:MTLResourceStorageModeShared |
                                                              (tracked ? MTLResourceHazardTrackingModeTracked
                                                                       : MTLResourceHazardTrackingModeUntracked)
-                                                 deallocator:nil];
+                                                 deallocator:cleanup];
     if (!b) fatal("Metal no-copy wrap of %zu bytes failed (page aligned?)", bytes);
     if (label) b.label = [NSString stringWithUTF8String:label];
     std::lock_guard<std::mutex> lk(impl_->mu);
@@ -466,6 +511,16 @@ void Gpu::keep_warm(double ms) {
 }
 
 void Gpu::release(Buffer& b) {
+  // Constructors unwind before the SDK can drain the queue. Its command buffers
+  // use unretained references: keep these buffers alive for AllocationScope's drain.
+  if (FatalRecovery::enabled() && std::uncaught_exceptions() && allocation_scopes.load()) {
+    b = Buffer{};
+    return;
+  }
+  release_now(b);
+}
+
+void Gpu::release_now(Buffer& b) {
   if (!b.mtl) return;
   std::lock_guard<std::mutex> lk(impl_->mu);
   // The residency set holds its allocations strongly (measured: a released 256 MB buffer stays

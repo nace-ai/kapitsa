@@ -1,3 +1,4 @@
+#include "util/load_threads.h"
 // Routed experts in llama.cpp's IQ blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S), as `kapitsa import` keeps them from
 // a GGUF (src/gguf/import.cpp): loading (the blocks' bits moved into the layout of src/kernels/wfmt_iq.metal) and the
 // MoE passes of such layers on wfmt_iq.metal's kernels: one or a few token rows (decode, the small-batch verify), the
@@ -76,14 +77,14 @@ void Qwen35::load_iq_experts() {
       raw.resize(rows * rb);
       ws_.read_deferred(it->second, raw.data());
       Buffer b = g.alloc(lay.bytes, "iq_experts", /*tracked=*/false);
-      std::vector<std::thread> th;
+      LoadThreads th;
       const size_t per = (rows + nth - 1) / nth;
       for (unsigned i = 0; i < nth; ++i) {
         const size_t r0 = std::min(rows, i * per), r1 = std::min(rows, r0 + per);
         if (r0 < r1)
           th.emplace_back([&, r0, r1] { gguf::iq_repack(q->iq, raw.data() + r0 * rb, rows, q->K, r0, r1, b.as<uint8_t>()); });
       }
-      for (auto& t : th) t.join();
+      th.join();
       wire(b);
       owned_bufs_.push_back(b);
       Tensor t = *q->w;

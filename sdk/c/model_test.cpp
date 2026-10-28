@@ -6,6 +6,7 @@
 #include <chrono>
 #include <filesystem>
 #include <future>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -67,11 +68,46 @@ Json generate(kapitsa_request* r, Stream& stream, kapitsa_status expected = KAPI
   if (!result) return nullptr;
   return Json::parse(result.get());
 }
+void failed_loads(const TempLock& lock, const char* model) {
+  const auto dir = std::filesystem::path(lock.dir) / "broken-model";
+  std::filesystem::create_directory(dir);
+  std::filesystem::copy_file(std::filesystem::path(model) / "config.json", dir / "config.json");
+  Json options{{"model_dir", dir.string()}, {"slots", 1}, {"context", 64},
+               {"prefill_chunk", 64}, {"spec_depth", 0}, {"dflash", "none"}, {"mem_budget_gb", 32}};
+  auto check_error = [&](const char* expected) {
+    kapitsa_engine* raw = nullptr; char* error = nullptr;
+    const auto status = kapitsa_engine_create(options.dump().c_str(), &raw, &error);
+    String message(error, kapitsa_string_free);
+    if (message) std::cout << "expected load error: " << message.get() << '\n';
+    CHECK(status == KAPITSA_ERROR && !raw && message);
+    CHECK(std::string(message.get()).find(expected) != std::string::npos);
+    CHECK(lock.available());
+  };
+  check_error(".safetensors");
+  std::ofstream(dir / "model.safetensors", std::ios::binary) << "broken";
+  check_error("incomplete");
+  // A valid small shard is allocated and read, then the incomplete weight set is refused.
+  // Repeating it exercises teardown of an incomplete model before a real load below.
+  Json config; std::ifstream(model + std::string("/config.json")) >> config;
+  const int hidden = config.contains("text_config") ? int(config["text_config"]["hidden_size"]) : int(config["hidden_size"]);
+  const auto header = Json{{"model.norm.weight", {{"dtype", "BF16"}, {"shape", {hidden}},
+                                                {"data_offsets", {0, hidden * 2}}}}}.dump();
+  {
+    std::ofstream f(dir / "model.safetensors", std::ios::binary | std::ios::trunc);
+    uint64_t length = header.size(); f.write(reinterpret_cast<char*>(&length), 8);
+    f << header << std::string(size_t(hidden) * 2, '\0');
+  }
+  for (int i = 0; i < 3; ++i) check_error("unrecognized weight naming");
+  options["model_dir"] = model; options["mem_budget_gb"] = 0.000001;
+  check_error("memory");
+  std::cout << "PASS missing/corrupt/incomplete models and memory refusal return ERROR; retry unlocks\n";
+}
 int main(int argc, char** argv) {
   if (argc != 2) { std::cerr << "usage: sdk_model_test MODEL_DIR\n"; return 2; }
   alarm(300);  // deadlock fails the process, without destroying handles still in use
   try {
     TempLock lock;
+    failed_loads(lock, argv[1]);
     Json options{{"model_dir", argv[1]}, {"slots", 2}, {"context", 4096},
                  {"prefill_chunk", 512}, {"spec_depth", 0}, {"dflash", "none"}};
     kapitsa_engine* raw = nullptr; char* error = nullptr;
@@ -135,6 +171,15 @@ int main(int argc, char** argv) {
       std::cout << Json{{"case", "two-requests-third-thread-cancel"}, {"round", round}, {"a", ra}, {"b", rb}} << std::endl;
     }
     CHECK(lock.available());
+    options["slots"] = 1; options["context"] = 512;
+    status = kapitsa_engine_create(options.dump().c_str(), &raw, &error);
+    String again_error(error, kapitsa_string_free);
+    Engine again(raw, kapitsa_engine_destroy);
+    CHECK(status == KAPITSA_OK && again && !again_error);
+    { auto r = request(again.get(), "Hello"); Stream s; CHECK(generate(r.get(), s)["completion_tokens"] > 0); }
+    again.reset();
+    CHECK(lock.available());
+    std::cout << "PASS destroy, reload and generate in the same process\n";
     std::cout << "PASS retained requests and lock release\nPASS all C ABI model checks\n";
   } catch (const std::exception& e) { std::cerr << "FAIL " << e.what() << '\n'; return 1; }
   alarm(0);

@@ -31,8 +31,10 @@ KAPITSA_API uint32_t kapitsa_abi_version(void);
  * The lock is held while the engine or retained requests exist, even when idle.
  * One live SDK engine per process; concurrent requests use its native slots.
  * Creating a second live engine returns BUSY immediately regardless of the lock timeout.
- * Some loader, Metal and resource failures call fatal()/_exit(1), terminating the host process;
- * they do not return a status. Exception handling here cannot recover from those failures.
+ * Synchronous model-loading and Metal initialization failures return ERROR with a diagnostic.
+ * Failed construction releases its allocations and lock, permitting another create attempt.
+ * Fatal errors during generation or in independent background services can still terminate
+ * the host process; applications needing crash isolation should use a worker process.
  * Errors/output strings are owned by the caller; free with kapitsa_string_free.
  * Output pointer arguments must be non-null; the returned handle/error may be null.
  * They are initialized on entry. Never pass a stale handle. */

@@ -18,6 +18,7 @@
 // GPU (tools/fn_store_test.cpp); ExpertStore puts it on Metal buffers and an MTLSharedEvent.
 // The design follows Splash 1.4.0's streamed experts (runtime/model/ExpertStore, SlotRecycler, SsdReaders; Apache-2.0).
 #pragma once
+#include "util/fd.h"
 #include "metal/gpu.h"
 #include "model/moe_q20.h"
 
@@ -441,7 +442,8 @@ class ExpertCache {
   Memory mem_;
   Sync sync_;
   bool complete_ = false, direct_ = false, scan_victim_on_ = true;
-  std::vector<int> fds_;
+  void stop_workers();
+  std::vector<Fd> fds_;
   std::vector<LayerSrc> src_;
 
   // replacement state (the turn thread; the constructor before it starts)
@@ -508,7 +510,7 @@ class ExpertStore {
   SlotLayout lay_;
   uint32_t E_ = 0;
   Buffer chunk_[2], table_;
-  void* ev_ = nullptr;  // MTLSharedEvent
+  std::shared_ptr<void> ev_;  // MTLSharedEvent; outlives cache_ even on constructor failure
   uint64_t next_value_ = 0, pending_go_ = 0;
   std::unique_ptr<ExpertCache> cache_;
 };

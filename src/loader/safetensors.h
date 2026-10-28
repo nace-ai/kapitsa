@@ -5,6 +5,7 @@
 // every tensor 256-byte aligned. Tensors rejected by the filter (e.g. the vision tower) are skipped.
 #pragma once
 #include "metal/gpu.h"
+#include "util/fd.h"
 
 #include <functional>
 #include <map>
@@ -92,7 +93,7 @@ class SafetensorsIndex {
 
  private:
   std::string dir_;
-  std::vector<int> fds_;
+  std::vector<Fd> fds_;
   std::vector<std::string> paths_;
   std::unordered_map<std::string, Entry> t_;
 };

@@ -1,3 +1,4 @@
+#include "util/load_threads.h"
 #include "model/iq_experts.h"
 
 #include "util/log.h"
@@ -32,13 +33,13 @@ Buffer iq_read_matrix(const WeightStore& ws, const std::string& name, uint32_t t
   ws.read_deferred(name, raw.data());
   Buffer b = Gpu::get().alloc(lay->bytes, "iq_experts", /*tracked=*/false);
   const unsigned nth = std::max(2u, std::min(8u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   const size_t per = (rows + nth - 1) / nth;
   for (unsigned i = 0; i < nth; ++i) {
     const size_t r0 = std::min(rows, i * per), r1 = std::min(rows, r0 + per);
     if (r0 < r1) th.emplace_back([&, r0, r1] { gguf::iq_repack(type, raw.data() + r0 * rb, rows, K, r0, r1, b.as<uint8_t>()); });
   }
-  for (auto& t : th) t.join();
+  th.join();
   return b;
 }
 

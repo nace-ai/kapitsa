@@ -70,6 +70,11 @@ int main() {
     create(KAPITSA_ERROR, "model_type");  // caller-held lock must not deadlock on itself
     unsetenv(marker);
   }
+  flock(fd, LOCK_UN);
+  // A wrong field type in model data is a load error, not a malformed SDK option.
+  std::ofstream(dir + "/config.json") << R"({"model_type":42})";
+  create(KAPITSA_ERROR, "type");
+  CHECK(flock(fd, LOCK_EX | LOCK_NB) == 0);
   const auto bad_path = std::string(path) + "/not-a-directory/lock";
   setenv("BENCH_GPU_LOCK", bad_path.c_str(), 1);
   config["gpu_lock_timeout_ms"] = 2000;

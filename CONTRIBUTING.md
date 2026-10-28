@@ -29,8 +29,11 @@ first use instead.
 ## SDK build and tests
 
 See [sdk/README.md](sdk/README.md) for the opt-in C ABI build, usage and CPU tests.
+`build/load_error_test` checks error recovery, joined workers, file cleanup and the CLI's fatal exit on the CPU.
+Its optional `--gpu` mode checks real Metal failures and buffer cleanup under the GPU lock.
 `build/sdk_model_test MODEL_DIR` additionally checks streaming, retained handles,
-concurrent requests and cross-thread cancellation. It loads a model, holds a temporary GPU lock,
+concurrent requests, cross-thread cancellation, failed loads and loading again after destruction.
+It loads a model, holds a temporary GPU lock,
 and requires authorization and an idle GPU under [AGENTS.md](AGENTS.md). Report actual runs in the PR.
 
 ## Tests

@@ -2,6 +2,7 @@
 #include "options.h"
 #include <cerrno>
 #include "bench/bench.h"
+#include "util/log.h"
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
@@ -14,9 +15,11 @@ bool engine_live = false;
 struct State {
   bool claimed = false;
   ni::bench::GpuLock gpu_lock;
+  std::unique_ptr<ni::Gpu::AllocationScope> allocations;
   std::unique_ptr<ni::Engine> engine;
   ~State() {
     engine.reset();
+    allocations.reset();
     gpu_lock.release();
     if (claimed) {
       std::lock_guard<std::mutex> lock(lifetime_mutex);
@@ -64,7 +67,11 @@ kapitsa_status kapitsa_engine_create(const char* json, kapitsa_engine** out, cha
     }
     if (!ni::bench::GpuLock::held_by_caller() && !state->gpu_lock.acquire(nullptr, options.gpu_lock_timeout_ms))
       return fail(error, errno == EWOULDBLOCK ? KAPITSA_BUSY : KAPITSA_ERROR, "could not acquire Kapitsa GPU lock");
-    state->engine = std::make_unique<ni::Engine>(options.engine);
+    state->allocations = std::make_unique<ni::Gpu::AllocationScope>();
+    try {
+      ni::FatalRecovery recover;
+      state->engine = std::make_unique<ni::Engine>(options.engine);
+    } catch (const std::exception& e) { return fail(error, KAPITSA_ERROR, e.what()); }
     *out = new kapitsa_engine{std::move(state)};
     return KAPITSA_OK;
   } catch (const ni::ojson::exception& e) { return fail(error, KAPITSA_INVALID_ARGUMENT, e.what());

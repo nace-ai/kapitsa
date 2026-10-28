@@ -1,3 +1,4 @@
+#include "util/load_threads.h"
 #include "loader/safetensors.h"
 #include "util/log.h"
 
@@ -80,23 +81,24 @@ struct ReadJob {
 } // namespace
 
 void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Filter& file_filter, const Filter& defer) {
-  DIR* d = opendir(dir.c_str());
+  std::unique_ptr<DIR, decltype(&closedir)> d(opendir(dir.c_str()), closedir);
   if (!d) fatal("cannot open model dir %s", dir.c_str());
   std::vector<std::string> files;
-  while (dirent* e = readdir(d)) {
+  while (dirent* e = readdir(d.get())) {
     std::string n = e->d_name;
     if (n.size() > 12 && n.substr(n.size() - 12) == ".safetensors" && (!file_filter || file_filter(n)))
       files.push_back(dir + "/" + n);
   }
-  closedir(d);
+  d.reset();
   std::sort(files.begin(), files.end());
   if (files.empty() && !file_filter) fatal("no .safetensors in %s", dir.c_str());
 
   constexpr size_t kAlign = 256, kChunk = 32u << 20;
   std::vector<ReadJob> jobs;
-  std::vector<int> fds;
+  std::vector<Fd> fds;
   for (auto& path : files) {
-    int fd = open(path.c_str(), O_RDONLY);
+    Fd opened(open(path.c_str(), O_RDONLY));
+    int fd = opened.get();
     if (fd < 0) fatal("open %s failed", path.c_str());
     fcntl(fd, F_NOCACHE, 1); // stream once; don't keep a second copy in the page cache
     uint64_t hlen = 0, fsize = 0;
@@ -130,7 +132,6 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
       items.push_back(std::move(it));
     }
     if (items.empty()) {
-      close(fd);
       continue;
     }
     for (const Item& it : items)
@@ -141,7 +142,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     Buffer fb = Gpu::get().alloc(total, base.c_str(), /*tracked=*/false);
     files_.push_back(fb);
     total_ += total;
-    fds.push_back(fd);
+    fds.push_back(std::move(opened));
     for (auto& it : items) {
       it.t.buf = fb.view(it.dst, it.len);
       for (size_t o = 0; o < it.len; o += kChunk)
@@ -154,7 +155,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   std::atomic<size_t> next{0};
   std::atomic<bool> failed{false};
   unsigned nth = std::min(8u, std::max(1u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
       for (size_t k; (k = next.fetch_add(1)) < jobs.size();) {
@@ -170,8 +171,8 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
         }
       }
     });
-  for (auto& t : th) t.join();
-  for (int fd : fds) close(fd);
+  th.join();
+  fds.clear();
   if (failed) fatal("reading weights from %s failed", dir.c_str());
   double ms = now_ms() - t0;
   logi("read %.2f GB of weights in %.0f ms (%.1f GB/s)", total_ / 1e9, ms, total_ / 1e6 / ms);
@@ -181,7 +182,8 @@ void WeightStore::read_deferred(const std::string& name, void* dst) const {
   auto it = deferred_.find(name);
   if (it == deferred_.end()) fatal("%s is not a deferred tensor", name.c_str());
   const Place& p = it->second;
-  int fd = open(p.path.c_str(), O_RDONLY);
+  Fd opened(open(p.path.c_str(), O_RDONLY));
+  int fd = opened.get();
   if (fd < 0) fatal("open %s failed", p.path.c_str());
   fcntl(fd, F_NOCACHE, 1);
   // parallel reads of 32 MB pieces
@@ -190,7 +192,7 @@ void WeightStore::read_deferred(const std::string& name, void* dst) const {
   std::atomic<bool> failed{false};
   const size_t n = (p.len + kChunk - 1) / kChunk;
   const unsigned nth = std::min<unsigned>(8, std::max<size_t>(1, n));
-  std::vector<std::thread> th;
+  LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
       for (size_t k; (k = next.fetch_add(1)) < n;) {
@@ -206,8 +208,7 @@ void WeightStore::read_deferred(const std::string& name, void* dst) const {
         }
       }
     });
-  for (auto& t : th) t.join();
-  close(fd);
+  th.join();
   if (failed) fatal("reading %s failed", name.c_str());
 }
 
@@ -233,21 +234,22 @@ const Tensor& WeightStore::get(const std::string& name) const {
 
 SafetensorsIndex::SafetensorsIndex(const std::string& dir, const std::function<bool(const std::string&)>& skip)
     : dir_(dir) {
-  DIR* d = opendir(dir.c_str());
+  std::unique_ptr<DIR, decltype(&closedir)> d(opendir(dir.c_str()), closedir);
   if (!d) fatal("cannot open model dir %s", dir.c_str());
-  while (dirent* e = readdir(d)) {
+  while (dirent* e = readdir(d.get())) {
     std::string n = e->d_name;
     if (n.size() > 12 && n.substr(n.size() - 12) == ".safetensors") paths_.push_back(dir + "/" + n);
   }
-  closedir(d);
+  d.reset();
   std::sort(paths_.begin(), paths_.end());
   if (paths_.empty()) fatal("no .safetensors in %s", dir.c_str());
   for (size_t fi = 0; fi < paths_.size(); ++fi) {
     const std::string& path = paths_[fi];
-    const int fd = open(path.c_str(), O_RDONLY);
+    Fd opened(open(path.c_str(), O_RDONLY));
+    const int fd = opened.get();
     if (fd < 0) fatal("open %s failed", path.c_str());
     fcntl(fd, F_NOCACHE, 1);
-    fds_.push_back(fd);
+    fds_.push_back(std::move(opened));
     uint64_t hlen = 0, fsize = 0;
     const auto j = read_header(fd, path, hlen, &fsize);
     for (auto& [name, v] : j.items()) {
@@ -264,9 +266,7 @@ SafetensorsIndex::SafetensorsIndex(const std::string& dir, const std::function<b
   }
 }
 
-SafetensorsIndex::~SafetensorsIndex() {
-  for (int fd : fds_) close(fd);
-}
+SafetensorsIndex::~SafetensorsIndex() = default;
 
 const SafetensorsIndex::Entry* SafetensorsIndex::find(const std::string& name) const {
   auto it = t_.find(name);
@@ -283,7 +283,7 @@ void SafetensorsIndex::read(const Entry& t, size_t off, void* dst, size_t n) con
   if (off + n > t.len) fatal("%s: read past a tensor's end", dir_.c_str());
   size_t done = 0;
   while (done < n) {
-    const ssize_t r = pread(fds_[size_t(t.file)], static_cast<uint8_t*>(dst) + done, n - done, off_t(t.off + off + done));
+    const ssize_t r = pread(fds_[size_t(t.file)].get(), static_cast<uint8_t*>(dst) + done, n - done, off_t(t.off + off + done));
     if (r <= 0) fatal("reading %s failed", paths_[size_t(t.file)].c_str());
     done += size_t(r);
   }

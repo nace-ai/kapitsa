@@ -1,3 +1,4 @@
+#include "util/load_threads.h"
 #include "model/qwen35.h"
 #include "ane/ffn_split.h"
 #include "gguf/gguf.h"
@@ -534,12 +535,12 @@ void Qwen35::prewarm_pipelines() {
   Gpu& g = Gpu::get();
   g.pipeline(v[0]);  // compiles the library once, before the threads
   const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   for (unsigned i = 0; i < nt; ++i)
     th.emplace_back([&, i] {
       for (size_t j = i; j < v.size(); j += nt) g.pipeline(v[j], false);
     });
-  for (auto& t : th) t.join();
+  th.join();
   logi("prewarmed %zu prefill pipelines in %.0f ms", v.size(), now_ms() - t0);
 }
 
@@ -1850,11 +1851,11 @@ void Qwen35::test_transforms() {
       }
     };
     const unsigned nth = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
-    std::vector<std::thread> th;
+    LoadThreads th;
     const size_t per = (rows + nth - 1) / nth;
     for (unsigned t = 0; t < nth; ++t)
       if (t * per < rows) th.emplace_back(work, t * per, std::min(rows, (t + 1) * per));
-    for (auto& t : th) t.join();
+    th.join();
     owned_bufs_.push_back(w);
     owned_bufs_.push_back(sc);
     if (names.count(q.b)) {  // the biases are kept: an owned copy of the deferred one

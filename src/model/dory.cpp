@@ -1,3 +1,4 @@
+#include "util/load_threads.h"
 #include "model/dory.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
@@ -259,7 +260,7 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
 }
 
 Dory::~Dory() {
-  if (embed_map_) munmap(embed_map_, embed_map_len_);
+  if (mapped_embed_.mtl) Gpu::get().release(mapped_embed_);
 }
 
 void Dory::load(int prefill_chunk) {
@@ -454,10 +455,9 @@ void Dory::load(int prefill_chunk) {
       close(fd);
       if (p == MAP_FAILED) fatal("mapping the embedding of %s failed", idx.path(t).c_str());
       madvise(p, len, MADV_WILLNEED);
-      embed_map_ = p;
-      embed_map_len_ = len;
-      Buffer bmap = g.wrap(p, len, "dory_embedding (mapped)", false);
-      embed_.q = embed_.s = bmap.view(t.off - off0, t.len);
+      auto owner = std::shared_ptr<void>(p, [len](void* q) { munmap(q, len); });
+      mapped_embed_ = g.wrap(p, len, "dory_embedding (mapped)", false, std::move(owner));
+      embed_.q = embed_.s = mapped_embed_.view(t.off - off0, t.len);
     } else {
       embed_.q = embed_.s = g.alloc(t.len, "dory_embedding", false);
       owned_.push_back(embed_.q);
@@ -469,7 +469,7 @@ void Dory::load(int prefill_chunk) {
   std::sort(jobs.begin(), jobs.end(), [](const Job& a, const Job& b) { return a.bytes > b.bytes; });
   std::atomic<size_t> next{0};
   const unsigned nth = std::max(2u, std::min(10u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
       std::vector<uint8_t> raw;
@@ -487,7 +487,7 @@ void Dory::load(int prefill_chunk) {
                        m.l2);
       }
     });
-  for (auto& t : th) t.join();
+  th.join();
   // The LM head: NVIDIA's checkpoints keep it BF16. With NVFP4 linears it runs as Q8_0 rows, quantized here: half its
   // bytes per decoded token (5-9% faster decoding on the M4 Pro), next-token KL 7e-6 from the BF16 head (the top token
   // the same at 319 of 320 positions). NI_DORY_HEAD=bf16 keeps it BF16; =q8 also quantizes the BF16 checkpoint's.
@@ -502,7 +502,7 @@ void Dory::load(int prefill_chunk) {
     q8.q = g.alloc(q8.q_row * q8.N, "dory_head_q8", false);
     q8.s = g.alloc(q8.s_row * q8.N, "dory_head_q8_scales", false);
     const unsigned nt = std::max(2u, std::min(10u, std::thread::hardware_concurrency()));
-    std::vector<std::thread> qt;
+    LoadThreads qt;
     for (unsigned t = 0; t < nt; ++t)
       qt.emplace_back([&, t] {
         std::vector<float> row(head_.K);
@@ -512,7 +512,7 @@ void Dory::load(int prefill_chunk) {
           nh_quant_q8(row.data(), head_.K, q8.q.as<uint8_t>() + r * q8.q_row, q8.s.as<uint8_t>() + r * q8.s_row);
         }
       });
-    for (auto& t : qt) t.join();
+    qt.join();
     for (auto it = owned_.begin(); it != owned_.end(); ++it)
       if (it->mtl == head_.q.mtl) {
         g.release(*it);

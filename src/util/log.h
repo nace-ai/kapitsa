@@ -3,10 +3,29 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <stdexcept>
 #include <string>
 #include <unistd.h>
 
 namespace ni {
+
+// Only the SDK's synchronous engine construction opts in. A worker must explicitly
+// inherit this setting and return its exception to the joining thread (LoadThreads).
+class FatalRecovery {
+ public:
+  explicit FatalRecovery(bool enable = true) : previous_(enabled()) { enabled() = enable; }
+  ~FatalRecovery() { enabled() = previous_; }
+  FatalRecovery(const FatalRecovery&) = delete;
+  FatalRecovery& operator=(const FatalRecovery&) = delete;
+  static bool& enabled() { static thread_local bool value = false; return value; }
+ private:
+  bool previous_;
+};
+
+class FatalError : public std::runtime_error {
+ public:
+  using std::runtime_error::runtime_error;
+};
 
 inline double now_ms() {
   using namespace std::chrono;
@@ -56,6 +75,25 @@ inline void log_to_sink(LogSink s, int level, const char* fmt, va_list ap) {
 [[noreturn]] __attribute__((format(printf, 1, 2))) inline void fatal(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
+  if (FatalRecovery::enabled()) {
+    char local[1024];
+    va_list aq;
+    va_copy(aq, ap);
+    const int n = vsnprintf(local, sizeof local, fmt, aq);
+    va_end(aq);
+    std::string message;
+    try {
+      if (n < 0) message = "could not format engine error";
+      else if (n < int(sizeof local)) message = local;
+      else {
+        message.resize(size_t(n) + 1);
+        vsnprintf(message.data(), message.size(), fmt, ap);
+        message.resize(size_t(n));
+      }
+    } catch (...) { va_end(ap); throw; }
+    va_end(ap);
+    throw FatalError(message);
+  }
   if (LogSink s = log_sink()) {
     log_to_sink(s, 0, fmt, ap);
   } else {

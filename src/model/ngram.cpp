@@ -1,3 +1,5 @@
+#include "util/load_threads.h"
+#include "util/fd.h"
 #include "model/ngram.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
@@ -102,15 +104,16 @@ NgramTable::~NgramTable() {
 
 // clean file pages: the page cache keeps what is used, outside the process footprint
 std::pair<const uint8_t*, size_t> NgramTable::map_file(const std::string& path) {
-  const int fd = ::open(path.c_str(), O_RDONLY);
+  Fd opened(::open(path.c_str(), O_RDONLY));
+  const int fd = opened.get();
   if (fd < 0) fatal("n-gram table: cannot open %s", path.c_str());
   struct stat st;
-  fstat(fd, &st);
+  if (fstat(fd, &st)) fatal("n-gram table: cannot stat %s", path.c_str());
   void* p = mmap(nullptr, size_t(st.st_size), PROT_READ, MAP_SHARED, fd, 0);
-  ::close(fd);
   if (p == MAP_FAILED) fatal("n-gram table: mapping %s failed", path.c_str());
   madvise(p, size_t(st.st_size), MADV_RANDOM);
-  maps_.push_back({p, size_t(st.st_size)});
+  try { maps_.push_back({p, size_t(st.st_size)}); }
+  catch (...) { munmap(p, size_t(st.st_size)); throw; }
   mapped_ += size_t(st.st_size);
   return {static_cast<const uint8_t*>(p), size_t(st.st_size)};
 }
@@ -325,11 +328,11 @@ void NgramTable::gather(const int64_t* ids, int T, int heads, float* out) const 
     work(0, n);
     return;
   }
-  std::vector<std::thread> th;
+  LoadThreads th;
   const size_t per = (n + nt - 1) / nt;
   for (unsigned t = 0; t < nt; ++t)
     if (t * per < n) th.emplace_back(work, t * per, std::min(n, (t + 1) * per));
-  for (auto& t : th) t.join();
+  th.join();
 }
 
 }  // namespace ni

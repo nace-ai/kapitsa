@@ -1,4 +1,5 @@
 #include "util/json_file.h"
+#include "util/fd.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -30,11 +31,11 @@ std::shared_ptr<const nlohmann::json> json_file(const std::string& path) {
   static std::mutex mu;
   static std::list<Entry> cache;  // most recently used first
 
-  const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+  Fd opened(open(path.c_str(), O_RDONLY | O_CLOEXEC));
+  const int fd = opened.get();
   if (fd < 0) return none;
   struct stat st;
   if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
-    close(fd);
     return none;
   }
   auto same = [&](const Entry& e) {
@@ -46,7 +47,6 @@ std::shared_ptr<const nlohmann::json> json_file(const std::string& path) {
     for (auto it = cache.begin(); it != cache.end(); ++it)
       if (same(*it)) {
         cache.splice(cache.begin(), cache, it);
-        close(fd);
         return cache.front().value;
       }
   }
@@ -57,7 +57,6 @@ std::shared_ptr<const nlohmann::json> json_file(const std::string& path) {
     if (n <= 0) break;
     got += size_t(n);
   }
-  close(fd);
   if (got != text.size()) return none;
   nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
   if (j.is_discarded()) return none;

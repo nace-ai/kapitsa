@@ -135,8 +135,8 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DKAPITSA_BUILD_SDK=ON
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target sdk_contract_test sdk_model_test
-          ctest --test-dir build -R '^sdk_contract_test$' --output-on-failure
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target sdk_contract_test sdk_model_test load_error_test
+          ctest --test-dir build -R '^(sdk_contract_test|load_error_test)$' --output-on-failure
           diff <(nm -gUj build/libkapitsa_sdk.dylib | sort) <(sort sdk/c/exports.txt)
       - name: Python environment
         if: steps.changes.outputs.code == 'true'

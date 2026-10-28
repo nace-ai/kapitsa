@@ -184,8 +184,7 @@ class Dory : public Model {
   int tmax_ = 2048;
   size_t mem_budget_ = 0;
   std::vector<Buffer> owned_;    // weight buffers
-  void* embed_map_ = nullptr;
-  size_t embed_map_len_ = 0;
+  Buffer mapped_embed_;          // release the no-copy buffer before unmapping its backing
   Buffer dummy_;                 // bound where a shared kernel declares a buffer Dory's formats never read
 
   // decode / verify activations (kMaxRows rows)

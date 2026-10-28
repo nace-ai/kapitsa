@@ -122,6 +122,8 @@ add_executable(execution_session_test tools/execution_session_test.cpp src/engin
 target_include_directories(execution_session_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(execution_session_test PRIVATE Threads::Threads)
 enable_testing()
+add_test(NAME load_error_test COMMAND load_error_test)
+set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)
 set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
 

@@ -1,3 +1,4 @@
+#include "util/load_threads.h"
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
 // Kernels in src/kernels/spec_dflash.metal.
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
@@ -278,13 +279,13 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
     return;
   }
   const unsigned nth = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   const uint32_t per = (N + nth - 1) / nth;
   for (unsigned t = 0; t < nth; ++t) {
     uint32_t a = std::min(N, t * per), b = std::min(N, a + per);
     if (a < b) th.emplace_back(work, a, b);
   }
-  for (auto& t : th) t.join();
+  th.join();
 }
 
 // bf16 rows (the parts stacked along N) -> MLX affine `bits_`-bit, group 64, with exactly
@@ -2015,12 +2016,12 @@ void DFlash2::prewarm_pipelines() {
       }
   if (v.empty()) return;
   const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   for (unsigned i = 0; i < nt; ++i)
     th.emplace_back([&, i] {
       for (size_t j = i; j < v.size(); j += nt) g.pipeline(v[j], false);
     });
-  for (auto& t : th) t.join();
+  th.join();
   logi("DFlash2: prewarmed %zu pipelines in %.0f ms", v.size(), now_ms() - t0);
 }
 

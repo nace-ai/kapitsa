@@ -10,8 +10,8 @@ Apple Silicon, macOS 14+, Xcode Command Line Tools and CMake 3.24+:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DKAPITSA_BUILD_SDK=ON
-cmake --build build -j 6 --target kapitsa_sdk sdk_contract_test sdk_model_test
-ctest --test-dir build -R '^sdk_contract_test$' --output-on-failure
+cmake --build build -j 6 --target kapitsa_sdk sdk_contract_test sdk_model_test load_error_test
+ctest --test-dir build -R '^(sdk_contract_test|load_error_test)$' --output-on-failure
 ```
 
 Include `sdk/c/kapitsa.h` and link `libkapitsa_sdk.dylib`. For a C source file:
@@ -45,10 +45,17 @@ under contention while queued CLI processes acquire the lock.
 The lock remains held while the engine or a retained request exists, including idle periods.
 A host already holding it sets `NI_LOCK_HELD=1` or `NACE_GPU_LOCK_HELD=1` to avoid acquiring it twice.
 
-Some loader, Metal and resource failures call upstream `fatal()` / `_exit(1)` and terminate
-the entire host process instead of returning an SDK status. The SDK's C++ exception handling
-does not recover from these paths. Applications requiring crash isolation should load the
-library inside their own Worker process. Making those failures recoverable is separate work.
+During `kapitsa_engine_create`, synchronous loader and Metal initialization failures return
+`KAPITSA_ERROR` with their diagnostic: missing or damaged weights, unsupported model data,
+insufficient memory, and device, library or pipeline creation failures. Joined loading workers
+return failures to the creating thread. Failed construction closes its files, releases its
+model buffers and GPU lock, and allows another creation attempt. Malformed SDK options still
+return `KAPITSA_INVALID_ARGUMENT`.
+
+Recovery is limited to construction. Fatal errors during generation or in independent
+background services (including streamed-expert I/O) can still terminate the host process.
+Applications requiring crash isolation should load the library inside their own worker process.
+The CLI and `serve` do not enable SDK recovery and keep their existing fatal-error behavior.
 
 ## Request and result contract
 
@@ -91,10 +98,11 @@ concurrently with another operation on the same handle. The host must enforce th
 
 ## Validation
 
-CI builds the C library and both test executables, runs CPU contracts with no model/GPU,
+CI builds the C library and the test executables, runs CPU checks with no model/GPU,
 and checks that only the eight C symbols are exported. The CPU tests cover malformed JSON,
 integer bounds, split UTF-8, lock contention, timeout expiry, acquisition before the deadline,
-caller-held locks, lock I/O errors and cleanup after failed construction.
+caller-held locks, lock I/O errors, joined loading failures and cleanup after failed construction.
+`load_error_test --gpu` checks Metal compilation/pipeline errors, retries and buffer rollback.
 
 The real-model test is deliberately excluded from CTest. With explicit GPU authorization and
 an idle GPU, run:

@@ -280,8 +280,7 @@ class NemotronH : public Model {
   size_t mem_budget_ = 0;
   std::vector<Buffer> arena_;   // weight buffers
   bool map_embed_ = true;       // NI_NH_MAP_EMBED: the BF16 embedding mapped from its file (no copy)
-  void* embed_map_ = nullptr;
-  size_t embed_map_len_ = 0;
+  Buffer mapped_embed_;
   size_t weight_bytes_ = 0;
   std::vector<int> mamba_idx_;  // layer -> index among Mamba layers (-1 otherwise)
 

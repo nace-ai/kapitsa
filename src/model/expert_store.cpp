@@ -98,86 +98,91 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
                          SlotLayout lay, uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o)
     : L_(uint32_t(layers.size())), E_(E), nslots_(nslots), lay_(lay), mem_(mem), sync_(sync), direct_(o.direct),
       scan_victim_on_(o.scan_victim), src_(layers) {
-  if (!L_ || !E_) fatal("expert store: no layers");
-  if (lay_.bytes % kPage) fatal("expert store: slots of %u bytes (not whole 16 KiB pages)", lay_.bytes);
-  // the planes must be the slot layout's: codes cb = uc, d db = ud - gd
-  const uint32_t cb = lay_.uc, db = lay_.ud - lay_.gd;
-  const uint32_t want[6] = {cb, db, cb, db, cb, db};
-  for (const LayerSrc& s : src_)
-    for (int j = 0; j < 6; ++j)
-      if (s.p[j].len != want[j] || s.p[j].file < 0 || s.p[j].file >= int(files.size()))
-        fatal("expert store: a layer's planes do not match the slot layout");
-  const size_t keys = size_t(L_) * E_;
-  if (nslots_ > keys) nslots_ = uint32_t(keys);
-  if (nslots_ < keys && nslots_ < 3 * E_)
-    fatal("expert store: %u slots; at least %u (3 layers' experts) or all %zu are needed", nslots_, 3 * E_, keys);
-  if (!mem_.per_chunk || nslots_ > 2 * size_t(mem_.per_chunk)) fatal("expert store: the arena has no room for its slots");
-  complete_ = nslots_ == keys;
-  std::vector<uint64_t> sizes;
-  for (const std::string& f : files) {
-    const int fd = open(f.c_str(), O_RDONLY | O_NONBLOCK);
-    if (fd < 0) fatal("expert store: cannot open %s", f.c_str());
-    struct stat st;
-    if (fstat(fd, &st)) fatal("expert store: cannot stat %s", f.c_str());
-    if (!S_ISREG(st.st_mode)) fatal("expert store: not a regular file: %s", f.c_str());
-    if (st.st_size < 0) fatal("expert store: invalid extent in %s", f.c_str());
-    sizes.push_back(uint64_t(st.st_size));
-    fcntl(fd, F_NOCACHE, 1);  // one pass from the SSD: no second copy in the page cache
-    fds_.push_back(fd);
-  }
-  for (uint32_t l = 0; l < L_; ++l)
-    for (int j = 0; j < 6; ++j) {
-      const PlaneSrc& p = src_[l].p[j];
-      if (!valid_extent(p, E_, sizes[p.file]))
-        fatal("expert store: invalid extent at layer %u plane %d in %s", l, j, files[p.file].c_str());
+  try {
+    if (!L_ || !E_) fatal("expert store: no layers");
+    if (lay_.bytes % kPage) fatal("expert store: slots of %u bytes (not whole 16 KiB pages)", lay_.bytes);
+    // the planes must be the slot layout's: codes cb = uc, d db = ud - gd
+    const uint32_t cb = lay_.uc, db = lay_.ud - lay_.gd;
+    const uint32_t want[6] = {cb, db, cb, db, cb, db};
+    for (const LayerSrc& s : src_)
+      for (int j = 0; j < 6; ++j)
+        if (s.p[j].len != want[j] || s.p[j].file < 0 || s.p[j].file >= int(files.size()))
+          fatal("expert store: a layer's planes do not match the slot layout");
+    const size_t keys = size_t(L_) * E_;
+    if (nslots_ > keys) nslots_ = uint32_t(keys);
+    if (nslots_ < keys && nslots_ < 3 * E_)
+      fatal("expert store: %u slots; at least %u (3 layers' experts) or all %zu are needed", nslots_, 3 * E_, keys);
+    if (!mem_.per_chunk || nslots_ > 2 * size_t(mem_.per_chunk)) fatal("expert store: the arena has no room for its slots");
+    complete_ = nslots_ == keys;
+    std::vector<uint64_t> sizes;
+    for (const std::string& f : files) {
+      Fd opened(open(f.c_str(), O_RDONLY | O_NONBLOCK));
+      const int fd = opened.get();
+      if (fd < 0) fatal("expert store: cannot open %s", f.c_str());
+      struct stat st;
+      if (fstat(fd, &st)) fatal("expert store: cannot stat %s", f.c_str());
+      if (!S_ISREG(st.st_mode)) fatal("expert store: not a regular file: %s", f.c_str());
+      if (st.st_size < 0) fatal("expert store: invalid extent in %s", f.c_str());
+      sizes.push_back(uint64_t(st.st_size));
+      fcntl(fd, F_NOCACHE, 1);  // one pass from the SSD: no second copy in the page cache
+      fds_.push_back(std::move(opened));
     }
-  std::memset(mem_.table, 0, keys * 4);
-  slot_of_.assign(keys, -1);
-  key_of_slot_.assign(nslots_, -1);
-  prv_.assign(keys, -1);
-  nxt_.assign(keys, -1);
-  where_.assign(keys, kNone);
-  routed_.assign(keys, 0);
-  prefetched_.assign(keys, 0);
-  pin_.assign(keys, 0);
-  mark_.assign(E_, 0);
-  pending_.reset(new std::atomic<int>[keys]);
-  for (size_t k = 0; k < keys; ++k) pending_[k].store(0, std::memory_order_relaxed);
-  free_.resize(nslots_);
-  layer_res_.assign(L_, 0);
-  layer_t1_.assign(L_, 0);
-  for (uint32_t i = 0; i < nslots_; ++i) free_[i] = int32_t(nslots_ - 1 - i);  // slot 0 first
+    for (uint32_t l = 0; l < L_; ++l)
+      for (int j = 0; j < 6; ++j) {
+        const PlaneSrc& p = src_[l].p[j];
+        if (!valid_extent(p, E_, sizes[p.file]))
+          fatal("expert store: invalid extent at layer %u plane %d in %s", l, j, files[p.file].c_str());
+      }
+    std::memset(mem_.table, 0, keys * 4);
+    slot_of_.assign(keys, -1);
+    key_of_slot_.assign(nslots_, -1);
+    prv_.assign(keys, -1);
+    nxt_.assign(keys, -1);
+    where_.assign(keys, kNone);
+    routed_.assign(keys, 0);
+    prefetched_.assign(keys, 0);
+    pin_.assign(keys, 0);
+    mark_.assign(E_, 0);
+    pending_.reset(new std::atomic<int>[keys]);
+    for (size_t k = 0; k < keys; ++k) pending_[k].store(0, std::memory_order_relaxed);
+    free_.resize(nslots_);
+    layer_res_.assign(L_, 0);
+    layer_t1_.assign(L_, 0);
+    for (uint32_t i = 0; i < nslots_; ++i) free_[i] = int32_t(nslots_ - 1 - i);  // slot 0 first
 
-  const int nr = std::max(1, std::min(o.readers, 64));
-  for (int i = 0; i < nr; ++i) {
+    const int nr = std::max(1, std::min(o.readers, 64));
+    for (int i = 0; i < nr; ++i) {
 #ifdef NI_EXPERT_CACHE_TEST
-    ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeWorkerStart);
+      ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeWorkerStart);
 #endif
-    readers_.emplace_back([this] { reader_loop(); });
-  }
-
-  // fill: every expert, or the same share of each layer (experts 0, 1, ... of every layer in turn)
-  const double t0 = now_ms();
-  if (complete_ || o.fill) {
-    for (uint32_t i = 0; i < nslots_; ++i) {
-      const int k = complete_ ? int(i) : int((i % L_) * E_ + i / L_);
-      admit(k, true);
-      load(k, false);
-      ++filled_;
+      readers_.emplace_back([this] { reader_loop(); });
     }
-    for (size_t k = 0; k < keys; ++k)
-      while (pending_[k].load(std::memory_order_acquire) > 0) usleep(500);
-  }
-  fill_ms_ = now_ms() - t0;
-  if (!complete_) {
+
+    // fill: every expert, or the same share of each layer (experts 0, 1, ... of every layer in turn)
+    const double t0 = now_ms();
+    if (complete_ || o.fill) {
+      for (uint32_t i = 0; i < nslots_; ++i) {
+        const int k = complete_ ? int(i) : int((i % L_) * E_ + i / L_);
+        admit(k, true);
+        load(k, false);
+        ++filled_;
+      }
+      for (size_t k = 0; k < keys; ++k)
+        while (pending_[k].load(std::memory_order_acquire) > 0) usleep(500);
+    }
+    fill_ms_ = now_ms() - t0;
+    if (!complete_) {
 #ifdef NI_EXPERT_CACHE_TEST
-    ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeWorkerStart);
+      ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeWorkerStart);
 #endif
-    turn_ = std::thread([this] { turn_loop(); });
-  }
+      turn_ = std::thread([this] { turn_loop(); });
+    }
+  } catch (...) { stop_workers(); throw; }
 }
 
-ExpertCache::~ExpertCache() {
+ExpertCache::~ExpertCache() { stop_workers(); }
+
+void ExpertCache::stop_workers() {
   {
     std::lock_guard<std::mutex> lk(req_mu_);
     turn_stop_ = true;
@@ -192,11 +197,10 @@ ExpertCache::~ExpertCache() {
   ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::ReadersClosed);
 #endif
   io_cv_.notify_all();
-  for (std::thread& t : readers_) t.join();
+  for (std::thread& t : readers_) if (t.joinable()) t.join();
 #ifdef NI_EXPERT_CACHE_TEST
   ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::ReadersJoined);
 #endif
-  for (int fd : fds_) close(fd);
 }
 
 uint32_t ExpertCache::word(int slot) const {
@@ -515,7 +519,7 @@ void ExpertCache::load(int k, bool urgent) {
     std::lock_guard<std::mutex> lk(io_mu_);
     for (int j = 0; j < 6; ++j) {
       const PlaneSrc& p = s.p[j];
-      (urgent ? urgent_ : normal_).push_back(Job{fds_[size_t(p.file)], p.off + uint64_t(e) * p.stride, p.len, base + at[j], k});
+      (urgent ? urgent_ : normal_).push_back(Job{fds_[size_t(p.file)].get(), p.off + uint64_t(e) * p.stride, p.len, base + at[j], k});
     }
   }
   io_cv_.notify_all();
@@ -597,14 +601,14 @@ ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vecto
   chunk_[0] = g.alloc(std::max<size_t>(c0, 1) * lay_.bytes, "expert_arena0", /*tracked=*/false);
   chunk_[1] = c1 ? g.alloc(c1 * lay_.bytes, "expert_arena1", /*tracked=*/false) : chunk_[0];
   table_ = g.alloc(keys * 4, "expert_slots", /*tracked=*/false);
-  ev_ = g.new_shared_event();
-  next_value_ = Gpu::event_value(ev_);
+  ev_.reset(g.new_shared_event(), [](void* p) { CFRelease(p); });
+  next_value_ = Gpu::event_value(ev_.get());
   ExpertCache::Memory mem;
   mem.chunk[0] = chunk_[0].as<uint8_t>();
   mem.chunk[1] = chunk_[1].as<uint8_t>();
   mem.per_chunk = per;
   mem.table = table_.as<uint32_t>();
-  void* ev = ev_;
+  void* ev = ev_.get();
   ExpertCache::Sync sync{[ev] { return Gpu::event_value(ev); }, [ev](uint64_t v) { Gpu::signal_event_cpu(ev, v); },
                          Gpu::heat_on() ? std::function<void()>([] { Gpu::get().keep_warm(kHeatMs); }) : nullptr};
   cache_ = std::make_unique<ExpertCache>(files, layers, E, lay, uint32_t(n), mem, sync, o.cache);
@@ -631,7 +635,6 @@ ExpertStore::~ExpertStore() {
   if (chunk_[1].mtl && chunk_[1].mtl != chunk_[0].mtl) g.release(chunk_[1]);
   g.release(chunk_[0]);
   g.release(table_);
-  if (ev_) CFRelease(ev_);
 }
 
 Experts ExpertStore::experts(int layer) const {
@@ -668,14 +671,14 @@ void ExpertStore::begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, co
   r.warm = warm;
   r.ready = ++next_value_;
   r.go = ++next_value_;
-  e.signal_event_inline(ev_, r.ready);
+  e.signal_event_inline(ev_.get(), r.ready);
   cache_->post(r);
   pending_go_ = r.go;
 }
 
 void ExpertStore::end(Encoder& e) {
   if (cache_->complete()) return;
-  e.wait_event(ev_, pending_go_);
+  e.wait_event(ev_.get(), pending_go_);
 }
 
 std::string ExpertStore::describe() const {

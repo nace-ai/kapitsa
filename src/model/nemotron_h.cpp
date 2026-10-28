@@ -1,3 +1,4 @@
+#include "util/load_threads.h"
 #include "model/nemotron_h.h"
 #include "model/kflash_budget.h"
 #include "ane/ffn_split.h"
@@ -535,12 +536,12 @@ void NemotronH::prewarm_pipelines() {
         break;
       }
   const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   for (unsigned i = 0; i < nt; ++i)
     th.emplace_back([&, i] {
       for (size_t j = i; j < v.size(); j += nt) g.pipeline(v[j], false);
     });
-  for (auto& t : th) t.join();
+  th.join();
   logi("Nemotron-H: prewarmed %zu pipelines in %.0f ms", v.size(), now_ms() - t0);
 }
 
@@ -680,7 +681,7 @@ bool NemotronH::ane_release() {
 NemotronH::~NemotronH() {
   if (ane_thread_.joinable()) ane_thread_.join();
   ane_.reset();
-  if (embed_map_) munmap(embed_map_, embed_map_len_);
+  if (mapped_embed_.mtl) Gpu::get().release(mapped_embed_);
 }
 
 namespace {
@@ -968,10 +969,9 @@ void NemotronH::load(int prefill_chunk) {
       // read ahead in the background: the first prompt then finds its rows in the page cache (clean file pages,
       // outside the process footprint)
       madvise(p, len, MADV_WILLNEED);
-      embed_map_ = p;
-      embed_map_len_ = len;
-      Buffer b = g.wrap(p, len, "nh_embedding (mapped)", false);
-      embed_.q = embed_.s = b.view(t.off - off0, t.len);
+      auto owner = std::shared_ptr<void>(p, [len](void* q) { munmap(q, len); });
+      mapped_embed_ = g.wrap(p, len, "nh_embedding (mapped)", false, std::move(owner));
+      embed_.q = embed_.s = mapped_embed_.view(t.off - off0, t.len);
       continue;
     }
     if (w.vec) {
@@ -1033,13 +1033,13 @@ void NemotronH::load(int prefill_chunk) {
   std::sort(jobs.begin(), jobs.end(), [](const Job& a, const Job& b) { return a.len > b.len; });
   std::atomic<size_t> next{0};
   const unsigned nth = std::max(2u, std::min(10u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> th;
+  LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
       std::vector<uint8_t> raw;
       for (size_t k; (k = next.fetch_add(1)) < jobs.size();) run_job(idx, jobs[k], raw);
     });
-  for (auto& t : th) t.join();
+  th.join();
   g.make_resident(arena_);
   alloc_buffers();
   const int n_d = int(std::count(cfg_.kind.begin(), cfg_.kind.end(), 'D'));

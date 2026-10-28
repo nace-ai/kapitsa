@@ -34,6 +34,18 @@ class Encoder;
 
 class Gpu {
  public:
+  // The SDK owns one engine at a time. Release allocations made during its lifetime,
+  // including buffers left by an incomplete constructor, after its workers are joined.
+  // Construction does not initialize Metal; CPU-only validation remains CPU-only.
+  class AllocationScope {
+   public:
+    AllocationScope();
+    ~AllocationScope();
+    AllocationScope(const AllocationScope&) = delete;
+    AllocationScope& operator=(const AllocationScope&) = delete;
+   private:
+    void* before_ = nullptr;
+  };
   static Gpu& get();
   std::string name() const;
   size_t recommended_working_set() const;
@@ -54,7 +66,9 @@ class Gpu {
   Buffer alloc(size_t bytes, const char* label = nullptr, bool tracked = true);
   // Wrap existing page-aligned memory (e.g. mmap) without copying. tracked=true keeps Metal's
   // hazard tracking (memory the GPU writes, e.g. IOSurfaces shared with the Neural Engine).
-  Buffer wrap(void* ptr, size_t bytes, const char* label = nullptr, bool tracked = false);
+  // owner, when supplied, keeps no-copy backing memory alive until Metal releases the buffer.
+  Buffer wrap(void* ptr, size_t bytes, const char* label = nullptr, bool tracked = false,
+              std::shared_ptr<void> owner = {});
   // A new MTLSharedEvent (retained; id<MTLSharedEvent>), for ordering GPU work with the ANE.
   void* new_shared_event();
   // Sets the event's value from the CPU (a GPU wait_event on it proceeds once it reaches the waited value)
@@ -115,6 +129,7 @@ class Gpu {
 
  private:
   Gpu();
+  void release_now(Buffer& b);
   void* device_ = nullptr;
   void* queue_ = nullptr;
   void* library_ = nullptr;
