@@ -1,0 +1,49 @@
+PASS grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 7.6 us, median 3.4, p90 16.3, p99 42.3, max 74.0; 308 passed, 0 failed)
+PASS structured_check answers every request
+PASS chat: json_object: JSON
+PASS chat: json_schema, strict: JSON
+PASS chat: text: no grammar
+PASS chat: no format, tools, auto: no grammar
+PASS chat: json_schema without a schema: any object: JSON
+PASS chat: unknown format type: 400 (response_format.type)
+PASS chat: format not an object: 400 (response_format)
+PASS chat: json_schema missing: 400 (response_format.json_schema)
+PASS chat: schema not a schema: 400 (response_format.json_schema.schema)
+PASS chat: strict not a boolean: 400 (response_format.json_schema.strict)
+PASS chat: unknown type in the schema: 400 (response_format)
+PASS chat: remote $ref: 400 (response_format)
+PASS chat: a schema no value satisfies: 400 (response_format)
+PASS chat: tool_choice required: tool calls (get_weather, run_shell)
+PASS chat: tool_choice named: tool calls (get_weather)
+PASS chat: one call (parallel_tool_calls false): tool calls (get_weather, run_shell; one call)
+PASS chat: a named tool the request lacks: 400 (tool_choice)
+PASS chat: required without tools: 400 (tool_choice)
+PASS chat: unknown tool_choice: 400 (tool_choice)
+PASS chat: tool_choice object without a name: 400 (tool_choice)
+PASS chat: tool_choice none with a format: the format: JSON,
+PASS chat: a strict tool, auto: text or tool calls (get_weather, run_shell free)
+PASS chat: a format beside tools: JSON or tool calls
+PASS chat: a strict tool with a schema it cannot hold: 400 (tools)
+PASS responses: text.format json_schema: JSON
+PASS responses: text.format json_object: JSON
+PASS responses: text.format text: no grammar
+PASS responses: text.format unknown: 400 (text.format.type)
+PASS responses: text.format bad schema: 400 (text.format)
+PASS responses: tool_choice required: tool calls (get_weather)
+PASS responses: tool_choice a function: tool calls (run_shell)
+PASS responses: allowed_tools required: tool calls (run_shell)
+PASS responses: a built-in tool choice: 400 (tool_choice)
+PASS responses: a strict function: text or tool calls (get_weather)
+PASS responses: a function without strict is not strict: no grammar
+PASS responses: a namespace's strict function: text or tool calls (wx__get_weather)
+PASS responses: a custom tool named: tool calls (apply_patch)
+PASS messages: tool_choice any: tool calls (get_weather)
+PASS messages: tool_choice tool, one call: tool calls (run_shell; one call)
+PASS messages: tool_choice tool without a name: 400
+PASS messages: unknown tool_choice: 400
+PASS messages: output_format: JSON
+PASS messages: output_config.format: JSON
+PASS messages: output_format of another type: 400
+PASS messages: a strict tool: text or tool calls (get_weather)
+PASS messages: tool_choice none: no grammar
+ALL PASSED

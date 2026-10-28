@@ -1,0 +1,48 @@
+target streams and the draft's reduction (DFlash2 config checks)
+  ok    config.json's hc_count: 4 streams (Flash-Next), 1 without it
+  ok    a hyper-connected target's reduction is stream_mean, another's none
+  ok    Flash-Next + a draft stating stream_mean: loads
+  ok    Flash-Next + a draft not stating it: loads (the target's)
+  ok    Flash-Next + a draft stating none: refused, for that reason only
+  ok    Flash-Next + a draft stating another reduction: refused
+  ok    a target without streams + a draft stating stream_mean: refused
+  ok    a target without streams + none or nothing: loads
+  ok    not a config: refused
+drafting block (DFlash2::plan_block_rows)
+  ok    one slot, dense target, unset: 16 rows
+  ok    NI_DFLASH_BLOCK=auto is the default: 16 rows
+  ok    NI_DFLASH_BLOCK=8: 8 rows
+  ok    NI_DFLASH_BLOCK=16, dense target: 16 rows
+  ok    two slots: 8 rows (a 16-row block has no batched cycle)
+  ok    one slot, MoE target: 8 rows (no wide tree verify to run)
+  ok    NI_DFLASH_BLOCK=16, MoE target: 16 rows (the load-time check refuses it)
+  ok    the environment is read when no value is passed: 16, 8 (BLOCK=8), 8 (CAP=2), 16
+  ok    a cap at or above the full depth (15, or 20 past it) is a no-op: the plan keeps 16 rows
+  ok    16 then 8 then 16 in one process: the next model decides for itself
+  ok    NI_KFLASH=0, NI_DFLASH_CAP=2 (trees asked or not), NI_DFLASH_VERIFY=7, NI_DFLASH_ATTN=scalar: the plan keeps 8 rows
+  ok    and with the knobs back off: 16 rows
+  ok    no matrix units on this Mac (an M1-M4, or CI's virtual GPU): the plan keeps 8 rows too
+the cap's interactions (NI_DFLASH_VERIFY, NI_KFLASH_ROWS)
+  ok    CAP=2 + VERIFY=7: the same rows (8 and 16, trees kept) and the same 8-row plan as VERIFY=7 alone -- the explicit verify overrides the cap
+  ok    CAP=2 alone still keeps the chains: one tile of 8 rows (unchanged)
+  ok    CAP=10 + NI_KFLASH_ROWS=8,16 on an 8-row block: a no-op, exactly as if the cap were unset (the rows stay 8 and 16); CAP=6 is below the full depth 7 and keeps one tile
+downward depth gate (DFlash2::DepthGate)
+  ok    a fresh gate warms up: the static depth
+  ok    and a depth below 2 has nothing to cap
+  ok    all acceptances: no position's acceptance is below p, no cap
+  ok    downward only: the cap never exceeds the depth it is given
+  ok    position 1 at 50% is above p = 0.25, position 2 at 0%: caps at 2
+  ok    the same window at p = 0.75: position 1 caps too
+  ok    p = 0: no acceptance is below it, no cap
+  ok    positions tau never kept: no evidence, no cap
+  ok    a full window of rejections: caps at 1
+  ok    the old rejections age out: the cap lifts
+  ok    win = 8 sees the last 8 cycles alone: the older rejections do not cap
+  ok    the full window still sees them
+  ok    63 observed cycles: still warmup
+  ok    the 64th cycle arms the gate
+  ok    marginal acceptance: every position reads 0.5 and caps at p = 0.6 (a reached-conditional hazard would read 1.0 -- the a = 0 cycles never reached it -- and never cap)
+  ok    the same window at p = 0.4: 0.5 clears it, no cap
+  ok    reset(): the window clears and warms up again (the engine calls gate_reset when a request starts; a park keeps the window)
+  ok    incoai's Flash-Next DFlash2 config (rope theta 1e4): loads for Flash-Next
+all checks passed

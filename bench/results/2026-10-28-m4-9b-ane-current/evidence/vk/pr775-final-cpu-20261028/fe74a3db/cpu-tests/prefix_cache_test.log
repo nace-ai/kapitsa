@@ -1,0 +1,77 @@
+[kapitsa] SSD prefix cache: /tmp/test-session/kapitsa-pcache-test-R3wAaS/5d3b8f87123db00cb6b0e1cb19f3be5d/kv/dff1ef3409ecd0a1d4b902ec4f4920d0 is damaged (its CRC does not match); the entries that need it are dropped
+[kapitsa] SSD prefix cache: /tmp/test-session/kapitsa-pcache-test-R3wAaS/5d3b8f87123db00cb6b0e1cb19f3be5d/kv/99bfa361d16cd279029bee144573e8d3 is damaged (its header or length is wrong); the entries that need it are dropped
+[kapitsa] SSD prefix cache: removed /tmp/test-session/kapitsa-pcache-test-R3wAaS/fb3049078ca2a10c4eddc50772cf5798 (0 MiB), the oldest cache of another model, to keep within 1 MiB
+[kapitsa] SSD prefix cache: removed /tmp/test-session/kapitsa-pcache-test-R3wAaS/5d3b8f87123db00cb6b0e1cb19f3be5d (0 MiB), the oldest cache of another model, to keep within 1 MiB
+[kapitsa] SSD prefix cache: removed /tmp/test-session/kapitsa-pcache-test-R3wAaS/6687ac8a0091ac60347d36bcf1f0c6fe (0 MiB), the oldest cache of another model, to keep within 1 MiB
+[kapitsa] SSD prefix cache: removed /tmp/test-session/kapitsa-pcache-test-R3wAaS/ns-root/a9c8dfa342da4fbfd26e395df5e0d5ea (0 MiB), unused for 15 days
+[kapitsa] SSD prefix cache: removed /tmp/test-session/kapitsa-pcache-test-R3wAaS/ns-root/2452e66b790a06364215e4e1a89dc066 (3 MiB), the oldest cache of another model, to keep within 3 MiB
+[kapitsa] SSD prefix cache: removed /tmp/test-session/kapitsa-pcache-test-R3wAaS/ns-root/659e21b14faf6b29746436e46ded6d00 (0 MiB), unused for 30 days
+[kapitsa] SSD prefix cache: another server holds /tmp/test-session/kapitsa-pcache-test-R3wAaS/ns-root/1b2a7e9142e6a5d5abf8238865dff8a1; waiting up to 0 s for it
+PASS CRC-32C of "123456789" is 0xE3069283
+PASS CRC-32C continues across calls
+PASS keys: the same tokens give the same key, others another
+PASS keys: 32 hex digits and back
+PASS --disk-cache auto
+PASS --disk-cache 0 / off
+PASS --disk-cache sizes: 16G, 4GiB, 512m, 1.5T, bytes
+PASS --disk-cache refuses what is not a size
+PASS auto: a quarter of the free space beyond the 10 GiB floor (28 GiB free: 4.5 GiB)
+PASS auto: nothing below the floor
+PASS the cache's own files count as free space (its writes do not shrink its limit)
+PASS auto: at most 32 GiB
+PASS a size caps it
+PASS a small volume keeps 5% of itself free
+PASS open a namespace
+PASS write an entry: 7 KV blocks and 2 states
+PASS lookup: a prompt that extends the conversation hits its deepest state (100)
+PASS lookup: one that diverges at 70 hits the state at 48
+PASS lookup: one that diverges at 10 misses
+PASS lookup: only states before the prompt's last token (below 100: 48)
+PASS lookup: an entry is found for its own tag only (Dory: the loop count)
+PASS ... a tagged entry: found with its tag, not without
+PASS read back: every piece's bytes and header data as written
+PASS the entry's record: tokens, fills, restore points, draft rows
+PASS held: the bytes of the namespace's files
+PASS open again (a restart)
+PASS the entries are taken back, with their tags
+PASS its pieces read back as written after the restart
+PASS three entries written
+PASS a damaged piece fails its CRC: the entry that needs it is dropped with it
+PASS the other entries stay
+PASS a leftover temporary file is removed at open
+PASS an entry whose state was cut short is dropped at open
+PASS a block cut inside its payload passes the open (its size is a header's)
+PASS ... and fails when read: its entry is dropped
+PASS no piece is left that no entry needs
+PASS a damaged entry record is dropped at open, with its pieces
+PASS a quota of 1 MiB
+PASS two conversations fit
+PASS a third one is written
+PASS the least recently used entry went to make room
+PASS within the limit
+PASS a conversation sharing c's blocks
+PASS only its new state was written (the shared blocks were not)
+PASS the volume fills: the limit shrinks to a quarter of what is left beyond the floor (its own files counted)
+PASS entries go to fit, least recently used first; a pinned one stays
+PASS unpinned, it goes too when it does not fit
+PASS c and c2 again
+PASS an entry with all of two others' restore points replaces them
+PASS its restore points are all still found
+PASS a piece larger than the limit is refused
+PASS a piece written by a job
+PASS kept after its job ends without an entry
+PASS threads at once: no read of a pinned entry fails
+PASS ... and the index counts the bytes the files take
+PASS ... and a reopen takes back whole entries only
+PASS open beside other namespaces
+PASS a namespace unused for 14 days is removed at open
+PASS one used yesterday stays, counted against the limit
+PASS one another server holds is left alone, however old
+PASS a folder that is not a namespace is left alone
+PASS an entry in the new namespace
+PASS over the limit: another model's cache nobody holds goes before this one's entries
+PASS the namespace's lock: the first server takes it
+PASS a second one waits for it (here 0.3 s), then gives up
+PASS once the first lets it go, it opens
+PASS the root is kept out of Time Machine
+67 passed, 0 failed

@@ -1,0 +1,19 @@
+prefill: 8 records (qwen3.5-4b-4bit)
+  reference: 0.2.24 (dbf3f3b), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  candidate: 0.2.24 (fe74a3d), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  every row bitwise identical
+batch: 192 records (qwen3.5-4b-4bit)
+  reference: 0.2.24 (dbf3f3b), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  candidate: 0.2.24 (fe74a3d), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))
+step: 192 records (qwen3.5-4b-4bit)
+  reference: 0.2.24 (dbf3f3b), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  candidate: 0.2.24 (fe74a3d), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.5-4b-4bit)
+  reference: 0.2.24 (dbf3f3b), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  candidate: 0.2.24 (fe74a3d), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))

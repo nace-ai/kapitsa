@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "git",
+    "switch",
+    "--detach",
+    "dbf3f3b330263a93c322ca650914bfd82cdecbea"
+  ],
+  "commit": "dbf3f3b330263a93c322ca650914bfd82cdecbea",
+  "returncode": 0,
+  "seconds": 0.06404304504394531
+}

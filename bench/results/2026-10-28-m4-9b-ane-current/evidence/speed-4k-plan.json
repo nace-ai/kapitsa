@@ -1,0 +1,113 @@
+{
+  "created_utc": "2026-10-28T14:48:20.071101+00:00",
+  "kind": "Fixed 4K performance regression rerun on freshly fetched latest main; historical prompts reused, no new workload-independence claim.",
+  "machine": "Mac mini2024, Apple M4,10GPU cores,24GiB; macOS26.5.2(25F84),SDK26.2",
+  "baseline": {
+    "commit": "dbf3f3b330263a93c322ca650914bfd82cdecbea",
+    "version": "kapitsa 0.2.24 (dbf3f3b)",
+    "files": {
+      "kapitsa": "2e9fa900a735a656da3af21cc2de4742dc41e64d91f4755d64d3e70702186743",
+      "logit_dump": "cc4410ba1846fba9620857f01478b4cb3d38fd067833cc597d52c3662f197d02",
+      "ni_run": "216ca8712b8aaa9a1049a6f8c7458edc54c5c8680792ae548328fcdcf26017be",
+      "ni_eval": "80b92f230fbe7143dd76628d85330ace96a5f15d32e26bdd0e262aae9e1c1816"
+    },
+    "frozen_utc": "2026-10-28T14:37:45.461628+00:00",
+    "sources": {
+      "AGENTS.md": "74e071413f84e3a5516d230cd53ef78a7c4f0f5cacb840cc3a30d8e6781dca6a",
+      "src/ane/ffn_split.cpp": "a375e2e43803bd31805072626ca77133fd14a491deb51144cc52a7ab80969aac",
+      "src/ane/ffn_split.h": "3492a7375a10f9a0b6942a6d924096de25942008f5afe747b323d3d5051a38b8",
+      "src/model/qwen35_ane.cpp": "ae96b11b476ce4243a6353870296e4011c5572cb36cbd761d2701bdf24ee9ecd",
+      "src/model/qwen35.cpp": "3230f16ae994573d00b3e025954384e67e5271a7f3f6dd5770ec8875fc7b65d6",
+      "src/model/qwen35.h": "ea27160551d53c6d63d4a5a8ae4b38f49225d30e6a060a17ac07fb8f51be7a26",
+      "tests/test_ane_split_abort.py": "82c495cfbc040a3ca87a43a0b71d457fd5dd9e521dee161b15048af479648a0a",
+      "tools/logit_dump.cpp": "56499aeb0aef156ec8d09459d2009cd10f090b2cb7a8fe12bc70979b959d5034"
+    }
+  },
+  "candidate": {
+    "commit": "fe74a3db5db5ef4f07233c795e0b6c00a9a13f2d",
+    "version": "kapitsa 0.2.24 (fe74a3d)",
+    "files": {
+      "kapitsa": "7c14140ce2f8fa0015fa8882446a85f7dd4c6e042a0cfcc16ff9cd7e9e73b12f",
+      "logit_dump": "16856a7523391217e017906b2d61f90318ef9c695121f04d6354449d458cdb09",
+      "ni_run": "b4a955b1475bb9916fd0ab6f7d95476fb058e306ad038be6f86b132194aba737",
+      "ni_eval": "0c983b6bfc6b62e7fde5d6c9f5f6ce6b57c55ae1000f59e07b61f9207eefbe4e",
+      "ane_segment_check": "99314fbbd6ea06d538901c1070be337ea58a0f388dcdc960be070e1be613fa6e"
+    },
+    "frozen_utc": "2026-10-28T14:38:47.343614+00:00",
+    "sources": {
+      "AGENTS.md": "74e071413f84e3a5516d230cd53ef78a7c4f0f5cacb840cc3a30d8e6781dca6a",
+      "src/ane/ffn_split.cpp": "4234256c8daa3ffbe4104c7b6f190afd138f990d553993deddb91a54043e5ffb",
+      "src/ane/ffn_split.h": "7c88c3fe2a160ed2b154660ad18b7861214f1168b8ad76b34e91446a0e2acb3c",
+      "src/model/qwen35_ane.cpp": "d192670d23265fcfc99b31b7d64c4365e69d634ccd89c6128c65a75c709f59ac",
+      "src/model/qwen35.cpp": "6f1b0d583e381daa9c59da4ff8e66d3bbce5302c81894151a71292db50294eff",
+      "src/model/qwen35.h": "ea27160551d53c6d63d4a5a8ae4b38f49225d30e6a060a17ac07fb8f51be7a26",
+      "tests/test_ane_split_abort.py": "7373e379be89007699cfa605de0334b608b7d779386ecd5084945ccbf4b7b69a",
+      "tools/logit_dump.cpp": "56499aeb0aef156ec8d09459d2009cd10f090b2cb7a8fe12bc70979b959d5034"
+    }
+  },
+  "model": "lmstudio-community/Qwen3.5-9B-MLX-4bit@b455506b0f574c74616dbcd56879bde38fafcff3",
+  "drafter": "z-lab/Qwen3.5-9B-DFlash@5fc3b3d474760f18c516db87d84c37edbfd3ede6",
+  "pairs": 4,
+  "arms": [
+    "A",
+    "B"
+  ],
+  "pair_orders": [
+    [
+      "A",
+      "B"
+    ],
+    [
+      "B",
+      "A"
+    ],
+    [
+      "A",
+      "B"
+    ],
+    [
+      "B",
+      "A"
+    ]
+  ],
+  "max_retries_per_pair_case": 1,
+  "cases": [
+    {
+      "name": "code-scheduler-4096",
+      "messages": "$RUN/prompts/code-scheduler-4096-messages.json",
+      "sha256": "211033f82de09c9649b8b3130c6ddc8cab51e8901ff3cddf1ac5d872e79a68a7",
+      "nominal_tokens": 4096,
+      "corpus_char_offset": 7312,
+      "historical_source": "$PREVIOUS_RUN/prompts/ane-confirm/code-scheduler-4096-messages.json"
+    },
+    {
+      "name": "prose-zh-4096",
+      "messages": "$RUN/prompts/prose-zh-4096-messages.json",
+      "sha256": "f446496b47a7a3810b949be89d841f41a3df6851b978eff4dc138025c1580d9d",
+      "nominal_tokens": 4096,
+      "corpus_char_offset": 17500,
+      "historical_source": "$PREVIOUS_RUN/prompts/ane-confirm/prose-zh-4096-messages.json"
+    }
+  ],
+  "tokens": 512,
+  "temperature": 0,
+  "primary": "Loaded-model native HTTP TTFT after fixed warmup and completed ANE preparation. Analyze paired log(A/B) per workload.",
+  "secondary": "Complete512-token HTTP request time, eligible only when telemetry for the whole request passes. Continuations may differ; no same-work decode speed claim.",
+  "eligibility": "Two or more1s samples overlapping each phase with no gap>2.5s; non-owned GPU including WindowServer mean<=1%, peak<=2%; nominal thermal; HID idle>=300s; zero phase swapouts using the preceding sample/pre-run counter. Exactly512nonempty tokens, finish=length, no native invalid flags, cached_tokens=0.",
+  "retries": "Only TTFT-telemetry-rejected workload pairs are repeated, once, both A and B. Use the first eligible attempt; retain every first/retry result. No retries based on speed. Idle-gate timeout stops the schedule as incomplete.",
+  "failure": "Stop for invalid output, wrong path, unexpected ANE fallback or request mismatch. Fewer than3eligible pairs per workload is inconclusive.",
+  "analysis": "Paired geometric A/B ratio and two-sided95% Student-t confidence interval of log ratios per workload. Confirmation requires>=3pairs and lowerCI>1 for both4Kworkloads; all first attempts retained as sensitivity. No early stopping.",
+  "controls": "Immutable current-main/current-integration binaries, exclusive GPU lock,8s quiet gate, no builds/downloads/CPU suites, one slot, fresh KAPITSA_HOME and disk cacheoff; matching A/B requests and budgets. CPU contention checked before launch.",
+  "flags_A": "Default current-main server flags; no NI_ overrides.",
+  "flags_B": "Same flags plus NI_ANE_H4096=1; default DFlash, default async ANE, default units, context32768.",
+  "display": "User explicitly authorized display sleep for performance. Keep system awake, preserve unrelated apps/processes. Record control before launch.",
+  "scope": "New focused4Krerun only. Does not turn the historical failed four-workload/16K protocol into a pass. No16Kperformance or broad quality claim.",
+  "hashes": {
+    "confirm_4k.py": "ca84f6592f7087b663d156ec1cd92347ad3d687e14de7edbdd5f0f18e5dfa822",
+    "analyze_4k.py": "e7ec8e7f5d291ab13ae2b5645658971e47253e8039ef1da814f0c4803a44784e",
+    "gpu_leg_startup.py": "e1bc865c70919ff6925f9d508a823e6f2200ab78a6dcaebdb3f5fa622a184a0c",
+    "observe": "bdbcdab2c063a32b29ba223d0ce3182a60e666004569c64ebbea90d5661f385c",
+    "api_server_leg_confirm.py": "5dddccc8a1697bccd5b0b56ddb9f6f2931f8c1e1f503b6eba6770db0986f236f",
+    "api_probe": "fd04d8fca29e675fda319d3a58c1ec3977fda5bb251de313932438cc3c1da222"
+  }
+}

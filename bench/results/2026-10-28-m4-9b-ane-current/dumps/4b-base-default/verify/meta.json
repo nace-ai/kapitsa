@@ -1,0 +1,21 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.24 (dbf3f3b)",
+  "model": "qwen3.5-4b-4bit",
+  "model_dir": "$MODELS/qwen3.5-4b-4bit",
+  "path": "verify",
+  "verify": "KFlash tree (a chain of 8 live rows)",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 10,
+    "evals": 576,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "bench/corpus.txt",
+  "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+  "macos": "26.5.2",
+  "date": "2026-10-28T15:04:22Z",
+  "env": {}
+}

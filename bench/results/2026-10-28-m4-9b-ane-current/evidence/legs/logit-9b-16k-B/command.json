@@ -1,0 +1,27 @@
+{
+  "command": [
+    "$RUN/candidate/logit_dump",
+    "$MODELS/qwen3.5-9b-4bit",
+    "$RUN/dumps/9b-16k-on",
+    "--from",
+    "$RUN/dumps/16k-input",
+    "--paths",
+    "step,verify"
+  ],
+  "cwd": "$REPO",
+  "env": {
+    "KAPITSA_HOME": "$RUN/evidence/legs/logit-9b-16k-B/home",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "NI_LOCK_HELD": "1",
+    "NACE_GPU_LOCK_HELD": "1",
+    "NI_ANE_H4096": "1"
+  },
+  "label": "logit-9b-16k-B",
+  "started_utc": "2026-10-28T15:06:10.703274+00:00",
+  "binary_sha256": "16856a7523391217e017906b2d61f90318ef9c695121f04d6354449d458cdb09",
+  "quiet_seconds": 0.0,
+  "max_foreign_pct": 1,
+  "sample_ms": 1000,
+  "runner_sha256": "e1bc865c70919ff6925f9d508a823e6f2200ab78a6dcaebdb3f5fa622a184a0c"
+}

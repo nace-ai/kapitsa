@@ -1,0 +1,3 @@
+2026-10-28 23:00:22.203 ane_segment_check[99719:45539131] Metal API Validation Enabled
+2026-10-28 23:00:22.207 ane_segment_check[99719:45539131] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 3766 ms

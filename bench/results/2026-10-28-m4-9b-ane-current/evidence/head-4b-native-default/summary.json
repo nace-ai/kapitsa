@@ -1,0 +1,15 @@
+{
+  "cases": 0,
+  "correct": 0,
+  "results": [],
+  "native": [
+    {
+      "name": "test_server",
+      "returncode": 0
+    },
+    {
+      "name": "test_structured",
+      "returncode": 0
+    }
+  ]
+}

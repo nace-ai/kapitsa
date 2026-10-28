@@ -1,0 +1,31 @@
+{
+  "argv": [
+    "$RUN/candidate/kapitsa",
+    "serve",
+    "--model",
+    "$MODELS/qwen3.5-4b-4bit",
+    "--model-id",
+    "ane-quality",
+    "--host",
+    "127.0.0.1",
+    "--private",
+    "--port",
+    "54181",
+    "--ctx",
+    "32768",
+    "--slots",
+    "3",
+    "--disk-cache",
+    "0"
+  ],
+  "binary_sha256": "7c14140ce2f8fa0015fa8882446a85f7dd4c6e042a0cfcc16ff9cd7e9e73b12f",
+  "cases_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+  "env": {
+    "KAPITSA_HOME": "$RUN/evidence/legs/head-4b-native-default/home",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "NI_LOCK_HELD": "1",
+    "NACE_GPU_LOCK_HELD": "1"
+  },
+  "purpose": "Functional only. No times from this leg are speed evidence."
+}

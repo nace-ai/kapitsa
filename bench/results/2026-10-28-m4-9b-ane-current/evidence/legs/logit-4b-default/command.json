@@ -1,0 +1,24 @@
+{
+  "command": [
+    "$RUN/candidate/logit_dump",
+    "$MODELS/qwen3.5-4b-4bit",
+    "$RUN/dumps/logit-4b-default",
+    "--from",
+    "$RUN/dumps/4b-base-default"
+  ],
+  "cwd": "$REPO",
+  "env": {
+    "KAPITSA_HOME": "$RUN/evidence/legs/logit-4b-default/home",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "NI_LOCK_HELD": "1",
+    "NACE_GPU_LOCK_HELD": "1"
+  },
+  "label": "logit-4b-default",
+  "started_utc": "2026-10-28T15:04:23.068014+00:00",
+  "binary_sha256": "16856a7523391217e017906b2d61f90318ef9c695121f04d6354449d458cdb09",
+  "quiet_seconds": 0.0,
+  "max_foreign_pct": 1,
+  "sample_ms": 1000,
+  "runner_sha256": "e1bc865c70919ff6925f9d508a823e6f2200ab78a6dcaebdb3f5fa622a184a0c"
+}

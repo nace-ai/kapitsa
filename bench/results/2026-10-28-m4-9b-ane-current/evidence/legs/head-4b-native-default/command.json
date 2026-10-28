@@ -1,0 +1,32 @@
+{
+  "command": [
+    "$VENV/bin/python",
+    "$RUN/ane_api_checks.py",
+    "--server",
+    "$RUN/candidate/kapitsa",
+    "--model",
+    "$MODELS/qwen3.5-4b-4bit",
+    "--out",
+    "$RUN/evidence/head-4b-native-default",
+    "--cases",
+    "$RUN/evidence/empty-cases.json",
+    "--native",
+    "--slots",
+    "3"
+  ],
+  "cwd": "$REPO",
+  "env": {
+    "KAPITSA_HOME": "$RUN/evidence/legs/head-4b-native-default/home",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "NI_LOCK_HELD": "1",
+    "NACE_GPU_LOCK_HELD": "1"
+  },
+  "label": "head-4b-native-default",
+  "started_utc": "2026-10-28T15:10:42.306115+00:00",
+  "binary_sha256": "c4e9f06cb179ae4b3728c748990fbbef7f30580ea42c0eb9c702ebc7c7861c89",
+  "quiet_seconds": 0.0,
+  "max_foreign_pct": 1,
+  "sample_ms": 1000,
+  "runner_sha256": "e1bc865c70919ff6925f9d508a823e6f2200ab78a6dcaebdb3f5fa622a184a0c"
+}

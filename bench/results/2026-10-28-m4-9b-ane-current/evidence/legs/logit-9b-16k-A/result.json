@@ -1,0 +1,14 @@
+{
+  "label": "logit-9b-16k-A",
+  "returncode": 0,
+  "wall_seconds": 79.61738538742065,
+  "foreign_mean_pct": 0.4399865563056748,
+  "foreign_peak_pct": 11.289013410388153,
+  "thermal_states": [
+    "nominal"
+  ],
+  "swapouts_delta": 0,
+  "samples": 80,
+  "user_activity_observed": false,
+  "summaries": []
+}

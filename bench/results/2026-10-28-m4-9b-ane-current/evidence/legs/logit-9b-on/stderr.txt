@@ -1,0 +1,13 @@
+[kapitsa] read 5.04 GB of weights in 855 ms (5.9 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.49 GB of weights in 44 ms (11.0 GB/s)
+[kapitsa] MTP head loaded in 482 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 12 ms
+[kapitsa] prewarmed 93 prefill pipelines in 17 ms
+[kapitsa] loaded $MODELS/qwen3.5-9b-4bit: 32 layers, dense, 5.0 GB mapped in 1504 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE_H4096=1: experimental 4096-hidden FFN on the Neural Engine (two 2048-channel inputs; W8A8 changes prefill numerics)
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 24/24 units (12288 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 16 ms, program cached 2 ms + load 66 ms (13 functions, MIL 115 KB); 374.7 MB Metal; ready in 0.1 s
+[kapitsa] NI_ANE: startup check 1.94% of the ANE's part from the GPU alone (2 functions, 575 ms)
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)

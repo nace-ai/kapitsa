@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "cmake",
+    "-S",
+    ".",
+    "-B",
+    "build",
+    "-DCMAKE_BUILD_TYPE=Release"
+  ],
+  "commit": "fe74a3db5db5ef4f07233c795e0b6c00a9a13f2d",
+  "returncode": 0,
+  "seconds": 0.5898351669311523
+}

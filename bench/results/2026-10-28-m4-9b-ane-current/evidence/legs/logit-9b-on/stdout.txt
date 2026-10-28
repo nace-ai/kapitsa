@@ -1,0 +1,5 @@
+prefill 8 rows: next-token NLL 1.6070, top-1 = next token 0.6250 -> $RUN/dumps/logit-9b-on/prefill
+step   192 rows: next-token NLL 0.6160, top-1 = next token 0.8125 -> $RUN/dumps/logit-9b-on/step
+verify 192 rows: next-token NLL 0.6161, top-1 = next token 0.8125 -> $RUN/dumps/logit-9b-on/verify
+batch  192 rows: next-token NLL 0.6160, top-1 = next token 0.8125 -> $RUN/dumps/logit-9b-on/batch
+8 windows, 14848 prefilled tokens in 24.8 s; 38.2 s in all

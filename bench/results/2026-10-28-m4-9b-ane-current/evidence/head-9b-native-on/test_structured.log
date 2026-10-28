@@ -1,0 +1,45 @@
+model ane-quality
+PASS person prompt 0 greedy: valid
+PASS person prompt 0 T=0.7 seed 7: valid
+PASS person prompt 1 greedy: valid
+PASS person prompt 1 T=0.7 seed 7: valid
+PASS weather prompt 0 greedy: valid
+PASS weather prompt 0 T=0.7 seed 7: valid
+PASS weather prompt 1 greedy: valid
+PASS weather prompt 1 T=0.7 seed 7: valid
+PASS review prompt 0 greedy: valid
+PASS review prompt 0 T=0.7 seed 7: valid
+PASS review prompt 1 greedy: valid
+PASS review prompt 1 T=0.7 seed 7: valid
+PASS recipe prompt 0 greedy: valid
+PASS recipe prompt 0 T=0.7 seed 7: valid
+PASS recipe prompt 1 greedy: valid
+PASS recipe prompt 1 T=0.7 seed 7: valid
+PASS result prompt 0 greedy: valid
+PASS result prompt 0 T=0.7 seed 7: valid
+PASS result prompt 1 greedy: valid
+PASS result prompt 1 T=0.7 seed 7: valid
+PASS tree prompt 0 greedy: valid
+PASS tree prompt 0 T=0.7 seed 7: valid
+PASS tree prompt 1 greedy: valid
+PASS tree prompt 1 T=0.7 seed 7: valid
+PASS schema-valid replies: 24 of 24 (59 s)
+PASS greedy: the streamed reply equals the reply
+PASS json_object 0: a JSON object
+PASS json_object 1: a JSON object
+PASS json_object 2: a JSON object
+PASS reasoning on: reasoning, then valid JSON
+PASS responses: text.format json_schema
+PASS chat tool_choice "required" (Hello! How are you today?): one valid call
+PASS chat tool_choice {"type": "function", "function": {"name": "get_weather"}} (What's 2+2?): one valid call
+PASS chat tool_choice "required" (I need the forecast for Paris for the next 3 days.): one valid call
+PASS reasoning on + tool_choice required: a valid call
+PASS messages tool_choice {"type": "any"}: valid tool_use
+PASS messages tool_choice {"type": "tool", "name": "get_weather"}: valid tool_use
+PASS responses tool_choice required: a valid function_call
+PASS strict tool, tool_choice auto: a call it makes is valid
+PASS a schema the server cannot hold: 400 with the field
+PASS at once with free requests: request 0 under the schema is valid
+PASS at once with free requests: request 1 under the schema is valid
+PASS at once: the free requests answer
+ALL PASSED

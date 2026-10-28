@@ -1,0 +1,24 @@
+{
+  "adaptive": false,
+  "steps": [
+    {
+      "name": "prefill~2.9k+decode64",
+      "ok": true,
+      "s": 6.64,
+      "prompt_tokens": 2922,
+      "completion_tokens": 64,
+      "finish": "length",
+      "thinking_leak": []
+    },
+    {
+      "name": "tools",
+      "ok": true,
+      "s": 2.52,
+      "prompt_tokens": 430,
+      "completion_tokens": 27,
+      "finish": "tool_calls",
+      "thinking_leak": []
+    }
+  ],
+  "ok": true
+}

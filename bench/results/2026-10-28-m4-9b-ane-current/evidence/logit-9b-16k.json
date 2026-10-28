@@ -1,0 +1,220 @@
+{
+  "paths": {
+    "prefill": {
+      "records": 1,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 3.77869089931062e-05,
+      "kl_median": 3.77869089931062e-05,
+      "kl_p99": 3.77869089931062e-05,
+      "kl_max": 3.77869089931062e-05,
+      "margin_change_max": 0.01873779296875,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.004188999019920203,
+      "max_abs_diff": 0.3287198543548584,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": "flags"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (dbf3f3b)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODELS/qwen3.5-9b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 1,
+        "vocab": 248320,
+        "source": "$RUN/dumps/16k-input",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:06:10Z",
+        "env": {}
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (fe74a3d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODELS/qwen3.5-9b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 8,
+          "evals": 512,
+          "reruns": 0
+        },
+        "records": 1,
+        "vocab": 248320,
+        "source": "$RUN/dumps/16k-input",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:06:44Z",
+        "env": {
+          "NI_ANE_H4096": "1"
+        }
+      }
+    },
+    "step": {
+      "records": 24,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.000297822447014149,
+      "kl_median": 4.9827173224088254e-05,
+      "kl_p99": 0.0018541178269422822,
+      "kl_max": 0.002079710120518429,
+      "margin_change_max": 0.08836936950683594,
+      "tie_margin": 0.0,
+      "nll_change_mean": -0.0047763179402419515,
+      "max_abs_diff": 0.47661876678466797,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [
+        "mean KL 2.978e-04 > 0.000e+00",
+        "median KL 4.983e-05 > 0.000e+00",
+        "p99 KL 1.854e-03 > 0.000e+00",
+        "mean NLL change -0.005 nats > 0.000"
+      ],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (dbf3f3b)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODELS/qwen3.5-9b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 24,
+        "vocab": 248320,
+        "source": "$RUN/dumps/16k-input",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:06:10Z",
+        "env": {}
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (fe74a3d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODELS/qwen3.5-9b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 8,
+          "evals": 512,
+          "reruns": 0
+        },
+        "records": 24,
+        "vocab": 248320,
+        "source": "$RUN/dumps/16k-input",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:06:44Z",
+        "env": {
+          "NI_ANE_H4096": "1"
+        }
+      }
+    },
+    "verify": {
+      "records": 24,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.00029375859935685937,
+      "kl_median": 4.914985321731753e-05,
+      "kl_p99": 0.0018190571315079228,
+      "kl_max": 0.0020362741241856264,
+      "margin_change_max": 0.08809280395507812,
+      "tie_margin": 0.0,
+      "nll_change_mean": -0.004629888412408671,
+      "max_abs_diff": 0.47593116760253906,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [
+        "mean KL 2.938e-04 > 0.000e+00",
+        "median KL 4.915e-05 > 0.000e+00",
+        "p99 KL 1.819e-03 > 0.000e+00",
+        "mean NLL change -0.005 nats > 0.000"
+      ],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (dbf3f3b)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODELS/qwen3.5-9b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 24,
+        "vocab": 248320,
+        "source": "$RUN/dumps/16k-input",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:06:10Z",
+        "env": {}
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (fe74a3d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODELS/qwen3.5-9b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 8,
+          "evals": 512,
+          "reruns": 0
+        },
+        "records": 24,
+        "vocab": 248320,
+        "source": "$RUN/dumps/16k-input",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:06:44Z",
+        "env": {
+          "NI_ANE_H4096": "1"
+        }
+      }
+    }
+  }
+}

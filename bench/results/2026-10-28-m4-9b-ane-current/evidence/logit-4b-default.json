@@ -1,0 +1,275 @@
+{
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 8,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": "tools/logit_floors/qwen3.5-4b-4bit.json"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (dbf3f3b)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:22Z",
+        "env": {}
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (fe74a3d)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "$RUN/dumps/4b-base-default",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:47Z",
+        "env": {}
+      }
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 0.989583,
+        "max_mean_kl": 1.02e-06,
+        "max_p99_kl": 1.06e-05,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (dbf3f3b)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "batch",
+        "batch": {
+          "members": 4,
+          "rows": 2
+        },
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:22Z",
+        "env": {}
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (fe74a3d)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "batch",
+        "batch": {
+          "members": 4,
+          "rows": 2
+        },
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "$RUN/dumps/4b-base-default",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:47Z",
+        "env": {}
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 0.989583,
+        "max_mean_kl": 1.02e-06,
+        "max_p99_kl": 1.06e-05,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (dbf3f3b)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:22Z",
+        "env": {}
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (fe74a3d)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "$RUN/dumps/4b-base-default",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:47Z",
+        "env": {}
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 0.989583,
+        "max_mean_kl": 1.02e-06,
+        "max_p99_kl": 1.06e-05,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (dbf3f3b)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:22Z",
+        "env": {}
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.24 (fe74a3d)",
+        "model": "qwen3.5-4b-4bit",
+        "model_dir": "$MODELS/qwen3.5-4b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "$RUN/dumps/4b-base-default",
+        "mac": "Mac mini (2024), M4 (10-core GPU), 24 GB",
+        "macos": "26.5.2",
+        "date": "2026-10-28T15:04:47Z",
+        "env": {}
+      }
+    }
+  }
+}

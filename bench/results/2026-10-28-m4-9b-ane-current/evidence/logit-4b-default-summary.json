@@ -1,0 +1,180 @@
+{
+  "command": [
+    "$VENV/bin/python",
+    "$REPO/tools/logit_compare.py",
+    "$RUN/dumps/4b-base-default",
+    "$RUN/dumps/logit-4b-default",
+    "--json",
+    "$RUN/evidence/logit-4b-default.json"
+  ],
+  "compare_returncode": 0,
+  "identity": {
+    "prefill": {
+      "logits.f32": true,
+      "records.txt": true,
+      "sequences.txt": true
+    },
+    "step": {
+      "logits.f32": true,
+      "records.txt": true,
+      "sequences.txt": true
+    },
+    "verify": {
+      "logits.f32": true,
+      "records.txt": true,
+      "sequences.txt": true
+    },
+    "batch": {
+      "logits.f32": true,
+      "records.txt": true,
+      "sequences.txt": true
+    }
+  },
+  "hashes": {
+    "prefill": {
+      "A": {
+        "logits.f32": "eba49cce8a4242f4ed85ce7f89ec70ce76d991981c138350fb6cd095581742ac",
+        "records.txt": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "eba49cce8a4242f4ed85ce7f89ec70ce76d991981c138350fb6cd095581742ac",
+        "records.txt": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    },
+    "step": {
+      "A": {
+        "logits.f32": "22c252e70993ed0ec419cabb75361e2651367b96371b57c086a88a9be5c7ed72",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "22c252e70993ed0ec419cabb75361e2651367b96371b57c086a88a9be5c7ed72",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    },
+    "verify": {
+      "A": {
+        "logits.f32": "58c2f1eb28946d34788158d402875bc703e259183261eb4ee52c1b0e74b1bb8a",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "58c2f1eb28946d34788158d402875bc703e259183261eb4ee52c1b0e74b1bb8a",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    },
+    "batch": {
+      "A": {
+        "logits.f32": "e9a669e132b79ea6b851ea4d3ed0aba6fe07b8527981ab1e7eb0924811f3ebdd",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "e9a669e132b79ea6b851ea4d3ed0aba6fe07b8527981ab1e7eb0924811f3ebdd",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    }
+  },
+  "ane": {
+    "prefill": {
+      "A": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    },
+    "step": {
+      "A": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    },
+    "verify": {
+      "A": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    },
+    "batch": {
+      "A": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    }
+  },
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 8,
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 192,
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 192,
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 192,
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0
+    }
+  },
+  "classification": "unchanged default regression"
+}

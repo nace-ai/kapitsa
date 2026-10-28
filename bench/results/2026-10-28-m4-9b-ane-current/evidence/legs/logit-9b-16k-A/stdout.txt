@@ -1,0 +1,4 @@
+prefill 1 rows: next-token NLL 0.2697, top-1 = next token 1.0000 -> $RUN/dumps/9b-16k-base/prefill
+step   24 rows: next-token NLL 1.3644, top-1 = next token 0.6667 -> $RUN/dumps/9b-16k-base/step
+verify 24 rows: next-token NLL 1.3643, top-1 = next token 0.6667 -> $RUN/dumps/9b-16k-base/verify
+1 windows, 16384 prefilled tokens in 75.5 s; 77.0 s in all

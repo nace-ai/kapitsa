@@ -1,0 +1,114 @@
+[  2%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/doctor.cpp.o
+[  2%] Building CXX object CMakeFiles/naceinfer.dir/src/ane/ffn_split.cpp.o
+[  5%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_ane.cpp.o
+[  5%] Building CXX object CMakeFiles/naceinfer.dir/src/model/nemotron_h.cpp.o
+[  8%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35.cpp.o
+$REPO/src/model/nemotron_h.cpp:476:10: warning: __builtin_available does not guard availability here; use if (__builtin_available) instead [-Wunsupported-availability-guard]
+  476 |     if (!__builtin_available(macOS 15.0, *)) return true;
+      |          ^
+1 warning generated.
+[  8%] Linking CXX static library libnaceinfer.a
+[ 82%] Built target naceinfer
+[ 82%] Building CXX object CMakeFiles/kapitsa.dir/src/server/main.cpp.o
+[ 82%] Building CXX object CMakeFiles/kapitsa.dir/src/server/native_execution.cpp.o
+[ 85%] Building CXX object CMakeFiles/kapitsa.dir/src/server/launch.cpp.o
+[ 85%] Building CXX object CMakeFiles/kapitsa.dir/src/server/http_stream.cpp.o
+[ 88%] Building CXX object CMakeFiles/kapitsa.dir/src/server/ui.cpp.o
+[ 88%] Building CXX object CMakeFiles/kapitsa.dir/src/server/beam.cpp.o
+[ 88%] Building CXX object CMakeFiles/kapitsa.dir/src/server/picker.cpp.o
+[ 88%] Building CXX object CMakeFiles/kapitsa.dir/src/server/bench_cmd.cpp.o
+[ 91%] Building CXX object CMakeFiles/kapitsa.dir/src/server/update_cmd.cpp.o
+[ 91%] Building CXX object CMakeFiles/kapitsa.dir/src/server/stage_cmd.cpp.o
+[ 91%] Building CXX object CMakeFiles/kapitsa.dir/src/server/route.cpp.o
+[ 94%] Building CXX object CMakeFiles/kapitsa.dir/src/server/cluster_cmd.cpp.o
+[ 94%] Building CXX object CMakeFiles/kapitsa.dir/src/server/pair.cpp.o
+[ 94%] Building CXX object CMakeFiles/kapitsa.dir/generated/chat_page.cpp.o
+[ 97%] Linking CXX executable kapitsa
+[100%] Built target kapitsa
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/logit_dump.dir/tools/logit_dump.cpp.o
+[100%] Linking CXX executable logit_dump
+[100%] Built target logit_dump
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/ni_run.dir/tools/ni_run.cpp.o
+[100%] Linking CXX executable ni_run
+[100%] Built target ni_run
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/ni_eval.dir/tools/ni_eval.cpp.o
+[100%] Linking CXX executable ni_eval
+[100%] Built target ni_eval
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/api_test.dir/tools/api_test.cpp.o
+[100%] Linking CXX executable api_test
+[100%] Built target api_test
+[100%] Built target execution_session_test
+[100%] Built target http_stream_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/bench_test.dir/tools/bench_test.cpp.o
+[100%] Linking CXX executable bench_test
+[100%] Built target bench_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/update_test.dir/tools/update_test.cpp.o
+[100%] Linking CXX executable update_test
+[100%] Built target update_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/prefix_cache_test.dir/tools/prefix_cache_test.cpp.o
+[100%] Linking CXX executable prefix_cache_test
+[100%] Built target prefix_cache_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/grammar_test.dir/tools/grammar_test.cpp.o
+[100%] Linking CXX executable grammar_test
+[100%] Built target grammar_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/structured_check.dir/tools/structured_check.cpp.o
+[100%] Linking CXX executable structured_check
+[100%] Built target structured_check
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/fn_store_test.dir/src/model/expert_store.cpp.o
+[100%] Building CXX object CMakeFiles/fn_store_test.dir/tools/fn_store_test.cpp.o
+[100%] Linking CXX executable fn_store_test
+[100%] Built target fn_store_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/fn_dflash_test.dir/tools/fn_dflash_test.cpp.o
+[100%] Linking CXX executable fn_dflash_test
+[100%] Built target fn_dflash_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/tokenizer_test.dir/tools/tokenizer_test.cpp.o
+[100%] Linking CXX executable tokenizer_test
+[100%] Built target tokenizer_test
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/iq_layout_test.dir/tools/iq_layout_test.cpp.o
+[100%] Linking CXX executable iq_layout_test
+[100%] Built target iq_layout_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/exl3_test.dir/tools/exl3_test.cpp.o
+[100%] Linking CXX executable exl3_test
+[100%] Built target exl3_test
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/remote_test.dir/tools/remote_test.cpp.o
+[100%] Linking CXX executable remote_test
+[100%] Built target remote_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/cluster_test.dir/tools/cluster_test.cpp.o
+[100%] Linking CXX executable cluster_test
+[100%] Built target cluster_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/split_place_test.dir/tools/split_place_test.cpp.o
+[100%] Linking CXX executable split_place_test
+[100%] Built target split_place_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/json_file_test.dir/tools/json_file_test.cpp.o
+[100%] Linking CXX executable json_file_test
+[100%] Built target json_file_test
+[100%] Built target splash_protocol_test
+[100%] Built target splash_runtime_test
+[100%] Built target splash_discover_test
+[100%] Built target splash_plan_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/ane_segment_check.dir/tools/ane_segment_check.cpp.o
+[100%] Linking CXX executable ane_segment_check
+[100%] Built target ane_segment_check
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/parser_test.dir/tools/parser_test.cpp.o
+[100%] Linking CXX executable parser_test
+[100%] Built target parser_test

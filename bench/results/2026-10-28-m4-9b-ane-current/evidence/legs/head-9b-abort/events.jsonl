@@ -1,0 +1,20 @@
+{"epoch": 1793200406.126723, "stream": "stdout", "line": "logs in /tmp/test-session/kap-ane-abort-9okgorli\n"}
+{"epoch": 1793200414.865116, "stream": "stdout", "line": "PASS gpu alone: prompt 0 replies (24 tokens, 3.7 s)\n"}
+{"epoch": 1793200418.757132, "stream": "stdout", "line": "PASS gpu alone: prompt 1 replies (24 tokens, 3.9 s)\n"}
+{"epoch": 1793200418.7580469, "stream": "stdout", "line": "PASS gpu alone: no split chunk in the log\n"}
+{"epoch": 1793200425.457, "stream": "stdout", "line": "PASS split: prompt 0 ran split chunks that held (2.3 s)\n"}
+{"epoch": 1793200427.297313, "stream": "stdout", "line": "PASS split: prompt 1 ran split chunks that held (1.8 s)\n"}
+{"epoch": 1793200427.297473, "stream": "stdout", "line": "PASS split: no chunk was given up\n"}
+{"epoch": 1793200431.57273, "stream": "stdout", "line": "PASS fault: the injected fault is armed\n"}
+{"epoch": 1793200437.3636491, "stream": "stdout", "line": "PASS fault: prompt 0 gives the GPU-alone reply again (24 tokens, 5.8 s)\n"}
+{"epoch": 1793200437.363696, "stream": "stdout", "line": "PASS fault: prompt 0 came back right after the bound (5.8 s)\n"}
+{"epoch": 1793200437.3641589, "stream": "stdout", "line": "PASS fault: the 250 ms bound gave the chunk up\n"}
+{"epoch": 1793200437.3642828, "stream": "stdout", "line": "PASS fault: the abort, not the per-job watchdog, retired the split\n"}
+{"epoch": 1793200437.364436, "stream": "stdout", "line": "PASS fault: the given-up chunk counted no evaluation\n"}
+{"epoch": 1793200437.364513, "stream": "stdout", "line": "PASS fault: the bound and the rerun were reported once each\n"}
+{"epoch": 1793200441.2736309, "stream": "stdout", "line": "PASS fault: prompt 1 gives the GPU-alone reply again (24 tokens, 3.9 s)\n"}
+{"epoch": 1793200441.273688, "stream": "stdout", "line": "PASS fault: prompt 1 came back right after the bound (3.9 s)\n"}
+{"epoch": 1793200441.274511, "stream": "stdout", "line": "PASS fault: the second prompt does not split (and so does not bound) again\n"}
+{"epoch": 1793200441.2745678, "stream": "stdout", "line": "PASS fault: no split chunk after the split was given up\n"}
+{"epoch": 1793200441.350129, "stream": "stdout", "line": "kept /tmp/test-session/kap-ane-abort-9okgorli\n"}
+{"epoch": 1793200441.350231, "stream": "stdout", "line": "OK\n"}

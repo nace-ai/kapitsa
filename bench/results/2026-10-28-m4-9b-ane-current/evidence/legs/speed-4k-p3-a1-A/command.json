@@ -1,0 +1,35 @@
+{
+  "command": [
+    "$VENV/bin/python",
+    "$RUN/api_server_leg_confirm.py",
+    "--server",
+    "$RUN/baseline/kapitsa",
+    "--model",
+    "$MODELS/qwen3.5-9b-4bit",
+    "--out",
+    "$RUN/evidence/speed-4k/speed-4k-p3-a1-A",
+    "--pair",
+    "3",
+    "--workloads",
+    "",
+    "--suite",
+    "$RUN/evidence/speed-4k-suite-p3-a1.json",
+    "--tokens",
+    "512"
+  ],
+  "cwd": "$REPO",
+  "env": {
+    "KAPITSA_HOME": "$RUN/evidence/legs/speed-4k-p3-a1-A/home",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "NI_LOCK_HELD": "1",
+    "NACE_GPU_LOCK_HELD": "1"
+  },
+  "label": "speed-4k-p3-a1-A",
+  "started_utc": "2026-10-28T15:34:05.419720+00:00",
+  "binary_sha256": "c4e9f06cb179ae4b3728c748990fbbef7f30580ea42c0eb9c702ebc7c7861c89",
+  "quiet_seconds": 8.0,
+  "max_foreign_pct": 1.0,
+  "sample_ms": 1000,
+  "runner_sha256": "e1bc865c70919ff6925f9d508a823e6f2200ab78a6dcaebdb3f5fa622a184a0c"
+}

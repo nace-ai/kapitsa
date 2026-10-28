@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "binary_hashes": {
+    "kapitsa": "7c14140ce2f8fa0015fa8882446a85f7dd4c6e042a0cfcc16ff9cd7e9e73b12f",
+    "logit_dump": "16856a7523391217e017906b2d61f90318ef9c695121f04d6354449d458cdb09",
+    "ni_run": "b4a955b1475bb9916fd0ab6f7d95476fb058e306ad038be6f86b132194aba737",
+    "ni_eval": "0c983b6bfc6b62e7fde5d6c9f5f6ce6b57c55ae1000f59e07b61f9207eefbe4e",
+    "ane_segment_check": "99314fbbd6ea06d538901c1070be337ea58a0f388dcdc960be070e1be613fa6e"
+  },
+  "completed_utc": "2026-10-28T14:51:48.490449+00:00"
+}

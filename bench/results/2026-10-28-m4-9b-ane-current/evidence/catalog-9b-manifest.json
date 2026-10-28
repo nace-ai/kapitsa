@@ -1,0 +1,98 @@
+{
+  "name": "qwen3.5-9b:4bit",
+  "repo": "lmstudio-community/Qwen3.5-9B-MLX-4bit",
+  "revision": "b455506b0f574c74616dbcd56879bde38fafcff3",
+  "commit": "b455506b0f574c74616dbcd56879bde38fafcff3",
+  "variant": "4bit",
+  "quant": "MLX affine 4-bit, group 64",
+  "files": [
+    {
+      "path": "README.md",
+      "size": 2253
+    },
+    {
+      "path": "chat_template.jinja",
+      "size": 7756
+    },
+    {
+      "path": "config.json",
+      "size": 3331
+    },
+    {
+      "path": "model-00001-of-00002.safetensors",
+      "size": 5349771292,
+      "sha256": "973cc1efdedb4d327993fb9c27865f0bcfd9015897d5f0ca9ffb6cda6a0768e5"
+    },
+    {
+      "path": "model-00002-of-00002.safetensors",
+      "size": 600449850,
+      "sha256": "597dae0ed72b60acc07382e8ea0cdb9509c54128e07b0eaa9cf4996373d5ca7d"
+    },
+    {
+      "path": "model.safetensors.index.json",
+      "size": 123592
+    },
+    {
+      "path": "preprocessor_config.json",
+      "size": 390
+    },
+    {
+      "path": "processor_config.json",
+      "size": 991
+    },
+    {
+      "path": "tokenizer.json",
+      "size": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size": 9187
+    },
+    {
+      "path": "video_preprocessor_config.json",
+      "size": 385
+    },
+    {
+      "path": "vocab.json",
+      "size": 6722759
+    },
+    {
+      "path": "mtp.safetensors",
+      "size": 486582960,
+      "sha256": "5f7c656b3930220c704c52d6c9ad0ab82cacf8da4b66c2f2361cbc3acee25a1f"
+    },
+    {
+      "path": "dflash2/config.json",
+      "size": 1222
+    },
+    {
+      "path": "dflash2/model.safetensors",
+      "size": 2583816465,
+      "sha256": "0a42274b32554f48de1faa0d42824e9c2ceda649c30ae0a731cddf410dd698c7"
+    }
+  ],
+  "companions": [
+    {
+      "kind": "mtp-sidecar",
+      "repo": "Qwen/Qwen3.5-9B",
+      "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "files": [
+        "mtp.safetensors"
+      ]
+    },
+    {
+      "kind": "dflash",
+      "repo": "z-lab/Qwen3.5-9B-DFlash",
+      "revision": "5fc3b3d474760f18c516db87d84c37edbfd3ede6",
+      "commit": "5fc3b3d474760f18c516db87d84c37edbfd3ede6",
+      "files": [
+        "dflash2/config.json",
+        "dflash2/model.safetensors"
+      ]
+    }
+  ],
+  "total_bytes": 9047481758,
+  "completed_at": "2026-10-27T15:01:05Z",
+  "kapitsa": "0.2.21"
+}

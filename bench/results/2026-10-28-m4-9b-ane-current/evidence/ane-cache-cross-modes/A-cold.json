@@ -1,0 +1,35 @@
+{
+  "label": "A-cold",
+  "cached_tokens": 0,
+  "response": {
+    "id": "chatcmpl-179320045875249",
+    "object": "chat.completion",
+    "created": 1793200458,
+    "model": "ane-quality",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"id\": \"ref_0003\", \"owner\": \"Person_5021\", \"city\": \"Lima\", \"quota\": 560, \"code\": \"b67fd506\"}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4975,
+      "completion_tokens": 50,
+      "total_tokens": 5025,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "kapitsa": {
+        "prefill_ms": 21035.1,
+        "kflash": {
+          "source": "DFlash2",
+          "cycles": 11
+        }
+      }
+    }
+  }
+}

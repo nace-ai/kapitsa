@@ -1,0 +1,14 @@
+{
+  "label": "head-4b-native-default",
+  "returncode": 0,
+  "wall_seconds": 163.6384961605072,
+  "foreign_mean_pct": 0.06789865018164379,
+  "foreign_peak_pct": 3.0099910710509143,
+  "thermal_states": [
+    "nominal"
+  ],
+  "swapouts_delta": 0,
+  "samples": 163,
+  "user_activity_observed": false,
+  "summaries": []
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "name": "prose-zh-4096",
+    "messages": "$RUN/prompts/prose-zh-4096-messages.json",
+    "sha256": "f446496b47a7a3810b949be89d841f41a3df6851b978eff4dc138025c1580d9d",
+    "nominal_tokens": 4096,
+    "corpus_char_offset": 17500,
+    "historical_source": "$PREVIOUS_RUN/prompts/ane-confirm/prose-zh-4096-messages.json"
+  }
+]

@@ -1,0 +1,194 @@
+{
+  "command": [
+    "$VENV/bin/python",
+    "$REPO/tools/logit_compare.py",
+    "$RUN/dumps/9b-base-default",
+    "$RUN/dumps/logit-9b-on",
+    "--json",
+    "$RUN/evidence/logit-9b-on.json",
+    "--min-top1",
+    "1",
+    "--max-mean-kl",
+    "0",
+    "--max-median-kl",
+    "0",
+    "--max-p99-kl",
+    "0",
+    "--near-tie",
+    "0",
+    "--max-far-flips",
+    "0",
+    "--max-nll-change",
+    "0"
+  ],
+  "compare_returncode": 1,
+  "identity": {
+    "prefill": {
+      "logits.f32": false,
+      "records.txt": true,
+      "sequences.txt": true
+    },
+    "step": {
+      "logits.f32": false,
+      "records.txt": true,
+      "sequences.txt": true
+    },
+    "verify": {
+      "logits.f32": false,
+      "records.txt": true,
+      "sequences.txt": true
+    },
+    "batch": {
+      "logits.f32": false,
+      "records.txt": true,
+      "sequences.txt": true
+    }
+  },
+  "hashes": {
+    "prefill": {
+      "A": {
+        "logits.f32": "ef1c3b40ee3c48605e75d5abfb214ddb79c700632990d7ce70c5d2979374f21e",
+        "records.txt": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "6c930446fc61f9a14d0bf52f250f1629d8ae19fb046d43f695e1f26fc47b4015",
+        "records.txt": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    },
+    "step": {
+      "A": {
+        "logits.f32": "94a1ce3bf82cfb0b20e9f1707ee0842dd1093e3bb84cae7d8a347d6a7d7ee73a",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "c86635a697d05c9a6335767b13262b9e2412fafe5c128176ce71e61eb79fa827",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    },
+    "verify": {
+      "A": {
+        "logits.f32": "b70dd0514767becd9e84a479c7817da5c4c80dcc21df7a06fc5b18459b8ba1b2",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "575435ded5e26bd0b15a7defe24d10804d38a229704e8826176504377441462e",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    },
+    "batch": {
+      "A": {
+        "logits.f32": "066e7c596dc04d18bd3b1b7c1cb43f8059bc8e45c5841a8048caeb039895dc26",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      },
+      "B": {
+        "logits.f32": "227085cc612d01a69344a014b79626e5b5ed4ec8f0e8d5389e8b4e3054aa1e66",
+        "records.txt": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+        "sequences.txt": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+      }
+    }
+  },
+  "ane": {
+    "prefill": {
+      "A": {
+        "chunks": 0,
+        "evals": 0,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    },
+    "step": {
+      "A": {
+        "chunks": 0,
+        "evals": 0,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    },
+    "verify": {
+      "A": {
+        "chunks": 0,
+        "evals": 0,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    },
+    "batch": {
+      "A": {
+        "chunks": 0,
+        "evals": 0,
+        "reruns": 0
+      },
+      "B": {
+        "chunks": 10,
+        "evals": 576,
+        "reruns": 0
+      }
+    }
+  },
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 0,
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.00047847517260584294,
+      "kl_p99": 0.001989358387337623,
+      "kl_max": 0.002064196454376971,
+      "nll_change_mean": 7.509512929670947e-05,
+      "max_abs_diff": 0.8046739101409912
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 0,
+      "top1": 0.9895833333333334,
+      "flips": 2,
+      "kl_mean": 0.0003691627516563735,
+      "kl_p99": 0.007215718988357354,
+      "kl_max": 0.009689941088064197,
+      "nll_change_mean": 0.001677625729465985,
+      "max_abs_diff": 3.36077544093132
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 0,
+      "top1": 0.9895833333333334,
+      "flips": 2,
+      "kl_mean": 0.0003767443686522171,
+      "kl_p99": 0.007340711699394486,
+      "kl_max": 0.010124970732502346,
+      "nll_change_mean": 0.0016965787883759982,
+      "max_abs_diff": 3.3148902654647827
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 0,
+      "top1": 0.9895833333333334,
+      "flips": 2,
+      "kl_mean": 0.0003638997966277224,
+      "kl_p99": 0.006972980239398841,
+      "kl_max": 0.009528184544307879,
+      "nll_change_mean": 0.0016311985587391664,
+      "max_abs_diff": 3.2830371856689453
+    }
+  },
+  "classification": "intentional opt-in numerical change"
+}

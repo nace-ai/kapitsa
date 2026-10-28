@@ -1,0 +1,161 @@
+PASS cli: list --json on an empty store
+PASS cli: 35b:4bit -> qwen3.6-35b-a3b:4bit at the app's pinned revisions
+PASS cli: QWEN3.6-35B-A3B:4bit -> qwen3.6-35b-a3b:4bit at the app's pinned revisions
+PASS cli: Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed -> qwen3.6-35b-a3b:4bit at the app's pinned revisions
+PASS cli: 27b:4bit -> qwen3.8-27b:4bit at the app's pinned revisions
+PASS cli: 27B:4BIT -> qwen3.8-27b:4bit at the app's pinned revisions
+PASS cli: lmstudio-community/Qwen3.8-27B-MLX-4bit -> qwen3.8-27b:4bit at the app's pinned revisions
+PASS cli: hf.co/lmstudio-community/Qwen3.8-27B-MLX-4bit -> qwen3.8-27b:4bit at the app's pinned revisions
+PASS cli: 4b:4bit -> qwen3.5-4b:4bit at the app's pinned revisions
+PASS cli: qwen3.5-4b:4bit -> qwen3.5-4b:4bit at the app's pinned revisions
+PASS cli: lmstudio-community/Qwen3.5-4B-MLX-4bit@c43ee1d65576a5d98de1e8405cac93c371a655c1 -> qwen3.5-4b:4bit at the app's pinned revisions
+PASS cli: 9b:4bit -> qwen3.5-9b:4bit at the app's pinned revisions
+PASS cli: QWEN3.5-9B:4bit -> qwen3.5-9b:4bit at the app's pinned revisions
+PASS cli: lmstudio-community/Qwen3.5-9B-MLX-4bit -> qwen3.5-9b:4bit at the app's pinned revisions
+PASS cli: 35b -> qwen3.6-35b-a3b:4bit, the default
+PASS cli: qwen3.6-35b -> qwen3.6-35b-a3b:4bit, the default
+PASS cli: QWEN3.6-35B-A3B -> qwen3.6-35b-a3b:4bit, the default
+PASS cli: 27b -> qwen3.8-27b:4bit, the default
+PASS cli: 4b -> qwen3.5-4b:4bit, the default
+PASS cli: qwen3.5-4b -> qwen3.5-4b:4bit, the default
+PASS cli: 9b -> qwen3.5-9b:4bit, the default
+PASS cli: qwen3.5-9b -> qwen3.5-9b:4bit, the default
+PASS cli: bolt -> nemotron-3.5-bolt:24gb with its lilicorr drafter
+PASS cli: nemotron-bolt -> nemotron-3.5-bolt:24gb with its lilicorr drafter
+PASS cli: super -> nemotron-3.5-super-vl:nvfp4 with its lilicorr drafter
+PASS cli: super-vl -> nemotron-3.5-super-vl:nvfp4 with its lilicorr drafter
+PASS cli: nemotron-super -> nemotron-3.5-super-vl:nvfp4 with its lilicorr drafter
+PASS cli: NEMOTRON-3.5-SUPER-VL:nvfp4 -> nemotron-3.5-super-vl:nvfp4 with its lilicorr drafter
+PASS cli: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4 -> nemotron-3.5-super-vl:nvfp4 with its lilicorr drafter
+PASS cli: lightning -> nemotron-3.5-lightning:nvfp4 with its dspark drafter
+PASS cli: nemotron-lightning -> nemotron-3.5-lightning:nvfp4 with its dspark drafter
+PASS cli: nemotron-3.5-lightning:nvfp4 -> nemotron-3.5-lightning:nvfp4 with its dspark drafter
+PASS cli: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4 -> nemotron-3.5-lightning:nvfp4 with its dspark drafter
+PASS cli: dory -> nemotron-labs-dory1.0-4b:nvfp4, no drafter
+PASS cli: nemotron-labs-dory1.0-4b -> nemotron-labs-dory1.0-4b:nvfp4, no drafter
+PASS cli: dory:bf16 -> nemotron-labs-dory1.0-4b:bf16, no drafter
+PASS cli: nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16 -> nemotron-labs-dory1.0-4b:bf16, no drafter
+PASS cli: flint -> flint:4bit, no drafter
+PASS cli: recursive-flint -> flint:4bit, no drafter
+PASS cli: flint:4bit -> flint:4bit, no drafter
+PASS cli: RecursiveSI/flint-int4 -> flint:4bit, no drafter
+PASS cli: nano-4b -> nemotron-3-nano-4b:fp8, no drafter
+PASS cli: nemotron-nano-4b -> nemotron-3-nano-4b:fp8, no drafter
+PASS cli: nano-4b:bf16 -> nemotron-3-nano-4b:bf16, no drafter
+PASS cli: nano-9b -> nemotron-nano-9b-v2:nvfp4, no drafter
+PASS cli: nvidia/NVIDIA-Nemotron-Nano-9B-v2-NVFP4 -> nemotron-nano-9b-v2:nvfp4, no drafter
+PASS cli: 35b:16gb -> qwen3.6-35b-a3b:16gb, one pinned GGUF file to import, no drafter
+PASS cli: QWEN3.6-35B-A3B:16GB -> qwen3.6-35b-a3b:16gb, one pinned GGUF file to import, no drafter
+PASS cli: unsloth/Qwen3.6-35B-A3B-GGUF -> qwen3.6-35b-a3b:16gb, one pinned GGUF file to import, no drafter
+PASS cli: 35b:16gb checks the disk before its download, keeping 6 GB for the import
+PASS cli: 35b on a 12.2 GB budget -> 35b:16gb
+PASS cli: 35b on a 48 GB budget -> 35b:4bit
+PASS cli: a downloaded 16gb says its size on disk
+PASS cli: a finished 16gb is reused offline
+PASS cli: serve unasked starts the model picked last, downloaded (the port fails next)
+PASS cli: serve --yes still takes the best model for this Mac
+PASS cli: pi unasked starts the model picked last too (the port fails next)
+PASS cli: a last pick that is not downloaded: the best model for this Mac, as before
+PASS cli: list shows 16gb complete, with its variant
+PASS cli: rm 35b:16gb deletes it
+PASS cli: rm 35b:4bit deletes it
+PASS cli: flint:16gb -> flint:16gb, one pinned GGUF file to import, no drafter
+PASS cli: FLINT:16GB -> flint:16gb, one pinned GGUF file to import, no drafter
+PASS cli: unsloth/flint-GGUF -> flint:16gb, one pinned GGUF file to import, no drafter
+PASS cli: flint on a 12.2 GB budget -> flint:16gb
+PASS cli: flint on a 48 GB budget -> flint:4bit
+PASS cli: doctor on a 12.2 GB budget: flint:16gb starts with 1 slot, a chunk below 1024 rows and 8K, and fits an 8K conversation
+PASS cli: doctor on a 16 GB budget: flint:16gb keeps the usual start (2+ slots, 1024+ rows, 32K+)
+PASS cli: doctor, an MLX pack with its MTP head in the shards (language_model.mtp.*): the head is planned apart from the trunk's weights and the model decodes with it
+PASS cli: doctor, a 35B-shaped model on 48 GB: the default context (262144) keeps the slots and prefill chunk 128K has (4, 2112) and is not less
+PASS cli: doctor, a 35B-shaped model on 16 GB: the default context (163840) keeps the slots and prefill chunk 128K has (4, 2112) and is not less
+PASS cli: doctor, a 35B-shaped model on 14.8 GB: the default context (131072) keeps the slots and prefill chunk 128K has (2, 2048) and is not less
+PASS cli: doctor, a 35B-shaped model on 13 GB with --slots 1: the context one slot holds, more than the default's
+PASS cli: doctor, 48 GB: the default context is the model's whole limit (256K)
+PASS cli: doctor, 14.8 GB: the default context stops at 128K, where 1024-row buffers would take the chunk down
+PASS cli: doctor, a Flash-Next Q2_0 pack without --context (memory-bound): its expert store is planned at serve's honest default context and slots (as with --context 122880), not at doctor's 64K; doctor's default equals the planned context and the incomplete store discloses the group-slot reservation it pays
+PASS cli: doctor, the same pack with an explicit --context 131072: the request is honored exactly (its context stays 131072, not the 122880 default) and its slots are 2 (full 131072 coverage preserved alongside the 122880 memory-bound default)
+PASS cli: doctor, a Flash-Next Q2_0 pack with --context: its expert store is planned at it (64K with its slots; past the model's 256K, at 256K as serve caps it)
+PASS cli: doctor, NI_EXPERT_STORE=all on the memory-bound pack: the pin is resident (its bytes are the whole store's), the reason names the pin, and the complete store never pays the group-slot charge - at the expert_store level or the top level - even where the automatic store is incomplete
+PASS cli: doctor, NI_EXPERT_STORE=1 (a short pin) on the same pack: the store's bytes are exactly the pin's 1e9, the reason names the pin, and the incomplete store discloses its reservation at both levels
+PASS cli: doctor, NI_EXPERT_STORE=-1 (a negative pin) on the same pack: it clamps to 0 bytes - never an undefined double->size_t conversion - and a 0 pin still reserves, disclosing the charge at both levels
+PASS cli: rm flint:16gb deletes it
+PASS cli: rm flint:4bit deletes it
+PASS cli: an unknown variant is refused with the model's variants
+PASS cli: doctor --slots with a bad number is a usage error (2), not an abort
+PASS cli: doctor --prefill-chunk with a bad number is a usage error (2), not an abort
+PASS cli: doctor --mem-budget with a bad number is a usage error (2), not an abort
+PASS cli: import --threads with a bad number is a usage error (2), not an abort
+PASS cli: doctor --slots with a bad number is a usage error (2), not an abort
+PASS cli: doctor --prefill-chunk with a bad number is a usage error (2), not an abort
+PASS cli: doctor --slots 99999999999 says its range
+PASS cli: doctor --prefill-chunk -1 says its range
+PASS cli: doctor --mem-budget 1e30 says its range
+PASS cli: doctor --mem-budget 1e400 says its range
+PASS cli: doctor --mem-budget -3 says its range
+PASS cli: doctor --mem-budget nan is not a number
+PASS cli: import --threads past 1024 says the range, not 'a whole number'
+PASS cli: a missing model folder is named without a --model flag that pull does not have
+PASS cli: org/name@rev is a Hugging Face repo
+PASS cli: a huggingface.co URL is a repo
+PASS cli: a folder is used as is
+PASS cli: 'llama-70b' is refused with the choices
+PASS cli: './no-such-folder' is refused with the choices
+PASS cli: 'org/' is refused with the choices
+PASS cli: a failed first pull leaves no folder behind
+PASS cli: a finished download is reused offline
+PASS cli: list shows it complete, with its variant and MTP head
+PASS cli: a missing file makes it incomplete
+PASS cli: completing it needs the Hub (offline here: a clear error)
+PASS cli: a failed repair keeps what is there
+PASS cli: rm deletes it
+PASS cli: rm leaves a folder of yours alone
+PASS cli: rm of a clone frees nothing, and says so
+PASS cli: rm of the last copy frees its size
+PASS cli: a busy port fails at once, before loading
+PASS cli: serve --context 131072 is taken
+PASS cli: serve --ctx 131072 is taken
+PASS cli: serve --context 128k is taken
+PASS cli: serve --ctx 128k is taken
+PASS cli: serve --context 256K is taken
+PASS cli: serve --ctx 256K is taken
+PASS cli: serve --context 1m is taken
+PASS cli: serve --ctx 1m is taken
+PASS cli: serve --context max is taken
+PASS cli: serve --ctx max is taken
+PASS cli: serve --context '12q' is refused
+PASS cli: claude --context '12q' is refused
+PASS cli: serve --context '0' is refused
+PASS cli: claude --context '0' is refused
+PASS cli: serve --context '-5' is refused
+PASS cli: claude --context '-5' is refused
+PASS cli: serve --context '128kb' is refused
+PASS cli: claude --context '128kb' is refused
+PASS cli: serve --context '1.5m' is refused
+PASS cli: claude --context '1.5m' is refused
+PASS cli: serve --context '99999999999' is refused
+PASS cli: claude --context '99999999999' is refused
+PASS cli: serve --context '' is refused
+PASS cli: claude --context '' is refused
+PASS cli: serve --timing ttft is taken
+PASS cli: serve --timing prefill is taken
+PASS cli: serve --timing both is taken
+PASS cli: serve --timing 'bogus' is refused
+PASS cli: serve --timing '' is refused
+PASS cli: serve --timing 'TTFT' is refused
+PASS cli: serve --timing 'prefill,ttft' is refused
+PASS cli: serve refuses another architecture by its model_type
+PASS cli: the port is still checked first
+PASS cli: doctor --context max asks for a size
+PASS cli: serve with an unknown model
+PASS cli: flash-next:4bit -> qwen3.8-flash-next:4bit at the app's pinned revision
+PASS cli: flash:4bit -> qwen3.8-flash-next:4bit at the app's pinned revision
+PASS cli: nace-ai/Qwen3.8-Flash-Next-MLX-4bit -> qwen3.8-flash-next:4bit at the app's pinned revision
+PASS cli: serve with no model, offline and nothing downloaded: a clear error
+PASS cli: pi uses the server on its port: its model and the context that fits, nothing started
+PASS cli: pi on the Homebrew service's port (sh.brew.kapitsa) says it is the service, and how to stop it
+PASS cli: pi on the Homebrew service's port (homebrew.mxcl.kapitsa) says it is the service, and how to stop it
+PASS cli: a service on another port is not the server found
+PASS cli: pi on a running server downloads nothing
+PASS cli: --help names the commands and models
+ALL PASSED
