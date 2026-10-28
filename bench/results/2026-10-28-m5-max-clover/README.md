@@ -9,8 +9,8 @@ High Power mode. Weights: the Hub checkpoint at `4b0402b` (every shard's sha256 
 8-bit), 19.5 GB. Every run is `kapitsa bench` (the protocol of [bench/harness](../../harness/README.md): 512-token coding
 answers at T 0.6 and greedy, cold 4K and 16K prompts, follow-ups, tool calls) on that folder.
 
-**The poster's cell** is the full run at 12:21 UTC on `80740c0`, #776's head at the time (its later
-head a9fa5ae only adds a log line; the decoding is the same): **6,002 / 319** tok/s (prefill 4K / decode T 0.6), greedy 332, 16K prompt 5,313, follow-ups 0.04 and
+**The poster's cell** is the full run at 12:21 UTC on `80740c0`, #776's pre-merge head (#776 was squash-merged as
+`250c7c9`; its final head `a9fa5ae` added only a log line, so the decoding is the same): **6,002 / 319** tok/s (prefill 4K / decode T 0.6), greedy 332, 16K prompt 5,313, follow-ups 0.04 and
 0.05 s, peak 21.1 GB. Its decoding is Kapitsa's default for Clover (`NI_CLOVER_DECODE=auto`): Clover's causal pathway
 has the 35B-A3B's shape, so the 35B's DFlash2 drafter (from the installed `qwen3.6-35b-a3b` pack) drafts and KFlash
 verifies, as for the 35B. No other engine runs Clover on a Mac (DiffuSpace's own engines: SGLang on CUDA, a llama.cpp
