@@ -341,6 +341,15 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     flint_ = m.get();
     model_ = std::move(m);
     publisher_sampling();
+  } else if (Clover::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<Clover>(opts_.model_dir, opts_.prefill_chunk);
+    q35_ = clover_ = m.get();
+    model_ = std::move(m);
+    // its generation_config.json decodes greedily (do_sample false; its temperature 1.0 is then not used)
+    auto gc = nlohmann::json::parse(read_file(opts_.model_dir + "/generation_config.json"), nullptr, false);
+    const bool sample = !gc.is_discarded() && gc.is_object() && gc.value("do_sample", false);
+    if (sample) publisher_sampling();
+    else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = 0;
   } else {
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
@@ -668,7 +677,7 @@ std::string unsupported_model(const std::string& model_dir) {
   const nlohmann::json& j = *jp;
   if (!j.is_object()) return model_dir + ": its config.json is not valid JSON.";
   if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
-      Flint::is_model(model_dir))
+      Flint::is_model(model_dir) || Clover::is_model(model_dir))
     return "";
   // the Qwen3.5 family by its model_type (Hugging Face's, and what the GGUF import writes); a config that names none,
   // by the hybrid's shape, as the Hub check reads it (src/hub/fetch.cpp, check_supported)
@@ -682,7 +691,7 @@ std::string unsupported_model(const std::string& model_dir) {
   if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers")) return "";
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
                            "Qwen3.8-Flash-Next (qwen4_exp), NVIDIA's Nemotron-H (nemotron_h: Nemotron Nano, Nemotron 3.5), "
-                           "Nemotron Labs Dory (dory) and Recursive's Flint (flint).";
+                           "Nemotron Labs Dory (dory), Recursive's Flint (flint) and DiffuSpace's Clover (clover_moe).";
   const std::string what = !mt.empty() ? mt : tt;
   if (what.empty()) return model_dir + " is not a model Kapitsa runs: its config.json names no model_type." + runs;
   return model_dir + " is a " + what + " model (its config.json's model_type), an architecture Kapitsa does not run." +
@@ -833,6 +842,10 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   lp.dflash_auto = want == "auto";
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
   slots = std::max(1, slots);
+  // Clover: the 35B-A3B's DFlash2 drafter for its causal pathway (Clover::find_drafter), unless NI_CLOVER_DECODE keeps
+  // its own decoding (self-speculative or block diffusion)
+  const bool clover = Clover::is_model(model_dir);
+  if (clover && Clover::decode_mode() != "auto" && Clover::decode_mode() != "dflash") lp.dflash_off = true;
   if (Dory::is_model(model_dir) || Flint::is_model(model_dir)) {
     lp.dflash_off = true;  // no block drafter for Dory or Flint
   } else if (NemotronH::is_model(model_dir)) {
@@ -851,7 +864,9 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       }
     }
   } else if (!lp.dflash_off && !Qwen4Exp::is_model(model_dir)) {  // (no block drafter binds to Qwen3.8-Flash-Next)
-    lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
+    lp.dflash = !lp.dflash_auto ? want
+                : clover         ? Clover::find_drafter(model_dir)
+                                 : DFlash2::find(model_dir, Qwen35::read_config(model_dir));
     if (!lp.dflash.empty()) {
       // auto: a drafter that would keep one conversation from its full context is left out (MTP or plain decoding
       // instead); the model with 1024-row prefill buffers, the slots' state, the Neural Engine split and one full
@@ -2527,6 +2542,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   s.embeds = runs.empty() ? nullptr : &runs;
 
   // ---- prefill ----
+  // Clover decodes with its own loops below when no drafter loaded (else the DFlash2 loop runs its causal pathway); its
+  // block diffusion samples nothing after the prompt (there a row's logits predict the row itself)
+  Clover* const clover_own = dfl_ ? nullptr : clover_;
+  const bool clover_diffusion = clover_own && !clover_own->self_spec();
   // template + tokenizer (before the turn) + slot pick (image encoding and an SSD read: logged apart)
   const double tok_ms = tok_wall + (now_ms() - t_turn) - img_ms - disk_ms;
   const AneStats ane0 = model_->ane_stats();  // the Neural Engine's busy time during this prefill (log)
@@ -2834,7 +2853,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       vpf_rows(n);
     } else {
-      model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? snap_at - p : 0);
+      model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n && !clover_diffusion, snap, snap ? snap_at - p : 0);
     }
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     const bool defer = !vpf && spec_ && mtp_defer && !split && p + T == n;
@@ -2849,7 +2868,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         // rerun on the GPU alone; it captures the chunk's rows for the drafter again (the hook is armed)
         e = g.begin();
         model_->restore(*e, s, *ane_ck_);
-        model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n);
+        model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n && !clover_diffusion);
         if (spec_) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
         e->commit_and_wait();
       }
@@ -3095,7 +3114,123 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const int* t = tree ? dfl_->tree_desc() : nullptr;
     verify_masks(*gm, gst, s, P, rows, t ? t + kf::kPar : nullptr, t ? std::clamp(t[kf::kN], 1, rows) : rows);
   };
-  if (g_direct) {
+  int clover_blocks = 0;  // Clover's block diffusion: blocks written (req_cycles: its denoising passes)
+  if (clover_own && gm) {
+    finish = "error";
+    res.error = "structured output is not supported with Clover";
+  } else if (clover_own && clover_own->self_spec()) {
+    // Clover, self-speculative (src/model/clover.h): tokens[P] is the pending token (the prompt's prefill sampled the
+    // first); a cycle drafts the W - 1 after it with one denoising pass and verifies them with one causal pass, then
+    // keeps the drafts the verify accepts and the verify's token after the last of them. The rows the cycle kept go
+    // into the state at the next cycle's start (commit_rows, folded first), as the MTP loop's do.
+    const int W = clover_own->draft_rows();
+    CloverReply reply;
+    reply.counts.assign(size_t(model_->vocab()), 0);
+    int P = n;
+    bool go = handle(s.tokens()[n]);
+    reply.commit(s.tokens() + n, 1);
+    while (go) {
+      if (P + W + 2 >= s.cap) {
+        // nothing of this request is in flight between cycles (the kept rows wait on the slot's own tape)
+        if (P + W + 2 >= s.limit || !grow_kv(std::min(s.limit, P + W + 3), [] {})) {
+          finish = "length";
+          res.context_full = true;
+          break;
+        }
+      }
+      auto e2 = g.begin();
+      clover_own->encode_cycle(*e2, s, P, W, reply, eos, sp, uint32_t(P));
+      e2->commit_and_wait();
+      const CloverRow* rw = clover_own->rows();
+      int* tk = s.tokens();
+      int a = 0;
+      while (a < W - 1 && clover_own->accept(rw[a], tk[P + 1 + a])) ++a;
+      tk[P + a + 1] = sp.temperature > 0.0f ? rw[a].smp : rw[a].tok;
+      int m = 0;  // tokens handled: the accepted drafts and the token after them, up to a stop
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      reply.commit(tk + P + 1, m);
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += a;
+      cycle_done(m);
+      q35_->commit_rows(s, m);  // rows P .. P + m - 1 are fed; tokens[P + m] is the new pending token
+      P += m;
+      if (go && contended()) yield_turn(res);
+    }
+    auto e3 = g.begin();
+    q35_->encode_flush(*e3, s);
+    e3->commit_and_wait();
+    fed_until = P;
+  } else if (clover_own) {
+    // Clover, block diffusion (NI_CLOVER_DECODE=diffusion): a block of B rows at P starts as mask tokens; each
+    // denoising pass gives every row a token and its probability, the rows still masked take theirs above the
+    // threshold (the most confident one when none is), until every row has one. The block's tokens are then the
+    // reply's, in order, up to an end-of-reply token, and a block the reply goes on after is committed by a causal
+    // pass (the prompt's prefill), so the live state covers it. The prompt's prefill sampled nothing (here a row's
+    // logits predict the row itself).
+    const int B = clover_own->block_size();
+    const float thr = clover_own->threshold();
+    const bool smp = sp.temperature > 0.0f;
+    CloverReply reply;
+    reply.counts.assign(size_t(model_->vocab()), 0);
+    int P = n;
+    bool go = true;
+    std::vector<char> pending(static_cast<size_t>(B), 0);
+    std::vector<int> take;
+    while (go) {
+      if (P + B + 1 >= s.cap) {
+        // nothing of this request is in flight between blocks
+        if (P + B + 1 >= s.limit || !grow_kv(std::min(s.limit, P + B + 2), [] {})) {
+          finish = "length";
+          res.context_full = true;
+          break;
+        }
+      }
+      int* tk = s.tokens();
+      for (int j = 0; j < B; ++j) tk[P + j] = clover_own->mask_id(), pending[size_t(j)] = 1;
+      for (int left = B, it = 0; left > 0; ++it) {
+        if (it >= B) fatal("Clover: a block still masked after %d denoising passes", B);
+        if (cancelled && cancelled()) {  // (a block takes up to B passes: not only between blocks)
+          finish = "cancelled";
+          break;
+        }
+        auto e2 = g.begin();
+        clover_own->encode_preview(*e2, s, P, B, reply, eos, sp, uint32_t(P) * 32u + uint32_t(it));
+        e2->commit_and_wait();
+        ++req_cycles;
+        const CloverRow* rw = clover_own->rows();
+        auto conf = [&](int j) { return smp ? rw[j].conf_smp : rw[j].conf; };
+        take.clear();
+        int best = -1;
+        for (int j = 0; j < B; ++j) {
+          if (!pending[size_t(j)]) continue;
+          if (conf(j) > thr) take.push_back(j);
+          if (best < 0 || conf(j) > conf(best)) best = j;
+        }
+        if (take.empty()) take.push_back(best);
+        for (int j : take) tk[P + j] = smp ? rw[j].smp : rw[j].tok, pending[size_t(j)] = 0, --left;
+      }
+      if (!finish.empty()) break;
+      ++clover_blocks;
+      int m = 0;
+      while (m < B && go) go = handle(tk[P + m++]);
+      reply.commit(tk + P, m);
+      cycle_done(m);
+      if (!go) break;
+      auto e2 = g.begin();
+      model_->encode_prefill(*e2, s, P, B, sp, 0, false);
+      e2->commit_and_wait();
+      P += B;
+      if (contended()) yield_turn(res);
+    }
+    fed_until = P;  // (the last block, not committed, is not in the live state)
+  } else if (g_direct) {
     // (the constrained loop below)
   } else if (lili_) {
     // LiLiCorr / DSpark: per cycle the drafter's context commit of the previous cycle's kept rows and the drafting pass
@@ -3839,6 +3974,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   char cyc[192] = "";
   if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
+  if (clover_own && clover_own->self_spec() && req_cycles > 0)
+    snprintf(cyc, sizeof cyc, ", %.2f tok/cycle (%d-row draft and verify)", double(gen - 1) / req_cycles,
+             clover_own->draft_rows());
+  else if (clover_own && req_cycles > 0)
+    snprintf(cyc, sizeof cyc, ", %d blocks, %d denoising passes (%.2f tok/pass)", clover_blocks, req_cycles,
+             double(gen) / req_cycles);
   if (kfw.cycles > 0 && !kfw.source.empty()) {  // (not with the wrapper off) KFlash's account of the request: rows verified, and the drafts among them that were accepted
     const size_t n0 = strlen(cyc);
     if (kfw.planned > 0)  // (rows only where KFlash's plan() chose them: a drafter's or MTP's cycle verifies several, counted elsewhere)

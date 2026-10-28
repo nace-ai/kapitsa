@@ -865,6 +865,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   const bool sep = sep_on && (split > small || shs);  // list B: moe8e beside list A's moe8s2
   enc_x8(e, x_, R, D, L.post_norm, precise, 0, small && !emu ? &v8xn_ : nullptr);  // moe8s2 reads fp32 rows
   enc_qmm8(e, {{&L.router, rlog_, uint32_t(E)}, {&L.shared_gate, slog_, 1u}}, R, v8t_, v8s_, precise);
+  enc_router_hook(e, R);
   kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
   // the router top-k inside moe8_plan (E == 256: its 8 simdgroups are the rows; the same topk256_row code)
   static const bool topk_env = env_int("NI_V8_MOE_TOPKPLAN", 1) != 0;

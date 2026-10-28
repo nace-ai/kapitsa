@@ -149,6 +149,16 @@ SSD before the GPU goes on. A pack with EXL3 routed experts (Sushi's; [`moe_exl3
 them resident and runs them through their own decode, verify and prefill kernels: trellis-coded 16 x 16 tiles decoded as
 they are read, between the two Hadamard transforms of each projection.
 
+DiffuSpace's Clover-35B-A3B (`Clover`, [`clover.h`](../src/model/clover.h)) is another subclass of `Qwen35`: the
+35B-A3B tuned into a block-diffusion model, whose weights read a sequence causally (Qwen35's passes) or as a block of
+positions at once (denoising passes, which change no committed state). With the 35B-A3B's DFlash2 drafter on the Mac,
+the engine decodes its causal pathway as the 35B's (DFlash2, KFlash). Without one it decodes self-speculatively: a
+cycle's denoising pass drafts the 7 tokens after the pending one (on the 8-row verify's kernels: `enc_denoise8`), and the
+8-row causal verify checks them and keeps the accepted ones on its tape, as an MTP cycle's. A denoising pass has its own
+Gated DeltaNet mixer (a right convolution over the next three rows and a softmax over the block's rows with the
+committed state's readout as one more entry, `clover.metal`), attention over the prefix and the whole block
+(`attn_prefill11gs_bidi`), and routing restricted to the block's expert coreset (`enc_router_hook`).
+
 Recursive's Flint (`Flint`) has no recurrent layers: 35 sliding-window attention layers keep their keys in a ring of
 528 positions per conversation (the window of 513 and 8 spare rows that a verify pass may fill), 14 full-attention
 layers keep a growing cache, and each head's learned sink joins its softmax. A decode row's attention is one dispatch
@@ -238,6 +248,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal); Q2_0 experts and their store: [`moe_q20.h`](../src/model/moe_q20.h), [`expert_store.h`](../src/model/expert_store.h), [`zq2moe.metal`](../src/kernels/zq2moe.metal); EXL3 experts: [`moe_exl3.h`](../src/model/moe_exl3.h), [`exl3moe.metal`](../src/kernels/exl3moe.metal) |
 | Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h); KFlash trees: [`kflash_budget.h`](../src/model/kflash_budget.h), [`nh_tree.metal`](../src/kernels/nemotron/nh_tree.metal) |
 | Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
+| Clover (block diffusion) | [`clover.h`](../src/model/clover.h), [`clover.metal`](../src/kernels/clover.metal); the converter [`convert_clover.py`](../tools/convert_clover.py) and the kernel check [`clover_check.cpp`](../tools/clover_check.cpp) |
 | Flint backend | [`flint.h`](../src/model/flint.h), [`src/kernels/flint/`](../src/kernels/flint/); the timing tools [`flint_bench.cpp`](../tools/flint_bench.cpp) and [`flint_kbench.cpp`](../tools/flint_kbench.cpp) |
 | Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |

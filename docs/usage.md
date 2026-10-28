@@ -187,6 +187,44 @@ quantizes it) is copied to bf16 at load, the format the routing kernels read; it
 choice at a near-tie. These experts run the generic expert kernels (`src/kernels/wfmt.metal`), not the 4-bit pack's
 specialized ones, and 8-bit experts read twice the bytes a token.
 
+DiffuSpace's Clover ([Diffuspace/Clover-35B-A3B-Preview](https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview),
+`clover_moe`) is Qwen3.6-35B-A3B tuned into a block-diffusion model, text only. It runs from a folder that
+`tools/convert_clover.py` writes from a local copy of that repo (its 69 GB of bf16; the pack takes the 35B's 4-bit
+recipe, the router and shared-expert gate 8-bit, 19.5 GB):
+
+```bash
+python3 tools/convert_clover.py ~/clover-hf ~/.cache/kapitsa/models/clover-35b-a3b-4bit
+kapitsa serve --model ~/.cache/kapitsa/models/clover-35b-a3b-4bit
+```
+
+Its weights read a sequence two ways over one committed state, which is Qwen3.6's, so prefix reuse, checkpoints and the
+SSD prefix cache work as for the 35B: causally, as the autoregressive model Qwen3.6 is, and by denoising, a block of
+positions at once (mask tokens where nothing was chosen yet), each position's own token. Kapitsa decodes it three ways
+(`NI_CLOVER_DECODE`), by default the fastest it can:
+
+- **With the 35B-A3B's draft model** (`auto` when one is found, `dflash`): the causal pathway has the 35B's shape, so the
+  35B's DFlash2 drafter drafts for it and KFlash verifies, as for the 35B; the reply is plain decoding's of that pathway.
+  The drafter comes from the pack's own `dflash2/` folder, else from an installed `qwen3.6-35b-a3b` pack (`kapitsa pull
+  35b`, or copy its `dflash2/` into Clover's folder).
+- **Self-speculative** (`auto` without a drafter, `spec`), as DiffuSpace's SGLang implementation decodes it: a cycle
+  drafts the 7 tokens after the pending one with one denoising pass, checks them with one causal pass (the 35B's 8-row
+  verify) and keeps the drafts it accepts and one more token. A draft is accepted when the causal pass gives it at least
+  min(1.0, 0.6 x exp(-entropy)) of its probability (SGLang's `threshold` rule; `NI_CLOVER_ACCEPT=exact` takes only its
+  argmax, and the reply is then greedy decoding's).
+- **Block diffusion** (`diffusion`), as the Hugging Face implementation decodes it: 32 positions at a time, each
+  denoising pass filling the positions above 0.95 probability, then a causal pass commits the block.
+
+On the M5 Max (`kapitsa bench --quick`, 512-token coding answers, 2026-10-28): 314.7 tok/s at T 0.6 and 299.4 greedy
+with the drafter, 213.5 and 210.4 self-speculatively (about plain decoding's speed: the draft is a whole pass of the
+35B, as dear as the check), and 45.6 greedy by block diffusion (1.25 positions a denoising pass); prompts read at
+6,000 tok/s (4K). The model's `generation_config.json` controls apply in its own two modes, greedy included: a presence
+penalty of 0.9 and a repetition penalty of 1.05 on the reply's tokens, and biases that rise toward ending the reply after
+8,192 tokens and the thinking after 4,096. With the drafter the request's sampling applies, as for the 35B. Clover
+decodes greedily unless a request sets a temperature (self-speculatively the token after the accepted drafts is then
+drawn at it, top-k and top-p not applied). Structured output is refused in its own modes. `build/clover_check` checks the
+denoising pass's kernels against the reference implementation on random data, and `build/clover_bench MODEL_DIR` times
+the self-speculative cycles.
+
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
 checkpoints in the Hugging Face layout, and weights larger than this Mac's memory budget.
@@ -1257,6 +1295,12 @@ first download's progress too:
 | `NI_NH_ATTN_Q8` | off | Nemotron Lightning: `1` stores its BF16 attention projections in 8-bit (about 3% faster decoding, slightly less accurate). |
 | `NI_NH_HEAD` | `q8` with NVFP4 or FP8 | Dense Nemotron-H models (Nemotron Nano): `bf16` keeps an NVFP4 or FP8 checkpoint's BF16 LM head (the 9B v2's, the 4B FP8's) BF16 instead of 8-bit rows; `q8` also runs a BF16 checkpoint's head as 8-bit rows. |
 | `NI_NH_NGRAM` | `4` with BF16 or FP8, `0` with NVFP4 | Dense Nemotron-H models (Nemotron Nano): prompt lookup's drafts per cycle when `--spec` is not given; `0` decodes plainly. |
+| `NI_CLOVER_DECODE` | `auto` | Clover: `auto` decodes its causal pathway with the 35B-A3B's DFlash2 drafter when one is found, else self-speculatively; `dflash` the drafter's way, `spec` self-speculatively (a denoising pass drafts, a causal pass checks, as DiffuSpace's SGLang implementation), `diffusion` by 32-position blocks of denoising passes, as the Hugging Face implementation ([Other models](#other-models)). |
+| `NI_CLOVER_DRAFT` | `8` | Clover, `spec`: rows of a cycle's draft and check (the pending token and the drafts after it), 2 to 8 and a divisor of the model's block size. |
+| `NI_CLOVER_ACCEPT` | `threshold` | Clover, `spec`: `threshold` accepts a draft the causal pass gives at least min(ratio, delta x exp(-entropy)) of its probability (SGLang's default); `exact` only the causal pass's argmax, so the reply is greedy decoding's. `NI_CLOVER_ACCEPT_RATIO` (`1.0`) and `NI_CLOVER_ACCEPT_DELTA` (`0.6`) set the two. |
+| `NI_CLOVER_THRESHOLD` | the model's (`0.95`) | Clover, `diffusion`: the probability above which a masked position takes its token in a denoising pass. Lower writes more positions a pass and fewer passes a block. |
+| `NI_CLOVER_BLOCK` | the model's (`32`) | Clover, `diffusion`: positions per block, a divisor of the model's block size. |
+| `NI_CLOVER_CORESET` | the model's (on) | Clover: `0` lets every row of a denoising pass route among all the experts instead of the block's shared set (the experts holding 90% of the block's routing mass). |
 | `NI_FLINT_NGRAM` | `0` | Flint: prompt lookup's drafts per cycle when `--spec` is not given (up to 7); `0` decodes plainly. |
 | `NI_FLINT_MOE_QTM` | on with the dense QMT path | Flint: the routed experts' prefill GEMMs on Metal 4 tensor ops (Apple10 GPU, macOS 26, 4-bit group-64 experts; `src/kernels/tensor/qmt_moe.metal`'s `qmtm_g_m64_n64`): gate, up and down each as a grouped GEMM over the MoE bucket's 64-row expert tiles to fp32 rows, so `flint_swiglu_scaled` keeps its whole-row overflow scaling. `0` keeps `qmm_moe_b4_m16_n64` (16-row simdgroup tiles), which a Mac without the tensor units (or with `NI_QMT=0`) runs anyway. Prefill 1,392 -> 2,262 tok/s at 4,000 tokens and 1,128 -> 1,635 at 16,000 through the harness on an M5 Pro (decode unchanged); the routed experts were 60% of a 4K prefill. The tile reassociates each output's K reduction, and Flint carries that further than the 35B: 1.4e-2 mean KL, p99 0.22 and 3 top-1 flips (all near-ties) in 192 verify rows against `NI_FLINT_MOE_QTM=0` (`logit_dump`, M5 Pro), the size of the drift the shipped dense QMT path already gives Flint (1.7e-2, 1 flip, against `NI_QMT=0`). That passes `tools/logit_compare.py --reorder` (`flint-4bit.m5.json`'s order-change gate) on the prefill, step and verify rows; against the model's M5 noise-floor gate the mean KL and flips pass and the p99 does not (0.212 step, 0.219 verify, over 0.192). |
 | `NI_FLINT_QATTN` | on with the dense QMT path | Flint: the prefill attention on the matrix units (`src/kernels/tensor/qattn_t_flint.metal`'s `qattn_flint_s8k32p`, 16 tokens x the KV head's 8 query heads per threadgroup, 32-key tiles, latest blocks first) instead of `flint_attn_prefill`'s 8x8x8 simdgroup MMAs: the same half operands, fp32 scores and statistics, sinks, two key sources and sliding window, only the products' summation order differs. Prefill 2,241 -> 2,691 tok/s at 4K, 1,621 -> 2,457 at 16K and 1,158 -> 2,086 at 32K on an M5 Pro (`compare_engines` ABBA, means of 2 passes; decode unchanged). Against `NI_FLINT_QATTN=0` (`logit_dump`, 192 verify rows): KL mean 2.0e-2, p99 0.48, 4 top-1 flips (all near-ties); that passes `tools/logit_compare.py --reorder` (`flint-4bit.m5.json`'s order-change gate) on the prefill, step and verify rows and fails the model's M5 noise-floor gate on top-1 (0.979) and p99. `0` runs the simdgroup kernel, and a GPU before Apple10 or a macOS before 26 takes it anyway. |

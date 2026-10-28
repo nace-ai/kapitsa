@@ -586,7 +586,11 @@ class Qwen35 : public Model {
   void enc_qmms_rows(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int T);
   // projections sharing xh: one dispatch where the short-prefill kernels allow it
   void enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
-  void enc_topk_rows(Encoder& e, uint32_t E, uint32_t k, bool norm, int T);
+  // the routing of T rows (router logits rlog_ -> ridx_ / rwts_); Clover routes a denoising pass's block first
+  virtual void enc_topk_rows(Encoder& e, uint32_t E, uint32_t k, bool norm, int T);
+  // the 8-row MoE's (enc_moe8) between its router GEMM (rlog_, R rows) and the top-k: nothing here; Clover's denoising
+  // passes route their block among its expert coreset
+  virtual void enc_router_hook(Encoder& e, int R) { (void)e, (void)R; }
   void enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
   bool enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T);
   bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false);
