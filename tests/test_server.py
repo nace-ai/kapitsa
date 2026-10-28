@@ -813,6 +813,30 @@ def cli_checks(kapitsa):
           rc == 2 and "is a gemma4 model" in err and "qwen3_5" in err and "nemotron_h" in err and "terminating" not in err, err)
     rc, _, err = run("serve", "--model", gemma, "--port", str(busy))
     check("cli: the port is still checked first", rc == 1 and "already in use" in err, err)
+    # Qwen 4 (src/model/qwen4_config.h): a qwen4* model_type other than Flash-Next's, or a qwen4_exp config outside what
+    # its path runs, is refused before the weights with each difference; Flash-Next's own settings (fn_text) run
+    q4 = os.path.join(home, "qwen4-moe")
+    os.makedirs(q4)
+    with open(os.path.join(q4, "config.json"), "w") as f:
+        json.dump({"model_type": "qwen4_moe", "text_config": dict(
+            fn_text, model_type="qwen4_moe_text", hidden_size=5120, ple_embedding_mode="per_token", gr_dtype="fp8")}, f)
+    rc, _, err = run("serve", "--model", q4, "--port", str(gemma_port))
+    check("cli: serve refuses a new Qwen 4 model_type, saying what differs from qwen4_exp",
+          rc == 2 and "is a qwen4_moe model (Qwen 4)" in err and "hidden_size 5120" in err and
+          "ple_embedding_mode per_token" in err and "does not have: gr_dtype" in err and "terminating" not in err, err)
+    # YaRN is not applied (Sushi's Flash-Next pack asks for it and runs unscaled, as before), so it does not refuse a
+    # qwen4_exp config; it is named beside what does
+    q4x = os.path.join(home, "qwen4-exp-yarn")
+    os.makedirs(q4x)
+    t4 = {k: v for k, v in fn_text.items() if not k.startswith("indexer_")}
+    t4["rope_parameters"] = dict(t4["rope_parameters"], rope_type="yarn", factor=4.0)
+    with open(os.path.join(q4x, "config.json"), "w") as f:
+        json.dump({"model_type": "qwen4_exp", "text_config": t4}, f)
+    rc, _, err = run("serve", "--model", q4x, "--port", str(gemma_port))
+    check("cli: serve refuses a qwen4_exp config the Flash-Next path does not run (no sparse-attention indexer), "
+          "naming its YaRN as not applied",
+          rc == 2 and "no indexer_* settings" in err and "Not applied either: rope_type yarn" in err and
+          "hidden_size" not in err, err)
     rc, _, err = run("doctor", "--context", "max")
     check("cli: doctor --context max asks for a size", rc == 2 and "--context 256k" in err, err)
     s.close()

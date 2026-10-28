@@ -3,6 +3,7 @@
 #include "engine/output_parser.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
+#include "model/qwen4_config.h"
 #include "splash/runtime.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -676,6 +677,8 @@ std::string unsupported_model(const std::string& model_dir) {
   const auto jp = json_file(model_dir + "/config.json");
   const nlohmann::json& j = *jp;
   if (!j.is_object()) return model_dir + ": its config.json is not valid JSON.";
+  // Qwen 4 (qwen4*): what the Qwen3.8-Flash-Next path does not run, or "" (model/qwen4_config.h)
+  if (qwen4_family(j)) return qwen4_refusal(j, model_dir);
   if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
       Flint::is_model(model_dir) || Clover::is_model(model_dir))
     return "";

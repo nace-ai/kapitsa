@@ -1,6 +1,7 @@
 #include "model/qwen4_exp.h"
 #include "loader/safetensors.h"
 #include "model/kparams.h"
+#include "model/qwen4_config.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -257,10 +258,9 @@ void Qwen4Exp::load(const std::string& dir) {
     gdn_sigmoid_ = t.value("output_gate_type", std::string("silu")) == "sigmoid";
   }
   no_qmvh_ = true;
-  if (c4_.hc != 4) fatal("qwen4_exp: %d residual streams unsupported (4 are)", c4_.hc);
-  if (c4_.ix_dim != 128 || c4_.ix_heads > 8 || c4_.ix_ratio != 4) fatal("qwen4_exp: indexer shape unsupported");
-  if (c4_.ple_conv != 4) fatal("qwen4_exp: n-gram conv kernel %d unsupported", c4_.ple_conv);
-  if (cfg_.hidden % 128 || cfg_.hidden > 4096) fatal("qwen4_exp: hidden size %d unsupported", cfg_.hidden);
+  // what this path runs (model/qwen4_config.h: the engine's and the Hub's refusals say the same)
+  if (const std::string why = qwen4_refusal(root, dir); !why.empty()) fatal("%s", why.c_str());
+  for (const std::string& u : qwen4_unapplied(root)) logi("qwen4_exp: not applied: %s", u.c_str());
   // a split across Macs: the head (lo_ 0) sends the rest of every pass to its other Macs, the n-gram block (which reads
   // the tokens) among its own layers; a stage holds layers after that block
   const int L = cfg_.layers;

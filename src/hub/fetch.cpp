@@ -12,6 +12,7 @@
 #include "gguf/import.h"
 #include "hub/hub.h"
 #include "hub/http.h"
+#include "model/qwen4_config.h"
 #include "util/term.h"
 
 #include <CommonCrypto/CommonDigest.h>
@@ -1111,6 +1112,9 @@ void check_supported(HttpClient& c, const Listing& L) {
     throw Error(L.repo + ": its config.json is not valid JSON.");
   }
   const json t = j.contains("text_config") ? j["text_config"] : j;
+  // a Qwen 4 model the Qwen3.8-Flash-Next path does not run is refused here, before its weights (model/qwen4_config.h)
+  if (qwen4_family(j))
+    if (const std::string why = qwen4_refusal(j, L.repo); !why.empty()) throw Error(why);
   if (j.value("model_type", std::string()) == "flint") {
     const json q = j.value("quantization", json::object());
     if (!q.is_object() || (q.value("bits", 0) != 4 && q.value("bits", 0) != 8) || q.value("group_size", 0) != 64)
