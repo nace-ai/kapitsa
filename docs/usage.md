@@ -480,10 +480,12 @@ Text chat only: Splash's native protocol carries text and sampling, so a request
 reason as the message. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the server's life: one
 `serve` is one engine, not one per request. Two failures are not refusals: a request that arrives while the engine is
 at its concurrent-request limit is a 503 with `Retry-After` and `the Splash engine is at its concurrent-request
-limit`, and one whose engine has died fails with `the Splash engine is not running`.
+limit`, and one that arrives after the engine has exited is a 503 without `Retry-After`, since nothing relaunches it:
+`the Splash engine has exited (...); restart kapitsa serve`, on `/v1/chat/completions`, `/v1/messages` and
+`/v1/responses` alike.
 
-Splash's sampler is its own frontend's: a request that names no sampling gets Splash's defaults — temperature 1.0,
-top_p 0.95, top_k 20 — rather than the per-model ones Kapitsa's own engine applies. Sampling fields Kapitsa's own
+Splash's sampler is its own frontend's: a request that leaves out temperature, top_p or top_k gets Splash's default —
+1.0, 0.95 and 20 — on all three routes, rather than the per-model ones Kapitsa's own engine applies. Sampling fields Kapitsa's own
 engine does not use (`presence_penalty`, `frequency_penalty`, `repetition_penalty`, `min_p`, `ignore_eos`) are passed
 to it, and a value outside Splash's range (temperature in [0, 2], top_p in (0, 1]) is a 400 naming the field rather
 than a clamp. A thinking budget in the request is honoured, as Kapitsa's own engine honours it.
