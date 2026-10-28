@@ -4,6 +4,7 @@
 #include "gguf/quant.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -44,6 +45,49 @@ bool format_supported(int bits, int gs) {
 }
 std::string format_name(int bits, int gs) {
   return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group " + std::to_string(gs);
+}
+// config.json's affine (bits, group size) for every quantized module the trunk loads, against format_supported, so a pack
+// in another format is refused before its weights are read (qlin refuses it only after all of them are: issue 787, 20 GB
+// in). Read as quant_of reads it: the default, then the entries keyed by module path. An 8-bit group-128 module is
+// read as group 64 when its scales are bf16 (qlin); the config cannot show the dtype, so it passes here. The vision tower
+// and the MTP head are not the trunk's: the first is never read, the second drops out with a reason when its format is
+// not one the kernels read (load_mtp). Other modes (q2_0, IQ) are checked where they are read.
+std::string unsupported_quantization(const std::string& model_dir) {
+  const auto rp = json_file(model_dir + "/config.json");
+  if (!rp->is_object() || !rp->contains("quantization") || !(*rp)["quantization"].is_object()) return "";
+  const json& q = (*rp)["quantization"];
+  auto whole = [](const json& o, const char* key, int dflt) {
+    return o.contains(key) && o[key].is_number_integer() ? o[key].get<int>() : dflt;
+  };
+  auto mode_of = [](const json& o, const std::string& dflt) {
+    return o.contains("mode") && o["mode"].is_string() ? o["mode"].get<std::string>() : dflt;
+  };
+  const std::string mode = mode_of(q, "affine");
+  const int bits = whole(q, "bits", 4), gs = whole(q, "group_size", 64);
+  std::map<std::string, int> bad;  // format -> modules
+  std::string first;
+  auto note = [&](const std::string& module, int b, int g) {
+    if (format_supported(b, b == 8 && g == 128 ? 64 : g)) return;
+    if (!bad[format_name(b, g)]++ && first.empty()) first = module;
+  };
+  if (mode == "affine") note("the default", bits, gs);
+  for (auto& [key, v] : q.items()) {
+    if (!v.is_object() || Qwen35::is_mtp(key) || key.find("vision_tower") != std::string::npos ||
+        key.find("visual.") != std::string::npos || mode_of(v, mode) != "affine")
+      continue;
+    note(key, whole(v, "bits", bits), whole(v, "group_size", gs));
+  }
+  if (bad.empty()) return "";
+  std::string formats;
+  int modules = 0;
+  for (auto& [f, n] : bad) {
+    formats += (formats.empty() ? "" : ", ") + f;
+    modules += n;
+  }
+  return "its config.json quantizes " + std::to_string(modules) + (modules == 1 ? " module" : " modules") + " in " +
+         formats + " (" + first + (modules > 1 ? ", ..." : "") +
+         "), a format Kapitsa has no kernels for. It runs MLX affine weights in bf16, 3/4/5/6/8-bit group 64 and 4-bit "
+         "group 32 (and 8-bit group 128 with bf16 scales). Use a pack in one of those.";
 }
 std::string QLinear::fmt() const {
   if (iq) return gguf::iq_suffix(iq);

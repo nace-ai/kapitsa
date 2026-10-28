@@ -64,6 +64,9 @@ struct QLinear {
 // Formats with a full set of kernels: 4-bit and 8-bit group 64 (specialized), and the generic ones of wfmt.metal.
 bool format_supported(int bits, int gs);
 std::string format_name(int bits, int gs);  // "bf16", "4-bit group 64", ...
+// "" when every module config.json quantizes is in a supported format (or it has no quantization), else why not: said
+// before any weight is read. The Qwen3.5 family's (Qwen35, which Qwen4Exp and Clover inherit, has its own checks).
+std::string unsupported_quantization(const std::string& model_dir);
 // The per-row MoE kernel (gate/up or down) for routed experts e and shared expert s, "" if none exists.
 // wide: the experts' staged h exceeds 4608 floats (Qwen35::moe_wide), so the down kernel's _w form ("" if none).
 std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bool wide = false);

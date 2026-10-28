@@ -687,8 +687,14 @@ std::string unsupported_model(const std::string& model_dir) {
   };
   const nlohmann::json t = j.contains("text_config") && j["text_config"].is_object() ? j["text_config"] : j;
   const std::string mt = type(j), tt = type(t);
-  if (mt == "qwen3_5" || mt == "qwen3_5_moe" || tt == "qwen3_5_text" || tt == "qwen3_5_moe_text") return "";
-  if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers")) return "";
+  // (a pack in a quantization format with no kernels is refused here too: before its weights are read, not after)
+  auto family = [&] {
+    const std::string why = unsupported_quantization(model_dir);
+    return why.empty() ? why : model_dir + ": " + why;
+  };
+  if (mt == "qwen3_5" || mt == "qwen3_5_moe" || tt == "qwen3_5_text" || tt == "qwen3_5_moe_text") return family();
+  if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers"))
+    return family();
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
                            "Qwen3.8-Flash-Next (qwen4_exp), NVIDIA's Nemotron-H (nemotron_h: Nemotron Nano, Nemotron 3.5), "
                            "Nemotron Labs Dory (dory), Recursive's Flint (flint) and DiffuSpace's Clover (clover_moe).";
