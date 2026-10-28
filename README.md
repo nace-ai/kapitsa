@@ -29,9 +29,9 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 - [2026/10] 🚀 **KFlash: tree speculative decoding** ([how it works](docs/kflash.md)).
 - [2026/10] 🏆 **The fastest decode in 32 of 37 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B ([#207](https://github.com/nace-ai/kapitsa/pull/207), [KFlash](docs/kflash.md#limitations)).
-- [2026/10] ⚡ **QMT prefill: prompts read up to 25% faster on M5** with the Metal 4 matrix units ([measured](docs/usage.md#environment-variables)).
+- [2026/10] ⚡ **QMT prefill: 25% off the time to first token on the M5 Pro** (Qwen3.6 35B-A3B at 4K, 20% at 16K) with the Metal 4 matrix units ([measured](docs/usage.md#environment-variables)).
 - [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
-- [2026/10] 🧠 **Prefix reuse: a new question over a shared 4K system prompt answers in 0.06 s instead of 3.8 s.**
+- [2026/10] 🧠 **Prefix reuse: a 4,359-token follow-up answers in 0.06 s instead of 3.8 s** (Qwen3.6 35B-A3B, M4 Pro).
 - [2026/10] 🧪 **Output check: a faster default must keep the answers** ([how](CONTRIBUTING.md#output-check)).
 - [2026/10] 📊 **`kapitsa bench compare`: every installed engine on your Mac, one command.**
 
