@@ -274,6 +274,32 @@ synth = kbench.kapitsa_synth(cfgs, "4b")
 check(synth and "--dflash" not in synth["cmd"] and any("qwen3.5-4b-4bit" in x for x in synth["cmd"]),
       "Kapitsa as pulled: its folder, no drafter named", str(synth and synth["cmd"]))
 
+# checkout_of: only a Kapitsa checkout counts. A release binary installed under /opt/homebrew/bin sits in Homebrew's own
+# git repo, and its commit must not be stamped as Kapitsa's version.
+def fake_repo(root, kapitsa):
+    os.makedirs(os.path.join(root, "bin"))
+    if kapitsa:
+        os.makedirs(os.path.join(root, "src", "hub"))
+        open(os.path.join(root, "src", "hub", "catalog.cpp"), "w").close()
+    b = os.path.join(root, "bin", "kapitsa")
+    with open(b, "w") as f:
+        f.write("#!/bin/sh\necho 'kapitsa 9.8.7'\n")
+    os.chmod(b, 0o755)
+    for a in (["init", "-q"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"]):
+        subprocess.run(["git", "-C", root, *a], check=True, capture_output=True)
+    return b
+
+repos = tempfile.mkdtemp()
+kap, other = fake_repo(os.path.join(repos, "kapitsa"), True), fake_repo(os.path.join(repos, "homebrew"), False)
+check(ce.checkout_of(kap) == os.path.realpath(os.path.join(repos, "kapitsa")), "checkout_of: a Kapitsa checkout is found",
+      str(ce.checkout_of(kap)))
+check(ce.checkout_of(other) is None, "checkout_of: another git repository (Homebrew's) is not Kapitsa's", str(ce.checkout_of(other)))
+check(ce.kapitsa_version(other) == "9.8.7", "kapitsa_version: outside a Kapitsa checkout, the binary's --version",
+      str(ce.kapitsa_version(other)))
+check(re.fullmatch(r"[0-9a-f]{7}", ce.kapitsa_version(kap) or ""), "kapitsa_version: in a checkout, its commit",
+      str(ce.kapitsa_version(kap)))
+shutil.rmtree(repos)
+
 print()
 if FAILS:
     print(f"{len(FAILS)} FAILED: " + "; ".join(FAILS))

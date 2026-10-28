@@ -8,8 +8,12 @@ weights (`kapitsa pull 35b 27b`), the same drafters and the harness's frozen cor
 each run. Times are UTC.
 
 - **Splash** is the 1.4.1 release tarball (`splash-1.4.1-arm64-macos26.tar.gz`, sha256 `5746068d…0d5c`), run through the
-  harness's `splash.json` with its version relabelled 1.4.1 (`configs/splash-141.json`, a `sed` copy: the config's
-  other fields are unchanged), `--max-context 32K`, `--expert-memory off`, offline, the DFlash2 drafter.
+  harness's `splash.json` with its version relabelled 1.4.1, `--max-context 32K`, `--expert-memory off`, offline, the
+  DFlash2 drafter. The relabelled config is not committed; it was made on the Mac with
+  `sed 's/"version": "1.4.0"/"version": "1.4.1"/; s/Splash 1.4.0/Splash 1.4.1/' configs/splash.json > configs/splash-141.json`
+  and its other fields are `splash.json`'s. That `sed` changed only the first mention in the config's `note`, so the
+  Splash records' `note` still names `splash-1.4.0-arm64-macos26.tar.gz`: that is the config's unedited wording, and the
+  tarball that ran is the 1.4.1 one above (`logs/setup.log`).
 - **Kapitsa** is the v0.2.23 release binary (`628abd76…`, the same file as on the first Mac) with its own DFlash2
   drafter, `serve --ctx 32768 --slots 1`.
 - The harness is a source tarball of 909e2823 (no git checkout).
