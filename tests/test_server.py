@@ -693,6 +693,17 @@ def cli_checks(kapitsa):
         rc, _, err = run(*args)  # (a bad number was an uncaught std::invalid_argument: the process aborted)
         check(f"cli: {' '.join(args[:1])} {flag} with a bad number is a usage error (2), not an abort",
               rc == 2 and flag in err and "needs" in err, f"rc={rc} {err}")
+    # a whole number out of range is told as a range, never as "not a whole number" (and 1e30 GB never reaches size_t())
+    for args, flag, want in ((("doctor", "--slots", "99999999999"), "--slots", "0 to 2147483647"),
+                             (("doctor", "--prefill-chunk", "-1"), "--prefill-chunk", "0 to 2147483647"),
+                             (("doctor", "--mem-budget", "1e30"), "--mem-budget", "0 to 1000000"),
+                             (("doctor", "--mem-budget", "1e400"), "--mem-budget", "0 to 1000000"),
+                             (("doctor", "--mem-budget", "-3"), "--mem-budget", "0 to 1000000")):
+        rc, _, err = run(*args)
+        check(f"cli: doctor {flag} {args[2]} says its range", rc == 2 and want in err and "not a whole number" not in err,
+              f"rc={rc} {err}")
+    rc, _, err = run("doctor", "--mem-budget", "nan")
+    check("cli: doctor --mem-budget nan is not a number", rc == 2 and "needs a number of GB" in err and "from 0 to" not in err, f"rc={rc} {err}")
     rc, _, err = run("import", "x.gguf", "--threads", "2000")
     check("cli: import --threads past 1024 says the range, not 'a whole number'",
           rc == 2 and "0 to 1024" in err and "whole number" not in err, f"rc={rc} {err}")
