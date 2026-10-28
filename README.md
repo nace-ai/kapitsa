@@ -52,15 +52,15 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 ## Features
 
-- **KFlash, tree speculative decoding**: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
-- **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
-- **Bigger than the memory**: a model's routed experts stream from the SSD, as many as the budget holds.
-- **Conversations on the SSD**: a 16K follow-up after a restart starts in 0.16 s instead of 17 s (`--disk-cache`).
-- **OpenAI and Anthropic APIs, and a chat page**: `/v1/chat/completions`, `/v1/messages` and `/v1/responses`, with streaming, tool calls and JSON-schema output, on `http://127.0.0.1:8000`.
-- **An agent in one command**: `kapitsa claude`, `kapitsa codex`, `kapitsa opencode` and `kapitsa pi` start on the local model.
-- **Drex decision models**: `kapitsa-systemone` serves a Drex 2.0 state and its questions as one calibrated probability per option (`POST /v1/systemone`) ([decisions](docs/systemone.md)).
-- **Several Macs, one model**: a Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
-- **Images**: screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.
+- **339 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 32 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
+- **A 180B model on a 48 GB Mac, at 56 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
+- **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
+- **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
+- **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
+- **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode` and `kapitsa pi` start on the local model.
+- **One calibrated probability per option.** `kapitsa-systemone` serves a Drex 2.0 state and its questions that way (`POST /v1/systemone`) ([decisions](docs/systemone.md)).
+- **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
+- **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.
 
 ## CLI
 
@@ -287,9 +287,7 @@ Kapitsa decodes with **KFlash**. A draft model such as DFlash2 guesses the next 
 
 ## Get release notices
 
-<p align="center"><img src="docs/assets/watch-releases.gif" alt="On the Kapitsa repository page: Watch, then Custom, tick Releases, Apply" width="720"></p>
-
-<sub>Watch → Custom → Releases on [nace-ai/kapitsa](https://github.com/nace-ai/kapitsa) puts every new version in your notifications. A drawn illustration of the steps, not a screen recording; the page source is in [tools/readme_images](tools/readme_images/README.md).</sub>
+Watch → Custom → Releases on [nace-ai/kapitsa](https://github.com/nace-ai/kapitsa) puts every new version in your notifications.
 
 ## Star history
 
