@@ -6,7 +6,7 @@
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
 
-[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [CLI](#cli) · [Splash's engine](#splashs-engine) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
+[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [CLI](#cli) · [Backends](#supported-backends) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
 
 ## Benchmarks
 
@@ -24,7 +24,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 ## 🔥 What's new
 
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, runs on Kapitsa: 319 tok/s decode on the M5 Max.** Convert the Hub checkpoint with `tools/convert_clover.py` and serve the folder: Clover's causal pathway decodes with the 35B's draft model, or self-speculatively as DiffuSpace's SGLang does ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
-- [2026/10] 🌊 **Kapitsa runs Splash's engine: `kapitsa serve --engine splash`** puts Inco's Splash behind Kapitsa's server — the chat page, the OpenAI and Anthropic APIs and streaming, Splash's model folders and `--check` — the Splash backend stack #738-#746 ([capabilities](#splashs-engine), [55.9 tok/s](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
+- [2026/10] 🌊 **Kapitsa runs Splash's engine: `kapitsa serve --engine splash`** puts Inco's Splash behind Kapitsa's server — the chat page, the OpenAI and Anthropic APIs and streaming, Splash's model folders and `--check` — the Splash backend stack #738-#746 ([backends](#supported-backends), [55.9 tok/s](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
 - [2026/10] 🗄️ **A 180B model on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD; through `--engine splash` the model peaks at 31.6 GiB wired with no swap growth and memory pressure 1, where Kapitsa's own engine at its 24 GB store reached memory pressure 4 ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md), [#751](https://github.com/nace-ai/kapitsa/pull/751)).
 - [2026/10] 🧩 **Flash-Next fits a 64 GB Mac**: `flash-next:64gb` runs Sushi's 2-bit EXL3 experts, 36.7 GB of weights in memory and 69.6 GB to download ([variants](docs/usage.md#models-and-downloads)).
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
@@ -80,30 +80,32 @@ server to its own Mac. [Usage guide](docs/usage.md)</sub>
 The opt-in [C ABI SDK](sdk/README.md) lets desktop clients reuse a loaded model,
 stream and cancel requests. See its build instructions and host-process lifetime limitations.
 
-## Splash's engine
+## Supported backends
 
-`kapitsa serve --engine splash` runs Inco's [Splash](https://github.com/incoai/splash) as the engine and Kapitsa as
-the server: Splash keeps the weights, the GPU and the decode loop; Kapitsa keeps the HTTP server, the chat page,
-the OpenAI and Anthropic APIs and streaming, and renders the prompt with Splash's own tokenizer and chat template, so
-the model, the prompt and the tokens are Splash's. Splash's model folder is the model, and `--splash-model` picks one
-by family (`flash-next`) or by the start of its folder name when Splash has several resolved, and `--check` says what would
-run without starting it. One command:
+Kapitsa runs a model on its own engine or on Inco's [Splash](https://github.com/incoai/splash), and `--engine` picks
+which. The chat page, the OpenAI and Anthropic APIs, streaming and `kapitsa claude` are the same on both.
 
-```bash
-kapitsa serve --engine splash
-```
+| Backend | Runs the model | Models | Start it |
+| --- | --- | --- | --- |
+| **Kapitsa**, the default | Kapitsa's Metal kernels and the Neural Engine: KFlash, the published drafters, the SSD prefix cache | The [catalog](#models), images on most models, structured output, [several Macs](docs/usage.md#several-macs) | `kapitsa serve` |
+| **Splash** | Inco's Splash in a child process: it holds the weights and runs the GPU work and the decode loop, and Kapitsa renders the prompt with its tokenizer and chat template | Splash's own model folders, text chat | `kapitsa serve --engine splash` |
 
-On an M5 Pro 48 GB, in one run with a forced memory plan (a 16 GiB expert cache on both Splash arms, `NI_EXPERT_STORE=24`
-on Kapitsa's own engine) and other sessions sharing the Mac, Qwen3.8-Flash-Next Q2_0 decoded at 55.9 tok/s through this
-mode and 55.5 tok/s in plain Splash, and the second turn of a 4K chat took 0.56 s and 0.57 s to first token; Kapitsa's own
-engine took 0.26 s, and no engine leads every row ([bench/results/2026-10-28-m5-pro-flash-next-engines](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md), with the
-table and its caveats in [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine)).
+Under `--engine splash`, Splash's model folder is the model: `--splash-model` picks one by family (`flash-next`) or by
+the start of its folder name when Splash has several resolved, and `--check` prints the engine and the model that
+would run, and what is missing, without starting anything. An image, structured output or a loop count is refused
+rather than answered by the other engine, and Splash's SSD cache stays off unless `--splash-persistent-cache` is
+given. Kapitsa links neither Splash's engine nor its library: Splash is Apache 2.0, and the few Metal kernels adapted
+from it keep their file headers ([Third-party notices](THIRD_PARTY_NOTICES)). Flags, how Splash's expert cache is
+sized, the failures that are not refusals and the measurements against plain Splash: [Splash's engine](docs/usage.md#splashs-engine).
 
-<sub>Text chat only: an image, structured output or a loop count is refused, never answered by the other engine.
-Splash's SSD cache stays off unless `--splash-persistent-cache` is given, and Kapitsa sizes Splash's expert cache for
-the memory this Mac has. Kapitsa links neither Splash's engine nor its library; Splash is Apache 2.0, and the Metal kernels adapted from it
-keep their file headers ([Third-party notices](THIRD_PARTY_NOTICES)). Flags, the failures that are not refusals and
-the measurements against plain Splash and Kapitsa's own engine: [docs/usage.md#splashs-engine](docs/usage.md#splashs-engine).</sub>
+**Roadmap** — what is open in the [tracker](https://github.com/nace-ai/kapitsa/issues), by backend:
+
+- **Splash's engine** — relaunch the child when it dies ([#757](https://github.com/nace-ai/kapitsa/issues/757)), queue
+  requests when the pool is full instead of a 503 ([#756](https://github.com/nace-ai/kapitsa/issues/756)), non-blocking
+  reap with a shutdown deadline and a per-request deadline ([#758](https://github.com/nace-ai/kapitsa/issues/758)), a
+  client's `cache_salt` on `/v1/messages` and `/v1/responses` ([#765](https://github.com/nace-ai/kapitsa/issues/765)),
+  and expert-cache headroom with turn-2 time to first token ([#753](https://github.com/nace-ai/kapitsa/issues/753)).
+- **Kapitsa's own engine** — KV cache quantization ([#547](https://github.com/nace-ai/kapitsa/issues/547)).
 
 ## Models
 
