@@ -33,8 +33,12 @@ a separator (4-6 times each in 58-71 lines), and none repeats a block.
 
 **Clover's own decoding** (the two modes DiffuSpace ships), for comparison, single requests of the bench's coding
 prompt through `kapitsa serve`: self-speculative (`spec`, a denoising pass drafts 7 tokens and the causal 8-row verify
-checks them, SGLang's threshold rule) keeps 4.0-5.0 tokens a cycle there at 21 ms a cycle, 187-224 tok/s, about plain
+checks them, SGLang's threshold rule) keeps 4.0-4.7 tokens a cycle there at 21 ms a cycle, 187-224 tok/s, about plain
 decoding of the causal pathway (212 tok/s at T 0.6 on a prose-and-code prompt); block diffusion (`diffusion`, the Hugging
 Face implementation's LowConfidence at 0.95) fills 1.25 positions a 32-row denoising pass on the 4-bit weights, 45.6
 tok/s greedy. `build/clover_bench` (no server) on a short C++ answer: 5.98 tokens a cycle, 276 tok/s, 27 of 50 cycles
-keeping all 8 rows.
+keeping all 8 rows. Every line behind these numbers: [requests.md](requests.md).
+
+**The `spec` record's `decoding` field** reads `plain` ("plain decoding, KFlash (none)"): `kapitsa bench` reports
+the engine's drafter, and knows nothing of `NI_CLOVER_DECODE`, under which that run's server decoded self-speculatively
+(its log: "8-row draft and verify" cycles).

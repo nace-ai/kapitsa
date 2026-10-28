@@ -407,15 +407,16 @@ checkpoint converted to the 35B's 4-bit recipe (19.5 GB), three ways, `kapitsa b
 
 | Decoding (`NI_CLOVER_DECODE`) | Prefill 4K / 16K | Decode T 0.6 / greedy | Tokens a cycle |
 | --- | ---: | ---: | ---: |
-| **`auto`: the 35B's DFlash2 drafter on the causal pathway, KFlash** (the default when the drafter is on the Mac) | **6,002 / 5,313** | **319 / 332** | 2.9-3.4 |
-| `spec`: self-speculative, as DiffuSpace's SGLang (a denoising pass drafts 7, the 8-row verify checks; quick run) | 5,958 / – | 214 / 210 | 4.0-6.0 |
+| **`auto`: the 35B's DFlash2 drafter on the causal pathway, KFlash** (the default when the drafter is on the Mac) | **6,002 / 5,313** | **319 / 332** | 2.8-3.4 |
+| `spec`: self-speculative, as DiffuSpace's SGLang (a denoising pass drafts 7, the 8-row verify checks; quick run) | 5,958 / – | 214 / 210 | 4.0-4.7 |
 | `diffusion`: block diffusion, as the Hugging Face implementation (one request) | – | – / 46 | 1.25 a pass |
 
 Self-speculative decoding keeps more tokens a cycle, but its draft is a whole pass of the 35B, as dear as the check (21
 ms a cycle), so it lands at about plain decoding's speed (212 tok/s); the DFlash2 drafter is small, so `auto` uses it
 when the 35B's pack is installed. Block diffusion at 0.95 fills few positions a pass on the 4-bit weights. The runs'
-repetition flags are the bench's 4-gram counter reading `# ------` separator lines dash by dash, not loops
-([results](../bench/results/2026-10-28-m5-max-clover/README.md)).
+repetition flags are the bench's 4-gram counter reading `# ------` separator lines dash by dash, not loops. Tokens a
+cycle and the block-diffusion row are single requests of the bench's prompt through the server
+([requests](../bench/results/2026-10-28-m5-max-clover/requests.md), [results](../bench/results/2026-10-28-m5-max-clover/README.md)).
 
 ### Qwen3.8-Flash-Next streamed from the SSD (M5 Pro 48 GB, 2026-10-24)
 
