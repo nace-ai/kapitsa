@@ -17,13 +17,13 @@ where each of their numbers comes from and how it was measured.
 ## At a glance
 
 Decode is the writing speed of a 512-token coding answer at T 0.6 (Flint at its card's T 1.0; the M5 Pro's Flash-Next
-Q2 row is a 256-token answer, [record](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)). "Lead" is
+Q2 row is a 256-token answer at T 0, [record](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)). "Lead" is
 Kapitsa's decode over the next fastest engine on that model.
 
 | Mac | Kapitsa's decode lead | Where another engine is ahead |
 | --- | --- | --- |
 | [M5 Max, 128 GB](#m5-max) | 35B-A3B **1.21x** Splash · Bolt **2.3x** oMLX · Flint 1.2x rec (1.06-1.25x over the night's runs) · Lightning 1.41x · Super-VL 1.42x · Dory 1.57x | 27B decode: level with mlx-serve, 133 against 128, inside the runs' spread. Flash-Next decode: mlx-serve 108 against 106. Prefill: Splash on the 27B (1,039 against 907) and the 35B-A3B (6,386 against 5,963); mlx-serve, oMLX and MTPLX on Flash-Next |
-| [M5 Pro, 48 GB](#m5-pro) | 35B-A3B **1.11x** Splash · Lightning 1.28x · Bolt 1.93x · Dory 1.32x · Flint 1.03x rec | Flash-Next Q2_0 decode: level with Splash, 57 against 54, inside the runs' spread. 27B decode: mlx-serve 78 against 77, inside the runs' spread. Prefill: Splash on the 35B-A3B (1.25x), the 27B (1.11x) and the Flash-Next Q2_0 row (1,149 against 847) |
+| [M5 Pro, 48 GB](#m5-pro) | 35B-A3B **1.11x** Splash · Lightning 1.28x · Bolt 1.93x · Dory 1.32x · Flint 1.03x rec | Flash-Next Q2_0 decode: level with Splash, 56 against 56 at T 0, inside the runs' spread. 27B decode: mlx-serve 78 against 77, inside the runs' spread. Prefill: Splash on the 35B-A3B (1.25x) and the 27B (1.11x) |
 | [M4 Pro, 48 GB](#m4-pro) | 4B **1.47x** mlx-serve · 27B 1.17x · 35B-A3B 1.19x Splash · Lightning 1.72x · Bolt 1.97x · Dory 1.33x · Flint 1.01x rec | Flint prefill: llama.cpp 977 against 968 |
 | [M3 Pro, 36 GB](#m3-pro) | 4B 1.79x · 9B **2.90x** · 27B 1.77x · 35B-A3B 1.84x · Lightning 1.92x · Flint 1.45x · Dory 1.21x | Nano 4B decode: llama.cpp 34.9 against 34.4. Nano 9B v2: mlx-lm 24.9 against 20.9 (both on lighter 4-bit files) |
 | [M1 Pro, 16 GB](#m1-pro) | 4B 1.56x · 9B 1.54x · 35B-A3B 2-bit 1.37x · Flint 2-bit 1.42x · Dory 1.30x · Nano 4B 1.32x · Nano 9B v2 1.39x | — |
@@ -31,7 +31,7 @@ Kapitsa's decode over the next fastest engine on that model.
 Kapitsa reads the highest decode in 34 of the 38 model and Mac pairs, and the 32 in the headline is the wins count:
 two of the 34 are ties (≈) that are not counted as wins. A tie is the row's fastest rival, the one the tables pair
 with Kapitsa, standing inside each other's measured range: the M5 Max's Qwen3.8 27B row (133 against mlx-serve's 128)
-and the M5 Pro's Flash-Next 180B Q2_0 row (57.2 against Splash's 54.0, the gap inside both runs' spreads).
+and the M5 Pro's Flash-Next 180B Q2_0 row (55.9 against Splash's 55.5 at T 0, the gap inside both runs' spreads).
 Counted over the poster's and the tables' rows (`tools/readme_images/readme_images.json`): the union of the 39 rows
 where Kapitsa has a decode cell, less the M3 Pro 36 GB's Bolt 74B row, which has no rival, gives 38 pairs. The six
 Kapitsa does not win are in the column above: those two ties, the M5 Max's Flash-Next and the M5 Pro's 27B losses to
@@ -184,16 +184,18 @@ cells are newer.
   faster** (1.25x Kapitsa's 35B-A3B cell at 4K, 1.11x its 27B cell); Kapitsa writes faster (11% and 6%).
 - **Lightning:** Kapitsa 3,141 / 159, one run on 2026-10-21 ([results](../bench/results/2026-10-21-m5pro-48gb/README.md)).
   **Dory:** per-loop KV, 70 tok/s ([results](../bench/results/2026-10-22-m5pro-dory/README.md)).
-- **Qwen3.8-Flash-Next 180B-A7B, Q2_0 streamed from the SSD.** Kapitsa 847 / 57.2 (its own engine at `e840651c`, MTP depth
-  2, expert store pinned at 24 GB), Splash 1.4.0 1,149 / 54.0 and llama.cpp 37 / 9.0 (`c7474afc`): the 2026-10-27 four-engine
-  run ([results](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)), the run behind the poster's Q2 row and
-  the M5 Pro table under [Models](../README.md#models). **Splash reads the 4K prompt 1.36x as fast**; their decode rates
-  are level (57 against 54, the gap inside the runs' spread; the record ran the arms as blocks, not interleaved).
-  The row is not this page's protocol: its decode rate is a 256-token answer at T 0.6, counted from the first token
-  to the last, and its 4K prompt is 4,074 tokens against 4,133. Three of the native engine's legs were stopped at
-  memory-pressure level 4, with up to 4.5 GB of swap, late in the leg (16K prefill or turn 2), so its 16K and turn-2 cells
-  have 9 runs against 12; neither engine's run is an auto-size result. Ollama and LM Studio were not run on the pack, and
-  the MLX engines have no pack of this model that fits 48 GB. Nothing here is re-measured from the 2026-10-24 bench.
+- **Qwen3.8-Flash-Next 180B-A7B, Q2_0 streamed from the SSD.** Kapitsa 1,181 / 55.9 on Splash's engine
+  (`--engine splash`, 0.2.23 with Splash 1.4.0 underneath, `ff6151c8`), Splash 1.4.0 1,149 / 55.5 and llama.cpp
+  36.8 / 9.0 (`c7474afc`): the 2026-10-27 four-engine run ([results](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)),
+  the run behind the poster's Q2 row and the M5 Pro table under [Models](../README.md#models). At T 0 **Kapitsa's decode
+  is level with Splash's** (55.9 against 55.5, the gap inside both runs' spreads) and **its 4K prefill reads 1.03x
+  Splash's**; the record ran the arms as blocks, not interleaved. The row is not this page's protocol: its decode rate
+  is a 256-token answer at T 0, counted from the first token to the last, and its 4K prompt is 4,074 tokens against
+  4,133. Kapitsa's own engine ran in the same record, with MTP depth 2 and its expert store pinned at 24 GB: 847
+  prefill and 53.7 decode at T 0, and three of its legs were stopped at memory-pressure level 4, with up to 4.5 GB of
+  swap, late in the leg (16K prefill or turn 2), so its 16K and turn-2 cells have 9 runs against 12; neither engine's
+  run is an auto-size result. Ollama and LM Studio were not run on the pack, and the MLX engines have no pack of this
+  model that fits 48 GB. Nothing here is re-measured from the 2026-10-24 bench.
 - **Flint:** see [Flint on the M5 Pro](#recursive-flint-40b-a25b-m5-pro-2026-10-22).
 - Settings: MLX is mlx-vlm with MTP on the 4B and 27B and with DFlash2 on the 35B-A3B, mlx-lm on Lightning and Dory,
   mlx-vlm on Bolt; oMLX MTP on Lightning and DFlash2 on the 27B and 35B-A3B; mlx-serve MTP except its DFlash2 draft tree
@@ -477,4 +479,4 @@ result files and READMEs stay in [bench/results](../bench/results/); each row li
 | 2026-10-22 | M5 Pro | Flint on Kapitsa before #345: main `6c13588`, then with #340 (expert GEMMs on the tensor units) | [flint-m5pro](../bench/results/2026-10-22-flint-m5pro/README.md), [flint-m5pro-qtm](../bench/results/2026-10-22-flint-m5pro-qtm/README.md) |
 | 2026-10-22 | M3 Pro | Flint on battery (superseded by the AC run) | [2026-10-22-flint-m3pro](../bench/results/2026-10-22-flint-m3pro/README.md) |
 | 2026-10-23 | M5 Pro | The 35B-A3B after #362 and the 27B after #360 | [2026-10-23-m5-pro-35b-27b](../bench/results/2026-10-23-m5-pro-35b-27b/README.md) |
-| 2026-10-27 | M5 Pro | Flash-Next 180B Q2_0 streamed from the SSD: Kapitsa's own engine, Splash 1.4.0 and llama.cpp, with memory footprints | [2026-10-28-m5-pro-flash-next-engines](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md) |
+| 2026-10-27 | M5 Pro | Flash-Next 180B Q2_0 streamed from the SSD: Kapitsa on Splash's engine, plain Splash 1.4.0, Kapitsa's own engine and llama.cpp, with memory footprints | [2026-10-28-m5-pro-flash-next-engines](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md) |

@@ -36,8 +36,8 @@ KAPITSA_METHOD = "KFlash"  # every Kapitsa cell's label: every Kapitsa decode pa
 
 def cell(row, engine):
     """(value, method, raw) of one cell: value is a number, None (a dash) or "x" (can't run). A Kapitsa number's method
-    is always KFlash; a rival's is None for plain decoding (no speculative decoding), so a rival's label only ever names
-    a real method"""
+    is KFlash, unless the cell names its own (the M5 Pro's Flash-Next Q2 cell decodes in Splash's engine, not Kapitsa's);
+    a rival's is None for plain decoding (no speculative decoding), so a rival's label only ever names a real method"""
     c = row["cells"].get(engine)
     if c is None or c == "x":
         return c, None, c
@@ -45,7 +45,7 @@ def cell(row, engine):
         return c, KAPITSA_METHOD if engine == "Kapitsa" else None, c
     m = c.get("method")
     if engine == "Kapitsa" and is_num(c.get("value")):
-        return c.get("value"), KAPITSA_METHOD, c
+        return c.get("value"), c.get("label") or KAPITSA_METHOD, c
     return c.get("value"), None if m == NO_SPEC else m, c
 
 
@@ -181,9 +181,10 @@ def readme_with_tables(readme, block):
     return readme[:start] + sec[:a] + block + sec[b:] + readme[end:]
 
 
-def method_label(mid, base, meth, cls, size, fill):
-    """the method under a number; a long one (no speculative decoding) on two lines in smaller type"""
-    if len(meth) <= 9:
+def method_label(mid, base, meth, cls, size, fill, width=None):
+    """the method under a number; a long one (no speculative decoding) on two lines in smaller type, unless the cell is
+    wide enough for it on one line (0.55 * size per character is a semibold sans average)"""
+    if len(meth) <= 9 or (width and len(meth) * size * 0.55 <= width - 24):
         return [text(mid, base, meth, cls, size, fill, "middle")]
     words = meth.split()
     cut = max(range(1, len(words)), key=lambda i: -abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))) * 100 - i)
@@ -414,13 +415,13 @@ def poster(data, theme):
                         o.append(f'<text x="{num(mid)}" y="{num(vb)}" text-anchor="middle" fill="#FFFFFF">'
                                  f'<tspan class="mono-b" font-size="{F_COMB}">{head}{fmt(v)}</tspan></text>')
                         if meth:
-                            o += method_label(mid, mb, meth, "sans-sb", F_KMETH, t["unit"])
+                            o += method_label(mid, mb, meth, "sans-sb", F_KMETH, t["unit"], cw)
                         continue
                     o.append(f'<text x="{num(mid)}" y="{num(vb)}" text-anchor="middle" fill="#FFFFFF">'
                              f'<tspan class="mono-b" font-size="{F_KVAL}">{fmt(v)}</tspan>'
                              f'<tspan class="sans-sb" font-size="{F_UNIT}" dx="7" fill="{t["unit"]}">tok/s</tspan></text>')
                     if meth:
-                        o += method_label(mid, mb, meth, "sans-sb", F_KMETH, t["unit"])
+                        o += method_label(mid, mb, meth, "sans-sb", F_KMETH, t["unit"], cw)
                     continue
                 best = v == top or e in tie
                 o.append(rect(cx + 3, ry + 5, cw - 6, rh - 10, 10, t["greys"][lvl]))

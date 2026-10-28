@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""tools/readme_images: every Kapitsa number renders as plain KFlash, whatever its record's method; a rival's plain
-decoding renders with no label. CPU only, stdlib only."""
+"""tools/readme_images: every Kapitsa number renders as plain KFlash, whatever its record's method, unless the cell names
+its own label (the M5 Pro Flash-Next Q2 cell runs Splash's engine); a rival's plain decoding renders with no label. CPU
+only, stdlib only."""
 import importlib.util, json, os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +14,7 @@ for m in ("KFlash", "DFlash2", "DSpark", "LiLiCorr", "MTP", "prompt lookup", "no
     assert ri.cell(row, "Kapitsa")[1] == "KFlash", m
     assert ri.cell(row, "llama.cpp")[1] == (None if m == "no spec" else m), m   # a rival keeps its own method
 assert ri.cell({"model": "m", "cells": {"Kapitsa": 100}}, "Kapitsa")[1] == "KFlash"   # a bare number too
+assert ri.cell({"model": "m", "cells": {"Kapitsa": {"value": 100, "label": "via Splash's engine"}}}, "Kapitsa")[1] == "via Splash's engine"   # a cell may name its own
 assert ri.cell({"model": "m", "cells": {"Kapitsa": "x"}}, "Kapitsa")[1] is None       # × and — carry no label
 
 # every Kapitsa number in readme_images.json (poster, tables and header) renders KFlash
@@ -24,10 +26,14 @@ for r in rows:
     v, label, _ = ri.cell(r, "Kapitsa")
     if ri.is_num(v):
         n += 1
-        assert label == "KFlash", (r["model"], label)
+        c = r["cells"]["Kapitsa"]
+        want = (c.get("label") if isinstance(c, dict) else None) or "KFlash"
+        assert label == want, (r["model"], label)
 assert n == 39, n   # every Kapitsa number in readme_images.json; update when cells are added or removed
+labelled = [r for r in rows if isinstance(r["cells"]["Kapitsa"], dict) and r["cells"]["Kapitsa"].get("label")]
+assert [r["cells"]["Kapitsa"]["label"] for r in labelled] == ["via Splash's engine"], labelled   # only the Flash-Next Q2 cell runs Splash's engine
 assert all(h["method"] == "KFlash" for h in ri.header_rows(data) if h["kap"] and h["value"] is not None)
 hr = ri.header_rows(data)   # the header SVGs' <desc> (and the README alt text) name Kapitsa's method as KFlash
 assert "Kapitsa with KFlash " in ri.header_desc(data, hr), ri.header_desc(data, hr)
 assert "no spec" not in ri.header_desc(data, hr), ri.header_desc(data, hr)
-print(f"test_readme_images: ok ({n} Kapitsa cells, all KFlash)")
+print(f"test_readme_images: ok ({n} Kapitsa cells)")
