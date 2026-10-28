@@ -188,7 +188,8 @@ cells are newer.
   2, expert store pinned at 24 GB), Splash 1.4.0 1,149 / 54.0 and llama.cpp 37 / 9.0 (`c7474afc`): the 2026-10-27 four-engine
   run ([results](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)), the run behind the poster's Q2 row and
   the M5 Pro table under [Models](../README.md#models). **Splash reads the 4K prompt 1.36x as fast**; their decode rates
-  are level (57 against 54, the gap inside the runs' spread). The row is not this page's protocol: its decode rate is a 256-token answer at T 0.6, counted from the first token
+  are level (57 against 54, the gap inside the runs' spread; the record ran the arms as blocks, not interleaved).
+  The row is not this page's protocol: its decode rate is a 256-token answer at T 0.6, counted from the first token
   to the last, and its 4K prompt is 4,074 tokens against 4,133. Three of the native engine's legs were stopped at
   memory-pressure level 4, with up to 4.5 GB of swap, late in the leg (16K prefill or turn 2), so its 16K and turn-2 cells
   have 9 runs against 12; neither engine's run is an auto-size result. Ollama and LM Studio were not run on the pack, and
