@@ -55,7 +55,7 @@ Limits limits_from_env();
 // A question's readout: which row of its branch holds the decide token and which hold each option's closing token.
 struct Group {
   int decide = -1;               // row index within the branch
-  std::vector<int> options;      // row indices within the branch
+  std::vector<int> options;      // projected: branch row indices; readout: output indices 0 .. N-1
 };
 
 // What the request asks the answer formatter to report for one question.
@@ -83,6 +83,8 @@ struct Encoded {
 
 // Encodes one {"state", "questions"} object. Throws std::runtime_error when it is invalid or exceeds `limits`.
 Encoded encode(const Tokenizer& tok, const ojson& body, const Limits& limits);
+// Max uses independent full prompts at position zero, no shared state, and linear readout output indices.
+Encoded encode_max(const Tokenizer& tok, const ojson& body, const Limits& limits);
 
 // Throws BadRequest when a request's rows do not fit a `context`-token sequence. The prefill pass is fatal when its last
 // row is at the sequence's last position (Qwen35::encode_prefill's `pos0 + T >= cap`), so the last position a request
@@ -99,14 +101,19 @@ int output_tokens(const Tokenizer& tok, const ojson& answers);
 // ---- the pointer head (pointer.bin) ----
 // Written from a Drex GGUF's pointer.q.* / pointer.k.* / pointer.temperature.* tensors by tools/drex_pointer.py.
 // Layout, little endian: magic "KPS1", u32 version = 1, u32 hidden, u32 dim, then f32 q_w[dim][hidden], q_b[dim],
-// k_w[dim][hidden], k_b[dim], temperature.
+// k_w[dim][hidden], k_b[dim], temperature. Version 2 stores f32 readout_w[dim][hidden], temperature instead;
+// dim is then the number of readout outputs, at most 255.
 class PointerHead {
  public:
-  // Throws std::runtime_error (bad magic/version/size, non-finite weights, a non-positive temperature).
+  enum class Kind { Projected, Readout };
+  // Throws on bad magic/version/size or non-finite values. Version 1 requires positive temperature;
+  // version 2 allows any finite temperature and treats zero as one, as the Max reference does.
   static PointerHead load(const std::string& path);
   // Finds pointer.bin next to the model's weights: <dir>/pointer.bin, else <dir>/.kapitsa/pointer.bin.
   static std::string find(const std::string& model_dir);
   bool ok() const { return dim_ > 0; }
+  Kind kind() const { return kind_; }
+  bool is_readout() const { return kind_ == Kind::Readout; }
   int hidden() const { return hidden_; }
   int dim() const { return dim_; }
   float temperature() const { return temperature_; }
@@ -114,9 +121,10 @@ class PointerHead {
   void logits(const float* h_decide, const std::vector<const float*>& option_rows, std::vector<float>* out) const;
 
  private:
+  Kind kind_ = Kind::Projected;
   int hidden_ = 0, dim_ = 0;
   float temperature_ = 1.0f;
-  std::vector<float> q_w_, q_b_, k_w_, k_b_;
+  std::vector<float> q_w_, q_b_, k_w_, k_b_, readout_w_;
 };
 
 // Post-final-norm row of a Qwen3.5 backbone's residual row: x * rsqrt(mean(x^2) + eps) * w, as the model's own

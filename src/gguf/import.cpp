@@ -252,7 +252,7 @@ Fmt expert_format(Cls c) {
 
 struct Hp {
   std::string arch;
-  bool moe = false, tied = false;
+  bool moe = false, tied = false, causal = true;
   int64_t H = 0, layers = 0, nextn = 0, hq = 0, hkv = 0, head_dim = 0, rot = 0, ctx = 0;
   int64_t conv = 0, dk = 0, hk = 0, hv = 0, dv = 0, interval = 4, ffn = 0;
   int64_t E = 0, topk = 0, moe_I = 0, shared_I = 0, vocab = 0;
@@ -290,6 +290,7 @@ Hp read_hp(const File& f) {
   const int64_t blocks = ival(f, a + "block_count");
   h.nextn = ival(f, a + "nextn_predict_layers", 0);
   h.layers = blocks - h.nextn;
+  h.causal = f.flag(a + "attention.causal", true);
   h.hq = ival(f, a + "attention.head_count");
   h.hkv = ival(f, a + "attention.head_count_kv");
   h.head_dim = ival(f, a + "attention.key_length", h.hq ? h.H / h.hq : 0);
@@ -1081,6 +1082,7 @@ ojson make_config(const Plan& P, const Tok& tok, const File& f) {
   ojson t;
   t["attention_bias"] = false;
   t["attn_output_gate"] = true;
+  t["causal"] = h.causal;
   t["dtype"] = "bfloat16";
   t["eos_token_id"] = tok.endoftext >= 0 ? tok.endoftext : tok.eos;
   t["full_attention_interval"] = h.interval;

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Extract Drex v2.0's pointer head into Kapitsa's pointer.bin.
+"""Extract a Drex projected or Max readout head into Kapitsa's pointer.bin.
 
-Reads either a llama.cpp GGUF (pointer.* are F32 there) or a model folder of safetensors (an HF or a Kapitsa import
-pack, any of F32 / F16 / BF16), finds the five head tensors and writes pointer.bin next to the model or anywhere else:
+Reads only head data from a GGUF with F32 pointer tensors or safetensors with F32, F16 or BF16 pointer tensors.
+Detects a five-tensor projected head or a two-tensor readout head and writes pointer.bin:
 
   tools/drex_pointer.py drex-v2.0-Q4_K_M.gguf  MODEL_DIR/pointer.bin
   tools/drex_pointer.py MODEL_DIR              MODEL_DIR/pointer.bin
@@ -17,6 +17,10 @@ pointer.bin layout (little endian):
   f32    k_w[dp][H]
   f32    k_b[dp]
   f32    temperature[1]
+
+Version 2 replaces the projected weights and biases with f32 readout_w[dim][H], then temperature[1].
+Its dim is the number of option-code outputs, at most 255. Readout temperature defaults to 1 when absent or zero;
+otherwise any finite value is used. The projected head still requires a positive temperature.
 """
 import json
 import math
@@ -31,8 +35,10 @@ FMT = {
     6: ("<f", 4), 7: ("<?", 1), 9: ("<Q", 8), 10: ("<Q", 8), 11: ("<q", 8), 12: ("<d", 8),
 }
 
-WANT = ("pointer.q.weight", "pointer.q.bias", "pointer.k.weight", "pointer.k.bias",
-        "pointer.temperature.weight")
+PROJECTED = ("pointer.q.weight", "pointer.q.bias", "pointer.k.weight", "pointer.k.bias",
+             "pointer.temperature.weight")
+READOUT = ("pointer.readout.weight", "pointer.temperature.weight")
+WANT = PROJECTED + ("pointer.readout.weight",)
 
 
 def rd(f, fmt):
@@ -110,9 +116,7 @@ def from_gguf(path):
                 continue
             if ttype != 0:
                 raise SystemExit("%s is GGUF type %d, expected F32 (0)" % (name, ttype))
-            count = 1
-            for d in dims:
-                count *= d
+            count = math.prod(dims)
             f.seek(data_start + off)
             raw = f.read(count * 4)
             if len(raw) != count * 4:
@@ -158,46 +162,60 @@ def from_safetensors(model_dir):
     return flat, shapes
 
 
+def write_head(got, shapes, out):
+    readout = "pointer.readout.weight" in got
+    if readout and "pointer.temperature.weight" not in got:
+        got = dict(got, **{"pointer.temperature.weight": [1.]})
+        shapes = dict(shapes, **{"pointer.temperature.weight": [1]})
+    names = READOUT if readout else PROJECTED
+    if readout and any(name in got for name in PROJECTED[:-1]):
+        raise SystemExit("mixed projected and readout pointer tensors")
+    missing = [name for name in names if name not in got]
+    if missing:
+        raise SystemExit("missing pointer tensors: %s (found %s)" % (missing, sorted(got)))
+    weight = names[0]
+    shape = shapes[weight]
+    if len(shape) != 2 or any(not isinstance(d, int) or d <= 0 for d in shape):
+        raise SystemExit("%s needs a positive two-dimensional shape" % weight)
+    dim, hidden = shape
+    if hidden > 0x7fffffff or dim > (255 if readout else 4096):
+        raise SystemExit("pointer head has a bad shape")
+    expected = {weight: [dim, hidden], "pointer.temperature.weight": [1]}
+    if not readout:
+        expected.update({"pointer.q.bias": [dim], "pointer.k.weight": [dim, hidden], "pointer.k.bias": [dim]})
+    for name in names:
+        shape = shapes[name]
+        if shape != expected[name]:
+            raise SystemExit("%s has shape %s, expected %s" % (name, shape, expected[name]))
+        if len(got[name]) != math.prod(shape):
+            raise SystemExit("%s value count does not match its shape" % name)
+        if any(not math.isfinite(value) or abs(value) > 3.4028234663852886e38 for value in got[name]):
+            raise SystemExit("%s has non-finite or out-of-F32-range values" % name)
+    temperature = got["pointer.temperature.weight"][0]
+    if not readout and temperature <= 0:
+        raise SystemExit("temperature %r is not a positive finite number" % temperature)
+    if readout and temperature == 0:
+        temperature = 1.
+        got = dict(got, **{"pointer.temperature.weight": [temperature]})
+    version = 2 if readout else 1
+    with open(out, "wb") as f:
+        f.write(b"KPS1")
+        f.write(struct.pack("<III", version, hidden, dim))
+        for name in names:
+            values = got[name]
+            f.write(struct.pack("<%df" % len(values), *values))
+    return version, hidden, dim, temperature
+
+
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: drex_pointer.py <GGUF file | model folder> <pointer.bin out>")
     src, out = sys.argv[1], sys.argv[2]
-    if os.path.isdir(src):
-        got, shapes = from_safetensors(src)
-    else:
-        got, shapes = from_gguf(src)
+    got, shapes = from_safetensors(src) if os.path.isdir(src) else from_gguf(src)
     print("shapes:", {k: shapes[k] for k in sorted(shapes)})
-    missing = [w for w in WANT if w not in got]
-    if missing:
-        raise SystemExit("missing pointer tensors: %s (found %s)" % (missing, sorted(got)))
-
-    qw, qb, kw, kb, temp = (got["pointer.q.weight"], got["pointer.q.bias"],
-                            got["pointer.k.weight"], got["pointer.k.bias"],
-                            got["pointer.temperature.weight"])
-    qw_dims = shapes["pointer.q.weight"][-2:]
-    dp, H = qw_dims[0], qw_dims[1]
-    if H * dp != len(qw):
-        raise SystemExit("pointer.q.weight holds %d values, expected %d x %d" % (len(qw), dp, H))
-    if len(kw) != len(qw):
-        raise SystemExit("pointer.k.weight holds %d values, expected %d" % (len(kw), len(qw)))
-    for name, vals, want in (("pointer.q.bias", qb, dp), ("pointer.k.bias", kb, dp),
-                             ("pointer.temperature.weight", temp, 1)):
-        if len(vals) != want:
-            raise SystemExit("%s holds %d values, expected %d" % (name, len(vals), want))
-    t = temp[0]
-    if not math.isfinite(t) or t <= 0:
-        raise SystemExit("temperature %r is not a positive finite number" % t)
-
-    with open(out, "wb") as g:
-        g.write(b"KPS1")
-        g.write(struct.pack("<III", 1, H, dp))
-        g.write(struct.pack("<%df" % len(qw), *qw))
-        g.write(struct.pack("<%df" % dp, *qb))
-        g.write(struct.pack("<%df" % len(kw), *kw))
-        g.write(struct.pack("<%df" % dp, *kb))
-        g.write(struct.pack("<f", t))
-    print("hidden=%d dp=%d temperature=%g -> %s (%.1f MB)" % (H, dp, t, out, os.path.getsize(out) / 1e6))
-    print("q_w[0][:4]", [round(v, 5) for v in qw[:4]], "q_b[:4]", [round(v, 5) for v in qb[:4]])
+    version, hidden, dim, temperature = write_head(got, shapes, out)
+    print("version=%d hidden=%d dim=%d temperature=%g -> %s (%.1f MB)" %
+          (version, hidden, dim, temperature, out, os.path.getsize(out) / 1e6))
 
 
 if __name__ == "__main__":

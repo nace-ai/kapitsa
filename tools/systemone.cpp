@@ -178,16 +178,6 @@ class SystemOne {
       while (!name_.empty() && name_.back() == '/') name_.pop_back();
       name_ = name_.substr(name_.find_last_of('/') + 1);
     }
-    Gpu& g = Gpu::get();
-    logi("loading %s", opts_.model_dir.c_str());
-    model_ = load_qwen(opts_.model_dir, 2048);
-    if (!model_) fatal("could not load %s", opts_.model_dir.c_str());
-    if (!model_->can_snapshot()) {
-      fatal("%s: this model's recurrent state is not something a checkpoint captures, and systemone answers every "
-            "question by restoring the state's checkpoint; it needs a model that can snapshot (Qwen3.5/3.6/3.8)",
-            opts_.model_dir.c_str());
-    }
-    tok_.load(opts_.model_dir + "/tokenizer.json");
     const std::string head_path = ni::systemone::PointerHead::find(opts_.model_dir);
     if (head_path.empty()) {
       fatal("%s has no pointer head: put pointer.bin there (tools/drex_pointer.py <gguf> <out>)", opts_.model_dir.c_str());
@@ -197,6 +187,17 @@ class SystemOne {
     } catch (const std::exception& e) {
       fatal("%s", e.what());
     }
+    if (head_.is_readout()) opts_.cache_bytes = 0;
+    logi("loading %s", opts_.model_dir.c_str());
+    model_ = load_qwen(opts_.model_dir, head_.is_readout() ? opts_.context - 1 : 2048);
+    if (!model_) fatal("could not load %s", opts_.model_dir.c_str());
+    if (model_->config().causal == head_.is_readout()) {
+      fatal("pointer head and backbone attention disagree: Max needs a readout head and noncausal attention");
+    }
+    if (!head_.is_readout() && !model_->can_snapshot()) {
+      fatal("systemone's causal pointer head requires a backbone with recurrent checkpoints");
+    }
+    tok_.load(opts_.model_dir + "/tokenizer.json");
     hidden_ = model_->hidden_width();
     if (head_.hidden() != hidden_) fatal("pointer head expects %d hidden values, the model has %d", head_.hidden(), hidden_);
     // hidden_rows() rows are read as hidden_ f32 values: a backbone whose rows hold several streams (Qwen3.8 Flash-Next
@@ -223,7 +224,7 @@ class SystemOne {
     for (Buffer& b : seq_->vc)
       if (b) std::memset(b.ptr(), 0, b.size);
     const double zero_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - z0).count();
-    ck_ = model_->new_checkpoint();
+    if (!head_.is_readout()) ck_ = model_->new_checkpoint();
     model_key_ = model_digest(opts_.model_dir);
     logi("%s ready: context %d, hidden %d, pointer dim %d, KV caches zeroed in %.0f ms", name_.c_str(), opts_.context,
          hidden_, head_.dim(), zero_ms);
@@ -248,8 +249,36 @@ class SystemOne {
     e.wait();
   }
 
+  ojson score_max(const ojson& body, Timings* tm) {
+    const auto enc = ni::systemone::encode_max(tok_, body, limits_);
+    ni::systemone::check_fits(enc, seq_->limit);
+    std::vector<std::vector<float>> logits;
+    const auto started = std::chrono::steady_clock::now();
+    for (const auto& branch : enc.branches) {
+      const int rows = int(branch.tokens.size());
+      if (rows > model_->prefill_chunk()) throw ni::systemone::BadRequest("Max question exceeds the full-row prefill capacity");
+      model_->reset(*seq_);
+      std::copy(branch.tokens.begin(), branch.tokens.end(), seq_->tokens());
+      ni::SamplingParams sp;
+      auto e = Gpu::get().begin();
+      model_->encode_prefill(*e, *seq_, 0, rows, sp, 0, false);
+      commit_chunk(*e, rows);
+      if (!model_->ane_finish_chunk()) throw std::runtime_error("Max full-row Neural Engine split failed");
+      std::vector<float> last;
+      ni::systemone::final_norm_row(model_->hidden_rows().as<float>() + size_t(branch.group.decide) * hidden_,
+                                    norm_w_.data(), hidden_, eps_, &last);
+      std::vector<float> group;
+      head_.logits(last.data(), std::vector<const float*>(branch.group.options.size(), nullptr), &group);
+      logits.push_back(std::move(group));
+    }
+    tm->branch_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    scored_input_tokens_ = int(enc.total_tokens());
+    return ni::systemone::format_answers(logits, enc.meta);
+  }
+
   // Scores one {"state", "questions"} object, returning its answers object.
   ojson score(const ojson& body, Timings* tm) {
+    if (head_.is_readout()) return score_max(body, tm);
     Gpu& g = Gpu::get();
     const ni::systemone::Encoded enc = ni::systemone::encode(tok_, body, limits_);
     const int n_state = enc.n_state();
@@ -546,7 +575,11 @@ int encode_only(const Options& opts) {
   ss << f.rdbuf();
   ni::systemone::Encoded enc;
   try {
-    enc = ni::systemone::encode(tok, parse_body(ss.str()), ni::systemone::limits_from_env());
+    const bool max_mode = std::filesystem::exists(opts.model_dir + "/config.json") &&
+                          !Qwen35::read_config(opts.model_dir).causal;
+    const auto body = parse_body(ss.str());
+    enc = max_mode ? ni::systemone::encode_max(tok, body, ni::systemone::limits_from_env())
+                   : ni::systemone::encode(tok, body, ni::systemone::limits_from_env());
     ni::systemone::check_fits(enc, opts.context);  // what the server answers for this --context
   } catch (const ni::systemone::BadRequest& e) {
     // A request the encoder rejects is a 400, which the server answers and this mode prints as `400 <reason>` and

@@ -1,5 +1,8 @@
 # System One: decisions instead of tokens
 
+This page describes Drex v2.0. [Drex Max v1](drex-max.md) uses the same HTTP API with independent full-question
+prompts, bidirectional full attention, and a linear readout head instead of v2's shared state and projected pointer.
+
 Drex v2.0 is a decision model: it reads a state and a set of questions and answers with a probability
 per option, not with generated text. `build/systemone` serves that protocol on Kapitsa, so a Drex
 release GGUF can be run natively on the Mac instead of through llama.cpp's server: the state is encoded once,

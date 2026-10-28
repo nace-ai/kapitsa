@@ -85,6 +85,7 @@ struct Qwen35Config {
   // Gated DeltaNet
   int lin_hk = 0, lin_hv = 0, lin_dk = 0, lin_dv = 0, conv_k = 4;
   // full attention
+  bool causal = true;
   int hq = 0, hkv = 0, head_dim = 0, rot_dims = 0;
   float theta = 1e7f, eps = 1e-6f;
   int mrope[3] = {11, 11, 10};  // M-RoPE (images): rotary frequencies per (t, h, w) axis, interleaved

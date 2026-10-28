@@ -608,6 +608,7 @@ static void parse_config(const json& root, Qwen35Config& cfg) {
   cfg.lin_dk = t["linear_key_head_dim"];
   cfg.lin_dv = t["linear_value_head_dim"];
   cfg.conv_k = t.value("linear_conv_kernel_dim", 4);
+  cfg.causal = t.value("causal", true);
   cfg.hq = t["num_attention_heads"];
   cfg.hkv = t["num_key_value_heads"];
   cfg.head_dim = t.value("head_dim", cfg.hidden / cfg.hq);
@@ -2428,6 +2429,7 @@ void Qwen35::enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
 }
 
 void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
+  if (!cfg_.causal) fatal("noncausal Qwen3.5 requires a whole-prompt prefill, not decode");
   if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
   enc_embed(e, s.tok, pos, 1, x_);
   static int dbg_layers = getenv("NI_DEBUG_LAYERS") ? atoi(getenv("NI_DEBUG_LAYERS")) : -1;
@@ -3366,6 +3368,13 @@ void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int
 void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, int T, int pos0, int cap) {
   kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(cap),
                   1.0f / std::sqrt(float(cfg_.head_dim))};
+  if (!cfg_.causal) {
+    e.use(pipe("attn_prefill11_bidi_k16"));
+    e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+    e.val(5, fp);
+    e.dispatch((T + 31) / 32, cfg_.hq, 1, 256);
+    return;
+  }
   // default attn_prefill11r: v11 skipping the O rescale when no row's max moved (bitwise equal)
   static const std::string an = getenv("NI_ATTN") && *getenv("NI_ATTN") ? getenv("NI_ATTN") : "attn_prefill11r";
   // NI_SHORTPF: few queries over a long cached prefix. Rows are (query, head) pairs of one KV
@@ -3558,6 +3567,8 @@ void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int po
 
 void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                             Checkpoint* snap, int snap_row) {
+  if (!cfg_.causal && (pos0 != 0 || sample || snap))
+    fatal("noncausal Qwen3.5 requires one whole-prompt prefill at position 0 without sampling or snapshots");
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
@@ -3567,7 +3578,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, x_, D);  // image rows
   // NI_ANE: dense FFN split with the Neural Engine. A chunk carrying an in-pass checkpoint stays on the
   // GPU (the engine cuts such chunks at the boundary instead when the split would apply).
-  ane_chunk_ = !snap && ane_splits(T);
+  ane_chunk_ = cfg_.causal && !snap && ane_splits(T);
   if (ane_chunk_) ane_begin_chunk(T);
   if (ane_chunk_ && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));

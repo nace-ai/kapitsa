@@ -1750,7 +1750,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     tq0 = t0;
     t = t0 + rg * 8 + frow;                       // this lane's query
     qpos_rg = p.pos0 + t0 + rg * 8;               // first query position of the row group
-    kend = p.pos0 + min(t0 + kBQ11, p.T);         // keys needed by the block
+    kend = p.pos0 + (BIDI ? p.T : min(t0 + kBQ11, p.T));
   }
   const uint qpos = p.pos0 + t;
   const uint ntiles = (kend + BK - 1) / BK;
@@ -2011,6 +2011,16 @@ NI_ATTN11(attn_prefill11, 32, false)         // 20 KB, exchange in the K tile (M
 NI_ATTN11(attn_prefill11_x, 32, true)        // 28 KB, own exchange buffer, 2 barriers fewer per tile
 NI_ATTN11(attn_prefill11_k16, 16, false)     // 16-key tiles: 12 KB, fewer registers
 NI_ATTN11(attn_prefill11_k16x, 16, true)
+[[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11_bidi_k16(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<16>() / 8];
+  threadgroup float2 xs[1];
+  attn_prefill11_impl<16, false, false, false, true, false, true>(q, kc, vc, qg, out, p, tg, tid, sg, lane,
+                                                              (threadgroup half*)kvm, xs);
+}
 // attn_prefill11_k16xr: attn_prefill11_k16x with 11r's skipped unit O rescales (bitwise equal to k16x)
 [[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11_k16xr(
     const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
