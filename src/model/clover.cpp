@@ -431,9 +431,9 @@ void Clover::encode_cycle(Encoder& e, Seq& s, int P, int W, const CloverReply& r
   encode_check(e, s, P, W, reply, stops, sp, step);
 }
 
-bool Clover::accept(const CloverRow& r, int draft) const {
-  if (exact_) return draft == r.tok;
-  return r.pc > 0.0f && r.pc >= std::min(accept_ratio_, accept_delta_ * std::exp(-r.ent));
+bool Clover::accept_draft(const CloverRow& r, int draft, bool exact, float ratio, float delta) {
+  if (exact) return draft == r.tok;
+  return r.pc > 0.0f && r.pc >= std::min(ratio, delta * std::exp(-r.ent));
 }
 
 }  // namespace ni

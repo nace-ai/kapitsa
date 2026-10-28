@@ -1,19 +1,19 @@
 // Clover's self-speculative decoding (src/model/clover.h) on a prompt, outside the engine: the cycles of the engine's
 // loop (draft, verify, the acceptance, the kept rows' commit), each half timed as its own command buffer, with the
-// tokens per cycle and the reply. Takes the GPU lock (BENCH_GPU_LOCK, as kapitsa bench) unless NACE_GPU_LOCK_HELD=1.
+// tokens per cycle and the reply. Takes the GPU lock (BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless its caller
+// holds it (NI_LOCK_HELD=1 / NACE_GPU_LOCK_HELD=1).
 //   clover_bench <model_dir> [max_tokens=256] [prompt]   (NI_CLOVER_* as the server: draft rows, acceptance)
 // NI_PROFILE=1: every dispatch timed apart, the draft's under "d:", the verify's under "v:" (much slower).
 // CB_WARM=n: cycles left out of the timings (default 4).
+#include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/clover.h"
 #include "tokenizer/tokenizer.h"
 #include "util/log.h"
 
-#include <fcntl.h>
-#include <sys/file.h>
-#include <unistd.h>
-
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -31,12 +31,12 @@ int main(int argc, char** argv) {
   const std::string text = argc > 3 ? argv[3]
                                     : "Write a C++ function that parses an ISO 8601 date (YYYY-MM-DD) into a struct with "
                                       "year, month and day, validating each field, with a short explanation.";
-  int lock_fd = -1;
-  if (!getenv("NACE_GPU_LOCK_HELD")) {
-    const char* lp = getenv("BENCH_GPU_LOCK");
-    lock_fd = open(lp && *lp ? lp : "/tmp/kapitsa-gpu.lock", O_RDWR | O_CREAT, 0644);
-    if (lock_fd < 0 || flock(lock_fd, LOCK_EX) != 0) fatal("cannot take the GPU lock");
-  }
+  bench::GpuLock lock;
+  if (!bench::GpuLock::held_by_caller() && !lock.acquire([](const std::string& who) {
+        fprintf(stderr, "waiting for the GPU lock %s%s\n", bench::GpuLock::path().c_str(),
+                who.empty() ? "" : (", held by " + who).c_str());
+      }))
+    fatal("cannot take the GPU lock %s: %s", bench::GpuLock::path().c_str(), strerror(errno));
   Clover m(dir, 2048);
   if (!m.self_spec()) fatal("clover_bench times the self-speculative cycles (NI_CLOVER_DECODE is diffusion)");
   Tokenizer tok;
@@ -121,6 +121,5 @@ int main(int argc, char** argv) {
   printf("tokens per cycle:");
   for (int i = 1; i <= W; ++i) printf(" %d:%d", i, hist[size_t(i)]);
   printf("\n");
-  if (lock_fd >= 0) close(lock_fd);
   return 0;
 }

@@ -23,7 +23,8 @@
 //    causal pass over [pending, drafts] (Qwen35's 8-row verify, its rows on the tape), and keeps the drafts the verify
 //    accepts and one more token from the first row it did not (encode_cycle). Acceptance (SGLang's rules): `threshold`
 //    takes a draft whose verify probability is at least min(ratio 1.0, delta 0.6 * exp(-entropy)), `exact` only the
-//    verify's own argmax (the reply is then greedy decoding's);
+//    verify's own argmax (every token the causal pathway's argmax, the penalties counting the reply as it stood at the
+//    cycle's start, as SGLang's; with the penalties off, greedy decoding's reply);
 //  - block diffusion (NI_CLOVER_DECODE=diffusion; the Hugging Face implementation's LowConfidence): a block of 32
 //    positions starts as mask tokens; each denoising pass gives every row its likeliest token and its probability, the
 //    rows above the threshold (0.95; at least the most confident one) take theirs, until every row has one; the block
@@ -94,8 +95,11 @@ class Clover : public Qwen35 {
                     const SamplingParams& sp, uint32_t step);
   void encode_check(Encoder& e, Seq& s, int P, int W, const CloverReply& reply, const std::vector<int>& stops,
                     const SamplingParams& sp, uint32_t step);
-  // whether a verify row accepts its draft (the token after the row's)
-  bool accept(const CloverRow& r, int draft) const;
+  // whether a verify row accepts its draft (the token after the row's): accept_draft with this model's rule
+  bool accept(const CloverRow& r, int draft) const { return accept_draft(r, draft, exact_, accept_ratio_, accept_delta_); }
+  // exact: the draft is the row's argmax; else (threshold) its probability is above zero and at least
+  // min(ratio, delta * exp(-entropy))
+  static bool accept_draft(const CloverRow& r, int draft, bool exact, float ratio, float delta);
 
   // ---- block diffusion (NI_CLOVER_DECODE=diffusion) ----
   int block_size() const { return block_; }    // rows per block (the config's 32, NI_CLOVER_BLOCK: a divisor of it)

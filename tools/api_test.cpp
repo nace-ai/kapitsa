@@ -1844,7 +1844,8 @@ void unsupported_model_unit() {
       "num_hidden_layers": 30, "num_attention_heads": 16, "vocab_size": 262144},
       "quantization": {"group_size": 32, "bits": 4, "mode": "affine"}})"));
   check(gemma.find("is a gemma4 model") != std::string::npos && gemma.find("qwen3_5") != std::string::npos &&
-            gemma.find("nemotron_h") != std::string::npos && gemma.find("flint") != std::string::npos,
+            gemma.find("nemotron_h") != std::string::npos && gemma.find("flint") != std::string::npos &&
+            gemma.find("clover_moe") != std::string::npos,
         "unsupported_model: another architecture is named by its model_type, with the ones Kapitsa runs");
   // the Qwen3.5 family is accepted by its model_type, and by the hybrid's shape when the config names none
   check(refused(folder("qwen35", R"({"model_type": "qwen3_5"})")).empty(),
@@ -1855,6 +1856,8 @@ void unsupported_model_unit() {
         "unsupported_model: a qwen3_5_moe_text text_config is not refused");
   check(refused(folder("hybrid", R"({"linear_num_value_heads": 8, "num_hidden_layers": 4})")).empty(),
         "unsupported_model: a config with no model_type and the hybrid's shape is not refused");
+  check(refused(folder("clover", R"({"model_type": "clover_moe"})")).empty(),
+        "unsupported_model: a clover_moe config (DiffuSpace's Clover) is not refused");
   // a drafter's config is another architecture here: it is refused, with its type named
   check(refused(folder("drafter", R"({"model_type": "qwen3"})")).find("is a qwen3 model") != std::string::npos,
         "unsupported_model: a qwen3 drafter config is refused by its model_type");
@@ -1867,6 +1870,24 @@ void unsupported_model_unit() {
   const std::string noconfig = std::string(root) + "/noconfig";
   mkdir(noconfig.c_str(), 0700);
   check(refused(noconfig).empty(), "unsupported_model: a folder with no config.json returns nothing");
+}
+
+// Clover (src/model/clover.h): the self-speculative acceptance rules (SGLang's) and NI_CLOVER_DECODE's default
+void clover_unit() {
+  CloverRow r{};
+  r.tok = 7, r.pc = 0.5f, r.ent = 0.0f;  // the draft's probability 0.5, entropy 0: the threshold is min(1, 0.6)
+  check(!Clover::accept_draft(r, 7, false, 1.0f, 0.6f), "clover: threshold rejects 0.5 under min(1, 0.6)");
+  check(Clover::accept_draft(r, 7, true, 1.0f, 0.6f), "clover: exact takes the argmax");
+  check(!Clover::accept_draft(r, 8, true, 1.0f, 0.6f), "clover: exact rejects another token");
+  r.ent = 1.0f;  // threshold 0.6 / e = 0.22
+  check(Clover::accept_draft(r, 8, false, 1.0f, 0.6f), "clover: threshold takes 0.5 over 0.6 exp(-1), argmax or not");
+  r.pc = 0.0f;
+  check(!Clover::accept_draft(r, 8, false, 0.0f, 0.0f), "clover: a draft of probability 0 is never taken");
+  unsetenv("NI_CLOVER_DECODE");
+  check(Clover::decode_mode() == "auto", "clover: NI_CLOVER_DECODE defaults to auto");
+  setenv("NI_CLOVER_DECODE", "diffusion", 1);
+  check(Clover::decode_mode() == "diffusion", "clover: NI_CLOVER_DECODE=diffusion is read");
+  unsetenv("NI_CLOVER_DECODE");
 }
 
 bool exists(const std::string& p) {
@@ -1927,6 +1948,7 @@ int main(int argc, char** argv) {
   history_gate_unit();
   kflash_lookup_unit();
   unsupported_model_unit();
+  clover_unit();
   norm_layout_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {

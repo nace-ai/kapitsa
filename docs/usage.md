@@ -210,7 +210,8 @@ positions at once (mask tokens where nothing was chosen yet), each position's ow
   drafts the 7 tokens after the pending one with one denoising pass, checks them with one causal pass (the 35B's 8-row
   verify) and keeps the drafts it accepts and one more token. A draft is accepted when the causal pass gives it at least
   min(1.0, 0.6 x exp(-entropy)) of its probability (SGLang's `threshold` rule; `NI_CLOVER_ACCEPT=exact` takes only its
-  argmax, and the reply is then greedy decoding's).
+  argmax: every token is then the causal pathway's argmax, the penalties below counting the reply as it stood at the
+  cycle's start, as in SGLang; with them off, greedy decoding's reply).
 - **Block diffusion** (`diffusion`), as the Hugging Face implementation decodes it: 32 positions at a time, each
   denoising pass filling the positions above 0.95 probability, then a causal pass commits the block.
 
@@ -1297,7 +1298,7 @@ first download's progress too:
 | `NI_NH_NGRAM` | `4` with BF16 or FP8, `0` with NVFP4 | Dense Nemotron-H models (Nemotron Nano): prompt lookup's drafts per cycle when `--spec` is not given; `0` decodes plainly. |
 | `NI_CLOVER_DECODE` | `auto` | Clover: `auto` decodes its causal pathway with the 35B-A3B's DFlash2 drafter when one is found, else self-speculatively; `dflash` the drafter's way, `spec` self-speculatively (a denoising pass drafts, a causal pass checks, as DiffuSpace's SGLang implementation), `diffusion` by 32-position blocks of denoising passes, as the Hugging Face implementation ([Other models](#other-models)). |
 | `NI_CLOVER_DRAFT` | `8` | Clover, `spec`: rows of a cycle's draft and check (the pending token and the drafts after it), 2 to 8 and a divisor of the model's block size. |
-| `NI_CLOVER_ACCEPT` | `threshold` | Clover, `spec`: `threshold` accepts a draft the causal pass gives at least min(ratio, delta x exp(-entropy)) of its probability (SGLang's default); `exact` only the causal pass's argmax, so the reply is greedy decoding's. `NI_CLOVER_ACCEPT_RATIO` (`1.0`) and `NI_CLOVER_ACCEPT_DELTA` (`0.6`) set the two. |
+| `NI_CLOVER_ACCEPT` | `threshold` | Clover, `spec`: `threshold` accepts a draft the causal pass gives at least min(ratio, delta x exp(-entropy)) of its probability (SGLang's default); `exact` only the causal pass's argmax (greedy decoding's reply when the model's penalties are off: inside a cycle they count the reply as it stood at the cycle's start). `NI_CLOVER_ACCEPT_RATIO` (`1.0`) and `NI_CLOVER_ACCEPT_DELTA` (`0.6`) set the two. |
 | `NI_CLOVER_THRESHOLD` | the model's (`0.95`) | Clover, `diffusion`: the probability above which a masked position takes its token in a denoising pass. Lower writes more positions a pass and fewer passes a block. |
 | `NI_CLOVER_BLOCK` | the model's (`32`) | Clover, `diffusion`: positions per block, a divisor of the model's block size. |
 | `NI_CLOVER_CORESET` | the model's (on) | Clover: `0` lets every row of a denoising pass route among all the experts instead of the block's shared set (the experts holding 90% of the block's routing mass). |
