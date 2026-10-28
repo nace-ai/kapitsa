@@ -488,8 +488,10 @@ def git_state(d, exclude=()):
 
 
 def checkout_of(binary):
-    """Top of the git checkout a binary was built in (e.g. <repo>/build/kapitsa), or None."""
-    return run_ok(["git", "-C", os.path.dirname(os.path.realpath(binary)), "rev-parse", "--show-toplevel"])
+    """Top of the Kapitsa checkout a binary was built in (e.g. <repo>/build/kapitsa), or None. Another repository does
+    not count: install.sh puts the release binary in /opt/homebrew/bin, Homebrew's own git checkout."""
+    top = run_ok(["git", "-C", os.path.dirname(os.path.realpath(binary)), "rev-parse", "--show-toplevel"])
+    return top if top and os.path.isfile(os.path.join(top, "src", "hub", "catalog.cpp")) else None
 
 
 def kapitsa_version(binary):

@@ -14,10 +14,17 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-880 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-26 down to 2026-10-16, newest first.
+887 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-28 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-10-28 | – | M4 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | Kapitsa | 0.2.23 | 125.6 | 128.5 | 1018 | 863 | 3.81 | – | – | [flint-kapitsa-20261028-111516](results/2026-10-28-m4pro-ec2/flint-kapitsa-20261028-111516.json) |
+| 2026-10-28 | – | M4 Pro, 48 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | 0.2.23 | 61.2 | 68.1 | 576 | 502 | 7.26 | – | – | [dory-kapitsa-perloop-20261028-111203](results/2026-10-28-m4pro-ec2/dory-kapitsa-perloop-20261028-111203.json) |
+| 2026-10-28 | – | M4 Pro, 48 GB | Nemotron 3.5 Bolt-74B-A9B | 2-bit experts | Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill) | 0.2.23 | 70.0 | 74.6 | 543 | 537 | 7.71 | – | – | [bolt-kapitsa-20261028-110818](results/2026-10-28-m4pro-ec2/bolt-kapitsa-20261028-110818.json) |
+| 2026-10-28 | – | M4 Pro, 48 GB | Nemotron 3.5 Lightning-30B-A3B | NVFP4 | Kapitsa (DSpark drafter) | 0.2.23 | 110.0 | 119.4 | 995 | 882 | 4.21 | – | – | [lightning-kapitsa-20261028-110538](results/2026-10-28-m4pro-ec2/lightning-kapitsa-20261028-110538.json) |
+| 2026-10-28 | – | M4 Pro, 48 GB | Qwen3.5 4B | 4-bit | Kapitsa (DFlash drafter) | 0.2.23 | 187.2 | 202.2 | 1982 | 1569 | 2.08 | – | – | [q35-4b-kapitsa-20261028-110404](results/2026-10-28-m4pro-ec2/q35-4b-kapitsa-20261028-110404.json) |
+| 2026-10-28 | – | M4 Pro, 48 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | 0.2.23 | 65.1 | 68.7 | 390 | 343 | 10.59 | 60.3 | – | [q38-27b-kapitsa-20261028-105701](results/2026-10-28-m4pro-ec2/q38-27b-kapitsa-20261028-105701.json) |
+| 2026-10-28 | – | M4 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 0.2.23 | 164.3 | 184.2 | 1172 | 981 | 3.53 | 143.4 | – | [q36-35b-kapitsa-20261028-105346](results/2026-10-28-m4pro-ec2/q36-35b-kapitsa-20261028-105346.json) |
 | 2026-10-26 | fearampgreed | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.3 | 124.5 | 138.0 | 763 | 710 | 5.41 | – | – | [q38-27b-mlxserve-dflash2-20261026-060940](results/2026-10-26-m5-max/results/q38-27b-mlxserve-dflash2-20261026-060940.json) |
 | 2026-10-26 | fearampgreed | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | cd20dcc | 123.2 | 137.2 | 844 | 846 | 4.90 | – | – | [q38-27b-kapitsa-20261026-060749](results/2026-10-26-m5-max/results/q38-27b-kapitsa-20261026-060749.json) |
 | 2026-10-26 | fearampgreed | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.3 | 131.3 | 144.3 | 764 | 689 | 5.41 | – | – | [q38-27b-mlxserve-dflash2-20261026-060420](results/2026-10-26-m5-max/results/q38-27b-mlxserve-dflash2-20261026-060420.json) |
