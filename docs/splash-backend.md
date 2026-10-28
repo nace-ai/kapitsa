@@ -55,10 +55,15 @@ model directory (`--splash-model`), never at Kapitsa's weights.
 ## Finding Splash
 
 Without `--splash-binary`, `serve` looks for `engine/splash` under `$SPLASH_HOME`, under the folder a `splash` on `PATH`
-resolves into, then `~/Applications/Splash`, `/Applications/Splash` and `~/Splash`. Without `--splash-model` it uses the
-only resolved model under `~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer; with several it
-lists them (family and folder name) and exits, and `--splash-model` takes a folder or the first 6 or more characters of
-its name. When nothing is found the error says where it looked and which flag to give.
+resolves into, then `~/Applications/Splash`, `/Applications/Splash` and `~/Splash`, and last the binary of the last run
+(`splash.json`). Without `--splash-model` it uses the only resolved model under
+`~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer, else the last run's, else the most recently
+resolved one; it says which on stderr and how to pick another, and it does not exit. `--splash-model` takes a folder, the
+first 6 or more characters of a folder's name, or a family or source name such as `flash-next` or `27b` (the most recently
+resolved folder of that model; two different models matching is an error that lists them). A run that starts writes its
+binary and model to `<kapitsa home>/splash.json` (`$KAPITSA_HOME`, else `~/.cache/kapitsa`). `serve --engine splash --check`
+prints the binary and model that would run and what is missing, starts nothing and writes nothing; it exits 0 when ready and
+1 when not. When nothing is found the error says where it looked and which flag to give.
 
 ## The template
 
