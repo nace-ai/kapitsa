@@ -386,6 +386,20 @@ with tempfile.TemporaryDirectory() as home:
     r2 = subprocess.run([CLI, "serve", "--engine", "splash", "--check", "--splash-model", "no-such-model"], capture_output=True, text=True, timeout=60, env=env)
     check(r2.returncode == 1 and "NOT DECIDED" in r2.stdout and "Ready" not in r2.stdout, "--check not ready: %d %r" % (r2.returncode, r2.stdout[-300:]))
     check(not os.path.exists(home + "/kapitsa/splash.json"), "--check wrote splash.json")
+    # a --splash-model that cannot be looked at (a file, a name too long for the file system, a path under a folder that cannot be
+    # searched) is no folder: --check says NOT DECIDED and exits 1, it does not abort on a filesystem_error
+    afile = home + "/not-a-folder"
+    open(afile, "w").close()
+    locked = home + "/locked"
+    os.makedirs(locked, exist_ok=True)
+    os.chmod(locked, 0)
+    try:
+        for label, bad in (("a file", afile), ("5000 characters", "x" * 5000), ("under an unsearchable folder", locked + "/model")):
+            rb = subprocess.run([CLI, "serve", "--engine", "splash", "--check", "--splash-model", bad], capture_output=True, text=True, timeout=60, env=env)
+            check(rb.returncode == 1 and "NOT DECIDED" in rb.stdout and "Ready" not in rb.stdout,
+                  "--check with a --splash-model that is %s: %d %r %r" % (label, rb.returncode, rb.stdout[-200:], rb.stderr[-200:]))
+    finally:
+        os.chmod(locked, 0o700)
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)

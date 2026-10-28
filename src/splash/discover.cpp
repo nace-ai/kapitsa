@@ -211,7 +211,8 @@ Check check(const std::string& home, const std::string& splash_home, const std::
   const std::vector<Model> all = models(home);
   out.text += "\nSplash models in " + models_dir(home).string() + ": " + (all.empty() ? "none" : std::to_string(all.size())) + "\n";
   for (const Model& m : all) out.text += "  " + m.family + "  " + m.name + (m.source.empty() ? "" : "  (" + m.source + ")") + "\n";
-  Found m = fs::is_directory(model) ? Found{model, ""} : find_model(home, model, last.model);  // (as serve: a folder, else a name)
+  std::error_code dec;  // (a name too long, or a path under a folder that cannot be searched, is no folder: not an exception)
+  Found m = fs::is_directory(model, dec) && !dec ? Found{model, ""} : find_model(home, model, last.model);  // (as serve: a folder, else a name)
   out.text += m.ok() ? "\nModel to run: " + m.path + "\n" + (m.note.empty() ? "" : m.note + "\n") : "\nModel to run: NOT DECIDED\n" + m.error + "\n";
   if (!m.ok() && !all.empty() && model.empty()) {
     std::string f = all[0].family == "?" ? all[0].name : all[0].family;  // a model.json without a family: its folder name
