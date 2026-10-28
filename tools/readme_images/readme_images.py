@@ -143,7 +143,8 @@ def family_table(data, rows, tmac=None):
     for r in rows:
         m = T["models"][r["model"]]
         top = max(cell(r, e["name"])[0] for e in engines if is_num(cell(r, e["name"])[0]))
-        out.append(f"| **{m['name']}** · `{m['alias']}`<br><sub>{m['about']}</sub> | "
+        alias = f" · `{m['alias']}`" if m.get("alias") else ""   # (none: not in the catalog, e.g. a converted folder)
+        out.append(f"| **{m['name']}**{alias}<br><sub>{m['about']}</sub> | "
                    + " | ".join(table_cell(r, e["name"], top, shared[e["name"]]) for e in engines) + " |")
     return out
 
