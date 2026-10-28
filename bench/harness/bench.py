@@ -395,10 +395,12 @@ def decode_messages():
             {"role": "user", "content": f"[run {random.random():.6f}] {DECODE_USER}"}]
 
 # ---------------------------------------------------------------- HTTP
-def post(base, body, stream, timeout=1800, session=None):
+def post(base, body, stream, timeout=1800, session=None, telemetry=False):
     h = {"Content-Type": "application/json", "Authorization": "Bearer " + os.environ.get("BENCH_API_KEY", "local")}
     if session:  # stable per-conversation id; engines like MTPLX key their KV session bank on it
         h["X-Session-Id"] = session
+    if telemetry:  # a Kapitsa server adds kapitsa_progress events: its accepted drafts on a writing run
+        h["X-Kapitsa-Bench-Telemetry"] = "1"
     req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(), headers=h)
     try:
         return urllib.request.urlopen(req, timeout=timeout)
@@ -410,7 +412,7 @@ def post(base, body, stream, timeout=1800, session=None):
         raise RuntimeError(f"HTTP {e.code}: {msg}") from None
 
 
-def stream_chat(base, body, session=None, timeout=1800):
+def stream_chat(base, body, session=None, timeout=1800, telemetry=False):
     """Streams one chat completion. Returns ttft/gen_time/total (s), usage, timings (llama.cpp and
     Ollama send one), content, reasoning, tool_calls, n_chunks (content-bearing events), finish, and
     the per-event arrival times (ev_t, s since request), character counts (ev_c) and kinds (ev_k: "c" content,
@@ -419,7 +421,7 @@ def stream_chat(base, body, session=None, timeout=1800):
     body["stream"] = True
     body.setdefault("stream_options", {"include_usage": True})
     t0 = time.perf_counter()
-    r = post(base, body, True, session=session, timeout=timeout)
+    r = post(base, body, True, session=session, timeout=timeout, telemetry=telemetry)
     first = last = usage = timings = finish = None
     content, reasoning, tcs, ev_t, ev_c, ev_k = [], [], {}, [], [], []
     n = 0
@@ -616,7 +618,7 @@ def t_decode(a, greedy=False):
     body = body_of(a, decode_messages(), a.decode_tokens, greedy=greedy)
     res = {"greedy": greedy, "invalid": [], "flags": []}
     try:
-        r = stream_chat(a.base_url, body)
+        r = stream_chat(a.base_url, body, telemetry=True)
     except Exception as e:
         res["invalid"].append(f"request failed: {e!r}"[:300])
         return res

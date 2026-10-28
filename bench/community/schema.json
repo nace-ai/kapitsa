@@ -50,7 +50,10 @@
         "revision": {"type": ["string", "null"], "pattern": "^[0-9a-f]{7}$", "description": "The weights' pinned revision, short."},
         "decoding": {"enum": ["KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain", "unknown"], "description": "By the prefix of decoding_detail. Kapitsa 0.2.0 to 0.2.14 wrote unknown for KFlash and prompt-lookup (issue #295)."},
         "decoding_detail": {"type": "string", "maxLength": 120, "description": "The server's own words for it, from its log's engine ready line."},
-        "drafter": {"type": ["string", "null"], "maxLength": 120, "description": "The drafter's repo@revision when one was used."}
+        "drafter": {"type": ["string", "null"], "maxLength": 120, "description": "The drafter model that decoded: its catalog repo@revision, else its folder's name; null when none did. Results without drafter_kind (before 0.2.18) record the catalog's drafter whenever decoding named one."},
+        "drafter_kind": {"enum": ["DFlash2", "DFlash", "LiLiCorr", "DSpark", "MTP", "none", "unknown"], "description": "What drafted, from the server log's drafter line: a drafter model, the MTP head, or none (plain or prompt-lookup decoding). unknown: a server kapitsa bench did not start. Optional: older results lack it."},
+        "drafter_source": {"type": ["string", "null"], "maxLength": 120, "description": "The drafter model's folder name (never a path)."},
+        "drafter_reason": {"type": ["string", "null"], "maxLength": 240, "description": "How the drafter was picked, or why no drafter model decoded."}
       }
     },
     "protocol": {
@@ -165,7 +168,9 @@
       "required": ["median_tps", "runs_tps"],
       "properties": {
         "median_tps": {"type": ["number", "null"], "exclusiveMinimum": 0},
-        "runs_tps": {"type": "array", "maxItems": 50, "items": {"type": "number", "exclusiveMinimum": 0}}
+        "runs_tps": {"type": "array", "maxItems": 50, "items": {"type": "number", "exclusiveMinimum": 0}},
+        "median_accepted_draft_tps": {"type": "number", "minimum": 0, "description": "Accepted draft tokens per second: each valid run's rate times the share of its tokens that were accepted drafts (completion tokens - 1 - decode cycles, from a Kapitsa server's telemetry), the median. Optional."},
+        "median_accepted_draft_share": {"type": "number", "minimum": 0, "maximum": 1, "description": "The share of the tokens written that were accepted drafts, the median over the valid runs. Optional."}
       }
     }
   }

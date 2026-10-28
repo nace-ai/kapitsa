@@ -271,7 +271,7 @@ bool truthy(const ojson& v) {
 }  // namespace
 
 // bench.py post() + stream_chat(): one request on a new connection, the body serialized after t0 as Python does
-Stream stream_chat(const Settings& s, const ojson& body_in, const std::string& session, int timeout_s) {
+Stream stream_chat(const Settings& s, const ojson& body_in, const std::string& session, int timeout_s, bool telemetry) {
   ojson body = body_in;
   body["stream"] = true;
   if (!body.contains("stream_options")) body["stream_options"] = {{"include_usage", true}};
@@ -291,7 +291,7 @@ Stream stream_chat(const Settings& s, const ojson& body_in, const std::string& s
   req.path = "/v1/chat/completions";
   req.headers = {{"Content-Type", "application/json"}, {"Authorization", "Bearer local"}};
   if (!session.empty()) req.headers.emplace("X-Session-Id", session);  // engines like MTPLX key a session bank on it
-  if (s.context_window) req.headers.emplace("X-Kapitsa-Bench-Telemetry", "1");
+  if (s.context_window || telemetry) req.headers.emplace("X-Kapitsa-Bench-Telemetry", "1");
   req.body = body.dump();
   req.response_handler = [&](const httplib::Response& r) {
     status = r.status;
@@ -558,7 +558,7 @@ ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
   ojson res = {{"greedy", greedy}, {"invalid", ojson::array()}, {"flags", ojson::array()}};
   Stream r;
   try {
-    r = stream_chat(s, body);
+    r = stream_chat(s, body, "", 1800, true);  // its cycle counts: the accepted drafts (diagnostics below)
   } catch (const std::exception& e) {
     res["invalid"].push_back(what(e));
     return res;
@@ -597,7 +597,7 @@ ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
     snprintf(b, sizeof b, "repetition loop (distinct-4-gram %g)", *d4);
     res["flags"].push_back(b);
   }
-  if (s.context_window && r.progress.is_object() && r.progress.value("final", false)) {
+  if (r.progress.is_object() && r.progress.value("final", false)) {
     const int cycles = r.progress.value("cycles", 0), tokens = r.progress.value("completion_tokens", 0);
     const int spec = r.progress.value("speculative", 0);
     if (cycles > 0 && tokens == ct && tokens > 1) {
@@ -607,6 +607,11 @@ ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
       if (spec != 0) {
         res["diagnostics"]["accepted_draft_tokens"] = std::max(0, tokens - 1 - cycles);
         res["diagnostics"]["accepted_draft_tokens_per_cycle"] = double(std::max(0, tokens - 1 - cycles)) / cycles;
+        // the share of the tokens written that were accepted drafts (each cycle's first token is the model's own,
+        // and so is the prefill's), and that share of the writing rate: accepted drafts per second
+        const double share = double(std::max(0, tokens - 1 - cycles)) / tokens;
+        res["diagnostics"]["accepted_draft_share"] = py_round(share, 4);
+        if (rate.mid) res["diagnostics"]["accepted_draft_tps"] = py_round(*rate.mid * share, 2);
       }
     }
   }

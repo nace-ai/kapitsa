@@ -36,9 +36,11 @@ The JSON follows [schema.json](schema.json) and is about 2 KB:
 - **The Mac:** its model identifier (`sysctl hw.model`, e.g. `Mac16,7`) with Apple's name for it and the year
   ([mac-models.json](mac-models.json)), the chip, CPU and GPU cores, memory, macOS version and build.
 - **Kapitsa:** its version and commit; the model, its precision, its pinned weights' revision, and how it decoded (the
-  KFlash trees over the DFlash2 drafter, the DFlash2, LiLiCorr or DSpark drafter, prompt lookup, the MTP head, or plain).
+  KFlash trees over the DFlash2 drafter, the DFlash2, LiLiCorr or DSpark drafter, prompt lookup, the MTP head, or plain);
+  which drafter decoded and why (`drafter_kind`, `drafter_source`, `drafter_reason`).
 - **The numbers:** writing speed (decode) at temperature 0.6 (Flint at 1.0, its model card's; the result records which)
-  and greedy, each run's and the median; reading a 4K- and a 16K-token prompt (prefill: tokens per second to the first
+  and greedy, each run's and the median, with the median accepted draft tokens per second and their share of the
+  tokens written where the server reports its decode cycles; reading a 4K- and a 16K-token prompt (prefill: tokens per second to the first
   token); the time to the first token of three follow-ups in each conversation; the server's peak memory; whether tool
   calls work.
 - **The conditions:** power source, Low Power Mode and the energy mode, the worst thermal state, pages swapped out,

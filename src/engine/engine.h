@@ -148,8 +148,11 @@ bool prefill_even_chunks();
 struct LoadPlan {
   bool dflash_auto = false;       // the drafter is looked for (--dflash auto)
   bool dflash_off = false;        // --dflash none, or auto with --spec 0
+  bool dflash_named = false;      // --dflash <dir> (a model without a block drafter ignores it)
   std::string dflash;             // the drafter to load ("" = none: MTP or plain decoding)
   std::string dflash_left_out;    // the drafter auto found and leaves out (it would cost context, below)
+  std::string dflash_unbound;     // a drafter found (or named) for a model no block drafter binds to: Flash-Next
+  bool dflash_unbound_missing = false;  // that one was named with --dflash and is not a folder on disk
   size_t dflash_bytes = 0;        // the loaded drafter's weights and rings (live + one per checkpoint, every slot)
   size_t dflash_found_bytes = 0;  // the same for the drafter found, loaded or left out
   int prefill_chunk = 2048;
@@ -160,6 +163,32 @@ struct LoadPlan {
 // before speed); prefill_chunk 0 = auto_prefill_chunk with the drafter's memory set aside.
 LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
                    size_t budget, int prefill_chunk, int prefill_chunk_cap = 0);
+
+// Which drafter an engine decodes with, and why no block drafter does when none does. The engine logs it once before
+// "engine ready" as "drafter: <kind>[ <source>] (<reason>)", the line `kapitsa bench` records (bench::parse_drafter).
+struct DrafterFacts {
+  std::string model_dir;
+  bool block_path = false;  // the model takes a block drafter (Qwen3.5 family but Flash-Next; Nemotron-H)
+  bool named = false;       // --dflash <dir> (else auto, or off)
+  bool off = false;         // --dflash none / NI_DFLASH=0, or auto with --spec 0
+  bool spec_off = false;    // --spec 0
+  std::string loaded;       // the block drafter's folder ("" = none loaded)
+  std::string loaded_kind;  // DFlash2, DFlash (v1), LiLiCorr or DSpark
+  std::string left_out;     // a drafter found and left out for the context it would cost
+  std::string unsupported;  // a drafter found whose format this model's embedding / output layer does not fit
+  std::string unbound;      // a drafter found for a model that takes none (Flash-Next: LoadPlan::dflash_unbound)
+  bool unbound_missing = false;  // the name given is not on disk: reported as a name, never as a find
+  int mtp_depth = 0;        // MTP speculative decoding's depth (0: off)
+  std::string self_drafts;  // drafting without a drafter model: "prompt lookup", Dory's "1-loop drafts", ...
+};
+struct DrafterUse {
+  std::string kind;    // DFlash2, DFlash, LiLiCorr, DSpark, MTP or none
+  std::string source;  // the block drafter's folder name, never a full path ("" for MTP and none)
+  std::string reason;  // how it was picked, or why no block drafter decodes; never parentheses (the line's parser)
+  std::string unused;  // a drafter found on disk that does not decode ("" = none): the engine warns about it
+};
+DrafterUse drafter_use(const DrafterFacts& f);
+std::string drafter_line(const DrafterUse& u);  // "drafter: <kind>[ <source>] (<reason>)"
 // What an engine starts a model with, as `kapitsa serve` resolves it before loading: the context (opt.context <= 0:
 // default_context, serve's without --context; else as given, which serve has capped at the model's limit with
 // context_within_limit), the slots (opt.slots 0: auto_slots at
