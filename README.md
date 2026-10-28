@@ -53,7 +53,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 ## Features
 
 - **339 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 32 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
-- **A 180B model on a 48 GB Mac, at 56 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
+- **A 180B model on a 48 GB Mac, at 56 tok/s (M5 Pro, `kapitsa serve --engine splash`).** Its routed experts stream from the SSD, as many as the budget holds.
 - **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
 - **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
