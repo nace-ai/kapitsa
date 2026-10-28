@@ -1140,7 +1140,7 @@ check("responses: a max_output_tokens cut is status incomplete", st == 200 and r
 #     default. A cached prefix is reused only at the loop count that computed it.
 probe = post({"messages": [{"role": "user", "content": "Say hi."}], "max_tokens": 4,
               "chat_template_kwargs": {"enable_thinking": False}})
-if (probe.get("usage") or {}).get("kapitsa"):
+if "loops" in ((probe.get("usage") or {}).get("kapitsa") or {}):
     base_loops = probe["usage"]["kapitsa"]["loops"]
     lmsgs = [{"role": "system", "content": "[loops] You are terse. " + "Answer in one short sentence. " * 30},
              {"role": "user", "content": "What is the capital of France?"}]
