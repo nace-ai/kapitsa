@@ -31,7 +31,8 @@ Kapitsa's decode over the next fastest engine on that model.
 Kapitsa reads the highest decode in 34 of the 38 model and Mac pairs, and the 32 in the headline is the wins count:
 two of the 34 are ties (≈) that are not counted as wins. A tie is the row's fastest rival, the one the tables pair
 with Kapitsa, standing inside each other's measured range: the M5 Max's Qwen3.8 27B row (133 against mlx-serve's 128)
-and the M5 Pro's Flash-Next 180B Q2_0 row (55.9 against Splash's 55.5 at T 0, the gap inside both runs' spreads).
+and the M5 Pro's Flash-Next 180B Q2_0 row (55.9 against Splash's 55.5 at T 0, the gap inside both runs' spreads; at
+T 0.6 the same arms read 52.1 against Splash's 54.0, also inside the spreads).
 Counted over the poster's and the tables' rows (`tools/readme_images/readme_images.json`): the union of the 39 rows
 where Kapitsa has a decode cell, less the M3 Pro 36 GB's Bolt 74B row, which has no rival, gives 38 pairs. The six
 Kapitsa does not win are in the column above: those two ties, the M5 Max's Flash-Next and the M5 Pro's 27B losses to
