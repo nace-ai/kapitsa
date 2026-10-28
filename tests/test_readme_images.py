@@ -33,7 +33,9 @@ assert n == 40, n   # every Kapitsa number in readme_images.json; update when ce
 labelled = [r for r in rows if isinstance(r["cells"]["Kapitsa"], dict) and r["cells"]["Kapitsa"].get("label")]
 assert [r["cells"]["Kapitsa"]["label"] for r in labelled] == ["via Splash's engine"], labelled   # only the Flash-Next Q2 cell runs Splash's engine
 assert all(h["method"] == "KFlash" for h in ri.header_rows(data) if h["kap"] and h["value"] is not None)
-hr = ri.header_rows(data)   # the header SVGs' <desc> (and the README alt text) name Kapitsa's method as KFlash
+hr = ri.header_rows(data)   # the header SVGs' <desc> names Kapitsa's method as KFlash
 assert "Kapitsa with KFlash " in ri.header_desc(data, hr), ri.header_desc(data, hr)
 assert "no spec" not in ri.header_desc(data, hr), ri.header_desc(data, hr)
+assert ri.header_alt(data, hr) == ("Kapitsa writes 339 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for "
+                                   "MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash."), ri.header_alt(data, hr)
 print(f"test_readme_images: ok ({n} Kapitsa cells)")

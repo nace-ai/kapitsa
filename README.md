@@ -1,12 +1,29 @@
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
-  <img alt="Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen, Nemotron and Flint. Writing speed in tokens per second for Qwen3.6 35B-A3B at 4-bit on a MacBook Pro (2026), M5 Max, 128 GB, the seven fastest of the nine engines measured: Kapitsa with KFlash 339, Splash with DFlash2 281, mlx-serve with MTP 235, oMLX with DFlash2 189, llama.cpp with MTP 171, Ollama with MTP 162, MLX with DFlash2 138." src="docs/assets/header-light.svg">
+  <img alt="Kapitsa writes 339 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
 
-[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [Features](#features) · [CLI](#cli) · [Backends](#supported-backends) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
+[Quickstart](#quickstart) · [Benchmarks](#benchmarks) · [Features](#features) · [CLI](#cli) · [Backends](#supported-backends) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
+
+## Quickstart
+
+**Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
+
+**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
+
+```bash
+brew install nace-ai/tap/kapitsa
+# or: curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash
+```
+
+```bash
+kapitsa opencode --model 35b    # also: claude, codex, pi
+```
+
+<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies.</sub>
 
 ## Benchmarks
 
@@ -27,21 +44,6 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 - [2026/10] 🌊 **Kapitsa runs Splash's engine**: `kapitsa serve --engine splash` puts Inco's Splash behind Kapitsa's chat page, OpenAI API and Anthropic API ([backends](#supported-backends)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: `kapitsa serve --engine splash` streams Qwen3.8-Flash-Next's Q2_0 experts from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
 - [2026/10] 🏆 **The fastest decode in 32 of the 38 model and Mac pairs** measured against nine engines ([poster](#benchmarks)).
-
-## Quickstart
-
-**Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
-
-```bash
-brew install nace-ai/tap/kapitsa
-# or: curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash
-```
-
-```bash
-kapitsa opencode --model 35b    # also: claude, codex, pi
-```
-
-<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies.</sub>
 
 ## Features
 

@@ -563,6 +563,16 @@ def header_desc(data, rows):
     return data["header"]["desc"] + ": " + ", ".join(parts) + "."
 
 
+def header_alt(data, rows):
+    h = data["header"]
+    kap = next(r for r in rows if r["kap"])
+    others = sorted((r for r in rows if not r["kap"] and r["value"] is not None), key=lambda r: r["value"])
+    names = [r["name"] for r in others]
+    chip = h["mac"].removeprefix("MacBook Pro ").rsplit(" ", 2)[0]
+    return (f"Kapitsa writes {fmt(kap['value'])} tok/s on {h['model']} on an {chip}, against "
+            f"{fmt(others[0]['value'])}-{fmt(others[-1]['value'])} for {', '.join(names[:-1])} and {names[-1]}.")
+
+
 def svg_open(w, h, title, desc):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" role="img" '
             f'aria-labelledby="t d"><title id="t">{escape(title)}</title><desc id="d">{escape(desc)}</desc>')
@@ -680,7 +690,7 @@ def main():
                 if isinstance(raw, dict) and raw.get("todo"):
                     print(f"todo: {mac['name']} / {row['model']} / {e}: {raw['todo']}")
     rows = header_rows(data)
-    print("README header alt text:", data["header"]["title"] + ". " + header_desc(data, rows[::-1]))
+    print("README header alt text:", header_alt(data, rows))
     words = "zero one two three four five six seven eight nine ten eleven twelve".split()
     others = len(data["engines"]) - 1
     chips = [m["name"].removeprefix("MacBook Pro ").rsplit(" ", 2)[0] for m in data["poster"]["macs"]]
