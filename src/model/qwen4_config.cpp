@@ -48,7 +48,12 @@ std::vector<std::string> qwen4_unsupported(const json& c) {
   if (!c.is_object()) return {"config.json is not a JSON object"};
   const json& t = text_of(c);
   const std::string mt = type_of(c), tt = type_of(t);
-  if (mt != "qwen4_exp" && tt != "qwen4_exp_text")
+  // Qwen4Exp::is_model's: model_type qwen4_exp, or a text_config of qwen4_exp_text
+  const bool nested = &t != &c;
+  if (mt == "qwen4_exp_text" && !nested)
+    v.push_back("model_type qwen4_exp_text without a text_config: Kapitsa loads Qwen3.8-Flash-Next's config.json "
+                "(model_type qwen4_exp, or its text settings in a text_config)");
+  else if (mt != "qwen4_exp" && !(nested && tt == "qwen4_exp_text"))
     v.push_back("model_type " + (mt.empty() ? tt : mt) +
                 ": Kapitsa runs Qwen 4's preview architecture, qwen4_exp (Qwen3.8-Flash-Next), and a new one once its "
                 "differences are read");

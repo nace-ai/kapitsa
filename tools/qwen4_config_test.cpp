@@ -70,11 +70,16 @@ int main() {
   CHECK(ni::qwen4_refusal(sushi, "x").empty(), "Sushi's YaRN runs: %s", ni::qwen4_refusal(sushi, "x").c_str());
   CHECK(su.size() == 1 && su[0] == "rope_type yarn (RoPE runs unscaled)", "Sushi: one unapplied line (%zu)", su.size());
 
-  // a text-only config (no text_config) and Nace AI's pack's ple_storage run too
+  // as Qwen4Exp::is_model takes them: a config without a text_config runs as model_type qwen4_exp (with Nace AI's
+  // pack's ple_storage), and is refused as qwen4_exp_text, which the loader does not take at the top level
   json flat = fn["text_config"];
+  flat["model_type"] = "qwen4_exp";
   flat["ple_storage"] = json::object();
-  CHECK(ni::qwen4_refusal(flat, "x").empty(), "a flat qwen4_exp_text config runs: %s",
-        ni::qwen4_refusal(flat, "x").c_str());
+  CHECK(ni::qwen4_refusal(flat, "x").empty(), "a flat qwen4_exp config runs: %s", ni::qwen4_refusal(flat, "x").c_str());
+  flat["model_type"] = "qwen4_exp_text";
+  const std::vector<std::string> fv = ni::qwen4_unsupported(flat);
+  CHECK(fv.size() == 1 && fv[0].rfind("model_type qwen4_exp_text without a text_config", 0) == 0,
+        "a flat qwen4_exp_text config is refused for its type alone (%zu)", fv.size());
 
   // not Qwen 4
   CHECK(!ni::qwen4_family(json{{"model_type", "qwen3_5_moe"}, {"text_config", {{"model_type", "qwen3_5_moe_text"}}}}),
