@@ -29,7 +29,7 @@ for r in rows:
         c = r["cells"]["Kapitsa"]
         want = (c.get("label") if isinstance(c, dict) else None) or "KFlash"
         assert label == want, (r["model"], label)
-assert n == 39, n   # every Kapitsa number in readme_images.json; update when cells are added or removed
+assert n == 40, n   # every Kapitsa number in readme_images.json; update when cells are added or removed
 labelled = [r for r in rows if isinstance(r["cells"]["Kapitsa"], dict) and r["cells"]["Kapitsa"].get("label")]
 assert [r["cells"]["Kapitsa"]["label"] for r in labelled] == ["via Splash's engine"], labelled   # only the Flash-Next Q2 cell runs Splash's engine
 assert all(h["method"] == "KFlash" for h in ri.header_rows(data) if h["kap"] and h["value"] is not None)

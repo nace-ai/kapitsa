@@ -23,6 +23,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 ## 🔥 What's new
 
+- [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, runs on Kapitsa: 319 tok/s decode on the M5 Max.** Convert the Hub checkpoint with `tools/convert_clover.py` and serve the folder: Clover's causal pathway decodes with the 35B's draft model, or self-speculatively as DiffuSpace's SGLang does ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🌊 **Kapitsa runs Splash's engine: `kapitsa serve --engine splash`** puts Inco's Splash behind Kapitsa's server — the chat page, the OpenAI and Anthropic APIs and streaming, Splash's model folders and `--check` — the Splash backend stack #738-#746 ([capabilities](#splashs-engine), [55.9 tok/s](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
 - [2026/10] 🗄️ **A 180B model on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD; through `--engine splash` the model peaks at 31.6 GiB wired with no swap growth and memory pressure 1, where Kapitsa's own engine at its 24 GB store reached memory pressure 4 ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md), [#751](https://github.com/nace-ai/kapitsa/pull/751)).
 - [2026/10] 🧩 **Flash-Next fits a 64 GB Mac**: `flash-next:64gb` runs Sushi's 2-bit EXL3 experts, 36.7 GB of weights in memory and 69.6 GB to download ([variants](docs/usage.md#models-and-downloads)).
@@ -106,7 +107,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 <sub>Each cell: prefill / decode, tokens/s (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured</sub>
 
 <details>
-<summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 8 models</summary>
+<summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 9 models</summary>
 
 **Qwen and Nemotron**
 
@@ -125,6 +126,12 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>Q4_1, b11871</sub> | <sub>rec<br>0.1.0</sub> |
 | --- | ---: | ---: | ---: |
 | **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 5721 / **267**<br><sub>KFlash</sub> | 3827 / 130 | 2863 / 224 |
+
+**DiffuSpace Clover**
+
+| Model | <mark>**Kapitsa**</mark> |
+| --- | ---: |
+| **Clover-35B-A3B-Preview** · `clover-35b-a3b-4bit`<br><sub>block-diffusion MoE, 3B active · 4-bit, 19.5 GB</sub> | 🟩 6002 / **319**<br><sub>KFlash</sub> |
 
 <sub>The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell, the Flash-Next row and the Lightning, Super-VL and Dory rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The Flint row is one block on 2026-10-26 (Kapitsa 0.2.18, [results](bench/results/2026-10-26-m5-max/README.md)). The 27B and Bolt rows are each one block of the row on AC power in High Power mode. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
 

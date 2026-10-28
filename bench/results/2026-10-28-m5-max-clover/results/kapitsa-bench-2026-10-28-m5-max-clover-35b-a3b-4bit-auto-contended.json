@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-28T12:01:45Z",
+  "kapitsa": {
+    "version": "0.2.23",
+    "commit": "909e282"
+  },
+  "mac": {
+    "identifier": "Mac17,6",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Max",
+    "cpu_cores": 18,
+    "gpu_cores": 40,
+    "memory_gb": 128,
+    "macos": "26.4",
+    "macos_build": "25E246"
+  },
+  "model": {
+    "name": "clover-35b-a3b-4bit",
+    "title": "clover-35b-a3b-4bit",
+    "variant": null,
+    "precision": "4-bit (mixed)",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 288.72,
+      "runs_tps": [
+        291.87,
+        282.29,
+        343.69,
+        288.72,
+        285.56
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 293.16,
+      "runs_tps": [
+        293.16,
+        335.16,
+        290.5,
+        313.09,
+        271.55
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 0.7024,
+        "tps": 5882.5,
+        "followup_s": [
+          0.0374,
+          0.0327,
+          0.0301
+        ],
+        "followup_median_s": 0.0327,
+        "followup_suffix_tps": 698.7
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16285,
+        "ttft_s": 3.0871,
+        "tps": 5275.2,
+        "followup_s": [
+          0.0451,
+          0.045,
+          0.037
+        ],
+        "followup_median_s": 0.045,
+        "followup_suffix_tps": 568.1
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 21.06
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 243.1,
+    "gpu_other_mean_pct": 4.46,
+    "gpu_other_max_pct": 21.11,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "Google Chrome"
+    ],
+    "contention": [
+      "decode_greedy",
+      "prefill_4000"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['decode_greedy', 'prefill_4000'] (mean 4.46%, top ['Google Chrome'])"
+  ],
+  "invalid": []
+}

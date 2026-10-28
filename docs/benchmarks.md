@@ -162,6 +162,9 @@ loop.
   27B block above.
 - Flint 40B-A2.5B (2026-10-26, one block of the row at T 1.0, Kapitsa 0.2.18): Kapitsa **5,721 / 267**, rec 0.1.0
   2,863 / 224, llama.cpp b11871 3,827 / 130 ([results](../bench/results/2026-10-26-m5-max/README.md)).
+- Clover 35B-A3B (2026-10-28, DiffuSpace's block-diffusion MoE, Kapitsa alone: no other engine runs it on a Mac):
+  **6,002 / 319**, greedy 332, with the 35B's DFlash2 drafter on Clover's causal pathway
+  ([details](#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [results](../bench/results/2026-10-28-m5-max-clover/README.md)).
 
 <a id="m5-pro"></a>
 
@@ -391,6 +394,28 @@ stored, Kapitsa's next-token distributions are at KL 0.22 (median 0.018), the sa
 swapped in some phase of every run (llama.cpp 12K-129K pages a phase, Kapitsa 2K-16K).
 
 <a id="qwen38-flash-next-streamed-from-the-ssd-kapitsa-against-llamacpp-m5-pro-48-gb-2026-10-24"></a>
+
+<a id="diffuspace-clover-35b-a3b-m5-max-2026-10-28"></a>
+
+### DiffuSpace Clover-35B-A3B (M5 Max, 2026-10-28)
+
+DiffuSpace's [Clover-35B-A3B-Preview](https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview) is Qwen3.6-35B-A3B tuned
+into a block-diffusion model: its weights read a sequence causally, as Qwen3.6, or a block of positions at once by
+denoising ([#773](https://github.com/nace-ai/kapitsa/pull/773), [#774](https://github.com/nace-ai/kapitsa/pull/774),
+[#776](https://github.com/nace-ai/kapitsa/pull/776); [Other models](usage.md#other-models)). Kapitsa runs the Hub
+checkpoint converted to the 35B's 4-bit recipe (19.5 GB), three ways, `kapitsa bench` on the M5 Max:
+
+| Decoding (`NI_CLOVER_DECODE`) | Prefill 4K / 16K | Decode T 0.6 / greedy | Tokens a cycle |
+| --- | ---: | ---: | ---: |
+| **`auto`: the 35B's DFlash2 drafter on the causal pathway, KFlash** (the default when the drafter is on the Mac) | **6,002 / 5,313** | **319 / 332** | 2.9-3.4 |
+| `spec`: self-speculative, as DiffuSpace's SGLang (a denoising pass drafts 7, the 8-row verify checks; quick run) | 5,958 / – | 214 / 210 | 4.0-6.0 |
+| `diffusion`: block diffusion, as the Hugging Face implementation (one request) | – | – / 46 | 1.25 a pass |
+
+Self-speculative decoding keeps more tokens a cycle, but its draft is a whole pass of the 35B, as dear as the check (21
+ms a cycle), so it lands at about plain decoding's speed (212 tok/s); the DFlash2 drafter is small, so `auto` uses it
+when the 35B's pack is installed. Block diffusion at 0.95 fills few positions a pass on the 4-bit weights. The runs'
+repetition flags are the bench's 4-gram counter reading `# ------` separator lines dash by dash, not loops
+([results](../bench/results/2026-10-28-m5-max-clover/README.md)).
 
 ### Qwen3.8-Flash-Next streamed from the SSD (M5 Pro 48 GB, 2026-10-24)
 
