@@ -127,7 +127,7 @@ class FfnSplit {
   std::vector<uint32_t> dseg_, fn_rows_;
   struct Lane {
     std::vector<Surface> x;  // int8 [input_seg_][2048] per hidden segment
-    Surface tx, y;         // fp16 [1][2048], fp16 [hidden + 1][2048]
+    Surface tx, y;          // fp16 [1][2048], fp16 [hidden + 1][2048]
     uint64_t done = 0;       // pending job's done value (0: none)
   } lane_[2];
   Set set_[2];
