@@ -215,7 +215,8 @@ MacBook Pro (16-inch, 2024), 20-core GPU, macOS 27.0.1, High Power mode, AC powe
   2026-10-21 ([KFlash](#kflash-trees-m4-pro-2026-10-21)). Prefill from the newest unflagged runs (2026-10-19).
 - **The other engines:** the 2026-10-17 to 10-19 sessions ([first comparison](../bench/results/2026-10-17/),
   [the table filled in](../bench/results/2026-10-19-m4pro/README.md)); Splash 1.4.0 (27B 53, 35B-A3B 135 tok/s) on
-  2026-10-21 in the KFlash session, without a prefill run (its cells show a dash before the slash).
+  2026-10-21 in the KFlash session, without a prefill run. The README's Splash cells (251 / 50 and 1056 / 140) are
+  not from this MacBook: they are Splash 1.4.1 on an EC2 Mac mini, [below](#m4-pro-ec2).
 - **Lightning and Bolt:** NVIDIA's NVFP4 Lightning with its DSpark drafter on Kapitsa and mlx-vlm (oMLX and llama.cpp
   not measured); Bolt's 24 GB checkpoint on Kapitsa, oMLX and mlx-vlm.
 - **Dory:** 2 loops; Kapitsa per-loop KV, llama.cpp NVIDIA's Dory fork on its Q5_K_M, mlx-lm's Dory pull request on a
@@ -224,6 +225,37 @@ MacBook Pro (16-inch, 2024), 20-core GPU, macOS 27.0.1, High Power mode, AC powe
 - **A real opencode session** on the 35B-A3B, replayed request by request: Kapitsa 49 s, mlx-serve 62 s, oMLX 66 s
   (2026-10-18); with KFlash 51.4 s against Splash's 57.0 s (2026-10-21)
   ([results](../bench/results/2026-10-18-agent-session/README.md)).
+
+<a id="m4-pro-ec2"></a>
+
+### M4 Pro on EC2: Mac mini, 48 GB (2026-10-28)
+
+Two AWS `mac-m4pro.metal` instances (Mac16,11, Apple M4 Pro, 14 CPU cores, 20 GPU cores, 48 GB), `powermode 2`, AC power,
+sleep off, nothing else running; Kapitsa 0.2.23 (the release binary) in the harness's protocol. This is a Mac mini, not the
+MacBook Pro above, on other macOS versions, so it is its own section and the README's MacBook Pro cells are unchanged,
+except the two Splash cells it fills.
+
+- **macOS 26.7: Splash 1.4.1 against Kapitsa on one Mac** ([record](../bench/results/2026-10-28-m4pro-ec2-macos26/README.md)).
+  Splash needs macOS 26.4 or later. Same weights, drafters and corpus, one config at a time, the GPU lock held:
+
+  | Qwen | Engine | Prefill 4K / 16K (tok/s) | Decode T 0.6 / greedy (tok/s) | Peak (GB) |
+  | --- | --- | ---: | ---: | ---: |
+  | 35B-A3B | Kapitsa 0.2.23 | **1171** / **979** | **168.9** / **180.0** | 21.7 |
+  | 35B-A3B | Splash 1.4.1 | 1056 / 915 | 139.9 / 140.6 | 23.6 |
+  | 27B | Kapitsa 0.2.23 | **392** / **343** | **65.5** / **68.4** | 21.0 |
+  | 27B | Splash 1.4.1 | 251 / 236 | 49.5 / 56.9 | 27.1 |
+
+  Kapitsa is 1.11x faster than Splash at 4K prefill on the 35B-A3B and 1.21x at decode; on the 27B 1.56x and 1.32x. One
+  of Splash's five T 0.6 decodes on the 35B-A3B tripped the repetition check (median 139.9; 146.1 without it). Both run
+  the same DFlash2 drafter: Splash checks one chain of guesses, Kapitsa a tree.
+- **macOS 15.8: Kapitsa on all seven models** ([record](../bench/results/2026-10-28-m4pro-ec2/README.md)). Splash does not
+  run there. 4B 1982 / 187, 27B 390 / 65, 35B-A3B 1172 / 164, Lightning 995 / 110, Bolt 543 / 70, Flint 1018 / 126,
+  Dory 61 tok/s (prefill, 4K / decode, T 0.6). They agree with the MacBook Pro's cells within 7% (the 4B's decode is the widest, 187
+  against 201); the 35B-A3B and 27B on macOS 26.7 above read within 3% of these.
+- **Not measured:** the other engines (out of scope for this run).
+- **Version stamp:** the harness recorded Homebrew's git commit as Kapitsa's version in these records, because the
+  release binary is installed under `/opt/homebrew`. The records say 0.2.23 now, the recorded value is kept as
+  `version_recorded`, and `checkout_of()` accepts only a Kapitsa checkout.
 
 <a id="m3-pro"></a>
 

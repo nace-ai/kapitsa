@@ -1,0 +1,145 @@
+++ cd /Users/ec2-user/splash
++++ awk '{print $1}' splash-1.4.1-arm64-macos26.tar.gz.sha256
+++ want=5746068dc652a4998267d55b1c6d59b545f1bc1e018131c6d8025022f7000d5c
++++ shasum -a 256 splash-1.4.1-arm64-macos26.tar.gz
++++ awk '{print $1}'
+++ got=5746068dc652a4998267d55b1c6d59b545f1bc1e018131c6d8025022f7000d5c
+++ '[' 5746068dc652a4998267d55b1c6d59b545f1bc1e018131c6d8025022f7000d5c = 5746068dc652a4998267d55b1c6d59b545f1bc1e018131c6d8025022f7000d5c ']'
+++ echo SHA-OK
+SHA-OK
+++ tar xzf splash-1.4.1-arm64-macos26.tar.gz
+++ ls
+splash-1.4.1-arm64-macos26
+splash-1.4.1-arm64-macos26.tar.gz
+splash-1.4.1-arm64-macos26.tar.gz.sha256
+++ cd /Users/ec2-user/kapitsa-src/bench/harness
++++ ls /Users/ec2-user/splash
++++ grep -v tar.gz
++++ head -1
+++ sed -i '' 's|^SPLASH_ROOT=.*|SPLASH_ROOT=/Users/ec2-user/splash/splash-1.4.1-arm64-macos26|' local.env
+++ cat local.env
+BENCH_MODELS=/Users/ec2-user/models
+BENCH_OUT=/Users/ec2-user/bench-runs
+SPLASH_ROOT=/Users/ec2-user/splash/splash-1.4.1-arm64-macos26
++++ grep SPLASH_ROOT local.env
++++ cut -d= -f2
+++ ls /Users/ec2-user/splash/splash-1.4.1-arm64-macos26/engine
+host-step.metallib
+splash
+splash.metallib
+++ for l in q36-35b-splash q38-27b-splash
++++ date -u +%T
+++ echo '=== START q36-35b-splash 12:15:50'
+=== START q36-35b-splash 12:15:50
+++ python3 compare_engines.py configs/splash-141.json --only q36-35b-splash
+
+===== q36-35b-splash  [splash] Splash 1.4.1 (DFlash2 drafter)  version 1.4.1
+[12:15:51] q36-35b-splash: GPU lock acquired after 0.0s wait
+[12:15:51] q36-35b-splash: starting /Users/ec2-user/splash/splash-1.4.1-arm64-macos26/python/bin/python3 -u /Users/ec2-user/splash/splash-1.4.1-arm64-macos26/install/launcher.py serve --model nace-local/Qwen3.6-35B-A3B-4bit --revision a155f490c53267b16553606af1832c03e616fec4 --draft-model /Users/ec2-user/models/drafters/Qwen3.6-35B-A3B-DFlash2 --offline --language-only --host 127.0.0.1 --port 8151 --no-webui --max-context 32K --expert-memory off --idle-release off
+[12:16:42] q36-35b-splash: ready after 51s (pid 3470, listener 3470)
+[12:16:45] q36-35b-splash:  warm-up prefill~2.9k+decode64: ok (3.38s)
+[12:16:46] q36-35b-splash:  warm-up tools: ok (0.71s)
+[12:16:50] q36-35b-splash:  warm-up decode512#1: ok (3.68s)
+[12:16:53] q36-35b-splash:  warm-up decode512#2: ok (3.7s)
+[12:16:57] q36-35b-splash:  warm-up decode512#3: ok (3.73s)
+[12:17:15] q36-35b-splash: GPU quiet after 18s; benchmarking
+== q36-35b-splash
+  decode T=0.6: 132.74 tok/s (e2e 133.43; 512 tok, finish=length, d4=0.9713)
+  decode T=0.6: 174.06 tok/s (e2e 174.81; 512 tok, finish=length, d4=0.9196)
+  decode T=0.6: 136.72 tok/s (e2e 137.39; 512 tok, finish=length, d4=0.4707) flags ['repetition loop (distinct-4-gram 0.4707)']
+  decode T=0.6: 152.32 tok/s (e2e 153.47; 512 tok, finish=length, d4=0.9592)
+  decode T=0.6: 139.90 tok/s (e2e 141.45; 512 tok, finish=length, d4=0.5678)
+  decode median 139.9 (min 132.74, max 174.06) over 5/5 valid
+  decode T=0: median 140.61 (min 137.88, max 142.62) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 3.92s -> 1056 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [4128, 4160, 4224])
+  prefill 16000: 16287 tok (ref 16286), TTFT 17.80s -> 915 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [16256, 16320, 16384])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  agent session: opencode-ledger (19 requests, tool mode rendered, gaps recorded)
+  agent turn  0: prompt 5485 (cached 0), TTFT 5.23s, 73/73 tok (length), 92.95 tok/s, 6.03s
+  agent turn  1: prompt 8351 (cached 5472), TTFT 3.13s, 66/66 tok (stop), 88.94 tok/s, 3.91s
+  agent turn  2: prompt 8510 (cached 8320), TTFT 0.31s, 117/117 tok (stop), 129.45 tok/s, 1.19s
+  agent turn  3: prompt 13009 (cached 8480), TTFT 5.34s, 131/131 tok (stop), 99.88 tok/s, 6.67s
+  agent turn  4: prompt 17649 (cached 12992), TTFT 6.07s, 38/38 tok (length), 86.79 tok/s, 6.55s
+  agent turn  5: prompt 17721 (cached 17632), TTFT 0.24s, 31/31 tok (stop), 91.62 tok/s, 0.55s
+  agent turn  6: prompt 18523 (cached 17696), TTFT 1.21s, 344/533 tok (stop), 107.19 tok/s, 4.43s
+  agent turn  7: prompt 19081 (cached 18496), TTFT 0.91s, 751/761 tok (stop), 154.71 tok/s, 5.78s
+  agent turn  8: prompt 19868 (cached 19072), TTFT 1.18s, 110/110 tok (stop), 118.82 tok/s, 2.12s
+  agent turn  9: prompt 20003 (cached 19840), TTFT 0.38s, 142/142 tok (stop), 132.01 tok/s, 1.47s
+  agent turn 10: prompt 20170 (cached 19968), TTFT 0.41s, 163/204 tok (stop), 133.65 tok/s, 1.64s
+  agent turn 11: prompt 20399 (cached 20160), TTFT 0.45s, 56/56 tok (stop), 85.57 tok/s, 1.14s
+  agent turn 12: prompt 20688 (cached 20384), TTFT 0.55s, 311/323 tok (stop), 141.73 tok/s, 2.73s
+  agent turn 13: prompt 21036 (cached 20672), TTFT 0.62s, 266/266 tok (length), 138.88 tok/s, 2.53s
+  agent turn 14: prompt 21327 (cached 21024), TTFT 0.56s, 207/207 tok (stop), 162.60 tok/s, 1.84s
+  agent turn 15: prompt 21559 (cached 21312), TTFT 0.48s, 57/57 tok (stop), 95.60 tok/s, 1.09s
+  agent turn 16: prompt 22538 (cached 21536), TTFT 1.54s, 79/83 tok (stop), 104.14 tok/s, 2.31s
+  agent turn 17: prompt 22646 (cached 22528), TTFT 0.26s, 57/57 tok (stop), 87.30 tok/s, 0.96s
+  agent turn 18: prompt 22779 (cached 22624), TTFT 0.36s, 322/322 tok (stop), 105.31 tok/s, 3.40s
+  agent session: 19/19 turns, engine 56.3s (prefill 29.2s, decode 27.1s), wall 58.2s, 3321/3577 tok out, writing 123.60 tok/s, first TTFT 5.23s, follow-up TTFT median 0.55s p90 5.34s, peak context 23101, 10/19 answers as recorded
+  memory: phys_footprint_peak 23.90 GB, resident mapped files 0.00 GB, swap used 0.0 MB
+  -> /Users/ec2-user/bench-runs/results/q36-35b-splash-20261028-121551.json
+[12:19:36] q36-35b-splash: stopped (SIGTERM, survivors [], memory released after 5.2s)
+[12:19:36] q36-35b-splash: GPU lock released after 225.2s held
+[12:19:36] q36-35b-splash: -> /Users/ec2-user/bench-runs/results/q36-35b-splash-20261028-121551.json  flags: 1
++++ date -u +%T
+++ echo '=== END q36-35b-splash rc=0 12:19:36'
+=== END q36-35b-splash rc=0 12:19:36
+++ for l in q36-35b-splash q38-27b-splash
++++ date -u +%T
+++ echo '=== START q38-27b-splash 12:19:36'
+=== START q38-27b-splash 12:19:36
+++ python3 compare_engines.py configs/splash-141.json --only q38-27b-splash
+
+===== q38-27b-splash  [splash] Splash 1.4.1 (DFlash2 drafter)  version 1.4.1
+[12:19:36] q38-27b-splash: GPU lock acquired after 0.0s wait
+[12:19:36] q38-27b-splash: starting /Users/ec2-user/splash/splash-1.4.1-arm64-macos26/python/bin/python3 -u /Users/ec2-user/splash/splash-1.4.1-arm64-macos26/install/launcher.py serve --model nace-local/Qwen3.8-27B-4bit --revision 567aa6f717662a3d90babfde3dbdd71c7b2cd48c --draft-model /Users/ec2-user/models/drafters/Qwen3.8-27B-DFlash2 --offline --language-only --host 127.0.0.1 --port 8151 --no-webui --max-context 32K --idle-release off
+[12:21:49] q38-27b-splash: ready after 133s (pid 4084, listener 4084)
+[12:22:03] q38-27b-splash:  warm-up prefill~2.9k+decode64: ok (13.34s)
+[12:22:07] q38-27b-splash:  warm-up tools: ok (3.76s)
+[12:22:16] q38-27b-splash:  warm-up decode512#1: ok (9.14s)
+[12:22:26] q38-27b-splash:  warm-up decode512#2: ok (10.3s)
+[12:22:37] q38-27b-splash:  warm-up decode512#3: ok (10.56s)
+[12:22:54] q38-27b-splash: GPU quiet after 18s; benchmarking
+== q38-27b-splash
+  decode T=0.6: 49.50 tok/s (e2e 48.79; 512 tok, finish=length, d4=0.9592)
+  decode T=0.6: 56.09 tok/s (e2e 54.92; 512 tok, finish=length, d4=0.9142)
+  decode T=0.6: 48.27 tok/s (e2e 47.25; 512 tok, finish=length, d4=0.942)
+  decode T=0.6: 57.82 tok/s (e2e 55.95; 512 tok, finish=length, d4=0.5387)
+  decode T=0.6: 47.40 tok/s (e2e 46.83; 512 tok, finish=length, d4=0.9537)
+  decode median 49.5 (min 47.4, max 57.82) over 5/5 valid
+  decode T=0: median 56.93 (min 56.89, max 56.97) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 16.48s -> 251 tok/s, cold cached=0 | cached TTFT median 0.70s over 3 turns (cached [4096, 4192, 4224])
+  prefill 16000: 16285 tok (ref 16286), TTFT 69.11s -> 236 tok/s, cold cached=0 | cached TTFT median 0.78s over 3 turns (cached [16256, 16352, 16384])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  agent session: opencode-ledger (19 requests, tool mode rendered, gaps recorded)
+  agent turn  0: prompt 5485 (cached 0), TTFT 21.71s, 53/73 tok (stop), 48.43 tok/s, 22.73s
+  agent turn  1: prompt 8351 (cached 5472), TTFT 12.40s, 65/66 tok (stop), 55.61 tok/s, 13.63s
+  agent turn  2: prompt 8510 (cached 8320), TTFT 1.80s, 117/117 tok (stop), 70.73 tok/s, 3.41s
+  agent turn  3: prompt 13009 (cached 8480), TTFT 21.62s, 130/131 tok (stop), 69.21 tok/s, 23.57s
+  agent turn  4: prompt 17649 (cached 12992), TTFT 22.20s, 38/38 tok (length), 46.08 tok/s, 23.09s
+  agent turn  5: prompt 17721 (cached 17632), TTFT 0.96s, 31/31 tok (stop), 47.29 tok/s, 1.55s
+  agent turn  6: prompt 18523 (cached 17696), TTFT 4.43s, 313/533 tok (stop), 49.41 tok/s, 10.83s
+  agent turn  7: prompt 19081 (cached 18496), TTFT 3.35s, 761/761 tok (length), 63.00 tok/s, 15.50s
+  agent turn  8: prompt 19868 (cached 19072), TTFT 4.56s, 110/110 tok (length), 67.19 tok/s, 6.27s
+  agent turn  9: prompt 20003 (cached 19840), TTFT 1.96s, 142/142 tok (stop), 69.80 tok/s, 4.06s
+  agent turn 10: prompt 20170 (cached 19968), TTFT 2.17s, 202/204 tok (stop), 58.92 tok/s, 5.67s
+  agent turn 11: prompt 20399 (cached 20160), TTFT 2.27s, 56/56 tok (length), 48.91 tok/s, 3.47s
+  agent turn 12: prompt 20688 (cached 20384), TTFT 2.89s, 323/323 tok (length), 52.82 tok/s, 9.07s
+  agent turn 13: prompt 21036 (cached 20672), TTFT 3.33s, 266/266 tok (length), 42.85 tok/s, 9.61s
+  agent turn 14: prompt 21327 (cached 21024), TTFT 2.84s, 103/207 tok (stop), 59.02 tok/s, 4.66s
+  agent turn 15: prompt 21559 (cached 21312), TTFT 2.31s, 57/57 tok (length), 68.66 tok/s, 3.23s
+  agent turn 16: prompt 22538 (cached 21536), TTFT 5.59s, 79/83 tok (stop), 63.39 tok/s, 6.91s
+  agent turn 17: prompt 22646 (cached 22528), TTFT 1.26s, 57/57 tok (stop), 54.00 tok/s, 2.38s
+  agent turn 18: prompt 22779 (cached 22624), TTFT 1.87s, 322/322 tok (length), 40.55 tok/s, 9.79s
+  agent session: 19/19 turns, engine 179.5s (prefill 119.5s, decode 59.9s), wall 181.4s, 3225/3577 tok out, writing 54.58 tok/s, first TTFT 21.71s, follow-up TTFT median 2.87s p90 21.62s, peak context 23101, 3/19 answers as recorded
+  memory: phys_footprint_peak 27.28 GB, resident mapped files 0.00 GB, swap used 0.0 MB
+  -> /Users/ec2-user/bench-runs/results/q38-27b-splash-20261028-121936.json
+[12:29:51] q38-27b-splash: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[12:29:51] q38-27b-splash: GPU lock released after 614.9s held
+[12:29:51] q38-27b-splash: -> /Users/ec2-user/bench-runs/results/q38-27b-splash-20261028-121936.json
++++ date -u +%T
+++ echo '=== END q38-27b-splash rc=0 12:29:51'
+=== END q38-27b-splash rc=0 12:29:51
+++ echo SPLASH-DONE
+SPLASH-DONE
