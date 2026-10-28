@@ -2687,8 +2687,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // arrives during a long prefill is seen within a chunk (encoding is far faster than the GPU: a 20K prompt's chunks
   // would all be queued in milliseconds). The GPU still always has the next chunk queued.
   // NI_PREFILL_GROUP: how many plain chunks the model runs as one layer-major group (1: the chunks one at a time,
-  // which is every model but Qwen4Exp's, and what NI_PREFILL_GROUP=1 asks of it; Qwen4Exp ships 4; the engine's own
-  // cap keeps Ts[] below in bounds)
+  // which is every model but Qwen4Exp's; Qwen4Exp ships 4 only while its streamed expert store is incomplete, and
+  // gives 1 with every expert resident, for a split's share, for layer debugging and for NI_PREFILL_GROUP=1
+  // (q20::group_chunks); the engine's own cap keeps Ts[] below in bounds)
   const int pgroup = std::min(model_->prefill_group(), 8);
   std::unique_ptr<Encoder> last, last2;
   while (p < n) {
