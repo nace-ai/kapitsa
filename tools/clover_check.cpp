@@ -6,15 +6,19 @@
 // The kernels other than the attention hold at most 4224 bytes of threadgroup memory, so they run under
 // MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1; attn_prefill11gs_bidi holds 20480 bytes, which the debug layer counts
 // twice against the 32768-byte cap (AGENTS.md): CLOVER_NO_ATTN=1 leaves it out for such a run. Returns 1 if any check
-// fails.
+// fails. It takes the GPU lock (BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless its caller holds it
+// (NI_LOCK_HELD=1 / NACE_GPU_LOCK_HELD=1).
+#include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <random>
 #include <vector>
 
@@ -368,6 +372,14 @@ int main(int argc, char** argv) {
   std::vector<int> Ts;
   for (int i = 1; i < argc; ++i) Ts.push_back(atoi(argv[i]));
   if (Ts.empty()) Ts = {32, 8};
+  bench::GpuLock lock;
+  if (!bench::GpuLock::held_by_caller() && !lock.acquire([](const std::string& who) {
+        fprintf(stderr, "waiting for the GPU lock %s%s\n", bench::GpuLock::path().c_str(),
+                who.empty() ? "" : (", held by " + who).c_str());
+      })) {
+    fprintf(stderr, "cannot take the GPU lock %s: %s\n", bench::GpuLock::path().c_str(), strerror(errno));
+    return 2;
+  }
   Gpu& g = Gpu::get();
   std::mt19937 rng(11);
   for (int T : Ts) {

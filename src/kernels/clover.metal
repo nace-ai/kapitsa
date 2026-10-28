@@ -136,8 +136,9 @@ struct CloverMemParams {
 // Every row's top-k experts by router logit (ties: the lower index) add their softmax probability to the expert's
 // total; the experts ranked by total (normalized), highest first, are kept while the mass ranked before them is below
 // top_p (the first always), and the others' logits are set to -1e30 for every row, so the routing (moe_topk_rows*,
-// moe8_plan) picks the row's top-k among the kept ones. One threadgroup, a thread per expert (E = 256; k <= 8,
-// T <= 32): a simdgroup takes a row's top-k at a time (each lane 8 experts in registers, as moe_topk_rows8).
+// moe8_plan) picks the row's top-k among the kept ones. One threadgroup of 256 threads or more (a thread per expert:
+// E = 256, which the host checks, p.E is not read; k <= 8, T <= 32): a simdgroup takes a row's top-k at a time (each
+// lane 8 experts in registers, as moe_topk_rows8).
 #define NI_UNROLL_CLOVER _Pragma("clang loop unroll(full)")
 struct CloverCoresetParams {
   uint T;
@@ -185,7 +186,7 @@ struct CloverCoresetParams {
     if (j % 8 < p.k && sel_i[j] == e) total += sel_w[j];
   const float sum = tg_sum(total, scratch, e, ntg);
   const float pr = total / max(sum, 1e-9f);
-  prob[e] = live ? pr : -1.0f;
+  if (live) prob[e] = pr;
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (!live) return;
   float before = 0.0f;
