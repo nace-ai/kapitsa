@@ -214,11 +214,6 @@ Check check(const std::string& home, const std::string& splash_home, const std::
   std::error_code dec;  // (a name too long, or a path under a folder that cannot be searched, is no folder: not an exception)
   Found m = fs::is_directory(model, dec) && !dec ? Found{model, ""} : find_model(home, model, last.model);  // (as serve: a folder, else a name)
   out.text += m.ok() ? "\nModel to run: " + m.path + "\n" + (m.note.empty() ? "" : m.note + "\n") : "\nModel to run: NOT DECIDED\n" + m.error + "\n";
-  if (!m.ok() && !all.empty() && model.empty()) {
-    std::string f = all[0].family == "?" ? all[0].name : all[0].family;  // a model.json without a family: its folder name
-    std::transform(f.begin(), f.end(), f.begin(), [](unsigned char c) { return std::tolower(c); });
-    out.text += "e.g. kapitsa serve --engine splash --splash-model " + f + "\n";
-  }
   out.ok = b.ok() && m.ok();
   if (out.ok) out.text += "\nReady: run the same command without --check.\n";
   return out;
