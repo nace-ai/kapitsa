@@ -1,0 +1,187 @@
+{
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.00047847517260628735,
+      "kl_median": 8.722135629633018e-05,
+      "kl_p99": 0.001989358387337872,
+      "kl_max": 0.002064196454376971,
+      "margin_change_max": 0.3213653564453125,
+      "tie_margin": 0.07268142700195312,
+      "nll_change_mean": 7.509512929715356e-05,
+      "max_abs_diff": 0.8046739101409912,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.21 (92e8b88)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODEL_9B",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "$EVIDENCE/inputs/primary",
+        "mac": "MacBook Pro (14-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "26.4.1",
+        "date": "2026-10-28T09:09:01Z",
+        "env": {
+          "NI_ANE": "0",
+          "NI_ANE_H4096": "1",
+          "NI_ANE_WAVE": "1",
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_MIN_ROWS": "512",
+          "NI_ANE_VERIFY": "1",
+          "NI_ANE_KEEP_S": "0",
+          "NI_ANE_UNITS": "24",
+          "NI_BAL": "0",
+          "NI_KFLASH": "1"
+        }
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.21 (92e8b88)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODEL_9B",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "$EVIDENCE/inputs/primary",
+        "mac": "MacBook Pro (14-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "26.4.1",
+        "date": "2026-10-28T09:10:03Z",
+        "env": {
+          "NI_ANE": "1",
+          "NI_ANE_H4096": "1",
+          "NI_ANE_WAVE": "1",
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_MIN_ROWS": "512",
+          "NI_ANE_VERIFY": "1",
+          "NI_ANE_KEEP_S": "0",
+          "NI_ANE_UNITS": "24",
+          "NI_BAL": "0",
+          "NI_KFLASH": "1"
+        }
+      }
+    },
+    "step": {
+      "records": 768,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.99609375,
+      "flips": 3,
+      "kl_mean": 0.0001795262359641954,
+      "kl_median": 8.5060782197278e-06,
+      "kl_p99": 0.002744503318368411,
+      "kl_max": 0.009696857130143208,
+      "margin_change_max": 0.5207071304321289,
+      "tie_margin": 0.314605712890625,
+      "nll_change_mean": 0.001297068273427159,
+      "max_abs_diff": 3.36077544093132,
+      "flip_list": [
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 413,
+          "margin": 0.12694931030273438
+        },
+        {
+          "record": "sequence 0 prefix 3210",
+          "ref_top": 4211,
+          "cand_top": 51319,
+          "margin": 0.045131683349609375
+        },
+        {
+          "record": "sequence 0 prefix 3256",
+          "ref_top": 83,
+          "cand_top": 75051,
+          "margin": 0.017810821533203125
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.21 (92e8b88)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODEL_9B",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 768,
+        "vocab": 248320,
+        "source": "$EVIDENCE/inputs/primary",
+        "mac": "MacBook Pro (14-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "26.4.1",
+        "date": "2026-10-28T09:09:01Z",
+        "env": {
+          "NI_ANE": "0",
+          "NI_ANE_H4096": "1",
+          "NI_ANE_WAVE": "1",
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_MIN_ROWS": "512",
+          "NI_ANE_VERIFY": "1",
+          "NI_ANE_KEEP_S": "0",
+          "NI_ANE_UNITS": "24",
+          "NI_BAL": "0",
+          "NI_KFLASH": "1"
+        }
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.21 (92e8b88)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "$MODEL_9B",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 768,
+        "vocab": 248320,
+        "source": "$EVIDENCE/inputs/primary",
+        "mac": "MacBook Pro (14-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "26.4.1",
+        "date": "2026-10-28T09:10:03Z",
+        "env": {
+          "NI_ANE": "1",
+          "NI_ANE_H4096": "1",
+          "NI_ANE_WAVE": "1",
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_MIN_ROWS": "512",
+          "NI_ANE_VERIFY": "1",
+          "NI_ANE_KEEP_S": "0",
+          "NI_ANE_UNITS": "24",
+          "NI_BAL": "0",
+          "NI_KFLASH": "1"
+        }
+      }
+    }
+  }
+}

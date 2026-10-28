@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
   printf("CPU input selection: %d checks, %d failures\n", cases, failures);
   bench::GpuLock lock;
   if (argc == 2 && !failures) {
-    if (!env_on("NI_LOCK_HELD") && !env_on("NACE_GPU_LOCK_HELD")) {
+    if (!bench::GpuLock::held_by_caller()) {
       if (!lock.acquire([](const std::string& who) {
             fprintf(stderr, "waiting for the GPU lock %s%s\n", bench::GpuLock::path().c_str(),
                     who.empty() ? "" : (", held by " + who).c_str());
