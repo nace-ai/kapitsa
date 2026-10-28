@@ -100,7 +100,7 @@
    "Qwen3.8 27B": {"name": "Qwen3.8-27B", "alias": "27b", "about": "dense · 4-bit, 20.2 GB"},
    "Qwen3.6 35B-A3B": {"name": "Qwen3.6-35B-A3B", "alias": "35b", "about": "MoE, 3B active · 4-bit, 22.1 GB"},
    "Qwen3.6 35B-A3B 2-bit": {"name": "Qwen3.6-35B-A3B", "alias": "35b:16gb", "about": "MoE, 3B active · 2-bit experts (unsloth's GGUF), 10.8 GB"},
-   "Clover 35B-A3B": {"name": "Clover-35B-A3B-Preview", "about": "block-diffusion MoE, 3B active · 4-bit pack converted by tools/convert_clover.py (not in the catalog), 19.5 GB"},
+   "Clover 35B-A3B": {"name": "Clover-35B-A3B-Preview", "alias": "clover", "about": "block-diffusion MoE, 3B active · 4-bit, 20.6 GB"},
    "Flash-Next 180B": {"name": "Qwen3.8-Flash-Next 180B-A7B", "alias": "flash-next", "about": "MoE, 7B active · 4-bit, 105.9 GB"},
    "Flash-Next 180B Q2": {"name": "Qwen3.8-Flash-Next 180B-A7B", "alias": "flash-next", "about": "MoE, 7B active · Q2_0 experts streamed from the SSD"},
    "Dory1.0 4B": {"name": "Nemotron Dory1.0 4B", "alias": "dory", "about": "looped dense · NVFP4, 3.2 GB"},

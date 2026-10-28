@@ -3,7 +3,7 @@
 // the downloader, `pull`, `list`, `--help` and the folder names (<name>-<variant>) follow this table.
 //
 // - Models are listed as the README and the picker show them: Qwen from small to large, then Nemotron from small to
-//   large, then Recursive's Flint. `kapitsa serve` without --model takes the most capable one that fits this Mac
+//   large, then Recursive's Flint, then DiffuSpace's Clover. `kapitsa serve` without --model takes the most capable one that fits this Mac
 //   (best_model's order, src/server/main.cpp).
 // - `--model <name>` takes the model's default variant where the engine's memory plan of its headers leaves room for
 //   one --ctx conversation with its drafter, else the first of its fallbacks that does (smaller variants, best
@@ -453,6 +453,26 @@ const std::vector<CatalogModel>& catalog() {
                      .size = 11855541696},
             .companions = {},
             .download_gb = 11.86},
+       }},
+      // DiffuSpace's block-diffusion MoE tuned from Qwen3.6-35B-A3B (src/model/clover.h), last in by_preference's
+      // order: picked by --model
+      {.name = "clover-35b-a3b",
+       .aliases = {"clover", "clover-35b"},
+       .title = "Clover-35B-A3B-Preview",
+       .about = "DiffuSpace's block-diffusion MoE tuned from Qwen3.6-35B-A3B, 3B active: decodes with the 35B's drafter",
+       .brief = "DiffuSpace block-diffusion MoE, 3B active",
+       .default_variant = "4bit",
+       .fallbacks = {},
+       .variants = {
+           // Nace AI's conversion of Diffuspace/Clover-35B-A3B-Preview @ 4b0402b (bf16; tools/convert_clover.py): the
+           // 35B's 4-bit recipe, its DeltaNet's own tensors bf16. The 35B's DFlash2 drafter drafts Clover's causal
+           // pathway (NI_CLOVER_DECODE=auto).
+           {.name = "4bit",
+            .quant = "MLX affine 4-bit, group 64 (8-bit router and shared-expert gate)",
+            .repo = "kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit",
+            .revision = "5eb76824edaad168c420621feb9c6cb6648e47bf",
+            .companions = {dflash35()},
+            .download_gb = 20.58},
        }},
   };
   return c;

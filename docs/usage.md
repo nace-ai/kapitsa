@@ -64,9 +64,11 @@ always take the best model.
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
+| `clover-35b-a3b` | `clover`, `clover-35b` | DiffuSpace Clover-35B-A3B-Preview: Qwen3.6-35B-A3B tuned into a block-diffusion model, mixture of 256 experts, 3B active; decodes with the 35B's draft model ([how](#other-models)); text only; 32 GB Macs and up | 20.6 GB | `4bit` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
-27B, an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning; Flash-Next's
+27B, an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning, the 35B's DFlash2
+draft model for Clover; Flash-Next's
 repo holds its MTP head. Dory and Flint have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
 MTP head, and a draft model would not fit beside it).
 
@@ -187,15 +189,19 @@ quantizes it) is copied to bf16 at load, the format the routing kernels read; it
 choice at a near-tie. These experts run the generic expert kernels (`src/kernels/wfmt.metal`), not the 4-bit pack's
 specialized ones, and 8-bit experts read twice the bytes a token.
 
-DiffuSpace's Clover ([Diffuspace/Clover-35B-A3B-Preview](https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview),
-`clover_moe`) is Qwen3.6-35B-A3B tuned into a block-diffusion model, text only. It runs from a folder that
-`tools/convert_clover.py` writes from a local copy of that repo (its 69 GB of bf16; the pack takes the 35B's 4-bit
-recipe, the router and shared-expert gate 8-bit, 19.5 GB):
+DiffuSpace's Clover (`clover`; [Diffuspace/Clover-35B-A3B-Preview](https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview),
+`clover_moe`) is Qwen3.6-35B-A3B tuned into a block-diffusion model, text only. The catalog's pack,
+[kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit](https://huggingface.co/kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit), is
+that checkpoint converted by `tools/convert_clover.py` (the 35B's 4-bit recipe, the router and shared-expert gate 8-bit,
+19.5 GB), downloaded with the 35B's DFlash2 drafter:
 
 ```bash
-python3 tools/convert_clover.py ~/clover-hf ~/.cache/kapitsa/models/clover-35b-a3b-4bit
-kapitsa serve --model ~/.cache/kapitsa/models/clover-35b-a3b-4bit
+kapitsa serve --model clover
+kapitsa opencode --model clover
 ```
+
+The converter writes the same pack from a local copy of the Hub repo (its 69 GB of bf16):
+`python3 tools/convert_clover.py ~/clover-hf OUT`, then `kapitsa serve --model OUT`.
 
 Its weights read a sequence two ways over one committed state, which is Qwen3.6's, so prefix reuse, checkpoints and the
 SSD prefix cache work as for the 35B: causally, as the autoregressive model Qwen3.6 is, and by denoising, a block of
@@ -204,8 +210,8 @@ positions at once (mask tokens where nothing was chosen yet), each position's ow
 
 - **With the 35B-A3B's draft model** (`auto` when one is found, `dflash`): the causal pathway has the 35B's shape, so the
   35B's DFlash2 drafter drafts for it and KFlash verifies, as for the 35B; the reply is plain decoding's of that pathway.
-  The drafter comes from the pack's own `dflash2/` folder, else from an installed `qwen3.6-35b-a3b` pack (`kapitsa pull
-  35b`, or copy its `dflash2/` into Clover's folder).
+  The catalog's download puts the drafter in the pack's `dflash2/` folder; a converted folder without one takes an
+  installed `qwen3.6-35b-a3b` pack's (`kapitsa pull 35b`, or copy its `dflash2/` into Clover's folder).
 - **Self-speculative** (`auto` without a drafter, `spec`), as DiffuSpace's SGLang implementation decodes it: a cycle
   drafts the 7 tokens after the pending one with one denoising pass, checks them with one causal pass (the 35B's 8-row
   verify) and keeps the drafts it accepts and one more token. A draft is accepted when the causal pass gives it at least

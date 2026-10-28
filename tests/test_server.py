@@ -332,6 +332,17 @@ def cli_checks(kapitsa):
               j.get("model") == name + ":4bit" and j.get("kind") == "catalog" and j.get("repo") == "RecursiveSI/flint-int4"
               and j.get("revision") == "3b93f9053b530488405ae9fca51d4900d6ce21f0" and j.get("companions") == [] and
               j.get("id") == name and j.get("dir") == os.path.join(models, name + "-4bit"), json.dumps(j))
+    # DiffuSpace's Clover: its 4-bit conversion with the 35B's DFlash2 drafter (Clover's causal pathway has the 35B's
+    # shape)
+    for a in ["clover", "clover-35b", "clover-35b-a3b:4bit", "kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit"]:
+        name = "clover-35b-a3b"
+        j = plan(a)
+        got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+        check(f"cli: {a} -> {name}:4bit with the 35B's drafter",
+              j.get("model") == name + ":4bit" and j.get("kind") == "catalog" and
+              j.get("repo") == "kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit" and j.get("revision") == "5eb76824edaad168c420621feb9c6cb6648e47bf" and
+              got == PINNED["qwen3.6-35b-a3b"][2] and j.get("id") == name and
+              j.get("dir") == os.path.join(models, name + "-4bit"), json.dumps(j))
     # NVIDIA's Nemotron Nano: the 4B in FP8 (default) and BF16, the 9B v2 in NVFP4; no drafter (prompt lookup)
     nano4, nano9 = "nemotron-3-nano-4b", "nemotron-nano-9b-v2"
     for a, name, dv, default, repo, rev in [

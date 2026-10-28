@@ -23,7 +23,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 ## 🔥 What's new
 
-- [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, runs on Kapitsa: 319 tok/s decode on the M5 Max.** Convert the Hub checkpoint with `tools/convert_clover.py` and serve the folder: Clover's causal pathway decodes with the 35B's draft model, or self-speculatively as DiffuSpace's SGLang does ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
+- [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, runs on Kapitsa: 319 tok/s decode on the M5 Max.** `kapitsa serve --model clover` (or `kapitsa opencode --model clover`): Clover's causal pathway decodes with the 35B's draft model, or self-speculatively as DiffuSpace's SGLang does ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🌊 **Kapitsa runs Splash's engine: `kapitsa serve --engine splash`** puts Inco's Splash behind Kapitsa's server — the chat page, the OpenAI and Anthropic APIs and streaming, Splash's model folders and `--check` — the Splash backend stack #738-#746 ([capabilities](#splashs-engine), [55.9 tok/s](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
 - [2026/10] 🗄️ **A 180B model on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD; through `--engine splash` the model peaks at 31.6 GiB wired with no swap growth and memory pressure 1, where Kapitsa's own engine at its 24 GB store reached memory pressure 4 ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md), [#751](https://github.com/nace-ai/kapitsa/pull/751)).
 - [2026/10] 🧩 **Flash-Next fits a 64 GB Mac**: `flash-next:64gb` runs Sushi's 2-bit EXL3 experts, 36.7 GB of weights in memory and 69.6 GB to download ([variants](docs/usage.md#models-and-downloads)).
@@ -136,7 +136,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> |
 | --- | ---: |
-| **Clover-35B-A3B-Preview**<br><sub>block-diffusion MoE, 3B active · 4-bit pack converted by tools/convert_clover.py (not in the catalog), 19.5 GB</sub> | 🟩 6002 / **319**<br><sub>KFlash</sub> |
+| **Clover-35B-A3B-Preview** · `clover`<br><sub>block-diffusion MoE, 3B active · 4-bit, 20.6 GB</sub> | 🟩 6002 / **319**<br><sub>KFlash</sub> |
 
 <sub>The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell, the Flash-Next row and the Lightning, Super-VL and Dory rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The Flint row is one block on 2026-10-26 (Kapitsa 0.2.18, [results](bench/results/2026-10-26-m5-max/README.md)). The 27B and Bolt rows are each one block of the row on AC power in High Power mode. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
 
@@ -238,7 +238,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 </details>
 
 <sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint and the 35B's `16gb` read images. Memory: 16 GB for the 4B and 9B models, 32 GB
-for the 27B, 35B, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next (64 GB with `flash-next:64gb`, Sushi's 2-bit EXL3 experts). On a 16 or 24 GB Mac, `35b` and `flint` take their `16gb` variants: unsloth's 2-bit GGUFs, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
+for the 27B, 35B, Clover, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next (64 GB with `flash-next:64gb`, Sushi's 2-bit EXL3 experts). On a 16 or 24 GB Mac, `35b` and `flint` take their `16gb` variants: unsloth's 2-bit GGUFs, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
 
 ## How it works
 
