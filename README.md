@@ -25,7 +25,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 319 tok/s on an M5 Max** ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🌊 **Kapitsa runs Splash's engine**: `kapitsa serve --engine splash` puts Inco's Splash behind Kapitsa's chat page, OpenAI API and Anthropic API ([backends](#supported-backends)).
-- [2026/10] 🗄️ **A 180B model answers on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD, and through `--engine splash` it peaks at 31.6 GiB wired with no swap growth ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
+- [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: `kapitsa serve --engine splash` streams Qwen3.8-Flash-Next's Q2_0 experts from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
 - [2026/10] 🏆 **The fastest decode in 32 of the 38 model and Mac pairs** measured against nine engines ([poster](#benchmarks)).
 
 ## Quickstart
@@ -51,6 +51,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - **Conversations on the SSD**: a 16K follow-up after a restart starts in 0.16 s instead of 17 s (`--disk-cache`).
 - **OpenAI and Anthropic APIs, and a chat page**: `/v1/chat/completions`, `/v1/messages` and `/v1/responses`, with streaming, tool calls and JSON-schema output, on `http://127.0.0.1:8000`.
 - **An agent in one command**: `kapitsa claude`, `kapitsa codex`, `kapitsa opencode` and `kapitsa pi` start on the local model.
+- **Drex decision models**: `kapitsa-systemone` serves a Drex 2.0 state and its questions as one calibrated probability per option (`POST /v1/systemone`) ([decisions](docs/systemone.md)).
 - **Several Macs, one model**: a Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
 - **Images**: screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint and the 35B's `16gb`.
 
@@ -110,24 +111,28 @@ sized, the failures that are not refusals and the measurements against plain Spl
 
 ## Supported models
 
-What `kapitsa serve <name>` runs of a catalog model on a Mac of each size: the variant it picks where that fits, else the first smaller variant that does. Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
+The most precise variant of each catalog model that runs on a Mac of each size. Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
 
-| Model | 16 GB | 24 GB | 32 GB | 36 GB |
-| --- | --- | --- | --- | --- |
-| **Qwen3.5-4B** · `4b` | 4-bit | 4-bit | 4-bit | 4-bit |
-| **Qwen3.5-9B** · `9b` | 4-bit | 4-bit | 4-bit | 4-bit |
-| **Qwen3.8-27B** · `27b` | — | 4-bit† | 4-bit | 4-bit |
-| **Qwen3.6-35B-A3B** · `35b` | 2-bit† | 2-bit | 4-bit† | 4-bit |
-| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next` | — | — | — | — |
-| **Nemotron Dory1.0 4B** · `dory` | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
-| **Nemotron 3 Nano 4B** · `nano-4b` | FP8 | FP8 | FP8 | FP8 |
-| **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
-| **Nemotron 3.5 Lightning 30B-A3B** · `lightning` | — | NVFP4† | NVFP4 | NVFP4 |
-| **Nemotron 3.5 Bolt 74B-A9B** · `bolt` | — | — | 2-bit† | 2-bit |
-| **Nemotron 3.5 Super-VL 120B-A12B** · `super-vl` | — | — | — | — |
-| **Recursive Flint 40B-A2.5B** · `flint` | 2-bit† | 2-bit | 4-bit† | 4-bit† |
+| Model | 16 GB | 24 GB | 32 GB | 36 GB | 48 GB | 64 GB | 128 GB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Qwen3.5-4B** · `4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
+| **Qwen3.5-9B** · `9b` | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit |
+| **Qwen3.8-27B** · `27b` | — | 4-bit† | 5-bit | 5-bit | 8-bit | 8-bit | BF16 |
+| **Qwen3.6-35B-A3B** · `35b` | 2-bit† | 2-bit | 4-bit | 4-bit | 6-bit | 8-bit | BF16 |
+| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next` | — | — | — | — | 2-bit + SSD | 2-bit | 4-bit |
+| **Nemotron 3.5 Lightning 30B-A3B** · `lightning` | — | NVFP4† | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt` | — | — | 2-bit† | 2-bit | 2-bit | 2-bit | 2-bit |
+| **Nemotron 3.5 Super-VL 120B-A12B** · `super-vl` | — | — | — | — | — | — | NVFP4 |
+| **Recursive Flint 40B-A2.5B** · `flint` | 2-bit† | 2-bit | 2-bit | 4-bit | 4-bit | 4-bit | 4-bit |
+| **Nemotron Dory1.0 4B** · `dory` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
+| **Nemotron 3 Nano 4B** · `nano-4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
+| **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
+| **Drex 2.0** · `kapitsa-systemone` | — | — | — | Q4† | Q4 | Q8 | Q8 |
 
-<sub>**4-bit**, **NVFP4** and **FP8** are the catalog's variants (`4bit`, `nvfp4`, `fp8`), **2-bit** the `16gb` build of the 35B and Flint and the `24gb` one of Bolt. † that Mac needs macOS's working set at the top of its range, about two thirds to 78% of the RAM; — `kapitsa serve` does not start the model there. A cell is the variant `kapitsa serve` picks, planned as `kapitsa doctor` plans it: 64K of context and two conversations where they fit, less context where they do not (the 27B keeps 32K on a 24 GB Mac). The 16 and 36 GB columns also hold for the peaks measured on an M1 Pro and an M3 Pro ([per-Mac tables](#models)); nothing has been run on 24 or 32 GB, those columns are planned. Flash-Next needs 64 GB or more: `64gb` on a 64 GB Mac, `4bit` on a 128 GB Mac, and 48 GB with its Q2_0 pack streamed from the SSD. Super-VL needs a 96 GB+ Mac.</sub>
+<sub>**4-bit**, **5-bit**, **6-bit**, **8-bit** and **BF16** are the catalog's `4bit`, `5bit`, `6bit`, `8bit` and `bf16` variants, **NVFP4** its `nvfp4` one, **2-bit** the `16gb` build of the 35B and Flint and the `24gb` one of Bolt, and **Q4**/**Q8** Drex 2.0's two builds (`9b` ships only `4bit`). `kapitsa serve <name>:<variant>` takes the variant in the cell (`35b:6bit`); a name alone takes the catalog's default, usually 4-bit, which leaves more context.
+A cell is the most precise variant that starts on a Mac of that size at the bottom of its working-set range, planned as `kapitsa doctor` plans it: the weights, the drafter, activations and 8K tokens of context, and `kapitsa doctor` prints how much context is left over. † only the top of the range holds that plan, about 80% of the Mac's RAM against 69% at the bottom. — nothing starts at either end. The 24, 32 and 64 GB columns are `kapitsa doctor`'s plan, not a run: our recorded runs are the Macs of the [per-Mac tables](#models), 16, 36, 48 and 128 GB, which ran the default variants.
+Flash-Next's 48 GB cell is its Q2_0 pack (`tools/qwen4_exp_q20.py`), not a catalog variant: the experts the budget does not hold stream from the SSD, `NI_EXPERT_STORE=<GB>` pins the store, and on our 48 GB M5 Pro the arm that ran it cleanly was Kapitsa's server on Splash's engine (31.6 GiB wired, no swap growth); below 48 GB that pack was not measured. Super-VL's NVFP4 starts at the top of a 96 GB Mac's range and at the bottom of a 128 GB Mac's. Above 128 GB nothing changes, every model's best variant already starts there, so there are no Mac Studio columns.
+Drex 2.0 is not a `kapitsa serve` catalog model: `kapitsa-systemone --model` serves it ([decisions](docs/systemone.md)) from its Q8_0 release, 36.8 GB of weights, or a 24.1 GB 4-bit build, and the cells add the default 16K context and 1 GB state cache to that.</sub>
 
 ## Models
 
