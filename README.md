@@ -83,7 +83,7 @@ stream and cancel requests. See its build instructions and host-process lifetime
 ## Supported backends
 
 Kapitsa runs a model on its own engine or on Inco's [Splash](https://github.com/incoai/splash), and `--engine` picks
-which. The chat page, the OpenAI and Anthropic APIs, streaming and `kapitsa claude` are the same on both.
+which. The chat page, the OpenAI and Anthropic APIs and streaming are the same on both.
 
 | Backend | Runs the model | Models | Start it |
 | --- | --- | --- | --- |
