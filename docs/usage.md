@@ -978,7 +978,7 @@ passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full 
 store `kapitsa serve` would pick now and why, the same line the engine logs at load (`expert store: ...`: all experts
 resident, what the budget leaves, capped by the available memory, capped by the RAM share, or the `NI_EXPERT_STORE`
 pin — that world's `reason` value is `NI_EXPERT_STORE`; `--json`: `expert_store` with `bytes`, `reason`, `text`, and
-the `context`, `slots` and `prefill_chunk` it is planned at, plus the `group_slot_bytes` it reserves (nonzero only
+the `context`, `slots` and `prefill_chunk` it is planned at, the numbers the size was picked from (`all_bytes`, every expert; `budget_leaves_bytes`, what the budget leaves for the store; `available_memory_bytes`, the system's available memory; `ram_share_cap`, the RAM share the process's GPU memory stays within, 0 to 1, 0 = none), plus the `group_slot_bytes` it reserves (nonzero only
 while the predicted store stays incomplete; #628) and the `kv_reserve_bytes` the available-memory guard keeps for the
 conversations' caches (the plan's `min(context, 32768)` positions times the slots, or `NI_EXPERT_KV_POS`'s explicit
 total, at the model's KV bytes per position; 0 with `NI_EXPERT_KV_POS=0`; an `NI_EXPERT_STORE` pin sizes the store
@@ -1188,7 +1188,7 @@ first download's progress too:
 | `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
 | `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
 | `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the model picked last if downloaded, else the best model for this Mac ([Which model](#which-model)). |
-| `BENCH_GPU_LOCK` | `/tmp/kapitsa-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
+| `BENCH_GPU_LOCK` | `/tmp/kapitsa-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NI_LOCK_HELD=1` / `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
 | `BENCH_GPU_AMBIENT` | | `kapitsa bench`: more process names whose GPU use is ambient (recorded, never flagged), comma-separated, as for the harness. |
 | `KAPITSA_BENCH_REPO` | `nace-ai/kapitsa` | `kapitsa bench --submit`: the repository results go to. |
 | `HF_TOKEN` | the token `hf auth login` saved | Hugging Face token for gated or private repos. |
