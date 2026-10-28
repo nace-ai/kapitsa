@@ -187,7 +187,7 @@ cells are newer.
 - **Qwen3.8-Flash-Next 180B-A7B, Q2_0 streamed from the SSD.** Kapitsa 1,181 / 55.9 on Splash's engine
   (`--engine splash`, 0.2.23 with Splash 1.4.0 underneath, `ff6151c8`), Splash 1.4.0 1,149 / 55.5 and llama.cpp
   36.8 / 9.0 (`c7474afc`): the 2026-10-27 four-engine run ([results](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)),
-  the run behind the poster's Q2 row and the M5 Pro table under [Models](../README.md#models). At T 0 **Kapitsa's decode
+  the run behind the poster's Q2 row and the M5 Pro table under [Models](../README.md#models), [#751](https://github.com/nace-ai/kapitsa/pull/751). At T 0 **Kapitsa's decode
   is level with Splash's** (55.9 against 55.5, the gap inside both runs' spreads) and **its 4K prefill reads 1.03x
   Splash's**; the record ran the arms as blocks, not interleaved. The row is not this page's protocol: its decode rate
   is a 256-token answer at T 0, counted from the first token to the last, and its 4K prompt is 4,074 tokens against
