@@ -227,6 +227,11 @@ def main():
     q = lib()
     entries, overrides = plan(src, a.bits, a.head_bits or a.bits)
     os.makedirs(a.out, exist_ok=True)
+    # Kapitsa reads every *.safetensors in a folder: shards of an earlier run (other bits, an interrupted one) would mix in
+    old = [f for f in os.listdir(a.out) if f.endswith(".safetensors") or f.endswith(".part")]
+    if old:
+        sys.exit(f"{a.out} already holds {', '.join(sorted(old)[:3])}{' ...' if len(old) > 3 else ''}: "
+                 "convert into an empty folder")
     shards, cur, size = [], [], 0
     for e in entries:
         nb = nbytes(e[4], e[5])
@@ -254,7 +259,8 @@ def main():
     for f in COPY:
         if os.path.exists(os.path.join(a.src, f)):
             shutil.copyfile(os.path.join(a.src, f), os.path.join(a.out, f))
-    files = sorted(f for f in os.listdir(a.out) if not f.startswith(".") and f != "conversion.json")
+    files = sorted(set(weight_map.values()) | {"model.safetensors.index.json", "config.json"} |
+                   {f for f in COPY if os.path.exists(os.path.join(a.out, f))})
     conv = {"source": "Diffuspace/Clover-35B-A3B-Preview",
             "recipe": {"bits": a.bits, "group_size": 64, "head_bits": a.head_bits or a.bits, "router": 8,
                        "shared_expert_gate": 8, "quantizer": "src/gguf/quant.cpp (tools/mlx_quant.cpp)"},
