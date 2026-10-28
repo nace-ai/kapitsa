@@ -10,24 +10,26 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 32 of the 37 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
   <img alt="Poster of prefill / decode speed for Kapitsa and nine other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro, M3 Pro and M1 Pro; the numbers are in the poster and in the Models section's tables" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer at T 0.6 (Flint at its card's T 1.0). × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
+<sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer at T 0.6 (Flint at its card's T 1.0). The M5 Pro's Flash-Next 180B Q2 row is a 256-token answer at T 0.6, counted from the first token to the last, on that run's own 4,074-token prompt ([record](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)). × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
 
 The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
 ## 🔥 What's new
 
+- [2026/10] 🌊 **Kapitsa runs Splash's engine: `kapitsa serve --engine splash`** puts Inco's Splash behind Kapitsa's server — the chat page, the OpenAI and Anthropic APIs and streaming, Splash's model folders and `--check` — the Splash backend stack #738-#746 ([capabilities](#splashs-engine), [55.9 tok/s](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
+- [2026/10] 🗄️ **A 180B model on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD, 31.7 GiB of peak footprint on Kapitsa's own engine ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md), [#751](https://github.com/nace-ai/kapitsa/pull/751)).
 - [2026/10] 🧩 **Flash-Next fits a 64 GB Mac**: `flash-next:64gb` runs Sushi's 2-bit EXL3 experts, 36.7 GB of weights in memory and 69.6 GB to download ([variants](docs/usage.md#models-and-downloads)).
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, and on the M4 Pro reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding** ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **The fastest decode in 32 of 37 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **The fastest decode in 33 of 38 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B ([#207](https://github.com/nace-ai/kapitsa/pull/207), [KFlash](docs/kflash.md#limitations)).
 - [2026/10] ⚡ **QMT prefill: 25% off the time to first token on the M5 Pro** (Qwen3.6 35B-A3B at 4K, 20% at 16K) with the Metal 4 matrix units ([measured](docs/usage.md#environment-variables)).
 - [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
@@ -129,7 +131,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 </details>
 
 <details>
-<summary><b>MacBook Pro (16-inch, 2026) · M5 Pro · 48 GB</b> · 6 models</summary>
+<summary><b>MacBook Pro (16-inch, 2026) · M5 Pro · 48 GB</b> · 7 models</summary>
 
 **Qwen and Nemotron**
 
@@ -137,6 +139,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 606 / 77<br><sub>KFlash</sub> | 🟩 464 / **78**<br><sub>DFlash2</sub> | 446 / 51<br><sub>DFlash2</sub> | 674 / 72<br><sub>DFlash2</sub> | 470 / 40<br><sub>MTP</sub> | 462 / 41<br><sub>MTP</sub> | 421 / 32<br><sub>MTP</sub> | 322 / 30<br><sub>MTP</sub> | 118 / 17 |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 2802 / **201**<br><sub>KFlash</sub> | 2494 / 156<br><sub>MTP</sub> | 1619 / 144<br><sub>DFlash2</sub> | 3514 / 181<br><sub>DFlash2</sub> | 1518 / 102<br><sub>MTP</sub> | 2569 / 89<br><sub>MTP</sub> | 2474 / 98<br><sub>DFlash2</sub> | 1755 / 107<br><sub>MTP</sub> | 997 / 96 |
+| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · Q2_0 experts streamed from the SSD</sub> | 🟩 847 / **57**<br><sub>KFlash · e840651c</sub> | × | × | 1149 / 54 | — | × | × | 37 / 9<br><sub>c7474afc</sub> | — |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **70**<br><sub>KFlash</sub> | × | × | × | × | × | 53 | 13 | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 3141 / **159**<br><sub>KFlash</sub> | 1728 / 115<br><sub>MTP</sub> | 1938 / 124<br><sub>MTP</sub> | × | 2369 / 92 | 1743 / 101 | 1881 / 94 | 1915 / 101<br><sub>MTP</sub> | 1479 / 72 |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 **79**<br><sub>KFlash</sub> | × | 39 | × | × | × | 41 | × | × |
@@ -147,7 +150,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: | ---: |
 | **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2691 / **149**<br><sub>KFlash</sub> | 2072 / 92 | 2138 / 145 |
 
-<sub>Qwen3.8-Flash-Next 180B-A7B does not fit in 48 GB, so both engines stream its experts from the SSD. With Q2_0 weights on both and Kapitsa's expert store pinned at 24 GB (the auto size here is about 29.9 GB, but four runs at that size were stopped at memory pressure), Kapitsa's prefill is behind on short prompts, level at 4K and 16K and 2.7% ahead at 32K: not the fastest everywhere (correction, 24 Oct: on Kapitsa's warm second leg alone its prefill is 13.5-14.5% behind at 1K, level at 4K and a few percent ahead at 16K and 32K; [numbers and caveats](docs/benchmarks.md#qwen38-flash-next-streamed-from-the-ssd-kapitsa-against-llamacpp-m5-pro-48-gb-2026-10-24)).</sub>
+<sub>Qwen3.8-Flash-Next 180B-A7B does not fit in 48 GB, so both engines stream its experts from the SSD. With Q2_0 weights on both and Kapitsa's expert store pinned at 24 GB (the auto size here is about 29.9 GB, but four runs at that size were stopped at memory pressure), Kapitsa's prefill is behind on short prompts, level at 4K and 16K and 2.7% ahead at 32K: not the fastest everywhere (correction, 24 Oct: on Kapitsa's warm second leg alone its prefill is 13.5-14.5% behind at 1K, level at 4K and a few percent ahead at 16K and 32K; [numbers and caveats](docs/benchmarks.md#qwen38-flash-next-streamed-from-the-ssd-kapitsa-against-llamacpp-m5-pro-48-gb-2026-10-24)). The Flash-Next 180B Q2 row is a separate 2026-10-27 four-engine run ([record](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)), which did not use this table's protocol: its decode rate runs over a 256-token answer at T 0.6, counted from the first token to the last, over 12 requests for Kapitsa, 10 for Splash and 2 for llama.cpp, and its 4K prefill is prompt tokens over time to first token on that run's own 4,074-token prompt, against this table's 4,133. Kapitsa ran its own engine with MTP and its expert store pinned at 24 GB, not sized from free memory. Three of its legs were stopped at memory-pressure level 4, with up to 4.5 GB of swap, late in the leg (16K prefill or turn 2), so its 16K and turn-2 cells have 9 runs against 12; its decode and 4K cells are the 12. Ollama and LM Studio were not run on that Q2_0 pack, so their cells are dashes, and mlx-serve, oMLX, MTPLX and MLX have no pack of this model that fits 48 GB.</sub>
 
 </details>
 
