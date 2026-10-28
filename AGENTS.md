@@ -33,7 +33,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test json_file_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
+exl3_test remote_test cluster_test split_place_test qwen4_config_test json_file_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
 build/api_test
@@ -46,6 +46,7 @@ build/exl3_test                              # the EXL3 reference decoder (src/m
 build/remote_test                            # a split model's reserve on its other Macs (src/model/remote.h)
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
+build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
