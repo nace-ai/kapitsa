@@ -51,7 +51,8 @@ std::string format_name(int bits, int gs) {
 // in). Read as quant_of reads it: the default, then the entries keyed by module path. An 8-bit group-128 module is
 // read as group 64 when its scales are bf16 (qlin); the config cannot show the dtype, so it passes here. The vision tower
 // and the MTP head are not the trunk's: the first is never read, the second drops out with a reason when its format is
-// not one the kernels read (load_mtp). Other modes (q2_0, IQ) are checked where they are read.
+// not one the kernels read (load_mtp). An allowlist of modes: affine (in a supported format), q2_0 and the IQ modes (their
+// layouts are checked where they are read); any other mode (mxfp4, nvfp4, ...) is refused here, as qlin would after the read.
 std::string unsupported_quantization(const std::string& model_dir) {
   const auto rp = json_file(model_dir + "/config.json");
   if (!rp->is_object() || !rp->contains("quantization") || !(*rp)["quantization"].is_object()) return "";
@@ -66,16 +67,22 @@ std::string unsupported_quantization(const std::string& model_dir) {
   const int bits = whole(q, "bits", 4), gs = whole(q, "group_size", 64);
   std::map<std::string, int> bad;  // format -> modules
   std::string first;
-  auto note = [&](const std::string& module, int b, int g) {
-    if (format_supported(b, b == 8 && g == 128 ? 64 : g)) return;
-    if (!bad[format_name(b, g)]++ && first.empty()) first = module;
+  auto note = [&](const std::string& module, const std::string& m, int b, int g) {
+    std::string what;  // "" = readable
+    if (m == "affine") {
+      if (!format_supported(b, b == 8 && g == 128 ? 64 : g)) what = format_name(b, g);
+    } else if (m != "q2_0" && !gguf::iq_mode_type(m)) {
+      what = "\"" + m + "\" mode";
+    }
+    if (what.empty()) return;
+    if (!bad[what]++ && first.empty()) first = module;
   };
-  if (mode == "affine") note("the default", bits, gs);
+  note("the default", mode, bits, gs);
   for (auto& [key, v] : q.items()) {
     if (!v.is_object() || Qwen35::is_mtp(key) || key.find("vision_tower") != std::string::npos ||
-        key.find("visual.") != std::string::npos || mode_of(v, mode) != "affine")
+        key.find("visual.") != std::string::npos)
       continue;
-    note(key, whole(v, "bits", bits), whole(v, "group_size", gs));
+    note(key, mode_of(v, mode), whole(v, "bits", bits), whole(v, "group_size", gs));
   }
   if (bad.empty()) return "";
   std::string formats;

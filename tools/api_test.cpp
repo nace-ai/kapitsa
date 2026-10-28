@@ -1880,6 +1880,16 @@ void unsupported_model_unit() {
                     "i.j": {"group_size": 256, "bits": 3, "mode": "iq3_s"}, "k.l": {"bits": 2, "mode": "q2_0"}})")
             .empty(),
         "unsupported_model: 4-bit g32, 6-bit g64, 8-bit g128, IQ and Q2_0 entries and an unquantized module are not refused");
+  // a mode with no loader is refused too, whatever its bits and group size: mxfp4 4-bit group 32 is a "supported" shape
+  // for affine, and would have been read in full before qlin refused it
+  const std::string fp4 = quantized("mxfp4", R"({"group_size": 32, "bits": 4, "mode": "mxfp4"})");
+  check(fp4.find("1 module in \"mxfp4\" mode (the default)") != std::string::npos &&
+            fp4.find("mxfp4: its config.json") != std::string::npos && fp4.find("3/4/5/6/8-bit group 64") != std::string::npos,
+        "unsupported_model: an mxfp4 default is refused up front, not passed for its bits and group size");
+  check(quantized("fp4mod", R"({"group_size": 64, "bits": 4, "a.b": {"group_size": 32, "bits": 4, "mode": "mxfp4"},
+                    "c.d": {"group_size": 32, "bits": 4, "mode": "nvfp4"}})")
+                .find("2 modules in \"mxfp4\" mode, \"nvfp4\" mode (a.b, ...)") != std::string::npos,
+        "unsupported_model: a per-module mxfp4 or nvfp4 entry is refused, naming the first");
   check(quantized("novision", R"({"group_size": 64, "bits": 4,
                     "vision_tower.blocks.0.attn.qkv": {"group_size": 128, "bits": 5},
                     "language_model.mtp.fc": {"group_size": 128, "bits": 5}})")
