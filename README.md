@@ -78,7 +78,8 @@ server to its own Mac. [Usage guide](docs/usage.md)</sub>
 the server: Splash keeps the weights, the GPU and the decode loop; Kapitsa keeps the HTTP server, the chat page,
 the OpenAI and Anthropic APIs and streaming, and renders the prompt with Splash's own tokenizer and chat template, so
 the model, the prompt and the tokens are Splash's. Splash's model folder is the model, and `--splash-model` picks one
-by the start of its folder name when Splash has several resolved. One command:
+by family (`flash-next`) or by the start of its folder name when Splash has several resolved, and `--check` says what would
+run without starting it. One command:
 
 ```bash
 kapitsa serve --engine splash

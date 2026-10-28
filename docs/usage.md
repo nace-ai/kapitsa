@@ -439,19 +439,23 @@ and the few Metal kernels adapted from Splash keep their own file headers.
 
 ```bash
 kapitsa serve --engine splash                            # the engine and the model, found where Splash installs them
-kapitsa serve --engine splash --splash-model 6527993     # one of several resolved models, by the start of its folder name
+kapitsa serve --engine splash --check                    # what it would run, and what is missing: nothing is started
+kapitsa serve --engine splash --splash-model flash-next  # one of several: a family, a source name or the start of a folder name
 ```
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--engine native\|splash` | `native` | `splash` runs text generation in a Splash child process; `native` is Kapitsa's own engine. |
-| `--splash-binary PATH` | found | The Splash binary that runs `serve-native`. Not given, it is `engine/splash` under `$SPLASH_HOME` (that variable set to a folder without it is an error, not a reason to look elsewhere), else the install a `splash` on `PATH` resolves into, then `~/Applications/Splash`, `/Applications/Splash` and `~/Splash`. |
-| `--splash-model DIR` | found | Splash's resolved model folder, or the first 6 or more characters of its name. Not given, it is the only folder under `~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer; with several, the error lists them. The folder's own tokenizer and chat template are what this server renders with, so the prompt is the one Splash would build. A name is not looked up or downloaded. |
+| `--splash-binary PATH` | found | The Splash binary that runs `serve-native`: `engine/splash` under `$SPLASH_HOME` (that variable set to a folder without it is an error, not a reason to look elsewhere), the install a `splash` on `PATH` resolves into, then `~/Applications/Splash`, `/Applications/Splash`, `~/Splash`, and last the binary the last run used, so a Splash installed anywhere needs this once. A path given here must be an executable file. |
+| `--splash-model NAME` | found | The model to run: a folder, or a name. A name is the first 6 or more characters of one of Splash's resolved folder names, or a part, in any case, of a model's family or of its source (`model` in its `model.json`): `flash-next`, `27b`, `Q2_0`. A name may hold a `/`, as a source such as `org/Model:Q2_0` does. When Splash resolved that model more than once, the newest folder is used; two different models matching is an error that lists them, and so is a name that matches none. Nothing is downloaded. Not given, it is the only folder under `~/Library/Application Support/Splash/models/.resolved/` that has a tokenizer, else the one the last run used, else the most recently resolved, and `serve` says which on stderr and how to pick another. The folder's own tokenizer and chat template are what this server renders with, so the prompt is the one Splash would build. |
+| `--check` | off | With `--engine splash`: prints the engine binary, the resolved models (family, folder name and source), the model that would run, and for whatever is missing the error and the flag that fixes it, then `Ready: run the same command without --check`, or with several models and none named, an `e.g. --splash-model <family>` line. It refuses what `serve` refuses, such as a `--splash-binary` that is no executable file. Exits 0 when both are found and 1 otherwise, starts nothing and writes nothing, the last-run record included. |
 | `--splash-arg ARG` | none | One more argument for `splash serve-native`, repeatable (`--splash-arg --verify-rows --splash-arg 2`). Kapitsa adds `--idle-release off` and sometimes `--expert-memory` itself (below); an argument given here replaces its own. |
 | `--splash-persistent-cache` | off | Splash's SSD prefix cache kept across restarts: `--persistent-cache on` and `--cache-dir ~/Library/Caches/Kapitsa/splash-prefix-cache/<folder name>-<hash>`, unless `--splash-arg` gives either. The hash is of the model folder's real path, so two folders with one name elsewhere do not share a cache. Off, the child starts with an empty cache and writes nothing to disk. |
 | `--splash-conversation-salt` | off | A cache salt per conversation (a hash of its messages up to the first user message), so conversations stop sharing cached prompts such as a common system prompt; off is one shared cache, as Splash without `cache_salt`. It separates conversations; it is not a speed option. |
 
-All five Splash options need `--engine splash` and are an error without it. Splash's model folder is the model:
+All six Splash options need `--engine splash` and are an error without it. A `serve` that starts writes the binary and
+model it used to `splash.json` in Kapitsa's home (`~/.cache/kapitsa`, or `$KAPITSA_HOME`), so the next run needs neither
+flag. Splash's model folder is the model:
 `--model`, `--split` and `--allow-switch` are usage errors in this mode, and this Mac's memory plan, the model catalog,
 downloads and routing to another Mac do not apply.
 
