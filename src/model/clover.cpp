@@ -147,6 +147,9 @@ Clover::Clover(const std::string& dir, int prefill_chunk) : Qwen35(dir, prefill_
     fatal("NI_CLOVER_ACCEPT_RATIO / NI_CLOVER_ACCEPT_DELTA: a ratio in [0, 1] and a delta >= 0");
 
   const json g = read_json(dir + "/generation_config.json", false);
+  if (g.empty())
+    logi("Clover: no generation_config.json in %s: no generation controls (penalties, ramps), greedy unless a request "
+         "sets a temperature", dir.c_str());
   auto num = [&](const char* k, float def) { return g.contains(k) && g[k].is_number() ? g[k].get<float>() : def; };
   auto inum = [&](const char* k, int def) { return g.contains(k) && g[k].is_number_integer() ? g[k].get<int>() : def; };
   ctl_.presence = num("presence_penalty", 0.0f);
