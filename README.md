@@ -10,7 +10,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 32 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
@@ -29,7 +29,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 61 tok/s against llama.cpp's 43 on the same 2-bit GGUF** ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: decodes faster than llama.cpp, and on the M4 Pro reads prompts faster than rec 0.1.0** ([M4 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding** ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **The fastest decode in 33 of 38 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **The fastest decode in 32 of 38 model and Mac pairs** against nine engines, up to 2.9× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: three requests share one verify pass**, up to +23% total throughput on the 27B ([#207](https://github.com/nace-ai/kapitsa/pull/207), [KFlash](docs/kflash.md#limitations)).
 - [2026/10] ⚡ **QMT prefill: 25% off the time to first token on the M5 Pro** (Qwen3.6 35B-A3B at 4K, 20% at 16K) with the Metal 4 matrix units ([measured](docs/usage.md#environment-variables)).
 - [2026/10] 💾 **SSD prefix cache: a 16K follow-up after a restart starts in 0.16 s instead of 17 s** (`--disk-cache`).
@@ -139,7 +139,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 606 / 77<br><sub>KFlash</sub> | 🟩 464 / **78**<br><sub>DFlash2</sub> | 446 / 51<br><sub>DFlash2</sub> | 674 / 72<br><sub>DFlash2</sub> | 470 / 40<br><sub>MTP</sub> | 462 / 41<br><sub>MTP</sub> | 421 / 32<br><sub>MTP</sub> | 322 / 30<br><sub>MTP</sub> | 118 / 17 |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 2802 / **201**<br><sub>KFlash</sub> | 2494 / 156<br><sub>MTP</sub> | 1619 / 144<br><sub>DFlash2</sub> | 3514 / 181<br><sub>DFlash2</sub> | 1518 / 102<br><sub>MTP</sub> | 2569 / 89<br><sub>MTP</sub> | 2474 / 98<br><sub>DFlash2</sub> | 1755 / 107<br><sub>MTP</sub> | 997 / 96 |
-| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · Q2_0 experts streamed from the SSD</sub> | 🟩 847 / **57**<br><sub>KFlash · e840651c</sub> | × | × | 1149 / 54 | — | × | × | 37 / 9<br><sub>c7474afc</sub> | — |
+| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · Q2_0 experts streamed from the SSD</sub> | 🟩 847 / **57**<br><sub>KFlash · e840651c</sub> | × | × | 1149 / **≈54** | — | × | × | 37 / 9<br><sub>c7474afc</sub> | — |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **70**<br><sub>KFlash</sub> | × | × | × | × | × | 53 | 13 | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 3141 / **159**<br><sub>KFlash</sub> | 1728 / 115<br><sub>MTP</sub> | 1938 / 124<br><sub>MTP</sub> | × | 2369 / 92 | 1743 / 101 | 1881 / 94 | 1915 / 101<br><sub>MTP</sub> | 1479 / 72 |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 **79**<br><sub>KFlash</sub> | × | 39 | × | × | × | 41 | × | × |
