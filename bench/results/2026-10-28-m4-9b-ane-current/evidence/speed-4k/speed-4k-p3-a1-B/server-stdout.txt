@@ -1,1 +1,0 @@
-Ready: chat at http://127.0.0.1:57232, API at http://127.0.0.1:57232/v1 (model "bench-model"). Ctrl+C stops.

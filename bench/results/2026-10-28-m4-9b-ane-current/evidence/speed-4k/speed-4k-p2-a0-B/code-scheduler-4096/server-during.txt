@@ -1,3 +1,0 @@
-[kapitsa] prefill: Neural Engine busy 51% of 6327 ms over 2 split chunks (128 evaluations)
-[kapitsa] KFlash: 159 cycles, 8.00 rows per cycle; cycles by rows 8:159; tokens per cycle expected 3.766, got 3.792; rate 0.0562 tok/ms; cost ms by rows 8:78.25; calibration (alpha, beta) by depth (0.06, 0.99) (-0.19, 1.12) (0.05, 1.39) (-0.24, 0.81) (-0.50, 1.14) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
-[kapitsa] chat: prompt 4099 (cached 0) in 6327 ms (+8.3 ms template/tokenize; last chunk: encoded by 6255.6 ms, GPU start +4.8 ms, GPU 66.7 ms, wake +0.2 ms), 512 tokens in 9429 ms (54.2 tok/s), length, 3.87 tok/cycle, KFlash (DFlash2): 132 cycles

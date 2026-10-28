@@ -1,5 +1,0 @@
-PASS nested path: stops at the corpus
-PASS nested path: dumps/x/ref made with its parents
-PASS existing path: kept, stops at the corpus
-PASS path under a file: cannot make, before the corpus
-all passed

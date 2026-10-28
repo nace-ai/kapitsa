@@ -1,3 +1,0 @@
-prefill 8 rows: next-token NLL 1.0004, top-1 = next token 0.7500 -> $EVIDENCE/runs/27b/primary-2-A/dump/prefill
-step   768 rows: next-token NLL 0.4676, top-1 = next token 0.8763 -> $EVIDENCE/runs/27b/primary-2-A/dump/step
-8 windows, 14848 prefilled tokens in 110.8 s; 163.7 s in all

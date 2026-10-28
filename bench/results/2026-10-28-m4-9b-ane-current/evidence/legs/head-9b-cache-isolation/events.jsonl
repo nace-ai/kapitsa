@@ -1,4 +1,0 @@
-{"epoch": 1793200454.69223, "stream": "stdout", "line": "PASS B-cold: cached_tokens=0, exact expected JSON, same-mode reply preserved\n"}
-{"epoch": 1793200480.9937038, "stream": "stdout", "line": "PASS A-cold: cached_tokens=0, exact expected JSON, same-mode reply preserved\n"}
-{"epoch": 1793200487.439014, "stream": "stdout", "line": "PASS B-warm: cached_tokens=4968, exact expected JSON, same-mode reply preserved\n"}
-{"epoch": 1793200492.681638, "stream": "stdout", "line": "PASS A-warm: cached_tokens=4968, exact expected JSON, same-mode reply preserved\n"}

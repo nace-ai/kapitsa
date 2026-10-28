@@ -1,3 +1,0 @@
-PASS mtp-sidecar == tools/mtp_sidecar.py (post_norm, 131704 bytes, every finite bf16 value + 1)
-PASS mtp-sidecar == tools/mtp_sidecar.py (pre_norm, 131704 bytes, every finite bf16 value + 1)
-ALL PASSED

@@ -1,4 +1,0 @@
-PASS B-cold: cached_tokens=0, exact expected JSON, same-mode reply preserved
-PASS A-cold: cached_tokens=0, exact expected JSON, same-mode reply preserved
-PASS B-warm: cached_tokens=4968, exact expected JSON, same-mode reply preserved
-PASS A-warm: cached_tokens=4968, exact expected JSON, same-mode reply preserved

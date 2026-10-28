@@ -1,5 +1,0 @@
-{"epoch": 1793199622.20738, "stream": "stderr", "line": "2026-10-28 23:00:22.203 ane_segment_check[99719:45539131] Metal API Validation Enabled\n"}
-{"epoch": 1793199622.207575, "stream": "stderr", "line": "2026-10-28 23:00:22.207 ane_segment_check[99719:45539131] Metal GPU Validation Enabled\n"}
-{"epoch": 1793199626.3067908, "stream": "stderr", "line": "[kapitsa] compiled kernels in 3766 ms\n"}
-{"epoch": 1793199626.397237, "stream": "stdout", "line": "CPU input selection: 14 checks, 0 failures\n"}
-{"epoch": 1793199626.3973398, "stream": "stdout", "line": "GPU input segments: 290 comparisons, 8995840 data/guard bytes checked, 0 failures\n"}

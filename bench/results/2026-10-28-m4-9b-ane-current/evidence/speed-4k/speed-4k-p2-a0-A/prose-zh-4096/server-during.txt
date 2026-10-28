@@ -1,3 +1,0 @@
-[kapitsa] KFlash: 431 cycles, 8.00 rows per cycle; cycles by rows 8:431; tokens per cycle expected 2.842, got 2.578; rate 0.0304 tok/ms; cost ms by rows 8:66.54; calibration (alpha, beta) by depth (-0.65, 1.00) (-0.67, 1.03) (-0.53, 1.07) (-0.08, 0.85) (-0.68, 1.13) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
-[kapitsa] KFlash: budget saved (431 cycles) to $RUN/evidence/legs/speed-4k-p2-a0-A/home/kflash/qwen3.5-9b-4bit-dflash2-b4-Apple_M4.json
-[kapitsa] chat: prompt 4099 (cached 0) in 17755 ms (+1.8 ms template/tokenize; last chunk: encoded by 5828.0 ms, GPU start +5918.4 ms, GPU 6008.1 ms, wake +0.2 ms), 512 tokens in 19163 ms (26.7 tok/s), length, 1.88 tok/cycle, KFlash (DFlash2): 272 cycles

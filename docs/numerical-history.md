@@ -142,13 +142,13 @@ macOS 26.4.1 (25E253), 768 teacher-forced step rows against the same 4-bit GPU m
 interval crossed zero. This does not establish quality equivalence. An earlier M4 mini summary
 reported PPL 6.41118 -> 6.41682 on a separate 4092-position sample and changed greedy answers.
 
-[Complete numerical evidence, controls, historical speed summary and limitations](../bench/results/2026-10-28-m4pro-9b-ane/README.md).
+[Historical numerical evidence, controls and limitations](https://github.com/KeyingSong0123/kapitsa/blob/9f8dd15a81aa67a69b4e1a86a5c4e2c67495194d/bench/results/2026-10-28-m4pro-9b-ane/README.md).
 Those GPU data are pinned to the earlier experimental commit. A fresh integration check of main
-`dbf3f3b` against `fe74a3d` on an M4 Mac mini / 24 GiB / macOS 26.5.2 (25F84) found every row bitwise
+`6d5c2aa` against `82e9b9e` on an M4 Mac mini / 24 GiB / macOS 26.5.2 (25F84) found every row bitwise
 identical for the 4B default and 9B opt-out: 8 prefill plus 192 rows each of step, verify and batch.
 For the 9B opt-in, step / verify / batch mean KL was 3.692e-4 / 3.767e-4 / 3.639e-4, each with 2/192
 top-1 flips; the prefill had 0/8 flips. These decode paths score the same token positions, not independent
-samples. [Current integration evidence and limits](../bench/results/2026-10-28-m4-9b-ane-current/README.md).
+samples. [Current integration evidence and limits](../bench/results/2026-10-29-m4-9b-ane-review/README.md).
 
 The opt-in deliberately changes outputs; no 9B noise-floor pass or `--reorder` exception is claimed.
 No floor or default is changed, and existing 4B/27B input segmentation remains 2560 channels.

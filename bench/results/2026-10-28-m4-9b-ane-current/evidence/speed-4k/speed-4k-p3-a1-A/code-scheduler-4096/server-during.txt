@@ -1,2 +1,0 @@
-[kapitsa] KFlash: 161 cycles, 8.00 rows per cycle; cycles by rows 8:161; tokens per cycle expected 3.720, got 3.733; rate 0.0569 tok/ms; cost ms by rows 8:65.99; calibration (alpha, beta) by depth (0.11, 0.91) (-0.17, 1.11) (0.06, 1.25) (-0.09, 0.71) (-0.86, 1.16) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
-[kapitsa] chat: prompt 4099 (cached 0) in 17733 ms (+9.9 ms template/tokenize; last chunk: encoded by 5816.6 ms, GPU start +5911.4 ms, GPU 6004.7 ms, wake +0.2 ms), 512 tokens in 9445 ms (54.1 tok/s), length, 3.87 tok/cycle, KFlash (DFlash2): 132 cycles

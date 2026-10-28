@@ -1,5 +1,0 @@
-{
-  "source": "$RUN/prompts/code-32768.ids",
-  "source_sha256": "93c27a9f8fc480bcd5df019bf2e541810fd51f3490cd99a25ad2baba012e87c6",
-  "prefix_tokens": 16384
-}

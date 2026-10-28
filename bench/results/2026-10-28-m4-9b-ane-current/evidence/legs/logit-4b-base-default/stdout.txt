@@ -1,5 +1,0 @@
-prefill 8 rows: next-token NLL 1.7539, top-1 = next token 0.6250 -> $RUN/dumps/4b-base-default/prefill
-step   192 rows: next-token NLL 0.6746, top-1 = next token 0.8333 -> $RUN/dumps/4b-base-default/step
-verify 192 rows: next-token NLL 0.6746, top-1 = next token 0.8333 -> $RUN/dumps/4b-base-default/verify
-batch  192 rows: next-token NLL 0.6747, top-1 = next token 0.8333 -> $RUN/dumps/4b-base-default/batch
-8 windows, 14848 prefilled tokens in 15.7 s; 23.4 s in all
