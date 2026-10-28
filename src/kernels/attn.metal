@@ -1714,7 +1714,10 @@ NI_INLINE void attn11_store_v(threadgroup half* vt, thread const uint4* r, uint 
 // MASK (attn_prefill11m, Qwen3.8-Flash-Next's sparse attention; BK = 32, not GQ): query t attends only to the keys
 // whose bit is set in its mask row (mask[t * mwords + key / 32]), causally; key tiles no query of the block selected
 // are skipped (tflag: 2 uints of threadgroup memory).
-template <uint BK, bool XS, bool SPLIT = false, bool GQ = false, bool RSKIP = false, bool MASK = false>
+// BIDI (attn_prefill11gs_bidi, Clover's denoising pass; GQ): every query of the pass attends to every key before
+// pos0 + T, its own block's later rows included (a causal prefix, the block bidirectional).
+template <uint BK, bool XS, bool SPLIT = false, bool GQ = false, bool RSKIP = false, bool MASK = false,
+          bool BIDI = false>
 NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc, const device half* vc,
                                    const device float* qg, device float* out, constant AttnPrefParams& p,
                                    uint2 tg, uint tid, uint sg, uint lane, threadgroup half* kv,
@@ -1738,7 +1741,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     t = r / G;
     h = kvh * G + r % G;
     qpos_rg = p.pos0 + (r0 + rg * 8) / G;
-    kend = p.pos0 + min((r0 + kBQ11 - 1) / G + 1, p.T);
+    kend = p.pos0 + (BIDI ? p.T : min((r0 + kBQ11 - 1) / G + 1, p.T));
   } else {
     h = tg.y;
     kvh = h / G;
@@ -1828,12 +1831,13 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     attn11_store_v<BK>(kv, r, tid);
 
     // online softmax on this lane's scores (row frow; the row's other lanes are lane^1, lane^8)
-    const bool diag = k0 + BK - 1 > qpos_rg;      // tile reaches past the row group's first query
+    // tile reaches past the row group's first query (BIDI: past the pass's last key)
+    const bool diag = BIDI ? k0 + BK > kend : k0 + BK - 1 > qpos_rg;
     float mx = kNeg11;
     NI_UNROLL for (uint c = 0; c < NC; ++c)
       NI_UNROLL for (uint i = 0; i < 2; ++i) {
         float v = s[c].thread_elements()[i] * M_LOG2E_F;
-        if (diag && k0 + c * 8 + fcol + i > qpos) v = kNeg11;
+        if (diag && k0 + c * 8 + fcol + i > (BIDI ? kend - 1 : qpos)) v = kNeg11;
         if (MASK && !((mword >> (c * 8 + fcol + i)) & 1u)) v = kNeg11;
         s[c].thread_elements()[i] = v;
         mx = max(mx, v);
@@ -1924,6 +1928,21 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   threadgroup float2 xs[1];
   attn_prefill11_impl<32, false, true, true, true>(q, kc, vc, qg, out, p, tg.xy, tid, sg, lane, (threadgroup half*)kvm,
                                                    xs, tg.z, nsplit, part_o, part_ml, nullptr, 0, nullptr, seg);
+}
+
+// attn_prefill11gs with the block bidirectional (BIDI): Clover's denoising pass, seg 0 (grid as attn_prefill11gs;
+// attn11_reduce combines the splits)
+[[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11gs_bidi(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
+    device float* part_o [[buffer(6)]], device float2* part_ml [[buffer(7)]], constant uint& nsplit [[buffer(8)]],
+    uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<32>() / 8];
+  threadgroup float2 xs[1];
+  attn_prefill11_impl<32, false, true, true, true, false, true>(q, kc, vc, qg, out, p, tg.xy, tid, sg, lane,
+                                                                (threadgroup half*)kvm, xs, tg.z, nsplit, part_o,
+                                                                part_ml);
 }
 
 // GQA-row form without the key split (grid (ceil(T*G/32), Hkv)).
