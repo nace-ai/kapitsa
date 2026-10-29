@@ -49,10 +49,10 @@ struct FfnConfig {
 
 class FfnSplit {
  public:
-  static constexpr uint32_t kUnit = 512, kSeg = 2560, kMaxRows = 2048;
-  // Prefer the existing 2560-channel segments; other multiples of 2048 use 2048-channel segments.
+  static constexpr uint32_t kUnit = 512, kSeg = 2560, kMaxRows = 2048, kMaxHidden = 8192;
+  // Up to kMaxHidden: prefer 2560-channel segments; other multiples of 2048 use 2048-channel segments.
   static uint32_t input_segment(uint32_t hidden);
-  // Rotation's simdgroups: <= 8 blocks each in ane_rotate, two passes above 8192; 0 = not supported.
+  // Rotation's simdgroups: <= 8 blocks each in ane_rotate; 0 = not supported.
   static uint32_t rotate_simdgroups(uint32_t hidden);
 
   // Allocates the surfaces, computes (or loads) the row scales, compiles/loads the program.

@@ -134,9 +134,10 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this 
 
 ## ANE prefill for hidden sizes divisible by 2048
 
-Hidden sizes divisible by 2048 are eligible for the existing W8A8 split by default; `NI_ANE=0` disables it.
+Hidden sizes divisible by 2048 up to 8192 are eligible for the existing W8A8 split by default;
+`NI_ANE=0` disables it. Larger widths remain on the GPU.
 The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
-and rotation stay unchanged. Wider inputs use two rotation passes to retain one scale over the whole token.
+and rotation stay unchanged. All supported inputs use the existing rotation kernel and its token-wide scale.
 
 At experimental commit `92e8b88`, on an M4 Pro 20-core GPU / 48 GiB /
 macOS 26.4.1 (25E253), 768 teacher-forced step rows against the same 4-bit GPU model gave mean KL

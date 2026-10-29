@@ -108,7 +108,7 @@ void check_pack(uint32_t D, uint32_t T) {
   struct RotP { uint32_t T, D; };
   struct PackP { uint32_t T, D, ch0, stride; };
   auto e = g.begin();
-  e->use(g.pipeline(D > 8192 ? "ane_rotate_wide" : "ane_rotate"));
+  e->use(g.pipeline("ane_rotate"));
   e->buf(0, input.data);
   e->buf(1, signs.data);
   e->buf(2, rotated.data);
@@ -228,11 +228,16 @@ int main(int argc, char** argv) {
       fprintf(stderr, "FAIL %s\n", what);
     }
   };
-  for (uint32_t n = 1; n <= 64; ++n) {
+  for (uint32_t n = 1; n <= 4; ++n) {
     const uint32_t h = n * 2048, segment = ane::FfnSplit::input_segment(h);
-    expect(segment == (h % 2560 == 0 ? 2560u : 2048u) && ane::FfnSplit::rotate_simdgroups(h) == 8,
-           "multiples of 2048 are eligible without an opt-in");
+    expect(segment == 2048 && ane::FfnSplit::rotate_simdgroups(h) == 8,
+           "multiples of 2048 through 8192 are eligible without an opt-in");
     expect(ane::split_bytes(h, 12288, 24, 32, 2) > 0, "eligible input has a split budget");
+  }
+  for (uint32_t h : {8193u, 10240u, 12288u, 16384u, 18432u, 20480u, 131072u, UINT32_MAX}) {
+    expect(ane::FfnSplit::input_segment(h) == 0, "width above 8192 has no input segments");
+    expect(ane::FfnSplit::rotate_simdgroups(h) == 0, "width above 8192 cannot dispatch rotation");
+    expect(ane::split_bytes(h, 12288, 24, 32, 2) == 0, "width above 8192 reserves no split memory");
   }
   for (uint32_t h : {0u, 128u, 2047u, 2049u, 3840u, 4095u, 4097u}) {
     expect(ane::FfnSplit::input_segment(h) == 0, "unsupported width remains excluded");
@@ -255,9 +260,9 @@ int main(int argc, char** argv) {
     }
     Gpu::get().compile();
     const int before = cases;
-    for (uint32_t d : {2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u, 12288u, 18432u})
+    for (uint32_t d : {2048u, 2560u, 4096u, 5120u, 6144u, 8192u})
       for (uint32_t n : {0u, 1u, 31u, 32u, 33u, 127u}) check_pack(d, n);
-    for (uint32_t d : {2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u, 12288u, 18432u})
+    for (uint32_t d : {2048u, 2560u, 4096u, 5120u, 6144u, 8192u})
       for (uint32_t n : {8u, 16u})
         for (uint32_t offset : {0u, 8u}) check_weights(d, n, offset);
     printf("GPU input segments: %d comparisons, %zu data/guard bytes checked, %d failures\n",

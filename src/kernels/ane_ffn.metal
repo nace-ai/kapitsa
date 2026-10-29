@@ -98,44 +98,6 @@ struct AneRotParams {
   if (sg == 0 && lane == 0) tx[row] = half(scale * kAneUnit);
 }
 
-// Hidden sizes above 8192 do not fit ane_rotate's eight blocks per simdgroup. Rotate twice:
-// first find the whole token's peak, then recompute each block and store it under that one scale.
-// No half scratch or per-segment scale is introduced; the existing narrow kernel stays unchanged.
-[[kernel]] void ane_rotate_wide(const device half* X [[buffer(0)]], const device float* sign [[buffer(1)]],
-                                device half* R [[buffer(2)]], device half* tx [[buffer(3)]],
-                                constant AneRotParams& p [[buffer(4)]], uint row [[threadgroup_position_in_grid]],
-                                uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
-                                uint nsg [[simdgroups_per_threadgroup]]) {
-  threadgroup float peaks[32];
-  if (row >= p.T) {
-    if (sg == 0 && lane == 0) tx[row] = half(0);
-    return;
-  }
-  const uint blocks = p.D / 128;
-  float peak = 0.0f;
-  for (uint blk = sg; blk < blocks; blk += nsg) {
-    const ulong base = ulong(row) * p.D + ulong(blk) * 128 + lane * 4;
-    const half4 h = *(const device half4*)(X + base);
-    float b[1][4] = {{float(h.x), float(h.y), float(h.z), float(h.w)}};
-    ane_rotate_block<1>(b, lane, sign);
-    for (uint e = 0; e < 4; ++e) peak = max(peak, fabs(b[0][e]));
-  }
-  peak = simd_max(peak);
-  if (lane == 0) peaks[sg] = peak;
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  peak = 0.0f;
-  for (uint g = 0; g < nsg; ++g) peak = max(peak, peaks[g]);
-  const float scale = max(peak, kAneFloor) / kAnePeak, inv = 1.0f / scale;
-  for (uint blk = sg; blk < blocks; blk += nsg) {
-    const ulong base = ulong(row) * p.D + ulong(blk) * 128 + lane * 4;
-    const half4 h = *(const device half4*)(X + base);
-    float b[1][4] = {{float(h.x), float(h.y), float(h.z), float(h.w)}};
-    ane_rotate_block<1>(b, lane, sign);
-    *(device half4*)(R + base) = half4(b[0][0] * inv, b[0][1] * inv, b[0][2] * inv, b[0][3] * inv);
-  }
-  if (sg == 0 && lane == 0) tx[row] = half(scale * kAneUnit);
-}
-
 // Rotated rows R[t][ch0 + c] (t < T; zeros for T <= t < tiles*32) -> int8 out[c][t] (channel-major,
 // `stride` bytes per channel). grid: (ceil(rows/32), channels/32) x (32, 8) threads.
 struct AnePackParams {

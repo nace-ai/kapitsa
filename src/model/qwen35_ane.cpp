@@ -1,7 +1,7 @@
 // GPU + Neural Engine split of the dense prefill FFN (NI_ANE). See src/ane/ffn_split.h.
 //
 //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
-//   Dense hidden sizes divisible by 2048 are eligible by default; NI_ANE=0 keeps the GPU-only path.
+//   Dense hidden sizes divisible by 2048 up to 8192 are eligible by default; NI_ANE=0 keeps the GPU-only path.
 //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
 //   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
 //   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
