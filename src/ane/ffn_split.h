@@ -123,7 +123,7 @@ class FfnSplit {
   std::vector<FfnLayer> layers_;
   uint32_t hidden_ = 0, inter_ = 0, units_ = 0, ane_ = 0, gpu_ = 0, min_rows_ = 0;
   uint32_t input_seg_ = kSeg;
-  uint32_t rot_sg_ = 8;  // rotation simdgroups; the wide kernel visits the 128-blocks in two passes
+  uint32_t rot_sg_ = 8;  // ane_rotate's simdgroups: they split the hidden's 128-blocks evenly, <= 8 each
   std::vector<uint32_t> dseg_, fn_rows_;
   struct Lane {
     std::vector<Surface> x;  // int8 [input_seg_][2048] per hidden segment
