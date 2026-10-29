@@ -106,6 +106,37 @@ for d, what in ((theirs, "a directory that is not a build"), (afile, "a file")):
         check(True, f"out: refuses {what}")
 check(open(os.path.join(theirs, "keep.txt")).read() == "user data", "out: the refused directory's files survive")
 
+def install_kflash(version):
+    """install.sh's build_kflash against a fake Splash `version` release; build.py replaced by a marker writer."""
+    src = open(os.path.join(HERE, "..", "install.sh")).read()
+    fn = re.search(r"^build_kflash\(\) \{\n.*?^\}\n", src, re.S | re.M).group(0)
+    t = tempfile.mkdtemp()
+    clone, root = os.path.join(t, "clone"), os.path.join(t, "Splash")
+    os.makedirs(os.path.join(clone, "packaging", "splash")); os.makedirs(os.path.join(root, "engine"))
+    with open(os.path.join(clone, "packaging", "splash", "pin.json"), "w") as f:
+        json.dump(pin, f)
+    with open(os.path.join(clone, "packaging", "splash", "build.py"), "w") as f:
+        f.write("import sys\nopen(%r, 'w').write(' '.join(sys.argv[1:]))\n" % os.path.join(t, "built"))
+    engine = os.path.join(root, "engine", "splash")
+    with open(engine, "w") as f:
+        f.write("#!/bin/sh\n")
+    os.chmod(engine, 0o755)
+    with open(os.path.join(root, "release.json"), "w") as f:
+        json.dump({"version": version}, f)
+    before = {n: open(os.path.join(d, n), "rb").read() for d, _, ns in os.walk(root) for n in ns}
+    p = subprocess.run(["bash", "-c", 'say() { printf "%s\\n" "$*"; }\n' + fn + 'build_kflash "$1"', "x", clone],
+                       capture_output=True, text=True, env=dict(os.environ, HOME=t, SPLASH_HOME=root))
+    after = {n: open(os.path.join(d, n), "rb").read() for d, _, ns in os.walk(root) for n in ns}
+    return p, os.path.exists(os.path.join(t, "built")), before == after
+
+
+p, built, same = install_kflash("1.5.0")
+check(p.returncode == 0 and not built and same, "install: a newer Splash release is left alone, not built", p.stdout + p.stderr)
+check("Splash 1.5.0 is installed" in p.stdout and "patches are for Splash " + pin["tag"] in p.stdout,
+      "install: says why KFlash was not built", p.stdout)
+p, built, same = install_kflash(pin["tag"])
+check(p.returncode == 0 and built and same, "install: the pinned release builds KFlash, its files untouched", p.stdout + p.stderr)
+
 if "--apply" in sys.argv[1:]:
     cache = os.environ.get("SPLASH_CACHE") or os.path.join(tempfile.mkdtemp(), "splash")
     p = subprocess.run([sys.executable, os.path.join(PKG, "build.py"), "--check", "--cache", cache],

@@ -83,6 +83,7 @@ struct EngineOptions {
   // output) are refused as invalid, never run elsewhere.
   std::string splash_model, splash_binary;
   std::vector<std::string> splash_args;
+  std::vector<std::string> splash_env;  // "NAME=value" for the child: KFlash's switches (splash::pick_engine), else none
   bool splash_conversation_salt = false;  // a cache_salt per conversation: requests share cached prompts only within one
   bool splash_persistent_cache = false;  // --persistent-cache on for the child (Splash's SSD cache across restarts)
 };

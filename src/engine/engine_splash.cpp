@@ -140,6 +140,7 @@ void Engine::init_splash() {
   splash::RuntimeOptions ro;
   ro.argv = {opts_.splash_binary, "serve-native", dir, opts_.context > 0 ? std::to_string(opts_.context) : "auto", "auto"};
   ro.argv.insert(ro.argv.end(), opts_.splash_args.begin(), opts_.splash_args.end());
+  ro.env = opts_.splash_env;
   {
     std::string note;
     const char* home = getenv("HOME");

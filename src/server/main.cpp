@@ -380,6 +380,8 @@ static void print_serve_help() {
          "                         --idle-release off is added, and --expert-memory sized from the memory free now when that is under ~38 GiB\n"
          "  --splash-persistent-cache  keep Splash's SSD prefix cache across restarts (--persistent-cache on, in ~/Library/Caches/Kapitsa/\n"
          "                         splash-prefix-cache/<model folder>; writes to your disk; default off)\n"
+         "  --splash-kflash auto|on|off  KFlash's Splash engine (Splash with Kapitsa's patches, packaging/splash/): auto (default) runs it for\n"
+         "                         the models measured faster with it when it is built and --splash-binary is not given; on for any model; off never\n"
          "  --splash-conversation-salt  a cache salt per conversation (its first user message): conversations no longer share cached\n"
          "                         prompts, such as a common system prompt (default off: one shared cache, as Splash without cache_salt)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
@@ -828,6 +830,8 @@ static int serve(int argc, char** argv, int first) {
   std::vector<std::string> split;  // --split: the stages' addresses, in the order of their layers
   int port = 8000;
   bool verbose = false, yes = false, allow_switch = false, priv = false, local = false, engine_splash = false, check_only = false;
+  std::string splash_kflash = "auto";  // --splash-kflash (splash::pick_engine)
+  std::string splash_found_binary;     // the stock engine given or found, which the next run starts from (splash.json)
   std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
@@ -851,6 +855,7 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--splash-arg") opt.splash_args.push_back(next());
     else if (a == "--splash-persistent-cache") opt.splash_persistent_cache = true;
     else if (a == "--splash-conversation-salt") opt.splash_conversation_salt = true;
+    else if (a == "--splash-kflash") splash_kflash = next();
     else if (a == "--check") check_only = true;
     else if (a == "--host") host = next();
     else if (a == "--port") port = to_int(a, next(), help);
@@ -918,11 +923,16 @@ static int serve(int argc, char** argv, int first) {
       const char* path = getenv("PATH");
       const splash::Check c = splash::check(home ? home : "", sh ? sh : "", path ? path : "", opt.splash_binary, opt.splash_model, last);
       fputs(c.text.c_str(), stdout);
+      const splash::KFlash kf = splash::find_kflash(hub::home_dir());
+      printf("\nKFlash engine: %s\n", kf.binary.empty() ? "not built (packaging/splash/README.md)" : kf.binary.c_str());
       return c.ok ? 0 : 1;
     }
+    if (splash_kflash != "auto" && splash_kflash != "on" && splash_kflash != "off")
+      usage_error("--splash-kflash must be auto, on or off", help);
     if (!opt.splash_binary.empty()) {  // the same rule as --check
       splash::Found f = splash::explicit_binary(opt.splash_binary);
       if (!f.ok()) usage_error(f.error, help);
+      splash_found_binary = opt.splash_binary;  // (given: pick_engine leaves it as it is unless --splash-kflash on)
     } else {
       const char* sh = getenv("SPLASH_HOME");
       const char* path = getenv("PATH");
@@ -939,11 +949,22 @@ static int serve(int argc, char** argv, int first) {
     }
     if (struct stat st2; stat(opt.splash_model.c_str(), &st2) != 0 || !S_ISDIR(st2.st_mode))
       usage_error("--splash-model " + opt.splash_model + " is not a folder", help);
+    {
+      const bool given = !splash_found_binary.empty();
+      splash_found_binary = opt.splash_binary;
+      const splash::KFlashMode mode = splash_kflash == "on" ? splash::KFlashMode::on
+                                      : splash_kflash == "off" ? splash::KFlashMode::off : splash::KFlashMode::automatic;
+      const splash::EnginePick pick = splash::pick_engine(mode, opt.splash_binary, given, splash::find_kflash(hub::home_dir()), opt.splash_model);
+      if (!pick.error.empty()) usage_error(pick.error, help);
+      if (!pick.note.empty()) fprintf(stderr, "kapitsa: %s\n", pick.note.c_str());
+      opt.splash_binary = pick.binary;
+      opt.splash_env = pick.env;
+    }
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";
-  } else if (!opt.splash_binary.empty() || !opt.splash_model.empty() || !opt.splash_args.empty() || opt.splash_persistent_cache || opt.splash_conversation_salt) {
-    usage_error("--splash-binary, --splash-model, --splash-arg, --splash-persistent-cache and --splash-conversation-salt need --engine splash", help);
+  } else if (!opt.splash_binary.empty() || !opt.splash_model.empty() || !opt.splash_args.empty() || opt.splash_persistent_cache || opt.splash_conversation_salt || splash_kflash != "auto") {
+    usage_error("--splash-binary, --splash-model, --splash-arg, --splash-persistent-cache, --splash-conversation-salt and --splash-kflash need --engine splash", help);
   }
   bool disk_asked = !opt.disk_cache.empty();  // --disk-cache or NI_DISK_CACHE given, not the default
   if (opt.disk_cache.empty()) {  // the SSD prefix cache: on by default for the server (NI_DISK_CACHE as the option)
@@ -1269,8 +1290,8 @@ static int serve(int argc, char** argv, int first) {
   }
   if (engine_splash) {  // (absolute: the next run may start in another folder)
     std::error_code abs_ec;
-    const std::filesystem::path bin = std::filesystem::absolute(opt.splash_binary, abs_ec);
-    splash::write_last(hub::home_dir() + "/splash.json", {abs_ec ? opt.splash_binary : bin.string(), opt.splash_model});
+    const std::filesystem::path bin = std::filesystem::absolute(splash_found_binary, abs_ec);
+    splash::write_last(hub::home_dir() + "/splash.json", {abs_ec ? splash_found_binary : bin.string(), opt.splash_model});
   }
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);

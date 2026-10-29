@@ -224,6 +224,51 @@ int main() {
   c = check(home, "", "", lbin, "", {lbin, res.string() + "/ffffff6666"}, none);
   check(c.ok && has(c.text, "/ffffff6666"), "check: the last run's model", c.text);
 
+  // KFlash: which build, which models by default, and what each --splash-kflash does
+  const std::string khome = (tmp / "khome").string();
+  check(find_kflash(khome).binary.empty(), "kflash: no engines folder");
+  const fs::path k1 = tmp / "khome/engines/splash-kflash-1.4.0-aaaaaaaaaaaa", k2 = tmp / "khome/engines/splash-kflash-1.4.0-bbbbbbbbbbbb";
+  exe(k1 / "engine/splash");
+  touch(k1 / "kernels/ksx_h1.metal");
+  check(find_kflash(khome).binary.empty(), "kflash: no kflash.json, not complete");
+  touch(k1 / "kflash.json", "{}");
+  exe(k2 / "engine/splash");
+  touch(k2 / "kernels/ksx_h1.metal");
+  touch(k2 / "kflash.json", "{}");
+  fs::last_write_time(k1 / "kflash.json", fs::file_time_type::clock::now() - std::chrono::hours(2));
+  KFlash kf = find_kflash(khome);
+  check(kf.binary == (k2 / "engine/splash").string() && kf.kernels == (k2 / "kernels").string(), "kflash: the newest build", kf.binary);
+  exe(tmp / "khome/engines/splash-other/engine/splash");  // not a KFlash build, whatever is in it
+  touch(tmp / "khome/engines/splash-other/kernels/ksx_h1.metal");
+  touch(tmp / "khome/engines/splash-other/kflash.json", "{}");
+  check(find_kflash(khome).binary == kf.binary, "kflash: only splash-kflash-* folders");
+
+  const std::string res2 = home + "/Library/Application Support/Splash/models/.resolved/";
+  model(home, "kfnext00001", "Qwen3.8-Flash-Next", true, "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0");
+  model(home, "kfnext00002", "Qwen3.8-Flash-Next", true, "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q4_0");
+  model(home, "kf27b000003", "Qwen3.8-27B", true, "nace-local/Qwen3.8-27B-4bit");
+  check(kflash_by_default(res2 + "kfnext00001"), "kflash default: Flash-Next Q2_0, the model the A/B measured");
+  check(!kflash_by_default(res2 + "kfnext00002"), "kflash default: not another quantization of it");
+  check(!kflash_by_default(res2 + "kf27b000003") && !kflash_by_default(res2 + "no-such"), "kflash default: not other models");
+
+  const std::string stock = (tmp / "root/engine/splash").string();
+  EnginePick p = pick_engine(KFlashMode::automatic, stock, false, kf, res2 + "kfnext00001");
+  check(p.binary == kf.binary && p.env.size() == 2 && p.env[0] == "SPLASH_KSX_H1=3" &&
+            p.env[1] == "SPLASH_KSX_KERNELS=" + kf.kernels && has(p.note, "--splash-kflash off") && p.error.empty(),
+        "pick auto: KFlash for the measured model", p.binary + p.note);
+  p = pick_engine(KFlashMode::automatic, stock, false, kf, res2 + "kf27b000003");
+  check(p.binary == stock && p.env.empty() && p.note.empty(), "pick auto: stock for another model", p.binary);
+  p = pick_engine(KFlashMode::automatic, stock, true, kf, res2 + "kfnext00001");
+  check(p.binary == stock && p.env.empty(), "pick auto: --splash-binary runs as given", p.binary);
+  p = pick_engine(KFlashMode::automatic, stock, false, {}, res2 + "kfnext00001");
+  check(p.binary == stock && p.env.empty() && has(p.note, "not built") && p.error.empty(), "pick auto: no build, stock and a note", p.note);
+  p = pick_engine(KFlashMode::on, stock, false, kf, res2 + "kf27b000003");
+  check(p.binary == kf.binary && p.env.size() == 2, "pick on: any model", p.binary);
+  check(!pick_engine(KFlashMode::on, stock, false, {}, res2 + "kfnext00001").error.empty(), "pick on: no build is an error");
+  check(!pick_engine(KFlashMode::on, stock, true, kf, res2 + "kfnext00001").error.empty(), "pick on: with --splash-binary is an error");
+  p = pick_engine(KFlashMode::off, stock, false, kf, res2 + "kfnext00001");
+  check(p.binary == stock && p.env.empty() && p.note.empty(), "pick off: stock", p.binary);
+
   fs::remove_all(tmp);
   if (failures) return 1;
   printf("splash_discover_test: ok\n");

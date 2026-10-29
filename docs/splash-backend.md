@@ -65,6 +65,31 @@ binary and model to `<kapitsa home>/splash.json` (`$KAPITSA_HOME`, else `~/.cach
 prints the binary and model that would run and what is missing, starts nothing and writes nothing; it exits 0 when ready and
 1 when not. When nothing is found the error says where it looked and which flag to give.
 
+## KFlash
+
+`packaging/splash/` keeps Kapitsa's changes to Splash as patches against one pinned Splash release, and `build.py`
+builds the patched engine into `<kapitsa home>/engines/splash-kflash-<tag>-<id>/` ([its README](../packaging/splash/README.md)).
+The patches are off unless the child's environment turns them on, so the same binary runs as stock Splash without it.
+`kapitsa serve --engine splash` picks the engine (`src/splash/discover.h`, `pick_engine`):
+
+- `--splash-kflash auto` (default): the KFlash build, with `SPLASH_KSX_H1=3` and `SPLASH_KSX_KERNELS`, for the models
+  below, when it is built and `--splash-binary` is not given. Any other model, or no build, runs stock Splash.
+- `on`: the KFlash build for any model. `off`: stock Splash.
+
+| Model (Splash source) | KFlash vs stock Splash 1.4.0 | Run |
+|---|---|---|
+| `ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0` | score 1.064 (95% LB 1.036); decode 1.118x (66.0 → 76.0 and 58.1 → 66.0 tok/s on the two prompts); 4K prefill 1.014x (1,264 → 1,288 tok/s); 16K prefill level (1,259 / 1,260) | M5 Pro 48 GB, macOS 26.5.2 (25F84), KFlash `92a5dfed` against the 1.4.0 release `20b36bcc`, both at `--expert-memory 20G --idle-release off`, 29 Oct 2026 |
+
+The measurement: `kapitsa serve --engine splash` with each engine, 8 legs per arm in the order S K K S S K K S, each leg
+2 decode prompts × 3 runs at temperature 0 (256 tokens), 2 cold 4K prompts and a cold 16K one. The score is the geometric
+mean of the decode and 4K prefill ratios, and LB its 95% lower bound. Against the Splash 1.5.0 release (`bf5c552b`),
+interleaved with the same run, KFlash scores 1.040 (LB 1.012, a marginal win): decode 1.109x, but its 4K prefill is 2.4%
+slower than 1.5.0's (1,265 against 1,303 tok/s). That release was built with macOS SDK 27.0 and KFlash with SDK 26.5.
+
+Outputs: under fixed verify rows (`--verify-rows all`) KFlash's temperature-0 outputs equal stock 1.4.0's on 6 prompts
+× 20 runs, and Splash's `teacher_logits` reads every logit row bitwise identical to stock's. Under Splash's automatic
+verify rows the row count follows measured timing, so neither engine's output is fixed from run to run at near-ties.
+
 ## The template
 
 Kapitsa's `flash-next-q20/chat_template.jinja` and Splash's resolved `tokenizer/chat_template.jinja` are not the same file

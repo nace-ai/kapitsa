@@ -57,4 +57,28 @@ Check check(const std::string& home, const std::string& splash_home, const std::
             const std::string& model, const Last& last,
             const std::vector<std::string>& system_roots = {"/Applications/Splash"});
 
+// KFlash's Splash engine: Splash with Kapitsa's patches (packaging/splash/README.md), which packaging/splash/build.py builds
+// into <kapitsa home>/engines/splash-kflash-<tag>-<id>/ (engine/splash, kernels/ksx_h1.metal, kflash.json). The patches are
+// off unless the child's environment turns them on (SPLASH_KSX_H1=3, SPLASH_KSX_KERNELS=<build>/kernels).
+struct KFlash {
+  std::string binary, kernels;  // empty when there is no complete build
+};
+// The most recently built complete one there (by its kflash.json's time).
+KFlash find_kflash(const std::string& kapitsa_home);
+
+// The resolved models KFlash runs by default: the ones an interleaved A/B against stock Splash measured faster on this
+// kind of Mac (docs/splash-backend.md lists them with the run). Matched on model.json's "model" (the source), exactly.
+bool kflash_by_default(const std::string& model_folder);
+
+// --splash-kflash: auto runs KFlash for kflash_by_default's models when a build is there and no --splash-binary was given;
+// on runs it for any model (an error when there is no build, or with --splash-binary); off never.
+enum class KFlashMode { automatic, on, off };
+struct EnginePick {
+  std::string binary;            // what to start: the KFlash build's engine, else `binary` as given or found
+  std::vector<std::string> env;  // "NAME=value" for the child: empty for stock Splash
+  std::string note, error;       // note: which engine and why (print it); error: why `on` cannot be honoured
+};
+EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_given, const KFlash& kflash,
+                       const std::string& model_folder);
+
 }  // namespace ni::splash

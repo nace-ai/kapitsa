@@ -230,6 +230,27 @@ install_kapitsa() {
   say "  $run --help       # models and commands"
 }
 
+# KFlash's Splash engine (packaging/splash/README.md), from a clone: built when the Splash release its patches are pinned
+# to is installed where `kapitsa serve --engine splash` looks for it. Kapitsa is installed either way; a build that fails
+# says why and how to retry, and serve then runs stock Splash.
+build_kflash() {
+  local root want got
+  want=$(sed -n 's/.*"tag": *"\([^"]*\)".*/\1/p' "$1/packaging/splash/pin.json")
+  for root in "${SPLASH_HOME:-}" "$HOME/Applications/Splash" /Applications/Splash "$HOME/Splash"; do
+    [ -n "$root" ] && [ -f "$root/release.json" ] && [ -x "$root/engine/splash" ] || continue
+    got=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$root/release.json")
+    if [ "$got" != "$want" ]; then
+      say "KFlash: not built. Splash $got is installed in $root and KFlash's patches are for Splash $want only;"
+      say "  stock Splash $got runs, and nothing in $root was changed."
+      return 0
+    fi
+    say "Building KFlash's Splash engine against $root (packaging/splash/build.py)..."
+    if python3 "$1/packaging/splash/build.py" --release "$root"; then return 0; fi
+    say "KFlash: the build failed (above); stock Splash runs. Retry: python3 $1/packaging/splash/build.py --release $root"
+    return 0
+  done
+}
+
 main() {
   prefix="" yes=0 mode="" from_file="" version="${KAPITSA_VERSION:-}" clone=""
   while [ $# -gt 0 ]; do
@@ -265,6 +286,7 @@ main() {
   if [ "$mode" = source ]; then
     build_from_source
     install_kapitsa "$clone/build/kapitsa" "$clone" "$clone/build/systemone" "$clone/tools/drex_pointer.py"
+    build_kflash "$clone"
   else
     KAPITSA_TMP="$(mktemp -d -t kapitsa-install)"
     trap 'rm -rf "$KAPITSA_TMP"' EXIT

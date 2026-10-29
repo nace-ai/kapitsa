@@ -219,4 +219,60 @@ Check check(const std::string& home, const std::string& splash_home, const std::
   return out;
 }
 
+KFlash find_kflash(const std::string& kapitsa_home) {
+  KFlash best;
+  fs::file_time_type newest{};
+  std::error_code ec;
+  for (fs::directory_iterator it(fs::path(kapitsa_home) / "engines", ec), end; !ec && it != end; it.increment(ec)) {
+    const fs::path& d = it->path();
+    if (d.filename().string().rfind("splash-kflash-", 0) != 0) continue;
+    // complete: build.py writes kflash.json last, after the engine and the kernels
+    if (!is_executable_file(d / "engine/splash") || !is_file(d / "kernels/ksx_h1.metal") || !is_file(d / "kflash.json")) continue;
+    std::error_code tec;
+    const auto t = fs::last_write_time(d / "kflash.json", tec);
+    if (tec || (!best.binary.empty() && t <= newest)) continue;
+    newest = t;
+    best = {(d / "engine/splash").string(), (d / "kernels").string()};
+  }
+  return best;
+}
+
+bool kflash_by_default(const std::string& model_folder) {
+  // Qwen3.8-Flash-Next Q2_0: score 1.064 (95% LB 1.036), decode 1.118x stock Splash 1.4.0, M5 Pro 48 GB
+  // (docs/splash-backend.md#kflash). A model joins this list only after its own interleaved A/B and output check.
+  static const char* const measured[] = {"ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0"};
+  std::ifstream f(fs::path(model_folder) / "model.json");
+  const auto j = nlohmann::json::parse(f, nullptr, false);
+  if (!j.is_object() || !j.contains("model") || !j["model"].is_string()) return false;
+  const std::string source = j["model"].get<std::string>();
+  return std::find(std::begin(measured), std::end(measured), source) != std::end(measured);
+}
+
+EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_given, const KFlash& kflash,
+                       const std::string& model_folder) {
+  EnginePick out{binary, {}, "", ""};
+  const char* build = "python3 packaging/splash/build.py --release <Splash 1.4.0 folder> (packaging/splash/README.md)";
+  if (mode == KFlashMode::off) return out;
+  if (mode == KFlashMode::on && binary_given) {
+    out.error = "--splash-kflash on runs the KFlash build, not --splash-binary: drop one of them";
+    return out;
+  }
+  if (mode == KFlashMode::on && kflash.binary.empty()) {
+    out.error = std::string("--splash-kflash on: no KFlash engine is built; build it with ") + build;
+    return out;
+  }
+  if (mode == KFlashMode::automatic) {
+    if (binary_given || !kflash_by_default(model_folder)) return out;
+    if (kflash.binary.empty()) {
+      out.note = std::string("stock Splash: KFlash runs this model faster, but its engine is not built (") + build + ")";
+      return out;
+    }
+  }
+  out.binary = kflash.binary;
+  out.env = {"SPLASH_KSX_H1=3", "SPLASH_KSX_KERNELS=" + kflash.kernels};
+  out.note = "KFlash engine " + kflash.binary + (mode == KFlashMode::on ? " (--splash-kflash on)"
+                                                                         : " (measured faster for this model; --splash-kflash off runs stock Splash)");
+  return out;
+}
+
 }  // namespace ni::splash
