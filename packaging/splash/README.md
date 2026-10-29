@@ -45,8 +45,9 @@ python3 tests/test_splash_patches.py --apply                           # the CPU
 
 The build takes the release's metallibs (checked against `pin.json`) and compiles only the host code. Stock Splash
 1.4.0 built this way reproduces the release binary byte for byte (sha256 `20b36bcc…`) with Xcode 26.5's SDK. So the
-KFlash binary differs from Splash's release by the patches alone. A different SDK builds a different binary. When
-`pin.json`'s `kflash_binary_sha256` is set and the build does not match it, `build.py` warns.
+KFlash binary differs from Splash's release by the patches alone. A different SDK builds a different binary.
+`pin.json`'s `kflash_binary_sha256` is the binary the output check and the A/B measured (`92a5dfed…`, Xcode 26.5's
+SDK); a build that does not match it gets a warning from `build.py`, and is a binary nobody measured.
 
 ## Moving to a new Splash release
 

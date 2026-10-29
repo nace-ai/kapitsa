@@ -62,6 +62,7 @@ Check check(const std::string& home, const std::string& splash_home, const std::
 // off unless the child's environment turns them on (SPLASH_KSX_H1=3, SPLASH_KSX_KERNELS=<build>/kernels).
 struct KFlash {
   std::string binary, kernels;  // empty when there is no complete build
+  std::string tag;              // the Splash release its patches are on (kflash.json's "splash_tag")
 };
 // The most recently built complete one there (by its kflash.json's time).
 KFlash find_kflash(const std::string& kapitsa_home);
@@ -70,8 +71,12 @@ KFlash find_kflash(const std::string& kapitsa_home);
 // kind of Mac (docs/splash-backend.md lists them with the run). Matched on model.json's "model" (the source), exactly.
 bool kflash_by_default(const std::string& model_folder);
 
-// --splash-kflash: auto runs KFlash for kflash_by_default's models when a build is there and no --splash-binary was given;
-// on runs it for any model (an error when there is no build, or with --splash-binary); off never.
+// The release of the Splash engine at `binary` (<release>/engine/splash): release.json's "version" next to it, else "".
+std::string release_version(const std::string& binary);
+
+// --splash-kflash: auto runs KFlash for kflash_by_default's models when a build is there, no --splash-binary was given
+// and the stock engine it would replace is the release KFlash is built on (the A/B measured it only against that one:
+// against a newer Splash it may be slower, so auto keeps the newer stock engine and says so); on runs it for any model (an error when there is no build, or with --splash-binary); off never.
 enum class KFlashMode { automatic, on, off };
 struct EnginePick {
   std::string binary;            // what to start: the KFlash build's engine, else `binary` as given or found

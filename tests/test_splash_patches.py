@@ -26,7 +26,7 @@ with open(os.path.join(PKG, "pin.json")) as f:
     pin = json.load(f)
 check(pin["repo"] == "https://github.com/incoai/splash.git", "pin: upstream Splash", pin["repo"])
 check(re.fullmatch(r"[0-9a-f]{40}", pin["commit"]) is not None, "pin: full commit hash", pin["commit"])
-for k in ("release_binary_sha256", "release_metallib_sha256", "release_host_step_metallib_sha256"):
+for k in ("release_binary_sha256", "release_metallib_sha256", "release_host_step_metallib_sha256", "kflash_binary_sha256"):
     check(re.fullmatch(r"[0-9a-f]{64}", pin[k]) is not None, f"pin: {k}", pin[k])
 
 PATCHES = sorted(n for n in os.listdir(os.path.join(PKG, "patches")) if n.endswith(".patch"))

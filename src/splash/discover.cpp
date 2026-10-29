@@ -232,9 +232,18 @@ KFlash find_kflash(const std::string& kapitsa_home) {
     const auto t = fs::last_write_time(d / "kflash.json", tec);
     if (tec || (!best.binary.empty() && t <= newest)) continue;
     newest = t;
-    best = {(d / "engine/splash").string(), (d / "kernels").string()};
+    std::ifstream f(d / "kflash.json");
+    const auto j = nlohmann::json::parse(f, nullptr, false);
+    const bool tagged = j.is_object() && j.contains("splash_tag") && j["splash_tag"].is_string();
+    best = {(d / "engine/splash").string(), (d / "kernels").string(), tagged ? j["splash_tag"].get<std::string>() : ""};
   }
   return best;
+}
+
+std::string release_version(const std::string& binary) {
+  std::ifstream f(fs::path(binary).parent_path().parent_path() / "release.json");
+  const auto j = nlohmann::json::parse(f, nullptr, false);
+  return j.is_object() && j.contains("version") && j["version"].is_string() ? j["version"].get<std::string>() : "";
 }
 
 bool kflash_by_default(const std::string& model_folder) {
@@ -265,6 +274,13 @@ EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_g
     if (binary_given || !kflash_by_default(model_folder)) return out;
     if (kflash.binary.empty()) {
       out.note = std::string("stock Splash: KFlash runs this model faster, but its engine is not built (") + build + ")";
+      return out;
+    }
+    const std::string v = release_version(binary);
+    if (kflash.tag.empty() || v != kflash.tag) {
+      out.note = "stock Splash " + (v.empty() ? std::string("(release unknown)") : v) + ": KFlash is built on Splash " +
+                 (kflash.tag.empty() ? std::string("(unknown)") : kflash.tag) +
+                 " and measured faster only against that release; --splash-kflash on runs it anyway";
       return out;
     }
   }

@@ -231,13 +231,14 @@ int main() {
   exe(k1 / "engine/splash");
   touch(k1 / "kernels/ksx_h1.metal");
   check(find_kflash(khome).binary.empty(), "kflash: no kflash.json, not complete");
-  touch(k1 / "kflash.json", "{}");
+  touch(k1 / "kflash.json", R"({"splash_tag": "1.4.0"})");
   exe(k2 / "engine/splash");
   touch(k2 / "kernels/ksx_h1.metal");
-  touch(k2 / "kflash.json", "{}");
+  touch(k2 / "kflash.json", R"({"splash_tag": "1.4.0"})");
   fs::last_write_time(k1 / "kflash.json", fs::file_time_type::clock::now() - std::chrono::hours(2));
   KFlash kf = find_kflash(khome);
-  check(kf.binary == (k2 / "engine/splash").string() && kf.kernels == (k2 / "kernels").string(), "kflash: the newest build", kf.binary);
+  check(kf.binary == (k2 / "engine/splash").string() && kf.kernels == (k2 / "kernels").string() && kf.tag == "1.4.0",
+        "kflash: the newest build, and the Splash release it is on", kf.binary + " " + kf.tag);
   exe(tmp / "khome/engines/splash-other/engine/splash");  // not a KFlash build, whatever is in it
   touch(tmp / "khome/engines/splash-other/kernels/ksx_h1.metal");
   touch(tmp / "khome/engines/splash-other/kflash.json", "{}");
@@ -252,6 +253,9 @@ int main() {
   check(!kflash_by_default(res2 + "kf27b000003") && !kflash_by_default(res2 + "no-such"), "kflash default: not other models");
 
   const std::string stock = (tmp / "root/engine/splash").string();
+  check(release_version(stock).empty(), "release version: no release.json, none");
+  touch(tmp / "root/release.json", R"({"version": "1.4.0", "binary_sha256": "x"})");
+  check(release_version(stock) == "1.4.0", "release version: release.json next to engine/", release_version(stock));
   EnginePick p = pick_engine(KFlashMode::automatic, stock, false, kf, res2 + "kfnext00001");
   check(p.binary == kf.binary && p.env.size() == 2 && p.env[0] == "SPLASH_KSX_H1=3" &&
             p.env[1] == "SPLASH_KSX_KERNELS=" + kf.kernels && has(p.note, "--splash-kflash off") && p.error.empty(),
@@ -262,6 +266,18 @@ int main() {
   check(p.binary == stock && p.env.empty(), "pick auto: --splash-binary runs as given", p.binary);
   p = pick_engine(KFlashMode::automatic, stock, false, {}, res2 + "kfnext00001");
   check(p.binary == stock && p.env.empty() && has(p.note, "not built") && p.error.empty(), "pick auto: no build, stock and a note", p.note);
+  touch(tmp / "root/release.json", R"({"version": "1.5.0"})");  // Splash upgraded past the release KFlash is built on
+  p = pick_engine(KFlashMode::automatic, stock, false, kf, res2 + "kfnext00001");
+  check(p.binary == stock && p.env.empty() && has(p.note, "stock Splash 1.5.0") && has(p.note, "built on Splash 1.4.0") && p.error.empty(),
+        "pick auto: a newer stock Splash is kept, with a note", p.note);
+  p = pick_engine(KFlashMode::on, stock, false, kf, res2 + "kfnext00001");
+  check(p.binary == kf.binary && p.env.size() == 2, "pick on: KFlash whatever the stock release", p.binary);
+  fs::remove(tmp / "root/release.json");
+  p = pick_engine(KFlashMode::automatic, stock, false, kf, res2 + "kfnext00001");
+  check(p.binary == stock && p.env.empty() && has(p.note, "release unknown"), "pick auto: stock of no known release is kept", p.note);
+  touch(tmp / "root/release.json", R"({"version": "1.4.0"})");
+  p = pick_engine(KFlashMode::automatic, stock, false, KFlash{kf.binary, kf.kernels, ""}, res2 + "kfnext00001");
+  check(p.binary == stock && p.env.empty(), "pick auto: a build that names no release is not run by default", p.note);
   p = pick_engine(KFlashMode::on, stock, false, kf, res2 + "kf27b000003");
   check(p.binary == kf.binary && p.env.size() == 2, "pick on: any model", p.binary);
   check(!pick_engine(KFlashMode::on, stock, false, {}, res2 + "kfnext00001").error.empty(), "pick on: no build is an error");

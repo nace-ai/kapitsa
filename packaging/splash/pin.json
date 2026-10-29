@@ -5,5 +5,5 @@
   "release_binary_sha256": "20b36bcc051145b425403dee7489d06cdbb5060460dfdb2e0cfc8d49cebfc29f",
   "release_metallib_sha256": "e30124e8bceba1a9de7afe75cf1a10439bcfa5c1b777490c829ba4da0d0cd1cd",
   "release_host_step_metallib_sha256": "8e177c753e2051cd8a31c79bf031b3fae8daf04f5564ced9fc37db064bdfe51a",
-  "kflash_binary_sha256": ""
+  "kflash_binary_sha256": "92a5dfedbe67b1574d1b50f499128c9dc7b4fcd799b00823d6ae07d2c2957ca3"
 }

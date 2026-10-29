@@ -73,7 +73,9 @@ The patches are off unless the child's environment turns them on, so the same bi
 `kapitsa serve --engine splash` picks the engine (`src/splash/discover.h`, `pick_engine`):
 
 - `--splash-kflash auto` (default): the KFlash build, with `SPLASH_KSX_H1=3` and `SPLASH_KSX_KERNELS`, for the models
-  below, when it is built and `--splash-binary` is not given. Any other model, or no build, runs stock Splash.
+  below, when it is built, `--splash-binary` is not given and the stock engine it replaces is the release KFlash is
+  built on (its `release.json` says 1.4.0). Any other model, no build, or a newer Splash (1.5.0, say) runs stock Splash,
+  and `kapitsa serve` prints why.
 - `on`: the KFlash build for any model. `off`: stock Splash.
 
 | Model (Splash source) | KFlash vs stock Splash 1.4.0 | Run |
