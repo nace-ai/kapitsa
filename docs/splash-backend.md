@@ -82,7 +82,8 @@ The patches are off unless the child's environment turns them on, so the same bi
 |---|---|---|
 | `ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0` | score 1.064 (95% LB 1.036); decode 1.118x (66.0 → 76.0 and 58.1 → 66.0 tok/s on the two prompts); 4K prefill 1.014x (1,264 → 1,288 tok/s); 16K prefill level (1,259 / 1,260) | M5 Pro 48 GB, macOS 26.5.2 (25F84), KFlash `92a5dfed` against the 1.4.0 release `20b36bcc`, both at `--expert-memory 20G --idle-release off`, 29 Oct 2026 |
 
-The measurement: `kapitsa serve --engine splash` with each engine, 8 legs per arm in the order S K K S S K K S, each leg
+The measurement: `kapitsa serve --engine splash` with each engine at `--expert-memory 20G` (a default run sizes the
+expert cache from the memory free, and no leg ran at that auto size), 8 legs per arm in the order S K K S S K K S, each leg
 2 decode prompts × 3 runs at temperature 0 (256 tokens), 2 cold 4K prompts and a cold 16K one. The score is the geometric
 mean of the decode and 4K prefill ratios, and LB its 95% lower bound. Against the Splash 1.5.0 release (`bf5c552b`),
 interleaved with the same run, KFlash scores 1.040 (LB 1.012, a marginal win): decode 1.109x, but its 4K prefill is 2.4%

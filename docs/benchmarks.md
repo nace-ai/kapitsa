@@ -217,7 +217,7 @@ cells are newer.
   run is an auto-size result. Ollama and LM Studio were not run on the pack, and the MLX engines have no pack of this
   model that fits 48 GB. Nothing here is re-measured from the 2026-10-24 bench.
   **KFlash**, Kapitsa's patches to Splash 1.4.0 ([splash-backend.md](splash-backend.md#kflash)), which `--engine splash`
-  runs for this model once built, is not in this row: in its own interleaved A/B on this Mac (29 Oct 2026) it read decode
+  runs for this model once built, is not in this row: in its own interleaved A/B on this Mac (29 Oct 2026, both engines at `--expert-memory 20G`) it read decode
   1.118x and 4K prefill 1.014x stock Splash 1.4.0 (score 1.064, LB 1.036), and against the Splash 1.5.0 release a
   marginal 1.040 (LB 1.012), with 4K prefill 2.4% slower than 1.5.0's (1.5.0 built with macOS SDK 27.0, KFlash 26.5).
 - **Flint:** see [Flint on the M5 Pro](#recursive-flint-40b-a25b-m5-pro-2026-10-22).
