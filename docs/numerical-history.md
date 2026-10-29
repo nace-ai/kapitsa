@@ -148,7 +148,7 @@ Those GPU data are pinned to the earlier experimental commit. A fresh integratio
 identical for the 4B default and 9B opt-out: 8 prefill plus 192 rows each of step, verify and batch.
 For the 9B opt-in, step / verify / batch mean KL was 3.692e-4 / 3.767e-4 / 3.639e-4, each with 2/192
 top-1 flips; the prefill had 0/8 flips. These decode paths score the same token positions, not independent
-samples. [Current integration evidence and limits](../bench/results/2026-10-29-m4-9b-ane-review/README.md).
+samples. [Integration evidence at those commits and limits](../bench/results/2026-10-29-m4-9b-ane-review/README.md).
 
 The opt-in deliberately changes outputs; no 9B noise-floor pass or `--reorder` exception is claimed.
 No floor or default is changed, and existing 4B/27B input segmentation remains 2560 channels.
