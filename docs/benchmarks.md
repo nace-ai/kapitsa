@@ -46,6 +46,22 @@ runs' saved text (`finish=length` on all 10 answers, each cut off at the 512-tok
 
 ## How we measure
 
+**Reading the poster.** Each cell is prefill / decode in tokens per second. Grey is the cell's share of the fastest
+decode in its row, and the small type under a number is the decoding method (none: no speculative decoding). Where
+the two numbers print at one size, both matter. A blue outline marks a decode faster than Kapitsa's, an orange bar a
+row where Kapitsa is not alone at the fastest decode, and ≈ a decode tie with Kapitsa (the gap is inside the runs'
+spread). The numbers come from [bench/results](../bench/results/), with llama.cpp b11804 for Flint 4-bit and the M3 Pro
+and d772569 for 2-bit.
+
+**× means the engine cannot run that model on that Mac.** Splash runs only the Qwen3.8 27B, the Qwen3.6 35B-A3B and
+Flash-Next Q2_0, and rec runs only Flint. No other engine runs Clover on a Mac, because DiffuSpace's SGLang needs CUDA.
+The M3 Pro is on macOS 14.1, and Splash needs 26.4, mlx-serve 26.2 and oMLX 15. **—** means not measured; before the
+slash it means no prefill run for that engine.
+
+**The M5 Pro's Flash-Next 180B Q2 row** streams Splash's Q2_0 experts from the SSD. Kapitsa there is its server on
+Splash's engine, and the row's cells are that run's protocol (a 256-token answer at T 0, rate from first token to
+last, [#751](https://github.com/nace-ai/kapitsa/pull/751)), not the 512-token one at T 0.6 used everywhere else.
+
 The [harness](../bench/harness/README.md) starts an engine's server, warms it up, waits for a quiet GPU and talks to it
 over its OpenAI-compatible API, as a coding agent does. `kapitsa bench` runs the same protocol from the binary.
 

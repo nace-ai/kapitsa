@@ -27,9 +27,9 @@
   ],
   "footer": [
    "Grey: share of the fastest decode in that row · small type: the decoding method (none: no speculative decoding) · the first number is prefill, the second decode (same size: both matter)",
-   "× can't run that model on that Mac (Splash: only the Qwen3.8 27B, Qwen3.6 35B-A3B and Flash-Next Q2_0; rec: only Flint; Clover: no other engine runs it on a Mac, DiffuSpace's SGLang needs CUDA; the M3 Pro is on macOS 14.1: Splash needs 26.4, mlx-serve 26.2, oMLX 15) · — not measured (before the slash: no prefill run for that engine)",
+   "× can't run that model on that Mac · — not measured (before the slash: no prefill run for that engine)",
    "The numbers come from bench/results (llama.cpp b11804 for Flint 4-bit and the M3 Pro, d772569 for 2-bit)",
-  "The M5 Pro's Flash-Next 180B Q2 row streams Splash's Q2_0 experts from the SSD: Kapitsa there is its server on Splash's engine, and the row's cells are that run's protocol (a 256-token answer at T 0, rate from first token to last, PR #751), not the 512-token one at T 0.6 here"
+  "The M5 Pro's Flash-Next 180B Q2 row: Kapitsa's server on Splash's engine, a 256-token answer at T 0 (PR #751), not the 512-token one at T 0.6"
   ],
   "macs": [
    {

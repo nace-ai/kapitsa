@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -240,6 +241,7 @@ KW_PRE = 296                        # Kapitsa's column when it shows 'prefill / 
 TILE, TILE_Y = 70, 202              # logo tiles
 PANELS_Y, HEAD, PAD, GAP = 372, 74, 14, 30
 FOOT_GAP, FOOT_LINE, FOOT_PAD = 44, 32, 30
+F_FOOT, FOOT_EM = 22, 0.5             # footer type size, and its widest average character in em (a wrap guard)
 RH_MIN, RH_MAX = 88, 150
 F_MODEL, F_VAL, F_KVAL, F_UNIT, F_METH, F_KMETH, F_DASH = 32, 42, 44, 25, 20, 21, 28
 F_CCOMB = 25                        # the other engines' 'prefill / decode'
@@ -349,6 +351,8 @@ def poster(data, theme):
     footer = list(P["footer"]) + (["Blue outline: faster decode than Kapitsa · orange bar: rows where Kapitsa isn't alone at the fastest decode"
                                    + (" · ≈: a decode tie with Kapitsa (the gap is inside the runs' spread)" if tied else "")]
                                   if beaten or tied else [])
+    per_line = int((W - 2 * 44) / (F_FOOT * FOOT_EM))   # a longer line wraps: the SVG clips at its edge
+    footer = [w for line in footer for w in textwrap.wrap(line, per_line, break_long_words=False)]
     foot_h = FOOT_GAP + len(footer) * FOOT_LINE + FOOT_PAD
     chrome = PANELS_Y + len(P["macs"]) * (HEAD + PAD) + (len(P["macs"]) - 1) * GAP + foot_h
     rh = min(RH_MAX, (H - chrome) // len(rows))
@@ -363,7 +367,7 @@ def poster(data, theme):
     o.append(text(122, 84, P["title"], "serif", 52, t["ink"]))
     o.append(text(44, 128, P["legend"], "sans-b", 29, t["ink"]))      # bold: what every cell reads
     for i, s in enumerate(P["subtitle"]):
-        o.append(text(44, 162 + 28 * i, s, "sans", 22, t["ink2"]))
+        o.append(text(44, 162 + 28 * i, s, "sans", F_FOOT, t["ink2"]))
 
     for j, e in enumerate(engines):           # one header for every Mac: logo, name, method if it's the same everywhere
         cx, cw = colx[j]

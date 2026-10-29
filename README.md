@@ -29,12 +29,17 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 Kapitsa has the fastest decode in 32 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
+<details>
+<summary><b>The poster: prefill / decode for every model on five Macs</b></summary>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
   <img alt="Poster of prefill / decode speed for Kapitsa and nine other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro, M3 Pro and M1 Pro; the numbers are in the poster and in the Models section's tables" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer at T 0.6 (Flint at its card's T 1.0). The M5 Pro's Flash-Next 180B Q2 row is a 256-token answer at T 0, counted from the first token to the last, on that run's own 4,074-token prompt, and its Kapitsa column is Kapitsa's server on Splash's engine ([record](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)). × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
+<sub>Each cell reads prefill / decode in tokens per second, from a 4K-token prompt and a 512-token answer at T 0.6 (Flint at its card's T 1.0). The M5 Pro's Flash-Next 180B Q2 row is a 256-token answer at T 0 on that run's own 4,074-token prompt, and its Kapitsa column is Kapitsa's server on Splash's engine ([record](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)). Footnotes, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
+
+</details>
 
 The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
