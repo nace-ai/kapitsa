@@ -219,7 +219,7 @@ cells are newer.
   **KFlash**, Kapitsa's patches to Splash 1.4.0 ([splash-backend.md](splash-backend.md#kflash)), which `--engine splash`
   runs for this model once built, is not in this row: in its own interleaved A/B on this Mac (29 Oct 2026, both engines at `--expert-memory 20G`) it read decode
   1.118x and 4K prefill 1.014x stock Splash 1.4.0 (score 1.064, LB 1.036), and against the Splash 1.5.0 release a
-  marginal 1.040 (LB 1.012), with 4K prefill 2.4% slower than 1.5.0's (1.5.0 built with macOS SDK 27.0, KFlash 26.5).
+  marginal 1.040 (LB 1.012), with 4K prefill 2.4% slower than 1.5.0's (0.976x, the geometric mean of 8 per-run ratios; 1.5.0 built with macOS SDK 27.0, KFlash 26.5).
 - **Flint:** see [Flint on the M5 Pro](#recursive-flint-40b-a25b-m5-pro-2026-10-22).
 - Settings: MLX is mlx-vlm with MTP on the 4B and 27B and with DFlash2 on the 35B-A3B, mlx-lm on Lightning and Dory,
   mlx-vlm on Bolt; oMLX MTP on Lightning and DFlash2 on the 27B and 35B-A3B; mlx-serve MTP except its DFlash2 draft tree
