@@ -1,5 +1,5 @@
 // Input segmentation for the dense ANE FFN: default geometry checks need no model or GPU.
-//   ane_segment_check          CPU: supported widths and the explicit 4096 opt-in
+//   ane_segment_check          CPU: default widths and memory planning
 //   ane_segment_check --gpu    also compare segmented/full activation packing and weight staging,
 //                              including nonzero offsets, padded rows, tails and allocation guards
 // The GPU mode takes BENCH_GPU_LOCK (default /tmp/kapitsa-gpu.lock), unless the caller holds it.
@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -53,19 +54,61 @@ void equal(const void* a, const void* b, size_t n, const char* why) {
 
 struct WP { uint32_t row0, col0, width, wpr, gpr, stride, sstride; };
 
+void check_rotation(const Guard& input, const Guard& signs, const Guard& rotated, const Guard& scale,
+                    uint32_t D, uint32_t T, uint32_t R) {
+  std::vector<double> ref(D);
+  double worst = 0;
+  for (uint32_t t = 0; t < T; ++t) {
+    double peak = 0;
+    for (uint32_t start = 0; start < D; start += 128) {
+      double* b = ref.data() + start;
+      for (uint32_t i = 0; i < 128; ++i) b[i] = double(input.data.as<_Float16>()[size_t(t) * D + start + i]);
+      for (uint32_t span = 1; span < 128; span *= 2)
+        for (uint32_t base = 0; base < 128; base += 2 * span)
+          for (uint32_t i = 0; i < span; ++i) {
+            const double a = b[base + i], c = b[base + i + span];
+            b[base + i] = a + c;
+            b[base + i + span] = a - c;
+          }
+      for (uint32_t i = 0; i < 128; ++i) {
+        b[i] *= signs.data.as<float>()[i] / std::sqrt(128.0);
+        peak = std::max(peak, std::abs(b[i]));
+      }
+    }
+    const double unit = std::max(peak, 0x1p-14) / 127;
+    const double tx = double(scale.data.as<_Float16>()[t]);
+    if (!std::isfinite(tx) || std::abs(tx - unit * 128) > unit * 128 * 0.001 + 0x1p-24) ++failures;
+    for (uint32_t i = 0; i < D; ++i) {
+      const double expected = ref[i] / unit, got = double(rotated.data.as<_Float16>()[size_t(t) * D + i]);
+      const double error = std::abs(got - expected);
+      worst = std::max(worst, error);
+      // A half step plus float rotation/normalization rounding against an independent fp64 WHT.
+      if (!std::isfinite(got) || error > std::abs(expected) * 0.0006 + 0.0001) ++failures;
+    }
+    ++cases;
+    checked += (size_t(D) + 1) * 2;
+  }
+  for (uint32_t t = T; t < R; ++t)
+    if (scale.data.as<_Float16>()[t] != 0) ++failures;
+  if (failures) fprintf(stderr, "rotation D=%u T=%u max absolute error %.6g\n", D, T, worst);
+}
+
 void check_pack(uint32_t D, uint32_t T) {
   auto& g = Gpu::get();
-  const uint32_t segment = D == 4096 ? 2048 : 2560;
+  const uint32_t segment = ane::FfnSplit::input_segment(D);
   const uint32_t R = std::max(32u, (T + 31) / 32 * 32), stride = R + 64;
   Guard input(size_t(R) * D * 2), signs(512 * 4), rotated(size_t(R) * D * 2), scale(R * 2), full(size_t(D) * stride);
   std::mt19937 rng(1234 + T + D);
   for (size_t i = 0; i < size_t(R) * D; ++i)
     input.data.as<_Float16>()[i] = _Float16((int(rng() % 2001) - 1000) / 137.f);
+  // Exercise zero rows and a peak in the last segment: all segments must use the same token scale.
+  if (T > 1) memset(input.data.ptr(), 0, size_t(D) * 2);
+  if (T) input.data.as<_Float16>()[size_t(T - 1) * D + D - 1] = _Float16(32);
   for (int i = 0; i < 512; ++i) signs.data.as<float>()[i] = i % 3 ? 1.f : -1.f;
   struct RotP { uint32_t T, D; };
   struct PackP { uint32_t T, D, ch0, stride; };
   auto e = g.begin();
-  e->use(g.pipeline("ane_rotate"));
+  e->use(g.pipeline(D > 8192 ? "ane_rotate_wide" : "ane_rotate"));
   e->buf(0, input.data);
   e->buf(1, signs.data);
   e->buf(2, rotated.data);
@@ -78,6 +121,7 @@ void check_pack(uint32_t D, uint32_t T) {
   e->val(2, PackP{T, D, 0, stride});
   e->dispatch(R / 32, D / 32, 1, 32, 8);
   e->commit_and_wait();
+  check_rotation(input, signs, rotated, scale, D, T, R);
   for (uint32_t start = 0; start < D; start += segment) {
     Guard part(size_t(segment) * stride);
     auto p = g.begin();
@@ -105,7 +149,7 @@ void check_pack(uint32_t D, uint32_t T) {
 
 void check_weights(uint32_t K, uint32_t N, uint32_t row0) {
   auto& g = Gpu::get();
-  const uint32_t segment = K == 4096 ? 2048 : 2560;
+  const uint32_t segment = ane::FfnSplit::input_segment(K);
   const uint32_t source = N + row0, wpr = K / 8, gpr = K / 64, stride = K + 64, sstride = 32;
   Guard w(size_t(source) * wpr * 4), s(size_t(source) * gpr * 2), b(size_t(source) * gpr * 2), signs(512 * 4), rs(N * 2);
   Guard full(size_t(N) * stride), scout(size_t(N) * sstride * 2);
@@ -177,9 +221,6 @@ int main(int argc, char** argv) {
     fprintf(stderr, "usage: ane_segment_check [--gpu]\n");
     return 2;
   }
-  const char* prior = getenv("NI_ANE_H4096");
-  const bool had_prior = prior != nullptr;
-  const std::string saved = prior ? prior : "";
   auto expect = [](bool ok, const char* what) {
     ++cases;
     if (!ok) {
@@ -187,19 +228,16 @@ int main(int argc, char** argv) {
       fprintf(stderr, "FAIL %s\n", what);
     }
   };
-  unsetenv("NI_ANE_H4096");
-  expect(ane::FfnSplit::input_segment(4096) == 0 && ane::FfnSplit::rotate_simdgroups(4096) == 0,
-         "4096 is excluded by default");
-  expect(ane::split_bytes(4096, 12288, 24, 32, 2) == 0, "unsupported width has no split budget");
-  for (const char* v : {"0", "2", "true", ""}) {
-    setenv("NI_ANE_H4096", v, 1);
-    expect(ane::FfnSplit::input_segment(4096) == 0, "4096 requires the exact opt-in value 1");
+  for (uint32_t n = 1; n <= 64; ++n) {
+    const uint32_t h = n * 2048, segment = ane::FfnSplit::input_segment(h);
+    expect(segment == (h % 2560 == 0 ? 2560u : 2048u) && ane::FfnSplit::rotate_simdgroups(h) == 8,
+           "multiples of 2048 are eligible without an opt-in");
+    expect(ane::split_bytes(h, 12288, 24, 32, 2) > 0, "eligible input has a split budget");
   }
-  setenv("NI_ANE_H4096", "1", 1);
-  expect(ane::FfnSplit::input_segment(4096) == 2048 && ane::FfnSplit::rotate_simdgroups(4096) == 8,
-         "4096 uses two input segments and eight simdgroups");
-  for (uint32_t h : {0u, 128u, 3840u})
+  for (uint32_t h : {0u, 128u, 2047u, 2049u, 3840u, 4095u, 4097u}) {
     expect(ane::FfnSplit::input_segment(h) == 0, "unsupported width remains excluded");
+    expect(ane::split_bytes(h, 12288, 24, 32, 2) == 0, "unsupported width has no split budget");
+  }
   for (uint32_t h : {2560u, 5120u})
     expect(ane::FfnSplit::input_segment(h) == 2560, "existing input segmentation is unchanged");
   expect(ane::FfnSplit::rotate_simdgroups(2560) == 5 && ane::FfnSplit::rotate_simdgroups(5120) == 8,
@@ -217,15 +255,13 @@ int main(int argc, char** argv) {
     }
     Gpu::get().compile();
     const int before = cases;
-    for (uint32_t d : {2560u, 4096u, 5120u})
+    for (uint32_t d : {2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u, 12288u, 18432u})
       for (uint32_t n : {0u, 1u, 31u, 32u, 33u, 127u}) check_pack(d, n);
-    for (uint32_t d : {2560u, 4096u, 5120u})
+    for (uint32_t d : {2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u, 12288u, 18432u})
       for (uint32_t n : {8u, 16u})
         for (uint32_t offset : {0u, 8u}) check_weights(d, n, offset);
     printf("GPU input segments: %d comparisons, %zu data/guard bytes checked, %d failures\n",
            cases - before, checked, failures);
   }
-  if (had_prior) setenv("NI_ANE_H4096", saved.c_str(), 1);
-  else unsetenv("NI_ANE_H4096");
   return failures ? 1 : 0;
 }

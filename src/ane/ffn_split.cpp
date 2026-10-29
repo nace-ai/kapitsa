@@ -89,7 +89,8 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
   input_seg_ = input_segment(hidden_);
   if (!input_seg_) throw std::runtime_error("hidden size is not supported by the input segments");
   // ane_rotate: the hidden's 128-blocks split evenly over at most 8 simdgroups, at most 8 blocks each
-  // (27B: 40 blocks, 8 x 5; 4B: 20 blocks, 5 x 4; 9B: 32 blocks, 8 x 4)
+  // (27B: 40 blocks, 8 x 5; 4B: 20 blocks, 5 x 4; 9B: 32 blocks, 8 x 4).
+  // Wider multiples of 2048 use ane_rotate_wide's two passes instead of the eight-block register array.
   rot_sg_ = rotate_simdgroups(hidden_);
   if (!rot_sg_) throw std::runtime_error("hidden size ane_rotate does not take");
   if (inter_ % kUnit || inter_ < 2 * kUnit) throw std::runtime_error("intermediate size is not whole 512-channel units");
@@ -287,12 +288,12 @@ void FfnSplit::keep_loop(std::shared_ptr<KeepState> st, Program* prog, std::shar
 
 uint32_t FfnSplit::input_segment(uint32_t hidden) {
   if (hidden && hidden % kSeg == 0) return kSeg;
-  const char* v = getenv("NI_ANE_H4096");
-  return hidden == 4096 && v && !strcmp(v, "1") ? 2048 : 0;
+  return hidden && hidden % 2048 == 0 ? 2048 : 0;
 }
 
 uint32_t FfnSplit::rotate_simdgroups(uint32_t hidden) {
   if (!input_segment(hidden)) return 0;
+  if (hidden % 2048 == 0) return 8;
   for (uint32_t g = 8; g >= 1; --g)
     if ((hidden / 128) % g == 0 && hidden / 128 / g <= 8) return g;
   return 0;
@@ -604,7 +605,7 @@ void FfnSplit::stage_layer(Encoder& e, int li, int set) {
 void FfnSplit::pack(Encoder& e, int lane, const Buffer& xh, int T) {
   const Lane& La = lane_[lane];
   const uint32_t R = fn_rows_[fn_for(T)], tiles = R / 32;
-  e.use(pipe("ane_rotate"));
+  e.use(pipe(hidden_ > 8192 ? "ane_rotate_wide" : "ane_rotate"));
   e.buf(0, xh);
   e.buf(1, signs_);
   e.buf(2, rot_);

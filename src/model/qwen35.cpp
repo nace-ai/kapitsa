@@ -1717,11 +1717,11 @@ std::string Qwen35::disk_format() const {
            kv_i8() ? " (int8 codes, an f32 scale a row)" : "", mtp_loaded_ ? " (MTP head too)" : "",
            2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv, cfg_.lin_hv, cfg_.lin_dv, cfg_.lin_dk);
   std::string format = b;
-  // The optional W8A8 prefill may leave different KV and recurrent values. Its saved prefixes must
-  // not be used by the default GPU-only 4096-hidden path after a restart. The layout itself is unchanged.
-  if (!cfg_.moe && cfg_.hidden == 4096 && ane::FfnSplit::input_segment(4096) &&
+  // Newly supported widths can leave different KV/recurrent values after W8A8 prefill. Separate
+  // their prefixes from pre-support binaries and NI_ANE=0, even if a particular chunk stays on the GPU.
+  if (!cfg_.moe && cfg_.hidden > 0 && cfg_.hidden % 2048 == 0 &&
       !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")))
-    format += "; prefill: experimental ANE W8A8 H4096";
+    format += "; prefill: ANE W8A8 segmented input";
   return format;
 }
 

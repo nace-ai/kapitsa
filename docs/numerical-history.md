@@ -132,10 +132,13 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this 
 - Qwen 4B and 9B attention: [#581](https://github.com/nace-ai/kapitsa/pull/581),
   numerical record [#583](https://github.com/nace-ai/kapitsa/pull/583).
 
-## Experimental 4096-hidden ANE prefill
+## ANE prefill for hidden sizes divisible by 2048
 
-`NI_ANE_H4096=1` opts Qwen3.5-9B into the existing W8A8 approximation with two 2048-channel inputs;
-the default remains off. At experimental commit `92e8b88`, on an M4 Pro 20-core GPU / 48 GiB /
+Hidden sizes divisible by 2048 are eligible for the existing W8A8 split by default; `NI_ANE=0` disables it.
+The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
+and rotation stay unchanged. Wider inputs use two rotation passes to retain one scale over the whole token.
+
+At experimental commit `92e8b88`, on an M4 Pro 20-core GPU / 48 GiB /
 macOS 26.4.1 (25E253), 768 teacher-forced step rows against the same 4-bit GPU model gave mean KL
 1.795e-4 and 3 top-1 flips. The corresponding existing 4B/27B paths gave 3.940e-4 / 8.249e-5 and
 3 / 2 flips. On 8192 code-token positions, 9B PPL was 2.01072 -> 2.01052; its document-bootstrap
@@ -150,5 +153,10 @@ For the 9B opt-in, step / verify / batch mean KL was 3.692e-4 / 3.767e-4 / 3.639
 top-1 flips; the prefill had 0/8 flips. These decode paths score the same token positions, not independent
 samples. [Integration evidence at those commits and limits](../bench/results/2026-10-29-m4-9b-ane-review/README.md).
 
-The opt-in deliberately changes outputs; no 9B noise-floor pass or `--reorder` exception is claimed.
-No floor or default is changed, and existing 4B/27B input segmentation remains 2560 channels.
+These historical opt-in comparisons deliberately changed outputs; no 9B noise-floor pass or `--reorder`
+exception is claimed. No floor is changed. The new default extends ANE eligibility, not numerical
+equivalence: the 9B/4B primary mean-KL ratio was 0.456 (document-bootstrap 95% [0.242, 1.021]), and
+9B/27B was 2.176 [1.685, 2.820]. At 4K/16K the latter ratios were 2.904/2.039. This code-only sample
+shows comparable orders of drift, not a bound on other models or tasks. The new widths beyond 9B
+require their own model-level numerical and performance measurements; shape support alone does not
+establish their quality or speed.

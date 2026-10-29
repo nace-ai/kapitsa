@@ -50,9 +50,9 @@ struct FfnConfig {
 class FfnSplit {
  public:
   static constexpr uint32_t kUnit = 512, kSeg = 2560, kMaxRows = 2048;
-  // Hidden input segment width; NI_ANE_H4096=1 enables two 2048-channel inputs for hidden 4096.
+  // Prefer the existing 2560-channel segments; other multiples of 2048 use 2048-channel segments.
   static uint32_t input_segment(uint32_t hidden);
-  // ane_rotate's simdgroups for a hidden size (its 128-blocks split evenly, <= 8 each); 0 = not supported
+  // Rotation's simdgroups: <= 8 blocks each in ane_rotate, two passes above 8192; 0 = not supported.
   static uint32_t rotate_simdgroups(uint32_t hidden);
 
   // Allocates the surfaces, computes (or loads) the row scales, compiles/loads the program.
@@ -123,7 +123,7 @@ class FfnSplit {
   std::vector<FfnLayer> layers_;
   uint32_t hidden_ = 0, inter_ = 0, units_ = 0, ane_ = 0, gpu_ = 0, min_rows_ = 0;
   uint32_t input_seg_ = kSeg;
-  uint32_t rot_sg_ = 8;  // ane_rotate's simdgroups: they split the hidden's 128-blocks evenly, <= 8 each
+  uint32_t rot_sg_ = 8;  // rotation simdgroups; the wide kernel visits the 128-blocks in two passes
   std::vector<uint32_t> dseg_, fn_rows_;
   struct Lane {
     std::vector<Surface> x;  // int8 [input_seg_][2048] per hidden segment
