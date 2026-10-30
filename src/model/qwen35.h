@@ -698,6 +698,7 @@ class Qwen35 : public Model {
   int lo_ = 0, hi_ = 0;
   bool local(int i) const { return i >= lo_ && i < hi_; }
   bool hf_names_ = false;  // official Hugging Face tensor names (model.language_model.*)
+  size_t sb_bytes_ = 0;  // bytes of those bf16 copies (resident next to the mapped f16 / f32 files)
   int sb_cast_ = 0, sb_lossy_ = 0;  // quantized linears' f16 / f32 scales and biases read as bf16 copies (qlin): tensors, inexact values
   bool hf_norms_ = false;  // zero-centred RMSNorm weights (Hugging Face): read as 1 + w
   Qwen35Config cfg_;

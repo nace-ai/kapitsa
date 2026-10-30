@@ -838,6 +838,7 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
     if ((*t)->dtype == DType::F16 || (*t)->dtype == DType::F32) {
       *t = bf16_param(*t, sb_lossy_);
       ++sb_cast_;
+      sb_bytes_ += size_t((*t)->numel()) * 2;
     }
   L.bits = bits;
   L.gs = gs;
@@ -1040,7 +1041,9 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
     if (converted)
       logi("converted %d parameter tensors to bf16 at load (%d values not exactly representable)", converted, lossy);
     if (sb_cast_)
-      logi("converted %d scale / bias tensors to bf16 at load (%d values not exactly representable)", sb_cast_, sb_lossy_);
+      logi("converted %d scale / bias tensors to bf16 at load (%d values not exactly representable); the copies take %.2f GB "
+           "more memory, which the fit estimate does not count",
+           sb_cast_, sb_lossy_, double(sb_bytes_) / 1e9);
     auto check = [](const QLinear& q) {
       if (q && !q.dense() && !q.iq && (q.s->dtype != DType::BF16 || q.b->dtype != DType::BF16))
         fatal("quantized weights with non-bf16 scales/biases are not supported");
