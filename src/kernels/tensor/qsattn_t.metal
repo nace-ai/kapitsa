@@ -16,10 +16,11 @@ using namespace mpp::tensor_ops;
 // the list 32 keys at a time: S = Q K^T (8 products over its half of the head dim, K gathered straight from the cache
 // into 16 x 16 fragments by the listed rows), the two partial score tiles added through threadgroup memory (a + b in
 // one, b + a in the other: the same value), the same online softmax in fp32 in both, and O += P V over its half of V
-// (P half). Products and fragment layout as qattn_t.metal / nh_attn_t.metal (nhf_mma); the head-dim split as
-// qattn_t_d2 (64 accumulator floats a lane instead of 128). The rows are one token, so there is no causal cut: a list
-// holds only keys at or before its row. The softmax accumulates in 32-key tiles instead of key by key and Q enters the
-// products as half, so the outputs are not bitwise those of attn_sparse_rows (docs/usage.md, NI_QSA_TATTN).
+// (P as hi + lo halves, as Q). Products and fragment layout as qattn_t.metal / nh_attn_t.metal (nhf_mma); the
+// head-dim split as qattn_t_d2 (64 accumulator floats a lane instead of 128). The rows are one token, so there is no
+// causal cut: a list holds only keys at or before its row. The softmax accumulates in 32-key tiles instead of key by
+// key and Q and P enter the products as two halves each (hi + lo, about 22 bits, #585), so the outputs are not bitwise
+// those of attn_sparse_rows (docs/usage.md, NI_QSA_TATTN).
 // Static threadgroup memory 4,096 B (xs). grid: (R, Hkv) x 64 threads.
 
 struct QsaTParams {  // = AttnSparseParams
@@ -43,16 +44,19 @@ NI_INLINE void qattn_t_sparse_d2_impl(const device float* q, const device half* 
   uint hd[2];
   _Pragma("clang loop unroll(full)")
   for (short i = 0; i < 2; ++i) hd[i] = kvh * G + min(uint(fm + 8 * i), uint(G - 1));
-  nhf_h8 qf[DH / 16];
+  // Q and P enter the products as two halves each, hi + lo (#585): ~22 bits of Q and P, near attn_sparse_rows'
+  // fp32, for twice the S and PV products. With one half each, a 64K prompt's first decode row moved to <|im_end|>.
+  nhf_h8 qf[DH / 16], ql[DH / 16];
   _Pragma("clang loop unroll(full)")
   for (short id = 0; id < DH / 16; ++id)
     _Pragma("clang loop unroll(full)")
     for (short i = 0; i < 2; ++i) {
       const float4 x = *(const device float4*)(q + (size_t(r) * p.Hq + hd[i]) * D + d0 + id * 16 + fn) * p.scale;
-      qf[id][4 * i] = half(x.x);
-      qf[id][4 * i + 1] = half(x.y);
-      qf[id][4 * i + 2] = half(x.z);
-      qf[id][4 * i + 3] = half(x.w);
+      _Pragma("clang loop unroll(full)")
+      for (short c = 0; c < 4; ++c) {
+        qf[id][4 * i + c] = half(x[c]);
+        ql[id][4 * i + c] = half(x[c] - float(qf[id][4 * i + c]));
+      }
     }
   nhf_f8 o[DH / 16];
   _Pragma("clang loop unroll(full)")
@@ -88,6 +92,7 @@ NI_INLINE void qattn_t_sparse_d2_impl(const device float* q, const device half* 
         kb2[4 * i] = y.x, kb2[4 * i + 1] = y.y, kb2[4 * i + 2] = y.z, kb2[4 * i + 3] = y.w;
       }
       nhf_mma<half, half, true>(sf[0], sf[1], qf[id], ka, kb2);
+      nhf_mma<half, half, true>(sf[0], sf[1], ql[id], ka, kb2);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);  // the partner has read the previous tile's partials
     xme[0] = float4(sf[0][0], sf[0][1], sf[0][2], sf[0][3]);
@@ -141,6 +146,9 @@ NI_INLINE void qattn_t_sparse_d2_impl(const device float* q, const device half* 
     _Pragma("clang loop unroll(full)")
     for (short f = 0; f < 2; ++f) {
       const nhf_h8 pf = nhf_h8(sf[f]);
+      nhf_h8 pl;
+      _Pragma("clang loop unroll(full)")
+      for (short e = 0; e < 8; ++e) pl[e] = half(sf[f][e] - float(pf[e]));
       _Pragma("clang loop unroll(full)")
       for (short id = 0; id < DH / 16; id += 2) {
         nhf_h8 v0, v1;
@@ -155,6 +163,7 @@ NI_INLINE void qattn_t_sparse_d2_impl(const device float* q, const device half* 
           v1[4 * i + 2] = z ? half(0) : y.z, v1[4 * i + 3] = z ? half(0) : y.w;
         }
         nhf_mma<half, half, false>(o[id], o[id + 1], pf, v0, v1);
+        nhf_mma<half, half, false>(o[id], o[id + 1], pl, v0, v1);
       }
     }
   }
