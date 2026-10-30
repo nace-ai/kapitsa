@@ -86,9 +86,10 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
     if (L.gate.K != hidden_ || L.up.K != hidden_ || L.gate.N != inter_ || L.up.N != inter_ || L.down.N != hidden_ ||
         L.down.K != inter_)
       throw std::runtime_error("FFN layers differ in shape");
-  if (hidden_ % kSeg) throw std::runtime_error("hidden size is not whole 2560-channel segments");
+  input_seg_ = input_segment(hidden_);
+  if (!input_seg_) throw std::runtime_error("hidden size is not supported by the input segments");
   // ane_rotate: the hidden's 128-blocks split evenly over at most 8 simdgroups, at most 8 blocks each
-  // (27B: 40 blocks, 8 x 5; 4B: 20 blocks, 5 x 4)
+  // (27B: 40 blocks, 8 x 5; 4B: 20 blocks, 5 x 4; 9B: 32 blocks, 8 x 4).
   rot_sg_ = rotate_simdgroups(hidden_);
   if (!rot_sg_) throw std::runtime_error("hidden size ane_rotate does not take");
   if (inter_ % kUnit || inter_ < 2 * kUnit) throw std::runtime_error("intermediate size is not whole 512-channel units");
@@ -132,7 +133,7 @@ void FfnSplit::init_resources() {
   const FfnConfig& c = cfg_;
   // ---- memory ----
   Gpu& g = Gpu::get();
-  const uint32_t nin = hidden_ / kSeg;
+  const uint32_t nin = hidden_ / input_seg_;
   auto surf = [&](uint32_t r, uint32_t w, bool f16) {
     Surface s = make_surface(r, w, f16);
     bytes_ += s.bytes;
@@ -140,14 +141,14 @@ void FfnSplit::init_resources() {
   };
   if (c.lanes < 1 || c.lanes > 2) throw std::runtime_error("lanes must be 1 or 2");
   for (int l = 0; l < c.lanes; ++l) {
-    for (uint32_t k = 0; k < nin; ++k) lane_[l].x.push_back(surf(kSeg, kMaxRows, false));
+    for (uint32_t k = 0; k < nin; ++k) lane_[l].x.push_back(surf(input_seg_, kMaxRows, false));
     lane_[l].tx = surf(1, kMaxRows, true);
     lane_[l].y = surf(hidden_ + 1, kMaxRows, true);
   }
   for (Set& s : set_) {
     for (uint32_t k = 0; k < nin; ++k) {
-      s.wg.push_back(surf(ane_, kSeg, false));
-      s.wu.push_back(surf(ane_, kSeg, false));
+      s.wg.push_back(surf(ane_, input_seg_, false));
+      s.wu.push_back(surf(ane_, input_seg_, false));
     }
     for (uint32_t d : dseg_) s.wd.push_back(surf(hidden_, d, false));
     s.sg = surf(ane_, 1, true);
@@ -284,8 +285,14 @@ void FfnSplit::keep_loop(std::shared_ptr<KeepState> st, Program* prog, std::shar
   st->done = true;
 }
 
+uint32_t FfnSplit::input_segment(uint32_t hidden) {
+  if (!hidden || hidden > kMaxHidden) return 0;
+  if (hidden % kSeg == 0) return kSeg;
+  return hidden % 2048 == 0 ? 2048 : 0;
+}
+
 uint32_t FfnSplit::rotate_simdgroups(uint32_t hidden) {
-  if (hidden % kSeg) return 0;
+  if (!input_segment(hidden)) return 0;
   for (uint32_t g = 8; g >= 1; --g)
     if ((hidden / 128) % g == 0 && hidden / 128 / g <= 8) return g;
   return 0;
@@ -310,15 +317,15 @@ void FfnSplit::program_source(std::string& mil, std::vector<uint8_t>& blob) {
 // generated from layout-only surfaces; compiles (unless the daemon already holds it), loads, and
 // unloads again. No Metal or IOSurface allocation, so it can run on a background thread.
 void FfnSplit::compile_program_only() {
-  const uint32_t nin = hidden_ / kSeg;
+  const uint32_t nin = hidden_ / input_seg_;
   Lane& L = lane_[0];
-  for (uint32_t k = 0; k < nin; ++k) L.x.push_back(surface_layout(kSeg, kMaxRows, false));
+  for (uint32_t k = 0; k < nin; ++k) L.x.push_back(surface_layout(input_seg_, kMaxRows, false));
   L.tx = surface_layout(1, kMaxRows, true);
   L.y = surface_layout(hidden_ + 1, kMaxRows, true);
   Set& S = set_[0];
   for (uint32_t k = 0; k < nin; ++k) {
-    S.wg.push_back(surface_layout(ane_, kSeg, false));
-    S.wu.push_back(surface_layout(ane_, kSeg, false));
+    S.wg.push_back(surface_layout(ane_, input_seg_, false));
+    S.wu.push_back(surface_layout(ane_, input_seg_, false));
   }
   for (uint32_t d : dseg_) S.wd.push_back(surface_layout(hidden_, d, false));
   S.sg = surface_layout(ane_, 1, true);
@@ -369,7 +376,7 @@ void FfnSplit::free_all() {
 // per-token scale, applied with the input's by the GPU join in fp32. Up's token scale is left out
 // (applied in the join): the true output is partial * hscale * tx.
 std::string FfnSplit::function(uint32_t R) const {
-  const uint32_t C = ane_, nseg = hidden_ / kSeg;
+  const uint32_t C = ane_, nseg = hidden_ / input_seg_;
   std::string par, b;
   auto line = [&](const std::string& t) { b += "        " + t + ";\n"; };
   auto f16 = [&](const std::string& n, uint64_t r, uint64_t w, const std::string& e) {
@@ -380,11 +387,11 @@ std::string FfnSplit::function(uint32_t R) const {
     line(tens(s.mil_type().c_str(), rows, width) + " " + name + "_t = tensor_buffer_to_tensor<ios17>(input = " + name +
          ")");
   };
-  for (uint32_t k = 0; k < nseg; ++k) input("x" + std::to_string(k), lane_[0].x[k], kSeg, R);
+  for (uint32_t k = 0; k < nseg; ++k) input("x" + std::to_string(k), lane_[0].x[k], input_seg_, R);
   input("tx", lane_[0].tx, 1, R);
   for (uint32_t k = 0; k < nseg; ++k) {
-    input("wg" + std::to_string(k), set_[0].wg[k], C, kSeg);
-    input("wu" + std::to_string(k), set_[0].wu[k], C, kSeg);
+    input("wg" + std::to_string(k), set_[0].wg[k], C, input_seg_);
+    input("wu" + std::to_string(k), set_[0].wu[k], C, input_seg_);
   }
   input("sg", set_[0].sg, C, 1);
   input("su", set_[0].su, C, 1);
@@ -407,11 +414,11 @@ std::string FfnSplit::function(uint32_t R) const {
     return t;
   };
   for (uint32_t k = 0; k < nseg; ++k)
-    f16("x" + std::to_string(k) + "_d", kSeg, R, "dequantize(input = x" + std::to_string(k) + "_t, scale = " + unit + ")");
+    f16("x" + std::to_string(k) + "_d", input_seg_, R, "dequantize(input = x" + std::to_string(k) + "_t, scale = " + unit + ")");
   for (const char* p : {"g", "u"}) {
     for (uint32_t k = 0; k < nseg; ++k)
       matmul(std::string(p) + "m" + std::to_string(k), std::string("w") + p + std::to_string(k),
-             "x" + std::to_string(k) + "_d", C, kSeg);
+             "x" + std::to_string(k) + "_d", C, input_seg_);
     f16(std::string(p) + "s", C, R, "mul(x = " + sum(std::string(p) + "m", nseg, C) + ", y = s" + p + "_t)");
   }
   f16("gt", C, R, "mul(x = gs, y = tx_t)");
@@ -561,7 +568,7 @@ void FfnSplit::stage_layer(Encoder& e, int li, int set) {
     for (size_t k = 0; k < S.wg.size(); ++k) {
       const Surface& out = which == 0 ? S.wg[k] : S.wu[k];
       const Surface& so = which == 0 ? S.sg : S.su;
-      WP w{gpu_, uint32_t(k * kSeg), kSeg, wpr(P), gpr(P), out.stride, so.stride / 2};
+      WP w{gpu_, uint32_t(k * input_seg_), input_seg_, wpr(P), gpr(P), out.stride, so.stride / 2};
       e.buf(0, P.w);
       e.buf(1, P.s);
       e.buf(2, P.b);
@@ -570,7 +577,7 @@ void FfnSplit::stage_layer(Encoder& e, int li, int set) {
       e.buf(5, so.buf);
       e.buf(6, signs_);
       e.val(7, w);
-      e.dispatch(ane_ / 8, kSeg / 128, 1, 256);
+      e.dispatch(ane_ / 8, input_seg_ / 128, 1, 256);
     }
   }
   e.use(wpipe("ane_stage", L.down, "b512"));
@@ -604,8 +611,8 @@ void FfnSplit::pack(Encoder& e, int lane, const Buffer& xh, int T) {
   for (size_t k = 0; k < La.x.size(); ++k) {
     e.buf(0, rot_);
     e.buf(1, La.x[k].buf);
-    e.val(2, PackP{uint32_t(T), hidden_, uint32_t(k * kSeg), La.x[k].stride});
-    e.dispatch(tiles, kSeg / 32, 1, 32, 8);
+    e.val(2, PackP{uint32_t(T), hidden_, uint32_t(k * input_seg_), La.x[k].stride});
+    e.dispatch(tiles, input_seg_ / 32, 1, 32, 8);
   }
 }
 
@@ -754,16 +761,18 @@ bool write_calibration(const std::string& key, const Calibration& c) {
 
 size_t split_bytes(uint32_t hidden, uint32_t inter, uint32_t units, int layers, int lanes) {
   (void)inter;
-  const size_t nin = hidden / FfnSplit::kSeg, ane = size_t(units) * FfnSplit::kUnit, R = FfnSplit::kMaxRows;
+  const size_t input_seg = FfnSplit::input_segment(hidden);
+  if (!input_seg) return 0;
+  const size_t nin = hidden / input_seg, ane = size_t(units) * FfnSplit::kUnit, R = FfnSplit::kMaxRows;
   auto surf = [](size_t rows, size_t width, bool f16) {  // rows padded to 64 bytes, size to 16 KB pages
     const size_t stride = (width * (f16 ? 2 : 1) + 63) / 64 * 64;
     return (rows * stride + 16383) / 16384 * 16384;
   };
   size_t b = 0;
-  for (int l = 0; l < lanes; ++l) b += nin * surf(FfnSplit::kSeg, R, false) + surf(1, R, true) + surf(hidden + 1, R, true);
+  for (int l = 0; l < lanes; ++l) b += nin * surf(input_seg, R, false) + surf(1, R, true) + surf(hidden + 1, R, true);
   size_t dseg = 0;
   for (size_t c = 0; c < ane; c += FfnSplit::kSeg) dseg += surf(hidden, std::min<size_t>(FfnSplit::kSeg, ane - c), false);
-  b += 2 * (2 * nin * surf(ane, FfnSplit::kSeg, false) + dseg + 2 * surf(ane, 1, true) + surf(hidden, 1, true));
+  b += 2 * (2 * nin * surf(ane, input_seg, false) + dseg + 2 * surf(ane, 1, true) + surf(hidden, 1, true));
   b += R * hidden * 2 + 512 * 4 + 16 + size_t(layers) * (2 * ane + hidden) * 2;  // rotation scratch, signs, row scales
   return b;
 }

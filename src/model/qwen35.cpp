@@ -1669,7 +1669,13 @@ std::string Qwen35::disk_format() const {
   snprintf(b, sizeof b, "qwen35 %s; attention: K, V f16 [%d][cap][%d]%s; GDN: conv f32 [3][%d], state f32 [%d][%d][%d]",
            kinds.c_str(), cfg_.hkv, cfg_.head_dim, mtp_loaded_ ? " (MTP head too)" : "",
            2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv, cfg_.lin_hv, cfg_.lin_dv, cfg_.lin_dk);
-  return b;
+  std::string format = b;
+  // Newly supported widths can leave different KV/recurrent values after W8A8 prefill. Separate
+  // their prefixes from pre-support binaries and NI_ANE=0, even if a particular chunk stays on the GPU.
+  if (!cfg_.moe && ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)) == 2048 &&
+      !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")))
+    format += "; prefill: ANE W8A8 segmented input";
+  return format;
 }
 
 void Qwen35::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
