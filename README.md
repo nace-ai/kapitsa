@@ -53,9 +53,22 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
 - **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
 - **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode` and `kapitsa pi` start on the local model.
-- **One calibrated probability per option.** `kapitsa-systemone` serves a Drex 2.0 state and its questions that way (`POST /v1/systemone`) ([decisions](docs/systemone.md)).
+- **One calibrated probability per option.** `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)).
 - **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
 - **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.
+
+### Drex Max v1
+
+Drex Max v1 runs on Kapitsa v0.2.25 or later, through `kapitsa-systemone` (the Q8_0 GGUF imported to Kapitsa's affine 8-bit layout; an affine Q4 checkpoint is in [its guide](docs/drex-max.md#run-the-affine-q4-checkpoint)):
+
+```bash
+brew install nace-ai/tap/kapitsa
+kapitsa import /path/to/drex-max-v1-Q8_0.gguf --name drex-max-v1
+kapitsa-drex-pointer /path/to/drex-max-v1-Q8_0.gguf ~/.cache/kapitsa/models/drex-max-v1/pointer.bin
+kapitsa-systemone --model ~/.cache/kapitsa/models/drex-max-v1 --port 8000 --context 2048
+```
+
+[Drex Max v1 on Kapitsa](docs/drex-max.md) has the request, the memory a longer context needs and the encoding.
 
 ## CLI
 

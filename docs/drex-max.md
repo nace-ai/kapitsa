@@ -1,8 +1,9 @@
 # Run Drex Max v1 on Kapitsa
 
 Drex Max v1 uses the [System One HTTP API](systemone.md#the-protocol), including `choice`, `noul`, `score`, and the
-`requests` batch wrapper. It produces probabilities without generating tokens. These steps import a release GGUF
-and run the native Metal implementation, without a llama.cpp runtime.
+`requests` batch wrapper. It produces probabilities without generating tokens. These steps run the native Metal
+implementation, without a llama.cpp runtime, from either the release Q8_0 GGUF (imported) or the affine Q4
+checkpoint (downloaded).
 
 This implementation is experimental. Kapitsa v0.2.25 is the first release with it. Its native probabilities differ
 from the pinned v1 reference by up to 0.0329, above the 0.02 parity gate (see
@@ -38,6 +39,25 @@ projected v2 pointer head paired with a noncausal backbone. Do not switch modes 
 
 The Q8_0 importer converts the backbone to Kapitsa's affine 8-bit group-64 layout. It does not retain the original
 Q8_0 blocks. The released GGUF's readout and temperature tensors are F32 even though its backbone is Q8_0.
+
+## Run the affine Q4 checkpoint
+
+[nace-ai/drex-max-v1-affine-q4](https://huggingface.co/nace-ai/drex-max-v1-affine-q4) is the same model in affine
+4-bit, group-64 weights, 14.5 GB against the Q8 import's 27 GB. It already holds `pointer.bin`, so there is no import
+and no extraction. `hf` is the Hugging Face CLI (`pip install -U huggingface_hub`).
+
+```bash
+hf download nace-ai/drex-max-v1-affine-q4 --local-dir ./drex-max-v1-affine-q4
+kapitsa-systemone --model ./drex-max-v1-affine-q4 --port 8000 --context 2048
+```
+
+In a second terminal:
+
+```bash
+curl --fail-with-body -s localhost:8000/v1/systemone -d '{"state":"The shipment awaits inspection.","questions":{"urgent":{"type":"noul","instructions":"Is the shipment urgent?"}}}'
+```
+
+The request and the response are the ones in the next section.
 
 ## Serve and inspect a request
 
