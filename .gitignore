@@ -1,4 +1,8 @@
+# Generated CMake build directories, including named local builds.
 build/
+build_*/
+build-*/
+cmake-build-*/
 *.bin
 .DS_Store
 internal/
