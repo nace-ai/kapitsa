@@ -96,7 +96,12 @@ Through `kapitsa serve --engine splash` at its defaults (no `--expert-memory`), 
 30 Oct 2026: decode 1.167x (standard error 1.3%; arm medians 67.3 → 80.2 and 60.6 → 71.4 tok/s) and 4K prefill
 0.989x (0.6%; 1,358 → 1,354 tok/s), score 1.074, KFlash against stock 1.4.0. Every leg had at least 38 GiB free, so
 Kapitsa passed no `--expert-memory` and Splash's auto plan sized the cache (27.35 GiB for both engines). Kapitsa's
-low-memory branch, which passes `--expert-memory` itself below 38 GiB free (22-23G on this Mac), was not measured.
+low-memory branch, which passes `--expert-memory` itself below 38 GiB free (22-23G on this Mac), was not measured. An
+earlier set an hour before gave decode 1.162x and 4K prefill 1.000x on its 3 pairs at Splash's auto size (its fourth
+pair ran in the low-memory branch and is invalid under its own rule). It is not counted because its legs skipped the
+engine status check that the amended run rule makes every leg run, so the set was run again. Between the two sets the
+stock arm's decode on the code prompt moved 70.8 → 67.3 tok/s; the ratios differ by 0.5 pp in decode and 1.1 pp in 4K
+prefill.
 
 Outputs: under fixed verify rows (`--verify-rows all`) KFlash's temperature-0 outputs equal stock 1.4.0's on 6 prompts
 × 20 runs, and Splash's `teacher_logits` reads every logit row bitwise identical to stock's. Under Splash's automatic
