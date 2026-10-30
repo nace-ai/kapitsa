@@ -648,12 +648,13 @@ static void parse_config(const json& root, Qwen35Config& cfg) {
     cfg.eos.push_back(eos);
 }
 
+std::string Qwen35::noncausal_refusal(const std::string& dir) {
+  return dir + " is a noncausal (bidirectional) model, which this command cannot decode token by token: score it with "
+               "kapitsa-systemone --model " + dir;
+}
+
 void Qwen35::require_causal(const std::string& dir) {
-  if (!read_config(dir).causal) {
-    fatal("%s is a noncausal (bidirectional) model, which this command cannot decode token by token: score it with "
-          "kapitsa-systemone --model %s",
-          dir.c_str(), dir.c_str());
-  }
+  if (!read_config(dir).causal) fatal("%s", noncausal_refusal(dir).c_str());
 }
 
 Qwen35Config Qwen35::read_config(const std::string& dir) {

@@ -242,6 +242,7 @@ class Qwen35 : public Model {
   // Exits for a noncausal (bidirectional) pack, before any weight is read: kapitsa serve/run/chat decode token by
   // token and cannot run one; only kapitsa-systemone scores it.
   static void require_causal(const std::string& model_dir);
+  static std::string noncausal_refusal(const std::string& model_dir);  // the message both refusals use
   // Whether n RMSNorm weight values (F32, F16 or BF16 at data) are Hugging Face's zero-centred parameterization, applied
   // as 1 + w: a mean below 0.5 and at least one negative value (MLX's are ~1 and all positive). False for no values, a
   // vector wider than 65,536 (not a norm) or another dtype, where the caller keeps its own answer.

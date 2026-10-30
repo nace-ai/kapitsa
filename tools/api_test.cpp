@@ -1856,6 +1856,16 @@ void unsupported_model_unit() {
         "unsupported_model: a qwen3_5_moe_text text_config is not refused");
   check(refused(folder("hybrid", R"({"linear_num_value_heads": 8, "num_hidden_layers": 4})")).empty(),
         "unsupported_model: a config with no model_type and the hybrid's shape is not refused");
+  // a noncausal Qwen3.5 pack (Drex Max) is refused with a message naming kapitsa-systemone, wherever causal is read from;
+  // an explicit causal=true is not refused
+  for (const char* cfg : {R"({"model_type": "qwen3_5", "causal": false})",
+                          R"({"text_config": {"model_type": "qwen3_5_text", "causal": false}})"}) {
+    const std::string nc = refused(folder("noncausal", cfg));
+    check(nc.find("noncausal") != std::string::npos && nc.find("kapitsa-systemone --model ") != std::string::npos,
+          "unsupported_model: a noncausal Qwen3.5 pack is refused, pointing to kapitsa-systemone");
+  }
+  check(refused(folder("causal", R"({"model_type": "qwen3_5", "causal": true})")).empty(),
+        "unsupported_model: an explicit causal=true is not refused");
   check(refused(folder("clover", R"({"model_type": "clover_moe"})")).empty(),
         "unsupported_model: a clover_moe config (DiffuSpace's Clover) is not refused");
   // a quantization format with no kernels is refused from config.json alone, before any weight is read (issue 787: a

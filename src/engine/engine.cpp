@@ -380,7 +380,6 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if (sample) publisher_sampling();
     else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = 0;
   } else {
-    Qwen35::require_causal(opts_.model_dir);
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
     model_ = std::move(m);
@@ -720,7 +719,10 @@ std::string unsupported_model(const std::string& model_dir) {
   const nlohmann::json t = j.contains("text_config") && j["text_config"].is_object() ? j["text_config"] : j;
   const std::string mt = type(j), tt = type(t);
   // (a pack in a quantization format with no kernels is refused here too: before its weights are read, not after)
+  // (and a noncausal pack, which only kapitsa-systemone scores: thrown here, so a model switch is refused and the old
+  // model stays up, and the memory plan is not read first)
   auto family = [&] {
+    if (!t.value("causal", true)) return Qwen35::noncausal_refusal(model_dir);
     const std::string why = unsupported_quantization(model_dir);
     return why.empty() ? why : model_dir + ": " + why;
   };
