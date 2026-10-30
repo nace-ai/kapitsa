@@ -1,4 +1,4 @@
-// The arguments Kapitsa adds to `splash serve-native` when the user gave none for them (docs/splash-backend.md). A pure
+// The arguments Kapitsa adds to `splash serve-native` when the user gave none for them (src/splash/README.md). A pure
 // function of the user's arguments and the memory free now, so a test needs no Splash and no Mac state.
 #pragma once
 

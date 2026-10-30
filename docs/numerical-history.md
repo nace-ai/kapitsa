@@ -65,10 +65,8 @@ reference with the option off:
 | Comparison | Rows | Absolute NLL change | Mean KL | p99 | Top-1 flips |
 | --- | --- | --- | --- | --- | --- |
 | Tensor path against Kapitsa reference | 96 long rows, 9K to 24.6K | 1.340e-2 | 4.353e-3 | 6.312e-2 | 3 of 96 |
-| Splash 1.4.0 against the same reference | Same rows | 4.4918e-1 | 7.196e-1 | 1.003e+1 | 13 |
 
-Every measured cell is at or below the cross-engine reference's drift. This is evidence of cross-engine drift,
-not a pass against Kapitsa's floor gate. The four dumps' `records.txt` and `sequences.txt` hashes match:
+This is a record of the drift, not a pass against Kapitsa's floor gate. The four dumps' `records.txt` and `sequences.txt` hashes match:
 `b65170880903` and `c1761547e85a` for long rows, `0b5d61b94a22` and `c1bf15d26cd3` for short rows.
 The prefixes are identical. The 192 short rows at or below 3.2K are bitwise identical between the two arms,
 with `logits.f32` sha256 `a5d294b0…` on both.

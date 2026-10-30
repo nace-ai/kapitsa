@@ -366,25 +366,6 @@ static void print_serve_help() {
          "                         gigabytes; 503 + Retry-After meanwhile). Default off: the \"model\" field is ignored.\n"
          "                         Without --api-key it keeps the server on this Mac, as --private does\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
-         "  --engine splash        run the model in a Splash child process instead of in this server\n"
-         "                         text chat only; both of the next two are found where Splash installs them when not given\n"
-         "  --splash-binary PATH   the Splash engine binary (<Splash folder>/engine/splash; else $SPLASH_HOME, `splash` on PATH, ~/Applications/Splash,\n"
-         "                         the last run's: a Splash installed anywhere needs this once)\n"
-         "  --splash-model DIR     Splash's resolved model folder, the first 6+ characters of its name, or its family (flash-next, 27b; the\n"
-         "                         newest of that family's folders; its tokenizer and chat template are used here); when not given: the\n"
-         "                         only one under ~/Library/Application Support/Splash, else the last run's, else the most recently resolved\n"
-         "                         (it says which). A run that starts writes its binary and model to <kapitsa home>/splash.json (the last run's)\n"
-         "  --check                with --engine splash: print the engine binary and model that would run, and what is missing; start nothing\n"
-         "                         (it writes nothing, splash.json included)\n"
-         "  --splash-arg ARG       an extra argument for `splash serve-native` (repeatable, e.g. --verify-rows 0). Unless given,\n"
-         "                         --idle-release off is added, and --expert-memory sized from the memory free now when that is under ~38 GiB\n"
-         "  --splash-persistent-cache  keep Splash's SSD prefix cache across restarts (--persistent-cache on, in ~/Library/Caches/Kapitsa/\n"
-         "                         splash-prefix-cache/<model folder>; writes to your disk; default off)\n"
-         "  --splash-kflash auto|on|off  KFlash's Splash engine (Splash with Kapitsa's patches, packaging/splash/): auto (default) runs it for\n"
-         "                         the models measured faster with it when it is built, --splash-binary is not given and stock Splash is the\n"
-         "                         release it is built on (1.5.0); on for any model; off never\n"
-         "  --splash-conversation-salt  a cache salt per conversation (its first user message): conversations no longer share cached\n"
-         "                         prompts, such as a common system prompt (default off: one shared cache, as Splash without cache_salt)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
          "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
          "                         Mac's memory is tight (the most that keeps the draft model). --ctx N works too\n"
@@ -1287,7 +1268,7 @@ static int serve(int argc, char** argv, int first) {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
   } catch (const std::exception& e) {
     if (!engine_splash) throw;
-    return fail(std::string("the Splash engine did not start: ") + e.what());  // (its own reason is in its output above)
+    return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
   }
   if (engine_splash) {  // (absolute: the next run may start in another folder)
     std::error_code abs_ec;

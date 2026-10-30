@@ -27,7 +27,7 @@
 // --rows W = 24 (192 rows in all). --from DIR scores the records of an earlier dump instead (Kapitsa's or another
 // engine's): per sequence, its scored prefixes form the window, and the files keep DIR's lines in DIR's order.
 //
-// out_dir/<path>/ (the layout of Splash's teacher-forced dumps, so that either engine's dumps compare with the other's;
+// out_dir/<path>/ (a layout another engine's teacher-forced dumps can share, so that either engine's dumps compare with the other's;
 // out_dir and any missing parents are made before the model loads, so a nested path such as dumps/x/ref works and a
 // path that cannot be made fails in a second, not after the model's load):
 //   sequences.txt  one window's token ids per line (as far as its last scored prefix's next token)

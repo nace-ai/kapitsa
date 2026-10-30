@@ -1,9 +1,10 @@
-# KFlash Splash engine: patches to Splash
+# KFlash patches for Splash's engine
 
-`kapitsa serve --engine splash` runs a Splash engine child (`splash serve-native`, see
-[docs/splash-backend.md](../../docs/splash-backend.md)). This directory holds Kapitsa's changes to that engine as
-patches against one pinned Splash release (1.5.0), and the script that builds it. The patched engine is KFlash's Splash
-engine; benchmark rows measured with it say KFlash, not Splash.
+A developer note. Kapitsa's own engine is the default and needs nothing from this directory. The `--engine splash` mode
+of `kapitsa serve` runs Inco's Splash engine as a child process ([notes](../../src/splash/README.md),
+[measurements](../../docs/splash-backend.md)). This directory holds Kapitsa's changes to that engine as patches against
+one pinned Splash release (1.5.0), and the script that builds it. Benchmark rows measured with the patched engine say
+KFlash, not Splash.
 
 ## Why patches, not a fork or third_party/
 

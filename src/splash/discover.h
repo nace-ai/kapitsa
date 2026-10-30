@@ -1,5 +1,5 @@
 // Where Splash's engine binary and resolved model folders are on this Mac, so `kapitsa serve --engine splash` can run
-// without --splash-binary and --splash-model (docs/splash-backend.md). Pure functions of the paths given: no process
+// without --splash-binary and --splash-model (src/splash/README.md). Pure functions of the paths given: no process
 // state, so the test builds a throwaway Splash tree.
 #pragma once
 

@@ -240,13 +240,13 @@ build_kflash() {
     [ -n "$root" ] && [ -f "$root/release.json" ] && [ -x "$root/engine/splash" ] || continue
     got=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$root/release.json")
     if [ "$got" != "$want" ]; then
-      say "KFlash: not built. Splash $got is installed in $root and KFlash's patches are for Splash $want only;"
-      say "  stock Splash $got runs, and nothing in $root was changed."
+      say "KFlash: not built. The engine installed in $root is release $got and KFlash's patches are for release $want only;"
+      say "  it runs as it is, and nothing in $root was changed."
       return 0
     fi
-    say "Building KFlash's Splash engine against $root (packaging/splash/build.py)..."
+    say "Building the KFlash engine against $root (packaging/splash/build.py)..."
     if python3 "$1/packaging/splash/build.py" --release "$root"; then return 0; fi
-    say "KFlash: the build failed (above); stock Splash runs. Retry: python3 $1/packaging/splash/build.py --release $root"
+    say "KFlash: the build failed (above); the stock engine runs. Retry: python3 $1/packaging/splash/build.py --release $root"
     return 0
   done
 }

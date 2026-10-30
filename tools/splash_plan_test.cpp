@@ -24,7 +24,7 @@ int main() {
   check(default_engine_args({}, 33 * G, false, "", nullptr)[3] == std::to_string(19 * G), "33 GiB -> 19G");
   // 22 GiB is the least that gets a cache of 8; below it Splash decides
   check(default_engine_args({}, 22 * G, false, "", nullptr)[3] == std::to_string(8 * G), "22 GiB -> 8G");
-  check(default_engine_args({}, 21 * G, false, "", &note) == V({"--idle-release", "off"}) && note.find("left to Splash") != std::string::npos, "21 GiB: left to Splash");
+  check(default_engine_args({}, 21 * G, false, "", &note) == V({"--idle-release", "off"}) && note.find("left to the engine") != std::string::npos, "21 GiB: left to the engine");
   // unknown memory (0): nothing about memory
   check(default_engine_args({}, 0, false, "", nullptr) == V({"--idle-release", "off"}), "unknown memory");
   // the user's arguments win and are not doubled

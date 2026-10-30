@@ -6,7 +6,7 @@
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
 
-[Quickstart](#quickstart) · [Benchmarks](#benchmarks) · [Features](#features) · [CLI](#cli) · [Backends](#supported-backends) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
+[Quickstart](#quickstart) · [Benchmarks](#benchmarks) · [Features](#features) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
 
 ## Quickstart
 
@@ -34,21 +34,20 @@ Kapitsa has the fastest decode in 32 of the 38 model and Mac pairs measured agai
   <img alt="Poster of prefill / decode speed for Kapitsa and nine other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro, M3 Pro and M1 Pro; the numbers are in the poster and in the Models section's tables" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>Each cell reads prefill / decode in tokens per second, from a 4K-token prompt and a 512-token answer at T 0.6 (Flint at its card's T 1.0). The M5 Pro's Flash-Next 180B Q2 row is a 256-token answer at T 0 on that run's own 4,074-token prompt, and its Kapitsa column is Kapitsa's server on Splash 1.5.0 running KFlash, Kapitsa's patches to Splash, against plain Splash 1.5.0: a tie, the two engines' ranges overlap ([record](bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md)). Footnotes, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
+<sub>Each cell reads prefill / decode in tokens per second, from a 4K-token prompt and a 512-token answer at T 0.6 (Flint at its card's T 1.0). The M5 Pro's Flash-Next 180B Q2 row is a 256-token answer at T 0 on that run's own 4,074-token prompt, and its Kapitsa column is Kapitsa with KFlash against plain Splash 1.5.0: a tie, the two engines' ranges overlap ([record](bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md)). Footnotes, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
 
 The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
 ## 🔥 What's new
 
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 319 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
-- [2026/10] 🌊 **Kapitsa runs Splash's engine**: `kapitsa serve --engine splash` puts Inco's Splash behind Kapitsa's chat page, OpenAI API and Anthropic API ([backends](#supported-backends)).
-- [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: `kapitsa serve --engine splash` streams Qwen3.8-Flash-Next's Q2_0 experts from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
+- [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
 - [2026/10] 🏆 **The fastest decode in 32 of the 38 model and Mac pairs** measured against nine engines ([poster](#benchmarks)).
 
 ## Features
 
 - **339 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 32 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
-- **A 180B model on a 48 GB Mac, at 56 tok/s (M5 Pro, `kapitsa serve --engine splash`).** Its routed experts stream from the SSD, as many as the budget holds.
+- **A 180B model on a 48 GB Mac, at 56 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
 - **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
 - **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
@@ -74,7 +73,6 @@ kapitsa-systemone --model ~/.cache/kapitsa/models/drex-max-v1 --port 8000 --cont
 
 ```bash
 kapitsa serve                   # chat + OpenAI/Anthropic APIs at http://127.0.0.1:8000
-kapitsa serve --engine splash   # the same server, with Splash's engine running the model
 kapitsa claude                  # Claude Code on Kapitsa
 kapitsa doctor                  # this Mac's GPU and memory, and which models fit it
 kapitsa cluster                 # the Macs on this network that run Kapitsa, and their models
@@ -97,32 +95,7 @@ server to its own Mac. [Usage guide](docs/usage.md)</sub>
 The opt-in [C ABI SDK](sdk/README.md) lets desktop clients reuse a loaded model,
 stream and cancel requests. See its build instructions and host-process lifetime limitations.
 
-## Supported backends
-
-Kapitsa runs a model on its own engine or on Inco's [Splash](https://github.com/incoai/splash), and `--engine` picks
-which. The chat page, the OpenAI and Anthropic APIs and streaming are the same on both.
-
-| Backend | Runs the model | Models | Start it |
-| --- | --- | --- | --- |
-| **Kapitsa**, the default | Kapitsa's Metal kernels and the Neural Engine: KFlash, the published drafters, the SSD prefix cache | The [catalog](#models), images on most models, structured output, [several Macs](docs/usage.md#several-macs) | `kapitsa serve` |
-| **Splash** | Inco's Splash in a child process: it holds the weights and runs the GPU work and the decode loop, and Kapitsa renders the prompt with its tokenizer and chat template | Splash's own model folders, text chat | `kapitsa serve --engine splash` |
-
-Under `--engine splash`, Splash's model folder is the model: `--splash-model` picks one by family (`flash-next`) or by
-the start of its folder name when Splash has several resolved, and `--check` prints the engine and the model that
-would run, and what is missing, without starting anything. An image, structured output or a loop count is refused
-rather than answered by the other engine, and Splash's SSD cache stays off unless `--splash-persistent-cache` is
-given. Kapitsa links neither Splash's engine nor its library: Splash is Apache 2.0, and the few Metal kernels adapted
-from it keep their file headers ([Third-party notices](THIRD_PARTY_NOTICES)). Flags, how Splash's expert cache is
-sized, the failures that are not refusals and the measurements against plain Splash: [Splash's engine](docs/usage.md#splashs-engine).
-
-**Roadmap** — what is open in the [tracker](https://github.com/nace-ai/kapitsa/issues), by backend:
-
-- **Splash's engine** — relaunch the child when it dies ([#757](https://github.com/nace-ai/kapitsa/issues/757)), queue
-  requests when the pool is full instead of a 503 ([#756](https://github.com/nace-ai/kapitsa/issues/756)), non-blocking
-  reap with a shutdown deadline and a per-request deadline ([#758](https://github.com/nace-ai/kapitsa/issues/758)), a
-  client's `cache_salt` on `/v1/messages` and `/v1/responses` ([#765](https://github.com/nace-ai/kapitsa/issues/765)),
-  and expert-cache headroom with turn-2 time to first token ([#753](https://github.com/nace-ai/kapitsa/issues/753)).
-- **Kapitsa's own engine** — KV cache quantization ([#547](https://github.com/nace-ai/kapitsa/issues/547)).
+**Roadmap** — what is open in the [tracker](https://github.com/nace-ai/kapitsa/issues): KV cache quantization ([#547](https://github.com/nace-ai/kapitsa/issues/547)).
 
 ## Supported models
 
@@ -193,7 +166,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 606 / 77<br><sub>KFlash</sub> | 🟩 464 / **78**<br><sub>DFlash2</sub> | 446 / 51<br><sub>DFlash2</sub> | 674 / 72<br><sub>DFlash2</sub> | 470 / 40<br><sub>MTP</sub> | 462 / 41<br><sub>MTP</sub> | 421 / 32<br><sub>MTP</sub> | 322 / 30<br><sub>MTP</sub> | 118 / 17 |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 2802 / **201**<br><sub>KFlash</sub> | 2494 / 156<br><sub>MTP</sub> | 1619 / 144<br><sub>DFlash2</sub> | 3514 / 181<br><sub>DFlash2</sub> | 1518 / 102<br><sub>MTP</sub> | 2569 / 89<br><sub>MTP</sub> | 2474 / 98<br><sub>DFlash2</sub> | 1755 / 107<br><sub>MTP</sub> | 997 / 96 |
-| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · Q2_0 experts streamed from the SSD</sub> | 🟩 1218 / **61**<br><sub>via Splash's engine · e67b764f · KFlash 1.5.0</sub> | × | × | 1178 / **≈56**<br><sub>1.5.0</sub> | — | × | × | 37 / 9<br><sub>c7474afc</sub> | — |
+| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · Q2_0 experts streamed from the SSD</sub> | 🟩 1218 / **61**<br><sub>KFlash · e67b764f</sub> | × | × | 1178 / **≈56**<br><sub>1.5.0</sub> | — | × | × | 37 / 9<br><sub>c7474afc</sub> | — |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **70**<br><sub>KFlash</sub> | × | × | × | × | × | 53 | 13 | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 3141 / **159**<br><sub>KFlash</sub> | 1728 / 115<br><sub>MTP</sub> | 1938 / 124<br><sub>MTP</sub> | × | 2369 / 92 | 1743 / 101 | 1881 / 94 | 1915 / 101<br><sub>MTP</sub> | 1479 / 72 |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 **79**<br><sub>KFlash</sub> | × | 39 | × | × | × | 41 | × | × |
@@ -204,7 +177,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: | ---: |
 | **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2691 / **149**<br><sub>KFlash</sub> | 2072 / 92 | 2138 / 145 |
 
-<sub>Qwen3.8-Flash-Next 180B-A7B does not fit in 48 GB, so both engines stream its experts from the SSD. With Q2_0 weights on both and Kapitsa's expert store pinned at 24 GB (the auto size here is about 29.9 GB, but four runs at that size were stopped at memory pressure), Kapitsa's prefill is behind on short prompts, level at 4K and 16K and 2.7% ahead at 32K: not the fastest everywhere (correction, 24 Oct: on Kapitsa's warm second leg alone its prefill is 13.5-14.5% behind at 1K, level at 4K and a few percent ahead at 16K and 32K; [numbers and caveats](docs/benchmarks.md#qwen38-flash-next-streamed-from-the-ssd-kapitsa-against-llamacpp-m5-pro-48-gb-2026-10-24)). The Flash-Next 180B Q2 row's Kapitsa and Splash cells are a 2026-10-30 re-measure ([record](bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md)): Kapitsa's server on Splash's engine (`kapitsa serve --engine splash` at main `e67b764f`, which at its default `--splash-kflash auto` runs **KFlash**, Kapitsa's patches to Splash 1.5.0, [packaging/splash/](packaging/splash/README.md)) against the plain Splash 1.5.0 release, both at `--expert-memory 16G --idle-release off`, interleaved K S K S, 5 legs per arm of 2 runs each, with the scripts of the 2026-10-27 run. Its decode is a 256-token answer at T 0, not this table's 512-token answer at T 0.6, counted from the first token to the last over 10 requests per engine; its 4K prefill is prompt tokens over time to first token on that run's own 4,074-token prompt, against this table's 4,133. Kapitsa read 61.3 decode (53.7-64.7) and 1,218 prefill (976-1,269) against Splash's 56.5 (51.9-60.2) and 1,178 (1,040-1,262): the ranges overlap, so by the rule registered before the run it is a tie, not a win. KFlash's interleaved A/B at `--expert-memory 20G` (29 Oct, more runs per arm) measured decode 1.101x and 4K prefill 1.004x the release, the same tokens as the release on 6 prompts × 22 runs ([numbers](docs/splash-backend.md#kflash)). The llama.cpp cell is the 2026-10-27 four-engine run, PR #751 ([record](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)), 2 requests. Kapitsa's own engine ran in that record too, with MTP depth 2 and its expert store pinned at 24 GB, not sized from free memory: 847 prefill and 53.7 decode at T 0, but three of its legs were stopped at memory-pressure level 4, with up to 4.5 GB of swap, late in the leg (16K prefill or turn 2), so its 16K and turn-2 cells have 9 runs against 12. Ollama and LM Studio were not run on that Q2_0 pack, so their cells are dashes, and mlx-serve, oMLX, MTPLX and MLX have no pack of this model that fits 48 GB.</sub>
+<sub>Qwen3.8-Flash-Next 180B-A7B does not fit in 48 GB, so both engines stream its experts from the SSD. With Q2_0 weights on both and Kapitsa's expert store pinned at 24 GB (the auto size here is about 29.9 GB, but four runs at that size were stopped at memory pressure), Kapitsa's prefill is behind on short prompts, level at 4K and 16K and 2.7% ahead at 32K: not the fastest everywhere (correction, 24 Oct: on Kapitsa's warm second leg alone its prefill is 13.5-14.5% behind at 1K, level at 4K and a few percent ahead at 16K and 32K; [numbers and caveats](docs/benchmarks.md#qwen38-flash-next-streamed-from-the-ssd-kapitsa-against-llamacpp-m5-pro-48-gb-2026-10-24)). The Flash-Next 180B Q2 row's Kapitsa and Splash cells are a 2026-10-30 re-measure ([record](bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md)): Kapitsa at main `e67b764f` running **KFlash** against the plain Splash 1.5.0 release, both at `--expert-memory 16G --idle-release off`, interleaved K S K S, 5 legs per arm of 2 runs each, with the scripts of the 2026-10-27 run. Its decode is a 256-token answer at T 0, not this table's 512-token answer at T 0.6, counted from the first token to the last over 10 requests per engine; its 4K prefill is prompt tokens over time to first token on that run's own 4,074-token prompt, against this table's 4,133. Kapitsa read 61.3 decode (53.7-64.7) and 1,218 prefill (976-1,269) against Splash's 56.5 (51.9-60.2) and 1,178 (1,040-1,262): the ranges overlap, so by the rule registered before the run it is a tie, not a win. KFlash's interleaved A/B at `--expert-memory 20G` (29 Oct, more runs per arm) measured decode 1.101x and 4K prefill 1.004x the release, the same tokens as the release on 6 prompts × 22 runs ([numbers](docs/benchmarks.md#m5-pro)). The llama.cpp cell is the 2026-10-27 four-engine run, PR #751 ([record](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)), 2 requests. Kapitsa's own engine ran in that record too, with MTP depth 2 and its expert store pinned at 24 GB, not sized from free memory: 847 prefill and 53.7 decode at T 0, but three of its legs were stopped at memory-pressure level 4, with up to 4.5 GB of swap, late in the leg (16K prefill or turn 2), so its 16K and turn-2 cells have 9 runs against 12. Ollama and LM Studio were not run on that Q2_0 pack, so their cells are dashes, and mlx-serve, oMLX, MTPLX and MLX have no pack of this model that fits 48 GB.</sub>
 
 </details>
 

@@ -1,6 +1,6 @@
 // Splash's native engine protocol (version 11), the client side: encodes the frames a server sends to the `splash
 // serve-native` child and decodes and validates the events it sends back. A port of splash-1.4.0/server/protocol.py
-// (Apache-2.0), which `runtime/engine/Protocol.*` mirrors on the engine's side; docs/splash-backend.md says what is left out
+// (Apache-2.0), which `runtime/engine/Protocol.*` mirrors on the engine's side; src/splash/README.md says what is left out
 // (image spans, score requests and token-mask constraints: a request here is text-only generation, unconstrained).
 //
 // Little-endian throughout. A frame is a 16-byte header (magic "SPLH", u16 version, u16 type, u64 payload bytes) and the

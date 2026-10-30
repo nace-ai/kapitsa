@@ -111,8 +111,8 @@ Found find_binary(const std::string& home, const std::string& splash_home, const
     if (is_executable_file(last)) return {last, ""};
     tried += "\n  " + last + "  (the last run's)";
   }
-  return {"", "no Splash engine binary found; looked for:" + tried +
-                  "\nInstall Splash, set SPLASH_HOME to its folder, or give --splash-binary <path to engine/splash>."};
+  return {"", "no engine binary found; looked for:" + tried +
+                  "\nInstall the engine, set SPLASH_HOME to its folder, or give --splash-binary <path to engine/splash>."};
 }
 
 std::vector<std::string> list_models(const std::string& home) {
@@ -125,7 +125,7 @@ Found find_model(const std::string& home, const std::string& want, const std::st
   std::vector<Model> all = models(home);
   const std::string dir = models_dir(home).string();
   if (all.empty())
-    return {"", "no Splash model found: " + dir + " has no folder with a tokenizer. Run a model in Splash once, or give --splash-model <folder>."};
+    return {"", "no model found: " + dir + " has no folder with a tokenizer. Run a model in the engine once, or give --splash-model <folder>."};
   if (want.empty()) {
     if (all.size() == 1) return {dir + "/" + all[0].name, ""};
     // several: the one the last run used, else the one Splash resolved last (ties: the first by folder name, so the same every time)
@@ -136,7 +136,7 @@ Found find_model(const std::string& home, const std::string& want, const std::st
     for (const Model& m : all)
       if (!last.empty() && last == dir + "/" + m.name) pick = &m, why = "the one the last run used";
     return {dir + "/" + pick->name, "",
-            "Splash model: " + pick->family + " " + pick->name + " (" + why + "; --splash-model <family or folder name> picks another)"};
+            "Model: " + pick->family + " " + pick->name + " (" + why + "; --splash-model <family or folder name> picks another)"};
   }
   std::vector<const Model*> hit;
   if (want.size() >= 6)
@@ -153,7 +153,7 @@ Found find_model(const std::string& home, const std::string& want, const std::st
     for (const Model& m : all) e += "\n  " + m.family + "  " + m.name;
     return {"", e};
   }
-  // one model, or re-resolutions of the same source (Splash keeps each): the newest
+  // one model, or re-resolutions of the same source (the engine keeps each): the newest
   const Model* best = hit[0];
   for (const Model* m : hit) {
     if (m != best && (m->family != best->family || m->source != best->source || m->source.empty())) {
@@ -207,9 +207,9 @@ Check check(const std::string& home, const std::string& splash_home, const std::
   Found b = binary.empty() ? find_binary(home, splash_home, path_env, system_roots, last.binary) : Found{binary, ""};
   if (!binary.empty() && !is_file(binary)) b = {"", "--splash-binary " + binary + ": no such file"};
   else if (!binary.empty() && !is_executable_file(binary)) b = {"", "--splash-binary " + binary + ": not an executable file"};
-  out.text = b.ok() ? "Splash engine: " + b.path + "\n" : "Splash engine: NOT FOUND\n" + b.error + "\n";
+  out.text = b.ok() ? "Engine: " + b.path + "\n" : "Engine: NOT FOUND\n" + b.error + "\n";
   const std::vector<Model> all = models(home);
-  out.text += "\nSplash models in " + models_dir(home).string() + ": " + (all.empty() ? "none" : std::to_string(all.size())) + "\n";
+  out.text += "\nModels in " + models_dir(home).string() + ": " + (all.empty() ? "none" : std::to_string(all.size())) + "\n";
   for (const Model& m : all) out.text += "  " + m.family + "  " + m.name + (m.source.empty() ? "" : "  (" + m.source + ")") + "\n";
   std::error_code dec;  // (a name too long, or a path under a folder that cannot be searched, is no folder: not an exception)
   Found m = fs::is_directory(model, dec) && !dec ? Found{model, ""} : find_model(home, model, last.model);  // (as serve: a folder, else a name)
@@ -260,7 +260,7 @@ bool kflash_by_default(const std::string& model_folder) {
 EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_given, const KFlash& kflash,
                        const std::string& model_folder) {
   EnginePick out{binary, {}, "", ""};
-  const char* build = "python3 packaging/splash/build.py --release <Splash 1.5.0 folder> (packaging/splash/README.md)";
+  const char* build = "python3 packaging/splash/build.py --release <engine 1.5.0 folder> (packaging/splash/README.md)";
   if (mode == KFlashMode::off) return out;
   if (mode == KFlashMode::on && binary_given) {
     out.error = "--splash-kflash on runs the KFlash build, not --splash-binary: drop one of them";
@@ -273,12 +273,12 @@ EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_g
   if (mode == KFlashMode::automatic) {
     if (binary_given || !kflash_by_default(model_folder)) return out;
     if (kflash.binary.empty()) {
-      out.note = std::string("stock Splash: KFlash runs this model faster, but its engine is not built (") + build + ")";
+      out.note = std::string("stock engine: KFlash runs this model faster, but its engine is not built (") + build + ")";
       return out;
     }
     const std::string v = release_version(binary);
     if (kflash.tag.empty() || v != kflash.tag) {
-      out.note = "stock Splash " + (v.empty() ? std::string("(release unknown)") : v) + ": KFlash is built on Splash " +
+      out.note = "stock engine " + (v.empty() ? std::string("(release unknown)") : v) + ": KFlash is built on release " +
                  (kflash.tag.empty() ? std::string("(unknown)") : kflash.tag) +
                  " and measured faster only against that release; --splash-kflash on runs it anyway";
       return out;
@@ -287,7 +287,7 @@ EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_g
   out.binary = kflash.binary;
   out.env = {"SPLASH_KSX_H1=3", "SPLASH_KSX_KERNELS=" + kflash.kernels};
   out.note = "KFlash engine " + kflash.binary + (mode == KFlashMode::on ? " (--splash-kflash on)"
-                                                                         : " (measured faster for this model; --splash-kflash off runs stock Splash)");
+                                                                         : " (measured faster for this model; --splash-kflash off runs the stock engine)");
   return out;
 }
 

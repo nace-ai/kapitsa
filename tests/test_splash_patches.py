@@ -132,7 +132,7 @@ def install_kflash(version):
 
 p, built, same = install_kflash("1.4.0")
 check(p.returncode == 0 and not built and same, "install: another Splash release is left alone, not built", p.stdout + p.stderr)
-check("Splash 1.4.0 is installed" in p.stdout and "patches are for Splash " + pin["tag"] in p.stdout,
+check("release 1.4.0" in p.stdout and "patches are for release " + pin["tag"] in p.stdout,
       "install: says why KFlash was not built", p.stdout)
 p, built, same = install_kflash(pin["tag"])
 check(p.returncode == 0 and built and same, "install: the pinned release builds KFlash, its files untouched", p.stdout + p.stderr)

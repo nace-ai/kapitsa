@@ -8,7 +8,7 @@ namespace {
 
 constexpr uint64_t kGiB = 1ull << 30;
 // Splash's auto plan has no fixed threshold (its refusal is dynamic): one start was refused at 35.2 GiB under a system pressure
-// warning, and one started at 33.0 GiB. 38 is a margin over the refusal seen, not a measured need; docs/splash-backend.md.
+// warning, and one started at 33.0 GiB. 38 is a margin over the refusal seen, not a measured need; src/splash/README.md.
 constexpr uint64_t kAutoPlanNeeds = 38 * kGiB;
 constexpr uint64_t kHeadroom = 14 * kGiB;       // 2 GiB protected for macOS, the rest for everything else running
 constexpr uint64_t kMinCache = 8 * kGiB;
@@ -103,7 +103,7 @@ std::vector<std::string> default_engine_args(const std::vector<std::string>& use
       out.insert(out.end(), {"--expert-memory", std::to_string(gib * kGiB)});
       say("--expert-memory " + std::to_string(gib) + "G (" + std::to_string(available_bytes / kGiB) + " GiB free+reclaimable)");
     } else {
-      say("only " + std::to_string(available_bytes / kGiB) + " GiB free+reclaimable: expert memory left to Splash");
+      say("only " + std::to_string(available_bytes / kGiB) + " GiB free+reclaimable: expert memory left to the engine");
     }
   }
   if (persistent_cache && !has(user, "--persistent-cache")) {

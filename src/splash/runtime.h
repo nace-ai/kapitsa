@@ -1,7 +1,7 @@
 // The Splash engine as a child process: `splash serve-native <model dir> <ctx|auto> <mem|auto> ...` speaking the native
 // protocol of splash/protocol.h over its stdin and stdout. A C++ counterpart of splash-1.4.0/server/runtime.py, without its
 // relaunch: a child that dies fails every request it held with an engine_unhealthy error and the Runtime stays dead, so the
-// owner decides whether to start another (docs/splash-backend.md).
+// owner decides whether to start another (src/splash/README.md).
 //
 // One reader thread decodes the child's events and calls a request's Sink from that thread, so a Sink returns quickly and
 // never calls back into the Runtime's submit() or shutdown(); cancel() is allowed. Exactly one of on_done / on_error ends

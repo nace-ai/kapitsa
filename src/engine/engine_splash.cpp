@@ -37,9 +37,9 @@ namespace {
 // What a request is told when the engine child has exited: one sentence on every route, without the runtime's own
 // "the splash engine is not running" prefix a second time.
 std::string engine_down_message(std::string why) {
-  for (const std::string lead : {"the splash engine is not running", ": "})
+  for (const std::string lead : {"the engine is not running", ": "})
     if (why.rfind(lead, 0) == 0) why.erase(0, lead.size());
-  return "the Splash engine has exited" + (why.empty() ? std::string() : " (" + why + ")") +
+  return "the engine has exited" + (why.empty() ? std::string() : " (" + why + ")") +
          "; restart kapitsa serve";
 }
 
@@ -100,19 +100,19 @@ ChatResult refuse(const std::string& why, bool invalid = true) {
 
 void Engine::init_splash() {
   const std::string& dir = opts_.splash_model;
-  if (opts_.splash_binary.empty()) throw std::runtime_error("splash: no Splash binary given (--splash-binary)");
+  if (opts_.splash_binary.empty()) throw std::runtime_error("no engine binary given (--splash-binary)");
   if (!is_file(dir + "/model.json") && !is_file(dir + "/config.json"))
-    throw std::runtime_error("splash: " + dir + " is not a Splash model folder (no model.json)");
+    throw std::runtime_error(dir + " is not a model folder for this engine (no model.json)");
   // the tokenizer and template Splash itself uses: in its resolved folder's tokenizer/ (else beside model.json)
   const std::string tdir = is_file(dir + "/tokenizer/tokenizer.json") ? dir + "/tokenizer" : dir;
-  if (!is_file(tdir + "/tokenizer.json")) throw std::runtime_error("splash: no tokenizer.json in " + tdir);
+  if (!is_file(tdir + "/tokenizer.json")) throw std::runtime_error("no tokenizer.json in " + tdir);
   if (opts_.model_id.empty()) {
     const size_t at = dir.find_last_of('/');
     opts_.model_id = at == std::string::npos || at + 1 == dir.size() ? dir : dir.substr(at + 1);
   }
   tok_.load(tdir + "/tokenizer.json");
   const std::string src = chat_template_source(tdir);
-  if (src.empty()) throw std::runtime_error("splash: no chat template in " + tdir);
+  if (src.empty()) throw std::runtime_error("no chat template in " + tdir);
   tmpl_ = std::make_unique<minja::chat_template>(src, "", "<|im_end|>");
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
@@ -156,15 +156,15 @@ void Engine::init_splash() {
     const auto extra = splash::default_engine_args(opts_.splash_args, q20::available_memory(), opts_.splash_persistent_cache,
                                                    cache_dir, &note);
     ro.argv.insert(ro.argv.end(), extra.begin(), extra.end());
-    if (!note.empty()) logi("splash: engine arguments added: %s", note.c_str());
+    if (!note.empty()) logi("engine arguments added: %s", note.c_str());
   }
-  ro.log = [](const std::string& s) { logi("splash: %s", s.c_str()); };
+  ro.log = [](const std::string& s) { logi("engine: %s", s.c_str()); };
   splash_ = std::make_unique<splash::Runtime>(std::move(ro));
   splash_->start();  // READY: the child has loaded and calibrated the model
   splash_slots_ = std::max<int>(1, int(splash_->ready().max_concurrent_requests));
   opts_.context = int(splash_->ready().max_context_tokens);
   context_fit_ = opts_.context;
-  logi("splash: engine ready (pid %d): context %d, %d concurrent request(s), tokenizer from %s", int(splash_->pid()),
+  logi("engine ready (pid %d): context %d, %d concurrent request(s), tokenizer from %s", int(splash_->pid()),
        opts_.context, splash_slots_, tdir.c_str());
 }
 
@@ -176,11 +176,11 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   ++requests_;
   // No reasoning is put back into assistant turns the client sent without it (the native path does, to extend the KV it
   // kept): Splash's engine caches a request's prompt blocks, not its output, so a longer prompt only costs prefill. Measured
-  // on a 4K two-turn chat it was slower than sending the history as is, as plain Splash does; the runs are in docs/splash-backend.md.
+  // on a 4K two-turn chat it was slower than sending the history as is, as plain Splash does; the runs are in src/splash/README.md.
   // what Splash's native protocol carries here is text with sampling: the rest is refused before anything is queued
-  if (r.grammar) return refuse("structured output is not supported by the Splash engine");
-  if (!vision::image_sources(r.messages).empty()) return refuse("image input is not supported by the Splash engine");
-  if (r.loops > 0) return refuse("loop counts are not supported by the Splash engine");
+  if (r.grammar) return refuse("structured output is not supported by this engine");
+  if (!vision::image_sources(r.messages).empty()) return refuse("image input is not supported by this engine");
+  if (r.loops > 0) return refuse("loop counts are not supported by this engine");
   // Splash's own ranges (frontend.py SAMPLING_NUMBERS): a value outside them is a 400 naming the field, not a clamp
   auto bad = [&](const char* name, const char* want) { return refuse(std::string(name) + " must be " + want); };
   if (!(r.temperature >= 0 && r.temperature <= 2)) return bad("temperature", "a number in [0, 2]");
@@ -263,7 +263,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   } catch (const splash::PendingLimitExceeded& ex) {
     res.finish_reason = "error";
     res.busy = true;  // a 503 with Retry-After, before a stream's first byte (on_accepted comes after the submit for that)
-    res.error = std::string("the Splash engine is at its concurrent-request limit: ") + ex.what();
+    res.error = std::string("the engine is at its concurrent-request limit: ") + ex.what();
     return res;
   } catch (const splash::EngineUnhealthy& ex) {
     res.finish_reason = "error";
@@ -271,7 +271,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     res.error = engine_down_message(ex.what());
     return res;
   } catch (const splash::ProtocolError& ex) {
-    return refuse(std::string("the Splash engine refused the request: ") + ex.what());
+    return refuse(std::string("the engine refused the request: ") + ex.what());
   }
 
   // after the submit, so a full pool answers before a stream has started; a client that is gone by now ends the request
@@ -347,7 +347,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     // a cancelled reply waits for the engine's end, but not forever: a child that ignores the cancel is the runtime's
     // to supervise, and this request goes on without it (its late frames fall into a relay nobody reads)
     if (cancel_sent && !ended && now_ms() - cancel_ms > 30000) {
-      logi("splash: the engine did not end request %llu 30 s after its cancel; the reply goes on without it", (unsigned long long)id);
+      logi("the engine did not end request %llu 30 s after its cancel; the reply goes on without it", (unsigned long long)id);
       break;
     }
     // the reply is over here (stop string, max_tokens, client gone): stop the engine's work, then drain it to its end

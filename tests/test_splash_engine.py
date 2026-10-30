@@ -34,17 +34,17 @@ with tempfile.TemporaryDirectory() as home:
     env.update(HOME=home, KAPITSA_HOME=home + "/kapitsa", PATH="/usr/bin:/bin")
     r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
     if not os.path.isfile("/Applications/Splash/engine/splash"):  # a system-wide install is looked at too, and HOME= does not hide it
-        check(r.returncode != 0 and "no Splash engine binary found" in r.stderr and "SPLASH_HOME" in r.stderr, "no binary: %r" % r.stderr[-300:])
+        check(r.returncode != 0 and "no engine binary found" in r.stderr and "SPLASH_HOME" in r.stderr, "no binary: %r" % r.stderr[-300:])
     if not os.path.isfile("/Applications/Splash/engine/splash"):  # same reason: a system-wide install would be found after this one
         os.makedirs(home + "/Applications/Splash/engine")
         open(home + "/Applications/Splash/engine/splash", "w").close()
         r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
-        check(r.returncode != 0 and "no Splash engine binary found" in r.stderr, "a file that cannot be run is not the engine: %r" % r.stderr[-300:])
+        check(r.returncode != 0 and "no engine binary found" in r.stderr, "a file that cannot be run is not the engine: %r" % r.stderr[-300:])
     os.makedirs(home + "/Applications/Splash/engine", exist_ok=True)
     open(home + "/Applications/Splash/engine/splash", "a").close()
     os.chmod(home + "/Applications/Splash/engine/splash", 0o755)
     r = subprocess.run([CLI, "serve", "--engine", "splash", "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
-    check(r.returncode != 0 and "no Splash model found" in r.stderr, "no model: %r" % r.stderr[-300:])
+    check(r.returncode != 0 and "no model found" in r.stderr, "no model: %r" % r.stderr[-300:])
 
 
 # no Splash installed (CI): the small stand-in folder of tests/fixtures/make_splash_model.py
@@ -191,7 +191,7 @@ try:
         for attempt in range(2):  # the same answer every time: nothing relaunches the engine
             st, r = post(s.base, body, path=path)
             text = json.dumps(r)
-            check(st == 503 and "Splash engine has exited" in text and "restart kapitsa serve" in text and "not running: the" not in text,
+            check(st == 503 and "the engine has exited" in text and "restart kapitsa serve" in text and "not running: the" not in text,
                   "%s dead engine: 503 naming it, got %s %s" % (path, st, r))
             check(not last_headers.get("Retry-After"), "%s dead engine: no Retry-After, got %r" % (path, dict(last_headers)))
     check(s.proc.poll() is None, "server still answering after the engine died")
@@ -209,7 +209,7 @@ try:
     t.join(30)
     st, r = out.get("r", (None, None))
     text = json.dumps(r)
-    check(st == 503 and "Splash engine has exited" in text and "restart kapitsa serve" in text,
+    check(st == 503 and "the engine has exited" in text and "restart kapitsa serve" in text,
           "engine killed mid-request: 503 naming it, got %s %s" % (st, r))
     check(not last_headers.get("Retry-After"), "engine killed mid-request: no Retry-After, got %r" % dict(last_headers))
 finally:
@@ -279,7 +279,7 @@ with tempfile.TemporaryDirectory() as home:
     env = dict(os.environ, HOME=home, KAPITSA_HOME=home + "/kapitsa")
     r = subprocess.run([CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", "/nonexistent/qwen3.5-35b-a3b",
                         "--private", "--port", str(free_port())], capture_output=True, text=True, timeout=60, env=env)
-    check(r.returncode != 0 and "no Splash model found" in r.stderr + r.stdout,
+    check(r.returncode != 0 and "no model found" in r.stderr + r.stdout,
           "model name refused: %d %r" % (r.returncode, (r.stderr + r.stdout)[-300:]))
 
 # turn 2 is what plain Splash sends: the client's own history, no reasoning put back (it only lengthens the prompt: Splash's
@@ -398,7 +398,7 @@ with tempfile.TemporaryDirectory() as home:
     try: err = proc.communicate(timeout=15)[1].decode()
     except subprocess.TimeoutExpired: proc.kill(); err = proc.communicate()[1].decode()
     check(up, "several models, no --splash-model: started: %r" % err[-400:])
-    check("Splash model: Qwen3.8-Flash-Next bbbbbb2222" in err and "--splash-model" in err, "several models: says which: %r" % err[-400:])
+    check("Model: Qwen3.8-Flash-Next bbbbbb2222" in err and "--splash-model" in err, "several models: says which: %r" % err[-400:])
     # a started run remembers its binary and model (splash.json, under KAPITSA_HOME)
     try: saved = json.load(open(home + "/kapitsa/splash.json"))
     except Exception: saved = {}

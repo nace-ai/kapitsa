@@ -62,7 +62,7 @@ int main() {
   Found b = find_binary(home, "", "", none);
   check(!b.ok() && has(b.error, home + "/Applications/Splash/engine/splash") && has(b.error, "--splash-binary") && has(b.error, "SPLASH_HOME"), "binary: nothing", b.error);
   Found m = find_model(home, "");
-  check(!m.ok() && has(m.error, "no Splash model found") && has(m.error, "--splash-model"), "model: nothing", m.error);
+  check(!m.ok() && has(m.error, "no model found") && has(m.error, "--splash-model"), "model: nothing", m.error);
 
   // SPLASH_HOME, then PATH (through a symlink), then the default folders
   exe(tmp / "root/engine/splash");
@@ -204,13 +204,13 @@ int main() {
 
   // --check: what is found, what is missing, the fix; nothing is started
   Check c = check(home, "", "", "", "", {}, none);
-  check(!c.ok && has(c.text, "Splash engine: NOT FOUND") && has(c.text, "SPLASH_HOME") && has(c.text, "Model to run: ") &&
-            has(c.text, "Splash model: ") && !has(c.text, "NOT DECIDED"),
+  check(!c.ok && has(c.text, "Engine: NOT FOUND") && has(c.text, "SPLASH_HOME") && has(c.text, "Model to run: ") &&
+            has(c.text, "Model: ") && !has(c.text, "NOT DECIDED"),
         "check: nothing found, several models: it still names the pick", c.text);
   c = check(home, "", "", "", "no-such-model", {}, none);
   check(!c.ok && has(c.text, "NOT DECIDED"), "check: a name that matches nothing", c.text);
   c = check(home, (tmp / "root").string(), "", "", "other-gguf", {}, none);
-  check(c.ok && has(c.text, "Splash engine: " + (tmp / "root/engine/splash").string()) && has(c.text, "Model to run: ") && has(c.text, "/ffffff6666") &&
+  check(c.ok && has(c.text, "Engine: " + (tmp / "root/engine/splash").string()) && has(c.text, "Model to run: ") && has(c.text, "/ffffff6666") &&
             has(c.text, "Ready: run the same command without --check"),
         "check: ready", c.text);
   c = check(home, "", "", (tmp / "nope").string(), "", {}, none);
@@ -268,7 +268,7 @@ int main() {
   check(p.binary == stock && p.env.empty() && has(p.note, "not built") && p.error.empty(), "pick auto: no build, stock and a note", p.note);
   touch(tmp / "root/release.json", R"({"version": "1.4.0"})");  // a Splash release other than the one KFlash is built on
   p = pick_engine(KFlashMode::automatic, stock, false, kf, res2 + "kfnext00001");
-  check(p.binary == stock && p.env.empty() && has(p.note, "stock Splash 1.4.0") && has(p.note, "built on Splash 1.5.0") && p.error.empty(),
+  check(p.binary == stock && p.env.empty() && has(p.note, "stock engine 1.4.0") && has(p.note, "built on release 1.5.0") && p.error.empty(),
         "pick auto: another stock Splash release is kept, with a note", p.note);
   p = pick_engine(KFlashMode::on, stock, false, kf, res2 + "kfnext00001");
   check(p.binary == kf.binary && p.env.size() == 2, "pick on: KFlash whatever the stock release", p.binary);

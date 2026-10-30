@@ -169,7 +169,7 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
   single-stream verify: KFlash's tree verify on Qwen, as DFlash2's cycle runs it) and `batch` (four requests in one
   pass, as the engine batches them); `prefill` holds each window's last prompt row as the prefill samples it. Per path
   it writes `sequences.txt`, `records.txt` and `logits.f32` (about 190 MB on the Qwen models: delete them after):
-  Splash's layout, so another engine's dump of the same prefixes compares too.
+  a plain binary layout, so a dump of the same prefixes from another engine compares too.
 - `--paths` defaults to `step,verify,batch`. Flint, Dory and Flash-Next decode one request at a
   time, and `batch` is fatal on them ("... no batch path"): pass `--paths step,verify` to both builds. Dory's `verify`
   needs `--loop-kv per-loop`; with its default last-loop KV pass `--paths step`. `prefill` is written whatever

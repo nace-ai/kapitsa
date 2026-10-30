@@ -37,7 +37,7 @@ KAPITSA_METHOD = "KFlash"  # every Kapitsa cell's label: every Kapitsa decode pa
 
 def cell(row, engine):
     """(value, method, raw) of one cell: value is a number, None (a dash) or "x" (can't run). A Kapitsa number's method
-    is KFlash, unless the cell names its own (the M5 Pro's Flash-Next Q2 cell decodes in Splash's engine, not Kapitsa's);
+    is KFlash, unless the cell names its own (none does today);
     a rival's is None for plain decoding (no speculative decoding), so a rival's label only ever names a real method"""
     c = row["cells"].get(engine)
     if c is None or c == "x":

@@ -116,7 +116,7 @@ void Runtime::start() {
   in_fd_ = to_child[1];
   fcntl(in_fd_, F_SETFL, fcntl(in_fd_, F_GETFL) | O_NONBLOCK);  // write_frame polls, so it can give up
   out_fd_ = from_child[0];
-  say("splash engine pid " + std::to_string(child) + " started");
+  say("engine pid " + std::to_string(child) + " started");
   reader_ = std::thread([this] { read_loop(); });
 
   std::unique_lock<std::mutex> l(m_);
@@ -166,7 +166,7 @@ void Runtime::flush_cancels() {
 }
 
 void Runtime::write_locked(const std::vector<uint8_t>& f) {
-  if (in_fd_ < 0) throw EngineUnhealthy("the splash engine is not running");
+  if (in_fd_ < 0) throw EngineUnhealthy("the engine is not running");
   const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(o_.write_timeout_s));
   size_t off = 0;
   while (off < f.size()) {
@@ -174,17 +174,17 @@ void Runtime::write_locked(const std::vector<uint8_t>& f) {
     if (n > 0) { off += size_t(n); continue; }
     if (n < 0 && errno == EINTR) continue;
     if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-      if (stopping_) throw EngineUnhealthy("the splash engine is shutting down");
+      if (stopping_) throw EngineUnhealthy("the engine is shutting down");
       if (Clock::now() >= deadline) {
-        say("splash engine did not read a frame within " + std::to_string(int(o_.write_timeout_s)) + " s: killing it");
+        say("engine did not read a frame within " + std::to_string(int(o_.write_timeout_s)) + " s: killing it");
         signal_child(SIGKILL);
-        throw EngineUnhealthy("the splash engine stopped reading its input");
+        throw EngineUnhealthy("the engine stopped reading its input");
       }
       pollfd p{in_fd_, POLLOUT, 0};
       poll(&p, 1, 100);
       continue;
     }
-    throw EngineUnhealthy(std::string("write to the splash engine failed: ") + std::strerror(n < 0 ? errno : EIO));
+    throw EngineUnhealthy(std::string("write to the engine failed: ") + std::strerror(n < 0 ? errno : EIO));
   }
 }
 
@@ -193,8 +193,8 @@ uint64_t Runtime::submit(Request r, std::shared_ptr<Sink> sink, double deadline_
   {
     // The slot is taken in the same step as the check, so concurrent submitters cannot pass a full pool together.
     std::lock_guard<std::mutex> l(m_);
-    if (state_ != State::kReady) throw EngineUnhealthy("the splash engine is not running" + (dead_reason_.empty() ? "" : ": " + dead_reason_));
-    if (pending_.size() >= ready_.max_concurrent_requests) throw PendingLimitExceeded("the splash engine's request capacity is full");
+    if (state_ != State::kReady) throw EngineUnhealthy("the engine is not running" + (dead_reason_.empty() ? "" : ": " + dead_reason_));
+    if (pending_.size() >= ready_.max_concurrent_requests) throw PendingLimitExceeded("the engine's request capacity is full");
     id = next_id_++;
     pending_[id] = Pending{std::move(sink), false};  // before the write: the first event can follow it at once
   }
@@ -258,7 +258,7 @@ void Runtime::fail_all(const std::string& code, const std::string& message) {
   }
   cv_.notify_all();
   for (auto& [id, p] : held) {
-    try { p.sink->on_error(unhealthy(id, code, message)); } catch (...) { say("a splash request's sink threw from on_error"); }
+    try { p.sink->on_error(unhealthy(id, code, message)); } catch (...) { say("a request's sink threw from on_error"); }
   }}
 
 void Runtime::reap(double grace_s) {
@@ -287,16 +287,16 @@ void Runtime::reap(double grace_s) {
     }
     usleep(10000);
   }
-  if (!exited && !killed) say("splash engine already gone");
-  else if (!exited) say("splash engine did not exit after SIGKILL; left unreaped");
-  else if (WIFEXITED(st)) say("splash engine exited with status " + std::to_string(WEXITSTATUS(st)));
-  else if (WIFSIGNALED(st)) say("splash engine killed by signal " + std::to_string(WTERMSIG(st)));
+  if (!exited && !killed) say("engine already gone");
+  else if (!exited) say("engine did not exit after SIGKILL; left unreaped");
+  else if (WIFEXITED(st)) say("engine exited with status " + std::to_string(WEXITSTATUS(st)));
+  else if (WIFSIGNALED(st)) say("engine killed by signal " + std::to_string(WTERMSIG(st)));
 }
 
 void Runtime::read_loop() {
   FrameParser parser;
   std::vector<uint8_t> buf(1 << 16);
-  std::string code = "engine_exited", message = "the splash engine closed its output";
+  std::string code = "engine_exited", message = "the engine closed its output";
   bool fatal = false, eof = false;
   try {
     while (true) {
@@ -357,7 +357,7 @@ void Runtime::read_loop() {
             if (terminal) pending_.erase(it);
           }
         }
-        if (unknown) { say("splash engine event for unknown request " + std::to_string(id)); continue; }  // outside m_: a log callback may call alive()
+        if (unknown) { say("engine event for unknown request " + std::to_string(id)); continue; }  // outside m_: a log callback may call alive()
         try {
           std::visit([&](auto& x) {
             using T = std::decay_t<decltype(x)>;
@@ -368,7 +368,7 @@ void Runtime::read_loop() {
             else if constexpr (std::is_same_v<T, Error>) sink->on_error(x);
           }, ev);
         } catch (...) {
-          say("a splash request's sink threw; the request goes on without it");  // a sink's bug is not the engine's
+          say("a request's sink threw; the request goes on without it");  // a sink's bug is not the engine's
         }
         cv_.notify_all();  // a slot is free for a waiting submit-er
       }
@@ -379,13 +379,13 @@ void Runtime::read_loop() {
         code = "truncated_frame";
         message = issue->message;
         fatal = true;
-        say("splash protocol failure: " + issue->describe());
+        say("engine protocol failure: " + issue->describe());
       }
   } catch (const ProtocolError& e) {
     code = "protocol_error";
     message = e.what();
     fatal = true;
-    say(std::string("splash protocol failure: ") + e.what());
+    say(std::string("engine protocol failure: ") + e.what());
   } catch (const std::exception& e) {
     code = "internal_error";
     message = e.what();
@@ -395,7 +395,7 @@ void Runtime::read_loop() {
   reap(fatal ? 5 : std::max(0.1, o_.stop_grace_s));
   bool stopping;
   { std::lock_guard<std::mutex> l(m_); stopping = stopping_; }
-  if (stopping) { code = "engine_stopped"; message = "the splash engine was shut down"; }
+  if (stopping) { code = "engine_stopped"; message = "the engine was shut down"; }
   fail_all(code, message);
 }
 
@@ -416,10 +416,10 @@ void Runtime::shutdown() {
       return cv_.wait_for(l, grace, [&] { return state_ == State::kDead; });
     };
     if (!dead()) {
-      say("splash engine did not exit: SIGTERM");
+      say("engine did not exit: SIGTERM");
       signal_child(SIGTERM);
       if (!dead()) {
-        say("splash engine did not exit: SIGKILL");
+        say("engine did not exit: SIGKILL");
         signal_child(SIGKILL);
         if (!dead()) abandon_ = true;  // something outside the group still holds its stdout: stop reading it
       }
