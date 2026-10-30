@@ -33,7 +33,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test qwen4_config_test json_file_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
+exl3_test remote_test cluster_test split_place_test qwen4_config_test json_file_test systemone systemone_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
 build/api_test
@@ -49,6 +49,7 @@ build/split_place_test                       # where a split model's layers go (
 build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
+build/systemone_test                         # System One's pointer heads, readout (Drex Max v1) and projected (Drex v2.0) (src/systemone/systemone.cpp)
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
@@ -61,6 +62,7 @@ python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac 
 python3 tests/test_update.py build
 python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
+python3 tests/test_drex_max.py --cli build   # Drex Max v1: head extraction, tokenizer-only request layouts (no model, no GPU)
 python3 tests/test_pr_size.py
 python3 tests/test_splash_patches.py --apply   # packaging/splash/: clones Splash and applies the patches; no build
 python3 tests/test_logit_compare.py

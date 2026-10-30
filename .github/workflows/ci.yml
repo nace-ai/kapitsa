@@ -138,7 +138,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test remote_test cluster_test split_place_test qwen4_config_test json_file_test affine_pack_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test remote_test cluster_test split_place_test qwen4_config_test json_file_test affine_pack_test systemone_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump
       - name: SDK C ABI contract
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -198,6 +198,9 @@ jobs:
       - name: affine_pack_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/affine_pack_test
+      - name: systemone_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/systemone_test
       - name: execution_session_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/execution_session_test
@@ -233,6 +236,9 @@ jobs:
       - name: test_community
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_community.py build
+      - name: test_drex_max
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_drex_max.py --cli build
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
