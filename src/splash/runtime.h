@@ -25,12 +25,16 @@
 
 namespace ni::splash {
 
-// A request's events, in order: on_start once, then on_progress and on_tokens any number of times, then on_done or on_error.
+// A request's events, in order: on_start once, then on_progress, on_tokens and (Constraint::kTokenMask only)
+// on_mask_request any number of times, then on_done or on_error. They come on the runtime's reader thread.
 class Sink {
  public:
   virtual ~Sink() = default;
   virtual void on_start(const Start&) {}
   virtual void on_progress(const PromptProgress&) {}
+  // The engine waits for the answer before it samples: Runtime::mask_response, from another thread (a write from the
+  // reader can wedge against a child blocked writing its next event), or Runtime::cancel.
+  virtual void on_mask_request(const MaskRequest&) {}
   virtual void on_tokens(const Tokens&) = 0;
   virtual void on_done(const Done&) = 0;
   virtual void on_error(const Error&) = 0;
@@ -72,6 +76,11 @@ class Runtime {
   // Asks the engine to stop the request. It still ends with on_done (cancelled, or finished first) or on_error.
   void cancel(uint64_t request_id);
 
+  // Answers a request's MaskRequest (encode_mask_response's words). Nothing is sent for a request that has ended or was
+  // cancelled. Throws EngineUnhealthy when the write fails, ProtocolError for words the engine would refuse. Not to be
+  // called from a Sink.
+  void mask_response(uint64_t request_id, uint64_t mask_request_id, const std::vector<uint32_t>& words);
+
   // The engine's status JSON, or "" when it does not answer within timeout_s.
   std::string status(double timeout_s = 10);
 
@@ -87,6 +96,8 @@ class Runtime {
   struct Pending {
     std::shared_ptr<Sink> sink;
     bool started = false;
+    bool masked = false;     // submitted with Constraint::kTokenMask: the only requests the engine may ask masks of
+    bool cancelled = false;  // cancel() was called: its masks go unanswered
   };
   void read_loop();
   void fail_all(const std::string& code, const std::string& message);

@@ -74,6 +74,13 @@ static void test_client_frames() {
   t.thinking = ThinkingBudget{512, {11, 248046}, 248047};
   CHECK(encode_request(t) == CLIENT("request_thinking"));
 
+  Request m = base_request();
+  m.request_id = 11;
+  m.constraint = Constraint::kTokenMask;
+  m.flags = kReturnProgress;
+  CHECK(encode_request(m) == CLIENT("request_token_mask"));
+  CHECK(encode_mask_response(11, 3, {0xFFFFFFFFu, 0x1u, 0x80000000u, 0u}) == CLIENT("mask_response"));
+
   CHECK(encode_cancel(7) == CLIENT("cancel"));
   CHECK(encode_status_request(0xFEEDFACE) == CLIENT("status_request"));
   CHECK(encode_release_request(5) == CLIENT("release_request"));
@@ -150,6 +157,15 @@ static void test_request_validation() {
   expect_request_issue(r, F::kProtocolFatal, C::kInvalidRequestId, "no request id");
   r = base_request(); r.request_id = 0; r.max_output_tokens = 0;
   expect_request_issue(r, F::kProtocolFatal, C::kInvalidRequestId, "no request id, no output either: the id is first");
+  // a grammar decides where constrained output ends: protocol.py refuses ignore-EOS with any constraint
+  r = base_request(); r.constraint = Constraint::kTokenMask; r.flags = kIgnoreEndOfSequence;
+  expect_request_issue(r, F::kRequestError, C::kInvalidConstraint, "token mask with ignore end-of-sequence");
+  r = base_request(); r.constraint = Constraint(2);
+  expect_request_issue(r, F::kRequestError, C::kInvalidEnumValue, "unknown constraint");
+  try { encode_mask_response(7, 0, {1}); CHECK(false); } catch (const ProtocolError& pe) { CHECK(pe.issue.code == C::kInvalidRequestId && pe.issue.request_id == 7); }
+  try { encode_mask_response(7, 1, {}); CHECK(false); } catch (const ProtocolError& pe) { CHECK(pe.issue.code == C::kLimitExceeded); }
+  try { encode_mask_response(7, 1, std::vector<uint32_t>(kMaxMaskWords + 1)); CHECK(false); } catch (const ProtocolError& pe) { CHECK(pe.issue.code == C::kLimitExceeded); }
+  CHECK(encode_mask_response(7, 1, {1}).size() == 16 + 20 + 4);
   try { encode_cancel(0); CHECK(false); } catch (const ProtocolError& pe) { CHECK(pe.issue.code == C::kInvalidRequestId && pe.issue.failure == F::kProtocolFatal); }
   CHECK(encode_cancel(1).size() == 24);
 }

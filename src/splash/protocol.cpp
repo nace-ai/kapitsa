@@ -39,7 +39,7 @@ struct Reader {
 }
 
 constexpr size_t kStartBytes = 16, kReadyBytes = 9, kPromptProgressBytes = 20, kTokensHead = 16, kMaskRequestHead = 24,
-                 kDoneHead = 62, kErrorHead = 22, kStatusHead = 8, kCancelBytes = 8;
+                 kDoneHead = 62, kErrorHead = 22, kStatusHead = 8, kCancelBytes = 8, kMaskResponseHead = 20;
 static_assert(kStartBytes == 8 + 4 + 4 && kReadyBytes == 4 + 4 + 1 && kPromptProgressBytes == 8 + 4 + 8);
 
 // protocol.py's _payload_bounds, for the event types (the engine's frames).
@@ -132,6 +132,7 @@ std::vector<uint8_t> encode_request(const Request& r) {
   // first, as protocol.py's: an id of zero names no request, so the stream fails
   if (!rid) fatal(IssueCode::kInvalidRequestId, "request id must be non-zero");
   if (r.priority > Priority::kBackground) fail_request(IssueCode::kInvalidEnumValue, "priority is not defined by native protocol", rid);
+  if (r.constraint > Constraint::kTokenMask) fail_request(IssueCode::kInvalidEnumValue, "constraint mode is not defined by native protocol", rid);
   if (r.flags & ~uint32_t(kIgnoreEndOfSequence | kReturnProgress))
     fail_request(IssueCode::kInvalidEnumValue, "request flags are not defined by native protocol", rid);
   if (!r.absolute_deadline_unix_micros || !r.remaining_deadline_micros)
@@ -167,6 +168,10 @@ std::vector<uint8_t> encode_request(const Request& r) {
     also_ends = t.also_ends;
   }
 
+  // A grammar decides where constrained output ends (protocol.py checks it here, after the thinking budget).
+  if ((r.flags & kIgnoreEndOfSequence) && r.constraint != Constraint::kNone)
+    fail_request(IssueCode::kInvalidConstraint, "only unconstrained generation can ignore end-of-sequence", rid);
+
   const uint64_t payload = kRequestFixedBytes + uint64_t(r.prompt.size()) * 4 + uint64_t(end_count) * 4;
   if (payload > kMaxFramePayloadBytes) fail_request(IssueCode::kFrameTooLarge, "request payload exceeds its safe limit", rid);
 
@@ -176,7 +181,7 @@ std::vector<uint8_t> encode_request(const Request& r) {
   header(w, FrameType::kRequest, payload);
   w.u64(rid);
   w.u8(uint8_t(r.priority));
-  w.u8(uint8_t(Constraint::kNone));
+  w.u8(uint8_t(r.constraint));
   w.u64(r.absolute_deadline_unix_micros);
   w.u64(r.remaining_deadline_micros);
   w.u32(r.max_output_tokens);
@@ -210,6 +215,22 @@ static std::vector<uint8_t> one_u64(FrameType t, uint64_t v, const char* what) {
   Writer w{out};
   header(w, t, kCancelBytes);
   w.u64(v);
+  return out;
+}
+
+std::vector<uint8_t> encode_mask_response(uint64_t request_id, uint64_t mask_request_id, const std::vector<uint32_t>& words) {
+  if (!request_id || !mask_request_id) fail_request(IssueCode::kInvalidRequestId, "mask response request ids must be non-zero", request_id);
+  if (words.empty() || words.size() > kMaxMaskWords)
+    fail_request(IssueCode::kLimitExceeded, "mask response word count exceeds its limit", request_id);
+  const uint64_t payload = kMaskResponseHead + uint64_t(words.size()) * 4;
+  std::vector<uint8_t> out;
+  out.reserve(kFrameHeaderBytes + payload);
+  Writer w{out};
+  header(w, FrameType::kMaskResponse, payload);
+  w.u64(request_id);
+  w.u64(mask_request_id);
+  w.u32(uint32_t(words.size()));
+  for (uint32_t x : words) w.u32(x);
   return out;
 }
 

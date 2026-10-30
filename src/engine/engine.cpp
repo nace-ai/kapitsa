@@ -634,7 +634,8 @@ void Engine::save_kflash() {
 std::shared_ptr<const TokenTable> Engine::token_table() {
   std::lock_guard<std::mutex> lk(table_mu_);
   if (!table_) {
-    auto t = std::make_shared<TokenTable>(tok_, model_->vocab(), stop_ids_, tc_open_, tc_close_);
+    // Splash mode has no model here: the tokenizer's ids are the vocabulary, and a mask row is padded to the engine's width
+    auto t = std::make_shared<TokenTable>(tok_, model_ ? model_->vocab() : tok_.vocab_size(), stop_ids_, tc_open_, tc_close_);
     t->warm();
     table_ = t;
   }

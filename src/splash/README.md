@@ -24,6 +24,7 @@ and the decode loop. This page records the shape and what the first version does
 | Child process: spawn, READY, submit, cancel, status, draining shutdown, death handling | `src/splash/runtime.*` | done, tested against a fake engine (`tools/splash_runtime_test`) |
 | Engine splash mode: tokenizer, template, stop ids, no `model_` (`EngineOptions::splash_model`) | `src/engine/engine_splash.cpp`, `engine.cpp` | done, built; exercised by `tests/test_splash_engine.py` |
 | `chat_splash`: render, tokenize, stream TOKENS through `OutputParser`, DONE to `ChatResult`; `native_execution` picks it when the engine is in splash mode | `src/engine/engine_splash.cpp`, `src/server/native_execution.cpp` | done; reply, reasoning split, max_tokens, stop string, streaming, refusals and client abandon checked against a fake engine |
+| Structured output: Kapitsa's grammar answers the engine's `MASK_REQUEST`s (`TOKEN_MASK` constraint) in place of Splash's llguidance constraints | `src/engine/engine_splash.cpp`, `src/splash/protocol.*`, `src/splash/runtime.*` | done; masks, a refused token, `ignore_eos` and narrow masks checked against a fake engine. Not verified on a GPU |
 | Server binding: `kapitsa serve --engine splash [--splash-binary P] [--splash-model DIR] [--splash-arg A]...` (skips memory planning, model pick, download, routing and the disk cache) | `src/server/main.cpp` | done |
 | Discovery: the binary and the model folder when the flags are not given, with an error that names what is missing | `src/splash/discover.*` | done, tested on a throwaway tree (`tools/splash_discover_test`) |
 | A/B against plain Splash: identity (text, and token ids through the tap) and speed | `tools/splash_ab.py`, `tools/splash_tap.py` | done; see Verification |
@@ -217,9 +218,19 @@ If Splash exits during its warmup, for example because this Mac has too little f
 Splash engine did not start: engine_exited: the splash engine closed its output`; Splash's own reason is the line
 above Kapitsa's.
 
-Text chat only: Splash's native protocol carries text and sampling, so a request with an image, structured output (a
-`response_format` grammar) or a loop count is refused with the error type `invalid_request_error` and the engine's
-reason as the message. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the server's life: one
+Structured output (a `response_format` grammar, strict tools, `tool_choice`) goes to the engine as a request with the
+`TOKEN_MASK` constraint, and Kapitsa's own grammar (`src/engine/grammar.h`) answers the engine's mask requests: row 0
+is the mask after the tokens committed so far, row i the mask after the draft's simulation token i too, so drafts still
+verify under masks. Splash's Python constraints (llguidance) are not involved. As in Kapitsa's own engine the grammar
+starts after `</think>` when the model reasons, and a row before it allows every token; a row after a simulation token
+the grammar refuses repeats the last valid row, as Splash's own `TokenConstraint` does. The reader thread only queues
+a mask request, in order with the tokens, and the request's worker answers it, so a mask is computed against exactly the
+tokens committed before it. A request that also sets `ignore_eos` is refused (Splash takes no constraint with it), and
+one whose engine asks for masks narrower than the tokenizer fails with an error saying so. (Not verified on a GPU:
+`tests/test_splash_engine.py` checks it against `tests/fake_splash.py`.)
+
+Text chat otherwise: Splash's native protocol carries text and sampling, so a request with an image or a loop count is
+refused with the error type `invalid_request_error` and the engine's reason as the message. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the server's life: one
 `serve` is one engine, not one per request. Two failures are not refusals: a request that arrives while the engine is
 at its concurrent-request limit is a 503 with `Retry-After` and `the Splash engine is at its concurrent-request
 limit`, and one that arrives after the engine has exited is a 503 without `Retry-After`, since nothing relaunches it:

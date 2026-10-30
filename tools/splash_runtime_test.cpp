@@ -1,7 +1,7 @@
 // CPU test of src/splash/runtime.{h,cpp}: the Runtime spawns this very binary as a fake `splash serve-native` (argv[1] =
 // "--fake MODE") that speaks the protocol over its stdin and stdout, and drives it through a request, a cancel, a status,
 // a child that dies, one that sends garbage, one that never gets ready, a full request pool, a child that stops reading its
-// input, a descendant that keeps its stdout, a Sink that throws, and a log callback that calls back in. No model, no GPU.
+// input, a descendant that keeps its stdout, a token mask asked and answered, a Sink that throws, and a log callback that calls back in. No model, no GPU.
 #include <signal.h>
 #include <unistd.h>
 
@@ -115,6 +115,21 @@ static int fake(const std::string& mode) {
       if (mode == "stray") send_tokens(id + 100, 0, {1});  // an event for a request nobody made
       send_start(id);
       if (first == 999) continue;  // hangs until cancelled
+      if (first == 777 || payload[9] == 1) {  // a token mask: ask for two rows after token 7, echo the answer as tokens
+        std::vector<uint8_t> p;
+        put(p, id, 8); put(p, 5, 8); put(p, 2, 4); put(p, 1, 4); put(p, 7, 4);
+        send_frame(0x0103, p);
+        if (first == 777) continue;  // asked on an unconstrained request: the client must fail the stream
+        uint8_t mh[16];
+        if (!read_all(mh, 16)) return 0;
+        std::vector<uint8_t> mp(le(mh + 8, 8));
+        if (!read_all(mp.data(), mp.size()) || le(mh + 6, 2) != 0x0003 || le(mp.data(), 8) != id || le(mp.data() + 8, 8) != 5) _exit(5);
+        std::vector<uint32_t> words(le(mp.data() + 16, 4));
+        for (size_t i = 0; i < words.size(); i++) words[i] = uint32_t(le(mp.data() + 20 + 4 * i, 4));
+        send_tokens(id, 0, words);
+        send_done(id, 0, uint32_t(words.size()));
+        continue;
+      }
       send_tokens(id, 0, {10, 11});
       send_tokens(id, 2, {12});
       send_done(id, 0, 3);
@@ -156,6 +171,15 @@ struct Collect : Sink {
     for (int i = 0; i < int(s * 100) && !([&] { std::lock_guard<std::mutex> l(m); return started; })(); i++) usleep(10000);
     std::lock_guard<std::mutex> l(m);
     return started;
+  }
+};
+
+struct Masker : Collect {  // queues mask requests: the answer goes back from another thread, never from the reader
+  std::vector<MaskRequest> asks;
+  void on_mask_request(const MaskRequest& x) override { std::lock_guard<std::mutex> l(m); asks.push_back(x); cv.notify_all(); }
+  bool wait_ask(double s = 10) {
+    std::unique_lock<std::mutex> l(m);
+    return cv.wait_for(l, std::chrono::duration<double>(s), [&] { return !asks.empty() || terminals > 0; }) && !asks.empty();
   }
 };
 
@@ -240,6 +264,41 @@ int main(int argc, char** argv) {
     // shutdown with a request held ends it as an engine error, once
     rt.shutdown();
     CHECK(h->wait(1) && h->errored && h->terminals == 1 && h->e.failure == FailureClass::kEngineUnhealthy && h->e.request_id == hid);
+  }
+
+  {  // a token-mask request: the engine asks, the caller answers off the reader thread, the engine gets the words
+    Runtime rt(opts(self, "echo"));
+    rt.start();
+    auto c = std::make_shared<Masker>();
+    Request r = req(1);
+    r.constraint = Constraint::kTokenMask;
+    uint64_t id = rt.submit(r, c, 30);
+    CHECK(c->wait_ask());
+    MaskRequest ask;
+    { std::lock_guard<std::mutex> l(c->m); ask = c->asks.at(0); }
+    CHECK(ask.request_id == id && ask.mask_request_id == 5 && ask.words_per_mask == 2);
+    CHECK((ask.simulation_tokens == std::vector<uint32_t>{7}));
+    rt.mask_response(id, 5, {0xFFFFFFFFu, 1u, 2u, 3u});
+    CHECK(c->wait() && c->done && c->terminals == 1);
+    CHECK((c->tokens == std::vector<uint32_t>{0xFFFFFFFFu, 1u, 2u, 3u}));
+    rt.mask_response(id, 6, {1});  // the request is over: nothing is sent, and the engine stays healthy
+    auto c2 = std::make_shared<Collect>();
+    rt.submit(req(1), c2, 30);
+    CHECK(c2->wait() && c2->done && rt.alive());
+    bool threw = false;
+    try { rt.mask_response(id, 6, {}); } catch (const ProtocolError&) { threw = true; }
+    CHECK(threw);
+  }
+
+  {  // a mask request for a request submitted without a constraint is a protocol failure: the stream ends
+    Runtime rt(opts(self, "echo"));
+    rt.start();
+    auto c = std::make_shared<Masker>();
+    rt.submit(req(777), c, 30);
+    CHECK(c->wait() && c->errored && c->terminals == 1);
+    CHECK(c->asks.empty());
+    CHECK(c->e.code == "protocol_error" && c->e.message.find("unconstrained") != std::string::npos);
+    CHECK(!rt.alive());
   }
 
   {  // a child that dies with a request held: the request fails engine_unhealthy and the runtime is dead

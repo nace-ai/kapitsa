@@ -4,6 +4,7 @@
 // come from the Splash model folder, so the tokens sent are the ones plain Splash would send. Nothing here touches Metal
 // or loads weights.
 #include "engine/engine.h"
+#include "engine/grammar.h"
 #include "engine/output_parser.h"
 #include "model/expert_store.h"
 #include "splash/plan.h"
@@ -27,6 +28,7 @@
 #include <fstream>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <random>
 #include <stdexcept>
 
@@ -49,10 +51,15 @@ bool is_file(const std::string& p) {
 }
 
 // What the reader thread hands the worker: Sink callbacks only queue, the worker parses (as the native path does).
+// Tokens and mask requests share one queue, so a mask is answered against exactly the tokens committed before it.
 struct Relay : splash::Sink {
+  struct Item {
+    uint32_t token = 0;
+    std::optional<splash::MaskRequest> mask;  // set: a mask request, not a token
+  };
   std::mutex m;
   std::condition_variable cv;
-  std::deque<uint32_t> tokens;
+  std::deque<Item> tokens;
   bool started = false, done = false, errored = false;
   splash::Start start;
   splash::Done fin;
@@ -66,7 +73,12 @@ struct Relay : splash::Sink {
   }
   void on_tokens(const splash::Tokens& t) override {
     std::lock_guard<std::mutex> l(m);
-    tokens.insert(tokens.end(), t.tokens.begin(), t.tokens.end());
+    for (uint32_t x : t.tokens) tokens.push_back(Item{x, std::nullopt});
+    cv.notify_all();
+  }
+  void on_mask_request(const splash::MaskRequest& q) override {
+    std::lock_guard<std::mutex> l(m);
+    tokens.push_back(Item{0, q});
     cv.notify_all();
   }
   void on_done(const splash::Done& d) override {
@@ -178,7 +190,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   // kept): Splash's engine caches a request's prompt blocks, not its output, so a longer prompt only costs prefill. Measured
   // on a 4K two-turn chat it was slower than sending the history as is, as plain Splash does; the runs are in src/splash/README.md.
   // what Splash's native protocol carries here is text with sampling: the rest is refused before anything is queued
-  if (r.grammar) return refuse("structured output is not supported by this engine");
+  // structured output: Kapitsa's grammar answers the engine's mask requests; a grammar decides where the reply ends
+  if (r.grammar && r.ignore_eos) return refuse("ignore_eos cannot be combined with structured output");
   if (!vision::image_sources(r.messages).empty()) return refuse("image input is not supported by this engine");
   if (r.loops > 0) return refuse("loop counts are not supported by this engine");
   // Splash's own ranges (frontend.py SAMPLING_NUMBERS): a value outside them is a 400 naming the field, not a clamp
@@ -235,6 +248,18 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   q.sampling.repetition_penalty = r.repetition_penalty;
   q.sampling.min_p = r.min_p;
   if (r.ignore_eos) q.flags |= splash::kIgnoreEndOfSequence;
+  // The grammar starts after </think> when reasoning is on (as Engine::chat): until then a mask allows every token.
+  std::unique_ptr<GrammarMatcher> gm;
+  GrammarState gst;
+  bool g_on = false;
+  if (r.grammar) {
+    // with no </think> token the grammar would never start, and the reply would go out unconstrained
+    if (think && think_close_ < 0) return refuse("structured output needs the model's </think> token when reasoning is on");
+    gm = std::make_unique<GrammarMatcher>(r.grammar, token_table());
+    gst = gm->start();
+    g_on = !think;
+    q.constraint = splash::Constraint::kTokenMask;
+  }
   if (r.cache_salt.is_string()) {  // the client's own salt wins: it decides who shares cached prompts, as with plain Splash
     const auto salt = splash::client_salt(r.cache_salt.get<std::string>());
     q.cache_salt_lo = salt.lo;
@@ -286,11 +311,46 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   std::string content_so_far, finish;
   int gen = 0;
   bool prompted = false, cancel_sent = false;
+  bool g_ok = true;  // every committed token was the grammar's
+  // the grammar's state follows every committed token, after the reply's end too: a mask is always on the engine's tokens
+  auto commit = [&](int t) {
+    if (!gm || !g_ok) return;
+    if (g_on) g_ok = gm->advance(gst, t);
+    else if (t == think_close_) g_on = true;
+  };
+  // a mask request's rows: row 0 after the committed tokens, row i after simulation token i too; rows after a token the
+  // grammar refuses copy the last valid row (as Splash's TokenConstraint). False: the engine's mask is narrower than ours.
+  std::vector<uint32_t> mask_words;
+  auto fill_rows = [&](const splash::MaskRequest& mq) -> bool {
+    const size_t W = mq.words_per_mask, rows = mq.simulation_tokens.size() + 1;
+    if (int64_t(W) < gm->table()->words()) return false;
+    mask_words.assign(W * rows, 0);
+    GrammarState st = gst;
+    bool on = g_on, ok = g_ok;
+    for (size_t row = 0; row < rows; ++row) {
+      uint32_t* w = mask_words.data() + row * W;
+      if (row > 0 && ok) {
+        const int t = int(mq.simulation_tokens[row - 1]);
+        if (on) ok = gm->advance(st, t);
+        else if (t == think_close_) on = true;
+      }
+      if (row > 0 && !ok) std::copy(w - W, w, w);
+      else if (on) gm->fill_mask(st, w);
+      else std::fill(w, w + W, 0xffffffffu);
+    }
+    return true;
+  };
   // one token: the native handle's rules (eos, parser, stop strings); false once the reply is over
   auto handle = [&](int t) -> bool {
     ++gen;
     if (!r.ignore_eos && std::find(stop_ids_.begin(), stop_ids_.end(), t) != stop_ids_.end()) {
       finish = "stop";
+      return false;
+    }
+    if (!g_ok) {  // the masks allow only what the grammar does: the engine sampled outside them
+      finish = "error";
+      res.error = "structured output: a token outside the grammar was sampled";
+      logi("chat: %s (token %d)", res.error.c_str(), t);
       return false;
     }
     if (parser.in_think()) ++res.reasoning_tokens;
@@ -323,7 +383,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   splash::Error err;
   bool errored = false;
   for (;;) {
-    std::deque<uint32_t> batch;
+    std::deque<Relay::Item> batch;
     {
       std::unique_lock<std::mutex> l(relay->m);
       relay->cv.wait_for(l, std::chrono::milliseconds(20),
@@ -339,9 +399,25 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
       if (relay->done) { ended = true; fin = relay->fin; }
       if (relay->errored) { ended = true; errored = true; err = relay->err; }
     }
-    for (uint32_t t : batch) {
-      if (!finish.empty()) break;  // tokens after the reply's end (the cancel is in flight) are dropped
-      if (!handle(int(t))) break;
+    for (const Relay::Item& it : batch) {
+      if (it.mask) {
+        if (!finish.empty() || cancel_sent) continue;  // the cancel answers it
+        if (!fill_rows(*it.mask)) {
+          finish = "error";
+          res.error = "structured output: the engine's masks cover " + std::to_string(it.mask->words_per_mask * 32) +
+                      " tokens, fewer than the tokenizer's " + std::to_string(gm->table()->vocab());
+          continue;
+        }
+        try {
+          splash_->mask_response(id, it.mask->mask_request_id, mask_words);
+        } catch (const std::exception& ex) {
+          finish = "error";
+          res.error = std::string("structured output: ") + ex.what();
+        }
+        continue;
+      }
+      commit(int(it.token));
+      if (finish.empty()) handle(int(it.token));  // tokens after the reply's end (the cancel is in flight) are dropped
     }
     if (finish.empty() && cancelled && cancelled()) finish = "cancelled";
     // a cancelled reply waits for the engine's end, but not forever: a child that ignores the cancel is the runtime's

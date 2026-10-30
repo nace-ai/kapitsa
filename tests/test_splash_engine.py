@@ -122,8 +122,9 @@ try:
     # refused up front
     st, r = post(s.base, {"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}}]}]})
     check(st == 400, "image refused with 400, got %s %s" % (st, r))
-    st, r = post(s.base, {"messages": MSG, "response_format": {"type": "json_object"}})
-    check(st == 400 and "structured output" in json.dumps(r), "json mode refused with 400: %s %s" % (st, r))
+    st, r = post(s.base, {"messages": MSG, "response_format": {"type": "json_object"}, "ignore_eos": True})
+    check(st == 400 and "ignore_eos" in json.dumps(r), "json mode with ignore_eos refused with 400: %s %s" % (st, r))
+    check(not any(p.get("constraint") for p in s.prompts()), "no constrained request reached the engine")
     check(s.proc.poll() is None, "server still running")
 
     # sampling: an absent field is Splash's own default (1.0 / 0.95 / 20), a given one goes through, penalties and min_p
@@ -425,6 +426,53 @@ with tempfile.TemporaryDirectory() as home:
                   "--check with a --splash-model that is %s: %d %r %r" % (label, rb.returncode, rb.stdout[-200:], rb.stderr[-200:]))
     finally:
         os.chmod(locked, 0o700)
+
+# structured output: Kapitsa's grammar answers the engine's mask requests. The stand-in asks for a mask before every token
+# (with the reply's next two as simulation tokens: row i masks the i-th) and logs what each row allows; before </think> every token is allowed.
+NTOK = max(max(VOCAB.values()), max(ADDED.values())) + 1
+W = (NTOK + 31) // 32 + 2  # the engine's rows may be wider than the tokenizer (padding past it stays 0)
+JREPLY = [tid("ok"), NL, THINK_CLOSE, tid("{"), tid("}"), EOS]
+mlog = tempfile.mktemp(suffix=".jsonl")
+s = Server("--reply", ",".join(map(str, JREPLY)), "--mask-words", str(W), "--mask-log", mlog)
+try:
+    n0 = len(s.prompts())
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 50, "temperature": 0, "response_format": {"type": "json_object"}})
+    check(st == 200 and r["choices"][0]["message"]["content"] == "{}" and r["choices"][0]["finish_reason"] == "stop",
+          "json mode through masks: %s %s" % (st, r))
+    p = s.prompts()[n0:]
+    check(len(p) == 1 and p[0]["constraint"] == 1 and not p[0]["flags"] & 1, "TOKEN_MASK constraint, no ignore_eos: %r" % p)
+    m = [json.loads(l) for l in open(mlog)] if os.path.exists(mlog) else []
+    check(len(m) == len(JREPLY), "one mask per token: %r" % m)
+    if len(m) == len(JREPLY):
+        full = W * 32
+        check(m[0]["rows"][0] == [full, True] and m[1]["rows"][0][0] == full, "before </think> a row allows every token: %r" % m[:2])
+        # mask 2 drafts </think> and "{": its row 1 is the grammar's first, which allows "{" and not every token
+        check(m[2]["rows"][0] == [full, True], "</think> itself is masked by a thinking row: %r" % m[2])
+        check(m[2]["rows"][1][1] and 0 < m[2]["rows"][1][0] < NTOK, "the row after </think> is the grammar's: %r" % m[2])
+        check(m[3]["rows"][0] == m[2]["rows"][1], "a draft row is the committed row it becomes: %r %r" % (m[2], m[3]))
+        check(m[4]["rows"][0][1] and 0 < m[4]["rows"][0][0] < NTOK, "after '{', '}' is allowed: %r" % m[4])
+        check(m[5]["rows"][0][1], "after '{}', the end of turn is allowed: %r" % m[5])
+    # a token the grammar refuses is never sampled: the stand-in takes row 0's lowest allowed token instead of "Hi"
+    os.remove(mlog)
+    s.close()
+    s = Server("--reply", ",".join(map(str, [tid("ok"), NL, THINK_CLOSE, tid("Hi"), EOS])), "--mask-words", str(W), "--mask-log", mlog)
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 10, "temperature": 0, "response_format": {"type": "json_object"}})
+    m = [json.loads(l) for l in open(mlog)] if os.path.exists(mlog) else []
+    check(len(m) >= 4 and m[3]["token"] == tid("Hi") and not m[3]["rows"][0][1], "'Hi' is outside the json grammar's first row: %r" % m)
+    check(st == 200 and "Hi" not in r["choices"][0]["message"]["content"], "the reply did not get 'Hi': %s %s" % (st, r))
+    check(s.proc.poll() is None, "server still running")
+finally:
+    s.close()
+# masks narrower than the tokenizer: the request fails with a clear error, the server lives on
+s = Server("--reply", ",".join(map(str, JREPLY)), "--mask-words", str((NTOK + 31) // 32 - 1))
+try:
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 50, "temperature": 0, "response_format": {"type": "json_object"}})
+    check(st >= 400 or r["choices"][0]["finish_reason"] == "error", "narrow masks fail the request: %s %s" % (st, r))
+    check("masks cover" in json.dumps(r), "narrow masks named: %r" % r)
+    st, r = post(s.base, {"messages": MSG, "max_tokens": 50, "temperature": 0})
+    check(st == 200, "an unconstrained request after it: %s %s" % (st, r))
+finally:
+    s.close()
 
 print("test_splash_engine: %s" % ("ok" if not failures else "%d FAILED" % failures))
 sys.exit(1 if failures else 0)

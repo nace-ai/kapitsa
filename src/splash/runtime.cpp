@@ -196,7 +196,7 @@ uint64_t Runtime::submit(Request r, std::shared_ptr<Sink> sink, double deadline_
     if (state_ != State::kReady) throw EngineUnhealthy("the engine is not running" + (dead_reason_.empty() ? "" : ": " + dead_reason_));
     if (pending_.size() >= ready_.max_concurrent_requests) throw PendingLimitExceeded("the engine's request capacity is full");
     id = next_id_++;
-    pending_[id] = Pending{std::move(sink), false};  // before the write: the first event can follow it at once
+    pending_[id] = Pending{std::move(sink), false, r.constraint == Constraint::kTokenMask, false};  // before the write: the first event can follow it at once
   }
   std::vector<uint8_t> frame;
   try {
@@ -218,10 +218,22 @@ uint64_t Runtime::submit(Request r, std::shared_ptr<Sink> sink, double deadline_
 void Runtime::cancel(uint64_t id) {
   {
     std::lock_guard<std::mutex> l(m_);
-    if (!pending_.count(id)) return;  // done already
+    auto it = pending_.find(id);
+    if (it == pending_.end()) return;  // done already
+    it->second.cancelled = true;
   }
   { std::lock_guard<std::mutex> c(cancel_m_); cancels_.push_back(id); }
   flush_cancels();
+}
+
+void Runtime::mask_response(uint64_t id, uint64_t mask_id, const std::vector<uint32_t>& words) {
+  std::vector<uint8_t> frame = encode_mask_response(id, mask_id, words);  // may throw ProtocolError: nothing sent
+  {
+    std::lock_guard<std::mutex> l(m_);
+    auto it = pending_.find(id);
+    if (it == pending_.end() || it->second.cancelled) return;  // as runtime.py: no answer to a call that is over
+  }
+  write_frame(frame);
 }
 
 std::string Runtime::status(double timeout_s) {
@@ -331,9 +343,6 @@ void Runtime::read_loop() {
           if (it != status_replies_.end()) { it->second = e->json; cv_.notify_all(); }
           continue;
         }
-        if (std::holds_alternative<MaskRequest>(ev))
-          throw ProtocolError(Issue{FailureClass::kProtocolFatal, IssueCode::kInvalidConstraint, std::get<MaskRequest>(ev).request_id,
-                                    "the engine asked for a token mask on an unconstrained request"});
         if (auto* e = std::get_if<Error>(&ev); e && e->failure != FailureClass::kRequestError) {
           code = e->code;
           message = e->message;
@@ -352,6 +361,9 @@ void Runtime::read_loop() {
           auto it = pending_.find(id);
           if (it == pending_.end()) unknown = true;
           else {
+            if (std::holds_alternative<MaskRequest>(ev) && !it->second.masked)
+              throw ProtocolError(Issue{FailureClass::kProtocolFatal, IssueCode::kInvalidConstraint, id,
+                                        "the engine asked for a token mask on an unconstrained request"});
             sink = it->second.sink;
             if (std::holds_alternative<Start>(ev)) it->second.started = true;
             if (terminal) pending_.erase(it);
@@ -364,6 +376,7 @@ void Runtime::read_loop() {
             if constexpr (std::is_same_v<T, Start>) sink->on_start(x);
             else if constexpr (std::is_same_v<T, PromptProgress>) sink->on_progress(x);
             else if constexpr (std::is_same_v<T, Tokens>) sink->on_tokens(x);
+            else if constexpr (std::is_same_v<T, MaskRequest>) sink->on_mask_request(x);
             else if constexpr (std::is_same_v<T, Done>) sink->on_done(x);
             else if constexpr (std::is_same_v<T, Error>) sink->on_error(x);
           }, ev);

@@ -232,10 +232,17 @@ def build_client_rows(protocol) -> list[tuple[str, bytes]]:
         generation_prompt_tokens=2,
         thinking_budget=protocol.ThinkingBudget(512, (11, 248046), 248047),
     )
+    masked = replace(
+        base,
+        request_id=11,
+        constraint=protocol.ConstraintMode.TOKEN_MASK,
+        flags=protocol.RequestFlag.RETURN_PROGRESS,
+    )
     requests = (
         ("request_greedy", base),
         ("request_sampled", sampled),
         ("request_thinking", thinking),
+        ("request_token_mask", masked),
     )
     rows: list[tuple[str, bytes]] = []
     for name, request in requests:
@@ -246,6 +253,18 @@ def build_client_rows(protocol) -> list[tuple[str, bytes]]:
         (
             "cancel",
             _client_frame(protocol, protocol.CancelFrame(7), protocol.FrameType.CANCEL),
+        )
+    )
+    rows.append(
+        (
+            "mask_response",
+            _client_frame(
+                protocol,
+                protocol.MaskResponseFrame(
+                    11, 3, struct.pack("<4I", 0xFFFFFFFF, 0x1, 0x80000000, 0)
+                ),
+                protocol.FrameType.MASK_RESPONSE,
+            ),
         )
     )
     rows.append(

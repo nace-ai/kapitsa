@@ -122,12 +122,18 @@ struct Request {
   uint32_t flags = 0;
   uint64_t cache_salt_lo = 0, cache_salt_hi = 0;  // the request's cache_salt hashed to 128 bits; zero without one
   std::optional<ThinkingBudget> thinking;
+  // kTokenMask: the engine asks for the allowed tokens (MaskRequest) before it samples, and the client answers each with
+  // encode_mask_response. A grammar decides where such output ends, so it cannot also set kIgnoreEndOfSequence.
+  Constraint constraint = Constraint::kNone;
 };
 
 // Encoding checks what protocol.py's does, and throws ProtocolError (a kRequestError naming the request when its id is
 // non-zero, else a kProtocolFatal) for what the engine would refuse.
 std::vector<uint8_t> encode_request(const Request& r);
 std::vector<uint8_t> encode_cancel(uint64_t request_id);
+// The answer to a MaskRequest: words_per_mask uint32 words per row, (simulation tokens + 1) rows, bit t of a row's word
+// t / 32 set when token t is allowed. The engine checks the word count against the request it made.
+std::vector<uint8_t> encode_mask_response(uint64_t request_id, uint64_t mask_request_id, const std::vector<uint32_t>& words);
 std::vector<uint8_t> encode_status_request(uint64_t correlation_id);
 std::vector<uint8_t> encode_release_request(uint64_t correlation_id);
 // Re-stamps a REQUEST frame's absolute deadline as now + its remaining budget (a request re-sent after a relaunch);
@@ -152,7 +158,8 @@ struct Tokens {
   uint32_t sequence_offset = 0;
   std::vector<uint32_t> tokens;
 };
-// Not expected without a token-mask constraint: the runtime treats one as a protocol failure of the request.
+// Sent only for a request with Constraint::kTokenMask (the runtime treats any other as a protocol failure): row 0 is the
+// mask after the tokens committed so far, row i the mask after simulation token i as well (the draft's verify rows).
 struct MaskRequest {
   uint64_t request_id = 0, mask_request_id = 0;
   uint32_t words_per_mask = 0;
