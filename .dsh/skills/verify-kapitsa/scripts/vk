@@ -37,7 +37,7 @@ PORT="${VK_PORT:-8090}"
 LOCK="${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}"
 BIN="$ROOT/build/kapitsa"
 CPU_TARGETS=(kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test
-             fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test)
+             fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test ws_upgrade_test)
 
 mkdir -p "$EVID" "$STATE"
 say() { printf '%s\n' "$*" >&2; }
@@ -114,7 +114,7 @@ cmd_cpu_tests() {
   local tests=(
     "api_test|build/api_test" "prefix_cache_test|build/prefix_cache_test" "fn_store_test|build/fn_store_test"
     "fn_dflash_test|build/fn_dflash_test" "tokenizer_test|build/tokenizer_test" "iq_layout_test|build/iq_layout_test"
-    "remote_test|build/remote_test" "cluster_test|build/cluster_test" "split_place_test|build/split_place_test"
+    "remote_test|build/remote_test" "cluster_test|build/cluster_test" "split_place_test|build/split_place_test" "ws_upgrade_test|build/ws_upgrade_test"
     "test_server_cli|python3 tests/test_server.py --cli build/kapitsa" "test_sidecar|python3 tests/test_sidecar.py build/kapitsa"
     "test_bench|python3 tests/test_bench.py build" "test_update|python3 tests/test_update.py build"
     "test_community|python3 tests/test_community.py build" "test_reasoning|python3 tests/test_reasoning.py"

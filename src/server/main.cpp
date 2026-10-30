@@ -42,6 +42,7 @@
 #include "server/route.h"
 #include "splash/discover.h"
 #include "server/ui.h"
+#include "server/ws_upgrade.h"
 #include "util/log.h"
 #include "util/term.h"
 
@@ -625,6 +626,9 @@ static bool reject_while_switching(const ModelManager& mgr, httplib::Response& r
 static void common_routes(httplib::Server& srv, const std::string& api_key, const std::string& timing,
                           std::function<cluster::MacInfo()> info) {
   srv.set_pre_routing_handler([api_key](const httplib::Request& req, httplib::Response& res) {
+    // a WebSocket upgrade on /v1/responses (Codex Desktop's probe, #772): 426 before the key check, so the client
+    // falls back to HTTP at once instead of retrying a 404 with backoff
+    if (server::refuse_ws_upgrade(req, res)) return httplib::Server::HandlerResponse::Handled;
     // the chat page asks for the key once and sends it with its API calls
     if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
         (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
