@@ -48,6 +48,7 @@ build/cluster_test                           # several Macs (src/cluster/): TXT,
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
 build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
+build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
