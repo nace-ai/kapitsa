@@ -91,6 +91,11 @@ Encoded encode_max(const Tokenizer& tok, const ojson& body, const Limits& limits
 // may reach is context - 1, and a state or row of exactly `context` tokens is as fatal as a longer one.
 void check_fits(const Encoded& enc, int context);
 
+// Throws BadRequest when a question has more options than the readout head has outputs. The scoring loop prefills each
+// question on the GPU before it reads logits, so this runs first: a bad request is a 400 with no prefill, not a 500
+// after minutes of it.
+void check_options(const Encoded& enc, int head_dim);
+
 // The answers object of the reference server, from one logit vector per question (its options, in option order).
 // Throws std::runtime_error when the logits do not match the questions.
 ojson format_answers(const std::vector<std::vector<float>>& logits, const std::vector<QuestionMeta>& meta);

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <unistd.h>
 
 namespace {
@@ -72,6 +73,16 @@ int main() {
     }
     write_head(path, 2, 1, 1, {std::numeric_limits<float>::infinity(), 1}); rejected(path);
     write_head(path, 2, 1, 1, {1, std::numeric_limits<float>::quiet_NaN()}); rejected(path);
+    // option count against the head's width is a 400 decided before any prefill (tools/systemone.cpp score_max)
+    ni::systemone::Encoded enc;
+    enc.branches.resize(2);
+    enc.branches[0].group.options = {0, 1};
+    enc.branches[1].group.options = {0, 1, 2};
+    ni::systemone::check_options(enc, 3);
+    bool bad = false;
+    try { ni::systemone::check_options(enc, 2); }
+    catch (const ni::systemone::BadRequest& e) { bad = std::string(e.what()).find("1 to 2 options") != std::string::npos; }
+    require(bad, "more options than the head's width is a BadRequest");
     std::cout << "System One projected/readout head checks passed\n";
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';

@@ -289,6 +289,14 @@ void check_fits(const Encoded& enc, int context) {
   }
 }
 
+void check_options(const Encoded& enc, int head_dim) {
+  for (const Branch& b : enc.branches) {
+    if (b.group.options.size() > size_t(std::max(0, head_dim))) {
+      throw BadRequest("a question needs 1 to " + std::to_string(head_dim) + " options");
+    }
+  }
+}
+
 Encoded encode(const Tokenizer& tok, const ojson& body, const Limits& limits) {
   validate_request(body);
   int delim[5];

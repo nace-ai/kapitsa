@@ -252,11 +252,7 @@ class SystemOne {
   ojson score_max(const ojson& body, Timings* tm) {
     const auto enc = ni::systemone::encode_max(tok_, body, limits_);
     ni::systemone::check_fits(enc, seq_->limit);
-    for (const auto& branch : enc.branches) {
-      if (branch.group.options.size() > size_t(head_.dim())) {
-        throw ni::systemone::BadRequest("a question needs 1 to " + std::to_string(head_.dim()) + " options");
-      }
-    }
+    ni::systemone::check_options(enc, head_.dim());  // before any prefill
     std::vector<std::vector<float>> logits;
     const auto started = std::chrono::steady_clock::now();
     for (const auto& branch : enc.branches) {
