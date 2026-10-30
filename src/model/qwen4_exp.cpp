@@ -199,8 +199,9 @@ Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget,
   load(dir);
 }
 
-std::unique_ptr<Qwen35> load_qwen(const std::string& dir, int prefill_chunk) {
+std::unique_ptr<Qwen35> load_qwen(const std::string& dir, int prefill_chunk, bool allow_noncausal) {
   if (Qwen4Exp::is_model(dir)) return std::make_unique<Qwen4Exp>(dir, prefill_chunk);
+  if (!allow_noncausal) Qwen35::require_causal(dir);
   return std::make_unique<Qwen35>(dir, prefill_chunk);
 }
 

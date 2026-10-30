@@ -239,6 +239,9 @@ class Qwen35 : public Model {
   // rows16: the engine will draft with a 16-row block (one slot), whose verify rows the live state's tape is sized for
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, bool rows16 = false);
   static Qwen35Config read_config(const std::string& model_dir);  // config.json only
+  // Exits for a noncausal (bidirectional) pack, before any weight is read: kapitsa serve/run/chat decode token by
+  // token and cannot run one; only kapitsa-systemone scores it.
+  static void require_causal(const std::string& model_dir);
   // Whether n RMSNorm weight values (F32, F16 or BF16 at data) are Hugging Face's zero-centred parameterization, applied
   // as 1 + w: a mean below 0.5 and at least one negative value (MLX's are ~1 and all positive). False for no values, a
   // vector wider than 65,536 (not a norm) or another dtype, where the caller keeps its own answer.

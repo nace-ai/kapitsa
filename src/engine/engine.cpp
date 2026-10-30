@@ -380,6 +380,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if (sample) publisher_sampling();
     else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = 0;
   } else {
+    Qwen35::require_causal(opts_.model_dir);
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
     model_ = std::move(m);

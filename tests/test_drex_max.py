@@ -301,6 +301,13 @@ class EncoderTests(unittest.TestCase):
         self.assertEqual(rc, 2, error)
         self.assertIn("does not take images", error)
 
+    def test_chat_commands_refuse_a_noncausal_pack_before_loading(self):
+        result = subprocess.run([str(Path(CLI) / "kapitsa"), "serve", str(self.path), "--port", "18971"], text=True,
+                                capture_output=True, timeout=30, stdin=subprocess.DEVNULL)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("noncausal", result.stdout + result.stderr)
+        self.assertIn("kapitsa-systemone", result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -189,7 +189,7 @@ class SystemOne {
     }
     if (head_.is_readout()) opts_.cache_bytes = 0;
     logi("loading %s", opts_.model_dir.c_str());
-    model_ = load_qwen(opts_.model_dir, head_.is_readout() ? opts_.context - 1 : 2048);
+    model_ = load_qwen(opts_.model_dir, head_.is_readout() ? opts_.context - 1 : 2048, /*allow_noncausal=*/true);
     if (!model_) fatal("could not load %s", opts_.model_dir.c_str());
     if (model_->config().causal == head_.is_readout()) {
       fatal("pointer head and backbone attention disagree: Max needs a readout head and noncausal attention");
@@ -252,6 +252,11 @@ class SystemOne {
   ojson score_max(const ojson& body, Timings* tm) {
     const auto enc = ni::systemone::encode_max(tok_, body, limits_);
     ni::systemone::check_fits(enc, seq_->limit);
+    for (const auto& branch : enc.branches) {
+      if (branch.group.options.size() > size_t(head_.dim())) {
+        throw ni::systemone::BadRequest("a question needs 1 to " + std::to_string(head_.dim()) + " options");
+      }
+    }
     std::vector<std::vector<float>> logits;
     const auto started = std::chrono::steady_clock::now();
     for (const auto& branch : enc.branches) {

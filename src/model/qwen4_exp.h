@@ -377,7 +377,8 @@ class Qwen4Exp : public Qwen35 {
   } pend_;
 };
 
-// A Qwen3.5-family model of either layout: Qwen4Exp for a qwen4_exp checkpoint, else Qwen35 (tools)
-std::unique_ptr<Qwen35> load_qwen(const std::string& model_dir, int prefill_chunk = 2048);
+// A Qwen3.5-family model of either layout: Qwen4Exp for a qwen4_exp checkpoint, else Qwen35 (tools). A noncausal
+// pack is refused unless the caller (systemone) allows it.
+std::unique_ptr<Qwen35> load_qwen(const std::string& model_dir, int prefill_chunk = 2048, bool allow_noncausal = false);
 
 }  // namespace ni
