@@ -382,7 +382,7 @@ static void print_serve_help() {
          "                         splash-prefix-cache/<model folder>; writes to your disk; default off)\n"
          "  --splash-kflash auto|on|off  KFlash's Splash engine (Splash with Kapitsa's patches, packaging/splash/): auto (default) runs it for\n"
          "                         the models measured faster with it when it is built, --splash-binary is not given and stock Splash is the\n"
-         "                         release it is built on (1.4.0); on for any model; off never\n"
+         "                         release it is built on (1.5.0); on for any model; off never\n"
          "  --splash-conversation-salt  a cache salt per conversation (its first user message): conversations no longer share cached\n"
          "                         prompts, such as a common system prompt (default off: one shared cache, as Splash without cache_salt)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"

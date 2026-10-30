@@ -247,7 +247,7 @@ std::string release_version(const std::string& binary) {
 }
 
 bool kflash_by_default(const std::string& model_folder) {
-  // Qwen3.8-Flash-Next Q2_0: score 1.064 (95% LB 1.036), decode 1.118x stock Splash 1.4.0, M5 Pro 48 GB
+  // Qwen3.8-Flash-Next Q2_0: score 1.051 (95% LB 1.030), decode 1.101x, 4K prefill 1.004x the Splash 1.5.0 release, M5 Pro 48 GB
   // (docs/splash-backend.md#kflash). A model joins this list only after its own interleaved A/B and output check.
   static const char* const measured[] = {"ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0"};
   std::ifstream f(fs::path(model_folder) / "model.json");
@@ -260,7 +260,7 @@ bool kflash_by_default(const std::string& model_folder) {
 EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_given, const KFlash& kflash,
                        const std::string& model_folder) {
   EnginePick out{binary, {}, "", ""};
-  const char* build = "python3 packaging/splash/build.py --release <Splash 1.4.0 folder> (packaging/splash/README.md)";
+  const char* build = "python3 packaging/splash/build.py --release <Splash 1.5.0 folder> (packaging/splash/README.md)";
   if (mode == KFlashMode::off) return out;
   if (mode == KFlashMode::on && binary_given) {
     out.error = "--splash-kflash on runs the KFlash build, not --splash-binary: drop one of them";

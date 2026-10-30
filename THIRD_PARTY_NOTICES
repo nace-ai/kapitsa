@@ -32,8 +32,9 @@ Changes for Kapitsa: its partial-output layout, strided work for up to 1024 spli
 FP32 sigmoid-gated output and a fallback to the original kernel for fewer than eight splits. The numerator and
 denominator retain Kapitsa's original accumulation order. The adapted kernel carries a notice of these changes.
 
-packaging/splash/patches/ are modifications of Splash 1.4.0 (commit 1482f6bbc2abf12375332725302019594150b6cb,
-pinned in packaging/splash/pin.json). packaging/splash/gen_kernels.py copies Splash's GGUF repack helpers
+packaging/splash/patches/ are modifications of Splash 1.5.0 (commit cabbad2732b027540f5a141511544e0bb62224b7,
+pinned in packaging/splash/pin.json; written against 1.4.0, commit 1482f6bbc2abf12375332725302019594150b6cb, and applied
+to 1.5.0 unchanged). packaging/splash/gen_kernels.py copies Splash's GGUF repack helpers
 (runtime/metal/kernels/shared/gguf_repack.metal) from that checkout into the kernel file it writes, with their staging
 pointers made system-coherent. ksx_moe_expert_load_c in packaging/splash/kernels/ksx_h1_kernels.metal is Splash's
 moe_expert_load with the same change. Each patch starts with a notice, and each file it changes is marked

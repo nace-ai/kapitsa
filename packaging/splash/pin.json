@@ -1,9 +1,9 @@
 {
   "repo": "https://github.com/incoai/splash.git",
-  "tag": "1.4.0",
-  "commit": "1482f6bbc2abf12375332725302019594150b6cb",
-  "release_binary_sha256": "20b36bcc051145b425403dee7489d06cdbb5060460dfdb2e0cfc8d49cebfc29f",
-  "release_metallib_sha256": "e30124e8bceba1a9de7afe75cf1a10439bcfa5c1b777490c829ba4da0d0cd1cd",
-  "release_host_step_metallib_sha256": "8e177c753e2051cd8a31c79bf031b3fae8daf04f5564ced9fc37db064bdfe51a",
-  "kflash_binary_sha256": "92a5dfedbe67b1574d1b50f499128c9dc7b4fcd799b00823d6ae07d2c2957ca3"
+  "tag": "1.5.0",
+  "commit": "cabbad2732b027540f5a141511544e0bb62224b7",
+  "release_binary_sha256": "bf5c552bae97f9875199d5b6e9143e7d7cd5d4be0a0f0e7fe489c939c54bd2b7",
+  "release_metallib_sha256": "0279664b0a60a571878d25e9595815b31b64aaaca0da80cf85aa7715d8d02c76",
+  "release_host_step_metallib_sha256": "dc7d6916fbae274bdcff3f3dcf16838a777ae6772f2457c926d839f13833967d",
+  "kflash_binary_sha256": "d45f8ea7473e9af164b83034b40513eac25b4173a08edd36fc83bbf1a95eaba9"
 }
