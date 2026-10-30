@@ -5,8 +5,8 @@ Drex Max v1 uses the [System One HTTP API](systemone.md#the-protocol), including
 implementation, without a llama.cpp runtime, from either the release Q8_0 GGUF (imported) or the affine Q4
 checkpoint (downloaded).
 
-Kapitsa v0.2.25 is the first release with Drex Max. Its native probabilities differ from the pinned v1 reference by at
-most 0.0329, with no choice flip ([GPU validation status](#gpu-validation-status)).
+Kapitsa v0.2.25 is the first release with Drex Max. Its native probabilities differed from the pinned v1 reference by up
+to 0.0329 on the Task #241 quality legs (M5), with no choice flip ([GPU validation status](#gpu-validation-status)).
 
 ## Install
 
