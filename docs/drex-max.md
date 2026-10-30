@@ -10,37 +10,26 @@ from the pinned v1 reference by up to 0.0329, above the 0.02 parity gate (see
 
 ## Install
 
-With Homebrew (v0.2.25 or later):
+Install Kapitsa with Homebrew (v0.2.25 or later):
 
 ```bash
 brew install nace-ai/tap/kapitsa      # kapitsa, kapitsa-systemone, kapitsa-drex-pointer
 kapitsa-systemone --help
 ```
 
-From source, at the release tag:
-
-```bash
-git clone --branch v0.2.25 https://github.com/nace-ai/kapitsa.git
-cd kapitsa
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j4 --target kapitsa systemone
-```
-
-The Homebrew commands are the built files under other names: `kapitsa` is `build/kapitsa`, `kapitsa-systemone` is
-`build/systemone` and `kapitsa-drex-pointer` is `tools/drex_pointer.py`. The steps below write the source form;
-substitute the installed names for the Homebrew form.
+The three commands used below are `kapitsa` (import), `kapitsa-drex-pointer` (extracts the readout head) and
+`kapitsa-systemone` (the server).
 
 ## Import the model and readout head
 
-Import the backbone, then extract its small readout head into the imported model directory (`kapitsa import` and
-`kapitsa-drex-pointer` with Homebrew). To keep both source weights and imported weights on an external drive, set
-`KAPITSA_HOME` before importing:
+Import the backbone, then extract its small readout head into the imported model directory. Models go to
+`~/.cache/kapitsa/models`; to keep them elsewhere, such as an external drive, set `KAPITSA_HOME` before importing:
 
 ```bash
-export KAPITSA_HOME="/Volumes/Extreme Pro/kapitsa"
-GGUF="/Volumes/Extreme Pro/parked/drex-max-v1-Q8_0-release/drex-max-v1-Q8_0.gguf"
-build/kapitsa import "$GGUF" --name drex-max-v1
-python3 tools/drex_pointer.py "$GGUF" "$KAPITSA_HOME/models/drex-max-v1/pointer.bin"
+export KAPITSA_HOME="$HOME/.cache/kapitsa"      # the default; change it to move the models
+GGUF=/path/to/drex-max-v1-Q8_0.gguf              # the Q8_0 file from nace-ai/drex-max-v1-Q8_0
+kapitsa import "$GGUF" --name drex-max-v1
+kapitsa-drex-pointer "$GGUF" "$KAPITSA_HOME/models/drex-max-v1/pointer.bin"
 ```
 
 The importer preserves `qwen35.attention.causal=false` as `text_config.causal=false`. The server requires this
@@ -53,7 +42,7 @@ Q8_0 blocks. The released GGUF's readout and temperature tensors are F32 even th
 ## Serve and inspect a request
 
 ```bash
-build/systemone --model "$KAPITSA_HOME/models/drex-max-v1" --port 8000 --context 2048
+kapitsa-systemone --model "$KAPITSA_HOME/models/drex-max-v1" --port 8000 --context 2048
 curl -s localhost:8000/v1/systemone -d '{"state":"The shipment awaits inspection.","questions":{"route":{"type":"choice","instructions":"Which desk?","criteria":{"customs":"hold and inspect","transit":null}},"urgent":{"type":"noul","instructions":"Is the shipment urgent?"},"quality":{"type":"score","instructions":"How clear is the note?","criteria":["unclear","usable","clear"]}}}'
 ```
 
@@ -90,7 +79,7 @@ existing System One protocol.
 `KPS1`, version 2, hidden width, output width, F32 readout weights in output-major order, and F32 temperature.
 Version 1 projected q/k heads remain supported for Drex v2.0.
 
-## CPU checks
+## CPU checks (source checkout)
 
 ```bash
 python3 tests/test_drex_max.py --cli build
