@@ -370,6 +370,11 @@ void Qwen35::load_mtp(const std::string& dir) {
   // head is left off
   // (a sidecar's dense MLP too: its widths come from its own shapes, and a gate and up of two widths would end the run
   // at the first draft step, "dense MLP: gate and up differ in format")
+  // (a MoE sidecar keeps the old contract for the linears its row kernels pair, 4 or 8 bits: a shared expert of another
+  // width has no kernel and would end the run at the first draft step)
+  const auto q48 = [](const QLinear& q) { return q.bits == 4 || q.bits == 8; };
+  if (off.empty() && !in_shards && cfg_.moe && !(q48(L.router) && q48(L.shared_gate) && q48(L.sg) && q48(L.su) && q48(L.sd)))
+    off = "its router / shared expert are not 4- or 8-bit";
   if (off.empty() &&
       (cfg_.moe ? in_shards && (!L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
                                 moe_rows_kernel(true, L.eg, L.sg).empty() ||
