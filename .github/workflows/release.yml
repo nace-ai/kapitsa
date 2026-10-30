@@ -1,6 +1,7 @@
 # A tag vX.Y.Z (X.Y.Z = KAPITSA_VERSION in CMakeLists.txt) builds the release binary with packaging/release/build.sh,
-# publishes it on the GitHub release (install.sh downloads it from there) and opens a pull request with the formula in
-# nace-ai/homebrew-tap. Optional secrets: MACOS_CERTIFICATE (base64 .p12 of a Developer ID
+# publishes it on the GitHub release (install.sh downloads it from there), makes a Homebrew bottle of it (uploaded to the
+# same release; a formula with no bottle is a source build to Homebrew, which refuses a Mac with stale or missing Command
+# Line Tools) and opens a pull request with the formula in nace-ai/homebrew-tap. Optional secrets: MACOS_CERTIFICATE (base64 .p12 of a Developer ID
 # Application certificate) and MACOS_CERTIFICATE_PASSWORD sign it; NOTARY_KEY (an App Store Connect API .p8 key),
 # NOTARY_KEY_ID and NOTARY_ISSUER_ID also notarize it; TAP_GITHUB_TOKEN opens the formula's pull request in the tap
 # (its default branch needs an approval, so the tap serves the release only after that is merged), and a stable release
@@ -79,18 +80,34 @@ jobs:
       - name: Homebrew formula
         if: ${{ !contains(github.ref_name, '-') }}
         env:
+          GH_TOKEN: ${{ github.token }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
+          set -o pipefail
           v=${GITHUB_REF_NAME#v}
           sha=$(cut -d ' ' -f 1 "build/release/kapitsa-$v-darwin-arm64.tar.gz.sha256")
           url="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/kapitsa-$v-darwin-arm64.tar.gz"
           sed -E -e "s|^  url \"[^\"]*\"|  url \"$url\"|" -e "s|^  version \"[^\"]*\".*|  version \"$v\"|" \
             -e "s|^  sha256 \"[^\"]*\".*|  sha256 \"$sha\"|" packaging/homebrew/kapitsa.rb > "$RUNNER_TEMP/kapitsa.rb"
-          # install it from a local tap and run its test before it reaches users
+          # Make the bottle from a local tap and upload it to the release. Without one the formula is a source build to
+          # Homebrew, which runs its build-environment checks and refuses a Mac with stale or missing Command Line Tools
+          # ("Your Command Line Tools (CLT) does not support macOS 26"), though nothing here compiles.
           brew tap-new --no-git kapitsa-release/check
-          cp "$RUNNER_TEMP/kapitsa.rb" "$(brew --repository kapitsa-release/check)/Formula/kapitsa.rb"
-          brew install kapitsa-release/check/kapitsa
+          tap_formula="$(brew --repository kapitsa-release/check)/Formula/kapitsa.rb"
+          cp "$RUNNER_TEMP/kapitsa.rb" "$tap_formula"
+          brew install --build-bottle kapitsa-release/check/kapitsa
+          mkdir "$RUNNER_TEMP/bottle"
+          (cd "$RUNNER_TEMP/bottle" && brew bottle --json --no-rebuild \
+            --root-url="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" kapitsa-release/check/kapitsa)
+          brew uninstall kapitsa-release/check/kapitsa
+          python3 packaging/homebrew/add_bottle.py "$RUNNER_TEMP/kapitsa.rb" "$RUNNER_TEMP"/bottle/*.json "$RUNNER_TEMP/bottle-assets"
+          gh release upload --clobber "$GITHUB_REF_NAME" "$RUNNER_TEMP"/bottle-assets/*.bottle.tar.gz
+          # Pour it from the release as a user's brew will, and run the formula's test on that install. --force-bottle
+          # fails if no bottle fits this runner, and "Pouring" shows the build-environment checks did not run.
+          cp "$RUNNER_TEMP/kapitsa.rb" "$tap_formula"
+          brew install --force-bottle kapitsa-release/check/kapitsa 2>&1 | tee "$RUNNER_TEMP/pour.log"
+          grep -q "^==> Pouring kapitsa-$v\." "$RUNNER_TEMP/pour.log"
           brew test kapitsa-release/check/kapitsa
           brew uninstall kapitsa-release/check/kapitsa
           brew untap kapitsa-release/check

@@ -1,8 +1,9 @@
 # Homebrew formula for Kapitsa (by Nace AI, https://nace.ai), prepared for a public release and not published yet.
 # It installs the release binary that packaging/release/build.sh makes (the same tarball install.sh downloads), so
 # nothing compiles; `brew install --HEAD` builds main from source instead. At each release the workflow
-# .github/workflows/release.yml sets version, url and sha256 and puts this file in the tap nace-ai/homebrew-tap as
-# Formula/kapitsa.rb, so that `brew install nace-ai/tap/kapitsa` works.
+# .github/workflows/release.yml sets version, url and sha256, adds the `bottle do` block (packaging/homebrew/add_bottle.py)
+# and puts this file in the tap nace-ai/homebrew-tap as Formula/kapitsa.rb, so that `brew install nace-ai/tap/kapitsa`
+# works. The bottle is what spares a Mac with stale or missing Command Line Tools Homebrew's source-build checks.
 class Kapitsa < Formula
   desc "Fast local Qwen inference for Apple silicon, with an OpenAI-compatible server"
   homepage "https://github.com/nace-ai/kapitsa"

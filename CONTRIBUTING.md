@@ -274,8 +274,12 @@ one engine at a time; [docs/benchmarks.md](docs/benchmarks.md) has the published
 A release is a pull request that sets the version (`CMakeLists.txt`, the `KAPITSA_VERSION` fallbacks in `src/`, the
 `install.sh` example and `packaging/homebrew/kapitsa.rb`) and, once it is merged, the tag `vX.Y.Z` on the merge commit.
 The tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the tarball, publishes the
-GitHub release with its `.sha256`, installs and tests the Homebrew formula locally, and opens a pull request with it in
-[nace-ai/homebrew-tap](https://github.com/nace-ai/homebrew-tap). The tap's default branch needs an approval, so a tap
+GitHub release with its `.sha256`, makes the Homebrew bottle (`kapitsa-X.Y.Z.arm64_{tahoe,sequoia,sonoma}.bottle.tar.gz`,
+one file under three names, uploaded to the same release), pours the formula with its `bottle do` block from that release
+and tests it locally, and opens a pull request with the formula in
+[nace-ai/homebrew-tap](https://github.com/nace-ai/homebrew-tap). The bottle is what lets `brew install` work on a Mac with
+stale or missing Command Line Tools: a formula without one is a source build to Homebrew, which checks for a CLT that
+supports the macOS version before it installs anything, though Kapitsa compiles nothing. The tap's default branch needs an approval, so a tap
 reviewer approves and merges that pull request before `brew install nace-ai/tap/kapitsa` serves the release. Then
 write the release notes (`gh release edit vX.Y.Z --notes-file FILE`), one line per user-facing change, crediting
 outside authors.
