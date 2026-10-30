@@ -823,8 +823,8 @@ void request_header() {  // once, above the first request (g_req_mu)
   if (c.read) h += right("read/s", 6) + "  ";
   h += right("out", 5) + "  " + right("tok/s", 5) + "  " + right("step", 4) + "  finish";
   line(section("Requests"));
-  line(dim(h));
   if (c.read) line(dim("  read/s: prompt tokens read per second of prefill, those not cached" + std::string(c.first ? " (first: time to first token)" : "")));
+  line(dim(h));
 }
 
 // ---- the dashboard: while requests are written, a strip under the request lines. The newest request as a beam
