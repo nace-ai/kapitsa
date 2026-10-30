@@ -2,6 +2,7 @@
 // verifies the pending token plus drafts in one small-batch forward, and Gated DeltaNet layers roll
 // back through a tape (rows are only folded into the recurrent state once accepted).
 #include "loader/safetensors.h"
+#include "model/affine_pack.h"
 #include "model/dflash2.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
@@ -47,12 +48,8 @@ const Tensor* Qwen35::bf16_param(const Tensor* t, int& lossy) {
   if (t->dtype != DType::F32 && t->dtype != DType::F16) fatal("parameter tensor of unsupported dtype");
   const size_t n = size_t(t->numel());
   Buffer b = Gpu::get().alloc(n * 2, "param_bf16", /*tracked=*/false);
-  uint16_t* d = b.as<uint16_t>();
-  for (size_t i = 0; i < n; ++i) {
-    const float v = t->dtype == DType::F32 ? t->buf.as<float>()[i] : float(t->buf.as<_Float16>()[i]);
-    d[i] = f32_to_bf16(v);
-    if (bf16_to_f32(d[i]) != v) ++lossy;
-  }
+  lossy += int(t->dtype == DType::F32 ? to_bf16(t->buf.as<float>(), b.as<uint16_t>(), n)
+                                      : to_bf16(t->buf.as<_Float16>(), b.as<uint16_t>(), n));
   owned_bufs_.push_back(b);
   Tensor c = *t;
   c.buf = b;
@@ -153,19 +150,30 @@ QLinear Qwen35::quantize_rows4(const QLinear& src, uint32_t r0, uint32_t n) {
   return L;
 }
 
-// An already-quantized linear from the MTP file (copied into engine-owned buffers).
+// An already-quantized linear from the MTP file (copied into engine-owned buffers). Group 64; the width comes from the
+// shapes and may be any the kernels read (format_supported: 3, 4, 5, 6, 8), scales and biases in f16 / f32 become bf16.
 QLinear Qwen35::own_qlin(const WeightStore& w, const std::string& name) {
   QLinear L;
+  int lossy = 0;
+  bool cast = false;
+  auto param = [&](const std::string& n) {
+    const Tensor& t = w.get(n);
+    cast |= t.dtype != DType::BF16;
+    return t.dtype == DType::BF16 ? own_copy(t) : bf16_param(&t, lossy);
+  };
   L.w = own_copy(w.get(name + ".weight"));
-  L.s = own_copy(w.get(name + ".scales"));
-  L.b = own_copy(w.get(name + ".biases"));
+  L.s = param(name + ".scales");
+  L.b = param(name + ".biases");
   const int64_t words = L.w->shape.back(), groups = L.s->shape.back();
   L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
-  // 4-bit g64 is the only sidecar format in use; derive and check
   L.gs = 64;
   L.K = uint32_t(groups * 64);
-  L.bits = int(words * 32 / L.K);
-  if (L.bits != 4 && L.bits != 8) fatal("%s: unsupported quantization", name.c_str());
+  L.bits = affine_bits(words, groups, 64);
+  if (!L.bits || !format_supported(L.bits, 64))
+    fatal("%s: %s weights are not supported (bf16, 3/4/5/6/8-bit group 64 and 4-bit group 32 are)", name.c_str(),
+          L.bits ? format_name(L.bits, 64).c_str() : "a packed weight whose shapes fit no bit width");
+  if (cast)
+    logi("%s: scales and biases converted to bf16 at load (%d values not exactly representable)", name.c_str(), lossy);
   return L;
 }
 
@@ -293,10 +301,11 @@ void Qwen35::load_mtp(const std::string& dir) {
       const Tensor* bi = w.find(n + ".biases");
       const int64_t K = bits > 0 ? q.shape.back() * 32 / bits : 0;
       // (qlin reads 8-bit group 128 as group 64: each scale and bias twice)
-      if (mode != "affine" || !bi || q.dtype != DType::U32 || sc.dtype != DType::BF16 || bi->dtype != DType::BF16 ||
+      const auto floats = [](DType d) { return d == DType::BF16 || d == DType::F16 || d == DType::F32; };  // qlin: bf16 copies
+      if (mode != "affine" || !bi || q.dtype != DType::U32 || !floats(sc.dtype) || !floats(bi->dtype) ||
           gs <= 0 || K % gs || K / gs != sc.shape.back() || !format_supported(bits, bits == 8 && gs == 128 ? 64 : gs)) {
         off = n + " is " + (mode == "affine" ? format_name(bits, gs) : mode) + " with " +
-              (bi && bi->dtype == DType::BF16 && sc.dtype == DType::BF16 ? "bf16" : "other") +
+              (bi && floats(bi->dtype) && floats(sc.dtype) ? "float" : "other") +
               " scales and biases, not a format the kernels read";
         return L;
       }
@@ -359,9 +368,12 @@ void Qwen35::load_mtp(const std::string& dir) {
   }
   // an MLX pack's head in formats the trunk's kernels do not pair (check_formats refuses such a trunk layer): only the
   // head is left off
-  if (off.empty() && in_shards &&
-      (cfg_.moe ? !L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
-                      moe_rows_kernel(true, L.eg, L.sg).empty() || moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty()
+  // (a sidecar's dense MLP too: its widths come from its own shapes, and a gate and up of two widths would end the run
+  // at the first draft step, "dense MLP: gate and up differ in format")
+  if (off.empty() &&
+      (cfg_.moe ? in_shards && (!L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
+                                moe_rows_kernel(true, L.eg, L.sg).empty() ||
+                                moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty())
                 : !L.mg.same_format(L.mu)))
     off = "its MLP's formats (" + (cfg_.moe ? L.eg : L.mg).name() + ") have no kernels here";
   if (!off.empty()) {

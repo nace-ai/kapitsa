@@ -832,6 +832,13 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
     fatal("%s: MLX \"%s\" quantization is not supported; Kapitsa runs MLX affine quantizations (2-8 bits) and bf16",
           full.c_str(), mode.c_str());
   if (!L.s || !L.b) fatal("%s: scales without biases (not an MLX affine quantization)", full.c_str());
+  // The kernels read scales and biases as bf16: an f16 / f32 pack (MTPLX's, from an f16 export) gets bf16 copies (before
+  // the group-128 split below, which reads bf16)
+  for (const Tensor** t : {&L.s, &L.b})
+    if ((*t)->dtype == DType::F16 || (*t)->dtype == DType::F32) {
+      *t = bf16_param(*t, sb_lossy_);
+      ++sb_cast_;
+    }
   L.bits = bits;
   L.gs = gs;
   int64_t words = L.w->shape.back();
@@ -1032,6 +1039,8 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
     fix(final_norm_);
     if (converted)
       logi("converted %d parameter tensors to bf16 at load (%d values not exactly representable)", converted, lossy);
+    if (sb_cast_)
+      logi("converted %d scale / bias tensors to bf16 at load (%d values not exactly representable)", sb_cast_, sb_lossy_);
     auto check = [](const QLinear& q) {
       if (q && !q.dense() && !q.iq && (q.s->dtype != DType::BF16 || q.b->dtype != DType::BF16))
         fatal("quantized weights with non-bf16 scales/biases are not supported");
