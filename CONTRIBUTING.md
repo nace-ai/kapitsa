@@ -274,30 +274,34 @@ one engine at a time; [docs/benchmarks.md](docs/benchmarks.md) has the published
 A release is a pull request that sets the version (`CMakeLists.txt`, the `KAPITSA_VERSION` fallbacks in `src/`, the
 `install.sh` example and `packaging/homebrew/kapitsa.rb`) and, once it is merged, the tag `vX.Y.Z` on the merge commit.
 The tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the tarball, publishes the
-GitHub release with its `.sha256`, and installs and tests the Homebrew formula locally before it reaches users. Then
+GitHub release with its `.sha256`, installs and tests the Homebrew formula locally, and opens a pull request with it in
+[nace-ai/homebrew-tap](https://github.com/nace-ai/homebrew-tap). The tap's default branch needs an approval, so a tap
+reviewer approves and merges that pull request before `brew install nace-ai/tap/kapitsa` serves the release. Then
 write the release notes (`gh release edit vX.Y.Z --notes-file FILE`), one line per user-facing change, crediting
 outside authors.
 
 ### The `TAP_GITHUB_TOKEN` secret (Homebrew tap)
 
-Without this repository secret the workflow cannot push the formula to
-[nace-ai/homebrew-tap](https://github.com/nace-ai/homebrew-tap), and a stable release's `Homebrew formula` step fails
-instead of passing quietly: `brew install nace-ai/tap/kapitsa` is an install path (README, docs/usage.md, and what
-`kapitsa update` tells Homebrew users to run), so a green release has to mean the tap serves that version. Its job
-summary then holds the formula to commit there by hand. To make the tap update automatic, an owner of the `nace-ai`
+Without this repository secret the workflow cannot open the formula's pull request in
+[nace-ai/homebrew-tap](https://github.com/nace-ai/homebrew-tap) (the tap refuses direct pushes to its default branch),
+and a stable release's `Homebrew formula` step fails instead of passing quietly: `brew install nace-ai/tap/kapitsa` is
+an install path (README, docs/usage.md, and what `kapitsa update` tells Homebrew users to run). Its job summary then
+holds the formula to put there by hand. To make the tap update automatic, an owner of the `nace-ai`
 organization sets it up once:
 
 1. Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) (for a shared
    machine user rather than a person, where the organization has one). Resource owner: `nace-ai`. Repository access:
-   only `nace-ai/homebrew-tap`. Permission: Repository permissions, Contents, Read and write; nothing else. Pick an
+   only `nace-ai/homebrew-tap`. Permissions: Repository permissions, Contents, Read and write (the formula's branch) and Pull requests, Read and
+   write (its pull request); nothing else. Pick an
    expiry (90 days to a year) and note the date. If the organization requires approval for tokens, an owner approves it
    under Organization settings, Personal access tokens.
 2. Add it to this repository: Settings, Secrets and variables, Actions, New repository secret, name `TAP_GITHUB_TOKEN`,
    the token as the value. Or: `gh secret set TAP_GITHUB_TOKEN -R nace-ai/kapitsa` and paste it.
-3. Check it on the next release: the `Homebrew formula` step should end with `nace-ai/homebrew-tap serves X.Y.Z` and a
-   `kapitsa X.Y.Z` commit by `github-actions[bot]` in the tap. It fails if the push does not land on the tap's default
-   branch or the committed formula's sha256 is not the release's. If the push fails with a 403, the token lacks
-   Contents write on the tap, has expired, or is waiting for organization approval.
+3. Check it on the next release: the `Homebrew formula` step should end with a warning that the tap serves the previous
+   version until its pull request is merged, and a `kapitsa X.Y.Z` pull request by `github-actions[bot]` should be open
+   in the tap. It fails if the branch's formula sha256 is not the release's. If it fails with a 403, the token lacks
+   Contents or Pull requests write on the tap, has expired, or is waiting for organization approval. Then have a tap
+   reviewer approve and merge that pull request.
 
 When the token expires, create a new one the same way and replace the secret. Never commit the token or paste it into an
 issue or pull request.
