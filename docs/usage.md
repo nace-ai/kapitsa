@@ -720,6 +720,11 @@ Effort levels: `none` and `minimal` turn thinking off; `low` and `medium` go to 
 them; `high`, `xhigh` and `max` keep the template's default, Qwen3.8's highest level. The other models think the same at
 every level. In Messages, `"thinking": {..., "display": "omitted"}` returns thinking blocks without their text.
 
+A chat template with a `preserve_thinking` switch (Qwen3.6's) drops earlier turns' reasoning from the prompt once a new
+user message arrives, so the prompt no longer matches what was cached and the conversation since is read again. Kapitsa
+sets `preserve_thinking` to true for such templates when the request leaves it out; `"chat_template_kwargs":
+{"preserve_thinking": false}` turns it off. The kept reasoning counts toward the context.
+
 ### Structured output
 
 A request can hold the reply to a JSON Schema, to any JSON object, or to tool calls. Each token is then sampled under a

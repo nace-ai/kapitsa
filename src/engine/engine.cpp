@@ -391,6 +391,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (flint_) src = flint_template(src);
   tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
                                                  flint_ ? "<|end_of_text|>" : "<|im_end|>");
+  preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && src.find("preserve_thinking") != std::string::npos;
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -1872,8 +1873,8 @@ ChatRequest with_answer(const ChatRequest& r, const std::string& content, const 
   // with its reasoning when the client sends reasoning back (it asks to keep every turn's thinking, or an earlier
   // assistant turn came back with it): templates that render past reasoning (Qwen3.8; preserve_thinking) then render
   // this turn as the live state holds it, and there is nothing to prefill
-  const auto pt = r.template_kwargs.find("preserve_thinking");
-  bool returns_reasoning = pt != r.template_kwargs.end() && pt->is_boolean() && pt->get<bool>();
+  const auto pt = r2.template_kwargs.find("preserve_thinking");  // (after `restore`, which may default it)
+  bool returns_reasoning = pt != r2.template_kwargs.end() && pt->is_boolean() && pt->get<bool>();
   for (const auto& m : r2.messages)
     returns_reasoning = returns_reasoning || (role_of(m) == "assistant" && m.contains("reasoning_content") &&
                                               m["reasoning_content"].is_string() &&
@@ -1947,6 +1948,15 @@ void Engine::remember_reasoning(const ChatRequest& r, const ChatResult& res) {
 }
 
 int Engine::restore_reasoning(ChatRequest& r) { return reasoning_.restore(r.messages); }
+
+// A template that renders earlier turns' reasoning only on preserve_thinking (Qwen3.6) drops it from every turn before
+// the newest user query, so when a new query arrives the prompt stops matching what was generated (and cached) right
+// after the previous query and everything since is read again. Keeping the reasoning is the default (as omlx does);
+// a request that sets preserve_thinking itself (chat_template_kwargs, false included) keeps its choice.
+void Engine::default_template_kwargs(ChatRequest& r) const {
+  if (preserve_thinking_default_ && !r.template_kwargs.contains("preserve_thinking"))
+    r.template_kwargs["preserve_thinking"] = true;
+}
 
 std::string chat_template_source(const std::string& model_dir) {
   std::string src = read_file(model_dir + "/chat_template.jinja");
@@ -2155,7 +2165,9 @@ vision::Prompt Engine::expand_images(const std::vector<int>& ids, const std::vec
   return vision::expand(ids, vision_->encoder().placeholder(), images, index, img_pre_, img_post_);
 }
 
-int Engine::count_tokens(const ChatRequest& r) const {
+int Engine::count_tokens(const ChatRequest& r_in) const {
+  ChatRequest r = r_in;
+  default_template_kwargs(r);
   std::vector<vision::Source> src;
   const std::vector<vision::Prepared> images = request_images(vision_.get(), &src, r.messages);
   const std::vector<int> ids = tok_.encode(render(r, true));
@@ -2252,9 +2264,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }
   // assistant turns the client sent back without their reasoning get it again (see restore_reasoning)
   ChatRequest r_restored = r_in;
+  default_template_kwargs(r_restored);
   const int restored = restore_reasoning(r_restored);
   if (restored > 0) logd("chat: reasoning or argument spelling put back into %d assistant turn(s) the client sent without it", restored);
-  const ChatRequest& r = restored > 0 ? r_restored : r_in;
+  const ChatRequest& r = r_restored;
   // images: fetched, decoded and resized before the GPU turn (a slow download holds up no other request)
   std::vector<vision::Source> img_src;
   std::vector<vision::Prepared> images;
@@ -4199,7 +4212,10 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
   // template renders answers before the last user query without their think block, so render it that
   // way and keep the text up to the placeholder turn's start
   // (the reasoning memory puts back what chat() will: this answer's too, when the client sends it without)
-  ChatRequest r2 = with_answer(r, res.content, res.reasoning, [this](ChatRequest& q) { restore_reasoning(q); });
+  ChatRequest r2 = with_answer(r, res.content, res.reasoning, [this](ChatRequest& q) {
+    restore_reasoning(q);
+    default_template_kwargs(q);
+  });
   static const std::string marker = "\x01nace-history-marker\x01";
   r2.messages.push_back({{"role", "user"}, {"content", marker}});
   std::vector<vision::Prepared> images;  // the request's, as chat() prepared them (no download again)
@@ -4442,7 +4458,10 @@ DraftResult Engine::draft(const std::string& after, const std::string& text) {
   DraftPrompt dp;
   try {
     const ChatRequest answered =
-        with_answer(a->r, a->content, a->reasoning, [this](ChatRequest& q) { restore_reasoning(q); });
+        with_answer(a->r, a->content, a->reasoning, [this](ChatRequest& q) {
+          restore_reasoning(q);
+          default_template_kwargs(q);
+        });
     dp = draft_prompt(answered, text, [&](const ChatRequest& q) {
       if (vision_ && vision::image_sources(q.messages).size() != images.size()) throw vision::Error("images");
       return render(q, false);

@@ -364,6 +364,7 @@ class Engine {
   // The reasoning of a turn this engine wrote, put back into the same turn when a client sends it without (reasoning_memory.h)
   void remember_reasoning(const ChatRequest& r, const ChatResult& res);
   int restore_reasoning(ChatRequest& r);
+  void default_template_kwargs(ChatRequest& r) const;  // preserve_thinking, when the template has it and the request leaves it out
   // A reply the server sent (before the reply ends, and again before prefill_history: kept once): the last kAnswered
   // that ended with "stop" are the conversations draft() can read ahead in.
   void remember_reply(const ChatRequest& r, const ChatResult& res);
@@ -619,6 +620,7 @@ class Engine {
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   ReasoningMemory reasoning_;  // remember_reasoning / restore_reasoning
+  bool preserve_thinking_default_ = false;  // the template has a preserve_thinking switch: on unless the request says
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
   TextTags text_tags_;        // the tags written as text (no such tokens; Nemotron Nano 9B v2)
   bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
