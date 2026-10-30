@@ -1,0 +1,4 @@
+| arm | decode T=0 tok/s | decode T=0.6 tok/s | TTFT 1K s | prompt tokens / TTFT 1K (tok/s) | TTFT 4K s | prompt tokens / TTFT 4K (tok/s) | TTFT 16K s | prompt tokens / TTFT 16K (tok/s) | turn-2 TTFT s (4K chat) | peak footprint GiB (serving tree) | system used GiB at that peak | system wired GiB (max) | swap growth GB (max) | memory pressure (max) | peak ps RSS MiB (not a memory comparison) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Kapitsa --engine splash @e67b764f (KFlash 1.5.0) | 61.3 (n 10) | 58.2 (n 10) | 1.47 (n 10) | 704 (n 10) | 3.35 (n 10) | 1218 (n 10) | 16.15 (n 10) | 1194 (n 10) | 0.56 (n 10) | 25.0 (5 legs) | 39.7 | 28.4 | 0.00 | 1 | 2395 |
+| plain Splash 1.5.0 | 56.5 (n 10) | 56.0 (n 10) | 1.47 (n 10) | 706 (n 10) | 3.46 (n 10) | 1178 (n 10) | 16.21 (n 10) | 1190 (n 10) | 0.56 (n 10) | 25.4 (5 legs) | 40.1 | 28.6 | 0.00 | 1 | 2894 |

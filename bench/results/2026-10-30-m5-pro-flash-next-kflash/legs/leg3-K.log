@@ -1,0 +1,20 @@
+kapitsa: KFlash engine /Users/alisheramantay/Documents/nace/fnposter-home/engines/splash-kflash-1.5.0-18a1058aa46c/engine/splash (measured faster for this model; --splash-kflash off runs stock Splash)
+[kapitsa] tokenizer: 248320 tokens, 247587 merges, 33 added (239 ms)
+[kapitsa] splash: splash engine pid 93897 started
+ksx: SPLASH_KSX_H1=3 (stock 0)
+ksx: SPLASH_KSX_H1=3 (stock 0)
+ksx: SPLASH_KSX_H1=3 (stock 0)
+ksx: SPLASH_KSX_KERNELS (stock off): ksx_h1.metal overrides 6 functions
+ksx: SPLASH_KSX_H1=3 (stock off): in-buffer decode loads with gate and replay, spin bound 4194304, shadows 112672 B
+16:01:59 Weights loaded in 1.95 s.
+16:01:59 Table per_layer_token_embd.weight streams from its file: 27465 MiB stay on the SSD; row cache of 4427535 rows in 511 MiB, all that --ple-memory auto leaves it beside the floors and the KV kept resident; 32 readers.
+16:01:59 Routed experts stream from their files: 12086 slots for 24576 experts (49%) in 15933 MiB.
+16:01:59 Decode cycles verify the rows the verify budget chooses (--verify-rows auto, as ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0 is a MoE target): greedy and seeded outputs can differ from run to run.
+16:01:59 SSD cache: up to 27.5 GiB of temporary files in /var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/ (a quarter of the 109.9 GiB its volume has beyond the 10.0 GiB it keeps free); KV pages of 416 KiB and states of 113 MiB, a state's write staging through 113 MiB of the memory plan; --max-cache-disk 0 turns it off.
+16:01:59 Kernel policy for GPU family 10 with 20 cores.
+16:01:59 Long requests keep their KV on the SSD cache: 262144 tokens of context (bound: model; window 262144, resident 262144, spilled 262144, disk 262144); a request whose KV fits 13272 MiB stays in memory; hot block cache 390 MiB (floor 390 MiB); history staging in 2 buffers; SSD room for active KV 32.0 GiB.
+ksx: H1=3 first gated command: 1590 dispatches, 48 gate steps from dispatch 116, 3 indirect grids read after it: [ksx/h1-grid+0, last 1560 by ksx_moe_expert_load_c] [qwen-shared-decode+242597892, last 1562 by moe_expert_gguf_m8_gate_up_mixed] [qwen-shared-decode+242597904, last 1563 by moe_expert_gguf_m8_a]
+[kapitsa] splash: engine ready (pid 93897): context 32768, 4 concurrent request(s), tokenizer from /Users/alisheramantay/Library/Application Support/Splash/models/.resolved/652799347ee912b7acd050042b20d3677ca2163103dc90e7d85138daa15e0c3e/tokenizer
+[kapitsa] listening on http://127.0.0.1:58395
+Ready: chat at http://127.0.0.1:58395, API at http://127.0.0.1:58395/v1 (model "652799347ee912b7acd050042b20d3677ca2163103dc90e7d85138daa15e0c3e"). Ctrl+C stops.
+ksx: H1 steps in-buffer 24624, awake fallback 0 (of 24624)

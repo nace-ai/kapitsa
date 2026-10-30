@@ -1,0 +1,177 @@
+# Engine architecture
+
+Kapitsa is a native C++20 inference engine for Apple silicon. Its HTTP APIs share one chat engine; model-specific
+backends encode work into Metal command buffers and can offload selected prefill operations to Apple's Neural Engine.
+It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do not imply a runtime dependency.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.svg">
+  <img alt="Kapitsa's architecture: the APIs, the engine with its conversation slots, prefill on the GPU and the Neural Engine, draft-and-verify decoding, the Qwen and Nemotron backends and their Metal kernels." src="assets/architecture-light.svg">
+</picture>
+
+The generation loop repeats until completion, streaming through the API adapter. Image encoders run only for
+supported image requests, and Neural Engine work is limited to selected prefill operations. Conversation slots retain
+state for later turns; requests sent at once take turns on the GPU for their prompts and share batched passes while
+they decode.
+
+## From a request to generated tokens
+
+1. **Normalize the API request.** The server exposes OpenAI Chat Completions, OpenAI Responses and Anthropic
+   Messages. Adapters translate these into `ChatRequest`; output adapters return each protocol's streaming events,
+   reasoning and tool calls. The built-in chat page uses the same server.
+2. **Build the prompt and recover conversation state.** The engine renders the model's Jinja chat template,
+   tokenizes the prompt, chooses a conversation slot and reuses a matching prefix. A slot holds attention KV caches,
+   recurrent state and checkpoints. Only the uncached suffix needs prefill when a compatible checkpoint exists.
+3. **Prefill the target model.** The selected backend processes prompt chunks, using its own attention, recurrent
+   and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows. On the
+   Qwen models a pass of at most 128 rows (a cached turn's message, the reply prefilled while idle, a draft read
+   ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
+   into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise.
+4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B
+   and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
+   (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
+   not become committed recurrent history. KFlash (every drafter by default; `NI_KFLASH=0` keeps chains, and
+   `NI_DFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
+   chains (the trees need the full depth) whose two clean depth-2/3 mode-3 anchors read cheaper per token than any
+   deeper measured arm, ids-identical, with the shipping-binary sweep to
+   decide whether it becomes their default): the
+   drafter's candidates are verified as a best-first tree instead of one chain: each verify row attends to its
+   ancestors only, the recurrent layers run from its own branch's state, and the longest branch that agrees with the
+   target is kept, so the reply is plain decoding's. The tree's size follows this Mac's measured cost per verify row
+   count and the drafter's probabilities as calibrated against its own acceptances: whole 8-row tiles on the dense Qwen
+   models (27B, 4B), where each cycle verifies 8 rows, or 16 or 32 when `NI_KFLASH_ROWS=8,16,32` names them (opt-in, but
+   for the 16-row drafting block below, which sets every cycle to 16 rows on a one-slot engine; the GPU runs the tiles the
+   drafting pass chose, with
+   no host round trip), as many as pay in expected tokens per millisecond on this Mac; on MoE targets (the Qwen
+   35B-A3B, the Nemotron drafters), whose verify pays per row for its experts, 1 to 8 rows per pass, the GPU routing
+   experts (and running the recurrent step and the sampler) for those rows alone. Plain generation is available with
+   `--spec 0`.
+5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
+   retains the slot for follow-ups and can prefill the rendered assistant history while idle. While the user types
+   the next message, `POST /v1/draft` reads the draft ahead the same way (`Engine::draft`): a checkpoint at the user
+   turn's start, then the live state extended with the draft up to its last whitespace, so the request, once sent,
+   continues that state and prefills only what was typed since (an edited draft restores the checkpoint).
+
+Requests sent at once each run on a slot of their own and take turns on the GPU (a first-come-first-served turn lock):
+between prefill chunks, and between decode cycles once a request has held the GPU for 30 ms. Before it gives its turn
+away a request parks: nothing of its own left in flight and nothing it needs next left in the model's or the drafter's
+shared buffers, so a request that only takes turns runs the cycles, and gets the tokens, it would alone. `--slots` (up
+to 4 by default, as memory allows) sets how many run at once; with every slot busy a request waits for one. Image
+fetching, the chat template and the tokenizer run before a request takes its turn.
+
+When two or more requests decode at once with a block drafter (DFlash2 on the Qwen 27B and 35B-A3B, LiLiCorr on Bolt),
+their decode cycles are batched. At a cycle boundary a parked request joins the batch, and one member's thread holds the
+turn and runs every member's cycles (`Engine::run_batch`): each member's draft when it verifies drafts, then one target
+pass over all the members' rows (`encode_verify_multi`, up to 8 rows). The norms, projections, MLP or experts and the LM
+head run once over every row, so each weight is read once for all the members; each member's recurrent scan, convolution
+window and attention over its own KV cache run side by side in the same command buffer. Every member keeps its own
+drafter ring, acceptance (the longest greedy match, or the exact speculative sampling of a sampled DFlash2 request),
+parser and stream. With DFlash2, KFlash's batch budget (`KfBatch`) decides the rows every cycle, once the members'
+drafting passes are done: a member's draft is worth the calibrated chance that the target accepts it and the drafts
+before it (the drafter's probabilities calibrated against the verify's own acceptances, as for KFlash trees; a sampled
+request's against its speculative sampling's), every member verifies its anchor, and the drafts go in decreasing worth
+over the whole batch, each while it pays for one more row at this Mac's measured cost (a batched cycle's GPU time by
+members and rows) and the batch's recent tokens per ms, up to the pass's 8 rows. A draft's place never depends on the
+draft itself, so a sampled request's speculative sampling stays exact. The rows are chosen on the host (the verify's
+per-member dispatches take their rows when encoded), so the verify is encoded once the drafting passes are done; its
+first layer goes to the GPU at once. With LiLiCorr the rows follow a table, as measured (`Engine::batch_rows`): two
+requests verify 3 drafts each, three 1 draft each and four plain rows (`NI_BATCH_KF=0` gives DFlash2 its table too:
+two requests 3 drafts each, three or four 1 draft each, the 27B's three taking turns). The Qwen3.5 4B's DFlash
+drafter, Nemotron 3.5 Lightning and Super-VL take turns until measured
+(`NI_BATCH=1` batches them too). A member that finishes leaves the batch, and the last one goes back to its own loop.
+One request alone runs the single-stream path unchanged. Requests decoded together can get other tokens than alone where
+two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
+`NI_BATCH=0` makes them take turns instead.
+
+## Execution session ownership
+
+[`ExecutionSession`](../src/engine/execution_session.h) provides one-shot start, cancellation, and join for a bound
+request. [`chat.h`](../src/engine/chat.h) contains the request, result, and delta types without native model headers.
+The private [`ExecutionFactory`](../src/engine/execution_session_internal.h) binds backend work and its observer
+before start. The native HTTP handlers use this owner through a server-private binding.
+
+The control owner keeps the session alive through its callbacks. Callbacks must not retain their own session, and
+cannot destroy, start, or wait on it. They can request cancellation. Destruction cancels and joins the worker before releasing the
+bound work. Concurrent waits return the same completed result. Waiting before start or from any observer callback throws.
+
+Observer exceptions cancel further prompt and delta delivery. Cancellation sets the stop token and emits `cancelled`
+on the cancelling thread, which can wake an observer blocked in `accepted`. It can overlap ordinary callbacks, so
+observers must synchronize their own state. `cancelled` and `finished` are serialized, with `finished` always last.
+Normal completion, cancellation after completion, and destruction without start do not emit a late `cancelled`.
+
+The terminal callback runs once after work returns, including work exceptions and thread-start failure. Terminal
+delivery proves CPU work returned, not that a backend retired its Metal command buffers, callbacks, or ANE evaluations.
+Each backend must establish its own native drain.
+
+The [standalone CPU runner](../tools/run_execution_session_test.sh) compiles the production implementation without
+native libraries or Apple frameworks. The same tests run through the CMake `execution_session_test` target.
+
+### HTTP request lifetime
+
+The [native binding](../src/server/native_execution.cpp) retains the selected engine and its `RequestGuard` through
+session destruction. The engine still owns scheduling, slots, RNG, parsing, expert storage and KV state. HTTP adds
+no second inference scheduler and does not enable earlier slot or cache reuse.
+
+The [stream observer](../src/server/http_stream.cpp) owns framing state and meters, with no owning path back to the
+session. Cancellation wakes the early-stream acceptance wait, which holds native slot acquisition until the first
+successful HTTP write or cancellation. A destroyed or abandoned provider cancels and joins its execution. Token
+metering stays at native delta production, not queue consumption. Streamed replies are remembered before terminal
+framing; nonstream handlers retain their prefill and response-store ordering. Pre-stream errors retain endpoint JSON
+responses; failed framing does not complete the HTTP stream.
+
+Model selection and request-lease registration happen under one selection lock. Switch and reload close admission,
+then wait for admitted leases without holding the lock those requests need for reply bookkeeping. A guard releases
+its engine reference before decrementing the lease count. This drains CPU request ownership, not Metal or ANE work.
+
+The [HTTP CPU runner](../tools/run_http_stream_test.sh) and CMake `http_stream_test` target exercise the production
+observer and chunked provider without native/UI linkage or sockets. They cover abandonment, cancellation, framing
+failures and metering, but do not establish native inference equivalence, performance or backend retirement.
+
+## Four model backends
+
+| | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron Dory | Recursive Flint |
+| --- | --- | --- | --- | --- |
+| Backend | `Qwen35` | `NemotronH` | `Dory` | `Flint` |
+| Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) | None |
+| Other layers | Attention; dense FFN or MoE | Attention; LatentMoE (dense relu² MLP in Nemotron Nano 4B / 9B v2) | Sliding-window and full attention, dense MLP; normalized (nGPT) residuals | Sliding-window and full attention with learned sinks; MoE (2 dense layers first) |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B and 9B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV | None on Recursive's Flint (prompt lookup with `--spec`) |
+| Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint | NVIDIA's safetensors checkpoints | Recursive's MLX export; GGUF imports (unsloth's UD-IQ files) |
+| Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type | NVFP4 or BF16 (on the Nemotron-H kernels; the LM head 8-bit with NVFP4) | Affine 4-bit (Recursive's: 8-bit embedding, bf16 router) and 8-bit, bf16; a GGUF import's routed experts in their IQ blocks |
+| Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work | None | None |
+
+Qwen3.8-Flash-Next (`Qwen4Exp`) is a subclass of `Qwen35` that reuses its projections, DeltaNet, attention, experts,
+sampler and KV handling, and adds the 4-stream hyper-connection residual, the per-layer n-gram embedding (hashed and
+gathered on the CPU from a mapped table) and the sparse-attention indexer. A pack with Q2_0 routed experts
+([`moe_q20.h`](../src/model/moe_q20.h)) can keep only part of them in memory: an expert store
+([`expert_store.h`](../src/model/expert_store.h)) holds them in slots the expert kernels read through a slot table,
+and a handshake between each layer's routing and its expert kernels lets a CPU thread read the missing ones from the
+SSD before the GPU goes on. A pack with EXL3 routed experts (Sushi's; [`moe_exl3.h`](../src/model/moe_exl3.h)) keeps
+them resident and runs them through their own decode, verify and prefill kernels: trellis-coded 16 x 16 tiles decoded as
+they are read, between the two Hadamard transforms of each projection.
+
+Recursive's Flint (`Flint`) has no recurrent layers: 35 sliding-window attention layers keep their keys in a ring of
+528 positions per conversation (the window of 513 and 8 spare rows that a verify pass may fill), 14 full-attention
+layers keep a growing cache, and each head's learned sink joins its softmax. A decode row's attention is one dispatch
+(`flint_attn_d2`: norms, RoPE, the cache write, split-K over 32-key tiles, the merge by the last threadgroup); verify
+passes and prefill chunks use split-K and tiled kernels of their own. Its MoE routes by sigmoid scores with an
+always-on shared expert, on the base library's expert kernels (`moe_gate_up3`, `moe_down`, the 2-4-row `moe4_*`, the
+prefill's grouped GEMMs). A pack with 8-bit routed experts, or 4-bit ones beside an 8-bit shared expert, takes
+`wfmt.metal`'s generic expert kernels instead (`moeg_gu_rows_*` / `moeg_down_rows_*_w` for decode and verify rows,
+`qrmf_gu_f8g64_m32_n64_f32` / `qrmf_dn_f8g64_m32_n128` for prefill), and a quantized router is copied to bf16 at load.
+Its activations pass half's range in places (up to 75776 at layer 46), so the prefill's
+SwiGLU stores such rows divided by a power of two and folds the factor back into the row's weight
+(`flint_swiglu_scaled`). It has its own pre-tokenizer split and GLM's tool-call format in the output parser.
+
+All four implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
+Speculative paths remain specialized: the engine also holds backend-specific pointers and drafter state. Adding a
+new architecture requires more than implementing `Model` if it needs a new drafter, tokenizer behavior or vision tower.
+
+## Where the speed comes from
+
+* **Shape-specific Metal kernels.** Quantized matrix operations, fused projections, attention, recurrent scans and
+  grouped expert operations avoid routing all work through general-purpose tensor operators. The Qwen and Nemotron
+  backends have separate kernel sets for their shapes and stored weight formats.
+* **QMT prefill.** On Apple10 GPUs (the M5) under macOS 26, the 4-bit dense GEMMs of the Qwen3.5
+  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B, `qattn_t_g4d2s8`: the same pair kernel over (token, head) rows;
+  `NI_QATTN_G4D2=0` keeps `qattn_t_s8k16`) and 8 (the 35B, on
+  `qattn_t_g8d2s8` by default, which splits the head dim over a pair of simdg

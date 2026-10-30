@@ -577,6 +577,10 @@ leg of the arm.</sub>
 
 Read across it:
 
+- **Re-measured on 2026-10-30 with KFlash and Splash 1.5.0**, with the same scripts, interleaved K S K S
+  ([results](../bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md)): this server at its default `--splash-kflash auto` read 61.3 tok/s decode at T 0 and
+  1,218 tok/s on the 4K prompt against plain Splash 1.5.0's 56.5 and 1,178, n 10 each. The ranges overlap on every
+  cell, so it is a tie, not a measured speed-up. The table above is the 2026-10-27 run.
 - **This server in front of Splash, and plain Splash, are close.** Decode medians are 55.9 and 55.5 tok/s, with single
   requests spread from 49 to 62 tok/s across the two arms. The prompt tokens / TTFT figure for the server is
   +1.3%, +2.8% and +4.7% against plain Splash at 1K, 4K and 19K, and turn-2 TTFT is 0.56 s against 0.57 s. These are

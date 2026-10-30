@@ -1,0 +1,678 @@
+# Engine architecture
+
+Kapitsa is a native C++20 inference engine for Apple silicon. Its HTTP APIs share one chat engine; model-specific
+backends encode work into Metal command buffers and can offload selected prefill operations to Apple's Neural Engine.
+It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do not imply a runtime dependency.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.svg">
+  <img alt="Kapitsa's architecture: the APIs, the engine with its conversation slots, prefill on the GPU and the Neural Engine, draft-and-verify decoding, the Qwen and Nemotron backends and their Metal kernels." src="assets/architecture-light.svg">
+</picture>
+
+The generation loop repeats until completion, streaming through the API adapter. Image encoders run only for
+supported image requests, and Neural Engine work is limited to selected prefill operations. Conversation slots retain
+state for later turns; requests sent at once take turns on the GPU for their prompts and share batched passes while
+they decode.
+
+## From a request to generated tokens
+
+1. **Normalize the API request.** The server exposes OpenAI Chat Completions, OpenAI Responses and Anthropic
+   Messages. Adapters translate these into `ChatRequest`; output adapters return each protocol's streaming events,
+   reasoning and tool calls. The built-in chat page uses the same server.
+2. **Build the prompt and recover conversation state.** The engine renders the model's Jinja chat template,
+   tokenizes the prompt, chooses a conversation slot and reuses a matching prefix. A slot holds attention KV caches,
+   recurrent state and checkpoints. Only the uncached suffix needs prefill when a compatible checkpoint exists.
+3. **Prefill the target model.** The selected backend processes prompt chunks, using its own attention, recurrent
+   and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows. On the
+   Qwen models a pass of at most 128 rows (a cached turn's message, the reply prefilled while idle, a draft read
+   ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
+   into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise.
+4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B
+   and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
+   (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
+   not become committed recurrent history. KFlash (every drafter by default; `NI_KFLASH=0` keeps chains, and
+   `NI_DFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
+   chains (the trees need the full depth) whose two clean depth-2/3 mode-3 anchors read cheaper per token than any
+   deeper measured arm, ids-identical, with the shipping-binary sweep to
+   decide whether it becomes their default): the
+   drafter's candidates are verified as a best-first tree instead of one chain: each verify row attends to its
+   ancestors only, the recurrent layers run from its own branch's state, and the longest branch that agrees with the
+   target is kept, so the reply is plain decoding's. The tree's size follows this Mac's measured cost per verify row
+   count and the drafter's probabilities as calibrated against its own acceptances: whole 8-row tiles on the dense Qwen
+   models (27B, 4B), where each cycle verifies 8 rows, or 16 or 32 when `NI_KFLASH_ROWS=8,16,32` names them (opt-in, but
+   for the 16-row drafting block below, which sets every cycle to 16 rows on a one-slot engine; the GPU runs the tiles the
+   drafting pass chose, with
+   no host round trip), as many as pay in expected tokens per millisecond on this Mac; on MoE targets (the Qwen
+   35B-A3B, the Nemotron drafters), whose verify pays per row for its experts, 1 to 8 rows per pass, the GPU routing
+   experts (and running the recurrent step and the sampler) for those rows alone. Plain generation is available with
+   `--spec 0`.
+5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
+   retains the slot for follow-ups and can prefill the rendered assistant history while idle. While the user types
+   the next message, `POST /v1/draft` reads the draft ahead the same way (`Engine::draft`): a checkpoint at the user
+   turn's start, then the live state extended with the draft up to its last whitespace, so the request, once sent,
+   continues that state and prefills only what was typed since (an edited draft restores the checkpoint).
+
+Requests sent at once each run on a slot of their own and take turns on the GPU (a first-come-first-served turn lock):
+between prefill chunks, and between decode cycles once a request has held the GPU for 30 ms. Before it gives its turn
+away a request parks: nothing of its own left in flight and nothing it needs next left in the model's or the drafter's
+shared buffers, so a request that only takes turns runs the cycles, and gets the tokens, it would alone. `--slots` (up
+to 4 by default, as memory allows) sets how many run at once; with every slot busy a request waits for one. Image
+fetching, the chat template and the tokenizer run before a request takes its turn.
+
+When two or more requests decode at once with a block drafter (DFlash2 on the Qwen 27B and 35B-A3B, LiLiCorr on Bolt),
+their decode cycles are batched. At a cycle boundary a parked request joins the batch, and one member's thread holds the
+turn and runs every member's cycles (`Engine::run_batch`): each member's draft when it verifies drafts, then one target
+pass over all the members' rows (`encode_verify_multi`, up to 8 rows). The norms, projections, MLP or experts and the LM
+head run once over every row, so each weight is read once for all the members; each member's recurrent scan, convolution
+window and attention over its own KV cache run side by side in the same command buffer. Every member keeps its own
+drafter ring, acceptance (the longest greedy match, or the exact speculative sampling of a sampled DFlash2 request),
+parser and stream. With DFlash2, KFlash's batch budget (`KfBatch`) decides the rows every cycle, once the members'
+drafting passes are done: a member's draft is worth the calibrated chance that the target accepts it and the drafts
+before it (the drafter's probabilities calibrated against the verify's own acceptances, as for KFlash trees; a sampled
+request's against its speculative sampling's), every member verifies its anchor, and the drafts go in decreasing worth
+over the whole batch, each while it pays for one more row at this Mac's measured cost (a batched cycle's GPU time by
+members and rows) and the batch's recent tokens per ms, up to the pass's 8 rows. A draft's place never depends on the
+draft itself, so a sampled request's speculative sampling stays exact. The rows are chosen on the host (the verify's
+per-member dispatches take their rows when encoded), so the verify is encoded once the drafting passes are done; its
+first layer goes to the GPU at once. With LiLiCorr the rows follow a table, as measured (`Engine::batch_rows`): two
+requests verify 3 drafts each, three 1 draft each and four plain rows (`NI_BATCH_KF=0` gives DFlash2 its table too:
+two requests 3 drafts each, three or four 1 draft each, the 27B's three taking turns). The Qwen3.5 4B's DFlash
+drafter, Nemotron 3.5 Lightning and Super-VL take turns until measured
+(`NI_BATCH=1` batches them too). A member that finishes leaves the batch, and the last one goes back to its own loop.
+One request alone runs the single-stream path unchanged. Requests decoded together can get other tokens than alone where
+two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
+`NI_BATCH=0` makes them take turns instead.
+
+## Execution session ownership
+
+[`ExecutionSession`](../src/engine/execution_session.h) provides one-shot start, cancellation, and join for a bound
+request. [`chat.h`](../src/engine/chat.h) contains the request, result, and delta types without native model headers.
+The private [`ExecutionFactory`](../src/engine/execution_session_internal.h) binds backend work and its observer
+before start. The native HTTP handlers use this owner through a server-private binding.
+
+The control owner keeps the session alive through its callbacks. Callbacks must not retain their own session, and
+cannot destroy, start, or wait on it. They can request cancellation. Destruction cancels and joins the worker before releasing the
+bound work. Concurrent waits return the same completed result. Waiting before start or from any observer callback throws.
+
+Observer exceptions cancel further prompt and delta delivery. Cancellation sets the stop token and emits `cancelled`
+on the cancelling thread, which can wake an observer blocked in `accepted`. It can overlap ordinary callbacks, so
+observers must synchronize their own state. `cancelled` and `finished` are serialized, with `finished` always last.
+Normal completion, cancellation after completion, and destruction without start do not emit a late `cancelled`.
+
+The terminal callback runs once after work returns, including work exceptions and thread-start failure. Terminal
+delivery proves CPU work returned, not that a backend retired its Metal command buffers, callbacks, or ANE evaluations.
+Each backend must establish its own native drain.
+
+The [standalone CPU runner](../tools/run_execution_session_test.sh) compiles the production implementation without
+native libraries or Apple frameworks. The same tests run through the CMake `execution_session_test` target.
+
+### HTTP request lifetime
+
+The [native binding](../src/server/native_execution.cpp) retains the selected engine and its `RequestGuard` through
+session destruction. The engine still owns scheduling, slots, RNG, parsing, expert storage and KV state. HTTP adds
+no second inference scheduler and does not enable earlier slot or cache reuse.
+
+The [stream observer](../src/server/http_stream.cpp) owns framing state and meters, with no owning path back to the
+session. Cancellation wakes the early-stream acceptance wait, which holds native slot acquisition until the first
+successful HTTP write or cancellation. A destroyed or abandoned provider cancels and joins its execution. Token
+metering stays at native delta production, not queue consumption. Streamed replies are remembered before terminal
+framing; nonstream handlers retain their prefill and response-store ordering. Pre-stream errors retain endpoint JSON
+responses; failed framing does not complete the HTTP stream.
+
+Model selection and request-lease registration happen under one selection lock. Switch and reload close admission,
+then wait for admitted leases without holding the lock those requests need for reply bookkeeping. A guard releases
+its engine reference before decrementing the lease count. This drains CPU request ownership, not Metal or ANE work.
+
+The [HTTP CPU runner](../tools/run_http_stream_test.sh) and CMake `http_stream_test` target exercise the production
+observer and chunked provider without native/UI linkage or sockets. They cover abandonment, cancellation, framing
+failures and metering, but do not establish native inference equivalence, performance or backend retirement.
+
+## Four model backends
+
+| | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron Dory | Recursive Flint |
+| --- | --- | --- | --- | --- |
+| Backend | `Qwen35` | `NemotronH` | `Dory` | `Flint` |
+| Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) | None |
+| Other layers | Attention; dense FFN or MoE | Attention; LatentMoE (dense relu² MLP in Nemotron Nano 4B / 9B v2) | Sliding-window and full attention, dense MLP; normalized (nGPT) residuals | Sliding-window and full attention with learned sinks; MoE (2 dense layers first) |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B and 9B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV | None on Recursive's Flint (prompt lookup with `--spec`) |
+| Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint | NVIDIA's safetensors checkpoints | Recursive's MLX export; GGUF imports (unsloth's UD-IQ files) |
+| Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type | NVFP4 or BF16 (on the Nemotron-H kernels; the LM head 8-bit with NVFP4) | Affine 4-bit (Recursive's: 8-bit embedding, bf16 router) and 8-bit, bf16; a GGUF import's routed experts in their IQ blocks |
+| Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work | None | None |
+
+Qwen3.8-Flash-Next (`Qwen4Exp`) is a subclass of `Qwen35` that reuses its projections, DeltaNet, attention, experts,
+sampler and KV handling, and adds the 4-stream hyper-connection residual, the per-layer n-gram embedding (hashed and
+gathered on the CPU from a mapped table) and the sparse-attention indexer. A pack with Q2_0 routed experts
+([`moe_q20.h`](../src/model/moe_q20.h)) can keep only part of them in memory: an expert store
+([`expert_store.h`](../src/model/expert_store.h)) holds them in slots the expert kernels read through a slot table,
+and a handshake between each layer's routing and its expert kernels lets a CPU thread read the missing ones from the
+SSD before the GPU goes on. A pack with EXL3 routed experts (Sushi's; [`moe_exl3.h`](../src/model/moe_exl3.h)) keeps
+them resident and runs them through their own decode, verify and prefill kernels: trellis-coded 16 x 16 tiles decoded as
+they are read, between the two Hadamard transforms of each projection.
+
+Recursive's Flint (`Flint`) has no recurrent layers: 35 sliding-window attention layers keep their keys in a ring of
+528 positions per conversation (the window of 513 and 8 spare rows that a verify pass may fill), 14 full-attention
+layers keep a growing cache, and each head's learned sink joins its softmax. A decode row's attention is one dispatch
+(`flint_attn_d2`: norms, RoPE, the cache write, split-K over 32-key tiles, the merge by the last threadgroup); verify
+passes and prefill chunks use split-K and tiled kernels of their own. Its MoE routes by sigmoid scores with an
+always-on shared expert, on the base library's expert kernels (`moe_gate_up3`, `moe_down`, the 2-4-row `moe4_*`, the
+prefill's grouped GEMMs). A pack with 8-bit routed experts, or 4-bit ones beside an 8-bit shared expert, takes
+`wfmt.metal`'s generic expert kernels instead (`moeg_gu_rows_*` / `moeg_down_rows_*_w` for decode and verify rows,
+`qrmf_gu_f8g64_m32_n64_f32` / `qrmf_dn_f8g64_m32_n128` for prefill), and a quantized router is copied to bf16 at load.
+Its activations pass half's range in places (up to 75776 at layer 46), so the prefill's
+SwiGLU stores such rows divided by a power of two and folds the factor back into the row's weight
+(`flint_swiglu_scaled`). It has its own pre-tokenizer split and GLM's tool-call format in the output parser.
+
+All four implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
+Speculative paths remain specialized: the engine also holds backend-specific pointers and drafter state. Adding a
+new architecture requires more than implementing `Model` if it needs a new drafter, tokenizer behavior or vision tower.
+
+## Where the speed comes from
+
+* **Shape-specific Metal kernels.** Quantized matrix operations, fused projections, attention, recurrent scans and
+  grouped expert operations avoid routing all work through general-purpose tensor operators. The Qwen and Nemotron
+  backends have separate kernel sets for their shapes and stored weight formats.
+* **QMT prefill.** On Apple10 GPUs (the M5) under macOS 26, the 4-bit dense GEMMs of the Qwen3.5
+  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B, `qattn_t_g4d2s8`: the same pair kernel over (token, head) rows;
+  `NI_QATTN_G4D2=0` keeps `qattn_t_s8k16`) and 8 (the 35B, on
+  `qattn_t_g8d2s8` by default, which splits the head dim over a pair of simdgroups; `NI_QATTN_D2=0` runs `qattn_t_g8s4k16`) and 6 (the 27B, `qattn_t_g6d2s8`: the same pair kernel over (token, head) rows; `NI_QATTN_G6=0` keeps `attn_prefill11r`) run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off, `NI_QATTN_G8=0` keeps the 35B on `attn_prefill11r`).
+  The 6-bit group-64 dense weights of those packs run their prefill GEMMs from 64 rows up on a tile of the same kind
+  (`src/kernels/tensor/qmt6.metal`: `qmt6_m64_n64`, `qmt.metal`'s 64x64x32 double-buffered `matmul2d`, one 32-K one per
+  step where the simdgroup path runs four 8-K MMAs) whose weight decode is `qrf`'s half-domain one, bitwise, so only the
+  K reduction's order differs; `NI_QMT6=0` keeps `qrf_f6g64_m32_n128`, and below 64 rows the older paths run anyway.
+  The 35B-A3B's routed expert prefill runs the same tile over the MoE bucket's 64-row expert tiles
+  (`src/kernels/tensor/qmt_moe.metal`, `NI_MOE_QTM=0` keeps it on the simdgroup kernels), and so do Flint's routed
+  expert GEMMs (`qmtm_g_m64_n64`: gate, up and down each to fp32 rows, so `flint_swiglu_scaled` still sees whole rows;
+  `NI_FLINT_MOE_QTM=0` keeps `qmm_moe_b4_m16_n64`; these tiles write whole output rows staged through threadgroup
+  memory, `NI_MOE_STAGE=0` keeps one store per accumulator element), Qwen3.8-Flash-Next's Q2_0 routed expert prefill
+  (`src/kernels/tensor/qmt_moe_q20.metal`: the same 64-row tile on the Q2_0 weight rows, the qrm kernels' per-element
+  arithmetic kept — the decode is exact and the products accumulate in fp32 — so only the tiling reassociates the K
+  reduction; `NI_MOE_QTM_Q20=0` keeps the simdgroup kernels), and Flint's prefill attention (head dim 128, 8 query heads per
+  KV head: `src/kernels/tensor/qattn_t_flint.metal`, `NI_FLINT_QATTN=0` keeps `flint_attn_prefill`). Measured on the 4B (dense),
+  the 35B-A3B and Flash-Next (experts): none is bit-identical to the simdgroup paths, since the tile reassociates each output's
+  K reduction, so the experts' tile is gated by `tools/logit_compare.py --reorder` (AGENTS.md) rather than the model's
+  noise floor.
+* **Several verified tokens per target pass.** DFlash2, MTP and LiLiCorr amortize target-model work when the drafts
+  are accepted. Throughput depends on the model, prompt, sampling settings and acceptance rate.
+* **Requests at once share passes.** While several requests decode, one target pass verifies all of their rows and
+  reads each weight once for all of them. The KFlash budget
+  (`src/model/kflash_budget.*`) picks how many rows each request gets, every cycle.
+* **Prefix reuse.** KV caches and recurrent-state checkpoints avoid rereading an entire conversation for each turn.
+  Image embeddings have their own content-aware cache, so a changed image cannot reuse another image's prompt state.
+  The SSD prefix cache (`src/engine/prefix_cache.h`, `engine_disk.cpp`) keeps those states as files too, so evicted
+  conversations and server restarts keep them: KV rows in blocks keyed by the tokens and the requests that computed
+  them (a conversation's turns share their blocks), states byte for byte as the slot held them, CRC-checked.
+* **GPU and Neural Engine overlap.** Eligible prefill operations split across both processors. GPU work and Neural
+  Engine jobs synchronize through shared events. The split uses additional quantization and is a numerical tradeoff;
+  it is distinct from speculative verification. Runtime checks and watchdogs can disable the split and rerun a
+  failed chunk on the GPU.
+
+These are implementation mechanisms, not guarantees of a fixed speedup. Measured results and their conditions live
+in the [benchmark reports](benchmarks.md).
+
+## Loading, images and memory
+
+The model catalog pins checkpoint and companion revisions. Downloads resume and validate checksums. The safetensors
+loader supplies weights to the backends; Bolt repacks codes and scales into its GPU layout at load time. Supported
+Qwen GGUF files are converted once into a reusable model folder.
+
+Vision is optional. `open_encoder` selects `QwenViT` for supported Qwen checkpoints (the 4B's tower: 24 blocks, head
+dimension 64; the 35B's and 27B's: 27 blocks, head dimension 72) or `RadioViT` for Nemotron 3.5 Bolt's and Super-VL's
+C-RADIO ViT-H/16 tower and projector (Super-VL layer-normalizes the tower's output first). The tower loads on the
+first image request; CPU image preparation and cached GPU embeddings feed the model's prefill. Qwen uses M-RoPE
+positions; Bolt and Super-VL wrap image rows in their image tokens and use attention without positional embeddings.
+The text benchmarks do not measure images.
+
+Memory planning happens before weights load. Per-slot KV caches grow within a budget derived from Metal's recommended
+working set or `--mem-budget`. Under pressure, the engine can release cached image data, idle slots' KV caches and
+Neural Engine resources. `kapitsa doctor` uses the same planning logic to report what fits.
+
+## Source map
+
+| Component | Entry points |
+| --- | --- |
+| CLI, HTTP routes and chat page | [`src/server/`](../src/server/) |
+| OpenAI Responses and Anthropic adapters | [`src/api/`](../src/api/) |
+| Request lifecycle, slots, turns, batched decoding and generation | [`src/engine/engine.cpp`](../src/engine/engine.cpp) |
+| Shared model contract and sequence state | [`src/model/model.h`](../src/model/model.h) |
+| Qwen backend and drafters | [`qwen35.h`](../src/model/qwen35.h), [`dflash2.h`](../src/model/dflash2.h); KFlash's budgets (trees, batched rows): [`kflash_budget.h`](../src/model/kflash_budget.h) |
+| Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal); Q2_0 experts and their store: [`moe_q20.h`](../src/model/moe_q20.h), [`expert_store.h`](../src/model/expert_store.h), [`zq2moe.metal`](../src/kernels/zq2moe.metal); EXL3 experts: [`moe_exl3.h`](../src/model/moe_exl3.h), [`exl3moe.metal`](../src/kernels/exl3moe.metal) |
+| Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h); KFlash trees: [`kflash_budget.h`](../src/model/kflash_budget.h), [`nh_tree.metal`](../src/kernels/nemotron/nh_tree.metal) |
+| Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
+| Flint backend | [`flint.h`](../src/model/flint.h), [`src/kernels/flint/`](../src/kernels/flint/); the timing tools [`flint_bench.cpp`](../tools/flint_bench.cpp) and [`flint_kbench.cpp`](../tools/flint_kbench.cpp) |
+| Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
+| Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |
+| Image encoders and embedding cache | [`src/vision/`](../src/vision/) |
+| Catalog, downloads and weights | [`src/hub/`](../src/hub/), [`src/loader/`](../src/loader/) |
+| `kapitsa bench`: the harness's protocol, this Mac's conditions, the result and its submission | [`src/bench/`](../src/bench/), [`bench_cmd.cpp`](../src/server/bench_cmd.cpp) |
+| `kapitsa update` and the automatic update | [`src/update/`](../src/update/), [`update_cmd.cpp`](../src/server/update_cmd.cpp) |
+
+The Neural Engine bridge uses Apple's private framework interfaces. See [third-party notices](../THIRD_PARTY_NOTICES)
+for adapted code and design credits, the [usage guide](usage.md) for options and switches, and
+[CONTRIBUTING.md](../CONTRIBUTING.md) for building and testing.
+
+## Updating the diagram
+
+The diagram is hand-written SVG in two variants, [architecture-dark.svg](assets/architecture-dark.svg) and
+[architecture-light.svg](assets/architecture-light.svg), with no fonts or scripts, so GitHub shows it as drawn. Edit
+both and preview them at README width (about 830 px) in dark and light mode. The logo and the README header are in
+[assets/brand](assets/brand/README.md) and [header-dark.svg](assets/header-dark.svg).
+# Using Kapitsa
+
+The reference for the `kapitsa` command and its server. To install Kapitsa, see the [README](../README.md); to build it
+from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [architecture.md](architecture.md).
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`, visible to Kapitsa on the other Macs of the network ([Several Macs](#several-macs)). Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the model picked last if it is downloaded, else the best model for this Mac ([Server options](#server-options)). |
+| `kapitsa cluster [--json] [--watch]` | The Macs on this network that run Kapitsa: the model each serves, how, how fast, and the link to it ([Several Macs](#several-macs)). `kapitsa macs` is the same. |
+| `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
+| `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
+| `kapitsa list [--json]` | The downloaded models: size on disk, complete or not, MTP head and draft model. |
+| `kapitsa rm M...` | Deletes downloaded models and says how much space that gave back. Folders outside the store are left alone. |
+| `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
+| `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
+| `kapitsa bench [--model M] [--prefill-chunk N] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
+| `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
+| `kapitsa stage --model M [--layers A-B] [--port P] [--host H] [--mem-budget GB] [--prefill-chunk N]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
+| `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
+
+Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
+download (the parts are kept) or when the model question is cancelled; the coding-agent commands exit with the agent's
+code; `kapitsa update --check` exits 100 when a newer release is out.
+
+### Which model
+
+Run in a terminal without `--model`, `kapitsa serve` and the coding-agent commands ask which model to start: the models
+with their download size, ✓ where downloaded and ★ on the best for this Mac, then the chosen model's precisions with
+their sizes and whether each fits this Mac's memory (the engine's own plan of its headers; a model or precision that
+does not fit is marked too big and can still be chosen, with a warning). Each shows the context it would run with: Tab
+(Shift+Tab back) changes it on both screens, between the default ([Context](#context): the model's limit where memory holds it), 32K, 128K, 256K and max, the
+model's own limit, and a model or precision that would run without its draft model at that context says so. ↑ and ↓
+(or j and k) move, Enter chooses, Esc goes back or cancels, Ctrl+C cancels. A model not downloaded yet says how much it
+downloads, then downloads as usual.
+
+The first choice is the last one, with its context, so Enter twice starts the same model again. It is kept in
+`~/.cache/kapitsa/state.json` (`KAPITSA_HOME`), and a `--model` that names a catalog model, typed in a terminal, updates
+it too; with no last choice, the best model for this Mac comes first. A coding-agent command that finds a server
+already running on its port uses it and says so (stop it to pick another model).
+
+Nothing is asked where nobody could answer: when stdin, stdout or stderr is not a terminal (the Nace Agent app,
+scripts, `brew services`), with `TERM=dumb`, `CI` or `KAPITSA_NO_PROMPT=1` set, with `--yes`, or in a background job.
+Those start the model picked last (the picker's last choice, or a catalog `--model` typed in a terminal) when it is
+downloaded at the revisions this Kapitsa pins (an upgrade can pin newer files, and an unasked start does not
+fetch them), saying so (`No --model given: ..., the model picked last`), else the best model for this Mac,
+downloading it first, with the same output as before. `--yes` and the Nace Agent app's own Kapitsa
+always take the best model.
+
+## Models and downloads
+
+| Name | Aliases | What it is | Download | Variants |
+| --- | --- | --- | ---: | --- |
+| `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
+| `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.0 GB | `4bit` (default) |
+| `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
+| `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `16gb` (where `4bit` does not fit: 2-bit experts, 10.8 GB; [GGUF files](#gguf-files)) |
+| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs, 64 GB with `64gb` | 105.9 GB | `4bit` (default), `64gb` (where `4bit` does not fit: Sushi's EXL3 2-bit experts, 69.6 GB) |
+| `nemotron-labs-dory1.0-4b` | `dory`, `dory-4b`, `dory1.0-4b` | NVIDIA Nemotron Dory1.0 4B: a looped model, its shared block run 1-4 times per token ([thinking depth](#dory-thinking-depth)); text only | 3.2 GB | `nvfp4` (default), `bf16` |
+| `nemotron-3-nano-4b` | `nano-4b`, `nemotron-nano-4b` | NVIDIA Nemotron 3 Nano 4B: hybrid Mamba-2, dense, FP8; text only | 5.3 GB | `fp8` (default), `bf16` |
+| `nemotron-nano-9b-v2` | `nano-9b`, `nemotron-nano-9b` | NVIDIA Nemotron Nano 9B v2: hybrid Mamba-2, dense, NVFP4; reasoning switched with `/think`; text only | 7.9 GB | `nvfp4` |
+| `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
+| `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
+| `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
+| `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
+
+A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
+27B, an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning; Flash-Next's
+repo holds its MTP head. Dory and Flint have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
+MTP head, and a draft model would not fit beside it).
+
+Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
+([nace-ai/Qwen3.8-Flash-Next-MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit), its precision per
+tensor chosen by KL against bf16; Qwen publishes no 4-bit). Its recipe keeps the hyper-connections and attention at 6
+bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB read per token); its 32 GB n-gram table
+(`ple.safetensors`) stays on disk and is read through the page cache.
+
+Flash-Next's `64gb` is [Sushi](https://github.com/beamivalice/sushi)'s 2-bit pack
+([beamster/Qwen3.8-Flash-Next-Sushi-2bpw](https://huggingface.co/beamster/Qwen3.8-Flash-Next-Sushi-2bpw)): its routed
+experts and the MTP head's are EXL3 trellises at 2 bits a weight (turboderp's format with the MCG codebook and 15-bit
+codewords, decoded as they are read: `src/model/moe_exl3.h`), the text model's other matrices 8-bit affine but for the
+bf16 router and gates (36.7 GB of weights in memory with the MTP head; 37.6 GB of files with the bf16 vision tower,
+which loads with the first image; images were not run on it), its 32 GB n-gram table 4-bit in `ngram_table.bin`. On an
+M5 Max 128 GB (macOS 26.4) it prefills 4K tokens at 728 tok/s and decodes 52.6 tok/s after them (plain), and 78.6 tok/s
+with the MTP head at depth 3 after a short prompt (2.83 tokens a cycle), where the `4bit` does 1,760, 81.6 and 104.7:
+the `64gb` is for a Mac the `4bit` does not fit. Kapitsa reads Sushi's EXL3 packs (`"expert_quant": {"format": "exl3",
+"codebook": "mcg"}`, up to 4 bits a weight) by repo or folder; only the 2bpw one has been run. Its STQ packs
+(`Qwen3.8-Flash-Next-Sushi-STQ-2.75bpw`, `"format": "stq"`) are refused when they load.
+
+`--model` takes a name or alias (`35b`), one with a variant (`35b:6bit`), a Hugging Face repo (`org/name[@revision]`,
+see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./` or `../`), a `.gguf` file
+([GGUF files](#gguf-files)) or the name of a folder in the store.
+
+The first start of a model downloads it; later starts use the copy on disk, offline too. A name without a variant takes
+the default where it holds one conversation of 32K tokens (or of the `--context` given) with its draft model, else the
+first of the model's smaller variants that does, else the smallest: `35b` and `flint` on a 16 or 24 GB Mac are
+`35b:16gb` and `flint:16gb`. A catalog model that would not start on this Mac is refused before the download, naming one
+that fits. Without `--model`, `kapitsa serve` takes the first of `35b`, `27b`, `9b` and `4b` that holds one conversation
+of 32K tokens (or of the `--context` given) within this Mac's memory budget (a model not downloaded yet is planned from
+its file headers, a few hundred KB).
+
+The API calls the model by its name (`qwen3.5-4b`), as `name:variant` for a variant other than the default
+(`qwen3.6-35b-a3b:6bit`), or by its repo id or folder name; `--model-id` sets another. The server runs one model, so a
+request's `model` field is not checked.
+
+### Precisions
+
+Each Qwen model comes in several precisions, its variants. Download sizes, companions included:
+
+| Variant | Weights | `4b` | `9b` | `27b` | `35b` |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 4.6 GB | 9.0 GB | 20.2 GB | 22.1 GB |
+| `5bit` | MLX affine 5-bit, group 64 | - | - | 23.5 GB | 26.4 GB |
+| `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |
+| `8bit` | MLX affine 8-bit, group 64 | 6.7 GB | - | 33.6 GB | 39.4 GB |
+| `bf16` | unquantized, where it fits | 10.6 GB | - | 58.8 GB | 71.9 GB |
+| `16gb` | 2-bit experts: unsloth's UD-IQ2_XXS GGUF, imported ([GGUF files](#gguf-files)); `35b` takes it where `4bit` does not fit (16 and 24 GB Macs) | - | - | - | 10.8 GB |
+
+Each step up stays closer to the original weights, decodes slower and needs more memory; `kapitsa doctor` shows which
+variants fit this Mac. Every variant but `16gb` keeps the model's MTP head and draft model; each pins its repo to a
+revision, so a download is always the same bytes. After a Kapitsa update that pins newer revisions, the next start
+fetches only the files that changed (offline, it keeps using the copy it has). Bolt has one variant, `24gb`: NVIDIA's
+own mixed-precision checkpoint (IQ2_XXS experts, NVFP4 Mamba layers, Q8_0 attention, latent and head, BF16 embedding).
+Super-VL has one variant, `nvfp4`: NVIDIA's own checkpoint as stored (NVFP4 routed and shared experts, FP8 Mamba
+projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding). Dory has two,
+NVIDIA's own checkpoints as stored: `nvfp4` (the default: NVFP4 linears, the format most of its pre-training ran in,
+with BF16 embedding and head; 3.2 GB) and `bf16` (8.0 GB). Along two replies (320 positions), the NVFP4 checkpoint's
+next-token distributions are a KL of 0.020 from the BF16 checkpoint's on average (NVIDIA's code, 2 loops), with the same
+top token at 94% of positions. With `nvfp4` the LM head loads as 8-bit rows (quantized from its BF16 at load: a
+next-token KL of 7e-6 from the BF16 head, the same top token at 319 of 320 positions, about 7% faster writing;
+`NI_DORY_HEAD=bf16` keeps it BF16). Flint has two: `4bit` (the default, Recursive's MLX export) and `16gb`
+(unsloth's UD-IQ2_XXS GGUF, imported: [GGUF files](#gguf-files)).
+
+### Other models
+
+Any Hugging Face repo of a Qwen3.5-family model (Qwen3.5, Qwen3.6, Qwen3.8) in MLX format runs: bf16, or MLX affine 3,
+4, 5, 6 or 8-bit with groups of 64 (4-bit also 32; 8-bit also 128, loaded as group 64 with bf16 scales and biases, which
+only Sushi's Flash-Next trunk has exercised), mixed recipes included, except ones whose dense MLP gives `gate_proj` and
+`up_proj` different formats (as `mlx-community/Qwen3.8-27B-OptiQ-4bit`): those are refused when they load. Kapitsa reads
+the repo's `config.json` before any weights, then downloads its top-level files except other formats (`.gguf`, `.bin`,
+images and the like; a Sushi pack's `ngram_table.bin` is kept). A catalog variant's repo
+(`mlx-community/Qwen3.6-35B-A3B-6bit`) comes with that variant's MTP head and draft model; other repos use the MTP head
+they contain, if any.
+
+A folder needs `config.json`, the `*.safetensors` weights and `tokenizer.json`, and may hold an MTP head in
+`mtp.safetensors`. The official Hugging Face checkpoints of the dense models run as well. A Qwen3.8-Flash-Next
+(`qwen4_exp`) folder also needs its n-gram table: `ple.safetensors`, a GGUF's in `ple.gguf` (read when present; see
+the Q2_0 folders below), or a Sushi pack's `ngram_table.bin` (read when there is no `ple.safetensors`).
+
+NVIDIA's dense Nemotron-H checkpoints run from a folder too (`kapitsa serve --model DIR`): Mamba-2, attention and dense
+MLP layers, no experts, as [Nemotron Nano 4B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16) (BF16) and
+[Nemotron Nano 9B v2](https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-9B-v2-NVFP4) (NVFP4, with its attention, first
+and last layers and LM head left BF16; the head loads as 8-bit rows, `NI_NH_HEAD`). `tools/nh_fp4_requant.py` writes
+a copy of that checkpoint with those attention, first and last layers in NVFP4 as well (the head as it is): a token
+reads 4.97 GB in place of 6.11 and decodes 1.20x as fast on an M3 Pro, at a mean KL of 0.0169 against the BF16 release
+where NVIDIA's checkpoint gives 0.0116 (top-1 93.7% against 95.1%); serve its output folder with `--model DIR`. They
+have no draft model. The 4B
+decodes with prompt lookup: drafts from earlier in the conversation (up to 4 per cycle), verified in one pass, so the
+reply is the one plain decoding gives, on an M1 Pro 4-8% sooner in BF16. In FP8 (with its 8-bit head) it is 1% sooner
+on the benchmark's code, 1.4-2.3x on replies that repeat the prompt (a rewrite of code it was given) and 4-5% later on
+free prose, where few drafts are accepted. The 9B v2 decodes plainly, as prompt lookup measured
+within 2% either way on its NVFP4 weights there; `--spec N` sets the drafts per cycle for either, `--spec 0` turns
+prompt lookup off. The 9B v2's template turns thinking on and off with `/think` and `/no_think` in a message: the APIs'
+switches (`enable_thinking`, `reasoning_effort`, Anthropic's `thinking`) set that flag, and its
+`<TOOLCALL>[...]</TOOLCALL>` calls come back as tool calls. That template also drops a past turn's reasoning and its
+`<think>` tags, so a follow-up request reuses the cache up to the previous reply, not through it.
+
+Recursive's Flint (`--model flint`: [RecursiveSI/flint-int4](https://huggingface.co/RecursiveSI/flint-int4), its MLX
+4-bit export) has 49 layers: 35 of sliding-window attention (513 positions, a ring per conversation) and 14 of full
+attention without positional encoding, each head with a learned sink, then 256 experts routed by sigmoid scores (6 a
+token) beside an always-on shared expert. It reasons before every answer (its template has no switch for that), and its
+tool calls, in GLM's `<tool_call>` format, come back as tool calls. It has no draft model and decodes plainly: prompt
+lookup (`--spec N`) checks 2-4 rows a pass at 1.6-2.8 times a decode step's cost on an M4 Pro (each row brings its own 6
+experts), and on the benchmark's code a draft exists for 1 token in 4, so it is off unless asked for. With it on, a reply
+can part from plain decoding's beyond a near-tie of the next token: Flint's router rounds its scores to bf16 before it
+takes its top 6, and where a score sits on a rounding boundary a verify pass, which sums in another order than a decode
+step, can pick another expert, and every layer after it computes something else. The output check met one such row in
+192 (layer 16 at a window's position 1684), at verify passes of 2, 4 and 8 rows alike.
+
+Flint packs of higher precision than Recursive's run too, each module's format read from its tensors: 8-bit group-64
+routed experts beside an 8-bit shared expert (an MLX 8-bit export, a Q8_0 GGUF's import), or 4-bit routed experts beside
+an 8-bit shared expert (MLX's mixed 4/8-bit recipe), with projections in 4 or 8 bits. A quantized router (that recipe
+quantizes it) is copied to bf16 at load, the format the routing kernels read; its rounding to bf16 can move a top-6
+choice at a near-tie. These experts run the generic expert kernels (`src/kernels/wfmt.metal`), not the 4-bit pack's
+specialized ones, and 8-bit experts read twice the bytes a token.
+
+Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
+them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
+checkpoints in the Hugging Face layout, and weights larger than this Mac's memory budget.
+
+### GGUF files
+
+`kapitsa import FILE.gguf` converts a GGUF file once into a model folder in the store and prints its name for
+`kapitsa serve --model`; `kapitsa serve --model FILE.gguf` and the coding-agent commands convert on first use and reuse
+the conversion after that. It reads the GGUF architectures `qwen35` and `qwen35moe` (Qwen3.5, 3.6 and 3.8) as LM Studio,
+Ollama (its blob files) and Hugging Face GGUF repos ship them, and `flint` (Recursive's Flint, where its routed experts
+are IQ blocks: below); a split file is named by any of its parts.
+
+The MTP head comes from the file, an `mtp-*.gguf` beside it, an Ollama model's draft layer, or `--mtp FILE`. Options:
+`--name NAME` (the folder; default: from the file name), `--threads N` (default: the performance cores, at most 8),
+`--force` (convert again over an existing folder), `--dry-run` (show the formats, size and folder, write nothing).
+
+| GGUF type | Converted to |
+| --- | --- |
+| BF16, F16, F32 | bf16 |
+| Q4_0, Q4_1, Q4_K | 4-bit group 32, the file's own codes |
+| Q8_0, Q6_K | 8-bit group 64 |
+| Q5_0, Q5_1, Q5_K | 6-bit group 64 |
+| IQ4_NL, IQ4_XS, MXFP4, NVFP4 | 5-bit group 64 |
+| IQ3_XXS, IQ3_S, Q3_K | 4-bit group 32 |
+| IQ2_XXS, IQ2_XS, IQ2_S, IQ1_S, IQ1_M, Q2_K | 3-bit group 64 |
+
+In a mostly 4-bit-or-better file (unsloth's UD mixes, for example), the 1-3-bit tensors take the file's majority format.
+The experts of mixture-of-experts layers take 5-bit group 64 from 4-bit types, 4-bit group 64 from 3-bit and 3-bit group
+64 from 1-2-bit types, except routed experts in IQ2_XXS, IQ2_S or IQ3_S (and IQ3_XXS or IQ1_S with
+`KAPITSA_IMPORT_IQ_NEW=1`): those stay in the file's own blocks, which Kapitsa's kernels read as they are. The folder's experts file is then an APFS clone of the GGUF (no second copy; on
+another volume, or with `KAPITSA_IMPORT_COPY=1`, a copy), and the model locks its weights in memory as it loads. Refused:
+the ternary TQ1_0 and TQ2_0, Hadamard-rotated weights, Qwen3-Next, other architectures.
+
+That is how Qwen3.6-35B-A3B runs on a 16 GB Mac: the UD-IQ2_XXS file of
+[unsloth/Qwen3.6-35B-A3B-GGUF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF) (10.8 GB; IQ2_XXS gate and up experts,
+IQ2_S and IQ3_S down experts) imports in seconds into 11.0 GB of weights, inside a 16 GB Mac's 12.2 GB budget with room
+for 21K tokens of KV cache. The catalog has it as the 35B's `16gb` variant, which `35b` takes where the 4-bit default
+does not fit (16 and 24 GB Macs):
+
+```bash
+kapitsa serve 35b          # on a 16 GB Mac: 35b:16gb, downloaded and imported the first time
+kapitsa pull 35b:16gb      # the same, without starting it
+```
+
+It downloads that one file, pinned to a revision and checked against its sha256 like every catalog file (resumed after
+Ctrl+C; taken from the Hugging Face cache or a `--from` folder when it is already on this Mac), then imports it into
+`qwen3.6-35b-a3b-16gb` in the store. The folder then holds the conversion, not the file: its experts file is an APFS
+clone of the file, 12.7 GB on disk in all with the file's 10.8 GB. The pull needs that much free disk, and 6 GB more
+that the import keeps free; a stopped import starts again from the downloaded file. Before the download, its memory
+plan is the import's plan of the file's header (16 MB, fetched once). `kapitsa pull --dry-run 35b:16gb` shows the file,
+its size and the folder's size after the import. A copy of the file you already have works too: `kapitsa pull
+35b:16gb --from DIR` (a clone, no download), or `kapitsa import Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf` (a folder outside the
+catalog, named after the file).
+
+On a MacBook Pro M1 Pro 16 GB it decodes 52.6 tok/s (llama.cpp b11669 on the same file: 38.0-38.8) and reads a
+4K-token prompt in 9.0 s (11.8 s). Against llama.cpp's Metal backend on the same file its next-token distributions are at
+KL 0.023 with the same top token 97.5% of the time (llama.cpp's own CPU backend: 0.012 and 97.5%); part of the gap is
+the conversion of the file's Q5_K tensors to 6-bit. It has no MTP head, so it decodes plainly, and no vision tower: it
+reads text only.
+
+Flint's GGUFs import their own way. Their routed experts must be IQ blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS or IQ3_S),
+which stay as they are; attention, the dense MLP and the shared expert take 4-bit group 64, the embedding 3-bit group
+64, the LM head 6-bit group 64, and the router stays bf16. A Flint GGUF whose routed experts are all Q8_0 or Q6_K
+(ggml-org's `Flint-Q8_0.gguf`) imports for precision instead: the experts, the shared expert and every other linear in
+8-bit group 64, the router bf16, about twice the 4-bit pack's memory. A Flint GGUF with other experts (Recursive's Q4_1
+file) is refused, pointing at `flint:4bit`. unsloth's `flint-UD-IQ2_XXS.gguf`
+([unsloth/flint-GGUF](https://huggingface.co/unsloth/flint-GGUF), 11.9 GB; IQ1_S, IQ2_XXS, IQ2_S and IQ3_XXS experts)
+imports in 6 s into 11.73 GB of weights, 13.0 GB on disk in all with the file's 11.9 GB (the experts file is an APFS
+clone of it). In a 16 GB Mac's 12.2 GB budget that leaves room for one conversation of 8K tokens: the engine runs it
+with one slot, 448-row prefill chunks and an 8K default context ([Memory](#memory-and-kapitsa-doctor)). The catalog has
+it as Flint's `16gb` variant, which `flint` takes where the 4-bit default does not fit (16 and 24 GB Macs):
+
+```bash
+kapitsa serve flint        # on a 16 GB Mac: flint:16gb, downloaded and imported the first time
+```
+
+On a MacBook Pro M1 Pro 16 GB it decodes 61 tok/s (llama.cpp d772569 on the same file, runs alternated: 42.4) and
+reads a 4K-token prompt in 9.4 s (10.9-11.2 s), at a peak of 11.6 GB (12.2 GB). The requantized tensors cost quality: against llama.cpp on the
+same file its next-token distributions are at KL 0.22 (median 0.018), with the same top token 89% of the time; on the
+same weights (its import written back as a GGUF) the two engines agree at KL 0.045 (median 0.001, 97.4%).
+
+### Where models are stored
+
+Models live in `~/.cache/kapitsa/models`; `KAPITSA_HOME` moves `~/.cache/kapitsa`. Folders are named `<name>-<variant>`
+for catalog models (`qwen3.6-35b-a3b-4bit`), `org--name` or `org--name@revision` for repos, and by `--name` for GGUF
+conversions. Inside, `.kapitsa/` holds the parts of files being downloaded and the manifest, written last (`35b:16gb`'s
+folder holds its GGUF file until the import replaces the folder with the conversion).
+
+- Every file is checked after download against its sha256, or its git blob id for small files; a mismatch deletes it
+  and says so. Ctrl+C keeps what has arrived (a second one quits at once) and the same command continues. A download
+  needs what is left plus 1 GB of free disk; a finished one needs no network access.
+- Files already on this Mac are used instead of downloaded, as APFS clones (no extra space; copies across volumes): the
+  Hugging Face cache (`HF_HUB_CACHE`, else `$HF_HOME/hub`, else `~/.cache/huggingface/hub`), folders given to
+  `kapitsa pull M --from DIR` (matched by checksum, up to 3 levels deep) and, for a catalog model, the Nace Agent app's
+  copy in `~/.nace/models`.
+- A catalog model's folder that Kapitsa did not download (copied in by hand, say) is adopted: its files are checked
+  against the pinned checksums, kept where they match, and only the others fetched. Until then `kapitsa list` shows it
+  as not checked yet.
+- `HF_TOKEN`, or the token `hf auth login` saved, is sent for gated or private repos; `HF_ENDPOINT` points at a mirror.
+
+`kapitsa list` shows the store and the variants not downloaded yet; `kapitsa rm 35b:6bit` deletes a variant
+(`kapitsa rm 35b`: the default one, or the only one downloaded). It says how much space it gave back: a model that is an APFS clone of
+another copy (Nace Agent's, a `--from` folder, the Hugging Face cache) frees nothing.
+
+When a download does not fit the disk (Kapitsa keeps 1 GB spare, 6 GB for `35b:16gb`'s import), `kapitsa serve`,
+`kapitsa pull`, `kapitsa bench` and the coding-agent commands, run in a terminal, list the other downloaded models with
+what deleting each would free: space selects, Enter deletes them and the download goes on once they free enough, Esc
+cancels. Elsewhere (the app, scripts) the error names the `kapitsa rm` commands that would make room.
+
+## Server options
+
+`kapitsa serve` checks the port, downloads the model if needed and loads it, then prints `Ready:` and the chat and API
+addresses. A model this Mac would not hold whole that another Mac on the network runs whole is neither downloaded nor
+loaded: the server sends its requests there ([Several Macs](#several-macs)). In a terminal the engine's log goes to
+`~/.cache/kapitsa/logs/serve-PORT.log` (`--verbose` shows it on screen too), otherwise to stderr; Ctrl+C stops it.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--model MODEL` | asked in a terminal; else the model picked last if downloaded, else the best for this Mac | A name, `name:variant`, `org/name[@revision]`, a folder or a `.gguf` file ([Models and downloads](#models-and-downloads)). |
+| `--host HOST` | `0.0.0.0` | Listen address: every address, this Mac's and its network's ([API keys and network access](#api-keys-and-network-access)). `127.0.0.1` keeps the server to this Mac, as `--private` does. |
+| `--port PORT` | `8000` | Listen port. A port in use is an error, on any address. |
+| `--private` | off | This Mac only: listen on `127.0.0.1`, stay out of sight of Kapitsa on the other Macs and never send them requests ([Several Macs](#several-macs)). |
+| `--local` | off | Run the model on this Mac even when another Mac on the network runs it whole ([Several Macs](#several-macs)). |
+| `--api-key KEY` | none | Require `Authorization: Bearer KEY` or `x-api-key: KEY`. |
+| `--allow-switch` | off | Let a request naming another model, or `POST /v1/models/switch`, load that model (it may download gigabytes). Off, the `model` field is ignored, as clients send names of their own. Without `--api-key` it keeps the server on this Mac, as `--private` does, and says so; with a network `--host` it needs `--api-key`. |
+| `--model-id ID` | the model's name | The model's name in the API. |
+| `--context N` | the model's limit (256K, 1M), less where memory is tight | Context per conversation: tokens (`131072`), `k` or `m` of them (`128k`, `1m`), or `max`, the model's own limit ([Context](#context)). `--ctx N` works too. |
+| `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
+| `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--context` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
+| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). Dense Nemotron-H (Nemotron Nano): prompt lookup's drafts per cycle (by default 4 with BF16 or FP8 MLP layers, off with NVFP4). Flint: prompt lookup's drafts per cycle (off by default). |
+| `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
+| `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. On a 32-core M1 Max and on the M5 (Apple10 GPUs), a single slot with the 35B-A3B 4-bit group-64 model uses `4096` when its memory plan fits. An MoE model's pass holds up to 1/32 more rows than the chunk (`2112` for `2048`), and the prompt is split evenly over the passes it needs, so a prompt a few tokens past a multiple of the chunk does not pay a pass of its own for them. `NI_BAL=0` restores the plain chunking. |
+| `--disk-cache SIZE` | `auto` | The SSD prefix cache: conversations kept on the SSD, also across restarts ([SSD prefix cache](#ssd-prefix-cache)). `auto`: a quarter of the free space beyond 10 GiB, at most 32 GiB; a size (`16G`, `512M`) caps it within that; `0` turns it off. Not every model has it yet ([Models](#ssd-prefix-cache) lists them): the others run without it and, when the option is given, say so at start. |
+| `--loops N` | `2` | Dory: how many times its shared block runs per token, 1-4 ([thinking depth](#dory-thinking-depth)); requests may choose their own. |
+| `--loop-kv MODE` | `last-loop` | Dory: the shared block's KV cache, `last-loop` (one per layer) or `per-loop` (one per loop, more memory). |
+| `--timing WHAT` | `both` | What the request log and the chat page show of the wait before the first token: `ttft` (the time to the first token), `prefill` (prompt tokens read per second) or `both`. The rate counts only the prompt tokens that were not served from the conversation's cache, over the engine's own prefill time: a follow-up that adds 80 tokens to a cached 20K prompt shows its 80 tokens' rate, and the chat page says "uncached". The API reports the time as `usage.kapitsa.prefill_ms` (OpenAI chat completions), so a client's rate is `(prompt_tokens - cached_tokens) / prefill_ms` (`usage.kapitsa.kflash` is `{"source", "cycles"}`: the KFlash proposal source of the model's decode and the cycles the request ran, left out with `NI_KFLASH=0` or `NI_KFLASH_WRAP=0`); `prefill_ms` is left out when the prompt had images (their encoding runs before the clock starts) or the request gave up its turn to another one while prefilling (`--slots` above 1), since the time is then not the time to read those tokens, and the request log shows `–`. |
+| `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
+| `--verbose` | off | In a terminal, show the engine's log on screen too. |
+| `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
+
+### Context
+
+`--context` sets how long one conversation can get: its prompt, its history and the reply share it. Without it, `kapitsa
+serve` and the coding-agent commands take the model's own limit (256K for the Qwen models, 1M for Lightning and
+Super-VL; 128K for a model that states none), or less where this Mac's memory is tight (the GPU's working set less a 4%
+margin, or `--mem-budget`): the most, in 8K steps down to 32K, that keeps the draft model the model has at 32K, with one full
+conversation beside it and, without `--slots`, the slots (3 or 4) the old 128K default would have got and, without `--prefill-chunk`, the prefill chunk (so a longer default never costs slots or prefill speed; a context
+between 128K and the limit is taken only where it keeps them, and never less than 128K's own fit) (below 32K only where one slot cannot hold 32K tokens: Flint's `16gb` on a 16 GB Mac takes 8K).
+The server says which context it took and why. A context costs no memory until a conversation fills it (the KV cache
+grows with it), so the default only sizes what memory is kept for.
+
+`--context max` takes the model's own limit (`max_position_embeddings` in its `config.json`): 256K for the Qwen models,
+Dory and Bolt, 1M for Lightning and Super-VL. A longer `--context` runs at that limit, and the server says so. Where a
+long context leaves no room for the draft model, the model runs without it (slower); the model picker
+([Which model](#which-model)) and `kapitsa doctor` show where. A longer context also lets a prompt grow longer before a
+coding agent compacts it, and a long prompt takes a while to read whenever it is not cached.
+
+### Requests at once
+
+Requests sent at once (a coding agent's parallel subagents and side requests, several clients) each run on a slot of
+their own. Their prompts take turns on the GPU between chunks, so a request sent during a long reply starts after a
+fraction of a second instead of after that reply. While two or more of them decode, one GPU pass serves them all (with
+the draft models of Qwen3.8 27B, Qwen3.6 35B-A3B and Nemotron 3.5 Bolt): each weight is read once for every request,
+so replies at once write more tokens per second in all than one reply alone, each a little slower than alone. Tokens
+per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro with an M4 Pro (48 GB):
+
+| Requests at once | 1 | 2 | 3 | 4 |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.8 27B, 4-bit | 57 | 66 (58) | 66 (56) | 67 (58) |
+| Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 206 (149) | 202 (161) |
+| Nemotron 3.5 Bolt, NVIDIA 24 GB | 65 | 77 (63) | 64 (63) | 75 (62) |
+
+In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. With the Qwen models KFlash chooses
+each shared pass's rows (`NI_BATCH_KF`): how many in all, up to 8, and which request gets them, from each request's
+drafts and what a row costs on this Mac; three requests now share 8 rows instead of 2 each (or, on the 27B, taking
+turns). A request alone gets the tokens it always gets. Requests decoded
+together can get other tokens than alone where two candidates nearly tie (they are within the batched pass's rounding of
+each other), and sampled requests draw other random numbers, so their replies differ as two samples do. With the Qwen3.5
+4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL (not measured batched yet; `NI_BATCH=1` batches them), without
+a draft model (`--dflash none`) and with `NI_BATCH=0`, requests at once take turns on the GPU, each with the tokens it
+gets alone, and write about as many tokens per second in all as one alone.
+
+Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full `--context` conversation,
+the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With every slot busy a request
+waits for one (the log says so); a streamed chat completion whose client disconnects stops waiting.
+
+### SSD prefix cache
+
+A slot keeps its conversation's state in memory until another conversation needs the slot, and the server keeps
+nothing when it stops. The SSD prefix cache keeps conversations on the SSD as well: a request whose prompt starts with
+a stored conversation (its next turn, a tool result, the same agent session after `kapitsa claude` or the server
+restarted) reads that state back and prefills only what follows it. `usage.prompt_tokens_details.cached_tokens`
+(Anthropic: `cache_read_input_tokens`) counts the tokens read back, as for a slot's own cache.
+
+- **What is kept.** The state a follow-up resumes from: the KV cache up to it, the recurrent state, the tokens, and the
+  draft model's context (the DFlash drafters' context ring; with the MTP head, its KV rows and the draft rows it
+  gathered). A slot's state is kept as it is, byte for byte, so a request resumed from the SSD writes what it would
+  from the slot. A conversation's next turns add only their new KV rows and states: the earlier ones are shared.
+  Images in a conversation are kept with it by their content: a prompt reuses a stored state only through the same
+  images. States nearer the start than 1024 tokens are not kept (quick to prefill again).
+- **When it is written.** After a turn, once the server has been idle for 10 s, in the background (a request that
+  arrives stops it, and nothing is written while requests run); when a request is about to replace a conversation the
+  SSD does not have yet (another conversation takes its slot, or memory for one), what is missing is copied first and
+  written in the background; and when the server stops (Ctrl+C, SIGTERM, a `kapitsa claude` session ending), for up to
+  8 s. A conversation is read back only when it is deeper than anything a slot holds.
+- **Where.** `~/.cache/kapitsa/prefix-cache` (`KAPITSA_HOME`), kept out of Time Machine and readable by your user only
+  (it holds the conversations' tokens). One folder per model and draft model (a digest of their files and of the state
+  formats), so no model reads another's states; one server uses a folder at a time (another waits up to 30 s for it,
+  then runs without the cache). Every file has a CRC-32C and is written to a temporary name, then renamed: a damaged
+  or partial file is a miss, never a wrong state.
+- **How much.** `--disk-cache auto` (the default) takes at most a quarter of what the volume has free beyond 10 GiB
+  (5% of a volume smaller than 200 GiB), its own files counted, and at most 32 GiB: on a disk with 28 GiB free, 4.5
+  GiB. It follows the free space as the disk fills or empties, giving up the least recently used conversations first.
+  `--disk-cache 16G` caps it at 16 GiB within the same rule; `--disk-cache 0` turns it off. Other models' caches that
+  no server uses count against the limit too and go first; one no server has used for 14 days is removed when a server
+  starts.
+- **Models.** The Qwen3.5 family (the 4B, 9B, 35B-A3B and 27B), with their draft models or the MTP head; Flint; and Dory (a state is read back only for the loop count that computed it).
+  Nemotron-H models and Qwen3.8-Flash-Next run without it (the log says so, and so does the screen when `--disk-cache`
+  or `NI_DISK_CACHE` asks for it).
+
+The server says at start where the cache is, its limit and how many conversations it took back; each read and write
+has a log line (`SSD cache: ...`).
+
+Measured on a MacBook Pro 16-inch (M4 Pro, 20-core GPU, 48 GB), macOS 27.0.1, by `tests/test_disk_cache.py --ttft`
+(greedy, thinking off, the DFlash2 drafters, two runs each): the time to the first token of a conversation's second
+turn (the first turn's prompt and answer, then a short question) with nothing cached, from the SSD after the server
+restarted, and from the slot that answered the first turn, each sent right after a short request (with the GPU
+awake). From the SSD the second turn writes the slot's text, token for token.
+
+| Model | Second turn | Nothing cached | From the SSD, after a restart | From the slot | Read | Written: turn 1, turn 2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.6 35B-A3B | 4,359 tokens | 3.81-3.83 s | 0.12 s | 0.06 s | 205 MB in 54 ms | 321 MB, 239 MB |
+| Qwen3.6 35B-A3B | 16,322 toke

@@ -1,0 +1,15 @@
+  up 5.6s
+  warm-up ttft 2.07
+  decode T0 54.6 tok/s (256 tok, length)
+  decode T06 58.7 tok/s (256 tok, length)
+  prefill 1K: 1035 tok, ttft 1.45s, 712 tok/s, cached 0
+  prefill 4K: 4074 tok, ttft 3.53s, 1153 tok/s, cached 0
+  prefill 16K: 19286 tok, ttft 17.01s, 1134 tok/s, cached 0
+  twoturn: turn2 ttft 0.56s cached 4320/4425
+  decode T0 55.8 tok/s (256 tok, length)
+  decode T06 58.4 tok/s (256 tok, length)
+  prefill 1K: 1035 tok, ttft 1.45s, 713 tok/s, cached 0
+  prefill 4K: 4074 tok, ttft 3.21s, 1269 tok/s, cached 0
+  prefill 16K: 19286 tok, ttft 16.05s, 1202 tok/s, cached 0
+  twoturn: turn2 ttft 0.57s cached 4320/4425
+  peak footprint 25625 MiB (75 samples), peak RSS 2394 MiB, free+reclaimable min 8.2 GiB, wired max 28.2 GiB, swap +0.00 GB, pressure 1
