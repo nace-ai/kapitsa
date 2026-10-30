@@ -261,6 +261,10 @@ DraftPrompt draft_prompt(const ChatRequest& answered, const std::string& draft,
 // the text.
 bool think_flag_template(const std::string& template_source);
 ChatRequest think_flag_request(const ChatRequest& r);
+// A template with a preserve_thinking switch (Qwen3.6) and the default Engine::default_template_kwargs gives it: on, unless
+// the request sets it itself (chat_template_kwargs, false included). CPU only; tools/api_test checks them.
+bool preserve_thinking_template(const std::string& template_source);
+void default_preserve_thinking(ChatRequest& r, bool enabled);
 TextTags text_tags_for(const Tokenizer& tok, const std::string& template_source);
 
 // What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).

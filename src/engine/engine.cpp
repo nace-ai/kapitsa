@@ -391,7 +391,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (flint_) src = flint_template(src);
   tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
                                                  flint_ ? "<|end_of_text|>" : "<|im_end|>");
-  preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && src.find("preserve_thinking") != std::string::npos;
+  preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && preserve_thinking_template(src);
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -1953,10 +1953,15 @@ int Engine::restore_reasoning(ChatRequest& r) { return reasoning_.restore(r.mess
 // the newest user query, so when a new query arrives the prompt stops matching what was generated (and cached) right
 // after the previous query and everything since is read again. Keeping the reasoning is the default (as omlx does);
 // a request that sets preserve_thinking itself (chat_template_kwargs, false included) keeps its choice.
-void Engine::default_template_kwargs(ChatRequest& r) const {
-  if (preserve_thinking_default_ && !r.template_kwargs.contains("preserve_thinking"))
-    r.template_kwargs["preserve_thinking"] = true;
+bool preserve_thinking_template(const std::string& template_source) {
+  return template_source.find("preserve_thinking") != std::string::npos;
 }
+
+void default_preserve_thinking(ChatRequest& r, bool enabled) {
+  if (enabled && !r.template_kwargs.contains("preserve_thinking")) r.template_kwargs["preserve_thinking"] = true;
+}
+
+void Engine::default_template_kwargs(ChatRequest& r) const { default_preserve_thinking(r, preserve_thinking_default_); }
 
 std::string chat_template_source(const std::string& model_dir) {
   std::string src = read_file(model_dir + "/chat_template.jinja");

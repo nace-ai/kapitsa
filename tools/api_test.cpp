@@ -1379,6 +1379,70 @@ void float_arguments_text() {
   check(render_chat(other, r, false).find("1.5") != std::string::npos && render_chat(other, r, false).find("1.500000") == std::string::npos, "float arguments: a template without `| string` renders them as before");
 }
 
+// preserve_thinking's default (engine.cpp: default_preserve_thinking, #820): a template that has the switch renders earlier
+// turns' reasoning once it is on, so the engine turns it on unless the request sets it, false included; a template
+// without it is left alone. The two templates are minimal copies of Qwen3.6's and Qwen3.8's condition (no model folder,
+// so CI runs it).
+void preserve_thinking_default_unit() {
+  const std::string head =
+      "{%- set ns = namespace(last=messages|length - 1) %}{%- for m in messages %}{%- if m.role == 'user' %}"
+      "{%- set ns.last = loop.index0 %}{%- endif %}{%- endfor %}{%- for m in messages %}{%- if m.role == 'assistant' %}"
+      "{%- if ";
+  const std::string tail = " %}<think>{{ m.reasoning_content }}</think>{%- endif %}{{ m.content }};{%- else %}{{ m.content }};{%- endif %}{%- endfor %}";
+  const std::string q36 = head + "(preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last)" + tail;
+  const std::string q38 = head + "preserve_thinking is undefined or preserve_thinking is true or loop.index0 > ns.last" + tail;
+  const std::string plain = "{%- for m in messages %}{{ m.content }};{%- endfor %}";
+  const std::string kept = "<think>R1</think>A1;";  // the first turn's reasoning, as the templates render it
+  auto request = [](const char* kwargs) {
+    ChatRequest r;
+    r.messages = J(R"([{"role": "user", "content": "Q1"}, {"role": "assistant", "content": "A1", "reasoning_content": "R1"},
+      {"role": "user", "content": "Q2"}])");
+    if (*kwargs) r.template_kwargs = J(kwargs);
+    return r;
+  };
+  auto rendered = [&](const std::string& src, const ChatRequest& r) {
+    minja::chat_template tmpl(src, "", "");
+    return render_chat(tmpl, r, false);
+  };
+  auto has = [&](const std::string& out) { return out.find(kept) != std::string::npos; };
+
+  check(preserve_thinking_template(q36) && preserve_thinking_template(q38) && !preserve_thinking_template(plain),
+        "preserve_thinking: a template is recognised by naming the switch");
+
+  // Qwen3.6's condition drops the first turn's reasoning without the flag (the cache miss of #253) and keeps it with it
+  ChatRequest bare = request("");
+  check(!has(rendered(q36, bare)), "preserve_thinking: Qwen3.6's template drops earlier reasoning when the flag is unset", rendered(q36, bare));
+  ChatRequest on = request("");
+  default_preserve_thinking(on, true);
+  check(on.template_kwargs == J(R"({"preserve_thinking": true})"), "preserve_thinking: the default sets it to true", on.template_kwargs.dump());
+  check(has(rendered(q36, on)), "preserve_thinking: with the default, Qwen3.6's template renders earlier reasoning", rendered(q36, on));
+  // Qwen3.8's renders it unset already: the default changes nothing there (q27 was token-identical in the #820 replay)
+  check(rendered(q38, bare) == rendered(q38, on) && has(rendered(q38, on)),
+        "preserve_thinking: Qwen3.8's template renders the same prompt with and without the default", rendered(q38, bare));
+
+  // an explicit false is honoured, and so is an explicit true; other kwargs stay
+  ChatRequest off = request(R"({"preserve_thinking": false, "enable_thinking": true})");
+  default_preserve_thinking(off, true);
+  check(off.template_kwargs == J(R"({"preserve_thinking": false, "enable_thinking": true})"),
+        "preserve_thinking: an explicit false is kept", off.template_kwargs.dump());
+  check(!has(rendered(q36, off)), "preserve_thinking: an explicit false still drops earlier reasoning", rendered(q36, off));
+  ChatRequest yes = request(R"({"preserve_thinking": true})");
+  default_preserve_thinking(yes, true);
+  check(yes.template_kwargs == J(R"({"preserve_thinking": true})"), "preserve_thinking: an explicit true is kept", yes.template_kwargs.dump());
+  ChatRequest other = request(R"({"enable_thinking": false})");
+  default_preserve_thinking(other, true);
+  check(other.template_kwargs == J(R"({"enable_thinking": false, "preserve_thinking": true})"),
+        "preserve_thinking: the default adds to the request's other kwargs", other.template_kwargs.dump());
+
+  // a template without the switch (and the engines that keep their own handling: the default is off for them) is untouched
+  ChatRequest none = request("");
+  default_preserve_thinking(none, preserve_thinking_template(plain));
+  check(none.template_kwargs.is_null() || none.template_kwargs.empty(), "preserve_thinking: a template without the switch gets no kwarg", none.template_kwargs.dump());
+  ChatRequest dis = request(R"({"enable_thinking": true})");
+  default_preserve_thinking(dis, false);
+  check(dis.template_kwargs == J(R"({"enable_thinking": true})"), "preserve_thinking: with the default off the request is untouched", dis.template_kwargs.dump());
+}
+
 // Tool arguments keep each value's spelling (src/engine/tool_args.h) through the Qwen3.5 / Nemotron templates' `| string`
 // (a minimal template with their argument line, no model folder, so CI runs it): what the model wrote (`true`, `null`,
 // `2.50`, `[1,2]`, non-ASCII text) is what the next prompt holds, from an OpenAI client that sends the arguments text
@@ -1990,6 +2054,7 @@ int main(int argc, char** argv) {
   reasoning_memory_unit();
   float_arguments_text();
   tool_arguments_spelling();
+  preserve_thinking_default_unit();
   disk_wait_unit();
   disk_saved_unit();
   disk_retry_wiring_unit();
