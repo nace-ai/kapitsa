@@ -4,20 +4,37 @@ Drex Max v1 uses the [System One HTTP API](systemone.md#the-protocol), including
 `requests` batch wrapper. It produces probabilities without generating tokens. These steps import a release GGUF
 and run the native Metal implementation, without a llama.cpp runtime.
 
-This implementation is experimental. CPU checks pass, but native probability parity against the pinned v1 reference
-has not been established. The first small-context GPU attempt stopped at the Metal validation assertion below.
+This implementation is experimental. Kapitsa v0.2.25 is the first release with it. Its native probabilities differ
+from the pinned v1 reference by up to 0.0329, above the 0.02 parity gate (see
+[GPU validation status](#gpu-validation-status)); treat them as close to the reference, not equal to it.
 
-## Import the model and readout head
+## Install
 
-Build the CLI and server:
+With Homebrew (v0.2.25 or later):
 
 ```bash
+brew install nace-ai/tap/kapitsa      # kapitsa, kapitsa-systemone, kapitsa-drex-pointer
+kapitsa-systemone --help
+```
+
+From source, at the release tag:
+
+```bash
+git clone --branch v0.2.25 https://github.com/nace-ai/kapitsa.git
+cd kapitsa
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4 --target kapitsa systemone
 ```
 
-Import the backbone, then extract its small readout head into the imported model directory. To keep both source
-weights and imported weights on an external drive, set `KAPITSA_HOME` before importing:
+The Homebrew commands are the built files under other names: `kapitsa` is `build/kapitsa`, `kapitsa-systemone` is
+`build/systemone` and `kapitsa-drex-pointer` is `tools/drex_pointer.py`. The steps below write the source form;
+substitute the installed names for the Homebrew form.
+
+## Import the model and readout head
+
+Import the backbone, then extract its small readout head into the imported model directory (`kapitsa import` and
+`kapitsa-drex-pointer` with Homebrew). To keep both source weights and imported weights on an external drive, set
+`KAPITSA_HOME` before importing:
 
 ```bash
 export KAPITSA_HOME="/Volumes/Extreme Pro/kapitsa"
@@ -90,5 +107,11 @@ native server aborted before returning probabilities. With `MTL_SHADER_VALIDATIO
 reported `qmms_gu_b8_t8` using 65,536 bytes of threadgroup memory against a 32,768-byte limit. This existing fused
 GEMM kernel declares 32,768 bytes of static storage; the validation layer counts that storage twice on this Mac.
 
-The maximum absolute probability-difference gate of 0.02 remains untested. The conditional 32K probe was not run;
-128K and 262K are excluded by the allocation estimates above. No performance claim follows from this attempt.
+Task #241's v9 quality legs ran the native path on an M5 at the f06921ea build (receipt 6fd28845): the maximum
+probability drift from the reference was 0.0329 with 0 flips. That is above the 0.02 parity gate, so the native path
+does not pass it. Reference parity on long rows was not run. The conditional 32K probe was not run; 128K and 262K
+are excluded by the allocation estimates above.
+
+The new bidirectional attention kernel declares 12,296 bytes of static threadgroup memory (12,288 bytes of live KV),
+under the validation layer's 16,384-byte limit, so the layer can run on it at small sizes; that run has not been
+done. `qmms_gu_b8_t8` is not part of this change. No performance claim follows from any of these runs.
