@@ -2024,16 +2024,23 @@ struct KvTreeParams {
                                 const device int* tree [[buffer(2)]], constant KvTreeParams& p [[buffer(3)]],
                                 uint2 tg [[threadgroup_position_in_grid]], uint d [[thread_index_in_threadgroup]]) {
   const uint h = tg.y % p.Hkv;
-  // int8 rows: the D int8 values at + d, plus the row's float scale (moved by d == 0)
+  // int8 rows: the D int8 values at + d, plus the row's float scale (moved by d == 0). fp16 rows: D halves at + 2d.
+#ifdef NI_KV_I8
   device char* c = (device char*)(tg.y < p.Hkv ? kc : vc) + size_t(h) * p.max_seq * KVQ_ROW + d;
+#else
+  device char* c = (device char*)(tg.y < p.Hkv ? kc : vc) + size_t(h) * p.max_seq * KVQ_ROW + d * 2;
+#endif
   const uint a = uint(tree[kKfA]);
   for (uint i = 1; i <= a; ++i) {
     const uint s = uint(tree[kKfPath + i]);
     if (s != i) {
-      c[size_t(p.pos + i) * KVQ_ROW] = c[size_t(p.pos + s) * KVQ_ROW];
-      if (d == 0)
-        *(device float*)(c + size_t(p.pos + i) * KVQ_ROW + KVQ_HD) =
-            *(const device float*)(c + size_t(p.pos + s) * KVQ_ROW + KVQ_HD);
+      const size_t di = size_t(p.pos + i) * KVQ_ROW, si = size_t(p.pos + s) * KVQ_ROW;
+      c[di] = c[si];
+#ifdef NI_KV_I8
+      if (d == 0) *(device float*)(c + di + KVQ_HD) = *(const device float*)(c + si + KVQ_HD);
+#else
+      c[di + 1] = c[si + 1];
+#endif
     }
   }
 }
