@@ -187,6 +187,14 @@ add_custom_command(TARGET kapitsa POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/nace-infer-server
   COMMAND ${CMAKE_COMMAND} -E create_symlink kapitsa ${CMAKE_BINARY_DIR}/nace-infer-server)
 
+add_executable(systemone_codes_driver EXCLUDE_FROM_ALL
+  tests/systemone_codes_driver.cpp src/systemone/systemone.cpp src/tokenizer/tokenizer.cpp)
+target_include_directories(systemone_codes_driver PRIVATE src third_party)
+target_link_libraries(systemone_codes_driver PRIVATE "-framework CoreFoundation")
+add_executable(systemone_codes_probe_test EXCLUDE_FROM_ALL
+  tests/systemone_codes_probe_test.cpp src/systemone/systemone.cpp)
+target_include_directories(systemone_codes_probe_test PRIVATE src third_party)
+
 # In-process SDK. Opt-in so the existing CLI build stays unchanged.
 option(KAPITSA_BUILD_SDK "Build the in-process C ABI shared library" OFF)
 if(KAPITSA_BUILD_SDK)
