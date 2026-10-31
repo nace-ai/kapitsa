@@ -298,7 +298,8 @@ void responses_mapping() {
         "responses: a custom tool is a function of one string, input, with its grammar", q.chat.tools[1].dump());
   check(q.custom.count("apply_patch") && q.namespaced.at("multi_agent_v1__spawn_agent") == std::make_pair(std::string("multi_agent_v1"), std::string("spawn_agent")),
         "responses: custom and namespaced tools remembered for the output");
-  check(q.chat.template_kwargs == J(R"({"reasoning_effort": "medium"})") && q.stream && !q.store && q.chat.max_tokens == 32768,
+  check(q.chat.template_kwargs == J(R"({"reasoning_effort": "medium", "enable_thinking": true})") && q.stream && !q.store &&
+            q.chat.max_tokens == 32768,
         "responses: effort medium, stream, store false, default max_output_tokens", q.chat.template_kwargs.dump());
   auto effort = [&](const char* e) {
     ojson b = J(R"({"model": "m", "input": "hi"})");
@@ -306,8 +307,10 @@ void responses_mapping() {
     return responses_request(b, store).chat.template_kwargs;
   };
   check(effort("none") == J(R"({"enable_thinking": false})") && effort("minimal") == J(R"({"enable_thinking": false})") &&
-            effort("high") == J(R"({"enable_thinking": true})") && effort("low") == J(R"({"reasoning_effort": "low"})"),
-        "responses: effort none/minimal = thinking off, high = thinking on, low passes");
+            effort("high") == J(R"({"enable_thinking": true})") &&
+            effort("low") == J(R"({"reasoning_effort": "low", "enable_thinking": true})") &&
+            effort("medium") == J(R"({"reasoning_effort": "medium", "enable_thinking": true})"),
+        "responses: effort none/minimal = thinking off, low/medium = thinking on with reasoning_effort, high = thinking on");
   ojson none = J(R"({"model": "m", "input": "hi", "tool_choice": "none", "tools": [{"type": "function", "name": "f"}]})");
   check(responses_request(none, store).chat.tools.empty(), "responses: tool_choice none = no tools");
   // previous_response_id: the stored conversation, then the new input (instructions are not inherited)
