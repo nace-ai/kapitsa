@@ -1,0 +1,9 @@
+{
+  "base": "15f8a57fb9a1d8775596cacfc4dc8264b03aee89",
+  "candidate": "1b89569a0d21619f448ba902f200bcd2d365fe56",
+  "kernel_sha256": {
+    "src/kernels/attn.metal": "da13da6afaa9c165fa485101f0bf72daa1fd48637942ed388fde7329c47692a7",
+    "src/kernels/mm.metal": "3a573973b6cfe7c281c5e237980136dbf49f5c04a2bec0de223cf7e0179b6177"
+  },
+  "note": "Model binaries use the listed commits. Uncommitted changes at measurement time only extend the test matrix, document it and build the tool in CI; gpu/uncommitted.patch records them."
+}

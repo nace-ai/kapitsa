@@ -35,6 +35,8 @@ struct MropeParams {
   const uint tid = tid2.x;
   threadgroup float scratch[32];
   threadgroup float row[512];
+  // One entry per rotary pair; rot <= D <= 512 (row[]), so half_rot <= 256.
+  threadgroup float cosine[256], sine[256];
   const uint h = tg.x, t = tg.y, D = p.D;
   const uint pos = p.pos + t;  // cache row
   if (h >= p.Hq + p.Hkv) {     // value head: plain copy into the cache
@@ -47,10 +49,9 @@ struct MropeParams {
   float ss = tg_sum(x * x, scratch, tid, D);
   x = x * metal::precise::rsqrt(ss / float(D) + p.eps) * float(is_q ? qn_w[tid] : kn_w[tid]);
   row[tid] = x;
-  threadgroup_barrier(mem_flags::mem_threadgroup);
   const uint half_rot = p.rot / 2;
-  if (tid < p.rot) {
-    uint i = tid % half_rot;
+  if (tid < half_rot) {
+    uint i = tid;
     int rp;
     if (pos < mr.mn) {
       const uint a = (i % 3 == 1 && i < mr.sec1) ? 1u : (i % 3 == 2 && i < mr.sec2) ? 2u : 0u;
@@ -60,7 +61,13 @@ struct MropeParams {
     }
     float inv_freq = metal::precise::pow(p.theta, -2.0f * float(i) / float(p.rot));
     float ang = float(rp) * inv_freq;
-    float cs = metal::precise::cos(ang), sn = metal::precise::sin(ang);
+    // Both coordinates of a rotary pair use the same precise angle.
+    cosine[tid] = metal::precise::cos(ang);
+    sine[tid] = metal::precise::sin(ang);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < p.rot) {
+    float cs = cosine[tid % half_rot], sn = sine[tid % half_rot];
     if (tid < half_rot) x = row[tid] * cs - row[tid + half_rot] * sn;
     else x = row[tid] * cs + row[tid - half_rot] * sn;
   }
