@@ -37,6 +37,11 @@ static json quant_cfg_;
 static json expert_quant_;
 static Pipeline pipe(const std::string& n);
 
+// int8 KV rows (kernels/kv_int8.h): bytes per (kv head, position). head_dim 256 -> 272
+// (256 int8 + float scale + pad, a multiple of 16 so the word copies stay row-exact).
+// The +16 is the scale and its padding, not rounding: the row must equal KVQ_ROW.
+static inline size_t kv_row_bytes(int head_dim) { return size_t((head_dim + 16) / 16 * 16); }
+
 // Formats with kernels on every path: the specialized 4-bit and 8-bit group-64 kernels, and the generic ones
 // (src/kernels/wfmt.metal) for bf16 and the other MLX affine widths MLX packs use.
 bool format_supported(int bits, int gs) {
@@ -1412,7 +1417,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   const size_t state = size_t(lin) * (3 * C * 4 + size_t(c.lin_hv) * c.lin_dv * c.lin_dk * 4);
   const size_t tape = size_t(lin) * vrows * (C + size_t(c.lin_hv) * c.lin_dk + c.lin_hv + size_t(c.lin_hv) * c.lin_dv) * 4;
   m.slot_state = 3 * state + tape;  // live state + the engine's two checkpoints + the verify tape
-  m.kv_per_pos = size_t(att + (has_mtp ? 1 : 0)) * 2 * c.hkv * c.head_dim * 2;
+  m.kv_per_pos = size_t(att + (has_mtp ? 1 : 0)) * 2 * c.hkv * kv_row_bytes(c.head_dim);
   return m;
 }
 
@@ -1473,12 +1478,12 @@ std::unique_ptr<Seq> Qwen35::new_seq(int limit, int initial) {
 size_t Qwen35::kv_bytes_per_pos() const {
   int att = 0;
   for (int i = lo_; i < hi_; ++i) att += !cfg_.is_linear[i];
-  return size_t(att + (mtp_loaded_ ? 1 : 0)) * 2 * cfg_.hkv * cfg_.head_dim * 2;
+  return size_t(att + (mtp_loaded_ ? 1 : 0)) * 2 * cfg_.hkv * kv_row_bytes(cfg_.head_dim);
 }
 
 // Copies positions [0, old_cap) of every kv head of a [Hkv, old_cap, D] cache into a [Hkv, new_cap, D] one.
 void Qwen35::enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap) {
-  const uint32_t n16 = uint32_t(cfg_.head_dim) * 2 / 16;  // 16-byte words per position
+  const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.head_dim)) / 16;  // 16-byte words per position
   const uint32_t p[4] = {uint32_t(old_cap) * n16, uint32_t(new_cap) * n16, uint32_t(cfg_.hkv), 0};  // uint3: 16 bytes
   e.use(pipe("kv_regrow"));
   e.buf(0, src);
@@ -1500,7 +1505,7 @@ void Qwen35::grow_kv(Seq& s, int cap) {
     bufs.push_back({&s.mtp_kc, "mtp_k_cache"});
     bufs.push_back({&s.mtp_vc, "mtp_v_cache"});
   }
-  const size_t nb = size_t(cfg_.hkv) * cap * cfg_.head_dim * 2;
+  const size_t nb = size_t(cfg_.hkv) * cap * kv_row_bytes(cfg_.head_dim);
   // In batches of ~256 MB: a batch's new buffers are filled from the old ones, then the old ones are
   // released, so growing never holds two copies of the whole cache.
   for (size_t i = 0; i < bufs.size();) {
@@ -1673,7 +1678,7 @@ std::string Qwen35::disk_format() const {
 }
 
 void Qwen35::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
-  const size_t row = size_t(cfg_.head_dim) * 2;
+  const size_t row = kv_row_bytes(cfg_.head_dim);
   for (int i = 0; i < cfg_.layers; ++i)
     if (!cfg_.is_linear[i]) {
       out.push_back({s.kc[size_t(i)], cfg_.hkv, row});
@@ -1693,7 +1698,7 @@ void Qwen35::disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& 
 
 bool Qwen35::copy_prefix(Encoder& e, const Seq& src, Seq& dst, int n) {
   if (n <= 0 || n > src.cap || n > dst.cap) return false;
-  const uint32_t n16 = uint32_t(cfg_.head_dim) * 2 / 16;  // 16-byte words per position
+  const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.head_dim)) / 16;  // 16-byte words per position
   const uint32_t p[4] = {uint32_t(n) * n16, uint32_t(src.cap) * n16, uint32_t(dst.cap) * n16, 0};  // uint3: 16 bytes
   auto copy = [&](const Buffer& a, const Buffer& b) {
     e.use(pipe("kv_copy_prefix"));

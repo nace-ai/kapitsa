@@ -1,4 +1,5 @@
 #include "common.h"
+#include "kv_int8.h"
 #include <metal_tensor>
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
 using namespace mpp::tensor_ops;
@@ -65,15 +66,15 @@ NI_INLINE void qattn_t_impl(const device float* q, const device half* kc, const 
   _Pragma("clang loop unroll(full)")
   for (short id = 0; id < D / 16; ++id) o[id] = nhf_f8(0.0f);
   float m[2] = {-1e30f, -1e30f}, l[2] = {0.0f, 0.0f};
-  const device half* kb = kc + size_t(kvh) * p.max_seq * D;
-  const device half* vb = vc + size_t(kvh) * p.max_seq * D;
+  const device half* kb = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);
+  const device half* vb = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
   for (uint k0 = 0; k0 <= tgl; k0 += BK) {
     threadgroup_barrier(mem_flags::mem_threadgroup);   // the previous step is done with the tiles
     for (uint i = tid; i < BK * 32; i += 32 * NS) {   // BK rows x 32 half8
       const uint r = i >> 5, c = (i & 31) * 8;
       const bool ok = k0 + r <= tgl;
-      *(threadgroup uint4*)(kt + r * LD + c) = ok ? *(const device uint4*)(kb + size_t(k0 + r) * D + c) : uint4(0);
-      *(threadgroup uint4*)(vt + r * LD + c) = ok ? *(const device uint4*)(vb + size_t(k0 + r) * D + c) : uint4(0);
+      *(threadgroup uint4*)(kt + r * LD + c) = ok ? kvq_load8(kb, size_t(k0 + r) * KVQ_ROW, i & 31) : uint4(0);
+      *(threadgroup uint4*)(vt + r * LD + c) = ok ? kvq_load8(vb, size_t(k0 + r) * KVQ_ROW, i & 31) : uint4(0);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (!live) continue;   // (tile loads and barriers are uniform over the threadgroup)
@@ -216,8 +217,8 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
   _Pragma("clang loop unroll(full)")
   for (short id = 0; id < DH / 16; ++id) o[id] = nhf_f8(0.0f);
   float m[2] = {-1e30f, -1e30f}, l[2] = {0.0f, 0.0f};
-  const device half* kb = kc + size_t(kvh) * p.max_seq * D;
-  const device half* vb = vc + size_t(kvh) * p.max_seq * D;
+  const device half* kb = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);
+  const device half* vb = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
   threadgroup float4* xme = (threadgroup float4*)(xs + sg * 256) + lane * 2;
   const threadgroup float4* xpa = (const threadgroup float4*)(xs + (sg ^ 1) * 256) + lane * 2;
   for (uint k0 = 0; k0 <= tgl; k0 += BK) {
@@ -225,8 +226,8 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
     for (uint i = tid; i < BK * 32; i += 32 * NS) {
       const uint r = i >> 5, c = (i & 31) * 8;
       const bool ok = k0 + r <= tgl;
-      *(threadgroup uint4*)(kt + r * LD + c) = ok ? *(const device uint4*)(kb + size_t(k0 + r) * D + c) : uint4(0);
-      *(threadgroup uint4*)(vt + r * LD + c) = ok ? *(const device uint4*)(vb + size_t(k0 + r) * D + c) : uint4(0);
+      *(threadgroup uint4*)(kt + r * LD + c) = ok ? kvq_load8(kb, size_t(k0 + r) * KVQ_ROW, i & 31) : uint4(0);
+      *(threadgroup uint4*)(vt + r * LD + c) = ok ? kvq_load8(vb, size_t(k0 + r) * KVQ_ROW, i & 31) : uint4(0);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     nhf_f8 s = nhf_f8(0.0f), s1 = nhf_f8(0.0f);
