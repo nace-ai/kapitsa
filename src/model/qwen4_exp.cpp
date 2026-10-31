@@ -701,7 +701,7 @@ size_t Qwen4Exp::kv_bytes_per_pos() const {
   for (int i = lo_; i < hi_; ++i) att += !cfg_.is_linear[size_t(i)];
   const size_t layers = size_t(att + (mtp_loaded_ ? 1 : 0));
   // attention rows are int8-packed (kernels/kv_int8.h), the index cache as before; +16 is the row's scale
-  const size_t arow = size_t((cfg_.head_dim + 16) / 16 * 16);
+  const size_t arow = kv_row_bytes(cfg_.head_dim);  // int8 or fp16 rows, as the attention kernels read them
   return layers * (size_t(2) * cfg_.hkv * arow + size_t(c4_.ix_dim) * 2 + size_t(c4_.ix_dim) * 4 / c4_.ix_ratio);
 }
 
@@ -2095,7 +2095,7 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
   const size_t tape = size_t(lin) * kMaxVerify * (C + size_t(c.lin_hv) * c.lin_dk + c.lin_hv + size_t(c.lin_hv) * c.lin_dv) * 4;
   m.slot_state = 3 * state + tape;
   // attention rows are int8-packed (kernels/kv_int8.h), the index cache as before; +16 is the row's scale
-  const size_t arow = size_t((c.head_dim + 16) / 16 * 16);
+  const size_t arow = kv_row_bytes(c.head_dim);
   m.kv_per_pos = size_t(att + (m.mtp ? 1 : 0)) *
                  (size_t(2) * c.hkv * arow + size_t(c4.ix_dim) * 2 + size_t(c4.ix_dim) * 4 / c4.ix_ratio);
   return m;

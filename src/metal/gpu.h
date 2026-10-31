@@ -2,12 +2,30 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace ni {
+
+// NI_KV_I8=1: the Qwen3.5-family attention caches hold int8 rows (src/kernels/kv_int8.h) instead of fp16. The Metal
+// library is compiled with the same answer (compile_library), so this is read once, before any kernel compiles, and
+// cannot change while the process runs. Unset (the default) is the fp16 layout every earlier build wrote.
+inline bool kv_i8() {
+  static const bool on = [] {
+    const char* v = getenv("NI_KV_I8");
+    return v && *v && atoi(v) != 0;
+  }();
+  return on;
+}
+
+// The bytes a (kv head, position) row of that cache takes: head_dim halves, or head_dim int8 codes, an f32 scale and
+// padding to a 16-byte word (272 at head_dim 256, 144 at 128).
+inline size_t kv_row_bytes(int head_dim) {
+  return kv_i8() ? size_t((head_dim + 16) / 16 * 16) : size_t(head_dim) * 2;
+}
 
 // A GPU-visible buffer (shared storage, so `ptr` is CPU-addressable on Apple silicon).
 // `offset` lets one MTLBuffer back many tensors (e.g. a whole mmapped safetensors file).

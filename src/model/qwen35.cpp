@@ -37,10 +37,8 @@ static json quant_cfg_;
 static json expert_quant_;
 static Pipeline pipe(const std::string& n);
 
-// int8 KV rows (kernels/kv_int8.h): bytes per (kv head, position). head_dim 256 -> 272
-// (256 int8 + float scale + pad, a multiple of 16 so the word copies stay row-exact).
-// The +16 is the scale and its padding, not rounding: the row must equal KVQ_ROW.
-static inline size_t kv_row_bytes(int head_dim) { return size_t((head_dim + 16) / 16 * 16); }
+// Bytes per (kv head, position) of the attention cache: ni::kv_row_bytes (metal/gpu.h), which follows NI_KV_I8 —
+// 272 int8 or 512 fp16 at head_dim 256 — and matches the kernels' KVQ_ROW.
 
 // Formats with kernels on every path: the specialized 4-bit and 8-bit group-64 kernels, and the generic ones
 // (src/kernels/wfmt.metal) for bf16 and the other MLX affine widths MLX packs use.
@@ -1671,10 +1669,12 @@ std::string Qwen35::disk_format() const {
   std::string kinds;
   for (int i = 0; i < cfg_.layers; ++i) kinds += cfg_.is_linear[i] ? 'G' : 'A';
   char b[256];
-  // The KV rows are int8 (kernels/kv_int8.h): naming the precision here is what keeps a cache written by an f16-KV
-  // build (<= 0.2.25) out of this one's namespaces (engine_disk.cpp's digest), instead of reading 272-byte rows at 512.
-  snprintf(b, sizeof b, "qwen35 %s; attention: K, V i8 [%d][cap][%d] (int8 codes, an f32 scale a row)%s; GDN: conv f32 [3][%d], state f32 [%d][%d][%d]",
-           kinds.c_str(), cfg_.hkv, int(kv_row_bytes(cfg_.head_dim)), mtp_loaded_ ? " (MTP head too)" : "",
+  // The KV rows' precision is part of the format: NI_KV_I8 gives int8 rows, the default fp16 ones, and the two must
+  // not share an SSD prefix cache's namespaces (engine_disk.cpp's digest) — nor may either read what an f16-KV build
+  // (<= 0.2.25) wrote, which this names as well.
+  snprintf(b, sizeof b, "qwen35 %s; attention: K, V %s [%d][cap][%d]%s%s; GDN: conv f32 [3][%d], state f32 [%d][%d][%d]",
+           kinds.c_str(), kv_i8() ? "i8" : "f16", cfg_.hkv, int(kv_row_bytes(cfg_.head_dim)),
+           kv_i8() ? " (int8 codes, an f32 scale a row)" : "", mtp_loaded_ ? " (MTP head too)" : "",
            2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv, cfg_.lin_hv, cfg_.lin_dv, cfg_.lin_dk);
   return b;
 }

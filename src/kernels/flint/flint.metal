@@ -58,7 +58,11 @@ NI_INLINE bool flint_arrive(device atomic_uint* cnt, uint n, uint tid, threadgro
 constant constexpr uint kFD = 128;  // head dim
 // int8 KV: a cache row is [kFD int8][float scale][pad], padded to 16 bytes (kv_regrow moves rows in
 // 16-byte words). 144 bytes for a 128-dim row instead of 256: 1.78x smaller, so 1.78x more context.
-constant constexpr uint kKvRow = (kFD + 16) / 16 * 16;
+#ifdef NI_KV_I8
+constant constexpr uint kKvRow = (kFD + 16) / 16 * 16;  // [kFD int8][float scale][pad]: 144 bytes a row
+#else
+constant constexpr uint kKvRow = kFD * 2;               // kFD halves: the layout every earlier build wrote
+#endif
 
 struct FlintPrepP {
   uint R;       // rows
@@ -154,12 +158,18 @@ NI_INLINE void flint_attn_partial_impl(const device float* q, const device char*
     for (uint i = tid; i < n * kFD / 4; i += ntg) {
       const uint key = t0 + i / (kFD / 4);
       const size_t rowo = size_t(p.ring ? key % p.rows : key) * kKvRow;
-      const uint at = rowo + (i % (kFD / 4)) * 4;
+      const uint c4 = i % (kFD / 4);
+#ifdef NI_KV_I8
+      const uint at = rowo + c4 * 4;
       const float ks = *(const device float*)(kb + rowo + kFD);
       const float vs = *(const device float*)(vb + rowo + kFD);
       const char4 k0 = *(const device char4*)(kb + at), v0 = *(const device char4*)(vb + at);
       kt[i] = half4(half(k0.x) * ks, half(k0.y) * ks, half(k0.z) * ks, half(k0.w) * ks);
       vt[i] = half4(half(v0.x) * vs, half(v0.y) * vs, half(v0.z) * vs, half(v0.w) * vs);
+#else
+      kt[i] = *(const device half4*)(kb + rowo + c4 * 8);
+      vt[i] = *(const device half4*)(vb + rowo + c4 * 8);
+#endif
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     for (uint j = 0; j < n; ++j) {
@@ -297,8 +307,13 @@ FLINT_ATTN_PARTIAL(flint_attn_partial_tree_k16, 16, true)
     const uint ps = p.pos0 + src, pd = p.pos0 + i;
     const size_t srco = size_t(p.ring ? ps % p.rows : ps) * kKvRow;
     const size_t dsto = size_t(p.ring ? pd % p.rows : pd) * kKvRow;
+#ifdef NI_KV_I8
     c[dsto + d] = c[srco + d];
     if (d == 0) *(device float*)(c + dsto + kFD) = *(const device float*)(c + srco + kFD);
+#else
+    c[dsto + d * 2] = c[srco + d * 2];
+    c[dsto + d * 2 + 1] = c[srco + d * 2 + 1];
+#endif
   }
 }
 
@@ -379,8 +394,9 @@ NI_INLINE void flint_attn_prefill_impl(const device float* q, const device char*
           const size_t at = size_t(key - p.pos0) * kFD + c;
           kv4 = *(const device uint4*)(ckb + at);
           vv4 = *(const device uint4*)(cvb + at);
-        } else {  // the cache: int8 + the row's scale
+        } else {  // the cache
           const size_t rowo = size_t(p.ring ? key % p.rows : key) * kKvRow;
+#ifdef NI_KV_I8
           const float ks = *(const device float*)(kb + rowo + kFD);
           const float vs = *(const device float*)(vb + rowo + kFD);
           const uint2 kq = *(const device uint2*)(kb + rowo + c), vq = *(const device uint2*)(vb + rowo + c);
@@ -392,6 +408,10 @@ NI_INLINE void flint_attn_prefill_impl(const device float* q, const device char*
           const half4 vh = half4(half(vb4.x) * vs, half(vb4.y) * vs, half(vb4.z) * vs, half(vb4.w) * vs);
           kv4 = uint4(as_type<uint2>(kl).x, as_type<uint2>(kl).y, as_type<uint2>(kh).x, as_type<uint2>(kh).y);
           vv4 = uint4(as_type<uint2>(vl).x, as_type<uint2>(vl).y, as_type<uint2>(vh).x, as_type<uint2>(vh).y);
+#else
+          kv4 = *(const device uint4*)(kb + rowo + c * 2);  // c counts dims: 8 halves are 16 bytes
+          vv4 = *(const device uint4*)(vb + rowo + c * 2);
+#endif
         }
       }
       *(threadgroup uint4*)(kt + r * kFPLD + c) = kv4;
@@ -482,6 +502,8 @@ FLINT_ATTN_PREFILL(flint_attn_prefill_k16, 16)
   const size_t dst = (size_t(hh) * p.rows + (p.ring ? pos % p.rows : pos)) * kKvRow;
   const size_t src = (size_t(hh) * p.T + t) * (kFD / 4) + lane;
   const half4 h = isv ? cv[src] : ck[src];
+  device char* base = isv ? vc : kc;
+#ifdef NI_KV_I8
   float mx = max(max(fabs(float(h.x)), fabs(float(h.y))), max(fabs(float(h.z)), fabs(float(h.w))));
   mx = simd_max(mx);
   const float scale = mx > 0.0f ? mx / 127.0f : 1.0f;
@@ -490,9 +512,11 @@ FLINT_ATTN_PREFILL(flint_attn_prefill_k16, 16)
   q.y = (char)rint(float(h.y) / scale);
   q.z = (char)rint(float(h.z) / scale);
   q.w = (char)rint(float(h.w) / scale);
-  device char* base = isv ? vc : kc;
   *(device char4*)(base + dst + lane * 4) = q;
   if (lane == 0) *(device float*)(base + dst + kFD) = scale;
+#else
+  *(device half4*)(base + dst + lane * 8) = h;
+#endif
 }
 
 // ---- speculative decoding: the drafts tokens[P + 1 .. P + K] accepted while they equal the verify rows' samples, then
@@ -868,7 +892,9 @@ NI_INLINE void flint_d2_load(const device char* kb, const device char* vb, uint 
     vr[j] = uint4(0);
     if (key < ke && key != own) {
       const size_t rowo = size_t(ring ? key % rows : key) * kKvRow;
-      const uint at = rowo + (tid % 16) * 8;
+      const uint c8 = tid % 16;
+#ifdef NI_KV_I8
+      const uint at = rowo + c8 * 8;
       const float ks = *(const device float*)(kb + rowo + kFD);
       const float vs = *(const device float*)(vb + rowo + kFD);
       const uint2 kq = *(const device uint2*)(kb + at), vq = *(const device uint2*)(vb + at);
@@ -880,6 +906,10 @@ NI_INLINE void flint_d2_load(const device char* kb, const device char* vb, uint 
       const half4 vh = half4(half(v1.x) * vs, half(v1.y) * vs, half(v1.z) * vs, half(v1.w) * vs);
       kr[j] = uint4(as_type<uint2>(kl).x, as_type<uint2>(kl).y, as_type<uint2>(kh).x, as_type<uint2>(kh).y);
       vr[j] = uint4(as_type<uint2>(vl).x, as_type<uint2>(vl).y, as_type<uint2>(vh).x, as_type<uint2>(vh).y);
+#else
+      kr[j] = *(const device uint4*)(kb + rowo + c8 * 16);
+      vr[j] = *(const device uint4*)(vb + rowo + c8 * 16);
+#endif
     }
   }
 }
@@ -929,7 +959,7 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
     v = flint_d2_norm_rope(v, qn, lane, p.eps, p.rope, cs) * (p.scale * l2e);
     ((threadgroup float4*)(qs + h * kFD))[lane] = v;
   }
-  // the row's own k / v (the split holding its position): into the cache (quantized to int8), and into the tile below
+  // the row's own k / v (the split holding its position): into the cache (int8 under NI_KV_I8), and into the tile below
   half4 own_kv = half4(0.0h);
   if (own && sg < 2) {
     const uint slot = p.ring ? p.pos % p.rows : p.pos;
@@ -940,6 +970,7 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
     } else {
       own_kv = half4(((const device float4*)(qkv + QD + KD + kvh * kFD))[lane]);
     }
+#ifdef NI_KV_I8
     // the row's scale: the largest magnitude across its 128 dims, shared by the 32 lanes
     float mx = max(max(fabs(float(own_kv.x)), fabs(float(own_kv.y))), max(fabs(float(own_kv.z)), fabs(float(own_kv.w))));
     mx = simd_max(mx);
@@ -951,6 +982,9 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
     q.w = (char)rint(float(own_kv.w) / sc);
     *(device char4*)(cbase + lane * 4) = q;
     if (lane == 0) *(device float*)(cbase + kFD) = sc;
+#else
+    *(device half4*)(cbase + lane * 8) = own_kv;
+#endif
   }
   simdgroup_float8x8 o[kFD / 8];
   NI_UNROLL for (uint d = 0; d < kFD / 8; ++d) o[d] = simdgroup_float8x8(0);
