@@ -4,6 +4,9 @@ An opt-in C ABI around `ni::Engine` for desktop applications. Create an engine o
 its loaded model across requests, stream deltas and cancel from another thread. Models must
 already exist locally; the library does not start HTTP servers or child processes.
 
+The optional [Node.js / TypeScript SDK](node/README.md) wraps this ABI with asynchronous
+loading/generation, streaming callbacks, cancellation and explicit teardown.
+
 ## Build and use
 
 Apple Silicon, macOS 14+, Xcode Command Line Tools and CMake 3.24+:

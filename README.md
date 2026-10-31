@@ -94,6 +94,7 @@ server to its own Mac. [Usage guide](docs/usage.md)</sub>
 
 The opt-in [C ABI SDK](sdk/README.md) lets desktop clients reuse a loaded model,
 stream and cancel requests. See its build instructions and host-process lifetime limitations.
+The [Node.js / TypeScript binding](sdk/node/README.md) provides async calls over the same C ABI.
 
 **Roadmap** — what is open in the [tracker](https://github.com/nace-ai/kapitsa/issues): KV cache quantization ([#547](https://github.com/nace-ai/kapitsa/issues/547)).
 

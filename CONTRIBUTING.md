@@ -29,6 +29,8 @@ first use instead.
 ## SDK build and tests
 
 See [sdk/README.md](sdk/README.md) for the opt-in C ABI build, usage and CPU tests.
+The [Node/TypeScript binding](sdk/node/README.md) adds CPU-only FFI tests and a type check;
+its opt-in real-model test follows the same GPU authorization and locking rules.
 `build/load_error_test` checks error recovery, joined workers, file cleanup and the CLI's fatal exit on the CPU.
 Its optional `--gpu` mode checks real Metal failures and buffer cleanup under the GPU lock.
 `build/sdk_model_test MODEL_DIR` additionally checks streaming, retained handles,

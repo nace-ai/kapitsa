@@ -147,6 +147,16 @@ jobs:
           cmake --build build -j"$(sysctl -n hw.ncpu)" --target sdk_contract_test sdk_model_test sdk_deferred_test load_error_test
           ctest --test-dir build -R '^(sdk_contract_test|load_error_test)$' --output-on-failure
           diff <(nm -gUj build/libkapitsa_sdk.dylib | sort) <(sort sdk/c/exports.txt)
+      - uses: actions/setup-node@v5
+        if: steps.changes.outputs.code == 'true'
+        with:
+          node-version: '22.21.1'
+      - name: Node SDK contract and TypeScript
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          npm ci --prefix sdk/node
+          KAPITSA_LIBRARY="$PWD/build/libkapitsa_sdk.dylib" npm test --prefix sdk/node
+          npm run typecheck --prefix sdk/node
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
