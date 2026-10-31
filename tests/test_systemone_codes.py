@@ -205,6 +205,9 @@ class CodesTests(unittest.TestCase):
                     "ignore_merges": model.get("ignore_merges", False),
                     "pre_tokenizer": data.get("pre_tokenizer")}
         print(f"{fixture}: {json.dumps(identity, ensure_ascii=False, sort_keys=True)}", file=sys.stderr)
+        if fixture == "real-vocab":
+            print("real-vocab: identity NOT established unless tokenizer_sha256 matches the approved Drex Max v1 release record",
+                  file=sys.stderr)
         outputs = {}
         for role, driver in (("reference", REFERENCE), ("candidate", CANDIDATE)):
             outputs[role] = self.run_driver(driver, tokenizer, cases)
@@ -223,6 +226,10 @@ class CodesTests(unittest.TestCase):
                     for name in REAL_REQUIRED_CASES:
                         self.assertNotIn("error", results[name],
                                          f"{role}: required real-vocabulary case {name} was rejected")
+                    for name, widths in (("width28", [28]), ("width40", [40]),
+                                         ("width255", [255]), ("mixed", [2, 40, 3])):
+                        self.assertEqual([len(meta["keys"]) for meta in results[name]["meta"]], widths,
+                                         f"{role}: required real-vocabulary case {name} has wrong meta key counts")
                 self.check_results(results)
                 if raw is not None:
                     self.golden(results, raw, fixture)

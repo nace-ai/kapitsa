@@ -74,6 +74,8 @@ class HarnessTests(unittest.TestCase):
         self.assertFalse(issubclass(SyntheticPathUsed, AssertionError))
         self.assertEqual(self.tokenizer.read_bytes(), self.contents)
         lines = self.output.getvalue().splitlines()
+        self.assertIn("real-vocab: identity NOT established unless tokenizer_sha256 matches the approved Drex Max v1 release record",
+                      lines)
         identity = json.loads(lines[0].removeprefix("real-vocab: "))
         self.assertEqual(identity, {"tokenizer": str(self.tokenizer.resolve()),
                                     "tokenizer_sha256": hashlib.sha256(self.contents).hexdigest(),
@@ -99,17 +101,25 @@ class HarnessTests(unittest.TestCase):
         for role in ("reference", "candidate"):
             self.assertIn(f"real-vocab/{role}: 104 requests, 2 accepted, 102 rejected", self.output.getvalue())
 
-    def test_any_required_wide_case_rejection_is_not_success(self):
+    def test_any_required_wide_case_rejection_or_wrong_width_is_not_success(self):
         baseline = copy.deepcopy(self.reference)
         for role in ("reference", "candidate"):
             for name in ("width28", "width40", "width255", "mixed"):
-                with self.subTest(driver=role, case=name):
-                    self.reference = copy.deepcopy(baseline)
-                    self.candidate = copy.deepcopy(baseline)
-                    results = self.reference if role == "reference" else self.candidate
-                    results[name] = {"error": "BadRequest", "message": "wide codes unavailable"}
-                    with self.assertRaisesRegex(AssertionError, f"{role}: required real-vocabulary case {name} was rejected"):
-                        self.checker.test_real_tokenizer_differential()
+                for failure in ("rejection", "meta_width"):
+                    with self.subTest(driver=role, case=name, failure=failure):
+                        self.reference = copy.deepcopy(baseline)
+                        self.candidate = copy.deepcopy(baseline)
+                        results = self.reference if role == "reference" else self.candidate
+                        if failure == "rejection":
+                            results[name] = {"error": "BadRequest", "message": "wide codes unavailable"}
+                            reason = "was rejected"
+                        else:
+                            row = 1 if name == "mixed" else 0
+                            results[name]["meta"][row]["keys"].pop()
+                            results[name]["branches"][row]["options"].pop()
+                            reason = "has wrong meta key counts"
+                        with self.assertRaisesRegex(AssertionError, f"{role}: required real-vocabulary case {name} {reason}"):
+                            self.checker.test_real_tokenizer_differential()
 
     def test_equal_all_errors_is_not_success(self):
         self.reference = {name: {"error": "BadRequest", "message": "no usable codes"} for name in self.names}
