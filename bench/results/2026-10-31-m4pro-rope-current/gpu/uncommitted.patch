@@ -1,0 +1,50 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index d6a88a1..5c17313 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -138,7 +138,7 @@ jobs:
+         if: steps.changes.outputs.code == 'true'
+         run: |
+           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test remote_test cluster_test split_place_test qwen4_config_test json_file_test affine_pack_test systemone_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump
++          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test qwen4_config_test json_file_test affine_pack_test systemone_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump
+       - name: SDK C ABI contract
+         if: steps.changes.outputs.code == 'true'
+         run: |
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index 3d319b3..59f599a 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -67,6 +67,8 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
+ | `build/attn_reduce_test --bench` | Interleaved original/shared-statistics reduction timings on the 27B's head layout, after warmup. Includes short shapes where production keeps the original kernel (fewer than 8 splits). Takes the GPU lock; kernel time, not model throughput | the GPU |
+ | `build/tree_reduce_test --gpu [P]` | Fused tree-tail attention and reduction against the separate kernels bitwise and against fp64: live row counts, branch slots, KV strides, empty history, nonzero gates and poisoned unused scratch. Without `P`, covers positions through 128K. Takes the GPU lock; run with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` | the GPU |
+ | `build/tree_reduce_test --bench P` | Interleaved separate/fused attention timings at logical position `P` on the 27B's head layout. Includes history, tail and reduction; takes the GPU lock. Kernel time, not model throughput | the GPU |
++| `build/rope_pair_test --gpu [--small]` | RoPE and M-RoPE against the original kernels bitwise, including untouched cache rows and guard bytes. Run `--small` first with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`; the full matrix covers head dimensions through 512 and zero, partial and full rotary widths. Takes the GPU lock | the GPU |
++| `build/rope_pair_test --bench` | Six interleaved original/shared-angle pairs per shape on the 27B head layout. Prints every GPU timing and thermal state; takes the GPU lock. Kernel time, not model throughput | the GPU |
+ | `build/fn_store_test` | The streamed-expert cache (`src/model/expert_store.h`) on a synthetic pack in a temporary folder, a thread playing the GPU: every routed expert in its slot at each handshake and still there at the next, read-ahead (right and wrong), verify windows, prefill sweeps, a hot set kept through a sweep (ARC), direct and widened 16 KiB reads; the n-gram table's reader (GGUF IQ4_NL and Q8_0 rows, affine shards) | nothing |
+ | `build/fn_dflash_test [--gpu]` | Qwen3.8-Flash-Next's DFlash2 plumbing: the target's streams from `hc_count`, the drafts' `target_hidden_reduction` checks; `--gpu`: the `stream_mean` capture kernel against the CPU (GPU lock) | nothing |
+ | `python3 tools/qwen4_exp_q20_test.py` | The Q2_0 Flash-Next converter on a tiny synthetic GGUF and pack: planes, dequantization, config, index, sparse table, the table from the GGUF (`--table gguf`) | numpy |
+diff --git a/tools/rope_pair_reference.h b/tools/rope_pair_reference.h
+index 39cb417..02d86c9 100644
+--- a/tools/rope_pair_reference.h
++++ b/tools/rope_pair_reference.h
+@@ -1,4 +1,4 @@
+-// Baseline kernels from 4256a5119bd093f6088bd46943aaacf5cc60d48a.
++// Baseline kernels from 15f8a57f (unchanged from 4256a511).
+ static constexpr const char* reference_source = R"metal(
+ [[kernel]] void attn_prep_reference(const device float* qg [[buffer(0)]], const device float* kr [[buffer(1)]],
+                           const device float* vr [[buffer(2)]], const device bfloat* qn_w [[buffer(3)]],
+diff --git a/tools/rope_pair_test.cpp b/tools/rope_pair_test.cpp
+index 9cfa144..e223028 100644
+--- a/tools/rope_pair_test.cpp
++++ b/tools/rope_pair_test.cpp
+@@ -22,7 +22,8 @@ int main(int argc, char** argv) {
+   for (unsigned D : {64u, 128u, 256u, 512u}) for (unsigned T : {1u, 8u, 128u, 512u}) {
+     if (small && (D > 128 || T > 8)) continue;
+     if (bench && D != 256) continue;
+-    for (unsigned rot : {0u, 32u, 64u}) for (unsigned mode : {0u, 1u, 2u}) {
++    for (unsigned rot : {0u, 2u, 32u, 64u, 128u, 256u, 512u}) for (unsigned mode : {0u, 1u, 2u}) {
++      if (rot > D) continue;
+       if (bench && (rot != 64 || mode == 2)) continue;
+       const unsigned Hq = 24, Hkv = 4, pos = small ? 3 : 257, cap = pos + T + 2;
+       const size_t nq = size_t(T) * Hq * D, nk = size_t(T) * Hkv * D, cache = size_t(cap) * Hkv * D;

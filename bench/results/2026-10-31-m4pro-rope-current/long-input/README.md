@@ -1,0 +1,1 @@
+Synthetic 64K stress input: first default corpus window token IDs repeated to 65545 tokens; 8 teacher-forced rows. No frozen corpus modified. This is correctness coverage, not a realistic throughput prompt.

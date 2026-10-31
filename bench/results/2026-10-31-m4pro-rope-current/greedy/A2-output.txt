@@ -1,0 +1,64 @@
+```python
+import threading
+import time
+from collections import OrderedDict
+from typing import Any, Optional, Callable
+
+
+class ExpiringLRUCache:
+    """
+    A thread-safe LRU cache with per-item expiration.
+    
+    Features:
+    - LRU eviction when max size is reached
+    - Per-item TTL (time-to-live) expiration
+    - Thread-safe operations using locks
+    - Support for custom key hashing
+    """
+
+    def __init__(self, max_size: int = 128, default_ttl: Optional[float] = None):
+        """
+        Initialize the cache.
+        
+        Args:
+            max_size: Maximum number of items in the cache.
+            default_ttl: Default time-to-live in seconds for items. If None, items don't expire by default.
+        """
+        if max_size <= 0:
+            raise ValueError("max_size must be positive")
+        if default_ttl is not None and default_ttl <= 0:
+            raise ValueError("default_ttl must be positive or None")
+        
+        self._max_size = max_size
+        self._default_ttl = default_ttl
+        self._cache: OrderedDict[Any, tuple[Any, float]] = OrderedDict()
+        self._lock = threading.RLock()
+        self._hits = 0
+        self._misses = 0
+
+    def _is_expired(self, expire_time: float) -> bool:
+        """Check if an item has expired."""
+        return time.time() >= expire_time
+
+    def _get_expire_time(self, ttl: Optional[float]) -> float:
+        """Calculate expiration time based on TTL."""
+        if ttl is None:
+            ttl = self._default_ttl
+        if ttl is None:
+            return float('inf')
+        return time.time() + ttl
+
+    def get(self, key: Any, default: Any = None, ttl: Optional[float] = None) -> Any:
+        """
+        Get an item from the cache.
+        
+        Args:
+            key: The key to look up.
+            default: Value to return if key is not found or expired.
+            ttl: Optional TTL override for this specific get operation (not used for storage, just for clarity).
+            
+        Returns:
+            The cached value or default if not found/expired.
+        """
+        with self._lock:
+            if key not in self._cache
