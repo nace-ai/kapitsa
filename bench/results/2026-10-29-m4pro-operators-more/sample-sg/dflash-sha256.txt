@@ -1,0 +1,1 @@
+67fc76d68dc5a9415511a4f394ef744d67510cd20e93b37cc2cc7d28e4bab65c  /Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit/dflash2/model.safetensors

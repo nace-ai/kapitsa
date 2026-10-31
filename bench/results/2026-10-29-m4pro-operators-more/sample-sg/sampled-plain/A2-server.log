@@ -1,0 +1,25 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 15.13 GB of weights in 1396 ms (10.8 GB/s)
+[kapitsa] read 0.24 GB of weights in 24 ms (9.8 GB/s)
+[kapitsa] MTP head loaded in 25 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 14 ms
+[kapitsa] prewarmed 93 prefill pipelines in 19 ms
+[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 1656 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine program ready in the background (program was cached, 0.1 s)
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (248 ms)
+[kapitsa] GPU: Apple M4 Pro, 20 cores
+[kapitsa] memory: 17.12 GB allocated (model, buffers, 1 slot's state), budget 37.1 GB (recommended working set 38.7 GB): KV room 19.99 GB = 287120 tokens (68 KB per token), one conversation up to 8192 of 8192 tokens
+[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.93 GB loaded on the first image
+[kapitsa] engine ready: qwen3.8-27b-4bit, context 8192, 1 slots, plain decoding, KFlash (none), images on
+[kapitsa] listening on http://127.0.0.1:18130
+Ready: chat at http://127.0.0.1:18130, API at http://127.0.0.1:18130/v1 (model "qwen3.8-27b-4bit"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: ~/Documents/ChatGPT/blog/work/operators-20261029-more/evidence/sampled-plain/home-A2/prefix-cache/a106306f2727b59b390ab3badb4ee85c, up to 0.1 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 34/34 units (17408 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 3 ms, program cached 1 ms + load 117 ms (13 functions, MIL 133 KB); 629.0 MB Metal; ready in 0.2 s
+[kapitsa] NI_ANE: startup check 0.75% of the ANE's part from the GPU alone (2 functions, 578 ms)
+[kapitsa] chat: prompt 47 (cached 0) in 407 ms (+8.8 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +22.3 ms, GPU 383.8 ms, wake +0.1 ms), 64 tokens in 4042 ms (15.6 tok/s), length, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] prefill: Neural Engine busy 98% of 7701 ms over 2 split chunks (256 evaluations)
+[kapitsa] chat: prompt 2957 (cached 0) in 7701 ms (+9.5 ms template/tokenize; last chunk: encoded by 7595.9 ms, GPU start +5.6 ms, GPU 99.1 ms, wake +0.1 ms), 512 tokens in 32838 ms (15.6 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] SSD cache: slot 0 was not saved (no room within the cache's limit of 0.1 GiB, or a write failed)
+[kapitsa] SSD prefix cache: 1 conversation saved as the server stops (134 MB in 44 ms)

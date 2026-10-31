@@ -480,6 +480,7 @@ void Qwen35::prewarm_pipelines() {
                                  "qmr_k32_w14_m32_n128", "qmr_k64_w14_m16_n64", "qmr_k64_w12_m8_n64",
                                  "qmr_gu_k32_w14_m32_n64", "qmr_gu_k64_w14_m16_n64", "qmr_gu_k64_w12_m8_n32",
                                  "qmm_b8_m32_n32", "qmm_moe_gu_b4_m64_n32", "qmm_moe_dn_b4_m64_n64"};
+  if (sample_sg_) names.insert("topk_stage1_rows_sg");
   if (qmm8_on())
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
@@ -1418,6 +1419,9 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
 
 void Qwen35::alloc_state() {
   Gpu& g = Gpu::get();
+  // Match Nemotron's default; older Macs can opt in for measured comparisons.
+  sample_sg_ = g.apple10();
+  if (const char* v = getenv("NI_QWEN_SAMPLE_SG")) sample_sg_ = atoi(v) != 0;
   for (const ActBuf& a : act_layout(cfg_, tmax_, kMaxVerify, mtp_loaded_, dense_hgu_rows()))
     this->*(a.member) = g.alloc(a.bytes, a.label);
 }
@@ -2471,7 +2475,9 @@ void Qwen35::enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, c
   uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
   kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};
   uint32_t ntg = (cfg_.vocab + 2047) / 2048;
-  e.use(st1);
+  // Independent SIMD selection and a merge avoid a threadgroup barrier per top-k rank.
+  // Keep the small-k path; both kernels emit the same sorted lists.
+  e.use(sample_sg_ && K >= 8 ? pipe("topk_stage1_rows_sg") : st1);
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
   e.dispatch(ntg, 1, 1, 256);

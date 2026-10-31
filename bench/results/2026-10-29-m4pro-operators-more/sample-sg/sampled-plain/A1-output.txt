@@ -1,0 +1,73 @@
+```python
+import threading
+import time
+from collections import OrderedDict
+from typing import Any, Callable, Optional, Tuple
+import unittest
+
+
+class ExpiringLRUCache:
+    """
+    A thread-safe LRU cache with support for expiration times.
+    
+    Each item can have an optional TTL (time to live). Items that have
+    expired are treated as non-existent and are evicted on access or
+    during cleanup.
+    """
+
+    def __init__(self, capacity: int, default_ttl: Optional[float] = None):
+        """
+        Initialize the cache.
+        
+        Args:
+            capacity: Maximum number of items the cache can hold.
+            default_ttl: Default time-to-live in seconds for items that
+                          don't specify their own TTL. If None, items
+                          don't expire by default.
+        """
+        if capacity <= 0:
+            raise ValueError("Capacity must be a positive integer.")
+        
+        self._capacity = capacity
+        self._default_ttl = default_ttl
+        self._cache = OrderedDict()  # key -> (value, expire_time)
+        self._lock = threading.RLock()
+        self._hits = 0
+        self._misses = 0
+
+    def _is_expired(self, expire_time: Optional[float]) -> bool:
+        """Check if the given expiration time has passed."""
+        if expire_time is None:
+            return False
+        return time.time() >= expire_time
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        """
+        Get an item from the cache.
+        
+        Args:
+            key: The key to look up.
+            default: Value to return if key is not found or expired.
+            
+        Returns:
+            The cached value, or default if not found/expired.
+        """
+        with self._lock:
+            if key not in self._cache:
+                self._misses += 1
+                return default
+            
+            value, expire_time = self._cache[key]
+            
+            if self._is_expired(expire_time):
+                # Remove expired item
+                del self._cache[key]
+                self._misses += 1
+                return default
+            
+            # Move to end (most recently used)
+            self._cache.move_to_end(key)
+            self._hits += 1
+            return value
+
+    def put

@@ -1129,6 +1129,7 @@ first download's progress too:
 | `HF_ENDPOINT` | `https://huggingface.co` | A Hugging Face mirror. |
 | `HF_HOME`, `HF_HUB_CACHE` | `~/.cache/huggingface`, `$HF_HOME/hub` | The Hugging Face cache, whose files downloads reuse. |
 | `NI_LOG` | `1` | `0` quiet, `1` a line per request with its timings, `2` debug. |
+| `NI_QWEN_SAMPLE_SG` | on for Apple10 (M5); off on M1–M4 | Qwen35 ordinary sampling: SIMD stage-1 top-k selection when K >= 8. Read at model load; `1` explicitly enables it on older Macs, `0` keeps the original selection on any Mac. Greedy, smaller K, stage 2 and speculative verification are unchanged. The M4 Pro measurements used the new path; reproducing them on M4 now requires `1`. |
 | `NI_V8_TREE_FUSE` | `0` | `1` fuses Qwen's eight-row KFlash tree-zone tail and the history-partial reduction. Each lane keeps the tail in registers instead of writing it to global scratch and reading it in another dispatch. The history chunks and summation order stay the same. Wide verifies, batched chains and other model backends keep their attention paths. |
 | `NI_DFLASH_CORE4` | Auto | `1` selects the newer four-row 4-bit drafter core, `0` the earlier core. Auto uses the newer core on Apple10 and the 32-core M1 Max. |
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
