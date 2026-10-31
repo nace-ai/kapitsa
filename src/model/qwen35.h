@@ -711,6 +711,7 @@ class Qwen35 : public Model {
   std::vector<Layer> layers_;
   const Tensor* final_norm_ = nullptr;
   QLinear embed_, lm_head_;
+  bool sample_sg_ = false;  // NI_QWEN_SAMPLE_SG: ordinary sampling, Apple10 by default
   int tmax_;
   // MTP head
   bool mtp_loaded_ = false;
