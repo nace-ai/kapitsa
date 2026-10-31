@@ -1,4 +1,5 @@
 #include "common.h"
+#include "kv_int8.h"
 
 // ---- Small-batch ("verify") kernels: R <= 4 rows processed against one weight read ----
 // Used by speculative decoding (the trunk verifies the pending token plus drafts) and by the MTP
@@ -169,13 +170,15 @@ struct AttnRowsParams {
     acc[i] = 0.0f;
   }
   float m = -INFINITY, l = 0.0f;
-  const device half* kbase = kc + kvh * p.max_seq * kHD;
-  const device half* vbase = vc + kvh * p.max_seq * kHD;
+  const device half* kbase = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);
+  const device half* vbase = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
   for (uint t0 = start; t0 < end; t0 += kTile) {
     uint n = min(kTile, end - t0);
-    for (uint i = tid; i < n * kHD / 4; i += ntg) {
-      ((threadgroup half4*)ktile)[i] = ((const device half4*)(kbase + t0 * kHD))[i];
-      ((threadgroup half4*)vtile)[i] = ((const device half4*)(vbase + t0 * kHD))[i];
+    const uint nh4 = kHD / 4;  // int8 rows: flat half4 i = (position, dim group)
+    for (uint i = tid; i < n * nh4; i += ntg) {
+      const uint j = i / nh4, c4 = i - j * nh4;
+      ((threadgroup half4*)ktile)[i] = kvq_load4(kbase, (t0 + j) * KVQ_ROW, c4);
+      ((threadgroup half4*)vtile)[i] = kvq_load4(vbase, (t0 + j) * KVQ_ROW, c4);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (sg < G) {

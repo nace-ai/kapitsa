@@ -1,4 +1,4 @@
-# Concatenates src/kernels/common.h + iq.h + nemotron/nh_route.h + src/kernels/tensor/*.metal into one C++ string literal:
+# Concatenates src/kernels/common.h + iq.h + nemotron/nh_route.h + src/kernels/kv_int8.h + src/kernels/tensor/*.metal into one C++ string literal:
 # kernels on Metal 4's tensor_ops (the M5's GPU matrix units), a library of their own compiled as Metal 4 on a GPU that
 # has them (Gpu::compile_extra with metal4).
 file(READ ${SRC_DIR}/common.h COMMON)
@@ -6,12 +6,14 @@ file(READ ${SRC_DIR}/common.h COMMON)
 file(READ ${SRC_DIR}/iq.h IQ)
 # (+ the Nemotron-H routing helpers the verify's fused router pass shares with that library)
 file(READ ${SRC_DIR}/nemotron/nh_route.h ROUTE)
-set(ALL "${COMMON}\n${IQ}\n\n// ---- nemotron/nh_route.h ----\n${ROUTE}\n")
+# (+ the int8 KV row helpers qattn_t.metal reads)
+file(READ ${SRC_DIR}/kv_int8.h KVQ)
+set(ALL "${COMMON}\n${IQ}\n\n// ---- nemotron/nh_route.h ----\n${ROUTE}\n\n// ---- kv_int8.h ----\n${KVQ}\n")
 file(GLOB METALS ${SRC_DIR}/tensor/*.metal)
 list(SORT METALS)
 foreach(m ${METALS})
   file(READ ${m} BODY)
-  string(REGEX REPLACE "#include \"[a-z_]+\\.h\"" "" BODY "${BODY}")
+  string(REGEX REPLACE "#include \"[a-z_0-9]+\\.h\"" "" BODY "${BODY}")
   get_filename_component(n ${m} NAME)
   string(APPEND ALL "\n// ---- tensor/${n} ----\n${BODY}\n")
 endforeach()
