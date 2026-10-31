@@ -300,10 +300,10 @@ void Qwen35::load_mtp(const std::string& dir) {
       const Tensor &q = get(n + ".weight"), &sc = get(n + ".scales");
       const Tensor* bi = w.find(n + ".biases");
       const int64_t K = bits > 0 ? q.shape.back() * 32 / bits : 0;
-      // (qlin reads 8-bit group 128 as group 64: each scale and bias twice)
+      // (qlin reads 5/8-bit group 128 as group 64: each scale and bias twice)
       const auto floats = [](DType d) { return d == DType::BF16 || d == DType::F16 || d == DType::F32; };  // qlin: bf16 copies
       if (mode != "affine" || !bi || q.dtype != DType::U32 || !floats(sc.dtype) || !floats(bi->dtype) ||
-          gs <= 0 || K % gs || K / gs != sc.shape.back() || !format_supported(bits, bits == 8 && gs == 128 ? 64 : gs)) {
+          gs <= 0 || K % gs || K / gs != sc.shape.back() || !format_supported(bits, affine_kernel_group_size(bits, gs))) {
         off = n + " is " + (mode == "affine" ? format_name(bits, gs) : mode) + " with " +
               (bi && floats(bi->dtype) && floats(sc.dtype) ? "float" : "other") +
               " scales and biases, not a format the kernels read";

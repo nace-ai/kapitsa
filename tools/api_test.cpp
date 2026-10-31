@@ -2009,28 +2009,31 @@ void unsupported_model_unit() {
         "unsupported_model: an explicit causal=true is not refused");
   check(refused(folder("clover", R"({"model_type": "clover_moe"})")).empty(),
         "unsupported_model: a clover_moe config (DiffuSpace's Clover) is not refused");
-  // a quantization format with no kernels is refused from config.json alone, before any weight is read (issue 787: a
-  // 5-bit group-128 module of Jundot's oQ pack, found after 20 GB were read). Header-only folders: no safetensors at all.
+  // Unsupported quantization is refused from config.json alone, before any weight is read. 5-bit group 128 now
+  // normalizes to group 64; keep 6-bit group 128 for the refusal. Header-only folders: no safetensors at all.
   const std::string text = R"("model_type": "qwen3_5_moe", "text_config": {"model_type": "qwen3_5_moe_text"})";
   auto quantized = [&](const std::string& name, const std::string& q) {
     return refused(folder(name, "{" + text + ", \"quantization\": " + q + "}"));
   };
-  const std::string g128 = quantized("q5g128", R"({"group_size": 64, "bits": 4, "mode": "affine",
-      "language_model.model.layers.0.linear_attn.out_proj": {"group_size": 128, "bits": 5},
-      "language_model.model.layers.1.linear_attn.out_proj": {"group_size": 128, "bits": 5},
+  const std::string g128 = quantized("q6g128", R"({"group_size": 64, "bits": 4, "mode": "affine",
+      "language_model.model.layers.0.linear_attn.out_proj": {"group_size": 128, "bits": 6},
+      "language_model.model.layers.1.linear_attn.out_proj": {"group_size": 128, "bits": 6},
       "language_model.model.layers.2.mlp.gate": {"group_size": 64, "bits": 8}})");
-  check(g128.find("2 modules in 5-bit group 128") != std::string::npos &&
+  check(g128.find("2 modules in 6-bit group 128") != std::string::npos &&
             g128.find("language_model.model.layers.0.linear_attn.out_proj") != std::string::npos &&
-            g128.find("4-bit group 32") != std::string::npos && g128.find("q5g128: its config.json") != std::string::npos,
-        "unsupported_model: a per-module 5-bit group-128 override is refused up front, naming it and what is supported");
+            g128.find("4-bit group 32") != std::string::npos && g128.find("q6g128: its config.json") != std::string::npos,
+        "unsupported_model: a per-module 6-bit group-128 override is refused up front, naming it and what is supported");
+  check(quantized("q5default", R"({"group_size": 128, "bits": 5})").empty(),
+        "unsupported_model: a 5-bit group-128 default is accepted for normalization to group 64");
   check(quantized("q4default", R"({"group_size": 128, "bits": 4})").find("1 module in 4-bit group 128 (the default)") !=
             std::string::npos,
         "unsupported_model: an unsupported default format is refused");
   check(quantized("supported", R"({"group_size": 64, "bits": 4, "a.b": {"group_size": 32, "bits": 4},
                     "c.d": {"group_size": 64, "bits": 6}, "e.f": {"group_size": 128, "bits": 8}, "g.h": false,
-                    "i.j": {"group_size": 256, "bits": 3, "mode": "iq3_s"}, "k.l": {"bits": 2, "mode": "q2_0"}})")
+                    "i.j": {"group_size": 256, "bits": 3, "mode": "iq3_s"}, "k.l": {"bits": 2, "mode": "q2_0"},
+                    "m.n": {"group_size": 128, "bits": 5}})")
             .empty(),
-        "unsupported_model: 4-bit g32, 6-bit g64, 8-bit g128, IQ and Q2_0 entries and an unquantized module are not refused");
+        "unsupported_model: 4-bit g32, 6-bit g64, 5/8-bit g128, IQ and Q2_0 entries and an unquantized module are not refused");
   // a mode with no loader is refused too, whatever its bits and group size: mxfp4 4-bit group 32 is a "supported" shape
   // for affine, and would have been read in full before qlin refused it
   const std::string fp4 = quantized("mxfp4", R"({"group_size": 32, "bits": 4, "mode": "mxfp4"})");
@@ -2042,8 +2045,8 @@ void unsupported_model_unit() {
                 .find("2 modules in \"mxfp4\" mode, \"nvfp4\" mode (a.b, ...)") != std::string::npos,
         "unsupported_model: a per-module mxfp4 or nvfp4 entry is refused, naming the first");
   check(quantized("novision", R"({"group_size": 64, "bits": 4,
-                    "vision_tower.blocks.0.attn.qkv": {"group_size": 128, "bits": 5},
-                    "language_model.mtp.fc": {"group_size": 128, "bits": 5}})")
+                    "vision_tower.blocks.0.attn.qkv": {"group_size": 128, "bits": 6},
+                    "language_model.mtp.fc": {"group_size": 128, "bits": 6}})")
             .empty(),
         "unsupported_model: the vision tower's and the MTP head's formats are not the trunk's: not refused");
   check(refused(folder("bf16", "{" + text + "}")).empty(), "unsupported_model: a config with no quantization is not refused");

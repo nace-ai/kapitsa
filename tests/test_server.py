@@ -822,17 +822,17 @@ def cli_checks(kapitsa):
     rc, _, err = run("serve", "--model", gemma, "--port", str(gemma_port))
     check("cli: serve refuses another architecture by its model_type",
           rc == 2 and "is a gemma4 model" in err and "qwen3_5" in err and "nemotron_h" in err and "terminating" not in err, err)
-    # issue 787: a pack with a 5-bit group-128 module (Jundot's oQ4e) is refused from config.json, before any weight is read:
+    # A still-unsupported 6-bit group-128 module is refused from config.json, before any weight is read:
     # a header-only folder, with no safetensors to read at all, so reaching the loader would say "no weights" instead
-    q5 = os.path.join(home, "q5-g128")
-    os.makedirs(q5)
-    with open(os.path.join(q5, "config.json"), "w") as f:
+    q6 = os.path.join(home, "q6-g128")
+    os.makedirs(q6)
+    with open(os.path.join(q6, "config.json"), "w") as f:
         json.dump({"model_type": "qwen3_5_moe", "text_config": {"model_type": "qwen3_5_moe_text"},
                    "quantization": {"group_size": 64, "bits": 4, "mode": "affine",
-                                    "language_model.model.layers.0.linear_attn.out_proj": {"group_size": 128, "bits": 5}}}, f)
-    rc, _, err = run("serve", "--model", q5, "--port", str(gemma_port))
-    check("cli: serve refuses a 5-bit group-128 module before reading weights, naming it and what is supported",
-          rc == 2 and "5-bit group 128" in err and "layers.0.linear_attn.out_proj" in err and "4-bit group 32" in err and
+                                    "language_model.model.layers.0.linear_attn.out_proj": {"group_size": 128, "bits": 6}}}, f)
+    rc, _, err = run("serve", "--model", q6, "--port", str(gemma_port))
+    check("cli: serve refuses a 6-bit group-128 module before reading weights, naming it and what is supported",
+          rc == 2 and "6-bit group 128" in err and "layers.0.linear_attn.out_proj" in err and "4-bit group 32" in err and
           "terminating" not in err, err)
     rc, _, err = run("serve", "--model", gemma, "--port", str(busy))
     check("cli: the port is still checked first", rc == 1 and "already in use" in err, err)
