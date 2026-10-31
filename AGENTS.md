@@ -78,8 +78,13 @@ and runs the controlled probe. The driver is for per-change old-versus-new evide
 check. Build it explicitly for that evidence. `vk` has separate hardcoded build and test lists. Editing this file
 does not update those lists.
 
-For an option-code change, build candidate and reference drivers with the same driver and tokenizer sources,
-replacing only `src/systemone/systemone.cpp` with the pre-change source for the reference. Compare all 104 requests:
+For an option-code change, build candidate and reference drivers with the same compiler flags and the same driver
+and tokenizer sources. Replace only the reference's [systemone.cpp](<src/systemone/systemone.cpp>) with the
+pre-change source and record its commit.
+
+CMake Release uses `-O3`. The standalone `-O0` example in [test_systemone_codes.py](<tests/test_systemone_codes.py>)
+is a CPU correctness build, not the Release configuration. Neither configuration measures inference speed.
+Compare all 104 requests:
 
 ```bash
 python3 tests/test_systemone_codes.py --candidate build/systemone_codes_driver --reference /path/to/reference-driver

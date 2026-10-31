@@ -220,5 +220,48 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
 
+class SyntheticHarnessTests(unittest.TestCase):
+    def test_default_mode_runs_all_synthetic_fixtures_and_goldens(self):
+        names = list(CODES.corpus())
+        results = {name: {"error": "BadRequest", "message": "stand-in rejection"} for name in names}
+        for name in ("pair", "fresh_after_wide"):
+            results[name] = stand_in_result({"q": 2})
+        raw = {42: b"x", 43: b"y"}
+        initial_merges = [["C", "D"]]
+        fixture_module = mock.Mock()
+
+        def synthetic_tokenizer(directory):
+            (directory / "tokenizer.json").write_text(json.dumps({"model": {"type": "BPE", "merges": initial_merges}}))
+            return raw
+
+        fixture_module.synthetic_tokenizer.side_effect = synthetic_tokenizer
+        spec = mock.Mock()
+        calls = []
+
+        def driver(driver, tokenizer, cases):
+            calls.append((driver, tokenizer.parent.name,
+                          json.loads(tokenizer.read_text())["model"]["merges"], list(cases)))
+            return copy.deepcopy(results)
+
+        checker = CODES.CodesTests("test_real_tokenizer_differential")
+        with mock.patch.object(CODES, "TOKENIZER", None), \
+                mock.patch.object(CODES, "CANDIDATE", Path("candidate")), \
+                mock.patch.object(CODES, "REFERENCE", Path("reference")), \
+                mock.patch.object(CODES.importlib.util, "spec_from_file_location", return_value=spec), \
+                mock.patch.object(CODES.importlib.util, "module_from_spec", return_value=fixture_module), \
+                mock.patch.object(checker, "run_driver", side_effect=driver), \
+                mock.patch.object(checker, "golden") as golden, \
+                mock.patch.object(CODES.sys, "stderr", io.StringIO()):
+            checker.test_real_tokenizer_differential()
+        spec.loader.exec_module.assert_called_once_with(fixture_module)
+        self.assertEqual(fixture_module.synthetic_tokenizer.call_count, 3)
+        self.assertEqual(len(names), 104)
+        fixtures = (("all", initial_merges), ("singles", []), ("sparse", [["A", "B"], ["Z", "Z"]]))
+        self.assertEqual(calls, [(Path(role), fixture, merges, names)
+                                 for fixture, merges in fixtures for role in ("reference", "candidate")])
+        self.assertEqual(golden.call_args_list, [mock.call(results, raw, fixture)
+                                                for fixture, _ in fixtures for _ in range(2)])
+
+
 if __name__ == "__main__":
     unittest.main()
