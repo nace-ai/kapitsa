@@ -108,8 +108,10 @@ constant constexpr uint kHD = 256;
     acc[i] = 0.0f;
   }
   float m = -INFINITY, l = 0.0f;
-  const device half* kbase = kc + kvh * p.max_seq * KVQ_ROW;
-  const device half* vbase = vc + kvh * p.max_seq * KVQ_ROW;
+  // KVQ_ROW is a byte stride, so the head's base is a byte offset: kc is a half*, and adding the stride to it
+  // directly would move twice as far (head 1 read past the buffer: logit_dump's step path came out NaN)
+  const device half* kbase = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);
+  const device half* vbase = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
 
   for (uint t0 = start; t0 < end; t0 += kTile) {
     uint n = min(kTile, end - t0);
