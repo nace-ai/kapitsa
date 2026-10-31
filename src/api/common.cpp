@@ -77,7 +77,10 @@ bool unpack_reasoning(const std::string& blob, std::string* text) {
 bool apply_effort(const std::string& effort, ojson& kwargs) {
   if (effort == "none" || effort == "minimal") kwargs["enable_thinking"] = false;
   else if (effort == "low" || effort == "medium") kwargs["reasoning_effort"] = effort;
-  else return effort == "high" || effort == "xhigh" || effort == "max";  // the template's default
+  // high and up ask for thinking explicitly: a template whose default is no thinking (Flint's, so that a client which
+  // sends nothing — Finch's "off" omits the field — gets a direct answer) still reasons when the request asks it to.
+  else if (effort == "high" || effort == "xhigh" || effort == "max") kwargs["enable_thinking"] = true;
+  else return false;
   return true;
 }
 

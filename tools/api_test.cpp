@@ -183,7 +183,7 @@ void anthropic_mapping() {
         "parameters": {"type": "object", "properties": {"file_path": {"type": "string"}}}}}])"),
         "anthropic: tools as functions, the server tool left out", q.chat.tools.dump());
   check(q.chat.template_kwargs == J(R"({"enable_thinking": true, "preserve_thinking": true})"),
-        "anthropic: adaptive thinking on, effort high = the template's default, keep:all = preserve_thinking",
+        "anthropic: adaptive thinking on, effort high asks for thinking, keep:all = preserve_thinking",
         q.chat.template_kwargs.dump());
   check(q.stream && !q.show_thinking && q.chat.max_tokens == 1000 && q.chat.stop == std::vector<std::string>{"STOP"} &&
             q.chat.temperature == 0.2f && q.chat.top_k == 10,
@@ -306,8 +306,8 @@ void responses_mapping() {
     return responses_request(b, store).chat.template_kwargs;
   };
   check(effort("none") == J(R"({"enable_thinking": false})") && effort("minimal") == J(R"({"enable_thinking": false})") &&
-            effort("high") == ojson::object() && effort("low") == J(R"({"reasoning_effort": "low"})"),
-        "responses: effort none/minimal = thinking off, high = the template's default, low passes");
+            effort("high") == J(R"({"enable_thinking": true})") && effort("low") == J(R"({"reasoning_effort": "low"})"),
+        "responses: effort none/minimal = thinking off, high = thinking on, low passes");
   ojson none = J(R"({"model": "m", "input": "hi", "tool_choice": "none", "tools": [{"type": "function", "name": "f"}]})");
   check(responses_request(none, store).chat.tools.empty(), "responses: tool_choice none = no tools");
   // previous_response_id: the stored conversation, then the new input (instructions are not inherited)
