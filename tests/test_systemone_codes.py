@@ -9,6 +9,9 @@ src/systemone/systemone.cpp with a saved baseline copy. Then run:
 Add --tokenizer /approved/model/tokenizer.json for unchanged real-vocabulary coverage.
 That mode creates no synthetic tokenizer and skips only synthetic fixture goldens.
 A successful two-option request with nonempty token IDs is required in both modes.
+Real mode also requires width28, width40, width255 and mixed to encode in both drivers.
+Its tokenizer SHA256 must be compared with the approved Drex Max v1 release record
+in the witness report. Without that comparison, report "identity not established".
 Real-vocabulary coverage does not establish model identity, GPU correctness, or speed.
 """
 import argparse
@@ -27,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CANDIDATE = None
 REFERENCE = None
 TOKENIZER = None
+REAL_REQUIRED_CASES = ("pair", "fresh_after_wide", "width28", "width40", "width255", "mixed")
 
 
 def choice(width):
@@ -109,9 +113,9 @@ class CodesTests(unittest.TestCase):
         payload = "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in cases.values())
         proc = subprocess.run([str(driver), str(tokenizer)], input=payload, text=True,
                               capture_output=True, timeout=30)
-        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(proc.returncode, 0, "driver exited nonzero: " + proc.stdout + proc.stderr)
         lines = proc.stdout.splitlines()
-        self.assertEqual(len(lines), len(cases), proc.stdout + proc.stderr)
+        self.assertEqual(len(lines), len(cases), "driver output line count does not match requests: " + proc.stdout + proc.stderr)
         results = {}
         for name, line in zip(cases, lines):
             result = json.loads(line)
@@ -167,22 +171,25 @@ class CodesTests(unittest.TestCase):
     def check_results(self, results):
         pair = results["pair"]
         self.assertNotIn("error", pair, "the known-valid two-option request must encode")
-        self.assertEqual(len(pair["branches"]), 1)
+        self.assertEqual(len(pair["branches"]), 1, "pair must have exactly one branch")
         self.assertTrue(pair["branches"][0]["tokens"], "the two-option request must produce tokens")
-        self.assertEqual(pair["branches"][0]["options"], [0, 1])
-        self.assertEqual(pair["meta"], [{"id": "q", "type": "choice", "keys": ["key0", "key1"], "legend": []}])
-        self.assertEqual(pair, results["fresh_after_wide"])
+        self.assertEqual(pair["branches"][0]["options"], [0, 1], "pair must expose exactly two options")
+        self.assertEqual(pair["meta"], [{"id": "q", "type": "choice", "keys": ["key0", "key1"], "legend": []}],
+                         "pair metadata must match the two-option request")
+        self.assertEqual(pair, results["fresh_after_wide"], "pair differs from fresh_after_wide")
         for name, result in results.items():
             if "error" in result:
                 self.assertEqual(result["error"], "BadRequest", name)
                 continue
             self.assertTrue(result["branches"], name)
             self.assertEqual(len(result["branches"]), len(result["meta"]), name)
-            self.assertEqual(result["total_tokens"], sum(len(b["tokens"]) for b in result["branches"]), name)
+            self.assertEqual(result["total_tokens"], sum(len(b["tokens"]) for b in result["branches"]),
+                             f"{name}: total_tokens does not match branches")
             self.assertEqual(result["max_branch"], max(len(b["tokens"]) for b in result["branches"]), name)
             for branch, meta in zip(result["branches"], result["meta"]):
                 self.assertTrue(branch["tokens"], name)
-                self.assertTrue(all(type(token) is int and token >= 0 for token in branch["tokens"]), name)
+                self.assertTrue(all(type(token) is int and token >= 0 for token in branch["tokens"]),
+                                f"{name}: nonnegative integer token IDs required")
                 self.assertEqual(branch["decide"], len(branch["tokens"]) - 1, name)
                 self.assertEqual(branch["options"], list(range(len(meta["keys"]))), name)
 
@@ -190,9 +197,12 @@ class CodesTests(unittest.TestCase):
         contents = tokenizer.read_bytes()
         data = json.loads(contents)
         digest = hashlib.sha256(contents).hexdigest()
+        model = data.get("model") if isinstance(data, dict) else None
+        self.assertTrue(isinstance(model, dict) and isinstance(model.get("type"), str) and model["type"].strip(),
+                        "tokenizer metadata requires nonempty model.type")
         identity = {"tokenizer": str(tokenizer.resolve()), "tokenizer_sha256": digest,
-                    "model_dir": str(tokenizer.resolve().parent), "model_type": data["model"]["type"],
-                    "ignore_merges": data["model"].get("ignore_merges", False),
+                    "model_dir": str(tokenizer.resolve().parent), "model_type": model["type"],
+                    "ignore_merges": model.get("ignore_merges", False),
                     "pre_tokenizer": data.get("pre_tokenizer")}
         print(f"{fixture}: {json.dumps(identity, ensure_ascii=False, sort_keys=True)}", file=sys.stderr)
         outputs = {}
@@ -200,17 +210,26 @@ class CodesTests(unittest.TestCase):
             outputs[role] = self.run_driver(driver, tokenizer, cases)
             self.assertEqual(hashlib.sha256(tokenizer.read_bytes()).hexdigest(), digest,
                              f"tokenizer changed during {role} run")
-            accepted = sum("error" not in result for result in outputs[role].values())
-            print(f"{fixture}/{role}: {len(cases)} requests, {accepted} accepted, "
-                  f"{len(cases) - accepted} rejected", file=sys.stderr)
-        for name in cases:
-            with self.subTest(fixture=fixture, case=name):
-                self.assertEqual(outputs["candidate"][name], outputs["reference"][name])
+            self.assertEqual(set(outputs[role]), set(cases), f"{role}: case names do not match requests")
+            accepted = [name for name in cases if "error" not in outputs[role][name]]
+            rejected = [name for name in cases if "error" in outputs[role][name]]
+            print(f"{fixture}/{role}: {len(cases)} requests, {len(accepted)} accepted, "
+                  f"{len(rejected)} rejected", file=sys.stderr)
+            print(f"{fixture}/{role}: accepted cases {json.dumps(accepted)}", file=sys.stderr)
+            print(f"{fixture}/{role}: rejected cases {json.dumps(rejected)}", file=sys.stderr)
         for role, results in outputs.items():
             with self.subTest(fixture=fixture, driver=role):
+                if fixture == "real-vocab":
+                    for name in REAL_REQUIRED_CASES:
+                        self.assertNotIn("error", results[name],
+                                         f"{role}: required real-vocabulary case {name} was rejected")
                 self.check_results(results)
                 if raw is not None:
                     self.golden(results, raw, fixture)
+        for name in cases:
+            with self.subTest(fixture=fixture, case=name):
+                self.assertEqual(outputs["candidate"][name], outputs["reference"][name],
+                                 f"{name}: candidate differs from reference")
 
     def test_real_tokenizer_differential(self):
         cases = corpus()
