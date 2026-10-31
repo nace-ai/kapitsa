@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-26T22:12:44Z",
+  "kapitsa": {
+    "version": "0.2.20",
+    "commit": "c8d32cf"
+  },
+  "mac": {
+    "identifier": "Mac17,3",
+    "name": "MacBook Air (13-inch, M5)",
+    "year": 2026,
+    "chip": "Apple M5",
+    "cpu_cores": 10,
+    "gpu_cores": 8,
+    "memory_gb": 16,
+    "macos": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "model": {
+    "name": "qwen3.5-4b",
+    "title": "Qwen3.5-4B",
+    "variant": "8bit",
+    "precision": "8-bit",
+    "catalog": true,
+    "revision": "59098e5",
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "z-lab/Qwen3.5-4B-DFlash@9a1996c"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 34.9,
+      "runs_tps": [
+        34.9,
+        33.84,
+        39.15,
+        29.66,
+        37.48
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 34.34,
+      "runs_tps": [
+        34.34,
+        34.01,
+        34.76,
+        35.07,
+        31.26
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4134,
+        "ttft_s": 9.7138,
+        "tps": 425.6,
+        "followup_s": [
+          0.1288,
+          0.1342,
+          0.0962
+        ],
+        "followup_median_s": 0.1288,
+        "followup_suffix_tps": 201.2
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16288,
+        "ttft_s": 39.5152,
+        "tps": 412.2,
+        "followup_s": [
+          0.1293,
+          0.1707,
+          0.1296
+        ],
+        "followup_median_s": 0.1296,
+        "followup_suffix_tps": 158.1
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 6.84
+  },
+  "conditions": {
+    "power_source": "battery",
+    "power_mode": "low",
+    "low_power_mode": true,
+    "thermal_state": "nominal",
+    "swapouts": 36336,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 1.01,
+    "gpu_other_max_pct": 13.01,
+    "gpu_ambient_mean_pct": 0.44,
+    "gpu_users": [
+      "Antigravity"
+    ],
+    "contention": [
+      "prefill_4000",
+      "prefill_16000"
+    ]
+  },
+  "flags": [
+    "decode_greedy: 4652 pages swapped out during the phase",
+    "prefill_4000: 15748 pages swapped out during the phase",
+    "prefill_16000: 15936 pages swapped out during the phase",
+    "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000', 'prefill_16000'] (mean 1.01%, top ['Antigravity', 'LumaBrowser'])",
+    "power: on battery (a Mac on battery may run slower)",
+    "power: Low Power Mode (the GPU runs slower)"
+  ],
+  "invalid": []
+}
