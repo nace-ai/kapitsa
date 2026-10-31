@@ -770,8 +770,10 @@ void Flint::restore(Encoder& e, Seq& s, const Checkpoint& c) {
 
 std::string Flint::disk_format() const {
   char b[256];
-  snprintf(b, sizeof b, "flint %s; K, V f16 [%d][cap][%d]; rings of %d; %s", std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(),
-           cfg_.hkv, cfg_.hd, ring_rows_, formats_summary().c_str());
+  // int8 KV rows (kv_row): as with Qwen35's, the precision is part of the format so an f16-KV build's cache is not read
+  snprintf(b, sizeof b, "flint %s; K, V i8 [%d][cap][%d] (int8 codes, an f32 scale a row); rings of %d; %s",
+           std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), cfg_.hkv, int(kv_row(size_t(cfg_.hd))), ring_rows_,
+           formats_summary().c_str());
   return b;
 }
 
