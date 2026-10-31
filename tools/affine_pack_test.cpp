@@ -31,6 +31,12 @@ _Float16 f16_from_bits(uint16_t b) {
 
 int main() {
   using namespace ni;
+  check(affine_kernel_group_size(5, 128) == 64, "5-bit group 128 reuses group-64 kernels");
+  check(affine_kernel_group_size(8, 128) == 64, "8-bit group 128 keeps its group-64 path");
+  for (int bits : {3, 4, 6})
+    check(affine_kernel_group_size(bits, 128) == 128, "other group-128 formats stay unsupported");
+  for (int bits : {3, 4, 5, 6, 8})
+    for (int gs : {32, 64}) check(affine_kernel_group_size(bits, gs) == gs, "other groups stay unchanged");
   // widths: words = K * bits / 32 per row, groups = K / 64
   for (int bits : {2, 3, 4, 5, 6, 8})
     for (int64_t K : {64, 128, 5120, 17408})

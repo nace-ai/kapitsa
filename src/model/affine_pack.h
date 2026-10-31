@@ -9,6 +9,11 @@
 
 namespace ni {
 
+// Group-128 packs can reuse these group-64 kernels by duplicating each scale and bias; the packed codes stay put.
+inline int affine_kernel_group_size(int bits, int gs) {
+  return gs == 128 && (bits == 5 || bits == 8) ? 64 : gs;
+}
+
 // Bits per weight of an MLX affine tensor that is `words` uint32 per row, `groups` scales per row, group size gs: the
 // bits b with words * 32 == groups * gs * b, or 0 when the shapes fit no whole width (a truncated or mislabelled tensor).
 inline int affine_bits(int64_t words, int64_t groups, int64_t gs) {

@@ -1,5 +1,6 @@
 #include "util/load_threads.h"
 #include "model/qwen35.h"
+#include "model/affine_pack.h"
 #include "ane/ffn_split.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
@@ -49,7 +50,7 @@ std::string format_name(int bits, int gs) {
 }
 // config.json's affine (bits, group size) for every quantized module the trunk loads, against format_supported, so a pack
 // in another format is refused before its weights are read (qlin refuses it only after all of them are: issue 787, 20 GB
-// in). Read as quant_of reads it: the default, then the entries keyed by module path. An 8-bit group-128 module is
+// in). Read as quant_of reads it: the default, then the entries keyed by module path. A 5/8-bit group-128 module is
 // read as group 64 when its scales are bf16 (qlin); the config cannot show the dtype, so it passes here. The vision tower
 // and the MTP head are not the trunk's: the first is never read, the second drops out with a reason when its format is
 // not one the kernels read (load_mtp). An allowlist of modes: affine (in a supported format), q2_0 and the IQ modes (their
@@ -71,7 +72,7 @@ std::string unsupported_quantization(const std::string& model_dir) {
   auto note = [&](const std::string& module, const std::string& m, int b, int g) {
     std::string what;  // "" = readable
     if (m == "affine") {
-      if (!format_supported(b, b == 8 && g == 128 ? 64 : g)) what = format_name(b, g);
+      if (!format_supported(b, affine_kernel_group_size(b, g))) what = format_name(b, g);
     } else if (m != "q2_0" && !gguf::iq_mode_type(m)) {
       what = "\"" + m + "\" mode";
     }
@@ -95,7 +96,7 @@ std::string unsupported_quantization(const std::string& model_dir) {
   return "its config.json quantizes " + std::to_string(modules) + (modules == 1 ? " module" : " modules") + " in " +
          formats + " (" + first + (modules > 1 ? ", ..." : "") +
          "), a format Kapitsa has no kernels for. It runs MLX affine weights in bf16, 3/4/5/6/8-bit group 64 and 4-bit "
-         "group 32 (and 8-bit group 128 with bf16 scales). Use a pack in one of those.";
+         "group 32 (and 5/8-bit group 128 with bf16 scales). Use a pack in one of those.";
 }
 std::string QLinear::fmt() const {
   if (iq) return gguf::iq_suffix(iq);
@@ -856,8 +857,8 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
   L.K = uint32_t(words * 32 / bits);
   L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
   if (int64_t(L.K / gs) != L.s->shape.back() || L.K % gs) fatal("%s: bits/group mismatch", full.c_str());
-  if (bits == 8 && gs == 128 && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
-    // 8-bit group 128 (Sushi's trunk) as group 64, exactly: each group's scale and bias twice (any leading dims: a
+  if (affine_kernel_group_size(bits, gs) != gs && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
+    // 5/8-bit group 128 as group 64, exactly: each group's scale and bias twice (any leading dims: a
     // matrix [N, K/128] or stacked experts [E, N, K/128])
     auto split = [&](const Tensor* t) {
       const size_t n = size_t(t->numel());
