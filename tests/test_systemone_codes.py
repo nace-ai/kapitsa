@@ -6,8 +6,13 @@ Build the candidate from the repository root:
 Build the reference with the same driver and tokenizer sources, replacing only
 src/systemone/systemone.cpp with a saved baseline copy. Then run:
   python3 tests/test_systemone_codes.py --candidate /tmp/systemone-candidate --reference /tmp/systemone-reference
+Add --tokenizer /approved/model/tokenizer.json for unchanged real-vocabulary coverage.
+That mode creates no synthetic tokenizer and skips only synthetic fixture goldens.
+A successful two-option request with nonempty token IDs is required in both modes.
+Real-vocabulary coverage does not establish model identity, GPU correctness, or speed.
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -19,11 +24,9 @@ import unittest
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("systemone_fixture", ROOT / "tests/test_drex_max.py")
-FIXTURE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(FIXTURE)
 CANDIDATE = None
 REFERENCE = None
+TOKENIZER = None
 
 
 def choice(width):
@@ -112,6 +115,7 @@ class CodesTests(unittest.TestCase):
         results = {}
         for name, line in zip(cases, lines):
             result = json.loads(line)
+            self.assertIsInstance(result, dict, (name, result))
             self.assertNotEqual(result.get("error"), "UnexpectedError", (name, result))
             results[name] = result
         return results
@@ -159,26 +163,70 @@ class CodesTests(unittest.TestCase):
             self.assertEqual(results[f"packed_before_{kind}"],
                              {"error": "BadRequest", "message": "request exceeds the 1-token packed limit"})
         self.assertEqual(results["validate_first"], {"error": "BadRequest", "message": "each question needs a type"})
+
+    def check_results(self, results):
+        pair = results["pair"]
+        self.assertNotIn("error", pair, "the known-valid two-option request must encode")
+        self.assertEqual(len(pair["branches"]), 1)
+        self.assertTrue(pair["branches"][0]["tokens"], "the two-option request must produce tokens")
+        self.assertEqual(pair["branches"][0]["options"], [0, 1])
+        self.assertEqual(pair["meta"], [{"id": "q", "type": "choice", "keys": ["key0", "key1"], "legend": []}])
+        self.assertEqual(pair, results["fresh_after_wide"])
         for name, result in results.items():
             if "error" in result:
                 self.assertEqual(result["error"], "BadRequest", name)
                 continue
+            self.assertTrue(result["branches"], name)
             self.assertEqual(len(result["branches"]), len(result["meta"]), name)
             self.assertEqual(result["total_tokens"], sum(len(b["tokens"]) for b in result["branches"]), name)
             self.assertEqual(result["max_branch"], max(len(b["tokens"]) for b in result["branches"]), name)
             for branch, meta in zip(result["branches"], result["meta"]):
+                self.assertTrue(branch["tokens"], name)
+                self.assertTrue(all(type(token) is int and token >= 0 for token in branch["tokens"]), name)
                 self.assertEqual(branch["decide"], len(branch["tokens"]) - 1, name)
                 self.assertEqual(branch["options"], list(range(len(meta["keys"]))), name)
 
+    def compare(self, tokenizer, cases, fixture, raw=None):
+        contents = tokenizer.read_bytes()
+        data = json.loads(contents)
+        digest = hashlib.sha256(contents).hexdigest()
+        identity = {"tokenizer": str(tokenizer.resolve()), "tokenizer_sha256": digest,
+                    "model_dir": str(tokenizer.resolve().parent), "model_type": data["model"]["type"],
+                    "ignore_merges": data["model"].get("ignore_merges", False),
+                    "pre_tokenizer": data.get("pre_tokenizer")}
+        print(f"{fixture}: {json.dumps(identity, ensure_ascii=False, sort_keys=True)}", file=sys.stderr)
+        outputs = {}
+        for role, driver in (("reference", REFERENCE), ("candidate", CANDIDATE)):
+            outputs[role] = self.run_driver(driver, tokenizer, cases)
+            self.assertEqual(hashlib.sha256(tokenizer.read_bytes()).hexdigest(), digest,
+                             f"tokenizer changed during {role} run")
+            accepted = sum("error" not in result for result in outputs[role].values())
+            print(f"{fixture}/{role}: {len(cases)} requests, {accepted} accepted, "
+                  f"{len(cases) - accepted} rejected", file=sys.stderr)
+        for name in cases:
+            with self.subTest(fixture=fixture, case=name):
+                self.assertEqual(outputs["candidate"][name], outputs["reference"][name])
+        for role, results in outputs.items():
+            with self.subTest(fixture=fixture, driver=role):
+                self.check_results(results)
+                if raw is not None:
+                    self.golden(results, raw, fixture)
+
     def test_real_tokenizer_differential(self):
         cases = corpus()
-        self.assertGreaterEqual(len(cases), 100)
+        self.assertEqual(len(cases), 104)
+        if TOKENIZER is not None:
+            self.compare(TOKENIZER, cases, "real-vocab")
+            return
+        spec = importlib.util.spec_from_file_location("systemone_fixture", ROOT / "tests/test_drex_max.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
         with tempfile.TemporaryDirectory() as tmp:
             for fixture in ("all", "singles", "sparse"):
                 with self.subTest(fixture=fixture):
                     directory = Path(tmp) / fixture
                     directory.mkdir()
-                    raw = FIXTURE.synthetic_tokenizer(directory)
+                    raw = fixture_module.synthetic_tokenizer(directory)
                     tokenizer = directory / "tokenizer.json"
                     data = json.loads(tokenizer.read_text())
                     if fixture == "singles":
@@ -186,23 +234,17 @@ class CodesTests(unittest.TestCase):
                     elif fixture == "sparse":
                         data["model"]["merges"] = [["A", "B"], ["Z", "Z"]]
                     tokenizer.write_text(json.dumps(data))
-                    reference = self.run_driver(REFERENCE, tokenizer, cases)
-                    candidate = self.run_driver(CANDIDATE, tokenizer, cases)
-                    for name in cases:
-                        with self.subTest(case=name):
-                            self.assertEqual(candidate[name], reference[name])
-                    self.golden(reference, raw, fixture)
-                    self.golden(candidate, raw, fixture)
-                    accepted = sum("error" not in result for result in candidate.values())
-                    print(f"{fixture}: {len(cases)} requests, {accepted} accepted, "
-                          f"{len(cases) - accepted} rejected; exact comparison complete", file=sys.stderr)
+                    self.compare(tokenizer, cases, fixture, raw)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", required=True, type=Path)
     parser.add_argument("--reference", required=True, type=Path)
+    parser.add_argument("--tokenizer", type=Path,
+                        help="existing tokenizer.json for real-vocabulary coverage; never created or modified")
     args, unittest_args = parser.parse_known_args()
     CANDIDATE = args.candidate.resolve()
     REFERENCE = args.reference.resolve()
+    TOKENIZER = args.tokenizer.resolve(strict=True) if args.tokenizer is not None else None
     unittest.main(argv=[sys.argv[0], *unittest_args])
