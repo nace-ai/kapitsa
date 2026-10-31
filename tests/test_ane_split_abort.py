@@ -181,7 +181,14 @@ def warm(server):
 
 def ane_line(server, since, timeout):
     """waits for the split to be on (the server compiles its program in the background)"""
-    m = server.wait_log(r"NI_ANE: Neural Engine FFN split[^:]*: \d+/\d+ units", timeout, since=since)
+    split = r"NI_ANE: Neural Engine FFN split[^:]*: \d+/\d+ units"
+    started = time.monotonic()
+    m = server.wait_log(split + r"|NI_ANE: Neural Engine program ready in the background", timeout, since=since)
+    if m is not None and "program ready" in m.group(0):
+        # A cold compile may finish after warm()'s request. Only a new request calls ane_poll()
+        # again and builds the split; another one-token prompt cannot consume the injected fault.
+        warm(server)
+        m = server.wait_log(split, max(0, timeout - (time.monotonic() - started)), since=since)
     if m is None:
         for why in (r"NI_ANE: (Neural Engine unavailable[^\n]*)", r"NI_ANE: (no calibration[^\n]*)",
                     r"NI_ANE: (releasing the Neural Engine split[^\n]*)"):

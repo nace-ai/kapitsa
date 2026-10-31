@@ -1,6 +1,7 @@
 // GPU + Neural Engine split of the dense prefill FFN (NI_ANE). See src/ane/ffn_split.h.
 //
 //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
+//   Dense hidden sizes divisible by 2048 up to 8192 are eligible by default; NI_ANE=0 keeps the GPU-only path.
 //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
 //   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
 //   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
@@ -210,6 +211,10 @@ void Qwen35::ane_finish_init() {
   const uint32_t units = ane_init_.units, min_rows = ane_init_.min_rows;
   const int fault = ane_init_.fault, lanes = ane_init_.lanes;
   if (!ane_rebuild(units, min_rows, ane_init_.fns, fault, lanes)) return;
+  if (cfg_.hidden % 2048 == 0)
+    logi("NI_ANE: %d-hidden FFN on the Neural Engine (%u-channel input segments; "
+         "W8A8 changes prefill numerics; NI_ANE=0 disables)", cfg_.hidden,
+         ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)));
   const char* source = ane_init_.source;
   logi("NI_ANE: Neural Engine FFN split%s: %u/%d units (%u channels; GPU %u) from the %s, chunks >= %u rows; %s; "
        "%.1f MB Metal; ready in %.1f s",

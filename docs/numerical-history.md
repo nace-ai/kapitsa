@@ -115,7 +115,7 @@ The decode rows use the prefill-scale gate, not the file's `decode_gate` of 1.02
 The changed prefill produces the KV inherited by decode. With `NI_ANE=0`, the same switch moves the 4B's
 decode paths at the 1e-7 scale.
 
-The 9B has hidden size 4096, no ANE split and no floor file of its own. The PR measured it on an M5 Max:
+At that measurement, the 9B (hidden size 4096) had no ANE split and no floor file of its own. The PR measured it on an M5 Max:
 prefill mean KL 1.4e-7, decode mean KL 2.6e-7 to 5.8e-7, 0 flips in 192 rows. Applied for scale, the 4B's
 gate passes by four orders of magnitude. The M5 Pro pair shows the same order of magnitude with the split
 off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this path enabled requires a separate PR.
@@ -131,3 +131,33 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this 
   default-off revert [#586](https://github.com/nace-ai/kapitsa/pull/586).
 - Qwen 4B and 9B attention: [#581](https://github.com/nace-ai/kapitsa/pull/581),
   numerical record [#583](https://github.com/nace-ai/kapitsa/pull/583).
+
+## ANE prefill for hidden sizes divisible by 2048
+
+Hidden sizes divisible by 2048 up to 8192 are eligible for the existing W8A8 split by default;
+`NI_ANE=0` disables it. Larger widths remain on the GPU.
+The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
+and rotation stay unchanged. All supported inputs use the existing rotation kernel and its token-wide scale.
+
+At experimental commit `92e8b88`, on an M4 Pro 20-core GPU / 48 GiB /
+macOS 26.4.1 (25E253), 768 teacher-forced step rows against the same 4-bit GPU model gave mean KL
+1.795e-4 and 3 top-1 flips. The corresponding existing 4B/27B paths gave 3.940e-4 / 8.249e-5 and
+3 / 2 flips. On 8192 code-token positions, 9B PPL was 2.01072 -> 2.01052; its document-bootstrap
+interval crossed zero. This does not establish quality equivalence. An earlier M4 mini summary
+reported PPL 6.41118 -> 6.41682 on a separate 4092-position sample and changed greedy answers.
+
+[Historical numerical evidence, controls and limitations](https://github.com/KeyingSong0123/kapitsa/blob/9f8dd15a81aa67a69b4e1a86a5c4e2c67495194d/bench/results/2026-10-28-m4pro-9b-ane/README.md).
+Those GPU data are pinned to the earlier experimental commit. A fresh integration check of main
+`6d5c2aa` against `82e9b9e` on an M4 Mac mini / 24 GiB / macOS 26.5.2 (25F84) found every row bitwise
+identical for the 4B default and 9B opt-out: 8 prefill plus 192 rows each of step, verify and batch.
+For the 9B opt-in, step / verify / batch mean KL was 3.692e-4 / 3.767e-4 / 3.639e-4, each with 2/192
+top-1 flips; the prefill had 0/8 flips. These decode paths score the same token positions, not independent
+samples. [Integration evidence at those commits and limits](../bench/results/2026-10-29-m4-9b-ane-review/README.md).
+
+These historical opt-in comparisons deliberately changed outputs; no 9B noise-floor pass or `--reorder`
+exception is claimed. No floor is changed. The new default extends ANE eligibility, not numerical
+equivalence: the 9B/4B primary mean-KL ratio was 0.456 (document-bootstrap 95% [0.242, 1.021]), and
+9B/27B was 2.176 [1.685, 2.820]. At 4K/16K the latter ratios were 2.904/2.039. This code-only sample
+shows comparable orders of drift, not a bound on other models or tasks. The new widths beyond 9B
+require their own model-level numerical and performance measurements; shape support alone does not
+establish their quality or speed.
