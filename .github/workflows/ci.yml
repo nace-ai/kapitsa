@@ -106,6 +106,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: python3 tests/test_agentic.py
       - run: python3 tests/test_cached_increment.py
+      - run: python3 tools/test_max_readout_compare.py
 
   build-and-test:
     # Changes that can affect the build or the tests only (the filter below). Not a required check, so a skipped run never blocks a docs-only PR.

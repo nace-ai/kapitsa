@@ -17,6 +17,7 @@
 #include "systemone/systemone.h"
 #include "tokenizer/tokenizer.h"
 #include "util/log.h"
+#include "systemone_max_dump.h"
 
 #include <httplib/httplib.h>
 
@@ -52,7 +53,7 @@ std::string g_encode_path;
 bool g_show_tokens = false;
 
 struct Options {
-  std::string model_dir, name, host = "127.0.0.1";
+  std::string model_dir, name, host = "127.0.0.1", dump_max_dir;
   int port = 8000;
   int context = ni::systemone::kRecommendedContext;
   // The state cache's byte cap (0: off): a request that re-sends a state it sent before restores its checkpoint and
@@ -65,6 +66,7 @@ void usage() {
                "usage: systemone --model DIR [--port 8000] [--host 127.0.0.1] [--context 16384] [--name NAME]\n"
                "                 [--cache-mb 1024]\n"
                "                 [--once request.json [--repeat N] [--warmup N]]\n"
+               "                 [--dump-max-logits NEW_DIR] (Max --once only, repeat=1, warmup=0)\n"
                "  DIR: a Kapitsa model folder (safetensors + tokenizer.json) with the Drex pointer head as\n"
                "       DIR/pointer.bin or DIR/.kapitsa/pointer.bin (tools/drex_pointer.py writes it)\n"
                "  --context: the sequence's positions (a request's state plus its longest question row must fit)\n"
@@ -80,6 +82,7 @@ void usage() {
 
 Options parse_args(int argc, char** argv) {
   Options o;
+  std::string repeat_value = "1", warmup_value = "0";
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     auto value = [&](const char* what) -> std::string {
@@ -101,14 +104,29 @@ Options parse_args(int argc, char** argv) {
     else if (a == "--once") g_once_path = value("--once");
     else if (a == "--encode") g_encode_path = value("--encode");
     else if (a == "--tokens") g_show_tokens = true;
-    else if (a == "--repeat") g_repeat = std::max(1, std::atoi(value("--repeat").c_str()));
-    else if (a == "--warmup") g_warmup = std::max(0, std::atoi(value("--warmup").c_str()));
+    else if (a == "--dump-max-logits") {
+      o.dump_max_dir = value("--dump-max-logits");
+      if (o.dump_max_dir.empty()) { std::fprintf(stderr, "--dump-max-logits needs a directory\n"); std::exit(2); }
+    }
+    else if (a == "--repeat") {
+      repeat_value = value("--repeat");
+      g_repeat = std::max(1, std::atoi(repeat_value.c_str()));
+    }
+    else if (a == "--warmup") {
+      warmup_value = value("--warmup");
+      g_warmup = std::max(0, std::atoi(warmup_value.c_str()));
+    }
     else if (a == "-h" || a == "--help") { usage(); std::exit(0); }
     else {
       std::fprintf(stderr, "unknown option %s\n", a.c_str());
       usage();
       std::exit(2);
     }
+  }
+  if (!o.dump_max_dir.empty() && (g_once_path.empty() || !g_encode_path.empty() || g_show_tokens ||
+                                 repeat_value != "1" || warmup_value != "0")) {
+    std::fprintf(stderr, "--dump-max-logits requires --once, --repeat 1, --warmup 0, and no --encode/--tokens\n");
+    std::exit(2);
   }
   if (o.model_dir.empty()) { usage(); std::exit(2); }
   if (o.context < 256) {
@@ -187,6 +205,16 @@ class SystemOne {
     } catch (const std::exception& e) {
       fatal("%s", e.what());
     }
+    if (!opts_.dump_max_dir.empty()) {
+      if (!head_.is_readout() || Qwen35::read_config(opts_.model_dir).causal) {
+        fatal("--dump-max-logits requires a Max readout head and noncausal backbone");
+      }
+      try {
+        dump_ = std::make_unique<ni::systemone::MaxDump>(opts_.dump_max_dir);
+      } catch (const std::exception& e) {
+        fatal("cannot create Max dump: %s", e.what());
+      }
+    }
     if (head_.is_readout()) opts_.cache_bytes = 0;
     logi("loading %s", opts_.model_dir.c_str());
     model_ = load_qwen(opts_.model_dir, head_.is_readout() ? opts_.context - 1 : 2048, /*allow_noncausal=*/true);
@@ -253,6 +281,7 @@ class SystemOne {
     const auto enc = ni::systemone::encode_max(tok_, body, limits_);
     ni::systemone::check_fits(enc, seq_->limit);
     ni::systemone::check_options(enc, head_.dim());  // before any prefill
+    if (dump_) dump_->begin_request(enc);
     std::vector<std::vector<float>> logits;
     const auto started = std::chrono::steady_clock::now();
     for (const auto& branch : enc.branches) {
@@ -270,6 +299,7 @@ class SystemOne {
                                     norm_w_.data(), hidden_, eps_, &last);
       std::vector<float> group;
       head_.logits(last.data(), std::vector<const float*>(branch.group.options.size(), nullptr), &group);
+      if (dump_) dump_->append(group);
       logits.push_back(std::move(group));
     }
     tm->branch_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
@@ -446,6 +476,7 @@ class SystemOne {
   int cache_hits() const { return cache_hits_; }
   int cache_misses() const { return cache_misses_; }
   size_t cache_states() const { return cache_.size(); }
+  void finish_dump() { if (dump_) dump_->finish(); }
 
  private:
   // ---- the state cache: keyed by the model plus the state's tokens, LRU by bytes ----
@@ -528,6 +559,7 @@ class SystemOne {
   std::unique_ptr<Qwen35> model_;
   Tokenizer tok_;
   ni::systemone::PointerHead head_;
+  std::unique_ptr<ni::systemone::MaxDump> dump_;
   std::vector<float> norm_w_;
   float eps_ = 1e-6f;
   int hidden_ = 0;
@@ -642,6 +674,7 @@ int main(int argc, char** argv) {
         reply = server.handle(body);
         ms.push_back(reply.value("latency_ms", 0.0));
       }
+      server.finish_dump();
       std::printf("%s\n", reply.dump(2).c_str());
       if (g_repeat > 1 || g_warmup > 0) {
         std::sort(ms.begin(), ms.end());
