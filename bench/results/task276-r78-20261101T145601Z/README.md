@@ -9,7 +9,9 @@ All eight interleaved 4K legs exited 0. One warmup and three measured repetition
 | Drex Max v1 | 13405.87 | 12709.04 / 13894.62 | 12937.15 | 12462.94 / 13148.85 | 0.96504 |
 | Qwen3.8-27B control | 11130.99 | 10754.06 / 11483.60 | 11243.98 | 10790.23 / 11530.00 | 1.01015 |
 
-Max has a 3.50% lower pooled B median. Both rounds favor B. Qwen, whose causal path is unchanged by the source diff, has a 1.02% higher pooled B median. The small cohort and overlapping ranges do not establish statistical significance.
+Max has a 3.50% lower pooled B median, with both rounds favoring B. Qwen neutral (+1.0%, within range). Its causal path is unchanged, and the overlapping observed ranges support neither a win nor a regression claim.
+
+The unchanged e8ffd2fb reference was 15.3% slower for Max and 15.8% slower for Qwen than in R77; R78 followed #209's reported pressure-4 abort and recorded 2821 to 3125 MiB swap versus R77's 192 MiB, with aggregate CPU at 6.56% to 27.43%, but no per-process CPU, swap-I/O or thermal evidence identifies the cause, so only the within-run A/B is comparable. The original metadata is unchanged. Recompute its host-sample bounds with the accompanying comparison script and reference metadata.
 
 ## Paired rounds
 
@@ -33,6 +35,15 @@ Pre-leg free memory was 59% to 92%, swap used was 2820.88 to 3125.06 MiB, and re
 Runs: Apple M5 Pro, 48 GB, macOS 26.5.2, 2026-11-01. Model packs are Drex Max v1 affine Q4 and Qwen3.8-27B affine Q4. The first measured leg began at 14:59:07Z and the cohort finished at 15:06:06Z.
 
 The provenance records the exact commits, binary digests, environment, argv, and token-file digest. Raw stdout and stderr remain in the local experiment directory, and their SHA256 digests accompany this record. No model weights or raw tensors are committed.
+
+Reproduce the metadata comparison from the repository root:
+
+```sh
+r=bench/results/task276-r78-20261101T145601Z
+python3 "$r/compare_host_context.py" "$r/reference-r77-meta.txt" "$r/meta.txt"
+```
+
+The CPU field is aggregate host usage sampled before each leg, despite the original `outside_cpu_percent` name. It does not identify #209 tests, LibreOffice or WebKit as contributors, and allocated swap is not proof of active paging.
 
 ## CPU checks and unrun coverage
 
