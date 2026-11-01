@@ -94,7 +94,8 @@ int main(int argc, char** argv) {
   const uint32_t T = argc > 1 ? atoi(argv[1]) : 2048;
   const int skew = argc > 2 ? atoi(argv[2]) : 1;  // 0 uniform random, 1 Zipf-like, 2 balanced (P/E rows each)
   const int trials = argc > 3 ? atoi(argv[3]) : 5;
-  const uint32_t D = 2048, I = 512, E = 256, k = 8, gs = 64, P = T * k;
+  const uint32_t k = getenv("BENCH_K") ? atoi(getenv("BENCH_K")) : 8;
+  const uint32_t D = 2048, I = 512, E = 256, gs = 64, P = T * k;
   Gpu& g = Gpu::get();
   g.compile_extra("tensor", kTensorKernelSource, true);  // qmtm_* (the routed experts on tensor_ops)
 
