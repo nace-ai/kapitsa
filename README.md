@@ -1,7 +1,7 @@
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
-  <img alt="Kapitsa writes 339 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
+  <img alt="Kapitsa writes 346 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
@@ -27,7 +27,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 32 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
@@ -46,7 +46,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 
 ## Features
 
-- **339 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 32 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
+- **346 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
 - **A 180B model on a 48 GB Mac, at 56 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
 - **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
@@ -134,19 +134,19 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2 / 26.10.3</sub> | <sub>oMLX<br>0.7.1rc1 / 0.7.3.dev2</sub> | <sub>Splash<br>1.4.0</sub> | <sub>Ollama<br>0.40.5 / 0.40.11</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-vlm 0.7.8 / 0.7.10</sub> | <sub>llama.cpp<br>b11669 / b11871</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1 (nax), llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 907 / **133**<br><sub>KFlash · cd20dcc</sub> | 792 / **≈128**<br><sub>DFlash2 · 26.10.3</sub> | 902 / 92<br><sub>DFlash2 · 0.7.3.dev2</sub> | 1039 / 116<br><sub>DFlash2</sub> | 844 / 71<br><sub>MTP · 0.40.11, MLX runner</sub> | 848 / 73<br><sub>MTP</sub> | 856 / 56<br><sub>MTP · mlx-vlm 0.7.10</sub> | 578 / 48<br><sub>MTP · b11871</sub> | 918 / 33<br><sub>MLX runtime 1.13.1 (nax)</sub> |
-| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 5963 / **339**<br><sub>KFlash · cd20dcc</sub> | 4622 / 235<br><sub>MTP · 26.10.3</sub> | 3005 / 189<br><sub>DFlash2 · 0.7.3.dev2</sub> | 6386 / 281<br><sub>DFlash2</sub> | 3077 / 162<br><sub>MTP · 0.40.11, MLX runner</sub> | 4291 / 130<br><sub>MTP</sub> | 4439 / 138<br><sub>DFlash2 · mlx-vlm 0.7.10</sub> | 2881 / 171<br><sub>MTP · b11669</sub> | 4672 / 136<br><sub>MLX runtime 1.13.1 (nax)</sub> |
-| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · 4-bit, 105.9 GB</sub> | 1165 / 106<br><sub>KFlash · fd85910</sub> | 🟩 1720 / **108**<br><sub>26.10.2</sub> | 1260 / 107<br><sub>MTP · 0.7.1rc1</sub> | × | 60<br><sub>0.40.6</sub> | 1263 / 88<br><sub>MTP</sub> | 1030 / 77<br><sub>MTP · mlx-vlm 0.7.8</sub> | 842 / 96<br><sub>b11669</sub> | × |
-| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **119**<br><sub>KFlash · 039ddea</sub> | × | × | × | × | × | 76<br><sub>mlx-vlm 0.7.8</sub> | 9<br><sub>b11669</sub> | × |
-| **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 **267**<br><sub>KFlash · fd85910</sub> | 190<br><sub>26.10.2</sub> | 190<br><sub>0.7.1rc1</sub> | × | 153<br><sub>0.40.5</sub> | 131 | 139<br><sub>mlx-vlm 0.7.8</sub> | 159<br><sub>b11669</sub> | 110<br><sub>llama.cpp runtime 2.60.0</sub> |
-| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 1038 / **160**<br><sub>KFlash · cd20dcc</sub> | × | 903 / 71<br><sub>0.7.3.dev2</sub> | × | × | × | 936 / 66<br><sub>mlx-vlm 0.7.10</sub> | × | × |
-| **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid MoE, 12B active · NVFP4, 76.4 GB</sub> | 🟩 **94**<br><sub>KFlash · fd85910</sub> | × | 52<br><sub>0.7.1rc1</sub> | × | 64<br><sub>0.40.5</sub> | 44 | 46<br><sub>mlx-vlm 0.7.8</sub> | 66<br><sub>b11669</sub> | 61<br><sub>llama.cpp runtime 2.60.0</sub> |
+| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 904 / **143**<br><sub>KFlash</sub> | 792 / 128<br><sub>DFlash2 · 26.10.3</sub> | 902 / 92<br><sub>DFlash2 · 0.7.3.dev2</sub> | 1039 / 116<br><sub>DFlash2</sub> | 844 / 71<br><sub>MTP · 0.40.11, MLX runner</sub> | 848 / 73<br><sub>MTP</sub> | 856 / 56<br><sub>MTP · mlx-vlm 0.7.10</sub> | 578 / 48<br><sub>MTP · b11871</sub> | 918 / 33<br><sub>MLX runtime 1.13.1 (nax)</sub> |
+| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 6036 / **346**<br><sub>KFlash</sub> | 4622 / 235<br><sub>MTP · 26.10.3</sub> | 3005 / 189<br><sub>DFlash2 · 0.7.3.dev2</sub> | 6386 / 281<br><sub>DFlash2</sub> | 3077 / 162<br><sub>MTP · 0.40.11, MLX runner</sub> | 4291 / 130<br><sub>MTP</sub> | 4439 / 138<br><sub>DFlash2 · mlx-vlm 0.7.10</sub> | 2881 / 171<br><sub>MTP · b11669</sub> | 4672 / 136<br><sub>MLX runtime 1.13.1 (nax)</sub> |
+| **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active · 4-bit, 105.9 GB</sub> | 🟩 1701 / **108**<br><sub>KFlash</sub> | 1720 / **≈108**<br><sub>26.10.2</sub> | 1260 / 107<br><sub>MTP · 0.7.1rc1</sub> | × | 60<br><sub>0.40.6</sub> | 1263 / 88<br><sub>MTP</sub> | 1030 / 77<br><sub>MTP · mlx-vlm 0.7.8</sub> | 842 / 96<br><sub>b11669</sub> | × |
+| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **122**<br><sub>KFlash</sub> | × | × | × | × | × | 76<br><sub>mlx-vlm 0.7.8</sub> | 9<br><sub>b11669</sub> | × |
+| **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 **287**<br><sub>KFlash</sub> | 190<br><sub>26.10.2</sub> | 190<br><sub>0.7.1rc1</sub> | × | 153<br><sub>0.40.5</sub> | 131 | 139<br><sub>mlx-vlm 0.7.8</sub> | 159<br><sub>b11669</sub> | 110<br><sub>llama.cpp runtime 2.60.0</sub> |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 1075 / **154**<br><sub>KFlash</sub> | × | 903 / 71<br><sub>0.7.3.dev2</sub> | × | × | × | 936 / 66<br><sub>mlx-vlm 0.7.10</sub> | × | × |
+| **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid MoE, 12B active · NVFP4, 76.4 GB</sub> | 🟩 **87**<br><sub>KFlash</sub> | × | 52<br><sub>0.7.1rc1</sub> | × | 64<br><sub>0.40.5</sub> | 44 | 46<br><sub>mlx-vlm 0.7.8</sub> | 66<br><sub>b11669</sub> | 61<br><sub>llama.cpp runtime 2.60.0</sub> |
 
 **Recursive Flint**
 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>Q4_1, b11871</sub> | <sub>rec<br>0.1.0</sub> |
 | --- | ---: | ---: | ---: |
-| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 5721 / **267**<br><sub>KFlash</sub> | 3827 / 130 | 2863 / 224 |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 5770 / **265**<br><sub>KFlash</sub> | 3827 / 130 | 2863 / 224 |
 
 **DiffuSpace Clover**
 
@@ -154,7 +154,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: |
 | **Clover-35B-A3B-Preview** · `clover`<br><sub>block-diffusion MoE, 3B active · 4-bit pack converted by tools/convert_clover.py, 19.5 GB (measured; the catalog's `clover` serves the same files)</sub> | 🟩 6002 / **319**<br><sub>KFlash</sub> |
 
-<sub>The 27B, 35B-A3B and Bolt rows are the 2026-10-25 session (Kapitsa main cd20dcc and each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell, the Flash-Next row and the Lightning, Super-VL and Dory rows are the 2026-10-18 to 10-22 runs, not yet re-measured. The Flint row is one block on 2026-10-26 (Kapitsa 0.2.18, [results](bench/results/2026-10-26-m5-max/README.md)). The 27B and Bolt rows are each one block of the row on AC power in High Power mode. The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
+<sub>Kapitsa's cells are the 2026-11-01 runs (main 7f4e709, [results](bench/results/2026-11-01-m5-max-kapitsa/README.md)), each the median of three runs (Super-VL five) on AC power in High Power mode, Clover's excepted (2026-10-28). The other engines' 27B, 35B-A3B and Bolt cells are the 2026-10-25 session (each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell and the other engines' Flash-Next, Lightning, Super-VL and Dory cells are the 2026-10-18 runs, not yet re-measured; rec's and llama.cpp's Flint cells are one block on 2026-10-26 ([results](bench/results/2026-10-26-m5-max/README.md)). The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
 
 </details>
 

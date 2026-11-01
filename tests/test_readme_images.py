@@ -36,6 +36,6 @@ assert all(h["method"] == "KFlash" for h in ri.header_rows(data) if h["kap"] and
 hr = ri.header_rows(data)   # the header SVGs' <desc> names Kapitsa's method as KFlash
 assert "Kapitsa with KFlash " in ri.header_desc(data, hr), ri.header_desc(data, hr)
 assert "no spec" not in ri.header_desc(data, hr), ri.header_desc(data, hr)
-assert ri.header_alt(data, hr) == ("Kapitsa writes 339 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for "
+assert ri.header_alt(data, hr) == ("Kapitsa writes 346 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for "
                                    "MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash."), ri.header_alt(data, hr)
 print(f"test_readme_images: ok ({n} Kapitsa cells)")

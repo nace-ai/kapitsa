@@ -1,0 +1,53 @@
+=== flash-kapitsa 04:52:38 powermode=2 Now drawing from 'AC Power'
+[04:58:18] flash-kapitsa: GPU not quiet after 301s (['Claude Helper[95214] 8%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 100.60 tok/s (e2e 99.43; 512 tok, finish=length, d4=0.9116)
+  decode T=0.6: 116.43 tok/s (e2e 114.08; 512 tok, finish=length, d4=0.9808)
+  decode T=0.6: 108.20 tok/s (e2e 107.28; 512 tok, finish=length, d4=0.9202)
+  decode T=0.6: 99.52 tok/s (e2e 98.89; 512 tok, finish=length, d4=0.6939)
+  decode T=0.6: 105.86 tok/s (e2e 105.39; 512 tok, finish=length, d4=0.97)
+  decode median 105.86 (min 99.52, max 116.43) over 5/5 valid
+  decode T=0: median 109.41 (min 105.61, max 112.57) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 2.68s -> 1541 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4174, 4209, 4252])
+  prefill 16000: 16287 tok (ref 16286), TTFT 10.66s -> 1528 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16330, 16358, 16392])
+  -> <run-root>/results/flash-kapitsa-20261101-045238.json
+[04:59:39] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261101-045238.json
+=== flash-kapitsa-mtp3 04:59:39 powermode=2 Now drawing from 'AC Power'
+[04:59:58] flash-kapitsa-mtp3:  warm-up prefill~2.9k+decode64: ok (2.46s)
+  decode T=0.6: 106.97 tok/s (e2e 105.65; 512 tok, finish=length, d4=0.9755)
+  decode T=0.6: 101.64 tok/s (e2e 99.31; 512 tok, finish=length, d4=0.9494)
+  decode T=0.6: 98.93 tok/s (e2e 97.70; 512 tok, finish=length, d4=0.8934)
+  decode T=0.6: 102.02 tok/s (e2e 100.62; 512 tok, finish=length, d4=0.9476)
+  decode T=0.6: 109.23 tok/s (e2e 106.09; 512 tok, finish=length, d4=0.9287)
+  decode median 102.02 (min 98.93, max 109.23) over 5/5 valid
+  decode T=0: median 106.96 (min 89.67, max 108.77) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4969)']
+  prefill 4000: 4134 tok (ref 4133), TTFT 2.46s -> 1684 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4183, 4211, 4247])
+  prefill 16000: 16284 tok (ref 16286), TTFT 9.73s -> 1674 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16330, 16358, 16392])
+  -> <run-root>/results/flash-kapitsa-mtp3-20261101-045939.json
+[05:01:37] flash-kapitsa-mtp3: -> <run-root>/results/flash-kapitsa-mtp3-20261101-045939.json  flags: 1
+=== flash-kapitsa-mtp1 05:01:37 powermode=2 Now drawing from 'AC Power'
+[05:01:55] flash-kapitsa-mtp1:  warm-up prefill~2.9k+decode64: ok (3.09s)
+  decode T=0.6: 89.28 tok/s (e2e 88.78; 512 tok, finish=length, d4=0.9576)
+  decode T=0.6: 85.95 tok/s (e2e 84.91; 512 tok, finish=length, d4=0.6829)
+  decode T=0.6: 85.89 tok/s (e2e 84.90; 512 tok, finish=length, d4=0.9215)
+  decode T=0.6: 86.16 tok/s (e2e 85.39; 512 tok, finish=length, d4=1.0)
+  decode T=0.6: 80.60 tok/s (e2e 79.70; 512 tok, finish=length, d4=0.8151)
+  decode median 85.95 (min 80.6, max 89.28) over 5/5 valid
+  decode T=0: median 91.39 (min 88.65, max 92.06) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 2.86s -> 1443 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4179, 4207, 4241])
+  prefill 16000: 16285 tok (ref 16286), TTFT 11.40s -> 1428 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16334, 16383, 16426])
+  -> <run-root>/results/flash-kapitsa-mtp1-20261101-050138.json
+[05:03:47] flash-kapitsa-mtp1: -> <run-root>/results/flash-kapitsa-mtp1-20261101-050138.json
+=== flash-kapitsa-mtp4 05:03:47 powermode=2 Now drawing from 'AC Power'
+[05:04:06] flash-kapitsa-mtp4:  warm-up prefill~2.9k+decode64: ok (3.2s)
+  decode T=0.6: 83.58 tok/s (e2e 83.62; 512 tok, finish=length, d4=0.9692)
+  decode T=0.6: 85.82 tok/s (e2e 85.35; 512 tok, finish=length, d4=0.4502) flags ['repetition loop (distinct-4-gram 0.4502)']
+  decode T=0.6: 100.02 tok/s (e2e 98.33; 512 tok, finish=length, d4=0.9479)
+  decode T=0.6: 93.94 tok/s (e2e 92.09; 512 tok, finish=length, d4=0.9564)
+  decode T=0.6: 92.80 tok/s (e2e 91.04; 512 tok, finish=length, d4=0.9165)
+  decode median 92.8 (min 83.58, max 100.02) over 5/5 valid
+  decode T=0: median 99.53 (min 89.96, max 103.34) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 2.75s -> 1506 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4171, 4199, 4233])
+  prefill 16000: 16287 tok (ref 16286), TTFT 11.33s -> 1437 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16323, 16351, 16385])
+  -> <run-root>/results/flash-kapitsa-mtp4-20261101-050347.json
+[05:05:54] flash-kapitsa-mtp4: -> <run-root>/results/flash-kapitsa-mtp4-20261101-050347.json  flags: 1
+=== done 05:05:54

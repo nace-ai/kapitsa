@@ -1,0 +1,5 @@
+[
+  {"label": "flash-kapitsa-mtp1", "extends": "flash-kapitsa", "display": "Kapitsa (MTP, depth 1)", "cmd_append": ["--spec", "1"], "note": "sweep: --spec 1"},
+  {"label": "flash-kapitsa-mtp3", "extends": "flash-kapitsa", "display": "Kapitsa (MTP, depth 3)", "cmd_append": ["--spec", "3"], "note": "sweep: --spec 3"},
+  {"label": "flash-kapitsa-mtp4", "extends": "flash-kapitsa", "display": "Kapitsa (MTP, depth 4)", "cmd_append": ["--spec", "4"], "note": "sweep: --spec 4"}
+]

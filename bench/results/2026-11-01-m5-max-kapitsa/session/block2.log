@@ -1,0 +1,145 @@
+=== flash-kapitsa-chain 05:06:34 powermode=2 Now drawing from 'AC Power'
+[05:11:52] flash-kapitsa-chain: GPU not quiet after 300s (['Claude Helper[95214] 7%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 107.24 tok/s (e2e 106.17; 512 tok, finish=length, d4=0.8406)
+  decode T=0.6: 102.43 tok/s (e2e 102.39; 512 tok, finish=length, d4=0.982)
+  decode T=0.6: 113.67 tok/s (e2e 112.26; 512 tok, finish=length, d4=0.9149)
+  decode T=0.6: 105.64 tok/s (e2e 104.35; 512 tok, finish=length, d4=0.9307)
+  decode T=0.6: 107.29 tok/s (e2e 106.04; 512 tok, finish=length, d4=0.9165)
+  decode median 107.24 (min 102.43, max 113.67) over 5/5 valid
+  decode T=0: median 107.05 (min 105.69, max 112.65) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 2.74s -> 1509 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4164, 4192, 4226])
+  prefill 16000: 16287 tok (ref 16286), TTFT 10.60s -> 1537 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16333, 16359, 16395])
+  -> <run-root>/results/flash-kapitsa-chain-20261101-050634.json
+[05:13:11] flash-kapitsa-chain: -> <run-root>/results/flash-kapitsa-chain-20261101-050634.json  flags: 1
+=== flash-kapitsa 05:13:11 powermode=2 Now drawing from 'AC Power'
+[05:18:38] flash-kapitsa: GPU not quiet after 300s (['Claude Helper[95214] 5%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 104.05 tok/s (e2e 104.27; 512 tok, finish=length, d4=0.9101)
+  decode T=0.6: 112.33 tok/s (e2e 111.80; 512 tok, finish=length, d4=0.929)
+  decode T=0.6: 103.25 tok/s (e2e 103.38; 512 tok, finish=length, d4=0.9647)
+  decode T=0.6: 105.29 tok/s (e2e 104.29; 512 tok, finish=length, d4=0.9573)
+  decode T=0.6: 104.47 tok/s (e2e 103.08; 512 tok, finish=length, d4=0.9385)
+  decode median 104.47 (min 103.25, max 112.33) over 5/5 valid
+  decode T=0: median 108.83 (min 106.5, max 111.82) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 2.71s -> 1524 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4174, 4202, 4238])
+  prefill 16000: 16286 tok (ref 16286), TTFT 10.74s -> 1517 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16330, 16358, 16392])
+  -> <run-root>/results/flash-kapitsa-20261101-051311.json
+[05:20:00] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261101-051311.json  flags: 1
+=== flash-kapitsa-plain 05:20:00 powermode=2 Now drawing from 'AC Power'
+[05:25:19] flash-kapitsa-plain: GPU not quiet after 300s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 85.82 tok/s (e2e 85.41; 512 tok, finish=length, d4=0.9727)
+  decode T=0.6: 86.16 tok/s (e2e 85.42; 512 tok, finish=length, d4=0.6364)
+  decode T=0.6: 85.25 tok/s (e2e 85.00; 512 tok, finish=length, d4=0.935)
+  decode T=0.6: 84.92 tok/s (e2e 84.71; 512 tok, finish=length, d4=0.9182)
+  decode T=0.6: 86.41 tok/s (e2e 85.26; 512 tok, finish=length, d4=0.6819)
+  decode median 85.82 (min 84.92, max 86.41) over 5/5 valid
+  decode T=0: median 87.14 (min 84.08, max 88.08) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 2.71s -> 1523 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4176, 4204, 4240])
+  prefill 16000: 16286 tok (ref 16286), TTFT 10.38s -> 1570 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16332, 16360, 16394])
+  -> <run-root>/results/flash-kapitsa-plain-20261101-052000.json
+[05:26:55] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261101-052000.json  flags: 1
+=== flash-kapitsa 05:26:55 powermode=2 Now drawing from 'AC Power'
+[05:32:12] flash-kapitsa: GPU not quiet after 300s (['Claude Helper[95214] 8%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 107.29 tok/s (e2e 107.32; 512 tok, finish=length, d4=0.9759)
+  decode T=0.6: 114.02 tok/s (e2e 112.37; 512 tok, finish=length, d4=0.9373)
+  decode T=0.6: 102.99 tok/s (e2e 102.40; 512 tok, finish=length, d4=0.9321)
+  decode T=0.6: 104.00 tok/s (e2e 103.27; 512 tok, finish=length, d4=0.7328)
+  decode T=0.6: 104.26 tok/s (e2e 102.80; 512 tok, finish=length, d4=0.912)
+  decode median 104.26 (min 102.99, max 114.02) over 5/5 valid
+  decode T=0: median 108.17 (min 106.87, max 110.8) over 5/5 valid
+  prefill 4000: 4130 tok (ref 4133), TTFT 2.76s -> 1495 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4173, 4205, 4239])
+  prefill 16000: 16287 tok (ref 16286), TTFT 10.99s -> 1482 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16332, 16360, 16394])
+  -> <run-root>/results/flash-kapitsa-20261101-052655.json
+[05:33:34] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261101-052655.json  flags: 1
+=== flash-kapitsa-plain 05:33:34 powermode=2 Now drawing from 'AC Power'
+[05:38:54] flash-kapitsa-plain: GPU not quiet after 301s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 86.11 tok/s (e2e 85.61; 512 tok, finish=length, d4=0.9404)
+  decode T=0.6: 85.66 tok/s (e2e 85.10; 512 tok, finish=length, d4=0.9157)
+  decode T=0.6: 85.22 tok/s (e2e 85.21; 512 tok, finish=length, d4=0.8367)
+  decode T=0.6: 86.04 tok/s (e2e 85.50; 512 tok, finish=length, d4=0.6801)
+  decode T=0.6: 85.21 tok/s (e2e 85.77; 512 tok, finish=length, d4=0.9062)
+  decode median 85.66 (min 85.21, max 86.11) over 5/5 valid
+  decode T=0: median 85.66 (min 84.97, max 87.69) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 2.73s -> 1513 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4163, 4191, 4225])
+  prefill 16000: 16287 tok (ref 16286), TTFT 10.51s -> 1549 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16333, 16376, 16425])
+  -> <run-root>/results/flash-kapitsa-plain-20261101-053334.json
+[05:40:27] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261101-053334.json  flags: 1
+=== flash-kapitsa 05:40:27 powermode=2 Now drawing from 'AC Power'
+[05:45:48] flash-kapitsa: GPU not quiet after 300s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 106.28 tok/s (e2e 104.72; 512 tok, finish=length, d4=0.8841)
+  decode T=0.6: 107.85 tok/s (e2e 106.36; 512 tok, finish=length, d4=0.7077)
+  decode T=0.6: 111.14 tok/s (e2e 109.88; 512 tok, finish=length, d4=0.9107)
+  decode T=0.6: 110.65 tok/s (e2e 109.77; 512 tok, finish=length, d4=0.9688)
+  decode T=0.6: 99.09 tok/s (e2e 98.37; 512 tok, finish=length, d4=0.7045)
+  decode median 107.85 (min 99.09, max 111.14) over 5/5 valid
+  decode T=0: median 108.66 (min 105.23, max 111.72) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 2.78s -> 1489 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4173, 4201, 4233])
+  prefill 16000: 16284 tok (ref 16286), TTFT 10.90s -> 1494 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16327, 16382, 16418])
+  -> <run-root>/results/flash-kapitsa-20261101-054028.json
+[05:47:09] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261101-054028.json  flags: 1
+=== flash-kapitsa-plain 05:47:09 powermode=2 Now drawing from 'AC Power'
+[05:52:32] flash-kapitsa-plain: GPU not quiet after 301s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 86.18 tok/s (e2e 85.57; 512 tok, finish=length, d4=0.9085)
+  decode T=0.6: 86.01 tok/s (e2e 85.81; 512 tok, finish=length, d4=0.9338)
+  decode T=0.6: 87.47 tok/s (e2e 86.72; 512 tok, finish=length, d4=0.9194)
+  decode T=0.6: 85.49 tok/s (e2e 85.26; 512 tok, finish=length, d4=0.9014)
+  decode T=0.6: 86.38 tok/s (e2e 86.09; 512 tok, finish=length, d4=0.9664)
+  decode median 86.18 (min 85.49, max 87.47) over 5/5 valid
+  decode T=0: median 86.44 (min 85.18, max 88.36) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 2.74s -> 1510 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4176, 4204, 4238])
+  prefill 16000: 16287 tok (ref 16286), TTFT 10.50s -> 1551 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16330, 16358, 16392])
+  -> <run-root>/results/flash-kapitsa-plain-20261101-054709.json
+[05:54:05] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261101-054709.json  flags: 1
+=== lightning-kapitsa 05:54:05 powermode=2 Now drawing from 'AC Power'
+[05:59:11] lightning-kapitsa: GPU not quiet after 300s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 273.83 tok/s (e2e 270.74; 512 tok, finish=length, d4=0.9728)
+  decode T=0.6: 272.57 tok/s (e2e 268.32; 512 tok, finish=length, d4=0.806)
+  decode T=0.6: 284.15 tok/s (e2e 279.65; 512 tok, finish=length, d4=0.9837)
+  decode T=0.6: 275.95 tok/s (e2e 273.73; 512 tok, finish=length, d4=0.9254)
+  decode T=0.6: 260.84 tok/s (e2e 263.42; 512 tok, finish=length, d4=0.8595)
+  decode median 273.83 (min 260.84, max 284.15) over 5/5 valid
+  decode T=0: median 284.73 (min 281.22, max 311.37) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 0.73s -> 5743 tok/s, cold cached=0 | cached TTFT median 0.06s over 3 turns (cached [4232, 4257, 4290])
+  prefill 16000: 16520 tok (ref 16517), TTFT 2.69s -> 6138 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16560, 16585, 16626])
+  -> <run-root>/results/lightning-kapitsa-20261101-055405.json
+[05:59:47] lightning-kapitsa: -> <run-root>/results/lightning-kapitsa-20261101-055405.json  flags: 1
+=== lightning-kapitsa-chain 05:59:47 powermode=2 Now drawing from 'AC Power'
+[06:04:53] lightning-kapitsa-chain: GPU not quiet after 300s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 300.31 tok/s (e2e 296.84; 512 tok, finish=length, d4=0.9519)
+  decode T=0.6: 289.49 tok/s (e2e 287.71; 512 tok, finish=length, d4=0.9409)
+  decode T=0.6: 275.92 tok/s (e2e 276.28; 512 tok, finish=length, d4=0.5433)
+  decode T=0.6: 364.94 tok/s (e2e 357.76; 512 tok, finish=length, d4=0.7941)
+  decode T=0.6: 323.02 tok/s (e2e 317.74; 512 tok, finish=length, d4=0.9217)
+  decode median 300.31 (min 275.92, max 364.94) over 5/5 valid
+  decode T=0: median 324.75 (min 281.37, max 345.69) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 0.72s -> 5798 tok/s, cold cached=0 | cached TTFT median 0.06s over 3 turns (cached [4230, 4253, 4292])
+  prefill 16000: 16516 tok (ref 16517), TTFT 2.67s -> 6182 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16554, 16579, 16620])
+  -> <run-root>/results/lightning-kapitsa-chain-20261101-055947.json
+[06:05:28] lightning-kapitsa-chain: -> <run-root>/results/lightning-kapitsa-chain-20261101-055947.json  flags: 1
+=== super-kapitsa 06:05:28 powermode=2 Now drawing from 'AC Power'
+[06:10:45] super-kapitsa: GPU not quiet after 300s (['Claude Helper[95214] 7%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 87.12 tok/s (e2e 87.09; 512 tok, finish=length, d4=0.9503)
+  decode T=0.6: 92.03 tok/s (e2e 91.01; 512 tok, finish=length, d4=0.9847)
+  decode T=0.6: 90.58 tok/s (e2e 89.26; 512 tok, finish=length, d4=0.5587)
+  decode T=0.6: 84.64 tok/s (e2e 83.47; 512 tok, finish=length, d4=0.4912) flags ['repetition loop (distinct-4-gram 0.4912)']
+  decode T=0.6: 79.05 tok/s (e2e 78.82; 512 tok, finish=length, d4=0.6972)
+  decode median 87.12 (min 79.05, max 92.03) over 5/5 valid
+  decode T=0: median 87.64 (min 84.99, max 90.12) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4644)']
+  prefill 4000: 4185 tok (ref 4183), TTFT 3.83s -> 1092 tok/s, cold cached=0 | cached TTFT median 0.17s over 3 turns (cached [4220, 4254, 4294])
+  prefill 16000: 16515 tok (ref 16513), TTFT 14.13s -> 1168 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [16555, 16598, 16647])
+  -> <run-root>/results/super-kapitsa-20261101-060528.json
+[06:12:25] super-kapitsa: -> <run-root>/results/super-kapitsa-20261101-060528.json  flags: 2
+=== super-kapitsa-chain 06:12:25 powermode=2 Now drawing from 'AC Power'
+[06:17:40] super-kapitsa-chain: GPU not quiet after 300s (['Claude Helper[95214] 8%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 93.43 tok/s (e2e 92.73; 512 tok, finish=length, d4=0.5434)
+  decode T=0.6: 86.92 tok/s (e2e 86.56; 512 tok, finish=length, d4=0.3906) flags ['repetition loop (distinct-4-gram 0.3906)']
+  decode T=0.6: 88.30 tok/s (e2e 86.00; 512 tok, finish=length, d4=0.5689)
+  decode T=0.6: 87.79 tok/s (e2e 87.79; 512 tok, finish=length, d4=0.9375)
+  decode T=0.6: 97.68 tok/s (e2e 95.88; 512 tok, finish=length, d4=0.9306)
+  decode median 88.3 (min 86.92, max 97.68) over 5/5 valid
+  decode T=0: median 87.75 (min 83.79, max 96.23) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4183), TTFT 3.83s -> 1092 tok/s, cold cached=0 | cached TTFT median 0.17s over 3 turns (cached [4225, 4259, 4299])
+  prefill 16000: 16514 tok (ref 16513), TTFT 14.09s -> 1172 tok/s, cold cached=0 | cached TTFT median 0.17s over 3 turns (cached [16564, 16611, 16662])
+  -> <run-root>/results/super-kapitsa-chain-20261101-061225.json
+[06:19:18] super-kapitsa-chain: -> <run-root>/results/super-kapitsa-chain-20261101-061225.json  flags: 1
+=== dory-kapitsa-perloop 06:19:18 powermode=2 Now drawing from 'AC Power'
+[06:19:22] dory-kapitsa-perloop:  warm-up prefill~2.9k+decode64: ok (1.76s)

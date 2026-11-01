@@ -1,0 +1,86 @@
+[
+ {
+  "label": "q36-35b-kapitsa-mtp",
+  "extends": "q36-35b-kapitsa",
+  "display": "Kapitsa (MTP head, default depth 1)",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.6-35b-a3b-4bit",
+   "--model-id",
+   "qwen3.6-35b-a3b",
+   "--dflash",
+   "none",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "note": "sweep: --dflash none (MTP depth 1)"
+ },
+ {
+  "label": "q36-35b-kapitsa-mtp2",
+  "extends": "q36-35b-kapitsa",
+  "display": "Kapitsa (MTP head, depth 2)",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.6-35b-a3b-4bit",
+   "--model-id",
+   "qwen3.6-35b-a3b",
+   "--dflash",
+   "none",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--spec",
+   "2"
+  ],
+  "note": "sweep: --dflash none --spec 2"
+ },
+ {
+  "label": "q38-27b-kapitsa-mtp",
+  "extends": "q38-27b-kapitsa",
+  "display": "Kapitsa (MTP head, default depth 4)",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.8-27b-4bit-mtp",
+   "--model-id",
+   "qwen3.8-27b",
+   "--dflash",
+   "none",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "note": "sweep: --dflash none (MTP depth 4)"
+ },
+ {
+  "label": "bolt-kapitsa-chain",
+  "extends": "bolt-kapitsa",
+  "display": "Kapitsa (LiLiCorr drafter, chains: NI_KFLASH=0)",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_KFLASH": "0"
+  },
+  "note": "sweep: NI_KFLASH=0"
+ }
+]
