@@ -1,0 +1,134 @@
+{
+  "models": {
+    "max": {
+      "complete": true,
+      "samples_per_arm": {
+        "A": 6,
+        "B": 6
+      },
+      "parity": true,
+      "A": {
+        "median_ms": 13405.865916499999,
+        "min_ms": 12709.044083,
+        "max_ms": 13894.62475
+      },
+      "B": {
+        "median_ms": 12937.148771,
+        "min_ms": 12462.942916,
+        "max_ms": 13148.846208
+      },
+      "B_over_A": 0.9650364140280487,
+      "capture_sha256s": [
+        "451cb37fed4d70a35a0361727b564ee993c58a7ef0e4ee2a1c427fccb9988ed2"
+      ]
+    },
+    "qwen": {
+      "complete": true,
+      "samples_per_arm": {
+        "A": 6,
+        "B": 6
+      },
+      "parity": true,
+      "A": {
+        "median_ms": 11130.9886255,
+        "min_ms": 10754.062917,
+        "max_ms": 11483.601208
+      },
+      "B": {
+        "median_ms": 11243.980604,
+        "min_ms": 10790.227,
+        "max_ms": 11529.995666
+      },
+      "B_over_A": 1.0101511179556097,
+      "capture_sha256s": [
+        "3989925b9bf06961b0fd07b5b9ef8a98fb0bb4380a2a712a1c76a50e9f31df8c"
+      ]
+    }
+  },
+  "rounds": {
+    "max": [
+      {
+        "round": 1,
+        "A": 13508.970833,
+        "B": 12864.355875,
+        "B_over_A": 0.9522824524555696
+      },
+      {
+        "round": 2,
+        "A": 13397.602708,
+        "B": 13052.920292,
+        "B_over_A": 0.9742728289894592
+      }
+    ],
+    "qwen": [
+      {
+        "round": 1,
+        "A": 10802.014291,
+        "B": 10876.0215,
+        "B_over_A": 1.0068512415375772
+      },
+      {
+        "round": 2,
+        "A": 11453.430917,
+        "B": 11481.05725,
+        "B_over_A": 1.002412057417572
+      }
+    ]
+  },
+  "small_validation": [
+    {
+      "T": 1,
+      "L": 17,
+      "arms": {
+        "A": {
+          "relative_error": 0.00017,
+          "bits_hash": "de89a9d837d2302e",
+          "API_validation": true,
+          "GPU_validation": true
+        },
+        "B": {
+          "relative_error": 0.00017,
+          "bits_hash": "de89a9d837d2302e",
+          "API_validation": true,
+          "GPU_validation": true
+        }
+      },
+      "matching_hash": true
+    },
+    {
+      "T": 33,
+      "L": 65,
+      "arms": {
+        "A": {
+          "relative_error": 0.000217,
+          "bits_hash": "cabbda16841a9b45",
+          "API_validation": true,
+          "GPU_validation": true
+        },
+        "B": {
+          "relative_error": 0.000217,
+          "bits_hash": "cabbda16841a9b45",
+          "API_validation": true,
+          "GPU_validation": true
+        }
+      },
+      "matching_hash": true
+    }
+  ],
+  "small_validation_timing_scope": "Correctness checks only; zero-resolution timings and inf TFLOP/s are not performance evidence.",
+  "host_samples": {
+    "free_percent_min": 59.0,
+    "free_percent_max": 92.0,
+    "swap_MiB_min": 2820.88,
+    "swap_MiB_max": 3125.06,
+    "outside_CPU_percent_min": 6.56,
+    "outside_CPU_percent_max": 27.43
+  },
+  "measurement_start_UTC": "2026-11-01T14:59:07Z",
+  "measurement_finish_UTC": "2026-11-01T15:06:06Z",
+  "limitations": [
+    "Six measured samples per arm, overlapping ranges; no statistical-significance claim.",
+    "Captured residual/normalized vectors and Max readout logits only, not the full-vocabulary logit-dump/noise-floor gate or generated continuations.",
+    "CPU load was recorded, not gated. Do not compare these absolute timings against R77 under a different host state."
+  ]
+}

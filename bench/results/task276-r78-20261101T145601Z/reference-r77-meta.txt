@@ -1,0 +1,32 @@
+2026-11-01T14:36:04Z leg=max-A1 free_percent=87 swap_used_MiB=192.12 outside_cpu_percent=15.8
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 87%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)
+2026-11-01T14:36:54Z leg=max-B1 free_percent=55 swap_used_MiB=192.12 outside_cpu_percent=4.84
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 55%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)
+2026-11-01T14:37:43Z leg=qwen-A1 free_percent=55 swap_used_MiB=192.12 outside_cpu_percent=13.81
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 55%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)
+2026-11-01T14:38:26Z leg=qwen-B1 free_percent=55 swap_used_MiB=192.12 outside_cpu_percent=5.54
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 55%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)
+2026-11-01T14:39:06Z leg=max-B2 free_percent=55 swap_used_MiB=192.12 outside_cpu_percent=8.38
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 55%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)
+2026-11-01T14:39:55Z leg=max-A2 free_percent=55 swap_used_MiB=192.12 outside_cpu_percent=4.31
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 55%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)
+2026-11-01T14:40:44Z leg=qwen-B2 free_percent=55 swap_used_MiB=192.12 outside_cpu_percent=11.57
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 55%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)
+2026-11-01T14:41:26Z leg=qwen-A2 free_percent=54 swap_used_MiB=192.12 outside_cpu_percent=20.6
+The system has 51539607552 (3145728 pages with a page size of 16384).
+System-wide memory free percentage: 54%
+total = 1024.00M  used = 192.12M  free = 831.88M  (encrypted)

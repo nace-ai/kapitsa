@@ -1,0 +1,30 @@
+{
+  "bench/results/task276-r78-20261101T145601Z/reference-r77-meta.txt": {
+    "free_percent": {
+      "min": 54.0,
+      "max": 87.0
+    },
+    "swap_used_MiB": {
+      "min": 192.12,
+      "max": 192.12
+    },
+    "outside_cpu_percent": {
+      "min": 4.31,
+      "max": 20.6
+    }
+  },
+  "bench/results/task276-r78-20261101T145601Z/meta.txt": {
+    "free_percent": {
+      "min": 59.0,
+      "max": 92.0
+    },
+    "swap_used_MiB": {
+      "min": 2820.88,
+      "max": 3125.06
+    },
+    "outside_cpu_percent": {
+      "min": 6.56,
+      "max": 27.43
+    }
+  }
+}
