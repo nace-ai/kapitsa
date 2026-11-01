@@ -1,0 +1,61 @@
+=== clover-kapitsa 11:17:49 powermode=2 Now drawing from 'AC Power' extra=[--agentic] load={ 1.93 1.46 1.48 } top=30.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;21.4 (Renderer);15.2 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[11:17:55] clover-kapitsa:  warm-up prefill~2.9k+decode64: ok (0.88s)
+[11:18:57] clover-kapitsa: GPU not quiet after 62s (['Google Chrome He[51042] 5%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 285.04 tok/s (e2e 290.38; 512 tok, finish=length, d4=0.8785)
+  decode T=0.6: 320.80 tok/s (e2e 315.88; 512 tok, finish=length, d4=0.5491)
+  decode T=0.6: 282.81 tok/s (e2e 284.54; 512 tok, finish=length, d4=0.4183) flags ['repetition loop (distinct-4-gram 0.4183)']
+  decode T=0.6: 319.81 tok/s (e2e 320.88; 512 tok, finish=length, d4=0.6252)
+  decode T=0.6: 325.89 tok/s (e2e 325.59; 512 tok, finish=length, d4=0.5435)
+  decode median 319.81 (min 282.81, max 325.89) over 5/5 valid
+  decode T=0: median 332.56 (min 283.73, max 334.85) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 0.69s -> 5973 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4172, 4200, 4236])
+  prefill 16000: 16285 tok (ref 16286), TTFT 3.13s -> 5211 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [16317, 16356, 16400])
+  sweep 1000: 1102.5 tok, TTFT 0.24s, 4621 tok/s prefill, decode 215.08 tok/s
+  sweep 2000: 2129.5 tok, TTFT 0.39s, 5451 tok/s prefill, decode 225.23 tok/s
+  sweep 4000: 4158.0 tok, TTFT 0.76s, 5499 tok/s prefill, decode 234.82 tok/s
+  sweep 8000: 8306.5 tok, TTFT 1.66s, 5019 tok/s prefill, decode 203.14 tok/s
+  sweep 16000: 16311.5 tok, TTFT 3.89s, 4192 tok/s prefill, decode 167.30 tok/s
+  sweep 30902: 31549.5 tok, TTFT 9.09s, 3470 tok/s prefill, decode 136.15 tok/s
+  -> <run-root>/results/clover-kapitsa-20261101-111749.json
+[11:20:16] clover-kapitsa: -> <run-root>/results/clover-kapitsa-20261101-111749.json  flags: 2
+=== clover-kapitsa 11:20:16 powermode=2 Now drawing from 'AC Power' extra=[--agentic] load={ 2.14 1.72 1.57 } top=29.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;12.0 Helper;6.2 (Renderer);
+[11:20:21] clover-kapitsa:  warm-up prefill~2.9k+decode64: ok (0.84s)
+[11:21:21] clover-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 298.75 tok/s (e2e 296.41; 512 tok, finish=length, d4=0.9878)
+  decode T=0.6: 313.96 tok/s (e2e 311.37; 512 tok, finish=length, d4=0.7052)
+  decode T=0.6: 315.83 tok/s (e2e 310.60; 512 tok, finish=length, d4=0.4517) flags ['repetition loop (distinct-4-gram 0.4517)']
+  decode T=0.6: 304.04 tok/s (e2e 300.23; 512 tok, finish=length, d4=0.554)
+  decode T=0.6: 293.82 tok/s (e2e 293.42; 512 tok, finish=length, d4=0.6988)
+  decode median 304.04 (min 293.82, max 315.83) over 5/5 valid
+  decode T=0: median 334.23 (min 324.11, max 340.56) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 0.69s -> 5997 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4163, 4197, 4239])
+  prefill 16000: 16288 tok (ref 16286), TTFT 3.12s -> 5227 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [16322, 16356, 16399])
+  sweep 1000: 1101.5 tok, TTFT 0.34s, 3562 tok/s prefill, decode 244.68 tok/s
+  sweep 2000: 2131.0 tok, TTFT 0.38s, 5546 tok/s prefill, decode 229.64 tok/s
+  sweep 4000: 4157.5 tok, TTFT 0.73s, 5688 tok/s prefill, decode 231.92 tok/s
+  sweep 8000: 8305.5 tok, TTFT 1.57s, 5298 tok/s prefill, decode 200.67 tok/s
+  sweep 16000: 16310.5 tok, TTFT 3.47s, 4707 tok/s prefill, decode 169.80 tok/s
+  sweep 30902: 31550.5 tok, TTFT 8.33s, 3788 tok/s prefill, decode 150.53 tok/s
+  -> <run-root>/results/clover-kapitsa-20261101-112016.json
+[11:22:37] clover-kapitsa: -> <run-root>/results/clover-kapitsa-20261101-112016.json  flags: 2
+=== clover-kapitsa 11:22:37 powermode=2 Now drawing from 'AC Power' extra=[--agentic] load={ 1.82 1.77 1.62 } top=32.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;12.6 Helper;8.7 (Renderer);
+[11:22:42] clover-kapitsa:  warm-up prefill~2.9k+decode64: ok (0.79s)
+[11:23:03] clover-kapitsa: GPU quiet after 21s; benchmarking
+  decode T=0.6: 303.49 tok/s (e2e 299.41; 512 tok, finish=length, d4=0.8795)
+  decode T=0.6: 281.40 tok/s (e2e 284.19; 512 tok, finish=length, d4=0.5181)
+  decode T=0.6: 319.17 tok/s (e2e 314.97; 512 tok, finish=length, d4=0.6522)
+  decode T=0.6: 293.68 tok/s (e2e 292.84; 512 tok, finish=length, d4=0.5056)
+  decode T=0.6: 330.82 tok/s (e2e 332.63; 512 tok, finish=length, d4=0.6431)
+  decode median 303.49 (min 281.4, max 330.82) over 5/5 valid
+  decode T=0: median 330.35 (min 280.76, max 340.89) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 0.69s -> 5981 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4175, 4210, 4253])
+  prefill 16000: 16286 tok (ref 16286), TTFT 3.09s -> 5268 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [16318, 16354, 16397])
+  sweep 1000: 1105.0 tok, TTFT 0.24s, 4572 tok/s prefill, decode 229.96 tok/s
+  sweep 2000: 2127.5 tok, TTFT 0.38s, 5583 tok/s prefill, decode 254.33 tok/s
+  sweep 4000: 4155.5 tok, TTFT 0.72s, 5794 tok/s prefill, decode 219.18 tok/s
+  sweep 8000: 8304.5 tok, TTFT 1.57s, 5280 tok/s prefill, decode 206.91 tok/s
+  sweep 16000: 16309.5 tok, TTFT 3.35s, 4866 tok/s prefill, decode 153.06 tok/s
+  sweep 30902: 31548.5 tok, TTFT 7.92s, 3982 tok/s prefill, decode 143.31 tok/s
+  -> <run-root>/results/clover-kapitsa-20261101-112237.json
+[11:24:18] clover-kapitsa: -> <run-root>/results/clover-kapitsa-20261101-112237.json
+=== done 11:24:18

@@ -1,0 +1,8 @@
+[
+ {"label": "clover-kapitsa", "extends": "q36-35b-kapitsa", "display": "Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash)",
+  "model_name": "Clover-35B-A3B", "model_path": "{models}/clover-35b-a3b-4bit", "model": "clover-35b-a3b",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve", "--model", "{models}/clover-35b-a3b-4bit", "--model-id", "clover-35b-a3b",
+          "--dflash", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2", "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "requires_paths": ["{models}/clover-35b-a3b-4bit/config.json", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2/model.safetensors"],
+  "note": "Kapitsa's default decoding for Clover (NI_CLOVER_DECODE=auto): Clover's causal pathway has the 35B-A3B's shape, so the 35B's DFlash2 drafter (the installed qwen3.6-35b-a3b pack's dflash2/, named here as q36-35b-kapitsa names it) drafts and KFlash verifies. The folder is `kapitsa pull clover` (Nace AI's 4-bit conversion of Diffuspace/Clover-35B-A3B-Preview @ 4b0402b). --slots 1 as the others."}
+]

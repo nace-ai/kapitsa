@@ -38,6 +38,18 @@ Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured agai
 
 The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
+How Kapitsa's speed holds from 1K to 32K tokens of context, every model on the M5 Max (log scale; the [table](docs/benchmarks.md#m5-max)):
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/context-prefill-dark.webp">
+  <img alt="Kapitsa's prefill speed in tokens per second on a MacBook Pro M5 Max, from 1K- to 32K-token prompts, one line per model: Qwen3.6 35B-A3B 4,662 at 1K to 4,015 at 32K; Clover 35B-A3B 4,572 at 1K to 3,788 at 32K; Qwen3.8 27B 672 at 1K to 762 at 32K; Flash-Next 180B 1,618 at 1K to 1,463 at 32K; Lightning 30B 5,394 at 1K to 4,790 at 32K; Super-VL 120B 941 at 1K to 1,105 at 32K; Bolt 74B 907 at 1K to 1,076 at 32K; Dory1.0 4B 2,414 at 1K to 1,800 at 32K; Flint 40B 4,280 at 1K to 3,972 at 32K." src="docs/assets/context-prefill-light.webp">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/context-decode-dark.webp">
+  <img alt="Kapitsa's decode speed in tokens per second on a MacBook Pro M5 Max after 1K to 32K tokens of context, one line per model: Qwen3.6 35B-A3B 268 at 1K to 175 at 32K; Clover 35B-A3B 230 at 1K to 143 at 32K; Qwen3.8 27B 97 at 1K to 61 at 32K; Flash-Next 180B 90 at 1K to 78 at 32K; Lightning 30B 206 at 1K to 117 at 32K; Super-VL 120B 76 at 1K to 46 at 32K; Bolt 74B 114 at 1K to 79 at 32K; Dory1.0 4B 109 at 1K to 76 at 32K; Flint 40B 256 at 1K to 180 at 32K." src="docs/assets/context-decode-light.webp">
+</picture>
+
 ## 🔥 What's new
 
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 319 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
@@ -47,7 +59,7 @@ The poster's numbers, and the models it leaves out, are in each Mac's table unde
 ## Features
 
 - **346 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
-- **A 180B model on a 48 GB Mac, at 56 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
+- **A 180B model on a 48 GB Mac, at 61 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
 - **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
 - **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
@@ -152,9 +164,9 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> |
 | --- | ---: |
-| **Clover-35B-A3B-Preview** · `clover`<br><sub>block-diffusion MoE, 3B active · 4-bit pack converted by tools/convert_clover.py, 19.5 GB (measured; the catalog's `clover` serves the same files)</sub> | 🟩 6002 / **319**<br><sub>KFlash</sub> |
+| **Clover-35B-A3B-Preview** · `clover`<br><sub>block-diffusion MoE, 3B active · 4-bit pack converted by tools/convert_clover.py, 19.5 GB (measured; the catalog's `clover` serves the same files)</sub> | 🟩 5981 / **304**<br><sub>KFlash</sub> |
 
-<sub>Kapitsa's cells are the 2026-11-01 runs (main 7f4e709, [results](bench/results/2026-11-01-m5-max-kapitsa/README.md)), each the median of three runs (Super-VL five) on AC power in High Power mode, Clover's excepted (2026-10-28). The other engines' 27B, 35B-A3B and Bolt cells are the 2026-10-25 session (each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell and the other engines' Flash-Next, Lightning, Super-VL and Dory cells are the 2026-10-18 runs, not yet re-measured; rec's and llama.cpp's Flint cells are one block on 2026-10-26 ([results](bench/results/2026-10-26-m5-max/README.md)). The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
+<sub>Kapitsa's cells are the 2026-11-01 runs (main 7f4e709, [results](bench/results/2026-11-01-m5-max-kapitsa/README.md)), each the median of three runs (Super-VL five) on AC power in High Power mode, Clover's in [its own folder](bench/results/2026-11-01-m5-max-clover/README.md). The other engines' 27B, 35B-A3B and Bolt cells are the 2026-10-25 session (each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell and the other engines' Flash-Next, Lightning, Super-VL and Dory cells are the 2026-10-18 runs, not yet re-measured; rec's and llama.cpp's Flint cells are one block on 2026-10-26 ([results](bench/results/2026-10-26-m5-max/README.md)). The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
 
 </details>
 
