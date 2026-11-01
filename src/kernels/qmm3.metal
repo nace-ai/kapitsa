@@ -23,13 +23,11 @@ NI_INLINE uint2 qr_rc(uint lane) {
 }
 
 // One A-fragment element pair: nibbles j and j+4 of w (j = 0..3), dequantized as half2;
-// sb = (scale * 4096, bias). 0x3400 | q is the half 0.25 + q/4096 (exact), so the pair costs a
-// shift, mask, or, subtract and FMA. Both factors of q*s stay normal halfs for scales in
-// [1.5e-8, 16] (a plain half scale goes subnormal below 6.1e-5: 2162 scales of the 27B, 14818 of
-// the 35B's dense projections); the FMA rounds once.
+// sb = (scale, bias). 0x6400 | q is the half 1024.0 + q (exact: q in the lowest 4 mantissa bits),
+// so as_type<half>(0x6400 | q) - 1024.0h = q exactly without catastrophic cancellation.
 NI_INLINE half2 qr_pair(uint w, uint j, half2 sb) {
-  uint t = ((w >> (4 * j)) & 0x000F000Fu) | 0x34003400u;
-  return fma(as_type<half2>(t) - half2(0.25h), half2(sb.x), half2(sb.y));
+  uint t = ((w >> (4 * j)) & 0x000F000Fu) | 0x64006400u;
+  return fma(as_type<half2>(t) - half2(1024.0h), half2(sb.x), half2(sb.y));
 }
 
 // X staging: chunk i (8 halfs, physical k0+8q..) of tile row r -> permuted threadgroup positions.
@@ -86,8 +84,9 @@ NI_INLINE void qr_load_w(const device uint32_t* const thread* W, const device bf
       } else {
         wr[i] = wp[0];
       }
-      if (BK >= 64 || (k0 & 63) == 0)
-        sb[i] = half2(half(float(S[p][wrow[a] * gpr + g]) * 4096.0f), half(float(B[p][wrow[a] * gpr + g])));
+      if (BK >= 64 || (k0 & 63) == 0) {
+        sb[i] = half2(half(float(S[p][wrow[a] * gpr + g])), half(float(B[p][wrow[a] * gpr + g])));
+      }
     }
 }
 
@@ -96,21 +95,24 @@ template <int FA, int FB, int BK, int TM, int ABL>
 NI_INLINE void qr_mma(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup const half* xs, uint sgm,
                       thread const uint* wr, thread const half2* sb) {
   constexpr int LD = BK + 8, WPL = BK / 32, NF = BK / 8;
+  simdgroup_half8x8 af[NF][FA];
   _Pragma("clang loop unroll(full)")
   for (int f = 0; f < NF; ++f) {
-    simdgroup_half8x8 af[FA];
     _Pragma("clang loop unroll(full)")
     for (int a = 0; a < FA; ++a) {
       half2 v = (ABL & 1) ? as_type<half2>(wr[a * WPL + f / 4]) : qr_pair(wr[a * WPL + f / 4], f % 4, sb[a]);
-      af[a].thread_elements()[0] = v.x;
-      af[a].thread_elements()[1] = v.y;
+      af[f][a].thread_elements()[0] = v.x;
+      af[f][a].thread_elements()[1] = v.y;
     }
+  }
+  _Pragma("clang loop unroll(full)")
+  for (int f = 0; f < NF; ++f) {
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < FB; ++b) {
       simdgroup_half8x8 bf;
       simdgroup_load(bf, xs + (sgm * TM + b * 8) * LD + 8 * f, LD, ulong2(0, 0), true);
       _Pragma("clang loop unroll(full)")
-      for (int a = 0; a < FA; ++a) simdgroup_multiply_accumulate(acc[a][b], af[a], bf, acc[a][b]);
+      for (int a = 0; a < FA; ++a) simdgroup_multiply_accumulate(acc[a][b], af[f][a], bf, acc[a][b]);
     }
   }
 }
