@@ -6,6 +6,7 @@ Measures, through the server's /v1/chat/completions streaming API (what coding a
   * decode tok/s, greedy   (same prompt at T=0; same weights -> nearly the same text on every engine)
   * prefill tok/s + TTFT   (cold ~4k and ~16k token prompts; cache-busting nonce after the system tag)
   * cached TTFT            (agent pattern: 3 append-only follow-up turns on the same prefix, median)
+  * cached increments      (optional: large additions to a growing conversation, cache usage and TTFT per turn)
   * tool calling           (streaming + non-streaming, tools array, tool-result round trip)
   * agent session          (agent_replay.py: a recorded opencode session, agent-traces/*.json, replayed request
                             by request, greedy, max_tokens = each recorded answer's length; per-turn TTFT,
@@ -362,6 +363,12 @@ def check_sizes(a):
         why = corpus_short(t)
         if why:
             raise SystemExit(f"{flag}: {why}. Ask for a smaller size, or pass --corpus with a longer text.")
+    if getattr(a, "cached_increment", False) and "increment" not in skip:
+        import cached_increment
+        try:
+            cached_increment.plan(a)
+        except ValueError as e:
+            raise SystemExit(f"--cached-increment: {e}") from None
 
 
 SYS = ("You are Nace, a local coding agent. You help the user with their repository. "
@@ -871,12 +878,17 @@ def parse_args(argv=None):
                     help="light: one tiny request; full: the compare_engines warm-up; none: caller warmed up")
     ap.add_argument("--adaptive-warm", action="store_true", help="with --warmup full: 3 extra full decodes")
     ap.add_argument("--no-gpu-lock", action="store_true", help=f"do not take the GPU lock {gpu_hogs.LOCK_PATH} (NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1 also skips it)")
-    ap.add_argument("--skip", default="", help="comma list of: decode,greedy,prefill,tools,agent,sweep,sustain,cache")
+    ap.add_argument("--skip", default="", help="comma list of: decode,greedy,prefill,tools,agent,sweep,sustain,cache,increment")
+    ap.add_argument("--cached-increment", action="store_true", help="measure large append-only turns after a cached prefix (#822)")
+    ap.add_argument("--increment-prefixes", default="8000", help="cached-increment phase: comma-separated initial corpus token targets")
+    ap.add_argument("--increment-tokens", type=int, default=8000, help="cached-increment phase: corpus token target added each turn")
+    ap.add_argument("--increment-turns", type=int, default=2, help="cached-increment phase: additions after each initial prompt")
+    ap.add_argument("--increment-repeats", type=int, default=2, help="cached-increment phase: independent conversations per prefix")
     ap.add_argument("--agentic", action="store_true",
                     help="also run the agent-harness phases (agentic.py): sweep, cache, sustain (last); --skip drops any")
     ap.add_argument("--sweep-sizes", default="1000,2000,4000,8000,16000,max", help="agentic sweep: token targets; max = the largest that fits --max-ctx")
     ap.add_argument("--sweep-repeats", type=int, default=2, help="agentic sweep: cold requests per size (median)")
-    ap.add_argument("--max-ctx", type=int, default=32768, help="context the server runs with (agentic sweep 'max' fits it)")
+    ap.add_argument("--max-ctx", type=int, default=32768, help="server context: bounds the agentic sweep and cached-increment scenarios")
     ap.add_argument("--cache-tokens", type=int, default=8000, help="agentic cache phase: shared prefix size")
     ap.add_argument("--server-slots", type=int, default=0,
                     help="conversations the server keeps live at once (its --slots); 0 = the engine's own default. "
@@ -928,7 +940,7 @@ def main():
     print(f"== {a.label}", flush=True)
     vm0 = vm_snapshot()
     res["vm_start"] = vm0
-    if a.agentic:
+    if a.agentic or a.cached_increment:
         import agentic
         res["thermal_start"] = agentic.thermal_state()
         if a.pid:  # weights-only baseline: KV cost at the largest context = peak - idle
@@ -1000,6 +1012,9 @@ def main():
                 print("  agent session: " + agent_replay.line(ag["summary"])
                       + (f" INVALID {ag['invalid']}" if ag["invalid"] else "")
                       + (f" flags {ag['flags']}" if ag["flags"] else ""), flush=True)
+        if a.cached_increment and "increment" not in skip:
+            import cached_increment
+            res["increment"] = phase("increment", lambda: cached_increment.run(a, log=lambda m: print(m, flush=True)))
         if a.agentic:
             import agentic
             if res.get("agent"):
@@ -1010,6 +1025,8 @@ def main():
                 res["cache"] = phase("cache", lambda: agentic.t_cache(a, log=lambda m: print(m, flush=True)))
             if "sustain" not in skip and a.sustain_s > 0:  # last: it heats the machine
                 res["sustain"] = phase("sustain", lambda: agentic.t_sustain(a, log=lambda m: print(m, flush=True)))
+            res["thermal_end"] = agentic.thermal_state()
+        elif a.cached_increment:
             res["thermal_end"] = agentic.thermal_state()
     finally:
         if mem:
@@ -1031,7 +1048,7 @@ def main():
     if res.get("agent"):
         inv += [f"agent: {x}" for x in res["agent"].get("invalid", [])]
         fl += [f"agent: {x}" for x in res["agent"].get("flags", [])]
-    for name in ("sweep", "cache", "sustain"):
+    for name in ("sweep", "cache", "sustain", "increment"):
         if res.get(name):
             inv += [f"{name}: {x}" for x in res[name].get("invalid", [])]
             fl += [f"{name}: {x}" for x in res[name].get("flags", [])]
@@ -1062,4 +1079,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Phases import bench; share the configured corpus when this file runs as a script.
+    sys.modules["bench"] = sys.modules[__name__]
     main()
