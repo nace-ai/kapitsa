@@ -48,6 +48,7 @@ its follow-ups read slightly faster than the harness's for the same server.
 | Decode, greedy | The same prompt at temperature 0 (plus top_k 1, top_p 1), 5 runs. With the same weights every engine writes nearly the same text, so this removes differences in what was sampled. |
 | Prefill, 4K and 16K | A cold prompt of 4,133 / 16,286 tokens (source code from the frozen corpus) with a random nonce right after `<\|im_start\|>system`, so no engine can reuse a cached prefix. Rate = prompt tokens / time to first token. |
 | Cached TTFT, 4K and 16K | After that prompt, three follow-up user turns on the growing conversation (append-only, 1 s apart, as an agent loop), median time to first token. Engines that cache prefixes answer from the cache. |
+| Large cached increments (opt-in, `--cached-increment`) | A cold prefix followed by large, distinct additions to the same conversation. Records actual prompt growth, cached and uncached tokens, and TTFT per turn. Details: [Large cached increments](#large-cached-increments---cached-increment). |
 | Tool calls | Streaming and non-streaming requests with two tools, with thinking off and on, plus a tool-result round trip. "pass" = every check passed. |
 | Agent session | A real coding-agent session, replayed request by request: opencode fixing a small Python project, recorded on Kapitsa ([Agent session](#agent-session)). Per request the time to first token, the writing rate and the time; per session the total time, prefill and decode time, the mean writing rate and the follow-up TTFT (median, p90). |
 | Agent-harness metrics (opt-in, `--agentic`) | Cold start (spawn to first token, and the first request's penalty over later ones), cold TTFT and decode tok/s at 1K to the largest context that fits `--max-ctx`, TTFT of a new question on a shared prefix, TTFT of a follow-up in a grown conversation, and whether a prefix survives another conversation, the agent replay's cache hit rate, sustained decode with a thermal check, idle vs peak memory. Details: [Agent-harness metrics](#agent-harness-metrics-agentic). |
@@ -69,6 +70,44 @@ thinking off, a nonce right after the system start on cold prompts, middle-windo
 
 `--skip sweep,cache,sustain` drops one; `compare_table.py` writes an extra table and `_agentic.csv`. Smoke runs
 (labels starting `smoke`) stay out of the tables.
+
+## Large cached increments (`--cached-increment`)
+
+[Issue #822](https://github.com/nace-ai/kapitsa/issues/822) describes turns that add about 8K tokens after a large
+cached prefix. The ordinary cached-TTFT test adds a short question. This optional phase grows an append-only
+conversation by a large, distinct slice of the frozen corpus on each turn:
+
+```bash
+python3 compare_engines.py configs/kapitsa.json --only 'q35-4b-kapitsa' \
+  --skip decode,greedy,prefill,tools,agent \
+  --bench-args '--cached-increment --increment-prefixes 8000 --increment-tokens 8000 --increment-turns 2 --increment-repeats 2'
+```
+
+`bench.py` accepts the same flags for an already running server. `--agentic` is not required; `--skip increment`
+skips this phase. The defaults above fit the usual 32K context. To test larger prefixes (for example
+`--increment-prefixes 8000,32000` with four 8K increments), configure a larger **server** context and pass the same
+limit as `--max-ctx`. The whole plan, including reply/template headroom and the available corpus, is checked before
+the GPU lock or any request; oversized plans are rejected instead of silently shortened.
+
+Each repeat starts a fresh conversation with a nonce at the start of its system message and a stable session ID.
+Prefix order reverses on alternate repeats. The model answers briefly at temperature 0, with thinking off, and
+each real answer is retained verbatim in the next turn. A reply that ends on `length`, lacks content, or leaks
+reasoning invalidates and stops that series: it cannot seed a reliable cached follow-up. `--turn-gap` applies
+between turns. Models that always reason are not supported by this short-acknowledgement scenario.
+
+The result JSON's `increment.series` retains every cold and appended request, its answer, corpus offset and size,
+reported prompt/cache counts, actual prompt growth, TTFT and total time. Requested sizes are approximate corpus
+targets (the same character slices for every engine), not exact tokenizer counts. `uncached_tokens` is reported
+prompt tokens minus reported cached tokens; `uncached_tokens_per_ttft_s` divides that count by client TTFT, which
+also includes scheduling and first-token work. It is not an isolated kernel prefill rate or a sustained decode rate.
+No cache counter means unknown, not zero. A reported miss stays visible and is flagged. Only valid follow-ups
+that reused at least 90% of the previous prompt enter `increment.summary`'s per-prefix, per-turn medians/ranges;
+the summary records both observed and verified sample counts.
+
+The phase uses the existing GPU lock, corpus provenance, memory snapshots and (through `compare_engines.py`)
+contention monitoring. Results remain in the harness JSON; this phase does not alter `kapitsa bench`, the existing
+core measurements, or the community results format. It measures context ingestion with brief replies, not a
+reproduction of the full coding-agent workload or the M1 Max engine comparison in #822.
 
 ## What makes a run count
 

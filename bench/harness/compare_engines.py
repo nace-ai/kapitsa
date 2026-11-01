@@ -1005,6 +1005,11 @@ def plan(c, args, stamp):
         bargs += ["--agent-tool-mode", mode]
     bargs += shlex.split(args.bench_args or "") + [str(x) for x in c.get("bench_args", [])]
     p["bench_args"] = bargs
+    if "--cached-increment" in bargs:
+        try:
+            bench.check_sizes(bench.parse_args(bargs))
+        except (SystemExit, ValueError) as e:
+            p["errors"].append(str(e))  # reject before starting a server, warming up or taking its lock
     return p, ctx
 
 
@@ -1316,6 +1321,8 @@ def dry_run(c, args, stamp):
     ba = bench.parse_args(p["bench_args"])
     skipped = set(filter(None, ba.skip.split(",")))
     phases = [x for x in ("decode", "greedy", "prefill", "tools") if x not in skipped]
+    if ba.cached_increment and "increment" not in skipped:
+        phases.append("increment")
     if ba.agent_trace and "agent" not in skipped:
         phases.append(f"agent ({os.path.relpath(ba.agent_trace, HERE)}" + ("" if os.path.exists(ba.agent_trace) else ", MISSING")
                       + f", tool mode {ba.agent_tool_mode})")
