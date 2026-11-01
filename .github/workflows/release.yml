@@ -83,6 +83,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_COLOR: "1"   # brew colors its output on GitHub Actions even into a pipe, which the pour check reads
         run: |
           set -o pipefail
           v=${GITHUB_REF_NAME#v}
@@ -107,7 +108,8 @@ jobs:
           # fails if no bottle fits this runner, and "Pouring" shows the build-environment checks did not run.
           cp "$RUNNER_TEMP/kapitsa.rb" "$tap_formula"
           brew install --force-bottle kapitsa-release/check/kapitsa 2>&1 | tee "$RUNNER_TEMP/pour.log"
-          grep -q "^==> Pouring kapitsa-$v\." "$RUNNER_TEMP/pour.log"
+          # Color codes may still sit around "==>" (v0.2.26 failed here on "\e[34m==>\e[0m \e[1mPouring"): match across them.
+          grep -q "==>.*Pouring kapitsa-$v\." "$RUNNER_TEMP/pour.log"
           brew test kapitsa-release/check/kapitsa
           brew uninstall kapitsa-release/check/kapitsa
           brew untap kapitsa-release/check
