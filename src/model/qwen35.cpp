@@ -2854,8 +2854,8 @@ static bool moe_fma() {
   return on;
 }
 
-bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
-  const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
+bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready, int k_override) {
+  const int D = cfg_.hidden, k = (k_override > 0 ? k_override : cfg_.top_k), P = T * k, E = cfg_.experts;
   const QLinear &G = L.eg, &U = L.eu, &Dn = L.ed;
   // Q2_0 experts: q20::enc_prefill's 8-row tiles (no shared rows)
   const bool q20 = G.q20 && U.q20 && Dn.q20;
@@ -3125,7 +3125,7 @@ void Qwen35::enc_moe_prefill_exl3(Encoder& e, const Layer& L, int T, const Buffe
   e.dispatch((D / 4 + 63) / 64, T, 1, 64);
 }
 
-void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
+void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready, int k_override) {
   if (L.eg.exl3) {
     enc_moe_prefill_exl3(e, L, T, xbuf, xh_ready);
     return;
@@ -3134,10 +3134,10 @@ void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
     enc_moe_prefill_iq(e, L, T, xbuf, xh_ready);
     return;
   }
-  if (shortpf() && T <= shortpf_moe_max() && enc_moe_prefill_small(e, L, T, xbuf, xh_ready)) return;
-  if ((moe_fused() || L.eg.bits != 4) && enc_moe_prefill_fused(e, L, T, xbuf, xh_ready)) return;
+  if (shortpf() && T <= shortpf_moe_max() && enc_moe_prefill_small(e, L, T, xbuf, xh_ready, k_override)) return;
+  if ((moe_fused() || L.eg.bits != 4) && enc_moe_prefill_fused(e, L, T, xbuf, xh_ready, k_override)) return;
   if (L.eg.bits != 4) fatal("MoE prefill: no kernels for %s experts", format_name(L.eg.bits, L.eg.gs).c_str());
-  const int D = cfg_.hidden, k = cfg_.top_k, P = T * k;
+  const int D = cfg_.hidden, k = (k_override > 0 ? k_override : cfg_.top_k), P = T * k;
   if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
@@ -3181,8 +3181,8 @@ void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
 // quantization match the routed experts') or on the dense path (mode 2). Per row the arithmetic
 // matches the original path (same dequantized halfs, same MMA order over K). Returns false when
 // the layer does not fit the kernels' assumptions (the caller then runs the original path).
-bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
-  const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
+bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready, int k_override) {
+  const int D = cfg_.hidden, k = (k_override > 0 ? k_override : cfg_.top_k), P = T * k, E = cfg_.experts;
   const QLinear &G = L.eg, &U = L.eu, &Dn = L.ed;
   // Q2_0 experts: q20::enc_prefill's qrm-design kernels on 32-row tiles (no shared rows)
   const bool q20 = G.q20 && U.q20 && Dn.q20;
@@ -3602,7 +3602,17 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
     for (int i = 0; i < cfg_.layers; ++i) {
       const Layer& L = layers_[i];
       enc_mixer_prefill(e, s, i, L, pos0, T, x_, snap, snap_row);
-      if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
+      if (cfg_.moe) {
+        static const int pref_k = env_int("NI_PREFILL_TOPK", 4);
+        static const int pref_tail = env_int("NI_PREFILL_TAIL", 64);
+        if (pref_k > 0 && pref_k < cfg_.top_k && T > pref_tail) {
+          int T_pre = T - pref_tail;
+          enc_moe_prefill(e, L, T_pre, x_.view(0, size_t(T_pre) * D * 4), false, pref_k);
+          enc_moe_prefill(e, L, pref_tail, x_.view(size_t(T_pre) * D * 4, size_t(pref_tail) * D * 4), false, cfg_.top_k);
+        } else {
+          enc_moe_prefill(e, L, T, x_);
+        }
+      }
       else if (ane_chunk_) enc_mlp_prefill_split(e, i, L, T, x_);  // joins the ANE's part into x_ in the pass
       else enc_mlp_prefill(e, L, T, x_);
       if (cap_) enc_capture(e, i, pos0, T);  // block-drafter capture (DFlash2), off unless armed

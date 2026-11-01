@@ -571,9 +571,9 @@ class Qwen35 : public Model {
   void enc_copy(Encoder& e, const Buffer& src, const Buffer& dst);
   // xh_ready: xh_ already holds the layer's half input rows (Qwen4Exp: the gated residual's mix), x only receives the
   // output (x += moe); else x is normed into xh_ first
-  void enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false);
+  void enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false, int k_override = 0);
   void enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, int T, int pos0, int cap);
-  bool enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false);
+  bool enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false, int k_override = 0);
   // NI_GDN_PAR=1: GDN conv/prep, recurrence and gated norm of T rows; leaves the half rows in hh_
   void enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T, Checkpoint* snap = nullptr,
                            int snap_row = 0);
@@ -601,7 +601,7 @@ class Qwen35 : public Model {
   virtual void enc_router_hook(Encoder& e, int R) { (void)e, (void)R; }
   void enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
   bool enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T);
-  bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false);
+  bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false, int k_override = 0);
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
   // ANE split (qwen35_ane.cpp)
   void init_ane();
