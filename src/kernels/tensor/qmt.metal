@@ -20,14 +20,14 @@ struct QmtRaw {
   float s, b;
 };
 // (rows of wld words / sld scale groups: K / 8 and K / 64 but for a view of the leading K columns, qmt_m64_n64_ld)
-NI_INLINE QmtRaw qmt_raw(const device uint* W, const device bfloat* S, const device bfloat* B, uint wld, uint sld,
-                         uint n, uint k) {
-  QmtRaw r;
+NI_INLINE void qmt_raw(const device uint* W, const device bfloat* S, const device bfloat* B, uint wld, uint sld,
+                        uint n, uint k, bool refresh, thread QmtRaw& r) {
   r.w = *(const device uint2*)(W + size_t(n) * wld + k / 8);
-  const size_t g = size_t(n) * sld + k / 64;
-  r.s = float(S[g]);
-  r.b = float(B[g]);
-  return r;
+  if (refresh) {
+    const size_t g = size_t(n) * sld + k / 64;
+    r.s = float(S[g]);
+    r.b = float(B[g]);
+  }
 }
 NI_INLINE void qmt_dec(const QmtRaw r, threadgroup half* dst) {
   half w[16];
@@ -91,7 +91,8 @@ NI_INLINE void qmt_tile(const device half* X, const device uint* const thread* W
     _Pragma("clang loop unroll(full)")
     for (int i = 0; i < WP; ++i) {
       const int q = NP == 2 && wr[i] >= BN / 2 ? 1 : 0;
-      wv[i] = qmt_raw(W[q], S[q], B[q], wld, sld, wn[i], k0 + wk[i]);
+      // BK32's paired steps share one g64 scale/bias; load(0) initializes every slot.
+      qmt_raw(W[q], S[q], B[q], wld, sld, wn[i], k0 + wk[i], BK != 32 || (k0 & 63u) == 0, wv[i]);
     }
   };
   auto store = [&](uint b) {
