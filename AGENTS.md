@@ -33,7 +33,8 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test qwen4_config_test json_file_test systemone systemone_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
+exl3_test remote_test cluster_test split_place_test qwen4_config_test json_file_test systemone systemone_test
+systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
 build/api_test
@@ -50,6 +51,7 @@ build/qwen4_config_test                      # what a Qwen 4 config asks that Fl
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
 build/systemone_test                         # System One's pointer heads, readout (Drex Max v1) and projected (Drex v2.0) (src/systemone/systemone.cpp)
+build/systemone_codes_probe_test             # controlled option-code regression, built and run explicitly in CI
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
@@ -70,6 +72,37 @@ python3 tests/test_logit_compare.py
 python3 tests/test_logit_dump.py build      # its output directory only, before the lock and the model
 python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
 ```
+
+Both `systemone_codes_probe_test` and `systemone_codes_driver` are `EXCLUDE_FROM_ALL` targets. CI explicitly builds
+and runs the controlled probe. The driver is for per-change old-versus-new evidence, not a standing differential CI
+check. Build it explicitly for that evidence. `vk` has separate hardcoded build and test lists. Editing this file
+does not update those lists.
+
+For an option-code change, build candidate and reference drivers with the same compiler flags and the same driver
+and tokenizer sources. Replace only the reference's [systemone.cpp](<src/systemone/systemone.cpp>) with the
+pre-change source and record its commit.
+
+CMake Release uses `-O3`. The standalone `-O0` example in [test_systemone_codes.py](<tests/test_systemone_codes.py>)
+is a CPU correctness build, not the Release configuration. Neither configuration measures inference speed.
+Compare all 104 requests:
+
+```bash
+python3 tests/test_systemone_codes.py --candidate build/systemone_codes_driver --reference /path/to/reference-driver
+python3 tests/test_systemone_codes.py --candidate build/systemone_codes_driver --reference /path/to/reference-driver --tokenizer /approved/drex-max-v1/tokenizer.json
+python3 tests/test_systemone_codes_harness.py  # script checks with stand-in driver results, not encoder evidence
+```
+
+Without `--tokenizer`, the script creates the three synthetic fixtures and checks their goldens. With `--tokenizer`,
+both drivers load the specified existing file unchanged. That mode skips only synthetic goldens. Both modes compare
+complete outputs and require the known-valid two-option request to produce nonempty tokens in both drivers.
+The script reports accepted and rejected counts per driver, the tokenizer SHA256, its parent `model_dir`, and the
+JSON's `model.type`, `ignore_merges`, and `pre_tokenizer`. The logged `model_type` is the tokenizer model type,
+not the neural model architecture. The script checks the tokenizer digest after each driver run.
+
+Real-vocabulary evidence for Drex Max requires the actual Drex Max v1 metadata identity. A Drex v2 tokenizer is a
+substitute only with evidence that its bytes are identical. A Qwen control is optional. Directory names and a
+matching tokenizer type do not establish identity. This CPU coverage does not waive the model output, GPU, or
+interleaved speed gates below, and does not establish an inference speedup.
 
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,

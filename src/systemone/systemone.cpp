@@ -394,12 +394,7 @@ Encoded encode_max(const Tokenizer& tok, const ojson& body, const Limits& limits
   }
 
   std::vector<std::string> usable;
-  auto add_code = [&](const std::string& code) {
-    if (usable.size() < kMaxOptions && tok.encode(code).size() == 1) usable.push_back(code);
-  };
-  for (char a = 'A'; a <= 'Z'; ++a) add_code(std::string(1, a));
-  for (char a = 'A'; a <= 'Z'; ++a)
-    for (char b = 'A'; b <= 'Z'; ++b) add_code(std::string{a, b});
+  size_t next_candidate = 0;
 
   static const char* kSystem =
       "<|im_start|>system\nClassify the supplied state using the question and option descriptions. "
@@ -443,6 +438,18 @@ Encoded encode_max(const Tokenizer& tok, const ojson& body, const Limits& limits
       }
     } else {
       throw BadRequest("question type must be choice, noul, or score");
+    }
+    const size_t need = std::min(labels.size(), size_t(kMaxOptions));
+    while (usable.size() < need && next_candidate < 26 + 26 * 26) {
+      const size_t ordinal = next_candidate++;
+      std::string code;
+      if (ordinal < 26) {
+        code = std::string(1, char('A' + ordinal));
+      } else {
+        const size_t pair = ordinal - 26;
+        code = std::string{char('A' + pair / 26), char('A' + pair % 26)};
+      }
+      if (tok.encode(code).size() == 1) usable.push_back(std::move(code));
     }
     if (labels.empty() || labels.size() > usable.size()) throw BadRequest("a question needs 1 to 255 options");
     std::string instructions = "Choose the best matching option.";
