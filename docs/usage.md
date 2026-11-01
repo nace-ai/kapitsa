@@ -152,9 +152,10 @@ the trunk's). The official Hugging Face checkpoints of the dense models run as w
 (`qwen4_exp`) folder also needs its n-gram table: `ple.safetensors`, a GGUF's in `ple.gguf` (read when present; see
 the Q2_0 folders below), or a Sushi pack's `ngram_table.bin` (read when there is no `ple.safetensors`). A Qwen 4 model
 (a `qwen4*` model_type other than `qwen4_exp`, or a `qwen4_exp` config with settings that path does not run: more than
-4,096 hidden, several n-gram layers, no sparse-attention indexer and the like) is refused with each difference, by `pull`
-before any weights and by `serve` before loading ([`qwen4_config.h`](../src/model/qwen4_config.h)); RoPE scaling (YaRN)
-and settings Flash-Next does not have are named when such a folder loads, and not applied.
+4,096 hidden, more than 512 experts or 16 per token, several n-gram layers or n-grams past 8, no sparse-attention
+indexer and the like) is refused with each difference, by `pull` before any weights and by `serve` before loading
+([`qwen4_config.h`](../src/model/qwen4_config.h)); RoPE scaling (YaRN), an MTP head of more than one layer (it drafts
+with the first) and settings Flash-Next does not have are named when such a folder loads, and not applied.
 
 NVIDIA's dense Nemotron-H checkpoints run from a folder too (`kapitsa serve --model DIR`): Mamba-2, attention and dense
 MLP layers, no experts, as [Nemotron Nano 4B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16) (BF16) and
