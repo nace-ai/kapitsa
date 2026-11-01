@@ -754,6 +754,32 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
       xin = &xrn_;
     }
     if (xn_out && xin != xn_out) fatal("enc_qmvr_multi: xn_out fallback needs xn_out == xrn_");
+    // Experiment: generic projections prepare the same X8 input in every enc_qmvr call.
+    // Reuse one table, keeping each GEMM separate so its tiling and K reduction stay unchanged.
+    static const bool share_x8 = env_on("NI_QMVR_SHARE_X8");
+    if (share_x8 && !off && !special && R >= 1 && R < v8_rows_min(true) && segs.size() <= 4 && K % 64 == 0) {
+      size_t generic = 0;
+      bool same_k = true;
+      for (const Seg& sg : segs) {
+        generic += !(sg.L->q4() || sg.L->q8());
+        same_k = same_k && sg.L->K == K;
+      }
+      if (same_k && generic > 1) {
+        v8_alloc();
+        enc_x8(e, *xin, R, int(K), nullptr);
+        for (size_t i = 0; i < segs.size(); ++i) {
+          const Seg& sg = segs[i];
+          const bool accum = i < add.size() && add[i];
+          if (sg.L->q4() || sg.L->q8()) {
+            // Below the MMA threshold these encoders leave the shared X8 table intact.
+            enc_qmvr(e, *sg.L, *xin, sg.y, R, accum);
+          } else {
+            enc_qmm8(e, {{sg.L, sg.y, sg.L->N, accum}}, R, v8t_, v8s_);
+          }
+        }
+        return;
+      }
+    }
     for (size_t i = 0; i < segs.size(); ++i) enc_qmvr(e, *segs[i].L, *xin, segs[i].y, R, i < add.size() && add[i]);
     return;
   }

@@ -1220,6 +1220,8 @@ first download's progress too:
 
 The other `NI_*` switches exist for development and A/B tests.
 
+`NI_QMVR_SHARE_X8=1` experimentally reuses one prepared input table across generic projections in Qwen's small-row path. It is off by default; `0` keeps the original per-projection preparation. Each GEMM keeps its existing tiling and reduction. `NI_NO_QMVR_MULTI=1` also disables this experiment.
+
 ## Benchmarking a chosen context window
 
 ```sh
