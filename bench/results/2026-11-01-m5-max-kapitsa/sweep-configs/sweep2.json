@@ -1,0 +1,8 @@
+[
+  {"label": "flash-kapitsa-chain", "extends": "flash-kapitsa", "display": "Kapitsa (MTP depth 2, chains: NI_KFLASH=0)", "env": {"NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache", "NI_KFLASH": "0"}, "note": "sweep: NI_KFLASH=0"},
+  {"label": "lightning-kapitsa-chain", "extends": "lightning-kapitsa", "display": "Kapitsa (DSpark drafter, chains: NI_KFLASH=0)", "env": {"NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache", "NI_KFLASH": "0"}, "note": "sweep: NI_KFLASH=0"},
+  {"label": "super-kapitsa-chain", "extends": "super-kapitsa", "display": "Kapitsa (LiLiCorr drafter, chains: NI_KFLASH=0)", "env": {"NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache", "NI_KFLASH": "0"}, "note": "sweep: NI_KFLASH=0"},
+  {"label": "dory-kapitsa-perloop-spec3", "extends": "dory-kapitsa-perloop", "display": "Kapitsa (NVFP4, 2 loops, per-loop KV, 3 drafts)", "cmd_append": ["--spec", "3"], "note": "sweep: --spec 3"},
+  {"label": "dory-kapitsa-perloop-spec4", "extends": "dory-kapitsa-perloop", "display": "Kapitsa (NVFP4, 2 loops, per-loop KV, 4 drafts)", "cmd_append": ["--spec", "4"], "note": "sweep: --spec 4"},
+  {"label": "flint-kapitsa-ngram4", "extends": "flint-kapitsa", "display": "Kapitsa (prompt lookup, 4 drafts)", "cmd_append": ["--spec", "4"], "note": "sweep: --spec 4"}
+]

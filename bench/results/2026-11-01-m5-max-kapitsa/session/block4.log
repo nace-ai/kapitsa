@@ -1,0 +1,115 @@
+=== dory-kapitsa-perloop-spec3 07:49:06 powermode=2 Now drawing from 'AC Power' extra=[]
+[07:49:10] dory-kapitsa-perloop-spec3:  warm-up prefill~2.9k+decode64: ok (1.58s)
+[07:50:12] dory-kapitsa-perloop-spec3: GPU not quiet after 62s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 113.77 tok/s (e2e 113.30; 512 tok, finish=length, d4=0.7068)
+  decode T=0.6: 119.35 tok/s (e2e 117.46; 512 tok, finish=length, d4=0.7186)
+  decode T=0.6: 109.44 tok/s (e2e 109.22; 512 tok, finish=length, d4=0.697)
+  decode T=0.6: 126.12 tok/s (e2e 124.43; 512 tok, finish=length, d4=0.9073)
+  decode T=0.6: 129.41 tok/s (e2e 131.84; 512 tok, finish=length, d4=0.9217)
+  decode median 119.35 (min 109.44, max 129.41) over 5/5 valid
+  decode T=0: median 141.06 (min 140.15, max 143.65) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.36s -> 3076 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4213, 4264, 4319])
+  prefill 16000: 16517 tok (ref 16517), TTFT 6.68s -> 2473 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [16562, 16617, 16674])
+  -> <run-root>/results/dory-kapitsa-perloop-spec3-20261101-074906.json
+[07:51:20] dory-kapitsa-perloop-spec3: -> <run-root>/results/dory-kapitsa-perloop-spec3-20261101-074906.json  flags: 1
+=== done 07:51:20
+=== q36-35b-kapitsa 07:51:20 powermode=2 Now drawing from 'AC Power' extra=[]
+[07:51:25] q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (0.8s)
+[07:52:28] q36-35b-kapitsa: GPU not quiet after 62s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 327.15 tok/s (e2e 326.32; 512 tok, finish=length, d4=0.5583)
+  decode T=0.6: 392.55 tok/s (e2e 393.80; 512 tok, finish=length, d4=0.9258)
+  decode T=0.6: 349.49 tok/s (e2e 347.94; 512 tok, finish=length, d4=0.967)
+  decode T=0.6: 372.94 tok/s (e2e 373.78; 512 tok, finish=length, d4=0.7261)
+  decode T=0.6: 327.54 tok/s (e2e 336.91; 512 tok, finish=length, d4=0.5152)
+  decode median 349.49 (min 327.15, max 392.55) over 5/5 valid
+  decode T=0: median 360.75 (min 345.59, max 384.93) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 0.68s -> 6099 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4158, 4203, 4247])
+  prefill 16000: 16286 tok (ref 16286), TTFT 3.08s -> 5295 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [16327, 16380, 16431])
+  -> <run-root>/results/q36-35b-kapitsa-20261101-075120.json
+[07:53:00] q36-35b-kapitsa: -> <run-root>/results/q36-35b-kapitsa-20261101-075120.json  flags: 1
+=== q36-35b-kapitsa-mtp 07:53:00 powermode=2 Now drawing from 'AC Power' extra=[]
+[07:53:03] q36-35b-kapitsa-mtp:  warm-up prefill~2.9k+decode64: ok (0.9s)
+[07:54:04] q36-35b-kapitsa-mtp: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 250.88 tok/s (e2e 250.19; 512 tok, finish=length, d4=0.9817)
+  decode T=0.6: 254.68 tok/s (e2e 251.12; 512 tok, finish=length, d4=0.9554)
+  decode T=0.6: 256.49 tok/s (e2e 254.85; 512 tok, finish=length, d4=0.9488)
+  decode T=0.6: 256.45 tok/s (e2e 251.91; 512 tok, finish=length, d4=0.562)
+  decode T=0.6: 260.96 tok/s (e2e 259.27; 512 tok, finish=length, d4=0.5286)
+  decode median 256.45 (min 250.88, max 260.96) over 5/5 valid
+  decode T=0: median 248.87 (min 245.0, max 259.02) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 0.81s -> 5109 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4165, 4200, 4241])
+  prefill 16000: 16286 tok (ref 16286), TTFT 3.62s -> 4498 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [16328, 16360, 16401])
+  -> <run-root>/results/q36-35b-kapitsa-mtp-20261101-075300.json
+[07:54:44] q36-35b-kapitsa-mtp: -> <run-root>/results/q36-35b-kapitsa-mtp-20261101-075300.json  flags: 1
+=== q36-35b-kapitsa-mtp2 07:54:44 powermode=2 Now drawing from 'AC Power' extra=[]
+[07:54:47] q36-35b-kapitsa-mtp2:  warm-up prefill~2.9k+decode64: ok (0.99s)
+[07:55:48] q36-35b-kapitsa-mtp2: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 213.56 tok/s (e2e 210.79; 512 tok, finish=length, d4=0.9513)
+  decode T=0.6: 221.37 tok/s (e2e 219.82; 512 tok, finish=length, d4=0.9551)
+  decode T=0.6: 217.45 tok/s (e2e 213.41; 512 tok, finish=length, d4=0.7093)
+  decode T=0.6: 219.21 tok/s (e2e 220.54; 512 tok, finish=length, d4=0.9251)
+  decode T=0.6: 241.64 tok/s (e2e 237.32; 512 tok, finish=length, d4=0.9243)
+  decode median 219.21 (min 213.56, max 241.64) over 5/5 valid
+  decode T=0: median 218.23 (min 211.1, max 225.22) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 0.83s -> 4974 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4175, 4220, 4261])
+  prefill 16000: 16283 tok (ref 16286), TTFT 3.69s -> 4413 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [16324, 16369, 16412])
+  -> <run-root>/results/q36-35b-kapitsa-mtp2-20261101-075444.json
+[07:56:32] q36-35b-kapitsa-mtp2: -> <run-root>/results/q36-35b-kapitsa-mtp2-20261101-075444.json  flags: 1
+=== q38-27b-kapitsa 07:56:32 powermode=2 Now drawing from 'AC Power' extra=[]
+[07:56:41] q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.2s)
+[07:57:42] q38-27b-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 5%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 118.50 tok/s (e2e 118.71; 512 tok, finish=length, d4=0.6673)
+  decode T=0.6: 107.92 tok/s (e2e 108.02; 512 tok, finish=length, d4=0.9621)
+  decode T=0.6: 95.43 tok/s (e2e 94.74; 512 tok, finish=length, d4=0.9419)
+  decode T=0.6: 96.32 tok/s (e2e 96.82; 512 tok, finish=length, d4=0.9498)
+  decode T=0.6: 115.86 tok/s (e2e 112.60; 512 tok, finish=length, d4=0.9338)
+  decode median 107.92 (min 95.43, max 118.5) over 5/5 valid
+  decode T=0: median 113.35 (min 112.6, max 116.26) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 6.19s -> 668 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [4188, 4223, 4266])
+  prefill 16000: 16285 tok (ref 16286), TTFT 25.18s -> 647 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16335, 16374, 16418])
+  -> <run-root>/results/q38-27b-kapitsa-20261101-075632.json
+[07:59:21] q38-27b-kapitsa: -> <run-root>/results/q38-27b-kapitsa-20261101-075632.json  flags: 1
+=== q38-27b-kapitsa-mtp 07:59:21 powermode=2 Now drawing from 'AC Power' extra=[]
+[07:59:29] q38-27b-kapitsa-mtp:  warm-up prefill~2.9k+decode64: ok (5.93s)
+[08:00:31] q38-27b-kapitsa-mtp: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 69.95 tok/s (e2e 69.83; 512 tok, finish=length, d4=0.5021)
+  decode T=0.6: 78.11 tok/s (e2e 77.01; 512 tok, finish=length, d4=0.9286)
+  decode T=0.6: 79.59 tok/s (e2e 78.52; 512 tok, finish=length, d4=0.9044)
+  decode T=0.6: 79.17 tok/s (e2e 79.15; 512 tok, finish=length, d4=0.9454)
+  decode T=0.6: 69.02 tok/s (e2e 68.73; 512 tok, finish=length, d4=0.9471)
+  decode median 78.11 (min 69.02, max 79.59) over 5/5 valid
+  decode T=0: median 74.04 (min 73.12, max 84.14) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 5.90s -> 700 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [4196, 4232, 4276])
+  prefill 16000: 16287 tok (ref 16286), TTFT 24.10s -> 676 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16348, 16376, 16412])
+  -> <run-root>/results/q38-27b-kapitsa-mtp-20261101-075921.json
+[08:02:30] q38-27b-kapitsa-mtp: -> <run-root>/results/q38-27b-kapitsa-mtp-20261101-075921.json  flags: 1
+=== bolt-kapitsa 08:02:30 powermode=2 Now drawing from 'AC Power' extra=[]
+===== bolt-kapitsa  [kapitsa] Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill)  version 7f4e709
+[08:02:38] bolt-kapitsa:  warm-up prefill~2.9k+decode64: ok (3.55s)
+[08:03:39] bolt-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 7%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 141.03 tok/s (e2e 141.49; 512 tok, finish=length, d4=0.9764)
+  decode T=0.6: 149.87 tok/s (e2e 151.61; 512 tok, finish=length, d4=0.4193) flags ['repetition loop (distinct-4-gram 0.4193)']
+  decode T=0.6: 143.16 tok/s (e2e 143.08; 512 tok, finish=length, d4=0.8757)
+  decode T=0.6: 160.48 tok/s (e2e 158.33; 512 tok, finish=length, d4=0.9378)
+  decode T=0.6: 156.75 tok/s (e2e 159.53; 512 tok, finish=length, d4=0.6057)
+  decode median 149.87 (min 141.03, max 160.48) over 5/5 valid
+  decode T=0: median 159.02 (min 152.28, max 164.96) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 3.91s -> 1070 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [4227, 4261, 4301])
+  prefill 16000: 16514 tok (ref 16514), TTFT 15.52s -> 1064 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16541, 16568, 16601])
+  -> <run-root>/results/bolt-kapitsa-20261101-080230.json
+[08:04:50] bolt-kapitsa: -> <run-root>/results/bolt-kapitsa-20261101-080230.json  flags: 2
+=== bolt-kapitsa-chain 08:04:50 powermode=2 Now drawing from 'AC Power' extra=[]
+[08:04:58] bolt-kapitsa-chain:  warm-up prefill~2.9k+decode64: ok (3.42s)
+[08:05:59] bolt-kapitsa-chain: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 146.48 tok/s (e2e 149.16; 512 tok, finish=length, d4=0.6233)
+  decode T=0.6: 129.84 tok/s (e2e 130.59; 512 tok, finish=length, d4=0.6262)
+  decode T=0.6: 142.86 tok/s (e2e 139.81; 512 tok, finish=length, d4=0.9269)
+  decode T=0.6: 133.53 tok/s (e2e 136.34; 512 tok, finish=length, d4=0.8238)
+  decode T=0.6: 133.18 tok/s (e2e 132.21; 512 tok, finish=length, d4=0.6616)
+  decode median 133.53 (min 129.84, max 146.48) over 5/5 valid
+  decode T=0: median 155.25 (min 150.19, max 157.99) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 4.03s -> 1039 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [4227, 4254, 4287])
+  prefill 16000: 16513 tok (ref 16514), TTFT 15.04s -> 1098 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16546, 16584, 16626])
+  -> <run-root>/results/bolt-kapitsa-chain-20261101-080450.json
+[08:07:12] bolt-kapitsa-chain: -> <run-root>/results/bolt-kapitsa-chain-20261101-080450.json  flags: 1
+=== done 08:07:12
