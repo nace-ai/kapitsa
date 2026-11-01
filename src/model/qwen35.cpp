@@ -3266,6 +3266,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     const q20::Experts X = q20_fetch(e, L, ridx_, uint32_t(P), T, enc_shared);
     q20::enc_prefill(e, X, q20_shape(), bm, max_tiles, xh_, hhalf_, yd_, tiles_, ntiles_, stok_, spair_);
   }
+  if (!fold && !q20) enc_shared();
   // gate + up + SwiGLU: hhalf_ row r = sorted row r (pairs grouped by expert, then shared rows)
   if (!q20) {
     // expert matrices are stacked [E, N, K]: strides in words / groups
@@ -3301,7 +3302,6 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.buf(9, SD.w->buf); e.buf(10, SD.s->buf); e.buf(11, SD.b->buf);
     e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
   }
-  if (!fold && !q20) enc_shared();
   if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
     comb_pending_ = {yd_, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_, uint32_t(D), uint32_t(k), true};
   } else {
