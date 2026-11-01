@@ -358,6 +358,7 @@ void QwenViT::load() {
     if (!t || t->numel() != int64_t(H) * K0) fatal("vision: patch_embed.proj.weight missing or of an unexpected size");
     patch_.N = H;
     patch_.K = K0;
+    patch_.packed_half = false;
     patch_.w = w_.alloc(size_t(H) * K0 * 2, "vit_w");
     w_.read_bf16("patch_embed.proj.weight", patch_.w.as<uint16_t>(), H, K0, K0);
     const bool channels_first = t->shape.size() == 5 && t->shape[1] == c_.in_ch && t->shape[4] != c_.in_ch;
@@ -394,6 +395,16 @@ void QwenViT::load() {
   m1_ = w_.lin("merger.linear_fc1");
   m2_ = w_.lin("merger.linear_fc2");
   w_.close();
+  // The measured Qwen 4B and 35B tower shapes on M4 Pro; other shapes keep the bf16 path.
+  const bool pack = (H == 1024 && c_.depth == 24 && c_.inter == 4096 && c_.out_hidden == 2560) ||
+                    (H == 1152 && c_.depth == 27 && c_.inter == 4304 && c_.out_hidden == 2048);
+  if (pack && Gpu::get().name() == "Apple M4 Pro") {
+    auto e = Gpu::get().begin();
+    for (VitLin* L : {&patch_, &m1_, &m2_}) vit_pack_linear(*e, *L);
+    for (Block& B : blocks_)
+      for (VitLin* L : {&B.qkv, &B.proj, &B.fc1, &B.fc2}) vit_pack_linear(*e, *L);
+    e->commit_and_wait();
+  }
   w_.make_resident();
   loaded_ = true;
 }

@@ -149,14 +149,25 @@ void VitWeights::release() {
 
 // ---- dispatches ----
 
+void vit_pack_linear(Encoder& e, VitLin& L) {
+  if (L.packed_half || L.K % 8) return;
+  const uint32_t groups = L.N * (L.K / 8);
+  e.use(vit_pipe("vit_pack_linear"));
+  e.buf(0, L.w);
+  e.val(1, groups);
+  e.dispatch((groups + 255) / 256, 1, 1, 256);
+  L.packed_half = true;
+}
+
 void vit_gemm(Encoder& e, const VitLin& L, const Buffer& x, uint32_t x_ld, const Buffer& y, uint32_t y_ld, int M,
               bool add) {
   const char* n;
   uint32_t bm, bn, th;
   bool mfast = false;
-  if (M >= 64 && L.N > 64) n = "qrf_f16_m32_n128_mf", bm = 32, bn = 128, th = 128, mfast = true;
-  else if (M > 8) n = "qrf_f16_m16_n64", bm = 16, bn = 64, th = 128;
-  else n = "qrf_f16_m8_n64", bm = 8, bn = 64, th = 64;
+  if (M >= 64 && L.N > 64)
+    n = L.packed_half ? "vit_gemm_packed_m32_n128" : "qrf_f16_m32_n128_mf", bm = 32, bn = 128, th = 128, mfast = true;
+  else if (M > 8) n = L.packed_half ? "vit_gemm_packed_m16_n64" : "qrf_f16_m16_n64", bm = 16, bn = 64, th = 128;
+  else n = L.packed_half ? "vit_gemm_packed_m8_n64" : "qrf_f16_m8_n64", bm = 8, bn = 64, th = 64;
   const kp::Qmm p{uint32_t(M), L.N, L.K, x_ld, y_ld, add ? 1u : 0u, 64, 0, 0};
   e.use(vit_pipe(n));
   e.buf(0, x);

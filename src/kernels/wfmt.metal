@@ -789,7 +789,7 @@ NI_INLINE void moe8g_down_impl(const device uint32_t* W, const device ushort* S,
 NI_INLINE float bf_lo(uint w) { return as_type<float>(w << 16); }
 NI_INLINE float bf_hi(uint w) { return as_type<float>(w & 0xFFFF0000u); }
 
-template <int F, int GS, int FA, int NP>
+template <int F, int GS, int FA, int NP, bool PACKED_HALF = false>
 NI_INLINE void qrf_load_w(const device uint32_t* const thread* W, const device bfloat* const thread* S,
                           const device bfloat* const thread* B, thread const uint* wrow, uint wpr, uint spr, uint k0,
                           uint c, thread uint* wr, thread half2* sb) {
@@ -802,10 +802,15 @@ NI_INLINE void qrf_load_w(const device uint32_t* const thread* W, const device b
       const device uint32_t* row = W[p] + wrow[a] * wpr;
       if (F == 16) {
         const uint4 u = *(const device uint4*)(row + kk / 2);
-        wr[i * 4 + 0] = as_type<uint>(half2(half(bf_lo(u.x)), half(bf_lo(u.z))));
-        wr[i * 4 + 1] = as_type<uint>(half2(half(bf_hi(u.x)), half(bf_hi(u.z))));
-        wr[i * 4 + 2] = as_type<uint>(half2(half(bf_lo(u.y)), half(bf_lo(u.w))));
-        wr[i * 4 + 3] = as_type<uint>(half2(half(bf_hi(u.y)), half(bf_hi(u.w))));
+        if (PACKED_HALF) {
+          wr[i * 4 + 0] = u.x; wr[i * 4 + 1] = u.y;
+          wr[i * 4 + 2] = u.z; wr[i * 4 + 3] = u.w;
+        } else {
+          wr[i * 4 + 0] = as_type<uint>(half2(half(bf_lo(u.x)), half(bf_lo(u.z))));
+          wr[i * 4 + 1] = as_type<uint>(half2(half(bf_hi(u.x)), half(bf_hi(u.z))));
+          wr[i * 4 + 2] = as_type<uint>(half2(half(bf_lo(u.y)), half(bf_lo(u.w))));
+          wr[i * 4 + 3] = as_type<uint>(half2(half(bf_hi(u.y)), half(bf_hi(u.w))));
+        }
       } else {
         uint qv[8];
         wf_codes8<F>(row, kk, qv);
@@ -844,7 +849,7 @@ NI_INLINE void qrf_mma(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup con
 }
 
 // qr_acc for format F (BK = 32): acc[p*FA + a][b] over the whole K.
-template <int F, int GS, int BM, int BN, int WM, int WN, int NP>
+template <int F, int GS, int BM, int BN, int WM, int WN, int NP, bool PACKED_HALF = false>
 NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread* W,
                        const device bfloat* const thread* S, const device bfloat* const thread* B, uint M, uint N,
                        uint K, uint x_ld, uint m0, uint n0, threadgroup half* xs, uint tid, uint sgm, uint sgn,
@@ -870,7 +875,7 @@ NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread
   half2 sb[NP * FA];
   for (uint k0 = 0; k0 < K; k0 += BK) {
     qr_load_x<BM, BK, NT>(X4, x_ld8, M, m0, k0, tid, xr);
-    qrf_load_w<F, GS, FA, NP>(W, S, B, wrow, wpr, spr, k0, c, wr, sb);
+    qrf_load_w<F, GS, FA, NP, PACKED_HALF>(W, S, B, wrow, wpr, spr, k0, c, wr, sb);
     qr_store_x<BM, BK, NT>(xs, tid, xr);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     qrf_mma<F, NP * FA, FB, TM>(acc, xs, sgm, wr, sb);
@@ -879,7 +884,7 @@ NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread
 }
 
 // Y (+)= X W^T (QmmParams, buffers 0-5 as qmr_*).
-#define NI_QRF(NAME, F, GS, BM, BN, WM, WN, MFAST)                                                           \
+#define NI_QRF_IMPL(NAME, F, GS, BM, BN, WM, WN, MFAST, PACKED_HALF)                                         \
   [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                       \
       const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],                            \
       const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],                           \
@@ -895,7 +900,7 @@ NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread
     const uint sgm = sg / WN, sgn = sg % WN, m0 = mt * BM, n0 = nt * BN;                                      \
     const uint2 rc = qr_rc(lane);                                                                             \
     simdgroup_float8x8 acc[TN / 8][TM / 8];                                                                   \
-    qrf_acc<F, GS, BM, BN, WM, WN, 1>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4, tid, \
+    qrf_acc<F, GS, BM, BN, WM, WN, 1, PACKED_HALF>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4, tid, \
                                       sgm, sgn, rc, acc);                                                     \
     _Pragma("clang loop unroll(full)")                                                                        \
     for (int a = 0; a < TN / 8; ++a) {                                                                        \
@@ -914,6 +919,12 @@ NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread
         }                                                                                                     \
     }                                                                                                         \
   }
+#define NI_QRF(NAME, F, GS, BM, BN, WM, WN, MFAST) NI_QRF_IMPL(NAME, F, GS, BM, BN, WM, WN, MFAST, false)
+
+// Vision weights converted once to qrf_load_w's half pairs; the MMA loop and tiles are unchanged.
+NI_QRF_IMPL(vit_gemm_packed_m32_n128, 16, 64, 32, 128, 1, 4, true, true)
+NI_QRF_IMPL(vit_gemm_packed_m16_n64, 16, 64, 16, 64, 1, 4, false, true)
+NI_QRF_IMPL(vit_gemm_packed_m8_n64, 16, 64, 8, 64, 1, 2, false, true)
 
 // Y (+)= X W[:, :K]^T over the leading K columns of rows w_ld words / s_ld groups long (QmmLdParams, as
 // qmm_b4_m64_n64_ld): the GPU's share of the down projection in the Neural Engine split.
