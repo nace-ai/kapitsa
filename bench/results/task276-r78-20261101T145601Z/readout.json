@@ -1,0 +1,143 @@
+{
+  "status": "COMPLETE",
+  "models": {
+    "max": {
+      "complete": true,
+      "samples_per_arm": {
+        "A": 6,
+        "B": 6
+      },
+      "parity": true,
+      "A": {
+        "median_ms": 13405.865916499999,
+        "min_ms": 12709.044083,
+        "max_ms": 13894.62475
+      },
+      "B": {
+        "median_ms": 12937.148771,
+        "min_ms": 12462.942916,
+        "max_ms": 13148.846208
+      },
+      "B_over_A": 0.9650364140280487,
+      "capture_sha256s": [
+        "451cb37fed4d70a35a0361727b564ee993c58a7ef0e4ee2a1c427fccb9988ed2"
+      ]
+    },
+    "qwen": {
+      "complete": true,
+      "samples_per_arm": {
+        "A": 6,
+        "B": 6
+      },
+      "parity": true,
+      "A": {
+        "median_ms": 11130.9886255,
+        "min_ms": 10754.062917,
+        "max_ms": 11483.601208
+      },
+      "B": {
+        "median_ms": 11243.980604,
+        "min_ms": 10790.227,
+        "max_ms": 11529.995666
+      },
+      "B_over_A": 1.0101511179556097,
+      "capture_sha256s": [
+        "3989925b9bf06961b0fd07b5b9ef8a98fb0bb4380a2a712a1c76a50e9f31df8c"
+      ]
+    }
+  },
+  "legs": {
+    "max-A1": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        13894.62475,
+        13508.970833,
+        12709.044083
+      ]
+    },
+    "max-B1": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        13009.941667,
+        12864.355875,
+        12462.942916
+      ]
+    },
+    "qwen-A1": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        10863.920792,
+        10754.062917,
+        10802.014291
+      ]
+    },
+    "qwen-B1": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        10876.0215,
+        11065.152458,
+        10790.227
+      ]
+    },
+    "max-B2": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        12718.819542,
+        13148.846208,
+        13052.920292
+      ]
+    },
+    "max-A2": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        13414.129125,
+        13171.253042,
+        13397.602708
+      ]
+    },
+    "qwen-B2": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        11481.05725,
+        11529.995666,
+        11422.80875
+      ]
+    },
+    "qwen-A2": {
+      "rc": 0,
+      "errors": [],
+      "wallms": [
+        11453.430917,
+        11398.056459,
+        11483.601208
+      ]
+    }
+  },
+  "order": [
+    "max-A1",
+    "max-B1",
+    "qwen-A1",
+    "qwen-B1",
+    "max-B2",
+    "max-A2",
+    "qwen-B2",
+    "qwen-A2"
+  ],
+  "timing_scope": "native backbone repetition.wallms, excluding warmups; min/max across both paired legs; not model-load wall time",
+  "parity_scope": "exact numeric residual, normalized, logits and captured row equality across all measured A/B repetitions",
+  "commits": {
+    "A": "e8ffd2fb0ac95bac66981adfcefb580ddb11dd03",
+    "B": "bde8330c6aad9a4ef77cffa3c1d0938ba824e705"
+  },
+  "binary_sha256": {
+    "A": "ca624c7ed0836073fe4b252a5fe95dd7a2896d9260f6e29dc402a4b7a7ae71dd",
+    "B": "00cee1769b1a883d385a19ae41cab47900e86db5d879a76643298399503c6c22"
+  }
+}
