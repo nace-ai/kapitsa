@@ -3599,9 +3599,25 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (ane_chunk_ && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
   } else {
+    static const int mix_sub = env_int("NI_MIXER_CHUNK", 512);
     for (int i = 0; i < cfg_.layers; ++i) {
       const Layer& L = layers_[i];
-      enc_mixer_prefill(e, s, i, L, pos0, T, x_, snap, snap_row);
+      if (mix_sub > 0 && T > mix_sub) {
+        for (int p = 0; p < T; p += mix_sub) {
+          int cur_t = std::min(mix_sub, T - p);
+          Checkpoint* cur_snap = nullptr;
+          int cur_snap_row = 0;
+          if (snap && snap_row > p && snap_row <= p + cur_t) {
+            cur_snap = snap;
+            cur_snap_row = snap_row - p;
+          }
+          enc_mixer_prefill(e, s, i, L, pos0 + p, cur_t,
+                            x_.view(size_t(p) * D * 4, size_t(cur_t) * D * 4),
+                            cur_snap, cur_snap_row);
+        }
+      } else {
+        enc_mixer_prefill(e, s, i, L, pos0, T, x_, snap, snap_row);
+      }
       if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
       else if (ane_chunk_) enc_mlp_prefill_split(e, i, L, T, x_);  // joins the ANE's part into x_ in the pass
       else enc_mlp_prefill(e, L, T, x_);
