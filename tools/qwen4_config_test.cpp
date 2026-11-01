@@ -70,6 +70,19 @@ int main() {
   CHECK(ni::qwen4_refusal(sushi, "x").empty(), "Sushi's YaRN runs: %s", ni::qwen4_refusal(sushi, "x").c_str());
   CHECK(su.size() == 1 && su[0] == "rope_type yarn (RoPE runs unscaled)", "Sushi: one unapplied line (%zu)", su.size());
 
+  // a deeper MTP head: runs (drafting with its first layer), named
+  json mtp2 = fn;
+  mtp2["text_config"]["mtp_num_hidden_layers"] = 2;
+  const std::vector<std::string> mu = ni::qwen4_unapplied(mtp2);
+  CHECK(ni::qwen4_refusal(mtp2, "x").empty() && mu.size() == 1 && mu[0].rfind("mtp_num_hidden_layers 2", 0) == 0,
+        "a 2-layer MTP head runs with one unapplied line (%zu)", mu.size());
+
+  // other n-gram geometry the hash and the kernels take: 5-grams of 4 heads each, 16 heads of 160 values as Flash-Next's
+  json ng = fn;
+  ng["text_config"]["ngram_size"] = 5;
+  ng["text_config"]["heads_per_ngram"] = 4;
+  CHECK(ni::qwen4_refusal(ng, "x").empty(), "5-grams of 4 heads run: %s", ni::qwen4_refusal(ng, "x").c_str());
+
   // as Qwen4Exp::is_model takes them: a config without a text_config runs as model_type qwen4_exp (with Nace AI's
   // pack's ple_storage), and is refused as qwen4_exp_text, which the loader does not take at the top level
   json flat = fn["text_config"];
@@ -120,6 +133,19 @@ int main() {
       {"ple_conv_kernel_size 8", [](json& t) { t["ple_conv_kernel_size"] = 8; }},
       {"ple_embed_dim 1280", [](json& t) { t["ple_embed_dim"] = 1280; }},
       {"ple_embedding_mode per_token", [](json& t) { t["ple_embedding_mode"] = "per_token"; }},
+      // Qwen35::check_shapes's limits and the n-gram hash's, which the loader applies only after the download
+      {"num_key_value_heads 1", [](json& t) { t["num_key_value_heads"] = 1; }},
+      {"linear_key_head_dim 256", [](json& t) { t["linear_key_head_dim"] = 256; }},
+      {"linear_value_head_dim 64", [](json& t) { t["linear_value_head_dim"] = 64; }},
+      {"num_experts 1024", [](json& t) { t["num_experts"] = 1024; }},
+      {"num_experts 500", [](json& t) { t["num_experts"] = 500; }},
+      {"num_experts_per_tok 20", [](json& t) { t["num_experts_per_tok"] = 20; }},
+      {"moe_intermediate_size 600", [](json& t) { t["moe_intermediate_size"] = 600; }},
+      {"shared_expert_intermediate_size 600", [](json& t) { t["shared_expert_intermediate_size"] = 600; }},
+      {"(num_experts_per_tok + 1) x the expert width is 11264", [](json& t) { t["moe_intermediate_size"] = 1024; }},
+      {"ngram_size 9", [](json& t) { t["ngram_size"] = 9; }},
+      {"heads_per_ngram 0", [](json& t) { t["heads_per_ngram"] = 0; }},
+      {"12 n-gram heads", [](json& t) { t["heads_per_ngram"] = 6; }},
   };
   for (const auto& [what, edit] : one) {
     json c = fn;

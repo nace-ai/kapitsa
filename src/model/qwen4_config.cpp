@@ -66,7 +66,31 @@ std::vector<std::string> qwen4_unsupported(const json& c) {
   const long long hq = num(t, "num_attention_heads", 0);
   if (const long long hd = num(t, "head_dim", hq > 0 ? hidden / hq : 0); hd != 256)  // (Qwen35's default when absent)
     v.push_back(fmt("head_dim %lld: the sparse attention's kernels take 256", hd));
-  if (num(t, "num_experts", 0) <= 0) v.push_back("no num_experts: dense MLP layers (the qwen4_exp path is MoE only)");
+  if (hq > 0) {
+    if (const long long hkv = num(t, "num_key_value_heads", 0); hkv <= 0 || hq / hkv > 16)
+      v.push_back(fmt("num_key_value_heads %lld: at most 16 query heads to a key head", hkv));
+  } else {
+    v.push_back("no num_attention_heads");
+  }
+  // Qwen35::check_shapes's limits, which the qwen4_exp loader applies after the download
+  if (const long long dk = num(t, "linear_key_head_dim", 0); dk != 128)
+    v.push_back(fmt("linear_key_head_dim %lld: the Gated DeltaNet kernels take 128", dk));
+  if (const long long dv = num(t, "linear_value_head_dim", 0); dv != 128)
+    v.push_back(fmt("linear_value_head_dim %lld: the Gated DeltaNet kernels take 128", dv));
+  if (const long long e = num(t, "num_experts", 0); e <= 0) {
+    v.push_back("no num_experts: dense MLP layers (the qwen4_exp path is MoE only)");
+  } else {
+    if (e % 32 || e > 512) v.push_back(fmt("num_experts %lld: a multiple of 32, at most 512", e));
+    const long long k = num(t, "num_experts_per_tok", 0), mi = num(t, "moe_intermediate_size", 0),
+                    si = num(t, "shared_expert_intermediate_size", 0);
+    if (k < 1 || k > 16) v.push_back(fmt("num_experts_per_tok %lld: 1 to 16", k));
+    if (mi <= 0 || mi % 64) v.push_back(fmt("moe_intermediate_size %lld: a multiple of 64", mi));
+    if (si < 0 || si % 64) v.push_back(fmt("shared_expert_intermediate_size %lld: a multiple of 64", si));
+    // the decode / row MoE kernels stage every slot's hidden: (k + 1) * I floats
+    if (k >= 1 && k <= 16 && (k + 1) * std::max(mi, si) > 7168)
+      v.push_back(fmt("(num_experts_per_tok + 1) x the expert width is %lld: the MoE decode kernels stage at most 7168",
+                      (k + 1) * std::max(mi, si)));
+  }
   if (const std::string act = str(t, "hidden_act"); !act.empty() && act != "silu")
     v.push_back("hidden_act " + act + ": SiLU");
   if (const std::string g = str(t, "output_gate_type"); !g.empty() && g != "sigmoid" && g != "silu")
@@ -119,6 +143,13 @@ std::vector<std::string> qwen4_unsupported(const json& c) {
       v.push_back(fmt("ple_embed_dim %lld: the hidden size", d));
     if (const std::string m = str(t, "ple_embedding_mode"); !m.empty() && m != "ngram")
       v.push_back("ple_embedding_mode " + m + ": the hashed n-gram table");
+    // the hash (model/ngram.cpp) and the conv window (dilation ngram_size, kRing in qwen4_exp.cpp) take 2- to
+    // 8-grams; each of the (ngram_size - 1) * heads_per_ngram heads reads a row of hidden / heads values
+    const long long n = num(t, "ngram_size", 3), per = num(t, "heads_per_ngram", 8);
+    if (n < 2 || n > 8) v.push_back(fmt("ngram_size %lld: 2 to 8", n));
+    if (per < 1) v.push_back(fmt("heads_per_ngram %lld: at least 1", per));
+    else if (n >= 2 && n <= 8 && hidden > 0 && hidden % ((n - 1) * per))
+      v.push_back(fmt("%lld n-gram heads: the hidden size is not a whole number of rows per head", (n - 1) * per));
   }
   return v;
 }
@@ -152,6 +183,9 @@ std::vector<std::string> qwen4_unapplied(const json& c) {
   if (const std::string rt = str(rp, "rope_type"); !rt.empty() && rt != "default")
     v.push_back("rope_type " + rt + " (RoPE runs unscaled)");
   if (present(t, "rope_scaling")) v.push_back("rope_scaling (RoPE runs unscaled)");
+  // load_mtp4 reads mtp.layers.0: a deeper head drafts worse, and the outputs, which the trunk verifies, are the same
+  if (const long long m = num(t, "mtp_num_hidden_layers", 1); m > 1)
+    v.push_back(fmt("mtp_num_hidden_layers %lld (the MTP head drafts with its first layer)", m));
   std::vector<std::string> unknown;
   for (auto it = t.begin(); it != t.end(); ++it)
     if (!kKnown.count(it.key())) unknown.push_back(it.key());
