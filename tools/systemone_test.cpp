@@ -1,6 +1,9 @@
 #include "systemone/systemone.h"
+#include "systemone_max_dump.h"
 
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -28,6 +31,76 @@ void rejected(const std::filesystem::path& path) {
   try { ni::systemone::PointerHead::load(path.string()); }
   catch (const std::runtime_error&) { failed = true; }
   require(failed, "invalid head accepted");
+}
+
+void dump_roundtrip(const std::filesystem::path& head_path) {
+  using namespace ni::systemone;
+  char pattern[] = "/tmp/kapitsa-max-dump-test-XXXXXX";
+  const char* made = mkdtemp(pattern);
+  require(made != nullptr, "create dump fixture root");
+  const std::filesystem::path root(made);
+  struct Cleanup {
+    std::filesystem::path path;
+    ~Cleanup() { std::error_code ec; std::filesystem::remove_all(path, ec); }
+  } cleanup{root};
+  write_head(head_path, 2, 3, 3, {1, -2, .5f, 4, 0, 3, -1, 2, .25f, 2});
+  auto head = PointerHead::load(head_path.string());
+  const float hidden[] = {2, 1, -2}, norm[] = {1, .5f, 2};
+  std::vector<float> normalized;
+  final_norm_row(hidden, norm, 3, 1e-6f, &normalized);
+  Encoded enc;
+  enc.meta = {{"two", "choice", {"yes", "no"}, {}}, {"three", "choice", {"a", "b", "c"}, {}}};
+  enc.branches = {{{11, 12, 13}, {2, {0, 1}}}, {{21, 22, 23, 24}, {3, {0, 1, 2}}}};
+  std::vector<std::vector<float>> groups(2);
+  for (size_t i = 0; i < groups.size(); ++i) {
+    head.logits(normalized.data(), std::vector<const float*>(enc.meta[i].keys.size(), nullptr), &groups[i]);
+  }
+  const auto answers = format_answers(groups, enc.meta);
+  const auto unchanged = groups;
+  MaxDump dump(root / "complete");
+  dump.begin_request(enc);
+  for (const auto& group : groups) dump.append(group);
+  dump.begin_request(enc);
+  for (const auto& group : groups) dump.append(group);
+  dump.finish();
+  require(groups == unchanged && format_answers(groups, enc.meta) == answers, "dump changed stock answers");
+  std::ifstream mf(root / "complete/manifest.json");
+  const auto manifest = ojson::parse(mf);
+  require(manifest.at("schema_version") == 1 && manifest.at("complete") == true &&
+          manifest.at("payload_bytes") == 40 && manifest.at("rows").size() == 4, "complete dump manifest");
+  std::ifstream payload(root / "complete/logits.f32", std::ios::binary);
+  size_t offset = 0;
+  for (size_t request = 0; request < 2; ++request) {
+    for (size_t i = 0; i < groups.size(); ++i) {
+      const auto& row = manifest.at("rows").at(request * 2 + i);
+      const auto& meta = enc.meta[i];
+      require(row.at("request_index") == request && row.at("branch_index") == i && row.at("byte_offset") == offset &&
+              row.at("width") == groups[i].size() && row.at("tokens") == ojson(enc.branches[i].tokens) &&
+              row.at("decide") == enc.branches[i].group.decide && row.at("option_order") == ojson(meta.keys) &&
+              row.at("question") == ojson{{"id", meta.id}, {"type", meta.type}, {"keys", meta.keys}, {"legend", meta.legend}},
+              "dump row identity/order");
+      std::vector<float> restored(groups[i].size());
+      const size_t bytes = restored.size() * sizeof(float);
+      payload.read(reinterpret_cast<char*>(restored.data()), std::streamsize(bytes));
+      require(bool(payload) && std::memcmp(restored.data(), groups[i].data(), bytes) == 0, "stock readout byte roundtrip");
+      offset += bytes;
+    }
+  }
+  require(payload.peek() == std::char_traits<char>::eof(), "trailing dump bytes");
+  auto rejects = [&](auto action, const char* message) {
+    bool failed = false;
+    try { action(); } catch (const std::exception&) { failed = true; }
+    require(failed, message);
+  };
+  rejects([&] { MaxDump existing(root / "complete"); }, "dump overwrote existing directory");
+  MaxDump partial(root / "partial");
+  partial.begin_request(enc);
+  rejects([&] { partial.append({1}); }, "dump accepted wrong active width");
+  rejects([&] { partial.append({1, std::numeric_limits<float>::infinity()}); }, "dump accepted nonfinite");
+  partial.append(groups[0]);
+  rejects([&] { partial.begin_request(enc); }, "dump accepted unfinished request");
+  rejects([&] { partial.finish(); }, "dump published incomplete request");
+  require(!std::filesystem::exists(root / "partial/manifest.json"), "partial dump marked complete");
 }
 }
 
@@ -83,7 +156,8 @@ int main() {
     try { ni::systemone::check_options(enc, 2); }
     catch (const ni::systemone::BadRequest& e) { bad = std::string(e.what()).find("1 to 2 options") != std::string::npos; }
     require(bad, "more options than the head's width is a BadRequest");
-    std::cout << "System One projected/readout head checks passed\n";
+    dump_roundtrip(path);
+    std::cout << "System One projected/readout head and Max dump checks passed\n";
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
     return 1;
