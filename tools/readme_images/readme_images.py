@@ -476,7 +476,7 @@ def render(html, w, h, out_webp, tmp):
 SERIES = {"light": ["#2A78D6", "#EB6834", "#1BAF7A", "#EDA100", "#E87BA4", "#008300", "#6250D6", "#E34948"],
           "dark": ["#3987E5", "#D95926", "#199E70", "#C98500", "#D55181", "#008300", "#9085E9", "#E66767"]}
 CTX_H, CTX_PANEL_Y, CTX_PLOT_TOP = 1560, 214, 404     # the chart's height, its panel's top, the plot's top
-CTX_LEFT, CTX_LABELS = 150, 452                       # the y axis' labels, the end labels right of the plot
+CTX_LABELS, CTX_AXIS = 452, 150                       # the start labels left of the plot, the y axis' values right of it
 CTX_LABEL_GAP = 40                                    # the least distance between two end labels
 
 
@@ -497,7 +497,7 @@ def spread(ys, gap, lo, hi):
 
 def context_chart(data, theme, kind):
     """Kapitsa's prefill or decode speed by context length (data["context"]): one line per model on a log scale (each
-    gridline twice the one below), a legend above, each line's model and last value at its end; returns (html, w, h)"""
+    gridline twice the one below), a legend above, each line's first value and model at its start; returns (html, w, h)"""
     t, colors = POSTER[theme], SERIES[theme]
     C = data["context"]
     sizes, models, K = C["sizes"], C["models"], C[kind]
@@ -509,7 +509,7 @@ def context_chart(data, theme, kind):
     per_line = int((W - 2 * 44) / (F_FOOT * FOOT_EM))
     foot = [w for line in K["footer"] for w in textwrap.wrap(line, per_line, break_long_words=False)]
     fy = H - FOOT_PAD - len(foot) * FOOT_LINE
-    left, right = X0 + CTX_LEFT, W - X0 - CTX_LABELS
+    left, right = X0 + CTX_LABELS, W - X0 - CTX_AXIS
     top, bottom = CTX_PLOT_TOP, fy - FOOT_GAP - 92
     lo, hi = math.log2(ticks[0]), math.log2(ticks[-1])
     y = lambda v: bottom - (bottom - top) * (math.log2(v) - lo) / (hi - lo)
@@ -534,7 +534,7 @@ def context_chart(data, theme, kind):
     for v in ticks:                                     # gridlines and their values, then the context sizes
         o.append(f'<line x1="{num(left)}" x2="{num(right)}" y1="{num(y(v))}" y2="{num(y(v))}" '
                  f'stroke="{t["greys"][2]}" stroke-width="2"/>')
-        o.append(text(left - 20, y(v) + 8, compact(v), "mono", 24, t["muted"], "end"))
+        o.append(text(right + 20, y(v) + 8, compact(v), "mono", 24, t["muted"]))
     for j, s in enumerate(sizes):
         o.append(text(x(j), bottom + 46, s, "mono", 24, t["muted"], "middle"))
     o.append(text((left + right) / 2, bottom + 84, K["x_title"], "sans", 24, t["ink2"], "middle"))
@@ -545,14 +545,15 @@ def context_chart(data, theme, kind):
         for j, v in enumerate(m[kind]):
             o.append(f'<circle cx="{num(x(j))}" cy="{num(y(v))}" r="8" fill="{colors[m["slot"]]}" '
                      f'stroke="{t["panel"]}" stroke-width="4"/>')
-    ends = [y(m[kind][-1]) for m in models]             # end labels, spread apart, each led back to its line's end
-    for m, ye, yl in zip(models, ends, spread(ends, CTX_LABEL_GAP, top, bottom)):
-        xe = x(len(sizes) - 1)
-        o.append(f'<polyline points="{num(xe + 16)},{num(ye)} {num(xe + 44)},{num(ye)} {num(xe + 84)},{num(yl)} '
-                 f'{num(xe + 100)},{num(yl)}" fill="none" stroke="{colors[m["slot"]]}" stroke-width="3" '
+    starts = [y(m[kind][0]) for m in models]            # start labels, spread apart, each led to its line's start
+    for m, ys, yl in zip(models, starts, spread(starts, CTX_LABEL_GAP, top, bottom)):
+        xs = x(0)
+        o.append(f'<polyline points="{num(xs - 16)},{num(ys)} {num(xs - 44)},{num(ys)} {num(xs - 84)},{num(yl)} '
+                 f'{num(xs - 100)},{num(yl)}" fill="none" stroke="{colors[m["slot"]]}" stroke-width="3" '
                  f'stroke-linejoin="round"/>')
-        o.append(f'<text x="{num(xe + 112)}" y="{num(yl + 9)}" font-size="26"><tspan class="mono-b" fill="{t["ink"]}">'
-                 f'{m[kind][-1]:,.0f}</tspan><tspan class="sans" fill="{t["ink2"]}" dx="12">{escape(m["model"])}</tspan></text>')
+        o.append(f'<text x="{num(xs - 112)}" y="{num(yl + 9)}" font-size="26" text-anchor="end"><tspan class="sans" '
+                 f'fill="{t["ink2"]}">{escape(m["model"])}</tspan><tspan class="mono-b" fill="{t["ink"]}" dx="12">'
+                 f'{m[kind][0]:,.0f}</tspan></text>')
     for i, s in enumerate(foot):
         o.append(text(44, fy + 16 + i * FOOT_LINE, s, "sans", F_FOOT, t["ink2"]))
 
