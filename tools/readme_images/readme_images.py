@@ -472,64 +472,87 @@ def render(html, w, h, out_webp, tmp):
 
 # ---------------------------------------------------------------- the context charts (WebP, rendered as the poster)
 
-CTX_TOP, CTX_PH, CTX_GAP, CTX_COLS = 214, 440, 28, 3   # panels' top, one panel's height, the gap, panels per row
+# the categorical series colors, in their fixed order (a model's "slot" in readme_images.json), light and dark steps
+SERIES = {"light": ["#2A78D6", "#EB6834", "#1BAF7A", "#EDA100", "#E87BA4", "#008300", "#6250D6", "#E34948"],
+          "dark": ["#3987E5", "#D95926", "#199E70", "#C98500", "#D55181", "#008300", "#9085E9", "#E66767"]}
+CTX_H, CTX_PANEL_Y, CTX_PLOT_TOP = 1560, 214, 404     # the chart's height, its panel's top, the plot's top
+CTX_LEFT, CTX_LABELS = 150, 452                       # the y axis' labels, the end labels right of the plot
+CTX_LABEL_GAP = 40                                    # the least distance between two end labels
 
 
-def nice_step(x):
-    """the smallest 1, 1.5, 2, 2.5, 3, 4, 5, 6 or 8 x 10^k at or above x"""
-    p = 10 ** math.floor(math.log10(x))
-    return next(m * p for m in (1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10) if m * p >= x)
-
-
-def compact(v):
-    return f"{v / 1000:g}K" if v >= 1000 else f"{v:g}"
+def spread(ys, gap, lo, hi):
+    """end labels' heights: each as near its line's end as the others allow, no two closer than gap, inside lo..hi"""
+    order = sorted(range(len(ys)), key=lambda i: ys[i])
+    out = {}
+    prev = lo - gap
+    for i in order:
+        out[i] = max(ys[i], prev + gap)
+        prev = out[i]
+    nxt = hi + gap
+    for i in reversed(order):
+        out[i] = min(out[i], nxt - gap)
+        nxt = out[i]
+    return [out[i] for i in range(len(ys))]
 
 
 def context_chart(data, theme, kind):
-    """Kapitsa's prefill or decode speed by context length (data["context"]) as small multiples: a panel per model, each
-    on its own scale from zero, its values in a row under the axis; returns (html, width, height)"""
-    t = POSTER[theme]
+    """Kapitsa's prefill or decode speed by context length (data["context"]): one line per model on a log scale (each
+    gridline twice the one below), a legend above, each line's model and last value at its end; returns (html, w, h)"""
+    t, colors = POSTER[theme], SERIES[theme]
     C = data["context"]
     sizes, models, K = C["sizes"], C["models"], C[kind]
-    W = data["poster"]["size"][0]
-    pw = (W - 2 * X0 - (CTX_COLS - 1) * CTX_GAP) / CTX_COLS
-    rows = -(-len(models) // CTX_COLS)
+    ticks = K["ticks"]
+    W, H = data["poster"]["size"][0], CTX_H
+    for m in models:
+        if len(m[kind]) != len(sizes) or not ticks[0] <= min(m[kind]) <= max(m[kind]) <= ticks[-1]:
+            sys.exit(f"readme_images.json: context {m['model']} {kind}: {len(sizes)} values within {ticks[0]}-{ticks[-1]}")
     per_line = int((W - 2 * 44) / (F_FOOT * FOOT_EM))
     foot = [w for line in K["footer"] for w in textwrap.wrap(line, per_line, break_long_words=False)]
-    fy = CTX_TOP + rows * CTX_PH + (rows - 1) * CTX_GAP + FOOT_GAP
-    H = fy + len(foot) * FOOT_LINE + FOOT_PAD
+    fy = H - FOOT_PAD - len(foot) * FOOT_LINE
+    left, right = X0 + CTX_LEFT, W - X0 - CTX_LABELS
+    top, bottom = CTX_PLOT_TOP, fy - FOOT_GAP - 92
+    lo, hi = math.log2(ticks[0]), math.log2(ticks[-1])
+    y = lambda v: bottom - (bottom - top) * (math.log2(v) - lo) / (hi - lo)
+    x = lambda j: left + (right - left) * j / (len(sizes) - 1)
+    stroke = lambda m, w: (f'stroke="{colors[m["slot"]]}" stroke-width="{w}"'
+                           + (' stroke-dasharray="16 11"' if m.get("dash") else ""))
 
     o = [rect(0, 0, W, H, 0, t["bg"])]
     o.append(mark(44, 43, 62, t["mark"], "mk"))
     o.append(text(122, 84, K["title"], "serif", 52, t["ink"]))
     for i, s in enumerate(K["subtitle"]):
         o.append(text(44, 140 + 30 * i, s, "sans", F_FOOT, t["ink2"]))
+    o.append(rect(X0, CTX_PANEL_Y, W - 2 * X0, bottom + 92 - CTX_PANEL_Y, 18, t["panel"]))
+    widths = [80 + len(m["model"]) * 15.5 + 40 for m in models]   # the legend: a line key and the model, in order,
+    rows = math.ceil(sum(widths) / (W - 2 * X0 - 72))               # in rows of (nearly) equal counts
+    per_row = math.ceil(len(models) / rows)
     for i, m in enumerate(models):
-        vals = m[kind]
-        if len(vals) != len(sizes):
-            sys.exit(f"readme_images.json: context {m['model']} {kind} has {len(vals)} values for {len(sizes)} sizes")
-        px = X0 + (i % CTX_COLS) * (pw + CTX_GAP)
-        py = CTX_TOP + (i // CTX_COLS) * (CTX_PH + CTX_GAP)
-        o.append(rect(px, py, pw, CTX_PH, 18, t["panel"]))
-        o.append(text(px + 28, py + 50, m["model"], "sans-sb", 30, t["ink"]))
-        left, right, top, bottom = px + 100, px + pw - 66, py + 92, py + CTX_PH - 104
-        step = nice_step(max(vals) * 1.08 / 2)            # two gridlines above zero, the top one over every value
-        y = lambda v: bottom - (bottom - top) * v / (2 * step)
-        x = lambda j: left + (right - left) * j / (len(sizes) - 1)
-        for k in range(3):
-            o.append(f'<line x1="{num(left)}" x2="{num(right)}" y1="{num(y(k * step))}" y2="{num(y(k * step))}" '
-                     f'stroke="{t["greys"][2]}" stroke-width="2"/>')
-            o.append(text(left - 18, y(k * step) + 8, compact(k * step), "mono", 22, t["muted"], "end"))
-        pts = " ".join(f"{num(x(j))},{num(y(v))}" for j, v in enumerate(vals))
-        o.append(f'<polygon points="{num(x(0))},{num(bottom)} {pts} {num(x(len(vals) - 1))},{num(bottom)}" '
-                 f'fill="{t["kap"]}" fill-opacity="0.12"/>')
-        o.append(f'<polyline points="{pts}" fill="none" stroke="{t["kap"]}" stroke-width="5" stroke-linejoin="round" '
-                 f'stroke-linecap="round"/>')
-        for j, v in enumerate(vals):
-            o.append(f'<circle cx="{num(x(j))}" cy="{num(y(v))}" r="9" fill="{t["kap"]}" stroke="{t["panel"]}" '
-                     f'stroke-width="5"/>')
-            o.append(text(x(j), bottom + 38, sizes[j], "mono", 22, t["muted"], "middle"))
-            o.append(text(x(j), bottom + 76, f"{v:,.0f}", "mono-b", 26, t["ink"], "middle"))
+        lx = X0 + 36 + sum(widths[i - i % per_row:i])
+        ly = CTX_PANEL_Y + 62 + (i // per_row) * 46
+        o.append(f'<line x1="{num(lx)}" x2="{num(lx + 58)}" y1="{num(ly - 9)}" y2="{num(ly - 9)}" {stroke(m, 5)}/>')
+        o.append(text(lx + 72, ly, m["model"], "sans-m", 26, t["ink"]))
+    for v in ticks:                                     # gridlines and their values, then the context sizes
+        o.append(f'<line x1="{num(left)}" x2="{num(right)}" y1="{num(y(v))}" y2="{num(y(v))}" '
+                 f'stroke="{t["greys"][2]}" stroke-width="2"/>')
+        o.append(text(left - 20, y(v) + 8, compact(v), "mono", 24, t["muted"], "end"))
+    for j, s in enumerate(sizes):
+        o.append(text(x(j), bottom + 46, s, "mono", 24, t["muted"], "middle"))
+    o.append(text((left + right) / 2, bottom + 84, K["x_title"], "sans", 24, t["ink2"], "middle"))
+    for m in models:                                    # the lines, then the markers over every line
+        pts = " ".join(f"{num(x(j))},{num(y(v))}" for j, v in enumerate(m[kind]))
+        o.append(f'<polyline points="{pts}" fill="none" {stroke(m, 5)} stroke-linejoin="round" stroke-linecap="round"/>')
+    for m in models:
+        for j, v in enumerate(m[kind]):
+            o.append(f'<circle cx="{num(x(j))}" cy="{num(y(v))}" r="8" fill="{colors[m["slot"]]}" '
+                     f'stroke="{t["panel"]}" stroke-width="4"/>')
+    ends = [y(m[kind][-1]) for m in models]             # end labels, spread apart, each led back to its line's end
+    for m, ye, yl in zip(models, ends, spread(ends, CTX_LABEL_GAP, top, bottom)):
+        xe = x(len(sizes) - 1)
+        o.append(f'<polyline points="{num(xe + 16)},{num(ye)} {num(xe + 44)},{num(ye)} {num(xe + 84)},{num(yl)} '
+                 f'{num(xe + 100)},{num(yl)}" fill="none" stroke="{colors[m["slot"]]}" stroke-width="3" '
+                 f'stroke-linejoin="round"/>')
+        o.append(f'<text x="{num(xe + 112)}" y="{num(yl + 9)}" font-size="26"><tspan class="mono-b" fill="{t["ink"]}">'
+                 f'{m[kind][-1]:,.0f}</tspan><tspan class="sans" fill="{t["ink2"]}" dx="12">{escape(m["model"])}</tspan></text>')
     for i, s in enumerate(foot):
         o.append(text(44, fy + 16 + i * FOOT_LINE, s, "sans", F_FOOT, t["ink2"]))
 
@@ -538,6 +561,10 @@ def context_chart(data, theme, kind):
     html = (f'<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light">'
             f'<style>{CSS % {"f": FONTS, "bg": t["bg"]}}</style></head><body>{svg}</body></html>')
     return html, W, H
+
+
+def compact(v):
+    return f"{v / 1000:g}K" if v >= 1000 else f"{v:g}"
 
 
 def context_alt(data, kind):
