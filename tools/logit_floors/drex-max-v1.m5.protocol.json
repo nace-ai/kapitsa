@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "status": "preregistered_before_numeric_floor_and_candidate_outputs",
+  "created_utc": "2026-11-01T16:28:46.774789+00:00",
+  "baseline_commit": "7f4e709ad9b3195ec72bfafd6667048e8e99fb78",
+  "baseline_identity": "Literal git rev-parse 24265bd0^, verified before registration.",
+  "candidate_commits": [
+    "24265bd0a5282a110a4c280cae66273be45b0670",
+    "7442da53ec66e4fde46c01b96716a2eb48a58950"
+  ],
+  "metric": "kl",
+  "direction": "reference||candidate",
+  "aggregation": "global_max",
+  "threshold_factor": 2,
+  "metric_definition": "For each complete matched branch, use max(0, stock logit_compare.row_metrics(reference_row, candidate_row, None)['kl']). The floor is the global maximum over every prompt and branch in the two baseline processes.",
+  "comparator_file": "tools/logit_compare.py",
+  "comparator_sha256": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+  "request_file": "tools/logit_fixtures/task276-max-requests.json",
+  "corpus_sha256": "4753028e2abc2440188f014627a24268e0662f25759287ba2a651a8e1f32ac31",
+  "layout_file": "tools/logit_fixtures/task276-max-layout.json",
+  "layout_sha256": "a7fbdc0b41b22d814dd92db09496e968d7f6b9ecfb0b7f0859d7ac131dab9498",
+  "context": 8192,
+  "branch_count": 6,
+  "branches": [
+    {
+      "request_index": 0,
+      "branch_index": 0,
+      "question_id": "refund_short",
+      "tokens": 131,
+      "decide": 130,
+      "width": 2,
+      "option_indices": [
+        0,
+        1
+      ],
+      "option_keys": [
+        "eligible",
+        "ineligible"
+      ]
+    },
+    {
+      "request_index": 1,
+      "branch_index": 0,
+      "question_id": "access_short",
+      "tokens": 265,
+      "decide": 264,
+      "width": 3,
+      "option_indices": [
+        0,
+        1,
+        2
+      ],
+      "option_keys": [
+        "allow",
+        "review",
+        "deny"
+      ]
+    },
+    {
+      "request_index": 2,
+      "branch_index": 0,
+      "question_id": "incident_512",
+      "tokens": 511,
+      "decide": 510,
+      "width": 4,
+      "option_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "option_keys": [
+        "monitor",
+        "investigate",
+        "rollback",
+        "page"
+      ]
+    },
+    {
+      "request_index": 3,
+      "branch_index": 0,
+      "question_id": "inventory_1024",
+      "tokens": 1024,
+      "decide": 1023,
+      "width": 2,
+      "option_indices": [
+        0,
+        1
+      ],
+      "option_keys": [
+        "reorder",
+        "hold"
+      ]
+    },
+    {
+      "request_index": 4,
+      "branch_index": 0,
+      "question_id": "support_2048",
+      "tokens": 2052,
+      "decide": 2051,
+      "width": 3,
+      "option_indices": [
+        0,
+        1,
+        2
+      ],
+      "option_keys": [
+        "billing",
+        "technical",
+        "security"
+      ]
+    },
+    {
+      "request_index": 5,
+      "branch_index": 0,
+      "question_id": "release_4096",
+      "tokens": 4096,
+      "decide": 4095,
+      "width": 4,
+      "option_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "option_keys": [
+        "ship",
+        "hold_tests",
+        "hold_security",
+        "rollback"
+      ]
+    }
+  ],
+  "length_coverage": "Measured full branch lengths are 131, 265, 511, 1024, 2052 and 4096. The performance lengths 1024 and 4096 are exact tokenizer-established whole branches.",
+  "corpus_scope": "Six classification decisions cover refund eligibility, access approval, incident response, inventory, support routing and release readiness. Longer states contain repeated numbered status reports; the options remain meaningful and unchanged by length.",
+  "model_dir": "/Users/alisheramantay/Documents/nace/weights-t219/drex-max-v1-kapitsa-q4",
+  "model_provenance_script": "/Users/alisheramantay/Documents/nace/task276-native-profile/launch-r79b-20261101T160729Z.noindex/run_pair.sh",
+  "model_provenance_lines": [
+    52,
+    53
+  ],
+  "model_metadata": {
+    "config.json": {
+      "bytes": 2250,
+      "sha256": "a9113853630377c14c880e96042ae34d78845131cd03a93dfa36a6ac03524dd7"
+    },
+    "tokenizer.json": {
+      "bytes": 9089350,
+      "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+    }
+  },
+  "model_properties": {
+    "causal": false,
+    "tokenizer_model_type": "BPE",
+    "tokenizer_ignore_merges": false
+  },
+  "tokenizer_scope": "The parent authorized the model directory named in the existing runner. Only config.json and tokenizer.json were read. No weights, pointer head, GPU or GPU lock were accessed for preregistration.",
+  "baseline_processes": 2,
+  "baseline_requirements": [
+    "Run two independent fresh processes of the exact baseline commit with the identical measuring patch, build flags, binary, requests, request order, complete encoded layouts, context, environment and model/head identities.",
+    "Use the clean R79 environment, NI_ANE=0, NI_NO_MTP=1, NI_PREWARM=0, NI_PROFILE=0 and NI_SYS_CACHE=0. Preserve absent QMT/I8/MATH_SAFE overrides; record the complete effective environment and argv.",
+    "Record host, Mac model, macOS, production commit, measuring commit/patch SHA256, binary SHA256, compiler/build flags, request/layout SHA256, named model/config/tokenizer/head identities and readout temperature. Record numeric comparator backend and version; do not change backend between floor and candidate comparisons.",
+    "Compute baseline1||baseline2 only. Retain raw KL and each nonnegative gap, and freeze the one global maximum. Do not inspect candidate outputs until the numeric floor and baseline provenance are committed."
+  ],
+  "measurement_requirements": [
+    "Use stock score_max unchanged: reset model state per branch, all tokens at position zero, one whole-branch bidirectional prefill, sample=false, no checkpoint, stock final_norm_row and stock head_.logits.",
+    "Capture the full active-option group immediately after head_.logits and before public-answer softmax/rounding. The measured width is exactly the active option count in its original order. Do not add unused readout rows or extra prompt options.",
+    "No model decoding, sampling, causal chunking, prefix caching, ANE, synthetic autoregressive prefixes, invented next-token labels or NLL.",
+    "Use --once with repeat=1 and warmup=0. Fresh output directories only; preserve raw little-endian f32 and exact complete manifest inventory."
+  ],
+  "candidate_requirements": [
+    "Compare baseline1||each candidate independently. Every branch must satisfy nonnegative KL gap <= exactly 2 * the committed global floor.",
+    "Do not round the gate, add epsilon, replace the gate with another metric, borrow a causal/LM floor, introduce a fallback, recalibrate the floor or relax the bound. A zero floor permits only zero nonnegative KL gap.",
+    "Report raw KL, nonnegative KL gap, bitwise row equality, top-1 agreement/winner and maximum absolute logit difference separately. They are diagnostics, not alternative acceptance gates."
+  ],
+  "invalid_comparison": [
+    "Any nonfinite logit or metric.",
+    "Any missing, extra, partial, duplicate or misordered branch, option or payload element.",
+    "Any request/layout/token/decide/option-order/width mismatch, gap/overlap/trailing payload, incomplete success marker or failure in either process.",
+    "Any unexplained mismatch in stable provenance, model/readout-temperature identity, effective environment, measuring patch, build configuration or numeric comparator backend."
+  ],
+  "numeric_floor_file": "tools/logit_floors/drex-max-v1.m5.json",
+  "numeric_floor_status": "Not measured or created by this preregistration. The floor-committed announcement is reserved for the actual committed numeric floor.",
+  "verification_python": "from pathlib import Path\nimport hashlib,json,subprocess\np=json.loads(Path(\"tools/logit_floors/drex-max-v1.m5.protocol.json\").read_text())\nr=Path(p[\"request_file\"])\nl=Path(p[\"layout_file\"])\nassert hashlib.sha256(r.read_bytes()).hexdigest()==p[\"corpus_sha256\"]\nassert hashlib.sha256(l.read_bytes()).hexdigest()==p[\"layout_sha256\"]\nassert hashlib.sha256(Path(p[\"comparator_file\"]).read_bytes()).hexdigest()==p[\"comparator_sha256\"]\nlayout=json.loads(l.read_text())\nassert hashlib.sha256(Path(layout[\"encoder_binary\"]).read_bytes()).hexdigest()==layout[\"encoder_binary_sha256\"]\nfor name,expected in p[\"model_metadata\"].items():\n    path=Path(p[\"model_dir\"])/name\n    assert path.stat().st_size==expected[\"bytes\"]<50000000\n    assert hashlib.sha256(path.read_bytes()).hexdigest()==expected[\"sha256\"]\nrequests=json.loads(r.read_text())[\"requests\"]\nassert len(requests)==len(layout[\"layouts\"])==len(p[\"branches\"])==6\noffset=0\nfor i,(body,expected) in enumerate(zip(requests,layout[\"layouts\"])):\n    assert expected[\"request_index\"]==i\n    result=subprocess.run(layout[\"encoder_argv\"],input=json.dumps(body),text=True,capture_output=True,env=layout[\"encoder_environment\"],timeout=30)\n    assert result.returncode==0,(result.returncode,result.stderr)\n    actual=json.loads(result.stdout[result.stdout.index(\"{\"):])\n    assert actual==expected[\"encoded\"],expected[\"case\"]\n    assert len(actual[\"questions\"])==1\n    name,q=next(iter(actual[\"questions\"].items()))\n    branch=p[\"branches\"][i]\n    assert name==branch[\"question_id\"]\n    assert len(q[\"ids\"])==q[\"tokens\"]==branch[\"tokens\"]<=p[\"context\"]\n    assert q[\"decide\"]==branch[\"decide\"]==q[\"tokens\"]-1\n    assert q[\"options\"]==branch[\"option_indices\"]==list(range(branch[\"width\"]))\n    assert q[\"keys\"]==branch[\"option_keys\"]==list(body[\"questions\"][name][\"criteria\"])\n    assert layout[\"rows\"][i]=={\"request_index\":i,\"branch_index\":0,\"question\":{\"id\":name,\"type\":q[\"type\"],\"keys\":q[\"keys\"],\"legend\":q.get(\"legend\",[])},\"option_order\":q[\"keys\"],\"tokens\":q[\"ids\"],\"decide\":q[\"decide\"],\"width\":len(q[\"options\"]),\"byte_offset\":offset}\n    offset+=4*len(q[\"options\"])\n    print(i,name,q[\"tokens\"],len(q[\"options\"]),\"CPU layout verified\")\nassert offset==layout[\"payload_bytes\"]==72\nprint(\"PASS: frozen request, layout, metadata, comparator and encoder hashes; all six full layouts reproduced\")\n"
+}
