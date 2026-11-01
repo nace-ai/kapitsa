@@ -8,7 +8,8 @@ those tools' docstrings. Here:
   mlx_names()       Hugging Face name -> the names mlx-vlm's qwen4_exp uses after its sanitize() (+ layout change)
   role_of()         the precision role of a tensor (experts, shared, router, gdn, attn, indexer, hc, ple, embed, ...)
   quantize()        MLX affine quantization with Kapitsa's re-quantizer (tools/mlx_quant.cpp -> src/gguf/quant.cpp)
-  ngram_ids()       the 16 PLE table rows each token reads (hash of the token ids; SPEC 2.7)
+  ngram_spec()      the PLE n-gram hash and table layout of a text_config (Flash-Next's: NGRAM)
+  ngram_ids()       the PLE table rows each token reads (16 for Flash-Next; hash of the token ids; SPEC 2.7)
   SafetensorsWriter a safetensors file written tensor by tensor at offsets fixed by its header (resumable)
 """
 import ctypes
@@ -415,19 +416,74 @@ def fp8_e4m3_round(x):
 
 # ---------------------------------------------------------------- PLE n-gram ids
 
-NGRAM = {
-    "multipliers": [23703573157769, 20109073645365, 8052911324071],
-    "sizes": [20000003, 20000023, 20000033, 20000047, 20000059, 20000063, 20000069, 20000077,
-              20000081, 20000093, 20000107, 20000147, 20000153, 20000159, 20000161, 20000171],
-    "eos": 248044,
-    "rows": 320001536,
-    "shard_rows": 2500012,
-}
-NGRAM["offsets"] = [int(x) for x in np.concatenate([[0], np.cumsum(NGRAM["sizes"])[:-1]])]
+def _splitmix64(v):
+    m = (1 << 64) - 1
+    v = (v + 0x9E3779B97F4A7C15) & m
+    v = ((v ^ (v >> 30)) * 0xBF58476D1CE4E5B9) & m
+    v = ((v ^ (v >> 27)) * 0x94D049BB133111EB) & m
+    return v ^ (v >> 31)
 
 
-def ngram_ids(seq, eos=NGRAM["eos"]):
-    """[T, 16] int64 table rows for a token sequence starting a document (no previous context)."""
+def _is_prime(v):
+    if v < 2 or v % 2 == 0:
+        return v == 2
+    d = 3
+    while d * d <= v:
+        if v % d == 0:
+            return False
+        d += 2
+    return True
+
+
+def ngram_spec(tc, ple_index=0):
+    """The PLE n-gram hash of a qwen4_exp text_config, as transformers' Qwen4ExpTextNGramEmbedding builds it (and
+    src/model/ngram.cpp's NgramHash::make): odd multipliers from splitmix64 of the seed, head h's modulus the
+    (ple_index * heads + h + 1)-th prime from ngram_vocab_size_base, the heads' rows end to end, the total padded to
+    make_ngram_vocab_size_divisible_by and cut into split_ngram_parts shards; a row has ple_embed_dim / heads values."""
+    n, per = tc.get("ngram_size", 3), tc.get("heads_per_ngram", 8)
+    vocab, seed = tc["vocab_size"], tc.get("seed", 1234)
+    eos = tc.get("eos_token_id", 248044)
+    eos = eos[0] if isinstance(eos, list) else eos
+    heads = (n - 1) * per
+    half = max(1, ((1 << 63) - 1) // max(vocab, 1) // 2)  # token * multiplier stays below 2^63
+    bseed = seed + 10007 * ple_index
+    mult = [2 * (_splitmix64(bseed + 0x9E3779B97F4A7C15 * (i + 1)) % half) + 1 for i in range(n)]
+    p, sizes = tc.get("ngram_vocab_size_base", 20000000) - 1, []
+    for i in range((ple_index + 1) * heads):
+        p += 1
+        while not _is_prime(p):
+            p += 1
+        if i >= ple_index * heads:
+            sizes.append(p)
+    div, parts = tc.get("make_ngram_vocab_size_divisible_by", 128), tc.get("split_ngram_parts", 128)
+    rows = -(-sum(sizes) // div) * div
+    width = tc.get("ple_embed_dim", tc["hidden_size"]) // heads
+    return {"ngram": n, "per_ngram": per, "heads": heads, "multipliers": mult, "sizes": sizes,
+            "offsets": [int(x) for x in np.concatenate([[0], np.cumsum(sizes)[:-1]])], "eos": eos, "rows": rows,
+            "parts": parts, "shard_rows": -(-rows // parts), "width": width}
+
+
+def ple_layer(tc):
+    """The decoder layer (zero-based) holding the n-gram embedding: ple_layer_ids is one-indexed, and one is read."""
+    ids = tc.get("ple_layer_ids") or []
+    if len(ids) != 1:
+        raise SystemExit(f"ple_layer_ids {ids}: one n-gram layer is converted")
+    return ids[0] - 1
+
+
+# Qwen/Qwen3.8-Flash-Next's (its config.json's settings; the checkpoint's layer_multipliers and
+# ngram_heads_vocab_sizes are these, tools/qwen4_exp_pack_test.py)
+FLASH_NEXT_NGRAM = {"vocab_size": 248320, "hidden_size": 2560, "ple_embed_dim": 2560, "ngram_size": 3,
+                    "heads_per_ngram": 8, "ngram_vocab_size_base": 20000000, "make_ngram_vocab_size_divisible_by": 128,
+                    "split_ngram_parts": 128, "eos_token_id": 248044}
+NGRAM = ngram_spec(FLASH_NEXT_NGRAM)
+
+
+def ngram_ids(seq, eos=None, ng=None):
+    """[T, heads] int64 table rows for a token sequence starting a document (no previous context); ng: an
+    ngram_spec (Flash-Next's when None)."""
+    ng = ng or NGRAM
+    eos = ng["eos"] if eos is None else eos
     t = np.asarray(seq, dtype=np.int64)
     T = len(t)
     pos = np.arange(T)
@@ -439,14 +495,15 @@ def ngram_ids(seq, eos=NGRAM["eos"]):
         src = pos - k
         ok = (src >= 0) & (src >= start)
         return np.where(ok, t[np.maximum(src, 0)], eos)
-    m = NGRAM["multipliers"]
-    x2 = (tok(0) * m[0]) ^ (tok(1) * m[1])
-    x3 = x2 ^ (tok(2) * m[2])
-    sizes = np.array(NGRAM["sizes"], dtype=np.int64)
-    offs = np.array(NGRAM["offsets"], dtype=np.int64)
-    ids = np.empty((T, 16), np.int64)
-    ids[:, :8] = x2[:, None] % sizes[None, :8] + offs[None, :8]
-    ids[:, 8:] = x3[:, None] % sizes[None, 8:] + offs[None, 8:]
+    m, per = ng["multipliers"], ng["per_ngram"]
+    sizes = np.array(ng["sizes"], dtype=np.int64)
+    offs = np.array(ng["offsets"], dtype=np.int64)
+    ids = np.empty((T, ng["heads"]), np.int64)
+    x = tok(0) * m[0]
+    for k in range(1, ng["ngram"]):  # the (k + 1)-grams' heads
+        x = x ^ (tok(k) * m[k])
+        h = slice((k - 1) * per, k * per)
+        ids[:, h] = x[:, None] % sizes[None, h] + offs[None, h]
     return ids
 
 

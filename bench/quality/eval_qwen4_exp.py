@@ -58,7 +58,7 @@ import mlx.nn as nn  # noqa: E402
 REPO = "Qwen/Qwen3.8-Flash-Next"
 REV = "de4b8e4d43b917e7706784d8bb445c9af86a3540"
 log = P.log
-TABLE_PREFIX = "model.language_model.layers.1.ple.ple_embedding.ngram_embedding.shard_"
+TABLE_PREFIX = "model.language_model.layers.{}.ple.ple_embedding.ngram_embedding.shard_"
 
 
 def read_ids(f):
@@ -293,9 +293,9 @@ def text_config(cfg):
     return TextConfig.from_dict(tc)
 
 
-def new_layer(tc, i):
+def new_layer(tc, i, table_layer):
     from mlx_vlm.models.qwen4_exp import language as L
-    if i == 1:  # keep mlx-vlm from building the 128 table shards as parameters
+    if i == table_layer:  # keep mlx-vlm from building the table's shards (128) as parameters
         orig = L.ShardedEmbedding
         L.ShardedEmbedding = lambda *a, **k: None
         try:
@@ -424,15 +424,18 @@ def cmd_rows(a):
     seqs = [read_ids(f) for f in a.ids]
     if a.long:
         seqs.append(sum(seqs, []))
-    ids = np.unique(np.concatenate([P.ngram_ids(s).ravel() for s in seqs]))
-    src = P.Remote(REPO, REV)
+    src = P.Remote(a.repo, a.rev)
+    tc = json.loads(src.read("config.json"))["text_config"]
+    ng, prefix = P.ngram_spec(tc), TABLE_PREFIX.format(P.ple_layer(tc))
+    ids = np.unique(np.concatenate([P.ngram_ids(s, ng=ng).ravel() for s in seqs]))
     log(f"{len(ids)} table rows")
-    rows = np.zeros((len(ids), 160), np.uint16)
+    rows = np.zeros((len(ids), ng["width"]), np.uint16)
+    rb = 2 * ng["width"]  # bf16 bytes a row
 
     def one(i):
-        k, loc = divmod(int(ids[i]), P.NGRAM["shard_rows"])
-        f, off, nb, dt, shape = src.index[f"{TABLE_PREFIX}{k}.weight"]
-        rows[i] = np.frombuffer(src.read_small(f, off + loc * 320, off + loc * 320 + 320), np.uint16)
+        k, loc = divmod(int(ids[i]), ng["shard_rows"])
+        f, off, nb, dt, shape = src.index[f"{prefix}{k}.weight"]
+        rows[i] = np.frombuffer(src.read_small(f, off + loc * rb, off + (loc + 1) * rb), np.uint16)
     t = time.time()
     with ThreadPoolExecutor(a.conns) as ex:
         for j, _ in enumerate(ex.map(one, range(len(ids)))):
@@ -444,9 +447,9 @@ def cmd_rows(a):
 
 # ---------------------------------------------------------------- stream / local
 
-def fp8_scale():
+def fp8_scale(repo):
     """The per-tensor scale of the official FP8 checkpoint's n-gram table (one bf16 value)."""
-    fp8 = P.Remote(REPO + "-FP8", "main")
+    fp8 = P.Remote(repo + "-FP8", "main")
     k = next(k for k in fp8.index if k.endswith("ngram_embedding.weight_scale") or
              (".ngram_embedding." in k and k.endswith("weight_scale")))
     f, off, nb, dt, shape = fp8.index[k]
@@ -475,17 +478,18 @@ def run(a, mode):
     if mode == "stream":
         chains.insert(0, Chain("bf16", "bf16"))
     if any(c.q("table") is not None and c.q("table")["mode"] == "fp8" for c in chains):
-        FP8_TABLE_SCALE = fp8_scale()
+        FP8_TABLE_SCALE = fp8_scale(a.repo)
         log(f"FP8 table scale {FP8_TABLE_SCALE}")
     dt = mx.float32 if a.f32 else mx.bfloat16
 
 
     if mode == "stream":
-        src = P.Remote(REPO, REV)
+        src = P.Remote(a.repo, a.rev)
         cfg = json.loads(src.read("config.json"))
     else:
         cfg = json.load(open(os.path.join(a.pack, "config.json")))
     tc = text_config(cfg)
+    table_layer = P.ple_layer(cfg["text_config"])
     L = tc.num_hidden_layers if not a.layers else a.layers
     state_path = os.path.join(a.work, f"state-{mode}.json")
     state = json.load(open(state_path)) if os.path.exists(state_path) and not a.restart else {}
@@ -567,8 +571,8 @@ def run(a, mode):
         prefix = f"language_model.model.layers.{i}."
         for c in chains:
             w, qm = ut.weights_for(c.recipe, prefix, a.f32 and c.f32, c.method)
-            layer = build(new_layer(tc, i), w, qm)
-            if i == 1:
+            layer = build(new_layer(tc, i, table_layer), w, qm)
+            if i == table_layer:
                 tq = c.q("table") if c.recipe != "pack" else PACK_TABLE_Q
                 key = json.dumps(tq) + c.method
                 if key not in rows_cache:
@@ -654,7 +658,7 @@ def run(a, mode):
         write_dense(a.dense, "head", ut)
 
     sc = Scorer(seqs, names)
-    out = {"repo": f"{REPO}@{REV}", "mode": mode, "layers": L, "sequences": names, "f32": a.f32, "candidates": {}}
+    out = {"repo": f"{a.repo}@{a.rev}", "mode": mode, "layers": L, "sequences": names, "f32": a.f32, "candidates": {}}
     cd = {c.name: (c.u, heads[c.name]) for c in cands}
     cd.update({k: (v[0], v[2]) for k, v in extra.items()})
     dump_target = a.dump_ref
@@ -765,6 +769,8 @@ def main():
     ap.add_argument("--topk", type=int, default=64)
     ap.add_argument("--budget-gb", type=float, default=12.0)
     ap.add_argument("--conns", type=int, default=16)
+    ap.add_argument("--repo", default=REPO, help="the Hugging Face checkpoint (a qwen4_exp model)")
+    ap.add_argument("--rev", default=REV, help="its revision")
     ap.add_argument("--layers", type=int, default=0)
     ap.add_argument("--max-tokens", type=int, default=0)
     ap.add_argument("--cpu", action="store_true")

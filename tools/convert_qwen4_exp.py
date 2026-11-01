@@ -4,8 +4,8 @@ ever holding more than a few GB of the checkpoint: everything streams from Huggi
 
   1. bench/quality/eval_qwen4_exp.py stream ... --stage S --dense D   (the quality evaluation's streaming pass also
      writes each layer's experts 4-bit g64 to S and every other tensor bf16 to D, plus the MTP head and vision)
-  2. convert_qwen4_exp.py table --out PACK [--bits 4 --group 32]       (the PLE n-gram table, 128 shards, into
-     PACK/ple.safetensors; resumable)
+  2. convert_qwen4_exp.py table --out PACK [--bits 4 --group 32]       (the PLE n-gram table, its split_ngram_parts
+     shards (128), into PACK/ple.safetensors; resumable)
   3. convert_qwen4_exp.py finalize --stage S --dense D --out PACK --recipe SPEC   (dense tensors quantized per the
      recipe, the pack's files, index, config, PLE manifest, checks, sha256s in conversion.json)
 
@@ -21,6 +21,8 @@ RMSNorm weights stay zero-centred (applied as 1 + w by mlx-vlm and this model), 
 Quantization: MLX affine (bf16 scale and bias per group) with Kapitsa's re-quantizer (src/gguf/quant.cpp), not RTN.
 Recipe SPEC as in tools/qwen4_exp_pack.py (e.g. '4,router=8,indexer=8,ple=8,embed=8'); the experts are always the
 staged ones (their bits are checked against the recipe).
+Another qwen4_exp checkpoint (--repo / --rev; Flash-Next's by default): the n-gram table's layer, shards, rows and
+width come from its config.json (qwen4_exp_pack.ngram_spec) and are checked against the checkpoint's shard shapes.
 """
 import argparse
 import json
@@ -39,9 +41,8 @@ import qwen4_exp_pack as P  # noqa: E402
 
 REPO = "Qwen/Qwen3.8-Flash-Next"
 REV = "de4b8e4d43b917e7706784d8bb445c9af86a3540"
-TABLE_HF = "model.language_model.layers.1.ple.ple_embedding.ngram_embedding.shard_{}.weight"
-TABLE_MLX = "language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shards.{}"
-NSHARD = 128
+TABLE_HF = "model.language_model.layers.{layer}.ple.ple_embedding.ngram_embedding.shard_{k}.weight"
+TABLE_MLX = "language_model.model.layers.{layer}.ple.ple_embedding.ngram_embedding.shards.{k}"
 COPY = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt", "chat_template.jinja",
         "generation_config.json", "preprocessor_config.json", "video_preprocessor_config.json", "LICENSE"]
 log = P.log
@@ -49,10 +50,31 @@ log = P.log
 
 # ---------------------------------------------------------------- table
 
-def table_specs(bits, gs, rows=P.NGRAM["shard_rows"], dims=160):
-    specs = []
-    for k in range(NSHARD):
-        n = TABLE_MLX.format(k)
+def table_layout(cfg, index=None):
+    """(layer, ngram_spec) of the n-gram table a config.json describes; with the checkpoint's tensor index, its shards
+    (split_ngram_parts of them, no more) must be [shard_rows, width] each, which hold the hash's rows."""
+    tc = cfg["text_config"]
+    layer, ng = P.ple_layer(tc), P.ngram_spec(tc)
+    dim = tc.get("ple_embed_dim", tc["hidden_size"])
+    if ng["parts"] * ng["shard_rows"] < ng["rows"] or ng["width"] * ng["heads"] != dim:
+        raise SystemExit(f"n-gram table: {ng['heads']} heads, {ng['parts']} shards: the config's sizes do not divide")
+    if index is not None:
+        for k in range(ng["parts"] + 1):
+            n = TABLE_HF.format(layer=layer, k=k)
+            if k == ng["parts"]:
+                if n in index:
+                    raise SystemExit(f"{n}: more n-gram shards than split_ngram_parts ({ng['parts']})")
+            elif n not in index:
+                raise SystemExit(f"{n}: not in the checkpoint")
+            elif list(index[n][4]) != [ng["shard_rows"], ng["width"]]:
+                raise SystemExit(f"{n}: {index[n][4]}, the config gives [{ng['shard_rows']}, {ng['width']}]")
+    return layer, ng
+
+
+def table_specs(bits, gs, layer, ng):
+    rows, dims, specs = ng["shard_rows"], ng["width"], []
+    for k in range(ng["parts"]):
+        n = TABLE_MLX.format(layer=layer, k=k)
         specs += [(n + ".weight", "U32", [rows, dims * bits // 32]), (n + ".scales", "BF16", [rows, dims // gs]),
                   (n + ".biases", "BF16", [rows, dims // gs])]
     return specs
@@ -63,17 +85,19 @@ def cmd_table(a):
     path = os.path.join(a.out, "ple.safetensors")
     done_path = os.path.join(a.out, ".ple.done.json")
     done = set(json.load(open(done_path))) if os.path.exists(done_path) else set()
-    w = P.SafetensorsWriter(path, table_specs(a.bits, a.group))
-    src = P.Remote(REPO, REV)
-    todo = [k for k in range(NSHARD) if k not in done]
-    log(f"table: {len(todo)} of {NSHARD} shards to do -> {path} ({a.bits}-bit group {a.group})")
+    src = P.Remote(a.repo, a.rev)
+    layer, ng = table_layout(json.loads(src.read("config.json")), src.index)
+    w = P.SafetensorsWriter(path, table_specs(a.bits, a.group, layer, ng))
+    todo = [k for k in range(ng["parts"]) if k not in done]
+    log(f"table: {len(todo)} of {ng['parts']} shards to do -> {path} ({a.bits}-bit group {a.group})")
     pool = ThreadPoolExecutor(a.conns)
     lock = threading.Condition()
     ready = {}
 
     def fetcher():
         for k in todo:
-            arr = src.fetch([TABLE_HF.format(k)], pool)[TABLE_HF.format(k)]
+            n = TABLE_HF.format(layer=layer, k=k)
+            arr = src.fetch([n], pool)[n]
             with lock:
                 while len(ready) >= 2:
                     lock.wait()
@@ -88,7 +112,7 @@ def cmd_table(a):
                 lock.wait(5)
             x = ready.pop(k)
             lock.notify_all()
-        if x.shape != (P.NGRAM["shard_rows"], 160):
+        if x.shape != (ng["shard_rows"], ng["width"]):
             raise SystemExit(f"shard {k}: shape {x.shape}")
         wq, s, b = P.quantize(x, a.bits, a.group)
         # check: a sample of rows dequantizes close to the bf16 rows (relative RMS error of a 4-bit grid ~ 0.1)
@@ -98,7 +122,7 @@ def cmd_table(a):
         rel = float(np.sqrt((err ** 2).mean() / max((ref ** 2).mean(), 1e-30)))
         if not np.isfinite(rel) or rel > {3: 0.3, 4: 0.15, 5: 0.08, 6: 0.04, 8: 0.01}[a.bits]:
             raise SystemExit(f"shard {k}: relative error {rel:.3f}")
-        n = TABLE_MLX.format(k)
+        n = TABLE_MLX.format(layer=layer, k=k)
         w.write(n + ".weight", wq)
         w.write(n + ".scales", s)
         w.write(n + ".biases", b)
@@ -125,6 +149,7 @@ def cmd_finalize(a):
     cfg = json.load(open(os.path.join(hfdir, "config.json")))
     tcfg = cfg["text_config"]
     L = tcfg["num_hidden_layers"]
+    table_layer, ng = table_layout(cfg)
     expected = json.load(open(a.expected)) if a.expected else None  # mlx-vlm parameter tree (name -> [shape, dtype])
 
     # experts' format from the stage files: words per row vs scales per row
@@ -228,16 +253,16 @@ def cmd_finalize(a):
     if not os.path.exists(tpath):
         raise SystemExit("ple.safetensors missing: run `table` first")
     tdone = json.load(open(os.path.join(out, ".ple.done.json")))
-    if len(tdone) != NSHARD:
-        raise SystemExit(f"ple.safetensors: {len(tdone)} of {NSHARD} shards written")
+    if len(tdone) != ng["parts"]:
+        raise SystemExit(f"ple.safetensors: {len(tdone)} of {ng['parts']} shards written")
     tl = P.Local(out)
     tq = None
     manifest_shards = []
-    for k in range(NSHARD):
-        n = TABLE_MLX.format(k)
+    for k in range(ng["parts"]):
+        n = TABLE_MLX.format(layer=table_layer, k=k)
         wi, si, bi = tl.index[n + ".weight"], tl.index[n + ".scales"], tl.index[n + ".biases"]
         rows = wi[4][0]
-        q = {"bits": wi[4][1] * 32 // 160, "group_size": 160 // si[4][1], "mode": "affine"}
+        q = {"bits": wi[4][1] * 32 // ng["width"], "group_size": ng["width"] // si[4][1], "mode": "affine"}
         tq = tq or q
         qblock[n] = quant_entry(q)
         for suf in (".weight", ".scales", ".biases"):
@@ -245,8 +270,8 @@ def cmd_finalize(a):
         manifest_shards.append({"row_start": k * rows, "row_count": rows, **{
             nm: {"file": "ple.safetensors", "offset": ix[1], "dtype": ix[3], "shape": ix[4]}
             for nm, ix in (("weight", wi), ("scales", si), ("biases", bi))}})
-    manifest = {"version": 2, "source_root": ".", "layout": "safetensors_ranges", "row_width": 160,
-                "row_count": NSHARD * P.NGRAM["shard_rows"], "quantization": tq, "cache_rows": 0,
+    manifest = {"version": 2, "source_root": ".", "layout": "safetensors_ranges", "row_width": ng["width"],
+                "row_count": ng["parts"] * ng["shard_rows"], "quantization": tq, "cache_rows": 0,
                 "shards": manifest_shards}
     json.dump(manifest, open(os.path.join(out, "ple_manifest.json"), "w"), indent=1)
 
@@ -303,7 +328,7 @@ def cmd_finalize(a):
     with ThreadPoolExecutor(8) as ex:
         for f, h in zip(allfiles, ex.map(lambda f: P.sha256_file(os.path.join(out, f)), allfiles)):
             sums[f] = {"size": os.path.getsize(os.path.join(out, f)), "sha256": h}
-    json.dump({"source": {"repo": REPO, "revision": REV}, "recipe": a.recipe, "table": tq,
+    json.dump({"source": {"repo": a.repo, "revision": a.rev}, "recipe": a.recipe, "table": tq,
                "experts": "staged by bench/quality/eval_qwen4_exp.py stream (Kapitsa re-quantizer)",
                "converter": "tools/convert_qwen4_exp.py", "files": sums},
               open(os.path.join(out, "conversion.json"), "w"), indent=1)
@@ -317,6 +342,8 @@ def main():
     ap.add_argument("--bits", type=int, default=4)
     ap.add_argument("--group", type=int, default=32)
     ap.add_argument("--conns", type=int, default=16)
+    ap.add_argument("--repo", default=REPO, help="the Hugging Face checkpoint (a qwen4_exp model)")
+    ap.add_argument("--rev", default=REV, help="its revision (a commit: the headers are cached by it)")
     ap.add_argument("--stage")
     ap.add_argument("--dense")
     ap.add_argument("--recipe")
