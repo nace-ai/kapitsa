@@ -1,4 +1,5 @@
 #include "common.h"
+#include "kv_int8.h"
 
 // ---- 8-row verify kernels (DFlash2 block verify; any R <= 8 token rows, padded to 8) ----
 //
@@ -1561,13 +1562,15 @@ NI_INLINE half v8e_b(uint i, uint mm, uint r, uint c) {
     acc[i] = 0.0f;
   }
   float m = -INFINITY, l = 0.0f;
-  const device half* kbase = kc + kvh * p.max_seq * kHD;
-  const device half* vbase = vc + kvh * p.max_seq * kHD;
+  const device half* kbase = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);
+  const device half* vbase = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
   for (uint t0 = start; t0 < end; t0 += kTile) {
     const uint n = min(kTile, end - t0);
-    for (uint i = tid; i < n * kHD / 4; i += ntg) {
-      ((threadgroup half4*)ktile)[i] = ((const device half4*)(kbase + t0 * kHD))[i];
-      ((threadgroup half4*)vtile)[i] = ((const device half4*)(vbase + t0 * kHD))[i];
+    const uint nh4 = kHD / 4;  // int8 rows: flat half4 i = (position, dim group)
+    for (uint i = tid; i < n * nh4; i += ntg) {
+      const uint j = i / nh4, c4 = i - j * nh4;
+      ((threadgroup half4*)ktile)[i] = kvq_load4(kbase, (t0 + j) * KVQ_ROW, c4);
+      ((threadgroup half4*)vtile)[i] = kvq_load4(vbase, (t0 + j) * KVQ_ROW, c4);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (live) {
@@ -1662,8 +1665,8 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
   simdgroup_float8x8 o[kDH / 8];
   NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) o[j] = simdgroup_float8x8(0);
   float m_row = kNeg11, l_row = 0.0f;
-  const device half* kb = kc + kvh * p.max_seq * kHD;
-  const device half* vb = vc + kvh * p.max_seq * kHD;
+  const device half* kb = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);
+  const device half* vb = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
   const threadgroup half* kfr = kv + (dh * kDH + frow) * KLD + fcol;
   const threadgroup half* vfr = kv + frow * kVLD11 + dh * kDH + fcol;
   const bool loader = tid < 256;
@@ -1819,15 +1822,15 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
   const uint anc = uint(tree[kKfMask + t]);
   float qv[8];
   for (uint i = 0; i < 8; ++i) qv[i] = float(half(q[(t * p.Hq + hq) * kHD + lane * 8 + i] * p.scale));
-  const device half* kb = kc + (kvh * p.max_seq + p.pos0) * kHD + lane * 8;
-  const device half* vb = vc + (kvh * p.max_seq + p.pos0) * kHD + lane * 8;
+  const device half* kb = (const device half*)((const device char*)kc + size_t(kvh * p.max_seq + p.pos0) * KVQ_ROW);  // int8 rows: the block rows, dims lane*8 + i
+  const device half* vb = (const device half*)((const device char*)vc + size_t(kvh * p.max_seq + p.pos0) * KVQ_ROW);
   float s[8];
   float m = -INFINITY;
   for (uint j = 0; j < 8; ++j) {
     s[j] = -INFINITY;
     if ((anc >> j) & 1u) {  // the same for every lane: the simd_sum below is uniform
       float a = 0.0f;
-      for (uint i = 0; i < 8; ++i) a = fma(qv[i], float(kb[j * kHD + i]), a);
+      for (uint i = 0; i < 8; ++i) a = fma(qv[i], float(kvq_load1(kb, j * KVQ_ROW, lane * 8 + i)), a);
       s[j] = simd_sum(a);
       m = max(m, s[j]);
     }
@@ -1838,7 +1841,7 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
     if ((anc >> j) & 1u) {
       const float e = metal::precise::exp(s[j] - m);
       l += e;
-      for (uint i = 0; i < 8; ++i) acc[i] = fma(e, float(vb[j * kHD + i]), acc[i]);
+      for (uint i = 0; i < 8; ++i) acc[i] = fma(e, float(kvq_load1(vb, j * KVQ_ROW, lane * 8 + i)), acc[i]);
     }
   }
   const uint base = (t * p.Hq + hq) * p.nchunks + (p.nchunks - 1);
@@ -1867,21 +1870,21 @@ NI_INLINE void attn8_tree_tail(const device float* q, const device half* kc, con
   }
   float qv[8];
   for (uint i = 0; i < 8; ++i) qv[i] = float(half(q[(t * p.Hq + hq) * kHD + lane * 8 + i] * p.scale));
-  const device half* kb = kc + kvh * p.max_seq * kHD + lane * 8;
-  const device half* vb = vc + kvh * p.max_seq * kHD + lane * 8;
+  const device half* kb = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);  // int8 rows: cache row `row`, dims lane*8 + i
+  const device half* vb = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
   const uint qp = p.pos0 + dep;
   m = -INFINITY; l = 0.0f;
   for (uint i = 0; i < 8; ++i) acc[i] = 0.0f;
   for (uint k = tree_zone(qp); k <= qp; ++k) {
     const uint row = k < p.pos0 ? k : p.pos0 + arow[k - p.pos0];
     float a = 0.0f;
-    for (uint i = 0; i < 8; ++i) a = fma(qv[i], float(kb[row * kHD + i]), a);
+    for (uint i = 0; i < 8; ++i) a = fma(qv[i], float(kvq_load1(kb, row * KVQ_ROW, lane * 8 + i)), a);
     const float sc = simd_sum(a);
     const float m_new = max(m, sc);
     const float corr = m == -INFINITY ? 0.0f : metal::precise::exp(m - m_new);
     const float e = metal::precise::exp(sc - m_new);
     l = l * corr + e;
-    for (uint i = 0; i < 8; ++i) acc[i] = fma(e, float(vb[row * kHD + i]), acc[i] * corr);
+    for (uint i = 0; i < 8; ++i) acc[i] = fma(e, float(kvq_load1(vb, row * KVQ_ROW, lane * 8 + i)), acc[i] * corr);
     m = m_new;
   }
 }
@@ -1956,9 +1959,10 @@ NI_INLINE void attn8_tree_tail(const device float* q, const device half* kc, con
   const uint h = tg.x, t = tg.y, D = p.D;
   const uint pos = p.pos + t;                    // cache row
   const uint tpos = p.pos + uint(tree[kKfDep + t]);  // the position of its token
-  if (h >= p.Hq + p.Hkv) {  // value head: plain copy into the cache
+  if (h >= p.Hq + p.Hkv) {  // value head: quantized copy into the cache
     uint hv = h - p.Hq - p.Hkv;
-    vc[(hv * p.max_seq + pos) * D + tid] = half(vr[(t * p.Hkv + hv) * D + tid]);
+    kvq_store1(vc, size_t(hv) * p.max_seq * KVQ_ROW + size_t(pos) * KVQ_ROW, scratch, tid,
+               float(vr[(t * p.Hkv + hv) * D + tid]));
     return;
   }
   const bool is_q = h < p.Hq;
@@ -1984,7 +1988,7 @@ NI_INLINE void attn8_tree_tail(const device float* q, const device half* kc, con
     else x = row[tid] * cs + row[tid - half_rot] * sn;
   }
   if (is_q) q_out[(t * p.Hq + h) * D + tid] = x;
-  else kc[((h - p.Hq) * p.max_seq + pos) * D + tid] = half(x);
+  else kvq_store1(kc, size_t(h - p.Hq) * p.max_seq * KVQ_ROW + size_t(pos) * KVQ_ROW, scratch, tid, x);
 }
 
 // ---- KFlash tree verifies wider than 8 rows: this cycle's row tiles, on the GPU ----
@@ -2020,11 +2024,24 @@ struct KvTreeParams {
                                 const device int* tree [[buffer(2)]], constant KvTreeParams& p [[buffer(3)]],
                                 uint2 tg [[threadgroup_position_in_grid]], uint d [[thread_index_in_threadgroup]]) {
   const uint h = tg.y % p.Hkv;
-  device half* c = (tg.y < p.Hkv ? kc : vc) + size_t(h) * p.max_seq * p.D + d;
+  // int8 rows: the D int8 values at + d, plus the row's float scale (moved by d == 0). fp16 rows: D halves at + 2d.
+#ifdef NI_KV_I8
+  device char* c = (device char*)(tg.y < p.Hkv ? kc : vc) + size_t(h) * p.max_seq * KVQ_ROW + d;
+#else
+  device char* c = (device char*)(tg.y < p.Hkv ? kc : vc) + size_t(h) * p.max_seq * KVQ_ROW + d * 2;
+#endif
   const uint a = uint(tree[kKfA]);
   for (uint i = 1; i <= a; ++i) {
     const uint s = uint(tree[kKfPath + i]);
-    if (s != i) c[size_t(p.pos + i) * p.D] = c[size_t(p.pos + s) * p.D];
+    if (s != i) {
+      const size_t di = size_t(p.pos + i) * KVQ_ROW, si = size_t(p.pos + s) * KVQ_ROW;
+      c[di] = c[si];
+#ifdef NI_KV_I8
+      if (d == 0) *(device float*)(c + di + KVQ_HD) = *(const device float*)(c + si + KVQ_HD);
+#else
+      c[di + 1] = c[si + 1];
+#endif
+    }
   }
 }
 
