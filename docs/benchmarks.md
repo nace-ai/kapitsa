@@ -124,12 +124,14 @@ session (3.8-8.8% worst-phase mean in prefill); no decode phase is (2.5% or less
 | Qwen3.6 35B-A3B | 5,963 / 5,270 → 6,036 / 5,298 | 339.1 → **346.0** | +2.0% |
 | Qwen3.8 27B | 907 / 898 → 904 / 880 | 133.2 → **143.3** | +7.6% |
 | Nemotron 3.5 Bolt 74B-A9B | 1,038 / 1,035 → 1,075 / 1,100 | 159.5 → 154.0 | -3.4% |
+| DiffuSpace Clover 35B-A3B | 6,002 / 5,313 → 5,981 / 5,227 | 319.2 → 304.0 | -4.8% |
 
 The old cells: Flash-Next, Lightning, Super-VL and Dory on 2026-10-22 (main `fd85910`, Dory `039ddea`, automatic mode,
 contention-flagged), the 35B-A3B on 2026-10-25 (`cd20dcc`, automatic mode), the 27B and Bolt on 2026-10-25 (`cd20dcc`,
-High Power mode), Flint on 2026-10-26 (`ed2b07d`, High Power mode). Super-VL's and Bolt's decode came out slower
-(five and four runs; the old Super-VL cell was one contention- and loop-flagged run, the old Bolt cell is inside the new
-runs' range), not explained here. On Lightning, `NI_KFLASH=0` (chains instead of KFlash trees) decoded faster than the
+High Power mode), Flint on 2026-10-26 (`ed2b07d`, High Power mode), Clover on 2026-10-28 (`80740c0`, High Power mode,
+one `kapitsa bench` run; its new runs are in [their own folder](../bench/results/2026-11-01-m5-max-clover/README.md)).
+Super-VL's, Bolt's and Clover's decode came out slower (five, four and three runs; the old Super-VL cell was one
+contention- and loop-flagged run, the old Bolt and Clover cells are inside the new runs' ranges), not explained here. On Lightning, `NI_KFLASH=0` (chains instead of KFlash trees) decoded faster than the
 default, 314.8 against 287.3 tok/s in three interleaved runs each; the cell stays on the default.
 
 Prefill / decode by context, tok/s (the median of the runs; a cold prompt, then a 192-token answer, whose rate is not the
@@ -145,6 +147,7 @@ Prefill / decode by context, tok/s (the median of the runs; a cold prompt, then 
 | Qwen3.6 35B-A3B | 4,662 / 268 | 5,611 / 262 | 6,013 / 257 | 5,493 / 240 | 4,900 / 218 | 4,015 / 175 |
 | Qwen3.8 27B | 672 / 97 | 817 / 84 | 870 / 88 | 850 / 77 | 833 / 71 | 762 / 61 |
 | Bolt 74B-A9B | 907 / 114 | 1,053 / 108 | 1,089 / 108 | 1,105 / 111 | 1,103 / 102 | 1,076 / 79 |
+| Clover 35B-A3B | 4,572 / 230 | 5,546 / 230 | 5,688 / 232 | 5,280 / 203 | 4,707 / 167 | 3,788 / 143 |
 
 **2026-10-25: the other engines' Qwen3.8 27B, Qwen3.6 35B-A3B and Nemotron 3.5 Bolt cells** ([results](../bench/results/2026-10-25-m5-max/README.md)).
 MacBook Pro (16-inch, 2026), 40-core GPU, macOS 26.4. Every cell ran on AC power, the 35B-A3B row in automatic mode and
@@ -225,9 +228,9 @@ Each engine has at least one decode answer flagged for a repetition loop.
   27B block above.
 - Flint 40B-A2.5B: rec 0.1.0 2,863 / 224 and llama.cpp b11871 3,827 / 130 on 2026-10-26, one block of the row at T 1.0
   with Kapitsa 0.2.18 (5,721 / 267) ([results](../bench/results/2026-10-26-m5-max/README.md)).
-- Clover 35B-A3B (2026-10-28, DiffuSpace's block-diffusion MoE, Kapitsa alone: no other engine runs it on a Mac; not
-  re-measured on 2026-11-01):
-  **6,002 / 319**, greedy 332, with the 35B's DFlash2 drafter on Clover's causal pathway
+- Clover 35B-A3B (DiffuSpace's block-diffusion MoE, Kapitsa alone: no other engine runs it on a Mac): **5,981 / 304**,
+  greedy 333, on 2026-11-01 (main `7f4e709`, three runs, [results](../bench/results/2026-11-01-m5-max-clover/README.md));
+  6,002 / 319, greedy 332, on 2026-10-28, with the same decoding, the 35B's DFlash2 drafter on Clover's causal pathway
   ([details](#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [results](../bench/results/2026-10-28-m5-max-clover/README.md)).
 
 <a id="m5-pro"></a>
@@ -505,7 +508,9 @@ DiffuSpace's [Clover-35B-A3B-Preview](https://huggingface.co/Diffuspace/Clover-3
 into a block-diffusion model: its weights read a sequence causally, as Qwen3.6, or a block of positions at once by
 denoising ([#773](https://github.com/nace-ai/kapitsa/pull/773), [#774](https://github.com/nace-ai/kapitsa/pull/774),
 [#776](https://github.com/nace-ai/kapitsa/pull/776); [Other models](usage.md#other-models)). Kapitsa runs the Hub
-checkpoint converted to the 35B's 4-bit recipe (19.5 GB), three ways, `kapitsa bench` on the M5 Max:
+checkpoint converted to the 35B's 4-bit recipe (19.5 GB), three ways, `kapitsa bench` on the M5 Max (the poster's cell
+is now the 2026-11-01 re-measure of `auto` on main `7f4e709`, 5,981 / 304, three runs:
+[results](../bench/results/2026-11-01-m5-max-clover/README.md)):
 
 | Decoding (`NI_CLOVER_DECODE`) | Prefill 4K / 16K | Decode T 0.6 / greedy | Tokens a cycle |
 | --- | ---: | ---: | ---: |

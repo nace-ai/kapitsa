@@ -38,4 +38,10 @@ assert "Kapitsa with KFlash " in ri.header_desc(data, hr), ri.header_desc(data, 
 assert "no spec" not in ri.header_desc(data, hr), ri.header_desc(data, hr)
 assert ri.header_alt(data, hr) == ("Kapitsa writes 346 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for "
                                    "MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash."), ri.header_alt(data, hr)
+C = data["context"]   # the context charts: every model has a value per size, and each chart builds without Chrome
+for kind in ("prefill", "decode"):
+    assert all(len(m[kind]) == len(C["sizes"]) for m in C["models"]), kind
+    html, w, h = ri.context_chart(data, "light", kind)
+    assert html.count("<polyline") == len(C["models"]) and w == data["poster"]["size"][0], kind
+    assert ri.context_alt(data, kind).startswith(C[kind]["alt"] + ": " + C["models"][0]["model"]), kind
 print(f"test_readme_images: ok ({n} Kapitsa cells)")

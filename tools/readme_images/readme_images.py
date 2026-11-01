@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-# Renders the README's benchmark poster (docs/assets/benchmarks-{light,dark}.webp) and header (header-{light,dark,narrow}.svg)
-# from readme_images.json beside it. Edit the numbers there, then: python3 readme_images.py --out <kapitsa repo>/docs/assets [--poster | --headers]
-# The poster needs Google Chrome (run headless, CPU only) and cwebp; the headers need nothing but Python 3.
+# Renders the README's benchmark poster (docs/assets/benchmarks-{light,dark}.webp), header (header-{light,dark,narrow}.svg)
+# and context charts (context-{prefill,decode}-{light,dark}.webp) from readme_images.json beside it. Edit the numbers there,
+# then: python3 readme_images.py --out <kapitsa repo>/docs/assets [--poster | --headers | --context]
+# The poster and the charts need Google Chrome (run headless, CPU only) and cwebp; the headers need nothing but Python 3.
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -468,6 +470,84 @@ def render(html, w, h, out_webp, tmp):
     subprocess.run([CWEBP, "-quiet", "-q", "90", str(png), "-o", str(out_webp)], check=True)
 
 
+# ---------------------------------------------------------------- the context charts (WebP, rendered as the poster)
+
+CTX_TOP, CTX_PH, CTX_GAP, CTX_COLS = 214, 440, 28, 3   # panels' top, one panel's height, the gap, panels per row
+
+
+def nice_step(x):
+    """the smallest 1, 1.5, 2, 2.5, 3, 4, 5, 6 or 8 x 10^k at or above x"""
+    p = 10 ** math.floor(math.log10(x))
+    return next(m * p for m in (1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10) if m * p >= x)
+
+
+def compact(v):
+    return f"{v / 1000:g}K" if v >= 1000 else f"{v:g}"
+
+
+def context_chart(data, theme, kind):
+    """Kapitsa's prefill or decode speed by context length (data["context"]) as small multiples: a panel per model, each
+    on its own scale from zero, its values in a row under the axis; returns (html, width, height)"""
+    t = POSTER[theme]
+    C = data["context"]
+    sizes, models, K = C["sizes"], C["models"], C[kind]
+    W = data["poster"]["size"][0]
+    pw = (W - 2 * X0 - (CTX_COLS - 1) * CTX_GAP) / CTX_COLS
+    rows = -(-len(models) // CTX_COLS)
+    per_line = int((W - 2 * 44) / (F_FOOT * FOOT_EM))
+    foot = [w for line in K["footer"] for w in textwrap.wrap(line, per_line, break_long_words=False)]
+    fy = CTX_TOP + rows * CTX_PH + (rows - 1) * CTX_GAP + FOOT_GAP
+    H = fy + len(foot) * FOOT_LINE + FOOT_PAD
+
+    o = [rect(0, 0, W, H, 0, t["bg"])]
+    o.append(mark(44, 43, 62, t["mark"], "mk"))
+    o.append(text(122, 84, K["title"], "serif", 52, t["ink"]))
+    for i, s in enumerate(K["subtitle"]):
+        o.append(text(44, 140 + 30 * i, s, "sans", F_FOOT, t["ink2"]))
+    for i, m in enumerate(models):
+        vals = m[kind]
+        if len(vals) != len(sizes):
+            sys.exit(f"readme_images.json: context {m['model']} {kind} has {len(vals)} values for {len(sizes)} sizes")
+        px = X0 + (i % CTX_COLS) * (pw + CTX_GAP)
+        py = CTX_TOP + (i // CTX_COLS) * (CTX_PH + CTX_GAP)
+        o.append(rect(px, py, pw, CTX_PH, 18, t["panel"]))
+        o.append(text(px + 28, py + 50, m["model"], "sans-sb", 30, t["ink"]))
+        left, right, top, bottom = px + 100, px + pw - 66, py + 92, py + CTX_PH - 104
+        step = nice_step(max(vals) * 1.08 / 2)            # two gridlines above zero, the top one over every value
+        y = lambda v: bottom - (bottom - top) * v / (2 * step)
+        x = lambda j: left + (right - left) * j / (len(sizes) - 1)
+        for k in range(3):
+            o.append(f'<line x1="{num(left)}" x2="{num(right)}" y1="{num(y(k * step))}" y2="{num(y(k * step))}" '
+                     f'stroke="{t["greys"][2]}" stroke-width="2"/>')
+            o.append(text(left - 18, y(k * step) + 8, compact(k * step), "mono", 22, t["muted"], "end"))
+        pts = " ".join(f"{num(x(j))},{num(y(v))}" for j, v in enumerate(vals))
+        o.append(f'<polygon points="{num(x(0))},{num(bottom)} {pts} {num(x(len(vals) - 1))},{num(bottom)}" '
+                 f'fill="{t["kap"]}" fill-opacity="0.12"/>')
+        o.append(f'<polyline points="{pts}" fill="none" stroke="{t["kap"]}" stroke-width="5" stroke-linejoin="round" '
+                 f'stroke-linecap="round"/>')
+        for j, v in enumerate(vals):
+            o.append(f'<circle cx="{num(x(j))}" cy="{num(y(v))}" r="9" fill="{t["kap"]}" stroke="{t["panel"]}" '
+                     f'stroke-width="5"/>')
+            o.append(text(x(j), bottom + 38, sizes[j], "mono", 22, t["muted"], "middle"))
+            o.append(text(x(j), bottom + 76, f"{v:,.0f}", "mono-b", 26, t["ink"], "middle"))
+    for i, s in enumerate(foot):
+        o.append(text(44, fy + 16 + i * FOOT_LINE, s, "sans", F_FOOT, t["ink2"]))
+
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
+           + "".join(o) + "</svg>")
+    html = (f'<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light">'
+            f'<style>{CSS % {"f": FONTS, "bg": t["bg"]}}</style></head><body>{svg}</body></html>')
+    return html, W, H
+
+
+def context_alt(data, kind):
+    """the README alt text of one context chart: every model's first and last value"""
+    C = data["context"]
+    return (f"{C[kind]['alt']}: "
+            + "; ".join(f"{m['model']} {m[kind][0]:,.0f} at {C['sizes'][0]} to {m[kind][-1]:,.0f} at {C['sizes'][-1]}"
+                        for m in C["models"]) + ".")
+
+
 # ---------------------------------------------------------------- the header (SVG, text as Geist Mono outlines)
 
 HEADER = {
@@ -640,6 +720,7 @@ def main():
     ap = argparse.ArgumentParser(description="Render the README's benchmark poster and header from readme_images.json")
     ap.add_argument("--poster", action="store_true", help="only the poster (two WebP files)")
     ap.add_argument("--headers", action="store_true", help="only the header (three SVG files; no Chrome needed)")
+    ap.add_argument("--context", action="store_true", help="only the context charts (four WebP files: prefill and decode, light and dark)")
     ap.add_argument("--out", type=Path, default=ROOT / "docs" / "assets", help="output folder (default: docs/assets)")
     ap.add_argument("--tables", action="store_true", help="only the README's per-Mac tables (rewrites README.md's Models section)")
     ap.add_argument("--check", action="store_true", help="with --tables: fail if README.md's tables are not what the data gives")
@@ -662,7 +743,7 @@ def main():
         return
     a.out.mkdir(parents=True, exist_ok=True)
     written = []
-    if not a.poster:
+    if not a.poster and not a.context:
         glyphs = json.loads((ASSETS / "geist-mono.json").read_text(encoding="utf-8"))
         for theme in ("light", "dark"):
             f = a.out / f"header-{theme}.svg"
@@ -676,13 +757,19 @@ def main():
             sys.exit("the poster needs Google Chrome (set CHROME=...) and cwebp (brew install webp; or set CWEBP=...)")
         tmp = Path(tempfile.mkdtemp(prefix="readme-images-"))
         try:
-            for theme in ("light", "dark"):
+            for theme in ("light", "dark") if not a.context else ():
                 html, w, h, notes = poster(data, theme)
                 for n in notes:
                     print("note:", n)
                 f = a.out / f"benchmarks-{theme}.webp"
                 render(html, w, h, f, tmp)
                 written.append(f)
+            for kind in ("prefill", "decode") if not a.poster and "context" in data else ():
+                for theme in ("light", "dark"):
+                    html, w, h = context_chart(data, theme, kind)
+                    f = a.out / f"context-{kind}-{theme}.webp"
+                    render(html, w, h, f, tmp)
+                    written.append(f)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     for f in written:
@@ -695,6 +782,8 @@ def main():
                     print(f"todo: {mac['name']} / {row['model']} / {e}: {raw['todo']}")
     rows = header_rows(data)
     print("README header alt text:", header_alt(data, rows))
+    for kind in ("prefill", "decode") if "context" in data else ():
+        print(f"README context chart alt text ({kind}):", context_alt(data, kind))
     words = "zero one two three four five six seven eight nine ten eleven twelve".split()
     others = len(data["engines"]) - 1
     chips = [m["name"].removeprefix("MacBook Pro ").rsplit(" ", 2)[0] for m in data["poster"]["macs"]]
