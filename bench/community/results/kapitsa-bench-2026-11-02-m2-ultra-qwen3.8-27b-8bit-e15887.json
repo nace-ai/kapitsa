@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-11-02T15:15:15Z",
+  "kapitsa": {
+    "version": "0.2.26",
+    "commit": "6ef19b0"
+  },
+  "mac": {
+    "identifier": "Mac14,14",
+    "name": "Mac Studio (2023)",
+    "year": 2023,
+    "chip": "Apple M2 Ultra",
+    "cpu_cores": 24,
+    "gpu_cores": 60,
+    "memory_gb": 64,
+    "macos": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "model": {
+    "name": "qwen3.8-27b",
+    "title": "Qwen3.8-27B",
+    "variant": "8bit",
+    "precision": "8-bit",
+    "catalog": true,
+    "revision": "241ebb5",
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "incoai/Qwen3.8-27B-DFlash2@015e795",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 48.5,
+      "runs_tps": [
+        73.53,
+        40.49,
+        45.78,
+        48.5,
+        58.62
+      ],
+      "median_accepted_draft_tps": 38.08,
+      "median_accepted_draft_share": 0.7891
+    },
+    "decode_greedy": {
+      "median_tps": 72.85,
+      "runs_tps": [
+        69.22,
+        72.85,
+        70.67,
+        76.62,
+        74.37
+      ],
+      "median_accepted_draft_tps": 59.76,
+      "median_accepted_draft_share": 0.8184
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 17.3851,
+        "tps": 237.7,
+        "followup_s": [
+          0.1914,
+          0.2267,
+          0.1668
+        ],
+        "followup_median_s": 0.1914,
+        "followup_suffix_tps": 123.5
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16284,
+        "ttft_s": 69.2541,
+        "tps": 235.1,
+        "followup_s": [
+          0.2012,
+          0.2543,
+          0.1868
+        ],
+        "followup_median_s": 0.2012,
+        "followup_suffix_tps": 112.4
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 31.68
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.02,
+    "gpu_other_max_pct": 1.61,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
