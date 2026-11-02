@@ -634,6 +634,9 @@ class Qwen35 : public Model {
   bool ane_slabs(int T) const;
   static bool noncausal_slabs_on();
   void enc_mlp_prefill_slabs(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
+  // NI_ANE_NC_WAVE=1 (default off): the noncausal pass pipelines its slabs across the two lanes (enc_prefill_nc_wave)
+  bool ane_nc_wave(int T) const;
+  void enc_prefill_nc_wave(Encoder& e, Seq& s, int T);
   void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);
   QLinear own_qlin(const class WeightStore& w, const std::string& name);
   // speculative decoding helpers (qwen35_spec.cpp)

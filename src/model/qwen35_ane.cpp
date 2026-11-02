@@ -434,6 +434,60 @@ void Qwen35::enc_mlp_prefill_slabs(Encoder& e, int li, const Layer& L, int T, co
   }
 }
 
+// NI_ANE_NC_WAVE=1 (default off; needs NI_ANE_NONCAUSAL's slabs and the wavefront's two lanes): the noncausal pass
+// pipelines its slabs. enc_mlp_prefill_slabs waits for each slab's ANE job before the next slab's GPU work, so the
+// ANE idles under every mixer. Here the FFN jobs go out in order j = 0, 1, ... (layer by layer, slab by slab), job j
+// on lane j & 1, and job j-2 is joined just before job j's slab uses the lane, so the ANE runs job j-1 under the GPU's
+// mixer and GPU part of job j. A GDN layer is causal and runs slab by slab with its state carried from one slab to the
+// next (as between two causal chunks): slab k's mixer needs only FFN_{i-1}(k), job j-n, joined long before. An
+// attention layer is bidirectional: every slab of FFN_{i-1} is joined first and its mixer runs over all T rows. Each
+// job's GPU part runs before its join, as in the plain split. Layer i+1's weights (set (i+1) & 1, last read by layer
+// i-1's jobs) are staged after layer i's second job is launched, when every job of layer i-1 has been joined.
+bool Qwen35::ane_nc_wave(int T) const {
+  static const bool on = [] {
+    const bool v = env_on("NI_ANE_NC_WAVE");
+    if (v) logi("NI_ANE_NC_WAVE: noncausal slabs pipelined over two lanes");
+    return v;
+  }();
+  return on && ane_ && ane_->lanes() >= 2 && !cap_ && ane::slab_count(T, int(ane::FfnSplit::kMaxRows)) >= 2;
+}
+
+void Qwen35::enc_prefill_nc_wave(Encoder& e, Seq& s, int T) {
+  const int D = cfg_.hidden, M = int(ane::FfnSplit::kMaxRows), R = ane::slab_rows(T, M), n = ane::slab_count(T, M);
+  const uint32_t g = ane_->gpu_channels();
+  ane::FfnSplit& A = *ane_;
+  auto rows = [&](int k) { return std::min(R, T - k * R); };
+  auto slab = [&](int k) { return x_.view(size_t(k) * R * D * 4, size_t(rows(k)) * D * 4); };
+  int pend[2] = {-1, -1};  // the slab whose job each lane holds, not yet joined
+  auto join = [&](int l) {
+    if (pend[l] < 0) return;
+    A.join(e, l, slab(pend[l]), rows(pend[l]));
+    pend[l] = -1;
+  };
+  unsigned j = 0;
+  A.stage_layer(e, 0, 0);
+  for (int i = 0; i < cfg_.layers; ++i) {
+    const Layer& L = layers_[i];
+    if (!L.linear) {
+      join(0), join(1);
+      enc_mixer_prefill(e, s, i, L, 0, T, x_);
+    }
+    for (int k = 0; k < n; ++k, ++j) {
+      const int l = int(j & 1), Tk = rows(k);
+      const Buffer xk = slab(k);
+      join(l);
+      if (L.linear) enc_mixer_prefill(e, s, i, L, k * R, Tk, xk);
+      enc_rows_half(e, xk, L.post_norm, xh_, Tk, D);
+      A.pack(e, l, xh_, Tk);
+      A.launch(e, l, i, Tk);
+      enc_mlp_gpu_part(e, L, Tk, g, xk);
+      pend[l] = k;
+      if (k == 1 && i + 1 < cfg_.layers) A.stage_layer(e, i + 1, (i + 1) & 1);
+    }
+  }
+  join(j & 1), join((j + 1) & 1);
+}
+
 void Qwen35::enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x) {
   enc_rows_half(e, x, L.post_norm, xh_, T, cfg_.hidden);
   const uint32_t g = ane_->gpu_channels();

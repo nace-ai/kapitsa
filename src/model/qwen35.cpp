@@ -3601,6 +3601,8 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (ane_chunk_) ane_begin_chunk(slabs ? ane::slab_rows(T, int(ane::FfnSplit::kMaxRows)) : T);
   if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
+  } else if (slabs && ane_nc_wave(T)) {
+    enc_prefill_nc_wave(e, s, T);
   } else {
     for (int i = 0; i < cfg_.layers; ++i) {
       const Layer& L = layers_[i];
