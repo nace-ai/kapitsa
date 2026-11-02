@@ -2,6 +2,7 @@
 #include "model/qwen35.h"
 #include "model/affine_pack.h"
 #include "ane/ffn_split.h"
+#include "ane/slabs.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 #include "model/kparams.h"
@@ -3594,15 +3595,18 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, x_, D);  // image rows
   // NI_ANE: dense FFN split with the Neural Engine. A chunk carrying an in-pass checkpoint stays on the
   // GPU (the engine cuts such chunks at the boundary instead when the split would apply).
-  ane_chunk_ = cfg_.causal && !snap && ane_splits(T);
-  if (ane_chunk_) ane_begin_chunk(T);
-  if (ane_chunk_ && ane_wave_rows(T)) {
+  // NI_ANE_NONCAUSAL: a noncausal pass (one whole prompt) splits slab by slab instead (enc_mlp_prefill_slabs).
+  const bool slabs = ane_slabs(T);
+  ane_chunk_ = slabs || (cfg_.causal && !snap && ane_splits(T));
+  if (ane_chunk_) ane_begin_chunk(slabs ? ane::slab_rows(T, int(ane::FfnSplit::kMaxRows)) : T);
+  if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
   } else {
     for (int i = 0; i < cfg_.layers; ++i) {
       const Layer& L = layers_[i];
       enc_mixer_prefill(e, s, i, L, pos0, T, x_, snap, snap_row);
       if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
+      else if (slabs) enc_mlp_prefill_slabs(e, i, L, T, x_);
       else if (ane_chunk_) enc_mlp_prefill_split(e, i, L, T, x_);  // joins the ANE's part into x_ in the pass
       else enc_mlp_prefill(e, L, T, x_);
       if (cap_) enc_capture(e, i, pos0, T);  // block-drafter capture (DFlash2), off unless armed

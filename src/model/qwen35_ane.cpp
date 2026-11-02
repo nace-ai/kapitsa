@@ -9,6 +9,7 @@
 //   NI_ANE_WAVE=0       the plain split (default: the two-half wavefront, for chunks >= 2 x the
 //                       smallest function; smaller chunks always run the plain split)
 #include "ane/ffn_split.h"
+#include "ane/slabs.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
 #include "util/log.h"
@@ -48,7 +49,22 @@ double median(std::vector<double> v) {
 
 }  // namespace
 
-bool Qwen35::ane_splits(int T) const { return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T); }
+bool Qwen35::ane_slabs(int T) const {
+  static const bool on = [] {
+    const char* v = getenv("NI_ANE_NONCAUSAL");
+    const bool b = v && !strcmp(v, "1");
+    if (b) logi("NI_ANE_NONCAUSAL=1: a noncausal prefill pass splits its FFN with the Neural Engine in slabs of <= %u rows",
+                ane::FfnSplit::kMaxRows);
+    return b;
+  }();
+  return on && !cfg_.causal && ane_ && ane_on_ && !cfg_.moe && T >= int(ane_->min_rows()) &&
+         ane::last_slab_rows(T, int(ane::FfnSplit::kMaxRows)) > 0 && !ane_->retired();
+}
+
+bool Qwen35::ane_splits(int T) const {
+  if (ane_slabs(T)) return true;
+  return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T);
+}
 
 void Qwen35::ane_begin_chunk(int T) {
   ane_->begin_chunk(T);
@@ -384,6 +400,28 @@ void Qwen35::enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
   }
   A.join(e, 1, xB, TB);
   if (cap_) enc_capture(e, cfg_.layers - 1, pos0 + TA, TB, &xB);
+}
+
+// NI_ANE_NONCAUSAL: layer li's FFN of a noncausal pass of T rows, slab by slab on lane 0 (the chunk began with the
+// largest slab's rows). Per slab: post-norm into xh_'s leading rows, pack, launch the ANE's channels, the GPU's
+// channels, join; the next slab's pack follows the join in GPU order, so the lane's surfaces are free again. Layer
+// li+1's weights are staged into the other set after the first slab (layer li-1's jobs, which read that set, have all
+// been joined by then).
+void Qwen35::enc_mlp_prefill_slabs(Encoder& e, int li, const Layer& L, int T, const Buffer& x) {
+  const int D = cfg_.hidden, M = int(ane::FfnSplit::kMaxRows), R = ane::slab_rows(T, M);
+  const uint32_t g = ane_->gpu_channels();
+  ane::FfnSplit& A = *ane_;
+  if (li == 0) A.stage_layer(e, 0, 0);
+  for (int r0 = 0, k = 0; r0 < T; r0 += R, ++k) {
+    const int Ts = std::min(R, T - r0);
+    const Buffer xs = x.view(size_t(r0) * D * 4, size_t(Ts) * D * 4);
+    enc_rows_half(e, xs, L.post_norm, xh_, Ts, D);
+    A.pack(e, 0, xh_, Ts);
+    A.launch(e, 0, li, Ts);
+    enc_mlp_gpu_part(e, L, Ts, g, xs);
+    if (k == 0 && li + 1 < cfg_.layers) A.stage_layer(e, li + 1, (li + 1) & 1);
+    A.join(e, 0, xs, Ts);
+  }
 }
 
 void Qwen35::enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x) {
