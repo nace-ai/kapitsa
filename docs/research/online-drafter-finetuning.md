@@ -313,7 +313,7 @@ The more useful product change is a **language check that turns on the full head
   non-English (expected yes, reject the whole of §6.1 if it gains < 3 % on every non-English class); (2) does the ranked head beat the
   **full head on tok/s** (needs ≥ +2 % on some class, else ship the full head behind a language check and drop the ranking).
 
-**F1 result (run, not inferred).** "M3 Pro, battery 99→91%, 3 prompts/class", 72 legs, Qwen3.6-35B-A3B 4-bit, greedy, 256 tokens, A B F F B A per prompt; greedy ids are identical on all 12 prompts and every leg exited 0. **Verdict: INCONCLUSIVE.** A is the default head, B the ranked head, F the full head; each cell is the mean over 3 prompts.
+**F1 result (run, not inferred).** "M3 Pro, battery 99→91%, 3 prompts/class" (start 99 % in `run-env.txt`; end 91 % in the last leg's `env.txt`, `en2_6_A`: "leg end 2026-11-02T17:23:09Z battery 91%"; every leg's `env.txt` has its own start and end battery), 72 legs, Qwen3.6-35B-A3B 4-bit, greedy, 256 tokens, A B F F B A per prompt; greedy ids are identical on all 12 prompts and every leg exited 0. **Verdict: INCONCLUSIVE.** A is the default head, B the ranked head, F the full head; each cell is the mean over 3 prompts.
 
 | Class | F/A | B/A | B/F |
 |---|---|---|---|
