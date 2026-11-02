@@ -165,8 +165,8 @@ void Engine::init_splash() {
     char tag[17];
     snprintf(tag, sizeof tag, "%016llx", (unsigned long long)splash::client_salt(trimmed).lo);
     const std::string cache_dir = home && *home && !folder.empty() ? std::string(home) + "/Library/Caches/Kapitsa/splash-prefix-cache/" + folder + "-" + tag : "";
-    const auto extra = splash::default_engine_args(opts_.splash_args, q20::available_memory(), opts_.splash_persistent_cache,
-                                                   cache_dir, &note);
+    const auto extra = splash::default_engine_args(opts_.splash_args, q20::available_memory(), splash::model_weight_bytes_in(dir),
+                                                   opts_.splash_persistent_cache, cache_dir, &note);
     ro.argv.insert(ro.argv.end(), extra.begin(), extra.end());
     if (!note.empty()) logi("engine arguments added: %s", note.c_str());
   }

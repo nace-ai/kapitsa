@@ -125,6 +125,18 @@ one server at a time under the GPU lock.
 - Default memory plan (no `--expert-memory`; 33.0 GiB free and reclaimable at start; n=1 per size, so no comparison):
   engine up in 8.9 s, 1K TTFT 1.41 s (732 tok/s as prompt tokens / TTFT), decode 74.9 tok/s; 4K TTFT 3.17 s (1286 tok/s the same way), decode
   61.8 tok/s; the child's peak RSS 1.9 GiB.
+- Weights that fit, 35B-A3B (2 Nov 2026, M5 Pro 48 GB, macOS 26.5.2, Splash 1.5.0, Qwen3.6-35B-A3B-4bit, `--verify-rows`
+  not passed, so `auto`): 3 interleaved pairs, A = the build before this rule (forced `--expert-memory 13958643712`),
+  B = after it (no `--expert-memory`, Splash loads every expert), every leg started with 27.2 to 29.9 GiB free and
+  reclaimable (a 1.25 GiB wired hold kept the Mac inside 23 to 30 GiB), one server at a time under the GPU lock. Cold
+  4K TTFT B − A: −332, −55, −362 ms (median −332 ms; A 1475, 1406, 1538 ms). Decode at T=0: +75.7, +53.8, +48.2 tok/s
+  (median +53.8; A 161, 166, 173 tok/s). The cold 4K prompt's 8 output tokens hash the same on all six legs. Decode
+  tokens are not compared: under `auto` a MoE target's greedy output varies from run to run (Splash's startup log and its
+  `docs/server.md`), and it did within each arm. Splash's own free-memory reading ran 4.4 to 6.9 GiB above the figure
+  this rule reads (`q20::available_memory()`, free + inactive + purgeable; Splash adds a compression credit), so the
+  rule can force the cache where Splash would have loaded everything. Below 23 GiB, and with Splash's start refusal,
+  nothing was run: B's legs never met "not enough free memory to start" (Splash's check of its own figure against the
+  2 GiB it keeps for macOS), and no leg tested where that check and this rule disagree. n=3 on one Mac.
 
 - Second turn on a ~4K chat (`tools/splash_ab.py --turn2`, 3 reps per side, Splash's default memory plan, M5 Pro, 27 Oct 2026).
   Turn 1 is 4072 prompt tokens; turn 2 is the same chat plus the reply (content only, as clients send it) and a short
@@ -149,8 +161,14 @@ one server at a time under the GPU lock.
 - `--splash-conversation-salt`: a cache salt per conversation (hash of the messages up to the first user message), so
   conversations stop sharing cached prompts such as a common system prompt, for requests that bring no `cache_salt`. Off by default, which is Splash's behaviour
   without a `cache_salt`.
-- The child gets `--idle-release off` unless given, and, when free and reclaimable memory is between 22 and 38 GiB and no
-  `--expert-memory` is given, `--expert-memory` of free GiB minus 14 (at least 8). The formula rests on one measured pass
+- The child gets `--idle-release off` unless given, and, when free and reclaimable memory is between 22 and 38 GiB, no
+  `--expert-memory` is given and the model's weights (target and draft, from the resolved folder's `model.json`) do not fit
+  in that memory with 2 GiB to spare, `--expert-memory` of free GiB minus 14 (at least 8). Weights that fit (the dense
+  Qwen3.8-27B at 18.5 GiB, the Qwen3.6-35B-A3B at 20.0 GiB) leave the plan to Splash, which then loads every expert
+  instead of streaming them; Flash-Next (63.0 GiB) never fits on a 48 GB Mac and gets the cache as before. An unreadable
+  `model.json` counts as weights that do not fit. The 2 GiB margin ignores the KV cache and Splash's own headroom and is
+  not measured. One interleaved A/B on the 35B-A3B (M5 Pro 48 GB, macOS 26.5.2, Qwen3.6-35B-A3B-4bit, 23 to 30 GiB free,
+  3 pairs, Verification) found the whole load faster than the forced 13 GiB cache in every pair. The formula rests on one measured pass
   (16 GiB at 30.4 GiB free) and Splash's 2 GiB protected for macOS; it is not validated across memory states. At 33.0 GiB free the default plan started and ran without it (Verification), so
   from 33 to 38 GiB this replaces a working default with a smaller expert cache, and no run compares the two. The 38 GiB bound is
   a margin over one refusal seen at 35.2 GiB under a system pressure warning, not a measured need. In that window the forced `--expert-memory` turns Splash's own "not enough free
@@ -202,9 +220,10 @@ Splash's own default frees the weights after ten idle minutes and the next reque
 so the child is given `--idle-release off` unless `--splash-arg` says otherwise. Splash takes `off` or a number of
 seconds, not `on`.
 
-When this Mac is short of memory, Kapitsa also sizes Splash's expert cache: with 22 to 38 GiB free and reclaimable, and
-no `--expert-memory` in `--splash-arg`, the child gets `--expert-memory` of the free GiB less 14, at least 8. Below
-22 GiB, or with your own `--expert-memory`, the plan is left to Splash, whose default plan has no fixed threshold: it started at 33.0 GiB free and refused at 35.2 GiB under memory pressure. The
+When this Mac is short of memory, Kapitsa also sizes Splash's expert cache: with 22 to 38 GiB free and reclaimable, no
+`--expert-memory` in `--splash-arg`, and a model whose weights do not fit in that memory with 2 GiB to spare (Flash-Next,
+not the 35B-A3B or the dense 27B; measured only on the 35B-A3B from 23 to 30 GiB free, below), the child gets `--expert-memory` of the free GiB less 14, at least 8. Below
+22 GiB, with weights that fit, or with your own `--expert-memory`, the plan is left to Splash, whose default plan has no fixed threshold: it started at 33.0 GiB free and refused at 35.2 GiB under memory pressure. The
 formula rests on one measured pass (a 16 GiB cache at 30.4 GiB free) and is not validated across memory states. From 33
 to 38 GiB free it replaces a default plan that can start with a smaller expert cache, which streams experts from the SSD
 and is slower than a full one, and no run compares the two; pass `--splash-arg --expert-memory <size>` to choose. What

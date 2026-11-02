@@ -1,6 +1,8 @@
 #include "splash/plan.h"
 
 #include <algorithm>
+#include <fstream>
+#include <string>
 
 namespace ni::splash {
 
@@ -12,6 +14,15 @@ constexpr uint64_t kGiB = 1ull << 30;
 constexpr uint64_t kAutoPlanNeeds = 38 * kGiB;
 constexpr uint64_t kHeadroom = 14 * kGiB;       // 2 GiB protected for macOS, the rest for everything else running
 constexpr uint64_t kMinCache = 8 * kGiB;
+// The margin beside a model's weights under which they count as fitting. Unmeasured: it is Splash's 2 GiB protected for
+// macOS and ignores the KV cache, activations and Splash's own planning headroom; the 35B-A3B A/B (forced streaming
+// against a whole load, #278) decides whether it is right.
+constexpr uint64_t kWeightsFitMargin = 2 * kGiB;
+
+bool ends_with(const std::string& s, const char* t) {
+  const size_t n = std::char_traits<char>::length(t);
+  return s.size() >= n && s.compare(s.size() - n, n, t) == 0;
+}
 
 // argparse takes `--flag value` and `--flag=value`: both mean the user gave it
 bool has(const std::vector<std::string>& v, const std::string& flag) {
@@ -88,7 +99,7 @@ struct Blake2b {
 }  // namespace
 
 std::vector<std::string> default_engine_args(const std::vector<std::string>& user, uint64_t available_bytes,
-                                             bool persistent_cache, const std::string& cache_dir,
+                                             uint64_t model_bytes, bool persistent_cache, const std::string& cache_dir,
                                              std::string* note) {
   std::vector<std::string> out;
   std::string n;
@@ -98,7 +109,10 @@ std::vector<std::string> default_engine_args(const std::vector<std::string>& use
     say("--idle-release off");
   }
   if (!has(user, "--expert-memory") && available_bytes > 0 && available_bytes < kAutoPlanNeeds) {
-    if (available_bytes >= kHeadroom + kMinCache) {
+    if (model_bytes > 0 && model_bytes + kWeightsFitMargin <= available_bytes) {
+      say("weights (" + std::to_string(model_bytes / kGiB) + " GiB) fit in " + std::to_string(available_bytes / kGiB) +
+          " GiB free+reclaimable: expert memory left to the engine");
+    } else if (available_bytes >= kHeadroom + kMinCache) {
       const uint64_t gib = (available_bytes - kHeadroom) / kGiB;
       out.insert(out.end(), {"--expert-memory", std::to_string(gib * kGiB)});
       say("--expert-memory " + std::to_string(gib) + "G (" + std::to_string(available_bytes / kGiB) + " GiB free+reclaimable)");
@@ -116,6 +130,28 @@ std::vector<std::string> default_engine_args(const std::vector<std::string>& use
   }
   if (note) *note = n;
   return out;
+}
+
+// The sizes are as resolved: model.json is written when Splash resolves the model, so this rule is only as current as the
+// .resolved folder (re-resolve after the weights change). The draft counts whenever the folder lists one, because every
+// argv Kapitsa can give `splash serve-native` loads it: the engine always opens root/draft (Splash 1.5.0 cabbad27,
+// runtime/model/ModelFactory.cpp:88, and sizes it in runtime/model/ModelSizing.cpp:87); --draft-model is the launcher's
+// and picks a different resolved folder instead, and no serve-native flag turns the draft off.
+uint64_t model_weight_bytes(const nlohmann::json& model_json) {
+  if (!model_json.is_object() || !model_json.contains("files") || !model_json["files"].is_object()) return 0;
+  uint64_t total = 0;
+  for (const auto& [path, f] : model_json["files"].items())
+    if ((ends_with(path, ".safetensors") || ends_with(path, ".gguf")) && f.is_object() && f.contains("bytes") &&
+        f["bytes"].is_number_unsigned())
+      total += f["bytes"].get<uint64_t>();
+  return total;
+}
+
+uint64_t model_weight_bytes_in(const std::string& dir) {
+  std::ifstream f(dir + "/model.json");
+  if (!f) return 0;
+  const nlohmann::json j = nlohmann::json::parse(f, nullptr, /*allow_exceptions=*/false);
+  return j.is_discarded() ? 0 : model_weight_bytes(j);
 }
 
 Salt client_salt(const std::string& salt) {
