@@ -9,6 +9,8 @@
 // One state pass fills the sequence to n_state and a checkpoint of the recurrent state is saved there; every question
 // then restores that checkpoint and runs one pass of its own row (instructions, options, decide) at positions
 // n_state .. So the state's attention rows and recurrent state are shared and each question's row is causal after it.
+#include "ane/ffn_split.h"
+#include "ane/slabs.h"
 #include "bench/bench.h"
 #include "engine/prefix_cache.h"
 #include "metal/gpu.h"
@@ -268,11 +270,13 @@ class SystemOne {
   // on its event forever, so a split chunk is bounded the way the engine bounds it (Engine::wait_split,
   // src/engine/engine.cpp:957): 60 s as the last resort after the per-job 2 s watchdog, then the split is given up, its
   // waits are released, and ane_finish_chunk() reruns the chunk on the GPU alone.
+  // A noncausal pass split in slabs (NI_ANE_NONCAUSAL, src/ane/slabs.h) gets the 60 s once per slab.
   void commit_chunk(Encoder& e, int rows) {
     e.commit();
-    if (model_->ane_splits(rows) && !e.wait_for(60000)) {
-      logi("NI_ANE: a split prefill chunk has not finished in 60 s; giving up the Neural Engine split");
-      model_->ane_abort("a split chunk did not finish within 60 s");
+    const int wait_s = 60 * std::max(1, ni::ane::slab_count(rows, int(ni::ane::FfnSplit::kMaxRows)));
+    if (model_->ane_splits(rows) && !e.wait_for(wait_s * 1000)) {
+      logi("NI_ANE: a split prefill chunk has not finished in %d s; giving up the Neural Engine split", wait_s);
+      model_->ane_abort("a split chunk did not finish within " + std::to_string(wait_s) + " s");
     }
     e.wait();
   }
@@ -293,7 +297,14 @@ class SystemOne {
       auto e = Gpu::get().begin();
       model_->encode_prefill(*e, *seq_, 0, rows, sp, 0, false);
       commit_chunk(*e, rows);
-      if (!model_->ane_finish_chunk()) throw std::runtime_error("Max full-row Neural Engine split failed");
+      if (!model_->ane_finish_chunk()) {
+        // the split is retired (NI_ANE_NONCAUSAL): the pass holds no state, so it reruns whole on the GPU alone
+        model_->reset(*seq_);
+        auto g = Gpu::get().begin();
+        model_->encode_prefill(*g, *seq_, 0, rows, sp, 0, false);
+        g->commit();
+        g->wait();
+      }
       std::vector<float> last;
       ni::systemone::final_norm_row(model_->hidden_rows().as<float>() + size_t(branch.group.decide) * hidden_,
                                     norm_w_.data(), hidden_, eps_, &last);

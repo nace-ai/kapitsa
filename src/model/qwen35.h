@@ -630,6 +630,9 @@ class Qwen35 : public Model {
   // the M5 default share of the split (default_units' gpu_mma) applies to this model: measured on it (NI_ANE_MMA)
   static bool mma_share_measured(const Qwen35Config& c);
   void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
+  // NI_ANE_NONCAUSAL=1: a noncausal pass (Max) splits its FFN slab by slab (src/ane/slabs.h), any length >= min_rows
+  bool ane_slabs(int T) const;
+  void enc_mlp_prefill_slabs(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
   void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);
   QLinear own_qlin(const class WeightStore& w, const std::string& name);
   // speculative decoding helpers (qwen35_spec.cpp)
