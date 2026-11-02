@@ -89,6 +89,7 @@ struct Bucket {
 
 struct Bucket2 {
   uint32_t P, k, E, BM, S;
+  uint32_t gx_gu = 0, gx_dn = 0;
 };
 
 struct Qmm2 {

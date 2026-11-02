@@ -1202,7 +1202,7 @@ std::vector<Qwen35::ActBuf> Qwen35::act_layout(const Qwen35Config& c, int T, int
       {&Qwen35::spair_, (Pm + S) * 4, "spair"},
       {&Qwen35::stok_, (Pm + S) * 4, "stok"},
       {&Qwen35::tiles_, (Pm + S + size_t(std::max(c.experts, 1)) + 1) * 3 * 4, "tiles"},
-      {&Qwen35::ntiles_, 16, "ntiles"},
+      {&Qwen35::ntiles_, 64, "ntiles"},
       {&Qwen35::hg_, (c.moe ? (iq_only ? 1 : P) : hgu_rows) * I * 4, "hg"},
       {&Qwen35::hu_, (c.moe ? (iq_only ? 1 : P) : hgu_rows) * I * 4, "hu"},
       {&Qwen35::hhalf_, (P + S) * I * 2, "hhalf"},
@@ -3241,7 +3241,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
   kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
   enc_topk_rows(e, tp.E, tp.k, tp.norm != 0, T);
-  kp::Bucket2 bp{uint32_t(P), uint32_t(k), uint32_t(E), uint32_t(bm), uint32_t(S)};
+  static const bool indirect_moe = env_int("NI_INDIRECT_MOE", 1) != 0;
+  const bool ind = indirect_moe && !q20;
+  const uint32_t gx_gu = ind ? uint32_t(G.N / kBnGu) : 0u;
+  const uint32_t gx_dn = ind ? uint32_t(Dn.N / kBnDn) : 0u;
+  kp::Bucket2 bp{uint32_t(P), uint32_t(k), uint32_t(E), uint32_t(bm), uint32_t(S), gx_gu, gx_dn};
   e.use(pipe(moe_bucket_name()));
   e.buf(0, ridx_); e.buf(1, spair_); e.buf(2, stok_); e.buf(3, tiles_); e.buf(4, ntiles_);
   e.val(5, bp);
@@ -3283,7 +3287,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.buf(9, tiles_); e.buf(10, ntiles_); e.buf(11, stok_);
     e.buf(12, SG.w->buf); e.buf(13, SG.s->buf); e.buf(14, SG.b->buf);
     e.buf(15, SU.w->buf); e.buf(16, SU.s->buf); e.buf(17, SU.b->buf);
-    e.dispatch(G.N / kBnGu, max_tiles, 1, 128);
+    if (ind) {
+      e.dispatch_indirect(ntiles_, 16, 128);
+    } else {
+      e.dispatch(G.N / kBnGu, max_tiles, 1, 128);
+    }
   }
   // down: yd_ row = pair id (shared rows: P + token)
   if (!q20) {
@@ -3299,7 +3307,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.val(5, p);
     e.buf(6, tiles_); e.buf(7, ntiles_); e.buf(8, spair_);
     e.buf(9, SD.w->buf); e.buf(10, SD.s->buf); e.buf(11, SD.b->buf);
-    e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
+    if (ind) {
+      e.dispatch_indirect(ntiles_, 32, 128);
+    } else {
+      e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
+    }
   }
   if (!fold && !q20) enc_shared();
   if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
