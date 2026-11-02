@@ -237,6 +237,9 @@ Instance::Instance(const std::string& directory, const std::string& id, const st
   });
   p.control.set_payload_max_length(4096);
   p.control.new_task_queue = [] { return new httplib::ThreadPool(2); };
+  // Dashboard observers must not reserve the small pool with idle persistent
+  // connections: app, widget and CLI can all inspect one runtime concurrently.
+  p.control.set_keep_alive_max_count(1);
   p.control.set_read_timeout(3);
   p.control.set_write_timeout(3);
   p.control.Get("/v1/status", [&p](const auto&, auto& res) {

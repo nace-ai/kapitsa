@@ -58,6 +58,22 @@ int main(int argc, char** argv) {
       check((st.st_mode & 0777) == 0600, "registry credentials are private");
       check(runtime::call(a.record(), "GET", "/v1/status").at("state") == "starting",
             "control is available before engine loading");
+      {
+        std::vector<std::unique_ptr<httplib::Client>> observers;
+        bool available = true;
+        for (int i = 0; i < 3; ++i) {
+          auto client = std::make_unique<httplib::Client>(a.record().at("control_url").get<std::string>());
+          client->set_keep_alive(true);
+          client->set_read_timeout(1);
+          const auto response = client->Get("/v1/status",
+            {{"Authorization", "Bearer " + a.record().at("token").get<std::string>()},
+             {"X-Kapitsa-Run-ID", a.record().at("run_id").get<std::string>()}});
+          available = available && response && response->status == 200 &&
+                      response->get_header_value("Connection") == "close";
+          observers.push_back(std::move(client));
+        }
+        check(available, "persistent app, widget and CLI observers cannot exhaust the control pool");
+      }
       bool refused = false;
       try {
         runtime::Instance duplicate(dir, "code", "Code", "", "", "", [] {});
