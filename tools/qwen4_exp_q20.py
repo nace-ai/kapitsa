@@ -18,6 +18,10 @@ switch_mlp.{gate,up,down}_proj. Each becomes, under the pack's name:
 with no .biases, and config.json's quantization (and quantization_config) gets {"bits": 2, "group_size": 64,
 "mode": "q2_0"} for the module. Only Kapitsa reads such a pack: MLX, mlx-vlm and oMLX have no q2_0 mode.
 Everything else keeps the source pack's files and names; model-000NN files hold the same tensors as the source's.
+--gguf takes one path: a GGUF file, or the folder a split set (name-0000k-of-0000n.gguf) sits in. A folder's parts are
+enumerated from the first one's own name (never "every .gguf", which would take a converted pack's ple.gguf), and each
+tensor is read from the shard that holds it, so it does not matter which shard the experts are in (in ISTA-DASLab's Q2_0
+all 144 expert tensors are in shard 1 of 2; shard 2 holds the n-gram table). A tensor found in two shards is refused.
 --verify N: N expert rows of every converted tensor dequantized from both sources must correlate (> 0.6; ~0.9 for two
 quantizations of the same weights, ~0 for another expert, a gate/up swap or a transposition).
 --table: full (ple.safetensors copied: 32 GB), link (an APFS clone or hard link of a local pack's), sparse (the file at
@@ -31,6 +35,7 @@ Resumable: finished files are listed in DIR/.q20.done.json.
 """
 import argparse
 import bisect
+import glob
 import json
 import os
 import re
@@ -39,6 +44,7 @@ import struct
 import subprocess
 import sys
 import time
+import types
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -151,7 +157,10 @@ class Gguf:
         """(E, N, K, absolute offset, bytes) of a Q2_0 expert tensor."""
         if name not in self.tensors:
             raise KeyError(f"{self.name}: no tensor {name}")
-        (K, N, E), typ, off = self.tensors[name]
+        dims, typ, off = self.tensors[name]
+        if len(dims) != 3:
+            raise ValueError(f"{name}: {len(dims)} dimensions, not an expert tensor [K, N, E]")
+        K, N, E = dims
         if typ != Q2_0:
             raise ValueError(f"{name}: ggml type {typ} ({GGML.get(typ, '?')}), not Q2_0 ({Q2_0}): Kapitsa's Flash-Next "
                              "routed experts are Q2_0 or the pack's MLX affine (no IQ types)")
@@ -264,23 +273,64 @@ class PackSource:
             os.close(fd)
 
 
+def gguf_paths(spec):
+    """The GGUF files a --gguf argument names: the file itself, or the parts of its split set that sit beside it.
+
+    A folder is not "every .gguf in it": a converted pack folder holds `ple.gguf` too (GTABLE, --table gguf), and a
+    folder can hold an unrelated model. Only the part names of one set are taken, by the same stem the source file
+    carries (name-0000k-of-0000n.gguf), or the single file itself when it is not a set.
+    """
+    if not os.path.isdir(spec):
+        return [spec]
+    files = [f for f in glob.glob(os.path.join(spec, "*.gguf")) if os.path.basename(f) != GTABLE]
+    if not files:
+        raise ValueError(f"{spec}: no .gguf files in this folder")
+    m = re.match(r"(.*)-(\d{5})-of-(\d{5})\.gguf$", os.path.basename(files[0]))
+    if m:
+        return [os.path.join(spec, f"{m.group(1)}-{k:05d}-of-{m.group(3)}.gguf")
+                for k in range(1, int(m.group(3)) + 1)]
+    if len(files) > 1:
+        raise ValueError(f"{spec}: {len(files)} GGUF files and none is a name-0000k-of-0000n.gguf part; "
+                         f"pass the model file itself")
+    return files
+
+
+class _Shard:
+    """One GGUF file of the set: its path, a read(a, b) over it and its parsed header."""
+
+    def __init__(self, where, read, g):
+        self.where, self.read, self.g = where, read, g
+
+    def split(self):
+        """(number, count) of the split set this file belongs to; (0, 1) for a single file."""
+        return int(self.g.kv.get("split.no", 0)), int(self.g.kv.get("split.count", 1))
+
+
 class GgufSource:
-    """The Q2_0 GGUF: a local file or a file of a Hugging Face repo (ranged reads)."""
+    """The Q2_0 GGUF: a local file, a folder of a split set or its files, or a file of a Hugging Face repo (ranged
+    reads). A split set's tensors are searched across its shards, and each is read from the file that holds it."""
 
     def __init__(self, a, pool):
         self.pool = pool
+        self.shards = []
         if a.gguf:
-            path = a.gguf
-            self.local, self.path = True, os.path.abspath(path)
-            self.read = self._reader(path)
-            self.where = self.path
+            paths = gguf_paths(a.gguf)
+            self.local = True
+            self.path = paths[0]
+            self.where = self.path if len(paths) == 1 else os.path.dirname(self.path)
+            self.shards = [_Shard(pth, self._reader(pth), None) for pth in paths]
+            for sh in self.shards:
+                sh.g = Gguf(sh.read, sh.where)
         else:
             repo, rev, path = parse_repo(a.gguf_repo, GGUF_REPO)
             r = P.Remote(repo, rev)
             self.local, self.path, self.remote = False, path, r
-            self.read = self._reader(path)
             self.where = f"{repo}@{r.rev}:{path}"
-        self.g = Gguf(self.read, self.where)
+            self.shards = [_Shard(self.where, self._reader(path), None)]
+            self.shards[0].g = Gguf(self.shards[0].read, self.where)
+        # table_part walks the set from self.path; a local set's shard headers are already here
+        self.g = self.shards[0].g
+        self._check_split()
 
     def _reader(self, path):
         if self.local:
@@ -294,22 +344,83 @@ class GgufSource:
     def table_part(self):
         """(path, Gguf, table) of the part of a split GGUF (name-0000k-of-0000n.gguf) that holds the n-gram table."""
         m = re.match(r"(.*)-(\d{5})-of-(\d{5})\.gguf$", self.path)
-        paths = [f"{m.group(1)}-{k:05d}-of-{m.group(3)}.gguf" for k in range(1, int(m.group(3)) + 1)] if m else [self.path]
+        paths = [f"{m.group(1)}-{k:05d}-of-{m.group(3)}.gguf"
+                 for k in range(1, int(m.group(3)) + 1)] if m else [self.path]
         for path in paths:
-            g = self.g if path == self.path else Gguf(self._reader(path), self.part_where(path))
+            g = next((sh.g for sh in self.shards if sh.where == path or sh.where.endswith("/" + os.path.basename(path))),
+                     None) or Gguf(self._reader(path), self.part_where(path))
             t = g.table()
             if t:
                 return path, g, t
         raise ValueError(f"{self.where}: no part holds {GGUF_TABLE}")
 
-    def fetch(self, off, nbytes, piece=32 << 20):
+    def fetch(self, off, nbytes, shard=None, piece=32 << 20):
+        """nbytes from `off` in one shard (the part that holds the tensor), read in parallel pieces."""
+        read = shard.read if shard is not None else self.g and self._reader(self.path)
         buf = bytearray(nbytes)
         jobs = [(p, min(nbytes, p + piece)) for p in range(0, nbytes, piece)]
 
         def work(ab):
-            buf[ab[0]:ab[1]] = self.read(off + ab[0], off + ab[1])
+            buf[ab[0]:ab[1]] = read(off + ab[0], off + ab[1])
         list(self.pool.map(work, jobs))
         return bytes(buf)
+
+    def _check_split(self):
+        """A set must be complete and in one set, and no tensor may live in two of its shards.
+
+        Two shards holding one name is the dangerous case: `expert()` reads the first in order, so a folder that
+        mixes a gate/up-swapped set with a correct one would convert "successfully" into the wrong planes, and only
+        a gross corruption would show at --verify. Duplicates are refused here instead.
+        """
+        counts = {sh.split()[1] for sh in self.shards}
+        if len(counts) > 1:
+            raise ValueError(f"{self.where}: shards of different split sets {sorted(counts)}")
+        count = counts.pop()
+        if count > 1:
+            nos = [sh.split()[0] for sh in self.shards]
+            if len(nos) != len(set(nos)):
+                dup = sorted({n + 1 for n in nos if nos.count(n) > 1})
+                raise ValueError(f"{self.where}: shard(s) {dup} given more than once")
+            # one shard of a larger set is legal: a tensor missing from it names its position (expert() does that).
+            # A folder holding part of a set is a mistake worth refusing, since it looks complete.
+            if len(self.shards) > 1 and sorted(nos) != list(range(count)):
+                raise ValueError(f"{self.where}: split set of {count} but shards "
+                                 f"{[n + 1 for n in sorted(nos)]} given")
+        if len(self.shards) == 1 and count > 1:
+            log(f"note: {os.path.basename(self.path)} is shard {self.shards[0].split()[0] + 1} of {count}; "
+                f"pass the folder if a tensor is missing")
+        owner = {}
+        for sh in self.shards:
+            for name in sh.g.tensors:
+                if name in owner and owner[name] is not sh:
+                    raise ValueError(f"{self.where}: tensor {name} is in two shards "
+                                     f"({os.path.basename(owner[name].where)} and {os.path.basename(sh.where)}); "
+                                     f"one of them is not this set")
+                owner[name] = sh
+
+    @property
+    def tensor_count(self):
+        return sum(len(sh.g.tensors) for sh in self.shards)
+
+    def expert(self, name):
+        """(E, N, K, absolute offset, bytes, shard) of a Q2_0 expert tensor, from the shard that holds it."""
+        for sh in self.shards:
+            if name in sh.g.tensors:
+                return (*sh.g.expert(name), sh)
+        where = ", ".join(os.path.basename(sh.where) for sh in self.shards)
+        split = [f"{os.path.basename(sh.where)} is shard {sh.split()[0] + 1} of {sh.split()[1]}"
+                 for sh in self.shards if sh.split()[1] > 1]
+        raise KeyError(f"no tensor {name} in {where}" + (f" ({'; '.join(split)})" if split else ""))
+
+    @classmethod
+    def from_spec(cls, where, pool):
+        """The source a conversion record names: a local file or split folder, else Hugging Face repo@rev:path."""
+        spec = types.SimpleNamespace(gguf=None, gguf_repo=None)
+        if os.path.exists(where):
+            spec.gguf = where
+        else:
+            spec.gguf_repo = where
+        return cls(spec, pool)
 
 
 # ---------------------------------------------------------------- convert
@@ -464,7 +575,7 @@ def cmd_convert(a):
     os.makedirs(a.out, exist_ok=True)
     pool = ThreadPoolExecutor(a.conns)
     pack, gg = PackSource(a, pool), GgufSource(a, pool)
-    log(f"pack {pack.where}: {len(pack.index)} tensors; GGUF {gg.where}: {len(gg.g.tensors)} tensors")
+    log(f"pack {pack.where}: {len(pack.index)} tensors; GGUF {gg.where}: {gg.tensor_count} tensors")
     done_path = os.path.join(a.out, ".q20.done.json")
     done = set(json.load(open(done_path))) if os.path.exists(done_path) else set()
 
@@ -480,11 +591,11 @@ def cmd_convert(a):
     modules = {}
     for L in layers:
         for mat, gname in GGUF_EXPERT.items():
-            E, N, K, off, nb = gg.g.expert(gname.format(L))
+            E, N, K, off, nb, shard = gg.expert(gname.format(L))
             ws = pack.index[EXPERT.format(L, mat) + ".weight"][4]
             if ws[0] != E or ws[1] != N:
                 raise ValueError(f"layer {L} {mat}: GGUF [{E}, {N}, {K}] vs pack {ws}")
-            modules[(L, mat)] = (E, N, K, off, nb)
+            modules[(L, mat)] = (E, N, K, off, nb, shard)
     log(f"{len(layers)} layers x 3 expert tensors in Q2_0, e.g. layer 0 gate [{modules[(layers[0], 'gate')][:3]}]")
 
     rng = np.random.default_rng(1)
@@ -502,7 +613,7 @@ def cmd_convert(a):
                 plain.append(k)
                 continue
             L, mat, part = ex
-            E, N, K, _, _ = modules[(L, mat)]
+            E, N, K = modules[(L, mat)][:3]
             if part == "weight":
                 specs.append((k, "U32", [E, N, K // 16]))
                 experts[(L, mat)] = k[:-len(".weight")]
@@ -517,8 +628,8 @@ def cmd_convert(a):
         for k, v in pack.tensor_bytes(plain).items():
             w.write(k, np.frombuffer(v, np.uint8))
         for (L, mat), base in sorted(experts.items()):
-            E, N, K, off, nb = modules[(L, mat)]
-            raw = gg.fetch(off, nb)
+            E, N, K, off, nb, shard = modules[(L, mat)]
+            raw = gg.fetch(off, nb, shard)
             codes, d = q20_planes(raw, E, N, K)
             w.write(base + ".weight", codes)
             w.write(base + ".scales", d)
@@ -621,7 +732,8 @@ def cmd_convert(a):
     json.dump({"metadata": {"total_size": size}, "weight_map": dict(sorted(weight_map.items()))},
               open(os.path.join(a.out, "model.safetensors.index.json"), "w"), indent=2)
     rec = {"tool": "tools/qwen4_exp_q20.py", "date": time.strftime("%Y-%m-%d %H:%M:%S"), "pack": pack.where,
-           "gguf": gg.where, "experts": "Q2_0 (ggml 42): .weight U32 codes [E, N, K/16], .scales F16 d [E, N, K/64]",
+           "gguf": gg.where, "gguf_shards": [sh.where for sh in gg.shards],
+           "experts": "Q2_0 (ggml 42): .weight U32 codes [E, N, K/16], .scales F16 d [E, N, K/64]",
            "table": a.table, "table_gguf": table_src, "rows_ids": a.rows_ids, "verify_rows": a.verify,
            "worst_row_correlation": worst, "files": {f: os.path.getsize(os.path.join(a.out, f))
                                                      for f in sorted(os.listdir(a.out)) if not f.startswith(".")}}
@@ -634,7 +746,6 @@ def cmd_check(a):
     rec = json.load(open(os.path.join(a.dir, "conversion_q20.json")))
     cfg = json.load(open(os.path.join(a.dir, "config.json")))
     out = P.Local(a.dir)
-
     def reader(src):  # a local file or REPO@REV:PATH
         if os.path.exists(src):
             fd = os.open(src, os.O_RDONLY)
@@ -642,9 +753,9 @@ def cmd_check(a):
         repo, rev, path = parse_repo(src, None)
         r = P.Remote(repo, rev)
         return lambda x, y: r.read(path, x, y)
-    src = rec["gguf"]
-    read = reader(src)
-    g = Gguf(read, src)
+    # the experts come from the set the conversion record names, through the same path the conversion read
+    with ThreadPoolExecutor(getattr(a, "conns", 8)) as pool:
+        gg = GgufSource.from_spec(rec["gguf"], pool)
     rng = np.random.default_rng(2)
     bad = 0
     if rec.get("table") == "gguf":  # ple.gguf: its header and some rows against the part it came from
@@ -662,7 +773,7 @@ def cmd_check(a):
     layers = sorted({expert_of(k)[0] for k in out.index if expert_of(k)})
     for L in layers:
         for mat, gname in GGUF_EXPERT.items():
-            E, N, K, off, nb = g.expert(gname.format(L))
+            E, N, K, off, nb, shard = gg.expert(gname.format(L))
             base = EXPERT.format(L, mat)
             if cfg["quantization"].get(base, {}).get("mode") != "q2_0":
                 bad += 1
@@ -672,7 +783,7 @@ def cmd_check(a):
             codes, d = out.array(base + ".weight"), out.array(base + ".scales")
             for e in rng.integers(E, size=2):
                 blk = N * (K // 64) * Q2_0_BYTES
-                raw = read(off + int(e) * blk, off + (int(e) + 1) * blk)
+                raw = shard.read(off + int(e) * blk, off + (int(e) + 1) * blk)
                 c2, d2 = q20_planes(raw, 1, N, K)
                 if not (np.array_equal(c2[0], codes[e]) and np.array_equal(d2[0].view("<u2"), d[e].view("<u2"))):
                     bad += 1
@@ -702,7 +813,7 @@ def main():
     c.add_argument("--out", required=True)
     c.add_argument("--pack", help="local MLX pack folder (default: --pack-repo)")
     c.add_argument("--pack-repo", default=PACK_REPO)
-    c.add_argument("--gguf", help="local Q2_0 GGUF file (default: --gguf-repo)")
+    c.add_argument("--gguf", help="local Q2_0 GGUF file, or the folder of a split set (default: --gguf-repo)")
     c.add_argument("--gguf-repo", default=GGUF_REPO)
     c.add_argument("--table", choices=["full", "link", "sparse", "gguf"], default="full")
     c.add_argument("--rows-ids", nargs="*", help="token id files (@path) whose table rows --table sparse writes")
