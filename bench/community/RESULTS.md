@@ -46,7 +46,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (14-inch, 2021) · M1 Max 24-core GPU · 64 GB](#macbook-pro-14-inch-2021--m1-max-24-core-gpu--64-gb) | 1 |
 | [MacBook Pro (14-inch, 2021) · M1 Pro 14-core GPU · 16 GB](#macbook-pro-14-inch-2021--m1-pro-14-core-gpu--16-gb) | 7 |
 | [MacBook Pro (14-inch, 2021) · M1 Pro 14-core GPU · 32 GB](#macbook-pro-14-inch-2021--m1-pro-14-core-gpu--32-gb) | 2 |
-| [MacBook Pro (16-inch, 2021) · M1 Max 32-core GPU · 32 GB](#macbook-pro-16-inch-2021--m1-max-32-core-gpu--32-gb) | 6 |
+| [MacBook Pro (16-inch, 2021) · M1 Max 32-core GPU · 32 GB](#macbook-pro-16-inch-2021--m1-max-32-core-gpu--32-gb) | 7 |
 | [MacBook Pro (16-inch, 2021) · M1 Max 32-core GPU · 64 GB](#macbook-pro-16-inch-2021--m1-max-32-core-gpu--64-gb) | 5 |
 | [Mac mini (M1, 2020) · M1 8-core GPU · 16 GB](#mac-mini-m1-2020--m1-8-core-gpu--16-gb) | 1 |
 
@@ -716,6 +716,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-30](results/kapitsa-bench-2026-10-30-m1-max-nemotron-3.5-bolt-24gb-1270d5.json) | 44.0 tok/s | 45.6 tok/s | 437 tok/s | 430 tok/s | 0.30 s | 0.37 s | 22.7 GB + 1.0 mapped | pass | LiLiCorr | 0.2.25 | 27.2 | – |
+
+### Clover-35B-A3B-Preview · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-01](results/kapitsa-bench-2026-11-01-m1-max-clover-35b-a3b-4bit-8be034.json) | 127.0 tok/s | 137.6 tok/s | 1,144 tok/s | 976 tok/s ⚠ | 0.11 s | 0.12 s ⚠ | 20.9 GB | pass | KFlash | 0.2.25 | 27.0 | repetition loop, contention (prefill_16000) |
 
 ### Recursive Flint 40B-A2.5B · 4-bit
 
