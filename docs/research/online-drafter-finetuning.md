@@ -42,7 +42,7 @@ position, `src/kernels/spec_dflash.metal:1498`; that is the same job, conditiona
 |---|---|---|
 | 35B-A3B decode, DFlash2 + KFlash trees | 201.1 tok/s T0.6, 222.3 greedy (median of 3) | `bench/results/2026-10-23-m5-pro-35b-365/README.md` |
 | Mean tokens per verify cycle (tau), code, 85-token prompt | 3.38-3.87, median ~3.6; chat/tool-call 3.0-3.25; agent follow-ups 4.9 (4K), 4.6 (16K) | same run, `logs/q36-35b-kapitsa-20261023-084520.log` |
-| Cycle GPU time by live rows, 1 → 8 | 14.26 → 21.48 ms (1.51x), ~1.03 ms per row; mean 5.71 rows per cycle | same log, line 59 (the `KFlash: 1459 cycles` summary; the last summary line, 80, reads 18.20 ms at 1 row after a later request) |
+| Cycle GPU time by live rows, 1 → 8 | 14.26 → 21.48 ms (1.51x), ~1.03 ms per row; mean 5.71 rows per cycle | same log, file line 59 = the 19th of its 27 `KFlash:` lines (`1459 cycles`); the last `KFlash:` summary (line 80) reads 18.20 ms at 1 row |
 | Draft cost per cycle (Flash-Next DFlash2 head) | 0.51-1.14 ms, 0.7-1.5 % of the cycle | `kapitsa-f72-acceptance-sweep.md` §2 |
 | Value of one more accepted token | one token ≈ one cycle (~18 ms at 201 tok/s and tau 3.6); +0.1 tok/cycle ≈ +2.8 % tok/s (derived) | derived |
 | Calibration the 35B has learned (M5 Pro cache) | alpha -0.4…-0.9, beta 0.45-0.83 by depth: the drafter is overconfident | `~/.cache/kapitsa/kflash/qwen3.6-35b-a3b-4bit-dflash2-b4-Apple_M5_Pro.json` |
