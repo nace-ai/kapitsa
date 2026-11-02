@@ -423,6 +423,17 @@ void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& x
       return;
     }
   }
+  if (!qmt && M >= 64 && segs.size() > 1 && segs.size() <= 4 && qmr_sel().on &&
+      qmr_sel().name == "qmr_k64_w12_m32_n64") {
+    bool all_qmr4 = true;
+    for (auto& s : segs) {
+      all_qmr4 = all_qmr4 && s.L->bits == 4 && s.L->gs == 64 && s.L->K == segs[0].L->K && s.L->K % 64 == 0;
+    }
+    if (all_qmr4) {
+      enc_qmr_multi(e, segs, xh, M);
+      return;
+    }
+  }
   // one projection: the large-prefill kernels (enc_qmm would come back here)
   for (auto& s : segs) segs.size() > 1 ? enc_qmm(e, *s.L, xh, s.y, M, s.add) : enc_qmm_large(e, *s.L, xh, s.y, M, s.add);
 }
@@ -466,6 +477,37 @@ void Qwen35::enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buff
   e.dispatch(tg, (M + t.bm - 1) / t.bm, 1, t.th);
 }
 
+// Multi-projection for large prefill (M >= 64, up to 4 projections sharing xh)
+void Qwen35::enc_qmr_multi(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M) {
+  static const uint32_t bm = 32, bn = 64, th = 64;
+  e.use(pipe("qmrs_k64_w12_m32_n64"));
+  kp::Qmms p{};
+  p.K = segs[0].L->K;
+  p.T = uint32_t(M);
+  p.x_ld = p.K;
+  p.nseg = uint32_t(segs.size());
+  uint32_t tg = 0;
+  for (size_t i = 0; i < 4; ++i) {
+    const SegQ& sq = segs[std::min(i, segs.size() - 1)];
+    if (i < segs.size()) {
+      p.N[i] = sq.L->N;
+      p.y_ld[i] = sq.L->N;
+      p.add[i] = sq.add ? 1u : 0u;
+      p.tg_begin[i] = tg;
+      tg += (sq.L->N + bn - 1) / bn;
+    }
+    e.buf(int(i * 4 + 0), sq.L->w->buf);
+    e.buf(int(i * 4 + 1), sq.L->s->buf);
+    e.buf(int(i * 4 + 2), sq.L->b->buf);
+    e.buf(int(i * 4 + 3), sq.y);
+  }
+  p.tg_begin[segs.size()] = tg;
+  e.buf(16, xh);
+  e.val(17, p);
+  const uint32_t m_tg = (uint32_t(M) + bm - 1) / bm;
+  e.dispatch(tg, m_tg, 1, th);
+}
+
 // Creates the compute pipelines the prefill paths can pick (every short-prefill variant the row
 // count can select, and the large-prefill GEMM / attention / MoE / GDN kernels) at load, in
 // parallel, instead of at first use: on a binary whose kernels are not in the system shader cache
@@ -487,7 +529,7 @@ void Qwen35::prewarm_pipelines() {
       names.insert(n);
   if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
   if (Gpu::get().apple_family() <= 7)  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
-    for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
+    for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64", "qmrs_k64_w12_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
     const std::string k = std::to_string(moe_qmr_k(cfg_.hidden, cfg_.moe_I));
     names.insert("qrm_gu_k" + k + "_m" + std::to_string(moe_qmr()) + "_n64");
