@@ -49,15 +49,17 @@ double median(std::vector<double> v) {
 
 }  // namespace
 
-bool Qwen35::ane_slabs(int T) const {
+// On by default; NI_ANE_NONCAUSAL=0 keeps a noncausal pass's FFN on the GPU alone.
+bool Qwen35::noncausal_slabs_on() {
   static const bool on = [] {
     const char* v = getenv("NI_ANE_NONCAUSAL");
-    const bool b = v && !strcmp(v, "1");
-    if (b) logi("NI_ANE_NONCAUSAL=1: a noncausal prefill pass splits its FFN with the Neural Engine in slabs of <= %u rows",
-                ane::FfnSplit::kMaxRows);
-    return b;
+    return !v || strcmp(v, "0") != 0;
   }();
-  return on && !cfg_.causal && ane_ && ane_on_ && !cfg_.moe && T >= int(ane_->min_rows()) &&
+  return on;
+}
+
+bool Qwen35::ane_slabs(int T) const {
+  return noncausal_slabs_on() && !cfg_.causal && ane_ && ane_on_ && !cfg_.moe && T >= int(ane_->min_rows()) &&
          ane::last_slab_rows(T, int(ane::FfnSplit::kMaxRows)) > 0 && !ane_->retired();
 }
 
@@ -118,15 +120,19 @@ void Qwen35::init_ane() {
   const std::string mkey = ane::model_key(dir_);
   // the two-half wavefront is the default schedule (NI_ANE_WAVE=0: the plain split)
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
+  // A noncausal pass splits slab by slab without the wavefront (enc_mlp_prefill_slabs), so its share is the plain
+  // split's: M5 Pro, Drex Max, 16 of 34 units against the wavefront's 24, latency x0.90 at 4K and 16K (#265).
+  // The lanes stay as the wavefront schedule sizes them.
+  const bool share_wave = wave && (cfg_.causal || !noncausal_slabs_on());
   ane::Calibration cal;
-  const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (wave ? "|wave" : ""), cal);
+  const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (share_wave ? "|wave" : ""), cal);
   // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights: the M5 default share on
   // the models it was measured on (mma_share_measured)
   bool mma = qmt_ready() && mma_share_measured(cfg_);
   auto g64 = [](const QLinear& q) { return q.bits == 4 && q.gs == 64; };
   for (const Layer& L : layers_) mma = mma && g64(L.mg) && g64(L.mu) && g64(L.md);  // as plan()'s ffn_mma
   const uint32_t total = uint32_t(cfg_.dense_I / 512);
-  uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, wave, mma);
+  uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, share_wave, mma);
   uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;
   if (getenv("NI_ANE_UNITS")) units = uint32_t(atoi(getenv("NI_ANE_UNITS")));
   if (getenv("NI_ANE_MIN_ROWS")) min_rows = uint32_t(atoi(getenv("NI_ANE_MIN_ROWS")));
@@ -185,11 +191,12 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
   if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
   const std::string chip = Gpu::get().name();
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
+  const bool share_wave = wave && (read_config(dir).causal || !noncausal_slabs_on());  // as init_ane
   ane::Calibration cal;
-  if (ane::read_calibration(ane::machine_key(chip, ane::model_key(dir)) + (wave ? "|wave" : ""), cal))
+  if (ane::read_calibration(ane::machine_key(chip, ane::model_key(dir)) + (share_wave ? "|wave" : ""), cal))
     a.units = cal.units, a.source = "calibration";
   else
-    a.units = ane::default_units(chip, Gpu::get().core_count(), a.total, wave, m.ffn_mma),
+    a.units = ane::default_units(chip, Gpu::get().core_count(), a.total, share_wave, m.ffn_mma),
     a.source = "default for this chip";
   if (getenv("NI_ANE_UNITS")) a.units = uint32_t(atoi(getenv("NI_ANE_UNITS"))), a.source = "NI_ANE_UNITS";
   if (!a.units || a.units > a.total) {
@@ -233,7 +240,10 @@ void Qwen35::ane_finish_init() {
        ane_->min_rows(),
        ane_->startup_note().c_str(), ane_->metal_bytes() / 1e6, ane_->startup_ms() / 1000);
   if (fault >= 0) logi("NI_ANE_FAULT: the ANE job of layer %d of the first split chunk will not start", fault);
-  if (tmax_ > int(ane::FfnSplit::kMaxRows))
+  if (!cfg_.causal && noncausal_slabs_on())
+    logi("NI_ANE: a noncausal prefill pass splits its FFN with the Neural Engine in slabs of <= %u rows "
+         "(NI_ANE_NONCAUSAL=0: GPU alone)", ane::FfnSplit::kMaxRows);
+  else if (tmax_ > int(ane::FfnSplit::kMaxRows))
     logi("NI_ANE: prefill chunks of more than %u rows run on the GPU alone (prefill chunk is %d)", ane::FfnSplit::kMaxRows,
          tmax_);
   if (env_on("NI_ANE_VERIFY") || !getenv("NI_ANE_VERIFY")) {
