@@ -358,6 +358,7 @@ loaded: the server sends its requests there ([Several Macs](#several-macs)). In 
 | `--model MODEL` | asked in a terminal; else the model picked last if downloaded, else the best for this Mac | A name, `name:variant`, `org/name[@revision]`, a folder or a `.gguf` file ([Models and downloads](#models-and-downloads)). |
 | `--host HOST` | `0.0.0.0` | Listen address: every address, this Mac's and its network's ([API keys and network access](#api-keys-and-network-access)). `127.0.0.1` keeps the server to this Mac, as `--private` does. |
 | `--port PORT` | `8000` | Listen port. A port in use is an error, on any address. |
+| `--name ID` | `serve-PORT` | Stable local instance identity for authenticated [runtime control](local-runtime.md). |
 | `--private` | off | This Mac only: listen on `127.0.0.1`, stay out of sight of Kapitsa on the other Macs and never send them requests ([Several Macs](#several-macs)). |
 | `--local` | off | Run the model on this Mac even when another Mac on the network runs it whole ([Several Macs](#several-macs)). |
 | `--api-key KEY` | none | Require `Authorization: Bearer KEY` or `x-api-key: KEY`. |

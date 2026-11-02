@@ -37,6 +37,8 @@
 #include "server/http_stream.h"
 #include "server/model_manager.h"
 #include "server/native_execution.h"
+#include "server/runtime.h"
+#include "server/service.h"
 #include "server/picker.h"
 #include "server/pair.h"
 #include "server/route.h"
@@ -353,6 +355,7 @@ static void print_serve_help() {
          "  --host HOST            listen address (default 0.0.0.0: this Mac and its network; 127.0.0.1: this Mac\n"
          "                         only, like --private)\n"
          "  --port PORT            default 8000\n"
+         "  --name ID              local runtime control identity (default serve-PORT)\n"
          "  --private              this Mac only: listen on 127.0.0.1, stay out of sight of Kapitsa on the other Macs\n"
          "                         and never send them requests. By default the server is visible on the network\n"
          "                         (Bonjour), with no password: kapitsa cluster on any Mac lists it\n"
@@ -771,6 +774,8 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
            api_key.empty() ? "" : ", API key required");
   }
   fflush(stdout);
+  if (const auto instance = runtime::observed())
+    instance->update({{"state", "ready"}, {"model", key}, {"routed", true}});
   // the Mac's comings and goings, as seen every second
   std::thread([router, tui, head_id] {
     cluster::MacInfo was = router->last();
@@ -808,17 +813,24 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
 }
 
 static int serve(int argc, char** argv, int first) {
-  exit_with_parent();
   keep_args(argc, argv);
-  EngineOptions opt;
-  int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
-  std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
-  std::vector<std::string> split;  // --split: the stages' addresses, in the order of their layers
-  int port = 8000;
-  bool verbose = false, yes = false, allow_switch = false, priv = false, local = false, engine_splash = false, check_only = false;
-  std::string splash_kflash = "auto";  // --splash-kflash (splash::pick_engine)
-  std::string splash_found_binary;     // the stock engine given or found, which the next run starts from (splash.json)
-  std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
+  server::Options config;
+  auto& opt = config.engine;
+  auto& context_req = config.context_req;
+  auto& host = config.host;
+  auto& api_key = config.api_key;
+  auto& model = config.model;
+  auto& split = config.split;
+  auto& port = config.port;
+  auto& verbose = config.verbose;
+  auto& yes = config.yes;
+  auto& allow_switch = config.allow_switch;
+  auto& priv = config.priv;
+  auto& local = config.local;
+  auto& engine_splash = config.engine_splash;
+  auto& check_only = config.check_only;
+  auto& splash_kflash = config.splash_kflash;
+  auto& timing = config.timing;
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
     std::string a = argv[i];
@@ -830,6 +842,7 @@ static int serve(int argc, char** argv, int first) {
       print_serve_help();
       return 0;
     } else if (a == "--model" || a == "-m") model = next();
+    else if (a == "--name") config.instance_id = config.name = next();
     else if (a == "--model-id") opt.model_id = next();
     else if (a == "--engine") {
       const std::string v = next();
@@ -893,7 +906,32 @@ static int serve(int argc, char** argv, int first) {
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
+  return server::run_service(std::move(config));
+}
+
+int ni::server::run_service(Options config) {
+  if (!config.managed) exit_with_parent();
+  auto& opt = config.engine;
+  auto& context_req = config.context_req;
+  auto& host = config.host;
+  auto& api_key = config.api_key;
+  auto& model = config.model;
+  auto& split = config.split;
+  auto& port = config.port;
+  auto& verbose = config.verbose;
+  auto& yes = config.yes;
+  auto& allow_switch = config.allow_switch;
+  auto& priv = config.priv;
+  auto& local = config.local;
+  auto& engine_splash = config.engine_splash;
+  auto& check_only = config.check_only;
+  auto& splash_kflash = config.splash_kflash;
+  auto& timing = config.timing;
+  std::string splash_found_binary;
+  const char* help = "kapitsa serve --help";
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  if (!config.instance_id.empty() && !runtime::valid_id(config.instance_id))
+    return fail("--name must be 1-64 letters, digits, '-' or '_'", 2);
   // Splash's engine: the model runs in its child, so nothing below plans this Mac's memory for it, picks, downloads or
   // routes a model: the folder given is the model, served here and nowhere else
   if (check_only && !engine_splash) usage_error("--check needs --engine splash", help);
@@ -976,8 +1014,21 @@ static int serve(int argc, char** argv, int first) {
   const bool visible = !priv && !loopback, may_route = visible && !local;
   if (allow_switch && api_key.empty() && !loopback)
     usage_error("--allow-switch on a network address needs --api-key (any client could load models)", help);
-  const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
+  const bool tui = !config.headless && term::fancy();  // a terminal: the styled screen, the engine's log in a file
   if (tui) ui::serve_begin(verbose);
+  if (config.instance_id.empty()) config.instance_id = "serve-" + std::to_string(port);
+  if (config.name.empty()) config.name = config.instance_id;
+  const std::string api_host = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
+  const std::string local_api = "http://" + (api_host.find(':') != std::string::npos ? "[" + api_host + "]" : api_host) +
+                                ":" + std::to_string(port);
+  std::shared_ptr<runtime::Instance> instance;
+  try {
+    instance = std::make_shared<runtime::Instance>(hub::home_dir() + "/instances", config.instance_id, config.name,
+      local_api, model, kVersion, [] { kill(getpid(), SIGTERM); });
+  } catch (const std::exception& e) { return fail(e.what()); }
+  runtime::observe(instance);
+  log_observer() = runtime::log_event;
+  instance->update({{"state", "preparing"}, {"managed", config.managed}, {"port", port}});
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
@@ -1154,7 +1205,9 @@ static int serve(int argc, char** argv, int first) {
     if (!header) ui::serve_header(KAPITSA_VERSION);
     for (const auto& n : notes) ui::note(n);
   }
-  if (route) return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
+  if (route) {
+    return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
+  }
   if (pair_head) {  // the stage of its split: the model's files here too, the layers it gives loaded when it does
     try {
       hub::PullOptions po;
@@ -1260,6 +1313,8 @@ static int serve(int argc, char** argv, int first) {
     }
   }
   if (opt.model_id.empty()) opt.model_id = ref.id;
+  instance->update({{"state", "loading"}, {"model", opt.model_id}, {"model_dir", opt.model_dir},
+    {"context", opt.context}, {"memory_budget_bytes", budget}});
   // the server compiles the Neural Engine program in the background (no 40 s start after the ANE
   // daemon evicted it); ni_run and the benchmarks build it synchronously
   setenv("NI_ANE_ASYNC", "1", 0);
@@ -1281,6 +1336,15 @@ static int serve(int argc, char** argv, int first) {
   }
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);
+  instance->details([model_mgr, budget] {
+    if (model_mgr->switching()) return json{{"model_switching", true}, {"state", "loading"}};
+    const auto eng = model_mgr->current_engine();
+    if (!eng) return json::object();
+    const auto ref = model_mgr->current_ref();
+    return json{{"model", eng->model_id()}, {"context", eng->context_length()}, {"context_fit", eng->context_fit()},
+      {"slots", eng->slots()}, {"quant", ref.variant ? ref.variant->quant : ""},
+      {"memory_used_bytes", Gpu::get().allocated_bytes()}, {"memory_budget_bytes", budget}, {"model_switching", false}};
+  });
 
   api::ResponseStore responses;  // recent responses, for previous_response_id
   httplib::Server srv;
@@ -1432,7 +1496,7 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     // the stream (src/api/chat_completions.cpp) starts as soon as the prompt is known to fit, before the slot
-    stream_reply(guard, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
+    ::stream_reply(guard, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
                  [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true, telemetry);
   });
 
@@ -1491,7 +1555,7 @@ static int serve(int argc, char** argv, int first) {
       prefill_after(q.chat, out);
       return;
     }
-    stream_reply(guard, q.chat, std::make_shared<api::MessagesStream>(id, model, q.show_thinking), res,
+    ::stream_reply(guard, q.chat, std::make_shared<api::MessagesStream>(id, model, q.show_thinking), res,
                  api::messages_failure, [&, r = q.chat](const ChatResult& out) { prefill_after(r, out); }, meter);
   });
   srv.Post("/v1/messages/count_tokens", [&](const httplib::Request& req, httplib::Response& res) {
@@ -1586,7 +1650,7 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     auto w = std::make_shared<api::ResponsesStream>(*q, id, model, created);
-    stream_reply(
+    ::stream_reply(
         guard, q->chat, w, res, api::responses_failure,
         [&, q, w, keep](const ChatResult& out) {
           if (out.finish_reason != "error") keep(w->output());
@@ -1705,6 +1769,7 @@ static int serve(int argc, char** argv, int first) {
            model_mgr->current_model_id().c_str(), api_key.empty() ? "" : ", API key required");
   }
   fflush(stdout);
+  instance->update({{"state", "ready"}});
   srv.listen_after_bind();
   return 0;
 }
@@ -1970,7 +2035,7 @@ static int mtp_sidecar(int argc, char** argv) {
   return 0;
 }
 
-int main(int argc, char** argv) {
+int ni::run_cli(int argc, char** argv) {
   const std::string cmd = argc > 1 ? argv[1] : "";
   // in a terminal the engine's log lines stay out of the screens (`kapitsa serve` keeps them in its log file)
   if (term::fancy() && cmd != "serve" && (cmd.empty() || cmd[0] != '-' || cmd == "--help" || cmd == "-h")) ui::quiet();

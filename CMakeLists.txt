@@ -178,16 +178,22 @@ add_custom_command(
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   DEPENDS ${CMAKE_SOURCE_DIR}/src/server/chat.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   COMMENT "Embedding the chat page")
-add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
+add_library(kapitsa_server STATIC ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
   ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/runtime.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
   ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp
   ${CMAKE_SOURCE_DIR}/src/server/stage_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/route.cpp
   ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/pair.cpp ${KAPITSA_CHAT})
-target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
-target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
+target_include_directories(kapitsa_server PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(kapitsa_server PUBLIC naceinfer "-framework CoreFoundation")
+target_compile_definitions(kapitsa_server PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
+add_executable(kapitsa src/server/cli_entry.cpp)
+target_link_libraries(kapitsa PRIVATE kapitsa_server)
+add_executable(kapitsa-runtime src/server/runtime_entry.cpp)
+target_link_libraries(kapitsa-runtime PRIVATE kapitsa_server)
+add_dependencies(kapitsa kapitsa-runtime)
 add_custom_command(TARGET kapitsa POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/nace-infer-server
   COMMAND ${CMAKE_COMMAND} -E create_symlink kapitsa ${CMAKE_BINARY_DIR}/nace-infer-server)

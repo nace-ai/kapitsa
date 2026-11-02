@@ -1,5 +1,6 @@
 // The command line's screens in a terminal (ui.h).
 #include "server/ui.h"
+#include "server/runtime.h"
 
 #include "api/clients.h"
 #include "metal/gpu.h"
@@ -168,7 +169,6 @@ void home(const std::string& version) {
               4, W);
   paragraph(o, "Chat at http://127.0.0.1:8000  " + std::string(kDot) + "  OpenAI and Anthropic APIs at /v1", 4, W, dim);
   o.push_back("");
-
   // models: alias, name, size, marks, purpose
   struct Row {
     std::string alias, name, size, marks, purpose;
@@ -769,6 +769,15 @@ struct Meter {
   int images = 0;
   std::shared_ptr<LiveDecode> live = std::make_shared<LiveDecode>();
   std::deque<std::array<double, 3>> samples;  // the dashboard thread's: (ms, tokens, cycles), the last 1.5 s
+  std::shared_ptr<runtime::Instance> instance;
+  std::string request_id;
+  ~Meter() {
+    if (instance) {
+      ChatResult abandoned;
+      abandoned.finish_reason = "cancelled";
+      instance->finish_request(request_id, abandoned);
+    }
+  }
 };
 
 namespace {
@@ -976,10 +985,14 @@ void dash_remove(const std::shared_ptr<Meter>& m) {
 }  // namespace
 
 std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r) {
-  if (!g_serve_ui) return nullptr;
+  const auto instance = runtime::observed();
+  if (!g_serve_ui && !instance) return nullptr;
   auto m = std::make_shared<Meter>();
   m->client = client_of(req.get_header_value("User-Agent"));
   m->images = images_in(r.messages);
+  m->instance = instance;
+  if (instance) m->request_id = instance->begin_request(m->client, m->live);
+  if (!g_serve_ui) return m;
   {
     std::lock_guard<std::mutex> lk(g_req_mu);
     request_header();
@@ -997,6 +1010,8 @@ void token(const std::shared_ptr<Meter>& m) {
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   if (r.completion_tokens > 1 && r.decode_ms > 0) g_rate = (r.completion_tokens - 1) / (r.decode_ms / 1000);
   if (!m) return;
+  if (m->instance) m->instance->finish_request(m->request_id, r);
+  if (!g_serve_ui) return;
   dash_remove(m);
   const time_t now = time(nullptr);
   char at[16];

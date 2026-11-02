@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
@@ -53,6 +54,12 @@ inline LogSink& log_sink() {
   return s;
 }
 
+// An independent structured observer; presentation still chooses its own sink.
+inline std::atomic<LogSink>& log_observer() {
+  static std::atomic<LogSink> observer{nullptr};
+  return observer;
+}
+
 inline void log_to_sink(LogSink s, int level, const char* fmt, va_list ap) {
   char buf[1024];
   va_list aq;
@@ -94,6 +101,7 @@ inline void log_to_sink(LogSink s, int level, const char* fmt, va_list ap) {
     va_end(ap);
     throw FatalError(message);
   }
+  if (LogSink o = log_observer().load()) log_to_sink(o, 0, fmt, ap);
   if (LogSink s = log_sink()) {
     log_to_sink(s, 0, fmt, ap);
   } else {
@@ -111,6 +119,7 @@ __attribute__((format(printf, 1, 2))) inline void logi(const char* fmt, ...) {
   if (log_level() < 1) return;
   va_list ap;
   va_start(ap, fmt);
+  if (LogSink o = log_observer().load()) log_to_sink(o, 1, fmt, ap);
   if (LogSink s = log_sink()) {
     log_to_sink(s, 1, fmt, ap);
     va_end(ap);
@@ -126,6 +135,7 @@ __attribute__((format(printf, 1, 2))) inline void logd(const char* fmt, ...) {
   if (log_level() < 2) return;
   va_list ap;
   va_start(ap, fmt);
+  if (LogSink o = log_observer().load()) log_to_sink(o, 2, fmt, ap);
   if (LogSink s = log_sink()) {
     log_to_sink(s, 2, fmt, ap);
     va_end(ap);
