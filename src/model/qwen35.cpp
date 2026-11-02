@@ -423,6 +423,17 @@ void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& x
       return;
     }
   }
+  if (!qmt && M >= 64 && segs.size() > 1 && segs.size() <= 4 && qmr_sel().on &&
+      qmr_sel().name == "qmr_k64_w12_m32_n64") {
+    bool all_qmr4 = true;
+    for (auto& s : segs) {
+      all_qmr4 = all_qmr4 && s.L->bits == 4 && s.L->gs == 64 && s.L->K == segs[0].L->K && s.L->K % 64 == 0;
+    }
+    if (all_qmr4) {
+      enc_qmr_multi(e, segs, xh, M);
+      return;
+    }
+  }
   // one projection: the large-prefill kernels (enc_qmm would come back here)
   for (auto& s : segs) segs.size() > 1 ? enc_qmm(e, *s.L, xh, s.y, M, s.add) : enc_qmm_large(e, *s.L, xh, s.y, M, s.add);
 }
@@ -466,6 +477,40 @@ void Qwen35::enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buff
   e.dispatch(tg, (M + t.bm - 1) / t.bm, 1, t.th);
 }
 
+// Multi-projection for large prefill (M >= 64, up to 4 projections sharing xh)
+void Qwen35::enc_qmr_multi(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M) {
+  static const uint32_t bm = 32, bn = 64, th = 64;
+  const bool mfast = prefill_mfast();
+  const char* kname = mfast ? "qmrs_k64_w12_m32_n64_mf" : "qmrs_k64_w12_m32_n64";
+  e.use(pipe(kname));
+  kp::Qmms p{};
+  p.K = segs[0].L->K;
+  p.T = uint32_t(M);
+  p.x_ld = p.K;
+  p.nseg = uint32_t(segs.size());
+  uint32_t tg = 0;
+  for (size_t i = 0; i < 4; ++i) {
+    const SegQ& sq = segs[std::min(i, segs.size() - 1)];
+    if (i < segs.size()) {
+      p.N[i] = sq.L->N;
+      p.y_ld[i] = sq.L->N;
+      p.add[i] = sq.add ? 1u : 0u;
+      p.tg_begin[i] = tg;
+      tg += (sq.L->N + bn - 1) / bn;
+    }
+    e.buf(int(i * 4 + 0), sq.L->w->buf);
+    e.buf(int(i * 4 + 1), sq.L->s->buf);
+    e.buf(int(i * 4 + 2), sq.L->b->buf);
+    e.buf(int(i * 4 + 3), sq.y);
+  }
+  p.tg_begin[segs.size()] = tg;
+  e.buf(16, xh);
+  e.val(17, p);
+  const uint32_t m_tg = (uint32_t(M) + bm - 1) / bm;
+  if (mfast) e.dispatch(m_tg, tg, 1, th);
+  else e.dispatch(tg, m_tg, 1, th);
+}
+
 // Creates the compute pipelines the prefill paths can pick (every short-prefill variant the row
 // count can select, and the large-prefill GEMM / attention / MoE / GDN kernels) at load, in
 // parallel, instead of at first use: on a binary whose kernels are not in the system shader cache
@@ -486,8 +531,14 @@ void Qwen35::prewarm_pipelines() {
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
   if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
-  if (Gpu::get().apple_family() <= 7)  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
-    for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
+  if (Gpu::get().apple_family() <= 7) {  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
+    for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64", "qmrs_k64_w12_m32_n64"}) names.insert(n);
+    if (prefill_mfast()) {
+      names.insert("qmr_k64_w12_m32_n64_mf");
+      names.insert("qmr_gu_k64_w14_m32_n64_mf");
+      names.insert("qmrs_k64_w12_m32_n64_mf");
+    }
+  }
   if (cfg_.moe && moe_qmr()) {
     const std::string k = std::to_string(moe_qmr_k(cfg_.hidden, cfg_.moe_I));
     names.insert("qrm_gu_k" + k + "_m" + std::to_string(moe_qmr()) + "_n64");
@@ -2678,13 +2729,20 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     const std::string* n = &q.name;
     uint32_t bm = q.bm, bn = q.bn, th = q.threads;
     static const std::string small = "qmr_k64_w14_m16_n64", tiny = "qmr_k64_w12_m8_n64";
+    bool mfast = false;
     if (M <= 8) n = &tiny, bm = 8, bn = 64, th = 64;
     else if (M < 64 || L.N <= 64) n = &small, bm = 16, bn = 64, th = 128;
+    else if (prefill_mfast() && q.name == "qmr_k64_w12_m32_n64") {
+      static const std::string n_mf = "qmr_k64_w12_m32_n64_mf";
+      n = &n_mf;
+      mfast = true;
+    }
     e.use(pipe(*n));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
     e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
     e.val(5, p);
-    e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
+    if (mfast) e.dispatch((M + bm - 1) / bm, (L.N + bn - 1) / bn, 1, th);
+    else e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
     return;
   }
   if (!L.q4() && !L.q8()) {  // wfmt.metal's qrf_* (the qmr design for any format)
@@ -3061,15 +3119,21 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   }
   const char* n = gu;
   uint32_t bm = 32, bn = 64, th = 128;
+  bool mfast = false;
   if (b8) n = M < 64 ? "qmr8_gu_k32_w14_m16_n64" : "qmr8_gu_k32_w14_m32_n64", bm = M < 64 ? 16 : 32;
   else if (M <= 8) n = "qmr_gu_k64_w12_m8_n32", bm = 8, bn = 32, th = 64;
   else if (M < 64) n = "qmr_gu_k64_w14_m16_n64", bm = 16, bn = 64, th = 128;
+  else if (prefill_mfast() && !strcmp(gu, "qmr_gu_k64_w14_m32_n64")) {
+    n = "qmr_gu_k64_w14_m32_n64_mf";
+    mfast = true;
+  }
   e.use(pipe(n));
   kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
   e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
   e.val(5, p);
   e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
-  e.dispatch((G.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
+  if (mfast) e.dispatch((uint32_t(M) + bm - 1) / bm, (G.N + bn - 1) / bn, 1, th);
+  else e.dispatch((G.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
   return true;
 }
 

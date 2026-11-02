@@ -62,7 +62,7 @@ static uint32_t threads_for(const std::string& name) {
 int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
   std::vector<Kern> kerns;
-  const std::regex full(".*_m([0-9]+)_n([0-9]+)(_ld)?$");
+  const std::regex full(".*_m([0-9]+)_n([0-9]+)(_mf)?(_ld)?$");
   std::smatch mt;
   std::string a1 = argc > 1 ? argv[1] : "qmm_b4";
   if (std::regex_match(a1, mt, full)) {
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
       std::string n = argv[i];
       if (!std::regex_match(n, mt, full)) fatal("not a kernel name: %s", n.c_str());
       kerns.push_back({n, std::stoi(mt[1]), std::stoi(mt[2]), threads_for(n), (n.find("_gu_") != std::string::npos || n.rfind("qmtg", 0) == 0), bits_for(n),
-                       mt[3].matched});
+                       mt[4].matched});
     }
   } else {
     std::vector<std::pair<int, int>> tiles = {{32, 32}, {64, 64}};
@@ -148,7 +148,11 @@ int main(int argc, char** argv) {
         if (k.ld) e->val(5, ldprm); else if (!i8) e->val(5, prm);
         if (k.gu) { e->buf(6, W2); e->buf(7, S2); e->buf(8, B2); }
         const int cb = k.name.rfind("qmtg", 0) == 0 ? k.bn / 2 : k.bn;
-        e->dispatch((N + cb - 1) / cb, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
+        const bool mf = k.name.find("_mf") != std::string::npos;
+        if (mf)
+          e->dispatch((M + k.bm - 1) / k.bm, (N + cb - 1) / cb, 1, std::min(k.threads, pipes[ki].max_threads));
+        else
+          e->dispatch((N + cb - 1) / cb, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
       }
       e->commit_and_wait();
       return e->gpu_ms() / n;
