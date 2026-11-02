@@ -68,11 +68,15 @@ jobs:
       - run: python3 tools/readme_images/readme_images.py --tables --check
 
   community-table:
-    # bench/community/RESULTS.md is written by tools/community_table.py from bench/community/results. A row merged
-    # without the rewrite leaves main's table stale, and the push-to-main `table` job cannot open the pull request it
-    # needs here, so nothing else would notice. Pure computation over the working tree: no author lookup, no GPU, no
-    # secrets, no fetch-depth. Not a required check (the ruleset requires none): this is the loud pre-merge signal, and
-    # the same run on main flags a table that went stale after the fact.
+    # bench/community/RESULTS.md is written by tools/community_table.py from bench/community/results. On a pull
+    # request actions/checkout checks out GitHub's merge commit, so this answers the question that matters: would this
+    # merge leave main's table stale? A branch cut before a result landed therefore fails here too, which is the point -
+    # the failing branch is brought up to date and regenerated, and the row and its rewrite land together.
+    #
+    # A merged row without the rewrite makes main stale, and the push-to-main `table` job cannot open the pull request it
+    # needs where Actions may not create them, so nothing else would notice. The same run on main flags a table that
+    # went stale after the fact. Pure computation over the working tree: no author lookup, no GPU, no secrets, no
+    # fetch-depth.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -85,7 +89,21 @@ jobs:
           # show what the table is missing, then fail: the row and its rewrite have to ride in the same pull request
           python3 tools/community_table.py
           git --no-pager diff -- bench/community/RESULTS.md || true
-          echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results. Run 'python3 tools/community_table.py' and commit bench/community/RESULTS.md in this pull request."
+          fix="python3 tools/community_table.py && git add bench/community/RESULTS.md && git commit -m 'bench/community/RESULTS.md: the community results, rewritten from bench/community/results'"
+          echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results after this merge. Run: $fix"
+          {
+            echo "### Community results table is stale"
+            echo
+            echo "After this pull request merges, \`bench/community/RESULTS.md\` would not match \`bench/community/results\`."
+            echo "The result row and its rewrite land in the same pull request. Regenerate it, commit, and push to this branch:"
+            echo
+            echo '```sh'
+            echo "$fix"
+            echo "git push"
+            echo '```'
+            echo
+            echo "A branch that was updated to the current main after another result landed needs this again before merging."
+          } >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
   docs-links:

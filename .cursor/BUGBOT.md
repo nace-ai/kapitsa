@@ -84,6 +84,10 @@ not ask for abstractions, interfaces or configuration the change does not need.
   results folder are normal; flag a commit that changes a file already under bench/results or bench/community/results
   without naming it in its subject (a re-measured cell, a superseded transcript, an erratum), and flag a transcript
   rewritten under the same label, which is a re-run wearing the old run's name.
+- A pull request that adds a file under `bench/community/results` must carry the regenerated
+  `bench/community/RESULTS.md` (`python3 tools/community_table.py`) in the same pull request. Flag a result without it,
+  and flag a merge of a bench pull request whose branch is behind main until the table is regenerated on the new base:
+  the row and its rewrite land together or main's table goes stale.
 
 ## Security and workflows (.github/**)
 
