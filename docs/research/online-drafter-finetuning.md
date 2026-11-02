@@ -326,7 +326,20 @@ The more useful product change is a **language check that turns on the full head
 - kk F/A 1.047 is below the 1.10 bar, so only ru and zh clear it.
 - The ranked head gains about 10 % over the default on non-English (B/A 1.095-1.107) with English flat (B/A 1.001), and ties or loses to the full head on ru and zh (B/F 0.987, 0.965) but beats it on kk (1.058).
 - The result shows direction, not an M5 Pro gain: one machine, on battery, 3 prompts per class, ranking lists from 3-4 Wikipedia articles. The gates were fixed before the run and are not changed. Per-prompt output is in the research notes (`f1-results-m3pro/analyse-output.txt`, kept outside the repo to stay under the PR size cap).
-- F2 (drafted, not run) compares the ranked head with a language-gated full head on 12 prompts per class.
+- The follow-up run "F1b" (below; not the frozen ask F2 in §7) compares the ranked head with a language-gated full head on 12 prompts per class.
+
+**F1b result (run, not inferred; the follow-up to F1, not the frozen ask F2 in §7).** "M3 Pro, battery 90→64%, 12 prompts/class" (start and end in `run-env.txt`: "battery at start: 90%", "battery at end: 64%"), 264 legs, same model, commit and gates as F1; 0 failed legs, greedy ids identical on every prompt. F1b asked whether a language-gated full head G (full head on ru/kk/zh, default head on English) beats the ranked head B; English legs are A and B only, so G/B there is A/B. **Verdict: PER-LANGUAGE (gated better: zh; ranked better: kk).** Mean over 12 prompts ± 95 % half-width, as printed by `analyse.py`:
+
+| Class | G/B | B/A | F/A |
+|---|---|---|---|
+| ru | 1.013 ±0.013 | 1.134 ±0.047 | 1.149 ±0.046 |
+| kk | 0.949 ±0.009 | 1.105 ±0.018 | 1.049 ±0.021 |
+| zh | 1.056 ±0.032 | 1.055 ±0.026 | 1.114 ±0.037 |
+| en | 0.997 ±0.006 | 1.003 ±0.006 | n/a |
+
+- zh: the gated full head wins (G/B 1.056, lower end 1.024 ≥ 1.00). kk: the ranked head is clearly ahead (G/B 0.949, upper end 0.958 ≤ 1.00), and kk does not qualify for the full head (F/A 1.049 < 1.10). ru ties: G/B 1.013 with its lower end at 1.000, short of the 1.02 bar.
+- The ranked head gains 5.5-13.4 % over the default on every non-English class and costs English nothing (B/A 1.003). The full head's English cost (0.945 in F1) is why a gate is needed to use it on zh.
+- Direction, not an M5 Pro gain: one machine, on battery, prompts 3-11 hand-written and not native-reviewed, ranking lists from 3-4 Wikipedia articles. Gates and prompts were fixed before the run. Output is in the research notes (`f2-results-m3pro/analyse-output.txt`), outside the repo.
 
 ### 6.2 A persistent history lane in the lattice (feasibility 0.45)
 
