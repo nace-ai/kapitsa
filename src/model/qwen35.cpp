@@ -3333,7 +3333,8 @@ void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int
   // default gdn_step_parr4_l16: four value rows per lane (independent recurrences interleaved), 1.6x
   // gdn_step_par_l16 and bitwise equal to it
   static const std::string step_name = getenv("NI_GDN_STEP") ? getenv("NI_GDN_STEP") : "gdn_step_parr4_l16";
-  static const uint32_t sgs = getenv("NI_GDN_SGS") ? uint32_t(atoi(getenv("NI_GDN_SGS"))) : 2u;
+  static const uint32_t sgs = getenv("NI_GDN_SGS") ? uint32_t(atoi(getenv("NI_GDN_SGS")))
+                                                     : (Gpu::get().apple_family() <= 7 ? 4u : 2u);
   static const uint32_t lanes = uint32_t(atoi(step_name.c_str() + step_name.rfind("_l") + 2));
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   const uint32_t Hv = uint32_t(cfg_.lin_hv);
