@@ -434,17 +434,28 @@ void Qwen35::enc_mlp_prefill_slabs(Encoder& e, int li, const Layer& L, int T, co
   }
 }
 
-// NI_ANE_NC_WAVE=1 (default off; needs NI_ANE_NONCAUSAL's slabs and the wavefront's two lanes): the noncausal pass
-// pipelines its slabs. enc_mlp_prefill_slabs waits for each slab's ANE job before the next slab's GPU work, so the
-// ANE idles under every mixer. Here the FFN jobs go out in order j = 0, 1, ... (layer by layer, slab by slab), job j
-// on lane j & 1, and job j-2 is joined just before job j's slab uses the lane, so the ANE runs job j-1 under the GPU's
-// mixer and GPU part of job j. A GDN layer is causal and runs slab by slab with its state carried from one slab to the
-// next (as between two causal chunks): slab k's mixer needs only FFN_{i-1}(k), job j-n, joined long before. An
-// attention layer is bidirectional: every slab of FFN_{i-1} is joined first and its mixer runs over all T rows. Each
-// job's GPU part runs before its join, as in the plain split. Layer i+1's weights (set (i+1) & 1, last read by layer
-// i-1's jobs) are staged after layer i's second job is launched, when every job of layer i-1 has been joined.
+// NI_ANE_NC_WAVE (on by default from kNcWaveMinRows rows; needs NI_ANE_NONCAUSAL's slabs and the wavefront's two
+// lanes): the noncausal pass pipelines its slabs. enc_mlp_prefill_slabs waits for each slab's ANE job before the next
+// slab's GPU work, so the ANE idles under every mixer. Here the FFN jobs go out in order j = 0, 1, ... (layer by layer,
+// slab by slab), job j on lane j & 1, and job j-2 is joined just before job j's slab uses the lane, so the ANE runs job
+// j-1 under the GPU's mixer and GPU part of job j. A GDN layer is causal and runs slab by slab with its state carried
+// from one slab to the next (as between two causal chunks): slab k's mixer needs only FFN_{i-1}(k), job j-n, joined
+// long before. An attention layer is bidirectional: every slab of FFN_{i-1} is joined first and its mixer runs over all
+// T rows. Each job's GPU part runs before its join, as in the plain split. Layer i+1's weights (set (i+1) & 1, last
+// read by layer i-1's jobs) are staged after layer i's second job is launched, when every job of layer i-1 has been
+// joined.
+// Unset or empty, the wave runs for a pass of at least NI_ANE_NC_WAVE_MIN_ROWS rows (default kNcWaveMinRows); 1 runs
+// it for any pass of two slabs or more, 0 never.
 bool Qwen35::ane_nc_wave(int T) const {
-  static const bool on = env_on("NI_ANE_NC_WAVE");
+  static const int mode = [] {  // -1 by size, 0 off, 1 on
+    const char* v = getenv("NI_ANE_NC_WAVE");
+    return !v || !*v ? -1 : strcmp(v, "0") != 0 ? 1 : 0;
+  }();
+  static const int min_rows = [] {
+    const char* v = getenv("NI_ANE_NC_WAVE_MIN_ROWS");
+    return v && *v ? atoi(v) : kNcWaveMinRows;
+  }();
+  const bool on = mode == 1 || (mode < 0 && T >= min_rows);
   const bool use = on && ane_ && ane_->lanes() >= 2 && !cap_ && ane::slab_count(T, int(ane::FfnSplit::kMaxRows)) >= 2;
   if (on && !use) logi("NI_ANE_NC_WAVE: a noncausal pass of %d rows runs its slabs one at a time instead", T);
   return use;
