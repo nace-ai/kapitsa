@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 
@@ -398,7 +399,8 @@ void QwenViT::load() {
   // The measured Qwen 4B and 35B tower shapes on M4 Pro; other shapes keep the bf16 path.
   const bool pack = (H == 1024 && c_.depth == 24 && c_.inter == 4096 && c_.out_hidden == 2560) ||
                     (H == 1152 && c_.depth == 27 && c_.inter == 4304 && c_.out_hidden == 2048);
-  if (pack && Gpu::get().name() == "Apple M4 Pro") {
+  const char* prepack = getenv("NI_VIT_PREPACK");
+  if (pack && !(prepack && !strcmp(prepack, "0")) && Gpu::get().name() == "Apple M4 Pro") {
     auto e = Gpu::get().begin();
     for (VitLin* L : {&patch_, &m1_, &m2_}) vit_pack_linear(*e, *L);
     for (Block& B : blocks_)
