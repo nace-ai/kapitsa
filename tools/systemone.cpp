@@ -488,6 +488,7 @@ class SystemOne {
   int cache_misses() const { return cache_misses_; }
   size_t cache_states() const { return cache_.size(); }
   void finish_dump() { if (dump_) dump_->finish(); }
+  const ni::AneStats& ane_stats() const { return model_->ane_stats(); }
 
  private:
   // ---- the state cache: keyed by the model plus the state's tokens, LRU by bytes ----
@@ -679,10 +680,21 @@ int main(int argc, char** argv) {
     try {
       std::lock_guard<std::mutex> l(server.mutex());
       ojson body = parse_body(ss.str());
-      for (int i = 0; i < g_warmup; ++i) server.handle(body);
+      // One stderr line per run with the Neural Engine split's counters for that run (NI_ANE / NI_ANE_NONCAUSAL):
+      // chunks split, ANE evaluations that held, reruns on the GPU alone, and the ANE's time.
+      auto run = [&](const char* kind, int i) {
+        const ni::AneStats before = server.ane_stats();
+        ojson r = server.handle(body);
+        const ni::AneStats& after = server.ane_stats();
+        std::fprintf(stderr, "ane %s %d: chunks %d evals %d reruns %d ane_ms %.1f\n", kind, i,
+                     after.chunks - before.chunks, after.evals - before.evals, after.reruns - before.reruns,
+                     after.ane_ms - before.ane_ms);
+        return r;
+      };
+      for (int i = 0; i < g_warmup; ++i) run("warmup", i);
       std::vector<double> ms;
       for (int i = 0; i < g_repeat; ++i) {
-        reply = server.handle(body);
+        reply = run("measured", i);
         ms.push_back(reply.value("latency_ms", 0.0));
       }
       server.finish_dump();
