@@ -444,12 +444,10 @@ void Qwen35::enc_mlp_prefill_slabs(Encoder& e, int li, const Layer& L, int T, co
 // job's GPU part runs before its join, as in the plain split. Layer i+1's weights (set (i+1) & 1, last read by layer
 // i-1's jobs) are staged after layer i's second job is launched, when every job of layer i-1 has been joined.
 bool Qwen35::ane_nc_wave(int T) const {
-  static const bool on = [] {
-    const bool v = env_on("NI_ANE_NC_WAVE");
-    if (v) logi("NI_ANE_NC_WAVE: noncausal slabs pipelined over two lanes");
-    return v;
-  }();
-  return on && ane_ && ane_->lanes() >= 2 && !cap_ && ane::slab_count(T, int(ane::FfnSplit::kMaxRows)) >= 2;
+  static const bool on = env_on("NI_ANE_NC_WAVE");
+  const bool use = on && ane_ && ane_->lanes() >= 2 && !cap_ && ane::slab_count(T, int(ane::FfnSplit::kMaxRows)) >= 2;
+  if (on && !use) logi("NI_ANE_NC_WAVE: a noncausal pass of %d rows runs its slabs one at a time instead", T);
+  return use;
 }
 
 void Qwen35::enc_prefill_nc_wave(Encoder& e, Seq& s, int T) {
@@ -464,6 +462,7 @@ void Qwen35::enc_prefill_nc_wave(Encoder& e, Seq& s, int T) {
     A.join(e, l, slab(pend[l]), rows(pend[l]));
     pend[l] = -1;
   };
+  logi("NI_ANE_NC_WAVE: a noncausal pass of %d rows pipelines %d slabs of %d over two lanes", T, n, R);
   unsigned j = 0;
   A.stage_layer(e, 0, 0);
   for (int i = 0; i < cfg_.layers; ++i) {
