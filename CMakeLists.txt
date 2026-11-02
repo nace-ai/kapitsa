@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 project(nace_infer LANGUAGES C CXX OBJCXX)
 
-set(KAPITSA_VERSION "0.2.39")
+set(KAPITSA_VERSION "0.2.26")
 if(NOT DEFINED KAPITSA_GIT)  # packaging/release/build.sh passes the commit it exported
   execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
                   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
@@ -65,30 +65,6 @@ add_custom_command(
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_flint.cmake
   COMMENT "Embedding the Flint Metal kernels")
 
-# Hy4-flash kernels: compiled only when a Hy4 pipeline is first asked for (src/model/hy4_kernels.h).
-file(GLOB NI_HY4_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/hy4/*.metal)
-set(NI_HY4_EMBED ${CMAKE_BINARY_DIR}/generated/hy4_kernels_embed.cpp)
-add_custom_command(
-  OUTPUT ${NI_HY4_EMBED}
-  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_HY4_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
-          -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_hy4.cmake
-  DEPENDS ${NI_HY4_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/quant.h
-          ${CMAKE_SOURCE_DIR}/src/kernels/kv_int8.h
-          ${CMAKE_SOURCE_DIR}/src/kernels/attn.metal
-          ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_hy4.cmake
-  COMMENT "Embedding the Hy4-flash Metal kernels")
-
-# Inkling-2 kernels: compiled only when an Inkling-2 model loads (src/model/inkling2_kernels.h).
-file(GLOB NI_INK2_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.metal ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.h)
-set(NI_INK2_EMBED ${CMAKE_BINARY_DIR}/generated/ink2_kernels_embed.cpp)
-add_custom_command(
-  OUTPUT ${NI_INK2_EMBED}
-  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_INK2_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
-          -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
-  DEPENDS ${NI_INK2_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/gguf/iq_grids.h
-          ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
-  COMMENT "Embedding the Inkling-2 Metal kernels")
-
 # Metal 4 tensor_ops kernels (src/kernels/tensor/): a library of their own, compiled as Metal 4 on a GPU with matrix units
 file(GLOB NI_TENSOR_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/tensor/*.metal)
 set(NI_TENSOR_EMBED ${CMAKE_BINARY_DIR}/generated/tensor_kernels_embed.cpp)
@@ -97,7 +73,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_TENSOR_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
   DEPENDS ${NI_TENSOR_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/nemotron/nh_route.h
-          ${CMAKE_SOURCE_DIR}/src/kernels/iq.h ${CMAKE_SOURCE_DIR}/src/kernels/kv_int8.h
+          ${CMAKE_SOURCE_DIR}/src/kernels/iq.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
   COMMENT "Embedding the Metal 4 tensor kernels")
 
@@ -121,18 +97,16 @@ file(GLOB_RECURSE NI_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.mm)
 list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 
-add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_DORY_EMBED} ${NI_FLINT_EMBED} ${NI_HY4_EMBED} ${NI_INK2_EMBED} ${NI_TENSOR_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
+add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_DORY_EMBED} ${NI_FLINT_EMBED} ${NI_TENSOR_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
   "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics" "-framework Security"
-  "-framework SystemConfiguration" "-framework Accelerate")  # src/cluster: this Mac's computer name, the kind of each network link
+  "-framework SystemConfiguration")  # src/cluster: this Mac's computer name, the kind of each network link
 target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}")
-# the KFlash budget's cache names the build that wrote it (src/model/kflash_budget.cpp), as `kapitsa --version` does
-set_source_files_properties(${CMAKE_SOURCE_DIR}/src/model/kflash_budget.cpp PROPERTIES COMPILE_DEFINITIONS "KAPITSA_GIT=\"${KAPITSA_GIT}\"")
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|disconnect_test|events_test|control_test|engine_view_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test|runtime_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -141,85 +115,29 @@ foreach(t ${NI_TOOLS})
   # (KAPITSA_GIT: the commit a dump or measurement says it was built from, as `kapitsa --version` does)
   target_compile_definitions(${name} PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
 endforeach()
-target_compile_definitions(ink2_check PRIVATE INK2_GOLDEN_PATH="${CMAKE_SOURCE_DIR}/tests/fixtures/ink2_golden.json")
 
 
 find_package(Threads REQUIRED)
-add_executable(ink2_gguf_test tests/ink2_gguf_test.cpp src/gguf/quant.cpp src/gguf/gguf.cpp)
-target_include_directories(ink2_gguf_test PRIVATE src third_party)
-add_test(NAME ink2_gguf_test COMMAND ink2_gguf_test)
-add_executable(gemm_slices_test tests/gemm_slices_test.cpp)  # src/model/gemm_slices.h: row slices of a GEMM
-target_include_directories(gemm_slices_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_executable(kv_grow_test tests/kv_grow_test.cpp)  # src/model/kv_grow.h: how far a KV cache grows in the budget
-target_include_directories(kv_grow_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp src/ane/default_share.cpp)
-target_include_directories(device_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_executable(catalog_profile_test tests/catalog_profile_test.cpp src/hub/catalog.cpp src/hub/resolve.cpp
-  src/engine/device_profile.cpp src/util/json_file.cpp)
-target_include_directories(catalog_profile_test PRIVATE src third_party)
 add_executable(execution_session_test tools/execution_session_test.cpp src/engine/execution_session.cpp)
 target_include_directories(execution_session_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(execution_session_test PRIVATE Threads::Threads)
 enable_testing()
-add_test(NAME nh_quant_q8_test COMMAND nh_quant_q8_test)
-set_tests_properties(nh_quant_q8_test PROPERTIES TIMEOUT 30)
-add_test(NAME gemm_slices_test COMMAND gemm_slices_test)
-add_test(NAME kv_grow_test COMMAND kv_grow_test)
-add_test(NAME device_profile_test COMMAND device_profile_test)
-add_test(NAME catalog_profile_test COMMAND catalog_profile_test)
+add_executable(runtime_test tools/runtime_test.cpp src/server/runtime.cpp)
+target_include_directories(runtime_test PRIVATE src third_party)
+target_link_libraries(runtime_test PRIVATE Threads::Threads)
+add_test(NAME runtime_test COMMAND runtime_test)
+set_tests_properties(runtime_test PROPERTIES TIMEOUT 30)
 add_test(NAME load_error_test COMMAND load_error_test)
 set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)
 set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
-add_test(NAME think_control_test COMMAND think_control_test)
-set_tests_properties(think_control_test PROPERTIES TIMEOUT 30)
-
-# Flint refuses NI_KV_I8 (#1257): the refusal text, header only
-add_executable(flint_kv_test tests/flint_kv_test.cpp)
-target_include_directories(flint_kv_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_test(NAME flint_kv_test COMMAND flint_kv_test)
-set_tests_properties(flint_kv_test PROPERTIES TIMEOUT 30)
-
-add_executable(token_suppression_test tests/token_suppression_test.cpp)
-target_include_directories(token_suppression_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
-add_test(NAME token_suppression_test COMMAND token_suppression_test)
-set_tests_properties(token_suppression_test PROPERTIES TIMEOUT 30)
-
-# kapitsa serve's one validator (src/server/service_config.cpp): flags and --config's JSON, against the schema in docs/
-add_executable(serve_options_test tests/serve_options_test.cpp src/server/service_config.cpp)
-target_include_directories(serve_options_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(serve_options_test PRIVATE naceinfer)
-add_test(NAME serve_options_test COMMAND serve_options_test ${CMAKE_SOURCE_DIR}/docs/serve-config.schema.json)
-set_tests_properties(serve_options_test PROPERTIES TIMEOUT 30)
 
 # Exercise the real HTTP observer and chunked provider without native/UI linkage or sockets.
-add_executable(events_test tools/events_test.cpp src/server/events.cpp src/server/activity.cpp)
-target_include_directories(events_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
-target_link_libraries(events_test PRIVATE Threads::Threads)
-add_test(NAME events_test COMMAND events_test)
-set_tests_properties(events_test PROPERTIES TIMEOUT 30)
-# The control socket over a real Unix socket in a temporary folder, with a stand-in for the server
-add_executable(control_test tools/control_test.cpp src/server/control.cpp src/server/events.cpp src/server/activity.cpp)
-target_include_directories(control_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
-target_link_libraries(control_test PRIVATE Threads::Threads)
-add_test(NAME control_test COMMAND control_test)
-set_tests_properties(control_test PROPERTIES TIMEOUT 60)
-add_executable(engine_view_test tools/engine_view_test.cpp src/server/engine_view.cpp src/server/pre_route.cpp src/server/control.cpp
-  src/server/events.cpp src/server/activity.cpp)
-target_include_directories(engine_view_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
-target_link_libraries(engine_view_test PRIVATE Threads::Threads)
-add_test(NAME engine_view_test COMMAND engine_view_test)
-set_tests_properties(engine_view_test PROPERTIES TIMEOUT 60)
 add_executable(http_stream_test tools/http_stream_test.cpp src/server/http_stream.cpp src/engine/execution_session.cpp)
 target_include_directories(http_stream_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(http_stream_test PRIVATE Threads::Threads)
 add_test(NAME http_stream_test COMMAND http_stream_test)
 set_tests_properties(http_stream_test PROPERTIES TIMEOUT 45)
-add_executable(disconnect_test tools/disconnect_test.cpp src/engine/execution_session.cpp)
-target_include_directories(disconnect_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
-target_link_libraries(disconnect_test PRIVATE Threads::Threads)
-add_test(NAME disconnect_test COMMAND disconnect_test)
-set_tests_properties(disconnect_test PROPERTIES TIMEOUT 60)
 # Normal static-archive linking uses this object's cache symbols, not naceinfer's hook-free member.
 target_sources(fn_store_test PRIVATE src/model/expert_store.cpp)
 target_compile_definitions(fn_store_test PRIVATE NI_EXPERT_CACHE_TEST)
@@ -260,24 +178,13 @@ add_custom_command(
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   DEPENDS ${CMAKE_SOURCE_DIR}/src/server/chat.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   COMMENT "Embedding the chat page")
-set(KAPITSA_ENGINE_PAGE ${CMAKE_BINARY_DIR}/generated/engine_page.cpp)
-add_custom_command(
-  OUTPUT ${KAPITSA_ENGINE_PAGE}
-  COMMAND ${CMAKE_COMMAND} -DOUT=${KAPITSA_ENGINE_PAGE} -DSRC=${CMAKE_SOURCE_DIR}/src/server/engine.html -DNAME=kEnginePage
-          -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
-  DEPENDS ${CMAKE_SOURCE_DIR}/src/server/engine.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
-  COMMENT "Embedding the engine view")
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/events.cpp ${CMAKE_SOURCE_DIR}/src/server/activity.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/control.cpp ${CMAKE_SOURCE_DIR}/src/server/engine_view.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/pre_route.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp
   ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp
   ${CMAKE_SOURCE_DIR}/src/server/stage_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/route.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/pair.cpp ${KAPITSA_CHAT}
-  ${KAPITSA_ENGINE_PAGE})
+  ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/pair.cpp ${KAPITSA_CHAT})
 target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
 target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
@@ -320,4 +227,3 @@ if(KAPITSA_BUILD_SDK)
   install(TARGETS kapitsa_sdk LIBRARY DESTINATION lib)
   install(FILES sdk/c/kapitsa.h DESTINATION include)
 endif()
-
