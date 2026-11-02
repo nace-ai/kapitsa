@@ -116,6 +116,17 @@ check(all(p.get("decode_tps") for p in sw["points"]) and not sw["invalid"], "swe
 check(all(x[2] == 0 for x in Fake.log), "sweep requests share no cache")
 tok = [p["prompt_tokens"] for p in sw["points"]]
 check(tok == sorted(tok) and tok[-1] <= a.max_ctx, "sweep prompt tokens grow and fit", str(tok))
+check(sw["task"] == "summary" and sw["decode_tokens"] == agentic.SWEEP_DECODE, "the default sweep is the 192-token summary")
+
+Fake.log.clear()
+summary_max = sw["points"][-1]["target"]
+a.sweep_task, a.decode_tokens = "code", 512
+sw = agentic.t_sweep(a, log=lambda m: None)
+a.sweep_task, a.decode_tokens = "summary", 64
+check(sw["task"] == "code" and sw["decode_tokens"] == 512, "--sweep-task code answers the decode phase's length")
+check([p["target"] for p in sw["points"]] == agentic.sweep_targets(a.sweep_sizes, a.max_ctx, 512)
+      and sw["points"][-1]["target"] < summary_max, "a code sweep's 'max' leaves room for its longer answer")
+check(all(p.get("decode_tps") for p in sw["points"]) and not sw["invalid"], "code sweep decode rates and valid", str(sw["invalid"]))
 
 Fake.log.clear()
 Fake.cache_sessions = 8

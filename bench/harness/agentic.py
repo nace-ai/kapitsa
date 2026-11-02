@@ -31,6 +31,15 @@ FALLOFF_FLAG_PCT = 10.0  # last-third vs first-third decode drop that is flagged
 KEPT_RATIO = 0.5         # interleave: TTFT after the other conversation / cold TTFT below this = prefix kept
 
 
+def sweep_task(a):
+    """The sweep's question and answer length: --sweep-task summary (the default), a 192-token summary of the document;
+    code, the decode phase's coding question and --decode-tokens, so each size's decode is the decode phase's rate
+    after a document of that size."""
+    if getattr(a, "sweep_task", "summary") == "code":
+        return bench.DECODE_USER, a.decode_tokens
+    return SWEEP_Q, SWEEP_DECODE
+
+
 # ---------------------------------------------------------------- pure helpers
 def med(v):
     v = [x for x in v if x is not None]
@@ -174,13 +183,14 @@ def cold_start(a, repeats=3, target=1000):
 
 
 def t_sweep(a, log=print):
-    """Cold prefill TTFT + decode tok/s at each size (median over --sweep-repeats), longest answer 192 tokens."""
-    targets = sweep_targets(a.sweep_sizes, a.max_ctx)
+    """Cold prefill TTFT + decode tok/s at each size (median over --sweep-repeats); the answer per --sweep-task."""
+    question, decode = sweep_task(a)
+    targets = sweep_targets(a.sweep_sizes, a.max_ctx, decode)
     points, invalid, flags = [], [], []
     for tg in targets:
         runs = []
         for _ in range(a.sweep_repeats):
-            rec, r = _cold(a, tg, SWEEP_Q, SWEEP_DECODE)
+            rec, r = _cold(a, tg, question, decode)
             if r is not None:
                 ct = rec.get("completion_tokens")
                 mid, e2e, _ = bench.decode_rates(r, ct, a.window_head, a.window_tail)
@@ -205,7 +215,8 @@ def t_sweep(a, log=print):
             f"{p.get('prefill_tps') and round(p['prefill_tps'])} tok/s prefill, decode {bench.f2(p.get('decode_tps'))} tok/s"
             + (f" ERROR {p['error']}" if p.get("error") else ""))
     res = summarize_sweep(points)
-    res.update({"runs": points, "max_ctx": a.max_ctx, "invalid": invalid, "flags": flags})
+    res.update({"runs": points, "max_ctx": a.max_ctx, "task": getattr(a, "sweep_task", "summary"),
+                "decode_tokens": decode, "invalid": invalid, "flags": flags})
     return res
 
 
