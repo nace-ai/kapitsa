@@ -1,5 +1,5 @@
-// kapitsa: Kapitsa's command line, and its server: OpenAI chat completions and Responses, Anthropic Messages,
-// Ollama chat and generate (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
+// kapitsa: Kapitsa's command line, and its server: OpenAI chat completions and Responses, Anthropic Messages
+// (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 0.0.0.0] [--port 8000]
 //                 [--private] [--local]
 //                 [--ctx 32768] [--slots N] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
@@ -8,7 +8,7 @@
 //                 the network (src/cluster/), and sends its requests to one that runs the model whole when this Mac
 //                 would not (route.h)
 //   kapitsa cluster [--json] [--watch]   the Macs on this network that run Kapitsa (cluster_cmd.cpp; alias: macs)
-//   kapitsa claude|codex|opencode|hermes|aider|goose|copilot [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
+//   kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
 //   kapitsa list [--json]
@@ -20,11 +20,9 @@
 //   kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on|off]   (update_cmd.cpp; and once a day, in the
 //                 background, the automatic update)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
-#include "api/clients.h"
 #include <cstring>
 #include "api/anthropic.h"
 #include "api/chat_completions.h"
-#include "api/ollama.h"
 #include "api/responses.h"
 #include "cluster/discovery.h"
 #include "cluster/pipe.h"
@@ -34,23 +32,17 @@
 #include "gguf/gguf.h"
 #include "gguf/import.h"
 #include "hub/hub.h"
-#include "loader/load_stop.h"
 #include "metal/gpu.h"
-#include "server/control.h"
-#include "server/engine_view.h"
-#include "server/pre_route.h"
 #include "server/cli.h"
 #include "server/http_stream.h"
 #include "server/model_manager.h"
 #include "server/native_execution.h"
+#include "server/runtime.h"
+#include "server/service.h"
 #include "server/picker.h"
 #include "server/pair.h"
 #include "server/route.h"
-#include "server/serve_defaults.h"
-#include "server/activity.h"
-#include "server/service.h"
 #include "splash/discover.h"
-#include "server/disconnect.h"
 #include "server/ui.h"
 #include "server/ws_upgrade.h"
 #include "util/log.h"
@@ -69,15 +61,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
-#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
-#include <fstream>
 #include <functional>
-#include <iostream>
-#include <sstream>
-#include <map>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -85,7 +72,7 @@
 #include <ctime>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.39"
+#define KAPITSA_VERSION "0.2.26"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
@@ -93,7 +80,6 @@
 
 namespace ni {
 extern const char* const kChatPage;  // src/server/chat.html, embedded at build time
-extern const char* const kEnginePage;  // src/server/engine.html, embedded at build time
 }
 
 const char* const ni::kVersion = KAPITSA_VERSION;
@@ -142,7 +128,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   r.max_tokens = api::chat_max_tokens(b);
   if (b.contains("temperature") && b["temperature"].is_number()) r.temperature = b["temperature"];
   if (b.contains("top_p") && b["top_p"].is_number()) r.top_p = b["top_p"];
-  if (b.contains("top_k") && b["top_k"].is_number()) r.top_k = api::clamp_top_k(b["top_k"]);
+  if (b.contains("top_k") && b["top_k"].is_number()) r.top_k = b["top_k"];
   for (auto [name, field] : {std::pair<const char*, float*>{"presence_penalty", &r.presence_penalty},
                              {"frequency_penalty", &r.frequency_penalty},
                              {"repetition_penalty", &r.repetition_penalty},
@@ -150,8 +136,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     if (b.contains(name) && b[name].is_number()) *field = b[name];
   if (b.contains("ignore_eos") && b["ignore_eos"].is_boolean()) r.ignore_eos = b["ignore_eos"];
   if (b.contains("cache_salt")) r.cache_salt = b["cache_salt"];
-  if (b.contains("prompt_cache_key") && b["prompt_cache_key"].is_string()) r.cache_key = b["prompt_cache_key"];
-  if (b.contains("seed") && b["seed"].is_number()) r.seed = api::extract_seed_u32(b["seed"]);
+  if (b.contains("seed") && b["seed"].is_number()) r.seed = uint32_t(b["seed"].get<int64_t>());
   // the Splash backend's seed, as Splash's frontend.py:1153-1162 reads it: absent or -1 random, another integer in
   // [-2^63, 2^64) its 64 bits, anything else refused. JSON integers outside that range parse here as floats, as do 5.0 and 1e3.
   if (b.contains("seed")) {
@@ -175,7 +160,6 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     r.effort = e;  // looped models: the loop count (Engine::request_loops)
   }
   r.loops = api::request_loops_field(b);
-  api::request_think_field(b, r);
   // structured output: response_format, tool_choice required or named, strict tools (src/api/chat_completions.cpp)
   r.grammar = api::chat_grammar(b, r.tools);
   return r;
@@ -341,17 +325,13 @@ static void print_help() {
          "  kapitsa claude                Claude Code\n"
          "  kapitsa codex                 Codex\n"
          "  kapitsa opencode              opencode\n"
-         "  kapitsa pi                    Pi\n"
-         "  kapitsa hermes                Hermes (Nous Research)\n"
-         "  kapitsa aider                 aider\n"
-         "  kapitsa goose                 Goose (Block)\n"
-         "  kapitsa copilot               GitHub Copilot CLI\n\n"
+         "  kapitsa pi                    Pi\n\n"
          "Models (with the files that speed them up; <model>:<variant> picks another precision):\n%s"
          "  or a Hugging Face repo of a Qwen3.5-family model in MLX format, bf16 or 3-8-bit (org/name[@revision]),\n"
          "  or a model folder, or a .gguf file (converted once into a model folder).\n\n"
          "Commands:\n"
          "  serve        start the server: chat page at /, OpenAI and Anthropic APIs at /v1 (kapitsa serve --help)\n"
-         "  claude, codex, opencode, pi, hermes, aider, goose, copilot [--model M] [--port P] [--ctx N] [--api-key K] [agent args]\n"
+         "  claude, codex, opencode, pi [--model M] [--port P] [--ctx N] [--api-key K] [agent args]\n"
          "               start that coding agent on Kapitsa: on the server already running on the port, else on one\n"
          "               started for it (with a context sized for agents; kapitsa claude --help)\n"
          "  pull MODEL   download a model without starting it (kapitsa pull --help)\n"
@@ -368,10 +348,6 @@ static void print_help() {
 
 static void print_serve_help() {
   std::string h = strf("kapitsa serve [--model MODEL] [options]\n\n"
-         "With no arguments, reads a JSON array of argument strings from KAPITSA_HOME/serve.json\n"
-         "(~/.cache/kapitsa/serve.json by default). Any explicit argument bypasses that file.\n"
-         "--config -|FILE takes every option below as one JSON object from stdin or a file, alone: each field is the\n"
-         "option's name with _ for - (docs/serve-config.schema.json).\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
          "                         once: kapitsa import). Default: asked in a terminal; else the model picked last if\n"
@@ -379,6 +355,7 @@ static void print_serve_help() {
          "  --host HOST            listen address (default 0.0.0.0: this Mac and its network; 127.0.0.1: this Mac\n"
          "                         only, like --private)\n"
          "  --port PORT            default 8000\n"
+         "  --name ID              local runtime control identity (default serve-PORT)\n"
          "  --private              this Mac only: listen on 127.0.0.1, stay out of sight of Kapitsa on the other Macs\n"
          "                         and never send them requests. By default the server is visible on the network\n"
          "                         (Bonjour), with no password: kapitsa cluster on any Mac lists it\n"
@@ -392,9 +369,6 @@ static void print_serve_help() {
          "  --allow-switch         a request naming another model, or POST /v1/models/switch, loads it (may download\n"
          "                         gigabytes; 503 + Retry-After meanwhile). Default off: the \"model\" field is ignored.\n"
          "                         Without --api-key it keeps the server on this Mac, as --private does\n"
-         "  --idle-unload MIN|auto|0  release the model from the GPU after MIN minutes without a request; the next\n"
-         "                         request loads it again (a few seconds). auto (default): after 10 minutes, and only\n"
-         "                         while macOS reports memory pressure; 0: never\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
          "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
@@ -403,15 +377,10 @@ static void print_serve_help() {
          "                         follow-ups; more wait for a free slot (default: up to 4, as memory allows)\n"
          "  --dflash auto|none|DIR DFlash2 drafter: auto (default) takes the one downloaded with the model;\n"
          "                         none decodes with the model's MTP head\n"
-         "  --suppress-tokens FILE suppress output token IDs listed in FILE (JSON array, {\"target_token_ids\": [...]}\n"
-         "                         object, or one ID per line; Qwen35 and Inkling-2 backends; also NI_SUPPRESS_TOKENS)\n"
          "  --spec N               MTP draft depth without a drafter (default per model; 0 = no speculation);\n"
          "                         Dory with --loop-kv per-loop: drafts per cycle (default 2 at 1-2 loops, 3 at 3-4)\n"
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
-         "  --profile NAME         precise (default): the exact outputs. fast: also the speedups that move the\n"
-         "                         outputs no more than the fastest other engine does, where they were measured\n"
-         "                         (docs/profiles.md; also KAPITSA_PROFILE)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
          "  --disk-cache SIZE      SSD prefix cache: conversations kept on the SSD, also across restarts, in\n"
          "                         %s/prefix-cache. auto (default): a quarter of the free space beyond\n"
@@ -434,8 +403,7 @@ static void print_serve_help() {
          "                         more keeps finer detail and takes longer; 0 = the model's own limit)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), POST /v1/draft (read a user's draft ahead),\n"
-         "GET /v1/models, GET /health, GET /cluster (what the server tells the other Macs),\n"
-         "POST /api/chat, /api/generate (Ollama), GET /api/tags, /api/ps, /api/version, POST /api/show.\n"
+         "GET /v1/models, GET /health, GET /cluster (what the server tells the other Macs).\n"
          "Images (every catalog model reads them): OpenAI image_url parts, Anthropic image blocks and Responses\n"
          "input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n", hub::tilde(hub::home_dir()).c_str());
@@ -448,27 +416,6 @@ static void print_serve_help() {
   show_help(h);
 }
 
-// What each model name downloads: the alias, then the Hugging Face repo of its default variant (the catalog's, so
-// docs/models.md and this list cannot disagree)
-static std::string repos_table() {
-  std::string s;
-  char line[256];
-  for (const auto& m : hub::catalog())
-    if (const hub::Variant* d = m.variant()) {
-      snprintf(line, sizeof line, "  %-10s %s\n", hub::short_name(m).c_str(), d->repo.c_str());
-      s += line;
-    }
-  return s;
-}
-
-// The models that take a smaller variant where the default does not fit this Mac, named from the catalog
-static std::string smaller_variant_models() {
-  std::string s;
-  for (const auto& m : hub::catalog())
-    if (!m.fallbacks.empty()) s += (s.empty() ? "" : ", ") + hub::short_name(m);
-  return s;
-}
-
 static void print_pull_help() {
   show_help(strf("kapitsa pull MODEL... [--from DIR]...\n\n"
          "Downloads a model with the files that speed it up (MTP head, DFlash2 drafter) into\n"
@@ -476,11 +423,8 @@ static void print_pull_help() {
          "  --from DIR   take files that are already on this Mac from DIR (a folder from `hf download --local-dir`,\n"
          "               another app's models): only exact matches of the pinned checksums, as APFS clones\n"
          "  --dry-run    show what MODEL resolves to, without downloading (--json for programs)\n\n"
-         "Files already in the Hugging Face cache (~/.cache/huggingface/hub) are reused the same way.\n\n"
-         "Each name's default variant is this Hugging Face repo, where it fits this Mac (%s take a\n"
-         "smaller variant where it does not; 27b:8bit names another one). Revisions, drafters, MTP heads and sizes:\n"
-         "docs/models.md, or --dry-run:\n\n%s",
-         hub::tilde(hub::models_dir()).c_str(), smaller_variant_models().c_str(), repos_table().c_str()));
+         "Files already in the Hugging Face cache (~/.cache/huggingface/hub) are reused the same way.\n",
+         hub::tilde(hub::models_dir()).c_str()));
 }
 
 // Why the server could not listen on host:port, or "" (a test bind, as the server binds: SO_REUSEADDR only).
@@ -543,8 +487,7 @@ struct MeterChatEvents final : detail::ChatObserver {
 static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
                          std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter,
-                         bool early = false, bool telemetry = false, bool progress = false,
-                         const char* content_type = "text/event-stream") {
+                         bool early = false, bool telemetry = false) {
   server::stream_reply(r, std::move(w), res,
       [guard = std::move(guard)](auto observer) {
         return native_execution(guard, std::move(observer), NativeReplyMemory::BeforeTerminal);
@@ -552,10 +495,10 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
       [failure = std::move(failure)](const ChatResult& result, httplib::Response& response) {
         auto [status, body] = failure(result);
         response.status = status;
-        if (status == 503 && (!result.engine_down || result.engine_restarting)) response.set_header("Retry-After", "1");
+        if (status == 503 && !result.engine_down) response.set_header("Retry-After", "1");  // a dead engine: no retry helps
         response.set_content(api::dump(body), "application/json");
       }, std::move(after), {[meter] { ui::token(meter); }, [meter](const ChatResult& result) { ui::done(meter, result); }},
-      early, telemetry, progress, content_type);
+      early, telemetry);
 }
 
 // What the server keeps when it ends: the KFlash budgets' measurements (Engine::save_kflash: this Mac's cost per verify
@@ -577,16 +520,6 @@ static const int kStopSignals[] = {SIGINT, SIGTERM, SIGHUP};
 static struct sigaction g_stop_prev[3];
 static int g_stop_pipe[2] = {-1, -1};
 static volatile sig_atomic_t g_stopping = 0;
-static server::ControlServer* g_control = nullptr;  // the control socket, once it listens (never freed)
-static std::string g_engine_key_path;  // the engine view's key file, while it exists (src/server/engine_view.h)
-// The socket's file and the engine view's key go with the process, however it ends: at exit, and on the stop thread
-// before its _exit or the signal's default (neither runs atexit)
-static void close_control() {
-  if (g_control) g_control->stop();
-  if (!g_engine_key_path.empty()) unlink(g_engine_key_path.c_str());
-}
-// POST /stop before the stop handlers exist (starting, the first load): run_service ends at its next step, exit 0
-static std::atomic<bool> g_stop_requested{false};
 
 static void pass_signal_on(int sig) {
   for (int i = 0; i < 3; ++i)
@@ -601,77 +534,6 @@ static void on_stop_signal(int sig) {
   if (again || write(g_stop_pipe[1], &c, 1) != 1) pass_signal_on(sig);
 }
 
-// POST /stop while the first model's weights are read: from the reader that saw it, exit 0 now rather than after the
-// load (nothing loaded yet to save; the files the load writes are written whole and renamed, so none is left half done)
-[[noreturn]] static void end_first_load_stop() {
-  close_control();
-  term::clear_for_exit();
-  _exit(0);
-}
-
-static bool g_stop_handlers = false;  // SaveOnStop's are installed (under g_stop_mu)
-static bool g_stop_routed = false;    // serve_routed() serves: no engine, nothing to save (under g_stop_mu)
-
-// Before serve_routed(): from now on POST /stop ends the process at once; true when one already asked to stop
-static bool stop_when_routed() {
-  std::lock_guard<std::mutex> lk(g_stop_mu);
-  g_stop_routed = true;
-  return g_stop_requested;
-}
-
-// The thread that stops the server: a stop signal or POST /stop (a 0 byte, request_stop()) wakes it once. It saves,
-// then takes its course. A signal's: the terminal UI's handler (the status block off the screen,
-// term::guard_signals), else the default (the process ends as killed by the signal). POST /stop's: the status block
-// off the screen and exit 0, however SIGINT is set: a client that asked for a stop never sees a death by signal. One
-// before the stop handlers exist (starting, the first load) only marks the stop: run_service sees it at its next step
-// and returns 0 through the normal exit.
-static bool start_stop_thread() {
-  static const bool ok = [] {
-    if (pipe(g_stop_pipe) != 0) return false;
-    for (int fd : g_stop_pipe) fcntl(fd, F_SETFD, FD_CLOEXEC);
-    std::thread([] {
-      char c = 0;
-      for (;;) {
-        ssize_t r;
-        while ((r = read(g_stop_pipe[0], &c, 1)) < 0 && errno == EINTR) {
-        }
-        if (r != 1) return;
-        if (c != 0) break;
-        std::lock_guard<std::mutex> lk(g_stop_mu);
-        if (g_stop_handlers || g_stop_routed) break;
-        if (!g_stop_requested.exchange(true)) {  // (run_service checks it after taking g_stop_mu: none is missed)
-          if (g_control) g_control->mark_stopping();
-          server::publish_state("stopping", nullptr);
-          hub::stop_downloads();  // a model still downloading stops now, its parts kept
-          ask_load_stop();        // one being read stops at its next piece (end_first_load_stop)
-        }
-      }
-      g_stopping = 1;  // (a further signal ends the process at once)
-      if (g_control) g_control->mark_stopping();
-      {
-        std::lock_guard<std::mutex> lk(g_stop_mu);
-        server::publish_state("stopping", g_stop_mgr ? server::model_json(g_stop_mgr->current_model_id(),
-                                                                          g_stop_mgr->current_context_length(),
-                                                                          g_stop_mgr->current_slots())
-                                                     : nullptr);
-      }
-      save_before_exit();
-      close_control();
-      if (c != 0) return pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends it
-      term::clear_for_exit();
-      _exit(0);
-    }).detach();
-    return true;
-  }();
-  return ok;
-}
-
-// POST /stop: wakes the stop thread without a signal (async-signal-safe; once is enough, ControlServer sees to it)
-static void request_stop() {
-  const char c = 0;
-  if (write(g_stop_pipe[1], &c, 1) != 1) _exit(0);
-}
-
 // The stop handlers while it lives (serve(), from the engine's start); the previous ones come back after
 struct SaveOnStop {
   explicit SaveOnStop(ModelManager& mgr) {
@@ -679,7 +541,17 @@ struct SaveOnStop {
       std::lock_guard<std::mutex> lk(g_stop_mu);
       g_stop_mgr = &mgr;
     }
-    if (!start_stop_thread()) return;
+    if (pipe(g_stop_pipe) != 0) return;
+    for (int fd : g_stop_pipe) fcntl(fd, F_SETFD, FD_CLOEXEC);
+    std::thread([] {
+      char c = 0;
+      ssize_t r;
+      while ((r = read(g_stop_pipe[0], &c, 1)) < 0 && errno == EINTR) {
+      }
+      if (r != 1) return;
+      save_before_exit();
+      pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends the process
+    }).detach();
     struct sigaction sa {};
     sa.sa_handler = on_stop_signal;
     sa.sa_flags = SA_RESTART;
@@ -689,14 +561,8 @@ struct SaveOnStop {
       if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &sa, nullptr);
     }
     handlers_ = true;
-    std::lock_guard<std::mutex> lk(g_stop_mu);
-    g_stop_handlers = true;
   }
   ~SaveOnStop() {
-    {
-      std::lock_guard<std::mutex> lk(g_stop_mu);
-      g_stop_handlers = false;
-    }
     if (handlers_)
       for (int i = 0; i < 3; ++i)
         if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &g_stop_prev[i], nullptr);
@@ -709,170 +575,6 @@ struct SaveOnStop {
  private:
   bool handlers_ = false;
 };
-
-// The control socket's side of this server (docs/control-socket.md): status from the bus and the model manager,
-// POST /stop through the stop handlers above, POST /model through the manager's switch.
-class ServeControl : public server::ControlApi {
- public:
-  ServeControl(const std::string& instance_id, const nlohmann::json& config, const std::string& host, int port) {
-    id_.instance_id = instance_id;
-    id_.version = kVersion;
-    id_.config = config;
-    id_.api_url = server::api_url(host, port);
-    const char* p = getenv("KAPITSA_PARENT_PID");
-    id_.parent_pid = p && *p ? atoi(p) : 0;
-    id_.lifecycle = id_.parent_pid > 1 ? "attached" : getppid() == 1 && !isatty(0) ? "keep_running" : "foreground";
-    const time_t now = std::time(nullptr);
-    char at[32];
-    strftime(at, sizeof at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-    id_.started_at = at;
-  }
-  // The manager is there: the fits of the downloaded models are planned now, in the background (the first listing
-  // would otherwise wait for the largest models' files: 5 s on the M5 Pro with six downloaded)
-  void attach(const std::shared_ptr<ModelManager>& mgr) {
-    mgr_.attach(mgr);
-    std::thread([this] { models(); }).detach();
-  }
-
-  nlohmann::json status() override {
-    return server::instance_status(id_, *server::events(), *server::activity(), server::last_state());
-  }
-  server::ControlReply stop() override {
-    return {202, {{"run_id", server::events()->run_id()}, {"state", "stopping"}}};
-  }
-  void after_stop() override { request_stop(); }
-  // GET /models: what is downloaded, each with the name POST /model takes for it, its size and precision, and whether it
-  // fits this Mac (the engine's plan of its files, as the picker's marks: offline, one answer kept per folder)
-  server::ControlReply models() override {
-    const std::shared_ptr<ModelManager> mgr = mgr_.get();
-    EngineOptions opt;
-    size_t budget = 0;
-    std::string current;
-    if (mgr) {
-      opt = mgr->base_options();  // (options() waits for a load in progress, and follows the model the last switch loaded)
-      budget = mgr->budget();
-      current = mgr->current_ref().dir;
-    }
-    nlohmann::json out = nlohmann::json::array();
-    try {
-      for (const auto& m : hub::installed()) {
-        if (!m.complete) continue;
-        nlohmann::json j{{"name", switch_name(m)}, {"bytes", m.bytes}, {"includes", m.extras},
-                         {"fits", mgr ? fit_of(m, opt, budget) : "unknown"}, {"current", !current.empty() && m.dir == current},
-                         {"up_to_date", up_to_date(m)}};
-        if (const hub::CatalogModel* c = hub::find_model(m.name.substr(0, m.name.find(':')))) j["title"] = c->title;
-        if (!m.variant.empty()) j["variant"] = m.variant;
-        out.push_back(j);
-      }
-    } catch (const std::exception& e) {
-      return server::control_error(500, "internal", std::string("cannot list the downloaded models: ") + e.what());
-    }
-    return {200, {{"run_id", server::events()->run_id()}, {"memory_budget_bytes", budget}, {"models", out}}};
-  }
-  server::ControlReply model_switch(const nlohmann::json& r) override {
-    if (server::ControlReply no = server::switch_refusal(id_.config, r); no.status) return no;
-    const std::shared_ptr<ModelManager> mgr = mgr_.get();  // (held for the switch only)
-    if (!mgr) {
-      server::ControlReply busy = server::control_error(503, "busy", "no model is being served yet", {{"retry_after_s", 30}});
-      busy.retry_after_s = 30;
-      return busy;
-    }
-    const nlohmann::json prev = server::model_json(mgr->current_model_id(), mgr->current_context_length(), mgr->current_slots());
-    const std::string target = r["model"];
-    ModelManager::Error err;
-    auto eng = mgr->switch_from_control(target, &err);
-    if (eng)
-      return {200, {{"run_id", server::events()->run_id()},
-                    {"model", server::model_json(eng->model_id(), eng->context_length(), eng->slots())},
-                    {"previous_model", prev}}};
-    using Code = ModelManager::Error::Code;
-    if (err.code == Code::Busy) {
-      server::ControlReply busy = server::control_error(503, "busy", err.message, {{"retry_after_s", err.retry_s}});
-      busy.retry_after_s = err.retry_s;
-      return busy;
-    }
-    if (err.code == Code::NotFound) return server::control_error(404, "model_not_found", err.message, {{"model", target}});
-    return server::control_error(500, "load_failed", err.message.empty() ? "the model did not load" : err.message,
-                                 {{"model", target}, {"state", mgr->unloaded() ? "released" : "ready"}});
-  }
-
- private:
-  // What POST /model takes for a downloaded model: its name when that names this very folder, else the folder
-  static std::string switch_name(const hub::Installed& m) {
-    try {
-      if (hub::resolve(m.name).dir == m.dir) return m.name;
-    } catch (const std::exception&) {
-    }
-    return m.dir;
-  }
-  // A catalog model downloaded at older revisions than this Kapitsa pins downloads the difference before it loads: the
-  // switch waits for that. Any other model loads as it is.
-  static bool up_to_date(const hub::Installed& m) {
-    try {
-      const hub::ModelRef ref = hub::resolve(switch_name(m));
-      return ref.kind != hub::ModelRef::kCatalog || hub::is_current(ref);
-    } catch (const std::exception&) {
-      return true;
-    }
-  }
-  // "fits": one conversation at the default context fits beside the model and its drafter; "no_drafter": only without
-  // the drafter (slower); "too_big": not even that; "unknown": its files could not be planned
-  std::string fit_of(const hub::Installed& m, EngineOptions opt, size_t budget) {
-    std::lock_guard<std::mutex> lk(fits_mu_);
-    if (auto it = fits_.find(m.dir); it != fits_.end()) return it->second;
-    std::string fit = "unknown";
-    try {
-      const hub::ModelRef ref = hub::resolve(switch_name(m));
-      opt.context = default_context(ref.dir, opt, budget);
-      const bool whole = ref.kind == hub::ModelRef::kCatalog ? variant_fits(ref, opt, budget) == 1
-                                                             : conversation_fits(ref.dir, opt.context, opt.slots, budget);
-      fit = whole ? "fits"
-            : conversation_fits(ref.dir, opt.context, opt.slots, budget) || small_start_fits(ref.dir, opt.context, opt.slots, budget)
-                ? "no_drafter"
-                : "too_big";
-    } catch (const std::exception&) {
-    }
-    if (fit != "unknown") fits_[m.dir] = fit;
-    return fit;
-  }
-
-  server::Identity id_;
-  std::mutex fits_mu_;
-  std::map<std::string, std::string> fits_;  // folder -> fit; from the start's options and budget, which never change
-  server::Attached<ModelManager> mgr_;  // weak: the socket never keeps the manager, or its engine, past run_service
-};
-static ServeControl* g_serve_control = nullptr;  // (never freed: the socket's threads may outlive run_service)
-
-// The instance's lock in `run_dir`, before its first event (docs/control-socket.md, "Start race"). The instance id is
-// `default` until the serve configuration names one. Without the folder or the lock (a second unnamed server, as
-// `kapitsa bench` starts beside a running one) the server serves without a socket, and says so.
-static bool lock_control(const std::string& run_dir, const std::string& instance_id) {
-  const char* why = run_dir.empty() ? "cannot make its folder"
-                    : server::take_instance_lock(run_dir + "/" + instance_id + ".lock", 1000) < 0
-                        ? "the instance is already running"
-                        : nullptr;
-  if (why) fprintf(stderr, "warning: %s: this server has no control socket\n", why);
-  return !why;
-}
-
-// After the first event: the socket listens, and the stop thread waits. "" or why it cannot (a path over macOS's
-// limit, a home whose volume takes no sockets). (Never freed: the socket's threads may outlive run_service.)
-static std::string listen_control(const std::string& run_dir, const std::string& instance_id, const server::Options& o,
-                                  const std::string& host) {
-  if (!start_stop_thread()) return std::string("cannot make the stop thread's pipe: ") + strerror(errno);
-  g_serve_control = new ServeControl(instance_id, o.given, host, o.port);
-  auto* srv = new server::ControlServer(*g_serve_control, *server::events());
-  if (std::string why = srv->start(run_dir + "/" + instance_id + ".sock"); !why.empty()) return why;
-  g_control = srv;
-  // the engine view's key: only this user reads it, as only they reach the socket
-  const std::string key_path = run_dir + "/" + instance_id + ".token";
-  if (const std::string why = server::write_engine_token(key_path); !why.empty())
-    fprintf(stderr, "warning: %s: the engine view at /engine cannot be opened\n", why.c_str());
-  else
-    g_engine_key_path = key_path;
-  std::atexit(close_control);
-  return "";
-}
 
 // Started by `kapitsa claude|codex|opencode` (KAPITSA_PARENT_PID): exits when the launcher does, however it ends (kill -9
 // included), instead of holding the model's memory with nobody left to stop it.
@@ -898,17 +600,33 @@ static void exit_with_parent() {
 static bool reject_while_switching(const ModelManager& mgr, httplib::Response& res, const std::string& body) {
   if (!mgr.switching()) return false;
   res.status = 503;
-  res.set_header("Retry-After", std::to_string(mgr.retry_after_s()));
+  res.set_header("Retry-After", "30");
   res.set_content(body, "application/json");
   return true;
 }
 
 // What every server answers, with a model here or not: the API key's check (the chat page, /health and /cluster need
-// none), GET /health, the chat page, the engine view, and GET /cluster: what it tells the other Macs (src/cluster/)
+// none), GET /health, the chat page, and GET /cluster: what it tells the other Macs (src/cluster/)
 static void common_routes(httplib::Server& srv, const std::string& api_key, const std::string& timing,
                           std::function<cluster::MacInfo()> info) {
   srv.set_pre_routing_handler([api_key](const httplib::Request& req, httplib::Response& res) {
-    return server::pre_route(req, res, api_key);
+    // a WebSocket upgrade on /v1/responses (Codex Desktop's probe, #772): 426 before the key check, so the client
+    // falls back to HTTP at once instead of retrying a 404 with backoff
+    if (server::refuse_ws_upgrade(req, res)) return httplib::Server::HandlerResponse::Handled;
+    // the chat page asks for the key once and sends it with its API calls
+    if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
+        (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
+      return httplib::Server::HandlerResponse::Unhandled;
+    // OpenAI clients send "Authorization: Bearer KEY", Anthropic ones "x-api-key: KEY" (Claude Code may send both,
+    // with an Anthropic key of its own in x-api-key)
+    if (req.get_header_value("Authorization") == "Bearer " + api_key || req.get_header_value("x-api-key") == api_key)
+      return httplib::Server::HandlerResponse::Unhandled;
+    res.status = 401;
+    if (req.path.rfind("/v1/messages", 0) == 0)
+      res.set_content(api::dump(api::messages_error("authentication_error", "invalid api key")), "application/json");
+    else
+      res.set_content(R"({"error":{"message":"invalid api key","type":"auth_error"}})", "application/json");
+    return httplib::Server::HandlerResponse::Handled;
   });
   srv.Get("/health", [](const httplib::Request&, httplib::Response& res) {
     res.set_content(R"({"status":"ok"})", "application/json");
@@ -930,7 +648,6 @@ static void common_routes(httplib::Server& srv, const std::string& api_key, cons
     res.set_content(page, "text/html; charset=utf-8");
   });
   srv.Get("/favicon.ico", [](const httplib::Request&, httplib::Response& res) { res.status = 204; });
-  server::engine_routes(srv, [] { return g_control; }, kEnginePage);
   srv.Get("/cluster", [info](const httplib::Request&, httplib::Response& res) {
     res.set_content(cluster::to_json(info()).dump(), "application/json");
   });
@@ -1057,6 +774,8 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
            api_key.empty() ? "" : ", API key required");
   }
   fflush(stdout);
+  if (const auto instance = runtime::observed())
+    instance->update({{"state", "ready"}, {"model", key}, {"routed", true}});
   // the Mac's comings and goings, as seen every second
   std::thread([router, tui, head_id] {
     cluster::MacInfo was = router->last();
@@ -1093,67 +812,132 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
   return 0;
 }
 
-// --idle-unload auto: 10 minutes idle, and only under memory pressure. NI_IDLE_UNLOAD_AUTO_S shortens the 10 minutes for
-// tests/test_idle_unload.py (the gate itself, Gpu::memory_pressed(), is what they run, not a shortcut around it).
-static int idle_unload_auto_s() {
-  const char* v = getenv("NI_IDLE_UNLOAD_AUTO_S");
-  const int s = v && *v ? atoi(v) : 0;
-  return s >= 5 && s <= 600 ? s : 600;
-}
-
-// kapitsa serve: its flags (or serve.json's, or --config's JSON) through the one validator (src/server/service.h),
-// then the service
 static int serve(int argc, char** argv, int first) {
-  exit_with_parent();
   keep_args(argc, argv);
-  std::vector<std::string> args(argv + first, argv + argc);
+  server::Options config;
+  auto& opt = config.engine;
+  auto& context_req = config.context_req;
+  auto& host = config.host;
+  auto& api_key = config.api_key;
+  auto& model = config.model;
+  auto& split = config.split;
+  auto& port = config.port;
+  auto& verbose = config.verbose;
+  auto& yes = config.yes;
+  auto& allow_switch = config.allow_switch;
+  auto& priv = config.priv;
+  auto& local = config.local;
+  auto& engine_splash = config.engine_splash;
+  auto& check_only = config.check_only;
+  auto& splash_kflash = config.splash_kflash;
+  auto& timing = config.timing;
   const char* help = "kapitsa serve --help";
-  if (args.empty()) {
-    try { args = serve_defaults(hub::home_dir()); }
-    catch (const std::exception& e) { usage_error(e.what(), help); }
-  }
-  server::Options options;
-  try {
-    if (std::find(args.begin(), args.end(), "--config") != args.end()) {
-      if (args.size() != 2 || args[0] != "--config")
-        usage_error("--config takes - (the JSON on stdin) or a file, and no other option", help);
-      try { options = server::parse_options(server::read_config(args[1] == "-" ? args[1] : expand_home(args[1])), server::Source::json); }
-      catch (const std::invalid_argument& e) { usage_error(std::string("--config: ") + e.what(), help); }
-    } else {
-      const auto config = server::flags_to_json(args, first == 2);
-      if (!config) {
-        print_serve_help();
-        return 0;
-      }
-      options = server::parse_options(*config, server::Source::flags);
+  for (int i = first; i < argc; ++i) {
+    std::string a = argv[i];
+    auto next = [&]() -> std::string {
+      if (i + 1 >= argc) usage_error(a + " needs a value", help);
+      return argv[++i];
+    };
+    if (a == "--help" || a == "-h") {
+      print_serve_help();
+      return 0;
+    } else if (a == "--model" || a == "-m") model = next();
+    else if (a == "--name") config.instance_id = config.name = next();
+    else if (a == "--model-id") opt.model_id = next();
+    else if (a == "--engine") {
+      const std::string v = next();
+      if (v != "splash" && v != "native") usage_error("--engine takes native or splash, not \"" + v + "\"", help);
+      engine_splash = v == "splash";
     }
-  } catch (const std::invalid_argument& e) { usage_error(e.what(), help); }
-  return server::run_service(std::move(options));
+    else if (a == "--splash-binary") opt.splash_binary = expand_home(next());
+    else if (a == "--splash-model") opt.splash_model = expand_home(next());
+    else if (a == "--splash-arg") opt.splash_args.push_back(next());
+    else if (a == "--splash-persistent-cache") opt.splash_persistent_cache = true;
+    else if (a == "--splash-conversation-salt") opt.splash_conversation_salt = true;
+    else if (a == "--splash-kflash") splash_kflash = next();
+    else if (a == "--check") check_only = true;
+    else if (a == "--host") host = next();
+    else if (a == "--port") port = to_int(a, next(), help);
+    else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
+    else if (a == "--local") local = true;   // never routed: the model runs here
+    else if (a == "--peer") cluster::add_peer(next());  // another Mac's server, where Bonjour does not reach
+    else if (a == "--context" || a == "--ctx") {
+      std::string why;
+      context_req = parse_context(next(), &why);
+      if (!context_req) usage_error(why, help);
+    }
+    else if (a == "--slots") opt.slots = to_int(a, next(), help);
+    else if (a == "--spec") opt.spec_depth = to_int(a, next(), help);
+    else if (a == "--dflash") opt.dflash = next();
+    else if (a == "--prefill-chunk") opt.prefill_chunk = to_int(a, next(), help);
+    else if (a == "--api-key") api_key = next();
+    else if (a == "--allow-switch") allow_switch = true;
+    else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
+    else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
+    else if (a == "--timing") {
+      timing = next();
+      if (!ui::set_timing(timing)) usage_error("--timing takes ttft, prefill or both, not \"" + timing + "\"", help);
+    }
+    else if (a == "--disk-cache") {
+      opt.disk_cache = next();
+      uint64_t bytes = 0;
+      if (!pcache::parse_size(opt.disk_cache, &bytes))
+        usage_error("--disk-cache takes auto, 0 (off) or a size such as 16G, not \"" + opt.disk_cache + "\"", help);
+    }
+    else if (a == "--loops") {
+      opt.loops = to_int(a, next(), help);
+      if (opt.loops < 1 || opt.loops > Dory::kMaxLoops) usage_error("--loops: 1 to 4", help);
+    } else if (a == "--loop-kv") {
+      LoopKv kv;
+      opt.loop_kv = next();
+      if (!parse_loop_kv(opt.loop_kv, &kv)) usage_error("--loop-kv: last-loop or per-loop", help);
+    }
+    else if (a == "--split") {
+      const std::string v = next();
+      for (size_t at = 0; at <= v.size();) {
+        const size_t comma = std::min(v.find(',', at), v.size());
+        if (comma > at) split.push_back(v.substr(at, comma - at));
+        at = comma + 1;
+      }
+      if (split.empty()) usage_error("--split takes the stages' host:port, comma-separated", help);
+    }
+    else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
+    else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
+    else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
+    else usage_error("unknown option " + a, help);
+  }
+  return server::run_service(std::move(config));
 }
 
-
-int ni::server::run_service(Options o) {
-  EngineOptions opt = std::move(o.engine);
-  opt.splash_binary = expand_home(opt.splash_binary);
-  opt.splash_model = expand_home(opt.splash_model);
-  int context_req = o.context;  // 0 none (default_context), kContextMax, or tokens
-  std::string host = o.host, api_key = o.api_key, model = o.model;  // host "": every address, 127.0.0.1 with --private
-  const std::vector<std::string> split = o.split;  // the stages' addresses, in the order of their layers
-  const int port = o.port;
-  const double idle_unload_min = o.idle_unload_min;  // -1 auto (10 min idle and macOS short of memory), 0 off, else minutes
-  const bool verbose = o.verbose, yes = o.yes, allow_switch = o.allow_switch, priv = o.priv, engine_splash = o.engine_splash,
-             check_only = o.check_only;
-  bool local = o.local;
-  const std::string splash_kflash = o.splash_kflash;  // splash::pick_engine
-  std::string splash_found_binary;  // the stock engine given or found, which the next run starts from (splash.json)
-  const std::string timing = o.timing;  // what the request log and the chat page show of the time before the first token
-  if (!o.profile.empty()) setenv("KAPITSA_PROFILE", o.profile.c_str(), 1);  // engine/profile.h reads it, as children do
-  for (const std::string& peer : o.peers) cluster::add_peer(peer);  // where Bonjour does not reach
-  ui::set_timing(timing);
+int ni::server::run_service(Options config) {
+  if (!config.managed) exit_with_parent();
+  auto& opt = config.engine;
+  auto& context_req = config.context_req;
+  auto& host = config.host;
+  auto& api_key = config.api_key;
+  auto& model = config.model;
+  auto& split = config.split;
+  auto& port = config.port;
+  auto& verbose = config.verbose;
+  auto& yes = config.yes;
+  auto& allow_switch = config.allow_switch;
+  auto& priv = config.priv;
+  auto& local = config.local;
+  auto& engine_splash = config.engine_splash;
+  auto& check_only = config.check_only;
+  auto& splash_kflash = config.splash_kflash;
+  auto& timing = config.timing;
+  std::string splash_found_binary;
   const char* help = "kapitsa serve --help";
+  if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  if (!config.instance_id.empty() && !runtime::valid_id(config.instance_id))
+    return fail("--name must be 1-64 letters, digits, '-' or '_'", 2);
   // Splash's engine: the model runs in its child, so nothing below plans this Mac's memory for it, picks, downloads or
   // routes a model: the folder given is the model, served here and nowhere else
-  if (engine_splash) {  // (parse_options refused --model, --split and --allow-switch with it)
+  if (check_only && !engine_splash) usage_error("--check needs --engine splash", help);
+  if (engine_splash) {
+    if (!model.empty() || !split.empty() || allow_switch)
+      usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
     // not given: where Splash installs them (src/splash/discover.h), else an error that says what is missing
     const char* home = getenv("HOME");
     const std::string last_file = hub::home_dir() + "/splash.json";
@@ -1167,6 +951,8 @@ int ni::server::run_service(Options o) {
       printf("\nKFlash engine: %s\n", kf.binary.empty() ? "not built (packaging/splash/README.md)" : kf.binary.c_str());
       return c.ok ? 0 : 1;
     }
+    if (splash_kflash != "auto" && splash_kflash != "on" && splash_kflash != "off")
+      usage_error("--splash-kflash must be auto, on or off", help);
     if (!opt.splash_binary.empty()) {  // the same rule as --check
       splash::Found f = splash::explicit_binary(opt.splash_binary);
       if (!f.ok()) usage_error(f.error, help);
@@ -1201,6 +987,8 @@ int ni::server::run_service(Options o) {
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";
+  } else if (!opt.splash_binary.empty() || !opt.splash_model.empty() || !opt.splash_args.empty() || opt.splash_persistent_cache || opt.splash_conversation_salt || splash_kflash != "auto") {
+    usage_error("--splash-binary, --splash-model, --splash-arg, --splash-persistent-cache, --splash-conversation-salt and --splash-kflash need --engine splash", help);
   }
   bool disk_asked = !opt.disk_cache.empty();  // --disk-cache or NI_DISK_CACHE given, not the default
   if (opt.disk_cache.empty()) {  // the SSD prefix cache: on by default for the server (NI_DISK_CACHE as the option)
@@ -1224,37 +1012,24 @@ int ni::server::run_service(Options o) {
   if (host.empty()) host = priv || switch_here ? "127.0.0.1" : "0.0.0.0";
   const bool loopback = host == "127.0.0.1" || host == "localhost" || host == "::1";
   const bool visible = !priv && !loopback, may_route = visible && !local;
-  const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
+  if (allow_switch && api_key.empty() && !loopback)
+    usage_error("--allow-switch on a network address needs --api-key (any client could load models)", help);
+  const bool tui = !config.headless && term::fancy();  // a terminal: the styled screen, the engine's log in a file
   if (tui) ui::serve_begin(verbose);
-  server::start_activity();
-  // the event bus (src/server/activity.h), after the terminal UI's log sink, which it passes every line on to. A
-  // server's first event comes before it takes a connection (docs/control-socket.md, "Events"): the instance's lock,
-  // then `starting`, then the control socket listens.
-  const std::string instance_id = "default", run_dir = server::control_dir(hub::home_dir());
-  const bool with_socket = lock_control(run_dir, instance_id);
-  server::publish_state("starting", nullptr);
-  if (with_socket)
-    if (const std::string why = listen_control(run_dir, instance_id, o, host); !why.empty())
-      fprintf(stderr, "warning: %s: this server has no control socket\n", why.c_str());  // (the unnamed default)
-  // NI_CONTROL_TEST_HOLD_MS: tests/test_control_socket.py holds the server in `starting` to stop it there
-  if (const char* d = getenv("NI_CONTROL_TEST_HOLD_MS"))
-    for (int left = std::clamp(atoi(d), 0, 60000); left > 0 && !g_stop_requested; left -= 50)
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  // POST /stop while starting: the normal exit (the socket goes at exit, the status 0)
-  const auto stop_asked = [] {
-    term::clear_for_exit();
-    return 0;
-  };
-  if (g_stop_requested) return stop_asked();
+  if (config.instance_id.empty()) config.instance_id = "serve-" + std::to_string(port);
+  if (config.name.empty()) config.name = config.instance_id;
+  const std::string api_host = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
+  const std::string local_api = "http://" + (api_host.find(':') != std::string::npos ? "[" + api_host + "]" : api_host) +
+                                ":" + std::to_string(port);
+  std::shared_ptr<runtime::Instance> instance;
+  try {
+    instance = std::make_shared<runtime::Instance>(hub::home_dir() + "/instances", config.instance_id, config.name,
+      local_api, model, kVersion, [] { kill(getpid(), SIGTERM); });
+  } catch (const std::exception& e) { return fail(e.what()); }
+  runtime::observe(instance);
+  log_observer() = runtime::log_event;
+  instance->update({{"state", "preparing"}, {"managed", config.managed}, {"port", port}});
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
-  if (g_control) {
-    // The engine view's link carries this run's key: said on this terminal only, never in the log (log files and the
-    // event stream), so only whoever started the server or can read run/ has it
-    const std::string page = "http://127.0.0.1:" + std::to_string(o.port) + "/engine";
-    if (tui) notes.push_back("Engine view: " + page + "#t=" + server::engine_token());
-    else if (isatty(STDERR_FILENO)) fprintf(stderr, "engine view: %s#t=%s\n", page.c_str(), server::engine_token().c_str());
-    else fprintf(stderr, "engine view: %s (its key: %s/%s.token)\n", page.c_str(), run_dir.c_str(), instance_id.c_str());
-  }
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
     if (tui) notes.push_back(say);
@@ -1430,21 +1205,19 @@ int ni::server::run_service(Options o) {
     if (!header) ui::serve_header(KAPITSA_VERSION);
     for (const auto& n : notes) ui::note(n);
   }
-  if (route && stop_when_routed()) return stop_asked();
-  if (route) return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
+  if (route) {
+    return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
+  }
   if (pair_head) {  // the stage of its split: the model's files here too, the layers it gives loaded when it does
     try {
       hub::PullOptions po;
       if (ui::can_prompt(yes)) po.make_room = ui::make_room;
-      if (g_stop_requested) return stop_asked();
       opt.model_dir = hub::ensure(ref, po);
     } catch (const hub::Stopped& e) {
-      if (g_stop_requested) return stop_asked();
       return stopped(e);
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
-    if (stop_when_routed()) return stop_asked();
     PairStage st;
     st.model_dir = opt.model_dir, st.head_id = pair_head->id, st.mem = double(budget);
     st.gbs = bandwidth_gbs(Gpu::get().name(), Gpu::get().core_count());
@@ -1457,10 +1230,8 @@ int ni::server::run_service(Options o) {
   try {
     hub::PullOptions po;
     if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
-    if (g_stop_requested) return stop_asked();
     opt.model_dir = hub::ensure(ref, po);
   } catch (const hub::Stopped& e) {
-    if (g_stop_requested) return stop_asked();  // POST /stop during the download: a stop, status 0
     return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
@@ -1506,15 +1277,12 @@ int ni::server::run_service(Options o) {
   }
   // the context: the one asked for, within what the model was trained for, else the default for this Mac
   if (!engine_splash) {
-    if (const std::string why = validate_token_suppression(opt.model_dir, opt.suppress_tokens); !why.empty())
-      return fail(why, 2);
     const int limit = model_context_limit(opt.model_dir);
     std::string say;
     if (context_req == kContextMax) {
       if (limit <= 0)
-        return fail(ref.name + " does not state the context it was trained for (max_position_embeddings or "
-                    "model_max_length in its config.json), so --context max has no size here: give it in tokens "
-                    "(--context 128k).", 2);
+        return fail(ref.name + " does not state the context it was trained for (max_position_embeddings in its "
+                    "config.json), so --context max has no size here: give it in tokens (--context 128k).", 2);
       opt.context = limit;
     } else if (context_req > 0) {
       opt.context = context_req;
@@ -1545,6 +1313,8 @@ int ni::server::run_service(Options o) {
     }
   }
   if (opt.model_id.empty()) opt.model_id = ref.id;
+  instance->update({{"state", "loading"}, {"model", opt.model_id}, {"model_dir", opt.model_dir},
+    {"context", opt.context}, {"memory_budget_bytes", budget}});
   // the server compiles the Neural Engine program in the background (no 40 s start after the ANE
   // daemon evicted it); ni_run and the benchmarks build it synchronously
   setenv("NI_ANE_ASYNC", "1", 0);
@@ -1553,37 +1323,12 @@ int ni::server::run_service(Options o) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
-  if (g_stop_requested) return stop_asked();
-  // status.engine and the engine events (docs/control-socket.md, "Status"): what a native engine holds while ready. The
-  // manager is held weakly (the tick thread outlives run_service) and read without waiting on a load or a release.
-  server::activity()->set_engine([wm = std::weak_ptr<ModelManager>(model_mgr)](server::Activity::EngineSample& out) {
-    const auto m = wm.lock();
-    if (!m || server::last_state().value("state", "") != "ready") return false;
-    const auto eng = m->peek_engine();
-    if (!eng || eng->splash_mode()) return false;
-    const Engine::View v = eng->view();
-    out = {eng.get(), v.budget, v.allocated, v.weights, v.kv, v.slot_tokens, v.drafts, v.ram.entries, v.ram.bytes,
-           v.ram.hits, v.ram.hit_tokens, v.ssd.on, v.ssd.entries, v.ssd.bytes, v.ssd.limit, v.ssd.read_bytes,
-           v.ssd.written_bytes, v.ssd.hits, v.ssd.hit_tokens};
-    return true;
-  });
-  server::publish_state("loading", nullptr);
-  set_load_stop_action(end_first_load_stop);
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
   } catch (const std::exception& e) {
-    set_load_stop_action(nullptr);
-    if (tui) term::status("");
-    if (engine_splash) return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
-    return fail(e.what());
+    if (!engine_splash) throw;
+    return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
   }
-  set_load_stop_action(nullptr);  // (a later load, a switch, is the stop thread's: it saves first)
-  if (!engine_splash && idle_unload_min != 0)
-    model_mgr->set_idle_unload(idle_unload_min < 0 ? idle_unload_auto_s() : int(idle_unload_min * 60 + 0.5), idle_unload_min < 0,
-                               [] { return split_now(); });
-  // POST /model reaches the manager only now: init() takes neither its lock nor its switch flag, so a switch during the
-  // first load would race it (until here POST /model answers 503 busy)
-  if (g_serve_control) g_serve_control->attach(model_mgr);
   if (engine_splash) {  // (absolute: the next run may start in another folder)
     std::error_code abs_ec;
     const std::filesystem::path bin = std::filesystem::absolute(splash_found_binary, abs_ec);
@@ -1591,13 +1336,18 @@ int ni::server::run_service(Options o) {
   }
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);
-  if (g_stop_requested) {  // POST /stop during the first load, seen now that it has ended: saved as a stop saves
-    save_before_exit();
-    return stop_asked();
-  }
+  instance->details([model_mgr, budget] {
+    if (model_mgr->switching()) return json{{"model_switching", true}, {"state", "loading"}};
+    const auto eng = model_mgr->current_engine();
+    if (!eng) return json::object();
+    const auto ref = model_mgr->current_ref();
+    return json{{"model", eng->model_id()}, {"context", eng->context_length()}, {"context_fit", eng->context_fit()},
+      {"slots", eng->slots()}, {"quant", ref.variant ? ref.variant->quant : ""},
+      {"memory_used_bytes", Gpu::get().allocated_bytes()}, {"memory_budget_bytes", budget}, {"model_switching", false}};
+  });
 
   api::ResponseStore responses;  // recent responses, for previous_response_id
-  ServingServer srv;
+  httplib::Server srv;
   // conversations carry their images as base64 every turn (an agent's screenshots: 1-4 MB each)
   srv.set_payload_max_length(256u << 20);
   // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
@@ -1637,7 +1387,7 @@ int ni::server::run_service(Options o) {
     }
     if (model_mgr->switching()) {
       res.status = 503;
-      res.set_header("Retry-After", std::to_string(model_mgr->retry_after_s()));
+      res.set_header("Retry-After", "30");
       res.set_content(R"({"error":{"message":"another model switch is in progress","type":"server_error"}})", "application/json");
       return;
     }
@@ -1659,7 +1409,7 @@ int ni::server::run_service(Options o) {
     if (!eng) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
+      if (busy) res.set_header("Retry-After", "30");
       json eb{{"error", {{"message", err.message.empty() ? "Failed to switch model" : err.message}, {"type", busy ? "server_error" : "invalid_request_error"}}}};
       res.set_content(eb.dump(), "application/json");
       return;
@@ -1696,7 +1446,7 @@ int ni::server::run_service(Options o) {
     if (!guard) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
+      if (busy) res.set_header("Retry-After", "30");
       res.set_content(api::dump(api::chat_error("Model error: " + err.message)), "application/json");
       return;
     }
@@ -1719,20 +1469,17 @@ int ni::server::run_service(Options o) {
     const auto meter = ui::meter(req, r);
     r.live = ui::live_of(meter);
     const bool telemetry = req.get_header_value("X-Kapitsa-Bench-Telemetry") == "1";
-    // llama.cpp's "return_progress": prompt_progress chunks while the prompt is read (streams only)
-    const bool progress = stream && body.contains("return_progress") && body["return_progress"].is_boolean() &&
-                          body["return_progress"].get<bool>();
-    if ((telemetry || progress) && !r.live) r.live = std::make_shared<LiveDecode>();
+    if (telemetry && !r.live) r.live = std::make_shared<LiveDecode>();
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
-      const ChatResult& out = wait_for_client(*execution);
+      const ChatResult& out = execution->wait();
       ui::done(meter, out);
       prefill_after(r, out);
       if (out.finish_reason == "error") {
         auto [status, fail_err] = api::chat_failure(out);
         res.status = status;
-        if (status == 503 && (!out.engine_down || out.engine_restarting)) res.set_header("Retry-After", "1");
+        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_err), "application/json");
         return;
       }
@@ -1750,7 +1497,7 @@ int ni::server::run_service(Options o) {
     }
     // the stream (src/api/chat_completions.cpp) starts as soon as the prompt is known to fit, before the slot
     ::stream_reply(guard, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
-                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true, telemetry, progress);
+                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true, telemetry);
   });
 
   // Anthropic Messages (src/api/anthropic.cpp)
@@ -1771,7 +1518,7 @@ int ni::server::run_service(Options o) {
     if (!guard) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
+      if (busy) res.set_header("Retry-After", "30");
       res.set_content(api::dump(api::messages_error(busy ? "overloaded_error" : "invalid_request_error", "Model error: " + err.message)), "application/json");
       return;
     }
@@ -1795,12 +1542,12 @@ int ni::server::run_service(Options o) {
     if (!q.stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(q.chat);
-      const ChatResult& out = wait_for_client(*execution);
+      const ChatResult& out = execution->wait();
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::messages_failure(out);
         res.status = status;
-        if (status == 503 && (!out.engine_down || out.engine_restarting)) res.set_header("Retry-After", "1");
+        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }
@@ -1821,7 +1568,7 @@ int ni::server::run_service(Options o) {
       if (!guard) {
         const bool busy = err.code == ModelManager::Error::Code::Busy;
         res.status = busy ? 503 : 400;
-        if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
+        if (busy) res.set_header("Retry-After", "30");
         res.set_content(api::dump(api::messages_error(busy ? "overloaded_error" : "invalid_request_error", "Model error")), "application/json");
         return;
       }
@@ -1855,7 +1602,7 @@ int ni::server::run_service(Options o) {
     if (!guard) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
+      if (busy) res.set_header("Retry-After", "30");
       res.set_content(api::dump(api::responses_error("Model error: " + err.message, busy ? "server_error" : "invalid_request_error")), "application/json");
       return;
     }
@@ -1887,12 +1634,12 @@ int ni::server::run_service(Options o) {
     if (!q->stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(q->chat);
-      const ChatResult& out = wait_for_client(*execution);
+      const ChatResult& out = execution->wait();
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::responses_failure(out);
         res.status = status;
-        if (status == 503 && (!out.engine_down || out.engine_restarting)) res.set_header("Retry-After", "1");
+        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }
@@ -1930,9 +1677,6 @@ int ni::server::run_service(Options o) {
         !body["text"].is_string())
       return bad("a draft needs \"after\" (the conversation's last assistant reply) and \"text\" (the draft), as "
                  "strings");
-    if (body.contains("prompt_cache_key") && !body["prompt_cache_key"].is_string())
-      return bad("\"prompt_cache_key\" (the conversation's, as its requests send it) must be a string");
-    const std::string key = body.value("prompt_cache_key", std::string());
     if (body.contains("think") && !(body["think"].is_boolean() && !body["think"].get<bool>()))
       return bad("\"think\" (reasoning ahead) is not supported yet");
     auto reply = [&](const DraftResult& d) {
@@ -1956,227 +1700,7 @@ int ni::server::run_service(Options o) {
       d.status = err.code == ModelManager::Error::Code::Busy ? "busy" : "no_conversation";
       return reply(d);
     }
-    reply(guard->engine().draft(key, body["after"].get<std::string>(), body["text"].get<std::string>()));
-  });
-
-  // ---- Ollama-compatible API (/api/*) ----
-  // Ollama streams newline-delimited JSON, not SSE: Content-Type application/x-ndjson.
-
-  srv.Get("/api/version", [](const httplib::Request&, httplib::Response& res) {
-    res.set_content(R"({"version":")" KAPITSA_VERSION R"("})", "application/json");
-  });
-
-  srv.Get("/api/tags", [model_mgr, started](const httplib::Request&, httplib::Response& res) {
-    const std::string cur_id = model_mgr->current_model_id();
-    const std::string cur_name = model_mgr->current_name();
-    res.set_content(api::dump(api::ollama_tags_response(cur_id, cur_name, started)), "application/json");
-  });
-
-  srv.Get("/api/ps", [model_mgr, started](const httplib::Request&, httplib::Response& res) {
-    const std::string cur_id = model_mgr->current_model_id();
-    const std::string cur_name = model_mgr->current_name();
-    res.set_content(api::dump(api::ollama_ps_response(cur_id, cur_name, started)), "application/json");
-  });
-
-  srv.Post("/api/show", [model_mgr](const httplib::Request& req, httplib::Response& res) {
-    ojson body;
-    try { body = ojson::parse(req.body); } catch (...) { body = ojson::object(); }
-    if (!body.is_object()) body = ojson::object();
-    const std::string req_model = body.value("model", "");
-    if (req_model.empty()) {
-      // No model named: show the running model
-      const std::string cur_id = model_mgr->current_model_id();
-      if (cur_id.empty()) { res.status = 404; res.set_content(R"({"error":"no model loaded"})", "application/json"); return; }
-      res.set_content(api::dump(api::ollama_show_response(cur_id, cur_id)), "application/json");
-      return;
-    }
-    const std::string resolved = api::ollama_resolve_model(req_model);
-    // Check if the model is known (the running model, or in the catalog, or installed)
-    const std::string cur_id = model_mgr->current_model_id();
-    if (resolved != cur_id && !hub::find_model(resolved)) {
-      // Check installed
-      bool found = false;
-      try { for (const auto& m : hub::installed()) if (m.name == resolved && m.complete) { found = true; break; } } catch (...) {}
-      if (!found) {
-        res.status = 404;
-        res.set_content(api::dump(json{{"error", "model '" + req_model + "' not found"}}), "application/json");
-        return;
-      }
-    }
-    res.set_content(api::dump(api::ollama_show_response(resolved, cur_id)), "application/json");
-  });
-
-  srv.Post("/api/embed", [](const httplib::Request&, httplib::Response& res) {
-    res.status = 400;
-    res.set_content(R"({"error":"embeddings are not supported by Kapitsa"})", "application/json");
-  });
-  srv.Post("/api/embeddings", [](const httplib::Request&, httplib::Response& res) {
-    res.status = 400;
-    res.set_content(R"({"error":"embeddings are not supported by Kapitsa"})", "application/json");
-  });
-
-  // Ollama error: properly escaped JSON (model names with " or newlines stay valid)
-  auto ollama_err = [](const std::string& msg) { return api::dump(json{{"error", msg}}); };
-  auto ollama_fail = [&](const ChatResult& out, httplib::Response& res) {
-    if (out.busy) { res.status = 503; res.set_header("Retry-After", "1"); }
-    else if (out.engine_down) res.status = 503;
-    else if (out.prompt_limit > 0) res.status = 400;
-    else res.status = 400;
-    res.set_content(api::dump(json{{"error", out.error.empty() ? "request failed" : out.error}}), "application/json");
-  };
-
-  srv.Post("/api/chat", [&](const httplib::Request& req, httplib::Response& res) {
-    ojson body;
-    try {
-      body = ojson::parse(req.body);
-    } catch (const std::exception& ex) {
-      res.status = 400;
-      res.set_content(ollama_err(ex.what()), "application/json");
-      return;
-    }
-    if (!body.is_object()) { res.status = 400; res.set_content(ollama_err("request body must be a JSON object"), "application/json"); return; }
-    const std::string req_model = api::ollama_resolve_model(body.value("model", ""));
-    ModelManager::Error err;
-    if (reject_while_switching(*model_mgr, res, ollama_err("the server is switching models; retry shortly"))) return;
-    auto guard = model_mgr->acquire_request(req_model, &err);
-    if (!guard) {
-      const bool busy = err.code == ModelManager::Error::Code::Busy;
-      res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
-      res.set_content(ollama_err(err.message), "application/json");
-      return;
-    }
-    // Empty messages: Ollama uses this to load/unload a model
-    if (!body.contains("messages") || (body["messages"].is_array() && body["messages"].empty())) {
-      ojson j{{"model", guard->engine().model_id()},
-              {"created_at", api::ollama_now()},
-              {"message", {{"role", "assistant"}, {"content", ""}}},
-              {"done_reason", "load"},
-              {"done", true}};
-      res.set_content(api::dump(j), "application/json");
-      return;
-    }
-    ChatRequest r;
-    try {
-      r = api::ollama_chat_request(body, guard->engine().request_defaults());
-    } catch (const api::ApiError& e) {
-      res.status = e.status;
-      res.set_content(ollama_err(e.what()), "application/json");
-      return;
-    } catch (const std::exception& ex) {
-      res.status = 400;
-      res.set_content(ollama_err(ex.what()), "application/json");
-      return;
-    }
-    const bool stream = !body.contains("stream") || !body["stream"].is_boolean() || body["stream"].get<bool>();
-    const std::string model = guard->engine().model_id();
-    const auto meter = ui::meter(req, r);
-    r.live = ui::live_of(meter);
-    if (!stream) {
-      auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
-      execution->start(r);
-      const ChatResult& out = wait_for_client(*execution);
-      ui::done(meter, out);
-      prefill_after(r, out);
-      if (out.finish_reason == "error") { ollama_fail(out, res); return; }
-      ojson msg{{"role", "assistant"}, {"content", out.content}};
-      if (!out.reasoning.empty()) msg["thinking"] = out.reasoning;
-      if (!out.tool_calls.empty()) {
-        ojson tcs = ojson::array();
-        for (const auto& tc : out.tool_calls) {
-          ojson args;
-          try { args = ojson::parse(tc.arguments); } catch (...) { args = ojson::object(); }
-          tcs.push_back(ojson{{"function", {{"name", tc.name}, {"arguments", args}}}});
-        }
-        msg["tool_calls"] = tcs;
-      }
-      ojson j{{"model", model},
-              {"created_at", api::ollama_now()},
-              {"message", msg},
-              {"done_reason", out.finish_reason == "stop" || out.finish_reason == "tool_calls" ? "stop" : out.finish_reason},
-              {"done", true}};
-      api::ollama_eval_stats(j, out);
-      res.set_content(api::dump(j), "application/json");
-      return;
-    }
-    // Streaming: Ollama uses newline-delimited JSON, not SSE. The failure lambda returns a status+body; the
-    // stream_reply wrapper adds Retry-After when status is 503 and the engine is not permanently down.
-    ::stream_reply(guard, r, std::make_shared<api::OllamaChatStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
-      if (result.busy) return {503, json{{"error", result.error}}};
-      if (result.engine_down) return {503, json{{"error", result.error}}};
-      if (result.prompt_limit > 0) return {400, json{{"error", "prompt too long: " + std::to_string(result.prompt_tokens) + " tokens, limit " + std::to_string(result.prompt_limit)}}};
-      return {400, json{{"error", result.error.empty() ? "request failed" : result.error}}};
-    }, [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, false, false, false, "application/x-ndjson");
-  });
-
-  srv.Post("/api/generate", [&](const httplib::Request& req, httplib::Response& res) {
-    ojson body;
-    try {
-      body = ojson::parse(req.body);
-    } catch (const std::exception& ex) {
-      res.status = 400;
-      res.set_content(ollama_err(ex.what()), "application/json");
-      return;
-    }
-    if (!body.is_object()) { res.status = 400; res.set_content(ollama_err("request body must be a JSON object"), "application/json"); return; }
-    const std::string req_model = api::ollama_resolve_model(body.value("model", ""));
-    ModelManager::Error err;
-    if (reject_while_switching(*model_mgr, res, ollama_err("the server is switching models; retry shortly"))) return;
-    auto guard = model_mgr->acquire_request(req_model, &err);
-    if (!guard) {
-      const bool busy = err.code == ModelManager::Error::Code::Busy;
-      res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
-      res.set_content(ollama_err(err.message), "application/json");
-      return;
-    }
-    // Empty or absent prompt: load model (prompt may be null, absent, or non-string)
-    const bool has_prompt = body.contains("prompt") && body["prompt"].is_string() && !body["prompt"].get<std::string>().empty();
-    if (!has_prompt && !body.contains("images")) {
-      ojson j{{"model", guard->engine().model_id()},
-              {"created_at", api::ollama_now()},
-              {"response", ""},
-              {"done", true}};
-      res.set_content(api::dump(j), "application/json");
-      return;
-    }
-    ChatRequest r;
-    try {
-      r = api::ollama_generate_request(body, guard->engine().request_defaults());
-    } catch (const api::ApiError& e) {
-      res.status = e.status;
-      res.set_content(ollama_err(e.what()), "application/json");
-      return;
-    } catch (const std::exception& ex) {
-      res.status = 400;
-      res.set_content(ollama_err(ex.what()), "application/json");
-      return;
-    }
-    const bool stream = !body.contains("stream") || !body["stream"].is_boolean() || body["stream"].get<bool>();
-    const std::string model = guard->engine().model_id();
-    const auto meter = ui::meter(req, r);
-    r.live = ui::live_of(meter);
-    if (!stream) {
-      auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
-      execution->start(r);
-      const ChatResult& out = wait_for_client(*execution);
-      ui::done(meter, out);
-      if (out.finish_reason == "error") { ollama_fail(out, res); return; }
-      ojson j{{"model", model},
-              {"created_at", api::ollama_now()},
-              {"response", out.content},
-              {"done_reason", out.finish_reason == "stop" ? "stop" : out.finish_reason},
-              {"done", true}};
-      if (!out.reasoning.empty()) j["thinking"] = out.reasoning;
-      api::ollama_eval_stats(j, out);
-      res.set_content(api::dump(j), "application/json");
-      return;
-    }
-    ::stream_reply(guard, r, std::make_shared<api::OllamaGenerateStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
-      if (result.busy) return {503, json{{"error", result.error}}};
-      if (result.engine_down) return {503, json{{"error", result.error}}};
-      return {400, json{{"error", result.error.empty() ? "request failed" : result.error}}};
-    }, [](const ChatResult&) {}, meter, false, false, false, "application/x-ndjson");
+    reply(guard->engine().draft(body["after"].get<std::string>(), body["text"].get<std::string>()));
   });
 
   if (const std::string why = bind_server(srv, host, port); !why.empty()) return fail(why);
@@ -2245,8 +1769,7 @@ int ni::server::run_service(Options o) {
            model_mgr->current_model_id().c_str(), api_key.empty() ? "" : ", API key required");
   }
   fflush(stdout);
-  server::publish_state("ready", server::model_json(model_mgr->current_model_id(), model_mgr->current_context_length(),
-                                                   model_mgr->current_slots()));
+  instance->update({{"state", "ready"}});
   srv.listen_after_bind();
   return 0;
 }
@@ -2410,7 +1933,7 @@ static int list(int argc, char** argv) {
         if (stat((m.dir + "/.kapitsa").c_str(), &st) != 0)
           for (const auto& c : hub::catalog())
             for (const auto& var : c.variants)
-              if (m.name == c.name + "-" + var.name || m.name == hub::legacy_dir_name(c, var)) cat = hub::short_name(c, var);
+              if (m.name == c.name + "-" + var.name) cat = hub::short_name(c, var);
         what = !cat.empty() ? "not checked yet: `kapitsa pull " + cat + "` checks it against the pinned checksums"
                             : "incomplete: `kapitsa pull " + m.name + "` continues it";
       }
@@ -2512,7 +2035,7 @@ static int mtp_sidecar(int argc, char** argv) {
   return 0;
 }
 
-int main(int argc, char** argv) {
+int ni::run_cli(int argc, char** argv) {
   const std::string cmd = argc > 1 ? argv[1] : "";
   // in a terminal the engine's log lines stay out of the screens (`kapitsa serve` keeps them in its log file)
   if (term::fancy() && cmd != "serve" && (cmd.empty() || cmd[0] != '-' || cmd == "--help" || cmd == "-h")) ui::quiet();
@@ -2544,7 +2067,7 @@ int main(int argc, char** argv) {
   if (cmd == "mtp-sidecar") return mtp_sidecar(argc, argv);
   if (cmd == "import") return gguf::run_import(argc, argv);
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
-  if (ni::api::known_agent(cmd)) return launch_agent(cmd, argc, argv, 2);
+  if (cmd == "claude" || cmd == "codex" || cmd == "opencode" || cmd == "pi") return launch_agent(cmd, argc, argv, 2);
   if (cmd == "bench") return run_bench(argc, argv, 2);
   if (cmd == "update") return run_update(argc, argv, 2);
   if (cmd == "cluster" || cmd == "macs") return run_cluster(argc, argv, 2);

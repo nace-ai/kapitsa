@@ -181,6 +181,7 @@ struct Instance::Impl {
     std::lock_guard<std::mutex> lk(mutex);
     json j = state;
     j.update(extra);
+    if (state.value("state", "") == "stopping") j["state"] = "stopping";
     j["protocol"] = kProtocol;
     j["instance_id"] = record.at("instance_id");
     j["run_id"] = record.at("run_id");
