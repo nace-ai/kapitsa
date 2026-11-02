@@ -54,10 +54,12 @@ NI_INLINE void qr_store_x(threadgroup half* xs, uint tid, thread const uint4* xr
       // halfs x[0..7] of the chunk: half2(x[f4], x[f4+4]) goes to fragment 4h+f4, column pair cc
       uint4 v = xr[j];
       threadgroup uint* dst = (threadgroup uint*)(xs + r * LD + 32 * h + 2 * cc);
-      dst[0] = (v.x & 0xFFFFu) | (v.z << 16);           // x0, x4
-      dst[4] = (v.x >> 16) | (v.z & 0xFFFF0000u);        // x1, x5
-      dst[8] = (v.y & 0xFFFFu) | (v.w << 16);           // x2, x6
-      dst[12] = (v.y >> 16) | (v.w & 0xFFFF0000u);       // x3, x7
+      ushort2 vx = as_type<ushort2>(v.x), vy = as_type<ushort2>(v.y);
+      ushort2 vz = as_type<ushort2>(v.z), vw = as_type<ushort2>(v.w);
+      dst[0] = as_type<uint>(ushort2(vx.x, vz.x));
+      dst[4] = as_type<uint>(ushort2(vx.y, vz.y));
+      dst[8] = as_type<uint>(ushort2(vy.x, vw.x));
+      dst[12] = as_type<uint>(ushort2(vy.y, vw.y));
     }
   }
 }
@@ -105,12 +107,15 @@ NI_INLINE void qr_mma(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup cons
       af[a].thread_elements()[0] = v.x;
       af[a].thread_elements()[1] = v.y;
     }
+    simdgroup_half8x8 bf[FB];
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < FB; ++b) {
-      simdgroup_half8x8 bf;
-      simdgroup_load(bf, xs + (sgm * TM + b * 8) * LD + 8 * f, LD, ulong2(0, 0), true);
+      simdgroup_load(bf[b], xs + (sgm * TM + b * 8) * LD + 8 * f, LD, ulong2(0, 0), true);
+    }
+    _Pragma("clang loop unroll(full)")
+    for (int b = 0; b < FB; ++b) {
       _Pragma("clang loop unroll(full)")
-      for (int a = 0; a < FA; ++a) simdgroup_multiply_accumulate(acc[a][b], af[a], bf, acc[a][b]);
+      for (int a = 0; a < FA; ++a) simdgroup_multiply_accumulate(acc[a][b], af[a], bf[b], acc[a][b]);
     }
   }
 }
@@ -336,12 +341,15 @@ NI_INLINE void qr_mma8(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup con
       af[a].thread_elements()[0] = v.x;
       af[a].thread_elements()[1] = v.y;
     }
+    simdgroup_half8x8 bf[FB];
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < FB; ++b) {
-      simdgroup_half8x8 bf;
-      simdgroup_load(bf, xs + (sgm * TM + b * 8) * LD + 8 * f, LD, ulong2(0, 0), true);
+      simdgroup_load(bf[b], xs + (sgm * TM + b * 8) * LD + 8 * f, LD, ulong2(0, 0), true);
+    }
+    _Pragma("clang loop unroll(full)")
+    for (int b = 0; b < FB; ++b) {
       _Pragma("clang loop unroll(full)")
-      for (int a = 0; a < FA; ++a) simdgroup_multiply_accumulate(acc[a][b], af[a], bf, acc[a][b]);
+      for (int a = 0; a < FA; ++a) simdgroup_multiply_accumulate(acc[a][b], af[a], bf[b], acc[a][b]);
     }
   }
 }
