@@ -25,6 +25,7 @@ std::vector<std::string> vit_tensor_names(const std::string& dir);
 struct VitLin {
   Buffer w, b;
   uint32_t N = 0, K = 0;
+  bool packed_half = false;  // w holds qrf's half pairs in groups of eight, rather than bf16
 };
 
 // The tensors of one vision tower (the names under `prefix` in dir's safetensors), read into buffers it owns
@@ -50,7 +51,9 @@ class VitWeights {
   std::vector<Buffer> owned_;
 };
 
-// Y (+)= X W^T on the bf16 prefill GEMMs (qrf_f16_*; X half rows of x_ld, Y fp32 rows of y_ld); the bias is not added
+// Convert a linear's bf16 weights in place to the half pairs its GEMM consumes; commit before using it.
+void vit_pack_linear(Encoder& e, VitLin& L);
+// Y (+)= X W^T (X half rows of x_ld, Y fp32 rows of y_ld); the bias is not added.
 void vit_gemm(Encoder& e, const VitLin& L, const Buffer& x, uint32_t x_ld, const Buffer& y, uint32_t y_ld, int M,
               bool add);
 

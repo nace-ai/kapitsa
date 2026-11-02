@@ -11,6 +11,18 @@
 // ViT's of Nemotron 3.5 (radio_*: position embeddings resized and cropped to the grid, the 2x2 pixel shuffle with the
 // projector's RMSNorm).
 
+// In-place bf16 -> qrf_load_w's half pairs (0,4), (1,5), (2,6), (3,7) per eight weights.
+// Run once at load, using the same conversions as the bf16 GEMM's inner loop.
+[[kernel]] void vit_pack_linear(device uint4* w [[buffer(0)]], constant uint& groups [[buffer(1)]],
+                                 uint i [[thread_position_in_grid]]) {
+  if (i >= groups) return;
+  const uint4 u = w[i];
+  w[i] = uint4(as_type<uint>(half2(half(as_type<float>(u.x << 16)), half(as_type<float>(u.z << 16)))),
+               as_type<uint>(half2(half(as_type<float>(u.x & 0xffff0000u)), half(as_type<float>(u.z & 0xffff0000u)))),
+               as_type<uint>(half2(half(as_type<float>(u.y << 16)), half(as_type<float>(u.w << 16)))),
+               as_type<uint>(half2(half(as_type<float>(u.y & 0xffff0000u)), half(as_type<float>(u.w & 0xffff0000u)))));
+}
+
 // ---- LayerNorm ----
 struct VitLnParams {
   uint rows, D, x_ld, y_ld;
