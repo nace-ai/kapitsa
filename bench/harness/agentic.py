@@ -195,6 +195,9 @@ def t_sweep(a, log=print):
                 ct = rec.get("completion_tokens")
                 mid, e2e, _ = bench.decode_rates(r, ct, a.window_head, a.window_tail)
                 rec["decode_tps"] = mid
+                rec["distinct4"] = bench.distinct4(r["content"] or r["reasoning"])
+                if rec["distinct4"] is not None and rec["distinct4"] < a.rep_threshold:
+                    flags.append(f"sweep {tg}: repetition loop (distinct-4-gram {rec['distinct4']})")
                 for why in [] if a.always_reasons else bench.thinking_leak(r):  # (a model that always reasons: Flint)
                     invalid.append(f"sweep {tg}: {why}")
                 if r["finish"] != "length":

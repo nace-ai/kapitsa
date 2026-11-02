@@ -70,3 +70,14 @@ as prompt material for benchmarks; it is not executed or imported.
 | 31 | `modeling_roberta.py` | Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team. Copyright (c) 2018, NVIDIA CORPORATION. |
 | 32 | `modeling_swin.py` | Copyright 2022 Microsoft Research and The HuggingFace Inc. team. |
 | 33 | `modeling_vit.py` (first 8,523 characters) | Copyright 2021 Google AI, Ross Wightman, The HuggingFace Inc. team. |
+
+## The long corpus
+
+`make_corpus.py --long --out FILE` builds a longer corpus for prompts past 128K tokens: the 33 files above and 77 more
+model files of Transformers v5.17.0 (`LONG_FILES` in `make_corpus.py`: the next model folders in alphabetical order
+whose modeling file has its license header in its first 3,000 characters and at least 20,000 characters, leaving out
+`auto`), each cut and headed as above, concatenated and cut to 2,200,000 characters (2,216,518 bytes), enough for a
+512K-token prompt. Its first 650,000 characters are `bench_corpus.txt` byte for byte, so a prompt cut from them is the
+same from either file. sha256 `4339c1d0f698b6bffe80926f01483602b8b5f6ddd14c8f21a75778d8b107c848`; `bench.py` accepts
+it as a frozen corpus. It is not in this repository: the script downloads the files, builds it and checks all three
+checksums. Each excerpt keeps its file's own copyright and license header (Apache License 2.0).

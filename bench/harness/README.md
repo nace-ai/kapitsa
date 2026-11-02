@@ -63,7 +63,7 @@ thinking off, a nonce right after the system start on cold prompts, middle-windo
 | Metric | How |
 | --- | --- |
 | Cold start | `compare_engines` measures spawn to ready, then three ~1K-token requests before any warm-up: spawn to first token, and the first request's penalty over the median of the others. The file cache is not purged (that needs root), so this is a warm-file-cache start. |
-| Sweep | Cold requests at `--sweep-sizes` (default 1000,2000,4000,8000,16000,max; max = the largest that fits `--max-ctx`), `--sweep-repeats` each: TTFT, prefill tok/s and decode tok/s at that context; decode retention = largest over smallest. |
+| Sweep | Cold requests at `--sweep-sizes` (default 1000,2000,4000,8000,16000,max; max = the largest that fits `--max-ctx`), `--sweep-repeats` each: TTFT, prefill tok/s and decode tok/s at that context; decode retention = largest over smallest. The answer is a 192-token summary of the document (`--sweep-task summary`, the default) or the decode phase's 512-token coding answer (`--sweep-task code`), so the rate at each size is the decode cell's own task with that document in front of it. Each answer's distinct 4-grams are recorded, and one below `--rep-threshold` is flagged as a repetition loop. |
 | Cache | A fixed ~`--cache-tokens` prefix: cold TTFT, a follow-up in the grown conversation (what a chat or tool loop sends), three new questions on the same prefix, then a second conversation and the first again: does the prefix survive? Engines that keep only live state or turn checkpoints reuse the follow-up but not a new question on a shared prefix, so the two are reported apart. Engines that report no cached tokens show `-`, a reported 0 shows 0%. The agent replay's follow-up cache hit rate (cached over prompt tokens) is added too. The last turn depends on how many conversations the server keeps live at once (its `--slots`, which `compare_engines` reads from the config's command and `compare_table` prints next to the result): with one slot the second conversation evicts the first, so the first one re-prefills; that is the configuration, not a lost prefix, and the run carries a flag saying so. Kapitsa's `q35-4b-kapitsa` passes `--slots 1` for parity with llama.cpp, `q35-4b-kapitsa-4slots` measures the engine's own default (4). |
 | Sustain | Back-to-back decodes for `--sustain-s` (default 300), last phase; first-third vs last-third median tok/s, flagged above 10% falloff, with `pmset` thermal state before and after. Battery power is flagged; Low Power Mode makes the run INVALID. |
 | Memory | Idle footprint of the server before any request next to the peak, so the KV cost is visible. |
@@ -140,6 +140,9 @@ Each engine has different hidden defaults. The harness sends everything explicit
 - **Same prompts.** Long prompts are cut from the frozen corpus (`corpus/`, sha256 recorded in every result). It has
   650,000 characters, enough for a 128K-token prompt; its first 144,500 are the corpus before its 22 Oct 2026
   extension, byte for byte, so prompts up to ~34K tokens are the same from either and both checksums count as frozen.
+  For prompts past 128K tokens, `corpus/make_corpus.py --long --out FILE` builds the long corpus (2,200,000
+  characters, enough for a 512K-token prompt; not in the repository), whose first 650,000 characters are the frozen
+  corpus byte for byte; pass it with `--corpus FILE`, and its checksum counts as frozen too.
   A size the corpus can't hold stops the run before any request, with the reason, instead of a short prompt. Cold
   prompts must come back within ±1% of the reference token count (catches truncation and chat-template drift) and
   must not report cached tokens.
