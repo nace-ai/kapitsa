@@ -487,7 +487,7 @@ void Qwen35::prewarm_pipelines() {
       names.insert(n);
   if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
   if (Gpu::get().apple_family() <= 7)  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
-    for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
+    for (const char* n : {"attn_prefill11_k16xr", "attn_prefill11g_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
     const std::string k = std::to_string(moe_qmr_k(cfg_.hidden, cfg_.moe_I));
     names.insert("qrm_gu_k" + k + "_m" + std::to_string(moe_qmr()) + "_n64");
@@ -3468,8 +3468,9 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // of Qwen3.5-4B/9B's heads (16 q, 4 kv, D 256) against 4K / 8K / 16K keys: 39.3 / 90.8 / 203.7 ms vs 60.2 / 140.1 /
   // 309.2 for attn_prefill11r. The 16-key tiles' online softmax rounds differently: outputs are not bit-identical to
   // 11r's, error against an fp64 reference the same (2.1-2.4e-4).
-  static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
-                                  : Gpu::get().apple_family() <= 7 ? "attn_prefill11_k16xr" : an;
+  const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
+                           : (Gpu::get().apple_family() <= 7 && cfg_.hq > cfg_.hkv) ? "attn_prefill11g_k16xr"
+                           : Gpu::get().apple_family() <= 7 ? "attn_prefill11_k16xr" : an;
   uint32_t qb = 4, th = 256, gy = cfg_.hkv;
   // NI_QATTN (default on, 0 = off): D 256, 4 or 8 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5.
   // G = 8 (the 35B) runs qattn_t_g8s4k16: 2 tokens x the KV head's 8 heads per 16-row tile, 8 tokens per
@@ -3524,6 +3525,14 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
     } else {
       e.dispatch((uint32_t(T) + 31) / 32, cfg_.hkv, 1, 256);
     }
+    return;
+  }
+  if (full.rfind("attn_prefill11g", 0) == 0) {
+    const uint32_t G = uint32_t(cfg_.hq / cfg_.hkv);
+    e.use(pipe(full));
+    e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+    e.val(5, fp);
+    e.dispatch((uint32_t(T) * G + 31) / 32, cfg_.hkv, 1, 256);
     return;
   }
   if (full.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
