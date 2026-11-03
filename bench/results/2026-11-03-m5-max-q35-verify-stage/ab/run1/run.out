@@ -1,0 +1,12 @@
+== A/B
+Tue Nov  3 12:54:35 PST 2026
+arm 0 old: prompt 132037 (cached 0): 384 tok, 144.5 tok/s, 3.36 t/c, 23.2 ms/cycle
+arm 0 old: prompt 254212 (cached 0): 512 tok, 96.0 tok/s, 3.17 t/c, 33.1 ms/cycle
+arm 1 new: prompt 132037 (cached 0): 384 tok, 154.2 tok/s, 3.27 t/c, 21.2 ms/cycle
+arm 1 new: prompt 254212 (cached 254205): 500 tok, 108.3 tok/s, 3.12 t/c, 28.8 ms/cycle
+arm 2 old: prompt 132037 (cached 0): 384 tok, 139.3 tok/s, 3.27 t/c, 23.5 ms/cycle
+arm 2 old: prompt 254212 (cached 254205): 500 tok, 93.8 tok/s, 3.10 t/c, 33.0 ms/cycle
+arm 3 new: prompt 132037 (cached 0): 384 tok, 152.4 tok/s, 3.27 t/c, 21.5 ms/cycle
+arm 3 new: prompt 254212 (cached 254205): 500 tok, 106.4 tok/s, 3.14 t/c, 29.5 ms/cycle
+texts identical across the arms: {'133K': True, '252K': False}
+Tue Nov  3 13:04:31 PST 2026

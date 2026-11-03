@@ -759,13 +759,17 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // 32K / 128K / 256K positions against attn8m's 1.71 / 1.68 / 3.99
   static const bool attn_t = env_int("NI_V8_ATTN_T", 1) != 0;
   const bool zt = zone && attn_t && G == 8 && tw_supported() && !kv_i8();
+  // NI_V8T_STAGE (default on, 0 = off): that kernel with its K / V tiles staged once a threadgroup
+  // (attn8ts_partial_zone_g8: the same partials to the bit; 0.35 / 0.73 / 1.40 ms after 32K / 128K / 256K positions
+  // against 0.46 / 0.84 / 1.58). Its 32 KB of threadgroup memory read as 64 KB under shader validation: not there
+  static const bool stage = env_int("NI_V8T_STAGE", 1) != 0 && !getenv("MTL_SHADER_VALIDATION");
   // and the 27B's tree verify (6 query heads per KV head; its 16-row wide verify's tiles): attn8t_partial_tree_g6, the
   // keys, masks and partials of attn8m_partial_tree, P as a half pair (one layer, 16 rows: 1.07 / 2.36 / 4.59 ms after
   // 32K / 128K / 256K positions against attn8m_partial_tree's 2.07 / 4.33 / 8.59; within 1.5e-6 of it)
   const bool wt = tree && !zone && !block && attn_t && G == 6 && tw_supported() && !kv_i8();
   if (mma) {
     e.use(pipe8(wt     ? "attn8t_partial_tree_g6"
-                : zt   ? "attn8t_partial_zone_g8"
+                : zt   ? (stage ? "attn8ts_partial_zone_g8" : "attn8t_partial_zone_g8")
                 : zone ? "attn8m_partial_zone"
                 : block ? "attn8m_partial_hist"
                 : tree  ? "attn8m_partial_tree"

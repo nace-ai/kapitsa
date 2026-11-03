@@ -1,0 +1,24 @@
+== output check
+Tue Nov  3 12:53:57 PST 2026
+prefill 8 rows: next-token NLL 1.8131, top-1 = next token 0.5000 -> <run-root>/oc/old/prefill
+step   192 rows: next-token NLL 0.4988, top-1 = next token 0.8750 -> <run-root>/oc/old/step
+verify 192 rows: next-token NLL 0.4988, top-1 = next token 0.8750 -> <run-root>/oc/old/verify
+8 windows, 14848 prefilled tokens in 3.4 s; 5.0 s in all
+prefill 8 rows: next-token NLL 1.8131, top-1 = next token 0.5000 -> <run-root>/oc/new/prefill
+step   192 rows: next-token NLL 0.4988, top-1 = next token 0.8750 -> <run-root>/oc/new/step
+verify 192 rows: next-token NLL 0.4988, top-1 = next token 0.8750 -> <run-root>/oc/new/verify
+8 windows, 14848 prefilled tokens in 2.6 s; 4.1 s in all
+prefill: 8 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.26 (cd20cf5), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_V8T_STAGE":"0"}
+  candidate: 0.2.26 (cd20cf5), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+step: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.26 (cd20cf5), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_V8T_STAGE":"0"}
+  candidate: 0.2.26 (cd20cf5), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.26 (cd20cf5), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_V8T_STAGE":"0"}
+  candidate: 0.2.26 (cd20cf5), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))

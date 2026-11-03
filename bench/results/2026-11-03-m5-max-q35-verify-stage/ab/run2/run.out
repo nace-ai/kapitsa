@@ -1,0 +1,12 @@
+arm 0 new: prompt 132037 (cached 0): 384 tok, 159.8 tok/s, 3.27 t/c, 20.5 ms/cycle
+arm 0 new: prompt 254212 (cached 254205): 500 tok, 115.5 tok/s, 3.14 t/c, 27.2 ms/cycle
+arm 1 old: prompt 132037 (cached 0): 384 tok, 145.9 tok/s, 3.27 t/c, 22.4 ms/cycle
+arm 1 old: prompt 254212 (cached 254205): 500 tok, 102.2 tok/s, 3.14 t/c, 30.7 ms/cycle
+arm 2 new: prompt 132037 (cached 0): 384 tok, 156.7 tok/s, 3.27 t/c, 20.9 ms/cycle
+arm 2 new: prompt 254212 (cached 254205): 500 tok, 113.2 tok/s, 3.10 t/c, 27.4 ms/cycle
+arm 3 old: prompt 132037 (cached 0): 384 tok, 143.9 tok/s, 3.27 t/c, 22.7 ms/cycle
+arm 3 old: prompt 254212 (cached 254205): 500 tok, 100.5 tok/s, 3.14 t/c, 31.2 ms/cycle
+arm 4 new: prompt 132037 (cached 0): 384 tok, 160.8 tok/s, 3.27 t/c, 20.4 ms/cycle
+arm 4 new: prompt 254212 (cached 254205): 500 tok, 112.2 tok/s, 3.14 t/c, 28.0 ms/cycle
+texts identical across arms 1..: {'133K': True, '252K': True}
+Tue Nov  3 13:12:42 PST 2026

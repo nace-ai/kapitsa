@@ -1,0 +1,166 @@
+diff --git a/src/kernels/tensor/v8attn_t.metal b/src/kernels/tensor/v8attn_t.metal
+index 52bcf95..d6a0e92 100644
+--- a/src/kernels/tensor/v8attn_t.metal
++++ b/src/kernels/tensor/v8attn_t.metal
+@@ -43,15 +43,35 @@ NI_INLINE nhf_h8 v8t_load_kv(const device half* base, uint r0, uint c0, uint lim
+   return v;
+ }
+ 
++// the same fragment from a 32-key tile staged in threadgroup memory (rows of 256 halves; rows past the cache's limit
++// were stored as 0, so the values are v8t_load_kv's)
++NI_INLINE nhf_h8 v8t_load_tg(const threadgroup half* base, uint r0, uint c0, short fm, short fn) {
++  nhf_h8 v;
++  _Pragma("clang loop unroll(full)")
++  for (short i = 0; i < 2; ++i) {
++    const half4 x = *(const threadgroup half4*)(base + (r0 + fm + 8 * i) * 256 + c0 + fn);
++    v[4 * i] = x.x;
++    v[4 * i + 1] = x.y;
++    v[4 * i + 2] = x.z;
++    v[4 * i + 3] = x.w;
++  }
++  return v;
++}
++
+ // TREE 3: attn8m_partial_zone's keys and masks (above). TREE 1, a wide tree verify (attn8m_partial_tree's tiles: 16 or
+ // 32 rows as 8-row tiles, the grid's x the chunks x the live tiles, tiles fastest): a threadgroup takes one 8-row tile
+ // of a chunk, its rows see the history (< pos0) and of the block their ancestors and themselves (the mask's bits), the
+ // keys up to pos0 + R.
+-template <int G, int TREE>
++// STAGE: each 32-key K / V tile read from the cache once into threadgroup memory (kvt: K then V, 32 rows of 256 halves
++// each) for all the threadgroup's simdgroups, instead of each pair reading it for itself (4 pairs at G 8: every byte 4
++// times); the pairs' score exchange (xs) then lives in the K tile, free once the scores are taken. The same fragments,
++// products and order, so the same outputs to the bit.
++template <int G, int TREE, int STAGE>
+ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const device half* vc,
+                            device float* part_o, device float* part_ml, constant V8tAttnP& p, uint R,
+-                           const device int* tree, threadgroup float* xs, uint2 tg, uint ntgx, uint sg, ushort lane) {
+-  constexpr int D = 256, DH = 128, BK = 32, KT = BK / 16;
++                           const device int* tree, threadgroup float* xs, threadgroup half* kvt, uint2 tg, uint ntgx,
++                           uint sg, ushort lane) {
++  constexpr int D = 256, DH = 128, BK = 32, KT = BK / 16, NTH = 64 * ((8 * G + 15) / 16);
+   const uint nt = TREE == 1 && ntgx > p.nchunks ? ntgx / p.nchunks : 1u;
+   const uint chunk = nt > 1 ? tg.x / nt : tg.x, tile = nt > 1 ? tg.x % nt : 0u;
+   if (TREE == 1 && R > 8) R = min(R, 8 * nt);  // (a wide verify: the live tiles' rows)
+@@ -93,18 +113,66 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+   threadgroup float* xme = xs + (sg * 32 + lane) * 16;
+   const threadgroup float* xpa = xs + ((sg ^ 1) * 32 + lane) * 16;
+   const uint last = kend > 0 ? kend - 1 : 0;
++  const threadgroup half* kt = kvt;
++  const threadgroup half* vt = kvt + BK * D;
++  // STAGE 2: this thread's share of the next tile, loaded into registers while the current one is computed
++  constexpr int PER = (BK * (D / 8) + NTH - 1) / NTH;
++  const uint tid = sg * 32 + lane;
++  uint4 pk[PER], pv[PER];
++  auto fetch = [&](uint k0) {
++    _Pragma("clang loop unroll(full)")
++    for (int j = 0; j < PER; ++j) {
++      const uint i = tid + uint(j) * NTH, r = i / (D / 8), c = i % (D / 8) * 8, key = k0 + r;
++      const bool ok = i < BK * (D / 8) && key <= last;
++      pk[j] = ok ? *(const device uint4*)(kb + size_t(key) * D + c) : uint4(0);
++      pv[j] = ok ? *(const device uint4*)(vb + size_t(key) * D + c) : uint4(0);
++    }
++  };
++  if (STAGE == 2 && start < kend) fetch(start);
+   for (uint k0 = start; k0 < kend; k0 += BK) {
++    if (STAGE == 1) {
++      threadgroup_barrier(mem_flags::mem_threadgroup);  // (the previous step is done with both tiles and the exchange)
++      for (uint i = tid; i < BK * (D / 8); i += NTH) {  // 32 rows x 32 half8 of K, and of V
++        const uint r = i / (D / 8), c = i % (D / 8) * 8, key = k0 + r;
++        const bool ok = key <= last;
++        const uint4 kx = ok ? *(const device uint4*)(kb + size_t(key) * D + c) : uint4(0);
++        const uint4 vx = ok ? *(const device uint4*)(vb + size_t(key) * D + c) : uint4(0);
++        *(threadgroup uint4*)(kvt + r * D + c) = kx;
++        *(threadgroup uint4*)(kvt + (BK + r) * D + c) = vx;
++      }
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++    } else if (STAGE == 3) {  // K alone (16 KB, the exchange inside it); V as STAGE 0 reads it
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      for (uint i = tid; i < BK * (D / 8); i += NTH) {
++        const uint r = i / (D / 8), c = i % (D / 8) * 8, key = k0 + r;
++        *(threadgroup uint4*)(kvt + r * D + c) = key <= last ? *(const device uint4*)(kb + size_t(key) * D + c) : uint4(0);
++      }
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++    } else if (STAGE == 2) {
++      threadgroup_barrier(mem_flags::mem_threadgroup);  // (the previous step is done with both tiles and the exchange)
++      _Pragma("clang loop unroll(full)")
++      for (int j = 0; j < PER; ++j) {
++        const uint i = tid + uint(j) * NTH, r = i / (D / 8), c = i % (D / 8) * 8;
++        if (i < BK * (D / 8)) {
++          *(threadgroup uint4*)(kvt + r * D + c) = pk[j];
++          *(threadgroup uint4*)(kvt + (BK + r) * D + c) = pv[j];
++        }
++      }
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      if (k0 + BK < kend) fetch(k0 + BK);
++    }
+     nhf_f8 sf[KT];
+     _Pragma("clang loop unroll(full)")
+     for (short f = 0; f < KT; ++f) sf[f] = nhf_f8(0.0f);
+     _Pragma("clang loop unroll(full)")
+     for (short id = 0; id < DH / 16; ++id) {
+-      const nhf_h8 ka = v8t_load_kv(kb, k0, d0 + id * 16, last, fm, fn);
+-      const nhf_h8 kb2 = v8t_load_kv(kb, k0 + 16, d0 + id * 16, last, fm, fn);
++      const nhf_h8 ka = STAGE ? v8t_load_tg(kt, 0, d0 + id * 16, fm, fn) : v8t_load_kv(kb, k0, d0 + id * 16, last, fm, fn);
++      const nhf_h8 kb2 =
++          STAGE ? v8t_load_tg(kt, 16, d0 + id * 16, fm, fn) : v8t_load_kv(kb, k0 + 16, d0 + id * 16, last, fm, fn);
+       nhf_mma<half, half, true>(sf[0], sf[1], qf[id], ka, kb2);
+     }
+     // the pair's two halves of the scores: mine + my partner's
+-    threadgroup_barrier(mem_flags::mem_threadgroup);  // (the previous step's reads of the exchange are done)
++    threadgroup_barrier(mem_flags::mem_threadgroup);  // (the previous step's reads of the exchange, STAGE: of K, are done)
+     _Pragma("clang loop unroll(full)")
+     for (short e = 0; e < 8; ++e) {
+       xme[e] = sf[0][e];
+@@ -164,8 +232,10 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+       if (TREE == 1) pl = nhf_h8(sf[f] - nhf_f8(pf));
+       _Pragma("clang loop unroll(full)")
+       for (short id = 0; id < DH / 16; id += 2) {
+-        const nhf_h8 v0 = v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16, last, fm, fn);
+-        const nhf_h8 v1 = v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16 + 16, last, fm, fn);
++        const nhf_h8 v0 = STAGE == 1 || STAGE == 2 ? v8t_load_tg(vt, 16 * f, d0 + id * 16, fm, fn)
++                                : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16, last, fm, fn);
++        const nhf_h8 v1 = STAGE == 1 || STAGE == 2 ? v8t_load_tg(vt, 16 * f, d0 + id * 16 + 16, fm, fn)
++                                : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16 + 16, last, fm, fn);
+         if (TREE == 1) nhf_mma<half, half, false>(o[id], o[id + 1], pl, v0, v1);
+         nhf_mma<half, half, false>(o[id], o[id + 1], pf, v0, v1);
+       }
+@@ -197,7 +267,38 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+       uint2 tg [[threadgroup_position_in_grid]], uint2 ntg [[threadgroups_per_grid]],                               \
+       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                        \
+     threadgroup float xs[2 * ((8 * G + 15) / 16) * 32 * 16];                                                         \
+-    attn8t_impl<G, TREE>(q, kc, vc, part_o, part_ml, p, R, tree, xs, tg, ntg.x, sg, ushort(lane));                   \
++    attn8t_impl<G, TREE, 0>(q, kc, vc, part_o, part_ml, p, R, tree, xs, nullptr, tg, ntg.x, sg, ushort(lane));   \
+   }
+ ATTN8T(attn8t_partial_zone_g8, 8, 3)  // Qwen3.6 35B-A3B, Clover: 16 query heads over 2 KV heads, 4 tiles
+ ATTN8T(attn8t_partial_tree_g6, 6, 1)  // Qwen3.8 27B's wide verify: 24 query heads over 4 KV heads, 3 tiles, P as hi + lo
++
++// STAGE (above): 32 KB of threadgroup memory, the two tiles, the exchange inside the K tile
++#define ATTN8TS(NAME, G, TREE, ST)                                                                                      \
++  [[kernel, max_total_threads_per_threadgroup(64 * ((8 * G + 15) / 16))]] void NAME(                                \
++      const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]], \
++      device float* part_o [[buffer(3)]], device float* part_ml [[buffer(4)]], constant V8tAttnP& p [[buffer(5)]],   \
++      constant uint& R [[buffer(6)]], const device int* tree [[buffer(7)]],                                          \
++      uint2 tg [[threadgroup_position_in_grid]], uint2 ntg [[threadgroups_per_grid]],                               \
++      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                        \
++    threadgroup half kvt[2 * 32 * 256];                                                                              \
++    static_assert(2 * ((8 * G + 15) / 16) * 32 * 16 * 4 <= 32 * 256 * 2, "attn8ts: the exchange outgrows the K tile"); \
++    attn8t_impl<G, TREE, ST>(q, kc, vc, part_o, part_ml, p, R, tree, (threadgroup float*)kvt, kvt, tg, ntg.x, sg,    \
++                             ushort(lane));                                                                          \
++  }
++ATTN8TS(attn8ts_partial_zone_g8, 8, 3, 1)
++ATTN8TS(attn8ts_partial_tree_g6, 6, 1, 1)
++ATTN8TS(attn8tp_partial_zone_g8, 8, 3, 2)
++ATTN8TS(attn8tp_partial_tree_g6, 6, 1, 2)
++#define ATTN8TK(NAME, G, TREE)                                                                                        \
++  [[kernel, max_total_threads_per_threadgroup(64 * ((8 * G + 15) / 16))]] void NAME(                                \
++      const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]], \
++      device float* part_o [[buffer(3)]], device float* part_ml [[buffer(4)]], constant V8tAttnP& p [[buffer(5)]],   \
++      constant uint& R [[buffer(6)]], const device int* tree [[buffer(7)]],                                          \
++      uint2 tg [[threadgroup_position_in_grid]], uint2 ntg [[threadgroups_per_grid]],                               \
++      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                        \
++    threadgroup half kvt[32 * 256];                                                                                  \
++    attn8t_impl<G, TREE, 3>(q, kc, vc, part_o, part_ml, p, R, tree, (threadgroup float*)kvt, kvt, tg, ntg.x, sg,     \
++                            ushort(lane));                                                                           \
++  }
++ATTN8TK(attn8tk_partial_zone_g8, 8, 3)
++ATTN8TK(attn8tk_partial_tree_g6, 6, 1)

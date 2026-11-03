@@ -1,0 +1,6 @@
+attn8t_partial_tree_g6: 12288 B threadgroup memory, max 192 threads; attn8ts_partial_tree_g6: 32768 B, max 192
+pos0  262144 chunk  6560 x  40 | attn8t_partial_tree_g6   4.556 ms (  236 GB/s)  attn8ts_partial_tree_g6   5.412 ms (  198 GB/s)   0.84x | partials differing 0 of 3962880, nonfinite 0
+pos0  131072 chunk  3296 x  40 | attn8t_partial_tree_g6   2.350 ms (  228 GB/s)  attn8ts_partial_tree_g6   2.787 ms (  193 GB/s)   0.84x | partials differing 0 of 3962880, nonfinite 0
+pos0   65536 chunk  1664 x  40 | attn8t_partial_tree_g6   1.231 ms (  218 GB/s)  attn8ts_partial_tree_g6   1.422 ms (  189 GB/s)   0.87x | partials differing 0 of 3962880, nonfinite 0
+pos0   32768 chunk   832 x  40 | attn8t_partial_tree_g6   0.655 ms (  205 GB/s)  attn8ts_partial_tree_g6   0.722 ms (  186 GB/s)   0.91x | partials differing 0 of 3962880, nonfinite 0
+pos0    4096 chunk   128 x  33 | attn8t_partial_tree_g6   0.641 ms (   26 GB/s)  attn8ts_partial_tree_g6   0.465 ms (   36 GB/s)   1.38x | partials differing 0 of 3269376, nonfinite 0
