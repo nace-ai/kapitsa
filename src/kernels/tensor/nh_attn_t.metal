@@ -177,6 +177,155 @@ NI_INLINE void nh_attn_t_impl(const device float* q, const device half* kc, cons
 // tokens the same, 12.6-14.5; 64 keys per step 22.4-27.1, relaxed-precision products 13.0-14.8)
 NH_ATTN_T(nh_attn_t_s4, 4, 32)
 
+// ---- nh_attn_ts: nh_attn_t with the K / V tiles staged in threadgroup memory for the threadgroup's NS tokens ----
+//
+// nh_attn_t's simdgroups each read their K / V fragments from device memory, so every threadgroup streams the whole
+// cache prefix on its own; past what the GPU's caches hold, that is the prefill's limit (one layer, 2048 rows: 12.8 ms
+// after 14336 positions, 40 TFLOP/s, but 187 / 521 / 1266 ms after 131072 / 262144 / 491520, 24 / 17 / 13 TFLOP/s; 2, 8
+// or 16 tokens per threadgroup the same). Here the threadgroup's threads load each 32-key tile of K and of V once (16 KB)
+// and its NS simdgroups (a token each, as nh_attn_t's) read their fragments from it. A token's products, softmax and
+// output are nh_attn_t_impl's: a key past the token's limit is masked to a zero weight (the tile holds the
+// threadgroup's keys up to its last token's), so the output is nh_attn_t_s4's bit for bit.
+// grid: (ceil(T / NS), Hkv) x 32 NS threads, tokens of block tg.x + qb0.
+
+// a fragment of 16 tile rows r0 + [0, 16) x 16 columns c0 + [0, 16) from a staged tile (rows of 128 halves)
+NI_INLINE nhf_h8 nhf_load_tg(const threadgroup half* base, uint r0, uint c0, short fm, short fn) {
+  nhf_h8 v;
+  _Pragma("clang loop unroll(full)")
+  for (short i = 0; i < 2; ++i) {
+    const half4 x = *(const threadgroup half4*)(base + (r0 + fm + 8 * i) * 128 + c0 + fn);
+    v[4 * i] = x.x;
+    v[4 * i + 1] = x.y;
+    v[4 * i + 2] = x.z;
+    v[4 * i + 3] = x.w;
+  }
+  return v;
+}
+
+template <int NS, int BK>
+NI_INLINE void nh_attn_ts_impl(const device float* q, const device half* kc, const device half* vc, device half* out,
+                               constant NhAttnTP& p, uint2 tg, uint sg, ushort lane, threadgroup half* kt,
+                               threadgroup half* vt) {
+  constexpr int D = 128, G = 16, KT = BK / 16;
+  const uint b = tg.x + p.qb0, t = b * NS + sg, kvh = tg.y;
+  if (b * NS >= p.T) return;  // (the whole threadgroup)
+  const bool live = t < p.T;
+  const uint lim = p.pos0 + min(t, p.T - 1);                   // the token's last key
+  const uint tgl = p.pos0 + min(b * NS + NS - 1, p.T - 1);     // the threadgroup's
+  const uint tid = sg * 32 + lane;
+  const short qid = lane >> 2, fm = (qid & 4) | ((lane >> 1) & 3), fn = ((qid & 2) | (lane & 1)) * 4;
+  const float qscale = p.scale * 1.4426950408889634f;
+  const device float* qp = q + (size_t(min(t, p.T - 1)) * p.Hq + kvh * G) * D;
+  nhf_h8 qf[D / 16];
+  _Pragma("clang loop unroll(full)")
+  for (short id = 0; id < D / 16; ++id)
+    _Pragma("clang loop unroll(full)")
+    for (short i = 0; i < 2; ++i) {
+      const float4 x = *(const device float4*)(qp + (fm + 8 * i) * D + id * 16 + fn) * qscale;
+      qf[id][4 * i] = half(x.x);
+      qf[id][4 * i + 1] = half(x.y);
+      qf[id][4 * i + 2] = half(x.z);
+      qf[id][4 * i + 3] = half(x.w);
+    }
+  nhf_f8 o[D / 16];
+  _Pragma("clang loop unroll(full)")
+  for (short id = 0; id < D / 16; ++id) o[id] = nhf_f8(0.0f);
+  float m[2] = {-1e30f, -1e30f}, l[2] = {0.0f, 0.0f};
+  const device half* kb = kc + size_t(kvh) * p.cap * D;
+  const device half* vb = vc + size_t(kvh) * p.cap * D;
+  for (uint k0 = 0; k0 <= tgl; k0 += BK) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);  // the previous tile's reads are done
+    for (uint i = tid; i < uint(BK * D / 8); i += 32 * NS) {
+      const uint r = i / (D / 8), c = (i % (D / 8)) * 8;
+      const bool ok = k0 + r <= tgl;
+      *(threadgroup uint4*)(kt + r * D + c) = ok ? *(const device uint4*)(kb + size_t(k0 + r) * D + c) : uint4(0);
+      *(threadgroup uint4*)(vt + r * D + c) = ok ? *(const device uint4*)(vb + size_t(k0 + r) * D + c) : uint4(0);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!live || k0 > lim) continue;  // (tile loads and barriers stay uniform over the threadgroup)
+    nhf_f8 sf[KT];
+    _Pragma("clang loop unroll(full)")
+    for (short f = 0; f < KT; ++f) sf[f] = nhf_f8(0.0f);
+    _Pragma("clang loop unroll(full)")
+    for (short f = 0; f < KT; f += 2)
+      _Pragma("clang loop unroll(full)")
+      for (short id = 0; id < D / 16; ++id) {
+        const nhf_h8 ka = nhf_load_tg(kt, 16 * f, id * 16, fm, fn);
+        const nhf_h8 kb2 = nhf_load_tg(kt, 16 * f + 16, id * 16, fm, fn);
+        nhf_mma<half, half, true>(sf[f], sf[f + 1], qf[id], ka, kb2);
+      }
+    if (k0 + BK - 1 > lim) {
+      _Pragma("clang loop unroll(full)")
+      for (short f = 0; f < KT; ++f)
+        _Pragma("clang loop unroll(full)")
+        for (short e = 0; e < 8; ++e)
+          if (k0 + 16 * f + fn + (e & 3) > lim) sf[f][e] = -1e30f;
+    }
+    float corr[2];
+    _Pragma("clang loop unroll(full)")
+    for (short i = 0; i < 2; ++i) {
+      float mx = -1e30f;
+      _Pragma("clang loop unroll(full)")
+      for (short f = 0; f < KT; ++f)
+        mx = max(mx, max(max(sf[f][4 * i], sf[f][4 * i + 1]), max(sf[f][4 * i + 2], sf[f][4 * i + 3])));
+      mx = max(mx, simd_shuffle_xor(mx, ushort(1)));
+      mx = max(mx, simd_shuffle_xor(mx, ushort(8)));
+      const float mn = max(m[i], mx);
+      corr[i] = exp2(m[i] - mn);
+      m[i] = mn;
+      float ps = 0.0f;
+      _Pragma("clang loop unroll(full)")
+      for (short f = 0; f < KT; ++f)
+        _Pragma("clang loop unroll(full)")
+        for (short j = 0; j < 4; ++j) {
+          sf[f][4 * i + j] = exp2(sf[f][4 * i + j] - mn);
+          ps += sf[f][4 * i + j];
+        }
+      ps += simd_shuffle_xor(ps, ushort(1));
+      ps += simd_shuffle_xor(ps, ushort(8));
+      l[i] = l[i] * corr[i] + ps;
+    }
+    if (!simd_all(corr[0] == 1.0f && corr[1] == 1.0f)) {
+      _Pragma("clang loop unroll(full)")
+      for (short id = 0; id < D / 16; ++id)
+        _Pragma("clang loop unroll(full)")
+        for (short e = 0; e < 8; ++e) o[id][e] *= corr[e >> 2];
+    }
+    _Pragma("clang loop unroll(full)")
+    for (short f = 0; f < KT; ++f) {
+      const nhf_h8 pf = nhf_h8(sf[f]);
+      _Pragma("clang loop unroll(full)")
+      for (short id = 0; id < D / 16; id += 2) {
+        const nhf_h8 v0 = nhf_load_tg(vt, 16 * f, id * 16, fm, fn);
+        const nhf_h8 v1 = nhf_load_tg(vt, 16 * f, id * 16 + 16, fm, fn);
+        nhf_mma<half, half, false>(o[id], o[id + 1], pf, v0, v1);
+      }
+    }
+  }
+  if (!live) return;
+  device half* op = out + (size_t(t) * p.Hq + kvh * G) * D;
+  _Pragma("clang loop unroll(full)")
+  for (short i = 0; i < 2; ++i) {
+    const float inv = l[i] > 0.0f ? 1.0f / l[i] : 0.0f;
+    _Pragma("clang loop unroll(full)")
+    for (short id = 0; id < D / 16; ++id)
+      *(device half4*)(op + (fm + 8 * i) * D + id * 16 + fn) =
+          half4(float4(o[id][4 * i], o[id][4 * i + 1], o[id][4 * i + 2], o[id][4 * i + 3]) * inv);
+  }
+}
+
+#define NH_ATTN_TS(NAME, NS, BK)                                                                                     \
+  [[kernel, max_total_threads_per_threadgroup(32 * NS)]] void NAME(                                                \
+      const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]], \
+      device half* out [[buffer(3)]], constant NhAttnTP& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]], \
+      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                      \
+    threadgroup half kt[BK * 128], vt[BK * 128];                                                                     \
+    nh_attn_ts_impl<NS, BK>(q, kc, vc, out, p, tg, sg, ushort(lane), kt, vt);                                       \
+  }
+// 8 tokens per threadgroup (2048 rows after 14336 / 131072 / 262144 / 491520 positions: 11.0 / 98.5 / 201 / 384 ms, 43-47
+// TFLOP/s; 16 tokens 12.3 / 106 / 212 / 398, 32 tokens 14.5 / 124 / 248 / 463)
+NH_ATTN_TS(nh_attn_ts_s8, 8, 32)
+
 // ---- the same products for a verify: R rows over chunks of the cache (split-K), nh_attn_partial's partials ----
 //
 // A verify's R rows (positions pos0 + r) each see the history [0, pos0) and, of the block, themselves and the rows
