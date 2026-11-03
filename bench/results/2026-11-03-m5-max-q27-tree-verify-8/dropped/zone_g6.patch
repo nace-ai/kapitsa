@@ -1,0 +1,62 @@
+diff --git a/src/kernels/tensor/v8attn_t.metal b/src/kernels/tensor/v8attn_t.metal
+index ee416f4..44c6790 100644
+--- a/src/kernels/tensor/v8attn_t.metal
++++ b/src/kernels/tensor/v8attn_t.metal
+@@ -192,20 +192,20 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+         _Pragma("clang loop unroll(full)")
+         for (short e = 0; e < 8; ++e) o[id][e] *= corr[e >> 2];
+     }
+-    // P as half (TREE 3, as nh_attn_t); TREE 1 (the 27B, whose decode paths agree to ~1e-6 KL) as a half pair, hi + lo,
+-    // so that O carries attn8m's fp32 P to ~22 bits and only the sums' order differs
++    // P as half (G 8, the 35B and Clover, as nh_attn_t); G 6 (the 27B, whose decode paths agree to ~1e-6 KL) as a half
++    // pair, hi + lo, so that O carries attn8m's fp32 P to ~22 bits and only the sums' order differs
+     _Pragma("clang loop unroll(full)")
+     for (short f = 0; f < KT; ++f) {
+       const nhf_h8 pf = nhf_h8(sf[f]);
+       nhf_h8 pl;
+-      if (TREE == 1) pl = nhf_h8(sf[f] - nhf_f8(pf));
++      if (G == 6) pl = nhf_h8(sf[f] - nhf_f8(pf));
+       _Pragma("clang loop unroll(full)")
+       for (short id = 0; id < DH / 16; id += 2) {
+         const nhf_h8 v0 = STAGE ? v8t_load_tg(vt, 16 * f, d0 + id * 16, fm, fn)
+                                 : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16, last, fm, fn);
+         const nhf_h8 v1 = STAGE ? v8t_load_tg(vt, 16 * f, d0 + id * 16 + 16, fm, fn)
+                                 : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16 + 16, last, fm, fn);
+-        if (TREE == 1) nhf_mma<half, half, false>(o[id], o[id + 1], pl, v0, v1);
++        if (G == 6) nhf_mma<half, half, false>(o[id], o[id + 1], pl, v0, v1);
+         nhf_mma<half, half, false>(o[id], o[id + 1], pf, v0, v1);
+       }
+     }
+@@ -240,6 +240,7 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+   }
+ ATTN8T(attn8t_partial_zone_g8, 8, 3)  // Qwen3.6 35B-A3B, Clover: 16 query heads over 2 KV heads, 4 tiles
+ ATTN8T(attn8t_partial_tree_g6, 6, 1)  // Qwen3.8 27B's wide verify: 24 query heads over 4 KV heads, 3 tiles, P as hi + lo
++ATTN8T(attn8t_partial_zone_g6, 6, 3)  // Qwen3.8 27B's 8-row tree verify: the same heads, P as hi + lo
+ 
+ // STAGE (above): 32 KB of threadgroup memory, the two tiles with the exchange inside the K one; the validation layer,
+ // which counts it twice, cannot dispatch it (the host keeps attn8t_partial_zone_g8 under MTL_SHADER_VALIDATION)
+diff --git a/src/model/qwen35_v8.cpp b/src/model/qwen35_v8.cpp
+index ee29834..97f4296 100644
+--- a/src/model/qwen35_v8.cpp
++++ b/src/model/qwen35_v8.cpp
+@@ -758,7 +758,10 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
+   // 8 query heads per KV head with fp16 KV rows. One layer of the 35B's heads, 8 rows: 0.48 / 0.86 / 1.61 ms after
+   // 32K / 128K / 256K positions against attn8m's 1.71 / 1.68 / 3.99
+   static const bool attn_t = env_int("NI_V8_ATTN_T", 1) != 0;
+-  const bool zt = zone && attn_t && G == 8 && tw_supported() && !kv_i8();
++  // G 6, the 27B's 8-row tree verify (an 8-row drafting block: more than one slot, or NI_DFLASH_BLOCK=8):
++  // attn8t_partial_zone_g6, its keys, masks and partials those of attn8m_partial_zone, P as a half pair as the wide
++  // verify's attn8t_partial_tree_g6
++  const bool zt = zone && attn_t && (G == 8 || G == 6) && tw_supported() && !kv_i8();
+   // NI_V8T_STAGE (default on, 0 = off): that kernel with its K / V tiles staged once a threadgroup
+   // (attn8ts_partial_zone_g8: the same partials to the bit; 0.35 / 0.73 / 1.40 ms after 32K / 128K / 256K positions
+   // against 0.46 / 0.84 / 1.58). Its 32 KB of threadgroup memory read as 64 KB under shader validation: not there
+@@ -769,7 +772,7 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
+   const bool wt = tree && !zone && !block && attn_t && G == 6 && tw_supported() && !kv_i8();
+   if (mma) {
+     e.use(pipe8(wt     ? "attn8t_partial_tree_g6"
+-                : zt   ? (stage ? "attn8ts_partial_zone_g8" : "attn8t_partial_zone_g8")
++                : zt   ? (G == 6 ? "attn8t_partial_zone_g6" : stage ? "attn8ts_partial_zone_g8" : "attn8t_partial_zone_g8")
+                 : zone ? "attn8m_partial_zone"
+                 : block ? "attn8m_partial_hist"
+                 : tree  ? "attn8m_partial_tree"

@@ -1,0 +1,35 @@
+{
+  "captured_at": "2026-11-03T22:47:29.328892+00:00",
+  "hardware": {
+    "hw.model": "Mac17,6",
+    "machdep.cpu.brand_string": "Apple M5 Max",
+    "hw.memsize": "137438953472",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18"
+  },
+  "gpu": {
+    "_name": "Apple M5 Max",
+    "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+    "spdisplays_vendor": "sppci_vendor_Apple",
+    "sppci_bus": "spdisplays_builtin",
+    "sppci_cores": "40",
+    "sppci_device_type": "spdisplays_gpu",
+    "sppci_model": "Apple M5 Max"
+  },
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4\nBuildVersion:\t\t25E246",
+  "power": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                1 (sleep prevented by Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         10\n tcpkeepalive         1\n powermode            2\n womp                 1",
+  "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=5439587)\t100%; finishing charge; 20:00 remaining present: true",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+  "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+  "python": "Python 3.9.6",
+  "swap_at_capture": "total = 2048.00M  used = 991.69M  free = 1056.31M  (encrypted)",
+  "source_commit": "1b0b577 + this branch's change",
+  "binary_sha256": "74e15ed0911fff591db054b398bfbe19e6dfb53b19514830678d3604ff664151",
+  "logit_dump_sha256": "86a4900b7b29c325783cc1a2aa384faa2f45a342c66f912a067f54effce0d798",
+  "ni_run_sha256": "e13d379caa9c309ef26b9c24c3a8a02601aa1dc3efd8f099c68901abf00f1014",
+  "source_note": "ab/, output-check/ and trace/tree-8row ran this branch's Release build (the hashes), the arms by NI_V8_TREE_G6 (0 = the zone path). trace/zone-8row-and-profile and trace/block16 ran a build of main's code at #911 (1b0b577's qwen35_v8.cpp and kernels); trace/block16-force8 the dropped zone kernel's build (dropped/zone_g6.patch on 1b0b577), whose 16-row wide path is main's.",
+  "build_commands": [
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build -j --target kapitsa logit_dump ni_run api_test"
+  ]
+}

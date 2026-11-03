@@ -1,0 +1,43 @@
+== 8-row cycle trace, zone_g6
+Tue Nov  3 13:59:01 PST 2026
+prompt 131404 tok in 269526 ms (487.5 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 4440 ms (57.4 tok/s), 62 cycles, 4.113 tok/cycle, 71.51 ms GPU/cycle, 71.61 ms wall/cycle (mode 3), hist 9 5 12 12 7 5 7 5; 7.00 proposals verified per cycle; acceptance by position 0.85 0.91 0.75 0.67 0.71 0.71 0.42
+KFlash: 62 cycles, 8.00 rows per cycle; cycles by rows 8:62; tokens per cycle expected 4.374, got 4.145; rate 0.0581 tok/ms; cost ms by rows 8:74.34; calibration (alpha, beta) by depth (-0.20, 1.03) (0.36, 1.37) (-0.77, 0.56) (-1.17, 1.21) (0.12, 0.59) (-0.45, 0.53) (0.00, 1.00) (0.00, 1.00)
+cycle trace (ms, mean of 61): host encodes the verify 0.288 | GPU idle verify->draft 0.005, draft 4.369, idle draft->verify 0.001, verify 67.275 | verify commit->start 3.983, host wake-up 0.093
+drafting pass: GPU ms/cycle mean 4.369 median 4.426 p10 3.899 p90 4.728 (61 cycles); GPU idle before the verify 0.001 ms/cycle
+== output check
+Tue Nov  3 14:03:38 PST 2026
+prefill 8 rows: next-token NLL 1.0323, top-1 = next token 0.7500 -> <run-root>/oc27/old/prefill
+step   192 rows: next-token NLL 0.4358, top-1 = next token 0.8646 -> <run-root>/oc27/old/step
+verify 192 rows: next-token NLL 0.4358, top-1 = next token 0.8646 -> <run-root>/oc27/old/verify
+8 windows, 14848 prefilled tokens in 17.3 s; 24.7 s in all
+prefill 8 rows: next-token NLL 1.0323, top-1 = next token 0.7500 -> <run-root>/oc27/new/prefill
+step   192 rows: next-token NLL 0.4358, top-1 = next token 0.8646 -> <run-root>/oc27/new/step
+verify 192 rows: next-token NLL 0.4358, top-1 = next token 0.8646 -> <run-root>/oc27/new/verify
+8 windows, 14848 prefilled tokens in 17.7 s; 25.1 s in all
+prefill: 8 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.26 (1b0b577), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}, env {"NI_V8_ATTN_T":"0"}
+  candidate: 0.2.26 (1b0b577), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  every row bitwise identical
+step: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.26 (1b0b577), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}, env {"NI_V8_ATTN_T":"0"}
+  candidate: 0.2.26 (1b0b577), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.26 (1b0b577), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}, env {"NI_V8_ATTN_T":"0"}
+  candidate: 0.2.26 (1b0b577), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.576
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0))
+  KL mean 2.597e-07 median 5.879e-09 p99 4.944e-06 max 6.746e-06; top-2 margin change up to 0.01033
+  next-token NLL change +4.969e-05 nats per record (candidate minus reference)
+  FAIL: p99 KL 4.944e-06 > 3.700e-06
+  FAIL (tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+== validation layer
+Tue Nov  3 14:04:56 PST 2026
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 16/34 units (8192 channels; GPU 9216) from the default for this chip, chunks >= 512 rows; row scales 0 ms, program cached 1 ms + load 115 ms (13 functions, MIL 106 KB); 341.1 MB Metal; ready in 0.1 s
+[kapitsa] compiled the tensor kernels in 963 ms
+[kapitsa] NI_ANE: startup check failed (split of 512 rows failed: a Neural Engine evaluation could not start: the Metal shared event has no eventPort (Metal API validation on?)); GPU only
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+validateComputeFunctionArguments:1267: failed assertion `Functon(qattn_t_g6d2s8): total used threadgroupMemoryLength(49152) must be <= 32768.'
+Tue Nov  3 14:05:06 PST 2026

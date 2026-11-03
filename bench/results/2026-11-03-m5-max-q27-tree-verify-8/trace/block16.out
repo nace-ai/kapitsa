@@ -1,0 +1,5 @@
+prompt 131404 tok in 266449 ms (493.2 tok/s); dflash decode (verify 15 of 7, greedy): 255 tok in 5177 ms (49.3 tok/s), 56 cycles, 4.554 tok/cycle, 92.31 ms GPU/cycle, 92.44 ms wall/cycle (mode 3), hist 7 4 10 9 9 7 4 2 1 0 2 0 0 1 0 0; 15.00 proposals verified per cycle; acceptance by position 0.88 0.92 0.78 0.74 0.65 0.59 0.60 0.67 0.75 1.00 0.33 1.00 1.00 0.00 0.00
+KFlash: 56 cycles, 16.00 rows per cycle; cycles by rows 16:56; 0 at capacity 8; tokens per cycle expected 6.189, got 4.589; rate 0.0503 tok/ms; cost ms by rows 16:95.85 (8 at capacity 8: 1.00); calibration (alpha, beta) by depth (-0.29, 1.30) (-0.09, 0.85) (-0.40, 0.63) (-0.61, 0.65) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+cycle trace (ms, mean of 55): host encodes the verify 0.274 | GPU idle verify->draft 0.006, draft 5.605, idle draft->verify 0.001, verify 86.868 | verify commit->start 5.230, host wake-up 0.098
+drafting pass: GPU ms/cycle mean 5.605 median 5.724 p10 5.186 p90 5.848 (55 cycles); GPU idle before the verify 0.001 ms/cycle
+Tue Nov  3 13:59:00 PST 2026

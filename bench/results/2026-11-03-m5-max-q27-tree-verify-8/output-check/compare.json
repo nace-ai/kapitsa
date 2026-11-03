@@ -1,0 +1,206 @@
+{
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 8,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": "tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (1b0b577)",
+        "model": "qwen3.8-27b-4bit-mtp",
+        "model_dir": "~/models/qwen3.8-27b-4bit-mtp",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 1152,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T22:15:48Z",
+        "env": {
+          "NI_V8_TREE_G6": "0"
+        }
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (1b0b577)",
+        "model": "qwen3.8-27b-4bit-mtp",
+        "model_dir": "~/models/qwen3.8-27b-4bit-mtp",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 1152,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T22:16:14Z",
+        "env": {}
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 0.989583,
+        "max_mean_kl": 4.88e-07,
+        "max_p99_kl": 3.7e-06,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "source": "tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same)"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (1b0b577)",
+        "model": "qwen3.8-27b-4bit-mtp",
+        "model_dir": "~/models/qwen3.8-27b-4bit-mtp",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 1152,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T22:15:48Z",
+        "env": {
+          "NI_V8_TREE_G6": "0"
+        }
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (1b0b577)",
+        "model": "qwen3.8-27b-4bit-mtp",
+        "model_dir": "~/models/qwen3.8-27b-4bit-mtp",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 1152,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T22:16:14Z",
+        "env": {}
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 1.5032837380030452e-07,
+      "kl_median": 4.736932876397889e-09,
+      "kl_p99": 1.716932747399122e-06,
+      "kl_max": 2.454798198612143e-06,
+      "margin_change_max": 0.010385513305664062,
+      "tie_margin": 0.0,
+      "nll_change_mean": -1.3709036926804844e-05,
+      "max_abs_diff": 0.11086288094520569,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 0.989583,
+        "max_mean_kl": 4.88e-07,
+        "max_p99_kl": 3.7e-06,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "source": "tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same)"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (1b0b577)",
+        "model": "qwen3.8-27b-4bit-mtp",
+        "model_dir": "~/models/qwen3.8-27b-4bit-mtp",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 1152,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T22:15:48Z",
+        "env": {
+          "NI_V8_TREE_G6": "0"
+        }
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (1b0b577)",
+        "model": "qwen3.8-27b-4bit-mtp",
+        "model_dir": "~/models/qwen3.8-27b-4bit-mtp",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 1152,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T22:16:14Z",
+        "env": {}
+      }
+    }
+  }
+}
