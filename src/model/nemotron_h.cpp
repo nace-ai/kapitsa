@@ -1156,6 +1156,7 @@ void NemotronH::alloc_buffers() {
   attn_chunk_ = Gpu::get().apple10() ? 64 : 256;
   if (const char* v = getenv("NI_NH_ATTN_CHUNK")) attn_chunk_ = std::max(32, atoi(v));
   if (const char* v = getenv("NI_NH_ATTN_TV")) attn_tv_ = atoi(v) != 0;
+  if (const char* v = getenv("NI_NH_ATTN_TS")) attn_ts_ = atoi(v) != 0;
   if (const char* v = getenv("NI_NH_MERGE_FLUSH")) merge_flush_ = atoi(v) != 0;
   acc_ = g.alloc(64, "nh_accepted");
   tree_ = g.alloc(kf::kWords * 4, "nh_kf_tree");
@@ -3074,15 +3075,20 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
       // heads per simdgroup, 4 tokens per threadgroup (2048 rows after 14336 positions: 12.8 against nh_attn_pf2's
       // 37.1 ms, tools/nh_pf_bench)
       const bool att_t = tg_ && cfg_.hq == 16 * cfg_.hkv && cfg_.hd == 128;
+      // nh_attn_ts_s8: nh_attn_t with the K / V tiles staged for 8 tokens, bit for bit nh_attn_t_s4's output (2048 rows
+      // after 14336 / 131072 / 262144 / 491520 positions: 11.0 / 98.5 / 201 / 384 ms against 12.8 / 184 / 517 / 1254)
+      const bool att_ts = att_t && attn_ts_;
       if (att_t || pf_nsg) {
         // 4 heads per threadgroup (nh_attn_pf2: the same values as nh_attn_prefill); a pass longer than ~25 ms (2048
         // rows after 14336 positions: ~330 ms on the M5 Max's 40 cores by nh_attn_pf2's estimate, nh_attn_t's from
         // its measured 12.8 ms) in pieces of equal work over the row blocks, each in a command buffer of its own
         // (outside a Neural Engine split chunk)
-        const uint32_t bq = att_t ? 4 : 8, nb = (uint32_t(T) + bq - 1) / bq;
+        const uint32_t bq = att_t && !att_ts ? 4 : 8, nb = (uint32_t(T) + bq - 1) / bq;
         const double work = double(T) * (double(pos0) + T / 2.0) * cfg_.hq;  // row x key x head
         const double est_ms = work * (att_t ? 1.25e-8 : 3.3e-7) * 40.0 / std::max(1, Gpu::get().core_count());
-        const int pieces = split ? 1 : std::clamp(int(std::ceil(est_ms / 25.0)), 1, int(nb));
+        // (nh_attn_ts_s8 in pieces of ~200 ms: one of ~25 ms holds too few threadgroups to fill the GPU at long context,
+        // 16 row blocks after 491520 positions, where nh_attn_t_s4 leaned on those pieces' K / V reuse in the caches)
+        const int pieces = split ? 1 : std::clamp(int(std::ceil(est_ms / (att_ts ? 200.0 : 25.0))), 1, int(nb));
         uint32_t b0 = 0;
         for (int pc = 0; pc < pieces; ++pc) {
           // row blocks [b0, b1): the work of rows [0, bq b) grows as bq b (pos0 + bq b / 2)
@@ -3102,13 +3108,17 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
           } ap{uint32_t(T), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
                1.0f / std::sqrt(float(cfg_.hd)), b0};
           if (pc > 0) e.split();
-          e.use(pipe(att_t ? "nh_attn_t_s4" : pf_nsg == 4 ? "nh_attn_pf2_q1_h4_k32" : "nh_attn_pf2_q1_h5_k32"));
+          e.use(pipe(att_ts  ? "nh_attn_ts_s8"
+                     : att_t ? "nh_attn_t_s4"
+                     : pf_nsg == 4 ? "nh_attn_pf2_q1_h4_k32"
+                                   : "nh_attn_pf2_q1_h5_k32"));
           e.buf(0, pq_);
           e.buf(1, s.kc[size_t(i)]);
           e.buf(2, s.vc[size_t(i)]);
           e.buf(3, poh_);
           e.bytes(4, &ap, sizeof ap);
-          if (att_t) e.dispatch(b1 - b0, uint32_t(cfg_.hkv), 1, 128);
+          if (att_ts) e.dispatch(b1 - b0, uint32_t(cfg_.hkv), 1, 256);
+          else if (att_t) e.dispatch(b1 - b0, uint32_t(cfg_.hkv), 1, 128);
           else e.dispatch(b1 - b0, uint32_t(cfg_.hq) / pf_nsg, 1, 32 * pf_nsg);
           b0 = b1;
         }

@@ -1,0 +1,214 @@
+[
+ {
+  "label": "lightning-pf-old",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TS": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: old (NI_NH_ATTN_TS=0, nh_attn_t_s4), 128000,240000, one request each"
+ },
+ {
+  "label": "lightning-pf-new",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: new (nh_attn_ts_s8), 128000,240000, one request each"
+ },
+ {
+  "label": "lightning512-pf-old",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TS": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "480000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: old (NI_NH_ATTN_TS=0, nh_attn_t_s4), 480000, one request each"
+ },
+ {
+  "label": "lightning512-pf-new",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "480000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: new (nh_attn_ts_s8), 480000, one request each"
+ },
+ {
+  "label": "super-pf-old",
+  "extends": "super-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TS": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16513",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: old (NI_NH_ATTN_TS=0, nh_attn_t_s4), 128000, one request each"
+ },
+ {
+  "label": "super-pf-new",
+  "extends": "super-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16513",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: new (nh_attn_ts_s8), 128000, one request each"
+ },
+ {
+  "label": "bolt-pf-old",
+  "extends": "bolt-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TS": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: old (NI_NH_ATTN_TS=0, nh_attn_t_s4), 128000, one request each"
+ },
+ {
+  "label": "bolt-pf-new",
+  "extends": "bolt-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the prefill's staged attention: new (nh_attn_ts_s8), 128000, one request each"
+ }
+]

@@ -1,0 +1,52 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] compiled the tensor kernels in 1 ms
+[kapitsa] Nemotron-H: 88 layers (40 Mamba-2, 8 attention, 40 MoE), 70.46 GB of weights read in 6.9 s (NVFP4 experts, FP8 Mamba, FP8 attention / head, Q8_0 latent, BF16 embedding / router)
+[kapitsa] Nemotron-H: prewarmed 290 pipelines in 4 ms
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine program ready in the background (program cached in 43 ms (12 functions, MIL 44 KB), 0.0 s)
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (153 ms)
+[kapitsa] LiLiCorr drafter: 5 layers, window 8192, 8 KV heads, 1.11 GB (NVFP4 as stored, BF16 matrices as Q8), draft head 131072 of 131072 rows (its own), loaded in 0.5 s
+[kapitsa] KFlash: tree drafting on LiLiCorr (budget cache nemotron-3.5-super-vl-nvfp4-LiLiCorr-Apple_M5_Max)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 74.74 GB allocated (model, buffers, 1 slot's state), budget 110.8 GB (recommended working set 115.4 GB): KV room 36.09 GB = 4406003 tokens (8 KB per token), one conversation up to 524288 of 524288 tokens
+[kapitsa] images: RADIO ViT-H/16 (32 blocks, width 1280, 16-pixel patches, a final LayerNorm; images of 1024 to 5468 patches), 1.68 GB loaded on the first image
+[kapitsa] drafter: LiLiCorr dflash (named with --dflash)
+[kapitsa] engine ready: super-vl, context 524288, 1 slots, LiLiCorr speculative decoding (7-token blocks), KFlash (LiLiCorr), images on
+[kapitsa] SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+[kapitsa] listening on http://127.0.0.1:8260
+Ready: chat at http://127.0.0.1:8260, API at http://127.0.0.1:8260/v1 (model "super-vl"). Ctrl+C stops.
+[kapitsa] NI_ANE: Neural Engine split: in_proj 12992 of 18560 rows, out_proj 2880 of 4096, shared expert on the ANE; row scales 0 ms, program from the background compile in 2 ms (12 functions, MIL 44 KB); 265 MB; ready in 0.0 s
+[kapitsa] prefill: Neural Engine busy 67% of 1124 ms over 1 split chunks (120 evaluations)
+[kapitsa] KFlash: 2 cycles, 8.00 rows per cycle; cycles by rows 8:2; tokens per cycle expected 5.379, got 5.500; rate 0.1009 tok/ms; cost ms by rows 1:25.35 2:29.61 3:33.32 4:37.47 5:41.37 6:50.53 7:49.70 8:55.01; calibration (alpha, beta) by depth (-0.01, 1.11) (0.21, 1.03) (0.24, 1.16) (0.29, 1.05) (0.44, 0.83) (0.56, 1.11) (0.49, 1.10) (0.00, 1.00)
+[kapitsa] chat: prompt 1076 (cached 0) in 1124 ms (+1.3 ms template/tokenize; last chunk: encoded by 1078.1 ms, GPU start +4.5 ms, GPU 41.7 ms, wake +0.1 ms), 8 tokens in 124 ms (56.7 tok/s), length, 3.50 tok/cycle, KFlash (LiLiCorr): 2 cycles
+[kapitsa] prefill: Neural Engine busy 68% of 1118 ms over 1 split chunks (120 evaluations)
+[kapitsa] KFlash: 4 cycles, 7.00 rows per cycle; cycles by rows 4:1 8:3; tokens per cycle expected 5.196, got 5.250; rate 0.1009 tok/ms; cost ms by rows 1:28.06 2:32.31 3:36.03 4:40.99 5:44.08 6:53.23 7:52.40 8:58.15; calibration (alpha, beta) by depth (-0.01, 1.11) (0.21, 1.03) (0.24, 1.16) (0.29, 1.05) (0.44, 0.83) (0.56, 1.11) (0.49, 1.10) (0.00, 1.00)
+[kapitsa] chat: prompt 1081 (cached 0) in 1118 ms (+1.1 ms template/tokenize; last chunk: encoded by 1072.7 ms, GPU start +2.4 ms, GPU 42.8 ms, wake +0.1 ms), 8 tokens in 116 ms (60.6 tok/s), length, 3.50 tok/cycle, KFlash (LiLiCorr): 2 cycles
+[kapitsa] prefill: Neural Engine busy 66% of 1141 ms over 1 split chunks (120 evaluations)
+[kapitsa] KFlash: 6 cycles, 6.67 rows per cycle; cycles by rows 4:1 5:1 7:1 8:3; tokens per cycle expected 5.018, got 5.333; rate 0.1037 tok/ms; cost ms by rows 1:30.06 2:34.32 3:38.03 4:42.99 5:46.19 6:55.23 7:55.29 8:60.15; calibration (alpha, beta) by depth (-0.01, 1.11) (0.21, 1.03) (0.24, 1.16) (0.29, 1.05) (0.44, 0.83) (0.56, 1.11) (0.49, 1.10) (0.00, 1.00)
+[kapitsa] chat: prompt 1078 (cached 0) in 1141 ms (+1.5 ms template/tokenize; last chunk: encoded by 1096.6 ms, GPU start +2.4 ms, GPU 41.9 ms, wake +0.1 ms), 8 tokens in 116 ms (60.5 tok/s), length, 3.50 tok/cycle, KFlash (LiLiCorr): 2 cycles
+[kapitsa] prefill: Neural Engine busy 66% of 1133 ms over 1 split chunks (120 evaluations)
+[kapitsa] KFlash: 8 cycles, 6.62 rows per cycle; cycles by rows 4:1 5:2 7:1 8:4; tokens per cycle expected 4.864, got 5.375; rate 0.1046 tok/ms; cost ms by rows 1:28.93 2:33.18 3:36.90 4:41.86 5:44.58 6:54.10 7:54.16 8:59.05; calibration (alpha, beta) by depth (-0.01, 1.11) (0.21, 1.03) (0.24, 1.16) (0.29, 1.05) (0.44, 0.83) (0.56, 1.11) (0.49, 1.10) (0.00, 1.00)
+[kapitsa] chat: prompt 1082 (cached 0) in 1133 ms (+1.0 ms template/tokenize; last chunk: encoded by 1089.1 ms, GPU start +2.4 ms, GPU 41.6 ms, wake +0.1 ms), 8 tokens in 118 ms (59.3 tok/s), length, 3.50 tok/cycle, KFlash (LiLiCorr): 2 cycles
+[kapitsa] prefill: Neural Engine busy 59% of 2544 ms over 2 split chunks (240 evaluations)
+[kapitsa] KFlash: 25 cycles, 6.20 rows per cycle; cycles by rows 3:2 4:2 5:7 7:6 8:8; tokens per cycle expected 4.506, got 4.440; rate 0.0845 tok/ms; cost ms by rows 1:31.46 2:35.72 3:40.08 4:44.23 5:47.91 6:56.64 7:56.85 8:61.33; calibration (alpha, beta) by depth (-0.01, 1.11) (0.21, 1.03) (0.24, 1.16) (0.29, 1.05) (0.44, 0.83) (0.56, 1.11) (0.49, 1.10) (0.00, 1.00)
+[kapitsa] chat: prompt 2930 (cached 0) in 2544 ms (+5.7 ms template/tokenize; last chunk: encoded by 2500.0 ms, GPU start +2.0 ms, GPU 42.0 ms, wake +0.1 ms), 64 tokens in 939 ms (67.1 tok/s), length, 3.71 tok/cycle, KFlash (LiLiCorr): 17 cycles
+[kapitsa] KFlash: 29 cycles, 6.45 rows per cycle; cycles by rows 3:2 4:2 5:7 7:6 8:12; tokens per cycle expected 4.961, got 4.793; rate 0.0896 tok/ms; cost ms by rows 1:32.83 2:37.09 3:41.44 4:45.59 5:49.28 6:58.00 7:58.22 8:62.93; calibration (alpha, beta) by depth (-0.01, 1.11) (0.21, 1.03) (0.24, 1.16) (0.29, 1.05) (0.44, 0.83) (0.56, 1.11) (0.49, 1.10) (0.00, 1.00)
+[kapitsa] chat: prompt 455 (cached 0) in 544 ms (+3.5 ms template/tokenize; last chunk: encoded by 1.3 ms, GPU start +496.2 ms, GPU 46.6 ms, wake +0.1 ms), 27 tokens in 263 ms (98.8 tok/s), tool_calls, 6.50 tok/cycle, KFlash (LiLiCorr): 4 cycles
+[kapitsa] KFlash: 162 cycles, 5.23 rows per cycle; cycles by rows 1:4 2:11 3:24 4:25 5:38 7:20 8:40; tokens per cycle expected 4.056, got 4.019; rate 0.0947 tok/ms; cost ms by rows 1:27.62 2:31.39 3:35.20 4:38.98 5:42.92 6:51.69 7:50.91 8:55.57; calibration (alpha, beta) by depth (-0.03, 0.99) (0.04, 0.90) (0.47, 1.18) (0.33, 0.77) (0.14, 0.84) (-0.41, 1.61) (0.49, 1.10) (0.00, 1.00)
+[kapitsa] chat: prompt 86 (cached 0) in 263 ms (+5.0 ms template/tokenize; last chunk: encoded by 0.5 ms, GPU start +222.0 ms, GPU 40.0 ms, wake +0.1 ms), 512 tokens in 5781 ms (88.4 tok/s), length, 3.84 tok/cycle, KFlash (LiLiCorr): 133 cycles
+[kapitsa] KFlash: 284 cycles, 5.17 rows per cycle; cycles by rows 1:13 2:24 3:29 4:48 5:64 7:39 8:67; tokens per cycle expected 4.122, got 4.116; rate 0.0993 tok/ms; cost ms by rows 1:28.32 2:32.28 3:36.09 4:39.96 5:43.88 6:52.51 7:51.66 8:56.09; calibration (alpha, beta) by depth (0.05, 1.00) (0.09, 0.89) (0.35, 1.22) (0.08, 1.07) (0.43, 0.83) (-0.28, 1.33) (-0.18, 0.70) (0.00, 1.00)
+[kapitsa] KFlash: budget saved (284 cycles) to ~/.cache/kapitsa/kflash/nemotron-3.5-super-vl-nvfp4-LiLiCorr-Apple_M5_Max.json
+[kapitsa] chat: prompt 86 (cached 0) in 237 ms (+0.9 ms template/tokenize; last chunk: encoded by 0.5 ms, GPU start +196.5 ms, GPU 40.1 ms, wake +0.1 ms), 512 tokens in 5378 ms (95.0 tok/s), length, 4.19 tok/cycle, KFlash (LiLiCorr): 122 cycles
+[kapitsa] KFlash: 415 cycles, 5.12 rows per cycle; cycles by rows 1:19 2:44 3:41 4:68 5:86 7:62 8:95; tokens per cycle expected 4.103, got 4.053; rate 0.0975 tok/ms; cost ms by rows 1:29.94 2:34.12 3:37.81 4:41.60 5:45.58 6:54.16 7:53.03 8:57.87; calibration (alpha, beta) by depth (-0.07, 0.98) (0.17, 0.89) (0.32, 1.10) (0.20, 0.93) (0.44, 0.98) (-0.08, 1.44) (-0.10, 0.75) (0.00, 1.00)
+[kapitsa] chat: prompt 86 (cached 0) in 238 ms (+0.9 ms template/tokenize; last chunk: encoded by 0.7 ms, GPU start +197.2 ms, GPU 40.0 ms, wake +0.1 ms), 512 tokens in 5748 ms (88.9 tok/s), length, 3.90 tok/cycle, KFlash (LiLiCorr): 131 cycles
+[kapitsa] KFlash: 535 cycles, 5.11 rows per cycle; cycles by rows 1:24 2:52 3:57 4:91 5:110 7:87 8:114; tokens per cycle expected 4.101, got 4.103; rate 0.1014 tok/ms; cost ms by rows 1:29.81 2:33.91 3:37.60 4:41.41 5:45.42 6:53.98 7:52.93 8:57.64; calibration (alpha, beta) by depth (0.08, 0.96) (0.17, 0.90) (0.35, 1.10) (0.22, 1.03) (0.36, 1.03) (0.11, 1.23) (-0.25, 0.99) (0.00, 1.00)
+[kapitsa] chat: prompt 86 (cached 0) in 244 ms (+0.9 ms template/tokenize; last chunk: encoded by 0.6 ms, GPU start +201.4 ms, GPU 41.6 ms, wake +0.1 ms), 512 tokens in 5422 ms (94.2 tok/s), length, 4.26 tok/cycle, KFlash (LiLiCorr): 120 cycles
+[kapitsa] KFlash: 656 cycles, 5.13 rows per cycle; cycles by rows 1:26 2:65 3:71 4:114 5:130 7:111 8:139; tokens per cycle expected 4.135, got 4.127; rate 0.0950 tok/ms; cost ms by rows 1:29.61 2:33.68 3:37.53 4:41.33 5:45.10 6:53.78 7:52.78 8:57.33; calibration (alpha, beta) by depth (0.05, 1.00) (0.20, 0.90) (0.32, 1.12) (0.19, 1.09) (0.34, 1.00) (0.12, 1.14) (-0.32, 1.00) (0.00, 1.00)
+[kapitsa] KFlash: budget saved (656 cycles) to ~/.cache/kapitsa/kflash/nemotron-3.5-super-vl-nvfp4-LiLiCorr-Apple_M5_Max.json
+[kapitsa] chat: prompt 86 (cached 0) in 246 ms (+0.9 ms template/tokenize; last chunk: encoded by 0.6 ms, GPU start +203.9 ms, GPU 41.7 ms, wake +0.1 ms), 512 tokens in 5609 ms (91.1 tok/s), length, 4.22 tok/cycle, KFlash (LiLiCorr): 121 cycles
+[kapitsa] prefill: Neural Engine busy 49% of 132098 ms over 65 split chunks (7800 evaluations)
+[kapitsa] KFlash: 787 cycles, 5.12 rows per cycle; cycles by rows 1:30 2:78 3:90 4:128 5:163 7:136 8:162; tokens per cycle expected 4.102, got 4.097; rate 0.0754 tok/ms; cost ms by rows 1:42.74 2:46.77 3:50.34 4:54.54 5:57.98 6:66.99 7:66.57 8:71.66; calibration (alpha, beta) by depth (0.09, 0.99) (0.24, 0.91) (0.23, 1.16) (0.22, 1.15) (0.41, 0.95) (-0.07, 1.26) (-0.27, 0.99) (0.00, 1.00)
+[kapitsa] chat: prompt 133393 (cached 0) in 132098 ms (+35.7 ms template/tokenize; last chunk: encoded by 131543.3 ms, GPU start +506.5 ms, GPU 47.9 ms, wake +0.1 ms), 512 tokens in 7559 ms (67.6 tok/s), length, 3.90 tok/cycle, KFlash (LiLiCorr): 131 cycles
+[kapitsa] KFlash: budget saved (787 cycles) to ~/.cache/kapitsa/kflash/nemotron-3.5-super-vl-nvfp4-LiLiCorr-Apple_M5_Max.json

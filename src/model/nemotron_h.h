@@ -331,6 +331,9 @@ class NemotronH : public Model {
   // M5 (tg_), 16 query heads per KV head of 128 dims: a verify's attention (2+ rows) on the matrix units
   // (nh_attn_t_part, a row's 16 heads per simdgroup and chunk); NI_NH_ATTN_TV=0: nh_attn_partial
   bool attn_tv_ = true;
+  // M5 (tg_), the same heads: the prefill's attention with its K / V tiles staged for 8 tokens (nh_attn_ts_s8);
+  // NI_NH_ATTN_TS=0: nh_attn_t_s4, which reads them per token (the same output to the bit, slower past ~32K)
+  bool attn_ts_ = true;
   const NhCapture* cap_ = nullptr;
   // prefill activations (tmax_ rows; allocated on first use)
   int pf_rows_ = 0;
