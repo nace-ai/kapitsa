@@ -1,0 +1,2 @@
+#!/bin/zsh
+caffeinate -is lockf -k -t 14400 /tmp/kapitsa-gpu.lock python3 <run-root>/../ab_self.py <run-root>/../bin/kapitsa-p1 ~/models/flint-4bit ~/kapitsa-bench-runs/2026-11-02-m5-max-long/bench_corpus_long.txt <run-root>/../run1 '[["plain",{}],["s3w4k",{"NI_FLINT_SELF":"3","NI_FLINT_SELF_MIN":"0"}],["s2w4k",{"NI_FLINT_SELF":"2","NI_FLINT_SELF_MIN":"0"}],["s4w4k",{"NI_FLINT_SELF":"4","NI_FLINT_SELF_MIN":"0"}],["s3w16k",{"NI_FLINT_SELF":"3","NI_FLINT_SELF_MIN":"0","NI_FLINT_SELF_WIN":"16384"}]]'

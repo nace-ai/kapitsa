@@ -1,0 +1,34 @@
+{
+  "captured_at": "2026-11-03T20:45:22.257262+00:00",
+  "hardware": {
+    "hw.model": "Mac17,6",
+    "machdep.cpu.brand_string": "Apple M5 Max",
+    "hw.memsize": "137438953472",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18"
+  },
+  "gpu": {
+    "_name": "Apple M5 Max",
+    "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+    "spdisplays_vendor": "sppci_vendor_Apple",
+    "sppci_bus": "spdisplays_builtin",
+    "sppci_cores": "40",
+    "sppci_device_type": "spdisplays_gpu",
+    "sppci_model": "Apple M5 Max"
+  },
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4\nBuildVersion:\t\t25E246",
+  "power": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                1 (sleep prevented by Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         10\n tcpkeepalive         1\n powermode            2\n womp                 1",
+  "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=5439587)\t100%; charged; 0:00 remaining present: true",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+  "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+  "python": "Python 3.9.6",
+  "swap_at_capture": "total = 2048.00M  used = 991.69M  free = 1056.31M  (encrypted)",
+  "source_commit": "cd20cf5 + this branch's change",
+  "binary_sha256": "5b5f9475d34229b5f17dfb39b5c71d7a32100c1f0c09b93d61938bd04233cac2",
+  "logit_dump_sha256": "9ec9c950b7ad8994b1eb7bc8e8aa51a5f0b5ff3eb1a972c99b5cf9e02defe7a5",
+  "source_note": "ab/ and output-check/ ran this branch's Release build (binary_sha256, logit_dump_sha256): the A/B's arms by NI_FLINT_SELF (0 = off), the output check with NI_FLINT_VERIFY_ROWS. explore/ ran earlier builds of the branch: run1 with the cycle as one command buffer and the self-drafts off by default (arms by NI_FLINT_SELF / NI_FLINT_SELF_MIN=0), run2 committing each draft as it is encoded (as the final build), the same arms.",
+  "build_commands": [
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build -j --target kapitsa logit_dump api_test bench_test"
+  ]
+}

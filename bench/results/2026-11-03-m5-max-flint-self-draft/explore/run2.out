@@ -1,0 +1,25 @@
+arm 0 plain 133K-t0: prompt 122621 (cached 0): 512 tok in 5534 ms, 92.3 tok/s, - t/c, length
+arm 0 plain 133K-t1: prompt 122621 (cached 122620): 512 tok in 5604 ms, 91.2 tok/s, - t/c, length
+arm 0 plain 186K-t0: prompt 187317 (cached 0): 512 tok in 7439 ms, 68.7 tok/s, - t/c, length
+arm 0 plain 186K-t1: prompt 187317 (cached 187316): 512 tok in 7489 ms, 68.2 tok/s, - t/c, length
+arm 0 plain 252K-t0: prompt 235892 (cached 235891): 512 tok in 8661 ms, 59.0 tok/s, - t/c, length
+arm 0 plain 252K-t1: prompt 235892 (cached 235891): 512 tok in 8720 ms, 58.6 tok/s, - t/c, length
+arm 1 s2 133K-t0: prompt 122621 (cached 0): 512 tok in 5772 ms, 88.5 tok/s, 2.38 t/c, length
+arm 1 s2 133K-t1: prompt 122621 (cached 122620): 512 tok in 6043 ms, 84.6 tok/s, 2.30 t/c, length
+arm 1 s2 186K-t0: prompt 187317 (cached 0): 512 tok in 6749 ms, 75.7 tok/s, 2.30 t/c, length
+arm 1 s2 186K-t1: prompt 187317 (cached 187316): 512 tok in 6924 ms, 73.8 tok/s, 2.28 t/c, length
+arm 1 s2 252K-t0: prompt 235892 (cached 235891): 512 tok in 6782 ms, 75.4 tok/s, 2.43 t/c, length
+arm 1 s2 252K-t1: prompt 235892 (cached 235891): 512 tok in 8150 ms, 62.7 tok/s, 2.07 t/c, length
+arm 2 s3 133K-t0: prompt 122621 (cached 0): 512 tok in 6518 ms, 78.4 tok/s, 2.66 t/c, length
+arm 2 s3 133K-t1: prompt 122621 (cached 122620): 512 tok in 6493 ms, 78.7 tok/s, 2.69 t/c, length
+arm 2 s3 186K-t0: prompt 187317 (cached 0): 512 tok in 7246 ms, 70.5 tok/s, 2.63 t/c, length
+arm 2 s3 186K-t1: prompt 187317 (cached 187316): 512 tok in 7380 ms, 69.2 tok/s, 2.62 t/c, length
+arm 2 s3 252K-t0: prompt 235892 (cached 235891): 512 tok in 6783 ms, 75.3 tok/s, 2.95 t/c, length
+arm 2 s3 252K-t1: prompt 235892 (cached 235891): 512 tok in 8585 ms, 59.5 tok/s, 2.38 t/c, length
+arm 3 s2ng 133K-t0: prompt 122621 (cached 0): 512 tok in 6367 ms, 80.3 tok/s, 2.26 t/c, length
+arm 3 s2ng 133K-t1: prompt 122621 (cached 122620): 512 tok in 6730 ms, 75.9 tok/s, 2.15 t/c, length
+arm 3 s2ng 186K-t0: prompt 187317 (cached 0): 512 tok in 7122 ms, 71.7 tok/s, 2.22 t/c, length
+arm 3 s2ng 186K-t1: prompt 187317 (cached 187316): 512 tok in 7277 ms, 70.2 tok/s, 2.21 t/c, length
+arm 3 s2ng 252K-t0: prompt 235892 (cached 235891): 512 tok in 7649 ms, 66.8 tok/s, 2.27 t/c, length
+arm 3 s2ng 252K-t1: prompt 235892 (cached 235891): 512 tok in 8609 ms, 59.4 tok/s, 2.05 t/c, length
+texts equal to arm 0's: {'133K-t0': [True, False, False, False], '133K-t1': [True, False, False, False], '186K-t0': [True, False, False, False], '186K-t1': [True, False, False, False], '252K-t0': [True, False, False, False], '252K-t1': [True, False, False, False]}

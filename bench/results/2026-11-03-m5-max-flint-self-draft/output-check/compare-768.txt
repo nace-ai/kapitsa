@@ -1,0 +1,51 @@
+== verify rows 3
+Tue Nov  3 12:43:24 PST 2026
+prefill 8 rows: next-token NLL 1.1594, top-1 = next token 0.7500 -> <run-root>/../oc/dump768-v3/prefill
+step   768 rows: next-token NLL 1.1578, top-1 = next token 0.7643 -> <run-root>/../oc/dump768-v3/step
+verify 768 rows: next-token NLL 1.1604, top-1 = next token 0.7630 -> <run-root>/../oc/dump768-v3/verify
+8 windows, 14848 prefilled tokens in 2.5 s; 8.8 s in all
+step: 768 records (flint-4bit)
+  reference: 0.2.26 (cd20cf5), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_FLINT_VERIFY_ROWS":"3"}
+  candidate: 0.2.26 (cd20cf5), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_FLINT_VERIFY_ROWS":"3"}
+  bitwise identical rows 0 of 768; max |logit diff| 9.308
+  top-1 agreement 0.9805 (15 flips, 15 of them near-ties (reference margin under 6.55))
+  KL mean 7.538e-03 median 1.940e-05 p99 1.154e-01 max 1.145e+00; top-2 margin change up to 4.77
+  next-token NLL change +2.576e-03 nats per record (candidate minus reference)
+    flip at sequence 3 prefix 2098: top-1 68 -> 349, reference margin 1.092
+    flip at sequence 6 prefix 955: top-1 7228 -> 836, reference margin 0.3328
+    flip at sequence 3 prefix 2095: top-1 10159 -> 27907, reference margin 0.3088
+    flip at sequence 6 prefix 902: top-1 54449 -> 63, reference margin 0.2954
+    flip at sequence 3 prefix 2096: top-1 417 -> 17, reference margin 0.2624
+    flip at sequence 3 prefix 2112: top-1 1852 -> 28848, reference margin 0.2548
+    flip at sequence 7 prefix 557: top-1 12170 -> 836, reference margin 0.1634
+    flip at sequence 6 prefix 970: top-1 676 -> 269, reference margin 0.1311
+    flip at sequence 7 prefix 514: top-1 7045 -> 8872, reference margin 0.1158
+    flip at sequence 0 prefix 3259: top-1 17360 -> 51047, reference margin 0.07385
+  FAIL: top-1 agreement 0.9805 < 0.9844
+  FAIL (tools/logit_floors/flint-4bit.m5.json)
+== verify rows 8
+Tue Nov  3 12:44:04 PST 2026
+prefill 8 rows: next-token NLL 1.1594, top-1 = next token 0.7500 -> <run-root>/../oc/dump768-v8/prefill
+step   768 rows: next-token NLL 1.1578, top-1 = next token 0.7643 -> <run-root>/../oc/dump768-v8/step
+verify 768 rows: next-token NLL 1.1525, top-1 = next token 0.7643 -> <run-root>/../oc/dump768-v8/verify
+8 windows, 14848 prefilled tokens in 3.0 s; 9.1 s in all
+step: 768 records (flint-4bit)
+  reference: 0.2.26 (cd20cf5), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_FLINT_VERIFY_ROWS":"8"}
+  candidate: 0.2.26 (cd20cf5), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_FLINT_VERIFY_ROWS":"8"}
+  bitwise identical rows 0 of 768; max |logit diff| 16.29
+  top-1 agreement 0.9805 (15 flips, 15 of them near-ties (reference margin under 6.55))
+  KL mean 7.323e-03 median 1.827e-05 p99 1.272e-01 max 1.191e+00; top-2 margin change up to 4.898
+  next-token NLL change -5.267e-03 nats per record (candidate minus reference)
+    flip at sequence 3 prefix 2098: top-1 68 -> 349, reference margin 1.092
+    flip at sequence 6 prefix 955: top-1 7228 -> 198, reference margin 0.4052
+    flip at sequence 3 prefix 2095: top-1 10159 -> 27907, reference margin 0.3088
+    flip at sequence 3 prefix 2096: top-1 417 -> 17, reference margin 0.2624
+    flip at sequence 7 prefix 557: top-1 12170 -> 836, reference margin 0.1634
+    flip at sequence 1 prefix 2850: top-1 1696 -> 1002, reference margin 0.1496
+    flip at sequence 6 prefix 970: top-1 676 -> 269, reference margin 0.1311
+    flip at sequence 7 prefix 514: top-1 7045 -> 8872, reference margin 0.1158
+    flip at sequence 0 prefix 3259: top-1 17360 -> 51047, reference margin 0.07385
+    flip at sequence 4 prefix 1685: top-1 327 -> 858, reference margin 0.05317
+  FAIL: top-1 agreement 0.9805 < 0.9844
+  FAIL (tools/logit_floors/flint-4bit.m5.json)
+Tue Nov  3 12:44:45 PST 2026

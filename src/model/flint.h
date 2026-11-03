@@ -117,6 +117,14 @@ class Flint : public Model {
   // command buffer has completed
   void encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp);
   int accepted() const { return acc_.as<int>()[0]; }
+  // Self-speculation at long contexts (MagicDec, arXiv 2408.11049: the model itself as its draft, reading a short
+  // window of its KV): the step at pos with its full-attention layers reading only the last `window` positions (the
+  // sliding-window layers as always), its token sampled with sp at step pos, the draw the verify's row at pos makes,
+  // into tokens[pos + 1]. The keys it writes at pos are the draft's; the verify writes them again before a row reads them.
+  void encode_draft(Encoder& e, Seq& s, int pos, const SamplingParams& sp, int window);
+  // A pass of 2-8 rows has its attention on the matrix units (flint_attn_t_rows: an Apple10 GPU on macOS 26), so a
+  // verify at a long context costs about a decode step: where the engine drafts by default
+  bool tensor_verify() const;
 
   // ---- tools ----
   float* logits() { return logits_.as<float>(); }
@@ -188,6 +196,7 @@ class Flint : public Model {
   size_t mem_budget_ = 0;
   bool qmt_ = false;             // dense 4-bit prefill GEMMs on Metal 4's tensor_ops (M5)
   bool split_ = false;           // the decode kernels' merges in a dispatch of their own (split_merges)
+  int draft_window_ = 0;         // while encode_draft encodes: its full-attention layers' window (0: every position)
 
   // decode / verify activations (kMaxRows rows)
   Buffer x_, xn_, qkv_, q_, ao_, mh_, part_o_, part_ml_, rlog_, eidx_, ewts_, eh_;
