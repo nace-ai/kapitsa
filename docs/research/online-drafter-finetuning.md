@@ -11,6 +11,7 @@ logged Kapitsa/Splash run or from a replay of such logs (source given). **Paper-
   cost table (`src/model/kflash_budget.cpp:153`, `:311`), saved per model and chip, not per user.
 - "Weaver" is, as far as I can find, the tree builder of "Trees from Marginals" on top of DFlash ([arXiv 2607.06763](https://arxiv.org/abs/2607.06763), Oda, Mathieu, Knyazhitskiy and Chakhvadze; the paper has four authors). Mirai Labs publishes the checkpoint (`trymirai/weaver`) and the M5 port in `uzu`; its blog numbers are a vendor claim (§3 row 30).
   It is trained offline. It is a competitor and a design idea (§2.1), not an online learner. Questions for Alish are in §2.1.
+  Measured 3 Nov 2026 in `uzu` on the 27B (M5 Pro, 108 legs): about 2.0x over no speculator and about 15% over the plain chain, no clear gain over the chain in Kazakh (§5.7).
 - 87 methods surveyed (§3). Every published method that updates drafter weights from live traffic ran on CUDA servers.
   No source reports online drafter training on a Mac or phone.
 - The room for a better **policy** on logged cycles is small and already mostly banked: a depth/row policy is worth ≤ +1.2 %
@@ -254,7 +255,39 @@ between-reply gaps last is logged nowhere.
 5. **Nobody has measured decode speed while training shares an Apple GPU** (Table 2). Kapitsa can: frozen ask F4.
 6. **Weaver's Apple M5 port is closed and vendor-benchmarked.** Mirai's `uzu` blog numbers (about 2x over MTPLX, over 3x over llama.cpp; read 2 Nov 2026, vendor claim, not reproduced)
    are a blog claim and the paper's kernels are CUDA. KSX/KFlash trees are the open Metal counterpart; a head-to-head needs
-   Qwen3.6-27B in both engines (not run).
+   Qwen3.6-27B in both engines (not run). What was measured, inside `uzu` only, is Weaver against that engine's own plain DFlash
+   chain on the same weights (§5.7).
+
+### 5.7 Weaver against its own chain on the M5 Pro (measured 3 Nov 2026, 108 legs)
+
+Mirai `uzu` 0.6.15 on an Apple M5 Pro (48 GB), `trymirai/Qwen3.6-27B-M`, greedy, 256 output tokens, one engine and one set of
+weights. Three arms: Weaver tree builder, the same DFlash drafter with plain argmax chain construction (Weaver switched off in
+`shapes.json`; both arms use tree budget and depth 16 on this chip), and no speculator. Four languages (ru, kk, zh, en) x 3 prompts
+x 3 repetitions x 3 arms = 108 legs, arm order rotated per repetition, all on AC power. All 108 are valid (rc 0, 256 output tokens,
+no void). The figure is `generate_tokens_per_second` (decode only), the mean of the three repetitions per prompt, then the mean of
+the per-prompt ratios. The interval is a bootstrap (4,000 resamples) over prompts: 12 for "all", 3 per language, so the per-language
+intervals are wide.
+
+| Class | Weaver tok/s | Argmax chain | No speculator | Weaver / no speculator | Weaver / chain |
+|---|---|---|---|---|---|
+| ru | 35.1 | 28.8 | 17.7 | 1.99x [1.74, 2.32] | 1.21x [1.15, 1.27] |
+| kk | 21.4 | 20.8 | 17.7 | 1.21x [1.19, 1.24] | 1.03x [0.99, 1.06] |
+| zh | 36.5 | 32.2 | 17.8 | 2.05x [1.86, 2.27] | 1.13x [1.06, 1.19] |
+| en | 50.6 | 41.5 | 17.6 | 2.88x [2.62, 3.10] | 1.22x [1.20, 1.23] |
+| **all (12 prompts)** | 35.9 | 30.9 | 17.7 | **2.03x [1.68, 2.38]** | **1.15x [1.09, 1.19]** |
+
+- Weaver is about 2x faster than no speculator and about 15% faster than the plain chain overall. The chain gain is positive in ru, zh
+  and en. **In Kazakh there is no clear gain over the chain**: 1.03x, interval 0.99x to 1.06x, which includes 1.0. Kazakh also
+  gains least over no speculator (1.21x).
+- **Scope.** The model files were read from the external SSD for all 108 legs. Loading is outside every reported number
+  (time to first token equals input tokens divided by the prompt rate) and the 16 GB of weights stay resident during decode (decode
+  runs about 170 times faster than reading 16 GB per token over USB4 would allow). The figures are decode speed only. There is no
+  cold-start, time-to-first-token or disk-streaming claim.
+- **Limits.** `uzu`, not Kapitsa: this shows what Weaver does for the 27B on this chip, not what it would do inside Kapitsa's DFlash2
+  loop, whose selector already builds trees from 16x16 transitions. Weaver is offline-trained for Qwen3.6-27B only, so it does not
+  transfer to the 35B-A3B. One chip, one engine version, 256 tokens, three prompts per language. A first run of 71 legs on battery
+  power is void and not used; it agreed (1.99x, 1.14x).
+- Rerun: the legs are `mirai bench <arm dir> <task>.json` for 12 prompts; the scripts and raw JSON stay with the task outside the repo.
 
 ## 6. Top 3, ranked
 
@@ -400,7 +433,7 @@ GPU trains (gap 5).
 ### Not in the top 3
 
 - Offline-trained EAGLE-3 / MTP heads: the F72 estimate is -6 to +32 % (central +10-15 %), needs a training budget, and has no online part.
-- Weaver itself: an offline per-target adapter, so competitor and idea source (§5.6), not an online learner.
+- Weaver itself: an offline per-target adapter, so competitor and idea source (§5.6), not an online learner. Measured in `uzu` against its own chain: about 15% faster than the chain and about 2x over no speculator on the 27B, no clear gain over the chain in Kazakh (§5.7).
 - KfBudget refits, depth gates, row bandits: shipped or replay-rejected (≤ +1.2 %). On the 16 recorded sessions, leave-one-session-out
   log-loss is 0.4297 for a frozen calibration fitted on the other sessions, 0.4366 for a warm-started online refit, 0.4463 for the refit from
   scratch, and 0.4623 with an extra online drift term (`online_drafter_sim.py calib`). More online fitting does not beat a good cache.
@@ -478,5 +511,6 @@ The rowlogs are Flash-Next on Splash, in other worktrees (`kapitsa-ksx`, `kapits
 - The survey is from search results and fetched abstracts on 2 Nov 2026. Four numeric tokens in the compact table are not verbatim in
   the merged source table (rows 48, 61, 78, 79: rounded or recomputed from a longer cell). Many licences were not checked (GitHub API rate
   limit); where sources disagree the table says "conflict".
+- The Weaver A/B (§5.7) ran in `uzu` on the 27B, not in Kapitsa and not on the 35B-A3B; no Kapitsa-vs-Weaver head-to-head was run.
 - Snowflake's patent on suffix-plus-model routing needs a legal read before anyone copies its router.
 - The raw research notes (about 270 kB: the four family notes, the code map, the measured baseline) stay with the task outside the repo.
