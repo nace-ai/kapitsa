@@ -212,7 +212,11 @@ value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/
 - The description says what changed, the measured before/after with a `Runs:` line (Mac, macOS, model), and what was
   checked how. A separate "Not verified" section lists what was not run, above all anything needing a GPU.
 - Benchmark submissions carry the `benchmark` label, the results table, `Kapitsa version (commit)`, `Flags:`, and say
-  `kapitsa bench` produced them. Results come only as pull requests from a fork, never as issues.
+  `kapitsa bench` produced them. Results come only as pull requests from a fork, never as issues. A result file and the
+  regenerated `bench/community/RESULTS.md` (`python3 tools/community_table.py`) ride in the same pull request: the
+  `community-table` check reads the merge commit, so a row without its rewrite is red and, once merged, leaves main
+  stale until someone regenerates it. Bringing a bench pull request up to date re-runs the command before the merge.
+
 - PRs of more than ~1000 changed lines (generated data and vendored code excluded) fail the `PR size` check. Split them.
   Only a reviewer overrides it (`size/override` label and a `Size override: <why>` line in the description); an author
   does not label their own PR through it.
