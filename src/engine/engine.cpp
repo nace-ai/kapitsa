@@ -3618,6 +3618,16 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     bool go = handle(s.tokens()[n]);
     // the KV room a cycle wants: the next anchor (at most P + 8) and its verify's rows (KFlash trees: up to 32; with
     // less room the drafting pass verifies fewer, DFlash2::tree_cap_)
+    // A drafter loaded with a 16-row block (one slot's default) drafts 8-row blocks from a prompt of
+    // NI_DFLASH_NARROW_MIN tokens (default 16384; DFlash2::set_block, NI_DFLASH_NARROW=0: 16 rows always): at long
+    // contexts the history attention, which grows with a verify's rows, outweighs the deeper lattice. ni_run on the 27B
+    // (M5 Max, the 8-row verify on its tree path): 84.0 / 63.5 / 58.4 / 49.3 tok/s with 16 rows at 8K / 32K / 64K / 131K
+    // tokens against 85.0 / 69.5 / 64.9 / 62.2 with 8, where at ~1K the 16-row block keeps 90.6 against 69.3
+    static const int narrow_min = [] {
+      const char* v = getenv("NI_DFLASH_NARROW_MIN");
+      return v && *v ? atoi(v) : 16384;
+    }();
+    if (dfl_->narrow_ok()) dfl_->set_block(n >= narrow_min ? DFlash2::kB : 16);
     const int Bk = dfl_->block();  // the drafting block (8, or 16 rows: NI_DFLASH_BLOCK, or one slot's default)
     const int vrows = dfl_->tree() ? std::max(Bk, dfl_->tree_rows()) : Bk;
     for (;;) {

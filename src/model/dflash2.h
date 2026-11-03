@@ -88,6 +88,13 @@ class DFlash2 {
   // alloc_buffers() and the reduced head size the rows from it; per drafter, so a process that switches models
   // (ModelManager::switch_to) picks its block again.
   int block() const { return block_; }
+  // A drafter loaded with a 16-row block drafts 8-row blocks too, request by request (set_block): its buffers are the
+  // 16-row block's, and the 8-row block keeps the budget, rows and depth a drafter loaded with NI_DFLASH_BLOCK=8 has
+  // (one 8-row tile, the 8-row budget file). narrow_ok(): this drafter can (a 16-row block with trees; NI_DFLASH_NARROW=0
+  // keeps it at 16 rows).
+  bool narrow_ok() const { return kf_budget_alt_ != nullptr; }
+  // the block of the cycles to come (8, or the block it loaded with), between requests: nothing of a cycle in flight
+  void set_block(int rows);
   static constexpr uint32_t kGpuChunk = 256;  // context positions per attention split, GPU-driven passes
   // default reduced draft head rows: from a ranked id list (NI_DFLASH_HEAD_IDS), and in id order (the default)
   static constexpr int kHeadRows = 65536, kHeadRowsIdOrder = 98304;
@@ -411,6 +418,9 @@ class DFlash2 {
   static std::string r_list(uint32_t allowed);
   Buffer tree_buf_, kf_clq_, kf_tok_, kf_next_, kf_live_;
   std::unique_ptr<KfBudget> kf_budget_;
+  // the other block's state while set_block holds one (narrow_ok): budget, rows of the widest verify, depth, rows
+  std::unique_ptr<KfBudget> kf_budget_alt_;
+  int tree_rows_alt_ = kB, vdepth_alt_ = kB - 1, block_alt_ = kB;
   std::unique_ptr<KfBatch> kf_batch_;  // batched decode's rows (the same key + "-batch")
   // T > 0: the walk samples its chain at T_q = walk_tf_ * T (NI_DFLASH_QT; 0 = argmax chain with one-hot q)
   float walk_tf_ = 1.0f;
