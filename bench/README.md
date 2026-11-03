@@ -14,10 +14,18 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-1022 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-02 down to 2026-10-16, newest first.
+1030 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-02 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 7b8c26d | 316.6 | – | – | – | – | – | contention | [clover-v8t-new-20261102-204155](results/2026-11-02-m5-max-qwen-verify-t/results/clover-v8t-new-20261102-204155.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 7b8c26d | 279.7 | – | – | – | – | – | contention | [clover-v8t-old-20261102-203856](results/2026-11-02-m5-max-qwen-verify-t/results/clover-v8t-old-20261102-203856.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 7b8c26d | 322.9 | – | – | – | – | – | contention | [clover-v8t-new-20261102-203602](results/2026-11-02-m5-max-qwen-verify-t/results/clover-v8t-new-20261102-203602.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 7b8c26d | 300.4 | – | – | – | – | – | contention | [clover-v8t-old-20261102-203257](results/2026-11-02-m5-max-qwen-verify-t/results/clover-v8t-old-20261102-203257.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 7b8c26d | 331.8 | – | – | – | – | – | contention | [q35-v8t-new-20261102-202605](results/2026-11-02-m5-max-qwen-verify-t/results/q35-v8t-new-20261102-202605.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 7b8c26d | 332.9 | – | – | – | – | – | contention | [q35-v8t-old-20261102-201937](results/2026-11-02-m5-max-qwen-verify-t/results/q35-v8t-old-20261102-201937.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 7b8c26d | 368.0 | – | – | – | – | – | contention | [q35-v8t-new-20261102-201313](results/2026-11-02-m5-max-qwen-verify-t/results/q35-v8t-new-20261102-201313.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 7b8c26d | 325.6 | – | – | – | – | – | contention | [q35-v8t-old-20261102-200650](results/2026-11-02-m5-max-qwen-verify-t/results/q35-v8t-old-20261102-200650.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron 3.5 Bolt-74B-A9B | 2-bit experts | Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill) | a9352a2+dirty | 153.8 | – | – | – | – | – | contention | [bolt-pf-new-20261102-200233](results/2026-11-02-m5-max-nh-prefill-ts/results/bolt-pf-new-20261102-200233.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron 3.5 Bolt-74B-A9B | 2-bit experts | Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill) | a9352a2+dirty | 148.4 | – | – | – | – | – | contention | [bolt-pf-old-20261102-195753](results/2026-11-02-m5-max-nh-prefill-ts/results/bolt-pf-old-20261102-195753.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron 3.5 Bolt-74B-A9B | 2-bit experts | Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill) | a9352a2+dirty | 154.5 | – | – | – | – | – | contention | [bolt-pf-new-20261102-195340](results/2026-11-02-m5-max-nh-prefill-ts/results/bolt-pf-new-20261102-195340.json) |

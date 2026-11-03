@@ -694,14 +694,25 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   kp::AttnRows rp{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos), chunk, uint32_t(cap),
                   1.0f / std::sqrt(float(cfg_.head_dim)), nch + extra};
   const uint32_t Ru = uint32_t(R);
+  // NI_V8_ATTN_T (default on, 0 = off): the zone's MMA keys on the M5's matrix units (attn8t_partial_zone_g8,
+  // tensor/v8attn_t.metal: the same keys, masks and partials as attn8m_partial_zone, the products on matmul2d) for
+  // 8 query heads per KV head with fp16 KV rows. One layer of the 35B's heads, 8 rows: 0.48 / 0.86 / 1.61 ms after
+  // 32K / 128K / 256K positions against attn8m's 1.71 / 1.68 / 3.99
+  static const bool attn_t = env_int("NI_V8_ATTN_T", 1) != 0;
+  const bool zt = zone && attn_t && G == 8 && tw_supported() && !kv_i8();
   if (mma) {
-    e.use(pipe8(zone ? "attn8m_partial_zone" : block ? "attn8m_partial_hist" : tree ? "attn8m_partial_tree" : "attn8m_partial"));
+    e.use(pipe8(zt     ? "attn8t_partial_zone_g8"
+                : zone ? "attn8m_partial_zone"
+                : block ? "attn8m_partial_hist"
+                : tree  ? "attn8m_partial_tree"
+                        : "attn8m_partial"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, part_o_); e.buf(4, part_ml_);
     e.val(5, rp);
     e.val(6, Ru);
     if (zone || (tree && !block)) e.buf(7, *v8_tree_);
     // a wide tree verify: the chunks x the live row tiles along x (a chunk's tiles side by side)
     if (v8w_R_) v8_disp(e, nch, uint32_t(cfg_.hkv), 1, kV8wX, 64 * G);
+    else if (zt) e.dispatch(nch, cfg_.hkv, 1, 64 * ((8 * G + 15) / 16));  // (a pair of simdgroups a 16-row tile)
     else e.dispatch(nch, cfg_.hkv, 1, 64 * G);
     if (block || zone) {
       e.use(pipe8(fused ? "attn8_tree_zone_reduce" : zone ? "attn8_tree_zone" : "attn8_tree_block"));

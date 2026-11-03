@@ -1,0 +1,22 @@
+prefill: 8 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.26 (b6345da), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.26 (b6345da), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+batch: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.26 (b6345da), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.26 (b6345da), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+step: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.26 (b6345da), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.26 (b6345da), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.26 (b6345da), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.26 (b6345da), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 2.981
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0))
+  KL mean 7.705e-05 median 5.750e-07 p99 1.040e-03 max 5.256e-03; top-2 margin change up to 0.6179
+  next-token NLL change +1.092e-03 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
