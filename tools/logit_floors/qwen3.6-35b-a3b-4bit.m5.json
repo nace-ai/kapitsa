@@ -1,0 +1,57 @@
+{
+  "model": "qwen3.6-35b-a3b-4bit",
+  "measured": {
+    "build": "0.2.26 (b6345da)",
+    "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+    "macos": "26.4",
+    "date": "2026-11-03T03:30:21Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {},
+    "command": "tools/logit_floor.py ~/models/qwen3.6-35b-a3b-4bit"
+  },
+  "reference_path": "verify",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "batch": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "batch": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.00016826652716738695, "kl_median": 6.038111633601548e-07, "kl_p99": 0.005128015058098558, "kl_max": 0.01275739958037244, "margin_change_max": 0.6885166168212891, "tie_margin": 0.0, "nll_change_mean": 0.0008744311023826112, "max_abs_diff": 2.8116273880004883, "what": "alone (the single-stream verify) against 4 requests decoding together (encode_verify_multi)", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false},
+    "step": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 6.667474793961452e-05, "kl_median": 3.9004898621975487e-07, "kl_p99": 0.0012370414771757723, "kl_max": 0.005245319555342712, "margin_change_max": 1.0914993286132812, "tie_margin": 0.0, "nll_change_mean": 0.0010602800777156178, "max_abs_diff": 3.8316575288772583, "what": "plain decoding (--spec 0) against the verify (8 rows; Flash-Next: its MTP cycle's 3)", "in_floor": true, "decode": true},
+    "chain": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.00014490314970898367, "kl_median": 5.176820002102023e-07, "kl_p99": 0.001567807659336922, "kl_max": 0.01277933412064651, "margin_change_max": 0.6891822814941406, "tie_margin": 0.0, "nll_change_mean": 0.0012692871073942864, "max_abs_diff": 2.6945858001708984, "what": "DFlash2's chain verify (NI_KFLASH=0) against KFlash's tree verify", "in_floor": true, "decode": true}
+  },
+  "floor": {
+    "flips": 0,
+    "kl_mean": 0.00016826652716738695,
+    "kl_p99": 0.005128015058098558,
+    "kl_max": 0.01277933412064651,
+    "margin_change_max": 1.0914993286132812,
+    "tie_margin": 0.0,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "batch", "kl_p99": "batch", "kl_max": "chain", "margin_change_max": "step"}
+  },
+  "gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.000337,
+    "max_p99_kl": 0.0103,
+    "near_tie": 0.0,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 0,
+    "kl_mean": 0.00016826652716738695,
+    "kl_p99": 0.005128015058098558,
+    "kl_max": 0.01277933412064651,
+    "margin_change_max": 1.0914993286132812,
+    "tie_margin": 0.0,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "batch", "kl_p99": "batch", "kl_max": "chain", "margin_change_max": "step"}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.000337,
+    "max_p99_kl": 0.0103,
+    "near_tie": 0.0,
+    "max_far_flips": 0
+  }
+}
