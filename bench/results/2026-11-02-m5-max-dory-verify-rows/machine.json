@@ -1,0 +1,34 @@
+{
+  "captured_at": "2026-11-02T23:44:06.200795+00:00",
+  "hardware": {
+    "hw.model": "Mac17,6",
+    "machdep.cpu.brand_string": "Apple M5 Max",
+    "hw.memsize": "137438953472",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18"
+  },
+  "gpu": {
+    "_name": "Apple M5 Max",
+    "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+    "spdisplays_vendor": "sppci_vendor_Apple",
+    "sppci_bus": "spdisplays_builtin",
+    "sppci_cores": "40",
+    "sppci_device_type": "spdisplays_gpu",
+    "sppci_model": "Apple M5 Max"
+  },
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4\nBuildVersion:\t\t25E246",
+  "power": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                1 (sleep prevented by Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         10\n tcpkeepalive         1\n powermode            2\n womp                 1",
+  "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=5439587)\t41%; charging; 1:11 remaining present: true",
+  "charger": "Apple 96W USB-C Power Adapter until 14:53:14, then an Apple 140W USB-C Power Adapter (pmset -g ac). On the 96 W one the battery fell slowly under load in High Power mode (11% at 12:46 to 7% at 13:08, then level); with the 140 W one it charged (25% at 15:30).",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+  "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+  "python": "Python 3.9.6",
+  "swap_at_capture": "total = 2048.00M  used = 974.00M  free = 1074.00M  (encrypted)",
+  "source_commit": "c0a2b25 + this branch's change (dory_attn_partial_rows)",
+  "binary_sha256": "520a21b686d6fe5b113217570f6ca9ce28bcd7d263eb67d735e588e6787396ca",
+  "source_note": "Every run and check ran this branch's Release build (binary_sha256).",
+  "build_commands": [
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build -j --target kapitsa"
+  ]
+}
