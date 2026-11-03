@@ -32,8 +32,8 @@ struct TopkParams {
 
   uint taken = 0;
   float sel_sum = 0.0f;
-  float my_w[16];
-  uint my_i[16];
+  float my_w = 0.0f;
+  uint my_i = 0;
   for (uint r = 0; r < p.k; ++r) {
     float best = -1.0f;
     uint bi = 0xffffffff;
@@ -46,17 +46,14 @@ struct TopkParams {
     uint cand = best == gbest ? bi : 0xffffffff;
     uint win = simd_min(cand);
     if (win / per == lane && win != 0xffffffff) taken |= 1u << (win % per);
-    my_w[r] = gbest;
-    my_i[r] = win;
+    if (lane == r) { my_w = gbest; my_i = win; }
     sel_sum += gbest;
   }
-  if (lane == 0) {
-    for (uint r = 0; r < p.k; ++r) {
-      idx[r] = my_i[r];
-      wts[r] = p.norm ? my_w[r] / sel_sum : my_w[r];
-    }
-    wts[p.k] = sigmoid(shared[0]);
+  if (lane < p.k) {
+    idx[lane] = my_i;
+    wts[lane] = p.norm ? my_w / sel_sum : my_w;
   }
+  if (lane == 0) wts[p.k] = sigmoid(shared[0]);
 }
 
 
@@ -190,8 +187,8 @@ struct MoeParams {
   for (uint i = 0; i < per; ++i) v[i] /= sum;
   uint taken = 0;
   float sel_sum = 0.0f;
-  float my_w[16];
-  uint my_i[16];
+  float my_w = 0.0f;
+  uint my_i = 0;
   for (uint r = 0; r < p.k; ++r) {
     float best = -1.0f;
     uint bi = 0xffffffff;
@@ -200,17 +197,14 @@ struct MoeParams {
     float gbest = simd_max(best);
     uint win = simd_min(best == gbest ? bi : 0xffffffff);
     if (win != 0xffffffff && win / per == lane) taken |= 1u << (win % per);
-    my_w[r] = gbest;
-    my_i[r] = win;
+    if (lane == r) { my_w = gbest; my_i = win; }
     sel_sum += gbest;
   }
-  if (lane == 0) {
-    for (uint r = 0; r < p.k; ++r) {
-      idx[t * p.k + r] = my_i[r];
-      wts[t * (p.k + 1) + r] = p.norm ? my_w[r] / sel_sum : my_w[r];
-    }
-    wts[t * (p.k + 1) + p.k] = sigmoid(shared[t]);
+  if (lane < p.k) {
+    idx[t * p.k + lane] = my_i;
+    wts[t * (p.k + 1) + lane] = p.norm ? my_w / sel_sum : my_w;
   }
+  if (lane == 0) wts[t * (p.k + 1) + p.k] = sigmoid(shared[t]);
 }
 
 // moe_topk_rows for E = 256 (8 logits per lane) with the loops unrolled and 8 tokens per 256-thread
@@ -243,8 +237,8 @@ struct MoeParams {
   for (uint i = 0; i < per; ++i) v[i] /= sum;
   uint taken = 0;
   float sel_sum = 0.0f;
-  float my_w[16];
-  uint my_i[16];
+  float my_w = 0.0f;
+  uint my_i = 0;
   for (uint r = 0; r < p.k; ++r) {
     float best = -1.0f;
     uint bi = 0xffffffff;
@@ -254,17 +248,14 @@ struct MoeParams {
     float gbest = simd_max(best);
     uint win = simd_min(best == gbest ? bi : 0xffffffff);
     if (win != 0xffffffff && win / per == lane) taken |= 1u << (win % per);
-    my_w[r] = gbest;
-    my_i[r] = win;
+    if (lane == r) { my_w = gbest; my_i = win; }
     sel_sum += gbest;
   }
-  if (lane == 0) {
-    for (uint r = 0; r < p.k; ++r) {
-      idx[t * p.k + r] = my_i[r];
-      wts[t * (p.k + 1) + r] = p.norm ? my_w[r] / sel_sum : my_w[r];
-    }
-    wts[t * (p.k + 1) + p.k] = sigmoid(shared[t]);
+  if (lane < p.k) {
+    idx[t * p.k + lane] = my_i;
+    wts[t * (p.k + 1) + lane] = p.norm ? my_w / sel_sum : my_w;
   }
+  if (lane == 0) wts[t * (p.k + 1) + p.k] = sigmoid(shared[t]);
 }
 
 // Groups the T*k (token, slot) pairs by expert. One threadgroup of 1024 threads.
@@ -559,8 +550,8 @@ NI_MOE_DOWN2(moe_down2_w, 7168)
     sum += v[i];
   }
   sum = simd_sum(sum);
-  float sel = 0.0f, wsel[8];
-  uint isel[8];
+  float sel = 0.0f, w = 0.0f;
+  uint ii = 0;
   for (uint r = 0; r < p.k; ++r) {
     float best = -1.0f;
     uint bi = 0;
@@ -569,15 +560,10 @@ NI_MOE_DOWN2(moe_down2_w, 7168)
     float g = simd_max(best);
     uint win = simd_min(best == g ? lane * PER + bi : 0xffffffffu);
     if (win / PER == lane) v[win % PER] = -1.0f;
-    wsel[r] = g;
-    isel[r] = win;
+    if (lane == r) { w = g; ii = win; }
     sel += g;
   }
   if (lane < p.k) {
-    float w = 0.0f;
-    uint ii = 0;
-    for (uint r = 0; r < p.k; ++r)
-      if (r == lane) { w = wsel[r]; ii = isel[r]; }
     idx[lane] = ii;
     wts[lane] = p.norm ? w / sel : w / sum;
   }
