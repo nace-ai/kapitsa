@@ -70,6 +70,8 @@ One full-attention layer of Dory's heads, 40 chunks per KV head as the engine sp
 
 Combined over the chunks as `dory_attn_reduce` does, the new rows are within 1.1e-5 of the old ones. The 32K timings
 (`k8.out`, `k8b.out`) moved between repeats by up to 2x for both kernels, so they are not quoted.
+Both kernels hold 16 KB of threadgroup memory, as the old ones: `logit_dump --paths step,verify --loop-kv per-loop` under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`, one window and then all 8 (512-3,200 tokens, where the sliding
+layers' ring wraps), ran with no errors ([validation.txt](validation.txt)).
 `s8.out`: a variant computing the 8 scores first and then running the old per-key update in order is bitwise the old
 kernel but no faster (3-row verify 3.68 -> 4.01 ms at 262K): the serial exponentials, not the score sums, are the bound.
 

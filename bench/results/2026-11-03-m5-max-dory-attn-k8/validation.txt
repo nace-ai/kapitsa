@@ -1,0 +1,29 @@
+# MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1 build/logit_dump <model> <dumps>/val --windows 1 --paths step,verify --loop-kv per-loop (the default: the 8-key kernels)
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (143 ms)
+2026-11-03 07:26:34.614 logit_dump[20986:13106598] Metal API Validation Enabled
+2026-11-03 07:26:34.614 logit_dump[20986:13106598] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 3104 ms
+[kapitsa] compiled the Nemotron-H kernels in 1304 ms
+[kapitsa] compiled the Dory kernels in 59 ms
+[kapitsa] compiled the tensor kernels in 931 ms
+[kapitsa] Dory: LM head as Q8_0 rows
+[kapitsa] Dory: 72 layers (16 input, 40 recurrent x 2 loops, 16 output), 2.53 GB of weights read in 0.2 s (NVFP4 attention / MLP, Q8_0 head, BF16 embedding); recurrent KV per-loop
+prefill 1 rows: next-token NLL 0.0124, top-1 = next token 1.0000 -> <dumps>/val8/prefill
+step   24 rows: next-token NLL 1.0385, top-1 = next token 0.7917 -> <dumps>/val8/step
+verify 24 rows: next-token NLL 1.0391, top-1 = next token 0.7917 -> <dumps>/val8/verify
+1 windows, 512 prefilled tokens in 1.0 s; 2.5 s in all
+
+# the same with the 8 default windows (512-3,200 tokens: the sliding layers' 1,024-slot ring wraps)
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (142 ms)
+2026-11-03 07:26:50.085 logit_dump[21030:13106944] Metal API Validation Enabled
+2026-11-03 07:26:50.085 logit_dump[21030:13106944] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] compiled the Dory kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] Dory: LM head as Q8_0 rows
+[kapitsa] Dory: 72 layers (16 input, 40 recurrent x 2 loops, 16 output), 2.53 GB of weights read in 0.2 s (NVFP4 attention / MLP, Q8_0 head, BF16 embedding); recurrent KV per-loop
+prefill 8 rows: next-token NLL 1.3446, top-1 = next token 0.7500 -> <dumps>/val8b/prefill
+step   192 rows: next-token NLL 0.7756, top-1 = next token 0.7969 -> <dumps>/val8b/step
+verify 192 rows: next-token NLL 0.7756, top-1 = next token 0.7969 -> <dumps>/val8b/verify
+8 windows, 14848 prefilled tokens in 20.4 s; 28.1 s in all
