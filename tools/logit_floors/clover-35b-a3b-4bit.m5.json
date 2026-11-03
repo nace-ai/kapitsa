@@ -1,0 +1,57 @@
+{
+  "model": "clover-35b-a3b-4bit",
+  "measured": {
+    "build": "0.2.26 (b6345da)",
+    "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+    "macos": "26.4",
+    "date": "2026-11-03T04:44:46Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {},
+    "command": "tools/logit_floor.py ~/models/clover-35b-a3b-4bit"
+  },
+  "reference_path": "verify",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "batch": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "batch": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.0004430477817897273, "kl_median": 5.874907296218409e-06, "kl_p99": 0.007553321720574387, "kl_max": 0.008331344368772088, "margin_change_max": 0.9904546737670898, "tie_margin": 0.0103759765625, "nll_change_mean": 0.0030142226046286284, "max_abs_diff": 2.9155426025390625, "largest_flip_margin": 0.0052738189697265625, "what": "alone (the single-stream verify) against 4 requests decoding together (encode_verify_multi)", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false},
+    "step": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.0002678168206029359, "kl_median": 4.574037886277019e-06, "kl_p99": 0.005286441255323318, "kl_max": 0.008252204166433267, "margin_change_max": 0.9036309719085693, "tie_margin": 0.08441543579101562, "nll_change_mean": 0.0004688797195357268, "max_abs_diff": 2.7706832885742188, "largest_flip_margin": 0.0052738189697265625, "what": "plain decoding (--spec 0) against the verify (8 rows; Flash-Next: its MTP cycle's 3)", "in_floor": true, "decode": true},
+    "chain": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.00029770503516682984, "kl_median": 6.427980984986368e-06, "kl_p99": 0.008105843772696292, "kl_max": 0.009316947837811748, "margin_change_max": 0.9530215859413147, "tie_margin": 0.08441543579101562, "nll_change_mean": 0.000810796867640344, "max_abs_diff": 2.787642478942871, "largest_flip_margin": 0.0052738189697265625, "what": "DFlash2's chain verify (NI_KFLASH=0) against KFlash's tree verify", "in_floor": true, "decode": true}
+  },
+  "floor": {
+    "flips": 1,
+    "kl_mean": 0.0004430477817897273,
+    "kl_p99": 0.008105843772696292,
+    "kl_max": 0.009316947837811748,
+    "margin_change_max": 0.9904546737670898,
+    "tie_margin": 0.08441543579101562,
+    "records": 192,
+    "top1": 0.9947916666666666,
+    "set_by": {"flips": "batch", "kl_mean": "batch", "kl_p99": "chain", "kl_max": "chain", "margin_change_max": "batch", "tie_margin": "step"}
+  },
+  "gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.000887,
+    "max_p99_kl": 0.0163,
+    "near_tie": 0.0845,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 1,
+    "kl_mean": 0.0004430477817897273,
+    "kl_p99": 0.008105843772696292,
+    "kl_max": 0.009316947837811748,
+    "margin_change_max": 0.9904546737670898,
+    "tie_margin": 0.08441543579101562,
+    "records": 192,
+    "top1": 0.9947916666666666,
+    "set_by": {"flips": "batch", "kl_mean": "batch", "kl_p99": "chain", "kl_max": "chain", "margin_change_max": "batch", "tie_margin": "step"}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.000887,
+    "max_p99_kl": 0.0163,
+    "near_tie": 0.0845,
+    "max_far_flips": 0
+  }
+}
