@@ -1,0 +1,162 @@
+{
+ "arms": [
+  {},
+  {
+   "NI_V8_TREE_G6": "0"
+  },
+  {},
+  {
+   "NI_V8_TREE_G6": "0"
+  },
+  {}
+ ],
+ "warm_arms": 1,
+ "rows": [
+  {
+   "arm": 0,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 9027,
+   "tps": 56.6,
+   "tok_per_cycle": 3.99,
+   "cycles": 128,
+   "ms_per_cycle": 70.52
+  },
+  {
+   "arm": 0,
+   "switch": "1",
+   "prompt": 254212,
+   "cached": 0,
+   "tokens": 398,
+   "ms": 11501,
+   "tps": 34.5,
+   "tok_per_cycle": 3.45,
+   "cycles": 115,
+   "ms_per_cycle": 100.01
+  },
+  {
+   "arm": 1,
+   "switch": "0",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 11704,
+   "tps": 43.7,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 92.89
+  },
+  {
+   "arm": 1,
+   "switch": "0",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 15123,
+   "tps": 26.3,
+   "tok_per_cycle": 3.45,
+   "cycles": 115,
+   "ms_per_cycle": 131.5
+  },
+  {
+   "arm": 2,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 8948,
+   "tps": 57.1,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 71.02
+  },
+  {
+   "arm": 2,
+   "switch": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 11368,
+   "tps": 34.9,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 98.0
+  },
+  {
+   "arm": 3,
+   "switch": "0",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 11343,
+   "tps": 45.1,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 90.02
+  },
+  {
+   "arm": 3,
+   "switch": "0",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 15212,
+   "tps": 26.1,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 131.14
+  },
+  {
+   "arm": 4,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 8905,
+   "tps": 57.4,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 70.67
+  },
+  {
+   "arm": 4,
+   "switch": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 11332,
+   "tps": 35.0,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 97.69
+  }
+ ],
+ "identical": {
+  "133K": true,
+  "252K": true
+ },
+ "texts": {
+  "0": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "1": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "2": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "3": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "4": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  }
+ }
+}

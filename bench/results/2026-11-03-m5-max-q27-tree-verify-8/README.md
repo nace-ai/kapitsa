@@ -22,18 +22,23 @@ its DFlash2 drafter and KFlash, MacBook Pro (16-inch, 2026), `Mac17,6`, M5 Max, 
 
 ## Decode, a 2-slot server
 
-Interleaved on the final build ([ab/](ab): a first arm only to fill the SSD cache, then `NI_V8_TREE_G6=0`, the default,
-`0`, the default): `kapitsa serve --slots 2` (its default drafting block is 8 rows), the same two cold documents from
-the long corpus (132,037 and 254,212 tokens with the template) and the same question, 512 tokens at temperature 0,
-thinking off. Every measured arm restored both documents from the shared SSD cache, and the four wrote the same text at
-both sizes (512 and 398 tokens).
+Interleaved on the final build on an idle GPU ([ab/](ab): a first arm only to fill the SSD cache, then `NI_V8_TREE_G6=0`,
+the default, `0`, the default): `kapitsa serve --slots 2` (its default drafting block is 8 rows), the same two cold
+documents from the long corpus (132,037 and 254,212 tokens with the template) and the same question, 512 tokens at
+temperature 0, thinking off. Every measured arm restored both documents from the shared SSD cache, and the four wrote the
+same text at both sizes (512 and 398 tokens). Each request waited for a quiet GPU (no foreign process above 5% for 15 s:
+`bench/harness/gpu_hogs.py`) and sampled the foreign GPU load every 2 s while it ran: every measured request waited
+18.5-45.3 s and ran at a mean and a maximum of 0.0% foreign load (the warm-up arm, which is not measured, ran beside the
+Claude desktop app's helper at 3-4%).
 
 | Context | Zone path: tok/s (ms a cycle) | Tree path: tok/s (ms a cycle) | Decode |
 | ---: | ---: | ---: | ---: |
-| 132K | 43.7 (92.9), 45.1 (90.0) | 57.1 (71.0), 57.4 (70.7) | +28.9% |
-| 254K | 26.3 (131.5), 26.1 (131.1) | 34.9 (98.0), 35.0 (97.7) | +33.4% |
+| 132K | 53.2 (76.2), 52.8 (76.8) | 70.3 (57.7), 70.2 (57.7) | +32.5% |
+| 254K | 31.1 (110.1), 31.0 (110.4) | 45.0 (76.1), 45.0 (76.0) | +44.9% |
 
-The script took the GPU lock for the whole run; it samples no GPU load, and the Claude desktop app was running.
+The first run ([ab-first/](ab-first), the same arms and build) sampled no GPU load and ran while the desktop app was in
+use: 43.7 / 45.1 -> 57.1 / 57.4 tok/s at 132K and 26.3 / 26.1 -> 34.9 / 35.0 at 254K, the same text. The review asked for
+the run on an idle GPU above.
 
 ## Output check
 
@@ -56,7 +61,8 @@ half pair) ran the 8-row cycle at 57.4 tok/s at 131K but failed the floor's deco
 
 ## Files
 
-`ab/`: the A/B script (`ab_q.py`), command, output, results with every arm's text and the five servers' logs.
+`ab/`: the A/B script (`ab_q.py`), command, output (with each request's quiet wait and foreign GPU load), results with
+every arm's text and the five servers' logs; `ab-first/`: the first run, its own script.
 `trace/`: the `ni_run` commands and outputs (the zone path and the 16-row block on main 1b0b577's code, the forced 8
 rows on the dropped kernel's build, whose wide path is main's; the tree path on this branch). `output-check/`, `dropped/`:
 as above. Local paths are replaced by placeholders (`~`, `<repo>`, `<run-root>`, `<scratch>`).
