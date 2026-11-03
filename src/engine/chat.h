@@ -47,6 +47,9 @@ struct ChatRequest {
   float presence_penalty = 0.0f, frequency_penalty = 0.0f, repetition_penalty = 1.0f, min_p = 0.0f;
   bool ignore_eos = false;
   ojson cache_salt;  // the body's "cache_salt" (null: none); only the Splash backend uses it, as its cache key
+  // The body's "prompt_cache_key" (OpenAI's, a conversation's id: chat completions and responses), "" if none. Keys the
+  // conversation a read ahead (POST /v1/draft) continues.
+  std::string cache_key;
   std::vector<std::string> stop;
   std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
   // Looped models (Dory): the loop count asked for ("loops" in the body, 0: none), else derived from the reasoning

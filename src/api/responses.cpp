@@ -351,6 +351,7 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
   if (body.contains("temperature") && body["temperature"].is_number()) r.temperature = body["temperature"];
   if (body.contains("top_p") && body["top_p"].is_number()) r.top_p = body["top_p"];
   if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = body["top_k"];
+  if (body.contains("prompt_cache_key") && body["prompt_cache_key"].is_string()) r.cache_key = body["prompt_cache_key"];
   const ojson reasoning = body.contains("reasoning") && body["reasoning"].is_object() ? body["reasoning"] : ojson::object();
   apply_effort(str(reasoning, "effort"), r.template_kwargs);
   r.effort = str(reasoning, "effort");   // looped models: the loop count (Engine::request_loops)
