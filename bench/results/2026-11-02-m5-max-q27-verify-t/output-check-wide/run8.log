@@ -1,0 +1,4 @@
+verify 192 rows: next-token NLL 0.4358, top-1 = next token 0.8646 -> <dumps>/main8/verify
+8 windows, 14848 prefilled tokens in 17.2 s; 18.3 s in all
+verify 192 rows: next-token NLL 0.4358, top-1 = next token 0.8646 -> <dumps>/branch8/verify
+8 windows, 14848 prefilled tokens in 17.1 s; 18.2 s in all

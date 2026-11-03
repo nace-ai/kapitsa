@@ -9,6 +9,7 @@ itself when it cannot be made:
 1. a nested path none of whose parents exist (dumps/x/ref): made, then the corpus error
 2. a path that already exists: kept, then the corpus error
 3. a path under a regular file: "cannot make", and the corpus is never read
+4. --verify-rows 12 (a wide verify runs whole 8-row tiles of 16 or 32): refused before the directory is made
 """
 import os, subprocess, sys, tempfile
 
@@ -35,8 +36,8 @@ def main():
         env = {k: v for k, v in os.environ.items() if not k.startswith(("NI_", "NACE_"))}
         env["BENCH_GPU_LOCK"] = os.path.join(tmp, "gpu.lock")
 
-        def dump(out):
-            return subprocess.run([LOGIT_DUMP, model, out, "--corpus", corpus], capture_output=True, text=True,
+        def dump(out, *extra):
+            return subprocess.run([LOGIT_DUMP, model, out, "--corpus", corpus, *extra], capture_output=True, text=True,
                                   timeout=60, env=env)
 
         nested = os.path.join(tmp, "dumps", "x", "ref")
@@ -54,6 +55,11 @@ def main():
         r = dump(os.path.join(blocker, "ref"))
         check(r.returncode == 1 and "cannot make" in r.stderr and "cannot read" not in r.stderr,
               "path under a file: cannot make, before the corpus", f"rc {r.returncode}: {r.stderr.strip()}")
+
+        rows12 = os.path.join(tmp, "rows12")
+        r = dump(rows12, "--verify-rows", "12")
+        check(r.returncode == 1 and "--verify-rows: 8, 16 or 32" in r.stderr and not os.path.exists(rows12),
+              "--verify-rows 12: refused before the directory", f"rc {r.returncode}: {r.stderr.strip()}")
     print(f"{len(FAILS)} failed" if FAILS else "all passed")
     sys.exit(1 if FAILS else 0)
 
