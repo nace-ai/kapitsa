@@ -3,6 +3,7 @@
 //
 //   logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] [--windows N]
 //              [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--loop-kv last-loop|per-loop]
+//              [--verify-rows N]
 //
 // A window is a cold request: its first L0 tokens are prefilled as the engine prefills a prompt (chunks of C rows,
 // default the engine's 2048, with the Neural Engine split wherever the model runs it), then W rows are fed
@@ -12,7 +13,9 @@
 //   verify  the single-stream verify of 8 rows. Qwen: KFlash's tree verify (the default) as DFlash2's cycle encodes it,
 //           the tree a chain of 8 live rows, the experts' row-independent numerics (NI_DFLASH_EXACT_MOE), the K/V
 //           compaction and the next cycle's fold of the accepted path; NI_KFLASH=0 the chain verify instead (DFlash2
-//           without trees). Nemotron-H: the 8-row chain verify. Dory: only with per-loop KV (--loop-kv per-loop), as
+//           without trees). --verify-rows 16 or 32: the tree a chain of that many live rows, a wide tree verify (the
+//           27B's 16-row block: GPU-driven row tiles, attn8t_partial_tree_g6 on the M5); --rows a multiple of it, since
+//           a window's rows are whole passes. Nemotron-H: the 8-row chain verify. Dory: only with per-loop KV (--loop-kv per-loop), as
 //           the engine runs it. Qwen3.8-Flash-Next: the verify of its MTP cycle, default_spec_depth() + 1 = 3 rows
 //           (Engine's encode_verify(depth + 1) with every draft accepted; the drafts are the sequence's own tokens, so
 //           the MTP head itself does not run: the trunk's logits do not read it).
@@ -195,12 +198,13 @@ int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] "
                     "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
-                    "[--loop-kv last-loop|per-loop]\n");
+                    "[--loop-kv last-loop|per-loop] [--verify-rows N]\n");
     return 1;
   }
   const std::string dir = argv[1], out = argv[2];
   std::string from, corpus = "bench/corpus.txt", paths_arg = "step,verify,batch", loop_kv;
   int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1;
+  int tree_rows = kVerifyRows;  // --verify-rows: a Qwen KFlash tree's live rows (8, or a wide verify's 16 or 32)
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -218,6 +222,7 @@ int main(int argc, char** argv) {
     else if (a == "--loops") loops = std::stoi(next());
     else if (a == "--spec") spec = std::stoi(next());
     else if (a == "--loop-kv") loop_kv = next();
+    else if (a == "--verify-rows") tree_rows = std::stoi(next());
     else fatal("unknown argument %s", a.c_str());
   }
   const std::vector<std::string> paths = split(paths_arg, ',');
@@ -225,6 +230,7 @@ int main(int argc, char** argv) {
     if (p != "step" && p != "verify" && p != "batch") fatal("--paths: unknown path %s (step, verify, batch)", p.c_str());
   if (n_windows < 1 || rows < 1 || chunk < 1 || members < 1 || members > 8)
     fatal("--windows, --rows, --chunk: positive; --batch: 1 to 8");
+  if (tree_rows != 8 && tree_rows != 16 && tree_rows != 32) fatal("--verify-rows: 8, 16 or 32");
   {
     std::error_code ec;
     std::filesystem::create_directories(out, ec);
@@ -310,6 +316,11 @@ int main(int argc, char** argv) {
     tree = tree && q->block_drafter_ok() && q->verify_tree_ok();
     if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) moe_exact = atoi(v) != 0;
   }
+  if (tree_rows > kVerifyRows) {  // a wide tree verify: the verify buffers and every sequence's tape that wide
+    if (!q || fn || !tree || !q->verify_wide_ok())
+      fatal("--verify-rows %d: a wide tree verify (a Qwen target with KFlash's tree verify and verify_wide_ok)", tree_rows);
+    q->set_tree_rows(tree_rows, false);
+  }
   if (member_rows <= 0) member_rows = members == 2 ? 4 : members <= 4 ? (nh && members == 4 ? 1 : 2) : 1;
   if (members * member_rows > kVerifyRows) fatal("--batch %d x --batch-rows %d: more than 8 rows", members, member_rows);
   for (const auto& p : paths) {
@@ -327,7 +338,8 @@ int main(int argc, char** argv) {
   // kMaxVerify; --spec 7 is the 8-row verify the decode's tree budget runs)
   const int vrows = fl && getenv("NI_FLINT_VERIFY_ROWS") ? std::clamp(atoi(getenv("NI_FLINT_VERIFY_ROWS")), 2, 8)
                     : fn ? std::clamp(spec >= 0 ? spec + 1 : fn->default_spec_depth() + 1, 1, Qwen35::kMaxVerify)
-                         : kVerifyRows;
+                    : tree ? tree_rows
+                           : kVerifyRows;
   auto path_rows = [&](const std::string& p, const Window& w) {
     const int k = p == "verify" ? vrows : p == "batch" ? member_rows : 1;
     const int W = (w.W + k - 1) / k * k;
@@ -385,20 +397,20 @@ int main(int argc, char** argv) {
 
   // ---- per group of windows: prefill each alone, then every path from the same state ----
   Buffer kf_tree, kf_live;
-  if (tree) {  // the tree descriptor of a chain of 8 live rows, as kf_build writes it and kf_accept completes it
+  if (tree) {  // the tree descriptor of a chain of vrows live rows, as kf_build writes it and kf_accept completes it
     kf_tree = g.alloc(size_t(kf::kWords) * 4, "logit_dump_tree");
     kf_live = g.alloc(16, "logit_dump_live");
     int32_t* t = kf_tree.as<int32_t>();
     memset(t, 0, size_t(kf::kWords) * 4);
-    for (int r = 0; r < kVerifyRows; ++r) {
+    for (int r = 0; r < vrows; ++r) {
       t[kf::kPar + r] = r - 1;
       t[kf::kDep + r] = r;
-      t[kf::kMask + r] = (1 << (r + 1)) - 1;
+      t[kf::kMask + r] = int32_t(~0u >> (31 - r));  // its history: rows 0 .. r
       t[kf::kPath + r] = r;
     }
-    t[kf::kN] = t[kf::kNodes] = kVerifyRows;
-    t[kf::kA] = kVerifyRows - 1;  // every draft accepted: the path is the chain
-    kf_live.as<uint32_t>()[0] = kVerifyRows;
+    t[kf::kN] = t[kf::kNodes] = vrows;
+    t[kf::kA] = vrows - 1;  // every draft accepted: the path is the chain
+    kf_live.as<uint32_t>()[0] = uint32_t(vrows);
   }
   // one group's sequences and checkpoints, reused group after group as the engine reuses a slot (reset, prefill)
   int need = 1;  // positions a window reads on any path
@@ -480,7 +492,7 @@ int main(int argc, char** argv) {
           Seq& s = *seqs[j];
           if (tree && !s.pend_path) {
             s.pend_path = g.alloc(size_t(kf::kPathWords) * 4, "logit_dump_path");
-            for (int r = 0; r < kVerifyRows; ++r) s.pend_path.as<int32_t>()[r] = r;  // kf_accept's path: the chain
+            for (int r = 0; r < vrows; ++r) s.pend_path.as<int32_t>()[r] = r;  // kf_accept's path: the chain
           }
           for (int i = 0, W = path_rows(o.name, w); i < W; i += vrows) {
             const int P = w.L0 + i;
@@ -489,7 +501,7 @@ int main(int argc, char** argv) {
               q->set_verify_tree(&kf_tree);
               q->set_verify_row_limit(&kf_live);
               q->set_verify_moe_exact(moe_exact);
-              q->encode_verify(*e, s, P, kVerifyRows, sp, uint32_t(P), /*v8=*/true);
+              q->encode_verify(*e, s, P, vrows, sp, uint32_t(P), /*v8=*/true);
               q->set_verify_moe_exact(false);
               q->set_verify_row_limit(nullptr);
               q->set_verify_tree(nullptr);
@@ -567,7 +579,7 @@ int main(int argc, char** argv) {
     meta["path"] = o.name;
     if (o.name == "verify")
       meta["verify"] = fn  ? "MTP cycle's chain of " + std::to_string(vrows) + " rows"
-                       : q ? (tree ? "KFlash tree (a chain of 8 live rows)" : "chain of 8 rows")
+                       : q ? (tree ? "KFlash tree (a chain of " + std::to_string(vrows) + " live rows)" : "chain of 8 rows")
                            : "8 rows";
     if (o.name == "verify" && q && tree && q->config().moe) meta["moe_exact"] = moe_exact;
     if (o.name == "batch") meta["batch"] = {{"members", members}, {"rows", member_rows}};

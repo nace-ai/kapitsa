@@ -57,7 +57,7 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | `python3 tests/test_update.py build` | `kapitsa update` and the automatic update against a release server in the test (`KAPITSA_UPDATE_URL`; nothing from GitHub), on temporary installs made by `install.sh`: real signed releases, the checks that refuse bad ones, the switch, the rollback, Homebrew, app and source installs, the background check (throttle, off switches, time limit, `kapitsa bench`), what the requests carry; `build/update_test` checks version order and kinds of install | nothing (the full build, for `build/update_test`) |
 | `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py`, the pull request check against a stand-in API | `pip install jsonschema` |
 | `python3 tests/test_logit_compare.py` | `tools/logit_compare.py` on synthetic dumps: its numbers against a direct computation, records matched in any order, the gate's verdicts and refusals, numpy against the standard library; `tools/logit_floor.py`'s gate | nothing |
-| `python3 tests/test_logit_dump.py build` | `build/logit_dump`'s output directory: a nested missing path made with its parents, an existing one kept, one under a file refused, each before the corpus, the GPU lock and the model | nothing |
+| `python3 tests/test_logit_dump.py build` | `build/logit_dump`'s output directory: a nested missing path made with its parents, an existing one kept, one under a file refused, each before the corpus, the GPU lock and the model; a `--verify-rows` other than 8, 16 or 32 refused before the directory is made | nothing |
 | `python3 tests/test_reasoning.py` | `bench/reasoning`: the grader's equivalences and near misses, the frozen problem sets, a run against a scripted server (the requests, grading, resuming, the GPU lock on a test file) and the report; with the problems downloaded, `reasoning.py check` and the sets' draw | nothing (`python3 bench/reasoning/reasoning.py fetch` for the last two) |
 | `python3 tests/test_structured.py --cli build [MODEL_DIR]` | Structured output, offline: `build/grammar_test` (JSON Schema and tool-call grammars against accepted, open and rejected texts, the schemas refused; with a tokenizer, every mask along valid replies and random walks against brute force, and the mask's time per token) and how the three APIs read `response_format`, `text.format`, `output_format`, `tool_choice` and strict tools (`build/structured_check`) | nothing (the 4B's tokenizer, when downloaded, for the mask checks) |
 | `build/execution_session_test` | `ExecutionSession` (`src/engine/execution_session.h`) over a fake work function: one start, cancel from another thread, `cancelled` never after `finished`, `finished` held until an in-flight `cancelled` returns, `wait()` from a delta or a cancel callback refused, a session destroyed without starting, and the worker joined once | nothing |
@@ -192,12 +192,17 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
   time, and `batch` is fatal on them ("... no batch path"): pass `--paths step,verify` to both builds. Dory's `verify`
   needs `--loop-kv per-loop`; with its default last-loop KV pass `--paths step`. `prefill` is written whatever
   `--paths` says.
-- Each path feeds a window's scored rows in passes of `k` rows (`verify`: 8, or Flint's `NI_FLINT_VERIFY_ROWS`, or
-  Flash-Next's MTP depth + 1; `batch`: `--batch-rows`; `step`: 1), rounded up to whole passes. A window whose sequence
+- Each path feeds a window's scored rows in passes of `k` rows (`verify`: 8, or Qwen's `--verify-rows`, or Flint's
+  `NI_FLINT_VERIFY_ROWS`, or Flash-Next's MTP depth + 1; `batch`: `--batch-rows`; `step`: 1), rounded up to whole
+  passes. A window whose sequence
   is shorter than its first scored prefix plus that rounded count is fatal ("the verify path's passes of 8 rows need
   ..."). The corpus's windows hold their scored rows and one token more, so the default 24 rows fit every default pass;
   a `--rows` or `NI_FLINT_VERIFY_ROWS` whose pass does not divide the rows can fail, and so can a `--from` set whose
   windows do not fill whole passes.
+- `--verify-rows 16` or `32` (Qwen with KFlash's tree verify): the verify's tree is a chain of that many live rows, a wide
+  tree verify, as the 27B's 16-row DFlash2 block runs it; the default 8-row pass takes other kernels there (on the M5,
+  `attn8m_partial_zone` instead of `attn8t_partial_tree_g6`). A change to the wide verify gates on a dump with it, with
+  `--rows 32` so that the windows hold whole passes.
 - `--from DIR` reads `DIR`'s records (or its `verify`, `step` or `batch` subfolder's). If it stops at
   `cannot read DIR/sequences.txt`, the reference run most likely failed before it wrote its dumps (they are written
   after the model loads and the paths are checked): read that run's error, not the new build's.
