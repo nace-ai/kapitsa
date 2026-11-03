@@ -11,7 +11,6 @@
 #include "util/log.h"
 
 #include <algorithm>
-#include <chrono>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -65,29 +64,23 @@ struct Output {
 struct CoeffImage {
   Gpu& gpu;
   Buffer buffer, headers;
-  size_t compressed = 0, blocks = 0;
   explicit CoeffImage(Gpu& g) : gpu(g) {}
   ~CoeffImage() { if (buffer) gpu.release(buffer); if (headers) gpu.release(headers); }
 };
 struct Matrix { Buffer w, s, b; uint32_t N, K; mutable std::shared_ptr<CoeffImage> coeff; mutable bool fixture_loaded = false; };
-static double pack_ms = 0;
-static size_t pack_bytes = 0, pack_blocks = 0, compressed_blocks = 0;
+static size_t pack_blocks = 0, compressed_blocks = 0;
 static void prepare_coeff(Gpu& g, const Matrix& m) {
   if (m.coeff) return;  // object-owned static weights; explicit reset after replacing their coefficients
-  const auto begin = std::chrono::steady_clock::now();
   const auto host = pack_affine_packed_coeff(m.w.as<uint32_t>(), m.s.as<uint16_t>(), m.b.as<uint16_t>(), m.N, m.K / 64);
   auto image = std::make_shared<CoeffImage>(g);
   image->buffer = g.alloc(host.words.size() * 4, "qmm_coefficient_delta", false);
   memcpy(image->buffer.ptr(), host.words.data(), host.words.size() * 4);
   image->headers = g.alloc(host.headers.size() * 4, "qmm_packed_headers", false);
   memcpy(image->headers.ptr(), host.headers.data(), host.headers.size() * 4);
-  image->blocks = host.blocks; image->compressed = host.compressed_blocks;
-  pack_bytes += image->buffer.size + image->headers.size; pack_blocks += image->blocks; compressed_blocks += image->compressed;
+  pack_blocks += host.blocks; compressed_blocks += host.compressed_blocks;
   m.coeff = std::move(image);
-  pack_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
 }
-// Additional, pre-frozen actual-coefficient diagnostic. The original random W/X
-// and all numerical checks remain unchanged; both timed arms share these bytes.
+// Both checked paths share the same real coefficients and original random W/X.
 static void fixture_coefficients(const Matrix& m, size_t copy) {
   const char* path = getenv("NI_QMM_COEFF_FIXTURES");
   if (!path) return;
@@ -237,6 +230,39 @@ static double reference(const Matrix& m, const float* x, uint32_t n, bool add) {
 }
 
 struct Checks { size_t cases = 0, outputs = 0, bitwise_outputs = 0; double cpu_error = 0, gpu_error = 0; };
+static void check_output(Checks& count, const Matrix& m, const Output& base, const Output& candidate,
+                         const std::vector<float>& hx, uint32_t R, bool exact) {
+  // The lossless layout must match every GPU output bit; FP64 below independently checks the dot product.
+  base.guards(); candidate.guards();
+  for (uint32_t t = 0; t < R; ++t) for (uint32_t n = 0; n < m.N; ++n) {
+    const float ref = base.data.as<float>()[size_t(t) * base.ld + n];
+    const float got = candidate.data.as<float>()[size_t(t) * candidate.ld + n];
+    if (!std::isfinite(ref) || !std::isfinite(got) || std::bit_cast<uint32_t>(got) != std::bit_cast<uint32_t>(ref))
+      fatal("QMM bitwise check K=%u N=%u R=%u t=%u n=%u", m.K, m.N, R, t, n);
+    ++count.bitwise_outputs; ++count.outputs;
+  }
+  std::vector<uint32_t> channels;
+  if (m.N <= 1024) { channels.resize(m.N); std::iota(channels.begin(), channels.end(), 0u); }
+  else for (uint32_t j = 0; j < 1024; ++j) channels.push_back(uint32_t(uint64_t(j) * (m.N - 1) / 1023));
+  std::vector<double> refs;
+  double sq = 0;
+  for (uint32_t t = 0; t < R; ++t) for (uint32_t n : channels) {
+    const double v = reference(m, hx.data() + size_t(t) * m.K, n, candidate.add);
+    refs.push_back(v); sq += v * v;
+  }
+  const double rms = std::sqrt(sq / refs.size());
+  size_t ri = 0;
+  for (uint32_t t = 0; t < R; ++t) for (uint32_t n : channels) {
+    const double want = refs[ri++];
+    for (const Output* out : {&base, &candidate}) {
+      const float got = out->data.as<float>()[size_t(t) * out->ld + n];
+      const double err = std::fabs(got - want) / (std::fabs(want) + rms + 1e-12);
+      if (err > kTolerance || (exact && double(got) != want))
+        fatal("FP64 check K=%u N=%u R=%u t=%u n=%u error=%.9g exact=%d", m.K, m.N, R, t, n, err, exact);
+      count.cpu_error = std::max(count.cpu_error, err);
+    }
+  }
+}
 static void check_case(Gpu& g, Checks& count, uint32_t N, uint32_t K, uint32_t R, uint32_t ks,
                        uint32_t segments, uint32_t seed, int pattern, bool norm, const std::string& kernel) {
   Arena arena(g);
@@ -268,48 +294,8 @@ static void check_case(Gpu& g, Checks& count, uint32_t N, uint32_t K, uint32_t R
       const float want = t < R ? float(__fp16(x.x.as<float>()[size_t(t) * x.ld + k])) : 0.0f;
       if (hx[size_t(t) * K + k] != want) fatal("input half table stale or misindexed");
     }
-    for (size_t i = 0; i < matrices.size(); ++i) {
-      const Matrix& m = matrices[i];
-      base[i].guards(); candidate[i].guards();
-      double sq = 0;
-      for (uint32_t t = 0; t < R; ++t) for (uint32_t n = 0; n < m.N; ++n) {
-        float v = base[i].data.as<float>()[size_t(t) * base[i].ld + n];
-        if (!std::isfinite(v)) fatal("baseline produced non-finite output");
-        sq += double(v) * v;
-      }
-      const double rms = std::sqrt(sq / (size_t(R) * m.N));
-      for (uint32_t t = 0; t < R; ++t) for (uint32_t n = 0; n < m.N; ++n) {
-        float ref = base[i].data.as<float>()[size_t(t) * base[i].ld + n];
-        float got = candidate[i].data.as<float>()[size_t(t) * candidate[i].ld + n];
-        double err = std::fabs(double(got) - ref) / (std::fabs(ref) + rms + 1e-12);
-        if (!std::isfinite(got) || err > kTolerance)
-          fatal("GPU check K=%u N=%u R=%u ks=%u t=%u n=%u error=%.9g got=%.9g ref=%.9g", K, m.N, R, ks, t, n, err, got, ref);
-        count.gpu_error = std::max(count.gpu_error, err);
-        count.bitwise_outputs += std::bit_cast<uint32_t>(got) == std::bit_cast<uint32_t>(ref);
-        ++count.outputs;
-      }
-      std::vector<uint32_t> channels;
-      if (m.N <= 1024) { channels.resize(m.N); std::iota(channels.begin(), channels.end(), 0u); }
-      else for (uint32_t j = 0; j < 1024; ++j) channels.push_back(uint32_t(uint64_t(j) * (m.N - 1) / 1023));
-      std::vector<double> refs;
-      sq = 0;
-      for (uint32_t t = 0; t < R; ++t) for (uint32_t n : channels) {
-        double v = reference(m, hx.data() + size_t(t) * K, n, candidate[i].add);
-        refs.push_back(v); sq += v * v;
-      }
-      const double rrms = std::sqrt(sq / refs.size());
-      size_t ri = 0;
-      for (uint32_t t = 0; t < R; ++t) for (uint32_t n : channels) {
-        double want = refs[ri++];
-        for (const Output* out : {&base[i], &candidate[i]}) {
-          float got = out->data.as<float>()[size_t(t) * out->ld + n];
-          double err = std::fabs(got - want) / (std::fabs(want) + rrms + 1e-12);
-          if (err > kTolerance || (exact && double(got) != want))
-            fatal("FP64 check K=%u N=%u R=%u ks=%u t=%u n=%u error=%.9g exact=%d", K, m.N, R, ks, t, n, err, exact);
-          count.cpu_error = std::max(count.cpu_error, err);
-        }
-      }
-    }
+    for (size_t i = 0; i < matrices.size(); ++i)
+      check_output(count, matrices[i], base[i], candidate[i], hx, R, exact);
     ++count.cases;
   }
 }
@@ -509,7 +495,8 @@ static void cpu_codec_checks() {
 }
 
 static void codec_checks(Gpu& g, const std::string& kernel) {
-  size_t cases = 0, bits = 0, outputs = 0;
+  size_t cases = 0, bits = 0;
+  Checks count;
   // First replay the unchanged D=256 fixtures as raw cases, then cover compression.
   for (uint32_t delta_base : {256u,355u})
   for (uint32_t G : {1u,2u,3u,4u,5u,16u}) for (uint32_t N : {1u,17u,33u})
@@ -563,7 +550,6 @@ static void codec_checks(Gpu& g, const std::string& kernel) {
         const auto hx = x.rounded();
         for (size_t seg = 0; seg < matrices.size(); ++seg) {
           const Matrix& m = matrices[seg];
-          base[seg].guards(); candidate[seg].guards();
           for (size_t j = 0; j < kGuard; ++j)
             if (decoded[seg].as<uint32_t>()[j] != 0x7b7b7b7bu || decoded[seg].as<uint32_t>()[kGuard+size_t(m.N)*G+j] != 0x7b7b7b7bu)
               fatal("coefficient probe buffer boundary overwritten");
@@ -572,29 +558,14 @@ static void codec_checks(Gpu& g, const std::string& kernel) {
             if (decoded[seg].as<uint32_t>()[kGuard+i] != want) fatal("coefficient bit pattern mismatch");
             ++bits;
           }
-          std::vector<double> refs;
-          double sq = 0;
-          for (uint32_t t = 0; t < R; ++t) for (uint32_t n = 0; n < m.N; ++n) {
-            const double v = reference(m,hx.data()+size_t(t)*m.K,n,candidate[seg].add);
-            refs.push_back(v); sq += v*v;
-          }
-          const double rms = std::sqrt(sq/refs.size());
-          size_t i = 0;
-          for (uint32_t t = 0; t < R; ++t) for (uint32_t n = 0; n < m.N; ++n,++i) {
-            const float a = base[seg].data.as<float>()[size_t(t)*base[seg].ld+n];
-            const float b = candidate[seg].data.as<float>()[size_t(t)*candidate[seg].ld+n];
-            if (std::bit_cast<uint32_t>(a) != std::bit_cast<uint32_t>(b)) fatal("compressed QMM bitwise mismatch");
-            if (!std::isfinite(b) || std::abs(double(b)-refs[i])/(std::abs(refs[i])+rms+1e-12)>kTolerance)
-              fatal("compressed QMM FP64 mismatch");
-            ++outputs;
-          }
+          check_output(count, m, base[seg], candidate[seg], hx, R, false);
         }
         ++cases;
       }
     }
   if (!compressed_blocks || compressed_blocks == pack_blocks) fatal("codec check did not cover both encodings");
   printf("AKO_CHECK={\"passed\":true,\"cases\":%zu,\"bit_pairs\":%zu,\"outputs\":%zu,\"compressed_blocks\":%zu,\"blocks\":%zu}\n",
-         cases,bits,outputs,compressed_blocks,pack_blocks);
+         cases,bits,count.outputs,compressed_blocks,pack_blocks);
 }
 
 int main(int argc, char** argv) {
