@@ -75,8 +75,8 @@ The model served at its default (`--loop-kv per`, `--ctx 65536`) with `NI_DORY_A
 cold documents from the long corpus (4,131 and 16,465 tokens with the template) and the same question, 256 tokens at
 temperature 0 ([greedy/](greedy)): the two texts are identical at both sizes (1,270 and 1,086 characters). The servers'
 logs (`server-old.log`: `NI_DORY_ATTN_D2=0`, `server-new.log`: the default) are cold starts with no quiet wait, so their
-prompt times are not a measurement (the new server's 16K prompt took 7.6 s against 6.5 s there; the A/B above and the
-kernel timings, the sliding layers' included, are the measurements).
+prompt times are not a measurement (the 16K prompt took 7.6 s in `server-old.log` and 6.5 s in `server-new.log`; the A/B
+above and the kernel timings, the sliding layers' included, are the measurements).
 
 ## Files
 
