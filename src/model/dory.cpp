@@ -254,6 +254,11 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
       if (at_on && cfg_.hq / cfg_.hkv == 4) {
         const char* name = ns && *ns && atoi(ns) == 4 ? "dory_attn_t_g4s4k16" : "dory_attn_t_g4s8k16";
         attn_t_ = Gpu::get().pipeline(name, false).pso != nullptr;
+        // the head dim split over simdgroup pairs (dory_attn_td2_g4s8: the same keys, masks and store, the scores'
+        // sum as two halves): one layer of 2,048 rows on the M5 Max, 14.8 / 130.7 / 267.2 ms after 14K / 129K / 254K
+        // positions against dory_attn_t_g4s8k16's 27.9 / 249.2 / 475.0. NI_DORY_ATTN_D2=0 keeps that kernel
+        const char* d2 = getenv("NI_DORY_ATTN_D2");
+        attn_d2_ = attn_t_ && !(d2 && *d2 && atoi(d2) == 0) && Gpu::get().pipeline("dory_attn_td2_g4s8", false).pso;
       }
     }
   load(prefill_chunk);
@@ -1115,8 +1120,13 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
   static const char* tmin_env = getenv("NI_DORY_ATTN_T_MIN");
   static const int tmin = tmin_env && *tmin_env ? atoi(tmin_env) : 64;
   const bool tn = tns && int(T) >= tmin;
-  e.use(pipe(tn ? (ns8 ? "dory_attn_t_g4s8k16" : "dory_attn_t_g4s4k16")
-                  : k16 || getenv("MTL_SHADER_VALIDATION") ? "dory_attn_prefill_k16" : "dory_attn_prefill"));
+  // (the split kernel's 24,576 B of threadgroup memory is past what the validation layer, which counts it twice,
+  // dispatches: under it the 16 KB kernel runs)
+  static const bool d2 = attn_d2_ && !getenv("MTL_SHADER_VALIDATION");
+  e.use(pipe(tn && d2 ? "dory_attn_td2_g4s8"
+             : tn     ? (ns8 ? "dory_attn_t_g4s8k16" : "dory_attn_t_g4s4k16")
+             : k16 || getenv("MTL_SHADER_VALIDATION") ? "dory_attn_prefill_k16"
+                                                      : "dory_attn_prefill"));
   e.buf(0, pq_);
   e.buf(1, s.kc[size_t(ci)]);
   e.buf(2, s.vc[size_t(ci)]);
@@ -1125,7 +1135,9 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
   e.buf(5, pao_);
   e.val(6, ap);
   // (the tensor kernel's threadgroup is 16 / G tokens of one KV head: NS simdgroups of them, G heads each)
-  if (tn) {
+  if (tn && d2) {
+    e.dispatch((uint32_t(T) + 15) / 16, uint32_t(c.hkv), 1, 256);   // 4 pairs x 16 rows = 16 tokens
+  } else if (tn) {
     const uint32_t tpt = ns8 ? 32 : 16;
     e.dispatch((uint32_t(T) + tpt - 1) / tpt, uint32_t(c.hkv), 1, ns8 ? 256 : 128);
   } else

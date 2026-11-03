@@ -1,0 +1,108 @@
+[
+ {
+  "label": "dory-d2-old",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_DORY_ATTN_D2": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of Dory's prefill attention, the head dim split over simdgroup pairs: old (NI_DORY_ATTN_D2=0, dory_attn_t_g4s8k16), 32K / 128K, one request each"
+ },
+ {
+  "label": "dory-d2-old-256",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_DORY_ATTN_D2": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of Dory's prefill attention, the head dim split over simdgroup pairs: old (NI_DORY_ATTN_D2=0, dory_attn_t_g4s8k16), 255K, one request each"
+ },
+ {
+  "label": "dory-d2-new",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of Dory's prefill attention, the head dim split over simdgroup pairs: new (dory_attn_td2_g4s8), 32K / 128K, one request each"
+ },
+ {
+  "label": "dory-d2-new-256",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of Dory's prefill attention, the head dim split over simdgroup pairs: new (dory_attn_td2_g4s8), 255K, one request each"
+ }
+]

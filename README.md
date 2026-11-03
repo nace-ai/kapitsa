@@ -42,12 +42,12 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/context-prefill-dark.webp">
-  <img alt="Kapitsa's prefill speed in tokens per second on a MacBook Pro M5 Max, from 1K-token prompts to each model's context limit (128K to 512K), one line per model: Qwen3.6 35B-A3B 4,686 at 1K to 987 at 256K; Clover 35B-A3B 4,688 at 1K to 1,894 at 128K; Qwen3.8 27B 755 at 1K to 286 at 256K; Flash-Next 180B 1,511 at 1K to 1,087 at 256K; Lightning 30B 5,205 at 1K to 1,131 at 512K; Super-VL 120B 956 at 1K to 546 at 512K; Bolt 74B 916 at 1K to 746 at 256K; Dory1.0 4B 2,448 at 1K to 405 at 256K; Flint 40B 4,266 at 1K to 1,241 at 256K." src="docs/assets/context-prefill-light.webp">
+  <img alt="Kapitsa's prefill speed in tokens per second on a MacBook Pro M5 Max, from 1K-token prompts to each model's context limit (128K to 512K), one line per model: Qwen3.6 35B-A3B 4,686 at 1K to 987 at 256K; Clover 35B-A3B 4,688 at 1K to 1,894 at 128K; Qwen3.8 27B 745 at 1K to 303 at 256K; Flash-Next 180B 1,511 at 1K to 1,087 at 256K; Lightning 30B 5,205 at 1K to 1,131 at 512K; Super-VL 120B 956 at 1K to 546 at 512K; Bolt 74B 916 at 1K to 746 at 256K; Dory1.0 4B 3,104 at 1K to 407 at 256K; Flint 40B 4,266 at 1K to 1,241 at 256K." src="docs/assets/context-prefill-light.webp">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/context-decode-dark.webp">
-  <img alt="Kapitsa's decode speed in tokens per second on a MacBook Pro M5 Max after 1K tokens of context to each model's context limit (128K to 512K), one line per model: Qwen3.6 35B-A3B 314 at 1K to 114 at 256K; Clover 35B-A3B 294 at 1K to 181 at 128K; Qwen3.8 27B 78 at 1K to 28 at 256K; Flash-Next 180B 97 at 1K to 76 at 256K; Lightning 30B 241 at 1K to 116 at 512K; Super-VL 120B 97 at 1K to 44 at 512K; Bolt 74B 142 at 1K to 91 at 256K; Dory1.0 4B 111 at 1K to 20 at 256K; Flint 40B 258 at 1K to 62 at 256K." src="docs/assets/context-decode-light.webp">
+  <img alt="Kapitsa's decode speed in tokens per second on a MacBook Pro M5 Max after 1K tokens of context to each model's context limit (128K to 512K), one line per model: Qwen3.6 35B-A3B 314 at 1K to 114 at 256K; Clover 35B-A3B 294 at 1K to 181 at 128K; Qwen3.8 27B 83 at 1K to 33 at 256K; Flash-Next 180B 97 at 1K to 76 at 256K; Lightning 30B 241 at 1K to 116 at 512K; Super-VL 120B 97 at 1K to 44 at 512K; Bolt 74B 142 at 1K to 91 at 256K; Dory1.0 4B 125 at 1K to 22 at 256K; Flint 40B 258 at 1K to 62 at 256K." src="docs/assets/context-decode-light.webp">
 </picture>
 
 ## 🔥 What's new

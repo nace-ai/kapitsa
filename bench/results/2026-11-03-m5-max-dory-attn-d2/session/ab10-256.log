@@ -1,0 +1,27 @@
+=== dory-d2-old-256 04:50:25 powermode=2 Now drawing from 'AC Power' load={ 1.84 1.28 1.38 } top=12.2 (Renderer);11.6 /usr/libexec/sysmond;10.3 Helper;
+[04:50:31] dory-d2-old-256:  warm-up prefill~2.9k+decode64: ok (1.59s)
+[04:50:31] dory-d2-old-256:  warm-up tools: ok (0.35s)
+[04:51:31] dory-d2-old-256: GPU not quiet after 60s (['Claude Helper[95214] 8%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 127.47 tok/s (e2e 124.98; 512 tok, finish=length, d4=0.7349)
+  decode T=0.6: 123.13 tok/s (e2e 122.31; 512 tok, finish=length, d4=0.75)
+  decode T=0.6: 122.33 tok/s (e2e 120.59; 512 tok, finish=length, d4=0.6926)
+  decode T=0.6: 120.98 tok/s (e2e 119.16; 512 tok, finish=length, d4=0.9399)
+  decode T=0.6: 124.68 tok/s (e2e 123.05; 512 tok, finish=length, d4=0.4877) flags ['repetition loop (distinct-4-gram 0.4877)']
+  decode median 123.13 (min 120.98, max 127.47) over 5/5 valid
+  sweep 240000: 254822 tok, TTFT 586.69s, 434 tok/s prefill, decode 19.31 tok/s
+  -> <run-root>/ab10/results/dory-d2-old-256-20261103-045025.json
+[05:02:15] dory-d2-old-256: -> <run-root>/ab10/results/dory-d2-old-256-20261103-045025.json  flags: 2
+=== dory-d2-new-256 05:02:15 powermode=2 Now drawing from 'AC Power' load={ 1.60 1.44 1.42 } top=14.7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;7.2 Helper;5.0 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder;
+[05:02:21] dory-d2-new-256:  warm-up prefill~2.9k+decode64: ok (1.78s)
+[05:02:21] dory-d2-new-256:  warm-up tools: ok (0.39s)
+[05:03:21] dory-d2-new-256: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 109.59 tok/s (e2e 109.41; 512 tok, finish=length, d4=0.7458)
+  decode T=0.6: 109.39 tok/s (e2e 109.37; 512 tok, finish=length, d4=0.9395)
+  decode T=0.6: 116.46 tok/s (e2e 115.89; 512 tok, finish=length, d4=0.6386)
+  decode T=0.6: 124.29 tok/s (e2e 123.29; 512 tok, finish=length, d4=0.7253)
+  decode T=0.6: 115.35 tok/s (e2e 114.51; 512 tok, finish=length, d4=0.7159)
+  decode median 115.35 (min 109.39, max 124.29) over 5/5 valid
+  sweep 240000: 254824 tok, TTFT 374.67s, 680 tok/s prefill, decode 20.12 tok/s
+  -> <run-root>/ab10/results/dory-d2-new-256-20261103-050215.json
+[05:10:34] dory-d2-new-256: -> <run-root>/ab10/results/dory-d2-new-256-20261103-050215.json  flags: 1
+=== done 05:10:34

@@ -1,0 +1,119 @@
+prefill 8 rows: next-token NLL 1.3419, top-1 = next token 0.7500 -> <run-root>/ab10-output-check/ref/prefill
+step   192 rows: next-token NLL 0.7754, top-1 = next token 0.7969 -> <run-root>/ab10-output-check/ref/step
+verify 192 rows: next-token NLL 0.7754, top-1 = next token 0.7969 -> <run-root>/ab10-output-check/ref/verify
+8 windows, 14848 prefilled tokens in 4.1 s; 6.4 s in all
+prefill 8 rows: next-token NLL 1.3477, top-1 = next token 0.7500 -> <run-root>/ab10-output-check/new/prefill
+step   192 rows: next-token NLL 0.7750, top-1 = next token 0.7969 -> <run-root>/ab10-output-check/new/step
+verify 192 rows: next-token NLL 0.7749, top-1 = next token 0.7969 -> <run-root>/ab10-output-check/new/verify
+8 windows, 14848 prefilled tokens in 3.8 s; 6.1 s in all
+prefill: 8 records (nemotron-labs-dory1.0-4b-nvfp4)
+  reference: 0.2.26 (32cf851), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DORY_ATTN_D2":"0"}
+  candidate: 0.2.26 (32cf851), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 8; max |logit diff| 0.1831
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 8.863e-06 median 3.592e-07 p99 5.474e-05 max 5.805e-05; top-2 margin change up to 0.03796
+  next-token NLL change +5.776e-03 nats per record (candidate minus reference)
+step: 192 records (nemotron-labs-dory1.0-4b-nvfp4)
+  reference: 0.2.26 (32cf851), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DORY_ATTN_D2":"0"}
+  candidate: 0.2.26 (32cf851), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.2964
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.987))
+  KL mean 1.091e-05 median 1.722e-07 p99 2.423e-04 max 3.563e-04; top-2 margin change up to 0.132
+  next-token NLL change -3.999e-04 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/nemotron-labs-dory1.0-4b-nvfp4.json)
+verify: 192 records (nemotron-labs-dory1.0-4b-nvfp4)
+  reference: 0.2.26 (32cf851), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DORY_ATTN_D2":"0"}
+  candidate: 0.2.26 (32cf851), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.258
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.987))
+  KL mean 1.106e-05 median 3.083e-07 p99 2.181e-04 max 3.098e-04; top-2 margin change up to 0.1347
+  next-token NLL change -4.922e-04 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/nemotron-labs-dory1.0-4b-nvfp4.json)
+  KL mean 1.106e-05 median 3.083e-07 p99 2.181e-04 max 3.098e-04; top-2 margin change up to 0.1347
+  next-token NLL change -4.922e-04 nats per record (candidate minus reference)
+  PASS (the order-change gate (a reassociated K reduction, not the noise floor))
+=== dory-d2-old 04:31:24 powermode=2 Now drawing from 'AC Power' load={ 1.28 1.96 1.95 } top=29.4 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;1.1 /usr/libexec/sysmond;0.8 /usr/libexec/syspolicyd;
+[04:31:30] dory-d2-old:  warm-up prefill~2.9k+decode64: ok (1.52s)
+[04:31:30] dory-d2-old:  warm-up tools: ok (0.35s)
+[04:31:49] dory-d2-old: GPU quiet after 19s; benchmarking
+  decode T=0.6: 123.57 tok/s (e2e 121.85; 512 tok, finish=length, d4=0.4905) flags ['repetition loop (distinct-4-gram 0.4905)']
+  decode T=0.6: 126.67 tok/s (e2e 128.27; 512 tok, finish=length, d4=0.9412)
+  decode T=0.6: 124.45 tok/s (e2e 122.83; 512 tok, finish=length, d4=0.7168)
+  decode T=0.6: 113.96 tok/s (e2e 113.14; 512 tok, finish=length, d4=0.598)
+  decode T=0.6: 120.86 tok/s (e2e 120.41; 512 tok, finish=length, d4=0.5205)
+  decode median 123.57 (min 113.96, max 126.67) over 5/5 valid
+  sweep 32000: 33149 tok, TTFT 20.10s, 1649 tok/s prefill, decode 72.54 tok/s
+  sweep 128000: 133399 tok, TTFT 185.23s, 720 tok/s prefill, decode 32.67 tok/s
+  -> <run-root>/ab10/results/dory-d2-old-20261103-043124.json
+[04:36:06] dory-d2-old: -> <run-root>/ab10/results/dory-d2-old-20261103-043124.json  flags: 1
+=== dory-d2-new 04:36:06 powermode=2 Now drawing from 'AC Power' load={ 0.85 1.12 1.55 } top=7.4 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;3.3 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder;2.7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;
+[04:36:12] dory-d2-new:  warm-up prefill~2.9k+decode64: ok (1.7s)
+[04:36:12] dory-d2-new:  warm-up tools: ok (0.4s)
+[04:36:31] dory-d2-new: GPU quiet after 19s; benchmarking
+  decode T=0.6: 108.77 tok/s (e2e 108.63; 512 tok, finish=length, d4=0.9466)
+  decode T=0.6: 94.57 tok/s (e2e 96.57; 512 tok, finish=length, d4=0.8361)
+  decode T=0.6: 98.82 tok/s (e2e 98.53; 512 tok, finish=length, d4=0.9308)
+  decode T=0.6: 98.72 tok/s (e2e 98.44; 512 tok, finish=length, d4=0.8994)
+  decode T=0.6: 101.59 tok/s (e2e 101.30; 512 tok, finish=length, d4=0.7154)
+  decode median 98.82 (min 94.57, max 108.77) over 5/5 valid
+  sweep 32000: 33147 tok, TTFT 16.02s, 2069 tok/s prefill, decode 68.11 tok/s
+  sweep 128000: 133399 tok, TTFT 124.74s, 1069 tok/s prefill, decode 33.84 tok/s
+  -> <run-root>/ab10/results/dory-d2-new-20261103-043606.json
+[04:39:48] dory-d2-new: -> <run-root>/ab10/results/dory-d2-new-20261103-043606.json
+=== dory-d2-old 04:39:48 powermode=2 Now drawing from 'AC Power' load={ 5.69 2.21 1.84 } top=43.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;13.3 Helper;5.8 Chrome;
+[04:39:54] dory-d2-old:  warm-up prefill~2.9k+decode64: ok (1.87s)
+[04:39:55] dory-d2-old:  warm-up tools: ok (0.4s)
+[04:40:13] dory-d2-old: GPU quiet after 19s; benchmarking
+  decode T=0.6: 107.20 tok/s (e2e 107.10; 512 tok, finish=length, d4=0.615)
+  decode T=0.6: 105.60 tok/s (e2e 104.35; 512 tok, finish=length, d4=0.7133)
+  decode T=0.6: 110.29 tok/s (e2e 108.67; 512 tok, finish=length, d4=0.5825)
+  decode T=0.6: 108.61 tok/s (e2e 108.43; 512 tok, finish=length, d4=0.8529)
+  decode T=0.6: 104.38 tok/s (e2e 102.38; 512 tok, finish=length, d4=0.6903)
+  decode median 107.2 (min 104.38, max 110.29) over 5/5 valid
+  sweep 32000: 33148 tok, TTFT 20.53s, 1615 tok/s prefill, decode 70.96 tok/s
+  sweep 128000: 133397 tok, TTFT 184.67s, 722 tok/s prefill, decode 33.70 tok/s
+  -> <run-root>/ab10/results/dory-d2-old-20261103-043948.json
+[04:44:33] dory-d2-old: -> <run-root>/ab10/results/dory-d2-old-20261103-043948.json
+=== dory-d2-new 04:44:33 powermode=2 Now drawing from 'AC Power' load={ 0.60 1.29 1.52 } top=2.7 Renderer);1.9 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;1.3 (Renderer);
+[04:44:39] dory-d2-new:  warm-up prefill~2.9k+decode64: ok (1.77s)
+[04:44:39] dory-d2-new:  warm-up tools: ok (0.39s)
+[04:44:58] dory-d2-new: GPU quiet after 19s; benchmarking
+  decode T=0.6: 105.54 tok/s (e2e 105.31; 512 tok, finish=length, d4=0.6871)
+  decode T=0.6: 100.22 tok/s (e2e 99.40; 512 tok, finish=length, d4=0.7229)
+  decode T=0.6: 107.83 tok/s (e2e 106.11; 512 tok, finish=length, d4=0.6074)
+  decode T=0.6: 103.35 tok/s (e2e 100.90; 512 tok, finish=length, d4=0.4916) flags ['repetition loop (distinct-4-gram 0.4916)']
+  decode T=0.6: 100.76 tok/s (e2e 99.61; 512 tok, finish=length, d4=0.6836)
+  decode median 103.35 (min 100.22, max 107.83) over 5/5 valid
+  sweep 32000: 33148 tok, TTFT 16.32s, 2031 tok/s prefill, decode 71.06 tok/s
+  sweep 128000: 133397 tok, TTFT 126.21s, 1057 tok/s prefill, decode 32.26 tok/s
+  -> <run-root>/ab10/results/dory-d2-new-20261103-044433.json
+[04:48:17] dory-d2-new: -> <run-root>/ab10/results/dory-d2-new-20261103-044433.json  flags: 1
+=== dory-d2-new-256 04:48:17 powermode=2 Now drawing from 'AC Power' load={ 0.76 0.94 1.30 } top=2.1 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;1.5 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;1.1 (Renderer);
+[04:48:23] dory-d2-new-256:  warm-up prefill~2.9k+decode64: ok (1.84s)
+[04:48:23] dory-d2-new-256:  warm-up tools: ok (0.49s)
+[04:48:42] dory-d2-new-256: GPU quiet after 19s; benchmarking
+  decode T=0.6: 111.87 tok/s (e2e 110.64; 512 tok, finish=length, d4=0.7208)
+  decode T=0.6: 98.07 tok/s (e2e 97.84; 512 tok, finish=length, d4=0.5909)
+  decode T=0.6: 102.07 tok/s (e2e 100.83; 512 tok, finish=length, d4=0.7127)
+  decode T=0.6: 110.72 tok/s (e2e 109.42; 512 tok, finish=length, d4=0.5245)
+  decode T=0.6: 95.07 tok/s (e2e 95.27; 512 tok, finish=length, d4=0.75)
+  decode median 102.07 (min 95.07, max 111.87) over 5/5 valid
+  sweep 249051: None tok, TTFT NAs, None tok/s prefill, decode NA tok/s ERROR RuntimeError('HTTP 400: {"error":{"message":"This model\'s maximum context length is 262142 tokens. However, your messages resulted in 264368 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}')
+  INVALID: ['sweep: sweep 249051: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 262142 tokens. However, your messages resulted in 264368 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']
+  -> <run-root>/ab10/results/dory-d2-new-256-20261103-044817.json
+[04:49:13] dory-d2-new-256: -> <run-root>/ab10/results/dory-d2-new-256-20261103-044817.json  INVALID: ['sweep: sweep 249051: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 262142 tokens. However, your messages resulted in 264368 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']
+=== dory-d2-old-256 04:49:13 powermode=2 Now drawing from 'AC Power' load={ 0.94 0.97 1.29 } top=1.4 (Renderer);1.0 /usr/libexec/sysmond;0.7 Renderer);
+[04:49:19] dory-d2-old-256:  warm-up prefill~2.9k+decode64: ok (1.81s)
+[04:49:20] dory-d2-old-256:  warm-up tools: ok (0.39s)
+[04:49:38] dory-d2-old-256: GPU quiet after 19s; benchmarking
+  decode T=0.6: 107.46 tok/s (e2e 105.82; 512 tok, finish=length, d4=0.5233)
+  decode T=0.6: 107.60 tok/s (e2e 106.36; 512 tok, finish=length, d4=0.4711) flags ['repetition loop (distinct-4-gram 0.4711)']
+  decode T=0.6: 112.72 tok/s (e2e 111.87; 512 tok, finish=length, d4=0.9433)
+  decode T=0.6: 115.40 tok/s (e2e 112.74; 512 tok, finish=length, d4=0.9137)
+  decode T=0.6: 113.05 tok/s (e2e 112.66; 512 tok, finish=length, d4=0.6891)
+  decode median 112.72 (min 107.46, max 115.4) over 5/5 valid
+  sweep 249051: None tok, TTFT NAs, None tok/s prefill, decode NA tok/s ERROR RuntimeError('HTTP 400: {"error":{"message":"This model\'s maximum context length is 262142 tokens. However, your messages resulted in 264366 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}')
+  INVALID: ['sweep: sweep 249051: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 262142 tokens. However, your messages resulted in 264366 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']
+  -> <run-root>/ab10/results/dory-d2-old-256-20261103-044913.json
+[04:50:08] dory-d2-old-256: -> <run-root>/ab10/results/dory-d2-old-256-20261103-044913.json  INVALID: ['sweep: sweep 249051: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 262142 tokens. However, your messages resulted in 264366 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']  flags: 1
+=== done 04:50:08
