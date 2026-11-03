@@ -36,8 +36,12 @@ identical on every path (prefill, step, verify, batch).
 
 ## Contention
 
-The Claude desktop app's GPU process, driving the session, held up to ~10% of the GPU (the harness's worst-phase mean), and
-the 60 s quiet wait timed out before most runs; both arms ran under it, interleaved.
+Every run is flagged for contention in its JSON (`contention`). The Claude desktop app's GPU process, driving the
+session, held a mean of 12.2-27.2% of the GPU during the sweep on the old arm's runs and 6.2-11.8% on the new arm's (up to
+66% at a sample), and the 60 s quiet wait timed out before every run. The load was uneven: on Lightning and Super-VL the
+old arm ran under 20.5-27.2% against the new arm's 6.2-9.4%, which favours the new arm. The two pairs closest in load give
+the table's range: Bolt's first pair (12.2% old, 11.8% new) 1.20x, and the 512K pair (13.7%, 10.2%) 1.40x. (An earlier
+version of this section said "up to ~10% of the GPU (the harness's worst-phase mean)", which the JSONs contradict.)
 
 ## Files
 
