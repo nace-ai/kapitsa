@@ -132,6 +132,71 @@ constant constexpr uint kDoryKT = 16;
   }
 }
 
+// The same attention with one threadgroup per (chunk, kv head) for all R rows: G R simdgroups (row sg / G, query head
+// sg % G), the K / V tiles of the rows' keys (the union: row 0's first, row R - 1's last) staged once for all of them,
+// where dory_attn_partial stages them once per row (a verify's R rows read the cache R times: at 254K positions the 3-row
+// verify's attention was ~3x one cache read). Each row's simdgroup runs dory_attn_partial's per-key update over its own
+// keys in the same ascending order, so its partials are dory_attn_partial's bit for bit.
+// grid: (nchunks, Hkv) x 32 G R threads (R <= 8: at most 1024).
+[[kernel]] void dory_attn_partial_rows(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                       const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                       device float* part_ml [[buffer(4)]], constant DoryAttnP& p [[buffer(5)]],
+                                       uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                       uint3 ntg3 [[threads_per_threadgroup]]) {
+  const uint ntg = ntg3.x;
+  threadgroup half4 kt[kDoryKT * kDD / 4];
+  threadgroup half4 vt[kDoryKT * kDD / 4];
+  const uint chunk = tg.x, kvh = tg.y;
+  const uint G = p.Hq / p.Hkv, r = sg / G, hq = kvh * G + sg % G;
+  const bool live = r < p.R;
+  const uint qp = p.pos0 + min(r, p.R - 1);
+  const uint lo = p.window && qp + 1 > p.window ? qp + 1 - p.window : 0;
+  const uint c0 = p.k0 + chunk * p.chunk;
+  const uint start = max(c0, lo), end = min(c0 + p.chunk, qp + 1);
+  // the rows' union of keys in this chunk: row 0's lo is the least (lo grows with the row), row R - 1's end the largest
+  const uint lo0 = p.window && p.pos0 + 1 > p.window ? p.pos0 + 1 - p.window : 0;
+  const uint ustart = max(c0, lo0), uend = min(c0 + p.chunk, p.pos0 + p.R);
+  const device float4* qr = (const device float4*)(q + (size_t(min(r, p.R - 1)) * p.Hq + hq) * kDD) + lane * 2;
+  const float4 q0 = qr[0] * p.scale, q1 = qr[1] * p.scale;
+  float4 a0 = 0.0f, a1 = 0.0f;
+  float m = -INFINITY, l = 0.0f;
+  const device half4* kb = (const device half4*)(kc + size_t(kvh) * p.rows * kDD);
+  const device half4* vb = (const device half4*)(vc + size_t(kvh) * p.rows * kDD);
+  for (uint t0 = ustart; t0 < uend; t0 += kDoryKT) {
+    const uint n = min(kDoryKT, uend - t0);
+    for (uint i = tid; i < n * kDD / 4; i += ntg) {
+      const uint key = t0 + i / (kDD / 4), slot = p.ring ? key % p.rows : key;
+      kt[i] = kb[size_t(slot) * (kDD / 4) + i % (kDD / 4)];
+      vt[i] = vb[size_t(slot) * (kDD / 4) + i % (kDD / 4)];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (live) {
+      for (uint j = 0; j < n; ++j) {
+        const uint key = t0 + j;
+        if (key < start || key >= end) continue;  // (another row's key)
+        const float s = simd_sum(dot(q0, float4(kt[j * kDD / 4 + lane * 2])) + dot(q1, float4(kt[j * kDD / 4 + lane * 2 + 1])));
+        const float mn = max(m, s);
+        const float corr = metal::precise::exp(m - mn), e = metal::precise::exp(s - mn);
+        l = l * corr + e;
+        a0 = a0 * corr + e * float4(vt[j * kDD / 4 + lane * 2]);
+        a1 = a1 * corr + e * float4(vt[j * kDD / 4 + lane * 2 + 1]);
+        m = mn;
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  if (!live) return;
+  const size_t base = (size_t(r) * p.Hq + hq) * p.nchunks + chunk;
+  device float4* po = (device float4*)(part_o + base * kDD) + lane * 2;
+  po[0] = a0;
+  po[1] = a1;
+  if (lane == 0) {
+    part_ml[base * 2 + 0] = m;
+    part_ml[base * 2 + 1] = l;
+  }
+}
+
 // grid: (Hq, R) x 256 threads. out[r][h * 256 + d] (fp32, not yet gated)
 [[kernel]] void dory_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
                                  device float* out [[buffer(2)]], constant DoryAttnP& p [[buffer(3)]],

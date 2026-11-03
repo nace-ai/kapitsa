@@ -1,0 +1,3 @@
+prefill 1 rows: next-token NLL 0.0124, top-1 = next token 1.0000 -> <dumps>/val/prefill
+verify 24 rows: next-token NLL 1.0386, top-1 = next token 0.7917 -> <dumps>/val/verify
+1 windows, 512 prefilled tokens in 1.1 s; 1.8 s in all

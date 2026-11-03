@@ -14,10 +14,14 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-1039 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-02 down to 2026-10-16, newest first.
+1043 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-02 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | c0a2b25+dirty | 113.2 | – | – | – | – | – | contention | [dory-rows-new-20261102-235518](results/2026-11-02-m5-max-dory-verify-rows/results/dory-rows-new-20261102-235518.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | c0a2b25+dirty | 121.5 | – | – | – | – | – | contention | [dory-rows-old-20261102-235006](results/2026-11-02-m5-max-dory-verify-rows/results/dory-rows-old-20261102-235006.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | c0a2b25+dirty | 117.3 | – | – | – | – | – | contention | [dory-rows-new-20261102-234455](results/2026-11-02-m5-max-dory-verify-rows/results/dory-rows-new-20261102-234455.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | c0a2b25+dirty | 118.3 | – | – | – | – | – | contention | [dory-rows-old-20261102-233926](results/2026-11-02-m5-max-dory-verify-rows/results/dory-rows-old-20261102-233926.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | 83c4478 | 122.1 | – | – | – | – | – | contention | [q27-v8t-new-20261102-232418](results/2026-11-02-m5-max-q27-verify-t/results/q27-v8t-new-20261102-232418.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | a2f4210+dirty | 126.7 | – | – | – | – | – | contention | [q27-v8t-old-20261102-231702](results/2026-11-02-m5-max-q27-verify-t/results/q27-v8t-old-20261102-231702.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | a2f4210+dirty | 140.3 | – | – | – | – | – | contention | [q27-v8t-new-20261102-230823](results/2026-11-02-m5-max-q27-verify-t/results/q27-v8t-new-20261102-230823.json) |

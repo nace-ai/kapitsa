@@ -1,0 +1,57 @@
+=== dory-rows-old 23:39:25 powermode=2 Now drawing from 'AC Power' load={ 4.11 3.51 2.23 } top=15.9 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;13.2 (Renderer);12.5 Helper;
+[23:39:31] dory-rows-old:  warm-up prefill~2.9k+decode64: ok (1.47s)
+[23:39:31] dory-rows-old:  warm-up tools: ok (0.35s)
+[23:40:32] dory-rows-old: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 114.24 tok/s (e2e 113.80; 512 tok, finish=length, d4=0.9262)
+  decode T=0.6: 113.21 tok/s (e2e 112.45; 512 tok, finish=length, d4=0.7423)
+  decode T=0.6: 123.39 tok/s (e2e 122.31; 512 tok, finish=length, d4=0.5294)
+  decode T=0.6: 120.62 tok/s (e2e 118.74; 512 tok, finish=length, d4=0.5865)
+  decode T=0.6: 118.33 tok/s (e2e 118.43; 512 tok, finish=length, d4=0.6852)
+  decode median 118.33 (min 113.21, max 123.39) over 5/5 valid
+  sweep 32000: 33149 tok, TTFT 19.54s, 1696 tok/s prefill, decode 70.04 tok/s
+  sweep 128000: 133397 tok, TTFT 190.82s, 699 tok/s prefill, decode 32.42 tok/s
+  -> <run-root>/ab8/results/dory-rows-old-20261102-233926.json
+[23:44:55] dory-rows-old: -> <run-root>/ab8/results/dory-rows-old-20261102-233926.json  flags: 1
+=== dory-rows-new 23:44:55 powermode=2 Now drawing from 'AC Power' load={ 1.11 2.08 1.99 } top=10.8 Helper;8.3 (Renderer);2.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;
+[23:45:01] dory-rows-new:  warm-up prefill~2.9k+decode64: ok (1.92s)
+[23:45:02] dory-rows-new:  warm-up tools: ok (0.39s)
+[23:46:02] dory-rows-new: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 109.59 tok/s (e2e 108.33; 512 tok, finish=length, d4=0.5746)
+  decode T=0.6: 110.85 tok/s (e2e 108.90; 512 tok, finish=length, d4=0.9953)
+  decode T=0.6: 117.32 tok/s (e2e 116.50; 512 tok, finish=length, d4=0.6886)
+  decode T=0.6: 118.59 tok/s (e2e 117.31; 512 tok, finish=length, d4=0.942)
+  decode T=0.6: 120.08 tok/s (e2e 119.65; 512 tok, finish=length, d4=0.9464)
+  decode median 117.32 (min 109.59, max 120.08) over 5/5 valid
+  sweep 32000: 33147 tok, TTFT 17.42s, 1902 tok/s prefill, decode 81.15 tok/s
+  sweep 128000: 133398 tok, TTFT 177.97s, 750 tok/s prefill, decode 38.91 tok/s
+  -> <run-root>/ab8/results/dory-rows-new-20261102-234455.json
+[23:50:06] dory-rows-new: -> <run-root>/ab8/results/dory-rows-new-20261102-234455.json  flags: 1
+=== dory-rows-old 23:50:06 powermode=2 Now drawing from 'AC Power' load={ 0.90 1.40 1.71 } top=17.8 Helper;14.4 (Renderer);5.2 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[23:50:12] dory-rows-old:  warm-up prefill~2.9k+decode64: ok (1.86s)
+[23:50:12] dory-rows-old:  warm-up tools: ok (0.39s)
+[23:51:13] dory-rows-old: GPU not quiet after 60s (['Claude Helper[95214] 17%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 123.55 tok/s (e2e 123.34; 512 tok, finish=length, d4=0.9461)
+  decode T=0.6: 113.19 tok/s (e2e 111.30; 512 tok, finish=length, d4=0.5879)
+  decode T=0.6: 120.11 tok/s (e2e 118.88; 512 tok, finish=length, d4=0.6981)
+  decode T=0.6: 122.63 tok/s (e2e 120.64; 512 tok, finish=length, d4=0.5922)
+  decode T=0.6: 121.55 tok/s (e2e 120.09; 512 tok, finish=length, d4=0.7083)
+  decode median 121.55 (min 113.19, max 123.55) over 5/5 valid
+  sweep 32000: 33148 tok, TTFT 17.54s, 1890 tok/s prefill, decode 74.53 tok/s
+  sweep 128000: 133397 tok, TTFT 175.26s, 761 tok/s prefill, decode 31.48 tok/s
+  -> <run-root>/ab8/results/dory-rows-old-20261102-235006.json
+[23:55:18] dory-rows-old: -> <run-root>/ab8/results/dory-rows-old-20261102-235006.json  flags: 1
+=== dory-rows-new 23:55:18 powermode=2 Now drawing from 'AC Power' load={ 1.56 1.58 1.69 } top=9.0 Helper;3.8 (Renderer);1.9 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;
+[23:55:24] dory-rows-new:  warm-up prefill~2.9k+decode64: ok (1.79s)
+[23:55:24] dory-rows-new:  warm-up tools: ok (0.5s)
+[23:56:24] dory-rows-new: GPU not quiet after 60s (['Claude Helper[95214] 15%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 111.91 tok/s (e2e 111.15; 512 tok, finish=length, d4=0.5802)
+  decode T=0.6: 111.82 tok/s (e2e 110.15; 512 tok, finish=length, d4=0.5516)
+  decode T=0.6: 113.16 tok/s (e2e 112.37; 512 tok, finish=length, d4=0.9683)
+  decode T=0.6: 117.51 tok/s (e2e 116.69; 512 tok, finish=length, d4=0.938)
+  decode T=0.6: 123.28 tok/s (e2e 122.35; 512 tok, finish=length, d4=0.7376)
+  decode median 113.16 (min 111.82, max 123.28) over 5/5 valid
+  sweep 32000: 33145 tok, TTFT 17.77s, 1866 tok/s prefill, decode 77.24 tok/s
+  sweep 128000: 133397 tok, TTFT 174.65s, 764 tok/s prefill, decode 35.39 tok/s
+  -> <run-root>/ab8/results/dory-rows-new-20261102-235518.json
+[00:00:28] dory-rows-new: -> <run-root>/ab8/results/dory-rows-new-20261102-235518.json  flags: 1
+=== done 00:00:28

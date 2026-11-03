@@ -1024,14 +1024,19 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
   const uint32_t nch = (Lk + chunk - 1) / chunk;
   const AttnP ap{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring, window, chunk, nch, k0,
                  1.0f / std::sqrt(float(c.hd))};
-  e.use(pipe("dory_attn_partial"));
+  // a verify's rows (2 or more): one threadgroup per (chunk, kv head) for all of them (dory_attn_partial_rows: the cache
+  // read once, the same partials bit for bit); NI_DORY_ATTN_ROWS=0: a threadgroup per row (dory_attn_partial)
+  static const bool rows_tg = !(getenv("NI_DORY_ATTN_ROWS") && atoi(getenv("NI_DORY_ATTN_ROWS")) == 0);
+  const bool rt = rows_tg && R >= 2 && R * (c.hq / c.hkv) <= 32;
+  e.use(pipe(rt ? "dory_attn_partial_rows" : "dory_attn_partial"));
   e.buf(0, q_);
   e.buf(1, s.kc[size_t(ci)]);
   e.buf(2, s.vc[size_t(ci)]);
   e.buf(3, part_o_);
   e.buf(4, part_ml_);
   e.val(5, ap);
-  e.dispatch(nch, uint32_t(c.hkv), uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
+  if (rt) e.dispatch(nch, uint32_t(c.hkv), 1, 32 * uint32_t(R) * uint32_t(c.hq / c.hkv));
+  else e.dispatch(nch, uint32_t(c.hkv), uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
   const struct {
     uint32_t Hq, nchunks, g_ld;
     float sg;

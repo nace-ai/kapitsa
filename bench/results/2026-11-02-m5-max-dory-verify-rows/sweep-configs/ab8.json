@@ -1,0 +1,55 @@
+[
+ {
+  "label": "dory-rows-old",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_DORY_ATTN_ROWS": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of Dory's verify attention, all rows in one threadgroup: old (NI_DORY_ATTN_ROWS=0, dory_attn_partial), 32K / 128K, one request each"
+ },
+ {
+  "label": "dory-rows-new",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of Dory's verify attention, all rows in one threadgroup: new (dory_attn_partial_rows), 32K / 128K, one request each"
+ }
+]
