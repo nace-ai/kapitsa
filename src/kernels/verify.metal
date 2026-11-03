@@ -407,8 +407,8 @@ NI_INLINE void topk256_row(const device float* logits, const device float* share
     sum += v[i];
   }
   sum = simd_sum(sum);
-  float sel = 0.0f, wsel[8];
-  uint isel[8];
+  float sel = 0.0f, w = 0.0f;
+  uint ii = 0;
   for (uint q = 0; q < p.k; ++q) {
     float best = -1.0f;
     uint bi = 0;
@@ -417,15 +417,10 @@ NI_INLINE void topk256_row(const device float* logits, const device float* share
     float g = simd_max(best);
     uint win = simd_min(best == g ? lane * PER + bi : 0xffffffffu);
     if (win / PER == lane) v[win % PER] = -1.0f;
-    wsel[q] = g;
-    isel[q] = win;
+    if (lane == q) { w = g; ii = win; }
     sel += g;
   }
   if (lane < p.k) {
-    float w = 0.0f;
-    uint ii = 0;
-    for (uint q = 0; q < p.k; ++q)
-      if (q == lane) { w = wsel[q]; ii = isel[q]; }
     idx[r * p.k + lane] = ii;
     if (ids) ids[r * p.k + lane] = ii;
     wts[r * (p.k + 1) + lane] = p.norm ? w / sel : w / sum;
