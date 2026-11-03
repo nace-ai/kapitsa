@@ -204,6 +204,8 @@ class Dory : public Model {
   // (tensor/nh_dory_attn_t.metal), when one exists for the model's query heads per KV head. NI_DORY_ATTN_T=0 keeps
   // dory_attn_prefill, which the models with another ratio and the GPUs below Apple10 take anyway.
   bool attn_t_ = false;
+  // ...as dory_attn_td2_g4s8, the head dim split over pairs of simdgroups (NI_DORY_ATTN_D2=0: dory_attn_t_g4s8k16)
+  bool attn_d2_ = false;
   static const char* x4(const NhMat& W, const char* l2, const char* l0) { return W.l2 ? l2 : l0; }
   int attn_max_chunks_ = 64;
   // prefill activations (tmax_ rows; on first use)
