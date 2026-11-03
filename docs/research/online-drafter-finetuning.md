@@ -294,7 +294,7 @@ intervals are wide.
 Scope (Alish, 4 Nov 2026): English coding prompts are the headline number, English non-coding the second class, and a multilingual set is an optional extra check, not a gate. The sections keep their numbers from the first version, so §6.1 is now an optional multilingual idea and §6.2 comes first.
 
 Feasibility is my score, 0-1, for "built and shown to win a default in about two weeks of engineering". Expected gains are
-inferences from the measured numbers cited. Only one GPU result exists, F1 (§6.1, "M3 Pro, battery 99→91%, 3 prompts/class", INCONCLUSIVE); nothing else was run.
+inferences from the measured numbers cited. GPU results: F1 (§6.1, "M3 Pro, battery 99→91%, 3 prompts/class", INCONCLUSIVE), F1b (§6.1), the 108 Weaver legs in `uzu` (§5.7), and F2 (§6.5, the 35B on the English coding-agent ledger, M5 Pro, AC power, one run per leg).
 
 ### 6.1 A draft head that follows the user's tokens (feasibility 0.8; optional, non-English only)
 
@@ -442,6 +442,26 @@ GPU trains (gap 5).
 
 The 7-node tree is the engine's default on the 35B. Replaying larger node budgets with `tools/tree_sim.py` on the 19 English opencode-ledger lattices (M5 Pro, 1,015 chain cycles, exact at T0) gives, in tokens per cycle: chain 3.696, 7 nodes 3.989 (+7.9 % over the chain), 11 nodes 4.220 (+5.8 % over 7 nodes), 15 nodes 4.410 (+10.6 % over 7 nodes); the lattice oracle is 5.433. With the 35B's measured cycle cost (14.26 ms at one row, about 1.03 ms per extra row, §2.2; the 12 and 16 row costs are extrapolated, not measured) tokens per ms fall to 0.89x (11 nodes) and 0.80x (15 nodes) of the 7-node tree. The extra rows pay only if each one beyond the 8th costs under 0.31 ms (11 nodes) or 0.28 ms (15 nodes): the tokens-per-cycle gain over the 7-node tree (+5.8 %, +10.6 %) times its 21.47 ms cycle, over the 4 or 8 extra rows. That is a quarter to a third of the measured 1.03 ms. The dense 27B, where 16 rows cost 1.07x of 8 (`docs/kflash.md`), is the case where a wider tree can win, and its 16-row block is already the default. Output is in `kapitsa-online-drafter-notes/f3/tree_budget_agent.txt`, outside the repo. Verdict: not a candidate for the 35B on an English coding session.
 
+### 6.5 F2 measured: the 35B on the English coding-agent session (M5 Pro, AC power, 4 Nov 2026)
+
+`compare_engines.py` agent phase (`agent_replay.py`) on `opencode-ledger.json`: 19 requests of one English coding-agent session (OpenCode, up to 22.7k tokens of context, greedy, thinking off, recorded tool-call gaps of at most 5 s), `kapitsa serve --slots 1`, 35B-A3B 4-bit, AC power and High Power Mode, GPU lock held, each leg started on a fresh server after AC was checked, once per leg. Raw files stay with the task outside the repo (`kapitsa-316/f2-out/results/q36-35b-*.json`, `kapitsa-316/f2/f2_acceptance.json`).
+
+| Leg | Writing speed | Time for the 19 turns | Tokens per verify cycle |
+|---|---|---|---|
+| DFlash2 drafter (default) | 173.5 tok/s | 30.8 s | 4.01 (code 4.06, the one prose answer 3.61) |
+| `--dflash none` (the engine's MTP head, depth 1) | 106.9 tok/s | 45.5 s | 1.83 |
+
+The drafter is about 62 % faster in writing speed (173.5 against 106.9 tok/s) and the session finishes about 32 % sooner (30.8 against 45.5 s, prefill included). Per turn it is faster on 17 of 19 turns, mean per-turn ratio 1.44 (bootstrap 95 % CI over turns [1.28, 1.59], median 1.48, range 0.95 to 2.17). Turns that write edits, which carry the long code answers, gain most: 4.50 tokens per cycle against 2.91 on reads and shell commands. The live 4.01 tokens per cycle is close to the replay's 3.99 (the §6.2 baseline); an earlier, separate drafter run of the same 19 requests that only parsed the server log read 4.04, so two live runs bracket the replay baseline.
+
+**Caveats, in order of weight.**
+- **The plain leg swapped.** The harness flagged "7,996 pages swapped out during the phase" on the plain leg and none on the drafter leg (both servers held about 22 GB with 3.3 GB of swap already in use before the phase). Plain decode may therefore be understated, so 62 % is an upper estimate of the drafter's gain over the engine's own MTP head.
+- **One timed run per leg**, drafter first, plain second. Order and run-to-run noise are not separated; the interval above is over turns, not repeats. A repeat in the opposite order (plain first) is queued; its numbers are not in this section yet.
+- **The two legs did not write identical answers.** 12 of 19 turns match the recording on the drafter leg and 11 on the plain leg, and the legs wrote 3,440 and 3,311 tokens, so the two rates average over slightly different text. Over the 10 turns whose answers match on both legs the ratio of rates is 1.30, the more conservative figure.
+- The baseline here is the engine's MTP head, not decoding with no speculator at all, so this is the drafter's gain over the engine's own fallback, not over plain greedy decoding. A plain no-speculator decode on this Mac was not measured.
+- Per-turn rates for short answers are dominated by start-up (turns of 31 to 66 tokens), so they say little on their own.
+
+What it settles for the plan: the drafter is working on English coding-agent traffic at 4.0 tokens per cycle, and the replay baseline the history lane and the selector update are measured against is the live number. What it does not settle: the history lane and the selector update are still replays; the +13.3 % and +8.6 % in §6.2 and §6.3 have not been run on the GPU.
+
 ### Not in the top 3
 
 - The draft head that follows the user's tokens (§6.1): a non-English idea with no English-code gain; optional multilingual check only.
@@ -460,7 +480,7 @@ earned by an interleaved A/B plus the `logit_dump` output check, or it stays an 
 | Phase | What | Owner | Gate to pass | GPU time |
 |---|---|---|---|---|
 | 0 | Land the simulators. Add a per-cycle trace ring at `src/engine/engine.cpp:3677-3691` (accepted, rows, `conf[7]`, ms) behind an env switch, and expose accepted length in `usage`. No behaviour change. | Kapitsa worker | A replay of a new trace reproduces the logged tok/cycle within 1 %; `api_test` unchanged | 0 on CPU; 15 min to record a trace |
-| 1 | Measure what is missing: plain 35B-A3B on M5 Pro (no number exists) and ask F2 (the English coding-agent ledger). Ask F1 is optional. | Orchestrator grants GPU | F2: a joint drafter-plus-history replay exists on English code. Plain baseline filled. Optional F1 (its `analyse.py` prints the verdict): full head ≥ +10 % over the default on one non-English class (F/A ≥ 1.10) with English F/A ≥ 0.97 (the full head's own cost is 2.7-4.1 %, so English may lose up to 3 %), greedy ids identical on every prompt | F2 ≈ 30 min, plain ≈ 15 min, optional F1 ≈ 50-60 min |
+| 1 | Measure what is missing: plain 35B-A3B on M5 Pro and ask F2 (the English coding-agent ledger). **Done 4 Nov 2026 (§6.5).** Ask F1 is optional. | Orchestrator grants GPU | F2: a joint drafter-plus-history replay exists on English code. Plain baseline filled. Optional F1 (its `analyse.py` prints the verdict): full head ≥ +10 % over the default on one non-English class (F/A ≥ 1.10) with English F/A ≥ 0.97 (the full head's own cost is 2.7-4.1 %, so English may lose up to 3 %), greedy ids identical on every prompt | F2 ≈ 30 min, plain ≈ 15 min, optional F1 ≈ 50-60 min |
 | 2 (optional, multilingual) | **Full head for non-English users, then a user-ranked head only if it beats the full head** (§6.1; no English-code gain, so it is not a gate for anything else): a language check from token counts turns on `NI_DFLASH_HEAD=0` (no ranking needed); a token counter and ranked file at `KAPITSA_HOME/adapt/<model>/head.ids` only if F1 shows the ranked head ahead of the full head. Kapitan: consent toggle. | Kapitsa worker + Kapitan worker | Full head default-on for detected non-English users on the 35B-A3B on M5 Pro by interleaved A/B (3 pairs per class), `logit_dump` identical, English and code within noise; ranked head additionally ≥ +2 % over the full head | ≈ 2 h |
 | 3 (do first for English code) | **History lane** (§6.2) in the lattice with a GPU hash pool, cost charged through `KfCosts`; per session first; workspace pool only after the consent flow. | Kapitsa worker | ≥ +2 % tok/s on the opencode ledger (English coding agent) and agent turns, no loss > 0.5 % on English code or English prose, exact outputs, recurrent-state tree verify unchanged | ≈ 4 h (record 30 min, A/B 3 h) |
 | 4 (second for English code) | **Selector update** (§6.3): CPU offline fit on dumps first; Metal idle-slice training only if that passes. Measure watchdog and foreground latency (F4). | Kapitsa worker | Held-out tokens/cycle +5 % on English code and no loss on English chat (it cost -1.2 % at lr 0.003), decode loss ≤ 3 %, p95 ≤ +5 %, no ring invalidation, outputs identical | ≈ 6 h (dump 1 h, F4 1 h, A/B 4 h) |
@@ -516,8 +536,7 @@ The rowlogs are Flash-Next on Splash, in other worktrees (`kapitsa-ksx`, `kapits
 `{acc, rows, conf[7], wall_ms}`; `acc` counts accepted drafts.
 
 **Not done, and limits.**
-- No GPU, no model load. Every speed figure for the 35B is an inference from other measurements, and a plain 35B decode on the M5 Pro was
-  never measured.
+- The research behind the survey and the replays used no GPU. The only live 35B-A3B numbers on the M5 Pro are the F2 legs in §6.5: one run per leg, 19 turns of one coding-agent session, so no interval over repeats. Every other speed figure for the 35B is an inference from other measurements.
 - Replays use Flash-Next traces from Splash (T0, 256 tokens, count/code/CJK prompts), not the 35B on Kapitsa. The history-lane replay skips 29 % of the logged requests (32 of 112; rowlog blocks that do not add up), keeping 64 % of the logged cycles. I did not check which draft head those runs used. A rowlog gives accepted
   counts and confidences, not hidden states, so weight updates cannot be replayed from it.
 - The Wikipedia coverage numbers come from single articles of up to 30 kB, with the first half as "history". Treat them as direction.
