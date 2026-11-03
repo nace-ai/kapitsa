@@ -107,6 +107,29 @@ be declared ambient instead: its load is then recorded, not flagged). *Loop*: a 
 
 ### MacBook Pro M5 Max, 128 GB
 
+**2026-11-03: the 27B and Dory after their verify changes** ([results](../bench/results/2026-11-03-m5-max-long-v3/README.md)).
+Main `dbf303a`: the 27B's wide tree verify attention on the matrix units (#897) and Dory's verify reading the cache once
+for all its rows (#898), the two models swept again with four cold requests a size (a point: the median of its clean
+answers, their count in parentheses):
+
+| Prefill / decode, tok/s (clean answers of 4) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K | 256K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.8 27B | 745 / 83.3 (1) | 766 / 94.2 (2) | 807 / 84.2 (2) | 777 / 72.9 (3) | 752 / 69.8 (3) | 679 / 68.3 (3) | 559 / 55.8 (4) | 435 / 40.9 (3) | 303 / 32.6 (1) |
+| Dory1.0 4B | 3,104 / 125 (4) | 2,442 / 120 (4) | 2,435 / 108 (4) | 2,288 / 98.3 (4) | 2,008 / 94.4 (4) | 1,625 / 70.3 (4) | 1,151 / 65.8 (4) | 695 / 32.4 (4) | 407 / 21.9 (3) |
+
+| Decode, morning → now | 32K | 64K | 128K | 256K |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.8 27B | 74.1 → 68.3 | 49.5 → 55.8 | 34.2 → 40.9 | 27.6 → 32.6 |
+| Dory1.0 4B | 70.0 → 70.3 | 51.6 → 65.8 | 35.2 → 32.4 | 20.5 → 21.9 |
+
+Dory's line moves within its run-to-run spread; the changes' own interleaved A/Bs: a verify cycle 25% cheaper at 131K on
+the 27B, 9% at 133K on Dory. Both runs ran under load and are flagged for contention: the Claude desktop app's GPU
+process held a mean of 66.7% of the GPU during Dory's sweep (up to 105.7% at a sample) and 22.6% during the 27B's (up to
+71.7%), and the 60 s quiet wait timed out before each (60.1 s and 60.2 s, the app at 11-12%). Their points are therefore
+likely lower than an idle Mac's, and the morning runs they are compared with ran under less (sweep means 0.3-16.4% for
+Dory, 0.2-4.0% for the 27B), so "morning → now" compares runs under different loads: Dory's small moves are not a
+measured change.
+
 **2026-11-02 (evening): the long sweep after the matrix-unit attention** ([results](../bench/results/2026-11-02-m5-max-long-v2/README.md)).
 Main `a2f4210`: the verify attention on the M5's matrix units with the context split (Nemotron #887, the 35B-A3B and Clover
 #892) and Nemotron's prefill attention with its K / V tiles staged (#890), the five models they touch swept again as
