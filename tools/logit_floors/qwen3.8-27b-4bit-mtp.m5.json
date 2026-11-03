@@ -1,0 +1,59 @@
+{
+  "model": "qwen3.8-27b-4bit-mtp",
+  "measured": {
+    "build": "0.2.26 (b6345da)",
+    "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+    "macos": "26.4",
+    "date": "2026-11-03T05:59:30Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {},
+    "command": "tools/logit_floor.py ~/models/qwen3.8-27b-4bit-mtp"
+  },
+  "reference_path": "verify",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "batch": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "batch": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 2.4398389085991004e-07, "kl_median": 5.407974774562158e-09, "kl_p99": 1.848636916292833e-06, "kl_max": 1.492722293000116e-05, "margin_change_max": 0.0118255615234375, "tie_margin": 0.0, "nll_change_mean": -3.899359588629044e-06, "max_abs_diff": 0.30102089047431946, "what": "alone (the single-stream verify) against 4 requests decoding together (encode_verify_multi)", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 72, "top1": 1.0, "flips": 0, "kl_mean": 2.791106686614875e-05, "kl_median": 3.90584865914246e-08, "kl_p99": 0.0007208193234847538, "kl_max": 0.0012026568551958211, "margin_change_max": 0.3759136199951172, "tie_margin": 0.0, "nll_change_mean": 0.0006909467674726111, "max_abs_diff": 2.6103932857513428, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false},
+    "ane": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 5.854464895193407e-05, "kl_median": 1.4337337623624763e-06, "kl_p99": 0.0009641382979469726, "kl_max": 0.002069159241622098, "margin_change_max": 0.4212760925292969, "tie_margin": 0.07257080078125, "nll_change_mean": 0.0013459885245438914, "max_abs_diff": 2.8818041905760765, "what": "the Neural Engine prefill split against the GPU alone (NI_ANE=0)", "in_floor": true, "decode": false},
+    "chunk_gpu": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048 with the GPU alone (NI_ANE=0: no rows moving to the ANE)", "in_floor": true, "decode": false},
+    "step": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 1.0020184527385419e-07, "kl_median": 3.136958085963173e-09, "kl_p99": 1.0080737402767246e-06, "kl_max": 2.881607862697426e-06, "margin_change_max": 0.015087127685546875, "tie_margin": 0.0, "nll_change_mean": 6.013784214831119e-06, "max_abs_diff": 0.10005831718444824, "what": "plain decoding (--spec 0) against the verify (8 rows; Flash-Next: its MTP cycle's 3)", "in_floor": true, "decode": true},
+    "chain": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 2.4398389085991004e-07, "kl_median": 5.407974774562158e-09, "kl_p99": 1.848636916292833e-06, "kl_max": 1.492722293000116e-05, "margin_change_max": 0.0118255615234375, "tie_margin": 0.0, "nll_change_mean": -3.899359588629044e-06, "max_abs_diff": 0.30102089047431946, "what": "DFlash2's chain verify (NI_KFLASH=0) against KFlash's tree verify", "in_floor": true, "decode": true}
+  },
+  "floor": {
+    "flips": 0,
+    "kl_mean": 5.854464895193407e-05,
+    "kl_p99": 0.0009641382979469726,
+    "kl_max": 0.002069159241622098,
+    "margin_change_max": 0.4212760925292969,
+    "tie_margin": 0.07257080078125,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "ane", "kl_p99": "ane", "kl_max": "ane", "margin_change_max": "ane", "tie_margin": "ane"}
+  },
+  "gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.000118,
+    "max_p99_kl": 0.00193,
+    "near_tie": 0.0726,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 0,
+    "kl_mean": 2.4398389085991004e-07,
+    "kl_p99": 1.848636916292833e-06,
+    "kl_max": 1.492722293000116e-05,
+    "margin_change_max": 0.015087127685546875,
+    "tie_margin": 0.0,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "batch", "kl_p99": "batch", "kl_max": "batch", "margin_change_max": "step"}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 4.88e-07,
+    "max_p99_kl": 3.7e-06,
+    "near_tie": 0.0,
+    "max_far_flips": 0
+  }
+}
