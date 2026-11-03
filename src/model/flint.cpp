@@ -235,14 +235,17 @@ FlintConfig Flint::read_config(const std::string& dir) {
   return c;
 }
 
+// Bytes per (kv head, position) of the attention cache: ni::kv_row_bytes (metal/gpu.h), which follows NI_KV_I8 —
+// 144 int8 or 256 fp16 at head_dim 128 — and matches the kernels' kKvRow.
+
 size_t Flint::kv_per_pos(const FlintConfig& c) {
   const size_t full = size_t(std::count(c.kind.begin(), c.kind.end(), 'F'));
-  return full * 2 * size_t(c.hkv) * size_t(c.hd) * 2;
+  return full * 2 * size_t(c.hkv) * kv_row_bytes(c.hd);
 }
 
 size_t Flint::ring_bytes(const FlintConfig& c) {
   const size_t swa = size_t(std::count(c.kind.begin(), c.kind.end(), 'S'));
-  return swa * 2 * size_t(c.hkv) * size_t((c.window + kRingSpare + 7) / 8 * 8) * size_t(c.hd) * 2;
+  return swa * 2 * size_t(c.hkv) * size_t((c.window + kRingSpare + 7) / 8 * 8) * kv_row_bytes(c.hd);
 }
 
 MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
@@ -649,7 +652,7 @@ std::unique_ptr<Seq> Flint::new_seq(int limit, int initial) {
 bool Flint::ensure_rings(Seq& s) {
   if (s.cap <= 0) return true;
   Gpu& g = Gpu::get();
-  const size_t row = size_t(cfg_.hkv) * cfg_.hd * 2;
+  const size_t row = size_t(cfg_.hkv) * kv_row_bytes(cfg_.hd);
   size_t need = 0;
   for (int l = 0; l < cfg_.layers; ++l)
     if (cfg_.kind[size_t(l)] == 'S' && !s.kc[size_t(l)]) need += 2 * row * size_t(ring_rows_);
@@ -671,7 +674,7 @@ bool Flint::reserve(Seq& s, int need) {
   if (need <= s.cap) return ensure_rings(s);
   if (need > s.limit) return false;
   Gpu& g = Gpu::get();
-  const size_t per = kv_per_pos(cfg_), row = size_t(cfg_.hkv) * cfg_.hd * 2;
+  const size_t per = kv_per_pos(cfg_), row = size_t(cfg_.hkv) * kv_row_bytes(cfg_.hd);
   auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
   const size_t rings = s.cap > 0 ? 0 : ring_bytes(cfg_);
   auto fits = [&](int c) {
@@ -688,7 +691,7 @@ bool Flint::reserve(Seq& s, int need) {
       Buffer nbuf = g.alloc(row * size_t(target), "flint_kv");
       memset(nbuf.ptr(), 0, nbuf.size);  // (as the rings: flint_attn_dec reads past the last position)
       if (old > 0 && *b) {
-        const uint32_t n16 = uint32_t(cfg_.hd) * 2 / 16;
+        const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.hd) / 16);
         const uint32_t p[4] = {uint32_t(old) * n16, uint32_t(target) * n16, uint32_t(cfg_.hkv), 0};
         auto e = g.begin();
         e->use(pipe("kv_regrow"));
@@ -766,8 +769,12 @@ void Flint::restore(Encoder& e, Seq& s, const Checkpoint& c) {
 
 std::string Flint::disk_format() const {
   char b[256];
-  snprintf(b, sizeof b, "flint %s; K, V f16 [%d][cap][%d]; rings of %d; %s", std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(),
-           cfg_.hkv, cfg_.hd, ring_rows_, formats_summary().c_str());
+  // As with Qwen35's: the rows' precision is part of the format, so the two layouts (and an f16-KV build's cache) get
+  // separate SSD prefix-cache namespaces
+  snprintf(b, sizeof b, "flint %s; K, V %s [%d][cap][%d]%s; rings of %d; %s",
+           std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), kv_i8() ? "i8" : "f16", cfg_.hkv,
+           int(kv_row_bytes(cfg_.hd)), kv_i8() ? " (int8 codes, an f32 scale a row)" : "", ring_rows_,
+           formats_summary().c_str());
   return b;
 }
 
@@ -775,7 +782,7 @@ void Flint::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
   (void)mtp;
   for (int l = 0; l < cfg_.layers; ++l)
     if (cfg_.kind[size_t(l)] == 'F')
-      for (const Buffer* b : {&s.kc[size_t(l)], &s.vc[size_t(l)]}) out.push_back({*b, cfg_.hkv, size_t(cfg_.hd) * 2});
+      for (const Buffer* b : {&s.kc[size_t(l)], &s.vc[size_t(l)]}) out.push_back({*b, cfg_.hkv, kv_row_bytes(cfg_.hd)});
 }
 
 void Flint::disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& out) const {

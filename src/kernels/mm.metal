@@ -1,4 +1,5 @@
 #include "common.h"
+#include "kv_int8.h"
 
 // ==== Images in the language model's passes (src/vision/embed.h) ====
 
@@ -39,9 +40,10 @@ struct MropeParams {
   threadgroup float cosine[256], sine[256];
   const uint h = tg.x, t = tg.y, D = p.D;
   const uint pos = p.pos + t;  // cache row
-  if (h >= p.Hq + p.Hkv) {     // value head: plain copy into the cache
+  if (h >= p.Hq + p.Hkv) {     // value head: quantized copy into the cache
     uint hv = h - p.Hq - p.Hkv;
-    vc[(hv * p.max_seq + pos) * D + tid] = half(vr[(t * p.Hkv + hv) * D + tid]);
+    kvq_store1(vc, size_t(hv) * p.max_seq * KVQ_ROW + size_t(pos) * KVQ_ROW, scratch, tid,
+               float(vr[(t * p.Hkv + hv) * D + tid]));
     return;
   }
   const bool is_q = h < p.Hq;
@@ -72,5 +74,5 @@ struct MropeParams {
     else x = row[tid] * cs + row[tid - half_rot] * sn;
   }
   if (is_q) q_out[(t * p.Hq + h) * D + tid] = x;
-  else kc[((h - p.Hq) * p.max_seq + pos) * D + tid] = half(x);
+  else kvq_store1(kc, size_t(h - p.Hq) * p.max_seq * KVQ_ROW + size_t(pos) * KVQ_ROW, scratch, tid, x);
 }

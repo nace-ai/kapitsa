@@ -585,7 +585,12 @@ static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, b
 #else
   o.fastMathEnabled = safe ? NO : YES;
 #endif
-  if (wf) o.preprocessorMacros = @{@"NI_WF_INST" : @1};
+  // NI_KV_I8: the KV cache row layout the kernels read (src/kernels/kv_int8.h); the engine allocates rows of the same
+  // size (ni::kv_row_bytes), so the two libraries and the host must agree. NI_WF_INST is the weight-format library's.
+  NSMutableDictionary* macros = [NSMutableDictionary new];
+  if (wf) macros[@"NI_WF_INST"] = @1;
+  if (kv_i8()) macros[@"NI_KV_I8"] = @1;
+  if (macros.count) o.preprocessorMacros = macros;
   NSError* err = nil;
   const double t0 = now_ms();
   id<MTLLibrary> lib = [d newLibraryWithSource:[NSString stringWithUTF8String:src.c_str()] options:o error:&err];
