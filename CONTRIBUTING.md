@@ -100,6 +100,14 @@ It checks seven proposal rows, hidden states, top candidates and per-layer debug
 `--from` compares every saved byte and fails on any difference. Build the tool explicitly and use a new output
 directory for each run. These are correctness runs, not performance measurements.
 
+`qmm_packed_coeff_check` (build explicitly) checks the auxiliary Q4 image: `check-cpu-codec` uses no GPU;
+`check-codec`, `check-small`, `check-segments` and `check-scales` exercise small kernels under the GPU lock
+and should run with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`. `check-shapes` checks full-size GPU
+outputs and fixed FP64 samples. The default kernel is `qmm8pc_b4_nf1`; an explicit `qmm8snb_b4_nf2` checks the
+original path. Failures exit nonzero; dispatch counts distinguish candidate coverage from fallback. The kernel
+retains the original K partitions, including when a geometry falls back to the original output tile.
+`NI_QMM_COEFF_FIXTURES=MANIFEST` enables `check-cpu-fixtures` (no GPU) and `check-real-coeff` (full GPU outputs and FP64).
+
 End to end, against a running server (this one runs the 4B on the GPU and downloads it, 3.3 GB, the first time):
 
 ```bash

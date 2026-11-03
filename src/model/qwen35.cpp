@@ -486,6 +486,7 @@ void Qwen35::prewarm_pipelines() {
                                  "qmr_gu_k32_w14_m32_n64", "qmr_gu_k64_w14_m16_n64", "qmr_gu_k64_w12_m8_n32",
                                  "qmm_b8_m32_n32", "qmm_moe_gu_b4_m64_n32", "qmm_moe_dn_b4_m64_n64"};
   if (sample_sg_) names.insert("topk_stage1_rows_sg");
+  if (!v8_packed_coeff_.empty()) names.insert("qmm8pc_b4_nf1");
   if (qmm8_on())
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
@@ -1078,6 +1079,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   check_formats();
 
   if (!getenv("NI_NO_MTP")) load_mtp(dir);
+  load_v8_packed_coeff();
   Gpu::get().make_resident(ws_.buffers());
   Gpu::get().make_resident(owned_bufs_);  // converted / copied tensors (bf16 copies, test transforms, MTP head)
   alloc_state();
@@ -1252,7 +1254,7 @@ struct TensorMeta {
 };
 static size_t st_bytes(const std::string& path, bool mtp, double expert_share = -1, size_t* decode = nullptr,
                        size_t* lm_head = nullptr, std::map<std::string, TensorMeta>* metas = nullptr,
-                       int mtp_bits = 4) {
+                       int mtp_bits = 4, bool packed_metas = false) {
   std::ifstream f(path, std::ios::binary);
   uint64_t n = 0;
   if (!f.read(reinterpret_cast<char*>(&n), 8) || n > (256u << 20)) return 0;
@@ -1282,7 +1284,7 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
       for (const char* k : {"embed_tokens.weight", "embed_tokens.scales", "lm_head.weight", "lm_head.scales"})
         if (name.size() >= strlen(k) && name.compare(name.size() - strlen(k), strlen(k), k) == 0)
           (*metas)[k] = TensorMeta{v["dtype"], v["shape"].get<std::vector<int64_t>>(), b};
-      // every layer's dense FFN tensors, keyed from "layers.": layers.<i>.mlp.{gate,up,down}_proj.{weight,scales}
+      // Every layer's dense FFN metadata is needed by the original memory plan.
       const size_t lp = name.find("layers.");
       for (const char* k : {".mlp.gate_proj.weight", ".mlp.gate_proj.scales", ".mlp.up_proj.weight",
                             ".mlp.up_proj.scales", ".mlp.down_proj.weight", ".mlp.down_proj.scales"}) {
@@ -1290,6 +1292,8 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
         if (lp != std::string::npos && name.size() >= kl && name.compare(name.size() - kl, kl, k) == 0)
           (*metas)[name.substr(lp)] = TensorMeta{v["dtype"], v["shape"].get<std::vector<int64_t>>(), b};
       }
+      if (packed_metas && lp != std::string::npos && (name.ends_with(".weight") || name.ends_with(".scales")))
+        (*metas)[name.substr(lp)] = TensorMeta{v["dtype"], v["shape"].get<std::vector<int64_t>>(), b};
       if (name.find("embed_tokens.") != std::string::npos) (*metas)["embed_bytes"].bytes += b;
     }
     if (lm_head && name.find("lm_head.") != std::string::npos) *lm_head += b;
@@ -1316,10 +1320,11 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   size_t embed = 0;  // tied models read the embedding table as their output layer
   size_t lm_head = 0;
   std::map<std::string, TensorMeta> metas;
+  const bool packed = v8_packed_coeff_on(c);
   // the MTP head: mtp.safetensors, else the one in the checkpoint's own shards (load_mtp reads the same)
   const bool sidecar = std::find(files.begin(), files.end(), "mtp.safetensors") != files.end();
   for (const std::string& f : files) {
-    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head, &metas);
+    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head, &metas, 4, packed);
     if ((f == "mtp.safetensors" || !sidecar) && !getenv("NI_NO_MTP"))
       m.mtp += st_bytes(dir + "/" + f, true, -1, nullptr, nullptr, nullptr, mtp_head_bits(c.moe));
   }
@@ -1350,6 +1355,32 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   const bool head_native = (hf.first == 4 || hf.first == 8) && hf.second == 64;
   m.head_row_bytes = head_native ? (lm_head ? lm_head : embed) / std::max(c.vocab, 1)
                                  : size_t(c.hidden) + size_t(c.hidden / 64) * 4;
+  if (packed) {
+    auto add_image = [&](const std::string& name, uint32_t K) {
+      auto w = metas.find(name + ".weight"), s = metas.find(name + ".scales");
+      if (!K || K % 64 || w == metas.end() || s == metas.end() || w->second.dtype != "U32" ||
+          w->second.shape.size() != 2 || s->second.shape.size() != 2 || w->second.shape[0] <= 0 ||
+          s->second.shape[0] != w->second.shape[0] || w->second.shape[1] != K / 8 || s->second.shape[1] != K / 64) return;
+      const size_t blocks = ((size_t(w->second.shape[0]) + 15) / 16) * ((K / 64 + 1) / 2);
+      // All-raw upper bound: 1088-byte bodies, 4-byte headers and 128-byte slabs.
+      m.weights += (((blocks * 272 + 31) & ~size_t(31)) + blocks * 33) * 4;
+    };
+    for (int i = 0; i < c.layers; ++i) {
+      const std::string p = "layers." + std::to_string(i);
+      add_image(p + ".mlp.gate_proj", c.hidden);
+      add_image(p + ".mlp.up_proj", c.hidden);
+      add_image(p + ".mlp.down_proj", c.dense_I);
+      if (c.is_linear[i]) {
+        for (const char* n : {"in_proj_qkv", "in_proj_z", "in_proj_a", "in_proj_b"})
+          add_image(p + ".linear_attn." + n, c.hidden);
+        add_image(p + ".linear_attn.out_proj", c.lin_hv * c.lin_dv);
+      } else {
+        for (const char* n : {"q_proj", "k_proj", "v_proj"}) add_image(p + ".self_attn." + n, c.hidden);
+        add_image(p + ".self_attn.o_proj", c.hq * c.head_dim);
+      }
+    }
+    add_image(tied ? "embed_tokens" : "lm_head", c.hidden);
+  }
   // what the weights are, for messages: the default format and how many modules the config sets otherwise
   {
     const json q = r.contains("quantization") ? r["quantization"] : json::object();

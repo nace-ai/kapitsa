@@ -8,6 +8,7 @@
 // Taken by encode_verify for R >= 5 (NI_V8=1: R >= 2); MTP verifies with R <= 4 keep their kernels.
 #include "kernels/kflash.h"
 #include "model/kparams.h"
+#include "model/affine_coeff_fixed.h"
 #include "model/qwen35.h"
 #include "util/log.h"
 
@@ -15,6 +16,7 @@
 #include <set>
 #include <cmath>
 #include <unordered_map>
+#include <sys/sysctl.h>
 
 namespace ni {
 
@@ -41,6 +43,45 @@ static Pipeline pipe8(const std::string& n) {
 static int env_int(const char* n, int def) {
   const char* v = getenv(n);
   return v && *v ? atoi(v) : def;
+}
+
+bool Qwen35::v8_packed_coeff_on(const Qwen35Config& c) {
+  const char* flag = getenv("NI_V8_PACKED_COEFF_NF1");
+  if (flag && *flag && !atoi(flag)) return false;
+  if (c.moe || c.hidden != 2560 || c.dense_I != 9216 || c.layers != 32 || c.group_size != 64) return false;
+  if (Gpu::get().name() != "Apple M4" || Gpu::get().core_count() != 10) return false;
+  if (flag && *flag) return true;
+  uint64_t ram = 0;
+  size_t len = sizeof(ram);
+  return sysctlbyname("hw.memsize", &ram, &len, nullptr, 0) == 0 && ram == (uint64_t(24) << 30);
+}
+
+void Qwen35::load_v8_packed_coeff() {
+  if (!v8_packed_coeff_on(cfg_)) return;
+  const double start = now_ms();
+  size_t bytes = 0, compressed = 0, blocks = 0;
+  auto pack = [&](const QLinear& q) {
+    if (!q || !q.q4() || q.exl3 || q.q20 || !q.N || !q.K || q.K % 64) return;
+    const auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
+                                               q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    Buffer payload = Gpu::get().alloc(image.words.size() * 4, "qmm8_packed_coeff_payload", false);
+    owned_bufs_.push_back(payload);
+    memcpy(payload.ptr(), image.words.data(), image.words.size() * 4);
+    Buffer headers = Gpu::get().alloc(image.headers.size() * 4, "qmm8_packed_coeff_headers", false);
+    owned_bufs_.push_back(headers);
+    memcpy(headers.ptr(), image.headers.data(), image.headers.size() * 4);
+    v8_packed_coeff_.emplace(&q, PackedCoeffBuffers{payload, headers});
+    bytes += payload.size + headers.size;
+    compressed += image.compressed_blocks; blocks += image.blocks;
+  };
+  for (const Layer& l : layers_) {
+    for (const QLinear* q : {&l.mg, &l.mu, &l.md}) pack(*q);
+    if (l.linear) for (const QLinear* q : {&l.qkv, &l.z, &l.a, &l.b, &l.out}) pack(*q);
+    else for (const QLinear* q : {&l.q, &l.k, &l.v, &l.o}) pack(*q);
+  }
+  pack(lm_head_);
+  logi("NI_V8_PACKED_COEFF_NF1: packed %zu static target projections, %.1f MiB in %.0f ms; compressed %zu/%zu blocks",
+       v8_packed_coeff_.size(), double(bytes) / (1024 * 1024), now_ms() - start, compressed, blocks);
 }
 
 // gate/up kernel (NI_V8_GU): "1" = 8 simdgroups x (1 gate + 1 up fragment), "2" = 4 x (2 + 2) (NI_V8_GU_PF=1:
@@ -594,6 +635,22 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
     if (pre == "qmm8snb" && (pl.nf == 1 || pl.nf == 2)) pre += "16";
     else pl.ks = 8, pl.cs = 1;
   }
+  const uint32_t groups = K / 64, per_slice = (groups + pl.ks - 1) / pl.ks;
+  PackedCoeffBuffers images[4];
+  bool packed = !x2 && !v8w_R_ && R > 0 && R <= 8 && pre == "qmm8snb" && bits == 4 && pl.nf == 2 &&
+                pl.cs * pl.ks <= 8 && !(groups & 1u) && !(per_slice & 1u);
+  if (packed) for (size_t i = 0; i < segs.size(); ++i) {
+    images[i] = segs[i].packed;
+    if (!images[i]) {
+      const auto it = v8_packed_coeff_.find(segs[i].L);
+      if (it != v8_packed_coeff_.end()) images[i] = it->second;
+    }
+    packed = packed && bool(images[i]);
+  }
+  if (packed) {
+    pre = "qmm8pc";
+    pl.nf = 1;  // Preserve the original NF2 CS/KS plan and its partial sums.
+  }
   const std::string name = pre + "_b" + std::to_string(bits) + "_nf" + std::to_string(pl.nf);
   kp::Qmm8 p{};
   p.K = K;
@@ -612,10 +669,12 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
       const uint32_t blocks = (sg.L->N + 8 * pl.nf - 1) / (8 * pl.nf);
       tg += (blocks + pl.cs - 1) / pl.cs;
     }
-    e.buf(int(i * 4 + 0), sg.L->w->buf);
+    const PackedCoeffBuffers& image = images[std::min(i, segs.size() - 1)];
+    e.buf(int(i * 4 + 0), packed ? image.payload : sg.L->w->buf);
     e.buf(int(i * 4 + 1), sg.L->s->buf);
     e.buf(int(i * 4 + 2), sg.L->b->buf);
     e.buf(int(i * 4 + 3), sg.y);
+    if (packed) e.buf(21 + int(i), image.headers);
   }
   p.tg_begin[segs.size()] = tg;
   e.buf(16, table);
@@ -749,7 +808,8 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
 }
 
 bool Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
-                     const Buffer& h, const Buffer& hs, const Buffer* tt, const Buffer* ht, int R) {
+                     const Buffer& h, const Buffer& hs, const Buffer* tt, const Buffer* ht, int R,
+                     const PackedCoeffBuffers& gate_packed, const PackedCoeffBuffers& up_packed) {
   v8_alloc();  // the split path's scratch (a drafter may encode before the first verify)
   const uint32_t I = gate.N, K = gate.K;
   const bool q4 = gate.q4() && up.q4();  // the fused qmm8_gu kernels read 4-bit group 64
@@ -759,7 +819,7 @@ bool Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const B
     // the fused qmm8_gu1k2 kernel (8 column slices x 2 k-slices of one 64-column group) streamed ~10% slower.
     // A wide tree verify: R rows (its capacity), the live row tiles' tables (v8_disp)
     const uint32_t Rg = v8w_R_ ? uint32_t(R) : 8u;
-    enc_qmm8(e, {{&gate, v8g_, I}, {&up, v8u_, I}}, int(Rg), table, sums, false, tt);
+    enc_qmm8(e, {{&gate, v8g_, I, false, gate_packed}, {&up, v8u_, I, false, up_packed}}, int(Rg), table, sums, false, tt);
     const bool wt = ht && v8_tw() && size_t(I) * 16 <= ht->size;
     kp::SwigluX8 sp{I, Rg, wt ? 1u : 0u};
     e.use(pipe8("swiglu_x8"));

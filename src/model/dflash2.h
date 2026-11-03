@@ -330,6 +330,7 @@ class DFlash2 {
     const Tensor *in_w = nullptr, *post_w = nullptr, *qn = nullptr, *kn = nullptr;
     const Tensor *ac_base = nullptr, *mc_base = nullptr;
     QLinear ac, q, kv, o, mc, gate, up, down;  // kv: row view of kv_all_
+    Qwen35::PackedCoeffBuffers gate_packed, up_packed, down_packed;
   };
 
   void load_config(const std::string& dir);
@@ -337,6 +338,7 @@ class DFlash2 {
   QLinear quantize(const std::vector<const Tensor*>& parts, const char* label, const std::vector<uint32_t>& perm = {});
   QLinear row_view(const QLinear& src, uint32_t r0, uint32_t n);
   void alloc_buffers();
+  void load_v8_packed_coeff();
   // a 16-row block's drafting pass on the tensor path: not the v1 drafter, the matrix units on, 4-bit group-64
   // projections, the fused attention (the load-time gate below refuses NI_DFLASH_BLOCK=16 without it)
   bool rows16_tensor_ok() const;
@@ -423,6 +425,7 @@ class DFlash2 {
   // (added/special tokens), ascending; the drafter's top-16 then picks among those ids only (the verify always
   // uses the full head, so outputs are unchanged).
   QLinear head_sub_;
+  Qwen35::PackedCoeffBuffers head_packed_;
   Buffer head_ids_;
   uint32_t head_n_ = 0;  // 0: full head
   void build_head(int n, bool explicit_n);
