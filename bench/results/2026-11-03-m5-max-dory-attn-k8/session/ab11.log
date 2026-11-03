@@ -1,0 +1,120 @@
+prefill 8 rows: next-token NLL 1.3419, top-1 = next token 0.7500 -> <run-root>/ab11-output-check/ref/prefill
+step   192 rows: next-token NLL 0.7754, top-1 = next token 0.7969 -> <run-root>/ab11-output-check/ref/step
+verify 192 rows: next-token NLL 0.7754, top-1 = next token 0.7969 -> <run-root>/ab11-output-check/ref/verify
+8 windows, 14848 prefilled tokens in 4.2 s; 6.5 s in all
+prefill 8 rows: next-token NLL 1.3419, top-1 = next token 0.7500 -> <run-root>/ab11-output-check/new/prefill
+step   192 rows: next-token NLL 0.7753, top-1 = next token 0.7969 -> <run-root>/ab11-output-check/new/step
+verify 192 rows: next-token NLL 0.7754, top-1 = next token 0.7969 -> <run-root>/ab11-output-check/new/verify
+8 windows, 14848 prefilled tokens in 4.3 s; 6.6 s in all
+prefill: 8 records (nemotron-labs-dory1.0-4b-nvfp4)
+  reference: 0.2.26 (b8960e6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DORY_ATTN_K8":"0"}
+  candidate: 0.2.26 (b8960e6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+step: 192 records (nemotron-labs-dory1.0-4b-nvfp4)
+  reference: 0.2.26 (b8960e6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DORY_ATTN_K8":"0"}
+  candidate: 0.2.26 (b8960e6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.02243
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0))
+  KL mean 3.263e-08 median 1.795e-09 p99 4.455e-07 max 9.857e-07; top-2 margin change up to 0.01003
+  next-token NLL change -1.837e-05 nats per record (candidate minus reference)
+  FAIL: mean KL 3.263e-08 > 0.000e+00
+  FAIL: p99 KL 4.455e-07 > 0.000e+00
+  FAIL (tools/logit_floors/nemotron-labs-dory1.0-4b-nvfp4.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (nemotron-labs-dory1.0-4b-nvfp4)
+  reference: 0.2.26 (b8960e6), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DORY_ATTN_K8":"0"}
+  candidate: 0.2.26 (b8960e6), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.03907
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0))
+  KL mean 8.415e-07 median 8.796e-08 p99 8.331e-06 max 3.244e-05; top-2 margin change up to 0.03819
+  next-token NLL change +3.541e-06 nats per record (candidate minus reference)
+  FAIL: mean KL 8.415e-07 > 0.000e+00
+  FAIL: p99 KL 8.331e-06 > 0.000e+00
+  FAIL (tools/logit_floors/nemotron-labs-dory1.0-4b-nvfp4.json: the decode passes' gate (the prefill rows are bitwise the same))
+  KL mean 8.415e-07 median 8.796e-08 p99 8.331e-06 max 3.244e-05; top-2 margin change up to 0.03819
+  next-token NLL change +3.541e-06 nats per record (candidate minus reference)
+  PASS (the order-change gate (a reassociated K reduction, not the noise floor))
+4K: identical
+16K: identical
+=== dory-k8-old 06:15:46 powermode=2 Now drawing from 'AC Power' load={ 3.26 3.22 2.63 } top=37.9 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;34.2 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;17.5 Helper;
+[06:15:52] dory-k8-old:  warm-up prefill~2.9k+decode64: ok (1.63s)
+[06:15:53] dory-k8-old:  warm-up tools: ok (0.37s)
+[06:16:53] dory-k8-old: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 80.89 tok/s (e2e 81.58; 512 tok, finish=length, d4=0.5992)
+  decode T=0.6: 88.49 tok/s (e2e 87.11; 512 tok, finish=length, d4=0.9769)
+  decode T=0.6: 84.05 tok/s (e2e 82.67; 512 tok, finish=length, d4=0.5772)
+  decode T=0.6: 89.02 tok/s (e2e 86.31; 512 tok, finish=length, d4=0.466) flags ['repetition loop (distinct-4-gram 0.466)']
+  decode T=0.6: 85.93 tok/s (e2e 84.59; 512 tok, finish=length, d4=0.7219)
+  decode median 85.93 (min 80.89, max 89.02) over 5/5 valid
+  sweep 32000: 33145 tok, TTFT 24.56s, 1349 tok/s prefill, decode 57.87 tok/s
+  sweep 128000: 133398 tok, TTFT 219.20s, 609 tok/s prefill, decode 31.22 tok/s
+  -> <run-root>/ab11/results/dory-k8-old-20261103-061546.json
+[06:22:00] dory-k8-old: -> <run-root>/ab11/results/dory-k8-old-20261103-061546.json  flags: 2
+=== dory-k8-new 06:22:00 powermode=2 Now drawing from 'AC Power' load={ 0.79 1.79 2.17 } top=12.0 Helper;11.2 /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow;7.9 (Renderer);
+[06:22:07] dory-k8-new:  warm-up prefill~2.9k+decode64: ok (2.16s)
+[06:22:07] dory-k8-new:  warm-up tools: ok (0.45s)
+[06:23:08] dory-k8-new: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 126.50 tok/s (e2e 124.04; 512 tok, finish=length, d4=0.5763)
+  decode T=0.6: 121.09 tok/s (e2e 119.29; 512 tok, finish=length, d4=0.7439)
+  decode T=0.6: 126.28 tok/s (e2e 123.50; 512 tok, finish=length, d4=0.4977) flags ['repetition loop (distinct-4-gram 0.4977)']
+  decode T=0.6: 110.44 tok/s (e2e 110.69; 512 tok, finish=length, d4=0.9506)
+  decode T=0.6: 128.63 tok/s (e2e 126.89; 512 tok, finish=length, d4=0.732)
+  decode median 126.28 (min 110.44, max 128.63) over 5/5 valid
+  sweep 32000: 33148 tok, TTFT 18.04s, 1837 tok/s prefill, decode 85.53 tok/s
+  sweep 128000: 133398 tok, TTFT 181.22s, 736 tok/s prefill, decode 36.94 tok/s
+  -> <run-root>/ab11/results/dory-k8-new-20261103-062200.json
+[06:27:16] dory-k8-new: -> <run-root>/ab11/results/dory-k8-new-20261103-062200.json  flags: 2
+=== dory-k8-old 06:27:16 powermode=2 Now drawing from 'AC Power' load={ 1.37 1.60 1.96 } top=11.1 Helper;5.2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;3.1 (Renderer);
+[06:27:22] dory-k8-old:  warm-up prefill~2.9k+decode64: ok (1.8s)
+[06:27:22] dory-k8-old:  warm-up tools: ok (0.38s)
+[06:28:22] dory-k8-old: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 126.89 tok/s (e2e 125.14; 512 tok, finish=length, d4=0.9653)
+  decode T=0.6: 120.42 tok/s (e2e 120.33; 512 tok, finish=length, d4=0.8582)
+  decode T=0.6: 115.20 tok/s (e2e 113.61; 512 tok, finish=length, d4=0.7443)
+  decode T=0.6: 126.90 tok/s (e2e 124.97; 512 tok, finish=length, d4=0.7242)
+  decode T=0.6: 121.97 tok/s (e2e 120.66; 512 tok, finish=length, d4=0.9234)
+  decode median 121.97 (min 115.2, max 126.9) over 5/5 valid
+  sweep 32000: 33147 tok, TTFT 17.53s, 1891 tok/s prefill, decode 77.90 tok/s
+  sweep 128000: 133398 tok, TTFT 174.55s, 764 tok/s prefill, decode 40.69 tok/s
+  -> <run-root>/ab11/results/dory-k8-old-20261103-062716.json
+[06:32:23] dory-k8-old: -> <run-root>/ab11/results/dory-k8-old-20261103-062716.json  flags: 1
+=== dory-k8-new 06:32:23 powermode=2 Now drawing from 'AC Power' load={ 1.05 1.24 1.67 } top=10.6 Helper;7.4 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;3.0 (Renderer);
+[06:32:28] dory-k8-new:  warm-up prefill~2.9k+decode64: ok (1.43s)
+[06:32:29] dory-k8-new:  warm-up tools: ok (0.48s)
+[06:33:29] dory-k8-new: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 124.22 tok/s (e2e 122.24; 512 tok, finish=length, d4=0.7307)
+  decode T=0.6: 123.17 tok/s (e2e 123.33; 512 tok, finish=length, d4=0.9236)
+  decode T=0.6: 127.40 tok/s (e2e 124.37; 512 tok, finish=length, d4=0.5743)
+  decode T=0.6: 121.84 tok/s (e2e 120.54; 512 tok, finish=length, d4=0.7305)
+  decode T=0.6: 126.82 tok/s (e2e 125.70; 512 tok, finish=length, d4=0.966)
+  decode median 124.22 (min 121.84, max 127.4) over 5/5 valid
+  sweep 32000: 33147 tok, TTFT 17.35s, 1910 tok/s prefill, decode 81.34 tok/s
+  sweep 128000: 133397 tok, TTFT 174.46s, 765 tok/s prefill, decode 44.09 tok/s
+  -> <run-root>/ab11/results/dory-k8-new-20261103-063223.json
+[06:37:27] dory-k8-new: -> <run-root>/ab11/results/dory-k8-new-20261103-063223.json  flags: 1
+=== dory-k8-new-256 06:37:27 powermode=2 Now drawing from 'AC Power' load={ 1.26 1.17 1.49 } top=34.5 (Renderer);20.6 Helper;16.0 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[06:37:33] dory-k8-new-256:  warm-up prefill~2.9k+decode64: ok (1.73s)
+[06:37:33] dory-k8-new-256:  warm-up tools: ok (0.37s)
+[06:38:33] dory-k8-new-256: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 121.12 tok/s (e2e 120.07; 512 tok, finish=length, d4=0.7019)
+  decode T=0.6: 123.27 tok/s (e2e 122.30; 512 tok, finish=length, d4=0.5617)
+  decode T=0.6: 116.16 tok/s (e2e 114.72; 512 tok, finish=length, d4=0.7218)
+  decode T=0.6: 124.79 tok/s (e2e 123.42; 512 tok, finish=length, d4=0.5575)
+  decode T=0.6: 117.43 tok/s (e2e 116.07; 512 tok, finish=length, d4=0.7259)
+  decode median 121.12 (min 116.16, max 124.79) over 5/5 valid
+  sweep 240000: 254825 tok, TTFT 563.13s, 453 tok/s prefill, decode 50.75 tok/s
+  -> <run-root>/ab11/results/dory-k8-new-256-20261103-063727.json
+[06:48:38] dory-k8-new-256: -> <run-root>/ab11/results/dory-k8-new-256-20261103-063727.json  flags: 2
+=== dory-k8-old-256 06:48:38 powermode=2 Now drawing from 'AC Power' load={ 1.39 0.97 1.17 } top=14.4 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;7.1 Helper;5.1 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder;
+[06:48:44] dory-k8-old-256:  warm-up prefill~2.9k+decode64: ok (1.72s)
+[06:48:44] dory-k8-old-256:  warm-up tools: ok (0.38s)
+[06:49:45] dory-k8-old-256: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 121.91 tok/s (e2e 121.19; 512 tok, finish=length, d4=0.5716)
+  decode T=0.6: 118.10 tok/s (e2e 116.75; 512 tok, finish=length, d4=0.7504)
+  decode T=0.6: 124.37 tok/s (e2e 125.40; 512 tok, finish=length, d4=0.7302)
+  decode T=0.6: 123.03 tok/s (e2e 121.85; 512 tok, finish=length, d4=0.7229)
+  decode T=0.6: 125.75 tok/s (e2e 125.14; 512 tok, finish=length, d4=0.7163)
+  decode median 123.03 (min 118.1, max 125.75) over 5/5 valid
+  sweep 240000: 254825 tok, TTFT 563.58s, 452 tok/s prefill, decode 21.24 tok/s
+  -> <run-root>/ab11/results/dory-k8-old-256-20261103-064838.json
+[07:00:02] dory-k8-old-256: -> <run-root>/ab11/results/dory-k8-old-256-20261103-064838.json  flags: 1
+=== done 07:00:02

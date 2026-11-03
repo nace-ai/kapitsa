@@ -197,6 +197,138 @@ constant constexpr uint kDoryKT = 16;
   }
 }
 
+// ---- the same two kernels with a row's keys taken 8 at a time (NI_DORY_ATTN_K8, default on) ----
+// dory_attn_partial's update runs one key at a time: a score (a sum over the simdgroup's lanes), then the running max,
+// two exponentials and the rescale, each step waiting on the one before, so a verify's attention ran at ~290 GB/s of
+// cache reads at 254K positions. Here a row takes 8 keys of the tile at once: their 8 scores (independent sums), one
+// running max over them and the row's history, one rescale of the history, the 8 weights and their weighted values.
+// The same products and the same exponentials of the same differences up to where the max is taken, so the partials
+// differ from dory_attn_partial's only in that order. Keys outside the row's [start, end) take a zero weight; a group
+// with none of the row's keys leaves it as it is.
+NI_INLINE void dory_attn_k8(thread float& m, thread float& l, thread float4& a0, thread float4& a1, float4 q0, float4 q1,
+                            const threadgroup half4* kt, const threadgroup half4* vt, uint t0, uint j0, uint n,
+                            uint start, uint end, uint lane) {
+  float s[8];
+  float mx = -INFINITY;
+  _Pragma("clang loop unroll(full)")
+  for (uint g = 0; g < 8; ++g) {
+    const uint j = j0 + g, key = t0 + j;
+    const bool ok = j < n && key >= start && key < end;
+    const uint jj = ok ? j : j0;
+    const float v = simd_sum(dot(q0, float4(kt[jj * kDD / 4 + lane * 2])) + dot(q1, float4(kt[jj * kDD / 4 + lane * 2 + 1])));
+    s[g] = ok ? v : -INFINITY;
+    mx = max(mx, s[g]);
+  }
+  if (mx == -INFINITY) return;  // (none of the row's keys)
+  const float mn = max(m, mx);
+  const float corr = metal::precise::exp(m - mn);
+  float es = 0.0f;
+  float4 v0 = 0.0f, v1 = 0.0f;
+  _Pragma("clang loop unroll(full)")
+  for (uint g = 0; g < 8; ++g) {
+    const uint j = min(j0 + g, n - 1);
+    const float e = metal::precise::exp(s[g] - mn);  // (0 for a key outside the row's)
+    es += e;
+    v0 += e * float4(vt[j * kDD / 4 + lane * 2]);
+    v1 += e * float4(vt[j * kDD / 4 + lane * 2 + 1]);
+  }
+  l = l * corr + es;
+  a0 = a0 * corr + v0;
+  a1 = a1 * corr + v1;
+  m = mn;
+}
+
+// dory_attn_partial with dory_attn_k8. grid: (nchunks, Hkv, R) x 32 G threads
+[[kernel]] void dory_attn_partial_k8(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                     const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                     device float* part_ml [[buffer(4)]], constant DoryAttnP& p [[buffer(5)]],
+                                     uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                     uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                     uint3 ntg3 [[threads_per_threadgroup]]) {
+  const uint ntg = ntg3.x;
+  threadgroup half4 kt[kDoryKT * kDD / 4];
+  threadgroup half4 vt[kDoryKT * kDD / 4];
+  const uint chunk = tg.x, kvh = tg.y, r = tg.z;
+  const uint G = p.Hq / p.Hkv, hq = kvh * G + sg;
+  const uint qp = p.pos0 + r;
+  const uint lo = p.window && qp + 1 > p.window ? qp + 1 - p.window : 0;
+  const uint c0 = p.k0 + chunk * p.chunk;
+  const uint start = max(c0, lo), end = min(c0 + p.chunk, qp + 1);
+  const device float4* qr = (const device float4*)(q + (size_t(r) * p.Hq + hq) * kDD) + lane * 2;
+  const float4 q0 = qr[0] * p.scale, q1 = qr[1] * p.scale;
+  float4 a0 = 0.0f, a1 = 0.0f;
+  float m = -INFINITY, l = 0.0f;
+  const device half4* kb = (const device half4*)(kc + size_t(kvh) * p.rows * kDD);
+  const device half4* vb = (const device half4*)(vc + size_t(kvh) * p.rows * kDD);
+  for (uint t0 = start; t0 < end; t0 += kDoryKT) {
+    const uint n = min(kDoryKT, end - t0);
+    for (uint i = tid; i < n * kDD / 4; i += ntg) {
+      const uint key = t0 + i / (kDD / 4), slot = p.ring ? key % p.rows : key;
+      kt[i] = kb[size_t(slot) * (kDD / 4) + i % (kDD / 4)];
+      vt[i] = vb[size_t(slot) * (kDD / 4) + i % (kDD / 4)];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint j0 = 0; j0 < n; j0 += 8) dory_attn_k8(m, l, a0, a1, q0, q1, kt, vt, t0, j0, n, start, end, lane);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  const size_t base = (size_t(r) * p.Hq + hq) * p.nchunks + chunk;
+  device float4* po = (device float4*)(part_o + base * kDD) + lane * 2;
+  po[0] = a0;
+  po[1] = a1;
+  if (lane == 0) {
+    part_ml[base * 2 + 0] = m;
+    part_ml[base * 2 + 1] = l;
+  }
+}
+
+// dory_attn_partial_rows with dory_attn_k8. grid: (nchunks, Hkv) x 32 G R threads (R <= 8: at most 1024)
+[[kernel]] void dory_attn_partial_rows_k8(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                          const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                          device float* part_ml [[buffer(4)]], constant DoryAttnP& p [[buffer(5)]],
+                                          uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                          uint3 ntg3 [[threads_per_threadgroup]]) {
+  const uint ntg = ntg3.x;
+  threadgroup half4 kt[kDoryKT * kDD / 4];
+  threadgroup half4 vt[kDoryKT * kDD / 4];
+  const uint chunk = tg.x, kvh = tg.y;
+  const uint G = p.Hq / p.Hkv, r = sg / G, hq = kvh * G + sg % G;
+  const bool live = r < p.R;
+  const uint qp = p.pos0 + min(r, p.R - 1);
+  const uint lo = p.window && qp + 1 > p.window ? qp + 1 - p.window : 0;
+  const uint c0 = p.k0 + chunk * p.chunk;
+  const uint start = max(c0, lo), end = min(c0 + p.chunk, qp + 1);
+  const uint lo0 = p.window && p.pos0 + 1 > p.window ? p.pos0 + 1 - p.window : 0;
+  const uint ustart = max(c0, lo0), uend = min(c0 + p.chunk, p.pos0 + p.R);
+  const device float4* qr = (const device float4*)(q + (size_t(min(r, p.R - 1)) * p.Hq + hq) * kDD) + lane * 2;
+  const float4 q0 = qr[0] * p.scale, q1 = qr[1] * p.scale;
+  float4 a0 = 0.0f, a1 = 0.0f;
+  float m = -INFINITY, l = 0.0f;
+  const device half4* kb = (const device half4*)(kc + size_t(kvh) * p.rows * kDD);
+  const device half4* vb = (const device half4*)(vc + size_t(kvh) * p.rows * kDD);
+  for (uint t0 = ustart; t0 < uend; t0 += kDoryKT) {
+    const uint n = min(kDoryKT, uend - t0);
+    for (uint i = tid; i < n * kDD / 4; i += ntg) {
+      const uint key = t0 + i / (kDD / 4), slot = p.ring ? key % p.rows : key;
+      kt[i] = kb[size_t(slot) * (kDD / 4) + i % (kDD / 4)];
+      vt[i] = vb[size_t(slot) * (kDD / 4) + i % (kDD / 4)];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (live)
+      for (uint j0 = 0; j0 < n; j0 += 8) dory_attn_k8(m, l, a0, a1, q0, q1, kt, vt, t0, j0, n, start, end, lane);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  if (!live) return;
+  const size_t base = (size_t(r) * p.Hq + hq) * p.nchunks + chunk;
+  device float4* po = (device float4*)(part_o + base * kDD) + lane * 2;
+  po[0] = a0;
+  po[1] = a1;
+  if (lane == 0) {
+    part_ml[base * 2 + 0] = m;
+    part_ml[base * 2 + 1] = l;
+  }
+}
+
 // grid: (Hq, R) x 256 threads. out[r][h * 256 + d] (fp32, not yet gated)
 [[kernel]] void dory_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
                                  device float* out [[buffer(2)]], constant DoryAttnP& p [[buffer(3)]],

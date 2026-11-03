@@ -1,0 +1,17 @@
+[kapitsa] compiled kernels in 8 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] compiled the Dory kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] Dory: LM head as Q8_0 rows
+[kapitsa] Dory: 72 layers (16 input, 40 recurrent x 2 loops, 16 output), 2.53 GB of weights read in 0.2 s (NVFP4 attention / MLP, Q8_0 head, BF16 embedding); recurrent KV per-loop
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (144 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 2.91 GB allocated (model, buffers, 1 slot's state), budget 110.8 GB (recommended working set 115.4 GB): KV room 107.92 GB = 1881923 tokens (56 KB per token), one conversation up to 262144 of 262144 tokens
+[kapitsa] drafter: none (this model takes no block drafter, prompt lookup and Dory 1-loop drafts only)
+[kapitsa] engine ready: m, context 262144, 1 slots, speculative decoding (prompt lookup, else 1-loop drafts, 2-3 per cycle), 2 loops by default (requests take 1-4), per-loop KV, KFlash (prompt lookup, 1-loop drafts)
+[kapitsa] listening on http://127.0.0.1:8298
+[kapitsa] SSD prefix cache: <scratch>/dory/t0/run1/prefix-cache/a8f36308020ca95f615945c8737409d0, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 1 conversation taken back (14.0 GiB)
+[kapitsa] chat: prompt 134348 (cached 0) in 174092 ms (+15.2 ms template/tokenize; last chunk: encoded by 169161.0 ms, GPU start +4646.4 ms, GPU 284.2 ms, wake +0.1 ms), 512 tokens in 11680 ms (43.8 tok/s), length, 2.47 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 207 cycles, 2 loops
+[kapitsa] SSD cache: slot 0's conversation (134342 tokens) is replaced before it was saved: the 7881 MB the SSD lacks of it exceed the 1074 MB copied at once, and writing them (about 19703 ms) would take longer than reading its 134342 rows again (about 174084 ms, at most 3 s)
+[kapitsa] SSD cache: read 259398 tokens of a stored conversation into slot 0 (15055 MB in 1165 ms)
+[kapitsa] chat: prompt 259404 (cached 259398) in 623 ms (+293.5 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +79.0 ms, GPU 543.6 ms, wake +0.1 ms), 512 tokens in 20309 ms (25.2 tok/s), length, 2.41 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 212 cycles, 2 loops

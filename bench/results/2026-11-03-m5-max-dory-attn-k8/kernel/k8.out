@@ -1,0 +1,12 @@
+dory_attn_partial R 1 L 32768:   40 chunks of    832 keys:   1.112 ms   120.7 GB/s  max|diff| 0.00e+00
+dory_attn_partial_k8 R 1 L 32768:   40 chunks of    832 keys:   0.989 ms   135.7 GB/s  max|diff| 1.40e-06
+dory_attn_partial_rows R 3 L 32768:   40 chunks of    832 keys:   1.664 ms    80.7 GB/s  max|diff| 0.00e+00
+dory_attn_partial_rows_k8 R 3 L 32768:   40 chunks of    832 keys:   1.780 ms    75.4 GB/s  max|diff| 1.28e-06
+dory_attn_partial_rows R 4 L 32768:   40 chunks of    832 keys:   1.412 ms    95.1 GB/s  max|diff| 0.00e+00
+dory_attn_partial_rows_k8 R 4 L 32768:   40 chunks of    832 keys:   0.626 ms   214.4 GB/s  max|diff| 1.38e-06
+dory_attn_partial R 1 L 262144:   40 chunks of   6560 keys:   2.220 ms   483.8 GB/s  max|diff| 0.00e+00
+dory_attn_partial_k8 R 1 L 262144:   40 chunks of   6560 keys:   2.065 ms   519.9 GB/s  max|diff| 8.73e-06
+dory_attn_partial_rows R 3 L 262144:   40 chunks of   6560 keys:   3.774 ms   284.5 GB/s  max|diff| 0.00e+00
+dory_attn_partial_rows_k8 R 3 L 262144:   40 chunks of   6560 keys:   3.028 ms   354.6 GB/s  max|diff| 8.77e-06
+dory_attn_partial_rows R 4 L 262144:   40 chunks of   6560 keys:   5.215 ms   205.9 GB/s  max|diff| 0.00e+00
+dory_attn_partial_rows_k8 R 4 L 262144:   40 chunks of   6560 keys:   3.742 ms   287.0 GB/s  max|diff| 1.09e-05

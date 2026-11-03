@@ -1,0 +1,108 @@
+{
+ "rows": [
+  {
+   "arm": 0,
+   "k8": false,
+   "prompt": 134348,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 11363,
+   "tps": 45.0,
+   "tok_per_cycle": 2.47,
+   "cycles": 207,
+   "ms_per_cycle": 54.89
+  },
+  {
+   "arm": 0,
+   "k8": false,
+   "prompt": 259404,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 20269,
+   "tps": 25.2,
+   "tok_per_cycle": 2.41,
+   "cycles": 212,
+   "ms_per_cycle": 95.61
+  },
+  {
+   "arm": 1,
+   "k8": true,
+   "prompt": 134348,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 10568,
+   "tps": 48.4,
+   "tok_per_cycle": 2.47,
+   "cycles": 207,
+   "ms_per_cycle": 51.05
+  },
+  {
+   "arm": 1,
+   "k8": true,
+   "prompt": 259404,
+   "cached": 259398,
+   "tokens": 512,
+   "ms": 18128,
+   "tps": 28.2,
+   "tok_per_cycle": 2.41,
+   "cycles": 212,
+   "ms_per_cycle": 85.51
+  },
+  {
+   "arm": 2,
+   "k8": false,
+   "prompt": 134348,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 11680,
+   "tps": 43.8,
+   "tok_per_cycle": 2.47,
+   "cycles": 207,
+   "ms_per_cycle": 56.43
+  },
+  {
+   "arm": 2,
+   "k8": false,
+   "prompt": 259404,
+   "cached": 259398,
+   "tokens": 512,
+   "ms": 20309,
+   "tps": 25.2,
+   "tok_per_cycle": 2.41,
+   "cycles": 212,
+   "ms_per_cycle": 95.8
+  },
+  {
+   "arm": 3,
+   "k8": true,
+   "prompt": 134348,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 10697,
+   "tps": 47.8,
+   "tok_per_cycle": 2.47,
+   "cycles": 207,
+   "ms_per_cycle": 51.68
+  },
+  {
+   "arm": 3,
+   "k8": true,
+   "prompt": 259404,
+   "cached": 259398,
+   "tokens": 512,
+   "ms": 18382,
+   "tps": 27.8,
+   "tok_per_cycle": 2.41,
+   "cycles": 212,
+   "ms_per_cycle": 86.71
+  }
+ ],
+ "identical": {
+  "133K": true,
+  "252K": true
+ },
+ "texts": {
+  "133K": "The code provided is a collection of multiple PyTorch model implementation files from the HuggingFace Transformers library. Each file defines a specific model architecture and its associated components.\n\nHere is a description of the main classes and their purposes:\n\n1.  **`modeling_granite_speech.py`**:\n    *   Defines the `GraniteSpeechModelOutputWithPast` and `GraniteSpeechCausalLMOutputWithPast` dataclasses for model outputs.\n    *   Contains the `GraniteSpeechEncoderProjector` class, which projects audio features to text features using a QFormer (QueryFormer) and a linear layer.\n    *   Implements the `GraniteSpeechConformerFeedForward`, `GraniteSpeechConformerAttention`, `GraniteSpeechConformerDepthWiseConv1d`, and `GraniteSpeechConformerConvModule` classes, which form the Conformer-based audio encoder.\n    *   Defines the `GraniteSpeechCTCEncoder` class, which stacks Conformer blocks to process audio signals.\n    *   Implements the `GraniteSpeechPreTrainedModel`, `GraniteSpeechModel`, and `GraniteSpeechCTCEncoder` classes. The `GraniteSpeechModel` integrates the audio encoder, projector, and a language model (LLM) to create a multimodal model capable of processing audio and text inputs.\n\n2.  **`modeling_modernvbert.py`**:\n    *   Defines output dataclasses like `ModernVBertBaseModelOutput` and `ModernVBertMaskedLMOutput`.\n    *   Contains the `ModernVBertConnector` class, which performs a pixel shuffle operation to align vision features with text features.\n    *   Implements the `ModernVBertPreTrainedModel`, `ModernVBertModel`, `ModernVBertPredictionHead`, and `ModernVBertForMaskedLM` classes. The `ModernVBertModel` combines a vision encoder (SigLIP) and a text encoder (ModernBert) to create a visual-retrieval model.\n\n3.  **`modeling_altclip.py`**:\n    *   Defines the `AltCLIPOutput` dataclass for contrastive learning outputs.\n    *   Implements the `AltRobertaEmbeddings` class for text embeddings.\n    *   Contains the `AltRobertaSelfAttention`, `AltRobertaSelfOutput`, `AltRobertaIntermediate`, and `AltRober",
+  "252K": "The provided code is a collection of PyTorch model implementations from the HuggingFace `transformers` library, primarily focused on multimodal and vision-language models. Here is a structured description of its main classes and components:\n\n1.  **Granite Speech Model (`modeling_granite_speech.py`)**:\n    *   Defines the `GraniteSpeechModel`, which serves as the base for audio-to-text processing.\n    *   It includes a `GraniteSpeechEncoder` (a Conformer-based encoder) and a `GraniteSpeechEncoderProjector` that projects audio features into text embeddings.\n    *   The model supports audio input and integrates with a causal language model (LLM) via the `GraniteSpeechPreTrainedModel` base class.\n    *   Key output classes include `GraniteSpeechModelOutputWithPast` and `GraniteSpeechCausalLMOutputWithPast`, which track hidden states, attentions, and audio features.\n\n2.  **ModernVBERT Model (`modeling_modernvbert.py`)**:\n    *   Implements a vision-language model based on the DeBERTa-v2 architecture.\n    *   Features a `ModernVBertConnector` to project vision features into the text embedding space.\n    *   The `ModernVBertModel` combines a vision encoder (SigLIP) and a text encoder (ModernBERT).\n    *   It supports multimodal inputs (image and text) and includes output classes like `ModernVBertBaseModelOutput` and `ModernVBertMaskedLMOutput`.\n\n3.  **VideoPrism Model (`modeling_videoprism.py`)**:\n    *   A multimodal video model designed for video-text understanding.\n    *   Contains components for tubelet embeddings, spatial and temporal embeddings, and a transformer-based decoder.\n    *   The `VideoPrismModel` handles both vision and text modalities, with output classes tracking temporal and spatial hidden states (`BaseModelOutputWithSpatialAndTemporalStates`).\n\n4.  **Xcodec Model (`modeling_xcodec.py`)**:\n    *   Implements the neural audio codec (Xcodec) architecture.\n    *   Includes encoder and decoder components (`SemanticEncoder`, `SemanticDecoder`), a codebook (`XcodecEuclideanCodebook`), and a residual vector quantization module (`XcodecResidualVectorQuantization`).\n    *   The `XcodecModel` manages"
+ }
+}

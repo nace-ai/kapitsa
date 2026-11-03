@@ -1028,7 +1028,11 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
   // read once, the same partials bit for bit); NI_DORY_ATTN_ROWS=0: a threadgroup per row (dory_attn_partial)
   static const bool rows_tg = !(getenv("NI_DORY_ATTN_ROWS") && atoi(getenv("NI_DORY_ATTN_ROWS")) == 0);
   const bool rt = rows_tg && R >= 2 && R * (c.hq / c.hkv) <= 32;
-  e.use(pipe(rt ? "dory_attn_partial_rows" : "dory_attn_partial"));
+  // NI_DORY_ATTN_K8 (default on, 0 = off): a row's keys 8 at a time (dory_attn_k8: 8 scores, one running max and one
+  // rescale for them) instead of one: a 3-row verify's attention after 262K positions 3.77 -> 3.0 ms, one row 2.19 -> 2.03
+  static const bool k8 = !(getenv("NI_DORY_ATTN_K8") && atoi(getenv("NI_DORY_ATTN_K8")) == 0);
+  e.use(pipe(rt ? (k8 ? "dory_attn_partial_rows_k8" : "dory_attn_partial_rows")
+                : (k8 ? "dory_attn_partial_k8" : "dory_attn_partial")));
   e.buf(0, q_);
   e.buf(1, s.kc[size_t(ci)]);
   e.buf(2, s.vc[size_t(ci)]);
