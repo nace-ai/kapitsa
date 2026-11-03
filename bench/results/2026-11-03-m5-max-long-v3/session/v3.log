@@ -1,0 +1,43 @@
+=== dory-kapitsa-perloop-256k-v3 01:04:04 powermode=2 Now drawing from 'AC Power' load={ 1.86 1.55 1.33 } top=20.0 Helper;16.7 (Renderer);11.2 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;
+[01:04:09] dory-kapitsa-perloop-256k-v3:  warm-up prefill~2.9k+decode64: ok (1.47s)
+[01:04:10] dory-kapitsa-perloop-256k-v3:  warm-up tools: ok (0.35s)
+[01:05:10] dory-kapitsa-perloop-256k-v3: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 120.85 tok/s (e2e 118.76; 512 tok, finish=length, d4=0.4944) flags ['repetition loop (distinct-4-gram 0.4944)']
+  decode T=0.6: 120.63 tok/s (e2e 118.25; 512 tok, finish=length, d4=0.5736)
+  decode T=0.6: 118.59 tok/s (e2e 117.33; 512 tok, finish=length, d4=0.9707)
+  decode T=0.6: 126.76 tok/s (e2e 124.84; 512 tok, finish=length, d4=0.6963)
+  decode T=0.6: 108.70 tok/s (e2e 109.17; 512 tok, finish=length, d4=0.9429)
+  decode median 120.63 (min 108.7, max 126.76) over 5/5 valid
+  sweep 1000: 1119.5 tok, TTFT 0.36s, 3104 tok/s prefill, decode 124.52 tok/s
+  sweep 2000: 2174.5 tok, TTFT 0.89s, 2442 tok/s prefill, decode 120.30 tok/s
+  sweep 4000: 4214.5 tok, TTFT 1.73s, 2435 tok/s prefill, decode 108.18 tok/s
+  sweep 8000: 8418.0 tok, TTFT 3.68s, 2288 tok/s prefill, decode 98.33 tok/s
+  sweep 16000: 16550.0 tok, TTFT 8.24s, 2008 tok/s prefill, decode 94.42 tok/s
+  sweep 32000: 33146.0 tok, TTFT 20.39s, 1625 tok/s prefill, decode 70.33 tok/s
+  sweep 64000: 66362.5 tok, TTFT 57.64s, 1151 tok/s prefill, decode 65.82 tok/s
+  sweep 128000: 133396.5 tok, TTFT 192.02s, 695 tok/s prefill, decode 32.38 tok/s
+  sweep 240000: 254823.0 tok, TTFT 626.08s, 407 tok/s prefill, decode 21.33 tok/s
+  -> <run-root>/v3/results/dory-kapitsa-perloop-256k-v3-20261103-010404.json
+[02:11:40] dory-kapitsa-perloop-256k-v3: -> <run-root>/v3/results/dory-kapitsa-perloop-256k-v3-20261103-010404.json  flags: 3
+=== q38-27b-kapitsa-256k-v3 02:11:40 powermode=2 Now drawing from 'AC Power' load={ 1.81 1.16 1.02 } top=25.4 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;7.7 Helper;5.5 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;
+[02:11:54] q38-27b-kapitsa-256k-v3:  warm-up prefill~2.9k+decode64: ok (5.1s)
+[02:11:56] q38-27b-kapitsa-256k-v3:  warm-up tools: ok (1.29s)
+[02:12:56] q38-27b-kapitsa-256k-v3: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 149.58 tok/s (e2e 148.73; 512 tok, finish=length, d4=0.8202)
+  decode T=0.6: 152.90 tok/s (e2e 149.16; 512 tok, finish=length, d4=0.89)
+  decode T=0.6: 113.75 tok/s (e2e 114.37; 512 tok, finish=length, d4=0.9436)
+  decode T=0.6: 144.05 tok/s (e2e 140.70; 512 tok, finish=length, d4=0.9042)
+  decode T=0.6: 128.09 tok/s (e2e 127.10; 512 tok, finish=length, d4=0.7024)
+  decode median 144.05 (min 113.75, max 152.9) over 5/5 valid
+  sweep 1000: 1106.5 tok, TTFT 1.49s, 745 tok/s prefill, decode 121.91 tok/s
+  sweep 2000: 2133.0 tok, TTFT 2.79s, 766 tok/s prefill, decode 101.40 tok/s
+  sweep 4000: 4161.5 tok, TTFT 5.16s, 807 tok/s prefill, decode 92.47 tok/s
+  sweep 8000: 8310.5 tok, TTFT 10.70s, 777 tok/s prefill, decode 76.73 tok/s
+  sweep 16000: 16315.0 tok, TTFT 21.70s, 752 tok/s prefill, decode 68.76 tok/s
+  sweep 32000: 32719.0 tok, TTFT 48.19s, 679 tok/s prefill, decode 65.58 tok/s
+  sweep 64000: 65402.0 tok, TTFT 117.04s, 559 tok/s prefill, decode 55.76 tok/s
+  sweep 128000: 131099.0 tok, TTFT 301.34s, 435 tok/s prefill, decode 42.41 tok/s
+  sweep 249051: 258994.5 tok, TTFT 856.03s, 303 tok/s prefill, decode 34.03 tok/s
+  -> <run-root>/v3/results/q38-27b-kapitsa-256k-v3-20261103-021140.json
+[03:48:35] q38-27b-kapitsa-256k-v3: -> <run-root>/v3/results/q38-27b-kapitsa-256k-v3-20261103-021140.json  flags: 15
+=== done 03:48:35

@@ -1,0 +1,52 @@
+[
+ {
+  "label": "dory-kapitsa-perloop-256k-v3",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "4"
+  ],
+  "note": "the long sweep on main dbf303a (#897, #898), four cold requests a size",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ },
+ {
+  "label": "q38-27b-kapitsa-256k-v3",
+  "extends": "q38-27b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "4"
+  ],
+  "note": "the long sweep on main dbf303a (#897, #898), four cold requests a size",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ }
+]
