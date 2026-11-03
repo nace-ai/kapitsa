@@ -1,0 +1,58 @@
+{
+  "model": "nemotron-3.5-bolt-24gb",
+  "measured": {
+    "build": "0.2.26 (7ebcf73)",
+    "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+    "macos": "26.4",
+    "date": "2026-11-03T01:08:39Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {},
+    "command": "tools/logit_floor.py ~/models/nemotron-3.5-bolt-24gb"
+  },
+  "reference_path": "verify",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "batch": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "batch": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "alone (the single-stream verify) against 4 requests decoding together (encode_verify_multi)", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 72, "top1": 1.0, "flips": 0, "kl_mean": 0.0003528060679542904, "kl_median": 4.070898877312745e-07, "kl_p99": 0.004650936696605318, "kl_max": 0.011248517358602786, "margin_change_max": 0.4253501892089844, "tie_margin": 0.11381912231445312, "nll_change_mean": -0.0019720074541127084, "max_abs_diff": 2.2795639038085938, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false},
+    "ane": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.0008051928213194597, "kl_median": 2.6894327742391315e-05, "kl_p99": 0.017755774832628354, "kl_max": 0.02997887722345861, "margin_change_max": 0.6645240783691406, "tie_margin": 0.21245193481445312, "nll_change_mean": -0.005135679190270248, "max_abs_diff": 2.0468177795410156, "what": "the Neural Engine prefill split against the GPU alone (NI_ANE=0)", "in_floor": true, "decode": false},
+    "chunk_gpu": {"records": 192, "bitwise": 96, "top1": 1.0, "flips": 0, "kl_mean": 0.0001414379284169882, "kl_median": 5.427867846247572e-10, "kl_p99": 0.002014963727039195, "kl_max": 0.006187900911443742, "margin_change_max": 0.7953720092773438, "tie_margin": 0.26342010498046875, "nll_change_mean": 0.0028375975042486123, "max_abs_diff": 3.3500118255615234, "what": "prefill chunks of 512 rows against 2048 with the GPU alone (NI_ANE=0: no rows moving to the ANE)", "in_floor": true, "decode": false},
+    "step": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 4.012835694184296e-05, "kl_median": 1.5759209909313557e-07, "kl_p99": 0.0006525859443926739, "kl_max": 0.0010758203402788592, "margin_change_max": 0.209991455078125, "tie_margin": 0.0118408203125, "nll_change_mean": -0.0006121814632698378, "max_abs_diff": 1.616079330444336, "what": "plain decoding (--spec 0) against the verify (8 rows; Flash-Next: its MTP cycle's 3)", "in_floor": true, "decode": true}
+  },
+  "floor": {
+    "flips": 0,
+    "kl_mean": 0.0008051928213194597,
+    "kl_p99": 0.017755774832628354,
+    "kl_max": 0.02997887722345861,
+    "margin_change_max": 0.7953720092773438,
+    "tie_margin": 0.26342010498046875,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "ane", "kl_p99": "ane", "kl_max": "ane", "margin_change_max": "chunk_gpu", "tie_margin": "chunk_gpu"}
+  },
+  "gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.00162,
+    "max_p99_kl": 0.0356,
+    "near_tie": 0.264,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 0,
+    "kl_mean": 4.012835694184296e-05,
+    "kl_p99": 0.0006525859443926739,
+    "kl_max": 0.0010758203402788592,
+    "margin_change_max": 0.209991455078125,
+    "tie_margin": 0.0118408203125,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "step", "kl_p99": "step", "kl_max": "step", "margin_change_max": "step", "tie_margin": "step"}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 8.03e-05,
+    "max_p99_kl": 0.00131,
+    "near_tie": 0.0119,
+    "max_far_flips": 0
+  }
+}
