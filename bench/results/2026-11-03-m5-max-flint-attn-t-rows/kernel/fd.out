@@ -1,0 +1,14 @@
+flint_attn_partial R 1 L 32768:   40 chunks of    832 keys:   0.969 ms    69.3 GB/s  max|diff| 0.00e+00
+flint_attn_partial_rows R 2 L 32768:   40 chunks of    832 keys:   1.944 ms    34.5 GB/s  max|diff| 0.00e+00
+flint_attn_partial R 2 L 32768:   40 chunks of    832 keys:   0.744 ms    90.2 GB/s  max|diff| 0.00e+00
+flint_attn_partial_rows R 4 L 32768:   40 chunks of    832 keys:   1.699 ms    39.5 GB/s  max|diff| 0.00e+00
+flint_attn_partial R 4 L 32768:   40 chunks of    832 keys:   0.700 ms    95.9 GB/s  max|diff| 0.00e+00
+flint_attn_partial_rows R 8 L 32768:   40 chunks of    832 keys:   1.967 ms    34.1 GB/s  max|diff| 0.00e+00
+flint_attn_partial R 8 L 32768:   40 chunks of    832 keys:   1.352 ms    49.6 GB/s  max|diff| 0.00e+00
+flint_attn_partial R 1 L 262144:   40 chunks of   6560 keys:   1.916 ms   280.2 GB/s  max|diff| 0.00e+00
+flint_attn_partial_rows R 2 L 262144:   40 chunks of   6560 keys:   3.266 ms   164.4 GB/s  max|diff| 0.00e+00
+flint_attn_partial R 2 L 262144:   40 chunks of   6560 keys:   2.990 ms   179.5 GB/s  max|diff| 0.00e+00
+flint_attn_partial_rows R 4 L 262144:   40 chunks of   6560 keys:   5.776 ms    93.0 GB/s  max|diff| 0.00e+00
+flint_attn_partial R 4 L 262144:   40 chunks of   6560 keys:   5.568 ms    96.4 GB/s  max|diff| 0.00e+00
+flint_attn_partial_rows R 8 L 262144:   40 chunks of   6560 keys:  10.992 ms    48.8 GB/s  max|diff| 0.00e+00
+flint_attn_partial R 8 L 262144:   40 chunks of   6560 keys:  10.715 ms    50.1 GB/s  max|diff| 0.00e+00

@@ -1,0 +1,18 @@
+[kapitsa] compiled kernels in 8 ms
+[kapitsa] compiled the Flint kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] read 22.57 GB of weights in 1156 ms (19.5 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 1.3 s
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (111 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 22.59 GB allocated (model, buffers, 1 slot's state), budget 110.8 GB (recommended working set 115.4 GB): KV room 88.25 GB = 3077766 tokens (28 KB per token), one conversation up to 262144 of 262144 tokens
+[kapitsa] drafter: none (this model takes no block drafter)
+[kapitsa] engine ready: m, context 262144, 1 slots, plain decoding, KFlash (none)
+[kapitsa] listening on http://127.0.0.1:8298
+[kapitsa] SSD prefix cache: <scratch>/flint/t0/run1/prefix-cache/fcf38ddea7a3ddca93ff08c4eb4e5249, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] compiled the weight-format kernels in 9 ms
+[kapitsa] chat: prompt 122621 (cached 0) in 64932 ms (+142.1 ms template/tokenize; last chunk: encoded by 63000.0 ms, GPU start +1921.5 ms, GPU 10.3 ms, wake +0.1 ms), 512 tokens in 5269 ms (97.0 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] SSD cache: slot 0's conversation (122620 tokens) is replaced before it was saved: the 3554 MB the SSD lacks of it exceed the 1074 MB copied at once, and writing them (about 8884 ms) would take longer than reading its 122620 rows again (about 64931 ms, at most 3 s)
+[kapitsa] chat: prompt 235892 (cached 0) in 207249 ms (+327.0 ms template/tokenize; last chunk: encoded by 203868.7 ms, GPU start +3363.8 ms, GPU 16.2 ms, wake +0.1 ms), 512 tokens in 8431 ms (60.6 tok/s), length, KFlash (none): 511 cycles, 511 rows, 0 drafts accepted
+[kapitsa] SSD cache: saved slot 0 (235891 tokens, 1 restore point; 461 of 461 KV blocks and 1 state new: 6801 MB) in 1216 ms
+[kapitsa] SSD prefix cache: 1 conversation saved as the server stops (6804 MB in 1216 ms)

@@ -1,0 +1,27 @@
+# MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1 build/logit_dump <flint-4bit> <dumps>/val1 --windows 1 --paths verify (the default: flint_attn_t_rows)
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (121 ms)
+2026-11-03 07:38:54.186 logit_dump[24037:13127726] Metal API Validation Enabled
+2026-11-03 07:38:54.187 logit_dump[24037:13127726] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 8 ms
+[kapitsa] compiled the Flint kernels in 144 ms
+[kapitsa] compiled the tensor kernels in 959 ms
+[kapitsa] read 22.57 GB of weights in 1153 ms (19.6 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 1.3 s
+[kapitsa] compiled the weight-format kernels in 7443 ms
+prefill 1 rows: next-token NLL nan, top-1 = next token 0.0000 -> <dumps>/val1/prefill
+verify 24 rows: next-token NLL 7.1313, top-1 = next token 0.0833 -> <dumps>/val1/verify
+1 windows, 512 prefilled tokens in 9.4 s; 11.0 s in all
+
+# the same with the 8 default windows (512-3,200 tokens: the sliding layers' ring wraps)
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (128 ms)
+2026-11-03 07:39:07.784 logit_dump[24072:13128125] Metal API Validation Enabled
+2026-11-03 07:39:07.784 logit_dump[24072:13128125] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 8 ms
+[kapitsa] compiled the Flint kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] read 22.57 GB of weights in 1149 ms (19.6 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 1.3 s
+[kapitsa] compiled the weight-format kernels in 11 ms
+prefill 8 rows: next-token NLL nan, top-1 = next token 0.0000 -> <dumps>/val8/prefill
+verify 192 rows: next-token NLL 6.0037, top-1 = next token 0.2812 -> <dumps>/val8/verify
+8 windows, 14848 prefilled tokens in 3.9 s; 6.4 s in all

@@ -1,0 +1,134 @@
+{
+ "rows": [
+  {
+   "arm": 0,
+   "tag": "plain",
+   "prompt": 122621,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 5269,
+   "tps": 97.0,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 0,
+   "tag": "plain",
+   "prompt": 235892,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 8431,
+   "tps": 60.6,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 1,
+   "tag": "old",
+   "prompt": 122621,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 14768,
+   "tps": 34.6,
+   "tok_per_cycle": 1.19,
+   "finish": "length"
+  },
+  {
+   "arm": 1,
+   "tag": "old",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 19166,
+   "tps": 26.7,
+   "tok_per_cycle": 1.2,
+   "finish": "length"
+  },
+  {
+   "arm": 2,
+   "tag": "new",
+   "prompt": 122621,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 6021,
+   "tps": 84.9,
+   "tok_per_cycle": 1.32,
+   "finish": "length"
+  },
+  {
+   "arm": 2,
+   "tag": "new",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 8617,
+   "tps": 59.3,
+   "tok_per_cycle": 1.2,
+   "finish": "length"
+  },
+  {
+   "arm": 3,
+   "tag": "old",
+   "prompt": 122621,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 14761,
+   "tps": 34.6,
+   "tok_per_cycle": 1.19,
+   "finish": "length"
+  },
+  {
+   "arm": 3,
+   "tag": "old",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 19121,
+   "tps": 26.7,
+   "tok_per_cycle": 1.2,
+   "finish": "length"
+  },
+  {
+   "arm": 4,
+   "tag": "new",
+   "prompt": 122621,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 6056,
+   "tps": 84.4,
+   "tok_per_cycle": 1.32,
+   "finish": "length"
+  },
+  {
+   "arm": 4,
+   "tag": "new",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 8627,
+   "tps": 59.2,
+   "tok_per_cycle": 1.2,
+   "finish": "length"
+  }
+ ],
+ "identical": {
+  "133K": [
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  "252K": [
+   true,
+   true,
+   true,
+   true,
+   true
+  ]
+ },
+ "texts": {
+  "133K": "",
+  "252K": ""
+ }
+}

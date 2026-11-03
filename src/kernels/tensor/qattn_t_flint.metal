@@ -174,3 +174,171 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
 // small_tiles() (shader validation, NI_FLINT_K16=1) takes NS 4 / BK 16, half the threadgroup memory.
 QATTN_FLINT(qattn_flint_s8k32p, 8, 32, 136)
 QATTN_FLINT(qattn_flint_s4k16, 4, 16, 128)
+
+// ---- flint_attn_t_rows: a verify's attention (2-8 rows, prompt lookup) on the matrix units ----
+// flint_attn_partial_rows (flint/flint.metal) runs, per (chunk, KV head), a simdgroup per query head that walks the
+// verify's rows one after another and each row's keys one at a time (a dot product, a sum over lanes, two
+// exponentials): its time grows with the rows, 1.9 ms for one row and 11.0 ms for eight per full-attention layer at
+// 262K positions on the M5 Max (49 GB/s of cache reads), where the decode row reads the same cache in ~2 ms. Here a
+// threadgroup per (chunk, KV head) stages each 32-key tile of K and V once (16 KB), and its 4 simdgroups each take two
+// rows x the KV head's 8 query heads as one 16-row tile (row r = verify row t0 + r / 8, head kvh * 8 + r % 8) on the
+// matrix units: scores Q K^T (Q as a half pair with QS: hi + lo, ~22 bits of Q), the online softmax in base 2 with fp32
+// statistics, O += P V (P as half). The partials are flint_attn_partial's: per row, head and chunk the unnormalized O,
+// the max (natural log; -inf for a chunk with none of the row's keys) and the sum, for flint_attn_reduce, which adds
+// the sinks. Row t (position pos0 + t) sees keys [lo_t, pos0 + t] within the chunk's [k0 + c chunk, + chunk), lo_t the
+// window's start (0 without one); a ring cache reads slot key % rows. grid: (nchunks, Hkv) x 128 threads.
+struct FlintAttnVP {  // = FlintAttnP (flint/flint.metal)
+  uint R, pos0, Hq, Hkv;
+  uint rows, ring, window, k0;
+  uint chunk, nchunks;
+  float scale;
+};
+
+template <int BK, int LD, bool QS>
+NI_INLINE void flint_attn_t_rows_impl(const device float* q, const device half* kc, const device half* vc,
+                                      device float* part_o, device float* part_ml, constant FlintAttnVP& p, uint2 tg,
+                                      uint sg, ushort lane, threadgroup half* kt, threadgroup half* vt) {
+  constexpr int D = 128, G = 8, KT = BK / 16, NS = 4;
+  const uint c = tg.x, kvh = tg.y, tid = sg * 32 + lane;
+  const uint R = min(p.R, 8u);
+  const uint cs = p.k0 + c * p.chunk, ce = min(cs + p.chunk, p.pos0 + R);   // the chunk's keys [cs, ce)
+  const uint t0 = sg * 2;
+  const bool live = t0 < R;
+  const short qid = lane >> 2, fm = (qid & 4) | ((lane >> 1) & 3), fn = ((qid & 2) | (lane & 1)) * 4;
+  uint tk[2], lim[2], lo[2];
+  _Pragma("clang loop unroll(full)")
+  for (short i = 0; i < 2; ++i) {
+    tk[i] = t0 + i;
+    lim[i] = p.pos0 + min(tk[i], R - 1);   // the last key the row sees
+    lo[i] = p.window && lim[i] + 1 > p.window ? lim[i] + 1 - p.window : 0u;
+  }
+  const uint hd = kvh * G + fm;
+  // the simdgroup's keys: up to its second row's last, from its first row's window start
+  const uint slast = min(ce, lim[1] + 1), sfirst = max(cs, lo[0]);
+  const float qscale = p.scale * M_LOG2E_F;
+  nhf_h8 qf[D / 16], ql[D / 16];
+  _Pragma("clang loop unroll(full)")
+  for (short id = 0; id < D / 16; ++id)
+    _Pragma("clang loop unroll(full)")
+    for (short i = 0; i < 2; ++i) {
+      const float4 x = *(const device float4*)(q + (size_t(min(tk[i], R - 1)) * p.Hq + hd) * D + id * 16 + fn) * qscale;
+      _Pragma("clang loop unroll(full)")
+      for (short j = 0; j < 4; ++j) {
+        qf[id][4 * i + j] = half(x[j]);
+        if (QS) ql[id][4 * i + j] = half(x[j] - float(qf[id][4 * i + j]));
+      }
+    }
+  nhf_f8 o[D / 16];
+  _Pragma("clang loop unroll(full)")
+  for (short id = 0; id < D / 16; ++id) o[id] = nhf_f8(0.0f);
+  float m[2] = {-1e30f, -1e30f}, l[2] = {0.0f, 0.0f};
+  const device half* kb = kc + size_t(kvh) * p.rows * D;
+  const device half* vb = vc + size_t(kvh) * p.rows * D;
+  for (uint k0 = cs; k0 < ce; k0 += BK) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);   // the previous step is done with the tiles
+    for (uint i = tid; i < BK * (D / 8); i += 32 * NS) {   // BK rows x 16 half8
+      const uint r = i / (D / 8), cc = (i % (D / 8)) * 8, key = k0 + r;
+      uint4 kv4 = uint4(0), vv4 = uint4(0);
+      if (key < ce) {
+        const size_t at = size_t(p.ring ? key % p.rows : key) * D + cc;
+        kv4 = *(const device uint4*)(kb + at);
+        vv4 = *(const device uint4*)(vb + at);
+      }
+      *(threadgroup uint4*)(kt + r * LD + cc) = kv4;
+      *(threadgroup uint4*)(vt + r * LD + cc) = vv4;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!live || k0 >= slast || k0 + BK <= sfirst) continue;   // (tile loads and barriers are uniform)
+    nhf_f8 sf[KT];
+    _Pragma("clang loop unroll(full)")
+    for (short f = 0; f < KT; ++f) sf[f] = nhf_f8(0.0f);
+    _Pragma("clang loop unroll(full)")
+    for (short f = 0; f < KT; f += 2)
+      _Pragma("clang loop unroll(full)")
+      for (short id = 0; id < D / 16; ++id) {
+        const nhf_h8 ka = qa_load_kv<LD>(kt, 16 * f, id * 16, fm, fn);
+        const nhf_h8 kb2 = qa_load_kv<LD>(kt, 16 * f + 16, id * 16, fm, fn);
+        if (QS) nhf_mma<half, half, true>(sf[f], sf[f + 1], ql[id], ka, kb2);
+        nhf_mma<half, half, true>(sf[f], sf[f + 1], qf[id], ka, kb2);
+      }
+    // some key of the tile past the chunk, past a row's last or below a row's window start
+    const bool edge = k0 + BK > ce || k0 + BK - 1 > lim[0] || k0 < lo[1];
+    float corr[2];
+    _Pragma("clang loop unroll(full)")
+    for (short i = 0; i < 2; ++i) {
+      float mx = -1e30f;
+      _Pragma("clang loop unroll(full)")
+      for (short f = 0; f < KT; ++f)
+        _Pragma("clang loop unroll(full)")
+        for (short j = 0; j < 4; ++j) {
+          float v = sf[f][4 * i + j];
+          const uint key = k0 + 16 * f + fn + j;
+          if (edge && (key >= ce || key > lim[i] || key < lo[i])) v = -1e30f;
+          sf[f][4 * i + j] = v;
+          mx = max(mx, v);
+        }
+      mx = max(mx, simd_shuffle_xor(mx, ushort(1)));
+      mx = max(mx, simd_shuffle_xor(mx, ushort(8)));
+      const float mn = max(m[i], mx);
+      corr[i] = exp2(m[i] - mn);
+      m[i] = mn;
+      float ps = 0.0f;
+      _Pragma("clang loop unroll(full)")
+      for (short f = 0; f < KT; ++f)
+        _Pragma("clang loop unroll(full)")
+        for (short j = 0; j < 4; ++j) {
+          const float v = sf[f][4 * i + j];
+          const float pv = v <= -1e29f ? 0.0f : exp2(v - mn);
+          sf[f][4 * i + j] = pv;
+          ps += pv;
+        }
+      ps += simd_shuffle_xor(ps, ushort(1));
+      ps += simd_shuffle_xor(ps, ushort(8));
+      l[i] = l[i] * corr[i] + ps;
+    }
+    if (!simd_all(corr[0] == 1.0f && corr[1] == 1.0f)) {
+      _Pragma("clang loop unroll(full)")
+      for (short id = 0; id < D / 16; ++id)
+        _Pragma("clang loop unroll(full)")
+        for (short e = 0; e < 8; ++e) o[id][e] *= corr[e >> 2];
+    }
+    _Pragma("clang loop unroll(full)")
+    for (short f = 0; f < KT; ++f) {
+      const nhf_h8 pf = nhf_h8(sf[f]);
+      _Pragma("clang loop unroll(full)")
+      for (short id = 0; id < D / 16; id += 2) {
+        const nhf_h8 v0 = qa_load_kv<LD>(vt, 16 * f, id * 16, fm, fn);
+        const nhf_h8 v1 = qa_load_kv<LD>(vt, 16 * f, id * 16 + 16, fm, fn);
+        nhf_mma<half, half, false>(o[id], o[id + 1], pf, v0, v1);
+      }
+    }
+  }
+  // the partials: O unnormalized (scaled by 2^-m), m as a natural log (-inf: none of the row's keys), l
+  _Pragma("clang loop unroll(full)")
+  for (short i = 0; i < 2; ++i) {
+    if (!live || tk[i] >= R) continue;
+    const size_t base = (size_t(tk[i]) * p.Hq + hd) * p.nchunks + c;
+    _Pragma("clang loop unroll(full)")
+    for (short id = 0; id < D / 16; ++id)
+      *(device float4*)(part_o + base * D + id * 16 + fn) =
+          float4(o[id][4 * i], o[id][4 * i + 1], o[id][4 * i + 2], o[id][4 * i + 3]);
+    if (fn == 0) {
+      part_ml[base * 2 + 0] = l[i] > 0.0f ? m[i] * 0.6931471805599453f : -INFINITY;
+      part_ml[base * 2 + 1] = l[i];
+    }
+  }
+}
+
+#define FLINT_ATTN_T_ROWS(NAME, BK, LD, QS)                                                                            \
+  [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                      \
+      const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],  \
+      device float* part_o [[buffer(3)]], device float* part_ml [[buffer(4)]], constant FlintAttnVP& p [[buffer(5)]], \
+      uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],                         \
+      uint lane [[thread_index_in_simdgroup]]) {                                                                      \
+    threadgroup half kt[BK * LD], vt[BK * LD];                                                                        \
+    flint_attn_t_rows_impl<BK, LD, QS>(q, kc, vc, part_o, part_ml, p, tg, sg, ushort(lane), kt, vt);                 \
+  }
+// 32-key tiles of 128 halves a row: 16 KB, which the validation layer (counting it twice) still dispatches. Q as half
+// alone: as a half pair (QS) it doubles the score products for 4.5e-6 instead of 5.7e-6 against an fp64 softmax at 32K
+// keys (8 rows at 262K: 2.11 against 1.00 ms); rows padded to 136 halves measured no faster
+FLINT_ATTN_T_ROWS(flint_attn_t_rows, 32, 128, false)
