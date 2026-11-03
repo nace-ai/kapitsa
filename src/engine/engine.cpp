@@ -4579,10 +4579,9 @@ void Engine::remember_reply(const ChatRequest& r, const ChatResult& res) {
 
 std::shared_ptr<const AnsweredReply> draft_conversation(const std::deque<std::shared_ptr<const AnsweredReply>>& answered,
                                                         const std::string& key, const std::string& after) {
-  (void)key;
   const std::string want = content_text(ojson(after));
   for (auto it = answered.rbegin(); it != answered.rend(); ++it)
-    if ((*it)->reply == want) return *it;
+    if ((key.empty() || (*it)->r.cache_key == key) && (*it)->reply == want) return *it;
   return nullptr;
 }
 

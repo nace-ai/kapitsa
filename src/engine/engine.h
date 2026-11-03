@@ -306,7 +306,8 @@ struct AnsweredReply {
   std::shared_ptr<const std::vector<vision::Prepared>> images;
 };
 // The conversation a draft reads ahead in (Engine::draft; CPU only: tools/api_test checks it): of `answered` (oldest
-// first), the newest whose reply is `after` (both trimmed), or null.
+// first), the newest whose reply is `after` (both trimmed) and, if `key` is not empty, whose request's prompt_cache_key
+// is `key` (two chats can end in the same text), or null.
 std::shared_ptr<const AnsweredReply> draft_conversation(const std::deque<std::shared_ptr<const AnsweredReply>>& answered,
                                                         const std::string& key, const std::string& after);
 
@@ -416,8 +417,8 @@ class Engine {
   // that ended with "stop" are the conversations draft() can read ahead in.
   void remember_reply(const ChatRequest& r, const ChatResult& res);
   // Read ahead (POST /v1/draft): while the user types the next message of a conversation, its prompt is read as far
-  // as the draft goes, so that the request, once sent, prefills only what was typed since. `after`: the text of the
-  // conversation's last assistant reply (the most recent remembered reply whose content equals it, both trimmed);
+  // as the draft goes, so that the request, once sent, prefills only what was typed since. `key`: the conversation's
+  // prompt_cache_key ("" if its requests send none); `after`: the text of its last assistant reply (draft_conversation);
   // `text`: the draft so far. The prompt is draft_prompt's, read less its last token (as after prefill_history, the
   // request's own prefill reads that one). A checkpoint where the user's turn starts (the conversation as the history
   // prefill leaves it: where a request without drafts starts; with the drafter's context) is kept first, so a draft
