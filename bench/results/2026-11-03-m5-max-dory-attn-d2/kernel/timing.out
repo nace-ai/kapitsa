@@ -1,0 +1,4 @@
+T 2048 after  14336: | dory_attn_t_g4s8k16    27.9 ms  18.5 TF/s fp64 err 9.43e-06 | dory_attn_td2_g4s8    14.8 ms  34.7 TF/s (diff 1.9e-06) fp64 err 9.71e-06
+T 2048 after  63488: | dory_attn_t_g4s8k16   117.6 ms  18.4 TF/s fp64 err 1.04e-05 | dory_attn_td2_g4s8    67.1 ms  32.3 TF/s (diff 2.3e-06) fp64 err 1.04e-05
+T 2048 after 129024: | dory_attn_t_g4s8k16   249.2 ms  17.5 TF/s fp64 err 9.68e-06 | dory_attn_td2_g4s8   130.7 ms  33.4 TF/s (diff 2.8e-06) fp64 err 9.68e-06
+T 2048 after 253952: | dory_attn_t_g4s8k16   475.0 ms  18.0 TF/s fp64 err 1.14e-05 | dory_attn_td2_g4s8   267.2 ms  32.0 TF/s (diff 2.4e-06) fp64 err 1.12e-05
