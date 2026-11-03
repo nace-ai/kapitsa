@@ -1155,6 +1155,7 @@ void NemotronH::alloc_buffers() {
   // ~600 positions: partial + reduce 27.0 against 36.8 us per layer with 256, NI_PROFILE; 32: 26.9)
   attn_chunk_ = Gpu::get().apple10() ? 64 : 256;
   if (const char* v = getenv("NI_NH_ATTN_CHUNK")) attn_chunk_ = std::max(32, atoi(v));
+  if (const char* v = getenv("NI_NH_ATTN_TV")) attn_tv_ = atoi(v) != 0;
   if (const char* v = getenv("NI_NH_MERGE_FLUSH")) merge_flush_ = atoi(v) != 0;
   acc_ = g.alloc(64, "nh_accepted");
   tree_ = g.alloc(kf::kWords * 4, "nh_kf_tree");
@@ -1862,15 +1863,21 @@ void NemotronH::enc_attn(Encoder& e, Seq& s, int li, int pos0, int R) {
   const uint32_t nchunks = (uint32_t(L_max) + chunk - 1) / chunk;
   const AttnP ap{uint32_t(R), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), chunk, nchunks,
                  1.0f / std::sqrt(float(cfg_.hd))};
-  e.use(pipe(tree_on_ ? "nh_attn_partial_tree" : "nh_attn_partial"));  // (a KFlash tree: rows see their ancestors)
+  // a verify on the M5's matrix units (nh_attn_t_part: a row's 16 heads per simdgroup, 4 rows per threadgroup; the same
+  // partials), else a threadgroup per row and a simdgroup per head (nh_attn_partial)
+  const bool tv = tg_ && attn_tv_ && R >= 2 && cfg_.hq == 16 * cfg_.hkv && cfg_.hd == 128;
+  static_assert(kf::kMask == 65, "nh_attn_t_part_tree reads the tree's masks at word 65 (kNhtKfMask)");
+  if (tv) e.use(pipe(tree_on_ ? "nh_attn_t_part_tree" : "nh_attn_t_part"));
+  else e.use(pipe(tree_on_ ? "nh_attn_partial_tree" : "nh_attn_partial"));  // (a KFlash tree: rows see their ancestors)
   e.buf(0, q_);
   e.buf(1, s.kc[size_t(li)]);
   e.buf(2, s.vc[size_t(li)]);
   e.buf(3, part_o_);
   e.buf(4, part_ml_);
   e.val(5, ap);
-  if (tree_on_) e.buf(6, tree_);
-  e.dispatch(nchunks, uint32_t(cfg_.hkv), uint32_t(R), uint32_t(32 * (cfg_.hq / cfg_.hkv)));
+  if (tree_on_ || tv) e.buf(6, tree_);
+  if (tv) e.dispatch(nchunks, uint32_t(cfg_.hkv), (uint32_t(R) + 3) / 4, 128);
+  else e.dispatch(nchunks, uint32_t(cfg_.hkv), uint32_t(R), uint32_t(32 * (cfg_.hq / cfg_.hkv)));
   // 2+ rows: the heads' outputs straight to half (o_proj's GEMM input)
   e.use(pipe(gm ? "nh_attn_reduce_h" : "nh_attn_reduce"));
   e.buf(0, part_o_);

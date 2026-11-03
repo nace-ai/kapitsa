@@ -1,0 +1,113 @@
+=== super-ab-old 17:14:37 powermode=2 Now drawing from 'AC Power' load={ 2.24 2.85 2.70 } top=14.6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;8.7 (Renderer);5.9 Helper;
+[17:14:56] super-ab-old:  warm-up prefill~2.9k+decode64: ok (3.28s)
+[17:14:56] super-ab-old:  warm-up tools: ok (0.72s)
+[17:15:57] super-ab-old: GPU not quiet after 60s (['Claude Helper[95214] 13%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 91.38 tok/s (e2e 89.61; 512 tok, finish=length, d4=0.393) flags ['repetition loop (distinct-4-gram 0.393)']
+  decode T=0.6: 93.72 tok/s (e2e 93.07; 512 tok, finish=length, d4=0.9885)
+  decode T=0.6: 91.11 tok/s (e2e 90.05; 512 tok, finish=length, d4=0.9564)
+  decode T=0.6: 92.26 tok/s (e2e 91.42; 512 tok, finish=length, d4=0.438) flags ['repetition loop (distinct-4-gram 0.438)']
+  decode T=0.6: 84.86 tok/s (e2e 84.24; 512 tok, finish=length, d4=0.9235)
+  decode median 91.38 (min 84.86, max 93.72) over 5/5 valid
+  sweep 32000: 33144 tok, TTFT 31.09s, 1066 tok/s prefill, decode 53.09 tok/s
+  sweep 128000: 133391 tok, TTFT 170.14s, 784 tok/s prefill, decode 33.70 tok/s
+  -> <run-root>/ab2/results/super-ab-old-20261102-171437.json
+[17:20:19] super-ab-old: -> <run-root>/ab2/results/super-ab-old-20261102-171437.json  flags: 3
+=== super-ab-new 17:20:19 powermode=2 Now drawing from 'AC Power' load={ 3.73 2.44 2.51 } top=15.7 Helper;7.1 /usr/libexec/opendirectoryd;6.7 (Renderer);
+[17:20:38] super-ab-new:  warm-up prefill~2.9k+decode64: ok (3.62s)
+[17:20:39] super-ab-new:  warm-up tools: ok (0.97s)
+[17:21:39] super-ab-new: GPU not quiet after 60s (['Claude Helper[95214] 13%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 88.04 tok/s (e2e 87.92; 512 tok, finish=length, d4=0.9452)
+  decode T=0.6: 86.61 tok/s (e2e 85.87; 512 tok, finish=length, d4=0.5699)
+  decode T=0.6: 93.27 tok/s (e2e 92.76; 512 tok, finish=length, d4=0.9614)
+  decode T=0.6: 87.07 tok/s (e2e 86.51; 512 tok, finish=length, d4=0.4499) flags ['repetition loop (distinct-4-gram 0.4499)']
+  decode T=0.6: 81.92 tok/s (e2e 82.89; 512 tok, finish=length, d4=0.5246)
+  decode median 87.07 (min 81.92, max 93.27) over 5/5 valid
+  sweep 32000: 33144 tok, TTFT 28.13s, 1178 tok/s prefill, decode 71.93 tok/s
+  sweep 128000: 133393 tok, TTFT 174.04s, 766 tok/s prefill, decode 73.58 tok/s
+  -> <run-root>/ab2/results/super-ab-new-20261102-172019.json
+[17:25:53] super-ab-new: -> <run-root>/ab2/results/super-ab-new-20261102-172019.json  flags: 3
+=== super-ab-old 17:25:53 powermode=2 Now drawing from 'AC Power' load={ 1.38 1.73 2.15 } top=13.6 Helper;6.7 (Renderer);2.1 Renderer);
+[17:26:12] super-ab-old:  warm-up prefill~2.9k+decode64: ok (3.52s)
+[17:26:12] super-ab-old:  warm-up tools: ok (0.81s)
+[17:27:13] super-ab-old: GPU not quiet after 60s (['Claude Helper[95214] 18%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 95.42 tok/s (e2e 93.94; 512 tok, finish=length, d4=0.9388)
+  decode T=0.6: 86.20 tok/s (e2e 87.61; 512 tok, finish=length, d4=0.4739) flags ['repetition loop (distinct-4-gram 0.4739)']
+  decode T=0.6: 88.91 tok/s (e2e 89.86; 512 tok, finish=length, d4=0.6279)
+  decode T=0.6: 80.06 tok/s (e2e 80.71; 512 tok, finish=length, d4=0.477) flags ['repetition loop (distinct-4-gram 0.477)']
+  decode T=0.6: 86.87 tok/s (e2e 86.32; 512 tok, finish=length, d4=0.9298)
+  decode median 86.87 (min 80.06, max 95.42) over 5/5 valid
+  sweep 32000: 33142 tok, TTFT 27.89s, 1189 tok/s prefill, decode 56.29 tok/s
+  sweep 128000: 133395 tok, TTFT 175.92s, 758 tok/s prefill, decode 34.86 tok/s
+  -> <run-root>/ab2/results/super-ab-old-20261102-172553.json
+[17:31:37] super-ab-old: -> <run-root>/ab2/results/super-ab-old-20261102-172553.json  flags: 3
+=== super-ab-new 17:31:37 powermode=2 Now drawing from 'AC Power' load={ 2.20 1.97 2.11 } top=36.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;15.4 Helper;5.8 (Renderer);
+[17:31:56] super-ab-new:  warm-up prefill~2.9k+decode64: ok (3.56s)
+[17:31:57] super-ab-new:  warm-up tools: ok (0.84s)
+[17:32:57] super-ab-new: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 90.23 tok/s (e2e 89.37; 512 tok, finish=length, d4=0.9527)
+  decode T=0.6: 95.96 tok/s (e2e 93.19; 512 tok, finish=length, d4=0.4828) flags ['repetition loop (distinct-4-gram 0.4828)']
+  decode T=0.6: 87.14 tok/s (e2e 88.28; 512 tok, finish=length, d4=0.5484)
+  decode T=0.6: 93.09 tok/s (e2e 90.78; 512 tok, finish=length, d4=0.5482)
+  decode T=0.6: 88.03 tok/s (e2e 87.34; 512 tok, finish=length, d4=0.5548)
+  decode median 90.23 (min 87.14, max 95.96) over 5/5 valid
+  sweep 32000: 33144 tok, TTFT 28.13s, 1178 tok/s prefill, decode 72.40 tok/s
+  sweep 128000: 133393 tok, TTFT 175.46s, 760 tok/s prefill, decode 67.17 tok/s
+  -> <run-root>/ab2/results/super-ab-new-20261102-173137.json
+[17:37:12] super-ab-new: -> <run-root>/ab2/results/super-ab-new-20261102-173137.json  flags: 2
+=== bolt-ab-old 17:37:12 powermode=2 Now drawing from 'AC Power' load={ 1.80 1.96 2.09 } top=42.6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;21.4 Helper;13.7 (Renderer);
+[17:37:24] bolt-ab-old:  warm-up prefill~2.9k+decode64: ok (3.35s)
+[17:37:25] bolt-ab-old:  warm-up tools: ok (0.77s)
+[17:38:25] bolt-ab-old: GPU not quiet after 60s (['Claude Helper[95214] 15%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 160.75 tok/s (e2e 159.18; 512 tok, finish=length, d4=0.8787)
+  decode T=0.6: 171.55 tok/s (e2e 171.75; 512 tok, finish=length, d4=0.9022)
+  decode T=0.6: 162.85 tok/s (e2e 160.85; 512 tok, finish=length, d4=0.9471)
+  decode T=0.6: 167.51 tok/s (e2e 167.36; 512 tok, finish=length, d4=0.9556)
+  decode T=0.6: 151.86 tok/s (e2e 154.45; 512 tok, finish=length, d4=0.7061)
+  decode median 162.85 (min 151.86, max 171.55) over 5/5 valid
+  sweep 32000: 33145 tok, TTFT 31.13s, 1065 tok/s prefill, decode 84.47 tok/s
+  sweep 128000: 133394 tok, TTFT 176.79s, 755 tok/s prefill, decode 54.03 tok/s
+  -> <run-root>/ab2/results/bolt-ab-old-20261102-173712.json
+[17:42:32] bolt-ab-old: -> <run-root>/ab2/results/bolt-ab-old-20261102-173712.json  flags: 1
+=== bolt-ab-new 17:42:32 powermode=2 Now drawing from 'AC Power' load={ 1.68 1.98 2.06 } top=8.6 Helper;5.1 (Renderer);4.0 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[17:42:45] bolt-ab-new:  warm-up prefill~2.9k+decode64: ok (3.28s)
+[17:42:45] bolt-ab-new:  warm-up tools: ok (0.76s)
+[17:43:45] bolt-ab-new: GPU not quiet after 60s (['Claude Helper[95214] 18%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 144.67 tok/s (e2e 143.97; 512 tok, finish=length, d4=0.6873)
+  decode T=0.6: 153.74 tok/s (e2e 152.49; 512 tok, finish=length, d4=0.8438)
+  decode T=0.6: 136.11 tok/s (e2e 134.64; 512 tok, finish=length, d4=0.7145)
+  decode T=0.6: 147.64 tok/s (e2e 147.13; 512 tok, finish=length, d4=0.8645)
+  decode T=0.6: 156.37 tok/s (e2e 155.36; 512 tok, finish=length, d4=0.9775)
+  decode median 147.64 (min 136.11, max 156.37) over 5/5 valid
+  sweep 32000: 33144 tok, TTFT 30.97s, 1070 tok/s prefill, decode 108.59 tok/s
+  sweep 128000: 133391 tok, TTFT 174.67s, 764 tok/s prefill, decode 107.51 tok/s
+  -> <run-root>/ab2/results/bolt-ab-new-20261102-174232.json
+[17:47:45] bolt-ab-new: -> <run-root>/ab2/results/bolt-ab-new-20261102-174232.json  flags: 1
+=== bolt-ab-old 17:47:45 powermode=2 Now drawing from 'AC Power' load={ 1.49 1.59 1.85 } top=8.7 Helper;2.8 (Renderer);1.9 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;
+[17:47:58] bolt-ab-old:  warm-up prefill~2.9k+decode64: ok (3.39s)
+[17:47:59] bolt-ab-old:  warm-up tools: ok (0.79s)
+[17:48:59] bolt-ab-old: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 167.25 tok/s (e2e 167.69; 512 tok, finish=length, d4=0.9544)
+  decode T=0.6: 136.03 tok/s (e2e 134.54; 512 tok, finish=length, d4=0.931)
+  decode T=0.6: 160.33 tok/s (e2e 158.20; 512 tok, finish=length, d4=0.9362)
+  decode T=0.6: 166.92 tok/s (e2e 162.37; 512 tok, finish=length, d4=0.5468)
+  decode T=0.6: 154.55 tok/s (e2e 155.12; 512 tok, finish=length, d4=0.3994) flags ['repetition loop (distinct-4-gram 0.3994)']
+  decode median 160.33 (min 136.03, max 167.25) over 5/5 valid
+  sweep 32000: 33145 tok, TTFT 30.94s, 1071 tok/s prefill, decode 102.49 tok/s
+  sweep 128000: 133392 tok, TTFT 181.14s, 736 tok/s prefill, decode 50.30 tok/s
+  -> <run-root>/ab2/results/bolt-ab-old-20261102-174745.json
+[17:53:10] bolt-ab-old: -> <run-root>/ab2/results/bolt-ab-old-20261102-174745.json  flags: 2
+=== bolt-ab-new 17:53:10 powermode=2 Now drawing from 'AC Power' load={ 1.50 1.60 1.77 } top=18.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;11.3 /usr/libexec/sysmond;7.4 Helper;
+[17:53:23] bolt-ab-new:  warm-up prefill~2.9k+decode64: ok (3.33s)
+[17:53:23] bolt-ab-new:  warm-up tools: ok (0.77s)
+[17:54:24] bolt-ab-new: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 159.81 tok/s (e2e 158.84; 512 tok, finish=length, d4=0.5165)
+  decode T=0.6: 149.51 tok/s (e2e 151.46; 512 tok, finish=length, d4=0.4145) flags ['repetition loop (distinct-4-gram 0.4145)']
+  decode T=0.6: 157.88 tok/s (e2e 156.86; 512 tok, finish=length, d4=0.9536)
+  decode T=0.6: 165.26 tok/s (e2e 166.30; 512 tok, finish=length, d4=0.5959)
+  decode T=0.6: 154.06 tok/s (e2e 152.87; 512 tok, finish=length, d4=0.9511)
+  decode median 157.88 (min 149.51, max 165.26) over 5/5 valid
+  sweep 32000: 33144 tok, TTFT 30.91s, 1072 tok/s prefill, decode 121.32 tok/s
+  sweep 128000: 133394 tok, TTFT 174.71s, 764 tok/s prefill, decode 118.82 tok/s
+  -> <run-root>/ab2/results/bolt-ab-new-20261102-175310.json
+[17:58:21] bolt-ab-new: -> <run-root>/ab2/results/bolt-ab-new-20261102-175310.json  flags: 2
+=== done 17:58:21

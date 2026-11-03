@@ -1,0 +1,79 @@
+=== lightning-short-old 16:54:51 powermode=2 Now drawing from 'AC Power' load={ 1.36 1.67 1.75 } top=35.6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;32.4 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;22.0 Helper;
+[16:54:57] lightning-short-old:  warm-up prefill~2.9k+decode64: ok (0.86s)
+[16:54:57] lightning-short-old:  warm-up tools: ok (0.18s)
+[16:55:57] lightning-short-old: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 297.99 tok/s (e2e 295.68; 512 tok, finish=length, d4=0.8235)
+  decode T=0.6: 284.84 tok/s (e2e 277.29; 512 tok, finish=length, d4=0.9368)
+  decode T=0.6: 251.47 tok/s (e2e 249.00; 512 tok, finish=length, d4=0.9497)
+  decode T=0.6: 291.30 tok/s (e2e 287.11; 512 tok, finish=length, d4=0.9416)
+  decode T=0.6: 281.28 tok/s (e2e 277.88; 512 tok, finish=length, d4=0.9263)
+  decode median 284.84 (min 251.47, max 297.99) over 5/5 valid
+  decode T=0: median 278.89 (min 259.92, max 304.28) over 5/5 valid
+  -> <run-root>/ab3/results/lightning-short-old-20261102-165451.json
+[16:56:22] lightning-short-old: -> <run-root>/ab3/results/lightning-short-old-20261102-165451.json  flags: 1
+=== lightning-short-new 16:56:22 powermode=2 Now drawing from 'AC Power' load={ 2.62 2.04 1.88 } top=44.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;17.0 Helper;10.5 (Renderer);
+[16:56:29] lightning-short-new:  warm-up prefill~2.9k+decode64: ok (0.75s)
+[16:56:29] lightning-short-new:  warm-up tools: ok (0.17s)
+[16:57:29] lightning-short-new: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 285.54 tok/s (e2e 277.54; 512 tok, finish=length, d4=0.8721)
+  decode T=0.6: 246.26 tok/s (e2e 245.18; 512 tok, finish=length, d4=0.8439)
+  decode T=0.6: 263.34 tok/s (e2e 259.46; 512 tok, finish=length, d4=0.973)
+  decode T=0.6: 269.76 tok/s (e2e 262.91; 512 tok, finish=length, d4=0.8537)
+  decode T=0.6: 251.44 tok/s (e2e 253.48; 512 tok, finish=length, d4=0.8712)
+  decode median 263.34 (min 246.26, max 285.54) over 5/5 valid
+  decode T=0: median 279.54 (min 256.86, max 314.1) over 5/5 valid
+  -> <run-root>/ab3/results/lightning-short-new-20261102-165623.json
+[16:57:55] lightning-short-new: -> <run-root>/ab3/results/lightning-short-new-20261102-165623.json  flags: 1
+=== lightning-short-old 16:57:55 powermode=2 Now drawing from 'AC Power' load={ 1.81 1.95 1.86 } top=33.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;18.0 Helper;11.0 (Renderer);
+[16:58:01] lightning-short-old:  warm-up prefill~2.9k+decode64: ok (0.8s)
+[16:58:01] lightning-short-old:  warm-up tools: ok (0.18s)
+[16:59:01] lightning-short-old: GPU not quiet after 60s (['Claude Helper[95214] 8%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 292.57 tok/s (e2e 284.57; 512 tok, finish=length, d4=0.9258)
+  decode T=0.6: 287.14 tok/s (e2e 281.87; 512 tok, finish=length, d4=0.8739)
+  decode T=0.6: 295.43 tok/s (e2e 285.38; 512 tok, finish=length, d4=0.9347)
+  decode T=0.6: 296.03 tok/s (e2e 291.36; 512 tok, finish=length, d4=0.8124)
+  decode T=0.6: 293.15 tok/s (e2e 283.96; 512 tok, finish=length, d4=0.8568)
+  decode median 293.15 (min 287.14, max 296.03) over 5/5 valid
+  decode T=0: median 280.36 (min 259.39, max 298.62) over 5/5 valid
+  -> <run-root>/ab3/results/lightning-short-old-20261102-165755.json
+[16:59:26] lightning-short-old: -> <run-root>/ab3/results/lightning-short-old-20261102-165755.json
+=== lightning-short-new 16:59:26 powermode=2 Now drawing from 'AC Power' load={ 2.18 2.03 1.90 } top=46.1 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;16.3 Helper;8.1 /Applications/Claude.app/Contents/MacOS/Claude;
+[16:59:32] lightning-short-new:  warm-up prefill~2.9k+decode64: ok (0.78s)
+[16:59:32] lightning-short-new:  warm-up tools: ok (0.17s)
+[17:00:32] lightning-short-new: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 290.87 tok/s (e2e 285.53; 512 tok, finish=length, d4=0.9227)
+  decode T=0.6: 297.20 tok/s (e2e 289.57; 512 tok, finish=length, d4=0.8862)
+  decode T=0.6: 267.95 tok/s (e2e 264.03; 512 tok, finish=length, d4=0.9251)
+  decode T=0.6: 247.42 tok/s (e2e 250.39; 512 tok, finish=length, d4=0.8391)
+  decode T=0.6: 283.53 tok/s (e2e 275.80; 512 tok, finish=length, d4=0.9017)
+  decode median 283.53 (min 247.42, max 297.2) over 5/5 valid
+  decode T=0: median 270.82 (min 269.42, max 300.33) over 5/5 valid
+  -> <run-root>/ab3/results/lightning-short-new-20261102-165926.json
+[17:00:58] lightning-short-new: -> <run-root>/ab3/results/lightning-short-new-20261102-165926.json
+=== lightning-short-old 17:00:58 powermode=2 Now drawing from 'AC Power' load={ 1.83 2.02 1.91 } top=45.5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;16.4 Helper;5.4 (Renderer);
+[17:01:04] lightning-short-old:  warm-up prefill~2.9k+decode64: ok (0.8s)
+[17:01:04] lightning-short-old:  warm-up tools: ok (0.18s)
+[17:02:04] lightning-short-old: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 287.83 tok/s (e2e 280.31; 512 tok, finish=length, d4=0.8547)
+  decode T=0.6: 286.91 tok/s (e2e 279.54; 512 tok, finish=length, d4=0.9494)
+  decode T=0.6: 272.41 tok/s (e2e 273.82; 512 tok, finish=length, d4=0.9312)
+  decode T=0.6: 281.23 tok/s (e2e 283.59; 512 tok, finish=length, d4=0.8425)
+  decode T=0.6: 300.55 tok/s (e2e 294.36; 512 tok, finish=length, d4=0.9676)
+  decode median 286.91 (min 272.41, max 300.55) over 5/5 valid
+  decode T=0: median 289.39 (min 266.52, max 301.11) over 5/5 valid
+  -> <run-root>/ab3/results/lightning-short-old-20261102-170058.json
+[17:02:29] lightning-short-old: -> <run-root>/ab3/results/lightning-short-old-20261102-170058.json
+=== lightning-short-new 17:02:29 powermode=2 Now drawing from 'AC Power' load={ 1.81 1.97 1.90 } top=42.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;14.6 Helper;8.0 (Renderer);
+[17:02:35] lightning-short-new:  warm-up prefill~2.9k+decode64: ok (0.73s)
+[17:02:35] lightning-short-new:  warm-up tools: ok (0.17s)
+[17:03:35] lightning-short-new: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 280.36 tok/s (e2e 276.59; 512 tok, finish=length, d4=0.9357)
+  decode T=0.6: 271.69 tok/s (e2e 269.16; 512 tok, finish=length, d4=0.9441)
+  decode T=0.6: 272.19 tok/s (e2e 266.67; 512 tok, finish=length, d4=0.9567)
+  decode T=0.6: 288.34 tok/s (e2e 283.35; 512 tok, finish=length, d4=0.9431)
+  decode T=0.6: 278.04 tok/s (e2e 274.14; 512 tok, finish=length, d4=0.8875)
+  decode median 278.04 (min 271.69, max 288.34) over 5/5 valid
+  decode T=0: median 291.54 (min 267.27, max 305.15) over 5/5 valid
+  -> <run-root>/ab3/results/lightning-short-new-20261102-170229.json
+[17:04:01] lightning-short-new: -> <run-root>/ab3/results/lightning-short-new-20261102-170229.json
+=== done 17:04:01
