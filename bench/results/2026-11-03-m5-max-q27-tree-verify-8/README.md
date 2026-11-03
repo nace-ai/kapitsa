@@ -3,7 +3,8 @@
 Qwen3.8 27B's 8-row KFlash tree verify (the 8-row drafting block: a server of more than one slot, or
 `NI_DFLASH_BLOCK=8`) takes the tree path its 16-row wide verify takes, `attn8t_partial_tree_g6` on the M5's matrix
 units with one row tile (#897's kernel), instead of the zone path, whose history keys ran `attn8m_partial_zone` on the
-shader ALUs (`NI_V8_TREE_G6=0`). No kernel changes: `src/model/qwen35_v8.cpp` picks the path. Qwen3.8 27B 4-bit with
+shader ALUs (`NI_V8_TREE_G6=0`). No kernel changes: `src/model/qwen35_v8.cpp` picks the path, by default on the M5 Max,
+where it was measured (`NI_V8_TREE_G6=1` on the other M5-class Macs). Qwen3.8 27B 4-bit with
 its DFlash2 drafter and KFlash, MacBook Pro (16-inch, 2026), `Mac17,6`, M5 Max, 40-core GPU, 128 GB, macOS 26.4
 (25E246), AC power, High Power mode, `caffeinate -is`, 2026-11-03 ([machine.json](machine.json)).
 
