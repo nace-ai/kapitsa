@@ -1,0 +1,107 @@
+=== q36-35b-kapitsa-256k-v2 20:49:33 powermode=2 Now drawing from 'AC Power' load={ 7.56 3.56 2.35 } top=28.0 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;18.4 (Renderer);11.8 Helper;
+[20:49:43] q36-35b-kapitsa-256k-v2:  warm-up prefill~2.9k+decode64: ok (0.72s)
+[20:49:43] q36-35b-kapitsa-256k-v2:  warm-up tools: ok (0.24s)
+[20:50:43] q36-35b-kapitsa-256k-v2: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 350.28 tok/s (e2e 347.78; 512 tok, finish=length, d4=0.9673)
+  decode T=0.6: 336.88 tok/s (e2e 337.66; 512 tok, finish=length, d4=0.9604)
+  decode T=0.6: 353.38 tok/s (e2e 357.35; 512 tok, finish=length, d4=0.4452) flags ['repetition loop (distinct-4-gram 0.4452)']
+  decode T=0.6: 313.84 tok/s (e2e 317.92; 512 tok, finish=length, d4=0.7208)
+  decode T=0.6: 345.05 tok/s (e2e 342.03; 512 tok, finish=length, d4=0.7074)
+  decode median 345.05 (min 313.84, max 353.38) over 5/5 valid
+  sweep 1000: 1109.0 tok, TTFT 0.24s, 4686 tok/s prefill, decode 313.57 tok/s
+  sweep 2000: 2135.5 tok, TTFT 0.38s, 5619 tok/s prefill, decode 336.37 tok/s
+  sweep 4000: 4164.0 tok, TTFT 0.75s, 5552 tok/s prefill, decode 302.15 tok/s
+  sweep 8000: 8311.0 tok, TTFT 1.59s, 5218 tok/s prefill, decode 299.41 tok/s
+  sweep 16000: 16315.5 tok, TTFT 3.86s, 4227 tok/s prefill, decode 292.44 tok/s
+  sweep 32000: 32719.0 tok, TTFT 9.66s, 3387 tok/s prefill, decode 263.34 tok/s
+  sweep 64000: 65401.5 tok, TTFT 25.56s, 2559 tok/s prefill, decode 201.45 tok/s
+  sweep 128000: 131098.5 tok, TTFT 79.38s, 1652 tok/s prefill, decode 146.65 tok/s
+  sweep 249051: 258995.5 tok, TTFT 262.52s, 987 tok/s prefill, decode 114.29 tok/s
+  -> <run-root>/v2/results/q36-35b-kapitsa-256k-v2-20261102-204933.json
+[21:04:28] q36-35b-kapitsa-256k-v2: -> <run-root>/v2/results/q36-35b-kapitsa-256k-v2-20261102-204933.json  flags: 2
+=== clover-kapitsa-128k-v2 21:04:28 powermode=2 Now drawing from 'AC Power' load={ 1.57 1.32 1.56 } top=44.7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;19.7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;11.8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds;
+[21:04:33] clover-kapitsa-128k-v2:  warm-up prefill~2.9k+decode64: ok (0.97s)
+[21:04:33] clover-kapitsa-128k-v2:  warm-up tools: ok (0.25s)
+[21:05:33] clover-kapitsa-128k-v2: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 276.65 tok/s (e2e 277.33; 512 tok, finish=length, d4=0.575)
+  decode T=0.6: 307.54 tok/s (e2e 305.16; 512 tok, finish=length, d4=0.7085)
+  decode T=0.6: 293.16 tok/s (e2e 289.80; 512 tok, finish=length, d4=0.6698)
+  decode T=0.6: 310.45 tok/s (e2e 308.79; 512 tok, finish=length, d4=0.5552)
+  decode T=0.6: 333.29 tok/s (e2e 328.88; 512 tok, finish=length, d4=0.566)
+  decode median 307.54 (min 276.65, max 333.29) over 5/5 valid
+  sweep 1000: 1105.5 tok, TTFT 0.24s, 4688 tok/s prefill, decode 293.56 tok/s
+  sweep 2000: 2135.5 tok, TTFT 0.38s, 5612 tok/s prefill, decode 288.94 tok/s
+  sweep 4000: 4160.5 tok, TTFT 0.72s, 5816 tok/s prefill, decode 278.42 tok/s
+  sweep 8000: 8311.0 tok, TTFT 1.53s, 5429 tok/s prefill, decode 301.19 tok/s
+  sweep 16000: 16316.0 tok, TTFT 3.38s, 4830 tok/s prefill, decode 220.72 tok/s
+  sweep 32000: 32719.5 tok, TTFT 8.32s, 3933 tok/s prefill, decode 224.60 tok/s
+  sweep 64000: 65402.0 tok, TTFT 22.68s, 2884 tok/s prefill, decode 231.89 tok/s
+  sweep 124220: 127345.0 tok, TTFT 67.24s, 1894 tok/s prefill, decode 181.18 tok/s
+  -> <run-root>/v2/results/clover-kapitsa-128k-v2-20261102-210429.json
+[21:09:52] clover-kapitsa-128k-v2: -> <run-root>/v2/results/clover-kapitsa-128k-v2-20261102-210429.json  flags: 1
+=== lightning-kapitsa-512k-v2 21:09:52 powermode=2 Now drawing from 'AC Power' load={ 1.48 1.55 1.60 } top=16.2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;12.6 Helper;4.1 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;
+[21:10:00] lightning-kapitsa-512k-v2:  warm-up prefill~2.9k+decode64: ok (0.86s)
+[21:10:00] lightning-kapitsa-512k-v2:  warm-up tools: ok (0.18s)
+[21:11:00] lightning-kapitsa-512k-v2: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 292.55 tok/s (e2e 286.54; 512 tok, finish=length, d4=0.9409)
+  decode T=0.6: 236.60 tok/s (e2e 232.60; 512 tok, finish=length, d4=0.9688)
+  decode T=0.6: 266.35 tok/s (e2e 261.81; 512 tok, finish=length, d4=0.9353)
+  decode T=0.6: 234.33 tok/s (e2e 235.66; 512 tok, finish=length, d4=0.8844)
+  decode T=0.6: 241.19 tok/s (e2e 239.94; 512 tok, finish=length, d4=0.9609)
+  decode median 241.19 (min 234.33, max 292.55) over 5/5 valid
+  sweep 1000: 1121.0 tok, TTFT 0.22s, 5205 tok/s prefill, decode 241.41 tok/s
+  sweep 2000: 2175.0 tok, TTFT 0.37s, 5865 tok/s prefill, decode 268.60 tok/s
+  sweep 4000: 4213.5 tok, TTFT 0.75s, 5643 tok/s prefill, decode 254.18 tok/s
+  sweep 8000: 8419.0 tok, TTFT 1.48s, 5707 tok/s prefill, decode 277.08 tok/s
+  sweep 16000: 16550.0 tok, TTFT 3.00s, 5520 tok/s prefill, decode 250.68 tok/s
+  sweep 32000: 33147.5 tok, TTFT 6.71s, 4941 tok/s prefill, decode 247.32 tok/s
+  sweep 64000: 66364.0 tok, TTFT 17.24s, 3851 tok/s prefill, decode 211.80 tok/s
+  sweep 128000: 133397.0 tok, TTFT 44.76s, 2981 tok/s prefill, decode 186.09 tok/s
+  sweep 256000: 271380.0 tok, TTFT 140.28s, 1935 tok/s prefill, decode 148.49 tok/s
+  sweep 480000: 512072.0 tok, TTFT 452.68s, 1131 tok/s prefill, decode 116.04 tok/s
+  -> <run-root>/v2/results/lightning-kapitsa-512k-v2-20261102-210952.json
+[21:34:22] lightning-kapitsa-512k-v2: -> <run-root>/v2/results/lightning-kapitsa-512k-v2-20261102-210952.json  flags: 1
+=== bolt-kapitsa-256k-v2 21:34:22 powermode=2 Now drawing from 'AC Power' load={ 1.01 1.04 1.28 } top=15.6 Helper;6.6 (Renderer);2.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;
+[21:34:56] bolt-kapitsa-256k-v2:  warm-up prefill~2.9k+decode64: ok (3.42s)
+[21:34:56] bolt-kapitsa-256k-v2:  warm-up tools: ok (0.8s)
+[21:35:56] bolt-kapitsa-256k-v2: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 168.06 tok/s (e2e 165.24; 512 tok, finish=length, d4=0.674)
+  decode T=0.6: 157.36 tok/s (e2e 160.46; 512 tok, finish=length, d4=0.6591)
+  decode T=0.6: 166.27 tok/s (e2e 165.52; 512 tok, finish=length, d4=0.8897)
+  decode T=0.6: 158.71 tok/s (e2e 159.00; 512 tok, finish=length, d4=0.9395)
+  decode T=0.6: 154.05 tok/s (e2e 151.54; 512 tok, finish=length, d4=0.9431)
+  decode median 158.71 (min 154.05, max 168.06) over 5/5 valid
+  sweep 1000: 1120.0 tok, TTFT 1.25s, 900 tok/s prefill, decode 201.83 tok/s
+  sweep 2000: 2173.0 tok, TTFT 2.06s, 1056 tok/s prefill, decode 207.93 tok/s
+  sweep 4000: 4215.5 tok, TTFT 3.86s, 1093 tok/s prefill, decode 923.55 tok/s
+  sweep 8000: 8416.0 tok, TTFT 7.75s, 1087 tok/s prefill, decode 183.27 tok/s
+  sweep 16000: 16544.0 tok, TTFT 15.40s, 1074 tok/s prefill, decode 147.70 tok/s
+  sweep 32000: 33144.5 tok, TTFT 30.82s, 1075 tok/s prefill, decode 126.22 tok/s
+  sweep 64000: 66360.5 tok, TTFT 65.26s, 1017 tok/s prefill, decode 107.42 tok/s
+  sweep 128000: 133393.5 tok, TTFT 147.22s, 906 tok/s prefill, decode 132.15 tok/s
+  sweep 240000: 254819.5 tok, TTFT 341.43s, 746 tok/s prefill, decode 90.95 tok/s
+  -> <run-root>/v2/results/bolt-kapitsa-256k-v2-20261102-213422.json
+[21:57:54] bolt-kapitsa-256k-v2: -> <run-root>/v2/results/bolt-kapitsa-256k-v2-20261102-213422.json  flags: 7
+=== super-kapitsa-512k-v2 21:57:54 powermode=2 Now drawing from 'AC Power' load={ 1.00 1.12 1.16 } top=11.8 Helper;3.9 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;3.4 (Renderer);
+[21:59:49] super-kapitsa-512k-v2:  warm-up prefill~2.9k+decode64: ok (3.68s)
+[21:59:50] super-kapitsa-512k-v2:  warm-up tools: ok (0.9s)
+[22:00:52] super-kapitsa-512k-v2: GPU not quiet after 62s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 93.14 tok/s (e2e 91.37; 512 tok, finish=length, d4=0.9569)
+  decode T=0.6: 89.34 tok/s (e2e 87.77; 512 tok, finish=length, d4=0.7075)
+  decode T=0.6: 98.61 tok/s (e2e 95.95; 512 tok, finish=length, d4=0.6786)
+  decode T=0.6: 80.76 tok/s (e2e 80.14; 512 tok, finish=length, d4=0.5734)
+  decode T=0.6: 86.92 tok/s (e2e 86.33; 512 tok, finish=length, d4=0.9528)
+  decode median 89.34 (min 80.76, max 98.61) over 5/5 valid
+  sweep 1000: 1121.0 tok, TTFT 1.18s, 954 tok/s prefill, decode 98.77 tok/s
+  sweep 2000: 2173.5 tok, TTFT 1.87s, 1163 tok/s prefill, decode 535.61 tok/s
+  sweep 4000: 4215.0 tok, TTFT 3.47s, 1214 tok/s prefill, decode 97.58 tok/s
+  sweep 8000: 8414.0 tok, TTFT 6.79s, 1239 tok/s prefill, decode 71.41 tok/s
+  sweep 16000: 16544.0 tok, TTFT 13.43s, 1232 tok/s prefill, decode 74.52 tok/s
+  sweep 32000: 33143.0 tok, TTFT 27.65s, 1199 tok/s prefill, decode 73.93 tok/s
+  sweep 64000: 66359.0 tok, TTFT 59.30s, 1119 tok/s prefill, decode 65.65 tok/s
+  sweep 128000: 133391.5 tok, TTFT 136.88s, 975 tok/s prefill, decode 64.90 tok/s
+  sweep 256000: 271375.0 tok, TTFT 359.34s, 755 tok/s prefill, decode 54.06 tok/s
+  sweep 480000: 512069.5 tok, TTFT 937.86s, 546 tok/s prefill, decode 44.79 tok/s
+  -> <run-root>/v2/results/super-kapitsa-512k-v2-20261102-215754.json
+[22:55:32] super-kapitsa-512k-v2: -> <run-root>/v2/results/super-kapitsa-512k-v2-20261102-215754.json  flags: 8
+=== done 22:55:32

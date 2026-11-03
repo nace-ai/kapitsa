@@ -107,6 +107,21 @@ be declared ambient instead: its load is then recorded, not flagged). *Loop*: a 
 
 ### MacBook Pro M5 Max, 128 GB
 
+**2026-11-02 (evening): the long sweep after the matrix-unit attention** ([results](../bench/results/2026-11-02-m5-max-long-v2/README.md)).
+Main `a2f4210`: the verify attention on the M5's matrix units with the context split (Nemotron #887, the 35B-A3B and Clover
+#892) and Nemotron's prefill attention with its K / V tiles staged (#890), the five models they touch swept again as
+below, one run each:
+
+| Prefill / decode, tok/s | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K | 256K | 512K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.6 35B-A3B | 4,686 / 314 | 5,619 / 336 | 5,552 / 302 | 5,218 / 299 | 4,227 / 292 | 3,387 / 263 | 2,559 / 201 | 1,652 / 147 | 987 / 114 | - |
+| Clover 35B-A3B | 4,688 / 294 | 5,612 / 289 | 5,816 / 278 | 5,429 / 301 | 4,830 / 221 | 3,933 / 225 | 2,884 / 232 | 1,894 / 181 | - | - |
+| Lightning 30B | 5,205 / 241 | 5,865 / 269 | 5,643 / 254 | 5,707 / 277 | 5,520 / 251 | 4,941 / 247 | 3,851 / 212 | 2,981 / 186 | 1,935 / 148 | 1,131 / 116 |
+| Super-VL 120B | 956 / 97.4 | 986 / 68.3 | 1,214 / 77.8 | 1,239 / 62.0 | 1,232 / 74.5 | 1,199 / 70.7 | 1,119 / 65.6 | 975 / 64.9 | 755 / 54.1 | 546 / 44.2 |
+| Bolt 74B | 916 / 142 | 1,056 / 147 | 1,090 / 145 | 1,087 / 138 | 1,074 / 148 | 1,075 / 126 | 1,017 / 107 | 906 / 109 | 746 / 91.0 | - |
+
+Against the 0.2.26 points below: Qwen3.6 35B-A3B 80.2 → 114 tok/s at 256K, Clover 35B-A3B 130 → 181 tok/s at 128K, Lightning 30B 21.0 → 116 tok/s at 512K, Super-VL 120B 16.0 → 44.2 tok/s at 512K, Bolt 74B 31.1 → 91.0 tok/s at 256K decoding.
+
 **2026-11-02: from 1K to 512K context** ([results](../bench/results/2026-11-02-m5-max-long/README.md)). Kapitsa 0.2.26
 (main `b7a9711`), each model at its default (the 2026-11-01 cells' labels) with the server's context at the model's limit:
 128K on Clover, 1M on Lightning and Super-VL (measured to 512K), 256K on the rest. At each size two cold requests: a
