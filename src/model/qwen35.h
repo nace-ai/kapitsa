@@ -607,6 +607,7 @@ class Qwen35 : public Model {
   // passes route their block among its expert coreset
   virtual void enc_router_hook(Encoder& e, int R) { (void)e, (void)R; }
   void enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
+  void enc_qmr_multi(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
   bool enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T);
   bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready = false);
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
