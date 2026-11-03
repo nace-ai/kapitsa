@@ -1,0 +1,26 @@
+=== dory-ab-ctx256k-code 15:45:45 Now drawing from 'AC Power'
+[15:46:51] dory-ab-ctx256k-code: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  sweep 2000: 2175.5 tok, TTFT 0.68s, 3194 tok/s prefill, decode 137.47 tok/s
+  sweep 4000: 4215.0 tok, TTFT 1.33s, 3174 tok/s prefill, decode 115.02 tok/s
+  sweep 16000: 16549.0 tok, TTFT 7.39s, 2253 tok/s prefill, decode 103.91 tok/s
+=== dory-ab-ctx32k-code 15:47:43 Now drawing from 'AC Power'
+[15:48:48] dory-ab-ctx32k-code: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  sweep 2000: 2174.5 tok, TTFT 0.68s, 3200 tok/s prefill, decode 123.24 tok/s
+  sweep 4000: 4214.5 tok, TTFT 1.36s, 3096 tok/s prefill, decode 117.22 tok/s
+  sweep 16000: 16549.0 tok, TTFT 6.85s, 2419 tok/s prefill, decode 96.06 tok/s
+=== dory-ab-ctx32k-summary 15:49:40 Now drawing from 'AC Power'
+[15:50:46] dory-ab-ctx32k-summary: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  sweep 2000: 2166.5 tok, TTFT 0.90s, 2486 tok/s prefill, decode 87.55 tok/s
+  sweep 4000: 4209.0 tok, TTFT 1.99s, 2110 tok/s prefill, decode 87.85 tok/s
+  sweep 16000: 16543.5 tok, TTFT 7.92s, 2089 tok/s prefill, decode 81.91 tok/s
+=== dory-ab-ctx256k-code 15:51:27 Now drawing from 'AC Power'
+[15:52:33] dory-ab-ctx256k-code: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  sweep 2000: 2175.0 tok, TTFT 0.68s, 3193 tok/s prefill, decode 120.42 tok/s
+  sweep 4000: 4216.5 tok, TTFT 1.33s, 3181 tok/s prefill, decode 113.90 tok/s
+  sweep 16000: 16550.5 tok, TTFT 6.98s, 2376 tok/s prefill, decode 91.70 tok/s
+=== dory-ab-ctx32k-code 15:53:26 Now drawing from 'AC Power'
+[15:54:32] dory-ab-ctx32k-code: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  sweep 2000: 2173.5 tok, TTFT 0.80s, 2774 tok/s prefill, decode 110.10 tok/s
+  sweep 4000: 4214.5 tok, TTFT 1.63s, 2579 tok/s prefill, decode 111.23 tok/s
+  sweep 16000: 16549.5 tok, TTFT 7.48s, 2212 tok/s prefill, decode 113.61 tok/s
+=== done 15:55:26

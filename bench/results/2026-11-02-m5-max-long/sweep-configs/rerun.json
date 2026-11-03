@@ -1,0 +1,84 @@
+[
+ {
+  "label": "q36-35b-kapitsa-256k-r2",
+  "extends": "q36-35b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "second run of q36-35b-kapitsa-256k's 1K-128K sizes (the first ran slower than the 2026-11-01 sweep at 1K-32K), on the 140 W charger"
+ },
+ {
+  "label": "lightning-kapitsa-512k-r2",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "second run of lightning-kapitsa-512k's 1K-128K sizes (the first ran slower than the 2026-11-01 sweep at 1K-32K), on the 140 W charger"
+ },
+ {
+  "label": "flash-kapitsa-256k-r2",
+  "extends": "flash-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4133,16000:16286",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "second run of flash-kapitsa-256k's 1K-128K sizes (the first ran slower than the 2026-11-01 sweep at 1K-32K), on the 140 W charger"
+ },
+ {
+  "label": "dory-kapitsa-perloop-256k-r2",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "second run of dory-kapitsa-perloop-256k's 1K-128K sizes (the first ran slower than the 2026-11-01 sweep at 1K-32K), on the 140 W charger"
+ }
+]

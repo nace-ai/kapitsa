@@ -1,0 +1,96 @@
+=== flint-kapitsa-256k 12:47:10 powermode=2 Now drawing from 'AC Power' load={ 1.68 1.02 0.89 } top=11.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;7.7 Helper;4.6 (Renderer);
+[12:47:16] flint-kapitsa-256k:  warm-up prefill~2.9k+decode64: ok (0.76s)
+[12:47:17] flint-kapitsa-256k:  warm-up tools: ok (0.3s)
+[12:47:35] flint-kapitsa-256k: GPU quiet after 19s; benchmarking
+  decode T=1.0: 263.69 tok/s (e2e 264.45; 512 tok, finish=length, d4=0.9685)
+  decode T=1.0: 265.89 tok/s (e2e 262.14; 512 tok, finish=length, d4=0.895)
+  decode T=1.0: 262.83 tok/s (e2e 263.59; 512 tok, finish=length, d4=0.947)
+  decode T=1.0: 263.45 tok/s (e2e 264.41; 512 tok, finish=length, d4=0.9258)
+  decode T=1.0: 264.99 tok/s (e2e 264.31; 512 tok, finish=length, d4=0.9411)
+  decode median 263.69 (min 262.83, max 265.89) over 5/5 valid
+  sweep 1000: 1037.0 tok, TTFT 0.24s, 4266 tok/s prefill, decode 257.59 tok/s
+  sweep 2000: 2004.0 tok, TTFT 0.35s, 5650 tok/s prefill, decode 251.75 tok/s
+  sweep 4000: 3899.0 tok, TTFT 0.66s, 5868 tok/s prefill, decode 246.01 tok/s
+  sweep 8000: 7703.0 tok, TTFT 1.45s, 5315 tok/s prefill, decode 232.78 tok/s
+  sweep 16000: 15092.5 tok, TTFT 3.09s, 4891 tok/s prefill, decode 212.35 tok/s
+  sweep 32000: 30214.0 tok, TTFT 8.03s, 3760 tok/s prefill, decode 180.84 tok/s
+  sweep 64000: 60527.0 tok, TTFT 20.48s, 2956 tok/s prefill, decode 140.69 tok/s
+  sweep 128000: 121735.5 tok, TTFT 59.40s, 2049 tok/s prefill, decode 98.48 tok/s
+  sweep 249051: 240298.5 tok, TTFT 193.66s, 1241 tok/s prefill, decode 62.36 tok/s
+  -> <run-root>/results/flint-kapitsa-256k-20261102-124710.json
+[12:58:28] flint-kapitsa-256k: -> <run-root>/results/flint-kapitsa-256k-20261102-124710.json
+=== bolt-kapitsa-256k-top 12:58:28 powermode=2 Now drawing from 'AC Power' load={ 1.00 0.83 0.82 } top=44.2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;9.0 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder;8.7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;
+[12:58:41] bolt-kapitsa-256k-top:  warm-up prefill~2.9k+decode64: ok (3.31s)
+[12:58:42] bolt-kapitsa-256k-top:  warm-up tools: ok (0.74s)
+[12:59:00] bolt-kapitsa-256k-top: GPU quiet after 19s; benchmarking
+  decode T=0.6: 156.14 tok/s (e2e 156.03; 512 tok, finish=length, d4=0.9348)
+  decode T=0.6: 173.14 tok/s (e2e 169.36; 512 tok, finish=length, d4=0.8944)
+  decode T=0.6: 121.27 tok/s (e2e 122.12; 512 tok, finish=length, d4=0.62)
+  decode T=0.6: 113.58 tok/s (e2e 115.45; 512 tok, finish=length, d4=0.6216)
+  decode T=0.6: 136.77 tok/s (e2e 133.36; 512 tok, finish=length, d4=0.9385)
+  decode median 136.77 (min 113.58, max 173.14) over 5/5 valid
+  sweep 240000: 254819.5 tok, TTFT 464.37s, 549 tok/s prefill, decode 31.08 tok/s
+  -> <run-root>/results/bolt-kapitsa-256k-top-20261102-125828.json
+[13:15:28] bolt-kapitsa-256k-top: -> <run-root>/results/bolt-kapitsa-256k-top-20261102-125828.json
+=== lightning-kapitsa-512k-top 13:15:28 powermode=2 Now drawing from 'AC Power' load={ 0.77 0.84 0.88 } top=5.4 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;2.4 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;2.2 (Renderer);
+[13:15:35] lightning-kapitsa-512k-top:  warm-up prefill~2.9k+decode64: ok (0.84s)
+[13:15:35] lightning-kapitsa-512k-top:  warm-up tools: ok (0.17s)
+[13:15:53] lightning-kapitsa-512k-top: GPU quiet after 19s; benchmarking
+  decode T=0.6: 274.19 tok/s (e2e 277.56; 512 tok, finish=length, d4=0.8983)
+  decode T=0.6: 288.05 tok/s (e2e 288.00; 512 tok, finish=length, d4=0.9458)
+  decode T=0.6: 289.25 tok/s (e2e 283.42; 512 tok, finish=length, d4=0.964)
+  decode T=0.6: 225.32 tok/s (e2e 230.49; 512 tok, finish=length, d4=0.5278)
+  decode T=0.6: 160.44 tok/s (e2e 156.48; 512 tok, finish=length, d4=0.9666)
+  decode median 274.19 (min 160.44, max 289.25) over 5/5 valid
+  sweep 480000: 512074.5 tok, TTFT 622.59s, 823 tok/s prefill, decode 21.04 tok/s
+  -> <run-root>/results/lightning-kapitsa-512k-top-20261102-131529.json
+[13:37:45] lightning-kapitsa-512k-top: -> <run-root>/results/lightning-kapitsa-512k-top-20261102-131529.json
+=== q38-27b-kapitsa-256k-top 13:37:45 powermode=2 Now drawing from 'AC Power' load={ 1.08 0.78 0.73 } top=2.2 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;1.1 (Renderer);0.7 Renderer);
+[13:37:59] q38-27b-kapitsa-256k-top:  warm-up prefill~2.9k+decode64: ok (4.22s)
+[13:38:00] q38-27b-kapitsa-256k-top:  warm-up tools: ok (1.07s)
+[13:38:19] q38-27b-kapitsa-256k-top: GPU quiet after 19s; benchmarking
+  decode T=0.6: 114.73 tok/s (e2e 114.41; 512 tok, finish=length, d4=0.9776)
+  decode T=0.6: 72.08 tok/s (e2e 73.33; 512 tok, finish=length, d4=0.9691)
+  decode T=0.6: 105.02 tok/s (e2e 104.03; 512 tok, finish=length, d4=0.9667)
+  decode T=0.6: 98.56 tok/s (e2e 97.97; 512 tok, finish=length, d4=0.9653)
+  decode T=0.6: 125.67 tok/s (e2e 122.11; 512 tok, finish=length, d4=0.6192)
+  decode median 105.02 (min 72.08, max 125.67) over 5/5 valid
+  sweep 249051: 258997.0 tok, TTFT 906.01s, 286 tok/s prefill, decode 27.60 tok/s
+  -> <run-root>/results/q38-27b-kapitsa-256k-top-20261102-133745.json
+[14:09:32] q38-27b-kapitsa-256k-top: -> <run-root>/results/q38-27b-kapitsa-256k-top-20261102-133745.json  flags: 1
+=== dory-kapitsa-perloop-256k 14:09:32 powermode=2 Now drawing from 'AC Power' load={ 0.58 0.72 0.74 } top=11.1 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;2.7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;2.6 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder;
+[14:09:38] dory-kapitsa-perloop-256k:  warm-up prefill~2.9k+decode64: ok (1.76s)
+[14:09:39] dory-kapitsa-perloop-256k:  warm-up tools: ok (0.39s)
+[14:09:57] dory-kapitsa-perloop-256k: GPU quiet after 19s; benchmarking
+  decode T=0.6: 116.13 tok/s (e2e 114.40; 512 tok, finish=length, d4=0.7067)
+  decode T=0.6: 113.30 tok/s (e2e 111.99; 512 tok, finish=length, d4=0.6856)
+  decode T=0.6: 90.91 tok/s (e2e 90.42; 512 tok, finish=length, d4=0.4036) flags ['repetition loop (distinct-4-gram 0.4036)']
+  decode T=0.6: 94.43 tok/s (e2e 93.38; 512 tok, finish=length, d4=0.7307)
+  decode T=0.6: 100.08 tok/s (e2e 98.34; 512 tok, finish=length, d4=0.5742)
+  decode median 100.08 (min 90.91, max 116.13) over 5/5 valid
+  sweep 1000: 1119.5 tok, TTFT 0.49s, 2264 tok/s prefill, decode 106.06 tok/s
+  sweep 2000: 2173.5 tok, TTFT 1.02s, 2125 tok/s prefill, decode 103.85 tok/s
+  sweep 4000: 4215.5 tok, TTFT 1.90s, 2213 tok/s prefill, decode 96.06 tok/s
+  sweep 8000: 8419.5 tok, TTFT 3.92s, 2148 tok/s prefill, decode 91.56 tok/s
+  sweep 16000: 16549.5 tok, TTFT 8.47s, 1955 tok/s prefill, decode 83.09 tok/s
+  sweep 32000: 33144.5 tok, TTFT 22.18s, 1494 tok/s prefill, decode 69.38 tok/s
+  sweep 64000: 66363.0 tok, TTFT 60.57s, 1096 tok/s prefill, decode 50.66 tok/s
+  sweep 128000: 133395.5 tok, TTFT 192.15s, 694 tok/s prefill, decode 36.00 tok/s
+  sweep 240000: 254824.5 tok, TTFT 628.66s, 405 tok/s prefill, decode 20.46 tok/s
+  -> <run-root>/results/dory-kapitsa-perloop-256k-20261102-140933.json
+[14:44:00] dory-kapitsa-perloop-256k: -> <run-root>/results/dory-kapitsa-perloop-256k-20261102-140933.json  flags: 4
+=== super-kapitsa-512k-top 14:44:00 powermode=2 Now drawing from 'AC Power' load={ 0.61 0.64 0.69 } top=23.8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;5.4 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder;4.9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;
+[14:44:20] super-kapitsa-512k-top:  warm-up prefill~2.9k+decode64: ok (3.88s)
+[14:44:21] super-kapitsa-512k-top:  warm-up tools: ok (1.04s)
+[14:44:40] super-kapitsa-512k-top: GPU quiet after 19s; benchmarking
+  decode T=0.6: 70.04 tok/s (e2e 71.51; 512 tok, finish=length, d4=0.4463) flags ['repetition loop (distinct-4-gram 0.4463)']
+  decode T=0.6: 73.87 tok/s (e2e 72.83; 512 tok, finish=length, d4=0.9433)
+  decode T=0.6: 68.24 tok/s (e2e 67.10; 512 tok, finish=length, d4=0.6818)
+  decode T=0.6: 66.08 tok/s (e2e 64.81; 512 tok, finish=length, d4=0.7162)
+  decode T=0.6: 73.00 tok/s (e2e 74.61; 512 tok, finish=length, d4=0.5417)
+  decode median 70.04 (min 66.08, max 73.87) over 5/5 valid
+  sweep 2000: 2174.0 tok, TTFT 2.21s, 986 tok/s prefill, decode 68.32 tok/s
+  sweep 480000: 512070.5 tok, TTFT 1521.80s, 337 tok/s prefill, decode 15.97 tok/s
+  -> <run-root>/results/super-kapitsa-512k-top-20261102-144400.json
+[15:37:33] super-kapitsa-512k-top: -> <run-root>/results/super-kapitsa-512k-top-20261102-144400.json  flags: 3
+=== done 15:37:33

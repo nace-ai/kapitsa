@@ -55,7 +55,10 @@ CORPUS_SHA256 = "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b
 # the corpus before its extension (V1): its first 144,500 characters, byte for byte, so every prompt up to ~34,000
 # tokens is the same from either, and results of either are the frozen corpus' (corpus/NOTICE.md)
 CORPUS_SHA256_V1 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28"
-FROZEN_SHA256 = (CORPUS_SHA256, CORPUS_SHA256_V1)
+# the long corpus (corpus/make_corpus.py --long, not in the repository): 2,200,000 characters, enough for a 512K-token
+# prompt, whose first 650,000 are this corpus byte for byte, so its prompts up to ~152,000 tokens are this corpus' own
+CORPUS_SHA256_LONG = "4339c1d0f698b6bffe80926f01483602b8b5f6ddd14c8f21a75778d8b107c848"
+FROZEN_SHA256 = (CORPUS_SHA256, CORPUS_SHA256_V1, CORPUS_SHA256_LONG)
 CHARS_PER_TOKEN = 4.25          # build_context() heuristic: target tokens -> characters cut from the corpus
 CORPUS_TOKENS_MAX = 152941      # frozen corpus length in "heuristic tokens" (650,000 chars; V1: ~34,000)
 WARM_TOKENS = 2700              # warm-up prompt ~2.9k tokens: > one 2048-token prefill chunk everywhere
@@ -69,6 +72,7 @@ PROMPT_TOL = 0.01               # ±1% around the reference prompt_tokens
 REF_PROMPT_TOKENS = {
     CORPUS_SHA256: {4000: 4133, 16000: 16286},
     CORPUS_SHA256_V1: {4000: 4133, 16000: 16286},  # the same prompts
+    CORPUS_SHA256_LONG: {4000: 4133, 16000: 16286},
 }
 
 DECODE_USER = ("Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, "
@@ -356,7 +360,7 @@ def check_sizes(a):
     if a.agentic:
         import agentic
         if "sweep" not in skip:
-            asks += [("--sweep-sizes", t) for t in agentic.sweep_targets(a.sweep_sizes, a.max_ctx)]
+            asks += [("--sweep-sizes", t) for t in agentic.sweep_targets(a.sweep_sizes, a.max_ctx, agentic.sweep_task(a)[1])]
         if "cache" not in skip:
             asks.append(("--cache-tokens", min(a.cache_tokens, agentic.sweep_targets("max", a.max_ctx, 256)[-1])))
     for flag, t in asks:
@@ -888,6 +892,9 @@ def parse_args(argv=None):
                     help="also run the agent-harness phases (agentic.py): sweep, cache, sustain (last); --skip drops any")
     ap.add_argument("--sweep-sizes", default="1000,2000,4000,8000,16000,max", help="agentic sweep: token targets; max = the largest that fits --max-ctx")
     ap.add_argument("--sweep-repeats", type=int, default=2, help="agentic sweep: cold requests per size (median)")
+    ap.add_argument("--sweep-task", choices=("summary", "code"), default="summary",
+                    help="agentic sweep: what each request asks about the document: summary, a 192-token summary; code, "
+                         "the decode phase's coding question and --decode-tokens, so its decode is the decode phase's at each size")
     ap.add_argument("--max-ctx", type=int, default=32768, help="server context: bounds the agentic sweep and cached-increment scenarios")
     ap.add_argument("--cache-tokens", type=int, default=8000, help="agentic cache phase: shared prefix size")
     ap.add_argument("--server-slots", type=int, default=0,

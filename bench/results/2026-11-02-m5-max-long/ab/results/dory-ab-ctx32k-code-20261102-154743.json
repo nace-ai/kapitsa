@@ -1,0 +1,804 @@
+{
+ "schema": 2,
+ "label": "dory-ab-ctx32k-code",
+ "model": "dory",
+ "base_url": "http://127.0.0.1:8302/v1",
+ "when": "2026-11-02 15:48:49",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8302/v1",
+  "model": "dory",
+  "label": "dory-ab-ctx32k-code",
+  "pid": 26155,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": "<run-root>/bench_corpus_long.txt",
+  "ref_prompt_tokens": "4000:4184,16000:16517",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "cached_increment": false,
+  "increment_prefixes": "8000",
+  "increment_tokens": 8000,
+  "increment_turns": 2,
+  "increment_repeats": 2,
+  "agentic": true,
+  "sweep_sizes": "2000,4000,16000",
+  "sweep_repeats": 2,
+  "sweep_task": "code",
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 1,
+  "sustain_s": 300,
+  "agent_trace": "<repo>/bench/harness/agent-traces/none",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<run-root>/ab/results/dory-ab-ctx32k-code-20261102-154743.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "<run-root>/bench_corpus_long.txt",
+  "sha256": "4339c1d0f698b6bffe80926f01483602b8b5f6ddd14c8f21a75778d8b107c848",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "d23770a8510ad988ec2b28c745d63fb7bb47cb30",
+  "dirty": false
+ },
+ "phases": {
+  "sweep": [
+   1793663329.143,
+   1793663374.658
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 26155,
+     "name": "kapitsa",
+     "phys_footprint": 5059531096,
+     "phys_footprint_peak": 5113876824,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 683835392,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 4825.1,
+   "phys_footprint_peak_mb": 4877.0,
+   "mapped_file_clean_mb": 652.2,
+   "swap_used_mb": 974.0,
+   "memorystatus_level": 91,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 117.2,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 974.0,
+  "swapouts": 6758941,
+  "swapins": 1449725,
+  "pageouts": 2697766,
+  "memorystatus_level": 93
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false,
+  "powermode": "2"
+ },
+ "idle_footprint_mb": 3799.3,
+ "sweep": {
+  "points": [
+   {
+    "target": 2000,
+    "prompt_tokens": 2174.5,
+    "ttft_s": 0.6796725204999998,
+    "prefill_tps": 3199.584363920353,
+    "decode_tps": 123.23749589366003,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4214.5,
+    "ttft_s": 1.3624599585000006,
+    "prefill_tps": 3095.759412116472,
+    "decode_tps": 117.22272272699661,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16549.0,
+    "ttft_s": 6.850463208500001,
+    "prefill_tps": 2419.111469716692,
+    "decode_tps": 96.05628636772886,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.779,
+  "retention_from_tokens": 2174.5,
+  "retention_to_tokens": 16549.0,
+  "max_prompt_tokens": 16549.0,
+  "runs": [
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2174,
+      "completion_tokens": 512,
+      "ttft_s": 0.6855966250000001,
+      "prefill_tps": 3170.9607672003926,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 120.80639020530604,
+      "distinct4": 0.9692
+     },
+     {
+      "target": 2000,
+      "prompt_tokens": 2175,
+      "completion_tokens": 512,
+      "ttft_s": 0.6737484159999996,
+      "prefill_tps": 3228.207960640313,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 125.66860158201402,
+      "distinct4": 0.5688
+     }
+    ],
+    "prompt_tokens": 2174.5,
+    "ttft_s": 0.6796725204999998,
+    "prefill_tps": 3199.584363920353,
+    "decode_tps": 123.23749589366003
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4215,
+      "completion_tokens": 512,
+      "ttft_s": 1.3241534169999998,
+      "prefill_tps": 3183.165897460355,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 116.50277084451706,
+      "distinct4": 0.9555
+     },
+     {
+      "target": 4000,
+      "prompt_tokens": 4214,
+      "completion_tokens": 512,
+      "ttft_s": 1.4007665000000014,
+      "prefill_tps": 3008.352926772589,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 117.94267460947614,
+      "distinct4": 0.9656
+     }
+    ],
+    "prompt_tokens": 4214.5,
+    "ttft_s": 1.3624599585000006,
+    "prefill_tps": 3095.759412116472,
+    "decode_tps": 117.22272272699661
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16549,
+      "completion_tokens": 512,
+      "ttft_s": 6.595065000000002,
+      "prefill_tps": 2509.300514854667,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 93.97813469882801,
+      "distinct4": 0.576
+     },
+     {
+      "target": 16000,
+      "prompt_tokens": 16549,
+      "completion_tokens": 512,
+      "ttft_s": 7.105861417,
+      "prefill_tps": 2328.9224245787173,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 98.13443803662969,
+      "distinct4": 0.9568
+     }
+    ],
+    "prompt_tokens": 16549.0,
+    "ttft_s": 6.850463208500001,
+    "prefill_tps": 2419.111469716692,
+    "decode_tps": 96.05628636772886
+   }
+  ],
+  "max_ctx": 32768,
+  "task": "code",
+  "decode_tokens": 512,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false,
+  "powermode": "2"
+ },
+ "peak_rss_mb": 4763,
+ "peak_footprint_mb": 4877,
+ "power_info": [
+  "POWER-INFO: High Power Mode (pmset powermode 2)"
+ ],
+ "invalid": [],
+ "flags": [
+  "CONTENTION: sustained foreign GPU load > 5% in ['sweep'] (mean 4.42%, top ['Claude Helper'])"
+ ],
+ "peak_memory_mb": 4877.0,
+ "mapped_file_clean_mb": 652.2,
+ "vm_end": {
+  "swap_used_mb": 974.0,
+  "swapouts": 6758941,
+  "swapins": 1449725,
+  "pageouts": 2697766,
+  "memorystatus_level": 91
+ },
+ "when_end": "2026-11-02 15:49:34",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 1.5,
+    "prompt_tokens": 2930,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 0.35,
+    "prompt_tokens": 455,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1079,
+   "completion_tokens": 8,
+   "ttft_s": 0.3545603330000002,
+   "prefill_tps": 3043.2056255994075,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1079,
+    "completion_tokens": 8,
+    "ttft_s": 0.37498774999999984,
+    "prefill_tps": 2877.4273292927583,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 8,
+    "ttft_s": 0.350330209,
+    "prefill_tps": 3085.6602491850767,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1080,
+    "completion_tokens": 8,
+    "ttft_s": 0.3525674999999997,
+    "prefill_tps": 3063.243208747264,
+    "finish": "length",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 0.3525674999999997,
+  "first_request_penalty_s": 0.002,
+  "invalid": [],
+  "spawn_to_ready_s": 2.0,
+  "spawn_to_first_token_s": 2.35
+ },
+ "contention": {
+  "overall": {
+   "samples": 22,
+   "mean_foreign_gpu_pct": 4.42,
+   "max_foreign_gpu_pct": 13.32,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 7,
+   "longest_busy_run": 4,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": true
+  },
+  "phases": {
+   "sweep": {
+    "samples": 22,
+    "mean_foreign_gpu_pct": 4.42,
+    "max_foreign_gpu_pct": 13.32,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 7,
+    "longest_busy_run": 4,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": true
+   }
+  },
+  "samples": [
+   [
+    1793663331.034,
+    2.94,
+    "Claude Helper",
+    2.94,
+    0.0
+   ],
+   [
+    1793663333.073,
+    1.62,
+    "Claude Helper",
+    1.62,
+    0.0
+   ],
+   [
+    1793663335.111,
+    1.6,
+    "Claude Helper",
+    1.6,
+    0.0
+   ],
+   [
+    1793663337.148,
+    1.53,
+    "Claude Helper",
+    1.53,
+    0.0
+   ],
+   [
+    1793663339.178,
+    2.12,
+    "Claude Helper",
+    2.12,
+    0.0
+   ],
+   [
+    1793663341.215,
+    2.07,
+    "Claude Helper",
+    2.07,
+    0.0
+   ],
+   [
+    1793663343.25,
+    1.36,
+    "Claude Helper",
+    1.36,
+    0.0
+   ],
+   [
+    1793663345.288,
+    3.29,
+    "Claude Helper",
+    3.29,
+    0.0
+   ],
+   [
+    1793663347.32,
+    1.8,
+    "Claude Helper",
+    1.8,
+    0.0
+   ],
+   [
+    1793663349.361,
+    1.28,
+    "Claude Helper",
+    1.28,
+    0.0
+   ],
+   [
+    1793663351.393,
+    3.73,
+    "Claude Helper",
+    3.73,
+    0.0
+   ],
+   [
+    1793663353.432,
+    7.88,
+    "Claude Helper",
+    7.88,
+    0.0
+   ],
+   [
+    1793663355.47,
+    9.34,
+    "Claude Helper",
+    9.34,
+    0.0
+   ],
+   [
+    1793663357.506,
+    13.04,
+    "Claude Helper",
+    13.04,
+    0.0
+   ],
+   [
+    1793663359.545,
+    1.27,
+    "Claude Helper",
+    1.27,
+    0.0
+   ],
+   [
+    1793663361.584,
+    1.24,
+    "Claude Helper",
+    1.24,
+    0.0
+   ],
+   [
+    1793663363.624,
+    6.62,
+    "Claude Helper",
+    6.62,
+    0.0
+   ],
+   [
+    1793663365.656,
+    8.43,
+    "Claude Helper",
+    8.43,
+    0.0
+   ],
+   [
+    1793663367.691,
+    10.14,
+    "Claude Helper",
+    10.14,
+    0.0
+   ],
+   [
+    1793663369.729,
+    13.32,
+    "Claude Helper",
+    13.32,
+    0.0
+   ],
+   [
+    1793663371.766,
+    1.38,
+    "Claude Helper",
+    1.38,
+    0.0
+   ],
+   [
+    1793663373.808,
+    1.2,
+    "Claude Helper",
+    1.2,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "dory-ab-ctx32k-code",
+ "display": "Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding)",
+ "engine": "kapitsa",
+ "version": "d23770a+dirty",
+ "version_config": "auto",
+ "model_name": "Nemotron-Labs-Dory1.0-4B",
+ "model_path": "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+ "note": "A/B: the default 32K context, the code question",
+ "config": {
+  "label": "dory-ab-ctx32k-code",
+  "display": "Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+   "--model-id",
+   "dory",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8302",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--loop-kv",
+   "per"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8302/v1",
+  "model": "dory",
+  "requires_paths": [
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4/model.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--sweep-sizes",
+   "2000,4000,16000",
+   "--max-ctx",
+   "32768",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "A/B: the default 32K context, the code question",
+  "agent_trace": "none"
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "2",
+   "low_power": false,
+   "vm": {
+    "swap_used_mb": 974.0,
+    "swapouts": 6758941,
+    "swapins": 1449725,
+    "pageouts": 2697766,
+    "memorystatus_level": 95
+   },
+   "gpu_mem": {
+    "in_use": 603684864,
+    "alloc": 3616391168,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 732474466304,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "~/models/nemotron-labs-dory1.0-4b-nvfp4",
+   "--model-id",
+   "dory",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8302",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--loop-kv",
+   "per"
+  ],
+  "cmd_shell": "<repo>/build/kapitsa serve --model ~/models/nemotron-labs-dory1.0-4b-nvfp4 --model-id dory --host 127.0.0.1 --port 8302 --ctx 32768 --slots 1 --loop-kv per",
+  "env": {
+   "NI_DISK_CACHE_DIR": "<run-root>/ab/state/kapitsa/prefix-cache"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+   "safetensors_bytes": 3202498032,
+   "safetensors_files": [
+    "model.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "d23770a8510ad988ec2b28c745d63fb7bb47cb30",
+   "dirty": false
+  },
+  "config_file": "../../../../kapitsa-bench-runs/2026-11-02-m5-max-long/ab.json",
+  "env_file_keys": [
+   "BENCH_GPU_LOCK",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "LLAMA_SERVER",
+   "LMS_BIN",
+   "MLX_LM_SERVER",
+   "MLX_SERVE_BIN",
+   "MLX_VLM_MAIN_PYTHON",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS",
+   "OMLX_BIN",
+   "REC_BIN",
+   "SPLASH_ROOT"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "kapitsa_git": {
+   "head": "d23770a8510ad988ec2b28c745d63fb7bb47cb30",
+   "head_time": "2026-11-02T15:40:16-08:00",
+   "branch": "context-256k",
+   "diff_head_sha256": "eda330c0990a56836e678908f09389941011846ba7a053a882d4e306b07ea0fe",
+   "diff_bytes": 17540,
+   "dirty": true,
+   "diff_stat": "3 files changed, 35 insertions(+), 23 deletions(-)",
+   "untracked_files": 0,
+   "excluded": [
+    "bench",
+    "docs"
+   ]
+  },
+  "binary": {
+   "sha256": "8ffabe60432a8595e96748377483c01606f02ca382cb94ac9132285d932e4365",
+   "mtime": "2026-11-02T05:52:12"
+  },
+  "prepare": [
+   "empty <run-root>/ab/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "~/models",
+   "BENCH_OUT": "<run-root>/ab",
+   "BENCH_GPU_LOCK": "/tmp/kapitsa-gpu.lock",
+   "LLAMA_SERVER": "~/engines/llama-b11871/llama-b11871/llama-server",
+   "OLLAMA_BIN": "~/engines/ollama-0.40.11/ollama",
+   "OLLAMA_MODELS": "~/.ollama/models",
+   "OLLAMA_MLX_MODELS": "~/models/ollama-mlx",
+   "MLX_LM_SERVER": "~/.local/bin/mlx_lm.server",
+   "OMLX_BIN": "~/engines/venv-omlx/bin/omlx",
+   "MTPLX_BIN": "~/.local/bin/mtplx",
+   "MLX_VLM_PYTHON": "~/engines/venv-mlxvlm/bin/python",
+   "MLX_VLM_MAIN_PYTHON": "~/engines/venv-mlxvlm/bin/python",
+   "LMS_BIN": "~/.lmstudio/bin/lms",
+   "MLX_SERVE_BIN": "~/engines/mlx-serve-26.10.3/mlx-serve-macos-arm64/mlx-serve",
+   "NI_DISK_CACHE_DIR": "<run-root>/ab/state/kapitsa/prefix-cache"
+  },
+  "ready_s": 2.0,
+  "server_pid": 26155,
+  "listener_pid": 26155,
+  "gpu_quiet_wait_s": 60.1,
+  "gpu_not_quiet": [
+   "Claude Helper[95214] 6%"
+  ],
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 830586880,
+   "alloc": 3759161344,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 974.0,
+   "swapouts": 6758941,
+   "swapins": 1449725,
+   "pageouts": 2697766,
+   "memorystatus_level": 94
+  },
+  "cleanup": [
+   "empty <run-root>/ab/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "disk_free_bytes": 732471164928
+ },
+ "server_log": [
+  "[kapitsa] engine ready: dory, context 32768, 1 slots, speculative decoding (prompt lookup, else 1-loop drafts, 2-3 per cycle), 2 loops by default (requests take 1-4), per-loop KV, KFlash (prompt lookup, 1-loop drafts)",
+  "[kapitsa] chat: prompt 1079 (cached 0) in 353 ms (+1.2 ms template/tokenize; last chunk: encoded by 308.8 ms, GPU start +25.2 ms, GPU 18.6 ms, wake +0.1 ms), 8 tokens in 58 ms (121.5 tok/s), length, 2.33 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 3 cycles, 2 loops",
+  "[kapitsa] chat: prompt 1079 (cached 0) in 336 ms (+38.1 ms template/tokenize; last chunk: encoded by 292.0 ms, GPU start +25.6 ms, GPU 18.6 ms, wake +0.1 ms), 8 tokens in 57 ms (122.9 tok/s), length, 2.33 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 3 cycles, 2 loops",
+  "[kapitsa] chat: prompt 1081 (cached 0) in 341 ms (+9.0 ms template/tokenize; last chunk: encoded by 296.5 ms, GPU start +25.7 ms, GPU 18.6 ms, wake +0.1 ms), 8 tokens in 57 ms (122.7 tok/s), length, 2.33 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 3 cycles, 2 loops",
+  "[kapitsa] chat: prompt 1080 (cached 0) in 343 ms (+9.0 ms template/tokenize; last chunk: encoded by 298.5 ms, GPU start +25.8 ms, GPU 18.6 ms, wake +0.1 ms), 8 tokens in 58 ms (121.4 tok/s), length, 2.33 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 3 cycles, 2 loops",
+  "[kapitsa] chat: prompt 2930 (cached 0) in 941 ms (+17.3 ms template/tokenize; last chunk: encoded by 888.7 ms, GPU start +29.6 ms, GPU 22.4 ms, wake +0.1 ms), 64 tokens in 546 ms (115.5 tok/s), length, 2.52 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 25 cycles, 2 loops",
+  "[kapitsa] chat: prompt 455 (cached 0) in 163 ms (+20.3 ms template/tokenize; last chunk: encoded by 122.4 ms, GPU start +27.1 ms, GPU 13.9 ms, wake +0.1 ms), 27 tokens in 170 ms (152.5 tok/s), tool_calls, 2.60 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 10 cycles, 2 loops",
+  "[kapitsa] chat: prompt 2174 (cached 0) in 680 ms (+0.7 ms template/tokenize; last chunk: encoded by 626.1 ms, GPU start +33.3 ms, GPU 20.8 ms, wake +0.1 ms), 512 tokens in 4209 ms (121.4 tok/s), length, 2.50 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 204 cycles, 2 loops",
+  "[kapitsa] chat: prompt 2175 (cached 0) in 665 ms (+7.9 ms template/tokenize; last chunk: encoded by 611.2 ms, GPU start +33.3 ms, GPU 20.7 ms, wake +0.1 ms), 512 tokens in 4119 ms (124.1 tok/s), length, 2.46 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 208 cycles, 2 loops",
+  "[kapitsa] chat: prompt 4215 (cached 0) in 1304 ms (+19.6 ms template/tokenize; last chunk: encoded by 1241.2 ms, GPU start +37.6 ms, GPU 24.9 ms, wake +0.1 ms), 512 tokens in 4342 ms (117.7 tok/s), length, 2.50 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 204 cycles, 2 loops",
+  "[kapitsa] chat: prompt 4214 (cached 0) in 1376 ms (+24.5 ms template/tokenize; last chunk: encoded by 1308.2 ms, GPU start +40.6 ms, GPU 26.7 ms, wake +0.1 ms), 512 tokens in 4447 ms (114.9 tok/s), length, 2.42 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 211 cycles, 2 loops",
+  "[kapitsa] chat: prompt 16549 (cached 0) in 6558 ms (+36.4 ms template/tokenize; last chunk: encoded by 6438.5 ms, GPU start +67.8 ms, GPU 51.4 ms, wake +0.1 ms), 512 tokens in 5270 ms (97.0 tok/s), length, 2.40 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 213 cycles, 2 loops",
+  "[kapitsa] chat: prompt 16549 (cached 0) in 6832 ms (+272.8 ms template/tokenize; last chunk: encoded by 6713.7 ms, GPU start +66.2 ms, GPU 52.2 ms, wake +0.1 ms), 512 tokens in 5343 ms (95.6 tok/s), length, 2.39 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 214 cycles, 2 loops"
+ ],
+ "server_log_path": "logs/dory-ab-ctx32k-code-20261102-154743.log"
+}
