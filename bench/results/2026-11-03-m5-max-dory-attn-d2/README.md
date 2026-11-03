@@ -30,6 +30,13 @@ before the change (the four 255K runs of `2026-11-03-m5-max-long-v3`, #900). The
 for 255,000 tokens of document, which the chat template took past the context ([failed-255000/](failed-255000): HTTP
 400 on both arms, nothing measured); the pair was re-run at the 240,000 the long-context sweep uses.
 
+The 255K saving is consistent with the idle pairs: the attention's work grows with the square of the prompt (x3.65 from
+133K to 255K), so the idle 133K pairs' savings of 60.5 s and 58.5 s predict 213-221 s at 255K, and the loaded pair saved
+212.0 s; the kernel alone is 1.78x at 254K positions, the prompt 1.57x end to end.
+
+Scope: the switch is on wherever the tensor prefill attention runs (an Apple10 GPU, macOS 26, 4 query heads per KV
+head), so on every M5-class Mac, but everything here was measured on the M5 Max; the other M5 Macs take it untested.
+
 ## Kernel
 
 One full-attention layer of Dory's heads (16 query heads over 4 KV heads, head dim 256), 2,048 rows after the cached
@@ -62,9 +69,19 @@ source as `kernel/mksrc.py` assembles it):
 gate of 2.84e-3 / 3.13e-2 (`tools/logit_floors/nemotron-labs-dory1.0-4b-nvfp4.json`): PASS, and PASS on the order-change
 gate (`--reorder`).
 
+## Temperature-0 continuations
+
+The model served at its default (`--loop-kv per`, `--ctx 65536`) with `NI_DORY_ATTN_D2=0` and with the default, the same
+cold documents from the long corpus (4,131 and 16,465 tokens with the template) and the same question, 256 tokens at
+temperature 0 ([greedy/](greedy)): the two texts are identical at both sizes (1,270 and 1,086 characters). The servers'
+logs (`server-old.log`: `NI_DORY_ATTN_D2=0`, `server-new.log`: the default) are cold starts with no quiet wait, so their
+prompt times are not a measurement (the new server's 16K prompt took 7.6 s against 6.5 s there; the A/B above and the
+kernel timings, the sliding layers' included, are the measurements).
+
 ## Files
 
 `results/`, `logs/`: the runs (`dory-d2-old*`: `NI_DORY_ATTN_D2=0`; `dory-d2-new*`: the default) and their server logs.
 `session/`, `sweep-configs/ab10.json`: the runner, its output and the labels (the 255K labels' size is the 240,000 they
-ran at). `kernel/`: the kernel checks, their scripts and output. Local paths are replaced by placeholders (`~`, `<repo>`,
+ran at). `kernel/`: the kernel checks, their scripts and output. `greedy/`: the continuations, the script and both
+servers' logs. Local paths are replaced by placeholders (`~`, `<repo>`,
 `<main>`, `<run-root>`, `<scratch>`).

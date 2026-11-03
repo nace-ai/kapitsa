@@ -1,0 +1,14 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] compiled the Dory kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] Dory: LM head as Q8_0 rows
+[kapitsa] Dory: 72 layers (16 input, 40 recurrent x 2 loops, 16 output), 2.53 GB of weights read in 0.2 s (NVFP4 attention / MLP, Q8_0 head, BF16 embedding); recurrent KV per-loop
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (173 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 2.91 GB allocated (model, buffers, 1 slot's state), budget 110.8 GB (recommended working set 115.4 GB): KV room 107.92 GB = 1881937 tokens (56 KB per token), one conversation up to 65536 of 65536 tokens
+[kapitsa] drafter: none (this model takes no block drafter, prompt lookup and Dory 1-loop drafts only)
+[kapitsa] engine ready: m, context 65536, 1 slots, speculative decoding (prompt lookup, else 1-loop drafts, 2-3 per cycle), 2 loops by default (requests take 1-4), per-loop KV, KFlash (prompt lookup, 1-loop drafts)
+[kapitsa] listening on http://127.0.0.1:8299
+[kapitsa] chat: prompt 4131 (cached 0) in 1358 ms (+1.9 ms template/tokenize; last chunk: encoded by 853.4 ms, GPU start +476.0 ms, GPU 28.9 ms, wake +0.1 ms), 256 tokens in 2240 ms (113.8 tok/s), length, 2.43 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 105 cycles, 2 loops
+[kapitsa] chat: prompt 16465 (cached 0) in 6537 ms (+26.8 ms template/tokenize; last chunk: encoded by 5659.1 ms, GPU start +819.4 ms, GPU 58.6 ms, wake +0.1 ms), 256 tokens in 2745 ms (92.9 tok/s), length, 2.32 tok/cycle, KFlash (prompt lookup, 1-loop drafts): 110 cycles, 2 loops
