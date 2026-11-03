@@ -59,10 +59,12 @@ an M5 Pro at 0.2.7), and the same with the 8-row verify, the floor's own "step" 
 | 768 | 8 rows | 0.9805 | 15 (15) | 1.09 | 7.32e-3 | 1.27e-1 | FAIL: top-1 |
 
 The gate: top-1 at least 0.9844, KL mean / p99 at most 0.0218 / 0.192, no flip at a margin of 6.55 or more. **It
-fails on top-1 agreement**: 15 of 768 rows flip, every one a near-tie (the largest at a margin of 1.09). The 8-row
-verify, which is what the floor itself measured as noise and what `--spec K` runs today, fails it the same way on this
-Mac and build: 15 flips, 0.9805. The 3-row verify is no further from the step than the 8-row one; both pass the KL
-bounds. The floor is left as it is (a re-measure is a PR of its own).
+fails on top-1 agreement**: 15 of 768 rows flip, every one a near-tie (the largest at a margin of 1.09); KL passes.
+The floor file records the same comparison, plain decoding against the 8-row verify (its "step" source), at top-1
+0.9922 (6 flips in 768 rows) on an M5 Pro at 0.2.7, which passes. Re-run here, on the M5 Max at cd20cf5, that
+comparison (the 8-row verify `--spec K` runs) gives 0.9805 with 15 flips, as the 3-row verify does. That re-run is a
+measurement of this Mac and build, not the floor, which is left as it is (a re-measure is a PR of its own): the gate as
+recorded is failed.
 
 ## Files
 
