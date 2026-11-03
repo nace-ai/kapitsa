@@ -459,11 +459,17 @@ class Qwen35 : public Model {
   void moe8_replay(Encoder& e, int li, int mask);
   // The 8-row verify GEMMs, for other 8-row passes (the DFlash2 drafter). Inputs are X8 tables
   // (verify8.metal layout: half operands in fragment order + per-64 group sums), R <= 8 live rows.
+  static bool v8_packed_coeff_on(const Qwen35Config& c);
+  struct PackedCoeffBuffers {
+    Buffer payload, headers;
+    explicit operator bool() const { return bool(payload) && bool(headers); }
+  };
   struct Seg8 {
     const QLinear* L;
     Buffer y;
     uint32_t y_ld = 0;  // 0: N
     bool add = false;   // y += X W^T
+    PackedCoeffBuffers packed;  // optional immutable image, owned by the caller
   };
   // y_i[R, N_i] = X W_i^T for up to 4 matrices sharing K and bits (x2: two-term hi+lo inputs). tt: the same
   // inputs as a T table (enc_x8 with tw), for qmm8t on the GPU's matrix units (V8Knobs::tw; 4-bit group 64)
@@ -473,7 +479,8 @@ class Qwen35 : public Model {
   // tt: the inputs' T table (qmm8t for gate|up); ht: also write h as a T table there (split path only). Returns
   // whether ht was written. R: the rows (a wide tree verify's capacity: its row tiles' tables)
   bool enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
-               const Buffer& h, const Buffer& hs, const Buffer* tt = nullptr, const Buffer* ht = nullptr, int R = 8);
+               const Buffer& h, const Buffer& hs, const Buffer* tt = nullptr, const Buffer* ht = nullptr, int R = 8,
+               const PackedCoeffBuffers& gate_packed = {}, const PackedCoeffBuffers& up_packed = {});
   // The last verify's sampler inputs and outputs, as GPU buffers (for an on-GPU acceptance step):
   // stage-1 top-k candidates per row (values / ids, verify_candidates() per row) and the sampled ids.
   Buffer verify_cand_vals() const { return cand_v_; }
@@ -668,6 +675,7 @@ class Qwen35 : public Model {
   // in: the rows' (already normalized) input instead of norm(x); it must be xrn_ (Qwen4Exp)
   void enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer, const Buffer* in = nullptr);
   // ---- 8-row verify path (qwen35_v8.cpp) ----
+  void load_v8_packed_coeff();
   void v8_alloc();
   void encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
   // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table.
@@ -755,6 +763,8 @@ class Qwen35 : public Model {
   Buffer chain_tree_[kMaxTreeRows / 8 + 1];
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
+  // Explicit immutable target objects; never dynamic drafter/selector weights.
+  std::unordered_map<const QLinear*, PackedCoeffBuffers> v8_packed_coeff_;
 
   size_t mem_budget_ = 0;
   bool gdn_sigmoid_ = false;  // the gated norm's gate: sigmoid (Qwen3.8-Flash-Next), else silu

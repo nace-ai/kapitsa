@@ -1,4 +1,5 @@
 #include "util/load_threads.h"
+#include "model/affine_coeff_fixed.h"
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
 // Kernels in src/kernels/spec_dflash.metal.
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
@@ -542,6 +543,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     if (v && *v) build_head(atoi(v), true);
     else build_head(0, false);
   }
+  load_v8_packed_coeff();
   Gpu::get().make_resident(owned_bufs_);
   // Dynamic verify depth on MoE targets (default tau 0.5, NI_DFLASH_DYN=tau overrides, 0 = off): the expert
   // union, the 35B verify's main cost, shrinks with the rows (35B, 512 tokens: code +7%, prose +20% over
@@ -674,6 +676,37 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
          dir.c_str(), kB, cfg_.trained_block, kCtxKeep, cfg_.trained_window);
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
        "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
+}
+
+void DFlash2::load_v8_packed_coeff() {
+  if (!v8_ || bits_ != 4 || !cfg_.v1 || cfg_.H != 2560 || cfg_.I != 9216 || cfg_.NL != 6 ||
+      !Qwen35::v8_packed_coeff_on(tg_.config())) return;
+  const double start = now_ms();
+  size_t bytes = 0, count = 0, compressed = 0, blocks = 0;
+  auto pack = [&](const QLinear& q, Qwen35::PackedCoeffBuffers& out) {
+    if (!q || !q.q4() || q.exl3 || q.q20 || !q.N || !q.K || q.K % 64) return;
+    const auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
+                                               q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    out.payload = Gpu::get().alloc(image.words.size() * 4, "dfl_packed_coeff_payload", false);
+    owned_bufs_.push_back(out.payload);
+    memcpy(out.payload.ptr(), image.words.data(), out.payload.size);
+    out.headers = Gpu::get().alloc(image.headers.size() * 4, "dfl_packed_coeff_headers", false);
+    owned_bufs_.push_back(out.headers);
+    memcpy(out.headers.ptr(), image.headers.data(), out.headers.size);
+    bytes += out.payload.size + out.headers.size;
+    compressed += image.compressed_blocks; blocks += image.blocks;
+    ++count;
+  };
+  for (DLayer& l : layers_) {
+    pack(l.gate, l.gate_packed);
+    pack(l.up, l.up_packed);
+    pack(l.down, l.down_packed);
+  }
+  // A full head uses the target's existing image; only the reduced copy belongs to the drafter.
+  if (head_n_) pack(head_sub_, head_packed_);
+  resident_ += bytes;
+  logi("NI_V8_PACKED_COEFF_NF1: packed %zu static draft projections, %.1f MiB in %.0f ms; compressed %zu/%zu blocks",
+       count, double(bytes) / (1024 * 1024), now_ms() - start, compressed, blocks);
 }
 
 void DFlash2::alloc_buffers() {
@@ -959,8 +992,18 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   const char* v8 = getenv("NI_DFLASH_V8");
   // A native 4-bit group-64 head row includes its packed codes, scales and biases.
   const bool head_q4 = head_row_bytes == size_t(target.hidden) / 2 + size_t(target.hidden) / 64 * 4;
-  if (v8 && *v8 ? atoi(v8) != 0 : default_v8(H, target.moe, head_q4))
+  const bool use_v8 = v8 && *v8 ? atoi(v8) != 0 : default_v8(H, target.moe, head_q4);
+  const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == 2560 && I == 9216 && NL == 6 &&
+                         c.value("architectures", json::array()) == json::array({"DFlashDraftModel"}) &&
+                         Qwen35::v8_packed_coeff_on(target);
+  auto packed_bytes = [](size_t N, size_t K) {
+    const size_t blocks = ((N + 15) / 16) * ((K / 64 + 1) / 2);
+    // All-raw upper bound, including aligned raw slabs and the separate header array.
+    return (((blocks * 272 + 31) & ~size_t(31)) + blocks * 33) * 4;
+  };
+  if (use_v8)
     b += 8 * H * 2 + 8 * I * 2 + I / 64 * 8 * 4;
+  if (packed_v8) w += NL * (2 * packed_bytes(I, H) + packed_bytes(H, I));
   // build_head(): rows of the target's LM head (the ranked or id-order rows plus every id from the first
   // end-of-sequence id on)
   {
@@ -968,7 +1011,11 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     const char* ids = getenv("NI_DFLASH_HEAD_IDS");
     const size_t req = hv && *hv ? size_t(std::max(0, atoi(hv))) : ids && *ids ? size_t(kHeadRows) : size_t(kHeadRowsIdOrder);
     const size_t special0 = target.eos.empty() ? V : std::min<size_t>(V, size_t(*std::min_element(target.eos.begin(), target.eos.end())));
-    if (req > 0 && req < V) b += std::max(req, V - special0) * (head_row_bytes + 4);
+    if (req > 0 && req < V) {
+      const size_t rows = std::max(req, V - special0);
+      b += rows * (head_row_bytes + 4);
+      if (packed_v8 && head_q4) w += packed_bytes(rows, H);
+    }
   }
   b += size_t(4) << 20;  // the target's 8-row verify scratch (Qwen35::v8_alloc): ~1-3 MB
   // begin_prefill(): the prompt captures and the 512-row context-commit buffers
@@ -1731,7 +1778,8 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     dbg(e, "mm" + sfx, mh, size_t(8) * H * 2);
     if (v8_) {  // the target's verify GEMMs (same math; the sums layout is shared, only the table permutes)
       enc_to_v8(e, mh, H, v8t_);
-      if (!(skip & 1024)) tg_.enc_gu8(e, Ly.gate, Ly.up, v8t_, ms, v8h_, v8hs_);
+      if (!(skip & 1024))
+        tg_.enc_gu8(e, Ly.gate, Ly.up, v8t_, ms, v8h_, v8hs_, nullptr, nullptr, 8, Ly.gate_packed, Ly.up_packed);
       if (debug_) {
         kp::DflPerm pp{I};
         e.use(dpipe("dfl_v8_to_x8"));
@@ -1740,7 +1788,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
         e.dispatch((I / 64 + 7) / 8, 1, 1, 256);
       }
       dbg(e, "hgu" + sfx, hh_, size_t(8) * I * 2);
-      if (!(skip & 2048)) tg_.enc_qmm8(e, {{&Ly.down, u_, H, false}}, 8, v8h_, v8hs_);
+      if (!(skip & 2048)) tg_.enc_qmm8(e, {{&Ly.down, u_, H, false, Ly.down_packed}}, 8, v8h_, v8hs_);
     } else {
       if (skip & 1024) {
       } else if (!(dk & 128) && tw_for({{&Ly.gate, gu_g_, I, 1.0f}, {&Ly.up, gu_u_, I, 1.0f}}, H)) {
@@ -1779,7 +1827,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   } else if (v1) {  // no candidate selector
     if (v8_) {
       enc_to_v8(e, xh_, H, v8t_);
-      tg_.enc_qmm8(e, {{&head, logits_, Vd, false}}, 8, v8t_, xs_);
+      tg_.enc_qmm8(e, {{&head, logits_, Vd, false, head_packed_}}, 8, v8t_, xs_);
     } else {
       enc_qmm8(e, {{&head, logits_, Vd, 1.0f}}, xh_, xs_, H, H, int(BT));
     }

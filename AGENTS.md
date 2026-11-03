@@ -110,6 +110,8 @@ Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`
 `tests/test_structured.py URL`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
 `tests/test_ane_split_abort.py`, `tests/test_systemone.py`): run it only when allowed, and report it as run.
 
+`qmm_packed_coeff_check` has CPU-only and GPU modes; see CONTRIBUTING.md for its exact mode names and validation requirements.
+
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 
 ## Rules that bite here
