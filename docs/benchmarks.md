@@ -107,6 +107,18 @@ be declared ambient instead: its load is then recorded, not flagged). *Loop*: a 
 
 ### MacBook Pro M5 Max, 128 GB
 
+**2026-11-03: Dory after its prefill attention moved to simdgroup pairs** ([results](../bench/results/2026-11-03-m5-max-long-v4/README.md)).
+#904's build (main `32cf851` with `dory_attn_td2_g4s8`), Dory swept again with four cold requests a size (all clean):
+
+| Prefill / decode, tok/s | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K | 256K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Dory1.0 4B | 3,307 / 123 | 2,624 / 115 | 2,644 / 106 | 2,651 / 101 | 2,424 / 88.4 | 2,121 / 73.2 | 1,624 / 55.8 | 1,102 / 33.7 | 700 / 22.7 |
+
+Prefill against the v3 run below: 32K 1,625 → 2,121, 64K 1,151 → 1,624, 128K 695 → 1,102, 256K 407 → 700 tok/s. The two
+runs are flagged for different loads (the desktop app at 10.6% of the GPU during this sweep, 66.7% during v3's), so the
+measure of the change is #904's interleaved A/B: a 133K-token prompt's first token 1.46-1.48x sooner, a 255K one's 1.57x,
+decode unchanged.
+
 **2026-11-03: the 27B and Dory after their verify changes** ([results](../bench/results/2026-11-03-m5-max-long-v3/README.md)).
 Main `dbf303a`: the 27B's wide tree verify attention on the matrix units (#897) and Dory's verify reading the cache once
 for all its rows (#898), the two models swept again with four cold requests a size (a point: the median of its clean
