@@ -1,0 +1,13 @@
+arm 0 win full: prompt 134348 (cached 0): 512 tok, 47.0 tok/s, 2.47 t/c, 52.6 ms/cycle
+arm 0 win full: prompt 259404 (cached 259398): 512 tok, 27.2 tok/s, 2.41 t/c, 88.5 ms/cycle
+arm 1 win 4096: prompt 134348 (cached 0): 512 tok, 48.7 tok/s, 2.46 t/c, 50.4 ms/cycle
+arm 1 win 4096: prompt 259404 (cached 259398): 512 tok, 28.2 tok/s, 2.35 t/c, 83.5 ms/cycle
+arm 2 win 1024: prompt 134348 (cached 0): 512 tok, 48.2 tok/s, 2.46 t/c, 51.0 ms/cycle
+arm 2 win 1024: prompt 259404 (cached 259398): 512 tok, 27.9 tok/s, 2.35 t/c, 84.3 ms/cycle
+arm 3 win full: prompt 134348 (cached 0): 512 tok, 45.9 tok/s, 2.47 t/c, 53.8 ms/cycle
+arm 3 win full: prompt 259404 (cached 259398): 512 tok, 26.5 tok/s, 2.41 t/c, 91.0 ms/cycle
+arm 4 win 4096: prompt 134348 (cached 0): 512 tok, 47.6 tok/s, 2.46 t/c, 51.7 ms/cycle
+arm 4 win 4096: prompt 259404 (cached 259398): 512 tok, 27.4 tok/s, 2.35 t/c, 86.0 ms/cycle
+arm 5 win 1024: prompt 134348 (cached 0): 512 tok, 47.1 tok/s, 2.46 t/c, 52.1 ms/cycle
+arm 5 win 1024: prompt 259404 (cached 259398): 512 tok, 27.3 tok/s, 2.35 t/c, 86.4 ms/cycle
+texts identical across the four arms: {'133K': True, '252K': True}

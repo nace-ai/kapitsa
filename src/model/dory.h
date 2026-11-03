@@ -208,6 +208,13 @@ class Dory : public Model {
   bool attn_d2_ = false;
   static const char* x4(const NhMat& W, const char* l2, const char* l0) { return W.l2 ? l2 : l0; }
   int attn_max_chunks_ = 64;
+  // A self-draft's output layers (encode_draft): their full-attention layers read only the last draft_out_window_
+  // positions (0: every one), as draft_window_ tells enc_layer_rows while they are encoded. The verify writes those
+  // layers' keys at the drafted positions again and reads none of the draft's, so only the drafts change, never the
+  // reply. NI_DORY_DRAFT_WIN (default 4096 on an M5-class GPU, where it was measured, 0 elsewhere; 0: every position):
+  // on the M5 Max a cycle 5 ms cheaper after 259K tokens for 2.35 against 2.41 tokens a cycle, decode 3.5-3.7% faster at
+  // 134K and 259K, the same text.
+  int draft_out_window_ = 0, draft_window_ = 0;
   // prefill activations (tmax_ rows; on first use)
   bool pf_alloc_ = false;
   Buffer px_, pxh_, pinp_, py_, pq_, pqkvg_, pck_, pcv_, pao_, paoh_, pgu_, pmh_;

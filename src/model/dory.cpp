@@ -261,6 +261,10 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
         attn_d2_ = attn_t_ && !(d2 && *d2 && atoi(d2) == 0) && Gpu::get().pipeline("dory_attn_td2_g4s8", false).pso;
       }
     }
+  {
+    const char* w = getenv("NI_DORY_DRAFT_WIN");
+    draft_out_window_ = w && *w ? std::max(0, atoi(w)) : Gpu::get().apple_family() >= 10 ? 4096 : 0;
+  }
   load(prefill_chunk);
 }
 
@@ -1020,7 +1024,7 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
   e.val(7, pp);
   e.dispatch(uint32_t(c.hq + 2 * c.hkv), uint32_t(R), 1, 128);
   // keys [k0, pos0 + R) in chunks: one per GPU core and kv head, at least 64 keys (16-key tiles), at most 64 chunks
-  const uint32_t window = L.kind == 'S' ? uint32_t(c.window) : 0u;
+  const uint32_t window = L.kind == 'S' ? uint32_t(c.window) : uint32_t(draft_window_);
   const uint32_t k0 = window && uint32_t(pos0) + 1 > window ? uint32_t(pos0) + 1 - window : 0u;
   const uint32_t Lk = uint32_t(pos0 + R) - k0;
   uint32_t chunk = std::max<uint32_t>(64, (Lk + gpu_cores() - 1) / gpu_cores());
@@ -1227,7 +1231,9 @@ void Dory::encode_draft(Encoder& e, Seq& s, int pos, int row) {
   enc_loops_rows(e, s, pos, 1, 0, 1, 1);  // loop 0, ending as a 1-loop model's: x_ = the state after it
   enc_copy_rows(e, x_, st0_.view(size_t(row) * rb, rb), 1);
   enc_copy_rows(e, inp_, inp0_.view(size_t(row) * rb, rb), 1);
+  draft_window_ = draft_out_window_;
   enc_output_rows(e, s, pos, 1);
+  draft_window_ = 0;
   enc_head(e, x_, 1, logits_, size_t(cfg_.vocab));
   SamplingParams greedy;
   enc_sample(e, logits_, s.tok, pos + 1, greedy, uint32_t(pos));
