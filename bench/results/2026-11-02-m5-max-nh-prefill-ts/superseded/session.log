@@ -1,0 +1,83 @@
+=== lightning-pf-old 18:07:51 powermode=2 Now drawing from 'AC Power' load={ 2.49 3.15 2.79 } top=29.4 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;19.2 (Renderer);8.6 Helper;
+[18:07:58] lightning-pf-old:  warm-up prefill~2.9k+decode64: ok (0.98s)
+[18:07:58] lightning-pf-old:  warm-up tools: ok (0.21s)
+[18:08:58] lightning-pf-old: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 266.33 tok/s (e2e 263.64; 512 tok, finish=length, d4=0.8734)
+  decode T=0.6: 270.58 tok/s (e2e 266.56; 512 tok, finish=length, d4=0.9691)
+  decode T=0.6: 277.98 tok/s (e2e 273.25; 512 tok, finish=length, d4=0.9347)
+  decode T=0.6: 267.46 tok/s (e2e 270.60; 512 tok, finish=length, d4=0.8566)
+  decode T=0.6: 278.23 tok/s (e2e 272.66; 512 tok, finish=length, d4=0.8523)
+  decode median 270.58 (min 266.33, max 278.23) over 5/5 valid
+  sweep 128000: 133398 tok, TTFT 53.55s, 2491 tok/s prefill, decode 185.38 tok/s
+  sweep 240000: 254824 tok, TTFT 172.35s, 1479 tok/s prefill, decode 149.08 tok/s
+  -> <run-root>/ab4/results/lightning-pf-old-20261102-180751.json
+[18:13:06] lightning-pf-old: -> <run-root>/ab4/results/lightning-pf-old-20261102-180751.json  flags: 1
+=== lightning-pf-new 18:13:06 powermode=2 Now drawing from 'AC Power' load={ 1.99 2.26 2.48 } top=14.9 Helper;6.1 (Renderer);2.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;
+[18:13:13] lightning-pf-new:  warm-up prefill~2.9k+decode64: ok (0.91s)
+[18:13:13] lightning-pf-new:  warm-up tools: ok (0.19s)
+[18:14:13] lightning-pf-new: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 312.91 tok/s (e2e 304.22; 512 tok, finish=length, d4=0.91)
+  decode T=0.6: 277.90 tok/s (e2e 271.11; 512 tok, finish=length, d4=0.9256)
+  decode T=0.6: 275.06 tok/s (e2e 274.23; 512 tok, finish=length, d4=0.4673) flags ['repetition loop (distinct-4-gram 0.4673)']
+  decode T=0.6: 282.02 tok/s (e2e 276.77; 512 tok, finish=length, d4=0.9815)
+  decode T=0.6: 235.55 tok/s (e2e 238.25; 512 tok, finish=length, d4=0.7715)
+  decode median 277.9 (min 235.55, max 312.91) over 5/5 valid
+  sweep 128000: 133397 tok, TTFT 44.62s, 2990 tok/s prefill, decode 205.97 tok/s
+  sweep 240000: 254824 tok, TTFT 130.54s, 1952 tok/s prefill, decode 173.66 tok/s
+  -> <run-root>/ab4/results/lightning-pf-new-20261102-181306.json
+[18:17:29] lightning-pf-new: -> <run-root>/ab4/results/lightning-pf-new-20261102-181306.json  flags: 2
+=== lightning-pf-old 18:17:29 powermode=2 Now drawing from 'AC Power' load={ 1.96 2.20 2.39 } top=35.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;20.1 Helper;5.2 (Renderer);
+[18:17:35] lightning-pf-old:  warm-up prefill~2.9k+decode64: ok (0.81s)
+[18:17:36] lightning-pf-old:  warm-up tools: ok (0.18s)
+[18:18:38] lightning-pf-old: GPU not quiet after 62s (['Claude Helper[95214] 14%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 283.05 tok/s (e2e 277.32; 512 tok, finish=length, d4=0.9699)
+  decode T=0.6: 286.54 tok/s (e2e 278.68; 512 tok, finish=length, d4=0.9416)
+  decode T=0.6: 286.46 tok/s (e2e 279.94; 512 tok, finish=length, d4=0.8333)
+  decode T=0.6: 266.68 tok/s (e2e 263.01; 512 tok, finish=length, d4=0.9629)
+  decode T=0.6: 240.14 tok/s (e2e 237.04; 512 tok, finish=length, d4=0.8715)
+  decode median 283.05 (min 240.14, max 286.54) over 5/5 valid
+  sweep 128000: 133396 tok, TTFT 52.28s, 2551 tok/s prefill, decode 184.14 tok/s
+  sweep 240000: 254825 tok, TTFT 166.31s, 1532 tok/s prefill, decode 165.14 tok/s
+  -> <run-root>/ab4/results/lightning-pf-old-20261102-181729.json
+[18:22:38] lightning-pf-old: -> <run-root>/ab4/results/lightning-pf-old-20261102-181729.json  flags: 1
+=== lightning-pf-new 18:22:38 powermode=2 Now drawing from 'AC Power' load={ 1.98 2.07 2.26 } top=33.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;17.2 Helper;5.5 (Renderer);
+[18:23:27] lightning-pf-new:  warm-up prefill~2.9k+decode64: ok (0.77s)
+[18:23:27] lightning-pf-new:  warm-up tools: ok (0.18s)
+[18:24:27] lightning-pf-new: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 270.70 tok/s (e2e 266.28; 512 tok, finish=length, d4=0.9227)
+  decode T=0.6: 313.38 tok/s (e2e 309.06; 512 tok, finish=length, d4=0.8483)
+  decode T=0.6: 268.20 tok/s (e2e 265.16; 512 tok, finish=length, d4=0.9771)
+  decode T=0.6: 298.83 tok/s (e2e 293.85; 512 tok, finish=length, d4=0.8048)
+  decode T=0.6: 276.24 tok/s (e2e 273.35; 512 tok, finish=length, d4=0.9362)
+  decode median 276.24 (min 268.2, max 313.38) over 5/5 valid
+  sweep 128000: 133397 tok, TTFT 44.78s, 2979 tok/s prefill, decode 191.00 tok/s
+  sweep 240000: 254824 tok, TTFT 132.05s, 1930 tok/s prefill, decode 145.76 tok/s
+  -> <run-root>/ab4/results/lightning-pf-new-20261102-182238.json
+[18:27:45] lightning-pf-new: -> <run-root>/ab4/results/lightning-pf-new-20261102-182238.json  flags: 1
+=== lightning512-pf-new 18:27:45 powermode=2 Now drawing from 'AC Power' load={ 4.09 2.86 2.52 } top=33.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;18.4 Helper;9.0 (Renderer);
+[18:27:52] lightning512-pf-new:  warm-up prefill~2.9k+decode64: ok (0.89s)
+[18:27:52] lightning512-pf-new:  warm-up tools: ok (0.18s)
+[18:28:52] lightning512-pf-new: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 292.03 tok/s (e2e 282.72; 512 tok, finish=length, d4=0.9316)
+  decode T=0.6: 253.99 tok/s (e2e 250.33; 512 tok, finish=length, d4=0.9302)
+  decode T=0.6: 274.53 tok/s (e2e 269.77; 512 tok, finish=length, d4=0.9375)
+  decode T=0.6: 239.62 tok/s (e2e 240.56; 512 tok, finish=length, d4=0.8884)
+  decode T=0.6: 300.21 tok/s (e2e 296.36; 512 tok, finish=length, d4=0.9511)
+  decode median 274.53 (min 239.62, max 300.21) over 5/5 valid
+  sweep 480000: 512075 tok, TTFT 592.47s, 864 tok/s prefill, decode 133.19 tok/s
+  -> <run-root>/ab4/results/lightning512-pf-new-20261102-182746.json
+[18:39:04] lightning512-pf-new: -> <run-root>/ab4/results/lightning512-pf-new-20261102-182746.json  flags: 1
+=== lightning512-pf-old 18:39:04 powermode=2 Now drawing from 'AC Power' load={ 1.14 1.56 1.98 } top=11.8 Renderer);11.6 Helper;3.7 (Renderer);
+[18:39:55] lightning512-pf-old:  warm-up prefill~2.9k+decode64: ok (0.73s)
+[18:39:56] lightning512-pf-old:  warm-up tools: ok (0.17s)
+[18:40:56] lightning512-pf-old: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 257.89 tok/s (e2e 255.50; 512 tok, finish=length, d4=0.9668)
+  decode T=0.6: 298.08 tok/s (e2e 294.95; 512 tok, finish=length, d4=0.9464)
+  decode T=0.6: 272.14 tok/s (e2e 268.61; 512 tok, finish=length, d4=0.8654)
+  decode T=0.6: 319.09 tok/s (e2e 312.56; 512 tok, finish=length, d4=0.7603)
+  decode T=0.6: 265.74 tok/s (e2e 264.92; 512 tok, finish=length, d4=0.8665)
+  decode median 272.14 (min 257.89, max 319.09) over 5/5 valid
+  sweep 480000: 512073 tok, TTFT 602.36s, 850 tok/s prefill, decode 111.76 tok/s
+  -> <run-root>/ab4/results/lightning512-pf-old-20261102-183904.json
+[18:51:18] lightning512-pf-old: -> <run-root>/ab4/results/lightning512-pf-old-20261102-183904.json  flags: 1
+=== super-pf-old 18:51:18 powermode=2 Now drawing from 'AC Power' load={ 1.55 1.93 2.28 } top=6.5 Helper;6.1 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;5.1 (Renderer);
