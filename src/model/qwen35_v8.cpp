@@ -700,8 +700,13 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // 32K / 128K / 256K positions against attn8m's 1.71 / 1.68 / 3.99
   static const bool attn_t = env_int("NI_V8_ATTN_T", 1) != 0;
   const bool zt = zone && attn_t && G == 8 && tw_supported() && !kv_i8();
+  // and the 27B's tree verify (6 query heads per KV head; its 16-row wide verify's tiles): attn8t_partial_tree_g6, the
+  // keys, masks and partials of attn8m_partial_tree, P as a half pair (one layer, 16 rows: 1.07 / 2.36 / 4.59 ms after
+  // 32K / 128K / 256K positions against attn8m_partial_tree's 2.07 / 4.33 / 8.59; within 1.5e-6 of it)
+  const bool wt = tree && !zone && !block && attn_t && G == 6 && tw_supported() && !kv_i8();
   if (mma) {
-    e.use(pipe8(zt     ? "attn8t_partial_zone_g8"
+    e.use(pipe8(wt     ? "attn8t_partial_tree_g6"
+                : zt   ? "attn8t_partial_zone_g8"
                 : zone ? "attn8m_partial_zone"
                 : block ? "attn8m_partial_hist"
                 : tree  ? "attn8m_partial_tree"
@@ -711,8 +716,9 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
     e.val(6, Ru);
     if (zone || (tree && !block)) e.buf(7, *v8_tree_);
     // a wide tree verify: the chunks x the live row tiles along x (a chunk's tiles side by side)
-    if (v8w_R_) v8_disp(e, nch, uint32_t(cfg_.hkv), 1, kV8wX, 64 * G);
-    else if (zt) e.dispatch(nch, cfg_.hkv, 1, 64 * ((8 * G + 15) / 16));  // (a pair of simdgroups a 16-row tile)
+    const uint32_t tt = 64 * ((8 * G + 15) / 16);  // attn8t: a pair of simdgroups a 16-row tile
+    if (v8w_R_) v8_disp(e, nch, uint32_t(cfg_.hkv), 1, kV8wX, wt ? tt : 64 * G);
+    else if (zt || wt) e.dispatch(nch, cfg_.hkv, 1, tt);
     else e.dispatch(nch, cfg_.hkv, 1, 64 * G);
     if (block || zone) {
       e.use(pipe8(fused ? "attn8_tree_zone_reduce" : zone ? "attn8_tree_zone" : "attn8_tree_block"));
