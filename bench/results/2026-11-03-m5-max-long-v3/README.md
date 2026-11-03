@@ -28,6 +28,12 @@ These are README's context chart lines for the two models. Dory's moves within i
 differed by up to 20%); #898's interleaved A/B (`2026-11-02-m5-max-dory-verify-rows`) is the measure of that change: a
 verify cycle 9% cheaper at 133K. The 27B's interleaved A/B is `2026-11-02-m5-max-q27-verify-t` (25% at 131K).
 
+Both runs ran under load and are flagged for contention: the Claude desktop app's GPU process held a mean of 66.7% of
+the GPU during Dory's sweep (up to 105.7% at a sample) and 22.6% during the 27B's (up to 71.7%), and the 60 s quiet wait
+timed out before each (60.1 s and 60.2 s, the app at 11-12%). Their points are therefore likely lower than an idle
+Mac's, and the morning runs they are compared with ran under less (sweep means 0.3-16.4% for Dory, 0.2-4.0% for the
+27B), so "morning → now" compares runs under different loads: Dory's small moves are not a measured change.
+
 ## Files
 
 `results/`, `logs/`: the two runs and their server logs. `session/`: the runner's output and script.
