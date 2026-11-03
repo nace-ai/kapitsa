@@ -354,8 +354,8 @@ def functional(tmp, log):
     finally:
         s.stop()
 
-    # 3. statuses
-    s = Server(tmp, log)
+    # 3. statuses (two slots: the keyed case keeps two conversations)
+    s = Server(tmp, log, ("--slots", "2"))
     try:
         conv = conversation()
         a, _ = first_turn(s, conv)
