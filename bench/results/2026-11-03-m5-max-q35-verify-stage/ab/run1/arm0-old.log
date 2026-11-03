@@ -1,0 +1,37 @@
+[kapitsa] compiled kernels in 9 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] prefill: 4224-row chunks (fewer expert-weight reads; the memory plan fits them)
+[kapitsa] read 19.51 GB of weights in 844 ms (23.1 GB/s)
+[kapitsa] read 0.58 GB of weights in 80 ms (7.3 GB/s)
+[kapitsa] MTP head loaded in 72 ms (MoE, trunk hidden pre-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] prewarmed 96 prefill pipelines in 2 ms
+[kapitsa] loaded ~/models/qwen3.6-35b-a3b-4bit: 40 layers, MoE, 19.5 GB mapped in 1138 ms; weights 4-bit group 64 100%, 8-bit group 64 0%
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (194 ms)
+[kapitsa] read 1.05 GB of weights in 80 ms (13.2 GB/s)
+[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 113 MB
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash2 drafter ~/models/qwen3.6-35b-a3b-4bit/dflash2: 6 layers, hidden 2048, 4-bit projections, 0.63 GB resident (process footprint +0.59 GB), loaded in 161 ms
+[kapitsa] DFlash2: prewarmed 126 pipelines in 206 ms
+[kapitsa] DFlash2: 0.625 GB allocated at load (planned 0.624 GB); 0.151 GB more for 1 slots' rings and 0.115 GB at the first prefill
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 22.64 GB allocated (model, buffers, 1 slot's state), budget 110.8 GB (recommended working set 115.4 GB): KV room 88.19 GB = 3914733 tokens (22 KB per token), one conversation up to 262144 of 262144 tokens
+[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.90 GB loaded on the first image
+[kapitsa] drafter: DFlash2 dflash2 (found in the model's folder)
+[kapitsa] engine ready: m, context 262144, 1 slots, KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2), images on
+[kapitsa] listening on http://127.0.0.1:8298
+[kapitsa] SSD prefix cache: <run-root>/ab1/prefix-cache/dc5f6c141061bd27c8c5fc237be58263, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] KFlash: 114 cycles, 7.65 rows per cycle; cycles by rows 4:1 5:4 6:11 7:2 8:96; tokens per cycle expected 3.428, got 3.377; rate 0.1386 tok/ms; cost ms by rows 1:20.29 2:20.85 3:21.88 4:22.26 5:22.83 6:23.47 7:24.29 8:24.73; calibration (alpha, beta) by depth (-0.37, 0.82) (-0.44, 0.66) (-0.79, 0.55) (-0.86, 0.66) (-0.05, 0.67) (0.64, 0.40) (0.20, 0.56) (0.00, 1.00)
+[kapitsa] chat: prompt 132037 (cached 0) in 69555 ms (+18.7 ms template/tokenize; last chunk: encoded by 62321.1 ms, GPU start +3570.2 ms, GPU 3663.7 ms, wake +0.1 ms), 384 tokens in 2650 ms (144.5 tok/s), stop, 3.36 tok/cycle, KFlash (DFlash2): 114 cycles
+[kapitsa] SSD cache: slot 0's conversation (132030 tokens) is replaced before it was saved: the 2820 MB the SSD lacks of it exceed the 1074 MB copied at once, and writing them (about 7050 ms) would take longer than reading its 132030 rows again (about 69551 ms, at most 3 s)
+[kapitsa] KFlash: 275 cycles, 7.72 rows per cycle; cycles by rows 4:2 5:12 6:13 7:7 8:241; tokens per cycle expected 3.350, got 3.276; rate 0.0988 tok/ms; cost ms by rows 1:29.55 2:30.11 3:31.14 4:31.74 5:32.47 6:33.29 7:33.74 8:34.11; calibration (alpha, beta) by depth (-0.44, 0.75) (-0.59, 0.73) (-0.85, 0.63) (-1.21, 0.75) (-1.28, 0.50) (-0.58, 0.42) (0.20, 0.56) (0.00, 1.00)
+[kapitsa] KFlash: budget saved (275 cycles) to ~/.cache/kapitsa/kflash/qwen3.6-35b-a3b-4bit-dflash2-b4-Apple_M5_Max.json
+[kapitsa] chat: prompt 254212 (cached 0) in 243889 ms (+139.1 ms template/tokenize; last chunk: encoded by 228625.9 ms, GPU start +7600.4 ms, GPU 7662.3 ms, wake +0.1 ms), 512 tokens in 5326 ms (96.0 tok/s), length, 3.17 tok/cycle, KFlash (DFlash2): 161 cycles
+[kapitsa] SSD cache: saved slot 0 (254205 tokens, 1 restore point; 497 of 497 KV blocks and 1 state new: 5322 MB) in 1184 ms
+[kapitsa] SSD prefix cache: 1 conversation saved as the server stops (5325 MB in 1184 ms)

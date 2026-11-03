@@ -1,0 +1,14 @@
+attn8t_partial_zone_g8: 16384 B threadgroup memory, max 256 threads; attn8ts_partial_zone_g8: 32768 B, max 256
+pos0  262144 chunk  2080 x 127 | attn8t_partial_zone_g8   1.578 ms (  340 GB/s)  attn8ts_partial_zone_g8   1.400 ms (  383 GB/s)   1.13x | partials differing 0 of 4194048, nonfinite 0
+pos0  131072 chunk  1056 x 125 | attn8t_partial_zone_g8   0.841 ms (  319 GB/s)  attn8ts_partial_zone_g8   0.728 ms (  369 GB/s)   1.15x | partials differing 0 of 4128000, nonfinite 0
+pos0   65536 chunk   544 x 121 | attn8t_partial_zone_g8   0.433 ms (  310 GB/s)  attn8ts_partial_zone_g8   0.361 ms (  372 GB/s)   1.20x | partials differing 0 of 3995904, nonfinite 0
+pos0   32768 chunk   288 x 114 | attn8t_partial_zone_g8   0.465 ms (  144 GB/s)  attn8ts_partial_zone_g8   0.353 ms (  190 GB/s)   1.32x | partials differing 0 of 3764736, nonfinite 0
+pos0   16384 chunk   160 x 103 | attn8t_partial_zone_g8   0.609 ms (   55 GB/s)  attn8ts_partial_zone_g8   0.482 ms (   70 GB/s)   1.26x | partials differing 0 of 3401472, nonfinite 0
+pos0    4096 chunk   128 x  32 | attn8t_partial_zone_g8   0.195 ms (   43 GB/s)  attn8ts_partial_zone_g8   0.139 ms (   60 GB/s)   1.40x | partials differing 0 of 1056768, nonfinite 0
+attn8t_partial_zone_g8: 16384 B threadgroup memory, max 256 threads; attn8tp_partial_zone_g8: 32768 B, max 256
+pos0  262144 chunk  2080 x 127 | attn8t_partial_zone_g8   1.572 ms (  341 GB/s)  attn8tp_partial_zone_g8   1.844 ms (  291 GB/s)   0.85x | partials differing 0 of 4194048, nonfinite 0
+pos0  131072 chunk  1056 x 125 | attn8t_partial_zone_g8   0.836 ms (  321 GB/s)  attn8tp_partial_zone_g8   0.951 ms (  282 GB/s)   0.88x | partials differing 0 of 4128000, nonfinite 0
+pos0   65536 chunk   544 x 121 | attn8t_partial_zone_g8   0.438 ms (  307 GB/s)  attn8tp_partial_zone_g8   0.464 ms (  289 GB/s)   0.94x | partials differing 0 of 3995904, nonfinite 0
+pos0   32768 chunk   288 x 114 | attn8t_partial_zone_g8   0.460 ms (  146 GB/s)  attn8tp_partial_zone_g8   0.496 ms (  135 GB/s)   0.93x | partials differing 0 of 3764736, nonfinite 0
+pos0   16384 chunk   160 x 103 | attn8t_partial_zone_g8   0.150 ms (  224 GB/s)  attn8tp_partial_zone_g8   0.148 ms (  227 GB/s)   1.01x | partials differing 0 of 3401472, nonfinite 0
+pos0    4096 chunk   128 x  32 | attn8t_partial_zone_g8   0.193 ms (   43 GB/s)  attn8tp_partial_zone_g8   0.188 ms (   45 GB/s)   1.03x | partials differing 0 of 1056768, nonfinite 0

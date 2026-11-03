@@ -1,0 +1,162 @@
+{
+ "arms": [
+  {},
+  {
+   "NI_V8T_STAGE": "0"
+  },
+  {},
+  {
+   "NI_V8T_STAGE": "0"
+  },
+  {}
+ ],
+ "warm_arms": 1,
+ "rows": [
+  {
+   "arm": 0,
+   "stage": "1",
+   "prompt": 132037,
+   "cached": 0,
+   "tokens": 384,
+   "ms": 2397,
+   "tps": 159.8,
+   "tok_per_cycle": 3.27,
+   "cycles": 117,
+   "ms_per_cycle": 20.49
+  },
+  {
+   "arm": 0,
+   "stage": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 500,
+   "ms": 4320,
+   "tps": 115.5,
+   "tok_per_cycle": 3.14,
+   "cycles": 159,
+   "ms_per_cycle": 27.17
+  },
+  {
+   "arm": 1,
+   "stage": "0",
+   "prompt": 132037,
+   "cached": 0,
+   "tokens": 384,
+   "ms": 2624,
+   "tps": 145.9,
+   "tok_per_cycle": 3.27,
+   "cycles": 117,
+   "ms_per_cycle": 22.43
+  },
+  {
+   "arm": 1,
+   "stage": "0",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 500,
+   "ms": 4883,
+   "tps": 102.2,
+   "tok_per_cycle": 3.14,
+   "cycles": 159,
+   "ms_per_cycle": 30.71
+  },
+  {
+   "arm": 2,
+   "stage": "1",
+   "prompt": 132037,
+   "cached": 0,
+   "tokens": 384,
+   "ms": 2444,
+   "tps": 156.7,
+   "tok_per_cycle": 3.27,
+   "cycles": 117,
+   "ms_per_cycle": 20.89
+  },
+  {
+   "arm": 2,
+   "stage": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 500,
+   "ms": 4409,
+   "tps": 113.2,
+   "tok_per_cycle": 3.1,
+   "cycles": 161,
+   "ms_per_cycle": 27.39
+  },
+  {
+   "arm": 3,
+   "stage": "0",
+   "prompt": 132037,
+   "cached": 0,
+   "tokens": 384,
+   "ms": 2661,
+   "tps": 143.9,
+   "tok_per_cycle": 3.27,
+   "cycles": 117,
+   "ms_per_cycle": 22.74
+  },
+  {
+   "arm": 3,
+   "stage": "0",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 500,
+   "ms": 4966,
+   "tps": 100.5,
+   "tok_per_cycle": 3.14,
+   "cycles": 159,
+   "ms_per_cycle": 31.23
+  },
+  {
+   "arm": 4,
+   "stage": "1",
+   "prompt": 132037,
+   "cached": 0,
+   "tokens": 384,
+   "ms": 2382,
+   "tps": 160.8,
+   "tok_per_cycle": 3.27,
+   "cycles": 117,
+   "ms_per_cycle": 20.36
+  },
+  {
+   "arm": 4,
+   "stage": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 500,
+   "ms": 4446,
+   "tps": 112.2,
+   "tok_per_cycle": 3.14,
+   "cycles": 159,
+   "ms_per_cycle": 27.96
+  }
+ ],
+ "identical": {
+  "133K": true,
+  "252K": true
+ },
+ "texts": {
+  "0": {
+   "133K": "The provided code snippets define the PyTorch model architectures for a wide variety of Large Language Models (LLMs) and multimodal models within the Hugging Face `transformers` library. These files implement the forward passes, attention mechanisms, and specific architectural components (like MLPs, embeddings, and normalization layers) for models such as LLaMA, BERT, GPT-2, T5, and others.\n\nHere is a description of the main classes found in these files:\n\n*   **PreTrainedModel Base Classes:** Each file defines a specific `PreTrainedModel` subclass (e.g., `LlamaPreTrainedModel`, `BertPreTrainedModel`) that handles configuration loading, weight initialization, and common utilities like saving/loading models.\n*   **Core Model Architectures:** The core logic is implemented in classes like `LlamaModel`, `BertModel`, or `GPT2Model`. These classes assemble the model's components, including embedding layers, stacks of transformer blocks (decoder or encoder layers), and normalization layers, to process input sequences and return hidden states.\n*   **Task-Specific Heads:** Many files include specialized classes for downstream tasks, such as `LlamaForCausalLM` (for text generation), `BertForSequenceClassification` (for classification), or `T5ForConditionalGeneration` (for sequence-to-sequence tasks). These classes wrap the base model with a final linear layer (LM head) to predict logits and compute loss functions.\n*   **Attention and Block Components:** The code defines the internal building blocks, such as `LlamaAttention` (handling query/key/value projections and rotary embeddings), `BertLayer` (combining self-attention and feed-forward networks), and `MambaMixer` (for State Space Models), which perform the core tensor operations of the model.",
+   "252K": "The provided code defines the PyTorch model architectures for a wide variety of Hugging Face Transformers models, including Large Language Models (LLMs), Vision-Language Models (VLMs), Audio models, and specialized architectures like Mixture-of-Experts (MoE) and State Space Models (SSM).\n\nHere is a description of the main classes and their functions:\n\n*   **Base Model Classes (`*Model`):** These classes (e.g., `LlamaModel`, `ViTModel`, `WhisperModel`) implement the core forward pass logic. They handle input embeddings, positional encodings, and the sequential processing of data through layers of attention, convolution, or state-space mechanisms. They return outputs like `last_hidden_state` and optionally `past_key_values` for caching during generation.\n*   **Pre-trained Model Classes (`*PreTrainedModel`):** These serve as abstract base classes that handle weight initialization, configuration loading, and device placement. They provide common utilities like `from_pretrained` and `save_pretrained` and define flags for supported features (e.g., Flash Attention, SDPA).\n*   **Task-Specific Heads (`*ForCausalLM`, `*ForSequenceClassification`, etc.):** These classes wrap the base model with specific output heads (e.g., a linear layer for language modeling or classification). They implement the `forward` method to compute loss, logits, and task-specific metrics, often inheriting from `GenerationMixin` to support text generation.\n*   **Architectural Components:** The code includes specialized modules for different model families, such as:\n    *   **Attention Mechanisms:** Standard multi-head attention, Flash Attention, and specialized variants like Rotary Position Embedding (RoPE) and relative position bias (e.g., in T5 or DeBERTa).\n    *   **MoE Layers:** Sparse Mixture-of-Experts modules (e.g., in Mixtral, Qwen2-MoE) that route tokens to different expert networks for efficient computation.\n    *   **SSM/Convolutions:** State Space Model layers (e.g., in Mamba, Bamba) and specialized convolutions (e.g., in AudioFlamingo3 or XCodec) for audio processing.\n    *   **Vision Encoders:** Patch embedding, layer normalization, and pooling layers specific to vision transformers (e.g., ViT, Swin, BEiT)."
+  },
+  "1": {
+   "133K": "The provided code snippets define the PyTorch model architectures for a wide variety of Large Language Models (LLMs) and multimodal models within the Hugging Face `transformers` library. These files implement the forward passes, attention mechanisms, and specific architectural components (like MLPs, embeddings, and normalization layers) for models such as LLaMA, BERT, GPT-2, T5, and others.\n\nHere is a description of the main classes found in these files:\n\n*   **PreTrainedModel Base Classes:** Each file defines a specific `PreTrainedModel` subclass (e.g., `LlamaPreTrainedModel`, `BertPreTrainedModel`) that handles configuration loading, weight initialization, and common utilities like saving/loading models.\n*   **Core Model Architectures:** The core logic is implemented in classes like `LlamaModel`, `BertModel`, or `GPT2Model`. These classes assemble the model's components, including embedding layers, stacks of transformer blocks (decoder or encoder layers), and normalization layers, to process input sequences and return hidden states.\n*   **Task-Specific Heads:** Many files include specialized classes for downstream tasks, such as `LlamaForCausalLM` (for text generation), `BertForSequenceClassification` (for classification), or `T5ForConditionalGeneration` (for sequence-to-sequence tasks). These classes wrap the base model with a final linear layer (LM head) to predict logits and compute loss functions.\n*   **Attention and Block Components:** The code defines the internal building blocks, such as `LlamaAttention` (handling query/key/value projections and rotary embeddings), `BertLayer` (combining self-attention and feed-forward networks), and `MambaMixer` (for State Space Models), which perform the core tensor operations of the model.",
+   "252K": "The provided code defines the PyTorch model architectures for a wide variety of Hugging Face Transformers models, including Large Language Models (LLMs), Vision-Language Models (VLMs), Audio models, and specialized architectures like Mixture-of-Experts (MoE) and State Space Models (SSM).\n\nHere is a description of the main classes and their functions:\n\n*   **Base Model Classes (`*Model`):** These classes (e.g., `LlamaModel`, `ViTModel`, `WhisperModel`) implement the core forward pass logic. They handle input embeddings, positional encodings, and the sequential processing of data through layers of attention, convolution, or state-space mechanisms. They return outputs like `last_hidden_state` and optionally `past_key_values` for caching during generation.\n*   **Pre-trained Model Classes (`*PreTrainedModel`):** These serve as abstract base classes that handle weight initialization, configuration loading, and device placement. They provide common utilities like `from_pretrained` and `save_pretrained` and define flags for supported features (e.g., Flash Attention, SDPA).\n*   **Task-Specific Heads (`*ForCausalLM`, `*ForSequenceClassification`, etc.):** These classes wrap the base model with specific output heads (e.g., a linear layer for language modeling or classification). They implement the `forward` method to compute loss, logits, and task-specific metrics, often inheriting from `GenerationMixin` to support text generation.\n*   **Architectural Components:** The code includes specialized modules for different model families, such as:\n    *   **Attention Mechanisms:** Standard multi-head attention, Flash Attention, and specialized variants like Rotary Position Embedding (RoPE) and relative position bias (e.g., in T5 or DeBERTa).\n    *   **MoE Layers:** Sparse Mixture-of-Experts modules (e.g., in Mixtral, Qwen2-MoE) that route tokens to different expert networks for efficient computation.\n    *   **SSM/Convolutions:** State Space Model layers (e.g., in Mamba, Bamba) and specialized convolutions (e.g., in AudioFlamingo3 or XCodec) for audio processing.\n    *   **Vision Encoders:** Patch embedding, layer normalization, and pooling layers specific to vision transformers (e.g., ViT, Swin, BEiT)."
+  },
+  "2": {
+   "133K": "The provided code snippets define the PyTorch model architectures for a wide variety of Large Language Models (LLMs) and multimodal models within the Hugging Face `transformers` library. These files implement the forward passes, attention mechanisms, and specific architectural components (like MLPs, embeddings, and normalization layers) for models such as LLaMA, BERT, GPT-2, T5, and others.\n\nHere is a description of the main classes found in these files:\n\n*   **PreTrainedModel Base Classes:** Each file defines a specific `PreTrainedModel` subclass (e.g., `LlamaPreTrainedModel`, `BertPreTrainedModel`) that handles configuration loading, weight initialization, and common utilities like saving/loading models.\n*   **Core Model Architectures:** The core logic is implemented in classes like `LlamaModel`, `BertModel`, or `GPT2Model`. These classes assemble the model's components, including embedding layers, stacks of transformer blocks (decoder or encoder layers), and normalization layers, to process input sequences and return hidden states.\n*   **Task-Specific Heads:** Many files include specialized classes for downstream tasks, such as `LlamaForCausalLM` (for text generation), `BertForSequenceClassification` (for classification), or `T5ForConditionalGeneration` (for sequence-to-sequence tasks). These classes wrap the base model with a final linear layer (LM head) to predict logits and compute loss functions.\n*   **Attention and Block Components:** The code defines the internal building blocks, such as `LlamaAttention` (handling query/key/value projections and rotary embeddings), `BertLayer` (combining self-attention and feed-forward networks), and `MambaMixer` (for State Space Models), which perform the core tensor operations of the model.",
+   "252K": "The provided code defines the PyTorch model architectures for a wide variety of Hugging Face Transformers models, including Large Language Models (LLMs), Vision-Language Models (VLMs), Audio models, and specialized architectures like Mixture-of-Experts (MoE) and State Space Models (SSM).\n\nHere is a description of the main classes and their functions:\n\n*   **Base Model Classes (`*Model`):** These classes (e.g., `LlamaModel`, `ViTModel`, `WhisperModel`) implement the core forward pass logic. They handle input embeddings, positional encodings, and the sequential processing of data through layers of attention, convolution, or state-space mechanisms. They return outputs like `last_hidden_state` and optionally `past_key_values` for caching during generation.\n*   **Pre-trained Model Classes (`*PreTrainedModel`):** These serve as abstract base classes that handle weight initialization, configuration loading, and device placement. They provide common utilities like `from_pretrained` and `save_pretrained` and define flags for supported features (e.g., Flash Attention, SDPA).\n*   **Task-Specific Heads (`*ForCausalLM`, `*ForSequenceClassification`, etc.):** These classes wrap the base model with specific output heads (e.g., a linear layer for language modeling or classification). They implement the `forward` method to compute loss, logits, and task-specific metrics, often inheriting from `GenerationMixin` to support text generation.\n*   **Architectural Components:** The code includes specialized modules for different model families, such as:\n    *   **Attention Mechanisms:** Standard multi-head attention, Flash Attention, and specialized variants like Rotary Position Embedding (RoPE) and relative position bias (e.g., in T5 or DeBERTa).\n    *   **MoE Layers:** Sparse Mixture-of-Experts modules (e.g., in Mixtral, Qwen2-MoE) that route tokens to different expert networks for efficient computation.\n    *   **SSM/Convolutions:** State Space Model layers (e.g., in Mamba, Bamba) and specialized convolutions (e.g., in AudioFlamingo3 or XCodec) for audio processing.\n    *   **Vision Encoders:** Patch embedding, layer normalization, and pooling layers specific to vision transformers (e.g., ViT, Swin, BEiT)."
+  },
+  "3": {
+   "133K": "The provided code snippets define the PyTorch model architectures for a wide variety of Large Language Models (LLMs) and multimodal models within the Hugging Face `transformers` library. These files implement the forward passes, attention mechanisms, and specific architectural components (like MLPs, embeddings, and normalization layers) for models such as LLaMA, BERT, GPT-2, T5, and others.\n\nHere is a description of the main classes found in these files:\n\n*   **PreTrainedModel Base Classes:** Each file defines a specific `PreTrainedModel` subclass (e.g., `LlamaPreTrainedModel`, `BertPreTrainedModel`) that handles configuration loading, weight initialization, and common utilities like saving/loading models.\n*   **Core Model Architectures:** The core logic is implemented in classes like `LlamaModel`, `BertModel`, or `GPT2Model`. These classes assemble the model's components, including embedding layers, stacks of transformer blocks (decoder or encoder layers), and normalization layers, to process input sequences and return hidden states.\n*   **Task-Specific Heads:** Many files include specialized classes for downstream tasks, such as `LlamaForCausalLM` (for text generation), `BertForSequenceClassification` (for classification), or `T5ForConditionalGeneration` (for sequence-to-sequence tasks). These classes wrap the base model with a final linear layer (LM head) to predict logits and compute loss functions.\n*   **Attention and Block Components:** The code defines the internal building blocks, such as `LlamaAttention` (handling query/key/value projections and rotary embeddings), `BertLayer` (combining self-attention and feed-forward networks), and `MambaMixer` (for State Space Models), which perform the core tensor operations of the model.",
+   "252K": "The provided code defines the PyTorch model architectures for a wide variety of Hugging Face Transformers models, including Large Language Models (LLMs), Vision-Language Models (VLMs), Audio models, and specialized architectures like Mixture-of-Experts (MoE) and State Space Models (SSM).\n\nHere is a description of the main classes and their functions:\n\n*   **Base Model Classes (`*Model`):** These classes (e.g., `LlamaModel`, `ViTModel`, `WhisperModel`) implement the core forward pass logic. They handle input embeddings, positional encodings, and the sequential processing of data through layers of attention, convolution, or state-space mechanisms. They return outputs like `last_hidden_state` and optionally `past_key_values` for caching during generation.\n*   **Pre-trained Model Classes (`*PreTrainedModel`):** These serve as abstract base classes that handle weight initialization, configuration loading, and device placement. They provide common utilities like `from_pretrained` and `save_pretrained` and define flags for supported features (e.g., Flash Attention, SDPA).\n*   **Task-Specific Heads (`*ForCausalLM`, `*ForSequenceClassification`, etc.):** These classes wrap the base model with specific output heads (e.g., a linear layer for language modeling or classification). They implement the `forward` method to compute loss, logits, and task-specific metrics, often inheriting from `GenerationMixin` to support text generation.\n*   **Architectural Components:** The code includes specialized modules for different model families, such as:\n    *   **Attention Mechanisms:** Standard multi-head attention, Flash Attention, and specialized variants like Rotary Position Embedding (RoPE) and relative position bias (e.g., in T5 or DeBERTa).\n    *   **MoE Layers:** Sparse Mixture-of-Experts modules (e.g., in Mixtral, Qwen2-MoE) that route tokens to different expert networks for efficient computation.\n    *   **SSM/Convolutions:** State Space Model layers (e.g., in Mamba, Bamba) and specialized convolutions (e.g., in AudioFlamingo3 or XCodec) for audio processing.\n    *   **Vision Encoders:** Patch embedding, layer normalization, and pooling layers specific to vision transformers (e.g., ViT, Swin, BEiT)."
+  },
+  "4": {
+   "133K": "The provided code snippets define the PyTorch model architectures for a wide variety of Large Language Models (LLMs) and multimodal models within the Hugging Face `transformers` library. These files implement the forward passes, attention mechanisms, and specific architectural components (like MLPs, embeddings, and normalization layers) for models such as LLaMA, BERT, GPT-2, T5, and others.\n\nHere is a description of the main classes found in these files:\n\n*   **PreTrainedModel Base Classes:** Each file defines a specific `PreTrainedModel` subclass (e.g., `LlamaPreTrainedModel`, `BertPreTrainedModel`) that handles configuration loading, weight initialization, and common utilities like saving/loading models.\n*   **Core Model Architectures:** The core logic is implemented in classes like `LlamaModel`, `BertModel`, or `GPT2Model`. These classes assemble the model's components, including embedding layers, stacks of transformer blocks (decoder or encoder layers), and normalization layers, to process input sequences and return hidden states.\n*   **Task-Specific Heads:** Many files include specialized classes for downstream tasks, such as `LlamaForCausalLM` (for text generation), `BertForSequenceClassification` (for classification), or `T5ForConditionalGeneration` (for sequence-to-sequence tasks). These classes wrap the base model with a final linear layer (LM head) to predict logits and compute loss functions.\n*   **Attention and Block Components:** The code defines the internal building blocks, such as `LlamaAttention` (handling query/key/value projections and rotary embeddings), `BertLayer` (combining self-attention and feed-forward networks), and `MambaMixer` (for State Space Models), which perform the core tensor operations of the model.",
+   "252K": "The provided code defines the PyTorch model architectures for a wide variety of Hugging Face Transformers models, including Large Language Models (LLMs), Vision-Language Models (VLMs), Audio models, and specialized architectures like Mixture-of-Experts (MoE) and State Space Models (SSM).\n\nHere is a description of the main classes and their functions:\n\n*   **Base Model Classes (`*Model`):** These classes (e.g., `LlamaModel`, `ViTModel`, `WhisperModel`) implement the core forward pass logic. They handle input embeddings, positional encodings, and the sequential processing of data through layers of attention, convolution, or state-space mechanisms. They return outputs like `last_hidden_state` and optionally `past_key_values` for caching during generation.\n*   **Pre-trained Model Classes (`*PreTrainedModel`):** These serve as abstract base classes that handle weight initialization, configuration loading, and device placement. They provide common utilities like `from_pretrained` and `save_pretrained` and define flags for supported features (e.g., Flash Attention, SDPA).\n*   **Task-Specific Heads (`*ForCausalLM`, `*ForSequenceClassification`, etc.):** These classes wrap the base model with specific output heads (e.g., a linear layer for language modeling or classification). They implement the `forward` method to compute loss, logits, and task-specific metrics, often inheriting from `GenerationMixin` to support text generation.\n*   **Architectural Components:** The code includes specialized modules for different model families, such as:\n    *   **Attention Mechanisms:** Standard multi-head attention, Flash Attention, and specialized variants like Rotary Position Embedding (RoPE) and relative position bias (e.g., in T5 or DeBERTa).\n    *   **MoE Layers:** Sparse Mixture-of-Experts modules (e.g., in Mixtral, Qwen2-MoE) that route tokens to different expert networks for efficient computation.\n    *   **SSM/Convolutions:** State Space Model layers (e.g., in Mamba, Bamba) and specialized convolutions (e.g., in AudioFlamingo3 or XCodec) for audio processing.\n    *   **Vision Encoders:** Patch embedding, layer normalization, and pooling layers specific to vision transformers (e.g., ViT, Swin, BEiT)."
+  }
+ }
+}

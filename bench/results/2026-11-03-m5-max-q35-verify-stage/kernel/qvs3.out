@@ -1,0 +1,6 @@
+attn8ts_partial_zone_g8: 32768 B threadgroup memory, max 256 threads; attn8tk_partial_zone_g8: 16384 B, max 256
+pos0  262144 chunk  2080 x 127 | attn8ts_partial_zone_g8   1.403 ms (  383 GB/s)  attn8tk_partial_zone_g8   1.701 ms (  316 GB/s)   0.83x | partials differing 0 of 4194048, nonfinite 0
+pos0  131072 chunk  1056 x 125 | attn8ts_partial_zone_g8   0.732 ms (  366 GB/s)  attn8tk_partial_zone_g8   0.897 ms (  299 GB/s)   0.82x | partials differing 0 of 4128000, nonfinite 0
+pos0   65536 chunk   544 x 121 | attn8ts_partial_zone_g8   0.364 ms (  369 GB/s)  attn8tk_partial_zone_g8   0.438 ms (  306 GB/s)   0.83x | partials differing 0 of 3995904, nonfinite 0
+pos0   32768 chunk   288 x 114 | attn8ts_partial_zone_g8   0.322 ms (  208 GB/s)  attn8tk_partial_zone_g8   0.387 ms (  173 GB/s)   0.83x | partials differing 0 of 3764736, nonfinite 0
+pos0    4096 chunk   128 x  32 | attn8ts_partial_zone_g8   0.139 ms (   60 GB/s)  attn8tk_partial_zone_g8   0.163 ms (   51 GB/s)   0.85x | partials differing 0 of 1056768, nonfinite 0
