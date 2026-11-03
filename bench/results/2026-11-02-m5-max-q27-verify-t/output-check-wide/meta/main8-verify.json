@@ -1,0 +1,21 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.26 (32cf851)",
+  "model": "qwen3.8-27b-4bit-mtp",
+  "model_dir": "~/models/qwen3.8-27b-4bit-mtp",
+  "path": "verify",
+  "verify": "KFlash tree (a chain of 8 live rows)",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 10,
+    "evals": 1152,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "bench/corpus.txt",
+  "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+  "macos": "26.4",
+  "date": "2026-11-03T12:08:00Z",
+  "env": {}
+}

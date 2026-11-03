@@ -1,0 +1,9 @@
+prefill: 8 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.26 (32cf851), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  candidate: 0.2.26 (32cf851), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  every row bitwise identical
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.26 (32cf851), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  candidate: 0.2.26 (32cf851), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  every row bitwise identical
+  PASS (tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))

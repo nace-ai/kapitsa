@@ -24,7 +24,8 @@ Tok/s, the middle of a 512-token answer; each value one cold request:
 
 Prefill is the same (the change is the verify's). One layer of the 35B's heads, the kernel alone (8 rows, the engine's
 zone chunks, best of 5): 0.48 / 0.86 / 1.61 ms after 32K / 128K / 256K positions against `attn8m_partial_zone`'s 1.71 /
-1.68 / 3.99.
+1.68 / 3.99. No log of that measurement was kept, so it cannot be reproduced from this folder; the table above, from the
+committed results and server logs, is the recorded evidence.
 
 ## Output check
 
@@ -35,10 +36,13 @@ every row bitwise identical; verify: 0 of 192 rows bitwise, top-1 1.0000, 0 flip
 
 ## Contention
 
-The Claude desktop app's GPU process, driving the session, held up to ~10% of the GPU (the harness's worst-phase mean)
-while the agent worked, and the 60 s quiet wait timed out before most runs; both arms ran under it, interleaved. The
-prefill of the companion change's output check (another checkout's `logit_dump`) took the GPU lock between some runs,
-never during one.
+Every run is flagged for contention in its JSON (`contention`). The Claude desktop app's GPU process, driving the
+session, held a mean of 37.6-57.9% of the GPU during the sweep on six of the eight runs (up to 81.5% at a sample) and
+7.4% on the last Clover pair, and the 60 s quiet wait timed out before every run. Both arms ran under it, interleaved, and
+in every pair the new arm's load was the same as the old arm's or higher. The least contended pair (7.4% on both arms)
+shows Clover's largest gain, 1.57x at 123K. (An earlier version of this section said "up to ~10% of the GPU (the
+harness's worst-phase mean)", which the JSONs contradict.) The prefill of the companion change's output check (another
+checkout's `logit_dump`) took the GPU lock between some runs, never during one.
 
 ## Files
 

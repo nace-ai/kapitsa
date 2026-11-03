@@ -1,0 +1,13 @@
+prefill 8 rows: next-token NLL 1.0323, top-1 = next token 0.7500 -> <dumps>/ref16/prefill
+verify 256 rows: next-token NLL 0.5001, top-1 = next token 0.8555 -> <dumps>/ref16/verify
+8 windows, 14848 prefilled tokens in 15.5 s; 16.4 s in all
+prefill 8 rows: next-token NLL 1.0323, top-1 = next token 0.7500 -> <dumps>/new16/prefill
+verify 256 rows: next-token NLL 0.5000, top-1 = next token 0.8555 -> <dumps>/new16/verify
+8 windows, 14848 prefilled tokens in 18.1 s; 19.0 s in all
+prefill 8 rows: next-token NLL 1.0323, top-1 = next token 0.7500 -> <dumps>/ref32/prefill
+verify 256 rows: next-token NLL 0.5001, top-1 = next token 0.8555 -> <dumps>/ref32/verify
+8 windows, 14848 prefilled tokens in 18.8 s; 19.6 s in all
+prefill 8 rows: next-token NLL 1.0323, top-1 = next token 0.7500 -> <dumps>/new32/prefill
+verify 256 rows: next-token NLL 0.5001, top-1 = next token 0.8555 -> <dumps>/new32/verify
+8 windows, 14848 prefilled tokens in 18.5 s; 19.3 s in all
+=== done
