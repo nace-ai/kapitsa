@@ -1,0 +1,51 @@
+[
+ {
+  "label": "q27-v8t-old",
+  "extends": "q38-27b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_V8_ATTN_T": "0"
+  },
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the 27B's wide tree verify attention on the matrix units: old (NI_V8_ATTN_T=0, attn8m_partial_tree), 32K / 128K, one request each"
+ },
+ {
+  "label": "q27-v8t-new",
+  "extends": "q38-27b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the 27B's wide tree verify attention on the matrix units: new (attn8t_partial_tree_g6), 32K / 128K, one request each"
+ }
+]
