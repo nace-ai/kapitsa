@@ -328,6 +328,9 @@ class NemotronH : public Model {
   Buffer moecnt_;                 // NVFP4 experts: arrival counters per (row, 32-row block) of nh_x4_moe_dn_sum
   int attn_max_chunks_ = 64;
   uint32_t attn_chunk_ = 256;  // keys per attention chunk (NI_NH_ATTN_CHUNK; M5: 64)
+  // M5 (tg_), 16 query heads per KV head of 128 dims: a verify's attention (2+ rows) on the matrix units
+  // (nh_attn_t_part, a row's 16 heads per simdgroup and chunk); NI_NH_ATTN_TV=0: nh_attn_partial
+  bool attn_tv_ = true;
   const NhCapture* cap_ = nullptr;
   // prefill activations (tmax_ rows; allocated on first use)
   int pf_rows_ = 0;
