@@ -131,6 +131,8 @@ int self_test() {
       {"MTP speculative decoding depth 2", "MTP"},
       {"plain decoding", "plain"},
       {"plain decoding, 2 loops by default (requests take 1-4), last-loop KV", "plain"},
+      {"plain decoding, self-speculative from 180000-token prompts (2 drafts per cycle, their full attention over the "
+       "last 4096 positions)", "plain"},
       {"", "unknown"},
       {"a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)", "unknown"}};
   for (const auto& [line, want] : lines) check(decoding_of(line) == want, std::string("the decoding of '") + line + "'", decoding_of(line));

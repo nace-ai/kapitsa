@@ -1,0 +1,103 @@
+{
+  "paths": {
+    "step": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.9791666666666666,
+      "flips": 4,
+      "kl_mean": 0.007015904738022174,
+      "kl_median": 2.8223305558001213e-06,
+      "kl_p99": 0.09600099721130531,
+      "kl_max": 0.7003346259550158,
+      "margin_change_max": 3.438969075679779,
+      "tie_margin": 0.8740930557250977,
+      "nll_change_mean": 0.017669210741900254,
+      "max_abs_diff": 8.43275260925293,
+      "flip_list": [
+        {
+          "record": "sequence 6 prefix 902",
+          "ref_top": 54449,
+          "cand_top": 63,
+          "margin": 0.29539966583251953
+        },
+        {
+          "record": "sequence 7 prefix 514",
+          "ref_top": 7045,
+          "cand_top": 8872,
+          "margin": 0.1158149242401123
+        },
+        {
+          "record": "sequence 4 prefix 1685",
+          "ref_top": 327,
+          "cand_top": 858,
+          "margin": 0.05317115783691406
+        },
+        {
+          "record": "sequence 2 prefix 2449",
+          "ref_top": 30776,
+          "cand_top": 2242,
+          "margin": 0.012728512287139893
+        }
+      ],
+      "near_tie": 6.55,
+      "near_tie_flips": 4,
+      "failures": [
+        "top-1 agreement 0.9792 < 0.9844"
+      ],
+      "gate": {
+        "min_top1": 0.984375,
+        "max_mean_kl": 0.0218,
+        "max_p99_kl": 0.192,
+        "near_tie": 6.55,
+        "max_far_flips": 0,
+        "source": "tools/logit_floors/flint-4bit.m5.json"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (cd20cf5)",
+        "model": "flint-4bit",
+        "model_dir": "~/models/flint-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 150144,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T20:32:05Z",
+        "env": {
+          "NI_FLINT_VERIFY_ROWS": "3"
+        }
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (cd20cf5)",
+        "model": "flint-4bit",
+        "model_dir": "~/models/flint-4bit",
+        "path": "verify",
+        "verify": "8 rows",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 150144,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T20:32:05Z",
+        "env": {
+          "NI_FLINT_VERIFY_ROWS": "3"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,270 @@
+{
+ "arms": [
+  [
+   "off",
+   {
+    "NI_FLINT_SELF": "0"
+   }
+  ],
+  [
+   "default",
+   {}
+  ],
+  [
+   "off",
+   {
+    "NI_FLINT_SELF": "0"
+   }
+  ],
+  [
+   "default",
+   {}
+  ]
+ ],
+ "rows": [
+  {
+   "arm": 0,
+   "tag": "off",
+   "req": "186K-t0",
+   "prompt": 187317,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 7272,
+   "tps": 70.3,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 0,
+   "tag": "off",
+   "req": "186K-t1",
+   "prompt": 187317,
+   "cached": 187316,
+   "tokens": 512,
+   "ms": 7414,
+   "tps": 68.9,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 0,
+   "tag": "off",
+   "req": "252K-t0",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 8424,
+   "tps": 60.7,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 0,
+   "tag": "off",
+   "req": "252K-t1",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 8512,
+   "tps": 60.0,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 1,
+   "tag": "default",
+   "req": "186K-t0",
+   "prompt": 187317,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 6595,
+   "tps": 77.5,
+   "tok_per_cycle": 2.3,
+   "finish": "length"
+  },
+  {
+   "arm": 1,
+   "tag": "default",
+   "req": "186K-t1",
+   "prompt": 187317,
+   "cached": 187316,
+   "tokens": 512,
+   "ms": 6871,
+   "tps": 74.4,
+   "tok_per_cycle": 2.28,
+   "finish": "length"
+  },
+  {
+   "arm": 1,
+   "tag": "default",
+   "req": "252K-t0",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 6633,
+   "tps": 77.0,
+   "tok_per_cycle": 2.43,
+   "finish": "length"
+  },
+  {
+   "arm": 1,
+   "tag": "default",
+   "req": "252K-t1",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 7910,
+   "tps": 64.6,
+   "tok_per_cycle": 2.07,
+   "finish": "length"
+  },
+  {
+   "arm": 2,
+   "tag": "off",
+   "req": "186K-t0",
+   "prompt": 187317,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 7354,
+   "tps": 69.5,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 2,
+   "tag": "off",
+   "req": "186K-t1",
+   "prompt": 187317,
+   "cached": 187316,
+   "tokens": 512,
+   "ms": 7454,
+   "tps": 68.6,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 2,
+   "tag": "off",
+   "req": "252K-t0",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 8579,
+   "tps": 59.6,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 2,
+   "tag": "off",
+   "req": "252K-t1",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 8637,
+   "tps": 59.2,
+   "tok_per_cycle": null,
+   "finish": "length"
+  },
+  {
+   "arm": 3,
+   "tag": "default",
+   "req": "186K-t0",
+   "prompt": 187317,
+   "cached": 0,
+   "tokens": 512,
+   "ms": 6695,
+   "tps": 76.3,
+   "tok_per_cycle": 2.3,
+   "finish": "length"
+  },
+  {
+   "arm": 3,
+   "tag": "default",
+   "req": "186K-t1",
+   "prompt": 187317,
+   "cached": 187316,
+   "tokens": 512,
+   "ms": 6898,
+   "tps": 74.1,
+   "tok_per_cycle": 2.28,
+   "finish": "length"
+  },
+  {
+   "arm": 3,
+   "tag": "default",
+   "req": "252K-t0",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 6675,
+   "tps": 76.6,
+   "tok_per_cycle": 2.43,
+   "finish": "length"
+  },
+  {
+   "arm": 3,
+   "tag": "default",
+   "req": "252K-t1",
+   "prompt": 235892,
+   "cached": 235891,
+   "tokens": 512,
+   "ms": 7896,
+   "tps": 64.7,
+   "tok_per_cycle": 2.07,
+   "finish": "length"
+  }
+ ],
+ "identical": {
+  "186K-t0": [
+   true,
+   false,
+   true,
+   false
+  ],
+  "186K-t1": [
+   true,
+   false,
+   true,
+   false
+  ],
+  "252K-t0": [
+   true,
+   false,
+   true,
+   false
+  ],
+  "252K-t1": [
+   true,
+   false,
+   true,
+   false
+  ]
+ },
+ "texts": {
+  "0": {
+   "186K-t0": "We need answer user: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe have a huge context with many files, likely they pasted a bunch of modeling_*.py files from transformers. The user asks: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need summarize. The code above includes many files, each containing model implementations. The question likely expects a high-level description: it's a collection of PyTorch model implementations for various transformer-based models in HuggingFace Transformers, including encoder/decoder, causal LM, etc. Main classes: PreTrainedModel subclasses, model outputs, attention layers, etc.\n\nWe should answer concisely: The code is a set of model definitions for various AI language/vision/audio models (e.g., Granite Speech, ModernVBERT, AltCLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, BLOOM, CLIP, DeBERTa, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2-MoE, Qwen3, RoBERTa, Swin, ViT, AFMoE, AudioFlamingo3, Autoformer, Arcee, Aria, AudioFlamingo3, etc.). They define model outputs, encoder/decoder layers, attention modules, MLPs, pre-trained model base classes, and task-specific heads (causal LM, masked LM, sequence classification, token classification, etc.). The code is likely from the HuggingFace Transformers library, modular model files.\n\nWe should not list all, but mention main classes: PreTrainedModel, model outputs (BaseModelOutput, CausalLMOutput, etc.), attention layers (e.g., LlamaAttention, GPT2Attention, BertSelfAttention, etc.), encoder/decoder layers, embeddings, poolers, heads.\n\nThe user asks \"What does the code above do? Describe its main classes in a few sentences.\" So answer: It implements various transformer-based neural network models for NLP, vision, and multimodal tasks. Each file defines a specific model's architecture, including input/output classes, attention, encoder/decoder, and task heads.\n\nWe should be careful: The code above is truncated, but we can summarize.\n\nLet's craft final answer: The provided code is a collection of model implementations from HuggingFace Transformers for many different model families. It\n</think>\n",
+   "186K-t1": "We need to answer: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nThe user provided a long list of code files, presumably from the HuggingFace transformers repository, each containing model implementations. The question is broad: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need to interpret the context. The user pasted multiple files, each is a model implementation for different architectures (e.g., Granite Speech, ModernVBERT, ALT-CLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, Bloom, CLIP, DeBERTaV2, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT-2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2-MoE, Qwen3, RoBERTa, Swin, ViT, AFMoe, AIRV2, ALBERT, ALIGN, Apertus, Arcee, Aria, AudioFlamingo3, Autoformer, etc.). These are all from the HuggingFace Transformers library, which is a popular open-source library for natural language processing and multimodal models.\n\nThe question likely expects a summary of what these files collectively do: they implement various transformer-based models for NLP and vision/audio tasks. The main classes in each file are model components like embeddings, attention layers, encoders, decoders, outputs, and model classes for tasks like causal LM, masked LM, sequence classification, etc.\n\nGiven the instruction: \"Describe its main classes in a few sentences.\" We should provide a concise description of the overall purpose of these code files and the primary classes they define.\n\nWe should not get too deep into each file but rather give a high-level answer.\n\nWe can say: The code provides implementations of various transformer-based models in the HuggingFace Transformers library, including encoder-only, decoder-only, and encoder-decoder architectures for language, speech, vision, and multimodal tasks. Each file defines model components such as embeddings, attention layers, feed-forward networks, encoders/decoders, and output classes, as well as task-specific heads (e.g., causal LM, masked LM, sequence classification). The implementations cover models like BERT, GPT-2, T5, Llama, Vision Transformer, etc.\n\nWe need to answer in a few sentences, not too long.\n\nLet's craft a response.\n\nPotential answer:\n\"The code files collectively implement a wide range of neural network models\n</think>\n",
+   "252K-t0": "Let me analyze the code files provided to understand what they do.\n\nThe user has provided multiple files from what appears to be the Hugging Face Transformers library, specifically focusing on model implementations. These files are likely part of the `modeling_*` modules that define different neural network architectures for various AI models.\n\nLet me identify the main components across these files:\n\n1. **Granite Speech Model** (`modeling_granite_speech.py`):\n   - Contains a speech model that combines audio processing and language modeling\n   - Has an encoder (Conformer-based), projector, and language model\n   - The Conformer is adapted from a Lucidrains implementation\n\n2. **ModernVBERT** (`modeling_modernvbert.py`):\n   - A multimodal model combining vision (SigLIP) and text (ModernBert) encoders\n   - Has a connector for modality projection\n   - Handles image-text integration\n\n3. **AltCLIP** (`modeling_altclip.py`):\n   - Contrastive language-image model\n   - Has text and vision encoders with contrastive loss\n\n4. **Xcodec** (`modeling_xcodec.py`):\n   - Audio codec model for encoding/decoding audio\n   - Has semantic encoder/decoder and vector quantization\n\n5. **T5** (`modeling_t5.py`):\n   - Text-to-text transformer model\n   - Encoder-decoder architecture with various layer types\n\n6. **CTRL** (`modeling_ctrl.py`):\n   - Conversational model with control codes\n   - Causal language model with custom positional encoding\n\n7. **Emu3** (`modeling_emu3.py`):\n   - Multimodal model with visual and language components\n   - VQ-VAE for visual tokens\n\n8. **VideoPrism** (`modeling_videoprism.py`):\n   - Video-text model\n   - Combines video and text understanding\n\n9. **BART** (`modeling_bart.py`):\n   - Sequence-to-sequence denoising model\n   - Encoder-decoder with denoising objective\n\n10. **BERT** (`modeling_bert.py`):\n    - Bidirectional transformer for NLP\n    - Encoder-only architecture\n\n11. **Bloom** (`modeling_bloom.py`):\n    - Transformer with attention and MLP\n    - Uses ALiBi for positional encoding\n\n12. **CLIP** (`modeling_clip.py`):\n    - Contrastive language-image model\n    - Vision and text encoders with projection layers\n\n13\n</think>\n",
+   "252K-t1": "We are given a large file dump that contains multiple model files from HuggingFace Transformers (like `modeling_granite_speech.py`, `modeling_modernvbert.py`, etc.) and asked: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nThe instruction says: \"The user wants a description of the code above. The code is a collection of model files from HuggingFace Transformers. They likely want an overview of what these files are and what they contain, maybe focusing on the main classes in the last file or summarizing the pattern.\"\n\nThe user might have provided the code in the conversation, and we need to respond with a concise answer. Since the code is huge and includes many model implementations, we should give a high-level summary.\n\nWe need to describe the main classes in a few sentences. Possibly we should mention that these are model definition files for various transformer-based architectures (e.g., Granite Speech, ModernVBERT, AltCLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, Bloom, CLIP, DeBERTa v2, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2MoE, Qwen3, RoBERTa, Swin, ViT, AFMoe, Arcee, Aria, AudioFlamingo3, Autoformer, AXK1, AXK2, Bamba, Bark, BeIT, BERT generation, BigBird, BigBirdPegasus, BioGpt, Bit).\n\nWe can say: These are PyTorch model implementations for various transformer-based architectures in the HuggingFace Transformers library. They define the core neural network components (e.g., embeddings, attention layers, feed-forward networks, decoders, encoders, heads) and output classes for each model. The code includes custom attention mechanisms, positional embeddings, and support for tasks like language modeling, image-text alignment, audio processing, etc. The main classes typically include the base model, encoder, decoder, and task-specific heads (e.g., for causal LM, masked LM, sequence classification, etc.).\n\nWe should answer in a few sentences, not a long essay.\n\nGiven the instruction: \"What does the code above do? Describe its main classes in a few sentences.\" We'll provide a concise summary.\n\nWe might also note that the last file (`modeling_bit.py`)\n</think>\n"
+  },
+  "1": {
+   "186K-t0": "We need answer user: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe have a huge context with many files, likely they pasted a bunch of modeling_*.py files from transformers. The user asks: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need summarize. The code above includes many files, each containing model implementations. The question likely expects a high-level description: it's a collection of PyTorch model implementations for various transformer-based models in HuggingFace Transformers, including encoder/decoder, causal LM, etc. Main classes: PreTrainedModel subclasses, model outputs, attention layers, etc.\n\nWe should answer concisely: The code is a set of model definitions for various AI language/vision/audio models (e.g., Granite Speech, ModernVBERT, AltCLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, BLOOM, CLIP, DeBERTa, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2-MoE, Qwen3, RoBERTa, Swin, ViT, AFMoE, AudioFlamingo3, Autoformer, Arcee, Aria, ALBERT, ALIGN, etc.). They define model outputs, attention modules, encoder/decoder layers, and pre-trained model classes for causal language modeling, masked language modeling, sequence classification, token classification, etc.\n\nWe should not list all, but mention main classes: PreTrainedModel, model outputs (e.g., CausalLMOutputWithPast, MaskedLMOutput, SequenceClassifierOutput), attention layers (e.g., LlamaAttention, GPT2Attention, BertSelfAttention), encoder/decoder layers, and specific model classes (e.g., LlamaForCausalLM, GPT2Model, BertModel, etc.). The code is part of HuggingFace Transformers library, likely generated from modular files.\n\nThe user might be asking about the entire pasted content. We can say: \"The code above is a collection of model implementations from the HuggingFace Transformers library, covering many pretrained models. Each file defines PyTorch modules for the transformer architecture, including attention, encoder/decoder layers, output classes, and concrete model classes (e.g., LlamaForCausalLM, GPT2ForSequenceClassification, etc.). The main classes across files include Pre\n</think>\n",
+   "186K-t1": "We need to answer: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nThe user provided a long list of code files, presumably from the HuggingFace transformers repository, each containing model implementations. The question is broad: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need to interpret the context. The user pasted multiple files, each likely containing model classes for different transformer architectures. The instruction is to describe what the code above does, focusing on main classes.\n\nWe should summarize the overall purpose: These are implementations of various transformer-based models in PyTorch for NLP and vision, etc. The code includes model classes like GraniteSpeechModel, ModernVBertModel, AltCLIPModel, XcodecModel, T5Model, CTRLModel, Emu3Model, VideoPrismModel, BARTModel, BERTModel, BloomModel, CLIPModel, DeBERTaV2Model, DETRModel, ELECTRAModel, FalconModel, GemmaModel, Gemma2Model, GPT2Model, LEDModel, LlamaModel, LongformerModel, MambaModel, MBARTModel, MixtralModel, OPTModel, PegasusModel, Phi3Model, Qwen2MoeModel, Qwen3Model, RoBERTaModel, SwinModel, ViTModel, AFMoEModel, Aimv2Model, ALBERTModel, ALIGNModel, ApertusModel, ArceeModel, AriaModel, AudioFlamingo3Model, AutoformerModel. These are all model definitions for various transformer architectures used in natural language processing, vision-language, audio, time-series, etc.\n\nThe answer should be concise: \"The code defines various transformer model classes for HuggingFace Transformers, including implementations for language models (GPT-2, BERT, T5, etc.), multimodal models (CLIP, ALIGN, AudioFlamingo3, etc.), audio models (Whisper, AudioFlamingo3, etc.), and time-series models (Autoformer). Each model class typically includes encoder/decoder stacks, attention layers, feed-forward networks, output heads, and pretraining objectives. The code follows the standard HuggingFace modeling structure with PreTrainedModel subclasses and output dataclasses.\"\n\nWe need to mention main classes in a few sentences. The user asked: \"What does the code above do? Describe its main classes in a few sentences.\" So we should describe the purpose and perhaps list categories.\n\nGiven the length, we should not list all but summarize.\n</think>\n",
+   "252K-t0": "Let me analyze the code files provided to understand what they do.\n\nThe user has provided multiple files from what appears to be the Hugging Face Transformers library, specifically focusing on model implementations. These files are likely part of the `modeling_*` modules that define different neural network architectures for various AI models.\n\nLet me identify the main components across these files:\n\n1. **Granite Speech Model** (`modeling_granite_speech.py`):\n   - Contains a speech model that combines audio processing and language modeling\n   - Has an encoder (Conformer-based), projector, and language model\n   - The Conformer is adapted from a Lucidrains implementation\n\n2. **ModernVBERT** (`modeling_modernvbert.py`):\n   - A vision-language model combining vision encoder (SigLIP) and text encoder (ModernBert)\n   - Has a connector for modality projection\n\n3. **AltCLIP** (`modeling_altclip.py`):\n   - Contrastive language-image model\n   - Contains text and vision encoders with contrastive learning\n\n4. **Xcodec** (`modeling_xcodec.py`):\n   - Audio codec model for encoding/decoding audio\n   - Has semantic encoder/decoder and vector quantization\n\n5. **T5** (`modeling_t5.py`):\n   - Text-to-text transformer model\n   - Encoder-decoder architecture with various layer types\n\n6. **CTRL** (`modeling_ctrl.py`):\n   - Conversational model with control codes\n   - Causal language model\n\n7. **Emu3** (`modeling_emu3.py`):\n   - Multimodal model with visual and language components\n   - VQ-VAE for visual tokens\n\n8. **VideoPrism** (`modeling_videoprism.py`):\n   - Video-text model\n   - Combines video and text understanding\n\n9. **BART** (`modeling_bart.py`):\n   - Denoising autoencoder for pretraining sequence-to-sequence models\n   - Encoder-decoder architecture\n\n10. **BERT** (`modeling_bert.py`):\n    - Bidirectional transformer for NLP tasks\n    - Encoder-only architecture\n\n11. **Bloom** (`modeling_bloom.py`):\n    - Transformer model with attention modifications\n    - Causal language model\n\n12. **CLIP** (`modeling_clip.py`):\n    - Contrastive language-image model\n    - Combines vision and language\n\n13. **DeBERTa v2** (`modeling_de\n</think>\n",
+   "252K-t1": "We are given a large file dump that contains multiple model files from what appears to be the Hugging Face Transformers library, each for a different model architecture. The user asks: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe must describe the main classes across all these files. The code above includes many files: modeling_granite_speech.py, modeling_modernvbert.py, modeling_altclip.py, modeling_xcodec.py, modeling_t5.py, modeling_ctrl.py, modeling_emu3.py, modeling_videoprism.py, modeling_bart.py, modeling_bert.py, modeling_bloom.py, modeling_clip.py, modeling_deberta_v2.py, modeling_detr.py, modeling_electra.py, modeling_falcon.py, modeling_gemma.py, modeling_gemma2.py, modeling_gpt2.py, modeling_led.py, modeling_llama.py, modeling_longformer.py, modeling_mamba.py, modeling_mbart.py, modeling_mixtral.py, modeling_opt.py, modeling_pegasus.py, modeling_phi3.py, modeling_qwen2_moe.py, modeling_qwen3.py, modeling_roberta.py, modeling_swin.py, modeling_vit.py, modeling_afmoe.py, modeling_albert.py, modeling_align.py, modeling_apertus.py, modeling_arcee.py, modeling_aria.py, modeling_audioflamingo3.py, modeling_autoformer.py, modeling_axk1.py, modeling_axk2.py, modeling_bamba.py, modeling_bark.py, modeling_beit.py, modeling_bert_generation.py, modeling_big_bird.py, modeling_bigbird_pegasus.py, modeling_biogpt.py, modeling_bit.py.\n\nThe user wants a description of the main classes in these files, probably summarizing what each model does, or maybe the overall purpose of the provided code.\n\nWe should not list all classes individually but give a high-level overview: These are implementation files for various transformer-based models in the Hugging Face Transformers library, covering tasks like language modeling, vision-language, audio, multimodal, etc. The main classes typically include configuration classes, model output classes, attention modules, feed-forward layers, encoder/decoder layers, and model classes (e.g., BertModel, GPT2Model, LlamaModel, etc.). Each file defines a specific model architecture with appropriate components.\n\nWe need to provide a concise answer: \"The code consists of multiple model implementations for different transformer architectures, including BERT, GPT-2, T5,\n</think>\n"
+  },
+  "2": {
+   "186K-t0": "We need answer user: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe have a huge context with many files, likely they pasted a bunch of modeling_*.py files from transformers. The user asks: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need summarize. The code above includes many files, each containing model implementations. The question likely expects a high-level description: it's a collection of PyTorch model implementations for various transformer-based models in HuggingFace Transformers, including encoder/decoder, causal LM, etc. Main classes: PreTrainedModel subclasses, model outputs, attention layers, etc.\n\nWe should answer concisely: The code is a set of model definitions for various AI language/vision/audio models (e.g., Granite Speech, ModernVBERT, AltCLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, BLOOM, CLIP, DeBERTa, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2-MoE, Qwen3, RoBERTa, Swin, ViT, AFMoE, AudioFlamingo3, Autoformer, Arcee, Aria, AudioFlamingo3, etc.). They define model outputs, encoder/decoder layers, attention modules, MLPs, pre-trained model base classes, and task-specific heads (causal LM, masked LM, sequence classification, token classification, etc.). The code is likely from the HuggingFace Transformers library, modular model files.\n\nWe should not list all, but mention main classes: PreTrainedModel, model outputs (BaseModelOutput, CausalLMOutput, etc.), attention layers (e.g., LlamaAttention, GPT2Attention, BertSelfAttention, etc.), encoder/decoder layers, embeddings, poolers, heads.\n\nThe user asks \"What does the code above do? Describe its main classes in a few sentences.\" So answer: It implements various transformer-based neural network models for NLP, vision, and multimodal tasks. Each file defines a specific model's architecture, including input/output classes, attention, encoder/decoder, and task heads.\n\nWe should be careful: The code above is truncated, but we can summarize.\n\nLet's craft final answer: The provided code is a collection of model implementations from HuggingFace Transformers for many different model families. It\n</think>\n",
+   "186K-t1": "We need to answer: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nThe user provided a long list of code files, presumably from the HuggingFace transformers repository, each containing model implementations. The question is broad: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need to interpret the context. The user pasted multiple files, each is a model implementation for different architectures (e.g., Granite Speech, ModernVBERT, ALT-CLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, Bloom, CLIP, DeBERTaV2, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT-2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2-MoE, Qwen3, RoBERTa, Swin, ViT, AFMoe, AIRV2, ALBERT, ALIGN, Apertus, Arcee, Aria, AudioFlamingo3, Autoformer, etc.). These are all from the HuggingFace Transformers library, which is a popular open-source library for natural language processing and multimodal models.\n\nThe question likely expects a summary of what these files collectively do: they implement various transformer-based models for NLP and vision/audio tasks. The main classes in each file are model components like embeddings, attention layers, encoders, decoders, outputs, and model classes for tasks like causal LM, masked LM, sequence classification, etc.\n\nGiven the instruction: \"Describe its main classes in a few sentences.\" We should provide a concise description of the overall purpose of these code files and the primary classes they define.\n\nWe should not get too deep into each file but rather give a high-level answer.\n\nWe can say: The code provides implementations of various transformer-based models in the HuggingFace Transformers library, including encoder-only, decoder-only, and encoder-decoder architectures for language, speech, vision, and multimodal tasks. Each file defines model components such as embeddings, attention layers, feed-forward networks, encoders/decoders, and output classes, as well as task-specific heads (e.g., causal LM, masked LM, sequence classification). The implementations cover models like BERT, GPT-2, T5, Llama, Vision Transformer, etc.\n\nWe need to answer in a few sentences, not too long.\n\nLet's craft a response.\n\nPotential answer:\n\"The code files collectively implement a wide range of neural network models\n</think>\n",
+   "252K-t0": "Let me analyze the code files provided to understand what they do.\n\nThe user has provided multiple files from what appears to be the Hugging Face Transformers library, specifically focusing on model implementations. These files are likely part of the `modeling_*` modules that define different neural network architectures for various AI models.\n\nLet me identify the main components across these files:\n\n1. **Granite Speech Model** (`modeling_granite_speech.py`):\n   - Contains a speech model that combines audio processing and language modeling\n   - Has an encoder (Conformer-based), projector, and language model\n   - The Conformer is adapted from a Lucidrains implementation\n\n2. **ModernVBERT** (`modeling_modernvbert.py`):\n   - A multimodal model combining vision (SigLIP) and text (ModernBert) encoders\n   - Has a connector for modality projection\n   - Handles image-text integration\n\n3. **AltCLIP** (`modeling_altclip.py`):\n   - Contrastive language-image model\n   - Has text and vision encoders with contrastive loss\n\n4. **Xcodec** (`modeling_xcodec.py`):\n   - Audio codec model for encoding/decoding audio\n   - Has semantic encoder/decoder and vector quantization\n\n5. **T5** (`modeling_t5.py`):\n   - Text-to-text transformer model\n   - Encoder-decoder architecture with various layer types\n\n6. **CTRL** (`modeling_ctrl.py`):\n   - Conversational model with control codes\n   - Causal language model with custom positional encoding\n\n7. **Emu3** (`modeling_emu3.py`):\n   - Multimodal model with visual and language components\n   - VQ-VAE for visual tokens\n\n8. **VideoPrism** (`modeling_videoprism.py`):\n   - Video-text model\n   - Combines video and text understanding\n\n9. **BART** (`modeling_bart.py`):\n   - Sequence-to-sequence denoising model\n   - Encoder-decoder with denoising objective\n\n10. **BERT** (`modeling_bert.py`):\n    - Bidirectional transformer for NLP\n    - Encoder-only architecture\n\n11. **Bloom** (`modeling_bloom.py`):\n    - Transformer with attention and MLP\n    - Uses ALiBi for positional encoding\n\n12. **CLIP** (`modeling_clip.py`):\n    - Contrastive language-image model\n    - Vision and text encoders with projection layers\n\n13\n</think>\n",
+   "252K-t1": "We are given a large file dump that contains multiple model files from HuggingFace Transformers (like `modeling_granite_speech.py`, `modeling_modernvbert.py`, etc.) and asked: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nThe instruction says: \"The user wants a description of the code above. The code is a collection of model files from HuggingFace Transformers. They likely want an overview of what these files are and what they contain, maybe focusing on the main classes in the last file or summarizing the pattern.\"\n\nThe user might have provided the code in the conversation, and we need to respond with a concise answer. Since the code is huge and includes many model implementations, we should give a high-level summary.\n\nWe need to describe the main classes in a few sentences. Possibly we should mention that these are model definition files for various transformer-based architectures (e.g., Granite Speech, ModernVBERT, AltCLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, Bloom, CLIP, DeBERTa v2, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2MoE, Qwen3, RoBERTa, Swin, ViT, AFMoe, Arcee, Aria, AudioFlamingo3, Autoformer, AXK1, AXK2, Bamba, Bark, BeIT, BERT generation, BigBird, BigBirdPegasus, BioGpt, Bit).\n\nWe can say: These are PyTorch model implementations for various transformer-based architectures in the HuggingFace Transformers library. They define the core neural network components (e.g., embeddings, attention layers, feed-forward networks, decoders, encoders, heads) and output classes for each model. The code includes custom attention mechanisms, positional embeddings, and support for tasks like language modeling, image-text alignment, audio processing, etc. The main classes typically include the base model, encoder, decoder, and task-specific heads (e.g., for causal LM, masked LM, sequence classification, etc.).\n\nWe should answer in a few sentences, not a long essay.\n\nGiven the instruction: \"What does the code above do? Describe its main classes in a few sentences.\" We'll provide a concise summary.\n\nWe might also note that the last file (`modeling_bit.py`)\n</think>\n"
+  },
+  "3": {
+   "186K-t0": "We need answer user: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe have a huge context with many files, likely they pasted a bunch of modeling_*.py files from transformers. The user asks: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need summarize. The code above includes many files, each containing model implementations. The question likely expects a high-level description: it's a collection of PyTorch model implementations for various transformer-based models in HuggingFace Transformers, including encoder/decoder, causal LM, etc. Main classes: PreTrainedModel subclasses, model outputs, attention layers, etc.\n\nWe should answer concisely: The code is a set of model definitions for various AI language/vision/audio models (e.g., Granite Speech, ModernVBERT, AltCLIP, Xcodec, T5, CTRL, Emu3, VideoPrism, BART, BERT, BLOOM, CLIP, DeBERTa, DETR, ELECTRA, Falcon, Gemma, Gemma2, GPT2, LED, Llama, Longformer, Mamba, MBART, Mixtral, OPT, Pegasus, Phi3, Qwen2-MoE, Qwen3, RoBERTa, Swin, ViT, AFMoE, AudioFlamingo3, Autoformer, Arcee, Aria, ALBERT, ALIGN, etc.). They define model outputs, attention modules, encoder/decoder layers, and pre-trained model classes for causal language modeling, masked language modeling, sequence classification, token classification, etc.\n\nWe should not list all, but mention main classes: PreTrainedModel, model outputs (e.g., CausalLMOutputWithPast, MaskedLMOutput, SequenceClassifierOutput), attention layers (e.g., LlamaAttention, GPT2Attention, BertSelfAttention), encoder/decoder layers, and specific model classes (e.g., LlamaForCausalLM, GPT2Model, BertModel, etc.). The code is part of HuggingFace Transformers library, likely generated from modular files.\n\nThe user might be asking about the entire pasted content. We can say: \"The code above is a collection of model implementations from the HuggingFace Transformers library, covering many pretrained models. Each file defines PyTorch modules for the transformer architecture, including attention, encoder/decoder layers, output classes, and concrete model classes (e.g., LlamaForCausalLM, GPT2ForSequenceClassification, etc.). The main classes across files include Pre\n</think>\n",
+   "186K-t1": "We need to answer: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nThe user provided a long list of code files, presumably from the HuggingFace transformers repository, each containing model implementations. The question is broad: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe need to interpret the context. The user pasted multiple files, each likely containing model classes for different transformer architectures. The instruction is to describe what the code above does, focusing on main classes.\n\nWe should summarize the overall purpose: These are implementations of various transformer-based models in PyTorch for NLP and vision, etc. The code includes model classes like GraniteSpeechModel, ModernVBertModel, AltCLIPModel, XcodecModel, T5Model, CTRLModel, Emu3Model, VideoPrismModel, BARTModel, BERTModel, BloomModel, CLIPModel, DeBERTaV2Model, DETRModel, ELECTRAModel, FalconModel, GemmaModel, Gemma2Model, GPT2Model, LEDModel, LlamaModel, LongformerModel, MambaModel, MBARTModel, MixtralModel, OPTModel, PegasusModel, Phi3Model, Qwen2MoeModel, Qwen3Model, RoBERTaModel, SwinModel, ViTModel, AFMoEModel, Aimv2Model, ALBERTModel, ALIGNModel, ApertusModel, ArceeModel, AriaModel, AudioFlamingo3Model, AutoformerModel. These are all model definitions for various transformer architectures used in natural language processing, vision-language, audio, time-series, etc.\n\nThe answer should be concise: \"The code defines various transformer model classes for HuggingFace Transformers, including implementations for language models (GPT-2, BERT, T5, etc.), multimodal models (CLIP, ALIGN, AudioFlamingo3, etc.), audio models (Whisper, AudioFlamingo3, etc.), and time-series models (Autoformer). Each model class typically includes encoder/decoder stacks, attention layers, feed-forward networks, output heads, and pretraining objectives. The code follows the standard HuggingFace modeling structure with PreTrainedModel subclasses and output dataclasses.\"\n\nWe need to mention main classes in a few sentences. The user asked: \"What does the code above do? Describe its main classes in a few sentences.\" So we should describe the purpose and perhaps list categories.\n\nGiven the length, we should not list all but summarize.\n</think>\n",
+   "252K-t0": "Let me analyze the code files provided to understand what they do.\n\nThe user has provided multiple files from what appears to be the Hugging Face Transformers library, specifically focusing on model implementations. These files are likely part of the `modeling_*` modules that define different neural network architectures for various AI models.\n\nLet me identify the main components across these files:\n\n1. **Granite Speech Model** (`modeling_granite_speech.py`):\n   - Contains a speech model that combines audio processing and language modeling\n   - Has an encoder (Conformer-based), projector, and language model\n   - The Conformer is adapted from a Lucidrains implementation\n\n2. **ModernVBERT** (`modeling_modernvbert.py`):\n   - A vision-language model combining vision encoder (SigLIP) and text encoder (ModernBert)\n   - Has a connector for modality projection\n\n3. **AltCLIP** (`modeling_altclip.py`):\n   - Contrastive language-image model\n   - Contains text and vision encoders with contrastive learning\n\n4. **Xcodec** (`modeling_xcodec.py`):\n   - Audio codec model for encoding/decoding audio\n   - Has semantic encoder/decoder and vector quantization\n\n5. **T5** (`modeling_t5.py`):\n   - Text-to-text transformer model\n   - Encoder-decoder architecture with various layer types\n\n6. **CTRL** (`modeling_ctrl.py`):\n   - Conversational model with control codes\n   - Causal language model\n\n7. **Emu3** (`modeling_emu3.py`):\n   - Multimodal model with visual and language components\n   - VQ-VAE for visual tokens\n\n8. **VideoPrism** (`modeling_videoprism.py`):\n   - Video-text model\n   - Combines video and text understanding\n\n9. **BART** (`modeling_bart.py`):\n   - Denoising autoencoder for pretraining sequence-to-sequence models\n   - Encoder-decoder architecture\n\n10. **BERT** (`modeling_bert.py`):\n    - Bidirectional transformer for NLP tasks\n    - Encoder-only architecture\n\n11. **Bloom** (`modeling_bloom.py`):\n    - Transformer model with attention modifications\n    - Causal language model\n\n12. **CLIP** (`modeling_clip.py`):\n    - Contrastive language-image model\n    - Combines vision and language\n\n13. **DeBERTa v2** (`modeling_de\n</think>\n",
+   "252K-t1": "We are given a large file dump that contains multiple model files from what appears to be the Hugging Face Transformers library, each for a different model architecture. The user asks: \"What does the code above do? Describe its main classes in a few sentences.\"\n\nWe must describe the main classes across all these files. The code above includes many files: modeling_granite_speech.py, modeling_modernvbert.py, modeling_altclip.py, modeling_xcodec.py, modeling_t5.py, modeling_ctrl.py, modeling_emu3.py, modeling_videoprism.py, modeling_bart.py, modeling_bert.py, modeling_bloom.py, modeling_clip.py, modeling_deberta_v2.py, modeling_detr.py, modeling_electra.py, modeling_falcon.py, modeling_gemma.py, modeling_gemma2.py, modeling_gpt2.py, modeling_led.py, modeling_llama.py, modeling_longformer.py, modeling_mamba.py, modeling_mbart.py, modeling_mixtral.py, modeling_opt.py, modeling_pegasus.py, modeling_phi3.py, modeling_qwen2_moe.py, modeling_qwen3.py, modeling_roberta.py, modeling_swin.py, modeling_vit.py, modeling_afmoe.py, modeling_albert.py, modeling_align.py, modeling_apertus.py, modeling_arcee.py, modeling_aria.py, modeling_audioflamingo3.py, modeling_autoformer.py, modeling_axk1.py, modeling_axk2.py, modeling_bamba.py, modeling_bark.py, modeling_beit.py, modeling_bert_generation.py, modeling_big_bird.py, modeling_bigbird_pegasus.py, modeling_biogpt.py, modeling_bit.py.\n\nThe user wants a description of the main classes in these files, probably summarizing what each model does, or maybe the overall purpose of the provided code.\n\nWe should not list all classes individually but give a high-level overview: These are implementation files for various transformer-based models in the Hugging Face Transformers library, covering tasks like language modeling, vision-language, audio, multimodal, etc. The main classes typically include configuration classes, model output classes, attention modules, feed-forward layers, encoder/decoder layers, and model classes (e.g., BertModel, GPT2Model, LlamaModel, etc.). Each file defines a specific model architecture with appropriate components.\n\nWe need to provide a concise answer: \"The code consists of multiple model implementations for different transformer architectures, including BERT, GPT-2, T5,\n</think>\n"
+  }
+ }
+}

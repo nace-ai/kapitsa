@@ -1,0 +1,21 @@
+arm 0 plain 133K-t0: prompt 122621 (cached 0): 512 tok in 5335 ms, 95.8 tok/s, - t/c, length
+arm 0 plain 133K-t1: prompt 122621 (cached 122620): 512 tok in 5582 ms, 91.5 tok/s, - t/c, length
+arm 0 plain 252K-t0: prompt 235892 (cached 235891): 512 tok in 9297 ms, 55.0 tok/s, - t/c, length
+arm 0 plain 252K-t1: prompt 235892 (cached 235891): 512 tok in 8659 ms, 59.0 tok/s, - t/c, length
+arm 1 s3w4k 133K-t0: prompt 122621 (cached 0): 512 tok in 5933 ms, 86.1 tok/s, 2.66 t/c, length
+arm 1 s3w4k 133K-t1: prompt 122621 (cached 122620): 512 tok in 6118 ms, 83.5 tok/s, 2.69 t/c, length
+arm 1 s3w4k 252K-t0: prompt 235892 (cached 235891): 512 tok in 6250 ms, 81.8 tok/s, 2.95 t/c, length
+arm 1 s3w4k 252K-t1: prompt 235892 (cached 235891): 512 tok in 8091 ms, 63.2 tok/s, 2.38 t/c, length
+arm 2 s2w4k 133K-t0: prompt 122621 (cached 0): 512 tok in 5322 ms, 96.0 tok/s, 2.38 t/c, length
+arm 2 s2w4k 133K-t1: prompt 122621 (cached 122620): 512 tok in 5733 ms, 89.1 tok/s, 2.30 t/c, length
+arm 2 s2w4k 252K-t0: prompt 235892 (cached 235891): 512 tok in 6351 ms, 80.5 tok/s, 2.43 t/c, length
+arm 2 s2w4k 252K-t1: prompt 235892 (cached 235891): 512 tok in 7735 ms, 66.1 tok/s, 2.07 t/c, length
+arm 3 s4w4k 133K-t0: prompt 122621 (cached 0): 512 tok in 6700 ms, 76.3 tok/s, 3.02 t/c, length
+arm 3 s4w4k 133K-t1: prompt 122621 (cached 122620): 512 tok in 7078 ms, 72.2 tok/s, 2.95 t/c, length
+arm 3 s4w4k 252K-t0: prompt 235892 (cached 235891): 512 tok in 7369 ms, 69.3 tok/s, 3.10 t/c, length
+arm 3 s4w4k 252K-t1: prompt 235892 (cached 235891): 512 tok in 9045 ms, 56.5 tok/s, 2.59 t/c, length
+arm 4 s3w16k 133K-t0: prompt 122621 (cached 0): 512 tok in 6252 ms, 81.7 tok/s, 2.82 t/c, length
+arm 4 s3w16k 133K-t1: prompt 122621 (cached 122620): 512 tok in 6540 ms, 78.1 tok/s, 2.79 t/c, length
+arm 4 s3w16k 252K-t0: prompt 235892 (cached 235891): 512 tok in 7126 ms, 71.7 tok/s, 2.85 t/c, length
+arm 4 s3w16k 252K-t1: prompt 235892 (cached 235891): 512 tok in 8318 ms, 61.4 tok/s, 2.50 t/c, length
+texts equal to arm 0's: {'133K-t0': [True, False, True, True, True], '133K-t1': [True, False, False, True, True], '252K-t0': [True, True, True, True, True], '252K-t1': [True, True, True, False, True]}

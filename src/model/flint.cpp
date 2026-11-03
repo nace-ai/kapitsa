@@ -920,7 +920,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
   enc_mv(e, {{&L.q, qkv_}, {&L.k, qkv_.view(size_t(QD) * 4, qkv_.size - size_t(QD) * 4)},
              {&L.v, qkv_.view(size_t(QD + KD) * 4, qkv_.size - size_t(QD + KD) * 4)}},
          x_, R, L.in_norm, QKV);
-  const uint32_t window = ring ? uint32_t(c.window) : 0u;
+  const uint32_t window = ring ? uint32_t(c.window) : uint32_t(draft_window_);
   const uint32_t k0 = window && uint32_t(pos0) + 1 > window ? uint32_t(pos0) + 1 - window : 0u;
   // NI_FLINT_ATTN=0: a decode row on the verify rows' three dispatches instead (prep, partial, reduce)
   static const bool attn1 = !getenv("NI_FLINT_ATTN") || atoi(getenv("NI_FLINT_ATTN")) != 0;
@@ -993,8 +993,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     // NI_FLINT_ATTN_T (default on, 0 = off): those rows on the matrix units where the dense GEMMs use them (qmt_: an
     // Apple10 GPU on macOS 26), flint_attn_t_rows (tensor/qattn_t_flint.metal: the same partials, the products as
     // half): one full-attention layer, 8 rows after 262K positions, 1.0 against 11.0 ms; 4 rows 0.93 against 5.8
-    static const bool attn_t = !getenv("NI_FLINT_ATTN_T") || atoi(getenv("NI_FLINT_ATTN_T")) != 0;
-    const bool tr = shared_rows && attn_t && qmt_ && c.hq / c.hkv == 8 && c.hd == 128;
+    const bool tr = shared_rows && tensor_verify();
     e.use(pipe(tr             ? "flint_attn_t_rows"
                : shared_rows  ? (small_tiles() ? "flint_attn_partial_rows_k16" : "flint_attn_partial_rows")
                : small_tiles() ? "flint_attn_partial_k16"
@@ -1548,6 +1547,19 @@ void Flint::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingPa
 void Flint::encode_verify(Encoder& e, Seq& s, int pos, int R) {
   enc_rows(e, s, pos, R);
   enc_head(e, x_, R, logits_, size_t(cfg_.vocab));
+}
+
+bool Flint::tensor_verify() const {
+  static const bool attn_t = !getenv("NI_FLINT_ATTN_T") || atoi(getenv("NI_FLINT_ATTN_T")) != 0;
+  return attn_t && qmt_ && cfg_.hq / cfg_.hkv == 8 && cfg_.hd == 128;
+}
+
+void Flint::encode_draft(Encoder& e, Seq& s, int pos, const SamplingParams& sp, int window) {
+  draft_window_ = window;
+  enc_rows(e, s, pos, 1);
+  draft_window_ = 0;
+  enc_head(e, x_, 1, logits_, size_t(cfg_.vocab));
+  enc_sample(e, logits_, s.tok, pos + 1, sp, uint32_t(pos));
 }
 
 void Flint::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp) {

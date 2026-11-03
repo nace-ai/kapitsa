@@ -602,6 +602,9 @@ class Engine {
   Flint* flint_ = nullptr;   // model_ when it is a Flint model
   Clover* clover_ = nullptr;  // model_ when it is Clover (block diffusion; q35_ too)
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
+  // Flint: self-drafts per cycle at long contexts (Flint::encode_draft; 0: none), their full-attention layers' window,
+  // and the shortest prompt that takes them
+  int flint_self_ = 0, flint_self_win_ = 4096, flint_self_min_ = 180000;
   int dory_spec_ = 0;        // Dory speculative decoding (per-loop KV): drafts per cycle (0: plain decoding)
   bool dory_spec_auto_ = false;  // drafts per cycle by the request's loops (no --spec)
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)

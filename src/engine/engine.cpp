@@ -516,6 +516,22 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     const int k = spec_asked > 0 ? spec_asked : v && *v ? atoi(v) : 0;
     if (k > 0) flint_ngram_ = std::min(k, Flint::kMaxRows - 1);
   }
+  // Flint drafting itself at long contexts (MagicDec, arXiv 2408.11049: the model as its own draft, reading a short
+  // window of its KV): from a prompt of flint_self_min_ tokens, a cycle drafts flint_self_ tokens with the full-attention
+  // layers over the last flint_self_win_ positions (Flint::encode_draft, each sampled with the draw its verify row
+  // makes) and verifies them with the pending token in one pass over the whole cache. On by default where that verify's
+  // attention runs on the matrix units (Flint::tensor_verify: an M5-class GPU, macOS 26) and --spec is not given: 2
+  // drafts, a 4096-position window, prompts of 180000 tokens. Interleaved on the M5 Max, decode 10% / 28% faster at 187K
+  // / 236K tokens at temperature 0 and 8% / 8% at the model's sampling; at 123K it was slower (92.3 -> 88.5 tok/s). The
+  // reply is plain decoding's up to the verify's near-ties, as prompt lookup's.
+  // NI_FLINT_SELF=K (0: off), NI_FLINT_SELF_WIN, NI_FLINT_SELF_MIN; --spec 0 turns it off.
+  if (flint_ && spec_asked != 0) {
+    const char* v = getenv("NI_FLINT_SELF");
+    const int k = v && *v ? atoi(v) : spec_asked < 0 && flint_->tensor_verify() ? 2 : 0;
+    if (k > 0) flint_self_ = std::min(k, Flint::kMaxRows - 1);
+    if ((v = getenv("NI_FLINT_SELF_WIN")) && *v) flint_self_win_ = std::max(64, atoi(v));
+    if ((v = getenv("NI_FLINT_SELF_MIN")) && *v) flint_self_min_ = std::max(0, atoi(v));
+  }
 
   // NI_PREFIX_CKPT=0: no prefix checkpoint. Not with LiLiCorr / KFlash drafters (their context has no rewind to an
   // empty ring).
@@ -578,7 +594,15 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
-                                                  " drafts per cycle)"
+                                                  " drafts per cycle" +
+                                                  (flint_self_ > 0 ? ", else " + std::to_string(flint_self_) +
+                                                                         " self-drafts from " + std::to_string(flint_self_min_) +
+                                                                         "-token prompts)"
+                                                                   : std::string(")"))
+                         : flint_self_ > 0 ? "plain decoding, self-speculative from " + std::to_string(flint_self_min_) +
+                                                 "-token prompts (" + std::to_string(flint_self_) +
+                                                 " drafts per cycle, their full attention over the last " +
+                                                 std::to_string(flint_self_win_) + " positions)"
                          : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
                                                " drafts per cycle)"
                          : dfl_ && dfl_->tree() ? std::string("KFlash speculative decoding (DFlash2 lattice, tree verify)")
@@ -605,7 +629,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     f.unbound = lp.dflash_unbound;
     f.unbound_missing = lp.dflash_unbound_missing;
     f.mtp_depth = spec_ ? opts_.spec_depth : 0;
-    f.self_drafts = flint_ngram_ > 0 || nh_ngram_ > 0                 ? "prompt lookup"
+    f.self_drafts = flint_ngram_ > 0 && flint_self_ > 0                ? "prompt lookup and Flint self-drafts"
+                    : flint_self_ > 0                                 ? "Flint self-drafts at long prompts"
+                    : flint_ngram_ > 0 || nh_ngram_ > 0               ? "prompt lookup"
                     : dory_spec_ > 0 && dory_spec_kind() == "ngram" ? "prompt lookup"
                     : dory_spec_ > 0 && dory_spec_kind() == "self"  ? "Dory 1-loop drafts"
                     : dory_spec_ > 0                                 ? "prompt lookup and Dory 1-loop drafts"
@@ -3308,7 +3334,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const char* v = getenv("NI_GRAMMAR_SPEC");
     return !(v && v[0] == '0');
   }();
-  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || depth > 0;
+  const bool flint_self = flint_self_ > 0 && n >= flint_self_min_;  // Flint drafts itself this request
+  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || flint_self || depth > 0;
   const bool g_dfl = gm && dfl_ && grammar_spec;
   const bool g_direct = gm && !g_dfl && (g_on || !spec_loop);
   g_in_spec = gm && !g_direct && !g_on;
@@ -3864,10 +3891,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     nh_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
-  } else if (flint_ngram_ > 0) {
+  } else if (flint_ngram_ > 0 || flint_self) {
     // Flint: prompt lookup. When the last tokens occurred earlier in the conversation, the tokens that followed them (up
-    // to flint_ngram_) are drafts, verified with the pending token in one pass; otherwise the pass is the pending
-    // token's row alone. Each row samples at its own position, accepting the drafts that agree. Rows past the accepted
+    // to flint_ngram_) are drafts, verified with the pending token in one pass; otherwise, from a long prompt
+    // (flint_self), the model drafts flint_self_ tokens itself, else the pass is the pending token's row alone. Each row samples at its own position, accepting the drafts that agree. Rows past the accepted
     // ones leave keys at positions the next pass writes again before any row reads them (a ring's included: its 8
     // spare rows hold them), so nothing is committed or flushed.
     int P = n;
@@ -3886,19 +3913,26 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         break;
       }
       if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
-      ngram_drafts(s.tokens(), P, flint_ngram_, nd);
+      nd.clear();
+      if (flint_ngram_ > 0) ngram_drafts(s.tokens(), P, flint_ngram_, nd);
       kf_rows = kfw.plan(int(nd.size()));  // KFlash's budget: the pending token's row and the drafts worth theirs
       nd.resize(size_t(kf_rows - 1));
+      const bool self = nd.empty() && flint_self;  // no lookup draft: the model drafts flint_self_ tokens itself
       const double kf_t0 = now_ms();
       int* tw = s.tokens();
       for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
-      const int R = int(nd.size()) + 1;
+      const int R = self ? flint_self_ + 1 : int(nd.size()) + 1;
       auto e2 = g.begin();
+      if (self)  // each draft committed as it is encoded, so the GPU runs it while the host encodes the rest
+        for (int j = 0; j < flint_self_; ++j) {
+          flint_->encode_draft(*e2, s, P + j, sp, flint_self_win_);
+          e2->split();
+        }
       flint_->encode_verify(*e2, s, P, R);
       flint_->encode_accept(*e2, s, P, R, R - 1, sp);
       e2->commit_and_wait();
       const int a = flint_->accepted();
-      kfw.observe(int(nd.size()), a, now_ms() - kf_t0);
+      if (!self) kfw.observe(int(nd.size()), a, now_ms() - kf_t0);
       const int* tk = s.tokens();
       int m = 0;
       while (m < a + 1) {
@@ -4177,7 +4211,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   slot.live_ok = finish == "tool_calls";
   ++slot.version;  // (a state the SSD prefix cache does not have yet)
   char cyc[192] = "";
-  if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_) && req_cycles > 0)
+  if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_ || flint_self_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   if (clover_own && clover_own->self_spec() && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle (%d-row draft and verify)", double(gen - 1) / req_cycles,

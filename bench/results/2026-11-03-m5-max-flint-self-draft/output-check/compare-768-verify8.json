@@ -1,0 +1,169 @@
+{
+  "paths": {
+    "step": {
+      "records": 768,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.98046875,
+      "flips": 15,
+      "kl_mean": 0.007323128213362631,
+      "kl_median": 1.826910547885735e-05,
+      "kl_p99": 0.12715923577899735,
+      "kl_max": 1.1911029657836578,
+      "margin_change_max": 4.898014068603516,
+      "tie_margin": 2.161831855773926,
+      "nll_change_mean": -0.005267136029265711,
+      "max_abs_diff": 16.2928466796875,
+      "flip_list": [
+        {
+          "record": "sequence 3 prefix 2098",
+          "ref_top": 68,
+          "cand_top": 349,
+          "margin": 1.0921745300292969
+        },
+        {
+          "record": "sequence 6 prefix 955",
+          "ref_top": 7228,
+          "cand_top": 198,
+          "margin": 0.40518712997436523
+        },
+        {
+          "record": "sequence 3 prefix 2095",
+          "ref_top": 10159,
+          "cand_top": 27907,
+          "margin": 0.30877017974853516
+        },
+        {
+          "record": "sequence 3 prefix 2096",
+          "ref_top": 417,
+          "cand_top": 17,
+          "margin": 0.2624025344848633
+        },
+        {
+          "record": "sequence 7 prefix 557",
+          "ref_top": 12170,
+          "cand_top": 836,
+          "margin": 0.16342830657958984
+        },
+        {
+          "record": "sequence 1 prefix 2850",
+          "ref_top": 1696,
+          "cand_top": 1002,
+          "margin": 0.14964568614959717
+        },
+        {
+          "record": "sequence 6 prefix 970",
+          "ref_top": 676,
+          "cand_top": 269,
+          "margin": 0.13105690479278564
+        },
+        {
+          "record": "sequence 7 prefix 514",
+          "ref_top": 7045,
+          "cand_top": 8872,
+          "margin": 0.1158149242401123
+        },
+        {
+          "record": "sequence 0 prefix 3259",
+          "ref_top": 17360,
+          "cand_top": 51047,
+          "margin": 0.07384824752807617
+        },
+        {
+          "record": "sequence 4 prefix 1685",
+          "ref_top": 327,
+          "cand_top": 858,
+          "margin": 0.05317115783691406
+        },
+        {
+          "record": "sequence 0 prefix 3268",
+          "ref_top": 83691,
+          "cand_top": 50395,
+          "margin": 0.03896307945251465
+        },
+        {
+          "record": "sequence 4 prefix 1749",
+          "ref_top": 84549,
+          "cand_top": 12599,
+          "margin": 0.023685812950134277
+        },
+        {
+          "record": "sequence 4 prefix 1743",
+          "ref_top": 4696,
+          "cand_top": 20287,
+          "margin": 0.020113229751586914
+        },
+        {
+          "record": "sequence 2 prefix 2449",
+          "ref_top": 30776,
+          "cand_top": 2242,
+          "margin": 0.012728512287139893
+        },
+        {
+          "record": "sequence 6 prefix 968",
+          "ref_top": 295,
+          "cand_top": 488,
+          "margin": 0.0015115737915039062
+        }
+      ],
+      "near_tie": 6.55,
+      "near_tie_flips": 15,
+      "failures": [
+        "top-1 agreement 0.9805 < 0.9844"
+      ],
+      "gate": {
+        "min_top1": 0.984375,
+        "max_mean_kl": 0.0218,
+        "max_p99_kl": 0.192,
+        "near_tie": 6.55,
+        "max_far_flips": 0,
+        "source": "tools/logit_floors/flint-4bit.m5.json"
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (cd20cf5)",
+        "model": "flint-4bit",
+        "model_dir": "~/models/flint-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 768,
+        "vocab": 150144,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T20:44:15Z",
+        "env": {
+          "NI_FLINT_VERIFY_ROWS": "8"
+        }
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.26 (cd20cf5)",
+        "model": "flint-4bit",
+        "model_dir": "~/models/flint-4bit",
+        "path": "verify",
+        "verify": "8 rows",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 768,
+        "vocab": 150144,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+        "macos": "26.4",
+        "date": "2026-11-03T20:44:15Z",
+        "env": {
+          "NI_FLINT_VERIFY_ROWS": "8"
+        }
+      }
+    }
+  }
+}

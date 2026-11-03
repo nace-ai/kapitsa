@@ -134,7 +134,7 @@ failures and metering, but do not establish native inference equivalence, perfor
 | Backend | `Qwen35` | `NemotronH` | `Dory` | `Flint` |
 | Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) | None |
 | Other layers | Attention; dense FFN or MoE | Attention; LatentMoE (dense relu² MLP in Nemotron Nano 4B / 9B v2) | Sliding-window and full attention, dense MLP; normalized (nGPT) residuals | Sliding-window and full attention with learned sinks; MoE (2 dense layers first) |
-| Default speculation | DFlash2 on 35B/27B; DFlash on 4B and 9B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV | None on Recursive's Flint (prompt lookup with `--spec`) |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B and 9B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV | Self-drafts from 180K-token prompts on an M5-class GPU (the model with its full attention over the last 4K positions); prompt lookup with `--spec` |
 | Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint | NVIDIA's safetensors checkpoints | Recursive's MLX export; GGUF imports (unsloth's UD-IQ files) |
 | Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type | NVFP4 or BF16 (on the Nemotron-H kernels; the LM head 8-bit with NVFP4) | Affine 4-bit (Recursive's: 8-bit embedding, bf16 router) and 8-bit, bf16; a GGUF import's routed experts in their IQ blocks |
 | Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work | None | None |
@@ -171,6 +171,10 @@ prefill's grouped GEMMs). A pack with 8-bit routed experts, or 4-bit ones beside
 Its activations pass half's range in places (up to 75776 at layer 46), so the prefill's
 SwiGLU stores such rows divided by a power of two and folds the factor back into the row's weight
 (`flint_swiglu_scaled`). It has its own pre-tokenizer split and GLM's tool-call format in the output parser.
+At long contexts it drafts with itself (MagicDec, arXiv 2408.11049): a draft is a decode step whose full-attention
+layers read only the last 4,096 positions (`Flint::encode_draft`), sampled with the draw its verify row will make, and
+a cycle verifies two of them with the pending token in one pass over the whole cache. That pays where the verify's
+attention runs on the matrix units (`flint_attn_t_rows`), so it is on there from 180K-token prompts.
 
 All four implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
 Speculative paths remain specialized: the engine also holds backend-specific pointers and drafter state. Adding a
