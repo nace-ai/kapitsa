@@ -732,11 +732,11 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   static const int tree_attn = env_int("NI_V8_TREE_ATTN", 2);
   // A wide tree verify (v8w_R_: 16 / 32 rows, dense targets) always takes the first: its row tiles run attn8m_partial_tree
   // with the tree block's keys inside the MMA tiles; the zone and block kernels are 8-row kernels
-  // The 27B (6 query heads per KV head) on the M5's matrix units takes the first at 8 rows too: its wide verify's kernel,
-  // attn8t_partial_tree_g6, with one row tile, so an 8-row verify rounds as the 16-row default does, where the zone runs
-  // attn8m_partial_zone on the shader ALUs. ni_run at 131K tokens, the 8-row drafting block (more than one slot, or
-  // NI_DFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block there:
-  // 49.3). NI_V8_TREE_G6: by default on the M5 Max, where it was measured; 1 on any M5-class Mac, 0 the zone everywhere
+  // The 27B (6 query heads per KV head) on the M5's matrix units takes the first at 8 rows too: its wide verify's
+  // kernel, attn8t_partial_tree_g6, with one row tile, so an 8-row verify rounds as the 16-row default does, where the
+  // zone runs attn8m_partial_zone on the shader ALUs. ni_run at 131K tokens, the 8-row drafting block (more than one
+  // slot, or NI_DFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block
+  // there: 49.3). NI_V8_TREE_G6: by default on the M5 Max, where it was measured; 1 on any M5-class Mac, 0 the zone
   static const bool tree_g6 = [] {
     const int v = env_int("NI_V8_TREE_G6", -1);
     if (env_int("NI_V8_ATTN_T", 1) == 0 || v == 0) return false;
