@@ -1,0 +1,28 @@
+[
+ {
+  "label": "dory-kapitsa-perloop-256k-d2",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "4"
+  ],
+  "note": "Dory's long-context sweep with dory_attn_td2_g4s8 (#904's build: main 32cf851 + the change), 1K to 240K, 4 requests a size, for the README's context charts",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ }
+]
