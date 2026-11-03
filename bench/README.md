@@ -14,10 +14,16 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-1054 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-03 down to 2026-10-16, newest first.
+1060 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-03 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 123.0 | – | – | – | – | – | contention | [dory-k8-old-256-20261103-064838](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-old-256-20261103-064838.json) |
+| 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 121.1 | – | – | – | – | – | contention | [dory-k8-new-256-20261103-063727](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-new-256-20261103-063727.json) |
+| 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 124.2 | – | – | – | – | – | contention | [dory-k8-new-20261103-063223](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-new-20261103-063223.json) |
+| 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 122.0 | – | – | – | – | – | contention | [dory-k8-old-20261103-062716](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-old-20261103-062716.json) |
+| 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 126.3 | – | – | – | – | – | contention | [dory-k8-new-20261103-062200](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-new-20261103-062200.json) |
+| 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 85.9 | – | – | – | – | – | contention | [dory-k8-old-20261103-061546](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-old-20261103-061546.json) |
 | 2026-11-03 | – | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | fc22597 | 124.0 | – | – | – | – | – | contention | [dory-kapitsa-perloop-256k-d2-20261103-052104](results/2026-11-03-m5-max-long-v4/results/dory-kapitsa-perloop-256k-d2-20261103-052104.json) |
 | 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | 32cf851+dirty | 115.3 | – | – | – | – | – | contention | [dory-d2-new-256-20261103-050215](results/2026-11-03-m5-max-dory-attn-d2/results/dory-d2-new-256-20261103-050215.json) |
 | 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | 32cf851+dirty | 123.1 | – | – | – | – | – | contention | [dory-d2-old-256-20261103-045025](results/2026-11-03-m5-max-dory-attn-d2/results/dory-d2-old-256-20261103-045025.json) |

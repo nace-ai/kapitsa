@@ -1,0 +1,9 @@
+arm 0 old: prompt 134348 (cached 0): 512 tok, 45.0 tok/s, 2.47 t/c, 54.9 ms/cycle
+arm 0 old: prompt 259404 (cached 0): 512 tok, 25.2 tok/s, 2.41 t/c, 95.6 ms/cycle
+arm 1 new: prompt 134348 (cached 0): 512 tok, 48.4 tok/s, 2.47 t/c, 51.1 ms/cycle
+arm 1 new: prompt 259404 (cached 259398): 512 tok, 28.2 tok/s, 2.41 t/c, 85.5 ms/cycle
+arm 2 old: prompt 134348 (cached 0): 512 tok, 43.8 tok/s, 2.47 t/c, 56.4 ms/cycle
+arm 2 old: prompt 259404 (cached 259398): 512 tok, 25.2 tok/s, 2.41 t/c, 95.8 ms/cycle
+arm 3 new: prompt 134348 (cached 0): 512 tok, 47.8 tok/s, 2.47 t/c, 51.7 ms/cycle
+arm 3 new: prompt 259404 (cached 259398): 512 tok, 27.8 tok/s, 2.41 t/c, 86.7 ms/cycle
+texts identical across the four arms: {'133K': True, '252K': True}

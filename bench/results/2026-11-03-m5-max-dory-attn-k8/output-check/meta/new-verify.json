@@ -1,0 +1,25 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.26 (b8960e6)",
+  "model": "nemotron-labs-dory1.0-4b-nvfp4",
+  "model_dir": "~/models/nemotron-labs-dory1.0-4b-nvfp4",
+  "path": "verify",
+  "verify": "8 rows",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "dory": {
+    "loops": 2,
+    "kv": "per-loop"
+  },
+  "records": 192,
+  "vocab": 131072,
+  "source": "bench/corpus.txt",
+  "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+  "macos": "26.4",
+  "date": "2026-11-03T14:14:42Z",
+  "env": {}
+}
