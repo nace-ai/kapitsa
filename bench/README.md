@@ -14,10 +14,15 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-1030 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-02 down to 2026-10-16, newest first.
+1035 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-02 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron 3.5 Super-VL-120B-A12B | NVFP4 | Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill) | 253f0b8 | 89.3 | – | – | – | – | – | contention | [super-kapitsa-512k-v2-20261102-215754](results/2026-11-02-m5-max-long-v2/results/super-kapitsa-512k-v2-20261102-215754.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron 3.5 Bolt-74B-A9B | 2-bit experts | Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill) | 253f0b8 | 158.7 | – | – | – | – | – | contention | [bolt-kapitsa-256k-v2-20261102-213422](results/2026-11-02-m5-max-long-v2/results/bolt-kapitsa-256k-v2-20261102-213422.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Nemotron 3.5 Lightning-30B-A3B | NVFP4 | Kapitsa (DSpark drafter) | 253f0b8 | 241.2 | – | – | – | – | – | contention | [lightning-kapitsa-512k-v2-20261102-210952](results/2026-11-02-m5-max-long-v2/results/lightning-kapitsa-512k-v2-20261102-210952.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 253f0b8 | 307.5 | – | – | – | – | – | contention | [clover-kapitsa-128k-v2-20261102-210429](results/2026-11-02-m5-max-long-v2/results/clover-kapitsa-128k-v2-20261102-210429.json) |
+| 2026-11-02 | fearampgreed | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 253f0b8 | 345.1 | – | – | – | – | – | contention | [q36-35b-kapitsa-256k-v2-20261102-204933](results/2026-11-02-m5-max-long-v2/results/q36-35b-kapitsa-256k-v2-20261102-204933.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 7b8c26d | 316.6 | – | – | – | – | – | contention | [clover-v8t-new-20261102-204155](results/2026-11-02-m5-max-qwen-verify-t/results/clover-v8t-new-20261102-204155.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 7b8c26d | 279.7 | – | – | – | – | – | contention | [clover-v8t-old-20261102-203856](results/2026-11-02-m5-max-qwen-verify-t/results/clover-v8t-old-20261102-203856.json) |
 | 2026-11-02 | fearampgreed | M5 Max, 128 GB | Clover-35B-A3B | 4-bit | Kapitsa (Clover: DFlash2 drafter on its causal pathway, KFlash) | 7b8c26d | 322.9 | – | – | – | – | – | contention | [clover-v8t-new-20261102-203602](results/2026-11-02-m5-max-qwen-verify-t/results/clover-v8t-new-20261102-203602.json) |

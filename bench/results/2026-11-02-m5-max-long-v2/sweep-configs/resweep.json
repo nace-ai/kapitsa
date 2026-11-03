@@ -1,0 +1,118 @@
+[
+ {
+  "label": "q36-35b-kapitsa-256k-v2",
+  "extends": "q36-35b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "the long sweep again with main + #890 (nh_attn_ts_s8 prefill) + #892 (attn8t verify), after #887 (nh_attn_t_part verify)",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ },
+ {
+  "label": "clover-kapitsa-128k-v2",
+  "extends": "clover-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "131072"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "131072",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "the long sweep again with main + #890 (nh_attn_ts_s8 prefill) + #892 (attn8t verify), after #887 (nh_attn_t_part verify)",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ },
+ {
+  "label": "lightning-kapitsa-512k-v2",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,256000,480000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "the long sweep again with main + #890 (nh_attn_ts_s8 prefill) + #892 (attn8t verify), after #887 (nh_attn_t_part verify)",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ },
+ {
+  "label": "bolt-kapitsa-256k-v2",
+  "extends": "bolt-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "the long sweep again with main + #890 (nh_attn_ts_s8 prefill) + #892 (attn8t verify), after #887 (nh_attn_t_part verify)",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ },
+ {
+  "label": "super-kapitsa-512k-v2",
+  "extends": "super-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16513",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,256000,480000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "the long sweep again with main + #890 (nh_attn_ts_s8 prefill) + #892 (attn8t verify), after #887 (nh_attn_t_part verify)",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ }
+]
