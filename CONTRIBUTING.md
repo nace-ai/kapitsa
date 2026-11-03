@@ -95,6 +95,11 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | `python3 tests/vision/check_cpu.py build/vit_check MODEL_DIR [--quick]` | The Qwen image processor against Pillow (and Hugging Face's processors when torch and transformers are installed) | a Qwen3.5-4B, Qwen3.6 or Qwen3.8 folder; Pillow and numpy |
 | `python3 tests/vision/check_radio_cpu.py MODEL_DIR build/vit_check IMAGE.png...` | Nemotron 3.5 Bolt's image processor against NVIDIA's own | the Bolt folder; torch |
 
+`qmm_draft_check MODEL_DIR PROMPT_IDS NEW_OUTPUT [--from REFERENCE_OUTPUT]` dumps a DFlash2 pass under the GPU lock.
+It checks seven proposal rows, hidden states, top candidates and per-layer debug tensors on three fixed anchors;
+`--from` compares every saved byte and fails on any difference. Build the tool explicitly and use a new output
+directory for each run. These are correctness runs, not performance measurements.
+
 End to end, against a running server (this one runs the 4B on the GPU and downloads it, 3.3 GB, the first time):
 
 ```bash
