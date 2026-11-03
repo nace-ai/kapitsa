@@ -1,0 +1,100 @@
+[
+ {
+  "label": "q35-v8t-old",
+  "extends": "q36-35b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_V8_ATTN_T": "0"
+  },
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's zone attention on the matrix units: old (NI_V8_ATTN_T=0, attn8m_partial_zone), 32000,128000,240000, one request each"
+ },
+ {
+  "label": "q35-v8t-new",
+  "extends": "q36-35b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's zone attention on the matrix units: new (attn8t_partial_zone_g8), 32000,128000,240000, one request each"
+ },
+ {
+  "label": "clover-v8t-old",
+  "extends": "clover-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "131072"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_V8_ATTN_T": "0"
+  },
+  "bench_args": [
+   "--max-ctx",
+   "131072",
+   "--sweep-sizes",
+   "32000,120000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's zone attention on the matrix units: old (NI_V8_ATTN_T=0, attn8m_partial_zone), 32000,120000, one request each"
+ },
+ {
+  "label": "clover-v8t-new",
+  "extends": "clover-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "131072"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--max-ctx",
+   "131072",
+   "--sweep-sizes",
+   "32000,120000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's zone attention on the matrix units: new (attn8t_partial_zone_g8), 32000,120000, one request each"
+ }
+]
