@@ -1,0 +1,161 @@
+[
+ {
+  "label": "lightning-ab-old",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TV": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "32000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's attention on the matrix units: old (NI_NH_ATTN_TV=0, nh_attn_partial), 32K / 128K / 240K, one request each"
+ },
+ {
+  "label": "lightning-ab-new",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "32000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's attention on the matrix units: new (nh_attn_t_part), 32K / 128K / 240K, one request each"
+ },
+ {
+  "label": "super-ab-old",
+  "extends": "super-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TV": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16513",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's attention on the matrix units: old (NI_NH_ATTN_TV=0, nh_attn_partial), 32K / 128K, one request each"
+ },
+ {
+  "label": "super-ab-new",
+  "extends": "super-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16513",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's attention on the matrix units: new (nh_attn_t_part), 32K / 128K, one request each"
+ },
+ {
+  "label": "bolt-ab-old",
+  "extends": "bolt-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TV": "0"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's attention on the matrix units: old (NI_NH_ATTN_TV=0, nh_attn_partial), 32K / 128K, one request each"
+ },
+ {
+  "label": "bolt-ab-new",
+  "extends": "bolt-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "32000,128000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "1"
+  ],
+  "note": "A/B of the verify's attention on the matrix units: new (nh_attn_t_part), 32K / 128K, one request each"
+ }
+]

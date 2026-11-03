@@ -1,0 +1,61 @@
+=== lightning-ab-old 16:33:13 powermode=2 Now drawing from 'AC Power' load={ 1.00 1.44 1.96 } top=25.4 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;16.8 (Renderer);8.9 Helper;
+[16:33:19] lightning-ab-old:  warm-up prefill~2.9k+decode64: ok (0.72s)
+[16:33:19] lightning-ab-old:  warm-up tools: ok (0.17s)
+[16:33:38] lightning-ab-old: GPU quiet after 19s; benchmarking
+  decode T=0.6: 295.04 tok/s (e2e 287.86; 512 tok, finish=length, d4=0.9347)
+  decode T=0.6: 287.20 tok/s (e2e 284.14; 512 tok, finish=length, d4=0.9108)
+  decode T=0.6: 293.70 tok/s (e2e 290.81; 512 tok, finish=length, d4=0.9511)
+  decode T=0.6: 274.93 tok/s (e2e 269.24; 512 tok, finish=length, d4=0.9506)
+  decode T=0.6: 300.82 tok/s (e2e 293.64; 512 tok, finish=length, d4=0.9439)
+  decode median 293.7 (min 274.93, max 300.82) over 5/5 valid
+  sweep 32000: 33148 tok, TTFT 6.58s, 5037 tok/s prefill, decode 143.22 tok/s
+  sweep 128000: 133399 tok, TTFT 57.81s, 2307 tok/s prefill, decode 65.24 tok/s
+  sweep 240000: 254826 tok, TTFT 176.56s, 1443 tok/s prefill, decode 41.88 tok/s
+  -> <run-root>/ab2/results/lightning-ab-old-20261102-163313.json
+[16:38:18] lightning-ab-old: -> <run-root>/ab2/results/lightning-ab-old-20261102-163313.json  flags: 1
+=== lightning-ab-new 16:38:18 powermode=2 Now drawing from 'AC Power' load={ 1.86 1.50 1.80 } top=36.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;24.2 Helper;9.0 (Renderer);
+[16:38:24] lightning-ab-new:  warm-up prefill~2.9k+decode64: ok (0.95s)
+[16:38:25] lightning-ab-new:  warm-up tools: ok (0.2s)
+[16:39:25] lightning-ab-new: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 259.83 tok/s (e2e 259.64; 512 tok, finish=length, d4=0.9615)
+  decode T=0.6: 285.77 tok/s (e2e 279.73; 512 tok, finish=length, d4=0.9524)
+  decode T=0.6: 267.22 tok/s (e2e 265.59; 512 tok, finish=length, d4=0.9475)
+  decode T=0.6: 291.32 tok/s (e2e 286.88; 512 tok, finish=length, d4=0.9654)
+  decode T=0.6: 297.06 tok/s (e2e 288.47; 512 tok, finish=length, d4=0.9397)
+  decode median 285.77 (min 259.83, max 297.06) over 5/5 valid
+  sweep 32000: 33146 tok, TTFT 6.65s, 4981 tok/s prefill, decode 234.75 tok/s
+  sweep 128000: 133397 tok, TTFT 54.55s, 2445 tok/s prefill, decode 196.61 tok/s
+  sweep 240000: 254825 tok, TTFT 165.49s, 1540 tok/s prefill, decode 159.36 tok/s
+  -> <run-root>/ab2/results/lightning-ab-new-20261102-163818.json
+[16:43:35] lightning-ab-new: -> <run-root>/ab2/results/lightning-ab-new-20261102-163818.json  flags: 1
+=== lightning-ab-old 16:43:35 powermode=2 Now drawing from 'AC Power' load={ 0.96 1.35 1.67 } top=31.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;8.9 Helper;7.2 lsof;
+[16:43:41] lightning-ab-old:  warm-up prefill~2.9k+decode64: ok (0.86s)
+[16:43:41] lightning-ab-old:  warm-up tools: ok (0.18s)
+[16:44:41] lightning-ab-old: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 276.26 tok/s (e2e 274.58; 512 tok, finish=length, d4=0.91)
+  decode T=0.6: 228.63 tok/s (e2e 230.53; 512 tok, finish=length, d4=0.8978)
+  decode T=0.6: 290.93 tok/s (e2e 285.04; 512 tok, finish=length, d4=0.85)
+  decode T=0.6: 323.94 tok/s (e2e 311.49; 512 tok, finish=length, d4=0.8598)
+  decode T=0.6: 288.43 tok/s (e2e 284.40; 512 tok, finish=length, d4=0.9781)
+  decode median 288.43 (min 228.63, max 323.94) over 5/5 valid
+  sweep 32000: 33147 tok, TTFT 6.49s, 5110 tok/s prefill, decode 164.28 tok/s
+  sweep 128000: 133396 tok, TTFT 53.84s, 2478 tok/s prefill, decode 67.84 tok/s
+  sweep 240000: 254823 tok, TTFT 164.31s, 1551 tok/s prefill, decode 39.67 tok/s
+  -> <run-root>/ab2/results/lightning-ab-old-20261102-164335.json
+[16:49:05] lightning-ab-old: -> <run-root>/ab2/results/lightning-ab-old-20261102-164335.json  flags: 1
+=== lightning-ab-new 16:49:05 powermode=2 Now drawing from 'AC Power' load={ 2.19 1.84 1.79 } top=33.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;14.3 Helper;13.8 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[16:49:11] lightning-ab-new:  warm-up prefill~2.9k+decode64: ok (0.95s)
+[16:49:12] lightning-ab-new:  warm-up tools: ok (0.19s)
+[16:50:12] lightning-ab-new: GPU not quiet after 60s (['Claude Helper[95214] 12%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 294.26 tok/s (e2e 285.01; 512 tok, finish=length, d4=0.9248)
+  decode T=0.6: 236.50 tok/s (e2e 233.54; 512 tok, finish=length, d4=0.9836)
+  decode T=0.6: 261.02 tok/s (e2e 255.62; 512 tok, finish=length, d4=0.9301)
+  decode T=0.6: 281.42 tok/s (e2e 276.83; 512 tok, finish=length, d4=0.9523)
+  decode T=0.6: 264.37 tok/s (e2e 257.68; 512 tok, finish=length, d4=0.9187)
+  decode median 264.37 (min 236.5, max 294.26) over 5/5 valid
+  sweep 32000: 33147 tok, TTFT 6.68s, 4963 tok/s prefill, decode 230.19 tok/s
+  sweep 128000: 133397 tok, TTFT 54.32s, 2456 tok/s prefill, decode 206.36 tok/s
+  sweep 240000: 254822 tok, TTFT 164.41s, 1550 tok/s prefill, decode 173.80 tok/s
+  -> <run-root>/ab2/results/lightning-ab-new-20261102-164905.json
+[16:54:21] lightning-ab-new: -> <run-root>/ab2/results/lightning-ab-new-20261102-164905.json  flags: 1
+=== done 16:54:21

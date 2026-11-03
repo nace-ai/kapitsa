@@ -1,0 +1,19 @@
+[
+ {
+  "label": "lightning-short-old",
+  "extends": "lightning-kapitsa",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_NH_ATTN_TV": "0"
+  },
+  "note": "A/B of the verify's attention on the matrix units at the default 32K context: old"
+ },
+ {
+  "label": "lightning-short-new",
+  "extends": "lightning-kapitsa",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "note": "A/B of the verify's attention on the matrix units at the default 32K context: new"
+ }
+]
