@@ -43,24 +43,33 @@ NI_INLINE nhf_h8 v8t_load_kv(const device half* base, uint r0, uint c0, uint lim
   return v;
 }
 
-template <int G>
-NI_INLINE void attn8t_zone_impl(const device float* q, const device half* kc, const device half* vc,
-                                device float* part_o, device float* part_ml, constant V8tAttnP& p, uint R,
-                                const device int* tree, threadgroup float* xs, uint2 tg, uint sg, ushort lane) {
+// TREE 3: attn8m_partial_zone's keys and masks (above). TREE 1, a wide tree verify (attn8m_partial_tree's tiles: 16 or
+// 32 rows as 8-row tiles, the grid's x the chunks x the live tiles, tiles fastest): a threadgroup takes one 8-row tile
+// of a chunk, its rows see the history (< pos0) and of the block their ancestors and themselves (the mask's bits), the
+// keys up to pos0 + R.
+template <int G, int TREE>
+NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const device half* vc,
+                           device float* part_o, device float* part_ml, constant V8tAttnP& p, uint R,
+                           const device int* tree, threadgroup float* xs, uint2 tg, uint ntgx, uint sg, ushort lane) {
   constexpr int D = 256, DH = 128, BK = 32, KT = BK / 16;
-  const uint chunk = tg.x, kvh = tg.y, pi = sg >> 1, dh = sg & 1, d0 = dh * DH;
+  const uint nt = TREE == 1 && ntgx > p.nchunks ? ntgx / p.nchunks : 1u;
+  const uint chunk = nt > 1 ? tg.x / nt : tg.x, tile = nt > 1 ? tg.x % nt : 0u;
+  if (TREE == 1 && R > 8) R = min(R, 8 * nt);  // (a wide verify: the live tiles' rows)
+  const uint kvh = tg.y, pi = sg >> 1, dh = sg & 1, d0 = dh * DH;
   const short qid = lane >> 2, fm = (qid & 4) | ((lane >> 1) & 3), fn = ((qid & 2) | (lane & 1)) * 4;
-  // this lane's two rows (t G + h = 16 pi + fm + 8 i): their verify row, query head and key limit
-  uint t[2], hq[2], lim[2];
+  // this lane's two rows (t G + h = 16 pi + fm + 8 i within the tile's 8 rows): their verify row, query head, ancestor
+  // mask and (TREE 3) key limit
+  uint t[2], hq[2], anc[2], lim[2];
   _Pragma("clang loop unroll(full)")
   for (short i = 0; i < 2; ++i) {
     const uint rr = 16 * pi + fm + 8 * i;
-    t[i] = rr / G;
+    t[i] = rr < 8u * G ? 8 * tile + rr / G : R;  // (rows past the tile's 8 G: none)
     hq[i] = kvh * G + rr % G;
-    const uint anc = t[i] < R ? uint(tree[kV8tKfMask + t[i]]) : 0u;
-    lim[i] = t[i] < R ? v8t_zone(p.pos0 + (anc ? uint(popcount(anc)) - 1u : 0u)) : 0u;
+    anc[i] = t[i] < R ? uint(tree[kV8tKfMask + t[i]]) : 0u;
+    lim[i] = TREE == 3 && t[i] < R ? v8t_zone(p.pos0 + (anc[i] ? uint(popcount(anc[i])) - 1u : 0u)) : 0u;
   }
-  const uint start = chunk * p.chunk, kend = min(start + p.chunk, v8t_zone(p.pos0 + 7u));
+  const uint start = chunk * p.chunk;
+  const uint kend = min(start + p.chunk, TREE == 3 ? v8t_zone(p.pos0 + 7u) : p.pos0 + R);
   // Q as attn8m's: half(q scale), this simdgroup's 128 dims
   nhf_h8 qf[DH / 16];
   _Pragma("clang loop unroll(full)")
@@ -117,7 +126,9 @@ NI_INLINE void attn8t_zone_impl(const device float* q, const device half* kc, co
         for (short j = 0; j < 4; ++j) {
           float v = sf[f][4 * i + j] * M_LOG2E_F;
           const uint key = k0 + 16 * f + fn + j;
-          if (key >= lim[i] || key >= kend) v = kV8tNeg;
+          if (TREE == 3 ? key >= lim[i] : key > p.pos0 && !(key - p.pos0 < 32u && ((anc[i] >> (key - p.pos0)) & 1u)))
+            v = kV8tNeg;
+          if (key >= kend) v = kV8tNeg;
           sf[f][4 * i + j] = v;
           mx = max(mx, v);
         }
@@ -144,13 +155,18 @@ NI_INLINE void attn8t_zone_impl(const device float* q, const device half* kc, co
         _Pragma("clang loop unroll(full)")
         for (short e = 0; e < 8; ++e) o[id][e] *= corr[e >> 2];
     }
+    // P as half (TREE 3, as nh_attn_t); TREE 1 (the 27B, whose decode paths agree to ~1e-6 KL) as a half pair, hi + lo,
+    // so that O carries attn8m's fp32 P to ~22 bits and only the sums' order differs
     _Pragma("clang loop unroll(full)")
     for (short f = 0; f < KT; ++f) {
       const nhf_h8 pf = nhf_h8(sf[f]);
+      nhf_h8 pl;
+      if (TREE == 1) pl = nhf_h8(sf[f] - nhf_f8(pf));
       _Pragma("clang loop unroll(full)")
       for (short id = 0; id < DH / 16; id += 2) {
         const nhf_h8 v0 = v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16, last, fm, fn);
         const nhf_h8 v1 = v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16 + 16, last, fm, fn);
+        if (TREE == 1) nhf_mma<half, half, false>(o[id], o[id + 1], pl, v0, v1);
         nhf_mma<half, half, false>(o[id], o[id + 1], pf, v0, v1);
       }
     }
@@ -160,7 +176,8 @@ NI_INLINE void attn8t_zone_impl(const device float* q, const device half* kc, co
   for (short i = 0; i < 2; ++i) {
     if (t[i] >= R) continue;
     const size_t base = (size_t(t[i]) * p.Hq + hq[i]) * p.nchunks + chunk;
-    const bool any = start < lim[i];
+    const bool any = TREE == 3 ? start < lim[i]
+                               : start <= p.pos0 || (start - p.pos0 < 32u && (anc[i] >> (start - p.pos0)) != 0u);
     _Pragma("clang loop unroll(full)")
     for (short id = 0; id < DH / 16; ++id)
       *(device float4*)(part_o + base * D + d0 + id * 16 + fn) =
@@ -172,14 +189,15 @@ NI_INLINE void attn8t_zone_impl(const device float* q, const device half* kc, co
   }
 }
 
-#define ATTN8T_ZONE(NAME, G)                                                                                          \
+#define ATTN8T(NAME, G, TREE)                                                                                         \
   [[kernel, max_total_threads_per_threadgroup(64 * ((8 * G + 15) / 16))]] void NAME(                                \
       const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]], \
       device float* part_o [[buffer(3)]], device float* part_ml [[buffer(4)]], constant V8tAttnP& p [[buffer(5)]],   \
       constant uint& R [[buffer(6)]], const device int* tree [[buffer(7)]],                                          \
-      uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],                        \
-      uint lane [[thread_index_in_simdgroup]]) {                                                                     \
+      uint2 tg [[threadgroup_position_in_grid]], uint2 ntg [[threadgroups_per_grid]],                               \
+      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                        \
     threadgroup float xs[2 * ((8 * G + 15) / 16) * 32 * 16];                                                         \
-    attn8t_zone_impl<G>(q, kc, vc, part_o, part_ml, p, R, tree, xs, tg, sg, ushort(lane));                           \
+    attn8t_impl<G, TREE>(q, kc, vc, part_o, part_ml, p, R, tree, xs, tg, ntg.x, sg, ushort(lane));                   \
   }
-ATTN8T_ZONE(attn8t_partial_zone_g8, 8)  // Qwen3.6 35B-A3B, Clover: 16 query heads over 2 KV heads, 4 tiles
+ATTN8T(attn8t_partial_zone_g8, 8, 3)  // Qwen3.6 35B-A3B, Clover: 16 query heads over 2 KV heads, 4 tiles
+ATTN8T(attn8t_partial_tree_g6, 6, 1)  // Qwen3.8 27B's wide verify: 24 query heads over 4 KV heads, 3 tiles, P as hi + lo

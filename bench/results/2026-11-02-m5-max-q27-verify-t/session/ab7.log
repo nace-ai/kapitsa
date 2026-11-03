@@ -1,0 +1,57 @@
+=== q27-v8t-old 23:01:02 powermode=2 Now drawing from 'AC Power' load={ 1.81 1.78 1.46 } top=32.1 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;20.5 (Renderer);10.7 Helper;
+[23:01:16] q27-v8t-old:  warm-up prefill~2.9k+decode64: ok (4.03s)
+[23:01:17] q27-v8t-old:  warm-up tools: ok (0.97s)
+[23:02:18] q27-v8t-old: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 150.03 tok/s (e2e 150.79; 512 tok, finish=length, d4=0.977)
+  decode T=0.6: 139.20 tok/s (e2e 140.02; 512 tok, finish=length, d4=0.673)
+  decode T=0.6: 153.05 tok/s (e2e 148.87; 512 tok, finish=length, d4=0.6461)
+  decode T=0.6: 170.71 tok/s (e2e 166.86; 512 tok, finish=length, d4=0.8623)
+  decode T=0.6: 145.79 tok/s (e2e 142.86; 512 tok, finish=length, d4=0.9335)
+  decode median 150.03 (min 139.2, max 170.71) over 5/5 valid
+  sweep 32000: 32719 tok, TTFT 42.58s, 768 tok/s prefill, decode 72.37 tok/s
+  sweep 128000: 131100 tok, TTFT 281.21s, 466 tok/s prefill, decode 34.58 tok/s
+  -> <run-root>/ab7/results/q27-v8t-old-20261102-230102.json
+[23:08:23] q27-v8t-old: -> <run-root>/ab7/results/q27-v8t-old-20261102-230102.json  flags: 3
+=== q27-v8t-new 23:08:23 powermode=2 Now drawing from 'AC Power' load={ 1.39 1.47 1.46 } top=11.6 Helper;5.0 (Renderer);3.4 /System/Library/Frameworks/AppKit.framework/Versions/C/XPCServices/com.apple.appkit.xpc.openAndSavePanelService.xpc/Contents/MacOS/com.apple.appkit.xpc.openAndSavePanelService;
+[23:09:49] q27-v8t-new:  warm-up prefill~2.9k+decode64: ok (4.07s)
+[23:09:50] q27-v8t-new:  warm-up tools: ok (0.96s)
+[23:10:50] q27-v8t-new: GPU not quiet after 60s (['Claude Helper[95214] 16%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 138.07 tok/s (e2e 138.36; 512 tok, finish=length, d4=0.8664)
+  decode T=0.6: 142.35 tok/s (e2e 139.45; 512 tok, finish=length, d4=0.9186)
+  decode T=0.6: 141.28 tok/s (e2e 138.08; 512 tok, finish=length, d4=0.903)
+  decode T=0.6: 140.33 tok/s (e2e 140.21; 512 tok, finish=length, d4=0.9589)
+  decode T=0.6: 129.57 tok/s (e2e 127.06; 512 tok, finish=length, d4=0.8879)
+  decode median 140.33 (min 129.57, max 142.35) over 5/5 valid
+  sweep 32000: 32721 tok, TTFT 42.68s, 767 tok/s prefill, decode 69.94 tok/s
+  sweep 128000: 131100 tok, TTFT 283.13s, 463 tok/s prefill, decode 40.15 tok/s
+  -> <run-root>/ab7/results/q27-v8t-new-20261102-230823.json
+[23:17:02] q27-v8t-new: -> <run-root>/ab7/results/q27-v8t-new-20261102-230823.json  flags: 1
+=== q27-v8t-old 23:17:02 powermode=2 Now drawing from 'AC Power' load={ 1.24 1.14 1.29 } top=15.3 Helper;14.7 (Renderer);4.2 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[23:17:15] q27-v8t-old:  warm-up prefill~2.9k+decode64: ok (4.53s)
+[23:17:17] q27-v8t-old:  warm-up tools: ok (1.14s)
+[23:18:17] q27-v8t-old: GPU not quiet after 60s (['Claude Helper[95214] 16%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 126.74 tok/s (e2e 127.57; 512 tok, finish=length, d4=0.9393)
+  decode T=0.6: 109.68 tok/s (e2e 110.37; 512 tok, finish=length, d4=0.9579)
+  decode T=0.6: 108.39 tok/s (e2e 108.81; 512 tok, finish=length, d4=0.8673)
+  decode T=0.6: 139.53 tok/s (e2e 135.95; 512 tok, finish=length, d4=0.9147)
+  decode T=0.6: 129.73 tok/s (e2e 127.63; 512 tok, finish=length, d4=0.9612)
+  decode median 126.74 (min 108.39, max 139.53) over 5/5 valid
+  sweep 32000: 32717 tok, TTFT 41.55s, 787 tok/s prefill, decode 60.81 tok/s
+  sweep 128000: 131096 tok, TTFT 278.96s, 470 tok/s prefill, decode 41.21 tok/s
+  -> <run-root>/ab7/results/q27-v8t-old-20261102-231702.json
+[23:24:18] q27-v8t-old: -> <run-root>/ab7/results/q27-v8t-old-20261102-231702.json  flags: 2
+=== q27-v8t-new 23:24:18 powermode=2 Now drawing from 'AC Power' load={ 1.59 1.29 1.31 } top=11.2 Helper;3.4 (Renderer);3.3 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[23:24:32] q27-v8t-new:  warm-up prefill~2.9k+decode64: ok (4.34s)
+[23:24:33] q27-v8t-new:  warm-up tools: ok (1.13s)
+[23:25:33] q27-v8t-new: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 111.53 tok/s (e2e 109.16; 512 tok, finish=length, d4=0.713)
+  decode T=0.6: 118.43 tok/s (e2e 117.92; 512 tok, finish=length, d4=0.9447)
+  decode T=0.6: 134.40 tok/s (e2e 131.36; 512 tok, finish=length, d4=0.9577)
+  decode T=0.6: 132.89 tok/s (e2e 133.31; 512 tok, finish=length, d4=0.9695)
+  decode T=0.6: 122.10 tok/s (e2e 121.62; 512 tok, finish=length, d4=0.9585)
+  decode median 122.1 (min 111.53, max 134.4) over 5/5 valid
+  sweep 32000: 32721 tok, TTFT 40.71s, 804 tok/s prefill, decode 70.63 tok/s
+  sweep 128000: 131099 tok, TTFT 274.64s, 477 tok/s prefill, decode 56.01 tok/s
+  -> <run-root>/ab7/results/q27-v8t-new-20261102-232418.json
+[23:31:35] q27-v8t-new: -> <run-root>/ab7/results/q27-v8t-new-20261102-232418.json  flags: 2
+=== done 23:31:35
