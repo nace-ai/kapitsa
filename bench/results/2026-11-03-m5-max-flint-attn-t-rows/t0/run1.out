@@ -1,0 +1,11 @@
+arm 0 plain: prompt 122621 (cached 0): 512 tok in 5269 ms, 97.0 tok/s, - t/c, length
+arm 0 plain: prompt 235892 (cached 0): 512 tok in 8431 ms, 60.6 tok/s, - t/c, length
+arm 1 old: prompt 122621 (cached 0): 512 tok in 14768 ms, 34.6 tok/s, 1.19 t/c, length
+arm 1 old: prompt 235892 (cached 235891): 512 tok in 19166 ms, 26.7 tok/s, 1.20 t/c, length
+arm 2 new: prompt 122621 (cached 0): 512 tok in 6021 ms, 84.9 tok/s, 1.32 t/c, length
+arm 2 new: prompt 235892 (cached 235891): 512 tok in 8617 ms, 59.3 tok/s, 1.20 t/c, length
+arm 3 old: prompt 122621 (cached 0): 512 tok in 14761 ms, 34.6 tok/s, 1.19 t/c, length
+arm 3 old: prompt 235892 (cached 235891): 512 tok in 19121 ms, 26.7 tok/s, 1.20 t/c, length
+arm 4 new: prompt 122621 (cached 0): 512 tok in 6056 ms, 84.4 tok/s, 1.32 t/c, length
+arm 4 new: prompt 235892 (cached 235891): 512 tok in 8627 ms, 59.2 tok/s, 1.20 t/c, length
+texts equal to the plain arm's: {'133K': [True, True, True, True, True], '252K': [True, True, True, True, True]}

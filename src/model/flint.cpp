@@ -990,7 +990,13 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     // (bitwise the per-row kernel's output; NI_FLINT_ATTN_ROWS=0 keeps the per-row grid)
     static const bool rows1 = !getenv("NI_FLINT_ATTN_ROWS") || atoi(getenv("NI_FLINT_ATTN_ROWS")) != 0;
     const bool shared_rows = rows1 && R > 1;
-    e.use(pipe(shared_rows    ? (small_tiles() ? "flint_attn_partial_rows_k16" : "flint_attn_partial_rows")
+    // NI_FLINT_ATTN_T (default on, 0 = off): those rows on the matrix units where the dense GEMMs use them (qmt_: an
+    // Apple10 GPU on macOS 26), flint_attn_t_rows (tensor/qattn_t_flint.metal: the same partials, the products as
+    // half): one full-attention layer, 8 rows after 262K positions, 1.0 against 11.0 ms; 4 rows 0.93 against 5.8
+    static const bool attn_t = !getenv("NI_FLINT_ATTN_T") || atoi(getenv("NI_FLINT_ATTN_T")) != 0;
+    const bool tr = shared_rows && attn_t && qmt_ && c.hq / c.hkv == 8 && c.hd == 128;
+    e.use(pipe(tr             ? "flint_attn_t_rows"
+               : shared_rows  ? (small_tiles() ? "flint_attn_partial_rows_k16" : "flint_attn_partial_rows")
                : small_tiles() ? "flint_attn_partial_k16"
                                : "flint_attn_partial"));
     e.buf(0, q_);
@@ -1000,7 +1006,8 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     e.buf(4, part_ml_);
     e.val(5, ap);
     if (!shared_rows) e.buf(6, part_ml_);  // (no tree)
-    e.dispatch(nch, uint32_t(c.hkv), shared_rows ? 1u : uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
+    if (tr) e.dispatch(nch, uint32_t(c.hkv), 1, 128);  // 4 simdgroups of 2 rows x 8 heads
+    else e.dispatch(nch, uint32_t(c.hkv), shared_rows ? 1u : uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
     e.use(pipe("flint_attn_reduce"));
     e.buf(0, part_o_);
     e.buf(1, part_ml_);

@@ -1,0 +1,12 @@
+flint_attn_partial_rows R 2 L 1000:   32 chunks of     32 keys:   0.095 ms    21.7 GB/s  max|diff| 0.00e+00  fp64 err 1.20e-08
+flint_attn_t_rows R 2 L 1000:   32 chunks of     32 keys:   0.046 ms    44.3 GB/s  max|diff| 1.56e-05  fp64 err 1.19e-05
+flint_attn_t_rows_q1 R 2 L 1000:   32 chunks of     32 keys:   0.035 ms    58.0 GB/s  max|diff| 1.89e-05  fp64 err 1.57e-05
+flint_attn_partial_rows R 8 L 1000:   32 chunks of     32 keys:   0.309 ms     6.7 GB/s  max|diff| 0.00e+00  fp64 err 1.08e-08
+flint_attn_t_rows R 8 L 1000:   32 chunks of     32 keys:   0.090 ms    22.8 GB/s  max|diff| 1.70e-05  fp64 err 1.46e-05
+flint_attn_t_rows_q1 R 8 L 1000:   32 chunks of     32 keys:   0.053 ms    38.6 GB/s  max|diff| 2.01e-05  fp64 err 2.01e-05
+flint_attn_partial_rows R 2 L 32768:   40 chunks of    832 keys:   1.721 ms    39.0 GB/s  max|diff| 0.00e+00  fp64 err 1.06e-08
+flint_attn_t_rows R 2 L 32768:   40 chunks of    832 keys:   0.411 ms   163.2 GB/s  max|diff| 5.24e-06  fp64 err 4.50e-06
+flint_attn_t_rows_q1 R 2 L 32768:   40 chunks of    832 keys:   0.132 ms   507.0 GB/s  max|diff| 6.43e-06  fp64 err 5.69e-06
+flint_attn_partial_rows R 8 L 32768:   40 chunks of    832 keys:   1.421 ms    47.2 GB/s  max|diff| 0.00e+00  fp64 err 1.00e-08
+flint_attn_t_rows R 8 L 32768:   40 chunks of    832 keys:   0.307 ms   218.7 GB/s  max|diff| 5.66e-06  fp64 err 4.65e-06
+flint_attn_t_rows_q1 R 8 L 32768:   40 chunks of    832 keys:   0.139 ms   483.6 GB/s  max|diff| 7.71e-06  fp64 err 7.70e-06

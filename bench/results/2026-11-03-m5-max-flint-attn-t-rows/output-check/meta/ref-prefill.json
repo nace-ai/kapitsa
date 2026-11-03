@@ -1,0 +1,22 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.26 (e93901d)",
+  "model": "flint-4bit",
+  "model_dir": "~/models/flint-4bit",
+  "path": "prefill",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 8,
+  "vocab": 150144,
+  "source": "bench/corpus.txt",
+  "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+  "macos": "26.4",
+  "date": "2026-11-03T15:38:33Z",
+  "env": {
+    "NI_FLINT_ATTN_T": "0"
+  }
+}

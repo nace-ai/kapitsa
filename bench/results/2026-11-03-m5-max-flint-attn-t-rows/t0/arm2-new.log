@@ -1,0 +1,17 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the Flint kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] read 22.57 GB of weights in 1158 ms (19.5 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 1.3 s
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (111 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 22.59 GB allocated (model, buffers, 1 slot's state), budget 110.8 GB (recommended working set 115.4 GB): KV room 88.25 GB = 3077766 tokens (28 KB per token), one conversation up to 262144 of 262144 tokens
+[kapitsa] drafter: none (this model takes no block drafter, prompt lookup only)
+[kapitsa] engine ready: m, context 262144, 1 slots, prompt-lookup speculative decoding (up to 7 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://127.0.0.1:8298
+[kapitsa] SSD prefix cache: <scratch>/flint/t0/run1/prefix-cache/fcf38ddea7a3ddca93ff08c4eb4e5249, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 1 conversation taken back (6.3 GiB)
+[kapitsa] compiled the weight-format kernels in 10 ms
+[kapitsa] chat: prompt 122621 (cached 0) in 64540 ms (+157.4 ms template/tokenize; last chunk: encoded by 62669.8 ms, GPU start +1860.0 ms, GPU 10.4 ms, wake +0.1 ms), 512 tokens in 6021 ms (84.9 tok/s), length, 1.32 tok/cycle, KFlash (prompt lookup): 387 cycles, 1045 rows, 124 drafts accepted
+[kapitsa] SSD cache: slot 0's conversation (122620 tokens) is replaced before it was saved: the 3554 MB the SSD lacks of it exceed the 1074 MB copied at once, and writing them (about 8884 ms) would take longer than reading its 122620 rows again (about 64540 ms, at most 3 s)
+[kapitsa] SSD cache: read 235891 tokens of a stored conversation into slot 0 (6803 MB in 529 ms)
+[kapitsa] chat: prompt 235892 (cached 235891) in 24 ms (+328.2 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +0.5 ms, GPU 23.2 ms, wake +0.1 ms), 512 tokens in 8617 ms (59.3 tok/s), length, 1.20 tok/cycle, KFlash (prompt lookup): 426 cycles, 972 rows, 85 drafts accepted
