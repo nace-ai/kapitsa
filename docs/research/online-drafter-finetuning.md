@@ -294,7 +294,7 @@ intervals are wide.
 Scope (Alish, 4 Nov 2026): English coding prompts are the headline number, English non-coding the second class, and a multilingual set is an optional extra check, not a gate. The sections keep their numbers from the first version, so §6.1 is now an optional multilingual idea and §6.2 comes first.
 
 Feasibility is my score, 0-1, for "built and shown to win a default in about two weeks of engineering". Expected gains are
-inferences from the measured numbers cited. GPU results: F1 (§6.1, "M3 Pro, battery 99→91%, 3 prompts/class", INCONCLUSIVE), F1b (§6.1), the 108 Weaver legs in `uzu` (§5.7), and F2 (§6.5, the 35B on the English coding-agent ledger, M5 Pro, AC power, one run per leg).
+inferences from the measured numbers cited. GPU results: F1 (§6.1, "M3 Pro, battery 99→91%, 3 prompts/class", INCONCLUSIVE), F1b (§6.1), the 108 Weaver legs in `uzu` (§5.7), and F2 (§6.5, the 35B on the English coding-agent ledger, M5 Pro, AC power, two runs).
 
 ### 6.1 A draft head that follows the user's tokens (feasibility 0.8; optional, non-English only)
 
@@ -444,23 +444,23 @@ The 7-node tree is the engine's default on the 35B. Replaying larger node budget
 
 ### 6.5 F2 measured: the 35B on the English coding-agent session (M5 Pro, AC power, 4 Nov 2026)
 
-`compare_engines.py` agent phase (`agent_replay.py`) on `opencode-ledger.json`: 19 requests of one English coding-agent session (OpenCode, up to 22.7k tokens of context, greedy, thinking off, recorded tool-call gaps of at most 5 s), `kapitsa serve --slots 1`, 35B-A3B 4-bit, AC power and High Power Mode, GPU lock held, each leg started on a fresh server after AC was checked, once per leg. Raw files stay with the task outside the repo (`kapitsa-316/f2-out/results/q36-35b-*.json`, `kapitsa-316/f2/f2_acceptance.json`).
+`compare_engines.py` agent phase (`agent_replay.py`) on `opencode-ledger.json`: 19 requests of one English coding-agent session (OpenCode, up to 22.7k tokens of context, greedy, thinking off, recorded tool-call gaps of at most 5 s), `kapitsa serve --slots 1`, 35B-A3B 4-bit, High Power Mode, GPU lock held, AC checked before and after every leg, a fresh server per leg. Two runs, the second in the opposite leg order. Raw files stay with the task outside the repo (`kapitsa-316/f2-out/`, `f2-out-rep/`, `f2/f2_acceptance.json`).
 
-| Leg | Writing speed | Time for the 19 turns | Tokens per verify cycle |
+| Run (leg order) | DFlash2 drafter | `--dflash none` (MTP head, depth 1) | Drafter faster by |
 |---|---|---|---|
-| DFlash2 drafter (default) | 173.5 tok/s | 30.8 s | 4.01 (code 4.06, the one prose answer 3.61) |
-| `--dflash none` (the engine's MTP head, depth 1) | 106.9 tok/s | 45.5 s | 1.83 |
+| Run 1 (drafter, then plain) | 173.5 tok/s, 30.8 s | 106.9 tok/s, 45.5 s, **7,996 pages swapped** | 62 % (not clean, see below) |
+| Run 2 (plain, then drafter) | 173.2 tok/s, 30.9 s | 128.3 tok/s, 36.7 s, no swap | **35 %** |
 
-The drafter is about 62 % faster in writing speed (173.5 against 106.9 tok/s) and the session finishes about 32 % sooner (30.8 against 45.5 s, prefill included). Per turn it is faster on 17 of 19 turns, mean per-turn ratio 1.44 (bootstrap 95 % CI over turns [1.28, 1.59], median 1.48, range 0.95 to 2.17). Turns that write edits, which carry the long code answers, gain most: 4.50 tokens per cycle against 2.91 on reads and shell commands. The live 4.01 tokens per cycle is close to the replay's 3.99 (the §6.2 baseline); an earlier, separate drafter run of the same 19 requests that only parsed the server log read 4.04, so two live runs bracket the replay baseline.
+Writing speed in tok/s, then the time for the 19 turns (prefill included). **Use run 2: the drafter is about 35 % faster than the engine's own MTP head on this session, and the session finishes about 19 % sooner.** The drafter leg reads 173 tok/s in both runs; only the plain leg moved (107 against 128), and it is the one that swapped in run 1. Per turn in run 2 the drafter is faster on 13 of 19 turns, mean ratio 1.21, median 1.20, bootstrap 95 % CI over turns [1.09, 1.34]. Edits, which carry the long code answers, gain most: 4.50 tokens per cycle against 2.91 on reads and shell commands. Tokens per verify cycle: 4.01 with the drafter (code 4.06, the one prose answer 3.61; 4.01 again in run 2), against 1.83 with the MTP head. The replay baseline in §6.2 and §6.3 is 3.99, so the live engine matches it.
 
 **Caveats, in order of weight.**
-- **The plain leg swapped.** The harness flagged "7,996 pages swapped out during the phase" on the plain leg and none on the drafter leg (both servers held about 22 GB with 3.3 GB of swap already in use before the phase). Plain decode may therefore be understated, so 62 % is an upper estimate of the drafter's gain over the engine's own MTP head.
-- **One timed run per leg**, drafter first, plain second. Order and run-to-run noise are not separated; the interval above is over turns, not repeats. A repeat in the opposite order (plain first) is queued; its numbers are not in this section yet.
-- **The two legs did not write identical answers.** 12 of 19 turns match the recording on the drafter leg and 11 on the plain leg, and the legs wrote 3,440 and 3,311 tokens, so the two rates average over slightly different text. Over the 10 turns whose answers match on both legs the ratio of rates is 1.30, the more conservative figure.
-- The baseline here is the engine's MTP head, not decoding with no speculator at all, so this is the drafter's gain over the engine's own fallback, not over plain greedy decoding. A plain no-speculator decode on this Mac was not measured.
-- Per-turn rates for short answers are dominated by start-up (turns of 31 to 66 tokens), so they say little on their own.
+- **Run 1's 62 % is inflated.** The harness flagged the swap on its plain leg only; plain decode there ran about 17 % slower than in the clean run 2. Quote 35 %, not 62 %.
+- **Two runs, one session.** The drafter leg agrees to 0.2 % across runs; the plain legs differ by 20 % because of the swap. No interval over repeats exists, and the interval above is over the 19 turns of one run.
+- **The legs did not write identical answers.** 12 of 19 turns match the recording on the drafter leg and 11 on the plain leg (3,440 and 3,311 tokens), so the rates average over slightly different text. Over the 10 turns whose answers match on both legs, run 2's ratio is 1.10, the most conservative figure: about 10 % faster. The honest range on this session is therefore +10 % to +35 %, centered near +20 to +35 %.
+- The baseline here is the engine's MTP head, not decoding with no speculator at all, so this is the drafter's gain over the engine's own fallback. A plain no-speculator decode on this Mac was not measured.
+- Short answers (turns of 31 to 66 tokens) are dominated by start-up and say little on their own; 6 of 19 turns were slower with the drafter in run 2.
 
-What it settles for the plan: the drafter is working on English coding-agent traffic at 4.0 tokens per cycle, and the replay baseline the history lane and the selector update are measured against is the live number. What it does not settle: the history lane and the selector update are still replays; the +13.3 % and +8.6 % in §6.2 and §6.3 have not been run on the GPU.
+What it settles: the drafter works on English coding-agent traffic, 4.0 tokens per cycle, and the replay baseline the history lane and the selector update are measured against is the live number. What it does not: the history lane and the selector update are still replays, and the +13.3 % and +8.6 % in §6.2 and §6.3 have not been run on the GPU.
 
 ### Not in the top 3
 
@@ -536,7 +536,7 @@ The rowlogs are Flash-Next on Splash, in other worktrees (`kapitsa-ksx`, `kapits
 `{acc, rows, conf[7], wall_ms}`; `acc` counts accepted drafts.
 
 **Not done, and limits.**
-- The research behind the survey and the replays used no GPU. The only live 35B-A3B numbers on the M5 Pro are the F2 legs in §6.5: one run per leg, 19 turns of one coding-agent session, so no interval over repeats. Every other speed figure for the 35B is an inference from other measurements.
+- The research behind the survey and the replays used no GPU. The only live 35B-A3B numbers on the M5 Pro are the F2 legs in §6.5: two runs, 19 turns of one coding-agent session, so no interval over repeats. Every other speed figure for the 35B is an inference from other measurements.
 - Replays use Flash-Next traces from Splash (T0, 256 tokens, count/code/CJK prompts), not the 35B on Kapitsa. The history-lane replay skips 29 % of the logged requests (32 of 112; rowlog blocks that do not add up), keeping 64 % of the logged cycles. I did not check which draft head those runs used. A rowlog gives accepted
   counts and confidences, not hidden states, so weight updates cannot be replayed from it.
 - The Wikipedia coverage numbers come from single articles of up to 30 kB, with the first half as "history". Treat them as direction.
