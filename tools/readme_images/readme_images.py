@@ -497,15 +497,19 @@ def spread(ys, gap, lo, hi):
 
 def context_chart(data, theme, kind):
     """Kapitsa's prefill or decode speed by context length (data["context"]): one line per model on a log scale (each
-    gridline twice the one below), a legend above, each line's first value and model at its start; returns (html, w, h)"""
+    gridline twice the one below), a legend above, each line's first value and model at its start; a model's values end
+    in nulls past its context limit, where its line stops; returns (html, w, h)"""
     t, colors = POSTER[theme], SERIES[theme]
     C = data["context"]
     sizes, models, K = C["sizes"], C["models"], C[kind]
     ticks = K["ticks"]
     W, H = data["poster"]["size"][0], CTX_H
     for m in models:
-        if len(m[kind]) != len(sizes) or not ticks[0] <= min(m[kind]) <= max(m[kind]) <= ticks[-1]:
-            sys.exit(f"readme_images.json: context {m['model']} {kind}: {len(sizes)} values within {ticks[0]}-{ticks[-1]}")
+        vs = measured(m[kind])
+        if (len(m[kind]) != len(sizes) or None in vs or not vs
+                or not ticks[0] <= min(vs) <= max(vs) <= ticks[-1]):
+            sys.exit(f"readme_images.json: context {m['model']} {kind}: {len(sizes)} values within {ticks[0]}-{ticks[-1]}"
+                     ", then nulls past the model's context limit")
     per_line = int((W - 2 * 44) / (F_FOOT * FOOT_EM))
     foot = [w for line in K["footer"] for w in textwrap.wrap(line, per_line, break_long_words=False)]
     fy = H - FOOT_PAD - len(foot) * FOOT_LINE
@@ -539,10 +543,10 @@ def context_chart(data, theme, kind):
         o.append(text(x(j), bottom + 46, s, "mono", 24, t["muted"], "middle"))
     o.append(text((left + right) / 2, bottom + 84, K["x_title"], "sans", 24, t["ink2"], "middle"))
     for m in models:                                    # the lines, then the markers over every line
-        pts = " ".join(f"{num(x(j))},{num(y(v))}" for j, v in enumerate(m[kind]))
+        pts = " ".join(f"{num(x(j))},{num(y(v))}" for j, v in enumerate(measured(m[kind])))
         o.append(f'<polyline points="{pts}" fill="none" {stroke(m, 5)} stroke-linejoin="round" stroke-linecap="round"/>')
     for m in models:
-        for j, v in enumerate(m[kind]):
+        for j, v in enumerate(measured(m[kind])):
             o.append(f'<circle cx="{num(x(j))}" cy="{num(y(v))}" r="8" fill="{colors[m["slot"]]}" '
                      f'stroke="{t["panel"]}" stroke-width="4"/>')
     starts = [y(m[kind][0]) for m in models]            # start labels, spread apart, each led to its line's start
@@ -564,6 +568,14 @@ def context_chart(data, theme, kind):
     return html, W, H
 
 
+def measured(vs):
+    """a context line's values up to its model's context limit (the nulls after it dropped)"""
+    n = len(vs)
+    while n and vs[n - 1] is None:
+        n -= 1
+    return vs[:n]
+
+
 def compact(v):
     return f"{v / 1000:g}K" if v >= 1000 else f"{v:g}"
 
@@ -572,8 +584,8 @@ def context_alt(data, kind):
     """the README alt text of one context chart: every model's first and last value"""
     C = data["context"]
     return (f"{C[kind]['alt']}: "
-            + "; ".join(f"{m['model']} {m[kind][0]:,.0f} at {C['sizes'][0]} to {m[kind][-1]:,.0f} at {C['sizes'][-1]}"
-                        for m in C["models"]) + ".")
+            + "; ".join(f"{m['model']} {m[kind][0]:,.0f} at {C['sizes'][0]} to {measured(m[kind])[-1]:,.0f} at "
+                        f"{C['sizes'][len(measured(m[kind])) - 1]}" for m in C["models"]) + ".")
 
 
 # ---------------------------------------------------------------- the header (SVG, text as Geist Mono outlines)

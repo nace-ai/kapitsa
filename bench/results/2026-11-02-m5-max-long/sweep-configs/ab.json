@@ -1,0 +1,55 @@
+[
+ {
+  "label": "dory-ab-ctx32k-code",
+  "extends": "dory-kapitsa-perloop",
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--sweep-sizes",
+   "2000,4000,16000",
+   "--max-ctx",
+   "32768",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "A/B: the default 32K context, the code question"
+ },
+ {
+  "label": "dory-ab-ctx256k-code",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--sweep-sizes",
+   "2000,4000,16000",
+   "--max-ctx",
+   "262144",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "A/B: --ctx 262144 (the long sweep's), the code question"
+ },
+ {
+  "label": "dory-ab-ctx32k-summary",
+  "extends": "dory-kapitsa-perloop",
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--sweep-sizes",
+   "2000,4000,16000",
+   "--max-ctx",
+   "32768",
+   "--sweep-task",
+   "summary"
+  ],
+  "note": "A/B: the default 32K context, the summary question and the frozen corpus (the 2026-11-01 sweep's)"
+ }
+]

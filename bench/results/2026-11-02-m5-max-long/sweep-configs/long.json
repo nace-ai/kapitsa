@@ -1,0 +1,270 @@
+[
+ {
+  "label": "q36-35b-kapitsa-256k",
+  "extends": "q36-35b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "flint-kapitsa-256k",
+  "extends": "flint-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons",
+   "--ref-prompt-tokens",
+   "4000:3874,16000:15066",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "clover-kapitsa-128k",
+  "extends": "clover-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "131072"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "131072",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (128k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "lightning-kapitsa-512k",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,256000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (512k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "bolt-kapitsa-256k",
+  "extends": "bolt-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "flash-kapitsa-256k",
+  "extends": "flash-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4133,16000:16286",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "super-kapitsa-512k",
+  "extends": "super-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16513",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,256000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (512k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "q38-27b-kapitsa-256k",
+  "extends": "q38-27b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "dory-kapitsa-perloop-256k",
+  "extends": "dory-kapitsa-perloop",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long)"
+ },
+ {
+  "label": "bolt-kapitsa-256k-top",
+  "extends": "bolt-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514",
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "240000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long); the top point only, 240,000 (max, 249,051, read as 264,365 tokens, past the context)"
+ },
+ {
+  "label": "lightning-kapitsa-512k-top",
+  "extends": "lightning-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "480000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (512k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long); the top point only, 480,000 (max, 498,712, read as 532,608 tokens, past the context)"
+ },
+ {
+  "label": "super-kapitsa-512k-top",
+  "extends": "super-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "524288"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16513",
+   "--max-ctx",
+   "524288",
+   "--sweep-sizes",
+   "2000,480000",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (512k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long); the top point, 480,000 (max read as 532,602 tokens, past the context), and 2,000 again (one answer looped at 825 tok/s)"
+ },
+ {
+  "label": "q38-27b-kapitsa-256k-top",
+  "extends": "q38-27b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt"
+  ],
+  "note": "long-context sweep: the model's limit (256k) as --ctx; each size answers the decode phase's 512-token coding question after the document (--sweep-task code), cut from the long corpus (corpus/make_corpus.py --long); the top point again, on AC with sleep prevented (the first run's 259K requests ran into the Mac's idle sleep at 07:54)"
+ }
+]

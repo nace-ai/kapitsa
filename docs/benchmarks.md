@@ -107,6 +107,34 @@ be declared ambient instead: its load is then recorded, not flagged). *Loop*: a 
 
 ### MacBook Pro M5 Max, 128 GB
 
+**2026-11-02: from 1K to 512K context** ([results](../bench/results/2026-11-02-m5-max-long/README.md)). Kapitsa 0.2.26
+(main `b7a9711`), each model at its default (the 2026-11-01 cells' labels) with the server's context at the model's limit:
+128K on Clover, 1M on Lightning and Super-VL (measured to 512K), 256K on the rest. At each size two cold requests: a
+document of that length from the long corpus (`bench/harness/corpus/make_corpus.py --long`), then the decode cell's
+512-token coding question at T 0.6 (Flint 1.0). One run per model, two for the 35B, Lightning, Flash-Next and Dory to 128K (the median of every request);
+AC power, High Power mode, the Mac kept awake. These are the README's context charts.
+
+Prefill / decode by context, tok/s (128K is 122-133K tokens, 256K 240-271K, 512K 512K):
+
+| Kapitsa | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K | 256K | 512K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.6 35B-A3B | 4,629 / 330 | 5,630 / 327 | 5,613 / 316 | 5,356 / 309 | 4,255 / 255 | 3,418 / 245 | 2,667 / 174 | 1,756 / 128 | 995 / 80 | - |
+| Clover 35B-A3B | 4,537 / 306 | 5,328 / 325 | 5,773 / 350 | 5,430 / 254 | 4,769 / 244 | 3,853 / 224 | 2,784 / 176 | 1,828 / 130 | - | - |
+| Qwen3.8 27B | 755 / 78 | 848 / 101 | 880 / 93 | 871 / 69 | 854 / 84 | 778 / 74 | 658 / 49 | 492 / 34 | 286 / 28 | - |
+| Flash-Next 180B-A7B | 1,511 / 97 | 1,477 / 95 | 1,631 / 93 | 1,539 / 92 | 1,476 / 92 | 1,417 / 92 | 1,326 / 90 | 1,242 / 85 | 1,087 / 76 | - |
+| Lightning 30B-A3B | 5,138 / 240 | 5,680 / 240 | 5,411 / 231 | 5,370 / 213 | 5,165 / 182 | 4,645 / 146 | 3,597 / 103 | 2,488 / 61 | 1,482 / 38 | 823 / 21 |
+| Super-VL 120B-A12B | 956 / 97 | 986 / 68 | 1,176 / 73 | 1,188 / 67 | 1,178 / 63 | 1,141 / 53 | 1,050 / 47 | 859 / 39 | 580 / 24 | 337 / 16 |
+| Bolt 74B-A9B | 916 / 142 | 1,056 / 147 | 1,090 / 145 | 1,089 / 117 | 1,081 / 112 | 1,040 / 98 | 965 / 78 | 792 / 47 | 549 / 31 | - |
+| Dory1.0 4B | 2,448 / 111 | 2,295 / 108 | 2,286 / 105 | 2,226 / 97 | 2,061 / 85 | 1,557 / 70 | 1,156 / 52 | 731 / 35 | 405 / 20 | - |
+| Flint 40B-A2.5B (T 1.0) | 4,266 / 258 | 5,650 / 252 | 5,868 / 246 | 5,315 / 233 | 4,891 / 212 | 3,760 / 181 | 2,956 / 141 | 2,049 / 98 | 1,241 / 62 | - |
+
+The decode is the cell's answer after a document, and with a document in front of it a drafter guesses fewer tokens right:
+the 27B's DFlash2 drafter got about 3.7 tokens per verify cycle at 1K against about 6 after the cell's short prompt, so it
+decodes 78 against its 143.3 cell, while Flint, which drafts nothing, reads 258 against 264.9. Its server logs show where
+long-context decode loses time: per verify cycle (a draft tree of about 16 rows), the step grows 3.5-5.2x more than one
+read of the KV cache on the Qwen models and Dory and 26-28x on the Nemotron models, while Flint's single-row step grows by
+about one read ([the table](../bench/results/2026-11-02-m5-max-long/README.md#where-the-long-context-time-goes)).
+
 **2026-11-01: Kapitsa's cells re-measured** ([results](../bench/results/2026-11-01-m5-max-kapitsa/README.md)). Kapitsa
 0.2.25 (main `7f4e709`) alone, each model at its fastest setting on main (a one-run sweep of its drafters, depths and
 documented speed switches picked its existing label every time), the median of three runs per cell (Super-VL five), AC
@@ -135,7 +163,8 @@ contention- and loop-flagged run, the old Bolt and Clover cells are inside the n
 default, 314.8 against 287.3 tok/s in three interleaved runs each; the cell stays on the default.
 
 Prefill / decode by context, tok/s (the median of the runs; a cold prompt, then a 192-token answer, whose rate is not the
-512-token answer's above; "32K" is the largest prompt that fits the 32K context, 31.5-32.0K tokens, Flint's 29.2K):
+512-token answer's above; "32K" is the largest prompt that fits the 32K context, 31.5-32.0K tokens, Flint's 29.2K; the
+README's charts show the 2026-11-02 sweep above, to each model's context limit):
 
 | Kapitsa | 1K | 2K | 4K | 8K | 16K | 32K |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

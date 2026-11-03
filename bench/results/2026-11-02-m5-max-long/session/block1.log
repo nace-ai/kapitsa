@@ -1,0 +1,196 @@
+=== q36-35b-kapitsa-256k 05:53:11 powermode=2 Now drawing from 'AC Power' load={ 6.96 4.73 3.05 } top=115.4 (Renderer);34.0 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService;24.3 /usr/libexec/sysmond;
+[05:53:21] q36-35b-kapitsa-256k:  warm-up prefill~2.9k+decode64: ok (0.79s)
+[05:53:22] q36-35b-kapitsa-256k:  warm-up tools: ok (0.33s)
+[05:53:59] q36-35b-kapitsa-256k: GPU quiet after 37s; benchmarking
+  decode T=0.6: 348.53 tok/s (e2e 344.29; 512 tok, finish=length, d4=0.4857) flags ['repetition loop (distinct-4-gram 0.4857)']
+  decode T=0.6: 335.45 tok/s (e2e 332.77; 512 tok, finish=length, d4=0.9698)
+  decode T=0.6: 326.01 tok/s (e2e 327.71; 512 tok, finish=length, d4=0.7004)
+  decode T=0.6: 323.39 tok/s (e2e 322.75; 512 tok, finish=length, d4=0.9698)
+  decode T=0.6: 329.64 tok/s (e2e 327.08; 512 tok, finish=length, d4=0.9742)
+  decode median 329.64 (min 323.39, max 348.53) over 5/5 valid
+  sweep 1000: 1107.0 tok, TTFT 0.24s, 4629 tok/s prefill, decode 329.85 tok/s
+  sweep 2000: 2136.0 tok, TTFT 0.38s, 5631 tok/s prefill, decode 326.83 tok/s
+  sweep 4000: 4161.5 tok, TTFT 0.74s, 5601 tok/s prefill, decode 305.87 tok/s
+  sweep 8000: 8310.5 tok, TTFT 1.58s, 5248 tok/s prefill, decode 327.81 tok/s
+  sweep 16000: 16315.5 tok, TTFT 3.84s, 4249 tok/s prefill, decode 256.64 tok/s
+  sweep 32000: 32720.0 tok, TTFT 9.45s, 3463 tok/s prefill, decode 253.31 tok/s
+  sweep 64000: 65402.5 tok, TTFT 24.01s, 2724 tok/s prefill, decode 193.35 tok/s
+  sweep 128000: 131097.0 tok, TTFT 72.72s, 1803 tok/s prefill, decode 132.36 tok/s
+  sweep 249051: 258994.5 tok, TTFT 260.42s, 995 tok/s prefill, decode 80.19 tok/s
+  -> <run-root>/results/q36-35b-kapitsa-256k-20261102-055311.json
+[06:07:28] q36-35b-kapitsa-256k: -> <run-root>/results/q36-35b-kapitsa-256k-20261102-055311.json  flags: 2
+=== flint-kapitsa-256k 06:07:28 powermode=2 Now drawing from 'AC Power' load={ 2.41 2.49 2.58 } top=44.6 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;30.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;12.1 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores;
+[06:07:41] flint-kapitsa-256k:  warm-up prefill~2.9k+decode64: ok (0.95s)
+[06:07:42] flint-kapitsa-256k:  warm-up tools: ok (0.34s)
+[06:07:42] flint-kapitsa-256k: WARNING: thinking was not switched off in warm-up ['prefill~2.9k+decode64', 'tools']; runs will be INVALID
+[06:08:42] flint-kapitsa-256k: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 261.34 tok/s (e2e 259.00; 512 tok, finish=length, d4=0.8974) INVALID ['reasoning text returned (2091 chars)']
+  decode T=0.6: 261.40 tok/s (e2e 259.29; 512 tok, finish=length, d4=0.9353) INVALID ['reasoning text returned (2156 chars)']
+  decode T=0.6: 263.15 tok/s (e2e 261.60; 512 tok, finish=length, d4=0.9466) INVALID ['reasoning text returned (2158 chars)']
+  decode T=0.6: 263.41 tok/s (e2e 261.60; 512 tok, finish=length, d4=0.9187) INVALID ['reasoning text returned (2188 chars)']
+  decode T=0.6: 264.45 tok/s (e2e 260.26; 512 tok, finish=length, d4=0.9035) INVALID ['reasoning text returned (2184 chars)']
+  decode median None (min None, max None) over 0/5 valid
+  sweep 1000: 1037.0 tok, TTFT 0.24s, 4301 tok/s prefill, decode 253.69 tok/s
+  sweep 2000: 2002.5 tok, TTFT 0.36s, 5557 tok/s prefill, decode 248.23 tok/s
+  sweep 4000: 3899.5 tok, TTFT 0.69s, 5633 tok/s prefill, decode 241.74 tok/s
+  sweep 8000: 7699.5 tok, TTFT 1.46s, 5271 tok/s prefill, decode 229.70 tok/s
+  sweep 16000: 15092.0 tok, TTFT 3.10s, 4873 tok/s prefill, decode 210.88 tok/s
+  sweep 32000: 30214.5 tok, TTFT 7.52s, 4017 tok/s prefill, decode 178.91 tok/s
+  sweep 64000: 60530.0 tok, TTFT 20.16s, 3003 tok/s prefill, decode 140.81 tok/s
+  sweep 128000: 121734.0 tok, TTFT 60.69s, 2006 tok/s prefill, decode 97.39 tok/s
+  sweep 249051: 240296.5 tok, TTFT 208.55s, 1153 tok/s prefill, decode 59.39 tok/s
+  INVALID: ['decode: reasoning text returned (2091 chars)', 'decode: reasoning text returned (2156 chars)', 'decode: reasoning text returned (2158 chars)', 'decode: reasoning text returned (2184 chars)', 'decode: reasoning text returned (2188 chars)', 'sweep: sweep 1000: reasoning text returned (1986 chars)', 'sweep: sweep 1000: reasoning text returned (2168 chars)', 'sweep: sweep 2000: reasoning text returned (2334 chars)', 'sweep: sweep 2000: reasoning text returned (2349 chars)', 'sweep: sweep 4000: reasoning text returned (2246 chars)', 'sweep: sweep 4000: reasoning text returned (2301 chars)', 'sweep: sweep 8000: reasoning text returned (2177 chars)', 'sweep: sweep 8000: reasoning text returned (2107 chars)', 'sweep: sweep 16000: reasoning text returned (2101 chars)', 'sweep: sweep 16000: reasoning text returned (2084 chars)', 'sweep: sweep 32000: reasoning text returned (2048 chars)', 'sweep: sweep 32000: reasoning text returned (1987 chars)', 'sweep: sweep 64000: reasoning text returned (2200 chars)', 'sweep: sweep 64000: reasoning text returned (2078 chars)', 'sweep: sweep 128000: reasoning text returned (2150 chars)', 'sweep: sweep 128000: reasoning text returned (2083 chars)', 'sweep: sweep 249051: reasoning text returned (2165 chars)', 'sweep: sweep 249051: reasoning text returned (2122 chars)']
+  -> <run-root>/results/flint-kapitsa-256k-20261102-060729.json
+[06:20:07] flint-kapitsa-256k: -> <run-root>/results/flint-kapitsa-256k-20261102-060729.json  INVALID: ['decode: reasoning text returned (2091 chars)', 'decode: reasoning text returned (2156 chars)', 'decode: reasoning text returned (2158 chars)', 'decode: reasoning text returned (2184 chars)', 'decode: reasoning text returned (2188 chars)', 'sweep: sweep 1000: reasoning text returned (1986 chars)', 'sweep: sweep 1000: reasoning text returned (2168 chars)', 'sweep: sweep 2000: reasoning text returned (2334 chars)', 'sweep: sweep 2000: reasoning text returned (2349 chars)', 'sweep: sweep 4000: reasoning text returned (2246 chars)', 'sweep: sweep 4000: reasoning text returned (2301 chars)', 'sweep: sweep 8000: reasoning text returned (2177 chars)', 'sweep: sweep 8000: reasoning text returned (2107 chars)', 'sweep: sweep 16000: reasoning text returned (2101 chars)', 'sweep: sweep 16000: reasoning text returned (2084 chars)', 'sweep: sweep 32000: reasoning text returned (2048 chars)', 'sweep: sweep 32000: reasoning text returned (1987 chars)', 'sweep: sweep 64000: reasoning text returned (2200 chars)', 'sweep: sweep 64000: reasoning text returned (2078 chars)', 'sweep: sweep 128000: reasoning text returned (2150 chars)', 'sweep: sweep 128000: reasoning text returned (2083 chars)', 'sweep: sweep 249051: reasoning text returned (2165 chars)', 'sweep: sweep 249051: reasoning text returned (2122 chars)']  flags: 1
+=== clover-kapitsa-128k 06:20:07 powermode=2 Now drawing from 'AC Power' load={ 1.82 1.38 1.76 } top=46.4 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;37.5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;10.4 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder;
+[06:20:14] clover-kapitsa-128k:  warm-up prefill~2.9k+decode64: ok (0.95s)
+[06:20:14] clover-kapitsa-128k:  warm-up tools: ok (0.23s)
+[06:21:14] clover-kapitsa-128k: GPU not quiet after 60s (['Claude Helper[95214] 7%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 289.31 tok/s (e2e 286.72; 512 tok, finish=length, d4=0.6983)
+  decode T=0.6: 259.42 tok/s (e2e 261.90; 512 tok, finish=length, d4=0.5626)
+  decode T=0.6: 270.51 tok/s (e2e 268.95; 512 tok, finish=length, d4=0.6557)
+  decode T=0.6: 250.62 tok/s (e2e 252.70; 512 tok, finish=length, d4=0.6754)
+  decode T=0.6: 315.70 tok/s (e2e 309.30; 512 tok, finish=length, d4=0.4464) flags ['repetition loop (distinct-4-gram 0.4464)']
+  decode median 270.51 (min 250.62, max 315.7) over 5/5 valid
+  sweep 1000: 1108.5 tok, TTFT 0.24s, 4537 tok/s prefill, decode 306.11 tok/s
+  sweep 2000: 2133.0 tok, TTFT 0.40s, 5328 tok/s prefill, decode 324.68 tok/s
+  sweep 4000: 4161.0 tok, TTFT 0.72s, 5773 tok/s prefill, decode 350.06 tok/s
+  sweep 8000: 8312.0 tok, TTFT 1.53s, 5430 tok/s prefill, decode 253.86 tok/s
+  sweep 16000: 16317.0 tok, TTFT 3.42s, 4769 tok/s prefill, decode 244.21 tok/s
+  sweep 32000: 32718.5 tok, TTFT 8.50s, 3853 tok/s prefill, decode 223.92 tok/s
+  sweep 64000: 65401.5 tok, TTFT 23.49s, 2784 tok/s prefill, decode 176.04 tok/s
+  sweep 124220: 127344.0 tok, TTFT 69.67s, 1828 tok/s prefill, decode 130.37 tok/s
+  -> <run-root>/results/clover-kapitsa-128k-20261102-062007.json
+[06:25:43] clover-kapitsa-128k: -> <run-root>/results/clover-kapitsa-128k-20261102-062007.json  flags: 2
+=== lightning-kapitsa-512k 06:25:43 powermode=2 Now drawing from 'AC Power' load={ 1.82 1.72 1.81 } top=25.0 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;17.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;14.4 (Aperitif);
+[06:25:49] lightning-kapitsa-512k:  warm-up prefill~2.9k+decode64: ok (1.0s)
+[06:25:50] lightning-kapitsa-512k:  warm-up tools: ok (0.2s)
+[06:26:14] lightning-kapitsa-512k: GPU quiet after 25s; benchmarking
+  decode T=0.6: 284.26 tok/s (e2e 279.85; 512 tok, finish=length, d4=0.9304)
+  decode T=0.6: 222.90 tok/s (e2e 224.88; 512 tok, finish=length, d4=0.8798)
+  decode T=0.6: 251.22 tok/s (e2e 246.43; 512 tok, finish=length, d4=0.9487)
+  decode T=0.6: 229.79 tok/s (e2e 228.25; 512 tok, finish=length, d4=0.9487)
+  decode T=0.6: 256.31 tok/s (e2e 251.50; 512 tok, finish=length, d4=0.9598)
+  decode median 251.22 (min 222.9, max 284.26) over 5/5 valid
+  sweep 1000: 1120.0 tok, TTFT 0.23s, 4869 tok/s prefill, decode 229.30 tok/s
+  sweep 2000: 2174.5 tok, TTFT 0.40s, 5427 tok/s prefill, decode 227.50 tok/s
+  sweep 4000: 4216.5 tok, TTFT 0.82s, 5143 tok/s prefill, decode 226.47 tok/s
+  sweep 8000: 8418.5 tok, TTFT 1.64s, 5147 tok/s prefill, decode 207.40 tok/s
+  sweep 16000: 16549.0 tok, TTFT 3.36s, 4927 tok/s prefill, decode 164.65 tok/s
+  sweep 32000: 33147.0 tok, TTFT 7.42s, 4469 tok/s prefill, decode 146.31 tok/s
+  sweep 64000: 66365.0 tok, TTFT 18.51s, 3584 tok/s prefill, decode 103.41 tok/s
+  sweep 128000: 133396.5 tok, TTFT 52.93s, 2520 tok/s prefill, decode 57.78 tok/s
+  sweep 256000: 271376.5 tok, TTFT 183.14s, 1482 tok/s prefill, decode 37.55 tok/s
+  sweep 498712: None tok, TTFT NAs, None tok/s prefill, decode NA tok/s ERROR RuntimeError('HTTP 400: {"error":{"message":"This model\'s maximum context length is 524286 tokens. However, your messages resulted in 532608 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}')
+  INVALID: ['sweep: sweep 498712: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 524286 tokens. However, your messages resulted in 532608 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']
+  -> <run-root>/results/lightning-kapitsa-512k-20261102-062543.json
+[06:36:55] lightning-kapitsa-512k: -> <run-root>/results/lightning-kapitsa-512k-20261102-062543.json  INVALID: ['sweep: sweep 498712: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 524286 tokens. However, your messages resulted in 532608 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']  flags: 1
+=== bolt-kapitsa-256k 06:36:55 powermode=2 Now drawing from 'AC Power' load={ 2.44 1.67 1.56 } top=47.7 /sbin/launchd;36.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;14.6 Helper;
+[06:37:08] bolt-kapitsa-256k:  warm-up prefill~2.9k+decode64: ok (3.5s)
+[06:37:09] bolt-kapitsa-256k:  warm-up tools: ok (0.83s)
+[06:38:09] bolt-kapitsa-256k: GPU not quiet after 60s (['Claude Helper[95214] 6%']); benchmarking anyway, contention will be flagged
+  decode T=0.6: 156.22 tok/s (e2e 154.34; 512 tok, finish=length, d4=0.9311)
+  decode T=0.6: 159.46 tok/s (e2e 157.39; 512 tok, finish=length, d4=0.9176)
+  decode T=0.6: 154.78 tok/s (e2e 159.62; 512 tok, finish=length, d4=0.3328) flags ['repetition loop (distinct-4-gram 0.3328)']
+  decode T=0.6: 150.13 tok/s (e2e 148.93; 512 tok, finish=length, d4=0.9761)
+  decode T=0.6: 154.48 tok/s (e2e 152.85; 512 tok, finish=length, d4=0.9765)
+  decode median 154.78 (min 150.13, max 159.46) over 5/5 valid
+  sweep 1000: 1120.5 tok, TTFT 1.22s, 916 tok/s prefill, decode 141.67 tok/s
+  sweep 2000: 2174.0 tok, TTFT 2.06s, 1056 tok/s prefill, decode 147.09 tok/s
+  sweep 4000: 4215.5 tok, TTFT 3.87s, 1090 tok/s prefill, decode 144.89 tok/s
+  sweep 8000: 8414.0 tok, TTFT 7.72s, 1089 tok/s prefill, decode 117.45 tok/s
+  sweep 16000: 16544.0 tok, TTFT 15.31s, 1081 tok/s prefill, decode 111.63 tok/s
+  sweep 32000: 33141.5 tok, TTFT 31.87s, 1040 tok/s prefill, decode 98.50 tok/s
+  sweep 64000: 66360.0 tok, TTFT 68.74s, 965 tok/s prefill, decode 78.26 tok/s
+  sweep 128000: 133393.5 tok, TTFT 168.42s, 792 tok/s prefill, decode 47.48 tok/s
+  sweep 249051: None tok, TTFT NAs, None tok/s prefill, decode NA tok/s ERROR RuntimeError('HTTP 400: {"error":{"message":"This model\'s maximum context length is 262142 tokens. However, your messages resulted in 264365 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}')
+  INVALID: ['sweep: sweep 249051: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 262142 tokens. However, your messages resulted in 264365 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']
+  -> <run-root>/results/bolt-kapitsa-256k-20261102-063655.json
+[06:49:53] bolt-kapitsa-256k: -> <run-root>/results/bolt-kapitsa-256k-20261102-063655.json  INVALID: ['sweep: sweep 249051: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 262142 tokens. However, your messages resulted in 264365 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']  flags: 3
+=== flash-kapitsa-256k 06:49:53 powermode=2 Now drawing from 'AC Power' load={ 0.74 1.09 1.31 } top=3.9 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;1.0 (Renderer);0.7 /usr/libexec/searchpartyd;
+[06:50:32] flash-kapitsa-256k:  warm-up prefill~2.9k+decode64: ok (2.64s)
+[06:50:33] flash-kapitsa-256k:  warm-up tools: ok (0.73s)
+[06:50:52] flash-kapitsa-256k: GPU quiet after 19s; benchmarking
+  decode T=0.6: 101.73 tok/s (e2e 101.10; 512 tok, finish=length, d4=0.9513)
+  decode T=0.6: 90.74 tok/s (e2e 89.61; 512 tok, finish=length, d4=0.4419) flags ['repetition loop (distinct-4-gram 0.4419)']
+  decode T=0.6: 97.46 tok/s (e2e 96.76; 512 tok, finish=length, d4=0.8882)
+  decode T=0.6: 95.57 tok/s (e2e 93.96; 512 tok, finish=length, d4=0.8617)
+  decode T=0.6: 97.50 tok/s (e2e 96.63; 512 tok, finish=length, d4=0.9089)
+  decode median 97.46 (min 90.74, max 101.73) over 5/5 valid
+  sweep 1000: 1109.5 tok, TTFT 0.75s, 1475 tok/s prefill, decode 93.82 tok/s
+  sweep 2000: 2132.5 tok, TTFT 1.50s, 1426 tok/s prefill, decode 89.49 tok/s
+  sweep 4000: 4162.5 tok, TTFT 2.63s, 1582 tok/s prefill, decode 90.89 tok/s
+  sweep 8000: 8309.0 tok, TTFT 5.55s, 1498 tok/s prefill, decode 91.74 tok/s
+  sweep 16000: 16315.5 tok, TTFT 11.33s, 1440 tok/s prefill, decode 89.93 tok/s
+  sweep 32000: 32719.0 tok, TTFT 23.50s, 1392 tok/s prefill, decode 86.22 tok/s
+  sweep 64000: 65402.0 tok, TTFT 49.44s, 1323 tok/s prefill, decode 85.14 tok/s
+  sweep 128000: 131098.5 tok, TTFT 107.13s, 1224 tok/s prefill, decode 84.12 tok/s
+  sweep 249051: 258996.5 tok, TTFT 238.26s, 1087 tok/s prefill, decode 75.82 tok/s
+  -> <run-root>/results/flash-kapitsa-256k-20261102-064953.json
+[07:07:42] flash-kapitsa-256k: -> <run-root>/results/flash-kapitsa-256k-20261102-064953.json  flags: 3
+=== super-kapitsa-512k 07:07:42 powermode=2 Now drawing from 'AC Power' load={ 1.16 1.43 2.50 } top=6.9 /usr/libexec/sysmond;1.3 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;0.7 Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude;
+[07:08:04] super-kapitsa-512k:  warm-up prefill~2.9k+decode64: ok (3.74s)
+[07:08:04] super-kapitsa-512k:  warm-up tools: ok (0.89s)
+[07:08:23] super-kapitsa-512k: GPU quiet after 19s; benchmarking
+  decode T=0.6: 75.82 tok/s (e2e 75.28; 512 tok, finish=length, d4=0.9045)
+  decode T=0.6: 84.84 tok/s (e2e 83.28; 512 tok, finish=length, d4=0.7043)
+  decode T=0.6: 82.71 tok/s (e2e 81.53; 512 tok, finish=length, d4=0.6926)
+  decode T=0.6: 90.68 tok/s (e2e 91.30; 512 tok, finish=length, d4=0.9126)
+  decode T=0.6: 88.75 tok/s (e2e 86.19; 512 tok, finish=length, d4=0.469) flags ['repetition loop (distinct-4-gram 0.469)']
+  decode median 84.84 (min 75.82, max 90.68) over 5/5 valid
+  sweep 1000: 1119.5 tok, TTFT 1.17s, 956 tok/s prefill, decode 97.41 tok/s
+  sweep 2000: 2175.0 tok, TTFT 1.90s, 1144 tok/s prefill, decode 825.31 tok/s
+  sweep 4000: 4215.0 tok, TTFT 3.58s, 1176 tok/s prefill, decode 73.47 tok/s
+  sweep 8000: 8415.5 tok, TTFT 7.08s, 1188 tok/s prefill, decode 67.24 tok/s
+  sweep 16000: 16544.5 tok, TTFT 14.05s, 1178 tok/s prefill, decode 63.29 tok/s
+  sweep 32000: 33143.5 tok, TTFT 29.06s, 1141 tok/s prefill, decode 52.98 tok/s
+  sweep 64000: 66361.5 tok, TTFT 63.18s, 1050 tok/s prefill, decode 46.97 tok/s
+  sweep 128000: 133393.5 tok, TTFT 155.29s, 859 tok/s prefill, decode 38.62 tok/s
+  sweep 256000: 271374.0 tok, TTFT 467.53s, 580 tok/s prefill, decode 24.11 tok/s
+  sweep 498712: None tok, TTFT NAs, None tok/s prefill, decode NA tok/s ERROR RuntimeError('HTTP 400: {"error":{"message":"This model\'s maximum context length is 524286 tokens. However, your messages resulted in 532602 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}')
+  INVALID: ['sweep: sweep 498712: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 524286 tokens. However, your messages resulted in 532602 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']
+  -> <run-root>/results/super-kapitsa-512k-20261102-070742.json
+[07:36:36] super-kapitsa-512k: -> <run-root>/results/super-kapitsa-512k-20261102-070742.json  INVALID: ['sweep: sweep 498712: request failed: RuntimeError(\'HTTP 400: {"error":{"message":"This model\\\'s maximum context length is 524286 tokens. However, your messages resulted in 532602 tokens. Please reduce the length of the messages.","type":"invalid_request_error","param":"messages","code":"context_length_exce']  flags: 3
+=== q38-27b-kapitsa-256k 07:36:36 powermode=2 Now drawing from 'AC Power' load={ 0.95 0.98 1.13 } top=4.0 /usr/libexec/sysmond;0.6 Renderer);0.5 Renderer);
+[07:36:51] q38-27b-kapitsa-256k:  warm-up prefill~2.9k+decode64: ok (4.47s)
+[07:36:52] q38-27b-kapitsa-256k:  warm-up tools: ok (1.07s)
+[07:37:11] q38-27b-kapitsa-256k: GPU quiet after 19s; benchmarking
+  decode T=0.6: 131.64 tok/s (e2e 131.08; 512 tok, finish=length, d4=0.8896)
+  decode T=0.6: 116.62 tok/s (e2e 115.86; 512 tok, finish=length, d4=0.9705)
+  decode T=0.6: 127.45 tok/s (e2e 127.36; 512 tok, finish=length, d4=0.8277)
+  decode T=0.6: 139.22 tok/s (e2e 137.67; 512 tok, finish=length, d4=0.9443)
+  decode T=0.6: 122.19 tok/s (e2e 121.48; 512 tok, finish=length, d4=0.9615)
+  decode median 127.45 (min 116.62, max 139.22) over 5/5 valid
+  sweep 1000: 1107.5 tok, TTFT 1.47s, 755 tok/s prefill, decode 77.59 tok/s
+  sweep 2000: 2134.5 tok, TTFT 2.52s, 848 tok/s prefill, decode 100.92 tok/s
+  sweep 4000: 4162.0 tok, TTFT 4.73s, 880 tok/s prefill, decode 93.46 tok/s
+  sweep 8000: 8310.0 tok, TTFT 9.55s, 871 tok/s prefill, decode 69.30 tok/s
+  sweep 16000: 16314.0 tok, TTFT 19.10s, 854 tok/s prefill, decode 83.64 tok/s
+  sweep 32000: 32720.0 tok, TTFT 42.08s, 778 tok/s prefill, decode 74.12 tok/s
+  sweep 64000: 65401.5 tok, TTFT 99.47s, 658 tok/s prefill, decode 49.49 tok/s
+  sweep 128000: 131097.5 tok, TTFT 266.24s, 492 tok/s prefill, decode 34.20 tok/s
+  sweep 249051: 258997 tok, TTFT 1087.35s, 238 tok/s prefill, decode 20.43 tok/s
+  -> <run-root>/results/q38-27b-kapitsa-256k-20261102-073636.json
+[11:10:34] q38-27b-kapitsa-256k: -> <run-root>/results/q38-27b-kapitsa-256k-20261102-073636.json  flags: 5
+=== dory-kapitsa-perloop-256k 11:10:34 powermode=2 Now drawing from 'Battery Power' load={ 2.12 1.92 1.52 } top=24.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer;14.0 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd;5.6 Helper;
+[11:10:41] dory-kapitsa-perloop-256k:  warm-up prefill~2.9k+decode64: ok (1.87s)
+[11:10:41] dory-kapitsa-perloop-256k:  warm-up tools: ok (0.48s)
+[11:11:21] dory-kapitsa-perloop-256k: GPU quiet after 39s; benchmarking
+  decode T=0.6: 114.83 tok/s (e2e 114.00; 512 tok, finish=length, d4=0.5758)
+  decode T=0.6: 103.21 tok/s (e2e 101.77; 512 tok, finish=length, d4=0.7348)
+  decode T=0.6: 100.16 tok/s (e2e 99.85; 512 tok, finish=length, d4=0.7091)
+  decode T=0.6: 106.17 tok/s (e2e 104.48; 512 tok, finish=length, d4=0.9376)
+  decode T=0.6: 110.81 tok/s (e2e 109.31; 512 tok, finish=length, d4=0.9358)
+  decode median 106.17 (min 100.16, max 114.83) over 5/5 valid
+  sweep 1000: 1120.5 tok, TTFT 0.42s, 2666 tok/s prefill, decode 110.51 tok/s
+  sweep 2000: 2174.5 tok, TTFT 0.88s, 2481 tok/s prefill, decode 108.88 tok/s
+  sweep 4000: 4215.5 tok, TTFT 1.73s, 2436 tok/s prefill, decode 98.27 tok/s
+  sweep 8000: 8417.0 tok, TTFT 3.61s, 2334 tok/s prefill, decode 110.25 tok/s
+  sweep 16000: 16550.0 tok, TTFT 7.88s, 2100 tok/s prefill, decode 89.66 tok/s
+  sweep 32000: 33145.5 tok, TTFT 19.76s, 1678 tok/s prefill, decode 69.90 tok/s
+  sweep 64000: 66364.5 tok, TTFT 55.12s, 1204 tok/s prefill, decode 62.46 tok/s
+  sweep 128000: 133396.5 tok, TTFT 178.77s, 746 tok/s prefill, decode 32.46 tok/s
+  sweep 240000: 254824.0 tok, TTFT 572.03s, 445 tok/s prefill, decode 19.60 tok/s
+  -> <run-root>/results/dory-kapitsa-perloop-256k-20261102-111035.json
+[11:42:39] dory-kapitsa-perloop-256k: -> <run-root>/results/dory-kapitsa-perloop-256k-20261102-111035.json  flags: 2
+=== done 11:42:39

@@ -1,0 +1,201 @@
+2026-11-02 05:42:54 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_TCP_DATA ARPT/ Using BATT (Charge:66%) 11 secs   
+2026-11-02 05:43:05 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using Batt (Charge:66%) 9 secs    
+2026-11-02 05:43:14 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_TCP_DATA ARPT/ Using BATT (Charge:66%) 10 secs   
+2026-11-02 05:43:24 -0800 Wake                	DarkWake to FullWake from Deep Idle [CDNVA] : due to UserActivity Assertion Using BATT (Charge:66%)           
+2026-11-02 05:43:25 -0800 Assertions          	Summary- [System: PrevIdle DeclUser SRPrevSleep kCPU kDisp] Using Batt(Charge: 66)          
+2026-11-02 05:44:11 -0800 Assertions          	Summary- [System: PrevIdle DeclUser kDisp] Using AC(Charge: 66)          
+2026-11-02 06:02:58 -0800 Assertions          	Summary- [System: PrevIdle DeclUser IPushSrvc kCPU kDisp] Using AC(Charge: 73)          
+2026-11-02 06:08:54 -0800 Assertions          	Summary- [System: PrevIdle] Using AC(Charge: 72)          
+2026-11-02 06:25:38 -0800 Assertions          	Summary- [System: PrevIdle PrevDisp DeclUser kDisp] Using AC(Charge: 66)          
+2026-11-02 06:51:27 -0800 Assertions          	Summary- [System: PrevIdle] Using AC(Charge: 60)          
+2026-11-02 07:54:22 -0800 Assertions          	Summary- [System: PrevIdle SRPrevSleep kCPU] Using AC(Charge: 41)          
+2026-11-02 07:54:26 -0800 Assertions          	Summary- [System: No Assertions] Using AC(Charge: 41)          
+2026-11-02 07:54:26 -0800 Sleep               	Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using AC (Charge:41%) 903 secs  
+2026-11-02 08:09:29 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using AC (Charge:59%) 45 secs   
+2026-11-02 08:09:31 -0800 Assertions          	Summary- [System: PrevIdle PushSrvc BGTask SRPrevSleep IPushSrvc kCPU] Using AC(Charge: 59)          
+2026-11-02 08:10:14 -0800 Assertions          	Summary- [System: No Assertions] Using AC(Charge: 59)          
+2026-11-02 08:10:14 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:59%) 902 secs  
+2026-11-02 08:25:16 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using AC (Charge:59%) 45 secs   
+2026-11-02 08:25:17 -0800 Assertions          	Summary- [System: PrevIdle PushSrvc BGTask SRPrevSleep IPushSrvc kCPU] Using AC(Charge: 77)          
+2026-11-02 08:26:01 -0800 Assertions          	Summary- [System: No Assertions] Using AC(Charge: 77)          
+2026-11-02 08:26:01 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:77%) 903 secs  
+2026-11-02 08:41:04 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using AC (Charge:77%) 60 secs   
+2026-11-02 08:41:05 -0800 Assertions          	Summary- [System: PrevIdle PushSrvc BGTask SRPrevSleep IPushSrvc kCPU] Using AC(Charge: 88)          
+2026-11-02 08:42:04 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:88%) 6 secs    
+2026-11-02 08:42:10 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-beta/ Using AC (Charge:88%) 5 secs    
+2026-11-02 08:42:15 -0800 Sleep               	Entering Sleep state due to 'Dark Wake Thermal Emergency':TCPKeepAlive=active Using AC (Charge:88%) 903 secs  
+2026-11-02 08:57:18 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using AC (Charge:88%) 45 secs   
+2026-11-02 08:58:03 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:97%) 532 secs  
+2026-11-02 09:06:55 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to NUB.SPMI0Sw3IRQ nub-spmi0.0x02 rtc/Maintenance Using AC (Charge:97%) 66 secs   
+2026-11-02 09:08:01 -0800 Sleep               	Entering Sleep state due to 'Dark Wake Thermal Emergency':TCPKeepAlive=active Using AC (Charge:99%) 903 secs  
+2026-11-02 09:23:04 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using AC (Charge:99%) 73 secs   
+2026-11-02 09:24:17 -0800 Sleep               	Entering Sleep state due to 'Dark Wake Thermal Emergency':TCPKeepAlive=active Using AC (Charge:100%) 903 secs  
+2026-11-02 09:39:20 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty nub-spmi-a0.0x3F centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using AC (Charge:100%) 76 secs   
+2026-11-02 09:40:36 -0800 Sleep               	Entering Sleep state due to 'Dark Wake Thermal Emergency':TCPKeepAlive=active Using AC (Charge:100%) 902 secs  
+2026-11-02 09:55:38 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty nub-spmi-a0.0x3F centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using AC (Charge:100%) 76 secs   
+2026-11-02 09:56:54 -0800 Sleep               	Entering Sleep state due to 'Dark Wake Thermal Emergency':TCPKeepAlive=active Using AC (Charge:100%) 46 secs   
+2026-11-02 09:57:40 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty nub-spmi-a0.0x3F centauri-beta/ Using AC (Charge:100%) 4 secs    
+2026-11-02 09:57:43 -0800 ThermalEvent        	Ignored DarkWake thermal emergency signal TCPKeepAlive=active              	          
+2026-11-02 09:57:44 -0800 Sleep               	Entering Sleep state due to 'Thermal Emergency Sleep':TCPKeepAlive=inactive Using AC (Charge:100%) 612 secs  
+2026-11-02 10:07:56 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to NUB.SPMI0Sw3IRQ nub-spmi0.0x02 nub-spmi-a0.0x3F rtc/Maintenance Using AC (Charge:100%) 45 secs   
+2026-11-02 10:08:41 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using AC (Charge:100%) 959 secs  
+2026-11-02 10:24:40 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to NUB.SPMI0Sw3IRQ nub-spmi0.0x02 nub-spmi-a0.0x3F rtc/Maintenance Using AC (Charge:100%) 45 secs   
+2026-11-02 10:25:25 -0800 Assertions          	Summary- [System: No Assertions] Using AC(Charge: 100)          
+2026-11-02 10:25:25 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using AC (Charge:100%) 181 secs  
+2026-11-02 10:28:26 -0800 DarkWake            	DarkWake from Deep Idle [CDNPB] : due to smc.sysState.Wake(0x70070000) USB-C_plug SMC.OutboxNotEmpty nub-spmi-a0.0x3F/ Using AC (Charge:100%) 42 secs   
+2026-11-02 10:28:27 -0800 Assertions          	Summary- [System: PrevIdle PushSrvc SRPrevSleep kCPU] Using AC(Charge: 100)          
+2026-11-02 10:28:27 -0800 Assertions          	Summary- [System: PrevIdle PushSrvc SRPrevSleep kCPU] Using Batt(Charge: 100)          
+2026-11-02 10:29:08 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:100%) 3 secs    
+2026-11-02 10:29:11 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:100%) 45 secs   
+2026-11-02 10:29:15 -0800 ThermalEvent        	Ignored DarkWake thermal emergency signal TCPKeepAlive=inactive            	          
+2026-11-02 10:29:56 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:100%) 4 secs    
+2026-11-02 10:30:00 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:100%) 18 secs   
+2026-11-02 10:30:18 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:100%) 3 secs    
+2026-11-02 10:30:21 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:100%) 23 secs   
+2026-11-02 10:30:44 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:100%) 4 secs    
+2026-11-02 10:30:48 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:100%) 42 secs   
+2026-11-02 10:31:30 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:99%) 3 secs    
+2026-11-02 10:31:33 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:99%) 45 secs   
+2026-11-02 10:32:18 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:98%) 3 secs    
+2026-11-02 10:32:21 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:98%) 13 secs   
+2026-11-02 10:32:34 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:97%) 3 secs    
+2026-11-02 10:32:37 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:97%) 27 secs   
+2026-11-02 10:33:04 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:96%) 2 secs    
+2026-11-02 10:33:06 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:96%) 14 secs   
+2026-11-02 10:33:20 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:96%) 3 secs    
+2026-11-02 10:33:21 -0800 Assertions          	Summary- [System: PrevIdle] Using Batt(Charge: 96)          
+2026-11-02 10:33:23 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:96%) 31 secs   
+2026-11-02 10:33:24 -0800 Assertions          	Summary- [System: PrevIdle PushSrvc SRPrevSleep kCPU] Using Batt(Charge: 96)          
+2026-11-02 10:33:54 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:95%) 3 secs    
+2026-11-02 10:33:57 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:95%) 22 secs   
+2026-11-02 10:34:19 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:94%) 3 secs    
+2026-11-02 10:34:22 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:94%) 15 secs   
+2026-11-02 10:34:37 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:94%) 3 secs    
+2026-11-02 10:34:40 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:94%) 18 secs   
+2026-11-02 10:34:58 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:93%) 3 secs    
+2026-11-02 10:35:01 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:93%) 23 secs   
+2026-11-02 10:35:24 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:92%) 4 secs    
+2026-11-02 10:35:28 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:92%) 40 secs   
+2026-11-02 10:36:08 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:91%) 3 secs    
+2026-11-02 10:36:11 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:91%) 22 secs   
+2026-11-02 10:36:33 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:91%) 4 secs    
+2026-11-02 10:36:37 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:91%) 45 secs   
+2026-11-02 10:37:22 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:89%) 4 secs    
+2026-11-02 10:37:26 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:89%) 7 secs    
+2026-11-02 10:37:33 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:89%) 4 secs    
+2026-11-02 10:37:37 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:89%) 45 secs   
+2026-11-02 10:38:22 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=inactive Using Batt (Charge:88%) 3 secs    
+2026-11-02 10:38:25 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_RX_IP_PACKET ARPT/ Using BATT (Charge:88%) 33 secs   
+2026-11-02 10:38:58 -0800 Wake                	DarkWake to FullWake from Deep Idle [CDNVA] : due to UserActivity Assertion Using BATT (Charge:87%) 139 secs  
+2026-11-02 10:38:59 -0800 Assertions          	Summary- [System: PrevIdle DeclUser SRPrevSleep kCPU kDisp] Using Batt(Charge: 87)          
+2026-11-02 10:40:58 -0800 Assertions          	Summary- [System: PrevIdle DeclUser kDisp] Using Batt(Charge: 84)          
+2026-11-02 10:41:01 -0800 Assertions          	Summary- [System: PrevIdle] Using Batt(Charge: 84)          
+2026-11-02 10:41:13 -0800 Assertions          	Summary- [System: SRPrevSleep kCPU] Using Batt(Charge: 83)          
+2026-11-02 10:41:17 -0800 Assertions          	Summary- [System: No Assertions] Using Batt(Charge: 83)          
+2026-11-02 10:41:17 -0800 Sleep               	Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:83%) 8 secs    
+2026-11-02 10:41:25 -0800 Wake                	Wake from Deep Idle [CDNVA] : due to MTP.DOCK.CHANNELS.AP0.IRQ RTP.keyboard/UserActivity Assertion Using BATT (Charge:83%) 142 secs  
+2026-11-02 10:41:26 -0800 Assertions          	Summary- [System: PrevIdle DeclUser kDisp] Using Batt(Charge: 83)          
+2026-11-02 10:43:31 -0800 Assertions          	Summary- [System: PrevIdle] Using Batt(Charge: 80)          
+2026-11-02 10:43:43 -0800 Assertions          	Summary- [System: SRPrevSleep kCPU] Using Batt(Charge: 80)          
+2026-11-02 10:43:47 -0800 Assertions          	Summary- [System: No Assertions] Using Batt(Charge: 80)          
+2026-11-02 10:43:47 -0800 Sleep               	Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:80%) 604 secs  
+2026-11-02 10:53:51 -0800 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty centauri-alpha E_TKO_UNEXPECT_TCP_FLAG ARPT/ Using BATT (Charge:80%) 45 secs   
+2026-11-02 10:53:52 -0800 Assertions          	Summary- [System: PrevIdle PushSrvc SRPrevSleep IPushSrvc kCPU] Using Batt(Charge: 80)          
+2026-11-02 10:54:36 -0800 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using Batt (Charge:79%) 824 secs  
+2026-11-02 11:08:20 -0800 Wake                	Wake from Deep Idle [CDNVA] : due to MTP.DOCK.CHANNELS.AP0.IRQ RTP.keyboard/UserActivity Assertion Using BATT (Charge:79%)           
+2026-11-02 11:08:21 -0800 Assertions          	Summary- [System: PrevIdle DeclUser kDisp] Using Batt(Charge: 79)          
+2026-11-02 11:10:49 -0800 Assertions          	Summary- [System: PrevIdle] Using Batt(Charge: 74)          
+2026-11-02 12:46:46 -0800 Assertions          	Summary- [System: PrevIdle DeclUser kDisp] Using AC(Charge: 11)          
+2026-11-02 12:47:10 -0800 Assertions          	PID 74510(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700008ebc [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 12:56:00 -0800 Assertions          	PID 74510(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:08:50  id:0x0x100008ebb [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 12:56:00 -0800 Assertions          	PID 74510(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:08:50  id:0x0x700008ebc [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 12:57:02 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep DeclUser kCPU kDisp] Using AC(Charge: 8)          
+2026-11-02 12:58:28 -0800 Assertions          	PID 74510(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:11:18  id:0x0x100008ebb [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 12:58:28 -0800 Assertions          	PID 74510(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:11:18  id:0x0x700008ebc [System: PrevIdle DeclUser kDisp]          
+2026-11-02 12:58:28 -0800 Assertions          	PID 77795(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700008eea [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 13:08:03 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 7)          
+2026-11-02 13:08:14 -0800 Assertions          	PID 77795(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:09:45  id:0x0x100008ee9 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:08:14 -0800 Assertions          	PID 77795(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:09:45  id:0x0x700008eea [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:15:28 -0800 Assertions          	PID 77795(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:17:00  id:0x0x100008ee9 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:15:28 -0800 Assertions          	PID 77795(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:17:00  id:0x0x700008eea [System: PrevIdle]          
+2026-11-02 13:15:29 -0800 Assertions          	PID 82606(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700008f1c [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:23:14 -0800 Assertions          	PID 82606(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:07:45  id:0x0x100008f1b [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:23:14 -0800 Assertions          	PID 82606(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:07:45  id:0x0x700008f1c [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:37:45 -0800 Assertions          	PID 82606(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:22:16  id:0x0x100008f1b [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:37:45 -0800 Assertions          	PID 82606(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:22:16  id:0x0x700008f1c [System: PrevIdle]          
+2026-11-02 13:37:45 -0800 Assertions          	PID 88933(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700008f85 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:38:14 -0800 Assertions          	PID 88933(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:00:29  id:0x0x100008f84 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:38:14 -0800 Assertions          	PID 88933(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:00:29  id:0x0x700008f85 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:53:14 -0800 Assertions          	PID 88933(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:15:29  id:0x0x100008f84 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 13:53:14 -0800 Assertions          	PID 88933(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:15:29  id:0x0x700008f85 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 14:07:38 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep DeclUser kCPU kDisp] Using AC(Charge: 7)          
+2026-11-02 14:08:14 -0800 Assertions          	PID 88933(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:30:29  id:0x0x100008f84 [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:08:14 -0800 Assertions          	PID 88933(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:30:29  id:0x0x700008f85 [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:09:32 -0800 Assertions          	PID 88933(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:31:47  id:0x0x100008f84 [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:09:32 -0800 Assertions          	PID 88933(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:31:47  id:0x0x700008f85 [System: PrevIdle DeclUser kDisp]          
+2026-11-02 14:09:33 -0800 Assertions          	PID 97952(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700009026 [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:21:52 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 10)          
+2026-11-02 14:22:02 -0800 Assertions          	PID 97952(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:12:29  id:0x0x100009025 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 14:22:02 -0800 Assertions          	PID 97952(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:12:29  id:0x0x700009026 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 14:31:24 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep DeclUser kCPU kDisp] Using AC(Charge: 5)          
+2026-11-02 14:34:27 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 6)          
+2026-11-02 14:34:37 -0800 Assertions          	PID 97952(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:25:04  id:0x0x100009025 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 14:34:37 -0800 Assertions          	PID 97952(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:25:04  id:0x0x700009026 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 14:41:28 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep DeclUser kCPU kDisp] Using AC(Charge: 7)          
+2026-11-02 14:44:00 -0800 Assertions          	PID 97952(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:34:27  id:0x0x100009025 [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:44:00 -0800 Assertions          	PID 97952(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:34:27  id:0x0x700009026 [System: PrevIdle DeclUser kDisp]          
+2026-11-02 14:44:00 -0800 Assertions          	PID 8536(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x7000090fb [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:49:37 -0800 Assertions          	PID 8536(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:05:36  id:0x0x1000090fa [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:49:37 -0800 Assertions          	PID 8536(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:05:36  id:0x0x7000090fb [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 14:53:14 -0800 Assertions          	Summary- [System: PrevIdle DeclUser kDisp] Using Batt(Charge: 8)          
+2026-11-02 14:53:14 -0800 Assertions          	Summary- [System: PrevIdle] Using Batt(Charge: 8)          
+2026-11-02 14:53:17 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 8)          
+2026-11-02 15:03:01 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep DeclUser kCPU kDisp] Using AC(Charge: 12)          
+2026-11-02 15:03:24 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 12)          
+2026-11-02 15:03:35 -0800 Assertions          	PID 8536(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:19:34  id:0x0x1000090fa [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:03:35 -0800 Assertions          	PID 8536(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:19:34  id:0x0x7000090fb [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:18:35 -0800 Assertions          	PID 8536(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:34:34  id:0x0x1000090fa [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:18:35 -0800 Assertions          	PID 8536(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:34:34  id:0x0x7000090fb [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:30:48 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep DeclUser kCPU kDisp] Using AC(Charge: 25)          
+2026-11-02 15:33:35 -0800 Assertions          	PID 8536(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:49:34  id:0x0x1000090fa [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 15:33:35 -0800 Assertions          	PID 8536(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:49:34  id:0x0x7000090fb [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 15:37:33 -0800 Assertions          	PID 8536(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:53:32  id:0x0x1000090fa [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 15:37:33 -0800 Assertions          	PID 8536(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:53:32  id:0x0x7000090fb [System: PrevIdle DeclUser kDisp]          
+2026-11-02 15:40:31 -0800 Assertions          	Summary- [System: PrevIdle] Using AC(Charge: 34)          
+2026-11-02 15:45:28 -0800 Assertions          	Summary- [System: PrevIdle IntPrevDisp kDisp] Using AC(Charge: 43)          
+2026-11-02 15:45:45 -0800 Assertions          	PID 25542(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700009312 [System: PrevIdle PrevSleep IntPrevDisp kCPU kDisp]          
+2026-11-02 15:47:40 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 46)          
+2026-11-02 15:47:42 -0800 Assertions          	PID 25542(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:01:57  id:0x0x100009311 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:47:42 -0800 Assertions          	PID 25542(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:01:57  id:0x0x700009312 [System: PrevIdle]          
+2026-11-02 15:47:43 -0800 Assertions          	PID 26128(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x70000931a [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:49:40 -0800 Assertions          	PID 26128(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:01:57  id:0x0x100009319 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:49:40 -0800 Assertions          	PID 26128(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:01:57  id:0x0x70000931a [System: PrevIdle]          
+2026-11-02 15:49:40 -0800 Assertions          	PID 26680(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x70000931f [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:51:27 -0800 Assertions          	PID 26680(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:01:46  id:0x0x10000931e [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:51:27 -0800 Assertions          	PID 26680(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:01:46  id:0x0x70000931f [System: PrevIdle]          
+2026-11-02 15:51:27 -0800 Assertions          	PID 27173(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700009337 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:53:26 -0800 Assertions          	PID 27173(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:01:59  id:0x0x100009336 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:53:26 -0800 Assertions          	PID 27173(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:01:59  id:0x0x700009337 [System: PrevIdle]          
+2026-11-02 15:53:26 -0800 Assertions          	PID 27751(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700009342 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:55:26 -0800 Assertions          	PID 27751(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:02:00  id:0x0x100009341 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:55:26 -0800 Assertions          	PID 27751(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:02:00  id:0x0x700009342 [System: PrevIdle]          
+2026-11-02 15:55:33 -0800 Assertions          	Summary- [System: PrevIdle] Using AC(Charge: 55)          
+2026-11-02 15:56:23 -0800 Assertions          	PID 28480(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700009361 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 15:56:57 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 57)          
+2026-11-02 16:02:17 -0800 Assertions          	PID 28480(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:05:54  id:0x0x100009360 [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:02:17 -0800 Assertions          	PID 28480(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:05:54  id:0x0x700009361 [System: PrevIdle DeclUser kDisp]          
+2026-11-02 16:02:17 -0800 Assertions          	PID 30273(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x70000939b [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:05:37 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep DeclUser kCPU kDisp] Using AC(Charge: 62)          
+2026-11-02 16:07:26 -0800 Assertions          	PID 30273(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:05:08  id:0x0x10000939a [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:07:26 -0800 Assertions          	PID 30273(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:05:08  id:0x0x70000939b [System: PrevIdle DeclUser kDisp]          
+2026-11-02 16:07:26 -0800 Assertions          	PID 32267(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x7000093ed [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:10:42 -0800 Assertions          	PID 32267(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:03:16  id:0x0x1000093ec [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:10:42 -0800 Assertions          	PID 32267(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:03:16  id:0x0x7000093ed [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:17:18 -0800 Assertions          	PID 32267(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:09:52  id:0x0x1000093ec [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:17:18 -0800 Assertions          	PID 32267(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:09:52  id:0x0x7000093ed [System: PrevIdle DeclUser kDisp]          
+2026-11-02 16:17:18 -0800 Assertions          	PID 36541(caffeinate) Created PreventSystemSleep "caffeinate command-line tool" 00:00:00  id:0x0x700009430 [System: PrevIdle PrevSleep DeclUser kCPU kDisp]          
+2026-11-02 16:23:19 -0800 Assertions          	Summary- [System: PrevIdle PrevSleep kCPU] Using AC(Charge: 67)          
+2026-11-02 16:23:29 -0800 Assertions          	PID 36541(caffeinate) Summary PreventUserIdleSystemSleep "caffeinate command-line tool" 00:06:10  id:0x0x10000942f [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 16:23:29 -0800 Assertions          	PID 36541(caffeinate) Summary PreventSystemSleep "caffeinate command-line tool" 00:06:10  id:0x0x700009430 [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 16:28:54 -0800 Assertions          	PID 36541(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:11:36  id:0x0x10000942f [System: PrevIdle PrevSleep kCPU]          
+2026-11-02 16:28:54 -0800 Assertions          	PID 36541(caffeinate) ClientDied PreventSystemSleep "caffeinate command-line tool" 00:11:36  id:0x0x700009430 [System: PrevIdle]          
