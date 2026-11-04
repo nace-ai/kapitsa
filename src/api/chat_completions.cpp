@@ -9,6 +9,8 @@ ojson chat_usage(const ChatResult& res) {
           {"completion_tokens", res.completion_tokens},
           {"total_tokens", res.prompt_tokens + res.completion_tokens},
           {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
+  if (res.reasoning_tokens > 0)
+    u["completion_tokens_details"] = {{"reasoning_tokens", res.reasoning_tokens}};
   if (res.loops > 0) u["kapitsa"] = kapitsa_usage(res);  // looped models: the loop count the request ran
   // the time the engine took to read the uncached part of the prompt (a client's prefill tok/s is
   // (prompt_tokens - cached_tokens) / prefill_ms; its own time to first token also holds the network and the queue).
