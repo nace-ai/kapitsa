@@ -73,6 +73,21 @@ class DeviceConditions(unittest.TestCase):
         self.samples[2]["foreign_gpu_ns"] = 1
         self.assertIn("foreign_GPU_activity", self.errors())
 
+    def test_cpu_gate_uses_request_intervals_not_postamble(self):
+        self.samples[-1]["background_cpu_pct"] = 20
+        valid_requests = [dict(invalid=[])]
+        errors, flags = ab.arm_errors(self.before, self.after, self.samples, valid_requests, 2, 5)
+        self.assertEqual(errors, [])
+        self.assertIn("background_CPU_over_limit", flags)
+        invalid_requests = [dict(invalid=["background_CPU_over_limit"])]
+        errors, _ = ab.arm_errors(self.before, self.after, self.samples, invalid_requests, 2, 5)
+        self.assertIn("invalid_request", errors)
+        self.after["pageouts"] += 61
+        self.samples[-1]["foreign_gpu_ns"] = 1
+        errors, _ = ab.arm_errors(self.before, self.after, self.samples, valid_requests, 2, 5)
+        self.assertIn("pageouts_changed", errors)
+        self.assertIn("foreign_GPU_activity", errors)
+
     def test_monitor_failure_missing_counter_and_gaps(self):
         self.samples[2]["error"] = "ioreg timeout"
         self.samples[3]["interval_s"] = 1.01

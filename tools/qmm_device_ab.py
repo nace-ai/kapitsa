@@ -285,6 +285,17 @@ def request_body(messages, model, temperature, count=512):
             "chat_template_kwargs": {"enable_thinking": False}}
 
 
+def arm_errors(before, after, samples, requests, max_load, max_background_cpu):
+    flags = validate_leg(before, after, samples, max_load, max_background_cpu)
+    # Only CPU peaks in timed requests are contention for the throughput
+    # measurements. Bookkeeping can use CPU after the final request. Retain
+    # its flags separately; all other conditions still cover the entire arm.
+    errors = [x for x in flags if x != "background_CPU_over_limit"]
+    if any(r["invalid"] for r in requests):
+        errors.append("invalid_request")
+    return errors, flags
+
+
 def one_leg(label, binary, cases, args, harness, gpu):
     directory = args.out/label
     directory.mkdir()
@@ -348,13 +359,12 @@ def one_leg(label, binary, cases, args, harness, gpu):
             samples = window_samples(monitor, start, end, args)
             record.update(before=before, after=after, samples=samples, duration_s=end-start,
                           power_mode_before=mode_before, power_mode_after=mode_after)
-            record["invalid"] = validate_leg(before, after, samples, args.max_load, args.max_background_cpu)
+            record["invalid"], record["monitor_flags"] = arm_errors(before, after, samples, record["requests"],
+                                                                  args.max_load, args.max_background_cpu)
             if mode_before != mode_after:
                 record["invalid"].append("power_mode_changed")
             if mode_before != 0 or mode_after != 0:
                 record["invalid"].append("power_mode_not_automatic")
-            if any(r["invalid"] for r in record["requests"]):
-                record["invalid"].append("invalid_request")
         except Exception as exc:
             record["invalid"].append(repr(exc))
             record["samples"] = monitor.read()
@@ -366,7 +376,7 @@ def one_leg(label, binary, cases, args, harness, gpu):
 
 
 def compact(leg):
-    result = {k: leg[k] for k in ("label", "invalid", "duration_s", "before", "after", "power_mode_before", "power_mode_after") if k in leg}
+    result = {k: leg[k] for k in ("label", "invalid", "monitor_flags", "duration_s", "before", "after", "power_mode_before", "power_mode_after") if k in leg}
     samples = leg.get("samples", [])
     result["monitor"] = {"samples": len(samples), "foreign_gpu_ns": sum(s.get("foreign_gpu_ns", 0) for s in samples),
                          "max_load1": max((s.get("load1", 0) for s in samples), default=None),
