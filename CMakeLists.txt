@@ -106,7 +106,7 @@ target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test|runtime_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -122,6 +122,11 @@ add_executable(execution_session_test tools/execution_session_test.cpp src/engin
 target_include_directories(execution_session_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(execution_session_test PRIVATE Threads::Threads)
 enable_testing()
+add_executable(runtime_test tools/runtime_test.cpp src/server/runtime.cpp)
+target_include_directories(runtime_test PRIVATE src third_party)
+target_link_libraries(runtime_test PRIVATE Threads::Threads)
+add_test(NAME runtime_test COMMAND runtime_test)
+set_tests_properties(runtime_test PROPERTIES TIMEOUT 30)
 add_test(NAME load_error_test COMMAND load_error_test)
 set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)
@@ -173,16 +178,22 @@ add_custom_command(
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   DEPENDS ${CMAKE_SOURCE_DIR}/src/server/chat.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   COMMENT "Embedding the chat page")
-add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
+add_library(kapitsa_server STATIC ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
   ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/runtime.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
   ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp
   ${CMAKE_SOURCE_DIR}/src/server/stage_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/route.cpp
   ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/pair.cpp ${KAPITSA_CHAT})
-target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
-target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
+target_include_directories(kapitsa_server PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(kapitsa_server PUBLIC naceinfer "-framework CoreFoundation")
+target_compile_definitions(kapitsa_server PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
+add_executable(kapitsa src/server/cli_entry.cpp)
+target_link_libraries(kapitsa PRIVATE kapitsa_server)
+add_executable(kapitsa-runtime src/server/runtime_entry.cpp)
+target_link_libraries(kapitsa-runtime PRIVATE kapitsa_server)
+add_dependencies(kapitsa kapitsa-runtime)
 add_custom_command(TARGET kapitsa POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/nace-infer-server
   COMMAND ${CMAKE_COMMAND} -E create_symlink kapitsa ${CMAKE_BINARY_DIR}/nace-infer-server)
