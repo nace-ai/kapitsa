@@ -1,0 +1,166 @@
+diff --git a/src/kernels/zqwen4v.metal b/src/kernels/zqwen4v.metal
+index afbbbab..c23df06 100644
+--- a/src/kernels/zqwen4v.metal
++++ b/src/kernels/zqwen4v.metal
+@@ -166,6 +166,103 @@ NI_INLINE void qmvs_row(const device uint32_t* w, const device bfloat* scales, c
+   }
+ NI_QMVS_MULTI(qmvs_multi)
+ 
++// qmvs_rows: qmvs_multi with the token rows in one simdgroup instead of one each: every weight word is read and
++// unpacked once for the R rows, and each row's sum is qmvs_row's expression in qmvs_row's order (bitwise equal: fn_check
++// FN_ROWS). grid (threadgroups) of 2 simdgroups x 4 weight rows, R = 2-4.
++template <int BITS, int T>
++NI_INLINE void qmvs_rows_t(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
++                           const device float* x, uint x_ld, device float* y, uint y_ld, uint N, uint K, bool add,
++                           uint row0, uint lane) {
++  constexpr int PER_WORD = 32 / BITS;
++  constexpr uint MASK = (1u << BITS) - 1u;
++  constexpr int VPL = 16, ROWS = 4;
++  constexpr int WORDS = VPL / PER_WORD;
++  const uint wpr = K / PER_WORD, gpr = K / 64;
++  float acc[ROWS][T];
++  uint rows[ROWS];
++  for (int r = 0; r < ROWS; ++r) {
++    for (int t = 0; t < T; ++t) acc[r][t] = 0.0f;
++    rows[r] = min(row0 + r, N - 1);
++  }
++  for (uint k0 = lane * VPL; k0 < K; k0 += 32 * VPL) {
++    float xv[T][VPL];
++    float xsum[T];
++    for (int t = 0; t < T; ++t) {
++      xsum[t] = 0.0f;
++      const device float4* xp = (const device float4*)(x + t * x_ld + k0);
++      for (int i = 0; i < VPL / 4; ++i) {
++        float4 v = xp[i];
++        xsum[t] += v.x + v.y + v.z + v.w;
++        for (int e = 0; e < 4; ++e)
++          xv[t][i * 4 + e] = v[e] * float(1.0f / float(1u << (BITS * ((i * 4 + e) % PER_WORD))));
++      }
++    }
++    const uint g = k0 / 64, wo = k0 / PER_WORD;
++    for (int r = 0; r < ROWS; ++r) {
++      const device uint32_t* wp = w + rows[r] * wpr + wo;
++      uint32_t wv[WORDS];
++      if (WORDS == 4) {
++        uint4 v = *(const device uint4*)wp;
++        wv[0] = v.x; wv[1] = v.y; wv[2] = v.z; wv[3] = v.w;
++      } else {
++        uint2 v = *(const device uint2*)wp;
++        wv[0] = v.x; wv[1] = v.y;
++      }
++      const float sc = float(scales[rows[r] * gpr + g]), bi = float(biases[rows[r] * gpr + g]);
++      for (int t = 0; t < T; ++t) {
++        float d = 0.0f;
++        for (int i = 0; i < WORDS; ++i)
++          for (int j = 0; j < PER_WORD; ++j) d += float(wv[i] & (MASK << (BITS * j))) * xv[t][i * PER_WORD + j];
++        acc[r][t] += sc * d + bi * xsum[t];
++      }
++    }
++  }
++  for (int r = 0; r < ROWS; ++r)
++    for (int t = 0; t < T; ++t) {
++      const float v = simd_sum(acc[r][t]);
++      const uint row = row0 + r;
++      if (lane == 0 && row < N) {
++        device float* dst = y + t * y_ld + row;
++        *dst = add ? *dst + v : v;
++      }
++    }
++}
++
++template <int BITS>
++NI_INLINE void qmvs_rows_r(const device uint32_t* W, const device bfloat* S, const device bfloat* B,
++                           const device float* x, uint x_ld, device float* Y, uint y_ld, uint R, uint N, uint K,
++                           bool add, uint row0, uint lane) {
++  if (R == 2) qmvs_rows_t<BITS, 2>(W, S, B, x, x_ld, Y, y_ld, N, K, add, row0, lane);
++  else if (R == 3) qmvs_rows_t<BITS, 3>(W, S, B, x, x_ld, Y, y_ld, N, K, add, row0, lane);
++  else qmvs_rows_t<BITS, 4>(W, S, B, x, x_ld, Y, y_ld, N, K, add, row0, lane);
++}
++
++[[kernel]] void qmvs_rows(
++    const device uint32_t* w0 [[buffer(0)]], const device bfloat* s0 [[buffer(1)]],
++    const device bfloat* b0 [[buffer(2)]], device float* y0 [[buffer(3)]],
++    const device uint32_t* w1 [[buffer(4)]], const device bfloat* s1 [[buffer(5)]],
++    const device bfloat* b1 [[buffer(6)]], device float* y1 [[buffer(7)]],
++    const device uint32_t* w2 [[buffer(8)]], const device bfloat* s2 [[buffer(9)]],
++    const device bfloat* b2 [[buffer(10)]], device float* y2 [[buffer(11)]],
++    const device uint32_t* w3 [[buffer(12)]], const device bfloat* s3 [[buffer(13)]],
++    const device bfloat* b3 [[buffer(14)]], device float* y3 [[buffer(15)]],
++    const device float* x [[buffer(16)]], constant QmvtParams& p [[buffer(17)]],
++    uint tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
++    uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
++  uint seg = 0;
++  for (uint i = 1; i < p.nseg; ++i)
++    if (tgp >= p.tg_begin[i]) seg = i;
++  const uint row0 = ((tgp - p.tg_begin[seg]) * nsg + sg) * 4;
++  const uint N = p.N[seg];
++  if (row0 >= N) return;
++  const device uint32_t* W = seg == 0 ? w0 : seg == 1 ? w1 : seg == 2 ? w2 : w3;
++  const device bfloat* S = seg == 0 ? s0 : seg == 1 ? s1 : seg == 2 ? s2 : s3;
++  const device bfloat* B = seg == 0 ? b0 : seg == 1 ? b1 : seg == 2 ? b2 : b3;
++  device float* Y = seg == 0 ? y0 : seg == 1 ? y1 : seg == 2 ? y2 : y3;
++  if (p.bits[seg] == 8) qmvs_rows_r<8>(W, S, B, x, p.x_ld, Y, p.y_ld[seg], p.R, N, p.K, p.add[seg] != 0, row0, lane);
++  else qmvs_rows_r<4>(W, S, B, x, p.x_ld, Y, p.y_ld[seg], p.R, N, p.K, p.add[seg] != 0, row0, lane);
++}
++
+ 
+ // Any MLX affine format of wfmt.metal (6-bit attention projections): per row the arithmetic of wf_rows_acc (qmvg_*).
+ template <int F>
+diff --git a/src/model/qwen4_exp_spec.cpp b/src/model/qwen4_exp_spec.cpp
+index 8bbd187..61cdccd 100644
+--- a/src/model/qwen4_exp_spec.cpp
++++ b/src/model/qwen4_exp_spec.cpp
+@@ -67,7 +67,9 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
+     // simdgroups (pair = sg % ceil(R/2), blk = sg / ceil(R/2)): threads must scale with ceil(R / 2) or blk
+     // collapses to 0 and half of every weight tile goes unread.
+     const bool qmvp = sp0 && (R == 4 || (pair8 && R == 8));
+-    e.use(pipe4(qmvp ? "qmvp_multi" : sp0 ? "qmvs_multi" : "qmvs_multi_" + f0.fmt()));
++    static const bool rows1 = env_on("NI_QMVS_ROWS");
++    const bool srows = rows1 && sp0 && !qmvp && R >= 2 && R <= 4;
++    e.use(pipe4(qmvp ? "qmvp_multi" : srows ? "qmvs_rows" : sp0 ? "qmvs_multi" : "qmvs_multi_" + f0.fmt()));
+     struct {
+       uint32_t K, R, nseg, x_ld, N[4], tg_begin[5], bits[4], y_ld[4], add[4];
+     } p{};
+@@ -95,6 +97,7 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
+     e.buf(16, x);
+     e.val(17, p);
+     if (qmvp) e.dispatch(tg, 1, 1, 64u * uint32_t((R + 1) / 2));
++    else if (srows) e.dispatch(tg, 1, 1, 64);
+     else e.dispatch(uint32_t(R), tg, 1, 64);
+   }
+ }
+diff --git a/tools/fn_check.cpp b/tools/fn_check.cpp
+index 46c667d..b3d5c6b 100644
+--- a/tools/fn_check.cpp
++++ b/tools/fn_check.cpp
+@@ -1021,6 +1021,30 @@ void test_qmvs_rows() {
+     char nm[64];
+     snprintf(nm, sizeof nm, "qmvs_multi R=%u == qmv2_multi_r2", R);
+     report(nm, e, 0);
++    if (R <= 4) {
++      for (int i = 0; i < 4; ++i) memset(yb[i]->f(), 0, size_t(R) * Ns[i] * 4);
++      run("qmvs_rows", [&](Encoder& e) {
++        for (int i = 0; i < 4; ++i) {
++          e.buf(i * 4, Wq[i]->b); e.buf(i * 4 + 1, Sq[i]->b); e.buf(i * 4 + 2, Bq[i]->b); e.buf(i * 4 + 3, yb[i]->b);
++        }
++        e.buf(16, x.b); e.val(17, q);
++      }, tg, 1, 1, 64);
++      double er = 0;
++      for (int i = 0; i < 4; ++i) er += memcmp(ya[i]->f(), yb[i]->f(), size_t(R) * Ns[i] * 4) == 0 ? 0 : 1;
++      if (getenv("FN_VERBOSE"))
++        for (int i = 0; i < 4; ++i) {
++          double d = 0, m = 0;
++          size_t nd = 0;
++          for (size_t j = 0; j < size_t(R) * Ns[i]; ++j) {
++            const double a = ya[i]->f()[j], b = yb[i]->f()[j];
++            if (a != b) ++nd;
++            d = std::max(d, std::fabs(a - b)), m = std::max(m, std::fabs(a));
++          }
++          printf("   seg %d (%u-bit): %zu of %zu differ, max |d| %.3g of max %.3g\n", i, bits[i], nd, size_t(R) * Ns[i], d, m);
++        }
++      snprintf(nm, sizeof nm, "qmvs_rows R=%u == qmv2_multi_r2", R);
++      report(nm, er, 0);
++    }
+     for (int i = 0; i < 4; ++i) memset(yb[i]->f(), 0, size_t(R) * Ns[i] * 4);
+     run("qmvp_multi", [&](Encoder& e) {
+       for (int i = 0; i < 4; ++i) {
