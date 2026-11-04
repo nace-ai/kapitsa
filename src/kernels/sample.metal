@@ -10,24 +10,25 @@ struct TopkStageParams {
   uint chunk;  // logits per threadgroup (threads * 8)
 };
 
+// Callers supply distinct candidate IDs, or UINT_MAX/-inf for exhausted lanes, after filtering NaNs.
+// Select the winning value's bits too: equal signed zeros must keep the lower ID's sign.
+NI_INLINE void sample_simd_argmax(thread float& v, thread uint& i) {
+  const float mv = simd_max(v);
+  const uint mi = simd_min(v == mv ? i : 0xffffffffu);
+  v = as_type<float>(simd_or(v == mv && i == mi ? as_type<uint>(v) : 0u));
+  i = mi;
+}
+
 NI_INLINE void tg_argmax(thread float& v, thread uint& i, threadgroup float* sv, threadgroup uint* si, uint tid,
                          uint ntg) {
   uint lane = tid & 31, sg = tid >> 5, nsg = (ntg + 31) >> 5;
-  for (uint off = 16; off > 0; off >>= 1) {
-    float ov = simd_shuffle_down(v, off);
-    uint oi = simd_shuffle_down(i, off);
-    if (ov > v || (ov == v && oi < i)) { v = ov; i = oi; }
-  }
+  sample_simd_argmax(v, i);
   if (lane == 0) { sv[sg] = v; si[sg] = i; }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (sg == 0) {
     v = lane < nsg ? sv[lane] : -INFINITY;
     i = lane < nsg ? si[lane] : 0xffffffff;
-    for (uint off = 16; off > 0; off >>= 1) {
-      float ov = simd_shuffle_down(v, off);
-      uint oi = simd_shuffle_down(i, off);
-      if (ov > v || (ov == v && oi < i)) { v = ov; i = oi; }
-    }
+    sample_simd_argmax(v, i);
     if (lane == 0) { sv[0] = v; si[0] = i; }
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
