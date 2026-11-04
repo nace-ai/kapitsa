@@ -41,11 +41,27 @@ run unpacked once for both): bitwise the same, but 30.9 against 18.5 us (registe
 
 ## Decode
 
-`ni_run` ([ab/](ab)), one build, `NI_HC_WIDE=0` against the default, interleaved over 3 rounds (old new, new old, old
-new), the README's decode prompt ([ab/prompt-ids.txt](ab/prompt-ids.txt), 56 tokens), greedy, 512 tokens
+`ni_run` ([ab/](ab)), one build, `NI_HC_WIDE=0` against the default, rounds alternating the arm order (old new, new
+old, ...), the README's decode prompt ([ab/prompt-ids.txt](ab/prompt-ids.txt), 56 tokens), greedy, 512 tokens
 (`--ignore-eos`), `--spec 2 --dflash none` (the server's default for this model). Every run waited for a quiet GPU
-(no foreign process above 5% for 15 s, at most 60 s: `bench/harness/gpu_hogs.py`) and sampled the foreign GPU load
-while it ran.
+(no foreign process above 5% for 15 s: `bench/harness/gpu_hogs.py`) and sampled the foreign GPU load while it ran.
+Every run wrote the same 511 tokens.
+
+**Idle** ([ab/idle/](ab/idle): 5 rounds in two batches, this session idle, each quiet wait up to 900 s). The rounds in
+which both arms found the GPU quiet and saw 0.0% foreign load while they ran (batch 1's second and third):
+
+| Arm | tok/s | ms of GPU a cycle | Tokens a cycle |
+| --- | ---: | ---: | ---: |
+| `NI_HC_WIDE=0` | 105.9, 105.9 | 21.83, 21.84 | 2.34 |
+| default | 107.9, 108.2 | 21.42, 21.37 | 2.34 |
+
+Medians: GPU time a cycle 21.84 -> 21.40 ms (-2.0%), decode 105.9 -> 108.1 tok/s (+2.0%). In the other three
+rounds every wait ran out at 900 s, the Claude desktop app's helper process (which this session runs in) at 2.8-4.8%
+mean through both arms alike; they agree (`NI_HC_WIDE=0` 21.91-21.96 ms, the default 21.36-21.44).
+
+**The first A/B** ([ab/run1/](ab/run1), 3 rounds, each quiet wait up to 60 s): the helper held 3.8-5.7% mean (9.6%
+at most) through both arms alike, so every wait ran out. #921's title and the usage row quoted it until the idle rounds
+replaced it:
 
 | Arm | tok/s | ms of GPU a cycle | Tokens a cycle |
 | --- | ---: | ---: | ---: |
@@ -53,8 +69,6 @@ while it ran.
 | default | 106.3, 108.0, 108.1 | 21.51, 21.42, 21.43 | 2.34 |
 
 GPU time a cycle 21.92 -> 21.45 ms (-2.1%), decode 105.6 -> 107.5 tok/s (+1.7%; the first new run 106.3).
-Every run wrote the same 511 tokens. **GPU load:** nothing else ran, but the Claude desktop app's helper process, which
-this session runs in, held 3.8-5.7% mean (9.6% at most) through both arms alike, so every quiet wait ran out at 60 s.
 
 ## Output check
 
@@ -73,6 +87,6 @@ the same kernels in the same passes, and the poster cell was not re-measured.
 ## Files
 
 `ab/`: the A/B script, command, output and every run's `ni_run` output (`run1/`, `ab_fn.json` with each run's ids and
-GPU load). `kernel/`: the `fn_check` commands and outputs. `output-check/`: the dumps' commands and logs, their
+GPU load); `ab/idle/`: the idle rounds the same way (the script with its 900 s wait, `run.sh`, `batch1/`, `batch2/`). `kernel/`: the `fn_check` commands and outputs. `output-check/`: the dumps' commands and logs, their
 `meta.json` and the comparison. Local paths are replaced by placeholders (`~`, `<repo>`: this branch's checkout,
 `<scratch>`).
