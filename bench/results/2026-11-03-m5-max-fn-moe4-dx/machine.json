@@ -29,7 +29,7 @@
     "logit_dump": "6af872c832b9090fb3752f0aacbb60c48153160a50a94a687df9e1d9549707c1",
     "fn_check": "44d1958cc35f11ffe08c77a35d1989c79851d23796d9174774508191aee563ca"
   },
-  "source_note": "One Release build of the branch; the old arm is NI_MOE4_DX=0 in the same binary. The final commit differs from the A/B's build in how the switch is read (a per-Mac default) and in comments; on this Mac the same kernels run.",
+  "source_note": "One Release build of the branch; the old arm is NI_MOE4_DX=0 in the same binary. The first A/B (ab/run1) ran a build that read the switch as 0 off, else on; the idle rounds (ab/idle), fn_check and the output check ran the next build, whose switch is the committed per-Mac default (c9bea88's code but for comments). On this Mac both builds run the same kernels.",
   "build_commands": [
     "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
     "cmake --build build -j --target ni_run logit_dump fn_check kapitsa"

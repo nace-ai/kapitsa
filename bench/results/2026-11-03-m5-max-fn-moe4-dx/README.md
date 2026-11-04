@@ -55,7 +55,8 @@ GPU time a cycle 22.12 -> 21.83 ms (-1.3%), decode 104.7 -> 106.1 tok/s (+1.3%).
   the prefill rows, 192 step rows and 192 verify rows (the MTP cycle's chain of 3) **every row bitwise identical**. No
   floor file exists for this 4-bit pack; bitwise identity needs none.
 
-The A/B's build read the switch as "`0` off, else on", the final code as above; on this Mac both run the same kernels.
+The first A/B's build read the switch as "`0` off, else on"; the idle rounds' build (the one the checks above used)
+reads it as committed, the per-Mac default: the code of `c9bea88` but for its comments.
 
 ## Not run
 
