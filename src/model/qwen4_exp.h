@@ -137,6 +137,11 @@ class Qwen4Exp : public Qwen35 {
     return q20::group_chunks(prefill_group_, remote_ || lo_ != 0, dbg_layers_ >= 0, !store_ || store_->complete());
   }
   void encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) override;
+  // NI_PF_GROUPED with the routed experts resident (stacked 4-bit planes): not on Q2_0 packs, the expert store or a
+  // split model, which a grouped prefill was not measured on
+  bool grouped_prefill() const override {
+    return Qwen35::grouped_prefill() && !q20_pack_ && !store_ && !remote_ && lo_ == 0;
+  }
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   // speculative decoding (qwen4_exp_spec.cpp)
   int default_spec_depth() const override { return 2; }

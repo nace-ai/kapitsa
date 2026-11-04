@@ -427,8 +427,12 @@ void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& x
       return;
     }
   }
-  // one projection: the large-prefill kernels (enc_qmm would come back here)
+  // one projection: the large-prefill kernels (enc_qmm would come back here); several, one dispatch each, as one group
+  // on a grouped prefill (each writes its own output from the same input)
+  const bool grp = segs.size() > 1 && e.grouped() && grouped_prefill();
+  if (grp) e.group_begin();
   for (auto& s : segs) segs.size() > 1 ? enc_qmm(e, *s.L, xh, s.y, M, s.add) : enc_qmm_large(e, *s.L, xh, s.y, M, s.add);
+  if (grp) e.group_end();
 }
 
 // Short-prefill qmr: one projection on qmr_k64_*, several on the qmrs_k64_* form (short_tile()).
@@ -2554,6 +2558,26 @@ static bool qmt_on() {
   return on;
 }
 
+static bool qmt_i8_on();
+
+// NI_PF_GROUPED (read once): a prefill pass on a grouped encoder, its independent dispatches side by side - enc_proj's
+// projections (DeltaNet's four, attention's q / k / v, the router and the shared-expert gate) and the routed and shared
+// experts' GEMMs - while the rest keep a barrier between them. The same kernels on the same data: bitwise the same
+// outputs. Default on where the tensor-unit prefill is (qmt_on(): the M5 family on macOS 26), measured on the M5 Max
+// (4K prefill, ni_run, old and new builds interleaved): the 35B-A3B 671.7 -> 657.9 ms (-2.1%), Clover -2.2%, the 4B
+// -2.0%, Flash-Next -1.1%, the 9B -0.5%, the 27B level (its prefill waits on the Neural Engine split). 0 = off (a
+// serial encoder, as before), 1 = on on any Mac.
+// Off whenever NI_QMT_I8 is on: its GEMMs are two dependent dispatches.
+bool Qwen35::grouped_prefill() const {
+  static const bool on = [] {
+    const int v = env_int("NI_PF_GROUPED", -1);
+    const bool o = v < 0 ? qmt_on() : v > 0;
+    if (o) logi("NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)");
+    return o;
+  }();
+  return on && !qmt_i8_on();
+}
+
 // NI_QMT6 (read once): the 6-bit group-64 dense weights' large-prefill GEMMs on qmt6_m64_n64 (tensor_ops/qmt6.metal)
 // instead of wfmt.metal's qrf_f6g64_m32_n128. Default on where qmt_on() is. The tile's weight decode mirrors
 // qrf_load_w's half-domain affine (0x3400|q trick, one half fma with the scale pre-multiplied by 4096), so the
@@ -3305,6 +3329,10 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     const q20::Experts X = q20_fetch(e, L, ridx_, uint32_t(P), T, enc_shared);
     q20::enc_prefill(e, X, q20_shape(), bm, max_tiles, xh_, hhalf_, yd_, tiles_, ntiles_, stok_, spair_);
   }
+  // a grouped prefill runs the shared expert beside the routed one: its gate / up (one dispatch) in the routed gate /
+  // up's group, its down projection in the routed down's
+  const bool side = !fold && !q20 && e.grouped() && grouped_prefill();
+  if (side) e.group_begin();
   // gate + up + SwiGLU: hhalf_ row r = sorted row r (pairs grouped by expert, then shared rows)
   if (!q20) {
     // expert matrices are stacked [E, N, K]: strides in words / groups
@@ -3324,6 +3352,20 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.buf(15, SU.w->buf); e.buf(16, SU.s->buf); e.buf(17, SU.b->buf);
     e.dispatch(G.N / kBnGu, max_tiles, 1, 128);
   }
+  bool shared_gu = false;
+  if (side) {
+    shared_gu = enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T);
+    e.group_end();
+    if (!shared_gu) {  // three dependent dispatches: after the group
+      enc_qmm(e, L.sg, xh_, sgb_, T, false);
+      enc_qmm(e, L.su, xh_, sub_, T, false);
+      uint32_t ns = uint32_t(T * cfg_.shared_I);
+      e.use(pipe("swiglu_half"));
+      e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
+      e.dispatch((ns + 255) / 256, 1, 1, 256);
+    }
+    e.group_begin();
+  }
   // down: yd_ row = pair id (shared rows: P + token)
   if (!q20) {
     kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4),
@@ -3340,7 +3382,12 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.buf(9, SD.w->buf); e.buf(10, SD.s->buf); e.buf(11, SD.b->buf);
     e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
   }
-  if (!fold && !q20) enc_shared();
+  if (side) {
+    enc_qmm(e, L.sd, hh_, ys_, T, false);
+    e.group_end();
+  } else if (!fold && !q20) {
+    enc_shared();
+  }
   if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
     comb_pending_ = {yd_, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_, uint32_t(D), uint32_t(k), true};
   } else {
@@ -3627,6 +3674,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
+  const GroupedPass gp(e, grouped_prefill());
   draft_vocab_rewind(s, pos0);  // tokens from pos0 on may be new
   const int D = cfg_.hidden;
   enc_embed(e, s.tok, pos0, T, x_);

@@ -293,6 +293,9 @@ class Qwen35 : public Model {
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   int prefill_chunk() const override { return tmax_; }
+  // NI_PF_GROUPED: a prefill pass runs on a grouped encoder (independent dispatches overlap: enc_proj's projections,
+  // the routed and shared experts' GEMMs); a model that cannot take it in some configuration says no here.
+  virtual bool grouped_prefill() const;
   // NI_SHORTPF: checkpoints can be captured inside a prefill pass (encode_prefill's `snap`).
   bool can_snapshot() const override;
 
@@ -500,6 +503,17 @@ class Qwen35 : public Model {
   virtual bool block_drafter_ok() const { return true; }
 
  protected:
+  // encode_prefill's pass on a grouped encoder when grouped_prefill() asks for it; the encoder's mode comes back after
+  struct GroupedPass {
+    Encoder& e;
+    const bool on;
+    GroupedPass(Encoder& enc, bool want) : e(enc), on(want && !enc.grouped()) {
+      if (on) e.set_grouped(true);
+    }
+    ~GroupedPass() {
+      if (on) e.set_grouped(false);
+    }
+  };
   // Subclasses (Qwen4Exp) that load the checkpoint themselves: members only, nothing read
   struct NoLoad {};
   Qwen35(const std::string& model_dir, int prefill_chunk, NoLoad);

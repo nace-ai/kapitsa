@@ -1007,6 +1007,18 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
   }
 }
 void Encoder::barrier() { [E(enc_) memoryBarrierWithScope:MTLBarrierScopeBuffers]; }
+void Encoder::set_grouped(bool on) {
+  if (concurrent_ == on && auto_barrier_ == on) return;
+  concurrent_ = on;
+  auto_barrier_ = on;
+  in_group_ = group_first_ = false;
+  dispatched_ = false;  // (the encoder before this one ends first: nothing in the new one needs a barrier yet)
+  if (!enc_) return;
+  [E(enc_) endEncoding];
+  CFRelease(enc_);
+  enc_ = nullptr;
+  open_encoder();
+}
 void Encoder::on_completed(std::function<void()> f) {
   [(__bridge id<MTLCommandBuffer>)cb_ addCompletedHandler:^(id<MTLCommandBuffer>) {
     f();
