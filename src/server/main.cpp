@@ -70,7 +70,7 @@
 #include <ctime>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.27"
+#define KAPITSA_VERSION "0.2.28"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
