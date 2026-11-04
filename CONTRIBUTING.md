@@ -111,6 +111,8 @@ retains the original K partitions, including when a geometry falls back to the o
 `tools/qmm_device_ab.py` checks the 4B packed-QMM device default with interleaved builds. Build
 `qmm_device_conditions` explicitly, then pass `--old OLD/kapitsa --new NEW/kapitsa --model MODEL_DIR
 --probe build/qmm_device_conditions --out NEW_DIRECTORY`. The controller holds the GPU lock. It records actual AC
+power after warming both greedy and 4K sampled requests with distinct warm-up inputs. Measured prompts are evicted
+between requests and must report zero cached tokens. It checks
 power, one-minute load, thermal state and paging counters before and after each leg and request, plus 250 ms GPU
 samples and CPU usage over rolling one-second windows. One resident native sampler reads IOKit's `AppUsage` counters
 directly, avoiding probe/ps/ioreg process launches at every sample. `proc_pid_rusage` records the tested process tree's CPU time;

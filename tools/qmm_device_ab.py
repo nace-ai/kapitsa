@@ -327,6 +327,15 @@ def one_leg(label, binary, cases, args, harness, gpu):
         warm = [{"role": "system", "content": "[warm-up coding] "+harness.DECODE_SYS},
                 {"role": "user", "content": harness.DECODE_USER}]
         harness.stream_chat(base, request_body(warm, model, 0), timeout=remaining(args, 300))
+        # Exercise sampled decoding and the long prompt's prefill shape before
+        # monitoring. Greedy-only warm-up leaves this mode's first-use work in
+        # the first measured sampled request. The measured request still must
+        # report zero cached tokens after the explicit eviction below.
+        warm = [dict(m) for m in cases[1][2]]
+        warm[-1]["content"] = warm[-1]["content"].replace("[run m4pro48-fixed]", "[warm m4pro48-fixed]", 1)
+        warmed = harness.stream_chat(base, request_body(warm, model, .6, 64), timeout=remaining(args, 300))
+        record["sampled_warmup"] = {"usage": warmed["usage"], "finish": warmed["finish"],
+                                    "nonempty": bool(warmed["content"].strip())}
         monitor = Monitor(args.probe, pid, gpu, args.interval)
         monitor.start()
         try:
