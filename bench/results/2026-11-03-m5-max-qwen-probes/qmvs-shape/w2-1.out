@@ -1,0 +1,88 @@
+[kapitsa] read 72.94 GB of weights in 10775 ms (6.8 GB/s)
+[kapitsa] RMSNorm weights zero-centred (indexer norm mean -0.04): read as 1 + w
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] compiled kernels in 27 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] compiled the weight-format kernels in 24 ms
+[kapitsa] prewarmed 130 prefill pipelines in 60 ms
+[kapitsa] loaded ~/models/qwen3.8-flash-next-4bit: Qwen3.8-Flash-Next, 48 layers (12 attention), 72.9 GB of weights in 15213 ms; 4-bit group 64 97%, 6-bit group 64 1%, 8-bit group 64 1%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped
+(profiling: prompt timings not meaningful)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+---- GPU profile per step (1 steps, 104.650 ms/step total, isolated dispatches) ----
+  qmms_moe3_gu_b4                34.049 ms/step   32.5%    48.0 calls/step   709.35 us/call
+  qmms_b4_t7                     22.786 ms/step   21.8%    72.0 calls/step   316.47 us/call
+  qmms_moe3_dn_b4                15.581 ms/step   14.9%    48.0 calls/step   324.60 us/call
+  qmmsf_f6g64_t7                 11.074 ms/step   10.6%   120.0 calls/step    92.28 us/call
+  qmmsf_f6g64_t1                  5.923 ms/step    5.7%    96.0 calls/step    61.70 us/call
+  gdn_step_parr4_l16              2.292 ms/step    2.2%    36.0 calls/step    63.66 us/call
+  qmms_gu_b4_t1                   1.857 ms/step    1.8%    48.0 calls/step    38.68 us/call
+  hc_pre_h                        1.595 ms/step    1.5%    97.0 calls/step    16.44 us/call
+  qmms_b8_t1                      1.587 ms/step    1.5%    61.0 calls/step    26.02 us/call
+  qmms_b4_t4                      1.423 ms/step    1.4%    48.0 calls/step    29.64 us/call
+  qmms_b8_t7                      1.009 ms/step    1.0%     3.0 calls/step   336.49 us/call
+  moe_topk_rows                   0.779 ms/step    0.7%    48.0 calls/step    16.24 us/call
+  hc_mix_h                        0.724 ms/step    0.7%    97.0 calls/step     7.46 us/call
+  qmv2_b4_g64_r4                  0.693 ms/step    0.7%     1.0 calls/step   693.25 us/call
+  moe_combine                     0.655 ms/step    0.6%    48.0 calls/step    13.65 us/call
+  gdn_prep_par                    0.590 ms/step    0.6%    36.0 calls/step    16.38 us/call
+  qmr8_k32_w14_m32_n128           0.258 ms/step    0.2%     1.0 calls/step   257.88 us/call
+  hc_act_h                        0.251 ms/step    0.2%    97.0 calls/step     2.59 us/call
+  moe_bucket3                     0.239 ms/step    0.2%    48.0 calls/step     4.97 us/call
+  gdn_gnorm_sg                    0.235 ms/step    0.2%    36.0 calls/step     6.52 us/call
+  attn_prefill11gs                0.210 ms/step    0.2%    12.0 calls/step    17.53 us/call
+  attn_prep                       0.144 ms/step    0.1%    13.0 calls/step    11.11 us/call
+  rows_to_half                    0.134 ms/step    0.1%    12.0 calls/step    11.16 us/call
+  qsa_block                       0.112 ms/step    0.1%    13.0 calls/step     8.65 us/call
+  attn11_reduce                   0.097 ms/step    0.1%    12.0 calls/step     8.06 us/call
+  qsa_prep                        0.083 ms/step    0.1%    13.0 calls/step     6.41 us/call
+  qmms_b8_t4                      0.080 ms/step    0.1%     1.0 calls/step    79.87 us/call
+  ple_conv_rows                   0.031 ms/step    0.0%     1.0 calls/step    31.29 us/call
+  embed_f8g64                     0.029 ms/step    0.0%     2.0 calls/step    14.40 us/call
+  ple_gate_rows                   0.025 ms/step    0.0%     1.0 calls/step    25.50 us/call
+  hc_up_mix3_c2_b6                0.020 ms/step    0.0%     1.0 calls/step    20.33 us/call
+  hc_inject                       0.018 ms/step    0.0%     2.0 calls/step     9.02 us/call
+  hc_down_sk4_n2_b6               0.015 ms/step    0.0%     1.0 calls/step    15.21 us/call
+  hc_expand                       0.015 ms/step    0.0%     1.0 calls/step    14.75 us/call
+  mtp4_pre_h                      0.013 ms/step    0.0%     1.0 calls/step    13.08 us/call
+  ple_ring_rows                   0.008 ms/step    0.0%     1.0 calls/step     8.13 us/call
+  mtp4_fuse                       0.005 ms/step    0.0%     1.0 calls/step     5.25 us/call
+  topk_stage1                     0.005 ms/step    0.0%     1.0 calls/step     4.79 us/call
+  sample_stage2                   0.004 ms/step    0.0%     1.0 calls/step     4.50 us/call
+---- GPU profile per step (44 steps, 23.154 ms/step total, isolated dispatches) ----
+  qmvs_multi_w2                   5.407 ms/step   23.4%   142.7 calls/step    37.90 us/call
+  moe4_gate_up                    4.823 ms/step   20.8%    48.0 calls/step   100.49 us/call
+  moe4_down                       3.070 ms/step   13.3%    48.0 calls/step    63.95 us/call
+  hc_up_mix4_c2_b6                2.742 ms/step   11.8%    97.0 calls/step    28.27 us/call
+  hc_down_sk4_n2_b6               2.222 ms/step    9.6%    97.0 calls/step    22.90 us/call
+  qmvs_multi_f6g64                1.443 ms/step    6.2%    24.0 calls/step    60.11 us/call
+  moe4_unique                     0.900 ms/step    3.9%    48.0 calls/step    18.75 us/call
+  gdn_step_verify_sg              0.727 ms/step    3.1%    36.0 calls/step    20.21 us/call
+  gdn_prep_verify                 0.276 ms/step    1.2%    36.0 calls/step     7.66 us/call
+  moe_topk512                     0.258 ms/step    1.1%    50.0 calls/step     5.15 us/call
+  attn_rows_partial               0.211 ms/step    0.9%    14.0 calls/step    15.05 us/call
+  qmv2_b4_g64_r2                  0.188 ms/step    0.8%     4.0 calls/step    46.93 us/call
+  moeg_gu_rows_f4g64_f8g64        0.127 ms/step    0.5%     2.0 calls/step    63.29 us/call
+  hc_down_sk4_n2_b8               0.100 ms/step    0.4%     6.0 calls/step    16.63 us/call
+  attn_prep                       0.093 ms/step    0.4%    14.0 calls/step     6.64 us/call
+  hc_up_mix3_c2_b8                0.092 ms/step    0.4%     4.6 calls/step    19.84 us/call
+  qsa_prep                        0.091 ms/step    0.4%    14.0 calls/step     6.51 us/call
+  qsa_block                       0.089 ms/step    0.4%    14.0 calls/step     6.39 us/call
+  moeg_down_rows_f4g64_f8g64_w    0.076 ms/step    0.3%     2.0 calls/step    38.11 us/call
+  attn_rows_reduce                0.051 ms/step    0.2%    14.0 calls/step     3.66 us/call
+  hc_up_mix4_c2_b8                0.039 ms/step    0.2%     1.4 calls/step    28.75 us/call
+  qmvp_multi                      0.027 ms/step    0.1%     1.3 calls/step    20.16 us/call
+  mtp4_pre                        0.020 ms/step    0.1%     2.0 calls/step    10.03 us/call
+  topk_stage1_rows                0.016 ms/step    0.1%     3.0 calls/step     5.41 us/call
+  embed_f8g64                     0.016 ms/step    0.1%     3.0 calls/step     5.22 us/call
+  ple_rows                        0.014 ms/step    0.1%     1.0 calls/step    13.90 us/call
+  sample_stage2_rows              0.012 ms/step    0.1%     3.0 calls/step     4.10 us/call
+  hc_inject                       0.010 ms/step    0.0%     3.0 calls/step     3.36 us/call
+  mtp4_fuse                       0.007 ms/step    0.0%     2.0 calls/step     3.51 us/call
+  copy_u32                        0.005 ms/step    0.0%     2.0 calls/step     2.69 us/call
+  hc_expand                       0.003 ms/step    0.0%     1.0 calls/step     2.63 us/call
+prompt 56 tok in 134 ms (419.1 tok/s); spec decode D=2: 95 tok in 1055 ms (90.1 tok/s), 44 cycles, 2.16 tok/cycle, accepted/drafted 0.60, 0.000 ms GPU/cycle, 23.969 ms wall/cycle, hist 13 9 22
+ids: 71093 12305 198 12237 198 19504 52 18887 440 75843 1326 46601 321 8487 6027 5468 34315 271 1919 4536 5004 264 87401 39642 11851 318 19504 52 8 6297 440 3984 56346 7869 520 318 51 13082 8 198 73130 1761 13 1049 5469 264 4368 53269 12876 364 32907 2528 321 264 198 848 51121 26864 1228 15705 13 271 20680 25 198 12 436 34810 75555 4687 25 3140 5742 1429 3470 513 3514 12404 948 8390 369 8379 198 12 75843 48241 25 3470 9184 31488 1238 264 5024 854 198 12
