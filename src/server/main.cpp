@@ -1403,6 +1403,11 @@ static int serve(int argc, char** argv, int first) {
     const std::string id = "chatcmpl-" + std::to_string(std::time(nullptr)) + std::to_string(rand() % 100000);
     const long created = long(std::time(nullptr));
     const std::string model = guard->engine().model_id();
+    if (!r.effort.empty()) {
+      const bool think_on = !r.template_kwargs.contains("enable_thinking") || r.template_kwargs["enable_thinking"] == true;
+      logi("chat [%s]: client reasoning_effort='%s' -> thinking %s",
+           model.c_str(), r.effort.c_str(), think_on ? "ON" : "OFF");
+    }
     const auto meter = ui::meter(req, r);
     r.live = ui::live_of(meter);
     const bool telemetry = req.get_header_value("X-Kapitsa-Bench-Telemetry") == "1";

@@ -638,6 +638,11 @@ void chat_events() {
           "chat stream: the engine's prefill time in usage, for a client's prefill tok/s on the uncached tokens");
     check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(inexact) == chunk("{}", R"("stop")", usage) + done,
           "chat stream: no prefill time in usage when it holds image encoding or turns given to other requests");
+    ChatResult res_think = result("stop");
+    res_think.reasoning_tokens = 15;
+    const std::string usage_think = R"({"prompt_tokens":100,"completion_tokens":20,"total_tokens":120,"prompt_tokens_details":{"cached_tokens":60},"completion_tokens_details":{"reasoning_tokens":15}})";
+    check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(res_think) == chunk("{}", R"("stop")", usage_think) + done,
+          "chat stream: reasoning_tokens in completion_tokens_details");
   }
   {
     // max_tokens: null is absent, so max_completion_tokens (or the default) applies (#546)

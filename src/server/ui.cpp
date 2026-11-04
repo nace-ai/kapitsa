@@ -767,6 +767,7 @@ struct Meter {
   std::atomic<double> first{0};
   std::string client;
   int images = 0;
+  std::string effort;
   std::shared_ptr<LiveDecode> live = std::make_shared<LiveDecode>();
   std::deque<std::array<double, 3>> samples;  // the dashboard thread's: (ms, tokens, cycles), the last 1.5 s
 };
@@ -980,6 +981,7 @@ std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r) 
   auto m = std::make_shared<Meter>();
   m->client = client_of(req.get_header_value("User-Agent"));
   m->images = images_in(r.messages);
+  m->effort = r.effort;
   {
     std::lock_guard<std::mutex> lk(g_req_mu);
     request_header();
@@ -1020,6 +1022,13 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   else if (fin == "cancelled") fin = warn("cancelled");
   else if (fin == "error") fin = red("error") + (r.error.empty() ? "" : dim(" " + r.error));
   if (m->images > 0) fin += dim("  " + std::to_string(m->images) + (m->images == 1 ? " image" : " images"));
+  if (r.reasoning_tokens > 0 || !m->effort.empty()) {
+    std::string th;
+    if (!m->effort.empty()) th = "effort=" + m->effort;
+    if (r.reasoning_tokens > 0) th += (th.empty() ? "" : ", ") + std::to_string(r.reasoning_tokens) + " think";
+    else if (m->effort == "none" || m->effort == "minimal") th += " (think off)";
+    fin += "  " + dim(th);
+  }
   const Cols c = cols_now();
   std::string l = "  ";
   if (c.time) l += dim(at) + "  ";
