@@ -664,8 +664,11 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
     if (block() > kB) kf_budget_->pin_wide();
     // the 8-row block of a drafter loaded with 16 rows (set_block): its own budget (the 8-row block's file), one 8-row
-    // tile, the full depth, as NI_DFLASH_BLOCK=8 has them
-    if (block() > kB && tree_ && !(getenv("NI_DFLASH_NARROW") && atoi(getenv("NI_DFLASH_NARROW")) == 0)) {
+    // tile, the full depth, as NI_DFLASH_BLOCK=8 has them. NI_DFLASH_NARROW: by default on the M5 Max, where it was
+    // measured; 1 on any Mac a 16-row block runs on, 0 never
+    const char* nv = getenv("NI_DFLASH_NARROW");
+    const bool narrow = nv && *nv ? atoi(nv) != 0 : Gpu::get().name().find("M5 Max") != std::string::npos;
+    if (block() > kB && tree_ && narrow) {
       std::string key8 = key;
       if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);
       kf_budget_alt_ = std::make_unique<KfBudget>(key8);

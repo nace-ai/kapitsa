@@ -1,0 +1,20 @@
+arm 0 new: prompt 8223 (cached 0): 422 tok, 89.9 tok/s, 4.53 t/c, 50.4 ms/cycle
+arm 0 new: prompt 32373 (cached 0): 512 tok, 70.5 tok/s, 3.70 t/c, 52.5 ms/cycle
+arm 0 new: prompt 132037 (cached 0): 512 tok, 55.9 tok/s, 4.02 t/c, 72.0 ms/cycle
+arm 1 old: prompt 8223 (cached 8216): 422 tok, 94.6 tok/s, 4.53 t/c, 47.8 ms/cycle
+arm 1 old: prompt 32373 (cached 32366): 512 tok, 63.9 tok/s, 4.15 t/c, 65.0 ms/cycle
+arm 1 old: prompt 132037 (cached 132030): 512 tok, 45.4 tok/s, 4.48 t/c, 98.7 ms/cycle
+arm 2 new: prompt 8223 (cached 8216): 422 tok, 87.7 tok/s, 4.58 t/c, 52.2 ms/cycle
+arm 2 new: prompt 32373 (cached 32366): 512 tok, 69.9 tok/s, 3.73 t/c, 53.3 ms/cycle
+arm 2 new: prompt 132037 (cached 132030): 512 tok, 55.8 tok/s, 3.99 t/c, 71.5 ms/cycle
+arm 3 old: prompt 8223 (cached 8216): 422 tok, 87.2 tok/s, 4.58 t/c, 52.5 ms/cycle
+arm 3 old: prompt 32373 (cached 32366): 512 tok, 64.9 tok/s, 4.22 t/c, 65.1 ms/cycle
+arm 3 old: prompt 132037 (cached 132030): 512 tok, 46.2 tok/s, 4.56 t/c, 98.8 ms/cycle
+arm 4 new: prompt 8223 (cached 8216): 422 tok, 85.5 tok/s, 4.53 t/c, 53.0 ms/cycle
+arm 4 new: prompt 32373 (cached 32366): 512 tok, 69.7 tok/s, 3.73 t/c, 53.5 ms/cycle
+arm 4 new: prompt 132037 (cached 132030): 512 tok, 56.2 tok/s, 4.02 t/c, 71.7 ms/cycle
+arm 5 new: prompt 8223 (cached 8216): 422 tok, 87.5 tok/s, 3.97 t/c, 45.4 ms/cycle
+arm 5 new: prompt 32373 (cached 32366): 512 tok, 67.7 tok/s, 3.65 t/c, 53.9 ms/cycle
+arm 5 new: prompt 132037 (cached 132030): 512 tok, 55.3 tok/s, 4.02 t/c, 72.8 ms/cycle
+texts identical across arms 1..: {'8K': True, '32K': True, '131K': True}
+Tue Nov  3 15:06:57 PST 2026

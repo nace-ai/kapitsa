@@ -1,22 +1,22 @@
-[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled kernels in 8 ms
 [kapitsa] compiled the tensor kernels in 2 ms
 [kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
 [kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
 [kapitsa] read 15.13 GB of weights in 619 ms (24.4 GB/s)
-[kapitsa] read 0.24 GB of weights in 12 ms (20.4 GB/s)
+[kapitsa] read 0.24 GB of weights in 12 ms (20.1 GB/s)
 [kapitsa] MTP head loaded in 12 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
 [kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
 [kapitsa] prewarmed 94 prefill pipelines in 2 ms
-[kapitsa] loaded ~/models/qwen3.8-27b-4bit-mtp: 64 layers, dense, 15.1 GB mapped in 755 ms; weights 4-bit group 64 100%
+[kapitsa] loaded ~/models/qwen3.8-27b-4bit-mtp: 64 layers, dense, 15.1 GB mapped in 751 ms; weights 4-bit group 64 100%
 [kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
 [kapitsa] NI_ANE: Neural Engine program ready in the background (program was cached, 0.1 s)
-[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (203 ms)
-[kapitsa] read 3.85 GB of weights in 204 ms (18.9 GB/s)
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (201 ms)
+[kapitsa] read 3.85 GB of weights in 207 ms (18.6 GB/s)
 [kapitsa] DFlash2: 16-row drafting block (one slot: the drafter drafts 15 guesses per weight read and the tree verify runs 16 rows; NI_DFLASH_BLOCK=8 keeps 8)
 [kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 283 MB
 [kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
 [kapitsa] KFlash: tree verifies of 16 rows (the size rule picks per cycle)
-[kapitsa] DFlash2 drafter ~/models/qwen3.8-27b-4bit-mtp/dflash2: 5 layers, hidden 5120, 4-bit projections, 1.63 GB resident (process footprint +1.55 GB), loaded in 458 ms
+[kapitsa] DFlash2 drafter ~/models/qwen3.8-27b-4bit-mtp/dflash2: 5 layers, hidden 5120, 4-bit projections, 1.63 GB resident (process footprint +1.55 GB), loaded in 460 ms
 [kapitsa] DFlash2: prewarmed 126 pipelines in 2 ms
 [kapitsa] DFlash2: 1.626 GB allocated at load (planned 1.637 GB); 0.230 GB more for 1 slots' rings and 0.168 GB at the first prefill
 [kapitsa] GPU: Apple M5 Max, 40 cores
@@ -25,16 +25,17 @@
 [kapitsa] drafter: DFlash2 dflash2 (found in the model's folder)
 [kapitsa] engine ready: m, context 262144, 1 slots, KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2), images on
 [kapitsa] listening on http://127.0.0.1:8298
-[kapitsa] SSD prefix cache: <run-root>/abnb/prefix-cache/4435c353296f1912ad9e1a544194e4f6, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 3 conversations taken back (11.1 GiB)
-[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 16/34 units (8192 channels; GPU 9216) from the default for this chip, chunks >= 512 rows; row scales 1 ms, program cached 1 ms + load 101 ms (13 functions, MIL 106 KB); 341.1 MB Metal; ready in 0.1 s
-[kapitsa] NI_ANE: startup check 1.16% of the ANE's part from the GPU alone (2 functions, 218 ms)
+[kapitsa] SSD prefix cache: <run-root>/abnb3/prefix-cache/4435c353296f1912ad9e1a544194e4f6, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 12 conversations taken back (13.0 GiB)
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 16/34 units (8192 channels; GPU 9216) from the default for this chip, chunks >= 512 rows; row scales 1 ms, program cached 1 ms + load 121 ms (13 functions, MIL 106 KB); 341.1 MB Metal; ready in 0.1 s
+[kapitsa] NI_ANE: startup check 1.16% of the ANE's part from the GPU alone (2 functions, 226 ms)
 [kapitsa] SSD cache: read 8216 tokens of a stored conversation into slot 0 (737 MB in 63 ms)
-[kapitsa] KFlash: 92 cycles, 16.00 rows per cycle; cycles by rows 16:92; 0 at capacity 8; tokens per cycle expected 4.512, got 4.587; rate 0.0887 tok/ms; cost ms by rows 16:57.46 (8 at capacity 8: 0.93); calibration (alpha, beta) by depth (-0.43, 0.93) (-0.57, 1.13) (-0.43, 0.49) (-0.56, 0.63) (-0.66, 0.57) (-0.67, 0.46) (-0.30, 0.56) (-0.84, 0.60)
-[kapitsa] chat: prompt 8223 (cached 8216) in 53 ms (+2.1 ms template/tokenize; last chunk: encoded by 0.6 ms, GPU start +16.2 ms, GPU 36.2 ms, wake +0.1 ms), 422 tokens in 4827 ms (87.2 tok/s), stop, 4.58 tok/cycle, KFlash (DFlash2): 92 cycles
-[kapitsa] SSD cache: read 32366 tokens of a stored conversation into slot 0 (2320 MB in 183 ms)
-[kapitsa] KFlash: 213 cycles, 16.00 rows per cycle; cycles by rows 16:213; 0 at capacity 8; tokens per cycle expected 4.304, got 4.385; rate 0.0695 tok/ms; cost ms by rows 16:65.32 (8 at capacity 8: 0.95); calibration (alpha, beta) by depth (-0.23, 0.86) (-0.59, 0.77) (-0.75, 0.55) (-0.70, 0.65) (-0.79, 0.69) (-0.57, 0.43) (-0.19, 0.80) (-0.84, 0.60)
-[kapitsa] chat: prompt 32373 (cached 32366) in 46 ms (+51.7 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +0.8 ms, GPU 45.2 ms, wake +0.1 ms), 512 tokens in 7872 ms (64.9 tok/s), length, 4.22 tok/cycle, KFlash (DFlash2): 121 cycles
-[kapitsa] SSD cache: read 132030 tokens of a stored conversation into slot 0 (8853 MB in 681 ms)
-[kapitsa] KFlash: 325 cycles, 16.00 rows per cycle; cycles by rows 16:325; 0 at capacity 8; tokens per cycle expected 4.388, got 4.458; rate 0.0491 tok/ms; cost ms by rows 16:100.03 (8 at capacity 8: 1.04); calibration (alpha, beta) by depth (-0.19, 0.93) (-0.56, 0.77) (-0.70, 0.56) (-0.75, 0.63) (-0.79, 0.60) (-0.70, 0.46) (-0.42, 0.75) (-0.69, 0.55)
+[kapitsa] KFlash: 92 cycles, 16.00 rows per cycle; cycles by rows 16:92; 0 at capacity 8; tokens per cycle expected 4.570, got 4.587; rate 0.1053 tok/ms; cost ms by rows 16:45.76 (8 at capacity 8: 0.89); calibration (alpha, beta) by depth (-0.42, 0.93) (-0.55, 1.13) (-0.41, 0.48) (-0.50, 0.64) (-0.69, 0.64) (-0.49, 0.44) (-0.62, 0.67) (-0.68, 0.56)
+[kapitsa] chat: prompt 8223 (cached 8216) in 52 ms (+2.3 ms template/tokenize; last chunk: encoded by 0.6 ms, GPU start +15.5 ms, GPU 35.8 ms, wake +0.1 ms), 422 tokens in 4209 ms (100.0 tok/s), stop, 4.58 tok/cycle, KFlash (DFlash2): 92 cycles
+[kapitsa] SSD cache: saved slot 0 (8644 tokens, 1 restore point; 1 of 17 KV blocks and 1 state new: 228 MB) in 51 ms
+[kapitsa] SSD cache: read 32366 tokens of a stored conversation into slot 0 (2320 MB in 182 ms)
+[kapitsa] KFlash: 213 cycles, 16.00 rows per cycle; cycles by rows 16:213; 0 at capacity 8; tokens per cycle expected 4.364, got 4.385; rate 0.0857 tok/ms; cost ms by rows 16:52.52 (8 at capacity 8: 0.91); calibration (alpha, beta) by depth (-0.28, 0.82) (-0.56, 0.77) (-0.69, 0.55) (-0.65, 0.61) (-0.79, 0.72) (-0.60, 0.44) (-0.52, 0.65) (-0.68, 0.56)
+[kapitsa] chat: prompt 32373 (cached 32366) in 56 ms (+60.7 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +5.2 ms, GPU 50.4 ms, wake +0.1 ms), 512 tokens in 6351 ms (80.5 tok/s), length, 4.22 tok/cycle, KFlash (DFlash2): 121 cycles
+[kapitsa] SSD cache: read 132030 tokens of a stored conversation into slot 0 (8853 MB in 682 ms)
+[kapitsa] KFlash: 325 cycles, 16.00 rows per cycle; cycles by rows 16:325; 0 at capacity 8; tokens per cycle expected 4.426, got 4.458; rate 0.0597 tok/ms; cost ms by rows 16:84.45 (8 at capacity 8: 1.00); calibration (alpha, beta) by depth (-0.24, 0.90) (-0.52, 0.76) (-0.68, 0.56) (-0.73, 0.65) (-0.83, 0.59) (-0.69, 0.46) (-0.61, 0.66) (-0.68, 0.56)
 [kapitsa] KFlash: budget saved (325 cycles) to ~/.cache/kapitsa/kflash/qwen3.8-27b-4bit-mtp-dflash2-b4-blk16-Apple_M5_Max.json
-[kapitsa] chat: prompt 132037 (cached 132030) in 80 ms (+179.6 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +0.7 ms, GPU 78.7 ms, wake +0.1 ms), 512 tokens in 11060 ms (46.2 tok/s), length, 4.56 tok/cycle, KFlash (DFlash2): 112 cycles
+[kapitsa] chat: prompt 132037 (cached 132030) in 84 ms (+208.2 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +4.8 ms, GPU 78.3 ms, wake +0.1 ms), 512 tokens in 9104 ms (56.1 tok/s), length, 4.56 tok/cycle, KFlash (DFlash2): 112 cycles

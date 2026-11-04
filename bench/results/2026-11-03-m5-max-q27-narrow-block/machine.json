@@ -23,12 +23,13 @@
   "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
   "python": "Python 3.9.6",
   "swap_at_capture": "total = 2048.00M  used = 991.69M  free = 1056.31M  (encrypted)",
-  "source_commit": "1b0b577 + #916 (the 27B's 8-row tree verify on attn8t_partial_tree_g6) + this branch's change",
-  "binary_sha256": "174b7d9eda2d45ab73c14b87dd1be0b6005f20a44ba94a96bc6f89786506431a",
+  "source_commit": "main 6519dbe (with #916) + this branch's change",
+  "binary_sha256": "7807a03a4dcefc655a4ec48ff8e4a9b58eefa53832054a381b06dcc2052ec234",
   "ni_run_sha256": "e13d379caa9c309ef26b9c24c3a8a02601aa1dc3efd8f099c68901abf00f1014",
-  "source_note": "ab/ ran this branch's Release build (binary_sha256), the arms by NI_DFLASH_NARROW (0 = 16 rows always) and the last by NI_DFLASH_BLOCK=8. crossover/ ran #916's ni_run (ni_run_sha256): the drafting block set by NI_DFLASH_BLOCK, before this branch's per-request choice; tok.cpp tokenized its prompts with the 27B's tokenizer.",
+  "source_note": "ab/ ran this branch's final Release build (binary_sha256), the arms by NI_DFLASH_NARROW (0 = 16 rows always) and the last by NI_DFLASH_BLOCK=8; ab-second/ and ab-first/ ran the branch before its default was scoped to the M5 Max (binary_sha256_earlier_runs: the same code on this Mac). crossover/ ran #916's ni_run (ni_run_sha256): the drafting block set by NI_DFLASH_BLOCK, before this branch's per-request choice; tok.cpp tokenized its prompts with the 27B's tokenizer.",
   "build_commands": [
     "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
     "cmake --build build -j --target kapitsa ni_run api_test"
-  ]
+  ],
+  "binary_sha256_earlier_runs": "174b7d9eda2d45ab73c14b87dd1be0b6005f20a44ba94a96bc6f89786506431a"
 }
