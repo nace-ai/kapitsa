@@ -11,6 +11,11 @@
 #include <iostream>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cstring>
+#include <vector>
 
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 using namespace ni;
@@ -38,6 +43,54 @@ static void child_fails(const char* self, const char* mode, const char* path = "
   close(pipefd[0]); int status = 0; CHECK(waitpid(pid, &status, 0) == pid);
   CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 1);
   CHECK(text.find("[kapitsa] fatal: ") != std::string::npos);
+}
+// Pages of `path` in the page cache
+static size_t cached_pages(const std::string& path) {
+  const int fd = open(path.c_str(), O_RDONLY); CHECK(fd >= 0);
+  struct stat st {}; CHECK(fstat(fd, &st) == 0);
+  void* m = mmap(nullptr, size_t(st.st_size), PROT_READ, MAP_SHARED, fd, 0); CHECK(m != MAP_FAILED);
+  const size_t page = size_t(getpagesize()), n = (size_t(st.st_size) + page - 1) / page;
+  std::vector<char> v(n); CHECK(mincore(m, size_t(st.st_size), v.data()) == 0);
+  munmap(m, size_t(st.st_size)); close(fd);
+  size_t r = 0; for (char c : v) r += c & 1;
+  return r;
+}
+// Tensors at offsets that are not page-aligned (as in every safetensors file) read back exact, and leave the file
+// out of the page cache (#939: F_NOCACHE does nothing for a misaligned read)
+static void uncached_reads(const std::filesystem::path& dir) {
+  const auto path = (dir / "c.safetensors").string();
+  const size_t lens[] = {3, (size_t(32) << 20) + 777, 16384, (size_t(5) << 20) + 1};  // the last ends the file
+  std::string hdr = "{";
+  size_t off = 0;
+  for (size_t i = 0; i < 4; ++i) {
+    hdr += (i ? ",\"t" : "\"t") + std::to_string(i) + "\":{\"dtype\":\"U8\",\"shape\":[" + std::to_string(lens[i]) +
+           "],\"data_offsets\":[" + std::to_string(off) + "," + std::to_string(off + lens[i]) + "]}";
+    off += lens[i];
+  }
+  hdr += "}";
+  hdr.resize(hdr.size() + (13 - hdr.size() % 8) % 8, ' ');  // 8 + header: 5 mod 8, so no tensor is page-aligned
+  std::vector<uint8_t> file(8 + hdr.size() + off);
+  const uint64_t hlen = hdr.size(); memcpy(file.data(), &hlen, 8); memcpy(file.data() + 8, hdr.data(), hdr.size());
+  for (size_t i = 8 + hdr.size(); i < file.size(); ++i) file[i] = uint8_t(i * 2654435761u >> 13);
+  {  // written past the cache, so whatever is cached afterwards came from the reads
+    const int fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644); CHECK(fd >= 0);
+    fcntl(fd, F_NOCACHE, 1);
+    CHECK(write(fd, file.data(), file.size()) == ssize_t(file.size())); fsync(fd); close(fd);
+  }
+  const size_t before = cached_pages(path);
+  WeightStore ws;
+  ws.open_dir(dir.string(), {}, [](const std::string& f) { return f == "c.safetensors"; },
+              [](const std::string&) { return true; });
+  off = 8 + hdr.size();
+  for (size_t i = 0; i < 4; ++i) {
+    std::vector<uint8_t> got(lens[i] + 1, 0xAB);
+    ws.read_deferred("t" + std::to_string(i), got.data() + 1);  // a misaligned destination too
+    CHECK(got[0] == 0xAB && !memcmp(got.data() + 1, file.data() + off, lens[i]));
+    off += lens[i];
+  }
+  const size_t after = cached_pages(path), pages = file.size() / size_t(getpagesize());
+  std::cout << "page cache: " << before << " -> " << after << " of " << pages << " pages\n";
+  CHECK(after <= before + pages / 10);
 }
 static void cpu(const char* self) {
   CHECK(!FatalRecovery::enabled());
@@ -86,6 +139,7 @@ static void cpu(const char* self) {
   }
   CHECK(descriptors() == before);
   child_fails(self, "--bad-file", pattern);
+  uncached_reads(dir);
   std::filesystem::remove_all(dir);
   std::cout << "PASS scoped errors, thread joining/isolation, loader FD cleanup, CLI exit 1\n";
 }
