@@ -1113,18 +1113,29 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
     static const bool hc3 = !(getenv("NI_HC3") && !strcmp(getenv("NI_HC3"), "0"));
     constexpr int nr = 2, cpt = 2;
     if (hc3 && R <= 4 && rank <= 512 && rank % (8 * nr) == 0 && D % (16 * cpt) == 0) {
-      e.use(pipe("hc_down_sk3_n" + std::to_string(nr) + b));
+      // NI_HC_WIDE (on by default on the M5 Max, where it was measured; 1 on the other Macs, 0 off): wider grids for
+      // the pair, the stats in R threadgroups of their own beside the down projection's dots (hc_down_sk4; hc_down_sk3
+      // runs them after the dots of its row block 0) and the verify rows' up projection on 2 blocks of 16 channels per
+      // threadgroup (hc_up_mix4_c2: 80 threadgroups at Flash-Next's shape against c4's 40, one a core on the M5 Max).
+      // The same code per value, so bitwise the same (fn_check hc-time). M5 Max, Flash-Next's shape (D 2560, rank 320,
+      // 6-bit), down + up: R=3 41.2 -> 36.4 us, R=2 32.6 -> 29.2 (bench/results/2026-11-03-m5-max-fn-hc-wide)
+      static const bool wide = [] {
+        const char* v = getenv("NI_HC_WIDE");
+        if (v && *v) return atoi(v) > 0;
+        return Gpu::get().name().find("M5 Max") != std::string::npos;
+      }();
+      e.use(pipe((wide ? "hc_down_sk4_n" : "hc_down_sk3_n") + std::to_string(nr) + b));
       e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
       e.buf(4, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(5, g.down.w->buf); e.buf(6, g.down.s->buf);
       e.buf(7, g.down.b->buf); e.buf(8, hpart_); e.buf(9, hx2_); e.buf(10, hstat_);
       e.val(11, fp);
-      e.dispatch(rank / (8 * nr), SD / 1024, 1, 256);
+      e.dispatch(rank / (8 * nr) + (wide ? uint32_t(R) : 0u), SD / 1024, 1, 256);
       // verify rows (R >= 2): hc_up_mix4, which unpacks each run of up weights once for all rows, 4 blocks of 16
       // channels per threadgroup; bitwise equal to hc_up_mix3 / hc_up_mix2 (fn_check FN_ROWS, hc-time). At Flash-Next's
       // shape (D 2560, rank 320, 6-bit), R=3 down+up 65.0 -> 54.1 us (fn_check hc-time; NI_HC_MIX4=0: hc_up_mix3)
       static const bool mix4 = !(getenv("NI_HC_MIX4") && !strcmp(getenv("NI_HC_MIX4"), "0"));
       const bool m4 = mix4 && R >= 2 && D % 64 == 0;
-      const int ucpt = m4 ? 4 : cpt;
+      const int ucpt = m4 && !wide ? 4 : cpt;
       e.use(pipe((m4 ? "hc_up_mix4_c" : "hc_up_mix3_c") + std::to_string(ucpt) + b));
       e.buf(0, hpart_); e.buf(1, hx2_); e.buf(2, hstat_); e.buf(3, g.norm->buf);
       e.buf(4, g.up.w->buf); e.buf(5, g.up.s->buf); e.buf(6, g.up.b->buf); e.buf(7, u);

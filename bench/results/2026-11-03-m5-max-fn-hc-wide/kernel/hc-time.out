@@ -1,0 +1,25 @@
+[kapitsa] compiled kernels in 8 ms
+R=1:  sk2_b6+mix2_b6 20.8 us  sk3_n2_b6+mix3_c2_b6 22.4 us  sk3_n2_b6+mix4_c2_b6 23.1 us  sk3_n2_b6+mix4_c4_b6 24.6 us  sk4_n2_b6+mix3_c2_b6 21.4 us  sk4_n2_b6+mix4_c2_b6 22.1 us
+R=1 sk3_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=1 sk3_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
+R=1 sk3_n2_b6+mix4_c4_b6 == one-row max rel err 0.00e+00
+R=1 sk4_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=1 sk4_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
+R=2:  sk2_b6+mix2_b6 29.1 us  sk3_n2_b6+mix3_c2_b6 33.7 us  sk3_n2_b6+mix4_c2_b6 30.4 us  sk3_n2_b6+mix4_c4_b6 32.6 us  sk4_n2_b6+mix3_c2_b6 32.5 us  sk4_n2_b6+mix4_c2_b6 29.2 us
+R=2 sk3_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=2 sk3_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
+R=2 sk3_n2_b6+mix4_c4_b6 == one-row max rel err 0.00e+00
+R=2 sk4_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=2 sk4_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
+R=3:  sk2_b6+mix2_b6 39.6 us  sk3_n2_b6+mix3_c2_b6 45.0 us  sk3_n2_b6+mix4_c2_b6 37.8 us  sk3_n2_b6+mix4_c4_b6 41.2 us  sk4_n2_b6+mix3_c2_b6 43.6 us  sk4_n2_b6+mix4_c2_b6 36.4 us
+R=3 sk3_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=3 sk3_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
+R=3 sk3_n2_b6+mix4_c4_b6 == one-row max rel err 0.00e+00
+R=3 sk4_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=3 sk4_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
+R=4:  sk2_b6+mix2_b6 51.7 us  sk3_n2_b6+mix3_c2_b6 56.3 us  sk3_n2_b6+mix4_c2_b6 45.2 us  sk3_n2_b6+mix4_c4_b6 49.8 us  sk4_n2_b6+mix3_c2_b6 54.5 us  sk4_n2_b6+mix4_c2_b6 43.7 us
+R=4 sk3_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=4 sk3_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
+R=4 sk3_n2_b6+mix4_c4_b6 == one-row max rel err 0.00e+00
+R=4 sk4_n2_b6+mix3_c2_b6 == one-row max rel err 0.00e+00
+R=4 sk4_n2_b6+mix4_c2_b6 == one-row max rel err 0.00e+00
