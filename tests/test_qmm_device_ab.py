@@ -2,7 +2,6 @@
 """CPU-only fault injection for the device A/B validity gate; no model or GPU."""
 import copy
 from pathlib import Path
-import subprocess
 import sys
 from types import SimpleNamespace
 import unittest
@@ -108,12 +107,17 @@ class DeviceConditions(unittest.TestCase):
         self.assertIn("monitor_time_not_increasing", self.errors())
 
     def test_gpu_query_failure_is_not_quiet(self):
-        with patch.object(ab.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "ioreg")):
-            with self.assertRaises(subprocess.CalledProcessError):
-                ab.gpu_snapshot()
-        with patch.object(ab.subprocess, "run", return_value=SimpleNamespace(stdout="")):
+        for frame in ({"valid": False, "gpu": []}, {"valid": True, "gpu": []},
+                      {"valid": True, "gpu": [{"pid": 1, "name": "x", "gpu_ns": -1}]}):
             with self.assertRaises(RuntimeError):
-                ab.gpu_snapshot()
+                ab.gpu_snapshot(frame)
+
+    def test_native_gpu_clients_are_aggregated_without_filtering(self):
+        frame = {"valid": True, "gpu": [{"pid": 5, "name": "x", "gpu_ns": 2},
+                                       {"pid": 5, "name": "x", "gpu_ns": 1}]}
+        self.assertEqual(ab.gpu_snapshot(frame), {(5, "x"): 3})
+        self.samples[2]["sample_age_s"] = 1.1
+        self.assertIn("monitor_backlog", self.errors())
 
     def test_cached_cpu_ticks_use_a_full_window(self):
         history = []

@@ -13,7 +13,6 @@ import json
 import math
 import os
 from pathlib import Path
-import re
 import signal
 import socket
 import subprocess
@@ -89,6 +88,8 @@ def validate_leg(before, after, samples, max_load=2.0, max_background_cpu=5.0, m
             errors.append("GPU_counter_reset")
         if not 0 < sample.get("interval_s", max_gap+1) <= max_gap:
             errors.append("monitor_gap")
+        if sample.get("sample_age_s", 0) > max_gap:
+            errors.append("monitor_backlog")
         if sample.get("time", -math.inf) <= previous_time:
             errors.append("monitor_time_not_increasing")
         previous_time = sample.get("time", -math.inf)
@@ -98,19 +99,17 @@ def validate_leg(before, after, samples, max_load=2.0, max_background_cpu=5.0, m
     return sorted(set(errors))
 
 
-def gpu_snapshot():
-    # Same accumulatedGPUTime source as gpu_hogs.snap(), but fail on a failed or
-    # empty query. Do not apply its 0.5% display filter or ambient exemptions.
-    out = subprocess.run(["ioreg", "-r", "-c", "AGXDeviceUserClient", "-l", "-w", "0"],
-                         capture_output=True, text=True, check=True, timeout=2).stdout
+def gpu_snapshot(frame):
+    # Direct IOKit AppUsage counters, the same values printed by ioreg. The
+    # resident sampler avoids launching probe/ps/ioreg for every observation.
+    if not frame.get("valid") or not frame.get("gpu"):
+        raise RuntimeError("invalid native counter frame")
     values = {}
-    for block in out.split("+-o AGXDeviceUserClient")[1:]:
-        match = re.search(r'"IOUserClientCreator" = "pid (\d+), ([^"]*)"', block)
-        if match:
-            key = (int(match[1]), match[2])
-            values[key] = values.get(key, 0)+sum(int(x) for x in re.findall(r'"accumulatedGPUTime"=(\d+)', block))
-    if not values:
-        raise RuntimeError("no AGX process counters returned")
+    for row in frame["gpu"]:
+        key = (row["pid"], row["name"])
+        if not isinstance(row["gpu_ns"], int) or row["gpu_ns"] < 0:
+            raise RuntimeError("invalid GPU time")
+        values[key] = values.get(key, 0)+row["gpu_ns"]
     return values
 
 
@@ -137,42 +136,60 @@ class Monitor(threading.Thread):
         super().__init__(daemon=True)
         self.probe, self.pid, self.gpu, self.interval = probe, pid, gpu, interval
         self.samples, self.lock, self.stopping = [], threading.Lock(), threading.Event()
+        self.process = None
 
     def run(self):
         previous = previous_gpu = previous_time = None
         cpu_history = []
-        while not self.stopping.is_set():
-            started = time.monotonic()
-            try:
-                own = self.gpu.proc_tree([self.pid])
-                item = snapshot(self.probe, own)
-                current_gpu = gpu_snapshot()
-                now = time.monotonic()
-                item.update(time=now, epoch=time.time())
-                item.update(cpu_usage(cpu_history, item))
-                if previous is not None:
-                    item["interval_s"] = now-previous_time
-                    foreign, own_ns, reset = [], 0, False
-                    for (pid, name), value in current_gpu.items():
-                        old = previous_gpu.get((pid, name), 0)
-                        delta = value-old
-                        if delta < 0:
-                            reset = True
-                        if pid in own:
-                            own_ns += max(0, delta)
-                        elif name != "WindowServer" and delta > 0:
-                            foreign.append({"pid": pid, "name": name, "gpu_ns": delta})
-                    vanished = [k for k in previous_gpu if k not in current_gpu and k[1] != "WindowServer"]
-                    item.update(foreign_gpu=foreign, foreign_gpu_ns=sum(x["gpu_ns"] for x in foreign),
-                                own_gpu_ns=own_ns, own_gpu_visible=any(k[0] in own for k in current_gpu),
-                                gpu_counter_reset=reset or bool(vanished), gpu_processes_lost=vanished)
+        clock_offset = time.monotonic()-time.clock_gettime(time.CLOCK_MONOTONIC)
+        epoch_offset = time.time()-time.monotonic()
+        try:
+            self.process = subprocess.Popen([str(self.probe), "--watch", str(round(self.interval*1000)), str(self.pid)],
+                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            for line in self.process.stdout:
+                if self.stopping.is_set():
+                    break
+                try:
+                    item = json.loads(line)
+                    current_gpu = gpu_snapshot(item)
+                    own = set(item["owner_pids"])
+                    now = item["monotonic_ns"]/1e9+clock_offset
+                    item.update(time=now, epoch=now+epoch_offset, sample_age_s=time.monotonic()-now)
+                    item.update(cpu_usage(cpu_history, item))
+                    if previous is not None:
+                        item["interval_s"] = now-previous_time
+                        foreign, own_ns, reset = [], 0, False
+                        for (pid, name), value in current_gpu.items():
+                            delta = value-previous_gpu.get((pid, name), 0)
+                            if delta < 0:
+                                reset = True
+                            if pid in own:
+                                own_ns += max(0, delta)
+                            elif name != "WindowServer" and delta > 0:
+                                foreign.append({"pid": pid, "name": name, "gpu_ns": delta})
+                        vanished = [k for k in previous_gpu if k not in current_gpu and k[1] != "WindowServer"]
+                        item.update(foreign_gpu=foreign, foreign_gpu_ns=sum(x["gpu_ns"] for x in foreign),
+                                    own_gpu_ns=own_ns, own_gpu_visible=any(k[0] in own for k in current_gpu),
+                                    gpu_counter_reset=reset or bool(vanished), gpu_processes_lost=vanished)
+                        with self.lock:
+                            self.samples.append(item)
+                    previous, previous_gpu, previous_time = item, current_gpu, now
+                except Exception as exc:
                     with self.lock:
-                        self.samples.append(item)
-                previous, previous_gpu, previous_time = item, current_gpu, now
-            except Exception as exc:
-                with self.lock:
-                    self.samples.append({"time": time.monotonic(), "epoch": time.time(), "error": repr(exc)})
-            self.stopping.wait(max(0, self.interval-(time.monotonic()-started)))
+                        self.samples.append({"time": time.monotonic(), "epoch": time.time(), "error": repr(exc)})
+            if not self.stopping.is_set():
+                raise RuntimeError("native sampler exited unexpectedly")
+        except Exception as exc:
+            with self.lock:
+                self.samples.append({"time": time.monotonic(), "epoch": time.time(), "error": repr(exc)})
+        finally:
+            if self.process:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait(timeout=5)
 
     def read(self):
         with self.lock:
@@ -180,6 +197,8 @@ class Monitor(threading.Thread):
 
     def stop(self):
         self.stopping.set()
+        if self.process and self.process.poll() is None:
+            self.process.terminate()
         self.join(timeout=10)
 
 
