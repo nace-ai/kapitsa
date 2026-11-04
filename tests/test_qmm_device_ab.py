@@ -179,6 +179,24 @@ class DeviceConditions(unittest.TestCase):
         legs[1]["requests"][0]["text_sha256"] = "different"
         self.assertIn("short_greedy:outputs_differ", ab.campaign_errors(legs, 4, 1))
 
+    def test_pair_retry_uses_conditions_never_speed(self):
+        requests = [dict(case=c, text_sha256="same", invalid=[]) for c in ("short_greedy", "4k_sampled")]
+        legs = [dict(invalid=[], requests=copy.deepcopy(requests), whole_decode_tps=rate) for rate in (1, 999)]
+        self.assertEqual(ab.pair_status(legs, 1), "accept")
+        legs[1]["invalid"] = ["pageouts_changed"]
+        self.assertEqual(ab.pair_status(legs, 1), "retry")
+        legs[0]["whole_decode_tps"], legs[1]["whole_decode_tps"] = 999, 1
+        self.assertEqual(ab.pair_status(legs, 1), "retry")
+
+    def test_output_failures_are_not_retried(self):
+        requests = [dict(case=c, text_sha256="same", invalid=[]) for c in ("short_greedy", "4k_sampled")]
+        legs = [dict(invalid=[], requests=copy.deepcopy(requests)) for _ in range(2)]
+        legs[1]["requests"][0]["invalid"] = ["cached_prompt"]
+        self.assertEqual(ab.pair_status(legs, 1), "fatal")
+        legs[1]["requests"][0]["invalid"] = []
+        legs[1]["requests"][0]["text_sha256"] = "different"
+        self.assertEqual(ab.pair_status(legs, 1), "fatal")
+
 
 if __name__ == "__main__":
     unittest.main()

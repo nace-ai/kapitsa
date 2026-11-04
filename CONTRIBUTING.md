@@ -118,8 +118,10 @@ both total usage and estimated background usage (total minus that owned work, as
 Defaults require load <= 2, background CPU <= 5%, nominal thermal state, automatic AC power mode, no pageouts or swap,
 and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
 the run. CPU contention is gated on each timed request; CPU peaks in the surrounding bookkeeping remain diagnostic.
-All other checks cover the entire arm as well. All planned legs and identical nonempty outputs are required; invalid
-runs remain in the output directory.
+All other checks cover the entire arm as well. All requested pairs and identical nonempty outputs are required.
+`--pair-attempts N` optionally retries both arms after an environment failure (default 1: no retry), accepting only the
+first fully valid pair within the declared cap. A valid half of a rejected pair is discarded with its counterpart;
+every attempt remains in the output, and output/shape/cache failures stop the series rather than trigger retries.
 `--start-seconds FIRST LAST` can restrict starts within each minute to avoid a known periodic desktop refresh;
 it never bypasses the environment checks. Use more pairs when reducing repeats per leg, and report the complete protocol.
 `python3 tests/test_qmm_device_ab.py` fault-injects these checks on the CPU without a model or GPU.

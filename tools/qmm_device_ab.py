@@ -423,12 +423,28 @@ def campaign_errors(legs, planned, repeats):
     return errors
 
 
+def pair_status(legs, repeats):
+    # Retries are for observed environment failures only, never for speed or
+    # output correctness. A valid half of a rejected pair is not retained.
+    quality = {"not_nonempty_512_length", "cached_prompt", "repetition", "thinking_leak", "missing_decode_rate"}
+    if len(legs) != 2 or any(len(x["requests"]) != 2*repeats for x in legs):
+        return "fatal"
+    if any(quality.intersection(r["invalid"]) for x in legs for r in x["requests"]):
+        return "fatal"
+    for case in ("short_greedy", "4k_sampled"):
+        if len({r["text_sha256"] for x in legs for r in x["requests"] if r["case"] == case}) != 1:
+            return "fatal"
+    return "retry" if any(x["invalid"] for x in legs) else "accept"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("old", "new", "model", "probe", "out"):
         parser.add_argument("--"+name, type=Path, required=True)
     parser.add_argument("--pairs", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--pair-attempts", type=int, default=1,
+                        help="maximum attempts per pair; retry both arms only after an environment failure")
     parser.add_argument("--max-load", type=float, default=2.0)
     parser.add_argument("--max-background-cpu", type=float, default=5.0)
     parser.add_argument("--interval", type=float, default=.25)
@@ -438,7 +454,7 @@ def main():
                         help="optional allowed start interval within each minute, to avoid periodic desktop redraws")
     parser.add_argument("--deadline-utc")
     args = parser.parse_args()
-    if args.pairs < 2 or args.repeats < 1 or not 0 < args.interval <= .25 or args.quiet_seconds < 10:
+    if args.pairs < 2 or args.repeats < 1 or args.pair_attempts < 1 or not 0 < args.interval <= .25 or args.quiet_seconds < 10:
         parser.error("need >=2 pairs, >=1 repeat, 0 < interval <= .25 and >=10 quiet seconds")
     if args.start_seconds and not 0 <= args.start_seconds[0] < args.start_seconds[1] < 60:
         parser.error("start-seconds must satisfy 0 <= FIRST < LAST < 60")
@@ -458,28 +474,42 @@ def main():
     cases = [("short_greedy", 0, short), ("4k_sampled", .6, long)]
     config = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
     config.update(corpus_sha256=harness.corpus_sha(), cases=cases,
-                  rule="All planned legs must pass; any pageout/swap or foreign GPU activity invalidates a leg. WindowServer only is excluded.")
+                  rule="All requested pairs must pass. Accept the first fully valid pair within the declared attempt cap; retry both arms after an environment failure only. Keep every attempt. Any pageout/swap or foreign GPU activity invalidates an arm. Only WindowServer is excluded.")
     config["sha256"] = {name: hashlib.sha256(getattr(args, name).read_bytes()).hexdigest() for name in ("old", "new", "probe")}
     config["harness_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     config["versions"] = {name: subprocess.check_output([str(getattr(args, name)), "--version"], text=True).strip()
                           for name in ("old", "new")}
     (args.out/"protocol.json").write_text(json.dumps(config, indent=2)+"\n")
     (args.out/"pid").write_text(str(os.getpid())+"\n")
-    legs = []
+    legs, accepted, pairs = [], [], []
     with contextlib.nullcontext() if gpu.held_by_caller() else gpu.GpuLock(timeout=0):
         for pair in range(1, args.pairs+1):
-            for arm, binary in (("A", args.old), ("B", args.new)):
-                label = f"{arm}{pair}"
-                try:
-                    remaining(args, 1)
-                    legs.append(one_leg(label, binary, cases, args, harness, gpu))
-                except Exception as exc:
-                    legs.append({"label": label, "requests": [], "invalid": [repr(exc)]})
-                result = {"protocol": config, "planned_legs": args.pairs*2, "legs": [compact(x) for x in legs]}
-                result["invalid"] = campaign_errors(legs, args.pairs*2, args.repeats)
+            status = "fatal"
+            for attempt in range(1, args.pair_attempts+1):
+                current = []
+                for arm, binary in (("A", args.old), ("B", args.new)):
+                    label = f"{arm}{pair}"+(f"_retry{attempt}" if attempt > 1 else "")
+                    try:
+                        remaining(args, 1)
+                        current.append(one_leg(label, binary, cases, args, harness, gpu))
+                    except Exception as exc:
+                        current.append({"label": label, "requests": [], "invalid": [repr(exc)]})
+                legs.extend(current)
+                status = pair_status(current, args.repeats)
+                pairs.append({"pair": pair, "attempt": attempt, "status": status, "labels": [x["label"] for x in current]})
+                if status == "accept":
+                    accepted.extend(current)
+                result = {"protocol": config, "planned_legs": args.pairs*2, "legs": [compact(x) for x in legs],
+                          "pairs": pairs, "accepted_labels": [x["label"] for x in accepted]}
+                result["invalid"] = campaign_errors(accepted, args.pairs*2, args.repeats)
                 (args.out/"summary.json").write_text(json.dumps(result, indent=2)+"\n")
+                print(f"Pair {pair}, attempt {attempt}: {status}", flush=True)
                 if args.deadline and time.time() >= args.deadline:
                     raise SystemExit("deadline reached; partial campaign is invalid")
+                if status != "retry":
+                    break
+            if status != "accept":
+                raise SystemExit("pair did not pass within the predeclared cap; entire campaign is invalid")
     print("Completed planned series; inspect all validity fields before calculating a verdict.", flush=True)
     raise SystemExit(bool(result["invalid"]))
 
