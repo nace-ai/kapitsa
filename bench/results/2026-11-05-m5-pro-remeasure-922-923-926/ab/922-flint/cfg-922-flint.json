@@ -1,0 +1,36 @@
+{
+ "arms": {
+  "old": {
+   "cmd": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/flint_bench",
+    "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flint-4bit",
+    "--rows",
+    "8",
+    "--steps",
+    "128",
+    "--reps",
+    "3"
+   ],
+   "cwd": "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab",
+   "env": {}
+  },
+  "new": {
+   "cmd": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/flint_bench",
+    "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flint-4bit",
+    "--rows",
+    "8",
+    "--steps",
+    "128",
+    "--reps",
+    "3"
+   ],
+   "cwd": "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7",
+   "env": {}
+  }
+ },
+ "metrics": {
+  "ms_step": "^rep 2: .*= ([\\d.]+) ms/step",
+  "gpu_ms_step": "^rep 2: .*GPU ([\\d.]+) ms/step\\)"
+ }
+}

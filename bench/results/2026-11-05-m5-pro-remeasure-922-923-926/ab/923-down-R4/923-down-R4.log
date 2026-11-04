@@ -1,0 +1,5 @@
+round 0 old: us_call 132.33 | quiet False after 61.4 s, foreign GPU mean None% max None%, load 3.77 -> 3.77 (waited 25 s), AC True -> True, clean False
+round 0 new: us_call 126.53 | quiet False after 60.0 s, foreign GPU mean None% max None%, load 2.90 -> 2.90 (waited 0 s), AC True -> True, clean False
+round 1 new: us_call 125.5 | quiet False after 61.9 s, foreign GPU mean None% max None%, load 3.07 -> 3.07 (waited 0 s), AC True -> True, clean False
+round 1 old: us_call 131.34 | quiet False after 61.8 s, foreign GPU mean None% max None%, load 3.75 -> 3.75 (waited 0 s), AC True -> True, clean False
+clean rounds: 0 of 2

@@ -1,0 +1,419 @@
+{
+ "pr": "923",
+ "task": "#343",
+ "machine": "Apple M5 Pro",
+ "macos": "26.5.2",
+ "commits": {
+  "parent": "467ff747",
+  "merge": "153dff95"
+ },
+ "what_was_timed": "kernel on vs off at M5 Pro default=off: moe4_gate_up_d/moe4_down_d against moe4_gate_up/moe4_down at Flash-Next's shape, R 3 and 4 (moe4_time)",
+ "headline_config_note": "PR headline config (Flash-Next 4-bit) cannot be measured on this Mac: the 4-bit pack is about 100 GB, the internal disk has 55 GiB free and the Mac has 48 GB of RAM",
+ "ab": [
+  {
+   "name": "923-gateup-R3",
+   "metric": "us_call",
+   "old_median": 168.99,
+   "new_median": 167.23,
+   "faster_pct": 1.0524427435268935,
+   "pair_range_pct": [
+    0.3490401396160525,
+    2.3075240594925717
+   ],
+   "rounds": 4,
+   "clean_rounds": 0,
+   "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+   "argv": {
+    "old": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_gate_up",
+     "3",
+     "200",
+     "7"
+    ],
+    "new": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_gate_up_d",
+     "3",
+     "200",
+     "7"
+    ]
+   },
+   "env": {
+    "old": {},
+    "new": {}
+   },
+   "bin_sha256": {
+    "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+    "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+   },
+   "legs": [
+    {
+     "round": 0,
+     "arm": "old",
+     "us_call": 166.75,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.54,
+     "load1_after": 1.49,
+     "gpu": "foreign GPU mean 0.0% max 0%"
+    },
+    {
+     "round": 0,
+     "arm": "new",
+     "us_call": 166.17,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.33,
+     "load1_after": 1.33,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 1,
+     "arm": "new",
+     "us_call": 168.29,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.38,
+     "load1_after": 1.38,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 1,
+     "arm": "old",
+     "us_call": 169.28,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.41,
+     "load1_after": 1.41,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "old",
+     "us_call": 168.7,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.01,
+     "load1_after": 2.01,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "new",
+     "us_call": 165.22,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.37,
+     "load1_after": 2.37,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "new",
+     "us_call": 182.88,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.36,
+     "load1_after": 2.36,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "old",
+     "us_call": 187.1,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.96,
+     "load1_after": 1.96,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    }
+   ],
+   "verdict_words": "faster"
+  },
+  {
+   "name": "923-gateup-R4",
+   "metric": "us_call",
+   "old_median": 214.92000000000002,
+   "new_median": 210.485,
+   "faster_pct": 2.1070385063068686,
+   "pair_range_pct": [
+    -1.9589084779736643,
+    7.520160328291281
+   ],
+   "rounds": 4,
+   "clean_rounds": 0,
+   "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+   "argv": {
+    "old": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_gate_up",
+     "4",
+     "200",
+     "7"
+    ],
+    "new": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_gate_up_d",
+     "4",
+     "200",
+     "7"
+    ]
+   },
+   "env": {
+    "old": {},
+    "new": {}
+   },
+   "bin_sha256": {
+    "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+    "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+   },
+   "legs": [
+    {
+     "round": 0,
+     "arm": "old",
+     "us_call": 225.33,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.95,
+     "load1_after": 1.95,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 0,
+     "arm": "new",
+     "us_call": 209.57,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.2,
+     "load1_after": 2.18,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 1,
+     "arm": "new",
+     "us_call": 219.51,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.91,
+     "load1_after": 1.92,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 1,
+     "arm": "old",
+     "us_call": 215.21,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.8,
+     "load1_after": 1.97,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "old",
+     "us_call": 212.44,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.69,
+     "load1_after": 1.63,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "new",
+     "us_call": 211.4,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.71,
+     "load1_after": 1.74,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "new",
+     "us_call": 208.54,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.77,
+     "load1_after": 1.71,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "old",
+     "us_call": 214.63,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.05,
+     "load1_after": 2.12,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    }
+   ],
+   "verdict_words": "faster"
+  },
+  {
+   "name": "923-down-R3",
+   "metric": "us_call",
+   "old_median": 101.155,
+   "new_median": 96.235,
+   "faster_pct": 5.112485062607153,
+   "pair_range_pct": [
+    4.378501763851417,
+    5.848683525861165
+   ],
+   "rounds": 2,
+   "clean_rounds": 0,
+   "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+   "argv": {
+    "old": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_down",
+     "3",
+     "200",
+     "7"
+    ],
+    "new": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_down_d",
+     "3",
+     "200",
+     "7"
+    ]
+   },
+   "env": {
+    "old": {},
+    "new": {}
+   },
+   "bin_sha256": {
+    "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+    "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+   },
+   "legs": [
+    {
+     "round": 0,
+     "arm": "old",
+     "us_call": 100.6,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.34,
+     "load1_after": 2.39,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    },
+    {
+     "round": 0,
+     "arm": "new",
+     "us_call": 96.38,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.4,
+     "load1_after": 2.4,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    },
+    {
+     "round": 1,
+     "arm": "new",
+     "us_call": 96.09,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.12,
+     "load1_after": 2.12,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    },
+    {
+     "round": 1,
+     "arm": "old",
+     "us_call": 101.71,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 3.38,
+     "load1_after": 3.38,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    }
+   ],
+   "verdict_words": "faster"
+  },
+  {
+   "name": "923-down-R4",
+   "metric": "us_call",
+   "old_median": 131.835,
+   "new_median": 126.015,
+   "faster_pct": 4.618497797881216,
+   "pair_range_pct": [
+    4.583893147870088,
+    4.653386454183273
+   ],
+   "rounds": 2,
+   "clean_rounds": 0,
+   "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+   "argv": {
+    "old": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_down",
+     "4",
+     "200",
+     "7"
+    ],
+    "new": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+     "moe4_down_d",
+     "4",
+     "200",
+     "7"
+    ]
+   },
+   "env": {
+    "old": {},
+    "new": {}
+   },
+   "bin_sha256": {
+    "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+    "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+   },
+   "legs": [
+    {
+     "round": 0,
+     "arm": "old",
+     "us_call": 132.33,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 3.77,
+     "load1_after": 3.77,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    },
+    {
+     "round": 0,
+     "arm": "new",
+     "us_call": 126.53,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.9,
+     "load1_after": 2.9,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    },
+    {
+     "round": 1,
+     "arm": "new",
+     "us_call": 125.5,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 3.07,
+     "load1_after": 3.07,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    },
+    {
+     "round": 1,
+     "arm": "old",
+     "us_call": 131.34,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 3.75,
+     "load1_after": 3.75,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    }
+   ],
+   "verdict_words": "faster"
+  }
+ ],
+ "mlx": "cannot measure on MLX: the changed kernels are Flash-Next/EXL3 specific; no MLX model of it fits here"
+}

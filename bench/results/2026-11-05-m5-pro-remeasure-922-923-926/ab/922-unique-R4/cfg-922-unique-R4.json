@@ -1,0 +1,29 @@
+{
+ "arms": {
+  "old": {
+   "cmd": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/moe4_time",
+    "moe4_unique",
+    "4",
+    "200",
+    "7"
+   ],
+   "cwd": "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab",
+   "env": {}
+  },
+  "new": {
+   "cmd": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/moe4_time",
+    "moe4_unique",
+    "4",
+    "200",
+    "7"
+   ],
+   "cwd": "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7",
+   "env": {}
+  }
+ },
+ "metrics": {
+  "us_call": "median ([\\d.]+) us/call"
+ }
+}
