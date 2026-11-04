@@ -90,8 +90,8 @@ class DFlash2 {
   int block() const { return block_; }
   // A drafter loaded with a 16-row block drafts 8-row blocks too, request by request (set_block): its buffers are the
   // 16-row block's, and the 8-row block keeps the budget, rows and depth a drafter loaded with NI_DFLASH_BLOCK=8 has
-  // (one 8-row tile, the 8-row budget file). narrow_ok(): this drafter can (a 16-row block with trees; NI_DFLASH_NARROW=0
-  // keeps it at 16 rows).
+  // (one 8-row tile, the 8-row budget file). narrow_ok(): this drafter can (a 16-row block with trees, by default on
+  // the M5 Max; NI_DFLASH_NARROW=1 elsewhere, 0 keeps it at 16 rows).
   bool narrow_ok() const { return kf_budget_alt_ != nullptr; }
   // the block of the cycles to come (8, or the block it loaded with), between requests: nothing of a cycle in flight
   void set_block(int rows);
