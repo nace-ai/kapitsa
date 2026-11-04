@@ -1,0 +1,96 @@
+=== round 0 old 07:37:03 7f4e709a Now drawing from 'AC Power'
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version 7f4e709
+[07:37:03] flash-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 4520 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[07:37:04] flash-kapitsa: starting <repo-7f4e709>/build/kapitsa serve --model ~/models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[07:37:37] flash-kapitsa: ready after 34s (pid 4561, listener 4561)
+[07:37:40] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (2.39s)
+[07:37:41] flash-kapitsa:  warm-up tools: ok (0.66s)
+[07:37:59] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  prefill 4000: 4133 tok (ref 4133), TTFT 2.28s -> 1813 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4175, 4203, 4239])
+  prefill 16000: 16288 tok (ref 16286), TTFT 9.55s -> 1705 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16322, 16357, 16391])
+  memory: phys_footprint_peak 70.63 GB, resident mapped files 4.47 GB, swap used 2732.94 MB
+  -> <out-old>/results/flash-kapitsa-20261104-073703.json
+[07:38:27] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[07:38:27] flash-kapitsa: -> <out-old>/results/flash-kapitsa-20261104-073703.json
+=== round 0 new 07:38:27 c90acf65 Now drawing from 'AC Power'
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version c90acf6
+[07:38:27] flash-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 5139 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[07:38:27] flash-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[07:38:56] flash-kapitsa: ready after 28s (pid 5173, listener 5173)
+[07:38:58] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (2.41s)
+[07:38:59] flash-kapitsa:  warm-up tools: ok (0.65s)
+[07:39:17] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  prefill 4000: 4134 tok (ref 4133), TTFT 2.25s -> 1835 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4169, 4197, 4233])
+  prefill 16000: 16286 tok (ref 16286), TTFT 9.57s -> 1702 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16335, 16363, 16397])
+  memory: phys_footprint_peak 70.63 GB, resident mapped files 4.54 GB, swap used 2733.38 MB
+  -> <out-new>/results/flash-kapitsa-20261104-073827.json
+[07:39:47] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[07:39:47] flash-kapitsa: -> <out-new>/results/flash-kapitsa-20261104-073827.json
+=== round 1 new 07:39:47 c90acf65 Now drawing from 'AC Power'
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version c90acf6
+[07:39:48] flash-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 5511 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[07:39:48] flash-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[07:40:04] flash-kapitsa: ready after 16s (pid 5542, listener 5542)
+[07:40:06] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (2.38s)
+[07:40:07] flash-kapitsa:  warm-up tools: ok (0.65s)
+[07:40:26] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  prefill 4000: 4130 tok (ref 4133), TTFT 2.25s -> 1835 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4166, 4194, 4228])
+  prefill 16000: 16285 tok (ref 16286), TTFT 9.51s -> 1712 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16332, 16360, 16394])
+  memory: phys_footprint_peak 70.63 GB, resident mapped files 4.51 GB, swap used 2751.5 MB
+  -> <out-new>/results/flash-kapitsa-20261104-073947.json
+[07:40:54] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[07:40:54] flash-kapitsa: -> <out-new>/results/flash-kapitsa-20261104-073947.json
+=== round 1 old 07:40:54 7f4e709a Now drawing from 'AC Power'
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version 7f4e709
+[07:40:54] flash-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 5831 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[07:40:54] flash-kapitsa: starting <repo-7f4e709>/build/kapitsa serve --model ~/models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[07:41:20] flash-kapitsa: ready after 26s (pid 5862, listener 5862)
+[07:41:25] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.37s)
+[07:41:26] flash-kapitsa:  warm-up tools: ok (1.06s)
+[07:41:45] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.21s -> 982 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4176, 4233, 4269])
+  prefill 16000: 16288 tok (ref 16286), TTFT 17.51s -> 930 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16315, 16344, 16380])
+  memory: phys_footprint_peak 70.63 GB, resident mapped files 4.53 GB, swap used 2756.19 MB
+  -> <out-old>/results/flash-kapitsa-20261104-074054.json
+[07:42:24] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[07:42:24] flash-kapitsa: -> <out-old>/results/flash-kapitsa-20261104-074054.json
+=== round 2 old 07:42:24 7f4e709a Now drawing from 'AC Power'
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version 7f4e709
+[07:42:25] flash-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 6221 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[07:42:25] flash-kapitsa: starting <repo-7f4e709>/build/kapitsa serve --model ~/models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[07:42:43] flash-kapitsa: ready after 18s (pid 6252, listener 6252)
+[07:42:47] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.07s)
+[07:42:48] flash-kapitsa:  warm-up tools: ok (1.02s)
+[07:43:07] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  prefill 4000: 4132 tok (ref 4133), TTFT 3.33s -> 1240 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4170, 4198, 4232])
+  prefill 16000: 16287 tok (ref 16286), TTFT 11.82s -> 1378 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16324, 16352, 16386])
+  memory: phys_footprint_peak 70.63 GB, resident mapped files 4.50 GB, swap used 2757.75 MB
+  -> <out-old>/results/flash-kapitsa-20261104-074225.json
+[07:43:39] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[07:43:39] flash-kapitsa: -> <out-old>/results/flash-kapitsa-20261104-074225.json
+=== round 2 new 07:43:39 c90acf65 Now drawing from 'AC Power'
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version c90acf6
+[07:43:39] flash-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 6553 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[07:43:39] flash-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[07:44:06] flash-kapitsa: ready after 26s (pid 6584, listener 6584)
+[07:44:09] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (3.09s)
+[07:44:10] flash-kapitsa:  warm-up tools: ok (0.81s)
+[07:44:28] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  prefill 4000: 4132 tok (ref 4133), TTFT 2.85s -> 1449 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4172, 4200, 4234])
+  prefill 16000: 16287 tok (ref 16286), TTFT 11.04s -> 1476 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16334, 16366, 16402])
+  memory: phys_footprint_peak 70.63 GB, resident mapped files 4.52 GB, swap used 2765.38 MB
+  -> <out-new>/results/flash-kapitsa-20261104-074339.json
+[07:45:00] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[07:45:00] flash-kapitsa: -> <out-new>/results/flash-kapitsa-20261104-074339.json
