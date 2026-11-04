@@ -1,1 +1,0 @@
-CPU_CODEC_CHECK={"passed":true,"coefficient_pairs":267378}

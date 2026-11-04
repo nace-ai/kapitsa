@@ -1,7 +1,0 @@
-{
-  "created_at": "2026-11-04T07:26:43.855035+00:00",
-  "observation": "Native A3 and B3 report NSProcessInfo thermal_state=fair; same-build A greedy falls from 192.92/198.82 to 130.74 tok/s. A3 prefill also slows from about 1973 to 1040 tok/s. All six raw native runs are retained; thermal drift and the A2 sampling repetition flag prevent using this series alone to establish the default.",
-  "followup": "Run the already planned fixed-input greedy ABAB and the already declared fixed-input sampled ABAB; no prompt, seed, arithmetic, or timing metric changes.",
-  "thermal_control": "Before every arm, at least 45 seconds without our GPU work and at least 15 continuous seconds of NSProcessInfo state 0 (nominal). Existing warm-up and GPU quiet checks still run. If not nominal before a measured request, wait again for 15 continuous nominal seconds. Record state before and after every measured request; non-nominal state flags it. Stop waiting after 600 seconds.",
-  "unchanged": "No fan or power-mode changes; no process termination outside our own servers; original lock, contention and paging checks kept. This is an environmental control, not a new kernel candidate."
-}
