@@ -18,22 +18,31 @@ old, ...), the README's decode prompt ([ab/prompt-ids.txt](ab/prompt-ids.txt), 5
 foreign process above 5% for 15 s: `bench/harness/gpu_hogs.py`) and sampled the foreign GPU load while it ran. Every
 run wrote the same 511 tokens.
 
-**Logged** ([ab/logged/](ab/logged): 4 rounds, 2026-11-04, this branch at `83ad33a`, after main's merge brought #921's
+**Logged** ([ab/logged/](ab/logged), 2026-11-04, this branch at `83ad33a`, after main's merge brought #921's
 `NI_HC_WIDE` in). Before each run the quiet wait (up to 900 s), then the 1-minute load average below 2; the load average
-and the power source (`pmset -g batt`) read just before and just after the run. All 8 runs ended at load 1.43-2.23 and
-drew from AC power before and after. No wait found the GPU quiet: the Claude desktop app's helper process held 2.9-3.8%
-mean foreign GPU load (6.5% at most) through both arms alike. Medians of the 4 rounds:
+and the power source (`pmset -g batt`) read just before and just after the run. Three batches, 14 rounds.
+
+`run2/` (4 rounds) and `run3/` (6) found the GPU quiet before every run. [pick.py](ab/logged/pick.py)
+([pick.out](ab/logged/pick.out)) keeps the 5 rounds in which both runs were quiet, ended below load 4 and drew from AC
+power before and after (in the other 5 a run ended at load 4.3-25.2). Their foreign GPU load was 0.0-0.13% mean (1.9%
+at most):
 
 | Arm | tok/s | ms of GPU a cycle | Tokens a cycle |
 | --- | ---: | ---: | ---: |
-| `NI_MOE4_DX=0` | 108.0 (107.7-108.2) | 21.42 (21.38-21.48) | 2.34 |
-| default | 109.2 (108.8-109.3) | 21.20 (21.18-21.26) | 2.34 |
+| `NI_MOE4_DX=0` | 108.2 (107.3-108.3) | 21.37 (21.35-21.53) | 2.34 |
+| default | 109.3 (108.3-109.5) | 21.16 (21.11-21.36) | 2.34 |
 
-GPU time a cycle 21.42 -> 21.20 ms (-1.0%), decode 108.0 -> 109.2 tok/s (+1.1%): the gain of the earlier rounds below,
-on top of #921. Every leg's line is in `dx_fn.out`, its conditions in `ab.json`. (`ab_lc.py` is the script as the later
-runs of that session used it: it since names the busiest processes after a run that ends at load 4 or more and takes
-an arm's working folder; neither applies to these runs. `run_lc.sh` ran this A/B after #922's; its Flint step hung,
-in a folder without `bench/corpus.txt`, and was stopped.)
+Medians: GPU time a cycle 21.37 -> 21.16 ms (-1.0%), decode 108.2 -> 109.3 tok/s (+1.0%), on top of #921; the default
+is the faster arm in each of the 5 rounds (by 0.16-0.26 ms), and in each of the other 9. Only one round saw 0.0% foreign
+load in both runs (`run2/` round 2): 21.35 -> 21.19 ms, 108.3 -> 109.1 tok/s.
+
+The first batch (`dx_fn.out`, the runs' outputs and `ab.json` at the folder's top, 4 rounds) passed the load and power
+checks (every run ended at load 1.43-2.23, on AC), but no wait found the GPU quiet: the Claude desktop app's helper
+process held 2.9-3.8% mean foreign GPU load (6.5% at most) through both arms alike. It gave 21.42 -> 21.20 ms, 108.0 ->
+109.2 tok/s, and is not cited. (`ab_lc.py` is the script as the later batches ran it: it since names the busiest
+processes after a run that ends at load 4 or more and takes an arm's working folder, neither of which the first batch
+needed. `run_lc.sh` ran the first batch after #922's A/B; its Flint step hung, in a folder without `bench/corpus.txt`,
+and was stopped.)
 
 The earlier rounds ran this branch at `c9bea88`, before main's merge.
 
@@ -73,19 +82,21 @@ GPU time a cycle 22.12 -> 21.83 ms (-1.3%), decode 104.7 -> 106.1 tok/s (+1.3%).
 - Output check ([output-check/](output-check)): `logit_dump --paths step,verify` with `NI_MOE4_DX=0` and the default:
   the prefill rows, 192 step rows and 192 verify rows (the MTP cycle's chain of 3) **every row bitwise identical**. No
   floor file exists for this 4-bit pack; bitwise identity needs none.
+- The output check again on main's merge (`83ad33a`'s code, #921's `NI_HC_WIDE` in;
+  [output-check/merged/](output-check/merged)): the prefill rows, 192 step rows and 192 verify rows, **every row
+  bitwise identical**.
 
-The first A/B's build read the switch as "`0` off, else on"; the idle rounds' build (the one the checks above used)
+The first A/B's build read the switch as "`0` off, else on"; the idle rounds' build (the one the first two checks used)
 reads it as committed, the per-Mac default: the code of `c9bea88` but for its comments.
 
 ## Not run
 
-Flint, whose verify MoE keeps the staged kernels, the other Macs, and the server (`kapitsa serve`, T 0.6). The output
-check on `83ad33a` (main's merge, #921's `NI_HC_WIDE` in): it ran on `c9bea88`; on `83ad33a` ran the logged rounds
-(the same 511 tokens in both arms) and `fn_check`.
+Flint, whose verify MoE keeps the staged kernels, the other Macs, and the server (`kapitsa serve`, T 0.6).
 
 ## Files
 
 `ab/`: the A/B script, command, output and every run's `ni_run` output (`run1/`, `ab_fn.json` with each run's ids and
-GPU load); `ab/logged/` the logged rounds (`ab_lc.py`, `dx_fn.json`, `run_lc.sh`, `builds.txt`); `ab/idle/`: the idle rounds the same way (the script with its 900 s wait, `run.sh`, `batch1/`, `batch2/`). `kernel/`: the `fn_check` and profile commands and outputs. `output-check/`: the dumps' commands and logs,
+GPU load); `ab/logged/` the logged rounds (`ab_lc.py`, `dx_fn.json`, `run_lc.sh`, `run_dx2.sh`, `run_dx3.sh`,
+`builds.txt`, `pick.py`; the first batch at its top, `run2/`, `run3/`); `ab/idle/`: the idle rounds the same way (the script with its 900 s wait, `run.sh`, `batch1/`, `batch2/`). `kernel/`: the `fn_check` and profile commands and outputs. `output-check/`: the dumps' commands and logs,
 their `meta.json` and the comparison. Local paths are replaced by placeholders (`~`, `<repo>`: this branch's
 checkout, `<scratch>`).
