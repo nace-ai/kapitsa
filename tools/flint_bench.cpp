@@ -40,12 +40,15 @@ int main(int argc, char** argv) {
     else fatal("unknown option %s", a.c_str());
   }
   std::ifstream cf("bench/corpus.txt");
+  if (!cf) fatal("cannot read bench/corpus.txt: run flint_bench from the repo's root");
   std::stringstream ss;
   ss << cf.rdbuf();
   Tokenizer tok;
   tok.load(dir + "/tokenizer.json");
   std::vector<int> ids = tok.encode(ss.str());
-  while (int(ids.size()) < prompt) ids.insert(ids.end(), ids.begin(), ids.end());
+  if (ids.empty()) fatal("bench/corpus.txt holds no tokens");
+  const std::vector<int> corpus = ids;  // (a vector's insert may not read from itself)
+  while (int(ids.size()) < prompt) ids.insert(ids.end(), corpus.begin(), corpus.end());
   ids.resize(size_t(prompt));
 
   bench::GpuLock lock;
