@@ -107,6 +107,27 @@ be declared ambient instead: its load is then recorded, not flagged). *Loop*: a 
 
 ### MacBook Pro M5 Max, 128 GB
 
+**2026-11-03: the 35B-A3B and the 27B after their verify changes** ([results](../bench/results/2026-11-03-m5-max-long-v5/README.md)).
+The 35B on main `6519dbe` (its tree verify attention staging its K / V tiles, #911), the 27B on main `eee2adb` (its
+8-row tree verify on the matrix units, #916, and 8-row drafting blocks from 16K-token prompts, #917), each swept again
+with four cold requests a size (a point: the median of its clean answers, their count in parentheses):
+
+| Prefill / decode, tok/s (clean answers of 4) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K | 256K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.6 35B-A3B | 4,674 / 335 (4) | 5,414 / 331 (4) | 5,311 / 321 (4) | 4,493 / 316 (4) | 4,213 / 291 (4) | 3,649 / 247 (4) | 2,743 / 222 (4) | 1,842 / 197 (3) | 1,114 / 136 (4) |
+| Qwen3.8 27B | 743 / 82.4 (1) | 783 / - (0) | 811 / 89.7 (2) | 873 / 74.7 (3) | 843 / 64.0 (2) | 778 / 73.3 (4) | 665 / 65.8 (2) | 511 / 57.8 (2) | 343 / 42.5 (2) |
+
+| Decode, the chart's earlier run → now | 32K | 64K | 128K | 256K |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.6 35B-A3B (v2) | 263 → 247 | 201 → 222 | 147 → 197 | 114 → 136 |
+| Qwen3.8 27B (v3, below) | 68.3 → 73.3 | 55.8 → 65.8 | 40.9 → 57.8 | 32.6 → 42.5 |
+
+Both runs are flagged for contention, under less load than the runs they replace (the desktop app at 9.9% of the GPU
+during the 35B's sweep against 57.8% during v2's, 3.1% during the 27B's against 22.6% during v3's), so the measures of
+the changes are their interleaved A/Bs: #911 the 35B's decode +9.6% at 132K and +11.2% at 254K, #917 (on #916's
+8-row path) the 27B's one-slot decode +25.0% at 131K. None of the 27B's 2K answers was clean (it often ends its answer early); the chart keeps
+its v3 point there.
+
 **2026-11-03: Dory after its prefill attention moved to simdgroup pairs** ([results](../bench/results/2026-11-03-m5-max-long-v4/README.md)).
 #904's build (main `32cf851` with `dory_attn_td2_g4s8`), Dory swept again with four cold requests a size (all clean):
 
