@@ -538,6 +538,51 @@ NI_HC_UP_MIX4(hc_up_mix4_c4_b8, 8, 4)
       if (row0 + q < N) h[(r * (p.k + 1) + slot) * max(p.I, p.SI) + row0 + q] = silu(ag[q]) * au[q];
 }
 
+// moe4_gate_up_d: moe4_gate_up with x read from device memory through the caches (qmv2_rows_dx) instead of staged in
+// 16 KB of threadgroup memory; the same arithmetic
+[[kernel]] void moe4_gate_up_d(const device uint32_t* gw [[buffer(0)]], const device bfloat* gsc [[buffer(1)]],
+                             const device bfloat* gbi [[buffer(2)]], const device uint32_t* uw [[buffer(3)]],
+                             const device bfloat* usc [[buffer(4)]], const device bfloat* ubi [[buffer(5)]],
+                             const device uint32_t* sgw [[buffer(6)]], const device bfloat* sgs [[buffer(7)]],
+                             const device bfloat* sgb [[buffer(8)]], const device uint32_t* suw [[buffer(9)]],
+                             const device bfloat* sus [[buffer(10)]], const device bfloat* sub [[buffer(11)]],
+                             const device float* xn [[buffer(12)]], device float* h [[buffer(13)]],
+                             constant MoeParams& p [[buffer(14)]], const device uint* ue [[buffer(15)]],
+                             const device uint* umask [[buffer(16)]], const device uint* uslot [[buffer(17)]],
+                             const device uint* un [[buffer(18)]], constant uint& R [[buffer(19)]],
+                             uint3 tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                             uint3 ntg3 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                             uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int ROWS = 2;
+  const uint r = tgp.x, u = tgp.z, ntg = ntg3.x;
+  const bool shared = u == R * p.k;
+  uint slot = p.k, e = 0;
+  if (!shared) {
+    if (u >= un[0] || !((umask[u] >> r) & 1u)) return;  // uniform across the threadgroup
+    slot = (uslot[u] >> (4 * r)) & 15u;
+    e = ue[u];
+  }
+  const device float* xs = xn + r * p.D;
+  const uint N = shared ? p.SI : p.I;
+  const uint row0 = (tgp.y * nsg + sg) * ROWS;
+  if (row0 >= N) return;
+  const uint K = p.D, wpr = K / 8, gpr = K / 64;
+  const device uint32_t *G = gw, *U = uw;
+  const device bfloat *Gs = gsc, *Gb = gbi, *Us = usc, *Ub = ubi;
+  if (shared) {
+    G = sgw; Gs = sgs; Gb = sgb; U = suw; Us = sus; Ub = sub;
+  } else {
+    G += e * N * wpr; U += e * N * wpr;
+    Gs += e * N * gpr; Gb += e * N * gpr; Us += e * N * gpr; Ub += e * N * gpr;
+  }
+  float ag[ROWS], au[ROWS];
+  qmv2_rows_dx<4, 16, ROWS, 64>(G, Gs, Gb, xs, N, K, row0, lane, ag);
+  qmv2_rows_dx<4, 16, ROWS, 64>(U, Us, Ub, xs, N, K, row0, lane, au);
+  if (lane == 0)
+    for (int q = 0; q < ROWS; ++q)
+      if (row0 + q < N) h[(r * (p.k + 1) + slot) * max(p.I, p.SI) + row0 + q] = silu(ag[q]) * au[q];
+}
+
 // down: x[r, d] += sum_slot wts[r, slot] * (down_slot[d] . h[r, slot]) (moe_down2_w's arithmetic, h staged per row).
 // grid (R, D / 16), 256 threads; (k + 1) * max(I, SI) <= HS (moe4_down_s: a small instance for shader validation).
 #define NI_MOE4_DOWN(NAME, HS)                                                                                  \
@@ -557,6 +602,41 @@ NI_HC_UP_MIX4(hc_up_mix4_c4_b8, 8, 4)
   }
 NI_MOE4_DOWN(moe4_down, 7168)
 NI_MOE4_DOWN(moe4_down_s, 2048)
+
+// moe4_down_d: moe4_down with each row's h read from device memory through the caches (qmv2_rows_dx) instead of staged
+// in 28 KB of threadgroup memory (one threadgroup a core); the same arithmetic. grid (R, D / 16), 256 threads.
+[[kernel]] void moe4_down_d(const device uint32_t* dw [[buffer(0)]], const device bfloat* dsc [[buffer(1)]],
+                            const device bfloat* dbi [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],
+                            const device bfloat* sds [[buffer(4)]], const device bfloat* sdb [[buffer(5)]],
+                            const device float* h [[buffer(6)]], const device uint* idx [[buffer(7)]],
+                            const device float* wts [[buffer(8)]], device float* x [[buffer(9)]],
+                            constant MoeParams& p [[buffer(10)]], uint2 tgp [[threadgroup_position_in_grid]],
+                            uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                            uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int ROWS = 2;
+  const uint r = tgp.x, hstride = max(p.I, p.SI);
+  const device float* hr = h + r * (p.k + 1) * hstride;
+  const device uint* ix = idx + r * p.k;
+  const device float* wt = wts + r * (p.k + 1);
+  const uint row0 = (tgp.y * nsg + sg) * ROWS;
+  if (row0 >= p.D) return;
+  float tot[ROWS] = {0.0f, 0.0f};
+  for (uint slot = 0; slot <= p.k; ++slot) {
+    const bool shared = slot == p.k;
+    const uint K = shared ? p.SI : p.I;
+    const uint wpr = K / 8, gpr = K / 64;
+    const device uint32_t* W = shared ? sdw : dw + ix[slot] * p.D * wpr;
+    const device bfloat* S = shared ? sds : dsc + ix[slot] * p.D * gpr;
+    const device bfloat* B = shared ? sdb : dbi + ix[slot] * p.D * gpr;
+    float a[ROWS];
+    qmv2_rows_dx<4, 16, ROWS, 64>(W, S, B, hr + slot * hstride, p.D, K, row0, lane, a);
+    const float ws = wt[slot];
+    for (int q = 0; q < ROWS; ++q) tot[q] += ws * a[q];
+  }
+  if (lane == 0)
+    for (int q = 0; q < ROWS; ++q)
+      if (row0 + q < p.D) x[r * p.D + row0 + q] += tot[q];
+}
 
 // ---- Token pairs: each simdgroup reads its 4 weight rows once for two token rows (qmvt_rows, NT = 2); the
 // ceil(R / 2) pair simdgroups of a weight block share it through the core's cache. grid (threadgroups) of
