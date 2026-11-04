@@ -275,6 +275,42 @@ NI_HC_DOWN_SK3(hc_down_sk3_n2_b6, 6, 2)
 NI_HC_DOWN_SK3(hc_down_sk3_n2_b4, 4, 2)
 NI_HC_DOWN_SK3(hc_down_sk3_n2_b8, 8, 2)
 
+// hc_down_sk4<NR>: hc_down_sk3 with the stats in threadgroups of their own, beside the dots instead of after them in
+// row block 0's: grid (rank / (8 NR) + R, S * D / 1024), threadgroup x = rank / (8 NR) + r writing row r's X2 and stats
+// of its chunk. The same code per value, so bitwise hc_down_sk3's (fn_check hc-time).
+template <int BITS, int NR>
+NI_INLINE void hc_down_sk4_impl(const device float* X, const device float* y, const device float* inj_prev,
+                                const device float* w, const device bfloat* winj, const device uint32_t* W,
+                                const device bfloat* Ws, const device bfloat* Wb, device float* part, device float* X2,
+                                device float* stat, constant HcFoldParams& p, uint2 tg, uint tid, uint sg, uint lane,
+                                threadgroup float4* scratch) {
+  const uint nd = p.rank / (8 * NR);
+  if (tg.x >= nd) {
+    hc_down_sk2_stat(X, y, inj_prev, w, winj, X2, stat, p, tg.y, tg.x - nd, tid, scratch);
+    return;
+  }
+  for (uint r = 0; r < p.R; ++r) {
+    float xv[32], xs;
+    hc_down_sk2_x(X, y, inj_prev, w, p, tg.y, r, lane, xv, xs);
+    for (uint j = 0; j < uint(NR); ++j) hc_down_sk2_dot<BITS>(W, Ws, Wb, part, p, (tg.x * 8 + sg) * NR + j, tg.y, r, lane, xv, xs);
+  }
+}
+#define NI_HC_DOWN_SK4(NAME, BITS, NR)                                                                         \
+  [[kernel]] void NAME(const device float* X [[buffer(0)]], const device float* y [[buffer(1)]],               \
+                       const device float* inj_prev [[buffer(2)]], const device float* w [[buffer(3)]],        \
+                       const device bfloat* winj [[buffer(4)]], const device uint32_t* W [[buffer(5)]],        \
+                       const device bfloat* Ws [[buffer(6)]], const device bfloat* Wb [[buffer(7)]],           \
+                       device float* part [[buffer(8)]], device float* X2 [[buffer(9)]],                       \
+                       device float* stat [[buffer(10)]], constant HcFoldParams& p [[buffer(11)]],             \
+                       uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],    \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    threadgroup float4 scratch[32];                                                                            \
+    hc_down_sk4_impl<BITS, NR>(X, y, inj_prev, w, winj, W, Ws, Wb, part, X2, stat, p, tg, tid, sg, lane, scratch); \
+  }
+NI_HC_DOWN_SK4(hc_down_sk4_n2_b6, 6, 2)
+NI_HC_DOWN_SK4(hc_down_sk4_n2_b4, 4, 2)
+NI_HC_DOWN_SK4(hc_down_sk4_n2_b8, 8, 2)
+
 #define NI_HC_UP_MIX3(NAME, BITS, CPT)                                                                         \
   [[kernel]] void NAME(const device float* part [[buffer(0)]], const device float* X2 [[buffer(1)]],           \
                        const device float* stat [[buffer(2)]], const device float* w [[buffer(3)]],            \
@@ -402,6 +438,8 @@ NI_INLINE void hc_up_mix4_impl(const device float* part, const device float* X2,
     hc_up_mix4_impl<BITS, CPT>(part, X2, stat, w, W, Ws, Wb, u, X, y, inj, p, tg, tid, sg, lane, hs, hsum, inv); \
   }
 NI_HC_UP_MIX4(hc_up_mix4_c2_b6, 6, 2)
+NI_HC_UP_MIX4(hc_up_mix4_c2_b4, 4, 2)
+NI_HC_UP_MIX4(hc_up_mix4_c2_b8, 8, 2)
 NI_HC_UP_MIX4(hc_up_mix4_c4_b4, 4, 4)
 NI_HC_UP_MIX4(hc_up_mix4_c4_b6, 6, 4)
 NI_HC_UP_MIX4(hc_up_mix4_c4_b8, 8, 4)

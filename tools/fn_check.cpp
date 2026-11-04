@@ -902,7 +902,8 @@ void test_wfmt6() {
 
 
 // Verify kernels (qwen4v.metal) against the one-row kernels decode runs, bit for bit: the multi-row folded gated
-// residual (hc_down_skr + hc_up_mixr) against R one-row threadgroups of hc_down_sk2 + hc_up_mix2
+// residual (hc_down_skr + hc_up_mixr) against R one-row threadgroups of hc_down_sk2 + hc_up_mix2; and NI_HC_WIDE's pair
+// (hc_down_sk4 with its R stat threadgroups, hc_up_mix4_c2, hc_up_mix3_c2 for one row)
 void test_hc_rows(int bits) {
   const uint32_t D = 768, S = 4, SD = S * D, RK = 128, G = 64, KC = SD / 1024;
   for (uint32_t R = 1; R <= 4; ++R)
@@ -920,8 +921,8 @@ void test_hc_rows(int bits) {
         Out(uint32_t R, uint32_t SD, uint32_t D, uint32_t S, uint32_t KC, uint32_t RK)
             : X(R * SD), y(R * D), u(R * D), inj(R * S), part(KC * R * RK * 2), X2(R * SD), stat(R * KC * 10) {}
       };
-      Out a(R, SD, D, S, KC, RK), b(R, SD, D, S, KC, RK), c4(R, SD, D, S, KC, RK);
-      for (Out* o : {&a, &b, &c4}) {
+      Out a(R, SD, D, S, KC, RK), b(R, SD, D, S, KC, RK), c4(R, SD, D, S, KC, RK), wd(R, SD, D, S, KC, RK);
+      for (Out* o : {&a, &b, &c4, &wd}) {
         memcpy(o->X.f(), X.f(), R * SD * 4);
         memcpy(o->y.f(), y.f(), R * D * 4);
       }
@@ -946,6 +947,8 @@ void test_hc_rows(int bits) {
       run(("hc_up_mix3_c" + std::to_string(cpt) + sfx).c_str(), bind_up(b), D / (16 * cpt), 1, 1, 256);
       run(("hc_down_sk3_n" + std::to_string(nr) + sfx).c_str(), bind_down(c4), RK / (8 * nr), KC, 1, 256);
       run(("hc_up_mix4_c4" + sfx).c_str(), bind_up(c4), D / (16 * 4), 1, 1, 256);
+      run(("hc_down_sk4_n" + std::to_string(nr) + sfx).c_str(), bind_down(wd), RK / (8 * nr) + R, KC, 1, 256);
+      run(((R >= 2 ? "hc_up_mix4_c2" : "hc_up_mix3_c2") + sfx).c_str(), bind_up(wd), D / (16 * 2), 1, 1, 256);
       auto diff = [](Buf& x, Buf& z) {
         size_t bad = 0;
         double mx = 0;
@@ -963,6 +966,10 @@ void test_hc_rows(int bits) {
                         diff(a.part, c4.part) + diff(a.X2, c4.X2) + diff(a.stat, c4.stat);
       snprintf(nm, sizeof nm, "hc_up_mix4%s R=%u %s == one-row", sfx.c_str(), R, mode ? "inject" : "plain");
       report(nm, e4, 0);
+      const double ew = diff(a.X, wd.X) + diff(a.y, wd.y) + diff(a.u, wd.u) + (mode ? diff(a.inj, wd.inj) : 0.0) +
+                        diff(a.part, wd.part) + diff(a.X2, wd.X2) + diff(a.stat, wd.stat);
+      snprintf(nm, sizeof nm, "hc wide (sk4 + c2)%s R=%u %s == one-row", sfx.c_str(), R, mode ? "inject" : "plain");
+      report(nm, ew, 0);
     }
 }
 
@@ -1173,11 +1180,14 @@ void test_hc_timing() {
     const float sc = 0.0003f;
     Sd[l]->fill_bf16(sc / 2, sc), Bd[l]->fill_bf16(-sc * 32, 0), Su[l]->fill_bf16(sc, 2 * sc), Bu[l]->fill_bf16(-sc * 64, 0);
   }
-  struct V { const char *down, *up; uint32_t nr, cpt; bool one_row; };
-  const V vs[] = {{"hc_down_sk2_b6", "hc_up_mix2_b6", 1, 1, true},
-                  {"hc_down_sk3_n2_b6", "hc_up_mix3_c2_b6", 2, 2, false},
-                  {"hc_down_sk3_n2_b6", "hc_up_mix4_c2_b6", 2, 2, false},
-                  {"hc_down_sk3_n2_b6", "hc_up_mix4_c4_b6", 2, 4, false}};
+  // stats: hc_down_sk4's R stat threadgroups beside the dots
+  struct V { const char *down, *up; uint32_t nr, cpt; bool one_row, stats; };
+  const V vs[] = {{"hc_down_sk2_b6", "hc_up_mix2_b6", 1, 1, true, false},
+                  {"hc_down_sk3_n2_b6", "hc_up_mix3_c2_b6", 2, 2, false, false},
+                  {"hc_down_sk3_n2_b6", "hc_up_mix4_c2_b6", 2, 2, false, false},
+                  {"hc_down_sk3_n2_b6", "hc_up_mix4_c4_b6", 2, 4, false, false},
+                  {"hc_down_sk4_n2_b6", "hc_up_mix3_c2_b6", 2, 2, false, true},
+                  {"hc_down_sk4_n2_b6", "hc_up_mix4_c2_b6", 2, 2, false, true}};
   constexpr int NV = sizeof vs / sizeof vs[0];
   for (uint32_t R = 1; R <= 4; ++R) {
     Buf X(R * SD), y(R * D), injp(R * S), w(SD), winj(S * SD, 2);
@@ -1199,7 +1209,7 @@ void test_hc_timing() {
         e.use(pd);
         e.buf(0, X.b); e.buf(1, y.b); e.buf(2, injp.b); e.buf(3, w.b); e.buf(4, winj.b); e.buf(5, Wd[l]->b);
         e.buf(6, Sd[l]->b); e.buf(7, Bd[l]->b); e.buf(8, op->b); e.buf(9, o2->b); e.buf(10, os->b); e.val(11, p);
-        if (c.one_row) e.dispatch(RK / 8, KC, R, 256); else e.dispatch(RK / (8 * c.nr), KC, 1, 256);
+        if (c.one_row) e.dispatch(RK / 8, KC, R, 256); else e.dispatch(RK / (8 * c.nr) + (c.stats ? R : 0), KC, 1, 256);
         if (only && !strcmp(only, "down")) return;
       up:
         e.use(pu);
