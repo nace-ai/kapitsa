@@ -195,6 +195,10 @@ def window_samples(monitor, start, end, args):
     raise RuntimeError("monitor did not cover the end of the measurement")
 
 
+def in_start_window(window, epoch):
+    return window is None or window[0] <= epoch % 60 <= window[1]
+
+
 def wait_quiet(monitor, args):
     began = time.monotonic()
     while time.monotonic()-began < args.quiet_timeout:
@@ -203,7 +207,8 @@ def wait_quiet(monitor, args):
         samples = [x for x in monitor.read() if x["time"] >= now-args.quiet_seconds]
         if len(samples) >= 2 and samples[-1]["time"]-samples[0]["time"] >= args.quiet_seconds-args.interval-0.05:
             valid = not validate_leg(samples[0], samples[-1], samples, args.max_load, args.max_background_cpu)
-            if valid and all(x.get("own_gpu_ns", 1) == 0 for x in samples):
+            if (valid and all(x.get("own_gpu_ns", 1) == 0 for x in samples)
+                    and in_start_window(getattr(args, "start_seconds", None), time.time())):
                 return {"waited_s": now-began, "samples": samples}
         time.sleep(0.5)
     raise RuntimeError("machine did not meet the declared quiet conditions")
@@ -400,10 +405,14 @@ def main():
     parser.add_argument("--interval", type=float, default=.25)
     parser.add_argument("--quiet-seconds", type=float, default=30)
     parser.add_argument("--quiet-timeout", type=float, default=900)
+    parser.add_argument("--start-seconds", type=float, nargs=2, metavar=("FIRST", "LAST"),
+                        help="optional allowed start interval within each minute, to avoid periodic desktop redraws")
     parser.add_argument("--deadline-utc")
     args = parser.parse_args()
     if args.pairs < 2 or args.repeats < 1 or not 0 < args.interval <= .25 or args.quiet_seconds < 10:
         parser.error("need >=2 pairs, >=1 repeat, 0 < interval <= .25 and >=10 quiet seconds")
+    if args.start_seconds and not 0 <= args.start_seconds[0] < args.start_seconds[1] < 60:
+        parser.error("start-seconds must satisfy 0 <= FIRST < LAST < 60")
     deadline = datetime.datetime.fromisoformat(args.deadline_utc.replace("Z", "+00:00")) if args.deadline_utc else None
     args.deadline = deadline.timestamp() if deadline else None
     for name in ("old", "new", "model", "probe", "out"):

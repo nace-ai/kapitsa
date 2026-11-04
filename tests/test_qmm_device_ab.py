@@ -138,6 +138,13 @@ class DeviceConditions(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 ab.remaining(SimpleNamespace(deadline=99), 300)
 
+    def test_start_window_avoids_minute_boundaries(self):
+        for epoch in (9.9, 35.1, 59.9, 60, 120):
+            self.assertFalse(ab.in_start_window([10, 35], epoch))
+        for epoch in (10, 20, 35, 70, 95, 140):
+            self.assertTrue(ab.in_start_window([10, 35], epoch))
+        self.assertTrue(ab.in_start_window(None, 0))
+
     def test_campaign_cannot_drop_a_bad_or_missing_leg(self):
         requests = [dict(case=c, text_sha256="same") for c in ("short_greedy", "4k_sampled")]
         legs = [dict(invalid=[], requests=copy.deepcopy(requests)) for _ in range(4)]

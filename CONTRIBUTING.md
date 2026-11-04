@@ -117,6 +117,8 @@ both total usage and estimated background usage (total minus that owned work, as
 Defaults require load <= 2, background CPU <= 5%, nominal thermal state, automatic AC power mode, no pageouts or swap,
 and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
 the run. All planned legs and identical nonempty outputs are required; invalid runs remain in the output directory.
+`--start-seconds FIRST LAST` can restrict starts within each minute to avoid a known periodic desktop refresh;
+it never bypasses the environment checks. Use more pairs when reducing repeats per leg, and report the complete protocol.
 `python3 tests/test_qmm_device_ab.py` fault-injects these checks on the CPU without a model or GPU.
 
 End to end, against a running server (this one runs the 4B on the GPU and downloads it, 3.3 GB, the first time):
