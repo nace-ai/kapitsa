@@ -1750,6 +1750,7 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
+  const GroupedPass gp(e, grouped_prefill());
   const int D = cfg_.hidden;
   // the chunk's n-gram rows (the tokens are known): gathered while the GPU runs the previous chunk
   Buffer rows;

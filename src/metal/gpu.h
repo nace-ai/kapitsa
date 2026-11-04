@@ -188,6 +188,10 @@ class Encoder {
   void group_begin() { in_group_ = true; group_first_ = true; }
   void group_end() { in_group_ = false; }
   bool grouped() const { return auto_barrier_; }
+  // Turns what follows in this command buffer into a grouped encoder's dispatches (on: concurrent, a barrier before
+  // each dispatch outside a group, as begin_grouped()) or a plain encoder's (off: serial). The open compute encoder
+  // ends and a new one starts in the same command buffer, as at an event wait; the next dispatch binds its own state.
+  void set_grouped(bool on);
   void commit();             // non-blocking
   // `f` runs (on a Metal thread) once the GPU has finished this command buffer; set before commit(). For progress
   // displays: no wait, nothing on the GPU's path.
