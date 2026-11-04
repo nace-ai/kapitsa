@@ -60,7 +60,7 @@ class DeviceConditions(unittest.TestCase):
 
     def test_thermal_power_pressure_and_cpu(self):
         cases = [("thermal", 1, "thermal_not_nominal"), ("low_power", True, "low_power_mode"),
-                 ("memory_pressure_level", -1, "memory_pressure"), ("background_cpu_pct", 5.01, "background_CPU_over_limit")]
+                 ("memory_pressure_level", -1, "memory_pressure"), ("background_cpu_pct", 10.01, "background_CPU_over_limit")]
         for key, value, error in cases:
             with self.subTest(key=key):
                 item = copy.deepcopy(self.samples[4])

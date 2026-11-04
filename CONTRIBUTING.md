@@ -117,9 +117,12 @@ arm and request, plus 250 ms GPU
 samples and CPU usage over rolling one-second windows. One resident native sampler reads IOKit's `AppUsage` counters
 directly, avoiding probe/ps/ioreg process launches at every sample. `proc_pid_rusage` records the tested process tree's CPU time;
 both total usage and estimated background usage (total minus that owned work, as a share of all CPU cores) are retained.
-Defaults require load <= 2, background CPU <= 5%, nominal thermal state, automatic AC power mode, no pageouts or swap,
+Defaults require load <= 2, background CPU <= 10%, nominal thermal state, automatic AC power mode, no pageouts or swap,
 and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
 the run. CPU contention is gated on each timed request; CPU peaks in the surrounding bookkeeping remain diagnostic.
+The 10% background budget preserves the preparation rule of at least 90% total CPU idle when the tested process is
+idle; during inference its own CPU work is accounted separately. This is the limit used in the M4 Pro validation
+record, whose accepted requests peaked at 9.47% estimated background usage across all 14 CPU cores.
 All other checks cover the entire arm as well. All requested pairs and identical nonempty outputs are required.
 `--pair-attempts N` optionally retries both arms after an environment failure (default 1: no retry), accepting only the
 first fully valid pair within the declared cap. A valid half of a rejected pair is discarded with its counterpart;

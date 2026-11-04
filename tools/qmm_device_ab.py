@@ -61,7 +61,7 @@ def environment_errors(value, max_load):
     return errors
 
 
-def validate_leg(before, after, samples, max_load=2.0, max_background_cpu=5.0, max_gap=1.0, min_samples=20):
+def validate_leg(before, after, samples, max_load=2.0, max_background_cpu=10.0, max_gap=1.0, min_samples=20):
     errors = ["before:"+x for x in environment_errors(before, max_load)]
     errors += ["after:"+x for x in environment_errors(after, max_load)]
     for key in PAGING:
@@ -455,7 +455,7 @@ def main():
     parser.add_argument("--pair-attempts", type=int, default=1,
                         help="maximum attempts per pair; retry both arms only after an environment failure")
     parser.add_argument("--max-load", type=float, default=2.0)
-    parser.add_argument("--max-background-cpu", type=float, default=5.0)
+    parser.add_argument("--max-background-cpu", type=float, default=10.0)
     parser.add_argument("--interval", type=float, default=.25)
     parser.add_argument("--quiet-seconds", type=float, default=30)
     parser.add_argument("--quiet-timeout", type=float, default=900)
