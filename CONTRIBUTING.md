@@ -108,6 +108,15 @@ original path. Failures exit nonzero; dispatch counts distinguish candidate cove
 retains the original K partitions, including when a geometry falls back to the original output tile.
 `NI_QMM_COEFF_FIXTURES=MANIFEST` enables `check-cpu-fixtures` (no GPU) and `check-real-coeff` (full GPU outputs and FP64).
 
+`tools/qmm_device_ab.py` checks the 4B packed-QMM device default with interleaved builds. Build
+`qmm_device_conditions` explicitly, then pass `--old OLD/kapitsa --new NEW/kapitsa --model MODEL_DIR
+--probe build/qmm_device_conditions --out NEW_DIRECTORY`. The controller holds the GPU lock. It records actual AC
+power, one-minute load, thermal state and paging counters before and after each leg and request, plus 250 ms GPU
+samples and CPU usage over rolling one-second windows. Defaults require load <= 2, CPU idle >= 90%, nominal thermal state, automatic AC power mode, no pageouts or
+swap, and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
+the run. All planned legs and identical nonempty outputs are required; invalid runs remain in the output directory.
+`python3 tests/test_qmm_device_ab.py` fault-injects these checks on the CPU without a model or GPU.
+
 End to end, against a running server (this one runs the 4B on the GPU and downloads it, 3.3 GB, the first time):
 
 ```bash
