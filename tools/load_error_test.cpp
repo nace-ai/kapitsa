@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <vector>
+#include <memory>
 
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 using namespace ni;
@@ -55,21 +56,36 @@ static size_t cached_pages(const std::string& path) {
   size_t r = 0; for (char c : v) r += c & 1;
   return r;
 }
-// Tensors at offsets that are not page-aligned (as in every safetensors file) read back exact, and leave the file
-// out of the page cache (#939: F_NOCACHE does nothing for a misaligned read)
+// The loader's reads leave the file out of the page cache (#939: F_NOCACHE does nothing for a read that is not
+// page-aligned, and safetensors tensors almost never are) and read every byte back exact, in each case:
+// a tiny tensor, one of several 32 MB pieces, a page-aligned one read into a destination that is not 16 KB aligned,
+// and a last tensor whose final page runs past the end of the file
 static void uncached_reads(const std::filesystem::path& dir) {
+  constexpr size_t kPage = size_t(16) << 10;
   const auto path = (dir / "c.safetensors").string();
-  const size_t lens[] = {3, (size_t(32) << 20) + 777, 16384, (size_t(5) << 20) + 1};  // the last ends the file
-  std::string hdr = "{";
-  size_t off = 0;
-  for (size_t i = 0; i < 4; ++i) {
-    hdr += (i ? ",\"t" : "\"t") + std::to_string(i) + "\":{\"dtype\":\"U8\",\"shape\":[" + std::to_string(lens[i]) +
-           "],\"data_offsets\":[" + std::to_string(off) + "," + std::to_string(off + lens[i]) + "]}";
-    off += lens[i];
+  const std::vector<std::string> names = {"tiny", "big", "pad", "aligned", "gap", "tail"};
+  std::vector<size_t> lens = {3, (size_t(64) << 20) + 777, kPage, 2 * kPage, 7, (size_t(5) << 20) + 1};
+  std::string hdr;
+  std::vector<size_t> at;  // each tensor's file offset
+  for (;;) {  // grow "pad" until "aligned" starts on a page; the header's own length moves with it
+    hdr = "{";
+    at.clear();
+    size_t off = 0;
+    for (size_t i = 0; i < names.size(); ++i) {
+      hdr += (i ? ",\"" : "\"") + names[i] + "\":{\"dtype\":\"U8\",\"shape\":[" + std::to_string(lens[i]) +
+             "],\"data_offsets\":[" + std::to_string(off) + "," + std::to_string(off + lens[i]) + "]}";
+      at.push_back(off);
+      off += lens[i];
+    }
+    hdr += "}";
+    hdr.resize(hdr.size() + (13 - hdr.size() % 8) % 8, ' ');  // 8 + header is 5 mod 8: "tiny" and "big" misaligned
+    for (auto& a : at) a += 8 + hdr.size();
+    if (at[3] % kPage == 0) break;
+    lens[2] += kPage - at[3] % kPage;
   }
-  hdr += "}";
-  hdr.resize(hdr.size() + (13 - hdr.size() % 8) % 8, ' ');  // 8 + header: 5 mod 8, so no tensor is page-aligned
-  std::vector<uint8_t> file(8 + hdr.size() + off);
+  CHECK(at[0] % kPage && at[1] % kPage && at[5] % kPage);
+  std::vector<uint8_t> file(at[5] + lens[5]);
+  CHECK(file.size() % kPage);  // "tail"'s last page runs past the end of the file
   const uint64_t hlen = hdr.size(); memcpy(file.data(), &hlen, 8); memcpy(file.data() + 8, hdr.data(), hdr.size());
   for (size_t i = 8 + hdr.size(); i < file.size(); ++i) file[i] = uint8_t(i * 2654435761u >> 13);
   {  // written past the cache, so whatever is cached afterwards came from the reads
@@ -81,13 +97,17 @@ static void uncached_reads(const std::filesystem::path& dir) {
   WeightStore ws;
   ws.open_dir(dir.string(), {}, [](const std::string& f) { return f == "c.safetensors"; },
               [](const std::string&) { return true; });
-  off = 8 + hdr.size();
-  for (size_t i = 0; i < 4; ++i) {
-    std::vector<uint8_t> got(lens[i] + 1, 0xAB);
-    ws.read_deferred("t" + std::to_string(i), got.data() + 1);  // a misaligned destination too
-    CHECK(got[0] == 0xAB && !memcmp(got.data() + 1, file.data() + off, lens[i]));
-    off += lens[i];
-  }
+  uint8_t* buf = nullptr;
+  CHECK(posix_memalign(reinterpret_cast<void**>(&buf), kPage, lens[1] + 2 * kPage) == 0);
+  std::unique_ptr<uint8_t, decltype(&free)> own(buf, free);
+  // destinations 16 KB aligned, 256 B aligned (a tensor's place in a GPU buffer) and 1 B off
+  for (const size_t shift : {size_t(0), size_t(256), size_t(1)})
+    for (size_t i = 0; i < names.size(); ++i) {
+      memset(buf, 0xAB, lens[i] + shift + 1);
+      ws.read_deferred(names[i], buf + shift);
+      CHECK(!memcmp(buf + shift, file.data() + at[i], lens[i]));
+      CHECK((!shift || buf[shift - 1] == 0xAB) && buf[shift + lens[i]] == 0xAB);  // nothing written around it
+    }
   const size_t after = cached_pages(path), pages = file.size() / size_t(getpagesize());
   std::cout << "page cache: " << before << " -> " << after << " of " << pages << " pages\n";
   CHECK(after <= before + pages / 10);
