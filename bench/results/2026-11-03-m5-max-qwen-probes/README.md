@@ -1,6 +1,6 @@
 # Results, 2026-11-03: MacBook Pro M5 Max, 128 GB (Qwen decode probes that did not pay)
 
-Probes of the Qwen decode cycles after #921, #922 and #923, kept so that they are not retried without a new reason.
+Probes of the Qwen decode cycles after #921, #922 and #923, recorded so that a retry starts from these numbers.
 None is proposed: each is slower than what ships, or would change outputs. Each kernel probe is a patch on main
 `8715427` behind a switch that is off by default (the base arm, the same binary), and its runs alternate base and
 variant ([run.sh](run.sh)). Qwen3.8-Flash-Next 4-bit (Nace AI's MLX pack), Qwen3.6 35B-A3B 4-bit and Qwen3.8 27B 4-bit,
@@ -9,8 +9,9 @@ the README's decode prompt ([prompt-ids.txt](prompt-ids.txt), 56 tokens), greedy
 lock ([machine.json](machine.json)).
 
 `NI_PROFILE=1` times every dispatch in a command buffer of its own (isolated dispatches): its sums rank kernels and
-compare variants of one kernel; they are not decode speed. These runs did not wait for a quiet GPU or log the foreign
-GPU load; the session sat idle while they ran.
+compare variants of one kernel; they are not decode speed. These runs, all but the depth pair's
+([depth/logged/](depth/logged)), did not wait for a quiet GPU or log the foreign GPU load; the session sat idle while
+they ran.
 
 ## Flash-Next's verify projections (`qmvs_multi`)
 
@@ -38,15 +39,23 @@ pragma). Every Flash-Next run in this section wrote the same 95 tokens.
 
 ## Flash-Next's MTP depth
 
-`ni_run`, 512 tokens (`--ignore-eos`), `--spec 2` (the default) against `--spec 3` (4 verify rows), alternated, two
-runs each ([depth/](depth)):
+`ni_run`, 512 tokens (`--ignore-eos`), `--spec 2` (the default) against `--spec 3` (4 verify rows), the unpatched
+build, 3 rounds alternating the arm order ([depth/logged/](depth/logged): `ab_lc.py`, `run_depth.sh`). Before each run
+a quiet GPU (no foreign process above 5% for 15 s, waiting up to 900 s: `bench/harness/gpu_hogs.py`), then the 1-minute
+load average below 2; the load average and the power source read just before and just after it, the foreign GPU load
+sampled while it ran. A round counts when both its runs found the GPU quiet, saw 0.0% foreign GPU load, ended below
+load 4, and drew from AC power before and after: rounds 0 and 1.
 
 | Depth | tok/s | Tokens a cycle | ms of GPU a cycle |
 | ---: | ---: | ---: | ---: |
-| 2 | 107.3, 107.2 | 2.34 | 21.56, 21.59 |
-| 3 | 102.0, 101.8 | 2.72 | 26.37, 26.43 |
+| 2 | 108.1, 108.0 | 2.34 | 21.39, 21.40 |
+| 3 | 102.9, 102.9 | 2.72 | 26.11, 26.09 |
 
-The fourth row's verify and the third draft cost more than the 0.38 tokens a cycle they add.
+Decode 108.05 -> 102.9 tok/s (-4.8%), 21.40 -> 26.10 ms of GPU a cycle, the medians: the fourth row's verify and the
+third draft cost more than the 0.38 tokens a cycle they add. Every run wrote the same 511 tokens. Round 2's runs (107.9
+and 102.9 tok/s, 0.06-0.11% foreign) both ended at load 14.2, with no process above 2.1% CPU then: they read their
+weights in 17-21 s, the clean runs in 10 s, so the load was their own page-ins. The first pair ([depth/](depth), `d*.out`,
+two runs each, alternated, without these checks) agrees: 107.2-107.3 against 101.8-102.0 tok/s.
 
 ## A repacked weight layout for the 8-row verify GEMM (`qmm8t`)
 
@@ -85,5 +94,6 @@ every kernel that reads the dense weights (decode, prefill, verify) rewritten fo
 
 `run.sh`: every run of this folder, in order. `*.diff`: the probes' patches on `8715427`. `qmvp3/`, `qmvs-rows/`,
 `qmvs-shape/`: each arm's `NI_PROFILE` output (`base-*`, `var-*`; `qmvs-shape/` named by variant) and `qmvs-rows/`'s
-`fn_check`. `depth/`, `layout/`, `profiles/`: the other runs' outputs. Local paths are replaced by placeholders (`~`,
+`fn_check`. `depth/`, `layout/`, `profiles/`: the other runs' outputs; `depth/logged/` the depth A/B with every run's conditions
+(`ab.json`, `depth.out`). Local paths are replaced by placeholders (`~`,
 `<repo>`: the checkout the patches were applied to, `<out>`: the outputs' folder).
