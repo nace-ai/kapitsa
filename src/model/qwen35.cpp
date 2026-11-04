@@ -3468,9 +3468,21 @@ void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int
 // attn_prefill11 (default): MLX-style layout, 32 queries of one query head per threadgroup,
 // fragments in registers (2.1x v10 on the 35B shape, 3.1x on the 27B's G=6). NI_ATTN overrides.
 void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, int T, int pos0, int cap) {
+  if (T == 0) return;
+  static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
+  static const bool d2_on = env_int("NI_QATTN_D2", 1) != 0;
+  static const bool g6_on = env_int("NI_QATTN_G6", 1) != 0;
   kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(cap),
                   1.0f / std::sqrt(float(cfg_.head_dim))};
   if (!cfg_.causal) {
+    if (qattn && d2_on && g6_on && cfg_.head_dim == 256 && cfg_.hkv > 0 && cfg_.hq == 6 * cfg_.hkv &&
+        T > 0 && pos0 >= 0 && pos0 <= cap && T <= cap - pos0 && uint64_t(T) * 6 + 63 <= 0xffffffffu) {
+      e.use(pipe("qattn_t_g6d2s8_bidi"));
+      e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+      e.val(5, fp);
+      e.dispatch(uint32_t((uint64_t(T) * 6 + 63) / 64), cfg_.hkv, 1, 256);
+      return;
+    }
     e.use(pipe("attn_prefill11_bidi_k16"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
     e.val(5, fp);
@@ -3573,17 +3585,14 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // M5 Pro, T 4224 against 8448 keys / T 3328 against 16000: 24.22 / 44.42 ms vs g8s4k16's 44.08 / 78.23 (1.82x /
   // 1.76x), error against the fp64 reference the same (2.58e-4 / 3.09e-4 vs 2.60e-4 / 3.08e-4). The scores add the
   // two halves of the head dim separately, so logits are not bit-identical to g8s4k16's.
-  static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
   // Only the environment is read once: the head ratios depend on cfg_, which changes when the server swaps models
   // (--allow-switch), and function-local statics survive the swap.
   static const bool g8_on = env_int("NI_QATTN_G8", 1) != 0;
-  static const bool d2_on = env_int("NI_QATTN_D2", 1) != 0;
   // NI_QATTN_G6 (default on, 0 = off): G = 6 (the 27B, 24 query heads over 4 KV heads) runs qattn_t_g6d2s8, the d2
   // kernel over (token, head) rows, 64 rows (10 2/3 tokens) per threadgroup; off, it stays on attn_prefill11r.
   // bench_attn on the M5 Pro, the 27B's heads: T 141 / 512 against a 16K prefix 4.16 / 12.76 ms vs 11r's 10.93 /
   // 30.77; T 2048 against 4096 / 16384 keys 8.85 / 44.23 ms vs 22.21 / 111.64 (2.4-2.6x). Error against the fp64
   // reference 2.6-3.1e-4 (11r 1.9-2.6e-4; the shipped G = 4 and G = 8 qattn kernels sit the same distance above it).
-  static const bool g6_on = env_int("NI_QATTN_G6", 1) != 0;
   // NI_QATTN_G4D2 (default on, 0 = off): G = 4 (the 4B and 9B, 16 query heads over 4 KV heads) runs qattn_t_g4d2s8, the
   // same d2 kernel over (token, head) rows, 64 rows (16 tokens) per threadgroup; off, qattn_t_s8k16 as before.
   // bench_attn on the M5 Max (40 cores, macOS 25E246), the 4B's heads, T 2048 against 4096 / 8192 / 16384 keys: 3.09 /
