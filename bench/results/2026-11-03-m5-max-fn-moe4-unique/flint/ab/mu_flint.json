@@ -1,0 +1,34 @@
+{
+ "arms": {
+  "old": {
+   "cmd": [
+    "<ref>/build/flint_bench",
+    "~/models/flint-4bit",
+    "--rows",
+    "8",
+    "--steps",
+    "128",
+    "--reps",
+    "3"
+   ],
+   "cwd": "<ref>"
+  },
+  "new": {
+   "cmd": [
+    "<repo>/build/flint_bench",
+    "~/models/flint-4bit",
+    "--rows",
+    "8",
+    "--steps",
+    "128",
+    "--reps",
+    "3"
+   ],
+   "cwd": "<repo>"
+  }
+ },
+ "metrics": {
+  "ms_step": "^rep 2: .*= ([\\d.]+) ms/step",
+  "gpu_ms_step": "^rep 2: .*GPU ([\\d.]+) ms/step\\)"
+ }
+}

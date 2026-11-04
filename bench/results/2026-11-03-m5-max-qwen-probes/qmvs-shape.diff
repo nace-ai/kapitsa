@@ -1,0 +1,88 @@
+diff --git a/src/kernels/zqwen4v.metal b/src/kernels/zqwen4v.metal
+index afbbbab..604399f 100644
+--- a/src/kernels/zqwen4v.metal
++++ b/src/kernels/zqwen4v.metal
+@@ -89,12 +89,12 @@ NI_INLINE void qmvt_store(const device uint32_t* w, const device bfloat* s, cons
+ // ---- Token rows as separate simdgroups: one row of x per simdgroup, the weight block shared through the core's
+ // cache (each simdgroup's arithmetic is the decode kernels'). qmvs_multi: grid (R, threadgroups) of 2 simdgroups x 4
+ // weight rows (the R threadgroups of a block adjacent, as qmvrc1); up to four 4/8-bit matrices sharing x.
+-template <int BITS>
++template <int BITS, int ROWS = 4>
+ NI_INLINE void qmvs_row(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                         const device float* x, device float* y, uint N, uint K, bool add, uint row0, uint lane) {
+   constexpr int PER_WORD = 32 / BITS;
+   constexpr uint MASK = (1u << BITS) - 1u;
+-  constexpr int VPL = 16, ROWS = 4;
++  constexpr int VPL = 16;
+   constexpr int WORDS = VPL / PER_WORD;
+   const uint wpr = K / PER_WORD, gpr = K / 64;
+   float acc[ROWS];
+@@ -136,7 +136,7 @@ NI_INLINE void qmvs_row(const device uint32_t* w, const device bfloat* scales, c
+   }
+ }
+ 
+-#define NI_QMVS_MULTI(NAME)                                                                               \
++#define NI_QMVS_MULTI(NAME, RW)                                                                              \
+   [[kernel]] void NAME(                                                                                  \
+       const device uint32_t* w0 [[buffer(0)]], const device bfloat* s0 [[buffer(1)]],                    \
+       const device bfloat* b0 [[buffer(2)]], device float* y0 [[buffer(3)]],                             \
+@@ -154,17 +154,19 @@ NI_INLINE void qmvs_row(const device uint32_t* w, const device bfloat* scales, c
+     uint seg = 0;                                                                                        \
+     for (uint i = 1; i < p.nseg; ++i)                                                                    \
+       if (tgp.y >= p.tg_begin[i]) seg = i;                                                                \
+-    const uint row0 = ((tgp.y - p.tg_begin[seg]) * nsg + sg) * 4;                                        \
++    const uint row0 = ((tgp.y - p.tg_begin[seg]) * nsg + sg) * RW;                                        \
+     const uint N = p.N[seg];                                                                              \
+     if (row0 >= N) return;                                                                                \
+     const device uint32_t* W = seg == 0 ? w0 : seg == 1 ? w1 : seg == 2 ? w2 : w3;                        \
+     const device bfloat* S = seg == 0 ? s0 : seg == 1 ? s1 : seg == 2 ? s2 : s3;                          \
+     const device bfloat* B = seg == 0 ? b0 : seg == 1 ? b1 : seg == 2 ? b2 : b3;                          \
+     device float* Y = (seg == 0 ? y0 : seg == 1 ? y1 : seg == 2 ? y2 : y3) + t * p.y_ld[seg];             \
+-    if (p.bits[seg] == 8) qmvs_row<8>(W, S, B, x + t * p.x_ld, Y, N, p.K, p.add[seg] != 0, row0, lane);    \
+-    else qmvs_row<4>(W, S, B, x + t * p.x_ld, Y, N, p.K, p.add[seg] != 0, row0, lane);                     \
++    if (p.bits[seg] == 8) qmvs_row<8, RW>(W, S, B, x + t * p.x_ld, Y, N, p.K, p.add[seg] != 0, row0, lane);    \
++    else qmvs_row<4, RW>(W, S, B, x + t * p.x_ld, Y, N, p.K, p.add[seg] != 0, row0, lane);                     \
+   }
+-NI_QMVS_MULTI(qmvs_multi)
++NI_QMVS_MULTI(qmvs_multi, 4)
++NI_QMVS_MULTI(qmvs_multi_w2, 2)
++NI_QMVS_MULTI(qmvs_multi_w8, 8)
+ 
+ 
+ // Any MLX affine format of wfmt.metal (6-bit attention projections): per row the arithmetic of wf_rows_acc (qmvg_*).
+diff --git a/src/model/qwen4_exp_spec.cpp b/src/model/qwen4_exp_spec.cpp
+index 8bbd187..ea178ba 100644
+--- a/src/model/qwen4_exp_spec.cpp
++++ b/src/model/qwen4_exp_spec.cpp
+@@ -67,7 +67,12 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
+     // simdgroups (pair = sg % ceil(R/2), blk = sg / ceil(R/2)): threads must scale with ceil(R / 2) or blk
+     // collapses to 0 and half of every weight tile goes unread.
+     const bool qmvp = sp0 && (R == 4 || (pair8 && R == 8));
+-    e.use(pipe4(qmvp ? "qmvp_multi" : sp0 ? "qmvs_multi" : "qmvs_multi_" + f0.fmt()));
++    // experiment: NI_QMVS_VAR = w2 / w8 (weight rows a simdgroup), t4 / t8 (simdgroups a threadgroup)
++    static const std::string var = getenv("NI_QMVS_VAR") ? getenv("NI_QMVS_VAR") : "";
++    const bool sv = sp0 && !qmvp;
++    const int rw = sv && var == "w2" ? 2 : sv && var == "w8" ? 8 : 4;
++    const int nsg = sv && var == "t4" ? 4 : sv && var == "t8" ? 8 : 2;
++    e.use(pipe4(qmvp ? "qmvp_multi" : sp0 ? (rw == 4 ? "qmvs_multi" : rw == 2 ? "qmvs_multi_w2" : "qmvs_multi_w8") : "qmvs_multi_" + f0.fmt()));
+     struct {
+       uint32_t K, R, nseg, x_ld, N[4], tg_begin[5], bits[4], y_ld[4], add[4];
+     } p{};
+@@ -84,7 +89,7 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
+         p.y_ld[i] = sg.y_ld ? sg.y_ld : sg.L->N;
+         p.add[i] = sg.add ? 1u : 0u;
+         p.tg_begin[i] = tg;
+-        tg += (sg.L->N + 7) / 8;
++        tg += sv ? (sg.L->N + rw * nsg - 1) / (rw * nsg) : (sg.L->N + 7) / 8;
+       }
+       e.buf(int(i * 4 + 0), sg.L->w->buf);
+       e.buf(int(i * 4 + 1), sg.L->s->buf);
+@@ -95,7 +100,7 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
+     e.buf(16, x);
+     e.val(17, p);
+     if (qmvp) e.dispatch(tg, 1, 1, 64u * uint32_t((R + 1) / 2));
+-    else e.dispatch(uint32_t(R), tg, 1, 64);
++    else e.dispatch(uint32_t(R), tg, 1, sv ? 32u * uint32_t(nsg) : 64u);
+   }
+ }
+ 

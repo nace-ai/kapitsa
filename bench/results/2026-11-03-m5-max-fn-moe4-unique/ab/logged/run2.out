@@ -1,0 +1,12 @@
+round 0 old: tok_s 108.3, gpu_ms_cycle 21.348 | quiet True after 18.5 s, foreign GPU mean 0.06% max 0.76%, load 1.95 -> 2.46 (waited 270 s), AC True -> True, clean False
+round 0 new: tok_s 110.8, gpu_ms_cycle 20.864 | quiet True after 18.5 s, foreign GPU mean 0.11% max 1.63%, load 1.90 -> 9.09 (waited 40 s), AC True -> True, clean False | busiest at the end: 7.3 lsof; 3.0 lsof; 1.0 /usr/libexec/searchpartyd; 0.6 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/156.0.8078.74/Helpers/Google Chrome Helper (Aperitif Renderer).app/Contents/MacOS/Google Chrome Helper (Aperitif Renderer); 0.6 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/156.0.8078.74/Helpers/Google Chrome Helper (Aperitif Renderer).app/Contents/MacOS/Google Chrome Helper (Aperitif Renderer)
+round 1 new: tok_s 111.1, gpu_ms_cycle 20.797 | quiet True after 18.5 s, foreign GPU mean 0.0% max 0%, load 1.97 -> 2.04 (waited 100 s), AC True -> True, clean True
+round 1 old: tok_s 108.4, gpu_ms_cycle 21.346 | quiet True after 18.5 s, foreign GPU mean 0.0% max 0%, load 1.95 -> 2.26 (waited 25 s), AC True -> True, clean True
+round 2 old: tok_s 108.6, gpu_ms_cycle 21.284 | quiet True after 18.5 s, foreign GPU mean 0.0% max 0%, load 1.99 -> 2.32 (waited 25 s), AC True -> True, clean True
+round 2 new: tok_s 111.3, gpu_ms_cycle 20.759 | quiet True after 18.5 s, foreign GPU mean 0.0% max 0%, load 1.96 -> 1.97 (waited 40 s), AC True -> True, clean True
+round 3 new: tok_s 111.0, gpu_ms_cycle 20.824 | quiet True after 18.5 s, foreign GPU mean 0.0% max 0%, load 1.67 -> 2.23 (waited 0 s), AC True -> True, clean True
+round 3 old: tok_s 107.9, gpu_ms_cycle 21.423 | quiet True after 18.5 s, foreign GPU mean 0.14% max 1.27%, load 1.89 -> 2.62 (waited 15 s), AC True -> True, clean False
+clean rounds: 2 of 4
+median tok_s over clean rounds: old 108.500, new 111.200 (+2.49%)
+median gpu_ms_cycle over clean rounds: old 21.315, new 20.778 (-2.52%)
+ids identical across every run: True

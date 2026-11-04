@@ -1,0 +1,11 @@
+[kapitsa] compiled kernels in 3055 ms
+N 12352 K 2048: 14.23 MB a matrix (codes 12.65 + scales/biases 1.58), 105 copies
+ks 1 ld_split      36.40 us   391.0 GB/s (best  394.2)
+ks 1 ld_sbpair     52.23 us   272.4 GB/s (best  411.5)
+ks 1 ld_tiled      29.78 us   477.8 GB/s (best  480.5)
+ks 2 ld_split      30.92 us   460.1 GB/s (best  462.2)
+ks 2 ld_sbpair     30.65 us   464.2 GB/s (best  476.6)
+ks 2 ld_tiled      30.09 us   472.9 GB/s (best  491.4)
+ks 4 ld_split      29.60 us   480.6 GB/s (best  482.4)
+ks 4 ld_sbpair     31.68 us   449.1 GB/s (best  495.9)
+ks 4 ld_tiled      27.47 us   518.0 GB/s (best  518.7)

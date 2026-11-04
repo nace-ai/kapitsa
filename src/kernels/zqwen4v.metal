@@ -447,29 +447,47 @@ NI_HC_UP_MIX4(hc_up_mix4_c4_b8, 8, 4)
 // ---- The MoE of up to 8 rows with the decode kernels' arithmetic (moe_gate_up3 / moe_down2_w) ----
 // moe4_unique: the distinct experts of the rows' top-k (idx [R, k]): ue[u], the rows that chose it (bit mask) and
 // each such row's slot (4 bits a row in uslot[u], so the slots of up to 8 rows share one word: k <= 16);
-// n[0] = U. One thread (R * k <= 64 entries).
+// n[0] = U. One threadgroup of 32 threads (R * k <= 64 entries), in the order a serial pass over the entries numbers
+// them: each entry i = r k + s finds its expert's first entry (the least j with idx[j] == idx[i]); a first entry's
+// u is the count of first entries before it, and it gathers the rows and slots of every entry that chose its expert.
+// (One thread walking the entries and searching ue took 19 us at Flash-Next's 3 rows x 10.)
 [[kernel]] void moe4_unique(const device uint* idx [[buffer(0)]], device uint* ue [[buffer(1)]],
                             device uint* umask [[buffer(2)]], device uint* uslot [[buffer(3)]],
                             device uint* n [[buffer(4)]], constant uint2& rk [[buffer(5)]],
                             uint tid [[thread_position_in_grid]]) {
-  if (tid != 0) return;
-  const uint R = rk.x, k = rk.y;
-  uint U = 0;
-  for (uint r = 0; r < R; ++r)
-    for (uint s = 0; s < k; ++s) {
-      const uint e = idx[r * k + s];
-      uint u = 0;
-      while (u < U && ue[u] != e) ++u;
-      if (u == U) {
-        ue[U] = e;
-        umask[U] = 0;
-        uslot[U] = 0;
-        ++U;
+  threadgroup uint te[128], tf[128];
+  const uint R = rk.x, k = rk.y, N = min(R * k, 128u);
+  for (uint i = tid; i < N; i += 32) te[i] = idx[i];
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < N; i += 32) {
+    uint f = i;
+    for (uint j = 0; j < i; ++j)
+      if (te[j] == te[i]) {
+        f = j;
+        break;
       }
-      umask[u] |= 1u << r;
-      uslot[u] |= uint(s) << (4 * r);
-    }
-  n[0] = U;
+    tf[i] = f;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < N; i += 32) {
+    if (tf[i] != i) continue;
+    uint u = 0, m = 0, sl = 0;
+    for (uint j = 0; j < i; ++j) u += tf[j] == j ? 1u : 0u;
+    for (uint j = i; j < N; ++j)
+      if (tf[j] == i) {
+        const uint r = j / k;
+        m |= 1u << r;
+        sl |= (j - r * k) << (4 * r);
+      }
+    ue[u] = te[i];
+    umask[u] = m;
+    uslot[u] = sl;
+  }
+  if (tid == 0) {
+    uint U = 0;
+    for (uint j = 0; j < N; ++j) U += tf[j] == j ? 1u : 0u;
+    n[0] = U;
+  }
 }
 
 // gate/up: h[(r * (k + 1) + slot) * max(I, SI) + i] = silu(gate_e . x_r) * (up_e . x_r). grid (R, max(I, SI) / 16,
