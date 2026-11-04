@@ -260,7 +260,8 @@ Splash's sampler is its own frontend's: a request that leaves out temperature, t
 1.0, 0.95 and 20 — on all three routes, rather than the per-model ones Kapitsa's own engine applies. Sampling fields Kapitsa's own
 engine does not use (`presence_penalty`, `frequency_penalty`, `repetition_penalty`, `min_p`, `ignore_eos`) are passed
 to it, and a value outside Splash's range (temperature in [0, 2], top_p in (0, 1]) is a 400 naming the field rather
-than a clamp. A thinking budget in the request is honoured, as Kapitsa's own engine honours it.
+than a clamp. A thinking budget in the request is honoured: at the budget the think-close token is forced, as Kapitsa's
+own engine forces it (`src/engine/think_control.h`; before 0.2.27 its engine did not, whatever this line said).
 
 ### Measured on an M5 Pro
 

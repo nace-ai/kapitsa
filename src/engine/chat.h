@@ -59,6 +59,12 @@ struct ChatRequest {
   int loops = 0;
   std::string effort;
   int thinking_budget = -1;     // Anthropic thinking.budget_tokens; 0: thinking disabled
+  // The reasoning's hard cap (src/engine/think_control.h): thinking_control.hard_cap, else a positive thinking_budget
+  // (-1: none; 0 forces the close at once); the text forced before </think> at the cap; whether a tool call inside the
+  // reasoning ends the control (-1: when the request has tools, as Splash's thinking budget does)
+  int think_cap = -1;
+  std::string think_close_text;
+  int think_end_on_tool_call = -1;
   // Structured output (src/engine/grammar.h: a JSON schema, any JSON object, tool calls the request forces or strict
   // tools): what the reply must follow after its reasoning, or null. The engine samples each token under its mask.
   std::shared_ptr<const Grammar> grammar;
@@ -97,6 +103,8 @@ struct ChatResult {
   bool engine_down = false;   // "error" because the engine process has exited: a 503 without Retry-After (nothing relaunches it)
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   int reasoning_tokens = 0;   // completion tokens inside the think block
+  int think_cap = -1;         // the reasoning's hard cap the request ran with (-1: none)
+  bool think_forced = false;  // the cap was reached: the close was forced
   double prefill_ms = 0, decode_ms = 0;
   // prefill_ms is the time to read the uncached prompt tokens: no image rows (their encoder runs before the clock
   // starts) and no turn given to another request in between (--slots > 1); a rate from it is shown only then

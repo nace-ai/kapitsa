@@ -1,6 +1,9 @@
 #include "api/common.h"
 #include "model/dory.h"
 
+#include <algorithm>
+#include <climits>
+#include <cstdint>
 #include <mutex>
 #include <random>
 
@@ -99,7 +102,37 @@ int request_loops_field(const ojson& body) {
   return int(v.get<int64_t>());
 }
 
-ojson kapitsa_usage(const ChatResult& res) { return res.loops > 0 ? ojson{{"loops", res.loops}} : ojson(); }
+void request_think_field(const ojson& body, ChatRequest& r) {
+  if (!body.is_object() || !body.contains("thinking_control") || body["thinking_control"].is_null()) return;
+  const ojson& c = body["thinking_control"];
+  auto bad = [](const std::string& m, const std::string& param) {
+    throw ApiError(400, "invalid_request_error", "thinking_control." + m, "", "thinking_control." + param);
+  };
+  if (!c.is_object()) throw ApiError(400, "invalid_request_error", "thinking_control: an object", "", "thinking_control");
+  if (c.contains("hard_cap") && !c["hard_cap"].is_null()) {
+    if (!c["hard_cap"].is_number_integer() || c["hard_cap"].get<int64_t>() < 0)
+      bad("hard_cap: a whole number of tokens, 0 or more", "hard_cap");
+    r.think_cap = int(std::min<int64_t>(c["hard_cap"].get<int64_t>(), INT32_MAX));
+  }
+  if (c.contains("close_text") && !c["close_text"].is_null()) {
+    if (!c["close_text"].is_string()) bad("close_text: a string", "close_text");
+    r.think_close_text = c["close_text"].get<std::string>();
+  }
+  if (c.contains("end_on_tool_call") && !c["end_on_tool_call"].is_null()) {
+    if (!c["end_on_tool_call"].is_boolean()) bad("end_on_tool_call: a boolean", "end_on_tool_call");
+    r.think_end_on_tool_call = c["end_on_tool_call"].get<bool>() ? 1 : 0;
+  }
+}
+
+ojson kapitsa_usage(const ChatResult& res) {
+  ojson u;
+  if (res.loops > 0) u["loops"] = res.loops;
+  // (reasoning_tokens counts the closing </think>, as ChatResult does, and the cap counts it too: at most hard_cap,
+  // forced or not, src/engine/think_control.h)
+  if (res.think_cap >= 0)
+    u["thinking"] = {{"hard_cap", res.think_cap}, {"reasoning_tokens", res.reasoning_tokens}, {"forced", res.think_forced}};
+  return u;
+}
 
 void join_text(std::string& acc, const std::string& piece) {
   if (piece.empty()) return;

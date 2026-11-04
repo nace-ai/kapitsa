@@ -44,7 +44,13 @@ bool apply_effort(const std::string& effort, ojson& kwargs);
 // A request's own loop count for looped models (Dory): "loops" in the body (the OpenAI clients' extra_body), 1-4,
 // else 0. Throws ApiError (400) for another value.
 int request_loops_field(const ojson& body);
-// The usage field that reports it ({"loops": n}; null when the model is not looped)
+// A request's thinking budget beyond the API's own field (src/engine/think_control.h), on every API: "thinking_control"
+// in the body, {"hard_cap": tokens (0 or more), "close_text": text forced before </think> at the cap,
+// "end_on_tool_call": a tool call inside the reasoning ends the control (default: when the request has tools)}, into r.
+// Throws ApiError (400) for a malformed one.
+void request_think_field(const ojson& body, ChatRequest& r);
+// The usage fields that report them: {"loops": n} for a looped model, {"thinking": {...}} for a request with a thinking
+// budget; null when neither applies
 ojson kapitsa_usage(const ChatResult& res);
 
 // Appends a text piece, with a newline between pieces that have none at the junction

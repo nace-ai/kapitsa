@@ -293,6 +293,8 @@ ChatRequest messages_prompt(const ojson& body, bool* show_thinking) {
     r.thinking_budget = int(std::clamp<int64_t>(th["budget_tokens"].get<int64_t>(), 0, INT32_MAX));
   if (think && body.contains("output_config")) r.effort = str(body["output_config"], "effort");
   r.loops = request_loops_field(body);
+  // the thinking budget (src/engine/think_control.h): budget_tokens is its hard cap, thinking_control can set it too
+  request_think_field(body, r);
   // context_management keeping every turn's thinking (Claude Code: clear_thinking keep "all"): every assistant turn
   // is rendered with its reasoning (Qwen3.6's preserve_thinking), so the prompt of the next request continues what the
   // engine generated whatever comes after it
@@ -394,7 +396,7 @@ ojson messages_usage(const ChatResult& res) {
              {"cache_creation_input_tokens", 0},
              {"cache_read_input_tokens", res.cached_tokens},
              {"output_tokens", res.completion_tokens}};
-  if (res.loops > 0) u["kapitsa"] = kapitsa_usage(res);
+  if (ojson k = kapitsa_usage(res); !k.is_null()) u["kapitsa"] = k;
   return u;
 }
 
