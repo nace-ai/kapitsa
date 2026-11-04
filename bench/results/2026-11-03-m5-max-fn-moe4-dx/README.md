@@ -79,8 +79,9 @@ reads it as committed, the per-Mac default: the code of `c9bea88` but for its co
 
 ## Not run
 
-Flint, whose verify MoE keeps the staged kernels, the other Macs, and the server (`kapitsa serve`, T 0.6). The
-switch with #921's `NI_HC_WIDE`, which main's merge brought into this branch after the A/B: each was measured alone.
+Flint, whose verify MoE keeps the staged kernels, the other Macs, and the server (`kapitsa serve`, T 0.6). The output
+check on `83ad33a` (main's merge, #921's `NI_HC_WIDE` in): it ran on `c9bea88`; on `83ad33a` ran the logged rounds
+(the same 511 tokens in both arms) and `fn_check`.
 
 ## Files
 
