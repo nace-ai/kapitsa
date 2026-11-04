@@ -1054,10 +1054,11 @@ void test_moe4_rows(bool small) {
   for (Buf* b : {&gb, &ub, &db, &sgb, &sub, &sdb}) b->fill_bf16(-0.06f, 0.0f);
   struct { uint32_t D, I, SI, k; float eps; } mp{D, I, SI, k, 1e-6f};
   for (uint32_t R = 1; R <= 4; ++R) {
-    Buf x(R * D), idx(R * k), wts(R * (k + 1)), ya(R * D), yb(R * D), h1((k + 1) * I), hR(R * (k + 1) * I);
+    Buf x(R * D), idx(R * k), wts(R * (k + 1)), ya(R * D), yb(R * D), yd(R * D), h1((k + 1) * I), hR(R * (k + 1) * I);
     Buf ue(64), umask(64), uslot(64), un(4), dummy(64);
     x.fill(-2, 2), wts.fill(0.0f, 0.3f), ya.fill(-1, 1);
     memcpy(yb.f(), ya.f(), R * D * 4);
+    memcpy(yd.f(), ya.f(), R * D * 4);
     for (uint32_t r = 0; r < R; ++r) {  // distinct experts per row, overlapping across rows
       std::vector<uint32_t> pool(E);
       for (uint32_t i = 0; i < E; ++i) pool[i] = i;
@@ -1094,7 +1095,25 @@ void test_moe4_rows(bool small) {
       e.buf(0, dw.b); e.buf(1, ds.b); e.buf(2, db.b); e.buf(3, sdw.b); e.buf(4, sds.b); e.buf(5, sdb.b);
       e.buf(6, hR.b); e.buf(7, idx.b); e.buf(8, wts.b); e.buf(9, yb.b); e.val(10, mp);
     }, R, D / 16, 1, 256);
+    Buf hD(R * (k + 1) * I);
+    run("moe4_gate_up_d", [&](Encoder& e) {  // x read from device memory: the same arithmetic as moe4_gate_up
+      e.buf(0, gw.b); e.buf(1, gs.b); e.buf(2, gb.b); e.buf(3, uw.b); e.buf(4, us.b); e.buf(5, ub.b);
+      e.buf(6, sgw.b); e.buf(7, sgs.b); e.buf(8, sgb.b); e.buf(9, suw.b); e.buf(10, sus.b); e.buf(11, sub.b);
+      e.buf(12, x.b); e.buf(13, hD.b); e.val(14, mp); e.buf(15, ue.b); e.buf(16, umask.b); e.buf(17, uslot.b);
+      e.buf(18, un.b); e.val(19, R);
+    }, R, I / 16, R * k + 1, 256);
+    {
+      char nm2[64];
+      snprintf(nm2, sizeof nm2, "moe4_gate_up_d R=%u == moe4_gate_up", R);
+      report(nm2, memcmp(hR.f(), hD.f(), hR.n * 4) == 0 ? 0.0 : 1.0, 0);
+    }
+    run("moe4_down_d", [&](Encoder& e) {  // h read from device memory: the same arithmetic as moe4_down
+      e.buf(0, dw.b); e.buf(1, ds.b); e.buf(2, db.b); e.buf(3, sdw.b); e.buf(4, sds.b); e.buf(5, sdb.b);
+      e.buf(6, hR.b); e.buf(7, idx.b); e.buf(8, wts.b); e.buf(9, yd.b); e.val(10, mp);
+    }, R, D / 16, 1, 256);
     char nm[64];
+    snprintf(nm, sizeof nm, "moe4_down_d R=%u == moe4_down", R);
+    report(nm, memcmp(yb.f(), yd.f(), size_t(R) * D * 4) == 0 ? 0.0 : 1.0, 0);
     if (small) {
       bool finite = true;
       for (size_t i = 0; i < yb.n; ++i) finite = finite && std::isfinite(yb.f()[i]);

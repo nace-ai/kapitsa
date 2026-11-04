@@ -22,6 +22,20 @@ Pipeline pipe4(const std::string& n) {
   return it->second;
 }
 
+// NI_MOE4_DX (on by default on the M5 Max, where it was measured; 1 on the other Macs, 0 off): the verify MoE's gate/up
+// and down kernels read their row's input (x, 10 KB at Flash-Next's shape; h, 28 KB) from device memory through the
+// caches (moe4_gate_up_d, moe4_down_d: qmv2_rows_dx) instead of staging it in threadgroup memory, whose 28 KB held the
+// down kernel to one threadgroup a core. The same arithmetic, so bitwise the same (fn_check FN_ROWS). M5 Max,
+// Flash-Next: 101.0 -> 98.6 and 64.2 -> 60.4 us a call, decode 22.12 -> 21.83 ms of GPU a cycle
+bool moe4_dx() {
+  static const bool on = [] {
+    const char* v = getenv("NI_MOE4_DX");
+    if (v && *v) return atoi(v) > 0;
+    return Gpu::get().name().find("M5 Max") != std::string::npos;
+  }();
+  return on;
+}
+
 struct HcParams {
   uint32_t R, D, S, has_y, has_inj;
   float eps;
@@ -149,7 +163,7 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
     e.buf(0, ridx_); e.buf(1, ue_); e.buf(2, umask); e.buf(3, uslot); e.buf(4, un_);
     e.val(5, rk);
     e.dispatch(1, 1, 1, 32);
-    e.use(pipe4("moe4_gate_up"));
+    e.use(pipe4(moe4_dx() ? "moe4_gate_up_d" : "moe4_gate_up"));
     e.buf(16, umask); e.buf(17, uslot); e.buf(18, un_);
     e.val(19, Ru);
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
@@ -210,7 +224,7 @@ void Qwen4Exp::enc_moe_exl3_rows(Encoder& e, const Layer& L, int R) {
 void Qwen4Exp::enc_moe4_down(Encoder& e, const Layer& L, int R, const Buffer& idx, const Buffer& wts) {
   const int D = cfg_.hidden, k = cfg_.top_k;
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};
-  e.use(pipe4("moe4_down"));
+  e.use(pipe4(moe4_dx() ? "moe4_down_d" : "moe4_down"));
   e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
   e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
   e.buf(6, eh_); e.buf(7, idx); e.buf(8, wts); e.buf(9, yb_);
