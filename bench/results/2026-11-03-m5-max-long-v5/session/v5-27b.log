@@ -1,0 +1,22 @@
+=== q38-27b-kapitsa-256k-v5 16:43:30 powermode=2 Now drawing from 'AC Power' load={ 2.38 2.14 2.20 } top=27.0 (Renderer);6.3 Helper;2.6 /usr/libexec/dasd;
+[16:43:44] q38-27b-kapitsa-256k-v5:  warm-up prefill~2.9k+decode64: ok (3.64s)
+[16:43:45] q38-27b-kapitsa-256k-v5:  warm-up tools: ok (0.96s)
+[16:44:03] q38-27b-kapitsa-256k-v5: GPU quiet after 19s; benchmarking
+  decode T=0.6: 137.88 tok/s (e2e 137.02; 512 tok, finish=length, d4=0.9249)
+  decode T=0.6: 140.42 tok/s (e2e 138.00; 512 tok, finish=length, d4=0.7072)
+  decode T=0.6: 114.47 tok/s (e2e 113.57; 512 tok, finish=length, d4=0.9402)
+  decode T=0.6: 144.37 tok/s (e2e 142.82; 512 tok, finish=length, d4=0.9581)
+  decode T=0.6: 131.77 tok/s (e2e 132.82; 512 tok, finish=length, d4=0.8512)
+  decode median 137.88 (min 114.47, max 144.37) over 5/5 valid
+  sweep 1000: 1108.0 tok, TTFT 1.49s, 743 tok/s prefill, decode 87.65 tok/s
+  sweep 2000: 2136.5 tok, TTFT 2.73s, 783 tok/s prefill, decode 125.65 tok/s
+  sweep 4000: 4163.0 tok, TTFT 5.13s, 811 tok/s prefill, decode 94.06 tok/s
+  sweep 8000: 8311.5 tok, TTFT 9.53s, 873 tok/s prefill, decode 75.66 tok/s
+  sweep 16000: 16315.5 tok, TTFT 19.35s, 843 tok/s prefill, decode 75.16 tok/s
+  sweep 32000: 32719.5 tok, TTFT 42.04s, 778 tok/s prefill, decode 73.27 tok/s
+  sweep 64000: 65402.0 tok, TTFT 98.39s, 665 tok/s prefill, decode 70.67 tok/s
+  sweep 128000: 131099.5 tok, TTFT 256.79s, 511 tok/s prefill, decode 64.72 tok/s
+  sweep 249051: 258996.5 tok, TTFT 755.63s, 343 tok/s prefill, decode 54.52 tok/s
+  -> <run-root>/v5/results/q38-27b-kapitsa-256k-v5-20261103-164330.json
+[18:06:49] q38-27b-kapitsa-256k-v5: -> <run-root>/v5/results/q38-27b-kapitsa-256k-v5-20261103-164330.json  flags: 19
+=== done 18:06:49

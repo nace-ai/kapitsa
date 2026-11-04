@@ -1,0 +1,50 @@
+[
+ {
+  "label": "q36-35b-kapitsa-256k-v5",
+  "extends": "q36-35b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "4"
+  ],
+  "note": "the long sweep on main 6519dbe (#911: the 35B's tree verify attention staged), four cold requests a size, for the README's context charts",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ },
+ {
+  "label": "q38-27b-kapitsa-256k-v5",
+  "extends": "q38-27b-kapitsa",
+  "cmd_append": [
+   "--ctx",
+   "262144"
+  ],
+  "bench_args": [
+   "--max-ctx",
+   "262144",
+   "--sweep-sizes",
+   "1000,2000,4000,8000,16000,32000,64000,128000,max",
+   "--sweep-task",
+   "code",
+   "--corpus",
+   "<run-root>/bench_corpus_long.txt",
+   "--sweep-repeats",
+   "4"
+  ],
+  "note": "the long sweep on main eee2adb (#916: the 27B's 8-row tree verify on attn8t_partial_tree_g6; #917: 8-row drafting blocks from 16K-token prompts), four cold requests a size, for the README's context charts",
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  }
+ }
+]

@@ -1,0 +1,36 @@
+{
+  "captured_at": "2026-11-04T02:08:57.669243+00:00",
+  "hardware": {
+    "hw.model": "Mac17,6",
+    "machdep.cpu.brand_string": "Apple M5 Max",
+    "hw.memsize": "137438953472",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18"
+  },
+  "gpu": {
+    "_name": "Apple M5 Max",
+    "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+    "spdisplays_vendor": "sppci_vendor_Apple",
+    "sppci_bus": "spdisplays_builtin",
+    "sppci_cores": "40",
+    "sppci_device_type": "spdisplays_gpu",
+    "sppci_model": "Apple M5 Max"
+  },
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4\nBuildVersion:\t\t25E246",
+  "power": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                1 (sleep prevented by Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         10\n tcpkeepalive         1\n powermode            2\n womp                 1",
+  "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=5439587)\t95%; charging; 1:35 remaining present: true",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+  "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+  "python": "Python 3.9.6",
+  "swap_at_capture": "total = 2048.00M  used = 991.69M  free = 1056.31M  (encrypted)",
+  "source_commit": "main 6519dbe (#916; the 35B-A3B), main eee2adb (#917; the 27B)",
+  "source_note": "Each sweep ran a clean Release build of main (the results' provenance: kapitsa_git, binary), every model at its default; the 27B's build was made after the 35B's sweep, in the same checkout.",
+  "build_commands": [
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build -j --target kapitsa"
+  ],
+  "binary_sha256": {
+    "q36-35b-kapitsa-256k-v5": "2b1f46abdcd7b9d8b85d1620eadee228190491d8aa8d223954ecb17a00316a2b",
+    "q38-27b-kapitsa-256k-v5": "dd04ede320a701d3f2f84a46d6ce908629b1c431635c46d692e7f2ccc06c8004"
+  }
+}

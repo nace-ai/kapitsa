@@ -14,10 +14,12 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-1060 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-03 down to 2026-10-16, newest first.
+1062 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-11-03 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-11-03 | – | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | eee2adb | 137.9 | – | – | – | – | – | contention | [q38-27b-kapitsa-256k-v5-20261103-164330](results/2026-11-03-m5-max-long-v5/results/q38-27b-kapitsa-256k-v5-20261103-164330.json) |
+| 2026-11-03 | – | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | 6519dbe | 353.7 | – | – | – | – | – | contention | [q36-35b-kapitsa-256k-v5-20261103-161706](results/2026-11-03-m5-max-long-v5/results/q36-35b-kapitsa-256k-v5-20261103-161706.json) |
 | 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 123.0 | – | – | – | – | – | contention | [dory-k8-old-256-20261103-064838](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-old-256-20261103-064838.json) |
 | 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 121.1 | – | – | – | – | – | contention | [dory-k8-new-256-20261103-063727](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-new-256-20261103-063727.json) |
 | 2026-11-03 | fearampgreed | M5 Max, 128 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | b8960e6+dirty | 124.2 | – | – | – | – | – | contention | [dory-k8-new-20261103-063223](results/2026-11-03-m5-max-dory-attn-k8/harness-ab/results/dory-k8-new-20261103-063223.json) |
