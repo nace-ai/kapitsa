@@ -77,6 +77,8 @@ struct KfParams {
   float rate;
 };
 #ifndef __METAL_VERSION__
+// the log q of a history-lane chain's edge (dfl_hist): an exact float, so the budget's calibration skips those nodes
+constexpr float kHistLq = -7.62939453125e-06f;
 // A lattice's children table (the first-order drafters: DFlash2, LiLiCorr, DSpark): children-row (s * K + p) holds
 // slot s's K candidates after candidate p of slot s - 1 (slot 0: after the root, p = 0); child c's own children-row is
 // (s + 1) * K + c, none past the last slot. Constant for a drafter: filled once.

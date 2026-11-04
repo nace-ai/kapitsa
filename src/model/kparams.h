@@ -273,6 +273,12 @@ struct KfBuild {
   uint32_t K, P, root, pad;
 };
 
+struct DflHist {
+  uint32_t P, nmin, nmax, cap, window;
+  float hlq;
+  uint32_t pad0, pad1;
+};
+
 struct KfAccept {
   uint32_t P, R, gst, pad;
 };

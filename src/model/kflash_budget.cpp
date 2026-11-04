@@ -204,6 +204,15 @@ void KfBudget::eval_wide() {
   wide_pays_ = ew / tw > e8 / (double(nc) * cost8n_);
 }
 
+// NI_DFLASH_HIST on (see DFlash2): the builder's chain edges carry kf::kHistLq and are not calibration data. Off: nothing is skipped.
+static bool hist_lane_on() {
+  static const bool on = [] {
+    const char* h = getenv("NI_DFLASH_HIST");
+    return h && *h && strcmp(h, "0") != 0;
+  }();
+  return on;
+}
+
 void KfBudget::observe(const int32_t* t, double ms) {
   std::lock_guard<std::mutex> lk(mu_);
   // kf_accept's copies (kObs: the next cycle's builder may already have rewritten the descriptor's own words); a
@@ -290,6 +299,7 @@ void KfBudget::observe(const int32_t* t, double ms) {
     if (d < 1 || d > kf::kMaxRows) continue;
     float lq;
     memcpy(&lq, &t[kf::kRecLq + i], 4);
+    if (hist_lane_on() && lq == kf::kHistLq) continue;  // a history-lane edge: not the drafter's probability (#316)
     add_record(d, lq, t[kf::kRecHit + i] != 0);
   }
   refit_tick();

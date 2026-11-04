@@ -1608,6 +1608,76 @@ struct DflSelectParams {
   }
 }
 
+// History lane (#316, NI_DFLASH_HIST): a prompt-lookup chain injected into the lattice's children tables before the
+// builder runs. The last n tokens (n = nmax .. nmin) ending at the anchor are searched in tokens[0 .. P] (latest earlier
+// occurrence within `window` positions); the up-to-`cap` tokens that followed it become a chain: slot d's candidate d
+// (the drafter's own if the token is among its 16, else it takes candidate 15's place in every children-row of the slot)
+// gets log q = hlq on the chain's edge, so the best-first builder takes the chain first and fills the rest of the rows
+// with the drafter's nodes. Rows never exceed the drafter's. grid: 1 x 256.
+struct DflHistP {
+  uint P;       // anchor position (kDflGpu: gst[0])
+  uint nmin, nmax, cap;
+  uint window;
+  float hlq;    // the chain edges' log q (kflash.h kHistLq: the budget does not learn from these nodes)
+  uint pad0, pad1;
+};
+[[kernel]] void dfl_hist(const device int* tokens [[buffer(0)]], const device int* cand_i [[buffer(1)]],
+                         device float* clq [[buffer(2)]], device int* ctok [[buffer(3)]],
+                         constant DflHistP& p [[buffer(4)]], const device uint* gst [[buffer(5)]],
+                         uint tid [[thread_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                         uint sg [[simdgroup_index_in_threadgroup]]) {
+  threadgroup int red[8];
+  threadgroup int found_from;
+  const int P = int(dfl_pos(p.P, gst));
+  if (tid == 0) found_from = -1;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (int n = int(p.nmax); n >= int(p.nmin); --n) {
+    if (P + 1 < n + 1) continue;
+    const int lo = max(0, P + 1 - int(p.window));
+    int best = -1;
+    for (int i = P - n - int(tid); i >= lo; i -= 256) {
+      bool ok = true;
+      for (int j = 0; j < n && ok; ++j) ok = tokens[i + j] == tokens[P + 1 - n + j];
+      if (ok) {
+        best = i;
+        break;
+      }
+    }
+    best = simd_max(best);
+    if (lane == 0) red[sg] = best;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid == 0) {
+      int b = -1;
+      for (int s = 0; s < 8; ++s) b = max(b, red[s]);
+      if (b >= 0 && found_from < 0) found_from = b + n;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (found_from >= 0) break;
+  }
+  if (tid != 0 || found_from < 0) return;
+  const int from = found_from;
+  const int L = min(min(int(p.cap), 7), P - from + 1);
+  int prev = 0;
+  for (int d = 0; d < L; ++d) {
+    const int h = tokens[from + d];
+    int k = -1;
+    for (int c = 0; c < 16; ++c)
+      if (cand_i[d * 16 + c] == h) {
+        k = c;
+        break;
+      }
+    if (k < 0) {
+      k = 15;
+      for (int pp = 0; pp < 16; ++pp) {  // candidate 15 becomes the chain token, valid only after the chain's own parent
+        ctok[(d * 16 + pp) * 16 + 15] = h;
+        if (pp != prev) clq[(d * 16 + pp) * 16 + 15] = -INFINITY;
+      }
+    }
+    clq[(d * 16 + prev) * 16 + k] = p.hlq;
+    prev = k;
+  }
+}
+
 // The shared builder for a GPU-driven drafting pass: the anchor comes from the drafter state (kDflGpu), so the nodes'
 // tokens go to tokens[gst[0] + r]. grid: 1 x 32.
 [[kernel]] void kf_build_gpu(const device float* clq [[buffer(0)]], const device int* ctok [[buffer(1)]],
@@ -1923,5 +1993,92 @@ struct DflPermParams {
   if (lane == 0) {
     tv[o] = acc;
     ti[o] = ids[k];
+  }
+}
+
+// ---- #316 idea 3: online update of the candidate selector's codebooks from the verify's outcome (NI_DFLASH_SELUPD) ----
+// Runs in the verify's command buffer right after kf_accept, while sel / cand_i / cand_v still hold the draft this
+// cycle verified. For each lattice position p on the accepted path (p = 0 .. min(a, nslots - 1); the last one is the
+// verify's own bonus / correction token) the target's token y = tokens[P + 1 + p] is the label, pred = the token before
+// it (the anchor for p = 0), and the softmax over the position's 16 candidates, S_k = cv[k] + B[ci_k] . (A[pred] * s),
+// scaled by tau_p = tau (1 + 0.1 p), takes one step of cross-entropy SGD on the fp32 master rows (gradient g_k = (q_k -
+// [k = w]) / tau_p): the 16 successor rows B[ci_k] and the predecessor row A[pred] (from the B rows before the step).
+// The touched rows are rounded to bf16 (nearest even) into the live codebooks dfl_lattice reads, so the next drafting
+// pass uses them. Positions run in order inside the one threadgroup (later ones see earlier updates). One thread owns
+// one embedding dim r, so no two threads touch the same element. grid: 1 threadgroup x 256.
+struct DflSelUpdP {
+  float lr;
+  float tau;     // position p uses tau * (1 + 0.1 p)
+  uint nslots;   // lattice positions (block - 1)
+  uint V;        // codebook rows
+};
+NI_INLINE ushort dfl_bf16_rne(float x) {
+  const uint u = as_type<uint>(x);
+  return ushort((u + 0x7fffu + ((u >> 16) & 1u)) >> 16);
+}
+[[kernel]] void dfl_sel_update(const device int* cand_i [[buffer(0)]], const device float* cand_v [[buffer(1)]],
+                               const device float* sel [[buffer(2)]], const device int* tokens [[buffer(3)]],
+                               const device int* tree [[buffer(4)]], const device uint* gst [[buffer(5)]],
+                               device float* Am [[buffer(6)]], device float* Bm [[buffer(7)]],
+                               device ushort* cbA [[buffer(8)]], device ushort* cbB [[buffer(9)]],
+                               constant DflSelUpdP& p [[buffer(10)]], uint r [[thread_position_in_threadgroup]],
+                               uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[8 * 16];
+  const uint P = gst[2];
+  const uint a = uint(max(tree[kKfA], 0));
+  const uint last = min(a, p.nslots - 1u);
+  for (uint pp = 0; pp <= last; ++pp) {
+    const int y = tokens[P + 1 + pp];
+    const uint pred = uint(pp == 0 ? tokens[P] : tokens[P + pp]);
+    int ci[16];
+    float cv[16];
+    uint w = 16;
+    bool ok = pred < p.V;
+    for (uint k = 0; k < 16; ++k) {
+      ci[k] = cand_i[pp * 16 + k];
+      cv[k] = cand_v[pp * 16 + k];
+      if (ci[k] == y && w == 16) w = k;
+      ok = ok && uint(ci[k]) < p.V;
+    }
+    if (w == 16 || !ok) continue;  // the label is not among the candidates: nothing to learn (uniform over the group)
+    const float s = sel[(pp + 1) * 256 + r];
+    const float ap = Am[size_t(pred) * 256 + r];
+    const float aps = ap * s;
+    float b[16];
+    for (uint k = 0; k < 16; ++k) {
+      b[k] = Bm[size_t(ci[k]) * 256 + r];
+      const float d = simd_sum(aps * b[k]);
+      if (lane == 0) red[sg * 16 + k] = d;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    float S[16];
+    float mx = -INFINITY;
+    for (uint k = 0; k < 16; ++k) {
+      float d = 0.0f;
+      for (uint g = 0; g < 8; ++g) d += red[g * 16 + k];
+      S[k] = cv[k] + d;
+      mx = max(mx, S[k]);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);  // red is rewritten by the next position
+    if (!(mx > -INFINITY)) continue;                  // every score -inf / NaN: no usable gradient (uniform)
+    const float tau = p.tau * (1.0f + 0.1f * float(pp));
+    float q[16], tot = 0.0f;
+    for (uint k = 0; k < 16; ++k) {
+      q[k] = metal::precise::exp((S[k] - mx) / tau);
+      tot += q[k];
+    }
+    float da = 0.0f;
+    for (uint k = 0; k < 16; ++k) {
+      const float g = (q[k] / tot - (k == w ? 1.0f : 0.0f)) / tau;
+      da += g * b[k];
+      const float nb = b[k] - p.lr * g * aps;
+      const size_t o = size_t(ci[k]) * 256 + r;
+      Bm[o] = nb;
+      cbB[o] = dfl_bf16_rne(nb);
+    }
+    const float na = ap - p.lr * da * s;
+    const size_t oa = size_t(pred) * 256 + r;
+    Am[oa] = na;
+    cbA[oa] = dfl_bf16_rne(na);
   }
 }

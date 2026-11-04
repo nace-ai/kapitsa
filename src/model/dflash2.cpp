@@ -225,8 +225,8 @@ void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out) {
   }
 }
 
-const Tensor* DFlash2::own(const Tensor& t, const char* label) {
-  Buffer b = Gpu::get().alloc(t.buf.size, label, /*tracked=*/false);
+const Tensor* DFlash2::own(const Tensor& t, const char* label, bool tracked) {
+  Buffer b = Gpu::get().alloc(t.buf.size, label, tracked);
   memcpy(b.ptr(), t.buf.ptr(), t.buf.size);
   owned_bufs_.push_back(b);
   resident_ += b.size;
@@ -437,8 +437,38 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     hnorm_ = own(expect("hidden_norm.weight", {H}), "dfl_norm");
     norm_ = own(expect("norm.weight", {H}), "dfl_norm");
     if (!v1) {
-      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
-      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
+      // NI_DFLASH_SELUPD=<lr>: the codebooks the GPU rewrites after each tree verify (dfl_sel_update) are tracked
+      // buffers, so the next drafting pass's reads wait for the writes; with it off they stay untracked, as before
+      const char* su = getenv("NI_DFLASH_SELUPD");
+      selupd_lr_ = su && *su ? float(atof(su)) : 0.0f;
+      if (!(selupd_lr_ > 0.0f)) selupd_lr_ = 0.0f;
+      const char* st = getenv("NI_DFLASH_SELUPD_TAU");
+      if (st && *st && atof(st) > 0) selupd_tau_ = float(atof(st));
+      const bool upd = selupd_lr_ > 0.0f;
+      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook", upd);
+      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook", upd);
+      if (upd) {  // fp32 masters of both codebooks: 2 x V x 256 x 4 B (about 0.5 GB at V = 248K), only when asked for
+        const size_t n = size_t(V) * kRank;
+        selupd_A_ = Gpu::get().alloc(n * 4, "dfl_selupd_A");
+        selupd_B_ = Gpu::get().alloc(n * 4, "dfl_selupd_B");
+        owned_bufs_.push_back(selupd_A_);
+        owned_bufs_.push_back(selupd_B_);
+        resident_ += selupd_A_.size + selupd_B_.size;
+        for (int c = 0; c < 2; ++c) {
+          const uint16_t* src = (c ? cbB_ : cbA_)->buf.as<uint16_t>();
+          uint32_t* dst = (c ? selupd_B_ : selupd_A_).as<uint32_t>();
+          for (size_t i = 0; i < n; ++i) dst[i] = uint32_t(src[i]) << 16;  // bf16 -> fp32 is exact
+        }
+        logi("DFlash2: online selector update on (NI_DFLASH_SELUPD lr %g, tau %g; fp32 masters %.0f MB)", selupd_lr_,
+             selupd_tau_, 2.0 * double(n) * 4 / 1048576.0);
+      }
+    }
+    if (const char* h = getenv("NI_DFLASH_HIST"); h && *h && strcmp(h, "0")) {
+      int a = 3, b = 8, c = 4;
+      if (sscanf(h, "%d,%d,%d", &a, &b, &c) < 1) a = 3;
+      hist_nmin_ = std::clamp(a, 1, 8); hist_nmax_ = std::clamp(b, hist_nmin_, 8); hist_cap_ = std::clamp(c, 1, 7);
+      hist_ = true;
+      logi("DFlash2: history lane on (n %d..%d, up to %d tokens)", hist_nmin_, hist_nmax_, hist_cap_);
     }
     // k|v of every layer stacked: one GEMM projects a committed context row for all layers.
     std::vector<const Tensor*> kv_parts;
@@ -2078,6 +2108,14 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       e.use(dpipe("dfl_kf_table"));
       e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, edges_); e.buf(3, kf_clq_); e.buf(4, kf_tok_);
       e.dispatch(D * 16, 1, 1, 32);
+      if (hist_) {  // #316: the history lane (dfl_hist) edits the children tables the builder reads
+        const kp::DflHist hp{Pk, uint32_t(hist_nmin_), uint32_t(hist_nmax_), uint32_t(hist_cap_), 16384u, kf::kHistLq, 0u, 0u};
+        e.use(dpipe("dfl_hist"));
+        e.buf(0, s.tok); e.buf(1, cand_i_); e.buf(2, kf_clq_); e.buf(3, kf_tok_);
+        e.val(4, hp);
+        e.buf(5, gst_);
+        e.dispatch(1, 1, 1, 256);
+      }
       KfParams kp{};
       kf_budget_->write(kp);
       // the verify's capacity this cycle: the budget's (8, or the widest count when the per-cycle choice among them
@@ -2176,6 +2214,16 @@ void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const Sampli
     e.val(4, ap);
     e.buf(5, kf_live_); e.buf(6, s.pend_path); e.buf(7, gst_);
     e.dispatch(1, 1, 1, 32);
+    // #316 idea 3: this cycle's draft (sel_, cand_i_, cand_v_: the next drafting half is committed after this verify) against
+    // what the verify accepted; not a grammar-masked cycle's (its acceptance is distorted, as for the budget's observe())
+    if (selupd_lr_ > 0.0f && s.mask_rows == 0) {
+      struct SelUpd { float lr, tau; uint32_t nslots, V; } up{selupd_lr_, selupd_tau_, uint32_t(block() - 1), uint32_t(cfg_.vocab)};
+      e.use(dpipe("dfl_sel_update"));
+      e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, sel_); e.buf(3, s.tok); e.buf(4, tree_buf_); e.buf(5, gst_);
+      e.buf(6, selupd_A_); e.buf(7, selupd_B_); e.buf(8, cbA_->buf); e.buf(9, cbB_->buf);
+      e.val(10, up);
+      e.dispatch(1, 1, 1, 256);
+    }
     tg_.encode_kv_tree_compact(e, s, P, tree_buf_);
     s.pend_tree = true;
     gst_tree_ = true;

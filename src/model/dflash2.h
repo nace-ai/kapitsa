@@ -341,7 +341,7 @@ class DFlash2 {
   };
 
   void load_config(const std::string& dir);
-  const Tensor* own(const Tensor& t, const char* label);
+  const Tensor* own(const Tensor& t, const char* label, bool tracked = false);
   QLinear quantize(const std::vector<const Tensor*>& parts, const char* label, const std::vector<uint32_t>& perm = {});
   QLinear row_view(const QLinear& src, uint32_t r0, uint32_t n);
   void alloc_buffers();
@@ -384,6 +384,10 @@ class DFlash2 {
   const Tensor *hnorm_ = nullptr, *norm_ = nullptr, *cbA_ = nullptr, *cbB_ = nullptr, *kn_all_ = nullptr;
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
+  // #316 idea 3 (NI_DFLASH_SELUPD=<lr>, unset or 0: off): fp32 master copies of the selector's codebooks, updated on the
+  // GPU after each tree verify (dfl_sel_update); the bf16 codebooks the lattice reads are then tracked buffers
+  Buffer selupd_A_, selupd_B_;
+  float selupd_lr_ = 0.0f, selupd_tau_ = 1.3f;
   Buffer inv_freq_;
 
   CaptureHook hook_pf_, hook_vf_;
@@ -412,6 +416,8 @@ class DFlash2 {
   // KFlash (see tree()): the tree descriptor (int32 [kf::kWords]), the lattice's children tables (clq float
   // [7][16][16], ctok int, the constant successors), the builder's live-row word, the budget
   bool tree_ = false;
+  bool hist_ = false;  // #316 NI_DFLASH_HIST=<nmin>,<nmax>,<cap>: the history lane (dfl_hist)
+  int hist_nmin_ = 3, hist_nmax_ = 8, hist_cap_ = 4;
   bool gst_tree_ = false;  // the drafter state's rows are a tree acceptance's path (gst[4 ..]): commits gather them
   int tree_rows_ = kB;     // the widest allowed verify (the budget's max rows)
   int tree_cap_ = kB;      // the verify capacity of the cycle being drafted (tree_rows_ unless the context is short)
