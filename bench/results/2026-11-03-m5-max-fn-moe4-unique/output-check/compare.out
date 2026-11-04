@@ -1,0 +1,15 @@
+prefill: 8 records (qwen3.8-flash-next-4bit)
+  reference: 0.2.26 (d93297d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.26 (d93297d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+no noise floor for this model and no bounds given: reported only (tools/logit_floor.py measures one)
+step: 192 records (qwen3.8-flash-next-4bit)
+  reference: 0.2.26 (d93297d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.26 (d93297d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+no noise floor for this model and no bounds given: reported only (tools/logit_floor.py measures one)
+verify: 192 records (qwen3.8-flash-next-4bit)
+  reference: 0.2.26 (d93297d), verify "MTP cycle's chain of 3 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.26 (d93297d), verify "MTP cycle's chain of 3 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+no noise floor for this model and no bounds given: reported only (tools/logit_floor.py measures one)
