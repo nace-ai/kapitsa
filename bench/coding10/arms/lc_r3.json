@@ -1,0 +1,1 @@
+{"name": "lc_r3", "system": "@../littlecoder/system.md", "task_template": "@../littlecoder/task.txt", "tools": "@../littlecoder/tools_wr.json", "tool_runtime": "littlecoder", "text_tool_fallback": true, "max_turns": 4, "temperature": 0.7, "max_tokens": 4096, "thinking_budget": null, "self_test_retries": 1, "retry_style": "lc", "thinking": false, "top_p": 0.8, "top_k": 20}

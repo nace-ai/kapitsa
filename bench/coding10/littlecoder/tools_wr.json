@@ -1,0 +1,46 @@
+[
+ {
+  "type": "function",
+  "function": {
+   "name": "write_file",
+   "description": "Create a NEW file with the given content. Refused if the file already exists: use edit_file to change an existing file.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string",
+      "description": "File name inside the task directory, e.g. solution.py. Use the EXACT name given in the task."
+     },
+     "content": {
+      "type": "string",
+      "description": "Full file content."
+     }
+    },
+    "required": [
+     "path",
+     "content"
+    ]
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "run_python",
+   "description": "Run Python 3 and return the exit code plus stdout+stderr (10 s timeout). Pass `code` to run a snippet (it can `from solution import ...`; put asserts or prints in it to test your function), or `path` to run a .py file from the task directory such as a test file.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string",
+      "description": "Python source to run. Use this OR path."
+     },
+     "path": {
+      "type": "string",
+      "description": "A .py file in the task directory to run. Use this OR code."
+     }
+    }
+   }
+  }
+ }
+]
