@@ -4577,7 +4577,15 @@ void Engine::remember_reply(const ChatRequest& r, const ChatResult& res) {
   while (answered_.size() > kAnswered) answered_.pop_front();
 }
 
-DraftResult Engine::draft(const std::string& after, const std::string& text) {
+std::shared_ptr<const AnsweredReply> draft_conversation(const std::deque<std::shared_ptr<const AnsweredReply>>& answered,
+                                                        const std::string& key, const std::string& after) {
+  const std::string want = content_text(ojson(after));
+  for (auto it = answered.rbegin(); it != answered.rend(); ++it)
+    if ((key.empty() || (*it)->r.cache_key == key) && (*it)->reply == want) return *it;
+  return nullptr;
+}
+
+DraftResult Engine::draft(const std::string& key, const std::string& after, const std::string& text) {
   const double t0 = now_ms();
   DraftResult out;
   auto done = [&](const char* status) {  // (nothing read)
@@ -4593,10 +4601,8 @@ DraftResult Engine::draft(const std::string& after, const std::string& text) {
   // ---- the conversation: the newest remembered reply whose text is `after` ----
   std::shared_ptr<const Answered> a;
   {
-    const std::string want = content_text(ojson(after));
     std::lock_guard<std::mutex> lk(answered_mu_);
-    for (auto it = answered_.rbegin(); it != answered_.rend() && !a; ++it)
-      if ((*it)->reply == want) a = *it;
+    a = draft_conversation(answered_, key, after);
   }
   if (!a) return done("no_conversation");
 

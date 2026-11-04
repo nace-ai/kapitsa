@@ -296,6 +296,21 @@ bool preserve_thinking_template(const std::string& template_source);
 void default_preserve_thinking(ChatRequest& r, bool enabled);
 TextTags text_tags_for(const Tokenizer& tok, const std::string& template_source);
 
+// A reply the server sent that ended with "stop" (Engine::remember_reply): a conversation a draft can read ahead in.
+struct AnsweredReply {
+  ChatRequest r;                 // the request (its image parts without their data; r.cache_key: the conversation's key)
+  std::string content, reasoning;
+  std::string reply;             // content, trimmed (what `after` is compared with)
+  int slot = -1;
+  uint64_t slot_gen = 0;         // the slot's use count at the reply: another request on it since changes it
+  std::shared_ptr<const std::vector<vision::Prepared>> images;
+};
+// The conversation a draft reads ahead in (Engine::draft; CPU only: tools/api_test checks it): of `answered` (oldest
+// first), the newest whose reply is `after` (both trimmed) and, if `key` is not empty, whose request's prompt_cache_key
+// is `key` (two chats can end in the same text), or null.
+std::shared_ptr<const AnsweredReply> draft_conversation(const std::deque<std::shared_ptr<const AnsweredReply>>& answered,
+                                                        const std::string& key, const std::string& after);
+
 // What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).
 struct DraftResult {
   std::string status;  // prefilled unchanged interrupted busy no_conversation unsupported no_room
@@ -402,8 +417,8 @@ class Engine {
   // that ended with "stop" are the conversations draft() can read ahead in.
   void remember_reply(const ChatRequest& r, const ChatResult& res);
   // Read ahead (POST /v1/draft): while the user types the next message of a conversation, its prompt is read as far
-  // as the draft goes, so that the request, once sent, prefills only what was typed since. `after`: the text of the
-  // conversation's last assistant reply (the most recent remembered reply whose content equals it, both trimmed);
+  // as the draft goes, so that the request, once sent, prefills only what was typed since. `key`: the conversation's
+  // prompt_cache_key ("" if its requests send none); `after`: the text of its last assistant reply (draft_conversation);
   // `text`: the draft so far. The prompt is draft_prompt's, read less its last token (as after prefill_history, the
   // request's own prefill reads that one). A checkpoint where the user's turn starts (the conversation as the history
   // prefill leaves it: where a request without drafts starts; with the drafter's context) is kept first, so a draft
@@ -411,7 +426,7 @@ class Engine {
   // the draft, continued by a later draft or by the request whose prompt extends it (chat()). Only while the server
   // is idle; a request that arrives stops it at the next chunk boundary. The Qwen3.5 family (DFlash2, DFlash, the MTP
   // head or none); other models answer "unsupported".
-  DraftResult draft(const std::string& after, const std::string& text);
+  DraftResult draft(const std::string& key, const std::string& after, const std::string& text);
   // KFlash: the budgets' cost tables and calibrations (KfBudget) to their cache files now. They are saved when the
   // engine ends and every KfBudget::kSaveEvery cycles between requests; a server stopped by a signal ends no
   // destructor, so it calls this. From any thread, with requests running.
@@ -642,14 +657,7 @@ class Engine {
   std::condition_variable bcv_;
   std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)
   // remember_reply: the recent replies that ended with "stop" (newest last), for draft()
-  struct Answered {
-    ChatRequest r;                 // the request (its image parts without their data)
-    std::string content, reasoning;
-    std::string reply;             // content, trimmed (what `after` is compared with)
-    int slot = -1;
-    uint64_t slot_gen = 0;         // the slot's use count at the reply: another request on it since changes it
-    std::shared_ptr<const std::vector<vision::Prepared>> images;
-  };
+  using Answered = AnsweredReply;
   static constexpr size_t kAnswered = 32;
   std::deque<std::shared_ptr<const Answered>> answered_;
   std::mutex answered_mu_;

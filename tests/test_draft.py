@@ -125,11 +125,13 @@ class Server:
         self.log.close()
 
 
-def chat(messages, max_tokens=160, on_first=None):
+def chat(messages, max_tokens=160, on_first=None, key=None):
     """(content, usage, time to first token, finish reason) of a streamed greedy chat completion; on_first() is called
-    at its first token"""
+    at its first token; key: its prompt_cache_key"""
     body = {"messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True,
             "stream_options": {"include_usage": True}, "chat_template_kwargs": {"enable_thinking": False}}
+    if key is not None:
+        body["prompt_cache_key"] = key
     req = urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     t0, first, text, usage, finish = time.time(), None, "", None, None
@@ -352,8 +354,8 @@ def functional(tmp, log):
     finally:
         s.stop()
 
-    # 3. statuses
-    s = Server(tmp, log)
+    # 3. statuses (two slots: the keyed case keeps two conversations)
+    s = Server(tmp, log, ("--slots", "2"))
     try:
         conv = conversation()
         a, _ = first_turn(s, conv)
@@ -362,6 +364,24 @@ def functional(tmp, log):
               "the same draft again: unchanged", [r1, r2])
         check(draft("an answer this server never wrote", SHORT)[1]["status"] == "no_conversation",
               "another `after`: no_conversation")
+        # two conversations ending in the same text (#297: a chat and a side request both answered "ready"): the key
+        # picks which one the draft continues; without it, the newer
+        say = "Reply with exactly one word: ready."
+        long_conv = conv[:-1] + [{"role": "user", "content": conv[-1]["content"] + "\n\n" + say}]
+        rl = chat(long_conv, max_tokens=8, key="chat-long")[0]
+        rs = chat([{"role": "user", "content": say}], max_tokens=8, key="side-short")[0]
+        if rl.strip() != rs.strip():
+            check(False, "both conversations end in the same text (the case needs it)", [rl, rs])
+        else:
+            dl, ds, dn = (draft(rl, SHORT, prompt_cache_key=k)[1] for k in ("chat-long", "side-short", None))
+            check(dl["status"] == "prefilled" and ds["status"] == "prefilled" and
+                  dl["prompt_tokens"] > ds["prompt_tokens"] + 1000,
+                  "the key picks its conversation: the long chat's draft reads its ~3,000 tokens, the side request's not",
+                  [dl, ds])
+            check(dn["prompt_tokens"] == ds["prompt_tokens"], "no key: the newer of the two (as before keys)", dn)
+            check(draft(rl, SHORT, prompt_cache_key="never-sent")[1]["status"] == "no_conversation" and
+                  draft(rl, SHORT, prompt_cache_key=7)[0] == 400,
+                  "an unknown key: no_conversation, not the other chat; a key that is not a string: 400")
         check(draft(a, SHORT, think=True)[0] == 400 and draft(a, SHORT, think=False)[0] == 200 and
               draft(a, None)[0] == 400, "400: \"think\": true (not supported yet), no \"text\"")
         writing = threading.Event()

@@ -134,6 +134,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     if (b.contains(name) && b[name].is_number()) *field = b[name];
   if (b.contains("ignore_eos") && b["ignore_eos"].is_boolean()) r.ignore_eos = b["ignore_eos"];
   if (b.contains("cache_salt")) r.cache_salt = b["cache_salt"];
+  if (b.contains("prompt_cache_key") && b["prompt_cache_key"].is_string()) r.cache_key = b["prompt_cache_key"];
   if (b.contains("seed") && b["seed"].is_number()) r.seed = uint32_t(b["seed"].get<int64_t>());
   // the Splash backend's seed, as Splash's frontend.py:1153-1162 reads it: absent or -1 random, another integer in
   // [-2^63, 2^64) its 64 bits, anything else refused. JSON integers outside that range parse here as floats, as do 5.0 and 1e3.
@@ -1613,6 +1614,9 @@ static int serve(int argc, char** argv, int first) {
         !body["text"].is_string())
       return bad("a draft needs \"after\" (the conversation's last assistant reply) and \"text\" (the draft), as "
                  "strings");
+    if (body.contains("prompt_cache_key") && !body["prompt_cache_key"].is_string())
+      return bad("\"prompt_cache_key\" (the conversation's, as its requests send it) must be a string");
+    const std::string key = body.value("prompt_cache_key", std::string());
     if (body.contains("think") && !(body["think"].is_boolean() && !body["think"].get<bool>()))
       return bad("\"think\" (reasoning ahead) is not supported yet");
     auto reply = [&](const DraftResult& d) {
@@ -1636,7 +1640,7 @@ static int serve(int argc, char** argv, int first) {
       d.status = err.code == ModelManager::Error::Code::Busy ? "busy" : "no_conversation";
       return reply(d);
     }
-    reply(guard->engine().draft(body["after"].get<std::string>(), body["text"].get<std::string>()));
+    reply(guard->engine().draft(key, body["after"].get<std::string>(), body["text"].get<std::string>()));
   });
 
   if (const std::string why = bind_server(srv, host, port); !why.empty()) return fail(why);

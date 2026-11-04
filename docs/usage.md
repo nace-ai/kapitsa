@@ -527,7 +527,10 @@ curl http://127.0.0.1:8000/v1/draft -H 'Content-Type: application/json' -d '{"mo
 ```
 
 - **Which conversation.** The most recent of the last 32 replies the server ended with `stop` (any API) whose text
-  equals `after`, both trimmed: the app sends no conversation id, only the reply and the draft.
+  equals `after`, both trimmed. With `"prompt_cache_key"` (OpenAI's conversation id, as the conversation's chat
+  completions or responses requests send it), only a reply to a request with that key: two conversations that both
+  ended with "Done." each warm their own. A key no remembered reply carries, or whose conversation ended otherwise,
+  is `no_conversation`, never another conversation's reply.
 - **What is read.** The next request as the server will render it (the conversation, that reply as clients send it
   back), then the user's turn holding the draft up to its last whitespace (the word being typed can still grow), less
   its last token. First a checkpoint is kept where the user's turn starts (where a request without drafts starts),

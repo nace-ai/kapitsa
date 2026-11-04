@@ -1799,6 +1799,33 @@ void draft_checks(const TmplModel& m, const std::string& tag) {
   }
 }
 
+// Which conversation a draft reads ahead in (draft_conversation, POST /v1/draft): the one its prompt_cache_key names,
+// not the newest that ended with the same text. CPU only. (#297: a chat and a side request both answered "ready", and
+// the drafts warmed the side request's 958 tokens instead of the chat's 2,656.)
+void draft_conversation_unit() {
+  std::deque<std::shared_ptr<const AnsweredReply>> seen;
+  auto add = [&](const std::string& key, const std::string& reply) {
+    auto a = std::make_shared<AnsweredReply>();
+    a->r.cache_key = key;
+    a->content = a->reply = reply;
+    seen.push_back(a);
+    return a;
+  };
+  const auto chat = add("chat-1", "ready");
+  const auto side = add("side-7", "ready");     // newer, the same text
+  const auto bare = add("", "Done.");           // a client that sends no key
+  const auto other = add("chat-2", "Sure.");
+  check(draft_conversation(seen, "chat-1", "ready") == chat, "draft: the key picks its chat, not a newer reply of the same text");
+  check(draft_conversation(seen, "side-7", " ready\n") == side, "draft: the key and the trimmed text pick the side request");
+  check(draft_conversation(seen, "", "ready") == side, "draft: no key, the newest reply of that text (as before)");
+  check(draft_conversation(seen, "", "Done.") == bare, "draft: no key, a reply sent without one");
+  check(draft_conversation(seen, "chat-2", "ready") == nullptr,
+        "draft: the key's conversation ends otherwise: none (its last reply is not `after`)");
+  check(draft_conversation(seen, "chat-9", "ready") == nullptr, "draft: an unknown key: none, not another chat's");
+  check(draft_conversation(seen, "chat-3", "Done.") == nullptr, "draft: a key never picks a reply sent without one");
+  (void)other;
+}
+
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs
 // parse them from a fake server): <name>.sse (a stream, with keepalives), <name>.json (a response body), <name>.status
 // (an error's)
@@ -2147,6 +2174,7 @@ int main(int argc, char** argv) {
   clover_unit();
   norm_layout_unit();
   drafter_report_unit();
+  draft_conversation_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
