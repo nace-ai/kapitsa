@@ -1,0 +1,1 @@
+Regenerate the report: `python3 gen_report.py > REPORT.md && python3 md2html.py REPORT.md > REPORT.html` (reads `harness-runs*/results/*.json` and `ac.log` here and the poster cells from `tools/readme_images/readme_images.json`; `valid.py` is the verdict rule).
