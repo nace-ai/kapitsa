@@ -1,0 +1,33 @@
+q35 round 1 old 'AC Power' load 1.25 | prompt 4096 tok in 705 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 1 new 'AC Power' load 0.91 | prompt 4096 tok in 692 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 2 new 'AC Power' load 0.99 | prompt 4096 tok in 691 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 2 old 'AC Power' load 1.06 | prompt 4096 tok in 705 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 3 old 'AC Power' load 1.30 | prompt 4096 tok in 706 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 3 new 'AC Power' load 1.29 | prompt 4096 tok in 690 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 4 new 'AC Power' load 1.06 | prompt 4096 tok in 693 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 4 old 'AC Power' load 1.47 | prompt 4096 tok in 708 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 5 old 'AC Power' load 1.27 | prompt 4096 tok in 709 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 5 new 'AC Power' load 1.17 | prompt 4096 tok in 693 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 6 new 'AC Power' load 1.28 | prompt 4096 tok in 693 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+q35 round 6 old 'AC Power' load 0.98 | prompt 4096 tok in 706 ms | 2.739 tok/cycle | ids df502d38a9f996d13704f695e88168b2
+clover round 1 old 'AC Power' load 0.73 | prompt 4096 tok in 705 ms | 4.846 tok/cycle | ids d0ce320c794c95b1e3e99a9b1cae1225
+clover round 1 new 'AC Power' load 1.06 | prompt 4096 tok in 692 ms | 4.846 tok/cycle | ids d0ce320c794c95b1e3e99a9b1cae1225
+clover round 2 new 'AC Power' load 1.03 | prompt 4096 tok in 692 ms | 4.846 tok/cycle | ids d0ce320c794c95b1e3e99a9b1cae1225
+clover round 2 old 'AC Power' load 1.50 | prompt 4096 tok in 705 ms | 4.846 tok/cycle | ids d0ce320c794c95b1e3e99a9b1cae1225
+q4b round 1 old 'AC Power' load 1.25 | prompt 4096 tok in 667 ms | 7.000 tok/cycle | ids 89d3a956eac9cefbea8a260b89b1883f
+q4b round 1 new 'AC Power' load 0.93 | prompt 4096 tok in 648 ms | 7.000 tok/cycle | ids 89d3a956eac9cefbea8a260b89b1883f
+q4b round 2 new 'AC Power' load 0.89 | prompt 4096 tok in 647 ms | 7.000 tok/cycle | ids 89d3a956eac9cefbea8a260b89b1883f
+q4b round 2 old 'AC Power' load 0.85 | prompt 4096 tok in 666 ms | 7.000 tok/cycle | ids 89d3a956eac9cefbea8a260b89b1883f
+q9b round 1 old 'AC Power' load 0.80 | prompt 4096 tok in 1387 ms | 7.000 tok/cycle | ids 8d2782c2143309b3f79d87f27f98563a
+q9b round 1 new 'AC Power' load 0.64 | prompt 4096 tok in 1342 ms | 7.000 tok/cycle | ids 8d2782c2143309b3f79d87f27f98563a
+q9b round 2 new 'AC Power' load 0.87 | prompt 4096 tok in 1343 ms | 7.000 tok/cycle | ids 8d2782c2143309b3f79d87f27f98563a
+q9b round 2 old 'AC Power' load 0.94 | prompt 4096 tok in 1387 ms | 7.000 tok/cycle | ids 8d2782c2143309b3f79d87f27f98563a
+q27 round 1 old 'AC Power' load 0.96 | prompt 4096 tok in 3650 ms | 5.250 tok/cycle | ids 21bb1f97f68f535964bb8392eb843a89
+q27 round 1 new 'AC Power' load 1.02 | prompt 4096 tok in 3600 ms | 5.250 tok/cycle | ids 21bb1f97f68f535964bb8392eb843a89
+q27 round 2 new 'AC Power' load 1.04 | prompt 4096 tok in 3603 ms | 5.250 tok/cycle | ids 21bb1f97f68f535964bb8392eb843a89
+q27 round 2 old 'AC Power' load 0.93 | prompt 4096 tok in 3644 ms | 5.250 tok/cycle | ids 21bb1f97f68f535964bb8392eb843a89
+q27 round 3 old 'AC Power' load 1.17 | prompt 4096 tok in 3648 ms | 5.250 tok/cycle | ids 21bb1f97f68f535964bb8392eb843a89
+q27 round 3 new 'AC Power' load 0.99 | prompt 4096 tok in 3601 ms | 5.250 tok/cycle | ids 21bb1f97f68f535964bb8392eb843a89
+== output check qwen3.6-35b-a3b-4bit: exit 0 4 paths identical
+== output check qwen3.8-27b-4bit-mtp: exit 0 4 paths identical
+done

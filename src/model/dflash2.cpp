@@ -44,6 +44,7 @@ static double footprint_gb() {
 static Pipeline dpipe(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
+  if (it == cache.end() && n.rfind("qmt", 0) == 0) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
   if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   return it->second;
 }
@@ -1373,9 +1374,21 @@ void DFlash2::enc_qmm8_cp(Encoder& e, const QLinear& L, const Tensor* base, cons
   }
 }
 
-// Prefill-size GEMM (context commit of the prompt): the target's prefill kernels, half X rows.
+// Prefill-size GEMM (context commit of the prompt): the target's prefill kernels, half X rows. 4-bit group-64 weights
+// at 64 rows or more take the target's tensor tile (qmt_m64_n64) where it runs (qmt_on(): the M5 family on macOS 26):
+// the 35B's commit of a 4K prompt, fc_ (2048 x 16384) and kv_all_ (12288 x 2048) on 512-row blocks, ran on the original
+// simdgroup kernels at 12-13 TFLOP/s (the tile: 41-44). Only the drafter's context moves (the K reduction's order): the target's
+// outputs are the verify's, so its tokens do not change.
 void DFlash2::enc_qmm_rows(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M) {
   const bool big = M >= 64;
+  if (big && qmt_on() && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+    e.use(dpipe("qmt_m64_n64"));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 63) / 64, 1, 128);
+    return;
+  }
   const int BM = big ? 64 : 32, BN = big ? 64 : 32;
   const std::string n = "qmm_b" + std::to_string(L.bits) + (big ? "_m64_n64" : "_m32_n32");
   e.use(dpipe(n));

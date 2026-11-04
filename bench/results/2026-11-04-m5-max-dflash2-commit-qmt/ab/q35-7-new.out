@@ -1,0 +1,24 @@
+[kapitsa] read 19.51 GB of weights in 837 ms (23.3 GB/s)
+[kapitsa] read 0.58 GB of weights in 80 ms (7.3 GB/s)
+[kapitsa] MTP head loaded in 75 ms (MoE, trunk hidden pre-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] prewarmed 96 prefill pipelines in 10 ms
+[kapitsa] loaded ~/models/qwen3.6-35b-a3b-4bit: 40 layers, MoE, 19.5 GB mapped in 1123 ms; weights 4-bit group 64 100%, 8-bit group 64 0%
+[kapitsa] read 1.05 GB of weights in 50 ms (21.1 GB/s)
+[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 113 MB
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash2 drafter ~/models/qwen3.6-35b-a3b-4bit/dflash2: 6 layers, hidden 2048, 4-bit projections, 0.63 GB resident (process footprint +0.59 GB), loaded in 128 ms
+[kapitsa] DFlash2: prewarmed 111 pipelines in 2 ms
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+prompt 4096 tok in 693 ms (5914.5 tok/s); dflash decode (verify 7 of 7, greedy): 63 tok in 267 ms (236.3 tok/s), 23 cycles, 2.739 tok/cycle, 11.45 ms GPU/cycle, 11.59 ms wall/cycle (mode 3), hist 1 10 6 4 1 0 0 1; 6.91 proposals verified per cycle; acceptance by position 0.96 0.55 0.50 0.33 0.50 1.00 1.00
+KFlash: 23 cycles, 7.91 rows per cycle; cycles by rows 7:2 8:21; tokens per cycle expected 2.852, got 2.957; rate 0.2641 tok/ms; cost ms by rows 1:11.97 2:11.97 3:11.97 4:11.97 5:11.97 6:11.97 7:11.63 8:11.97; calibration (alpha, beta) by depth (-0.18, 0.83) (-0.85, 0.56) (-0.56, 0.43) (-0.11, 0.88) (-1.22, 1.13) (-0.58, 0.42) (0.20, 0.56) (0.00, 1.00)
+drafting pass: GPU ms/cycle mean 1.406 median 1.397 p10 1.393 p90 1.434 (22 cycles); GPU idle before the verify 0.001 ms/cycle
+ids: 248046 198 248045 846 248046 198 248045 74455 198 248068 271 248069 271 760 1510 1479 10630 63 709 1381 25503 449 9801 1510 4818 63 5515 25 271 12 2972 63 4818 63 369 264 999 12317 1576 332 318 54243 303 1414 3728 1590 6761 513 5158 5774 310 424 430 781 513 8677 11 321 279 709 4523 1510 3928 27653

@@ -78,6 +78,9 @@ bool qmt6_on();
 // all (enc_qmm_large's q.on). Exported for Qwen4Exp's NI_HC_FUSE mix fold, whose host gate must match the
 // tensor-tile branch it replaces exactly.
 bool qmm_on();
+// The NI_QMT gate (defined in qwen35.cpp): the dense 4-bit group-64 prefill GEMMs on tensor ops (qmt_m64_n64).
+// Exported for DFlash2's context commit (enc_qmm_rows), which runs the same tile on the drafter's prompt rows.
+bool qmt_on();
 
 struct Qwen35Config {
   int hidden = 0, layers = 0, vocab = 0;

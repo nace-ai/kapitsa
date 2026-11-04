@@ -1,0 +1,24 @@
+[kapitsa] read 15.13 GB of weights in 616 ms (24.6 GB/s)
+[kapitsa] read 0.24 GB of weights in 11 ms (20.8 GB/s)
+[kapitsa] MTP head loaded in 11 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] prewarmed 94 prefill pipelines in 10 ms
+[kapitsa] loaded ~/models/qwen3.8-27b-4bit-mtp: 64 layers, dense, 15.1 GB mapped in 747 ms; weights 4-bit group 64 100%
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 16/34 units (8192 channels; GPU 9216) from the default for this chip, chunks >= 512 rows; row scales 0 ms, program cached 1 ms + load 127 ms (13 functions, MIL 106 KB); 341.1 MB Metal; ready in 0.1 s
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] NI_ANE: startup check 1.16% of the ANE's part from the GPU alone (2 functions, 236 ms)
+[kapitsa] read 3.85 GB of weights in 204 ms (18.9 GB/s)
+[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 283 MB
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash2 drafter ~/models/qwen3.8-27b-4bit-mtp/dflash2: 5 layers, hidden 5120, 4-bit projections, 1.61 GB resident (process footprint +1.14 GB), loaded in 464 ms
+[kapitsa] DFlash2: prewarmed 126 pipelines in 2 ms
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+ane: system wired memory +197 MB at the program load, +897 MB after the first split chunk (split surfaces 341 MB)
+ane: 2 split chunks, 256 evaluations, ANE 3846 ms (15.0 ms each), reruns 0; memory: Metal 19997 MB, process footprint 19406 MB; thermal nominal
+prompt 4096 tok in 3601 ms (1137.5 tok/s); dflash decode (verify 7 of 7, greedy): 63 tok in 466 ms (135.3 tok/s), 12 cycles, 5.250 tok/cycle, 38.43 ms GPU/cycle, 38.80 ms wall/cycle (mode 3), hist 0 0 2 1 2 3 2 2; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 0.83 0.90 0.78 0.57 0.50
+KFlash: 12 cycles, 8.00 rows per cycle; cycles by rows 8:12; tokens per cycle expected 4.253, got 5.667; rate 0.1471 tok/ms; cost ms by rows 8:38.47; calibration (alpha, beta) by depth (-0.21, 0.84) (-0.85, 0.67) (-0.92, 0.97) (-0.82, 0.73) (-0.86, 0.76) (-0.51, 0.59) (-0.83, 0.83) (0.00, 1.00)
+drafting pass: GPU ms/cycle mean 3.570 median 3.570 p10 3.565 p90 3.574 (11 cycles); GPU idle before the verify 0.001 ms/cycle
+ids: 271 4068 220 17 25 45265 369 2250 15833 494 35752 13 2532 513 393 17 3 1680 15833 13 1690 2892 314 1439 11 1017 513 2250 4147 15833 303 264 2713 383 799 3008 314 45265 11 321 799 4147 10407 1881 45265 321 35752 13 10785 628 2364 303 2892 314 279 5956 1330 314 279 2250 4147 15833 303 264

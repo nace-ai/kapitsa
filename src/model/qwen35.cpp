@@ -175,7 +175,7 @@ static int moe_qmr() {
 // simdgroup qrm kernels. On where the tensor units are usable (the M5 family on macOS 26, the same condition as the
 // dense NI_QMT path) and the model keeps the 35B's shapes (below): 4K prefill 2,135 -> 1,574 ms and 16K 10,810 ->
 // 8,570 ms on the M5 Pro. `NI_MOE_QTM=0` keeps the qrm path; every other Mac defaults to qrm.
-static bool qmt_on();
+bool qmt_on();  // declared in qwen35.h: DFlash2's context commit takes the same tile
 // NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
 // at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
 // qrf_f6g64_m32_n128.
@@ -2546,7 +2546,7 @@ static Pipeline pipe(const std::string& n) {
 // NI_QMT (read once; default on, 0 = off): the dense 4-bit prefill GEMMs (M >= 64, group 64) on Metal 4's tensor_ops
 // (qmt.metal: the M5's matrix units; bench_qmm on the M5 Pro, 2048-row chunks of Qwen3.5-4B's projections: 21-23
 // TFLOP/s against qmr's 7.4-7.6, the fused gate/up 22.8 against 7.5). Needs macOS 26 and an Apple10 GPU.
-static bool qmt_on() {
+bool qmt_on() {
   static const bool on = [] {
     if (env_int("NI_QMT", 1) == 0) return false;
     if (Gpu::get().apple_family() < 10) return false;

@@ -1,0 +1,4 @@
+---- GPU profile per step (1 steps, 718.469 ms/step total, isolated dispatches) ----
+  qmm_b4_m64_n64/32x8x1          11.891 ms/step    1.7%     4.0 calls/step  2972.82 us/call
+  qmm_b4_m64_n64/192x8x1          8.142 ms/step    1.1%     4.0 calls/step  2035.60 us/call
+---- GPU profile per step (0 steps, nan ms/step total, isolated dispatches) ----
