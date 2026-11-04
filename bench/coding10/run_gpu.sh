@@ -16,7 +16,7 @@ for M in $MODELS; do
   $SARGV > "$OUT/serve-$M.log" 2>&1 & SP=$!
   for i in $(seq 1 300); do curl -sf http://127.0.0.1:$PORT/v1/models >/dev/null && break; sleep 2; done
   CODING10_SERVER_ARGV="$SARGV" CODING10_KAPITSA_VERSION="$($KAP --version)" \
-    timeout 3600 python3 "$HERE/coding10.py" --url http://127.0.0.1:$PORT --label "$M" --out "$OUT/$M.json" --arms "$@"
+    timeout 3600 python3 "$HERE/coding10.py" --url http://127.0.0.1:$PORT --label "$M" --out "$OUT/$M.json" --reps "${REPS:-1}" --arms "$@"
   rc=$?
   echo "== $M harness rc=$rc"
   kill $SP; wait $SP 2>/dev/null; sleep 3
