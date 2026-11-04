@@ -180,7 +180,7 @@ QATTN_T(qattn_t_g8s4k16, 4, 16, 256, 8)
 // in the other: the same value), so both run the same online softmax; each multiplies P by its half of V.
 // NS simdgroups = NS / 2 pairs x 16 rows per threadgroup (8 NS (token, head) rows). Buffers and result as qattn_t_impl.
 // grid: (ceil(T * G / (8 NS)), Hkv) x 32 NS threads.
-template <int NS, int G>
+template <int NS, int G, bool BIDI = false>
 NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, const device half* vc, const device float* qg,
                                device float* out, constant QaParams& p, uint2 tg, uint sg, ushort lane, threadgroup half* kt,
                                threadgroup half* vt, threadgroup float* xs) {
@@ -191,7 +191,8 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
   const uint R0 = (tg.x * NP + pi) * 16, t0 = R0 / G, kvh = tg.y;
   const bool live = R0 < p.T * G;
   const uint tid = sg * 32 + lane;
-  const uint tgl = p.pos0 + min((tg.x * NP * 16 + NP * 16 - 1) / G, p.T - 1);
+  const uint tgl = BIDI ? p.pos0 + p.T - 1
+                        : p.pos0 + min((tg.x * NP * 16 + NP * 16 - 1) / G, p.T - 1);
   const short qid = lane >> 2, fm = (qid & 4) | ((lane >> 1) & 3), fn = ((qid & 2) | (lane & 1)) * 4;
   uint tk[2], hd[2], lim[2];
   _Pragma("clang loop unroll(full)")
@@ -199,7 +200,7 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
     const uint r = R0 + fm + 8 * i;
     tk[i] = r / G;
     hd[i] = kvh * G + r % G;
-    lim[i] = p.pos0 + min(tk[i], p.T - 1);
+    lim[i] = BIDI ? tgl : p.pos0 + min(tk[i], p.T - 1);
   }
   const uint first = p.pos0 + t0;
   nhf_h8 qf[DH / 16];
@@ -245,7 +246,7 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
     const float4 pa = xpa[0], pb = xpa[1];
     s[0] += pa.x; s[1] += pa.y; s[2] += pa.z; s[3] += pa.w;
     s[4] += pb.x; s[5] += pb.y; s[6] += pb.z; s[7] += pb.w;
-    const bool diag = k0 + BK - 1 > first;
+    const bool diag = BIDI ? k0 + BK - 1 > tgl : k0 + BK - 1 > first;
     float corr[2];
     _Pragma("clang loop unroll(full)")
     for (short i = 0; i < 2; ++i) {
@@ -253,7 +254,7 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
       _Pragma("clang loop unroll(full)")
       for (short j = 0; j < 4; ++j) {
         float v = s[4 * i + j] * M_LOG2E_F;
-        if (diag && k0 + fn + j > lim[i]) v = -1e30f;
+        if (diag && k0 + fn + j > lim[i]) v = BIDI ? -INFINITY : -1e30f;
         s[4 * i + j] = v;
         mx = max(mx, v);
       }
@@ -301,7 +302,7 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
     }
   }
 }
-#define QATTN_TD2(NAME, NS, G)                                                                                       \
+#define QATTN_TD2(NAME, NS, G, BIDI)                                                                                       \
   [[kernel, max_total_threads_per_threadgroup(32 * NS)]] void NAME(                                                \
       const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]], \
       const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant QaParams& p [[buffer(5)]],     \
@@ -311,18 +312,19 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
     threadgroup float xs[NS * 256];                                                                                  \
     /* Apple7-Apple10 allow 32 KB per threadgroup; ni_kstats --limits prints the pipeline's own figure */            \
     static_assert(sizeof(kt) + sizeof(vt) + sizeof(xs) <= 32768, "qattn_t d2: threadgroup memory over 32 KB");      \
-    qattn_t_d2_impl<NS, G>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), kt, vt, xs);                                 \
+    qattn_t_d2_impl<NS, G, BIDI>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), kt, vt, xs);                                 \
   }
 // The 35B (G = 8): 4 pairs x 2 tokens = 8 tokens per threadgroup. bench_attn on the M5 Pro, T 4224 against 8448 keys
 // and T 3328 against 16000 (a 16K prompt's 2nd and 4th chunks): 24.22 / 44.42 ms vs qattn_t_g8s4k16's 44.08 / 78.23
 // (1.82x / 1.76x); 4 simdgroups 30.65 / 58.69, 16 simdgroups 26.90 / 47.25. Error against the fp64 reference
 // 2.58e-4 / 3.09e-4 (g8s4k16: 2.60e-4 / 3.08e-4).
-QATTN_TD2(qattn_t_g8d2s8, 8, 8)
+QATTN_TD2(qattn_t_g8d2s8, 8, 8, false)
 // The 27B (G = 6): 4 pairs x 16 rows = 64 (token, head) rows per threadgroup. bench_attn on the M5 Pro, the 27B's heads
 // (24 over 4), T 141 / 512 / 2048 against 16141 / 16512 / 16384 keys: s6 4.10 / 13.74 / 53.33 ms, s8 4.16 / 12.76 /
 // 44.23, s12 3.90 / 13.86 / 45.72, s16 5.11 / 13.00 / 48.65 against attn_prefill11r's 10.93 / 30.77 / 111.64.
-QATTN_TD2(qattn_t_g6d2s8, 8, 6)
+QATTN_TD2(qattn_t_g6d2s8, 8, 6, false)
+QATTN_TD2(qattn_t_g6d2s8_bidi, 8, 6, true)
 // The 4B and 9B (G = 4): 4 pairs x 16 rows = 64 (token, head) rows, 16 tokens per threadgroup. bench_attn on the M5 Max
 // (40 cores), the 4B's heads, T 2048 against 4096 / 8192 / 16384 keys: s4 4.04 / 9.61 / 21.92 ms, s8 3.09 / 7.34 / 15.95,
 // s16 3.54 / 8.27 / 17.79 against qattn_t_s8k16's 5.15 / 11.48 / 24.21; the three shapes are bitwise identical.
-QATTN_TD2(qattn_t_g4d2s8, 8, 4)
+QATTN_TD2(qattn_t_g4d2s8, 8, 4, false)
