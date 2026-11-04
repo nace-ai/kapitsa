@@ -1,0 +1,10 @@
+round 0 old: tok_s 108.0, gpu_ms_cycle 21.433 | quiet False after 900.4 s, foreign GPU mean 4.95% max 8.1%, load 1.99 -> 2.04 (waited 20 s), AC True -> True, clean False
+round 0 new: tok_s 111.0, gpu_ms_cycle 20.828 | quiet True after 454.5 s, foreign GPU mean 0.0% max 0%, load 1.88 -> 2.12 (waited 0 s), AC True -> True, clean True
+round 1 new: tok_s 110.8, gpu_ms_cycle 20.858 | quiet True after 18.5 s, foreign GPU mean 0.0% max 0%, load 1.80 -> 1.56 (waited 0 s), AC True -> True, clean True
+round 1 old: tok_s 108.1, gpu_ms_cycle 21.388 | quiet True after 18.5 s, foreign GPU mean 0.09% max 1.04%, load 1.32 -> 23.82 (waited 0 s), AC True -> True, clean False
+round 2 old: tok_s 108.3, gpu_ms_cycle 21.35 | quiet True after 18.5 s, foreign GPU mean 0.0% max 0%, load 1.97 -> 4.30 (waited 165 s), AC True -> True, clean False
+round 2 new: tok_s 110.9, gpu_ms_cycle 20.857 | quiet False after 900.6 s, foreign GPU mean 3.46% max 6.12%, load 1.16 -> 20.46 (waited 0 s), AC True -> True, clean False
+round 3 new: tok_s 110.9, gpu_ms_cycle 20.852 | quiet False after 900.6 s, foreign GPU mean 3.21% max 5.46%, load 1.75 -> 2.18 (waited 0 s), AC True -> True, clean False
+round 3 old: tok_s 108.2, gpu_ms_cycle 21.384 | quiet False after 900.6 s, foreign GPU mean 3.32% max 5.81%, load 1.86 -> 15.64 (waited 5 s), AC True -> True, clean False
+clean rounds: 0 of 4
+ids identical across every run: True
