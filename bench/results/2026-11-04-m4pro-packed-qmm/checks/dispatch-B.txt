@@ -1,0 +1,71 @@
+[kapitsa] read 2.37 GB of weights in 150 ms (15.8 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)
+[kapitsa] no MTP head in /Users/bytedance/.codex/worktrees/6aff/kapitsa/build-m4pro-validation-20261104/models/qwen3.5-4b-4bit; speculative decoding off
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 249 static target projections, 2150.9 MiB in 602 ms; compressed 1948221/2053120 blocks
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 13 ms
+[kapitsa] prewarmed 94 prefill pipelines in 21 ms
+[kapitsa] loaded /Users/bytedance/.codex/worktrees/6aff/kapitsa/build-m4pro-validation-20261104/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 834 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: off under NI_PROFILE
+[kapitsa] read 1.27 GB of weights in 69 ms (18.5 GB/s)
+[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 19 static draft projections, 343.9 MiB in 102 ms; compressed 330008/330240 blocks
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash drafter (v1) /Users/bytedance/.codex/worktrees/6aff/kapitsa/build-m4pro-validation-20261104/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)
+[kapitsa] DFlash2 drafter /Users/bytedance/.codex/worktrees/6aff/kapitsa/build-m4pro-validation-20261104/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.90 GB resident (process footprint +1.00 GB), loaded in 280 ms
+[kapitsa] DFlash2: prewarmed 111 pipelines in 2 ms
+(profiling: prompt timings not meaningful)
+---- GPU profile per step (1 steps, 130.598 ms/step total, isolated dispatches) ----
+  qmms_b4_t6                     73.824 ms/step   56.5%    96.0 calls/step   769.00 us/call
+  qmms_gu_b4_t6                  46.067 ms/step   35.3%    32.0 calls/step  1439.58 us/call
+  gdn_step_parr4_l16              3.547 ms/step    2.7%    24.0 calls/step   147.81 us/call
+  dfl_qmm8                        3.035 ms/step    2.3%    22.0 calls/step   137.95 us/call
+  qmvf_b4_t1_r4_norm              1.502 ms/step    1.2%     1.0 calls/step  1502.38 us/call
+  rows_to_half                    0.702 ms/step    0.5%    72.0 calls/step     9.76 us/call
+  gdn_prep_par                    0.626 ms/step    0.5%    24.0 calls/step    26.08 us/call
+  gdn_gnorm                       0.360 ms/step    0.3%    24.0 calls/step    15.00 us/call
+  attn_prefill11gs                0.310 ms/step    0.2%     8.0 calls/step    38.71 us/call
+  attn_prep                       0.185 ms/step    0.1%     8.0 calls/step    23.17 us/call
+  attn11_reduce                   0.161 ms/step    0.1%     8.0 calls/step    20.11 us/call
+  dfl_x8_from_bf16                0.075 ms/step    0.1%    11.0 calls/step     6.78 us/call
+  dfl_norm_x8                     0.069 ms/step    0.1%    11.0 calls/step     6.31 us/call
+  dfl_ctx_commit                  0.061 ms/step    0.0%    11.0 calls/step     5.51 us/call
+  dfl_capture                     0.037 ms/step    0.0%     8.0 calls/step     4.64 us/call
+  embed_q4                        0.026 ms/step    0.0%     1.0 calls/step    26.12 us/call
+  topk_stage1                     0.006 ms/step    0.0%     1.0 calls/step     6.04 us/call
+  sample_stage2                   0.005 ms/step    0.0%     1.0 calls/step     4.79 us/call
+---- GPU profile per step (10 steps, 17.992 ms/step total, isolated dispatches) ----
+  qmm8pc_b4_nf1                  13.881 ms/step   77.2%   142.0 calls/step    97.75 us/call
+  gdn_step_verify8s_tree          1.180 ms/step    6.6%    24.0 calls/step    49.17 us/call
+  dfl_qmm8                        0.826 ms/step    4.6%    13.8 calls/step    59.87 us/call
+  x8_prep2                        0.463 ms/step    2.6%    73.0 calls/step     6.34 us/call
+  gdn_prep_verify8_tree           0.358 ms/step    2.0%    24.0 calls/step    14.91 us/call
+  attn8m_partial_zone             0.213 ms/step    1.2%     8.0 calls/step    26.68 us/call
+  dfl_attn_qk                     0.179 ms/step    1.0%     6.0 calls/step    29.77 us/call
+  swiglu_x8                       0.170 ms/step    0.9%    38.0 calls/step     4.47 us/call
+  attn8_tree_zone                 0.134 ms/step    0.7%     8.0 calls/step    16.74 us/call
+  gdn_gnorm_x8                    0.094 ms/step    0.5%    24.0 calls/step     3.94 us/call
+  dfl_res_norm                    0.079 ms/step    0.4%    12.0 calls/step     6.56 us/call
+  dfl_rope_table                  0.071 ms/step    0.4%     1.0 calls/step    71.22 us/call
+  attn_prep_tree                  0.065 ms/step    0.4%     8.0 calls/step     8.09 us/call
+  dfl_top16                       0.046 ms/step    0.3%     2.0 calls/step    22.91 us/call
+  dfl_attn_reduce                 0.039 ms/step    0.2%     6.0 calls/step     6.52 us/call
+  topk_stage1_rows_tree           0.039 ms/step    0.2%     1.0 calls/step    38.90 us/call
+  attn_rows_reduce                0.034 ms/step    0.2%     8.0 calls/step     4.24 us/call
+  kv_tree_compact                 0.023 ms/step    0.1%     8.0 calls/step     2.94 us/call
+  dfl_capture                     0.020 ms/step    0.1%     8.0 calls/step     2.52 us/call
+  dfl_x8_to_v8                    0.020 ms/step    0.1%     7.0 calls/step     2.80 us/call
+  kf_build                        0.014 ms/step    0.1%     1.0 calls/step    14.35 us/call
+  dfl_embed_norm                  0.008 ms/step    0.0%     1.0 calls/step     7.88 us/call
+  dfl_norm_x8                     0.006 ms/step    0.0%     0.9 calls/step     6.69 us/call
+  embed_q4                        0.006 ms/step    0.0%     1.0 calls/step     5.91 us/call
+  dfl_x8_from_bf16                0.006 ms/step    0.0%     0.9 calls/step     6.13 us/call
+  sample_stage2_rows_tree         0.005 ms/step    0.0%     1.0 calls/step     5.22 us/call
+  kf_accept                       0.005 ms/step    0.0%     1.0 calls/step     5.16 us/call
+  dfl_ctx_commit                  0.005 ms/step    0.0%     0.9 calls/step     5.01 us/call
+  dfl_kf_table                    0.003 ms/step    0.0%     1.0 calls/step     3.28 us/call
+prompt 82 tok in 139 ms (590.9 tok/s); dflash decode (verify 7 of 7, greedy): 31 tok in 185 ms (168.0 tok/s), 10 cycles, 3.100 tok/cycle, 0.00 ms GPU/cycle, 18.46 ms wall/cycle (mode 1), hist 2 3 1 2 0 2 0 0; 7.00 proposals verified per cycle; acceptance by position 0.80 0.62 0.80 0.50 1.00 0.00 0.00
+KFlash: 10 cycles, 8.00 rows per cycle; cycles by rows 8:10; tokens per cycle expected 3.518, got 3.100; rate 147492.9935 tok/ms; cost ms by rows 8:0.00; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+ids: 71093 12305 198 12237 198 75 2585 11198 84150 6971 271 32 15352 11 5492 61758 7873 314 449 436 34810 318 78994 39642 11851 8 6297 198 4058 3984 56346 7869

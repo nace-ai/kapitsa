@@ -1,0 +1,44 @@
+{
+  "created_at": "2026-11-04T07:09:18.290709+00:00",
+  "candidate": "6c0617fc",
+  "baseline": "e87d0f87",
+  "standard_benchmark": {
+    "tool": "kapitsa bench --quick --json",
+    "order": [
+      "A1",
+      "B1",
+      "A2",
+      "B2",
+      "A3",
+      "B3"
+    ],
+    "ni_environment": "unset in both; native benchmark clears NI_* from server",
+    "scope": "Qwen3.5 4B Q4/group64 + pinned six-layer DFlash v1",
+    "metrics": [
+      "sampled decode",
+      "greedy decode",
+      "4K prefill",
+      "4K follow-up TTFT"
+    ],
+    "quality": "require nonempty 512-token writing responses and inspect all contention, thermal and paging flags"
+  },
+  "fixed_prompt_diagnostic": {
+    "order": [
+      "A1",
+      "B1",
+      "A2",
+      "B2"
+    ],
+    "contexts": [
+      "short",
+      "4k"
+    ],
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "metric": "existing bench/harness/bench.py decode_rates middle window and (completion_tokens-1)/(last_content_time-first_content_time)",
+    "cold_prompts": "fresh private server per arm; distinct warm-up inputs; disk cache disabled; check cached tokens",
+    "purpose": "same inputs and text, including decode over a 4K prompt"
+  },
+  "decision": "Expand default only with output gates passed and a repeatable positive inference result larger than within-build variation, with no material regression in the other measured phases. Keep all attempts; a flagged series cannot support a win and any environmental repair/rerun must be declared."
+}

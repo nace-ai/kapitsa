@@ -1,0 +1,32 @@
+{
+  "commit": "6c0617fc30d5ba79a37a41f42e325a87511fe08d",
+  "version": "kapitsa 0.2.26 (6c0617fc)",
+  "binaries": {
+    "kapitsa": {
+      "bytes": 12416008,
+      "sha256": "ad37b3fa3e240d953a317872e40837d30dea235936b2f0fc9cba259aa6bd62f6"
+    },
+    "logit_dump": {
+      "bytes": 7981480,
+      "sha256": "fc5b2688f18a69ee99ddc0d5b588173b0bc623af74142d9ab6f1844115615f4f"
+    },
+    "qmm_packed_coeff_check": {
+      "bytes": 1803384,
+      "sha256": "b008a6351994f7610b985dad3733013e0c5f6da06e101cf59464d03d036fb227"
+    },
+    "qmm_draft_check": {
+      "bytes": 3768656,
+      "sha256": "d833c618648e52eb9333def4ca86db0eb7a1cd046f616d095cf505bcff2c7305"
+    },
+    "ni_run": {
+      "bytes": 3976136,
+      "sha256": "71740302f1aa5c8926ddadb158cea20d89e81a2641cbb883b606a4a72394e563"
+    }
+  },
+  "source_sha256": {
+    "src/kernels/verify8.metal": "33a025bd70f495e483dfa6094b21687c185e887350d6868ab832ea4bafc4ec3f",
+    "src/kernels/verify8_packed_coeff.metal": "7f2ad6a7370c171d5dacb98877d178bda5e1ac92dacd9ed53b104527851cc379",
+    "src/model/affine_coeff_fixed.h": "26833cfd00dbeeeb48f6e2063dfa332b7adfea1af4af511c7b9371f29b9d531a"
+  },
+  "kernel_sources_identical_to_baseline": true
+}

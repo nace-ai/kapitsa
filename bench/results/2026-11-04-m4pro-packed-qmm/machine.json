@@ -1,0 +1,11 @@
+{
+  "identifier": "Mac16,8",
+  "name": "MacBook Pro (14-inch, 2024)",
+  "year": 2024,
+  "chip": "Apple M4 Pro",
+  "cpu_cores": 14,
+  "gpu_cores": 20,
+  "memory_gb": 48,
+  "macos": "26.4.1",
+  "macos_build": "25E253"
+}

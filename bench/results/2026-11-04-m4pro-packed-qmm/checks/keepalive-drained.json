@@ -1,0 +1,352 @@
+[
+  {
+    "passed": true,
+    "held_until_release": true,
+    "holder_content_events": [
+      4712,
+      4678
+    ],
+    "keepalives_s": [
+      15.062309333000002,
+      30.116440417000003
+    ],
+    "first_token_s": 30.292966875,
+    "errors": [],
+    "events": [
+      [
+        0.0017089169999997544,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "role": "assistant",
+                "content": ""
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        15.062309333000002,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.116440417000003,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.292966875,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "1"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.311240708000003,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "\n2"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.311255208000002,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "\n3"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.311262833000004,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "\n4"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.314878417,
+        {
+          "id": "chatcmpl-179377831950073",
+          "object": "chat.completion.chunk",
+          "created": 1793778319,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": "length"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 30,
+            "completion_tokens": 8,
+            "total_tokens": 38,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 45.2,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 1
+              }
+            }
+          }
+        }
+      ],
+      [
+        30.314882625,
+        "[DONE]"
+      ]
+    ],
+    "arm": "A"
+  },
+  {
+    "passed": true,
+    "held_until_release": true,
+    "holder_content_events": [
+      4859,
+      4831
+    ],
+    "keepalives_s": [
+      15.061797416999994,
+      30.123119167
+    ],
+    "first_token_s": 30.263731667000002,
+    "errors": [],
+    "events": [
+      [
+        0.001658917000000315,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "role": "assistant",
+                "content": ""
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        15.061797416999994,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.123119167,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.263731667000002,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "1"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.282125249999993,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "\n2"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.282136749999992,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "\n3"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.282143957999992,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "\n4"
+              },
+              "finish_reason": null
+            }
+          ]
+        }
+      ],
+      [
+        30.285770624999998,
+        {
+          "id": "chatcmpl-179377835350073",
+          "object": "chat.completion.chunk",
+          "created": 1793778353,
+          "model": "qwen3.5-4b-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": "length"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 30,
+            "completion_tokens": 8,
+            "total_tokens": 38,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 44.6,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 1
+              }
+            }
+          }
+        }
+      ],
+      [
+        30.285775875,
+        "[DONE]"
+      ]
+    ],
+    "arm": "B"
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "kernel_gpu_modes": 5,
+  "kernel_cpu_coefficient_pairs": 267378,
+  "full_shape_bitwise_outputs": 14134272,
+  "full_shape_fp64_max_normalized_error": 4.87891285e-07,
+  "logit_rows_per_candidate_mode": 584,
+  "candidate_modes": [
+    "default",
+    "NI_V8_PACKED_COEFF_NF1=0"
+  ],
+  "logits_bitwise": true,
+  "draft_contexts": [
+    82,
+    4132
+  ],
+  "draft_tensors_per_context": 270,
+  "draft_bytes_per_context": 35198376,
+  "draft_bitwise": true,
+  "cpu_vk_commands": 19,
+  "cpu_supplemental_commands": 18,
+  "all_cpu_commands_passed": true,
+  "prek_passed": true,
+  "stock_api_per_arm": {
+    "passed": 48,
+    "failed": 1,
+    "failure": "queued keepalive test with unread holder streams"
+  },
+  "drained_holder_probe": {
+    "baseline_passed": true,
+    "candidate_passed": true
+  },
+  "other_models_or_quantizations_tested": false,
+  "cli_token_traces": {
+    "runs": 8,
+    "tokens_per_run": 512,
+    "end_tokens_per_run": 0,
+    "A_B_ids_identical": true,
+    "temperatures": [
+      0,
+      0.6
+    ],
+    "contexts": [
+      82,
+      4132
+    ],
+    "timings": "diagnostic only, not acceptance measurements"
+  }
+}

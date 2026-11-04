@@ -1,0 +1,9 @@
+<|im_start|>system
+You are a helpful coding assistant. Answer with code only.<|im_end|>
+<|im_start|>user
+[run m4pro48-fixed] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+

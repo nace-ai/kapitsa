@@ -1,0 +1,22 @@
+[kapitsa] compiled kernels in 3211 ms
+device=Apple M4 Pro cores=20 kernel=qmm8pc_b4_nf1 thermal=nominal
+check_shape N=18432 K=2560 seed=7 passed=1
+check_shape N=18432 K=2560 seed=19 passed=1
+check_shape N=18432 K=2560 seed=42 passed=1
+check_shape N=12352 K=2560 seed=7 passed=1
+check_shape N=12352 K=2560 seed=19 passed=1
+check_shape N=12352 K=2560 seed=42 passed=1
+check_shape N=10240 K=2560 seed=7 passed=1
+check_shape N=10240 K=2560 seed=19 passed=1
+check_shape N=10240 K=2560 seed=42 passed=1
+check_shape N=2560 K=4096 seed=7 passed=1
+check_shape N=2560 K=4096 seed=19 passed=1
+check_shape N=2560 K=4096 seed=42 passed=1
+check_shape N=2560 K=9216 seed=7 passed=1
+check_shape N=2560 K=9216 seed=19 passed=1
+check_shape N=2560 K=9216 seed=42 passed=1
+check_shape N=248320 K=2560 seed=7 passed=1
+check_shape N=248320 K=2560 seed=19 passed=1
+check_shape N=248320 K=2560 seed=42 passed=1
+AKO_CHECK={"passed":true,"cases":36,"outputs":14134272,"bitwise_outputs":14134272,"max_cpu_error":4.87891285e-07,"max_gpu_error":0}
+QMM_CD_DISPATCH={"candidate":36,"original":36}

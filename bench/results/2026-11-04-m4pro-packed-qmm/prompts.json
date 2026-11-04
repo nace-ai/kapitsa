@@ -1,0 +1,12 @@
+{
+  "short": {
+    "tokens": 82,
+    "text_sha256": "c247e77a38067f920516b035bc9a9d39b35bf07e4cab61abf10509bedba3b034",
+    "ids_sha256": "b87698f6bc2d6408d3227a6f27c5b103ea4fcf52504fcc62c5cdee97f835a53c"
+  },
+  "4k": {
+    "tokens": 4132,
+    "text_sha256": "3253373e7a2dca17dbf77dedaab1964d409ff438000711b4fa082ee075b91838",
+    "ids_sha256": "49aedf4f04b5d2c579f084e6f469689b8da7bd4a5a8ccaa58656a4062df11dc3"
+  }
+}

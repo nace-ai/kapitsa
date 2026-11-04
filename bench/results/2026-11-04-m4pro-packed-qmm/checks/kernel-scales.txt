@@ -1,0 +1,6 @@
+2026-11-04 14:59:39.649 qmm_packed_coeff_check[2641:16703271] Metal API Validation Enabled
+2026-11-04 14:59:39.649 qmm_packed_coeff_check[2641:16703271] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 11 ms
+device=Apple M4 Pro cores=20 kernel=qmm8pc_b4_nf1 thermal=nominal
+AKO_CHECK={"passed":true,"cases":80,"values":14760,"nan_class":4744,"infinity_bitwise":1592}
+QMM_CD_DISPATCH={"candidate":12,"original":148}
