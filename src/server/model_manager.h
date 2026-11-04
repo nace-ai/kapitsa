@@ -68,6 +68,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     started_at_ = started_at;
 
     if (tui_) ui::loading_begin(ref_.name);
+    allocations_ = std::make_unique<Gpu::AllocationScope>();
     engine_ = std::make_shared<Engine>(opt_);
     if (tui_) ui::loading_end(ref_.name);
   }
@@ -212,6 +213,8 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
     // Release old engine to free GPU memory
     engine_.reset();
+    allocations_.reset();
+    allocations_ = std::make_unique<Gpu::AllocationScope>();
 
     if (tui_) ui::loading_begin(new_ref.name);
     try {
@@ -221,6 +224,9 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       if (error_out) error_out->message = std::string("Engine initialization failed: ") + e.what();
       // the old model comes back, so a failed switch (memory, a bad checkpoint) leaves the server serving
       logi("switch to %s failed (%s); reloading %s", new_ref.name.c_str(), e.what(), ref_.name.c_str());
+      // the failed load's partial allocations leave with their scope before the reload allocates its own
+      allocations_.reset();
+      allocations_ = std::make_unique<Gpu::AllocationScope>();
       if (tui_) ui::loading_begin(ref_.name);
       try {
         engine_ = std::make_shared<Engine>(opt_);
@@ -259,6 +265,8 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     wait_for_requests(lk);
     stop_prefill();
     engine_.reset();
+    allocations_.reset();
+    allocations_ = std::make_unique<Gpu::AllocationScope>();
     if (before) before();
     if (tui_) ui::loading_begin(ref_.name);
     try {
@@ -267,6 +275,8 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       if (error_out) *error_out = e.what();
       logi("loading %s again failed (%s); loading it as it was", ref_.name.c_str(), e.what());
       if (undo) undo();
+      allocations_.reset();
+      allocations_ = std::make_unique<Gpu::AllocationScope>();
       try {
         engine_ = std::make_shared<Engine>(opt_);
       } catch (const std::exception& e2) {
@@ -552,6 +562,12 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
   }
 
   mutable std::shared_mutex rw_mu_;
+  // Releases every buffer allocated during the engine's lifetime (weights, activations, KV grown by requests,
+  // scratch) when the engine is replaced: model destructors release only what they name, so a switch otherwise
+  // kept the old model's converted weights in the Gpu's registry until KV room hit 0 (#932). Declared before
+  // engine_ so the engine (its workers joined, its destructor's releases done) is gone before the scope drains
+  // and frees what remains.
+  std::unique_ptr<Gpu::AllocationScope> allocations_;
   std::shared_ptr<Engine> engine_;
   hub::ModelRef ref_;
   EngineOptions opt_;
