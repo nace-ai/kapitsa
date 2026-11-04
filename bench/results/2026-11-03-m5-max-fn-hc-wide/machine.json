@@ -1,0 +1,37 @@
+{
+  "captured_at": "2026-11-04T02:53:25.933352+00:00",
+  "hardware": {
+    "hw.model": "Mac17,6",
+    "machdep.cpu.brand_string": "Apple M5 Max",
+    "hw.memsize": "137438953472",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18"
+  },
+  "gpu": {
+    "_name": "Apple M5 Max",
+    "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+    "spdisplays_vendor": "sppci_vendor_Apple",
+    "sppci_bus": "spdisplays_builtin",
+    "sppci_cores": "40",
+    "sppci_device_type": "spdisplays_gpu",
+    "sppci_model": "Apple M5 Max"
+  },
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4\nBuildVersion:\t\t25E246",
+  "power": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                1 (sleep prevented by Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         10\n tcpkeepalive         1\n powermode            2\n womp                 1",
+  "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=5439587)\t100%; charged; 0:00 remaining present: true",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+  "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+  "python": "Python 3.9.6",
+  "swap_at_capture": "total = 2048.00M  used = 1119.56M  free = 928.44M  (encrypted)",
+  "source_commit": "main 8ea3e5a + this branch's change (hc_down_sk4, NI_HC_WIDE)",
+  "binary_sha256": {
+    "ni_run": "df97f93ced4b6745f968be92c490e10881d671f1380eca64eaac598d5c921ffb",
+    "logit_dump": "ec925e3813ed366401579e979b0321d7cd3d1874fe9cc3e03c0f5d45139decaa",
+    "fn_check": "45636a1bafc31e6c26b3dea044f2b49e2499c792070f607383b56007ed5bc3c9"
+  },
+  "source_note": "One Release build of the branch; the old arm is NI_HC_WIDE=0 in the same binaries (hc_down_sk3, hc_up_mix4_c4). The branch's final commit differs from the measured build only in two comments' wrapping and numbers.",
+  "build_commands": [
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build -j --target ni_run logit_dump fn_check kapitsa"
+  ]
+}
