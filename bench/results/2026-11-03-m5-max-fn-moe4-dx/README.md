@@ -12,20 +12,34 @@ default, its MTP head at depth 2, MacBook Pro (16-inch, 2026), `Mac17,6`, M5 Max
 
 ## Decode
 
-`ni_run` ([ab/](ab)), one build, `NI_MOE4_DX=0` against the default, interleaved over 3 rounds (old new, new old, old
-new), the README's decode prompt ([ab/prompt-ids.txt](ab/prompt-ids.txt), 56 tokens), greedy, 512 tokens
-(`--ignore-eos`), `--spec 2 --dflash none` (the server's default for this model). Every run waited for a quiet GPU
-(no foreign process above 5% for 15 s, at most 60 s: `bench/harness/gpu_hogs.py`) and sampled the foreign GPU load
-while it ran.
+`ni_run` ([ab/](ab)), one build (this branch at `c9bea88`, before main's merge), `NI_MOE4_DX=0` against the default,
+rounds alternating the arm order (old new, new old, ...), the README's decode prompt
+([ab/prompt-ids.txt](ab/prompt-ids.txt), 56 tokens), greedy, 512 tokens (`--ignore-eos`), `--spec 2 --dflash none`
+(the server's default for this model). Every run waited for a quiet GPU (no foreign process above 5% for 15 s:
+`bench/harness/gpu_hogs.py`) and sampled the foreign GPU load while it ran. Every run wrote the same 511 tokens.
+
+**Idle** ([ab/idle/](ab/idle): 5 rounds in two batches, this session idle, each quiet wait up to 900 s). The round in
+which both arms found the GPU quiet and saw 0.0% foreign load while they ran (batch 1's second):
+
+| Arm | tok/s | ms of GPU a cycle | Tokens a cycle |
+| --- | ---: | ---: | ---: |
+| `NI_MOE4_DX=0` | 105.7 | 21.88 | 2.34 |
+| default | 106.8 | 21.65 | 2.34 |
+
+GPU time a cycle 21.88 -> 21.65 ms (-1.1%), decode 105.7 -> 106.8 tok/s (+1.0%). Batch 1's other two rounds were
+quiet too, at 0.06-0.17% foreign load (`NI_MOE4_DX=0` 21.92, 21.88 ms; the default 21.61, 21.64): the median of its
+three quiet rounds is the same, 21.88 -> 21.64 ms. Batch 2's two rounds, whose waits ran out at 900 s with the Claude
+desktop app's helper process (which this session runs in) at 2.6-3.4% mean, agree: 21.87-21.90 against 21.65-21.69.
+
+**The first A/B** ([ab/run1/](ab/run1), 3 rounds, each quiet wait up to 60 s): the helper held 4.9-5.5% mean (9.6% at
+most) through both arms alike, so every wait ran out. The idle rounds replace it:
 
 | Arm | tok/s | ms of GPU a cycle | Tokens a cycle |
 | --- | ---: | ---: | ---: |
 | `NI_MOE4_DX=0` | 105.1, 104.3, 104.7 | 22.04, 22.20, 22.11 | 2.34 |
 | default | 106.1, 106.2, 105.9 | 21.84, 21.81, 21.86 | 2.34 |
 
-GPU time a cycle 22.12 -> 21.83 ms (-1.3%), decode 104.7 -> 106.1 tok/s (+1.3%). Every run wrote the same 511 tokens.
-**GPU load:** nothing else ran, but the Claude desktop app's helper process, which this session runs in, held
-4.9-5.5% mean (9.6% at most) through both arms alike, so every quiet wait ran out at 60 s.
+GPU time a cycle 22.12 -> 21.83 ms (-1.3%), decode 104.7 -> 106.1 tok/s (+1.3%).
 
 `NI_PROFILE=1` over 44 passes ([kernel/](kernel), isolated dispatches): `moe4_gate_up` 101.0 -> 98.6 us a call,
 `moe4_down` 64.2 -> 60.4 us. (`profile-old.out` is `NI_MOE4_DX=0` on an earlier build of this branch, before
@@ -45,11 +59,12 @@ The A/B's build read the switch as "`0` off, else on", the final code as above; 
 
 ## Not run
 
-Flint, whose verify MoE keeps the staged kernels, the other Macs, and the server (`kapitsa serve`, T 0.6).
+Flint, whose verify MoE keeps the staged kernels, the other Macs, and the server (`kapitsa serve`, T 0.6). The
+switch with #921's `NI_HC_WIDE`, which main's merge brought into this branch after the A/B: each was measured alone.
 
 ## Files
 
 `ab/`: the A/B script, command, output and every run's `ni_run` output (`run1/`, `ab_fn.json` with each run's ids and
-GPU load). `kernel/`: the `fn_check` and profile commands and outputs. `output-check/`: the dumps' commands and logs,
+GPU load); `ab/idle/`: the idle rounds the same way (the script with its 900 s wait, `run.sh`, `batch1/`, `batch2/`). `kernel/`: the `fn_check` and profile commands and outputs. `output-check/`: the dumps' commands and logs,
 their `meta.json` and the comparison. Local paths are replaced by placeholders (`~`, `<repo>`: this branch's
 checkout, `<scratch>`).

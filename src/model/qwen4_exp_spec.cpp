@@ -26,7 +26,7 @@ Pipeline pipe4(const std::string& n) {
 // and down kernels read their row's input (x, 10 KB at Flash-Next's shape; h, 28 KB) from device memory through the
 // caches (moe4_gate_up_d, moe4_down_d: qmv2_rows_dx) instead of staging it in threadgroup memory, whose 28 KB held the
 // down kernel to one threadgroup a core. The same arithmetic, so bitwise the same (fn_check FN_ROWS). M5 Max,
-// Flash-Next: 101.0 -> 98.6 and 64.2 -> 60.4 us a call, decode 22.12 -> 21.83 ms of GPU a cycle
+// Flash-Next: 101.0 -> 98.6 and 64.2 -> 60.4 us a call, decode 21.88 -> 21.65 ms of GPU a cycle (idle)
 bool moe4_dx() {
   static const bool on = [] {
     const char* v = getenv("NI_MOE4_DX");
