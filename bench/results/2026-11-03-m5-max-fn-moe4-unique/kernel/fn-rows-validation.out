@@ -1,0 +1,57 @@
+2026-11-03 18:57:35.315 fn_check[52141:14182301] Metal API Validation Enabled
+2026-11-03 18:57:35.315 fn_check[52141:14182301] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 3236 ms
+hc_*3_b4 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=4 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=4 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=4 inject == one-row max rel err 0.00e+00
+moe4_unique == the serial pass (400 sets) max rel err 0.00e+00
+moe4 R=1 (validation run) finite   max rel err 0.00e+00
+moe4 R=2 (validation run) finite   max rel err 0.00e+00
+moe4 R=3 (validation run) finite   max rel err 0.00e+00
+moe4 R=4 (validation run) finite   max rel err 0.00e+00
+all kernels match
