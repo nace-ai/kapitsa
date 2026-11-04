@@ -1,0 +1,838 @@
+{
+ "arms": [
+  {},
+  {
+   "NI_DFLASH_NARROW": "0"
+  },
+  {},
+  {
+   "NI_DFLASH_NARROW": "0"
+  },
+  {},
+  {
+   "NI_DFLASH_BLOCK": "8"
+  }
+ ],
+ "warm_arms": 1,
+ "rows": [
+  {
+   "arm": 0,
+   "switch": "1",
+   "prompt": 8223,
+   "cached": 8216,
+   "tokens": 422,
+   "ms": 4209,
+   "tps": 100.0,
+   "tok_per_cycle": 4.58,
+   "cycles": 92,
+   "ms_per_cycle": 45.75,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 61.7,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 2,
+    "mean_foreign_gpu_pct": 2.74,
+    "max_foreign_gpu_pct": 3.34,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 0,
+   "switch": "1",
+   "prompt": 32373,
+   "cached": 32366,
+   "tokens": 512,
+   "ms": 5904,
+   "tps": 86.5,
+   "tok_per_cycle": 3.73,
+   "cycles": 137,
+   "ms_per_cycle": 43.09,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.2,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 3,
+    "mean_foreign_gpu_pct": 3.52,
+    "max_foreign_gpu_pct": 6.35,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 0,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 7269,
+   "tps": 70.3,
+   "tok_per_cycle": 4.02,
+   "cycles": 127,
+   "ms_per_cycle": 57.24,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.2,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 4.51,
+    "max_foreign_gpu_pct": 9.02,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 1,
+   "switch": "0",
+   "prompt": 8223,
+   "cached": 8216,
+   "tokens": 422,
+   "ms": 4212,
+   "tps": 99.9,
+   "tok_per_cycle": 4.58,
+   "cycles": 92,
+   "ms_per_cycle": 45.78,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 61.7,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 2,
+    "mean_foreign_gpu_pct": 2.69,
+    "max_foreign_gpu_pct": 3.28,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 1,
+   "switch": "0",
+   "prompt": 32373,
+   "cached": 32366,
+   "tokens": 512,
+   "ms": 6410,
+   "tps": 79.7,
+   "tok_per_cycle": 4.19,
+   "cycles": 122,
+   "ms_per_cycle": 52.54,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.2,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 3,
+    "mean_foreign_gpu_pct": 3.83,
+    "max_foreign_gpu_pct": 6.6,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 1,
+   "switch": "0",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 9096,
+   "tps": 56.2,
+   "tok_per_cycle": 4.56,
+   "cycles": 112,
+   "ms_per_cycle": 81.21,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 62.0,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 4.59,
+    "max_foreign_gpu_pct": 4.97,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 2,
+   "switch": "1",
+   "prompt": 8223,
+   "cached": 8216,
+   "tokens": 422,
+   "ms": 4207,
+   "tps": 100.1,
+   "tok_per_cycle": 4.58,
+   "cycles": 92,
+   "ms_per_cycle": 45.73,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 61.7,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 2,
+    "mean_foreign_gpu_pct": 2.79,
+    "max_foreign_gpu_pct": 3.43,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 2,
+   "switch": "1",
+   "prompt": 32373,
+   "cached": 32366,
+   "tokens": 512,
+   "ms": 5948,
+   "tps": 85.9,
+   "tok_per_cycle": 3.7,
+   "cycles": 138,
+   "ms_per_cycle": 43.1,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.2,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 3,
+    "mean_foreign_gpu_pct": 3.51,
+    "max_foreign_gpu_pct": 6.41,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 2,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 7267,
+   "tps": 70.3,
+   "tok_per_cycle": 4.02,
+   "cycles": 127,
+   "ms_per_cycle": 57.22,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.2,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 4.36,
+    "max_foreign_gpu_pct": 8.66,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 3,
+   "switch": "0",
+   "prompt": 8223,
+   "cached": 8216,
+   "tokens": 422,
+   "ms": 4209,
+   "tps": 100.0,
+   "tok_per_cycle": 4.58,
+   "cycles": 92,
+   "ms_per_cycle": 45.75,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 61.7,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 2,
+    "mean_foreign_gpu_pct": 2.76,
+    "max_foreign_gpu_pct": 3.41,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 3,
+   "switch": "0",
+   "prompt": 32373,
+   "cached": 32366,
+   "tokens": 512,
+   "ms": 6351,
+   "tps": 80.5,
+   "tok_per_cycle": 4.22,
+   "cycles": 121,
+   "ms_per_cycle": 52.49,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.1,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 3,
+    "mean_foreign_gpu_pct": 3.7,
+    "max_foreign_gpu_pct": 6.19,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 3,
+   "switch": "0",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 9104,
+   "tps": 56.1,
+   "tok_per_cycle": 4.56,
+   "cycles": 112,
+   "ms_per_cycle": 81.29,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.1,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 4.18,
+    "max_foreign_gpu_pct": 4.65,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 4,
+   "switch": "1",
+   "prompt": 8223,
+   "cached": 8216,
+   "tokens": 422,
+   "ms": 4259,
+   "tps": 98.8,
+   "tok_per_cycle": 4.53,
+   "cycles": 93,
+   "ms_per_cycle": 45.8,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 61.7,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 2,
+    "mean_foreign_gpu_pct": 2.69,
+    "max_foreign_gpu_pct": 3.23,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 4,
+   "switch": "1",
+   "prompt": 32373,
+   "cached": 32366,
+   "tokens": 512,
+   "ms": 5970,
+   "tps": 85.6,
+   "tok_per_cycle": 3.7,
+   "cycles": 138,
+   "ms_per_cycle": 43.26,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.2,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 3,
+    "mean_foreign_gpu_pct": 3.69,
+    "max_foreign_gpu_pct": 6.98,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 4,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 7286,
+   "tps": 70.1,
+   "tok_per_cycle": 4.02,
+   "cycles": 127,
+   "ms_per_cycle": 57.37,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.1,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 4.58,
+    "max_foreign_gpu_pct": 9.22,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 5,
+   "switch": "1",
+   "prompt": 8223,
+   "cached": 8216,
+   "tokens": 422,
+   "ms": 4255,
+   "tps": 98.9,
+   "tok_per_cycle": 3.93,
+   "cycles": 107,
+   "ms_per_cycle": 39.77,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 61.7,
+    "busy_at_timeout": [
+     "Claude Helper 7%"
+    ],
+    "samples": 2,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 5,
+   "switch": "1",
+   "prompt": 32373,
+   "cached": 32366,
+   "tokens": 512,
+   "ms": 6107,
+   "tps": 83.7,
+   "tok_per_cycle": 3.65,
+   "cycles": 140,
+   "ms_per_cycle": 43.62,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.7,
+    "busy_at_timeout": [],
+    "samples": 3,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 5,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 7321,
+   "tps": 69.8,
+   "tok_per_cycle": 4.02,
+   "cycles": 127,
+   "ms_per_cycle": 57.65,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.7,
+    "busy_at_timeout": [],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  }
+ ],
+ "identical": {
+  "8K": true,
+  "32K": true,
+  "131K": true
+ },
+ "load": {
+  "0-8K": {
+   "quiet": false,
+   "quiet_wait_s": 61.7,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 2,
+   "mean_foreign_gpu_pct": 2.74,
+   "max_foreign_gpu_pct": 3.34,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "0-32K": {
+   "quiet": false,
+   "quiet_wait_s": 60.2,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 3,
+   "mean_foreign_gpu_pct": 3.52,
+   "max_foreign_gpu_pct": 6.35,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "0-131K": {
+   "quiet": false,
+   "quiet_wait_s": 60.2,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 4.51,
+   "max_foreign_gpu_pct": 9.02,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "1-8K": {
+   "quiet": false,
+   "quiet_wait_s": 61.7,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 2,
+   "mean_foreign_gpu_pct": 2.69,
+   "max_foreign_gpu_pct": 3.28,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "1-32K": {
+   "quiet": false,
+   "quiet_wait_s": 60.2,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 3,
+   "mean_foreign_gpu_pct": 3.83,
+   "max_foreign_gpu_pct": 6.6,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "1-131K": {
+   "quiet": false,
+   "quiet_wait_s": 62.0,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 4.59,
+   "max_foreign_gpu_pct": 4.97,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "2-8K": {
+   "quiet": false,
+   "quiet_wait_s": 61.7,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 2,
+   "mean_foreign_gpu_pct": 2.79,
+   "max_foreign_gpu_pct": 3.43,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "2-32K": {
+   "quiet": false,
+   "quiet_wait_s": 60.2,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 3,
+   "mean_foreign_gpu_pct": 3.51,
+   "max_foreign_gpu_pct": 6.41,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "2-131K": {
+   "quiet": false,
+   "quiet_wait_s": 60.2,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 4.36,
+   "max_foreign_gpu_pct": 8.66,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "3-8K": {
+   "quiet": false,
+   "quiet_wait_s": 61.7,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 2,
+   "mean_foreign_gpu_pct": 2.76,
+   "max_foreign_gpu_pct": 3.41,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "3-32K": {
+   "quiet": false,
+   "quiet_wait_s": 60.1,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 3,
+   "mean_foreign_gpu_pct": 3.7,
+   "max_foreign_gpu_pct": 6.19,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "3-131K": {
+   "quiet": false,
+   "quiet_wait_s": 60.1,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 4.18,
+   "max_foreign_gpu_pct": 4.65,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "4-8K": {
+   "quiet": false,
+   "quiet_wait_s": 61.7,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 2,
+   "mean_foreign_gpu_pct": 2.69,
+   "max_foreign_gpu_pct": 3.23,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "4-32K": {
+   "quiet": false,
+   "quiet_wait_s": 60.2,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 3,
+   "mean_foreign_gpu_pct": 3.69,
+   "max_foreign_gpu_pct": 6.98,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "4-131K": {
+   "quiet": false,
+   "quiet_wait_s": 60.1,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 4.58,
+   "max_foreign_gpu_pct": 9.22,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "5-8K": {
+   "quiet": false,
+   "quiet_wait_s": 61.7,
+   "busy_at_timeout": [
+    "Claude Helper 7%"
+   ],
+   "samples": 2,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "5-32K": {
+   "quiet": true,
+   "quiet_wait_s": 18.7,
+   "busy_at_timeout": [],
+   "samples": 3,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "5-131K": {
+   "quiet": true,
+   "quiet_wait_s": 18.7,
+   "busy_at_timeout": [],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  }
+ },
+ "texts": {
+  "0": {
+   "8K": "The provided code defines the core architectural components for two distinct multimodal models within the Hugging Face Transformers library: **Granite Speech** and **ModernVBert**.\n\n**1. Granite Speech (`modeling_granite_speech.py`)**\nThis file implements a speech-to-text or speech-language model. Its main classes include:\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder features into the text model's hidden space.\n*   **`GraniteSpeechConformer*` classes**: A suite of modules implementing a Conformer-style audio encoder, including feed-forward networks, attention mechanisms with relative positional embeddings, and depthwise convolutions.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that processes raw audio features through the Conformer blocks, utilizing a mid-layer skip connection.\n*   **`GraniteSpeechModel`**: The base multimodal model that integrates the audio encoder, projector, and a text language model (loaded via `AutoModel`). It handles merging audio features into text embeddings using placeholder tokens.\n\n**2. ModernVBert (`modeling_modernvbert.py`)**\nThis file implements a vision-language model designed for document retrieval. Its main classes include:\n*   **`ModernVBertConnector`**: A module that applies a pixel shuffle operation to vision encoder outputs to reduce sequence length and increase channel depth, followed by a linear projection to match the text model's hidden size.\n*   **`ModernVBertModel`**: The base model combining a vision encoder (SigLIP) and a text encoder (ModernBert). It features an `inputs_merger` method that scatters projected image hidden states into the text embedding sequence at specific placeholder token locations.\n*   **`ModernVBertPreTrainedModel`**: The base class for all ModernVBert models, defining weight initialization strategies (truncated normal) and attention backend support.",
+   "32K": "The provided code snippets define the PyTorch model architectures for five distinct Hugging Face Transformers models. Here is a description of the main classes in each file:\n\n**1. `modeling_granite_speech.py` (Granite Speech)**\nThis file implements a multimodal model for speech-to-text or speech understanding.\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder hidden states into the text model's embedding space.\n*   **`GraniteSpeechConformerBlock`** (and related classes like `GraniteSpeechConformerAttention`): Implements a Conformer-style encoder block using relative positional embeddings (Shaw's) and depthwise convolutions to process audio features.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that stacks Conformer blocks to produce audio hidden states.\n*   **`GraniteSpeechModel`**: The base multimodal model that combines the audio encoder, projector, and a text language model (`AutoModel`). It handles merging audio features into text embeddings via placeholder tokens.\n\n**2. `modeling_modernvbert.py` (ModernVBert)**\nThis file defines a vision-language model designed for document retrieval, combining a vision encoder (SigLIP) and a text encoder (ModernBert).\n*   **`ModernVBertConnector`**: A module that performs a pixel shuffle operation on vision hidden states to reduce their sequence length and projects them into the text model's hidden dimension.\n*   **`ModernVBertModel`**: The base model that processes images through the vision encoder and connector, then merges these image embeddings with text token embeddings using a custom `inputs_merger` method before passing them to the text transformer.\n*   **`ModernVBertForMaskedLM`**: A variant of the model with a masked language modeling head for pre-training or fine-tuning.\n\n**3. `modeling_altclip.py` (AltCLIP)**\nThis file implements the AltCLIP model, a vision-language model based on the CLIP architecture but using a RoBERTa-style text encoder.\n*   **`AltRobertaEmbeddings`**: Constructs text embeddings by combining word, position, and token type embeddings, specific to the RoBERTa architecture.\n*   **`AltRobertaSelfAttention` / `AltCLIPAttention`**:",
+   "131K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **"
+  },
+  "1": {
+   "8K": "The provided code defines the core architectural components for two distinct multimodal models within the Hugging Face Transformers library: **Granite Speech** and **ModernVBert**.\n\n**1. Granite Speech (`modeling_granite_speech.py`)**\nThis file implements a speech-to-text or speech-language model. Its main classes include:\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder features into the text model's hidden space.\n*   **`GraniteSpeechConformer*` classes**: A suite of modules implementing a Conformer-style audio encoder, including feed-forward networks, attention mechanisms with relative positional embeddings, and depthwise convolutions.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that processes raw audio features through the Conformer blocks, utilizing a mid-layer skip connection.\n*   **`GraniteSpeechModel`**: The base multimodal model that integrates the audio encoder, projector, and a text language model (loaded via `AutoModel`). It handles merging audio features into text embeddings using placeholder tokens.\n\n**2. ModernVBert (`modeling_modernvbert.py`)**\nThis file implements a vision-language model designed for document retrieval. Its main classes include:\n*   **`ModernVBertConnector`**: A module that applies a pixel shuffle operation to vision encoder outputs to reduce sequence length and increase channel depth, followed by a linear projection to match the text model's hidden size.\n*   **`ModernVBertModel`**: The base model combining a vision encoder (SigLIP) and a text encoder (ModernBert). It features an `inputs_merger` method that scatters projected image hidden states into the text embedding sequence at specific placeholder token locations.\n*   **`ModernVBertPreTrainedModel`**: The base class for all ModernVBert models, defining weight initialization strategies (truncated normal) and attention backend support.",
+   "32K": "The provided code snippets define the PyTorch model architectures for five distinct Hugging Face Transformers models. Here is a description of the main classes in each file:\n\n**1. `modeling_granite_speech.py` (Granite Speech)**\nThis file implements a multimodal model for speech-to-text or speech understanding.\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder hidden states into the text model's embedding space.\n*   **`GraniteSpeechConformerBlock`** (and related classes like `GraniteSpeechConformerAttention`): Implements a Conformer-style encoder block using relative positional embeddings (Shaw's) and depthwise convolutions to process audio features.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that stacks Conformer blocks to produce audio hidden states.\n*   **`GraniteSpeechModel`**: The base multimodal model that combines the audio encoder, projector, and a text language model (`AutoModel`). It handles merging audio features into text embeddings via placeholder tokens.\n\n**2. `modeling_modernvbert.py` (ModernVBert)**\nThis file defines a vision-language model designed for document retrieval, combining a vision encoder (SigLIP) and a text encoder (ModernBert).\n*   **`ModernVBertConnector`**: A module that performs a pixel shuffle operation on vision hidden states to reduce their sequence length and projects them into the text model's hidden dimension.\n*   **`ModernVBertModel`**: The base model that processes images through the vision encoder and connector, then merges these image embeddings with text token embeddings using a custom `inputs_merger` method before passing them to the text transformer.\n*   **`ModernVBertForMaskedLM`**: A variant of the model with a masked language modeling head for pre-training or fine-tuning.\n\n**3. `modeling_altclip.py` (AltCLIP)**\nThis file implements the AltCLIP model, a vision-language model based on the CLIP architecture but using a RoBERTa-style text encoder.\n*   **`AltRobertaEmbeddings`**: Constructs text embeddings by combining word, position, and token type embeddings, specific to the RoBERTa architecture.\n*   **`AltRobertaSelfAttention` / `AltCLIPAttention`**:",
+   "131K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **"
+  },
+  "2": {
+   "8K": "The provided code defines the core architectural components for two distinct multimodal models within the Hugging Face Transformers library: **Granite Speech** and **ModernVBert**.\n\n**1. Granite Speech (`modeling_granite_speech.py`)**\nThis file implements a speech-to-text or speech-language model. Its main classes include:\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder features into the text model's hidden space.\n*   **`GraniteSpeechConformer*` classes**: A suite of modules implementing a Conformer-style audio encoder, including feed-forward networks, attention mechanisms with relative positional embeddings, and depthwise convolutions.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that processes raw audio features through the Conformer blocks, utilizing a mid-layer skip connection.\n*   **`GraniteSpeechModel`**: The base multimodal model that integrates the audio encoder, projector, and a text language model (loaded via `AutoModel`). It handles merging audio features into text embeddings using placeholder tokens.\n\n**2. ModernVBert (`modeling_modernvbert.py`)**\nThis file implements a vision-language model designed for document retrieval. Its main classes include:\n*   **`ModernVBertConnector`**: A module that applies a pixel shuffle operation to vision encoder outputs to reduce sequence length and increase channel depth, followed by a linear projection to match the text model's hidden size.\n*   **`ModernVBertModel`**: The base model combining a vision encoder (SigLIP) and a text encoder (ModernBert). It features an `inputs_merger` method that scatters projected image hidden states into the text embedding sequence at specific placeholder token locations.\n*   **`ModernVBertPreTrainedModel`**: The base class for all ModernVBert models, defining weight initialization strategies (truncated normal) and attention backend support.",
+   "32K": "The provided code snippets define the PyTorch model architectures for five distinct Hugging Face Transformers models. Here is a description of the main classes in each file:\n\n**1. `modeling_granite_speech.py` (Granite Speech)**\nThis file implements a multimodal model for speech-to-text or speech understanding.\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder hidden states into the text model's embedding space.\n*   **`GraniteSpeechConformerBlock`** (and related classes like `GraniteSpeechConformerAttention`): Implements a Conformer-style encoder block using relative positional embeddings (Shaw's) and depthwise convolutions to process audio features.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that stacks Conformer blocks to produce audio hidden states.\n*   **`GraniteSpeechModel`**: The base multimodal model that combines the audio encoder, projector, and a text language model (`AutoModel`). It handles merging audio features into text embeddings via placeholder tokens.\n\n**2. `modeling_modernvbert.py` (ModernVBert)**\nThis file defines a vision-language model designed for document retrieval, combining a vision encoder (SigLIP) and a text encoder (ModernBert).\n*   **`ModernVBertConnector`**: A module that performs a pixel shuffle operation on vision hidden states to reduce their sequence length and projects them into the text model's hidden dimension.\n*   **`ModernVBertModel`**: The base model that processes images through the vision encoder and connector, then merges these image embeddings with text token embeddings using a custom `inputs_merger` method before passing them to the text transformer.\n*   **`ModernVBertForMaskedLM`**: A variant of the model with a masked language modeling head for pre-training or fine-tuning.\n\n**3. `modeling_altclip.py` (AltCLIP)**\nThis file implements the AltCLIP model, a vision-language model based on the CLIP architecture but using a RoBERTa-style text encoder.\n*   **`AltRobertaEmbeddings`**: Constructs text embeddings by combining word, position, and token type embeddings, specific to the RoBERTa architecture.\n*   **`AltRobertaSelfAttention` / `AltCLIPAttention`**:",
+   "131K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **"
+  },
+  "3": {
+   "8K": "The provided code defines the core architectural components for two distinct multimodal models within the Hugging Face Transformers library: **Granite Speech** and **ModernVBert**.\n\n**1. Granite Speech (`modeling_granite_speech.py`)**\nThis file implements a speech-to-text or speech-language model. Its main classes include:\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder features into the text model's hidden space.\n*   **`GraniteSpeechConformer*` classes**: A suite of modules implementing a Conformer-style audio encoder, including feed-forward networks, attention mechanisms with relative positional embeddings, and depthwise convolutions.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that processes raw audio features through the Conformer blocks, utilizing a mid-layer skip connection.\n*   **`GraniteSpeechModel`**: The base multimodal model that integrates the audio encoder, projector, and a text language model (loaded via `AutoModel`). It handles merging audio features into text embeddings using placeholder tokens.\n\n**2. ModernVBert (`modeling_modernvbert.py`)**\nThis file implements a vision-language model designed for document retrieval. Its main classes include:\n*   **`ModernVBertConnector`**: A module that applies a pixel shuffle operation to vision encoder outputs to reduce sequence length and increase channel depth, followed by a linear projection to match the text model's hidden size.\n*   **`ModernVBertModel`**: The base model combining a vision encoder (SigLIP) and a text encoder (ModernBert). It features an `inputs_merger` method that scatters projected image hidden states into the text embedding sequence at specific placeholder token locations.\n*   **`ModernVBertPreTrainedModel`**: The base class for all ModernVBert models, defining weight initialization strategies (truncated normal) and attention backend support.",
+   "32K": "The provided code snippets define the PyTorch model architectures for five distinct Hugging Face Transformers models. Here is a description of the main classes in each file:\n\n**1. `modeling_granite_speech.py` (Granite Speech)**\nThis file implements a multimodal model for speech-to-text or speech understanding.\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder hidden states into the text model's embedding space.\n*   **`GraniteSpeechConformerBlock`** (and related classes like `GraniteSpeechConformerAttention`): Implements a Conformer-style encoder block using relative positional embeddings (Shaw's) and depthwise convolutions to process audio features.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that stacks Conformer blocks to produce audio hidden states.\n*   **`GraniteSpeechModel`**: The base multimodal model that combines the audio encoder, projector, and a text language model (`AutoModel`). It handles merging audio features into text embeddings via placeholder tokens.\n\n**2. `modeling_modernvbert.py` (ModernVBert)**\nThis file defines a vision-language model designed for document retrieval, combining a vision encoder (SigLIP) and a text encoder (ModernBert).\n*   **`ModernVBertConnector`**: A module that performs a pixel shuffle operation on vision hidden states to reduce their sequence length and projects them into the text model's hidden dimension.\n*   **`ModernVBertModel`**: The base model that processes images through the vision encoder and connector, then merges these image embeddings with text token embeddings using a custom `inputs_merger` method before passing them to the text transformer.\n*   **`ModernVBertForMaskedLM`**: A variant of the model with a masked language modeling head for pre-training or fine-tuning.\n\n**3. `modeling_altclip.py` (AltCLIP)**\nThis file implements the AltCLIP model, a vision-language model based on the CLIP architecture but using a RoBERTa-style text encoder.\n*   **`AltRobertaEmbeddings`**: Constructs text embeddings by combining word, position, and token type embeddings, specific to the RoBERTa architecture.\n*   **`AltRobertaSelfAttention` / `AltCLIPAttention`**:",
+   "131K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **"
+  },
+  "4": {
+   "8K": "The provided code defines the core architectural components for two distinct multimodal models within the Hugging Face Transformers library: **Granite Speech** and **ModernVBert**.\n\n**1. Granite Speech (`modeling_granite_speech.py`)**\nThis file implements a speech-to-text or speech-language model. Its main classes include:\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder features into the text model's hidden space.\n*   **`GraniteSpeechConformer*` classes**: A suite of modules implementing a Conformer-style audio encoder, including feed-forward networks, attention mechanisms with relative positional embeddings, and depthwise convolutions.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that processes raw audio features through the Conformer blocks, utilizing a mid-layer skip connection.\n*   **`GraniteSpeechModel`**: The base multimodal model that integrates the audio encoder, projector, and a text language model (loaded via `AutoModel`). It handles merging audio features into text embeddings using placeholder tokens.\n\n**2. ModernVBert (`modeling_modernvbert.py`)**\nThis file implements a vision-language model designed for document retrieval. Its main classes include:\n*   **`ModernVBertConnector`**: A module that applies a pixel shuffle operation to vision encoder outputs to reduce sequence length and increase channel depth, followed by a linear projection to match the text model's hidden size.\n*   **`ModernVBertModel`**: The base model combining a vision encoder (SigLIP) and a text encoder (ModernBert). It features an `inputs_merger` method that scatters projected image hidden states into the text embedding sequence at specific placeholder token locations.\n*   **`ModernVBertPreTrainedModel`**: The base class for all ModernVBert models, defining weight initialization strategies (truncated normal) and attention backend support.",
+   "32K": "The provided code snippets define the PyTorch model architectures for five distinct Hugging Face Transformers models. Here is a description of the main classes in each file:\n\n**1. `modeling_granite_speech.py` (Granite Speech)**\nThis file implements a multimodal model for speech-to-text or speech understanding.\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder hidden states into the text model's embedding space.\n*   **`GraniteSpeechConformerBlock`** (and related classes like `GraniteSpeechConformerAttention`): Implements a Conformer-style encoder block using relative positional embeddings (Shaw's) and depthwise convolutions to process audio features.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that stacks Conformer blocks to produce audio hidden states.\n*   **`GraniteSpeechModel`**: The base multimodal model that combines the audio encoder, projector, and a text language model (`AutoModel`). It handles merging audio features into text embeddings via placeholder tokens.\n\n**2. `modeling_modernvbert.py` (ModernVBert)**\nThis file defines a vision-language model designed for document retrieval, combining a vision encoder (SigLIP) and a text encoder (ModernBert).\n*   **`ModernVBertConnector`**: A module that performs a pixel shuffle operation on vision hidden states to reduce their sequence length and projects them into the text model's hidden dimension.\n*   **`ModernVBertModel`**: The base model that processes images through the vision encoder and connector, then merges these image embeddings with text token embeddings using a custom `inputs_merger` method before passing them to the text transformer.\n*   **`ModernVBertForMaskedLM`**: A variant of the model with a masked language modeling head for pre-training or fine-tuning.\n\n**3. `modeling_altclip.py` (AltCLIP)**\nThis file implements the AltCLIP model, a vision-language model based on the CLIP architecture but using a RoBERTa-style text encoder.\n*   **`AltRobertaEmbeddings`**: Constructs text embeddings by combining word, position, and token type embeddings, specific to the RoBERTa architecture.\n*   **`AltRobertaSelfAttention` / `AltCLIPAttention`**:",
+   "131K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **"
+  },
+  "5": {
+   "8K": "The provided code defines the core architectural components for two distinct multimodal models within the Hugging Face Transformers library: **Granite Speech** and **ModernVBert**.\n\n**1. Granite Speech (`modeling_granite_speech.py`)**\nThis file implements a speech-to-text or speech-language model. Its main classes include:\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder features into the text model's hidden space.\n*   **`GraniteSpeechConformer*` classes**: A suite of modules implementing a Conformer-style audio encoder, including feed-forward networks, attention mechanisms with relative positional embeddings, and depthwise convolutions.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that processes raw audio features through the Conformer blocks, utilizing a mid-layer skip connection.\n*   **`GraniteSpeechModel`**: The base multimodal model that integrates the audio encoder, projector, and a text language model (loaded via `AutoModel`). It handles merging audio features into text embeddings using placeholder tokens.\n\n**2. ModernVBert (`modeling_modernvbert.py`)**\nThis file implements a vision-language model designed for document retrieval. Its main classes include:\n*   **`ModernVBertConnector`**: A module that applies a pixel shuffle operation to vision encoder outputs to reduce sequence length and increase channel depth, followed by a linear projection to match the text model's hidden size.\n*   **`ModernVBertModel`**: The base model combining a vision encoder (SigLIP) and a text encoder (ModernBert). It features an `inputs_merger` method that scatters projected image hidden states into the text embedding sequence at specific placeholder token locations.\n*   **`ModernVBertPreTrainedModel`**: The base class for all ModernVBert models, defining weight initialization strategies (truncated normal) and attention backend support.",
+   "32K": "The provided code snippets define the PyTorch model architectures for five distinct Hugging Face Transformers models. Here is a description of the main classes in each file:\n\n**1. `modeling_granite_speech.py` (Granite Speech)**\nThis file implements a multimodal model for speech-to-text or speech understanding.\n*   **`GraniteSpeechEncoderProjector`**: A module that uses a Q-Former (via `AutoModel`) with learnable queries to downsample and project audio encoder hidden states into the text model's embedding space.\n*   **`GraniteSpeechConformerBlock`** (and related classes like `GraniteSpeechConformerAttention`): Implements a Conformer-style encoder block using relative positional embeddings (Shaw's) and depthwise convolutions to process audio features.\n*   **`GraniteSpeechCTCEncoder`**: The main audio encoder that stacks Conformer blocks to produce audio hidden states.\n*   **`GraniteSpeechModel`**: The base multimodal model that combines the audio encoder, projector, and a text language model (`AutoModel`). It handles merging audio features into text embeddings via placeholder tokens.\n\n**2. `modeling_modernvbert.py` (ModernVBert)**\nThis file defines a vision-language model designed for document retrieval, combining a vision encoder (SigLIP) and a text encoder (ModernBert).\n*   **`ModernVBertConnector`**: A module that performs a pixel shuffle operation on vision hidden states to reduce their sequence length and projects them into the text model's hidden dimension.\n*   **`ModernVBertModel`**: The base model that processes images through the vision encoder and connector, then merges these image embeddings with text token embeddings using a custom `inputs_merger` method before passing them to the text transformer.\n*   **`ModernVBertForMaskedLM`**: A variant of the model with a masked language modeling head for pre-training or fine-tuning.\n\n**3. `modeling_altclip.py` (AltCLIP)**\nThis file implements the AltCLIP model, a vision-language model based on the CLIP architecture but using a RoBERTa-style text encoder.\n*   **`AltRobertaEmbeddings`**: Constructs text embeddings by combining word, position, and token type embeddings, specific to the RoBERTa architecture.\n*   **`AltRobertaSelfAttention` / `AltCLIPAttention`**:",
+   "131K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **"
+  }
+ }
+}

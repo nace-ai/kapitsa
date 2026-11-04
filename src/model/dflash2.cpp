@@ -663,6 +663,21 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // rows would leave half the draft on the floor: the block pins the capacity (and the size rule's choice of 8 rows,
     // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
     if (block() > kB) kf_budget_->pin_wide();
+    // the 8-row block of a drafter loaded with 16 rows (set_block): its own budget (the 8-row block's file), one 8-row
+    // tile, the full depth, as NI_DFLASH_BLOCK=8 has them. NI_DFLASH_NARROW: by default on the M5 Max, where it was
+    // measured; 1 on any Mac a 16-row block runs on, 0 never
+    const char* nv = getenv("NI_DFLASH_NARROW");
+    const bool narrow = nv && *nv ? atoi(nv) != 0 : Gpu::get().name().find("M5 Max") != std::string::npos;
+    if (block() > kB && tree_ && narrow) {
+      std::string key8 = key;
+      if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);
+      kf_budget_alt_ = std::make_unique<KfBudget>(key8);
+      kf_budget_alt_->set_rows(1u << (kB - 1), kB);
+      kf_budget_alt_->set_wide(false);
+      tree_rows_alt_ = kB;
+      vdepth_alt_ = kB - 1;
+      block_alt_ = kB;
+    }
     if (tree_ && tree_rows_ > kB) {
       tg_.set_tree_rows(tree_rows_, true);  // the drafter's own block: NI_VPF's default keys on it (Qwen35::drafter_wide)
       logi("KFlash: tree verifies of %s rows (the size rule picks per cycle)",
@@ -1497,6 +1512,16 @@ std::string DFlash2::r_list(uint32_t allowed) {
   for (int n = 1; n <= kf::kMaxRows; ++n)
     if ((allowed >> (n - 1)) & 1u) r += (r.empty() ? "" : ", ") + std::to_string(n);
   return r;
+}
+
+void DFlash2::set_block(int rows) {
+  if (rows == block_) return;
+  if (!narrow_ok() || rows != block_alt_) fatal("DFlash2::set_block(%d): this drafter drafts %d rows", rows, block_);
+  std::swap(kf_budget_, kf_budget_alt_);
+  std::swap(tree_rows_, tree_rows_alt_);
+  std::swap(vdepth_, vdepth_alt_);
+  std::swap(block_, block_alt_);
+  tree_cap_ = std::min(tree_cap_, tree_rows_);
 }
 
 void DFlash2::set_tree(bool on) {

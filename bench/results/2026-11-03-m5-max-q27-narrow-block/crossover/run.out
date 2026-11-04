@@ -1,0 +1,25 @@
+== 34000 chars, block 16
+Tue Nov  3 14:48:38 PST 2026
+prompt 8156 tok in 7672 ms (1063.1 tok/s); dflash decode (verify 15 of 7, greedy): 255 tok in 3035 ms (84.0 tok/s), 62 cycles, 4.113 tok/cycle, 48.85 ms GPU/cycle, 48.95 ms wall/cycle (mode 3), hist 7 9 12 10 10 2 5 5 1 0 0 0 0 1 0 0; 15.00 proposals verified 
+cycle trace (ms, mean of 61): host encodes the verify 0.278 | GPU idle verify->draft 0.002, draft 5.028, idle draft->verify 0.002, verify 43.816 | verify commit->start 4.645, host wake-up 0.100
+== 34000 chars, block 8
+Tue Nov  3 14:48:50 PST 2026
+prompt 8156 tok in 8273 ms (985.8 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 3000 ms (85.0 tok/s), 69 cycles, 3.696 tok/cycle, 43.39 ms GPU/cycle, 43.47 ms wall/cycle (mode 3), hist 16 7 12 12 8 4 3 7; 7.00 proposals verified per cycle; acceptan
+cycle trace (ms, mean of 68): host encodes the verify 0.276 | GPU idle verify->draft 0.003, draft 3.890, idle draft->verify 0.002, verify 39.505 | verify commit->start 3.515, host wake-up 0.094
+== 135000 chars, block 16
+Tue Nov  3 14:49:03 PST 2026
+prompt 32141 tok in 42571 ms (755.0 tok/s); dflash decode (verify 15 of 7, greedy): 255 tok in 4015 ms (63.5 tok/s), 65 cycles, 3.923 tok/cycle, 61.62 ms GPU/cycle, 61.77 ms wall/cycle (mode 3), hist 8 9 12 15 10 4 1 3 2 0 0 0 0 1 0 0; 15.00 proposals verified
+cycle trace (ms, mean of 64): host encodes the verify 0.308 | GPU idle verify->draft 0.004, draft 5.500, idle draft->verify 0.001, verify 56.232 | verify commit->start 5.092, host wake-up 0.093
+== 135000 chars, block 8
+Tue Nov  3 14:49:52 PST 2026
+prompt 32141 tok in 42234 ms (761.0 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 3670 ms (69.5 tok/s), 73 cycles, 3.493 tok/cycle, 50.14 ms GPU/cycle, 50.27 ms wall/cycle (mode 3), hist 11 12 18 13 7 4 5 3; 7.00 proposals verified per cycle; accep
+cycle trace (ms, mean of 72): host encodes the verify 0.281 | GPU idle verify->draft 0.002, draft 4.077, idle draft->verify 0.001, verify 46.106 | verify commit->start 3.696, host wake-up 0.093
+== 270000 chars, block 16
+Tue Nov  3 14:50:39 PST 2026
+prompt 64542 tok in 100632 ms (641.4 tok/s); dflash decode (verify 15 of 7, greedy): 255 tok in 4369 ms (58.4 tok/s), 60 cycles, 4.250 tok/cycle, 72.54 ms GPU/cycle, 72.81 ms wall/cycle (mode 3), hist 2 10 12 14 8 6 2 2 2 1 1 0 0 0 0 0; 15.00 proposals verifie
+cycle trace (ms, mean of 59): host encodes the verify 0.274 | GPU idle verify->draft 0.011, draft 5.754, idle draft->verify 0.003, verify 66.898 | verify commit->start 5.388, host wake-up 0.097
+== 270000 chars, block 8
+Tue Nov  3 14:52:26 PST 2026
+prompt 64542 tok in 101409 ms (636.5 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 3927 ms (64.9 tok/s), 66 cycles, 3.864 tok/cycle, 59.29 ms GPU/cycle, 59.50 ms wall/cycle (mode 3), hist 4 13 11 15 11 6 2 4; 7.00 proposals verified per cycle; acce
+cycle trace (ms, mean of 65): host encodes the verify 0.315 | GPU idle verify->draft 0.008, draft 4.643, idle draft->verify 0.001, verify 54.765 | verify commit->start 4.230, host wake-up 0.096
+Tue Nov  3 14:54:13 PST 2026
