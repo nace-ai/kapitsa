@@ -9,6 +9,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Mac | Runs |
 | --- | ---: |
 | [Mac Studio (2026) · M5 Max 32-core GPU · 36 GB](#mac-studio-2026--m5-max-32-core-gpu--36-gb) | 5 |
+| [Mac Studio (2026) · M5 Max 40-core GPU · 48 GB](#mac-studio-2026--m5-max-40-core-gpu--48-gb) | 1 |
 | [Mac Studio (2026) · M5 Max 40-core GPU · 64 GB](#mac-studio-2026--m5-max-40-core-gpu--64-gb) | 1 |
 | [Mac Studio (2026) · M5 Max 40-core GPU · 128 GB](#mac-studio-2026--m5-max-40-core-gpu--128-gb) | 1 |
 | [Mac Studio (2026) · M5 Ultra 80-core GPU · 256 GB](#mac-studio-2026--m5-ultra-80-core-gpu--256-gb) | 8 |
@@ -82,6 +83,14 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-22](results/kapitsa-bench-2026-10-22-m5-max-nemotron-nano-9b-v2-nvfp4-e5c0af.json) | 60.9 tok/s | 60.8 tok/s | 2,230 tok/s | 2,014 tok/s | 0.09 s | 0.10 s | 7.2 GB + 1.1 mapped | pass | plain | 0.2.4 | 27.0.1 | short answer |
+
+## Mac Studio (2026) · M5 Max 40-core GPU · 48 GB
+
+### Qwen3.8 27B · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-04](results/kapitsa-bench-2026-11-04-m5-max-qwen3.8-27b-4bit-f3d5bf.json) | 137.9 tok/s | 167.4 tok/s | 1,079 tok/s | 1,047 tok/s | 0.14 s | 0.15 s | 19.5 GB | pass | KFlash | 0.2.26 | 27.2 | – |
 
 ## Mac Studio (2026) · M5 Max 40-core GPU · 64 GB
 
