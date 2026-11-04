@@ -18,7 +18,7 @@ class DeviceConditions(unittest.TestCase):
                            thermal=0, load1=1.0, memory_pressure_level=1,
                            pageouts=100, swapins=200, swapouts=300, monotonic_ns=1000000000)
         self.after = dict(self.before, monotonic_ns=6000000000)
-        self.samples = [dict(self.before, time=1+i*.25, interval_s=.25, cpu_idle_pct=96,
+        self.samples = [dict(self.before, time=1+i*.25, interval_s=.25, cpu_idle_pct=96, background_cpu_pct=4,
                              foreign_gpu_ns=0, own_gpu_visible=True) for i in range(20)]
 
     def errors(self):
@@ -61,7 +61,7 @@ class DeviceConditions(unittest.TestCase):
 
     def test_thermal_power_pressure_and_cpu(self):
         cases = [("thermal", 1, "thermal_not_nominal"), ("low_power", True, "low_power_mode"),
-                 ("memory_pressure_level", -1, "memory_pressure"), ("cpu_idle_pct", 89, "cpu_not_idle")]
+                 ("memory_pressure_level", -1, "memory_pressure"), ("background_cpu_pct", 5.01, "background_CPU_over_limit")]
         for key, value, error in cases:
             with self.subTest(key=key):
                 item = copy.deepcopy(self.samples[4])
@@ -103,12 +103,27 @@ class DeviceConditions(unittest.TestCase):
     def test_cached_cpu_ticks_use_a_full_window(self):
         history = []
         for i in range(4):
-            value = ab.cpu_usage(history, dict(monotonic_ns=i*250000000, cpu_ticks=[10, 10, 180, 0]))
+            value = ab.cpu_usage(history, dict(monotonic_ns=i*250000000, cpu_ticks=[10, 10, 180, 0], owner_cpu_ns=0, cpu_count=10))
             self.assertEqual(value["cpu_idle_pct"], -1)
-        value = ab.cpu_usage(history, dict(monotonic_ns=1000000000, cpu_ticks=[15, 15, 370, 0]))
+        value = ab.cpu_usage(history, dict(monotonic_ns=1000000000, cpu_ticks=[15, 15, 370, 0], owner_cpu_ns=0, cpu_count=10))
         self.assertEqual(value["cpu_idle_pct"], 95)
-        value = ab.cpu_usage(history, dict(monotonic_ns=1250000000, cpu_ticks=[15, 15, 370, 0]))
+        value = ab.cpu_usage(history, dict(monotonic_ns=1250000000, cpu_ticks=[15, 15, 370, 0], owner_cpu_ns=0, cpu_count=10))
         self.assertEqual(value["cpu_idle_pct"], 95)
+
+    def test_owned_cpu_is_recorded_separately_from_background(self):
+        history = [dict(monotonic_ns=0, cpu_ticks=[0, 0, 0, 0], owner_cpu_ns=0, cpu_count=10)]
+        value = ab.cpu_usage(history, dict(monotonic_ns=1000000000, cpu_ticks=[140, 10, 850, 0],
+                                           owner_cpu_ns=1000000000, cpu_count=10))
+        self.assertEqual(value["cpu_idle_pct"], 85)
+        self.assertEqual(value["owner_cpu_pct"], 10)
+        self.assertEqual(value["background_cpu_pct"], 5)
+
+    def test_missing_or_reset_cpu_accounting_is_invalid(self):
+        del self.samples[2]["background_cpu_pct"]
+        self.assertIn("background_CPU_over_limit", self.errors())
+        history = [dict(monotonic_ns=0, cpu_ticks=[0, 0, 0, 0], owner_cpu_ns=2, cpu_count=10)]
+        value = ab.cpu_usage(history, dict(monotonic_ns=1000000000, cpu_ticks=[1, 1, 98, 0], owner_cpu_ns=1, cpu_count=10))
+        self.assertIsNone(value["background_cpu_pct"])
 
     def test_tail_interval_is_retained(self):
         monitor = SimpleNamespace(read=lambda: self.samples)

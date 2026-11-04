@@ -112,8 +112,10 @@ retains the original K partitions, including when a geometry falls back to the o
 `qmm_device_conditions` explicitly, then pass `--old OLD/kapitsa --new NEW/kapitsa --model MODEL_DIR
 --probe build/qmm_device_conditions --out NEW_DIRECTORY`. The controller holds the GPU lock. It records actual AC
 power, one-minute load, thermal state and paging counters before and after each leg and request, plus 250 ms GPU
-samples and CPU usage over rolling one-second windows. Defaults require load <= 2, CPU idle >= 90%, nominal thermal state, automatic AC power mode, no pageouts or
-swap, and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
+samples and CPU usage over rolling one-second windows. `proc_pid_rusage` records the tested process tree's CPU time;
+both total usage and estimated background usage (total minus that owned work, as a share of all CPU cores) are retained.
+Defaults require load <= 2, background CPU <= 5%, nominal thermal state, automatic AC power mode, no pageouts or swap,
+and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
 the run. All planned legs and identical nonempty outputs are required; invalid runs remain in the output directory.
 `python3 tests/test_qmm_device_ab.py` fault-injects these checks on the CPU without a model or GPU.
 

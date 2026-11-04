@@ -33,8 +33,8 @@ def remaining(args, limit):
     return seconds
 
 
-def snapshot(probe):
-    result = subprocess.run([str(probe)], capture_output=True, text=True, check=True, timeout=2)
+def snapshot(probe, owners=()):
+    result = subprocess.run([str(probe), *map(str, sorted(owners))], capture_output=True, text=True, check=True, timeout=2)
     value = json.loads(result.stdout)
     if not value.get("valid"):
         raise RuntimeError("invalid machine snapshot")
@@ -62,7 +62,7 @@ def environment_errors(value, max_load):
     return errors
 
 
-def validate_leg(before, after, samples, max_load=2.0, min_idle=90.0, max_gap=1.0, min_samples=20):
+def validate_leg(before, after, samples, max_load=2.0, max_background_cpu=5.0, max_gap=1.0, min_samples=20):
     errors = ["before:"+x for x in environment_errors(before, max_load)]
     errors += ["after:"+x for x in environment_errors(after, max_load)]
     for key in PAGING:
@@ -78,8 +78,9 @@ def validate_leg(before, after, samples, max_load=2.0, min_idle=90.0, max_gap=1.
             errors.append("monitor_error")
             continue
         errors += environment_errors(sample, max_load)
-        if sample.get("cpu_idle_pct", 0) < min_idle:
-            errors.append("cpu_not_idle")
+        background = sample.get("background_cpu_pct")
+        if not isinstance(background, (int, float)) or not math.isfinite(background) or not 0 <= background <= max_background_cpu:
+            errors.append("background_CPU_over_limit")
         if sample.get("foreign_gpu_ns", 0) > 0:
             errors.append("foreign_GPU_activity")
         if "foreign_gpu_ns" not in sample or not sample.get("own_gpu_visible"):
@@ -122,8 +123,13 @@ def cpu_usage(history, item):
     first = history[0]
     window = (item["monotonic_ns"]-first["monotonic_ns"])/1e9
     ticks = [(x-y) & 0xffffffff for x, y in zip(item["cpu_ticks"], first["cpu_ticks"])]
-    return {"cpu_idle_pct": 100*ticks[2]/sum(ticks) if window >= 1 and sum(ticks) else -1,
-            "cpu_window_s": window}
+    idle = 100*ticks[2]/sum(ticks) if window >= 1 and sum(ticks) else -1
+    delta = item["owner_cpu_ns"]-first["owner_cpu_ns"]
+    owned = 100*delta/(window*1e9*item["cpu_count"]) if window >= 1 and delta >= 0 else -1
+    # Preserve total usage as well. Owned CPU work is part of the measured
+    # workload, just as owned GPU work is; it is not background contention.
+    return {"cpu_idle_pct": idle, "owner_cpu_pct": owned, "cpu_window_s": window,
+            "background_cpu_pct": max(0, 100-idle-owned) if idle >= 0 and owned >= 0 else None}
 
 
 class Monitor(threading.Thread):
@@ -138,9 +144,9 @@ class Monitor(threading.Thread):
         while not self.stopping.is_set():
             started = time.monotonic()
             try:
-                item = snapshot(self.probe)
-                current_gpu = gpu_snapshot()
                 own = self.gpu.proc_tree([self.pid])
+                item = snapshot(self.probe, own)
+                current_gpu = gpu_snapshot()
                 now = time.monotonic()
                 item.update(time=now, epoch=time.time())
                 item.update(cpu_usage(cpu_history, item))
@@ -196,7 +202,7 @@ def wait_quiet(monitor, args):
         now = time.monotonic()
         samples = [x for x in monitor.read() if x["time"] >= now-args.quiet_seconds]
         if len(samples) >= 2 and samples[-1]["time"]-samples[0]["time"] >= args.quiet_seconds-args.interval-0.05:
-            valid = not validate_leg(samples[0], samples[-1], samples, args.max_load, args.min_cpu_idle)
+            valid = not validate_leg(samples[0], samples[-1], samples, args.max_load, args.max_background_cpu)
             if valid and all(x.get("own_gpu_ns", 1) == 0 for x in samples):
                 return {"waited_s": now-began, "samples": samples}
         time.sleep(0.5)
@@ -308,7 +314,7 @@ def one_leg(label, binary, cases, args, harness, gpu):
                     mid, whole, rate = harness.decode_rates(result, count)
                     cached = harness.cached_of(result["usage"], result["timings"])
                     distinct = harness.distinct4(result["content"])
-                    invalid = validate_leg(b, a, observed, args.max_load, args.min_cpu_idle, min_samples=8)
+                    invalid = validate_leg(b, a, observed, args.max_load, args.max_background_cpu, min_samples=8)
                     if count != 512 or result["finish"] != "length" or not result["content"].strip():
                         invalid.append("not_nonempty_512_length")
                     if cached != 0:
@@ -337,7 +343,7 @@ def one_leg(label, binary, cases, args, harness, gpu):
             samples = window_samples(monitor, start, end, args)
             record.update(before=before, after=after, samples=samples, duration_s=end-start,
                           power_mode_before=mode_before, power_mode_after=mode_after)
-            record["invalid"] = validate_leg(before, after, samples, args.max_load, args.min_cpu_idle)
+            record["invalid"] = validate_leg(before, after, samples, args.max_load, args.max_background_cpu)
             if mode_before != mode_after:
                 record["invalid"].append("power_mode_changed")
             if mode_before != 0 or mode_after != 0:
@@ -360,6 +366,7 @@ def compact(leg):
     result["monitor"] = {"samples": len(samples), "foreign_gpu_ns": sum(s.get("foreign_gpu_ns", 0) for s in samples),
                          "max_load1": max((s.get("load1", 0) for s in samples), default=None),
                          "min_cpu_idle_pct": min((s.get("cpu_idle_pct", 0) for s in samples), default=None),
+                         "max_background_cpu_pct": max((s["background_cpu_pct"] for s in samples if s.get("background_cpu_pct") is not None), default=None),
                          "max_interval_s": max((s.get("interval_s", 0) for s in samples), default=None)}
     result["requests"] = [{k: r[k] for k in ("case", "repeat", "temperature", "whole_decode_tps", "middle_window_tps",
                                              "ttft_s", "completion_tokens", "cached_tokens", "distinct4", "text_sha256", "monitor_samples", "invalid")}
@@ -389,7 +396,7 @@ def main():
     parser.add_argument("--pairs", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--max-load", type=float, default=2.0)
-    parser.add_argument("--min-cpu-idle", type=float, default=90.0)
+    parser.add_argument("--max-background-cpu", type=float, default=5.0)
     parser.add_argument("--interval", type=float, default=.25)
     parser.add_argument("--quiet-seconds", type=float, default=30)
     parser.add_argument("--quiet-timeout", type=float, default=900)
