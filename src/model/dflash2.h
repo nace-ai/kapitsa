@@ -313,6 +313,8 @@ class DFlash2 {
   uint32_t head_rows() const { return draft_vocab(); }             // draft logit columns (vocab or the reduced head)
   const uint32_t* head_ids() const { return head_n_ ? head_ids_.as<uint32_t>() : nullptr; }  // column -> token id
   const float* sel_hidden() const { return sel_.as<float>(); }    // [8][256]
+  // the selector codebooks (bf16 [V][256], shared memory; nullptr on v1): 0 = predecessor, 1 = successor (research, #350)
+  uint16_t* codebook(int w) const { const Tensor* t = w ? cbB_ : cbA_; return t ? (uint16_t*)t->buf.ptr() : nullptr; }
   const float* final_hidden() const { return n_.as<float>(); }    // [8][H] after the last layer
 
   // ---- debugging / tests ----

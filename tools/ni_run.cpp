@@ -18,6 +18,7 @@
 #include "metal/gpu.h"
 #include "ane/ffn_split.h"
 #include "model/dflash2.h"
+#include "online_selector.h"
 #include "model/qwen35.h"
 #include "model/qwen4_exp.h"
 #include "util/log.h"
@@ -428,6 +429,18 @@ int main(int argc, char** argv) {
     // lattice is recorded at every position of the plain output (a tree simulator can then replay any policy).
     FILE* lat = getenv("NI_DFLASH_LAT") ? fopen(getenv("NI_DFLASH_LAT"), "wb") : nullptr;
     const bool step1 = env_on("NI_DFLASH_STEP1");
+    // NI_SEL_ONLINE=<lr> (research, #350): online row-sparse update of the selector codebooks from each cycle's verified
+    // tokens (tools/online_selector.h); NI_SEL_STATE=<file> loads the rows at start and saves them at exit (a session)
+    std::unique_ptr<OnlineSelector> osel;
+    if (getenv("NI_SEL_ONLINE") && *getenv("NI_SEL_ONLINE") && dfl->codebook(0)) {  // lr 0: the control (mode 2, no change)
+      if (dfl->verify_depth() != 7) fatal("NI_SEL_ONLINE needs the 8-row block (verify depth 7)");
+      osel = std::make_unique<OnlineSelector>();
+      osel->cb[0] = dfl->codebook(0); osel->cb[1] = dfl->codebook(1); osel->lr = float(atof(getenv("NI_SEL_ONLINE")));
+      const char* st = getenv("NI_SEL_STATE");
+      const bool ld = st && *st && osel->load(st);
+      fprintf(stderr, "online selector: lr %g, state %s (%zu A + %zu B rows loaded)\n", osel->lr, ld ? st : "cold",
+              osel->m[0].size(), osel->m[1].size());
+    }
     if (lat || step1) dfl->set_tree(false);  // the recording is the walk's chain and its lattice
     if (lat) {
       const int32_t hdr[8] = {0x3154414c /* "LAT1" */, 1, n, int32_t(std::lround(sp.temperature * 1000)), K,
@@ -452,7 +465,7 @@ int main(int argc, char** argv) {
     // NI_TRACE / NI_DFLASH_CONF read drafter buffers after each cycle, so they run mode 2; NI_PROFILE
     // (one command buffer per dispatch) runs mode 1.
     int mode = getenv("NI_DFLASH_CB") && *getenv("NI_DFLASH_CB") ? atoi(getenv("NI_DFLASH_CB")) : 3;
-    if ((trace || conf || lat || step1) && mode == 3) mode = 2;
+    if ((trace || conf || lat || step1 || osel) && mode == 3) mode = 2;
     if (Encoder::profiling()) mode = 1;
     // NI_AB=key=value,... (V8Knobs keys): odd cycles run with those verify-kernel knobs, even cycles with the
     // defaults, so two kernel variants are timed under the same GPU conditions (GPU ms per cycle by parity;
@@ -630,6 +643,7 @@ int main(int argc, char** argv) {
         reached[i]++;
         if (i < a) acc_pos[i]++;
       }
+      if (osel && osel->lr > 0 && mm > 0) osel->learn(tk[P], dfl->cand_ids(), dfl->cand_vals(), dfl->sel_hidden(), tk + P + 1, mm - 1);
       m.commit_rows(s, mm);
       m_prev = mm;
       emitted += mm;
@@ -645,6 +659,11 @@ int main(int argc, char** argv) {
     if (conf) fclose(conf);
     if (lat) fclose(lat);
     if (Encoder::profiling()) Encoder::profile_report(cycles);
+    if (osel) {
+      fprintf(stderr, "online selector: %ld steps, %ld positions skipped (true token not a candidate), %zu A + %zu B rows touched\n",
+              osel->steps, osel->skipped, osel->m[0].size(), osel->m[1].size());
+      if (getenv("NI_SEL_STATE") && *getenv("NI_SEL_STATE")) osel->save(getenv("NI_SEL_STATE"));
+    }
     printf("ids:");
     for (int t : out) printf(" %d", t);
     printf("\n");
