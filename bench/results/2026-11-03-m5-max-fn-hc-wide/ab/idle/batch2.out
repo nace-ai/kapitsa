@@ -1,0 +1,5 @@
+round 0 old: 105.4 tok/s, 2.34 tok/cycle, 21.959 ms GPU/cycle | quiet False after 900.5 s, foreign GPU mean 3.47% max 5.9%
+round 0 new: 108.4 tok/s, 2.34 tok/cycle, 21.359 ms GPU/cycle | quiet False after 900.4 s, foreign GPU mean 2.89% max 5.76%
+round 1 new: 108.0 tok/s, 2.34 tok/cycle, 21.438 ms GPU/cycle | quiet False after 900.4 s, foreign GPU mean 2.78% max 4.82%
+round 1 old: 105.6 tok/s, 2.34 tok/cycle, 21.913 ms GPU/cycle | quiet False after 900.5 s, foreign GPU mean 2.86% max 5.16%
+ids identical across every run: True
