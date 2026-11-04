@@ -15,11 +15,15 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.request
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "littlecoder"))
+import tools_impl  # noqa: E402  little-coder's tool runtime, ported
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -38,6 +42,12 @@ ARM_DEFAULTS = {
     "tools": None,             # None, or "@tools.json": OpenAI tool definitions; loop runs tool calls
     "max_turns": 6,            # tool loop cap
     "extra": {},               # merged into the request body as-is
+    "task_template": None,     # "@file": user prompt template with {entry_point} and {problem statement / docstring}
+    "tool_runtime": "builtin", # "builtin" or "littlecoder" (littlecoder/tools_impl.py, a workdir per answer)
+    "write_guard": True,       # littlecoder runtime: write_file refuses existing files
+    "text_tool_fallback": False,  # parse tool calls the model printed as text (littlecoder parser)
+    "thinking_budget": None,   # N: thinking turn capped at N tokens; if cut, re-ask with thinking off (little-coder)
+    "retry_style": "plain",    # "plain" or "lc" (little-coder's "The tests failed. Output: ..." turn)
 }
 
 
@@ -46,7 +56,7 @@ def load_arm(path):
         arm = json.load(f)
     out = dict(ARM_DEFAULTS)
     out.update(arm)
-    for key in ("system", "tools"):
+    for key in ("system", "tools", "task_template"):
         v = out.get(key)
         if isinstance(v, str) and v.startswith("@"):
             p = os.path.join(os.path.dirname(os.path.abspath(path)), v[1:])
@@ -137,6 +147,9 @@ def solve(url, arm, item):
     prompt = item["prompt"]
     if arm["show_examples"] and item.get("examples"):
         prompt += "\n\nExample:\n" + "\n".join(item["examples"])
+    if arm["task_template"]:
+        prompt = arm["task_template"].replace("{entry_point}", item["entry"]).replace(
+            "{problem statement / docstring}", prompt)
     if arm["suffix"]:
         prompt += "\n\n" + arm["suffix"]
     messages = []
@@ -144,13 +157,19 @@ def solve(url, arm, item):
         messages.append({"role": "system", "content": arm["system"]})
     messages.append({"role": "user", "content": prompt})
     state = {"examples": item.get("examples", [])}
+    workdir = tempfile.mkdtemp(prefix="c10_")
+    budget_used = False
     t0 = time.time()
     turns, ctoks, retries, tool_calls = 0, 0, 0, 0
     code, finish, err = None, None, None
     while True:
         turns += 1
+        body = build_body(arm, messages)
+        budgeted = arm["thinking_budget"] and not budget_used and arm["thinking"] is not False
+        if budgeted:
+            body["max_tokens"] = arm["thinking_budget"]
         try:
-            resp = chat(url, build_body(arm, messages))
+            resp = chat(url, body)
         except Exception as e:  # noqa: BLE001 - a failed request is a failed answer, logged
             err = repr(e)[:300]
             break
@@ -158,6 +177,19 @@ def solve(url, arm, item):
         finish = resp["choices"][0].get("finish_reason")
         ctoks += (resp.get("usage") or {}).get("completion_tokens", 0)
         calls = msg.get("tool_calls") or []
+        if not calls and arm["text_tool_fallback"] and arm["tools"]:
+            parsed = tools_impl.parse_text_tool_calls(msg.get("content") or "")
+            calls = [{"id": "t%d" % i, "type": "function",
+                      "function": {"name": c["name"], "arguments": json.dumps(c.get("arguments", c.get("input", {})))}}
+                     for i, c in enumerate(parsed) if c.get("name")]
+        if budgeted and finish == "length" and not calls and not extract_code(msg.get("content") or "", item["entry"]):
+            budget_used = True
+            reasoning = msg.get("reasoning_content") or msg.get("content") or ""
+            messages.append({"role": "assistant", "content": "Here is my analysis so far:\n" + reasoning[-2000:]})
+            messages.append({"role": "user", "content":
+                             "Good analysis. Now produce the final answer directly \u2014 no more deliberation needed."})
+            arm = dict(arm, thinking=False)
+            continue
         if calls and arm["tools"] and turns < arm["max_turns"]:
             messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls})
             for c in calls:
@@ -167,11 +199,17 @@ def solve(url, arm, item):
                 except json.JSONDecodeError as e:
                     args, out = {}, "error: arguments are not valid JSON: %s" % e
                 else:
-                    out = tool_exec(c["function"]["name"], args, state)
+                    if arm["tool_runtime"] == "littlecoder":
+                        out = tools_impl.run_tool(c["function"]["name"], args, workdir, write_guard=arm["write_guard"])
+                    else:
+                        out = tool_exec(c["function"]["name"], args, state)
                 messages.append({"role": "tool", "tool_call_id": c.get("id", ""), "content": out})
             continue
         content = msg.get("content") or ""
         code = extract_code(content, item["entry"])
+        if code is None and os.path.exists(os.path.join(workdir, "solution.py")):
+            with open(os.path.join(workdir, "solution.py")) as f:
+                code = f.read()
         if code is None and state.get("last_tool_code"):
             code = state["last_tool_code"]
         if retries < arm["self_test_retries"] and item.get("examples"):
@@ -179,15 +217,20 @@ def solve(url, arm, item):
             if not ok:
                 retries += 1
                 messages.append({"role": "assistant", "content": content})
+                if arm["retry_style"] == "lc":
+                    messages.append({"role": "user", "content": "The tests failed. Output:\n\n```\n%s\n```\n\n"
+                                     "Fix the implementation and try again." % (out if code else "no ```python code block found")[-4000:]})
+                    continue
                 messages.append({"role": "user", "content":
                                  "Your code fails the example:\n%s\nFix it and reply with the complete corrected "
                                  "function in one ```python block." % (out if code else "no ```python code block found")})
                 continue
         break
     wall = time.time() - t0
+    shutil.rmtree(workdir, ignore_errors=True)
     ok, out = check(code, item.get("examples", []) + item["tests"])
     return {"id": item["id"], "pass": ok, "wall_s": round(wall, 2), "turns": turns, "retries": retries,
-            "tool_calls": tool_calls, "completion_tokens": ctoks, "finish": finish, "error": err,
+            "tool_calls": tool_calls, "budget_cut": budget_used, "completion_tokens": ctoks, "finish": finish, "error": err,
             "check_out": out[-300:], "code": code}
 
 
