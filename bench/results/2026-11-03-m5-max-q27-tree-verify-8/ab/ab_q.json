@@ -1,0 +1,440 @@
+{
+ "arms": [
+  {},
+  {
+   "NI_V8_TREE_G6": "0"
+  },
+  {},
+  {
+   "NI_V8_TREE_G6": "0"
+  },
+  {}
+ ],
+ "warm_arms": 1,
+ "rows": [
+  {
+   "arm": 0,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 7259,
+   "tps": 70.4,
+   "tok_per_cycle": 4.02,
+   "cycles": 127,
+   "ms_per_cycle": 57.16,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 61.7,
+    "busy_at_timeout": [
+     "Claude Helper 9%"
+    ],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 3.09,
+    "max_foreign_gpu_pct": 5.12,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 0,
+   "switch": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 8725,
+   "tps": 45.5,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 75.22,
+   "load": {
+    "quiet": false,
+    "quiet_wait_s": 60.1,
+    "busy_at_timeout": [
+     "Claude Helper 10%"
+    ],
+    "samples": 5,
+    "mean_foreign_gpu_pct": 4.17,
+    "max_foreign_gpu_pct": 7.76,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "Claude Helper"
+    ],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 1,
+   "switch": "0",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 9600,
+   "tps": 53.2,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 76.19,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 45.3,
+    "busy_at_timeout": [],
+    "samples": 5,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 1,
+   "switch": "0",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 12776,
+   "tps": 31.1,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 110.14,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.7,
+    "busy_at_timeout": [],
+    "samples": 7,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 2,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 7274,
+   "tps": 70.3,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 57.73,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.5,
+    "busy_at_timeout": [],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 2,
+   "switch": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 8831,
+   "tps": 45.0,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 76.13,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.6,
+    "busy_at_timeout": [],
+    "samples": 5,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 3,
+   "switch": "0",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 9677,
+   "tps": 52.8,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 76.8,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.5,
+    "busy_at_timeout": [],
+    "samples": 5,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 3,
+   "switch": "0",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 12807,
+   "tps": 31.0,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 110.41,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.6,
+    "busy_at_timeout": [],
+    "samples": 7,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 4,
+   "switch": "1",
+   "prompt": 132037,
+   "cached": 132030,
+   "tokens": 512,
+   "ms": 7274,
+   "tps": 70.2,
+   "tok_per_cycle": 4.06,
+   "cycles": 126,
+   "ms_per_cycle": 57.73,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.5,
+    "busy_at_timeout": [],
+    "samples": 4,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  {
+   "arm": 4,
+   "switch": "1",
+   "prompt": 254212,
+   "cached": 254205,
+   "tokens": 398,
+   "ms": 8820,
+   "tps": 45.0,
+   "tok_per_cycle": 3.42,
+   "cycles": 116,
+   "ms_per_cycle": 76.03,
+   "load": {
+    "quiet": true,
+    "quiet_wait_s": 18.7,
+    "busy_at_timeout": [],
+    "samples": 5,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  }
+ ],
+ "identical": {
+  "133K": true,
+  "252K": true
+ },
+ "load": {
+  "0-133K": {
+   "quiet": false,
+   "quiet_wait_s": 61.7,
+   "busy_at_timeout": [
+    "Claude Helper 9%"
+   ],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 3.09,
+   "max_foreign_gpu_pct": 5.12,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "0-252K": {
+   "quiet": false,
+   "quiet_wait_s": 60.1,
+   "busy_at_timeout": [
+    "Claude Helper 10%"
+   ],
+   "samples": 5,
+   "mean_foreign_gpu_pct": 4.17,
+   "max_foreign_gpu_pct": 7.76,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "Claude Helper"
+   ],
+   "flagged": false
+  },
+  "1-133K": {
+   "quiet": true,
+   "quiet_wait_s": 45.3,
+   "busy_at_timeout": [],
+   "samples": 5,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "1-252K": {
+   "quiet": true,
+   "quiet_wait_s": 18.7,
+   "busy_at_timeout": [],
+   "samples": 7,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "2-133K": {
+   "quiet": true,
+   "quiet_wait_s": 18.5,
+   "busy_at_timeout": [],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "2-252K": {
+   "quiet": true,
+   "quiet_wait_s": 18.6,
+   "busy_at_timeout": [],
+   "samples": 5,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "3-133K": {
+   "quiet": true,
+   "quiet_wait_s": 18.5,
+   "busy_at_timeout": [],
+   "samples": 5,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "3-252K": {
+   "quiet": true,
+   "quiet_wait_s": 18.6,
+   "busy_at_timeout": [],
+   "samples": 7,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "4-133K": {
+   "quiet": true,
+   "quiet_wait_s": 18.5,
+   "busy_at_timeout": [],
+   "samples": 4,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "4-252K": {
+   "quiet": true,
+   "quiet_wait_s": 18.7,
+   "busy_at_timeout": [],
+   "samples": 5,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  }
+ },
+ "texts": {
+  "0": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "1": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "2": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "3": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  },
+  "4": {
+   "133K": "The provided code consists of multiple Python files from the Hugging Face `transformers` library, each defining the PyTorch implementation of a specific neural network architecture. These files define the core model classes, attention mechanisms, and output data structures for various state-of-the-art AI models.\n\nHere is a description of the main classes in each file:\n\n*   **`modeling_granite_speech.py`**: Implements **Granite Speech**, a multimodal model for speech-to-text. Key classes include `GraniteSpeechCTCEncoder` (a Conformer-based audio encoder), `GraniteSpeechEncoderProjector` (which projects audio features to the text embedding space using a Q-Former), and `GraniteSpeechModel` (which combines the encoder, projector, and a language model).\n*   **`modeling_modernvbert.py`**: Implements **ModernVBert**, a vision-language model for document retrieval. It features `ModernVBertConnector` (which uses pixel shuffle and linear projection to align vision and text embeddings) and `ModernVBertModel` (which merges image and text embeddings before passing them to a text transformer).\n*   **`modeling_altclip.py`**: Implements **AltCLIP**, a variant of CLIP. It defines `AltRobertaEmbeddings` and `AltRobertaEncoder` for the text branch and `AltCLIPAttention`/`AltCLIPEncoderLayer` for the vision branch, allowing for contrastive learning between images and text.\n*   **`modeling_xcodec.py`**: Implements **Xcodec**, a neural audio codec. It includes `SemanticEncoder` and `SemanticDecoder` (convolutional blocks for semantic representation) and `XcodecResidualVectorQuantization` (for discrete audio coding), wrapped in the `XcodecModel` class.\n*   **`modeling_t5.py`**: Implements **T5** (Text-to-Text Transfer Transformer). Key classes include `T5Attention` (with relative position bias), `T5Block` (combining self/cross-attention and feed-forward layers), and `T5Model` (the encoder-decoder backbone).\n*   **`modeling_ctrl.py`**: Implements **CTRL** (Conditional Transformer Language Model). It uses `MultiHeadAttention` with ALiBi (Attention with Linear Biases) and `EncoderLayer` blocks, wrapped in `CTRLModel` and `CTRLLMHeadModel`.\n*   **",
+   "252K": "The provided code defines the PyTorch model architectures for several Hugging Face Transformers models, primarily focusing on Vision Transformers (ViT, Swin, BEiT, BiT, CLIP, ALIGN, AIMv2, VideoPrism), Causal Language Models (Llama, Gemma, Qwen, Mistral/MoE variants, Falcon, BLOOM, GPT-2, OPT, CTRL, Mamba, Bamba), and Encoder-Decoder models (BART, MBART, Pegasus, T5, BigBird, Autoformer).\n\nThe main classes generally follow a standard pattern:\n1.  **Embedding Modules:** Classes like `ViTEmbeddings`, `LlamaRotaryEmbedding`, or `BertEmbeddings` handle the conversion of raw inputs (pixels or token IDs) into dense vector representations, often including positional encodings.\n2.  **Attention and MLP Blocks:** Classes such as `LlamaAttention`, `ViTAttention`, or `MambaMixer` implement the core computational layers, utilizing mechanisms like Multi-Head Attention, Rotary Position Embeddings (RoPE), or State Space Models (SSM) to process the sequence.\n3.  **Transformer Layers:** Classes like `LlamaDecoderLayer` or `ViTLayer` combine the attention/MLP blocks with normalization layers (e.g., RMSNorm, LayerNorm) and residual connections to form a single transformer block.\n4.  **Main Model Classes:** Classes like `LlamaModel`, `ViTModel`, or `BartModel` stack these layers and manage the forward pass, handling inputs, masks, and caching for autoregressive generation.\n5.  **Task-Specific Heads:** Classes like `LlamaForCausalLM` or `ViTForImageClassification` add specific output heads (e.g., linear layers for logits) on top of the base model for specific downstream tasks."
+  }
+ }
+}

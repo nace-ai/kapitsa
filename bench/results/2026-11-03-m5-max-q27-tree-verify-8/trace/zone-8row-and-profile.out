@@ -1,0 +1,54 @@
+== cycle trace
+Tue Nov  3 13:43:39 PST 2026
+prompt 131404 tok in 259604 ms (506.2 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 5251 ms (48.6 tok/s), 62 cycles, 4.113 tok/cycle, 84.59 ms GPU/cycle, 84.69 ms wall/cycle (mode 3), hist 9 5 12 12 7 5 7 5; 7.00 proposals verified per cycle; acceptance by position 0.85 0.91 0.75 0.67 0.71 0.71 0.42
+KFlash: 62 cycles, 8.00 rows per cycle; cycles by rows 8:62; tokens per cycle expected 4.325, got 4.145; rate 0.0495 tok/ms; cost ms by rows 8:86.20; calibration (alpha, beta) by depth (-0.24, 1.06) (0.36, 1.39) (-0.66, 0.56) (-1.17, 1.21) (0.12, 0.59) (-0.45, 0.53) (0.00, 1.00) (0.00, 1.00)
+cycle trace (ms, mean of 61): host encodes the verify 0.296 | GPU idle verify->draft 0.014, draft 4.008, idle draft->verify 0.002, verify 80.645 | verify commit->start 3.616, host wake-up 0.099
+drafting pass: GPU ms/cycle mean 4.008 median 4.003 p10 3.829 p90 4.177 (61 cycles); GPU idle before the verify 0.002 ms/cycle
+== profile
+Tue Nov  3 13:48:06 PST 2026
+  qmm_b4_m64_n64                 70.383 ms/step    0.0%     8.0 calls/step  8797.93 us/call
+  embed_q4                        3.920 ms/step    0.0%    65.0 calls/step    60.31 us/call
+  qmvf_b4_t1_r4_norm              1.298 ms/step    0.0%     1.0 calls/step  1298.50 us/call
+  dfl_capture                     0.507 ms/step    0.0%    10.0 calls/step    50.68 us/call
+  dfl_rows_bf16_half              0.360 ms/step    0.0%     4.0 calls/step    89.99 us/call
+  dfl_ctx_commit                  0.256 ms/step    0.0%     4.0 calls/step    63.90 us/call
+  dfl_rows_norm_half              0.151 ms/step    0.0%     4.0 calls/step    37.72 us/call
+  topk_stage1                     0.017 ms/step    0.0%     1.0 calls/step    17.42 us/call
+  sample_stage2                   0.009 ms/step    0.0%     1.0 calls/step     9.12 us/call
+---- GPU profile per step (15 steps, 85.465 ms/step total, isolated dispatches) ----
+  attn8m_partial_zone            41.234 ms/step   48.2%    16.0 calls/step  2577.10 us/call
+  qmm8tp_b4_nt16                 32.991 ms/step   38.6%   261.0 calls/step   126.40 us/call
+  qmm8tp_b4_nt32                  1.866 ms/step    2.2%     7.9 calls/step   237.18 us/call
+  qmm8snb_b4_nf2                  1.808 ms/step    2.1%     6.0 calls/step   301.30 us/call
+  gdn_step_verify8s_tree          1.442 ms/step    1.7%    48.0 calls/step    30.04 us/call
+  x8_prep2                        1.405 ms/step    1.6%   145.0 calls/step     9.69 us/call
+  gdn_prep_verify8_tree           0.854 ms/step    1.0%    48.0 calls/step    17.78 us/call
+  attn_rows_reduce_shared         0.841 ms/step    1.0%    16.0 calls/step    52.58 us/call
+  qmm8snb16_b4_nf2                0.724 ms/step    0.8%     5.0 calls/step   144.75 us/call
+  swiglu_x8                       0.672 ms/step    0.8%    69.0 calls/step     9.74 us/call
+  attn8_tree_zone                 0.327 ms/step    0.4%    16.0 calls/step    20.43 us/call
+  dfl_attn_qk                     0.280 ms/step    0.3%     5.0 calls/step    55.94 us/call
+  gdn_gnorm_x8t                   0.190 ms/step    0.2%    48.0 calls/step     3.95 us/call
+  attn_prep_tree                  0.175 ms/step    0.2%    16.0 calls/step    10.96 us/call
+  dfl_qmm8_cp                     0.168 ms/step    0.2%    10.0 calls/step    16.75 us/call
+  dfl_conv_fin_norm               0.122 ms/step    0.1%    10.0 calls/step    12.23 us/call
+  dfl_attn_reduce                 0.080 ms/step    0.1%     5.0 calls/step    15.98 us/call
+  dfl_rope_table                  0.071 ms/step    0.1%     1.0 calls/step    70.76 us/call
+  kv_tree_compact                 0.050 ms/step    0.1%    16.0 calls/step     3.10 us/call
+  dfl_top16                       0.038 ms/step    0.0%     2.0 calls/step    19.16 us/call
+  topk_stage1_rows_tree           0.023 ms/step    0.0%     1.0 calls/step    23.17 us/call
+  dfl_x8_to_v8                    0.017 ms/step    0.0%     6.0 calls/step     2.85 us/call
+  dfl_capture                     0.016 ms/step    0.0%     5.0 calls/step     3.17 us/call
+  kf_build                        0.013 ms/step    0.0%     1.0 calls/step    13.01 us/call
+  dfl_embed_norm                  0.012 ms/step    0.0%     1.0 calls/step    11.62 us/call
+  dfl_ctx_commit                  0.010 ms/step    0.0%     0.9 calls/step    11.19 us/call
+  dfl_norm_x8                     0.009 ms/step    0.0%     0.9 calls/step     9.75 us/call
+  dfl_lattice                     0.006 ms/step    0.0%     1.0 calls/step     5.93 us/call
+  kf_accept                       0.005 ms/step    0.0%     1.0 calls/step     5.47 us/call
+  sample_stage2_rows_tree         0.005 ms/step    0.0%     1.0 calls/step     5.44 us/call
+  embed_q4                        0.005 ms/step    0.0%     1.0 calls/step     5.22 us/call
+  dfl_x8_from_bf16                0.004 ms/step    0.0%     0.9 calls/step     4.22 us/call
+  dfl_kf_table                    0.003 ms/step    0.0%     1.0 calls/step     2.88 us/call
+prompt 131404 tok in 319620 ms (411.1 tok/s); dflash decode (verify 7 of 7, greedy): 47 tok in 1287 ms (36.5 tok/s), 15 cycles, 3.133 tok/cycle, 0.00 ms GPU/cycle, 85.80 ms wall/cycle (mode 1), hist 2 1 6 4 1 0 1 0; 7.00 proposals verified per cycle; acceptance by position 0.87 0.92 0.50 0.33 0.50 1.00 0.00
+KFlash: 15 cycles, 8.00 rows per cycle; cycles by rows 8:15; tokens per cycle expected 3.675, got 3.333; rate 65710.9153 tok/ms; cost ms by rows 8:0.00; calibration (alpha, beta) by depth (-0.24, 1.06) (0.36, 1.39) (-0.66, 0.56) (-1.17, 1.21) (0.12, 0.59) (-0.45, 0.53) (0.00, 1.00) (0.00, 1.00)
+Tue Nov  3 13:53:29 PST 2026
