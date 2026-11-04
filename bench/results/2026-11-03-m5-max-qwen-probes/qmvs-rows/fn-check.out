@@ -1,0 +1,112 @@
+[kapitsa] compiled kernels in 3120 ms
+hc_*3_b4 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=1 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=1 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=2 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=2 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=3 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=3 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=4 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=4 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b4 R=4 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=1 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=1 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=2 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=2 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=3 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=3 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=4 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=4 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b6 R=4 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=1 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=1 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=2 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=2 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=3 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=3 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=4 plain == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=4 inject == one[kapitsa] compiled the weight-format kernels in 6697 ms
+-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=4 inject == one-row max rel err 0.00e+00
+hc wide (sk4 + c2)_b8 R=4 inject == one-row max rel err 0.00e+00
+qmvs_multi R=2 == qmv2_multi_r2    max rel err 0.00e+00
+   seg 0 (4-bit): 133 of 192 differ, max |d| 4.77e-07 of max 6.11
+   seg 1 (4-bit): 51 of 80 differ, max |d| 5.36e-07 of max 4.8
+   seg 2 (8-bit): 0 of 16 differ, max |d| 0 of max 64.8
+   seg 3 (8-bit): 0 of 8 differ, max |d| 0 of max 84.3
+qmvs_rows R=2 == qmv2_multi_r2     max rel err 2.00e+00  FAILED
+qmvp_multi R=2 ~ qmv2_multi_r2     max rel err 2.35e-07
+qmvs_multi R=3 == qmv2_multi_r2    max rel err 0.00e+00
+   seg 0 (4-bit): 193 of 288 differ, max |d| 7.15e-07 of max 5.14
+   seg 1 (4-bit): 84 of 120 differ, max |d| 4.77e-07 of max 5.82
+   seg 2 (8-bit): 0 of 24 differ, max |d| 0 of max 64.8
+   seg 3 (8-bit): 0 of 12 differ, max |d| 0 of max 67.2
+qmvs_rows R=3 == qmv2_multi_r2     max rel err 2.00e+00  FAILED
+qmvp_multi R=3 ~ qmv2_multi_r2     max rel err 1.42e-07
+qmvs_multi R=4 == qmv2_multi_r2    max rel err 0.00e+00
+   seg 0 (4-bit): 268 of 384 differ, max |d| 7.15e-07 of max 4.62
+   seg 1 (4-bit): 114 of 160 differ, max |d| 7.15e-07 of max 4.89
+   seg 2 (8-bit): 20 of 32 differ, max |d| 7.63e-06 of max 83.1
+   seg 3 (8-bit): 9 of 16 differ, max |d| 7.63e-06 of max 72.6
+qmvs_rows R=4 == qmv2_multi_r2     max rel err 4.00e+00  FAILED
+qmvp_multi R=4 ~ qmv2_multi_r2     max rel err 1.55e-07
+qmvs_multi R=5 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=5 ~ qmv2_multi_r2     max rel err 1.52e-07
+qmvs_multi R=6 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=6 ~ qmv2_multi_r2     max rel err 1.67e-07
+qmvs_multi R=7 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=7 ~ qmv2_multi_r2     max rel err 1.84e-07
+qmvs_multi R=8 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=8 ~ qmv2_multi_r2     max rel err 1.77e-07
+qmvs R=4 == qmv3_b4_r2             max rel err 0.00e+00
+qmvs R=4 == qmv2_b4_g64_r4         max rel err 0.00e+00
+qmvs R=4 == qmvg_f6g64_r2          max rel err 0.00e+00
+qmvs R=4 == qmv3_b8_r2             max rel err 0.00e+00
+moe4 R=1 == decode MoE per row     max rel err 0.00e+00
+moe4 R=2 == decode MoE per row     max rel err 0.00e+00
+moe4 R=3 == decode MoE per row     max rel err 0.00e+00
+moe4 R=4 == decode MoE per row     max rel err 0.00e+00
+FAILED

@@ -1,0 +1,11 @@
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (124 ms)
+[kapitsa] compiled kernels in 2945 ms
+[kapitsa] compiled the Flint kernels in 1 ms
+[kapitsa] compiled the tensor kernels in 1 ms
+[kapitsa] read 22.57 GB of weights in 1141 ms (19.8 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 1.3 s
+[kapitsa] compiled the weight-format kernels in 6541 ms
+prefill 8 rows: next-token NLL 1.1594, top-1 = next token 0.7500 -> <scratch>/lc/oc/new/prefill
+step   192 rows: next-token NLL 0.8380, top-1 = next token 0.8021 -> <scratch>/lc/oc/new/step
+verify 192 rows: next-token NLL 0.8356, top-1 = next token 0.8125 -> <scratch>/lc/oc/new/verify
+8 windows, 14848 prefilled tokens in 8.9 s; 10.4 s in all

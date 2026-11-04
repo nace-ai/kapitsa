@@ -120,6 +120,50 @@ NI_INLINE void qmv2_rows(const device uint32_t* w, const device bfloat* scales, 
   for (int r = 0; r < ROWS; ++r) acc[r] = simd_sum(acc[r]);
 }
 
+// qmv2_rows with x in device memory (read through the caches instead of staged): the same arithmetic
+template <int BITS, int VPL, int ROWS, int GS>
+NI_INLINE void qmv2_rows_dx(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                            const device float* xs, uint N, uint K, uint row0, uint lane, thread float* acc) {
+  constexpr int PER_WORD = 32 / BITS;
+  constexpr uint MASK = (1u << BITS) - 1u;
+  constexpr int WORDS = VPL / PER_WORD;
+  const uint words_per_row = K / PER_WORD;
+  const uint groups_per_row = K / GS;
+  uint rows[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    acc[r] = 0.0f;
+    rows[r] = min(row0 + r, N - 1);
+  }
+  for (uint k0 = lane * VPL; k0 < K; k0 += 32 * VPL) {
+    float xv[VPL];
+    float xsum = 0.0f;
+    for (int i = 0; i < VPL / 4; ++i) {
+      float4 v = ((const device float4*)(xs + k0))[i];
+      xsum += v.x + v.y + v.z + v.w;
+      for (int e = 0; e < 4; ++e) xv[i * 4 + e] = v[e] * float(1.0f / float(1u << (BITS * ((i * 4 + e) % PER_WORD))));
+    }
+    const uint g = k0 / GS, wo = k0 / PER_WORD;
+    for (int r = 0; r < ROWS; ++r) {
+      const device uint32_t* wp = w + rows[r] * words_per_row + wo;
+      uint32_t wv[WORDS];
+      if (WORDS == 4) {
+        uint4 v = *(const device uint4*)wp;
+        wv[0] = v.x; wv[1] = v.y; wv[2] = v.z; wv[3] = v.w;
+      } else if (WORDS == 2) {
+        uint2 v = *(const device uint2*)wp;
+        wv[0] = v.x; wv[1] = v.y;
+      } else {
+        for (int i = 0; i < WORDS; ++i) wv[i] = wp[i];
+      }
+      float d = 0.0f;
+      for (int i = 0; i < WORDS; ++i)
+        for (int j = 0; j < PER_WORD; ++j) d += float(wv[i] & (MASK << (BITS * j))) * xv[i * PER_WORD + j];
+      acc[r] += float(scales[rows[r] * groups_per_row + g]) * d + float(biases[rows[r] * groups_per_row + g]) * xsum;
+    }
+  }
+  for (int r = 0; r < ROWS; ++r) acc[r] = simd_sum(acc[r]);
+}
+
 // Stages x (optionally normalized) into threadgroup memory.
 NI_INLINE void stage_x(const device float* x, uint K, bool norm, float eps, const device bfloat* nw,
                        threadgroup float* xs, threadgroup float* red, uint tid, uint ntg) {

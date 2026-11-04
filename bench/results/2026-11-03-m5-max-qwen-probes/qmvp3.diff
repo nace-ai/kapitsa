@@ -1,0 +1,14 @@
+diff --git a/src/model/qwen4_exp_spec.cpp b/src/model/qwen4_exp_spec.cpp
+index 8bbd187..35df5d9 100644
+--- a/src/model/qwen4_exp_spec.cpp
++++ b/src/model/qwen4_exp_spec.cpp
+@@ -66,7 +66,8 @@ void Qwen4Exp::enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffe
+     // the LM head on the M5 Max); else a simdgroup per token row. The pair kernel needs 2 * ceil(R / 2)
+     // simdgroups (pair = sg % ceil(R/2), blk = sg / ceil(R/2)): threads must scale with ceil(R / 2) or blk
+     // collapses to 0 and half of every weight tile goes unread.
+-    const bool qmvp = sp0 && (R == 4 || (pair8 && R == 8));
++    static const bool q3 = env_on("NI_QMVP3");
++    const bool qmvp = sp0 && (R == 4 || (pair8 && R == 8) || (q3 && R == 3));
+     e.use(pipe4(qmvp ? "qmvp_multi" : sp0 ? "qmvs_multi" : "qmvs_multi_" + f0.fmt()));
+     struct {
+       uint32_t K, R, nseg, x_ld, N[4], tg_begin[5], bits[4], y_ld[4], add[4];

@@ -1045,6 +1045,45 @@ void test_qmvs_rows() {
   for (int i = 0; i < 4; ++i) delete Wq[i], delete Sq[i], delete Bq[i];
 }
 
+// moe4_unique against the serial pass it replaced (on the CPU): 400 random top-k sets of 1-8 rows x 1-16 slots (at most
+// 64 entries), experts distinct within a row and drawn from a small pool so that rows share them; ue, umask, uslot, n
+void test_moe4_unique() {
+  Buf idx(64), ue(64), umask(64), uslot(64), un(4);
+  double bad = 0;
+  for (int t = 0; t < 400; ++t) {
+    const uint32_t R = 1 + rng() % 8, k = 1 + rng() % std::min<uint32_t>(16, 64 / R), E = k + rng() % 24;
+    for (uint32_t r = 0; r < R; ++r) {
+      std::vector<uint32_t> pool(E);
+      for (uint32_t i = 0; i < E; ++i) pool[i] = i * 7 + 3;
+      std::shuffle(pool.begin(), pool.end(), rng);
+      for (uint32_t s2 = 0; s2 < k; ++s2) idx.b.as<uint32_t>()[r * k + s2] = pool[s2];
+    }
+    for (Buf* b : {&ue, &umask, &uslot}) memset(b->b.as<uint32_t>(), 0xff, 64 * 4);
+    std::vector<uint32_t> ce, cm, cs;  // the serial pass
+    for (uint32_t r = 0; r < R; ++r)
+      for (uint32_t s2 = 0; s2 < k; ++s2) {
+        const uint32_t e = idx.b.as<uint32_t>()[r * k + s2];
+        size_t u = 0;
+        while (u < ce.size() && ce[u] != e) ++u;
+        if (u == ce.size()) ce.push_back(e), cm.push_back(0), cs.push_back(0);
+        cm[u] |= 1u << r;
+        cs[u] |= s2 << (4 * r);
+      }
+    const struct { uint32_t R, k; } rk{R, k};
+    run("moe4_unique", [&](Encoder& e) {
+      e.buf(0, idx.b); e.buf(1, ue.b); e.buf(2, umask.b); e.buf(3, uslot.b); e.buf(4, un.b); e.val(5, rk);
+    }, 1, 1, 1, 32);
+    bool ok = un.b.as<uint32_t>()[0] == ce.size();
+    for (size_t u = 0; ok && u < ce.size(); ++u)
+      ok = ue.b.as<uint32_t>()[u] == ce[u] && umask.b.as<uint32_t>()[u] == cm[u] && uslot.b.as<uint32_t>()[u] == cs[u];
+    if (!ok) {
+      bad += 1;
+      if (getenv("FN_VERBOSE")) printf("   moe4_unique: R=%u k=%u differs from the serial pass\n", R, k);
+    }
+  }
+  report("moe4_unique == the serial pass (400 sets)", bad, 0);
+}
+
 // The verify MoE (moe4_unique + moe4_gate_up + moe4_down) against the decode kernels (moe_gate_up3_r2 + moe_down2_w)
 // run row by row on the same top-k, bit for bit; small = the moe4_down_s instance only (shader validation)
 void test_moe4_rows(bool small) {
@@ -1061,10 +1100,11 @@ void test_moe4_rows(bool small) {
   for (Buf* b : {&gb, &ub, &db, &sgb, &sub, &sdb}) b->fill_bf16(-0.06f, 0.0f);
   struct { uint32_t D, I, SI, k; float eps; } mp{D, I, SI, k, 1e-6f};
   for (uint32_t R = 1; R <= 4; ++R) {
-    Buf x(R * D), idx(R * k), wts(R * (k + 1)), ya(R * D), yb(R * D), h1((k + 1) * I), hR(R * (k + 1) * I);
+    Buf x(R * D), idx(R * k), wts(R * (k + 1)), ya(R * D), yb(R * D), yd(R * D), h1((k + 1) * I), hR(R * (k + 1) * I);
     Buf ue(64), umask(64), uslot(64), un(4), dummy(64);
     x.fill(-2, 2), wts.fill(0.0f, 0.3f), ya.fill(-1, 1);
     memcpy(yb.f(), ya.f(), R * D * 4);
+    memcpy(yd.f(), ya.f(), R * D * 4);
     for (uint32_t r = 0; r < R; ++r) {  // distinct experts per row, overlapping across rows
       std::vector<uint32_t> pool(E);
       for (uint32_t i = 0; i < E; ++i) pool[i] = i;
@@ -1101,7 +1141,25 @@ void test_moe4_rows(bool small) {
       e.buf(0, dw.b); e.buf(1, ds.b); e.buf(2, db.b); e.buf(3, sdw.b); e.buf(4, sds.b); e.buf(5, sdb.b);
       e.buf(6, hR.b); e.buf(7, idx.b); e.buf(8, wts.b); e.buf(9, yb.b); e.val(10, mp);
     }, R, D / 16, 1, 256);
+    Buf hD(R * (k + 1) * I);
+    run("moe4_gate_up_d", [&](Encoder& e) {  // x read from device memory: the same arithmetic as moe4_gate_up
+      e.buf(0, gw.b); e.buf(1, gs.b); e.buf(2, gb.b); e.buf(3, uw.b); e.buf(4, us.b); e.buf(5, ub.b);
+      e.buf(6, sgw.b); e.buf(7, sgs.b); e.buf(8, sgb.b); e.buf(9, suw.b); e.buf(10, sus.b); e.buf(11, sub.b);
+      e.buf(12, x.b); e.buf(13, hD.b); e.val(14, mp); e.buf(15, ue.b); e.buf(16, umask.b); e.buf(17, uslot.b);
+      e.buf(18, un.b); e.val(19, R);
+    }, R, I / 16, R * k + 1, 256);
+    {
+      char nm2[64];
+      snprintf(nm2, sizeof nm2, "moe4_gate_up_d R=%u == moe4_gate_up", R);
+      report(nm2, memcmp(hR.f(), hD.f(), hR.n * 4) == 0 ? 0.0 : 1.0, 0);
+    }
+    run("moe4_down_d", [&](Encoder& e) {  // h read from device memory: the same arithmetic as moe4_down
+      e.buf(0, dw.b); e.buf(1, ds.b); e.buf(2, db.b); e.buf(3, sdw.b); e.buf(4, sds.b); e.buf(5, sdb.b);
+      e.buf(6, hR.b); e.buf(7, idx.b); e.buf(8, wts.b); e.buf(9, yd.b); e.val(10, mp);
+    }, R, D / 16, 1, 256);
     char nm[64];
+    snprintf(nm, sizeof nm, "moe4_down_d R=%u == moe4_down", R);
+    report(nm, memcmp(yb.f(), yd.f(), size_t(R) * D * 4) == 0 ? 0.0 : 1.0, 0);
     if (small) {
       bool finite = true;
       for (size_t i = 0; i < yb.n; ++i) finite = finite && std::isfinite(yb.f()[i]);
@@ -1244,6 +1302,7 @@ int kernels() {
     test_hc_rows(8);
     // (qmv2_multi_r2: 16 KB of threadgroup memory, past what shader validation accepts)
     if (!getenv("MTL_SHADER_VALIDATION")) test_qmvs_rows(), test_qmvs_single();
+    test_moe4_unique();
     test_moe4_rows(getenv("MTL_SHADER_VALIDATION") != nullptr);
     printf("%s\n", g_fail ? "FAILED" : "all kernels match");
     return g_fail ? 1 : 0;
@@ -1265,6 +1324,7 @@ int kernels() {
   test_hc_rows(8);
   // (qmv2_multi_r2: 16 KB of threadgroup memory, past what shader validation accepts)
   if (!getenv("MTL_SHADER_VALIDATION")) test_qmvs_rows(), test_qmvs_single();
+  test_moe4_unique();
   test_moe4_rows(getenv("MTL_SHADER_VALIDATION") != nullptr);
   test_ple();
   test_qsa();
