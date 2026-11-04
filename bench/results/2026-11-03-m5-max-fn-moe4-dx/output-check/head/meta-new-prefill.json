@@ -1,6 +1,6 @@
 {
   "engine": "kapitsa",
-  "build": "0.2.26 (d93297d)",
+  "build": "0.2.26 (c90acf65)",
   "model": "qwen3.8-flash-next-4bit",
   "model_dir": "~/models/qwen3.8-flash-next-4bit",
   "path": "prefill",
@@ -15,6 +15,6 @@
   "source": "bench/corpus.txt",
   "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
   "macos": "26.4",
-  "date": "2026-11-04T14:16:26Z",
+  "date": "2026-11-04T15:26:55Z",
   "env": {}
 }

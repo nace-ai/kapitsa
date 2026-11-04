@@ -81,10 +81,14 @@ GPU time a cycle 22.12 -> 21.83 ms (-1.3%), decode 104.7 -> 106.1 tok/s (+1.3%).
   threadgroup memory): "all kernels match".
 - Output check ([output-check/](output-check)): `logit_dump --paths step,verify` with `NI_MOE4_DX=0` and the default:
   the prefill rows, 192 step rows and 192 verify rows (the MTP cycle's chain of 3) **every row bitwise identical**. No
-  floor file exists for this 4-bit pack; bitwise identity needs none.
-- The output check again on main's merge (`83ad33a`'s code, #921's `NI_HC_WIDE` in;
-  [output-check/merged/](output-check/merged)): the prefill rows, 192 step rows and 192 verify rows, **every row
-  bitwise identical**.
+  floor file exists for this 4-bit pack; bitwise identity needs none. (Its dumps' `meta.json` name `d93297d`, the commit
+  the build folder was configured at: the code was `c9bea88`'s.)
+- The output check on this branch's head, `c90acf6` (main's merges of #921's `NI_HC_WIDE` and #922's `moe4_unique` in;
+  [output-check/head/](output-check/head)), the build configured with `KAPITSA_GIT` set to the head so that every
+  `meta.json` reads `0.2.26 (c90acf65)`: the prefill rows, 192 step rows and 192 verify rows, **every row bitwise
+  identical**. The same build's `NI_PROFILE` decodes show the switch at work: `NI_MOE4_DX=0` runs `moe4_gate_up` and
+  `moe4_down` (100.4 and 63.6 us a call), the default `moe4_gate_up_d` and `moe4_down_d` (98.2 and 60.2 us), both
+  after #922's `moe4_unique` (8.0 us).
 
 The first A/B's build read the switch as "`0` off, else on"; the idle rounds' build (the one the first two checks used)
 reads it as committed, the per-Mac default: the code of `c9bea88` but for its comments.
