@@ -788,8 +788,14 @@ uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool 
     // of them the FFN, so ~25 ms of mixer. Wavefront balance u = (25 + 1.52 x 34) k / (1.68 + 1.52 k): 24 of 34 at
     // 20 cores (ane_calib --wave: 22-28 within noise at 2.99-3.30 s per chunk, 34 4.0 s); plain split
     // u = 1.52 k U / (1.68 + 1.52 k): 16 of 34 (measured best 16).
-    const double g = 1.52 * k, a = 1.68;
-    const double frac = std::min(1.0, wave ? (25.0 * k + g * 34) / (a + g) / 34 : g / (a + g));
+    // The 128-row tile (NI_QMT128) runs the GPU's share faster: on the M5 Max (bench_qmm, the 27B's shapes) gate/up
+    // 1.195x and down 1.112x, so a unit costs (2/3) / 1.195 + (1/3) / 1.112 = 0.86 of what it did, 1.52 -> 1.30 ms, and
+    // the mixer's projections ~1.15x, 25 -> 22 ms. The wavefront balance moves from 16 to 14 of 34 units at 40 cores:
+    // M5 Max, 27B 4K prefill (ni_run, two passes): 16 units 3,632 ms, 14 3,199, 12 3,218, 8 3,480, 20 4,459, the GPU
+    // alone 4,043 (bench/results/2026-11-04-m5-max-ane-share-qmt128). The plain split (a noncausal pass) keeps its
+    // measured 1.52, not re-measured with the new tile.
+    const double gw = 1.30 * k, gp = 1.52 * k, a = 1.68;
+    const double frac = std::min(1.0, wave ? (22.0 * k + gw * 34) / (a + gw) / 34 : gp / (a + gp));
     return std::max<uint32_t>(1, std::min<uint32_t>(total, uint32_t(std::lround(frac * total))));
   }
   const double u34 = (100.0 + 6.2 * 34) * k / (1.94 + 6.2 * k);  // on the 27B's 34 units
