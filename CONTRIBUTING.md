@@ -48,6 +48,9 @@ The SDK model tests additionally exercise ownership on a temporary lock file. Re
 
 `build/dflash_lowrank_cache_test` checks the low-rank drafter cache identity on the CPU: changing Q4 codes
 with unchanged scales and biases changes both the key and the computed factors. No model or GPU is needed.
+`build/dflash_plan_test` checks optional low-rank drafter memory reservations on the CPU.
+`build/dflash_plan_test --gpu MODEL_DIR` compares a real drafter load against its reservation, allowing 8 MiB
+for buffer page rounding and existing small scratch estimates. The latter mode takes the GPU lock.
 
 These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/tokenizer_test`, `build/vit_check`,
 `build/bench_test`) come with the full build.

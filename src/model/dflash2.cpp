@@ -42,6 +42,11 @@ static bool dfl_lanes_shape(const Qwen35Config& c) {
 }
 static bool dfl_lanes_default(const Qwen35& t) { return dfl_lanes_shape(t.config()) && !dynamic_cast<const Clover*>(&t); }
 
+static int lowrank_request() {
+  const char* v = getenv("NI_DFLASH_LOWRANK");
+  return v && *v ? atoi(v) : Gpu::get().m4_base() ? 768 : 0;
+}
+
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
   static const bool m1_max32 = Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32;
   return hidden >= 2560 || (m1_max32 && hidden == 2048 && moe && head_q4);
@@ -576,8 +581,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // head's own rows rescore. On the 10-core M4, 4B: drafting pass -0.75 ms, tok/cycle unchanged on 7 prompts (the
     // shortlist holds the true top 16's probability mass to 0.9999). Default on the 10-core M4, where it was measured
     // and gated; NI_DFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
-    const char* v = getenv("NI_DFLASH_LOWRANK");
-    const int r = v && *v ? atoi(v) : Gpu::get().m4_base() ? 768 : 0;
+    const int r = lowrank_request();
     if (r > 0 && v8_ && cfg_.v1) build_lowrank(uint32_t(r));
   }
   load_v8_packed_coeff();
@@ -795,6 +799,7 @@ void DFlash2::build_lowrank(uint32_t r) {
   lr_y_ = g.alloc(size_t(8) * r * 4, "dfl_lr_y");
   lr_xh_ = g.alloc(size_t(16) * r * 2, "dfl_lr_xh");
   lr_xs_ = g.alloc(size_t(r) / 64 * 8 * 4, "dfl_lr_xs");
+  resident_ += lr_perm_.size + lr_y_.size + lr_xh_.size + lr_xs_.size;
   lr_r_ = r;
   logi("DFlash2: low-rank shortlist head r=%u (factors %s in %.0f ms, rows %.0f ms)", r, cached ? "cached" : "computed",
        t1 - t0, now_ms() - t1);
@@ -1130,17 +1135,27 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   // A native 4-bit group-64 head row includes its packed codes, scales and biases.
   const bool head_q4 = head_row_bytes == size_t(target.hidden) / 2 + size_t(target.hidden) / 64 * 4;
   const bool use_v8 = v8 && *v8 ? atoi(v8) != 0 : default_v8(H, target.moe, head_q4);
-  const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == size_t(target.hidden) && I == size_t(target.dense_I) && NL == 6 &&
-                         c.value("architectures", json::array()) == json::array({"DFlashDraftModel"}) &&
+  const bool v1 = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
+  const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == size_t(target.hidden) &&
+                         I == size_t(target.dense_I) && NL == 6 && v1 &&
                          Qwen35::v8_packed_coeff_on(target);
   auto packed_bytes = [](size_t N, size_t K) {
     const size_t blocks = ((N + 15) / 16) * ((K / 64 + 1) / 2);
     // All-raw upper bound, including aligned raw slabs and the separate header array.
     return (((blocks * 272 + 31) & ~size_t(31)) + blocks * 33) * 4;
   };
-  if (use_v8)
-    b += 8 * H * 2 + 8 * I * 2 + I / 64 * 8 * 4;
-  if (packed_v8) w += NL * ((H == 4096 ? 0 : 2 * packed_bytes(I, H)) + packed_bytes(H, I));
+  if (Bk == 8 && use_v8)
+    b += 8 * std::max({H, size_t(4096), nH}) * 2 + 8 * I * 2 + I / 64 * 8 * 4;
+  if (packed_v8) {
+    w += NL * ((H == 4096 ? 0 : 2 * packed_bytes(I, H)) + packed_bytes(H, I));
+    if (H != 4096) {
+      // load_v8_packed_coeff(): per-layer q/kv/o, the stacked context KV, and the optional ring-commit fc.
+      w += NL * (packed_bytes(4096, H) + packed_bytes(2048, H) + packed_bytes(H, 4096));
+      w += packed_bytes(NL * 2048, H);
+      const bool fc = !getenv("NI_DFL_FC_PACK") || atoi(getenv("NI_DFL_FC_PACK")) != 0;
+      if (fc && nH / 64 >= 256 && (nH / 64 / 2) % 8 == 0) w += packed_bytes(H, nH);
+    }
+  }
   // build_head(): rows of the target's LM head (the ranked or id-order rows plus every id from the first
   // end-of-sequence id on)
   {
@@ -1151,7 +1166,20 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     if (req > 0 && req < V) {
       const size_t rows = std::max(req, V - special0);
       b += rows * (head_row_bytes + 4);
-      if (packed_v8 && head_q4 && H != 4096) w += packed_bytes(rows, H);
+      // build_lowrank() retains the original reduced head for rescoring and adds two quantized factors.
+      const int r = lowrank_request();
+      const bool lr = Bk == 8 && use_v8 && v1 && head_q4 && H % 64 == 0 && rows % 2048 == 0 &&
+                      r > 0 && size_t(r) < H && r % 64 == 0;
+      size_t head_extra = packed_v8 && head_q4 && H != 4096 ? packed_bytes(rows, H) : 0;
+      if (lr) {
+        size_t factors = (size_t(r) * H + rows * size_t(r)) * bits / 8 +
+                         (size_t(r) * (H / 64) + rows * (size_t(r) / 64)) * 4;
+        factors += rows * 4 + 8 * size_t(r) * 4 + 16 * size_t(r) * 2 + size_t(r) / 64 * 8 * 4;
+        if (packed_v8 && H != 4096) factors += packed_bytes(size_t(r), H);
+        // A failed factorization keeps the full packed head; reserve enough for either outcome.
+        head_extra = std::max(head_extra, factors);
+      }
+      w += head_extra;
     }
   }
   b += size_t(4) << 20;  // the target's 8-row verify scratch (Qwen35::v8_alloc): ~1-3 MB
