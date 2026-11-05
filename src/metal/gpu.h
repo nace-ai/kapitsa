@@ -229,7 +229,47 @@ class Encoder {
   // another's, e.g. a drafting pass's "d:"); nullptr or "" for none
   static void profile_tag(const char* tag);
 
+  // ---- Two dependent chains side by side (a GPU-only prefill wavefront) ----
+  // While a Tape is set (record), the encoder writes what it would encode into it instead: pipelines, bindings,
+  // grids, and where a barrier would come (a step: the dispatches that may run together, as a grouped encoder's
+  // group). play() encodes a tape as recorded; play_pair() encodes two tapes as one, a step of each beside the other
+  // between barriers, so each chain keeps its own order and the two overlap. Pairing: a latency-bound step (a
+  // DeltaNet scan, prefill attention) waits for the other chain's next GEMM step, which hides it. The chains must not
+  // touch each other's buffers. Not while profiling (NI_PROFILE) or NI_DUP: tapes_ok() says so.
+  struct Tape {
+    struct Bind {
+      int kind, idx;  // 0 buffer, 1 bytes, 2 threadgroup memory
+      void* mtl;
+      size_t off;     // buffer offset, or the bytes' offset in data
+      uint32_t len;   // bytes / threadgroup memory length
+    };
+    struct Op {
+      void* pso;
+      const char* name;
+      uint32_t max_threads, grid[3], tpg[3];
+      size_t b0, b1;  // binds[b0, b1)
+      bool step;      // a barrier comes before it
+      void* ind;      // an indirect dispatch's argument buffer (id<MTLBuffer>), else nullptr
+      size_t ind_off;
+    };
+    std::vector<Op> ops;
+    std::vector<Bind> binds;
+    std::vector<uint8_t> data;
+    void clear() { ops.clear(); binds.clear(); data.clear(); }
+  };
+  static bool tapes_ok();
+  void record(Tape* t);  // nullptr: encode again
+  bool recording() const { return rec_ != nullptr; }
+  void play(const Tape& t);
+  void play_pair(const Tape& a, const Tape& b);
+
  private:
+  Tape* rec_ = nullptr;
+  std::vector<Tape::Bind> rec_state_;  // the bindings so far while recording: 32 buffer indices, then 8 tg memory
+  bool rec_dispatched_ = false, rec_barrier_ = false;
+  void rec_set(int kind, int idx, void* mtl, size_t off, uint32_t len);
+  void rec_dispatch(const uint32_t grid[3], const uint32_t tpg[3], void* ind, size_t ind_off);
+  void emit(const Tape& t, const Tape::Op& o);
   friend class Gpu;
   void open_encoder();
   void* cb_ = nullptr;

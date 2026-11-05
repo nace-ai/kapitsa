@@ -13,7 +13,9 @@
 #include <cstring>
 #include <map>
 #include <mutex>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -852,7 +854,7 @@ void Gpu::make_resident(const std::vector<Buffer>& bufs) {
 static inline id<MTLComputeCommandEncoder> E(void* p) { return (__bridge id<MTLComputeCommandEncoder>)p; }
 
 void Encoder::use(const Pipeline& p) {
-  [E(enc_) setComputePipelineState:(__bridge id<MTLComputePipelineState>)p.pso];
+  if (!rec_) [E(enc_) setComputePipelineState:(__bridge id<MTLComputePipelineState>)p.pso];
   cur_name_ = p.name;
   cur_pso_ = p.pso;
   cur_max_threads_ = p.max_threads;
@@ -865,7 +867,7 @@ void Encoder::use(const Pipeline& p) {
 void Encoder::fit_threads(uint32_t threads) {
   if (!cur_max_threads_ || threads <= cur_max_threads_) return;
   Pipeline w = Gpu::get().pipeline_threads(Pipeline{cur_pso_, cur_name_, cur_max_threads_}, threads);
-  [E(enc_) setComputePipelineState:(__bridge id<MTLComputePipelineState>)w.pso];
+  if (!rec_) [E(enc_) setComputePipelineState:(__bridge id<MTLComputePipelineState>)w.pso];
   cur_pso_ = w.pso;
   cur_max_threads_ = w.max_threads;
 }
@@ -912,10 +914,21 @@ void Encoder::profile_report(int steps) {
   prof_recs().clear();
 }
 void Encoder::buf(int idx, const Buffer& b, size_t extra) {
+  if (rec_) return rec_set(0, idx, b.mtl, b.offset + extra, 0);
   [E(enc_) setBuffer:(__bridge id<MTLBuffer>)b.mtl offset:b.offset + extra atIndex:idx];
 }
-void Encoder::bytes(int idx, const void* data, size_t len) { [E(enc_) setBytes:data length:len atIndex:idx]; }
-void Encoder::tgmem(int idx, size_t len) { [E(enc_) setThreadgroupMemoryLength:(len + 15) & ~size_t(15) atIndex:idx]; }
+void Encoder::bytes(int idx, const void* data, size_t len) {
+  if (rec_) {
+    const size_t off = rec_->data.size();
+    rec_->data.insert(rec_->data.end(), (const uint8_t*)data, (const uint8_t*)data + len);
+    return rec_set(1, idx, nullptr, off, uint32_t(len));
+  }
+  [E(enc_) setBytes:data length:len atIndex:idx];
+}
+void Encoder::tgmem(int idx, size_t len) {
+  if (rec_) return rec_set(2, idx, nullptr, 0, uint32_t((len + 15) & ~size_t(15)));
+  [E(enc_) setThreadgroupMemoryLength:(len + 15) & ~size_t(15) atIndex:idx];
+}
 // NI_DUP=<kernel>[,<kernel>...] (timing aid, read once): every dispatch of these kernels runs twice in
 // a row, so (time with) - (time without) is their in-pipeline cost, unlike NI_PROFILE's isolated
 // command buffers. Only meaningful for kernels that do not read their own outputs (GEMMs without
@@ -951,6 +964,10 @@ void Encoder::pre_dispatch() {
 
 void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint32_t ty, uint32_t tz) {
   fit_threads(tx * ty * tz);
+  if (rec_) {
+    const uint32_t g[3] = {gx, gy, gz}, t[3] = {tx, ty, tz};
+    return rec_dispatch(g, t, nullptr, 0);
+  }
   pre_dispatch();
   [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
   if (dup_kernel(cur_name_))
@@ -981,6 +998,10 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
 }
 void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty, uint32_t tz) {
   fit_threads(tx * ty * tz);
+  if (rec_) {
+    const uint32_t g[3] = {0, 0, 0}, t[3] = {tx, ty, tz};
+    return rec_dispatch(g, t, args.mtl, args.offset + off);
+  }
   pre_dispatch();
   [E(enc_) dispatchThreadgroupsWithIndirectBuffer:(__bridge id<MTLBuffer>)args.mtl
                              indirectBufferOffset:args.offset + off
@@ -1006,8 +1027,162 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
     if (cur_pso_) [ne setComputePipelineState:(__bridge id<MTLComputePipelineState>)cur_pso_];
   }
 }
-void Encoder::barrier() { [E(enc_) memoryBarrierWithScope:MTLBarrierScopeBuffers]; }
+void Encoder::barrier() {
+  if (rec_) {
+    rec_barrier_ = true;
+    return;
+  }
+  [E(enc_) memoryBarrierWithScope:MTLBarrierScopeBuffers];
+}
+
+// ---- tapes ----
+bool Encoder::tapes_ok() {
+  static const bool ok = !profiling() && !(getenv("NI_DUP") && *getenv("NI_DUP"));
+  return ok;
+}
+void Encoder::record(Tape* t) {
+  if (t && !tapes_ok()) throw std::logic_error("Encoder::record: no tapes while profiling or with NI_DUP");
+  rec_ = t;
+  rec_state_.assign(40, Tape::Bind{-1, 0, nullptr, 0, 0});
+  rec_dispatched_ = rec_barrier_ = false;
+  in_group_ = group_first_ = false;
+}
+void Encoder::rec_set(int kind, int idx, void* mtl, size_t off, uint32_t len) {
+  const int slot = kind == 2 ? 32 + idx : idx;
+  if (idx < 0 || slot >= int(rec_state_.size())) throw std::logic_error("Encoder::record: binding index out of range");
+  rec_state_[slot] = Tape::Bind{kind, idx, mtl, off, len};
+}
+void Encoder::rec_dispatch(const uint32_t grid[3], const uint32_t tpg[3], void* ind, size_t ind_off) {
+  // where a barrier would come: a serial encoder orders every dispatch after the one before; a grouped one puts a
+  // barrier before each dispatch but the second and later of a group (pre_dispatch); an explicit barrier() too
+  const bool step = rec_dispatched_ && (rec_barrier_ || !auto_barrier_ || !in_group_ || group_first_);
+  group_first_ = false;
+  rec_dispatched_ = true;
+  rec_barrier_ = false;
+  Tape::Op o{cur_pso_, cur_name_, cur_max_threads_, {grid[0], grid[1], grid[2]}, {tpg[0], tpg[1], tpg[2]},
+             rec_->binds.size(), 0, step, ind, ind_off};
+  for (const Tape::Bind& b : rec_state_)
+    if (b.kind >= 0) rec_->binds.push_back(b);
+  o.b1 = rec_->binds.size();
+  rec_->ops.push_back(o);
+}
+void Encoder::emit(const Tape& t, const Tape::Op& o) {
+  id<MTLComputeCommandEncoder> en = E(enc_);
+  [en setComputePipelineState:(__bridge id<MTLComputePipelineState>)o.pso];
+  cur_pso_ = o.pso;
+  cur_name_ = o.name;
+  cur_max_threads_ = o.max_threads;
+  for (size_t i = o.b0; i < o.b1; ++i) {
+    const Tape::Bind& b = t.binds[i];
+    if (b.kind == 0) [en setBuffer:(__bridge id<MTLBuffer>)b.mtl offset:b.off atIndex:b.idx];
+    else if (b.kind == 1) [en setBytes:t.data.data() + b.off length:b.len atIndex:b.idx];
+    else [en setThreadgroupMemoryLength:b.len atIndex:b.idx];
+  }
+  const MTLSize tpg = MTLSizeMake(o.tpg[0], o.tpg[1], o.tpg[2]);
+  if (o.ind)
+    [en dispatchThreadgroupsWithIndirectBuffer:(__bridge id<MTLBuffer>)o.ind indirectBufferOffset:o.ind_off
+                         threadsPerThreadgroup:tpg];
+  else
+    [en dispatchThreadgroups:MTLSizeMake(o.grid[0], o.grid[1], o.grid[2]) threadsPerThreadgroup:tpg];
+}
+namespace {
+// A tape's steps: [begin, end) op ranges, each starting at a recorded barrier
+std::vector<std::pair<size_t, size_t>> tape_steps(const Encoder::Tape& t) {
+  std::vector<std::pair<size_t, size_t>> v;
+  for (size_t i = 0; i < t.ops.size(); ++i)
+    if (i == 0 || t.ops[i].step) v.push_back({i, i + 1});
+    else v.back().second = i + 1;
+  return v;
+}
+// 2: latency-bound (a DeltaNet scan or prefill attention: few threadgroups or a long dependent loop), 1: a GEMM
+// (the matrix units or simdgroup MMAs busy), 0: the rest (norms, routing, small glue)
+int step_kind(const Encoder::Tape& t, std::pair<size_t, size_t> r) {
+  int k = 0;
+  for (size_t i = r.first; i < r.second; ++i) {
+    const std::string_view n = t.ops[i].name;
+    if (n.rfind("gdn_step", 0) == 0 || n.rfind("qattn", 0) == 0 || n.rfind("attn_prefill", 0) == 0) return 2;
+    if (n.rfind("qmt", 0) == 0 || n.rfind("qmm", 0) == 0 || n.rfind("qmr", 0) == 0 || n.rfind("qrm", 0) == 0) k = 1;
+  }
+  return k;
+}
+}  // namespace
+void Encoder::play(const Tape& t) {
+  for (const Tape::Op& o : t.ops) {
+    if (concurrent_ && dispatched_ && (o.step || &o == &t.ops[0])) barrier();
+    emit(t, o);
+    dispatched_ = true;
+  }
+  in_group_ = group_first_ = false;
+}
+void Encoder::play_pair(const Tape& a, const Tape& b) {
+  if (!concurrent_) {  // a serial encoder runs them one after the other
+    play(a);
+    play(b);
+    return;
+  }
+  const auto sa = tape_steps(a), sb = tape_steps(b);
+  // Only a latency-bound step of one chain runs beside a step of the other: the other's largest GEMM step after the
+  // last one paired. Measured on the 35B-A3B (M5 Max, 4,129 ids in one chunk, ni_run): every step beside the other
+  // chain's, 737 ms; the same tapes one after the other, 624; a DeltaNet scan or attention beside the largest GEMM,
+  // the GEMM dispatched first, 665; the scan first, 589; besides that every other non-GEMM step beside a GEMM, 595.
+  // Pairs keep both chains' orders; every other step runs alone, the two chains alternating.
+  auto size = [](const Tape& t, std::pair<size_t, size_t> r) {
+    double n = 0;
+    for (size_t k = r.first; k < r.second; ++k)
+      n += double(t.ops[k].grid[0]) * t.ops[k].grid[1] * t.ops[k].grid[2] * t.ops[k].tpg[0] * t.ops[k].tpg[1];
+    return n;
+  };
+  std::vector<std::pair<size_t, size_t>> pairs;  // (step of a, step of b)
+  auto match = [&](const Tape& lt, const std::vector<std::pair<size_t, size_t>>& ls, const Tape& gt,
+                   const std::vector<std::pair<size_t, size_t>>& gs, bool lat_is_a) {
+    size_t from = 0;
+    for (size_t k = 0; k < ls.size(); ++k) {
+      if (step_kind(lt, ls[k]) != 2) continue;
+      size_t best = size_t(-1);
+      for (size_t g = from; g < gs.size(); ++g)
+        if (step_kind(gt, gs[g]) == 1 && (best == size_t(-1) || size(gt, gs[g]) > size(gt, gs[best]))) best = g;
+      if (best == size_t(-1)) break;
+      pairs.push_back(lat_is_a ? std::make_pair(k, best) : std::make_pair(best, k));
+      from = best + 1;
+    }
+  };
+  match(b, sb, a, sa, false);
+  if (pairs.empty()) match(a, sa, b, sb, true);
+  size_t i = 0, j = 0;
+  auto run = [&](const Tape& t, std::pair<size_t, size_t> r) {
+    for (size_t k = r.first; k < r.second; ++k) emit(t, t.ops[k]);
+  };
+  auto alone = [&](size_t ia_end, size_t jb_end) {  // the steps before the next pair, one chain then the other
+    while (i < ia_end || j < jb_end) {
+      if (i < ia_end) {
+        if (dispatched_) barrier();
+        run(a, sa[i++]);
+        dispatched_ = true;
+      }
+      if (j < jb_end) {
+        if (dispatched_) barrier();
+        run(b, sb[j++]);
+        dispatched_ = true;
+      }
+    }
+  };
+  for (auto [pa, pb] : pairs) {
+    if (pa < i || pb < j) continue;
+    alone(pa, pb);
+    if (dispatched_) barrier();
+    // the latency-bound step first: its threadgroups (a few hundred, each a long dependent loop) all start at once,
+    // and the GEMM's fill the cores around them; the other way round they wait for the GEMM's to drain
+    if (step_kind(a, sa[i]) == 2) run(a, sa[i]), run(b, sb[j]);
+    else run(b, sb[j]), run(a, sa[i]);
+    ++i, ++j;
+    dispatched_ = true;
+  }
+  alone(sa.size(), sb.size());
+  in_group_ = group_first_ = false;
+}
+
 void Encoder::set_grouped(bool on) {
+  if (rec_) throw std::logic_error("Encoder: set_grouped while recording");
   if (concurrent_ == on && auto_barrier_ == on) return;
   concurrent_ = on;
   auto_barrier_ = on;
@@ -1105,6 +1280,7 @@ void Encoder::open_encoder() {
   enc_ = (__bridge_retained void*)ne;
 }
 void Encoder::signal_event(void* event, uint64_t value) {
+  if (rec_) throw std::logic_error("Encoder: an event or a split while recording");
   id<MTLSharedEvent> ev = (__bridge id<MTLSharedEvent>)event;
   if (enc_) {
     [E(enc_) endEncoding];
@@ -1123,6 +1299,7 @@ void Encoder::signal_event(void* event, uint64_t value) {
   open_encoder();
 }
 void Encoder::split() {
+  if (rec_) throw std::logic_error("Encoder: an event or a split while recording");
   if (profiling()) return;  // (every dispatch has its own command buffer then)
   if (enc_) {
     [E(enc_) endEncoding];
@@ -1139,6 +1316,7 @@ void Gpu::signal_event_cpu(void* event, uint64_t value) { ((__bridge id<MTLShare
 uint64_t Gpu::event_value(void* event) { return ((__bridge id<MTLSharedEvent>)event).signaledValue; }
 
 void Encoder::signal_event_inline(void* event, uint64_t value) {
+  if (rec_) throw std::logic_error("Encoder: an event or a split while recording");
   if (enc_) {
     [E(enc_) endEncoding];
     CFRelease(enc_);
@@ -1149,6 +1327,7 @@ void Encoder::signal_event_inline(void* event, uint64_t value) {
 }
 
 void Encoder::wait_event(void* event, uint64_t value) {
+  if (rec_) throw std::logic_error("Encoder: an event or a split while recording");
   if (enc_) {
     [E(enc_) endEncoding];
     CFRelease(enc_);
