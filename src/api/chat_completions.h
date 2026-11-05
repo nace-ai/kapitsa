@@ -35,7 +35,8 @@ std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tool
 // The stream: a chat.completion.chunk with the assistant's role at begin(), one per delta's reasoning
 // (reasoning_content), text (content) and tool calls (tool_calls, indexed across the reply), then one with
 // finish_reason and usage, and "data: [DONE]". begin() takes no counts (the stream starts before the request has a
-// slot); a failure after it is chat_failure's error as an event before [DONE].
+// slot); a failure after it is chat_failure's error as an event before [DONE]. With "return_progress": true, chunks
+// with an empty delta and llama.cpp's prompt_progress object while the prompt is read (progress()).
 class ChatCompletionsStream : public StreamWriter {
  public:
   ChatCompletionsStream(std::string id, std::string model, long created)
@@ -43,10 +44,12 @@ class ChatCompletionsStream : public StreamWriter {
   std::string begin(const ChatResult& prompt) override;
   std::string delta(const ChatDelta& d) override;
   std::string keepalive() override;
+  std::string progress(const PromptProgress& p) override;
   std::string end(const ChatResult& res) override;
 
  private:
-  std::string chunk(const ojson& delta, const ojson& finish, const ojson* usage = nullptr) const;
+  std::string chunk(const ojson& delta, const ojson& finish, const ojson* usage = nullptr,
+                    const ojson* progress = nullptr) const;
   std::string id_, model_;
   long created_;
   size_t tools_ = 0;  // tool calls sent: the next one's index

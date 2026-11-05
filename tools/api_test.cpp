@@ -2,7 +2,7 @@
 //  - request mapping: multi-turn conversations with tools, thinking / reasoning round trips, system merging, images;
 //  - the exact event sequences of streamed replies (text, reasoning + text, reasoning + 2 tool calls, a custom tool
 //    call, a length cutoff, a stop sequence, errors) and the non-streamed responses; the Chat Completions stream's
-//    bytes and its keepalive chunk;
+//    bytes, its keepalive chunk and its prompt progress chunks;
 //  - what `kapitsa claude|codex|opencode|pi` gives each client;
 //  - with a model folder (its chat template and tokenizer): tool loops through the template, the generated turns parsed
 //    as the engine parses them, streamed, read back as each client reads them and sent back: the next request's prompt
@@ -699,6 +699,23 @@ void chat_events() {
     check(chunks == 5 && text == "Hi", "chat stream: keepalives between chunks add no text", s);
     check(w.delta(content("caf\xc3")) == chunk("{\"content\":\"caf\xef\xbf\xbd\"}"),
           "chat stream: invalid UTF-8 at the end of a piece is replaced, not thrown");
+  }
+  {
+    // "return_progress": llama.cpp's prompt_progress object, on a chunk with an empty delta
+    ChatCompletionsStream w("chatcmpl-1", "m", 123);
+    const std::string p = w.progress({27104, 24576, 25600, 3250});
+    check(p == R"(data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":123,"model":"m","choices":[{"index":0,)"
+               R"("delta":{},"finish_reason":null}],)"
+               R"("prompt_progress":{"total":27104,"cache":24576,"processed":25600,"time_ms":3250}})" "\n\n",
+          "chat stream: a progress chunk has an empty delta and prompt_progress {total, cache, processed, time_ms} "
+          "beside the choices", p);
+    std::string s = w.begin(ChatResult{}) + p + w.delta(content("Hi")) + w.end(result("stop"));
+    std::string text;
+    for (const auto& e : parse_sse(s.substr(0, s.size() - done.size()))) {
+      const ojson& c = e.data["choices"][0]["delta"];
+      if (c.contains("content") && c["content"].is_string()) text += c["content"].get<std::string>();
+    }
+    check(text == "Hi", "chat stream: progress chunks add no text", s);
   }
 }
 
@@ -1903,6 +1920,13 @@ void dump_cases(const std::string& dir) {
     }
     chat += cw.end(r);
     write("chat-" + c.name + ".sse", chat);
+    if (c.name == "text") {  // with "return_progress": prompt_progress chunks while the prompt is read
+      ChatCompletionsStream pw("chatcmpl-progress", "m", 1760000000);
+      std::string sse = pw.begin(r);
+      for (int read : {60, 80, 100}) sse += pw.progress({100, 60, read, (read - 60) * 25});
+      for (auto& d : c.deltas) sse += pw.delta(d);
+      write("chat-progress.sse", sse + pw.end(r));
+    }
   }
   ChatResult big = result("error");
   big.prompt_tokens = 140000;

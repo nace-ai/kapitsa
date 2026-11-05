@@ -501,6 +501,17 @@ whose stream starts before the request has a slot, also the wait for one) gets a
 it: a `ping` event (Messages), a `response.in_progress` event (Responses), a chunk with an empty delta (Chat
 Completions).
 
+A Chat Completions stream that asks with `"return_progress": true` (llama.cpp's server's field) also says how far the
+prompt has been read, for a client that shows a long prompt's progress: chunks with an empty delta (as the
+keepalive's) and llama.cpp's `prompt_progress` object beside the `choices`, `{"total": 27104, "cache": 24576,
+"processed": 25600, "time_ms": 3250}`. `total` is the prompt's tokens, `cache` those reused from the cache,
+`processed` those read so far (the cached ones included: the first event, once the prompt is matched against the
+cache, has `processed` equal to `cache`) and `time_ms` the milliseconds since then. An event comes as the GPU finishes
+each prefill pass (`--prefill-chunk`; sampled every 50 ms, so passes that finish closer together share one), the last
+with `processed` equal to `total`, before the reply's first token. The overall progress is `processed / total`, the
+part being read `(processed - cache) / (total - cache)`. It is off by default and has no effect on a request that is
+not streamed.
+
 ```bash
 curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model": "qwen3.5-4b",
   "messages": [{"role": "user", "content": "Explain speculative decoding in two sentences."}], "stream": true}'

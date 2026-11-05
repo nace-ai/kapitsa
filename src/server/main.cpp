@@ -485,7 +485,7 @@ struct MeterChatEvents final : detail::ChatObserver {
 static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
                          std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter,
-                         bool early = false, bool telemetry = false) {
+                         bool early = false, bool telemetry = false, bool progress = false) {
   server::stream_reply(r, std::move(w), res,
       [guard = std::move(guard)](auto observer) {
         return native_execution(guard, std::move(observer), NativeReplyMemory::BeforeTerminal);
@@ -496,7 +496,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
         if (status == 503 && !result.engine_down) response.set_header("Retry-After", "1");  // a dead engine: no retry helps
         response.set_content(api::dump(body), "application/json");
       }, std::move(after), {[meter] { ui::token(meter); }, [meter](const ChatResult& result) { ui::done(meter, result); }},
-      early, telemetry);
+      early, telemetry, progress);
 }
 
 // What the server keeps when it ends: the KFlash budgets' measurements (Engine::save_kflash: this Mac's cost per verify
@@ -1406,7 +1406,10 @@ static int serve(int argc, char** argv, int first) {
     const auto meter = ui::meter(req, r);
     r.live = ui::live_of(meter);
     const bool telemetry = req.get_header_value("X-Kapitsa-Bench-Telemetry") == "1";
-    if (telemetry && !r.live) r.live = std::make_shared<LiveDecode>();
+    // llama.cpp's "return_progress": prompt_progress chunks while the prompt is read (streams only)
+    const bool progress = stream && body.contains("return_progress") && body["return_progress"].is_boolean() &&
+                          body["return_progress"].get<bool>();
+    if ((telemetry || progress) && !r.live) r.live = std::make_shared<LiveDecode>();
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
@@ -1434,7 +1437,7 @@ static int serve(int argc, char** argv, int first) {
     }
     // the stream (src/api/chat_completions.cpp) starts as soon as the prompt is known to fit, before the slot
     stream_reply(guard, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
-                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true, telemetry);
+                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true, telemetry, progress);
   });
 
   // Anthropic Messages (src/api/anthropic.cpp)

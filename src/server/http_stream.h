@@ -18,10 +18,11 @@ struct StreamMeter {
 
 // Meter exceptions are contained. token runs on the worker; done is attempted once on the connection thread after join.
 // failure owns the pre-stream response. Otherwise the response owns the provider and its execution.
+// progress: the writer's progress() events while the prompt is read, from request.live (which must then be set)
 void stream_reply(const ChatRequest& request, std::shared_ptr<api::StreamWriter> writer,
                   httplib::Response& response, BindExecution bind,
                   std::function<void(const ChatResult&, httplib::Response&)> failure,
                   std::function<void(const ChatResult&)> after, StreamMeter meter,
-                  bool early = false, bool telemetry = false);
+                  bool early = false, bool telemetry = false, bool progress = false);
 
 }  // namespace ni::server

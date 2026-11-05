@@ -63,16 +63,25 @@ void schema_format(const ojson& f, OutputSpec& spec, const std::string& param);
 std::shared_ptr<const Grammar> request_grammar(const OutputSpec& spec, const ojson& tools,
                                                const std::string& format_param = "response_format");
 
+// How far the engine has read a request's prompt (llama.cpp's prompt_progress): its tokens, of which reused from the
+// cache, read so far (the cached ones included), and the milliseconds since the cached prefix was known
+struct PromptProgress {
+  int total = 0, cache = 0, processed = 0;
+  long long time_ms = 0;
+};
+
 // The events of one streamed reply. The server calls begin() once the engine has counted the prompt and matched it
 // against its cache (prompt_tokens and cached_tokens set), or at once, without them, for a stream that starts before
 // the request runs (Chat Completions), delta() for each engine delta, keepalive() when nothing was sent for a while,
-// and end() with the finished result. Each returns the SSE text to send (possibly empty).
+// progress() while the prompt is read when the request asked for it, and end() with the finished result. Each returns
+// the SSE text to send (possibly empty).
 class StreamWriter {
  public:
   virtual ~StreamWriter() = default;
   virtual std::string begin(const ChatResult& prompt) = 0;
   virtual std::string delta(const ChatDelta& d) = 0;
   virtual std::string keepalive() = 0;
+  virtual std::string progress(const PromptProgress&) { return {}; }  // only Chat Completions has an event for it
   virtual std::string end(const ChatResult& res) = 0;
 };
 
