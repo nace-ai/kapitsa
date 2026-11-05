@@ -1,0 +1,55 @@
+--- a/tools/qmm_packed_coeff_check.cpp
++++ b/tools/qmm_packed_coeff_check.cpp
+@@ -63,16 +63,22 @@
+ };
+ struct CoeffImage {
+   Gpu& gpu;
+-  Buffer buffer, headers;
++  Buffer buffer, headers; uint32_t rg = 0;
+   explicit CoeffImage(Gpu& g) : gpu(g) {}
+   ~CoeffImage() { if (buffer) gpu.release(buffer); if (headers) gpu.release(headers); }
+ };
+ struct Matrix { Buffer w, s, b; uint32_t N, K; mutable std::shared_ptr<CoeffImage> coeff; mutable bool fixture_loaded = false; };
+ static size_t pack_blocks = 0, compressed_blocks = 0;
+-static void prepare_coeff(Gpu& g, const Matrix& m) {
++static void prepare_coeff(Gpu& g, const Matrix& m, uint32_t ks) {
+   if (m.coeff) return;  // object-owned static weights; explicit reset after replacing their coefficients
+-  const auto host = pack_affine_packed_coeff(m.w.as<uint32_t>(), m.s.as<uint16_t>(), m.b.as<uint16_t>(), m.N, m.K / 64);
++  auto host = pack_affine_packed_coeff(m.w.as<uint32_t>(), m.s.as<uint16_t>(), m.b.as<uint16_t>(), m.N, m.K / 64);
+   auto image = std::make_shared<CoeffImage>(g);
++  uint32_t rg = 8;
++  while (rg > 1 && ((m.N + 15) / 16) % rg) rg /= 2;
++  if (ks >= 2 && ((m.K / 64 + 1) / 2) % ks == 0) {
++    interleave_packed_slices(host, m.N, m.K / 64, ks, rg);
++    image->rg = rg;
++  }
+   image->buffer = g.alloc(host.words.size() * 4, "qmm_coefficient_delta", false);
+   memcpy(image->buffer.ptr(), host.words.data(), host.words.size() * 4);
+   image->headers = g.alloc(host.headers.size() * 4, "qmm_packed_headers", false);
+@@ -212,11 +218,16 @@
+     }
+     e.buf(i * 4, m[j].w); e.buf(i * 4 + 1, m[j].s); e.buf(i * 4 + 2, m[j].b); e.buf(i * 4 + 3, y[j].data);
+     if (actual == "qmm8pc_b4_nf1") {
+-      prepare_coeff(g, m[j]); e.buf(i * 4, m[j].coeff->buffer); e.buf(21 + i, m[j].coeff->headers);
++      prepare_coeff(g, m[j], pl.ks); e.buf(i * 4, m[j].coeff->buffer); e.buf(21 + i, m[j].coeff->headers);
+     }
+   }
+   e.buf(16, x.table); e.buf(17, x.sums); e.val(18, p);
+   e.buf(19, x.table); e.buf(20, x.sums);
++  if (actual == "qmm8pc_b4_nf1") {
++    uint32_t ilv[4];
++    for (uint32_t i = 0; i < 4; ++i) ilv[i] = m[std::min(i, p.nseg - 1)].coeff->rg;
++    e.bytes(25, ilv, sizeof(ilv));
++  }
+   e.dispatch(p.tg_begin[p.nseg], 1, 1, 32 * pl.cs * pl.ks);
+ }
+ static double reference(const Matrix& m, const float* x, uint32_t n, bool add) {
+@@ -530,7 +541,7 @@
+             for (size_t i = 0; i < size_t(m.N)*G; ++i) { m.s.as<uint16_t>()[i] ^= 1; m.b.as<uint16_t>()[i] ^= 1; }
+             m.coeff.reset();  // explicit invalidation when immutable parameter storage is replaced
+           }
+-          prepare_coeff(g,m);
++          prepare_coeff(g,m,0);
+           base[seg].reset(); candidate[seg].reset();
+           std::fill_n(decoded[seg].as<uint32_t>(), decoded[seg].size/4, 0x7b7b7b7bu);
+         }
