@@ -65,7 +65,8 @@ bool Qwen35::ane_slabs(int T) const {
 
 bool Qwen35::ane_splits(int T) const {
   if (ane_slabs(T)) return true;
-  return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T);
+  // past kMaxRows only as the two-half wavefront, each half within kMaxRows
+  return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T) && (T <= int(ane::FfnSplit::kMaxRows) || ane_wave_rows(T) > 0);
 }
 
 void Qwen35::ane_begin_chunk(int T) {
@@ -243,9 +244,9 @@ void Qwen35::ane_finish_init() {
   if (!cfg_.causal && noncausal_slabs_on())
     logi("NI_ANE: a noncausal prefill pass splits its FFN with the Neural Engine in slabs of <= %u rows "
          "(NI_ANE_NONCAUSAL=0: GPU alone)", ane::FfnSplit::kMaxRows);
-  else if (tmax_ > int(ane::FfnSplit::kMaxRows))
-    logi("NI_ANE: prefill chunks of more than %u rows run on the GPU alone (prefill chunk is %d)", ane::FfnSplit::kMaxRows,
-         tmax_);
+  else if (tmax_ > int(lanes > 1 ? 2 * ane::FfnSplit::kMaxRows : ane::FfnSplit::kMaxRows))
+    logi("NI_ANE: prefill chunks of more than %u rows run on the GPU alone (prefill chunk is %d)",
+         lanes > 1 ? 2 * ane::FfnSplit::kMaxRows : ane::FfnSplit::kMaxRows, tmax_);
   if (env_on("NI_ANE_VERIFY") || !getenv("NI_ANE_VERIFY")) {
     const double t0 = now_ms();
     // the check runs whole chunks through the model's activation buffers: at most tmax_ rows
@@ -379,6 +380,7 @@ int Qwen35::ane_wave_rows(int T) const {
   if (!ane_ || ane_->lanes() < 2) return 0;
   const int h = (T / 2 + 127) / 128 * 128;
   if (h >= T || h < int(ane_->fn_rows().front()) || T - h < int(ane_->min_rows()) / 2) return 0;
+  if (h > int(ane::FfnSplit::kMaxRows) || T - h > int(ane::FfnSplit::kMaxRows)) return 0;
   return h;
 }
 
