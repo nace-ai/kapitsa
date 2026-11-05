@@ -62,6 +62,7 @@
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <mutex>
 #include <set>
@@ -347,6 +348,8 @@ static void print_help() {
 
 static void print_serve_help() {
   std::string h = strf("kapitsa serve [--model MODEL] [options]\n\n"
+         "With no arguments, reads a JSON array of argument strings from KAPITSA_HOME/serve.json\n"
+         "(~/.cache/kapitsa/serve.json by default). Any explicit argument bypasses that file.\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
          "                         once: kapitsa import). Default: asked in a terminal; else the model picked last if\n"
@@ -808,9 +811,36 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
   return 0;
 }
 
+// Homebrew starts `kapitsa serve` without arguments. Keep explicit command lines self-contained, including help;
+// the file is an argument array so the same parser below owns every option and its validation.
+static std::vector<std::string> serve_args(int argc, char** argv, int first) {
+  if (argc > first) return {argv + first, argv + argc};
+  const std::string path = hub::home_dir() + "/serve.json";
+  const char* help = "kapitsa serve --help";
+  std::error_code ec;
+  const auto status = std::filesystem::status(path, ec);
+  if (status.type() == std::filesystem::file_type::not_found) return {};
+  if (ec || !std::filesystem::is_regular_file(status))
+    usage_error("Can't read " + path + " as a regular file.", help);
+  std::ifstream f(path);
+  if (!f) usage_error("Can't read " + path + ".", help);
+  const json config = json::parse(f, nullptr, false);
+  if (config.is_discarded() || !config.is_array())
+    usage_error(path + " must contain a JSON array of argument strings.", help);
+  std::vector<std::string> args;
+  for (const auto& value : config) {
+    if (!value.is_string()) usage_error(path + " must contain only argument strings.", help);
+    std::string a = value.get<std::string>();
+    if (a.find('\0') != std::string::npos) usage_error(path + " arguments must not contain NUL bytes.", help);
+    args.push_back(std::move(a));
+  }
+  return args;
+}
+
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
   keep_args(argc, argv);
+  const auto args = serve_args(argc, argv, first);
   EngineOptions opt;
   int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
@@ -821,11 +851,11 @@ static int serve(int argc, char** argv, int first) {
   std::string splash_found_binary;     // the stock engine given or found, which the next run starts from (splash.json)
   std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
   const char* help = "kapitsa serve --help";
-  for (int i = first; i < argc; ++i) {
-    std::string a = argv[i];
+  for (size_t i = 0; i < args.size(); ++i) {
+    std::string a = args[i];
     auto next = [&]() -> std::string {
-      if (i + 1 >= argc) usage_error(a + " needs a value", help);
-      return argv[++i];
+      if (i + 1 >= args.size()) usage_error(a + " needs a value", help);
+      return args[++i];
     };
     if (a == "--help" || a == "-h") {
       print_serve_help();

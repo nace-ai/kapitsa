@@ -789,6 +789,63 @@ def cli_checks(kapitsa):
     t0 = time.time()
     rc, _, err = run("serve", "--model", folder, "--port", str(busy))
     check("cli: a busy port fails at once, before loading", rc == 1 and "already in use" in err and time.time() - t0 < 10, err)
+    # The Homebrew invocation reads its defaults through the ordinary serve parser. A listening socket stops
+    # valid configurations before model loading; malformed configurations stop at parsing, also without a GPU.
+    serve_file = os.path.join(home, "serve.json")
+    defaults = ["--model", folder, "--port", str(busy), "--allow-switch", "--context", "32k", "--slots", "2"]
+    with open(serve_file, "w") as f:
+        json.dump(defaults, f)
+    expected = run("serve", *defaults)
+    got = run("serve")
+    check("cli: bare serve reads KAPITSA_HOME/serve.json like explicit arguments",
+          got == expected and got[0] == 1 and "already in use" in got[2], str(got))
+    for args, message in [(["--context", "12q"], "--context takes tokens"),
+                          (["--slots", "two"], "--slots needs a whole number"),
+                          (["--context"], "--context needs a value"),
+                          (["--not-a-serve-option"], "unknown option"),
+                          (["--allow-switch", "--host", "0.0.0.0"], "needs --api-key")]:
+        with open(serve_file, "w") as f:
+            json.dump(args, f)
+        expected = run("serve", *args)
+        got = run("serve")
+        check(f"cli: serve defaults keep validation for {args[0]}",
+              got == expected and got[0] == 2 and message in got[2], str(got))
+    for content in ['["--api-key", "secret-value",', '{}', 'null', '["--slots", 2]', '["--help", "a\\u0000b"]']:
+        with open(serve_file, "w") as f:
+            f.write(content)
+        rc, out, err = run("serve")
+        check("cli: invalid serve.json fails clearly without echoing its contents",
+              rc == 2 and serve_file in err and "secret-value" not in out + err, out + err)
+    # A broken defaults file cannot prevent help or affect a command that supplies its own arguments.
+    rc, out, err = run("serve", "--help")
+    check("cli: explicit help bypasses serve.json", rc == 0 and "serve.json" in out, out + err)
+    rc, _, err = run("serve", "--port", "0")
+    check("cli: explicit serve arguments bypass serve.json", rc == 2 and "--port must be 1-65535" in err, err)
+    rc, _, err = run("--port", "0")
+    check("cli: legacy options-only arguments bypass serve.json", rc == 2 and "--port must be 1-65535" in err, err)
+    rc, out, err = run("list", "--json")
+    check("cli: other commands ignore serve.json", rc == 0, out + err)
+    os.remove(serve_file)
+    os.mkdir(serve_file)
+    rc, _, err = run("serve")
+    check("cli: a non-file serve.json is refused", rc == 2 and "regular file" in err, err)
+    os.rmdir(serve_file)
+    # Neither run can fetch weights: the isolated home has no catalog model and HF_ENDPOINT is a closed port.
+    missing = run("serve")
+    with open(serve_file, "w") as f:
+        f.write("[]")
+    empty = run("serve")
+    check("cli: missing and empty serve defaults preserve the unconfigured startup",
+          empty == missing and missing[0] == 1 and
+          ("already in use" in missing[2] or "Can't reach" in missing[2]), str((missing, empty)))
+    marker = os.path.join(home, "not-executed")
+    literal = f"$(touch {marker})"
+    with open(serve_file, "w") as f:
+        json.dump(["--context", literal], f)
+    rc, _, err = run("serve")
+    check("cli: serve defaults pass strings literally without a shell",
+          rc == 2 and literal in err and not os.path.exists(marker), err)
+    os.remove(serve_file)
     # --context: tokens, k or m of them, or max (--ctx too); anything else is refused before the model is looked at
     for ok in ["131072", "128k", "256K", "1m", "max"]:
         for flag in ["--context", "--ctx"]:

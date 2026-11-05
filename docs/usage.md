@@ -1128,11 +1128,29 @@ else the best model for this Mac, downloaded first ([Which model](#which-model))
 first download's progress too:
 `/opt/homebrew/var/log/kapitsa.log`.
 
+To give the service startup options, create `~/.cache/kapitsa/serve.json` (`KAPITSA_HOME/serve.json` when that
+environment variable is set for the service). It contains a JSON array with one string per command-line argument:
+
+```json
+["--allow-switch", "--context", "32k", "--slots", "2"]
+```
+
+Then run `brew services restart kapitsa`. This example allows model switching, with a 32K context and two conversation
+slots, using the model selected as above. Without `--api-key`, `--allow-switch` keeps the service on this Mac.
+The same validation as command-line arguments applies; invalid JSON or options stop startup with an error in the log.
+
+Only `kapitsa serve` with **no arguments** reads this file, including when run in a terminal. Any explicit argument
+(such as `kapitsa serve --model 4b` or `kapitsa serve --help`) bypasses the entire file; options are not merged.
+A missing file or an empty array keeps the usual defaults. Strings are literal arguments: spaces need no shell
+quoting, and shell substitutions, environment variables and commands are not expanded. Changes apply on the next
+start; there is no live reload. The service's environment is separate from your shell's, so setting `KAPITSA_HOME`
+only in a terminal does not change a service already configured with another home.
+
 ## Environment variables
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, the automatic update's state in `update.json`, KFlash's measurements (this Mac's cost per verified row count and the draft model's calibration, per model, draft model and chip) in `kflash/`, saved as the server runs and when it stops, the [SSD prefix cache](#ssd-prefix-cache) in `prefix-cache/`. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, bare `serve` startup arguments in `serve.json`, the automatic update's state in `update.json`, KFlash's measurements (this Mac's cost per verified row count and the draft model's calibration, per model, draft model and chip) in `kflash/`, saved as the server runs and when it stops, the [SSD prefix cache](#ssd-prefix-cache) in `prefix-cache/`. |
 | `KAPITSA_NO_AUTO_UPDATE` | | `1`: no automatic update and no check in the background ([Updating](#updating)); `kapitsa update` still works. |
 | `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
 | `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
