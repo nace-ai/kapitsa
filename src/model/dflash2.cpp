@@ -1,5 +1,6 @@
 #include "util/load_threads.h"
 #include "model/affine_coeff_fixed.h"
+#include "model/dflash2_lowrank_cache.h"
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
 // Kernels in src/kernels/spec_dflash.metal.
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
@@ -716,19 +717,10 @@ void DFlash2::build_lowrank(uint32_t r) {
   if (!head_n_ || !hq.q4() || hq.K != K || head_n_ % 2048 || K % 64 || r % 64 || r >= K) return;
   const double t0 = now_ms();
   std::vector<float> A, P;
-  // The factors depend on the head's weights alone: cached (~/.cache/kapitsa/kflash), keyed by the head's scales,
-  // biases and shape (2-3 s to compute on an M4, 16 MB at r = 768)
-  uint64_t key = 1469598103934665603ull;
-  auto mix = [&](const void* p, size_t n) {
-    const uint8_t* b = static_cast<const uint8_t*>(p);
-    for (size_t i = 0; i < n; ++i) key = (key ^ b[i]) * 1099511628211ull;
-  };
-  const uint32_t shape[4] = {head_n_, K, r, 1u};  // [3]: the factors' version
-  mix(shape, sizeof shape);
-  mix(hq.s->buf.ptr(), size_t(head_n_) * (K / 64) * 2);
-  mix(hq.b->buf.ptr(), size_t(head_n_) * (K / 64) * 2);
-  char name[64];
-  snprintf(name, sizeof name, "dflash2-lowrank-%016llx.bin", (unsigned long long)key);
+  // A complete head identity also invalidates the old coefficient-only cache names. Hashing the Q4 bytes with
+  // SHA256 is faster than extending the byte-at-a-time FNV loop over the whole head.
+  const std::string name = "dflash2-lowrank-" + dfl_lowrank_cache_key(hq.w->buf.as<uint32_t>(),
+      hq.s->buf.as<uint16_t>(), hq.b->buf.as<uint16_t>(), head_n_, K, r) + ".bin";
   const std::string dir = hub::home_dir() + "/kflash", path = dir + "/" + name;
   const size_t n = size_t(r) * K;
   bool cached = false;
