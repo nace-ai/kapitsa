@@ -25,7 +25,7 @@ namespace ni {
 class ModelManager;
 
 // RAII guard holding an Engine reference for an in-flight request
-class RequestGuard {
+class RequestGuard : public std::enable_shared_from_this<RequestGuard> {
  public:
   ~RequestGuard();
   RequestGuard(const RequestGuard&) = delete;
@@ -34,7 +34,8 @@ class RequestGuard {
   Engine& engine() const { return *eng_; }
   Engine* operator->() const { return eng_.get(); }
   Engine& operator*() const { return *eng_; }
-  std::shared_ptr<Engine> get() const { return eng_; }
+  // An exported engine handle must keep its registration in the switch's request drain.
+  std::shared_ptr<Engine> get() const { return {shared_from_this(), eng_.get()}; }
 
  private:
   friend class ModelManager;
@@ -68,7 +69,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     started_at_ = started_at;
 
     if (tui_) ui::loading_begin(ref_.name);
-    engine_ = std::make_shared<Engine>(opt_);
+    engine_ = load_engine(opt_);
     if (tui_) ui::loading_end(ref_.name);
   }
 
@@ -116,7 +117,9 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
   // Explicitly switch the active model
   std::shared_ptr<Engine> switch_to(const std::string& target_model, Error* error_out = nullptr) {
-    return switch_to_impl(target_model, error_out, nullptr);
+    std::shared_ptr<RequestGuard> guard;
+    switch_to_impl(target_model, error_out, &guard);
+    return guard ? guard->get() : nullptr;
   }
 
  private:
@@ -210,12 +213,12 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     else printf("Switching model to %s...\n", new_ref.name.c_str());
     fflush(stdout);
 
-    // Release old engine to free GPU memory
+    // All engine handles and history workers are gone, so its allocation scope can finish before the next starts.
     engine_.reset();
 
     if (tui_) ui::loading_begin(new_ref.name);
     try {
-      engine_ = std::make_shared<Engine>(new_opt);
+      engine_ = load_engine(new_opt);
     } catch (const std::exception& e) {
       if (tui_) ui::loading_end(new_ref.name);
       if (error_out) error_out->message = std::string("Engine initialization failed: ") + e.what();
@@ -223,7 +226,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       logi("switch to %s failed (%s); reloading %s", new_ref.name.c_str(), e.what(), ref_.name.c_str());
       if (tui_) ui::loading_begin(ref_.name);
       try {
-        engine_ = std::make_shared<Engine>(opt_);
+        engine_ = load_engine(opt_);
       } catch (const std::exception& e2) {
         logi("reloading %s failed too: %s", ref_.name.c_str(), e2.what());
         if (error_out) error_out->message += std::string("; reloading the previous model failed too: ") + e2.what();
@@ -262,13 +265,13 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     if (before) before();
     if (tui_) ui::loading_begin(ref_.name);
     try {
-      engine_ = std::make_shared<Engine>(opt);
+      engine_ = load_engine(opt);
     } catch (const std::exception& e) {
       if (error_out) *error_out = e.what();
       logi("loading %s again failed (%s); loading it as it was", ref_.name.c_str(), e.what());
       if (undo) undo();
       try {
-        engine_ = std::make_shared<Engine>(opt_);
+        engine_ = load_engine(opt_);
       } catch (const std::exception& e2) {
         logi("loading %s as it was failed too: %s", ref_.name.c_str(), e2.what());
         if (error_out) *error_out += std::string("; loading it as it was failed too: ") + e2.what();
@@ -363,9 +366,9 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
     return ref_;
   }
-  std::shared_ptr<Engine> current_engine() const {
-    std::shared_lock<std::shared_mutex> lk(rw_mu_);
-    return engine_;
+  std::shared_ptr<Engine> current_engine() {
+    auto guard = acquire_current("");
+    return guard ? guard->get() : nullptr;
   }
 
   nlohmann::ordered_json list_models_json() const {
@@ -483,6 +486,18 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
  private:
   friend class RequestGuard;
+
+  static std::shared_ptr<Engine> load_engine(const EngineOptions& opt) {
+    // Like the SDK, keep one allocation scope around the entire engine lifetime, including failed construction.
+    // Member order destroys the engine (joining its workers) before draining and releasing its Metal buffers.
+    struct LoadedEngine {
+      Gpu::AllocationScope allocations;
+      Engine engine;
+      explicit LoadedEngine(const EngineOptions& opt) : engine(opt) {}
+    };
+    auto loaded = std::make_shared<LoadedEngine>(opt);
+    return {loaded, &loaded->engine};
+  }
 
   // rw_mu_ protects selection and registration as one operation. Leave the guard unregistered until all allocation
   // succeeds: shared_ptr's control-block allocation may delete it here, and its destructor must not relock rw_mu_.
