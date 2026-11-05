@@ -40,6 +40,7 @@
 #include "server/picker.h"
 #include "server/pair.h"
 #include "server/route.h"
+#include "server/serve_defaults.h"
 #include "splash/discover.h"
 #include "server/ui.h"
 #include "server/ws_upgrade.h"
@@ -347,6 +348,8 @@ static void print_help() {
 
 static void print_serve_help() {
   std::string h = strf("kapitsa serve [--model MODEL] [options]\n\n"
+         "With no arguments, reads a JSON array of argument strings from KAPITSA_HOME/serve.json\n"
+         "(~/.cache/kapitsa/serve.json by default). Any explicit argument bypasses that file.\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
          "                         once: kapitsa import). Default: asked in a terminal; else the model picked last if\n"
@@ -811,6 +814,11 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
   keep_args(argc, argv);
+  std::vector<std::string> args(argv + first, argv + argc);
+  if (args.empty()) {
+    try { args = serve_defaults(hub::home_dir()); }
+    catch (const std::exception& e) { usage_error(e.what(), "kapitsa serve --help"); }
+  }
   EngineOptions opt;
   int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
@@ -821,11 +829,11 @@ static int serve(int argc, char** argv, int first) {
   std::string splash_found_binary;     // the stock engine given or found, which the next run starts from (splash.json)
   std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
   const char* help = "kapitsa serve --help";
-  for (int i = first; i < argc; ++i) {
-    std::string a = argv[i];
+  for (size_t i = 0; i < args.size(); ++i) {
+    std::string a = args[i];
     auto next = [&]() -> std::string {
-      if (i + 1 >= argc) usage_error(a + " needs a value", help);
-      return argv[++i];
+      if (i + 1 >= args.size()) usage_error(a + " needs a value", help);
+      return args[++i];
     };
     if (a == "--help" || a == "-h") {
       print_serve_help();
@@ -891,7 +899,7 @@ static int serve(int argc, char** argv, int first) {
     }
     else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
     else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
-    else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
+    else if (i == 0 && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);

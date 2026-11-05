@@ -159,7 +159,7 @@ def agent_checks(run, home):
     Pi gets that server's model, nothing downloads or starts, and when the Homebrew service's launchd job serves that
     port the command says so and how to stop it (issue 653: the service's server, the best model for the Mac, outlived
     Pi and came back with its model after Activity Monitor's Quit)"""
-    import http.server, shutil, threading
+    import http.server, plistlib, shutil, threading
     class Models(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             body = json.dumps({"object": "list", "data": [{"id": "qwen3.6-35b-a3b", "object": "model", "owned_by": "nace",
@@ -184,17 +184,20 @@ def agent_checks(run, home):
                 f"open({seen!r}, 'w'))\n")
     os.chmod(os.path.join(bindir, "pi"), 0o755)
     agents = os.path.join(user, "Library", "LaunchAgents")
-    def pi(port_in_plist, label="sh.brew.kapitsa"):
+    def pi(port_in_plist, label="sh.brew.kapitsa", service_args=None, service_env=None, binary=False, workdir=None):
         plist = os.path.join(agents, label + ".plist")
         if os.path.exists(seen):
             os.remove(seen)
         if port_in_plist:  # as `brew services start kapitsa` writes it, with a --port so that the job serves this port
             os.makedirs(os.path.dirname(plist), exist_ok=True)
-            with open(plist, "w") as f:
-                f.write('<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n\t<key>Label</key>\n'
-                        f'\t<string>{label}</string>\n\t<key>ProgramArguments</key>\n\t<array>\n'
-                        '\t\t<string>/opt/homebrew/opt/kapitsa/bin/kapitsa</string>\n\t\t<string>serve</string>\n'
-                        f'\t\t<string>--port</string>\n\t\t<string>{port_in_plist}</string>\n\t</array>\n</dict>\n</plist>\n')
+            args = ["--port", str(port_in_plist)] if service_args is None else service_args
+            job = {"Label": label, "ProgramArguments": ["/opt/homebrew/opt/kapitsa/bin/kapitsa", "serve", *args]}
+            if service_env is not None:
+                job["EnvironmentVariables"] = service_env
+            if workdir is not None:
+                job["WorkingDirectory"] = workdir
+            with open(plist, "wb") as f:
+                plistlib.dump(job, f, fmt=plistlib.FMT_BINARY if binary else plistlib.FMT_XML)
         else:
             shutil.rmtree(agents, ignore_errors=True)
         rc, out, err = run("pi", "--port", str(port), "--", "-p", "hi",
@@ -238,6 +241,40 @@ def agent_checks(run, home):
         pi(None)
     rc, out, got = pi(port + 1 if port < 65535 else port - 1)
     check("cli: a service on another port is not the server found", rc == 0 and "brew services" not in out, out)
+    # A bare Homebrew command gets its port from the service's home, not the attaching agent's KAPITSA_HOME.
+    defaults = os.path.join(user, ".cache", "kapitsa")
+    os.makedirs(defaults)
+    with open(os.path.join(defaults, "serve.json"), "w") as f:
+        json.dump(["--port", str(port)], f)
+    for label in ["sh.brew.kapitsa", "homebrew.mxcl.kapitsa"]:
+        rc, out, _ = pi(port, label, service_args=[])
+        check(f"cli: pi recognizes a Homebrew port from serve.json ({label})",
+              rc == 0 and "Homebrew service" in out, out)
+        pi(None)
+    custom = os.path.join(home, "service & defaults")
+    os.makedirs(custom)
+    with open(os.path.join(custom, "serve.json"), "w") as f:
+        json.dump(["--port", "1", "--api-key", "--port", "--port", str(port)], f)
+    for binary in [False, True]:
+        rc, out, _ = pi(port, service_args=[], service_env={"KAPITSA_HOME": custom}, binary=binary)
+        check(f"cli: service KAPITSA_HOME and last port work in {'binary' if binary else 'XML'} plists",
+              rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"HOME": user}, binary=True)
+    check("cli: service HOME supplies its default config path", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"HOME": user, "KAPITSA_HOME": "~/.cache/kapitsa"})
+    check("cli: service KAPITSA_HOME expands its own HOME", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"KAPITSA_HOME": "service & defaults"}, workdir=home)
+    check("cli: relative service KAPITSA_HOME uses its working directory", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=["--context", "32k"])
+    check("cli: explicit service arguments bypass serve.json for service recognition",
+          rc == 0 and "Homebrew service" not in out, out)
+    with open(os.path.join(defaults, "serve.json"), "w") as f:
+        f.write("not JSON")
+    rc, out, _ = pi(port, service_args=[])
+    check("cli: a bad service config does not prevent attaching to its server", rc == 0, out)
+    rc, out, _ = pi(port)
+    check("cli: explicit plist port ignores a bad defaults file", rc == 0 and "Homebrew service" in out, out)
+    shutil.rmtree(defaults)
     check("cli: pi on a running server downloads nothing",
           (sorted(os.listdir(models)) if os.path.isdir(models) else []) == had, str(had))
     srv.shutdown()
@@ -789,6 +826,73 @@ def cli_checks(kapitsa):
     t0 = time.time()
     rc, _, err = run("serve", "--model", folder, "--port", str(busy))
     check("cli: a busy port fails at once, before loading", rc == 1 and "already in use" in err and time.time() - t0 < 10, err)
+    # The Homebrew invocation reads its defaults through the ordinary serve parser. A listening socket stops
+    # valid configurations before model loading; malformed configurations stop at parsing, also without a GPU.
+    serve_file = os.path.join(home, "serve.json")
+    defaults = ["--model", folder, "--port", str(busy), "--allow-switch", "--context", "32k", "--slots", "2"]
+    with open(serve_file, "w") as f:
+        json.dump(defaults, f)
+    expected = run("serve", *defaults)
+    got = run("serve")
+    check("cli: bare serve reads KAPITSA_HOME/serve.json like explicit arguments",
+          got == expected and got[0] == 1 and "already in use" in got[2], str(got))
+    with open(serve_file, "w") as f:
+        json.dump([folder, "--port", str(busy)], f)
+    expected = run("serve", folder, "--port", str(busy))
+    got = run("serve")
+    check("cli: a leading positional model works in explicit and file arguments",
+          got == expected and got[0] == 1 and "already in use" in got[2], str(got))
+    rc, _, err = run("serve", "--private", "--local", folder, "--port", str(busy))
+    check("cli: a positional model is still only accepted as the first argument",
+          rc == 2 and "unknown option " + folder in err, err)
+    for args, message in [(["--context", "12q"], "--context takes tokens"),
+                          (["--slots", "two"], "--slots needs a whole number"),
+                          (["--context"], "--context needs a value"),
+                          (["--not-a-serve-option"], "unknown option"),
+                          (["--allow-switch", "--host", "0.0.0.0"], "needs --api-key")]:
+        with open(serve_file, "w") as f:
+            json.dump(args, f)
+        expected = run("serve", *args)
+        got = run("serve")
+        check(f"cli: serve defaults keep validation for {args[0]}",
+              got == expected and got[0] == 2 and message in got[2], str(got))
+    for content in ['["--api-key", "secret-value",', '{}', 'null', '["--slots", 2]', '["--help", "a\\u0000b"]']:
+        with open(serve_file, "w") as f:
+            f.write(content)
+        rc, out, err = run("serve")
+        check("cli: invalid serve.json fails clearly without echoing its contents",
+              rc == 2 and serve_file in err and "secret-value" not in out + err, out + err)
+    # A broken defaults file cannot prevent help or affect a command that supplies its own arguments.
+    rc, out, err = run("serve", "--help")
+    check("cli: explicit help bypasses serve.json", rc == 0 and "serve.json" in out, out + err)
+    rc, _, err = run("serve", "--port", "0")
+    check("cli: explicit serve arguments bypass serve.json", rc == 2 and "--port must be 1-65535" in err, err)
+    rc, _, err = run("--port", "0")
+    check("cli: legacy options-only arguments bypass serve.json", rc == 2 and "--port must be 1-65535" in err, err)
+    rc, out, err = run("list", "--json")
+    check("cli: other commands ignore serve.json", rc == 0, out + err)
+    os.remove(serve_file)
+    os.mkdir(serve_file)
+    rc, _, err = run("serve")
+    check("cli: a non-file serve.json is refused", rc == 2 and "regular file" in err, err)
+    os.rmdir(serve_file)
+    # Keep the unconfigured starts apart from the fake downloaded models above; the Hub is a closed port too.
+    with tempfile.TemporaryDirectory(prefix="kapitsa-empty-serve-") as empty_home:
+        missing = run("serve", env_add={"KAPITSA_HOME": empty_home})
+        with open(os.path.join(empty_home, "serve.json"), "w") as f:
+            f.write("[]")
+        empty = run("serve", env_add={"KAPITSA_HOME": empty_home})
+    check("cli: missing and empty serve defaults preserve the unconfigured startup",
+          empty == missing and missing[0] == 1 and
+          ("already in use" in missing[2] or "Can't reach" in missing[2]), str((missing, empty)))
+    marker = os.path.join(home, "not-executed")
+    literal = f"$(touch {marker})"
+    with open(serve_file, "w") as f:
+        json.dump(["--context", literal], f)
+    rc, _, err = run("serve")
+    check("cli: serve defaults pass strings literally without a shell",
+          rc == 2 and literal in err and not os.path.exists(marker), err)
+    os.remove(serve_file)
     # --context: tokens, k or m of them, or max (--ctx too); anything else is refused before the model is looked at
     for ok in ["131072", "128k", "256K", "1m", "max"]:
         for flag in ["--context", "--ctx"]:
