@@ -119,6 +119,7 @@ cmd_cpu_tests() {
     "test_bench|python3 tests/test_bench.py build" "test_update|python3 tests/test_update.py build"
     "test_community|python3 tests/test_community.py build" "test_reasoning|python3 tests/test_reasoning.py"
     "test_pr_size|python3 tests/test_pr_size.py" "test_logit_compare|python3 tests/test_logit_compare.py"
+    "test_sampled_tokens_harness|python3 tests/test_sampled_tokens_harness.py"
     "test_structured_cli|python3 tests/test_structured.py --cli build")
   for line in "${tests[@]}"; do
     name="${line%%|*}"
