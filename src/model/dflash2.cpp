@@ -1382,11 +1382,12 @@ void DFlash2::enc_qmm8_cp(Encoder& e, const QLinear& L, const Tensor* base, cons
 void DFlash2::enc_qmm_rows(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M) {
   const bool big = M >= 64;
   if (big && qmt_on() && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
-    e.use(dpipe("qmt_m64_n64"));
+    const uint32_t bm = qmt128_for(M) ? 128 : 64;  // the 128-row tile: the same bits (NI_QMT128)
+    e.use(dpipe(bm == 128 ? "qmt_m128_n64" : "qmt_m64_n64"));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, 0u, uint32_t(L.gs), 0, 0};
     e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
     e.val(5, p);
-    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 63) / 64, 1, 128);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + bm - 1) / bm, 1, 128);
     return;
   }
   const int BM = big ? 64 : 32, BN = big ? 64 : 32;

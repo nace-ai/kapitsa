@@ -2558,6 +2558,23 @@ bool qmt_on() {
   return on;
 }
 
+// NI_QMT128 (read once; default on, 0 = off): the qmt GEMMs of 96 rows or more on the 128-row tile (qmt.metal's qmt128_tile:
+// 4 simdgroups of 32 rows over 64 weight rows, X read by the matmul from device memory, only the dequantized weights in
+// threadgroup memory), the same 32 x 32 x 32 matmuls on the same elements in the same K order as the 64-row tile, so the
+// same bits (bench_qmm QMM_CMP: every output element of every shape below identical). A weight is dequantized once per
+// 128 rows instead of 64: bench_qmm on the M5 Max, M 2048, 64-row vs 128-row tile: the 27B's gate/up 49.8 -> 59.5
+// TFLOP/s, down 48.1 -> 53.5, out_proj 47.8 -> 53.4, GDN in_proj 47.1 -> 55.1; the 35B's 8192 x 2048 45.3 -> 52.5,
+// 2048 x 4096 43.8 -> 50.7, shared expert gate/up (N 512) 37.6 -> 48.8; 4K prefill on ni_run -5.2% (35B-A3B), -7.3%
+// (27B), bench/results/2026-11-04-m5-max-qmt-128. Below 96 rows the 64-row tile stays (M 33, N 512: 39 vs 48 us).
+bool qmt128_for(int M) {
+  static const bool on = [] {
+    const bool o = qmt_on() && env_int("NI_QMT128", 1) != 0;
+    if (o) logi("NI_QMT128: qmt GEMMs of 96+ rows on the 128-row tile (qmt_m128_n64, qmtg_m128_n64)");
+    return o;
+  }();
+  return on && M >= 96;
+}
+
 static bool qmt_i8_on();
 
 // NI_PF_GROUPED (read once): a prefill pass on a grouped encoder, its independent dispatches side by side - enc_proj's
@@ -2722,11 +2739,12 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     return;
   }
   if (q.on && qmt_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
-    e.use(pipe("qmt_m64_n64"));
+    const uint32_t bm = qmt128_for(M) ? 128 : 64;
+    e.use(pipe(bm == 128 ? "qmt_m128_n64" : "qmt_m64_n64"));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
     e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
     e.val(5, p);
-    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 63) / 64, 1, 128);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + bm - 1) / bm, 1, 128);
     return;
   }
   if (q.on && qmt6_on() && M >= 64 && L.bits == 6 && L.gs == 64 && L.K % 64 == 0) {
@@ -3040,18 +3058,18 @@ bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g,
   const QLinear &G = L.mg, &U = L.mu, &Dn = L.md;
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
   if (!qmt_on() || T < 64 || g % 64 || !ok(G) || !ok(U) || !ok(Dn) || G.N != U.N || G.K != U.K) return false;
-  const uint32_t D = uint32_t(cfg_.hidden), I = G.N;
-  e.use(pipe("qmtg_m64_n64"));
+  const uint32_t D = uint32_t(cfg_.hidden), I = G.N, bm = qmt128_for(T) ? 128 : 64;
+  e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
   kp::Qmm pg{uint32_t(T), g, G.K, G.K, g, 0, uint32_t(G.gs), 0, 0};
   e.buf(0, xh_); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, hhalf_);
   e.val(5, pg);
   e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
-  e.dispatch((g + 31) / 32, (uint32_t(T) + 63) / 64, 1, 128);
-  e.use(pipe("qmt_m64_n64_ld"));
+  e.dispatch((g + 31) / 32, (uint32_t(T) + bm - 1) / bm, 1, 128);
+  e.use(pipe(bm == 128 ? "qmt_m128_n64_ld" : "qmt_m64_n64_ld"));
   kp::QmmLd pd{{uint32_t(T), D, g, g, D, 1u, uint32_t(Dn.gs), 0, 0}, I / 8, I / 64};
   e.buf(0, hhalf_); e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf); e.buf(4, x);
   e.val(5, pd);
-  e.dispatch((D + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+  e.dispatch((D + 63) / 64, (uint32_t(T) + bm - 1) / bm, 1, 128);
   return true;
 }
 
@@ -3114,12 +3132,13 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
   if (!b8 && qmt_on() && M >= 64) {
-    e.use(pipe("qmtg_m64_n64"));
+    const uint32_t bm = qmt128_for(M) ? 128 : 64;
+    e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
     kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
     e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
     e.val(5, p);
     e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
-    e.dispatch((G.N + 31) / 32, (uint32_t(M) + 63) / 64, 1, 128);
+    e.dispatch((G.N + 31) / 32, (uint32_t(M) + bm - 1) / bm, 1, 128);
     return true;
   }
   const char* n = gu;

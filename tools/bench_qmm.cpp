@@ -148,18 +148,36 @@ int main(int argc, char** argv) {
         if (k.ld) e->val(5, ldprm); else if (!i8) e->val(5, prm);
         if (k.gu) { e->buf(6, W2); e->buf(7, S2); e->buf(8, B2); }
         const int cb = k.name.rfind("qmtg", 0) == 0 ? k.bn / 2 : k.bn;
-        e->dispatch((N + cb - 1) / cb, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
+        if (k.name.find("rt_m") != std::string::npos)  // rows-fastest grid
+          e->dispatch((M + k.bm - 1) / k.bm, (N + cb - 1) / cb, 1, std::min(k.threads, pipes[ki].max_threads));
+        else
+          e->dispatch((N + cb - 1) / cb, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
       }
       e->commit_and_wait();
       return e->gpu_ms() / n;
     };
     std::vector<std::vector<double>> ms(kerns.size());
+    std::vector<uint8_t> y0, h0;  // QMM_CMP: the first fp32 and the first gate/up kernel's outputs
     for (size_t ki = 0; ki < kerns.size(); ++ki) run(ki, 1);
     for (int t = 0; t < trials; ++t)
       for (size_t ki = 0; ki < kerns.size(); ++ki) ms[ki].push_back(run(ki, reps));
     for (size_t ki = 0; ki < kerns.size(); ++ki) {
       memset(Y.ptr(), 0, size_t(M) * N * 4);
       run(ki, 1);
+      // QMM_CMP: each kernel's output against the first kernel's of its kind (fp32 Y, or the gate/up kernels' half H)
+      size_t ndiff = 0;
+      bool cmp = false;
+      if (getenv("QMM_CMP")) {
+        const size_t bytes = size_t(M) * N * (kerns[ki].gu ? 2 : 4);
+        std::vector<uint8_t>& ref = kerns[ki].gu ? h0 : y0;
+        const uint8_t* yp = (const uint8_t*)Y.ptr();
+        if (ref.empty()) ref.assign(yp, yp + bytes);
+        else {
+          cmp = true;
+          const size_t es = kerns[ki].gu ? 2 : 4;
+          for (size_t i = 0; i < bytes; i += es) ndiff += memcmp(yp + i, ref.data() + i, es) != 0;
+        }
+      }
       double maxrel = 0;
       std::mt19937 r2(11);
       for (int t = 0; t < 64; ++t) {
@@ -191,8 +209,10 @@ int main(int argc, char** argv) {
       double med = v[v.size() / 2], best = v[0];
       const double kf = kerns[ki].gu ? 2.0 * flop : flop,
                    tol = kerns[ki].name.rfind("qmti8", 0) == 0 ? 3e-2 : kerns[ki].gu ? 4e-3 : 1e-3;
-      printf("%-26s M=%5u N=%5u K=%5u  %8.1f us  med %5.2f  best %5.2f TFLOP/s  err=%.1e%s\n", kerns[ki].name.c_str(), M, N,
+      printf("%-26s M=%5u N=%5u K=%5u  %8.1f us  med %5.2f  best %5.2f TFLOP/s  err=%.1e%s", kerns[ki].name.c_str(), M, N,
              K, med * 1000, kf / (med * 1e-3) / 1e12, kf / (best * 1e-3) / 1e12, maxrel, maxrel > tol ? "  FAIL" : "");
+      if (cmp) printf("  vs first: %zu differ", ndiff);
+      printf("\n");
     }
     for (Buffer* b : {&W, &S, &B, &W2, &S2, &B2, &X, &Y, &XQ, &XS}) g.release(*b);
   }

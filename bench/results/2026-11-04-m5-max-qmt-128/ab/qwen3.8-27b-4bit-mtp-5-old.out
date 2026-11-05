@@ -1,0 +1,21 @@
+[kapitsa] read 15.13 GB of weights in 604 ms (25.1 GB/s)
+[kapitsa] read 0.24 GB of weights in 11 ms (20.9 GB/s)
+[kapitsa] MTP head loaded in 12 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] prewarmed 94 prefill pipelines in 10 ms
+[kapitsa] loaded ~/models/qwen3.8-27b-4bit-mtp: 64 layers, dense, 15.1 GB mapped in 729 ms; weights 4-bit group 64 100%
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 16/34 units (8192 channels; GPU 9216) from the default for this chip, chunks >= 512 rows; row scales 0 ms, program cached 1 ms + load 130 ms (13 functions, MIL 106 KB); 341.1 MB Metal; ready in 0.1 s
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] NI_ANE: startup check 1.16% of the ANE's part from the GPU alone (2 functions, 235 ms)
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+prefill rep 0: 4096 tok in 3578.31 ms (GPU 3564.95 ms)
+prefill rep 1: 4096 tok in 3877.37 ms (GPU 3873.47 ms)
+prefill rep 2: 4096 tok in 4099.31 ms (GPU 4095.06 ms)
+ane: system wired memory +197 MB at the program load, +737 MB after the first split chunk (split surfaces 341 MB)
+ane: 6 split chunks, 768 evaluations, ANE 11390 ms (14.8 ms each), reruns 0; memory: Metal 18177 MB, process footprint 17607 MB; thermal nominal
+mean GPU time per step: 30.45 ms (7 steps)
+prompt 4096 tok in 4099 ms (999.2 tok/s); decode 7 tok in 216 ms (32.4 tok/s)
+ids: 271 4068 220 17 25 45265 369 2250

@@ -1,0 +1,46 @@
+qwen3.6-35b-a3b-4bit round 1 old 'AC Power' load 4.23 reps 660.37 658.84 
+qwen3.6-35b-a3b-4bit round 1 new 'AC Power' load 3.52 reps 626.40 626.34 
+qwen3.6-35b-a3b-4bit round 2 new 'AC Power' load 1.97 reps 625.72 625.83 
+qwen3.6-35b-a3b-4bit round 2 old 'AC Power' load 1.96 reps 665.14 664.04 
+qwen3.6-35b-a3b-4bit round 3 old 'AC Power' load 2.00 reps 666.85 660.88 
+qwen3.6-35b-a3b-4bit round 3 new 'AC Power' load 4.36 reps 642.47 626.76 
+qwen3.6-35b-a3b-4bit round 4 new 'AC Power' load 3.33 reps 629.38 625.15 
+qwen3.6-35b-a3b-4bit round 4 old 'AC Power' load 3.09 reps 661.33 661.26 
+qwen3.6-35b-a3b-4bit round 5 old 'AC Power' load 3.38 reps 668.20 666.90 
+qwen3.6-35b-a3b-4bit round 5 new 'AC Power' load 2.40 reps 631.14 631.37 
+qwen3.6-35b-a3b-4bit round 6 new 'AC Power' load 2.36 reps 622.30 622.24 
+qwen3.6-35b-a3b-4bit round 6 old 'AC Power' load 1.91 reps 658.26 658.39 
+qwen3.8-27b-4bit-mtp round 1 old 'AC Power' load 1.60 reps 3866.34 4036.44 
+qwen3.8-27b-4bit-mtp round 1 new 'AC Power' load 1.39 reps 3551.30 3623.81 
+qwen3.8-27b-4bit-mtp round 2 new 'AC Power' load 1.42 reps 3553.85 3631.08 
+qwen3.8-27b-4bit-mtp round 2 old 'AC Power' load 0.98 reps 3855.65 4066.17 
+qwen3.8-27b-4bit-mtp round 3 old 'AC Power' load 0.79 reps 3877.37 4099.31 
+qwen3.8-27b-4bit-mtp round 3 new 'AC Power' load 0.73 reps 3608.64 3803.44 
+qwen3.8-27b-4bit-mtp round 4 new 'AC Power' load 1.29 reps 3572.23 3781.07 
+qwen3.8-27b-4bit-mtp round 4 old 'AC Power' load 1.13 reps 3815.59 4121.89 
+clover-35b-a3b-4bit round 1 old 'AC Power' load 1.11 reps 656.77 656.72 
+clover-35b-a3b-4bit round 1 new 'AC Power' load 1.56 reps 622.75 622.74 
+clover-35b-a3b-4bit round 2 new 'AC Power' load 1.41 reps 623.35 623.17 
+clover-35b-a3b-4bit round 2 old 'AC Power' load 1.05 reps 657.67 657.45 
+== output check qwen3.6-35b-a3b-4bit
+compare exit 0
+verify: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.28 (d9e54300), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.28 (fa0bc007), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (kapitsa-q128/tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+== output check qwen3.8-27b-4bit-mtp
+compare exit 0
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.28 (d9e54300), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  candidate: 0.2.28 (fa0bc007), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  every row bitwise identical
+  PASS (kapitsa-q128/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+== output check clover-35b-a3b-4bit
+compare exit 0
+verify: 192 records (clover-35b-a3b-4bit)
+  reference: 0.2.28 (d9e54300), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.28 (fa0bc007), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (kapitsa-q128/tools/logit_floors/clover-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+done
