@@ -365,6 +365,7 @@ static int cores_cached(bool* measured) {
   return n;
 }
 int Gpu::core_count() const { return cores_cached(nullptr); }
+bool Gpu::m4_base() const { return name() == "Apple M4" && core_count() <= 10; }
 bool Gpu::core_count_measured() const {
   bool m = false;
   cores_cached(&m);

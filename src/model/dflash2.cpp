@@ -549,10 +549,10 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // The low-rank shortlist head (SlimSpec, arXiv 2605.10453, without training: build_lowrank): the reduced head's
     // 4-bit GEMM (98,304 rows, 134 MB per drafting pass) becomes a rank-768 one (40 MB) whose chunk top-16s the
     // head's own rows rescore. On the 10-core M4, 4B: drafting pass -0.75 ms, tok/cycle unchanged on 7 prompts (the
-    // shortlist holds the true top 16's probability mass to 0.9999). Default on the M4 family, where it was measured;
-    // NI_DFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
+    // shortlist holds the true top 16's probability mass to 0.9999). Default on the 10-core M4, where it was measured
+    // and gated; NI_DFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
     const char* v = getenv("NI_DFLASH_LOWRANK");
-    const int r = v && *v ? atoi(v) : Gpu::get().name().rfind("Apple M4", 0) == 0 ? 768 : 0;
+    const int r = v && *v ? atoi(v) : Gpu::get().m4_base() ? 768 : 0;
     if (r > 0 && v8_ && cfg_.v1) build_lowrank(uint32_t(r));
   }
   load_v8_packed_coeff();
@@ -1838,7 +1838,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     // runs); from 2048 keys on (the window) the plans agree
     static const uint32_t minc = [] {
       if (const char* v = getenv("NI_DFLASH_ATTN_MINC")) return uint32_t(atoi(v));
-      return Gpu::get().name() == "Apple M4" && Gpu::get().core_count() <= 10 ? 128u : 0u;
+      return Gpu::get().m4_base() ? 128u : 0u;
     }();
     chunk = old_attn ? kGpuChunk : minc > 32 ? (0x80000000u | (minc + 31) / 32 * 32) : 0u;  // 0: dfl_attn_geom's plan
     nsplit = old_attn ? (kCtxKeep + kGpuChunk - 1) / kGpuChunk : splits;  // the grid; empty splits exit
@@ -2090,10 +2090,10 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       // the GPU-driven anchor: the builder's P is unknown to the host, so the tokens' base comes from the drafter state
       // (kf_build reads P from its params: the host passes P; a GPU-driven pass passes the sentinel and the kernel reads
       // gst) -- see kf_build_gpu below
-      // NI_KFLASH_DFS (default on for dense targets): a full tree's rows in depth-first order (kf_dfs_reorder: about half
-      // the Gated DeltaNet replays of jumping rows; the same outputs)
+      // NI_KFLASH_DFS (default on for dense targets on the 10-core M4, where it was measured and gated): a full tree's
+      // rows in depth-first order (kf_dfs_reorder: about half the Gated DeltaNet replays of jumping rows)
       static const int dfs_env = getenv("NI_KFLASH_DFS") ? atoi(getenv("NI_KFLASH_DFS")) : -1;
-      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe : dfs_env != 0) ? 1u : 0u;
+      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe && Gpu::get().m4_base() : dfs_env != 0) ? 1u : 0u;
       const kp::KfBuild bp{16u, Pk, 0u, dfs};
       e.use(dpipe(gpu ? "kf_build_gpu" : "kf_build"));
       e.buf(0, kf_clq_); e.buf(1, kf_tok_); e.buf(2, kf_next_);
