@@ -181,6 +181,14 @@ sense.
 - **One place.** Every device- or model-dependent default lives in the device profile table
   (`src/engine/device_profile.cpp`, printed by `kapitsa doctor --print-profile`). No new inline `apple_family()`,
   chip-name or core-count checks outside it.
+- **The fast profile counts as a default** (6 Nov 2026, #363). Kapitsa has two profiles
+  ([docs/profiles.md](docs/profiles.md)): `precise`, the exact defaults, and `fast` (`kapitsa serve --profile fast`,
+  `KAPITSA_PROFILE=fast`). It is one setting for every member, not an opt-in switch per feature. A feature that moves
+  the outputs beyond the floor's gate is on by default for its class when the fast profile turns it on there: it
+  reads its switch through `profile_switch()` (`src/engine/profile.h`), its class is a row in the profile table, and
+  its output check shows top-1 flips and mean KL against the precise path no larger than the fastest other engine's
+  on the same rows (the bar in docs/profiles.md). The class and evidence rules above apply unchanged. A feature that
+  passes the floor's gate belongs in `precise`, not only in `fast`.
 - **Off everywhere never merges**, even when the flag-off path is byte-identical to main, the idea is established
   elsewhere, or the PR says "a later PR flips the default". "Off by default" in a title is a NO GO. (5 Nov 2026: #819
   and #944 sat open as off-by-default PRs; #944 measured +7% and +6% on the 35B on an M5 Pro and still left both off.)

@@ -52,6 +52,11 @@ const DefaultRow kDefaults[] = {
      "10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
     {"ultra_gpu", ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
      "name contains Ultra; fused merges failed on the old arrival (#421); not re-run since, so the split merges stay", false},
+    // Fast profile only (docs/profiles.md): Flash-Next's sparse prefill attention on the matrix units, Q and P as hi + lo
+    // halves (#818). Matrix class, not the name: the kernel needs matrix units and nothing was measured slower on them.
+    // M5 Pro, 32K and 64K prompts: prefill +12 to +20%, 4 top-1 flips in 72 rows (Splash 1.5.0: 16). The call site is
+    // tattn() in qwen4_exp.cpp, whose matrix-unit check predates this table.
+    {"tattn_fast", ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 12, 20, false, "M5 Pro", false},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
