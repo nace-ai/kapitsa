@@ -7,8 +7,8 @@ Each round adds one change to the best arm so far. Every round's arms run interl
 the unchanged `lc` in the same leg, 3 reps, and `log_round.py` appends one row per (model, arm) to `hillclimb.tsv`.
 
 **Stop line.** Stop at the first round where an `lc_*` arm passes 30/30 (10 prompts x 3 reps) on both qwen3.5-4b
-and qwen3.5-9b with a median wall time per prompt no more than 2x `opt0`'s median in the same leg, or after
-8 rounds, whichever comes first. What ships then: the best arm (all 30/30, lowest summed median over both
+and qwen3.5-9b with a median wall time per prompt of at most 1.5 s (4B) and 3 s (9B), or after round 7 (set 5 Nov 10:20,
+replacing "2x opt0 or 8 rounds"), whichever comes first. What ships then: the best arm (all 30/30, lowest summed median over both
 models) becomes `arms/lc_best.json`, and the final table goes into the task summary.
 
 | round | change on top of the previous round |
