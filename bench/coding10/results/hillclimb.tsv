@@ -1,0 +1,32 @@
+round	model	arm	pass	n	wall_s_total	wall_s_median	completion_tokens	change	json
+0	4b	base	7	10	27.7	3.0	9188	as ported; opt0/base reference	/tmp/k350/runs/b1/4b.json
+0	4b	opt0	10	10	4.5	0.5	1070	as ported; opt0/base reference	/tmp/k350/runs/b1/4b.json
+0	9b	base	7	10	149.2	6.3	25187	as ported; opt0/base reference	/tmp/k350/runs/b1/9b.json
+0	9b	opt0	10	10	7.7	0.8	1217	as ported; opt0/base reference	/tmp/k350/runs/b1/9b.json
+0	4b	lc	10	10	50.2	4.7	14139	as ported; opt0/base reference	/tmp/k350/runs/b2/4b.json
+0	9b	lc	10	10	113.7	11.3	20515	as ported; opt0/base reference	/tmp/k350/runs/b2/9b.json
+1-3	4b	opt0	30	30	11.8	0.4	3059	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/4b.json
+1-3	4b	lc	29	30	179.6	5.0	47601	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/4b.json
+1-3	4b	lc_r1	30	30	113.0	2.8	29889	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/4b.json
+1-3	4b	lc_r2	29	30	97.9	2.7	22604	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/4b.json
+1-3	4b	lc_r3	29	30	104.4	3.1	24298	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/4b.json
+1-3	9b	opt0	30	30	26.8	0.7	3338	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/9b.json
+1-3	9b	lc	28	30	327.6	6.5	58281	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/9b.json
+1-3	9b	lc_r1	29	30	235.8	6.2	40970	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/9b.json
+1-3	9b	lc_r2	30	30	267.3	6.7	43441	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/9b.json
+1-3	9b	lc_r3	26	30	220.0	7.0	33417	r1 thinking off; r2 +qwen sampling; r3 +2 tools 4 turns	/tmp/k350/runs/hc1/9b.json
+4-5	4b	opt0	30	30	11.1	0.4	3088	r4 reply DONE; r5 +qwen sampling (9B not run: drive unplugged)	/tmp/k350/runs/hc2/4b.json
+4-5	4b	lc_r1	30	30	153.5	3.5	36702	r4 reply DONE; r5 +qwen sampling (9B not run: drive unplugged)	/tmp/k350/runs/hc2/4b.json
+4-5	4b	lc_r4	30	30	71.3	1.7	17228	r4 reply DONE; r5 +qwen sampling (9B not run: drive unplugged)	/tmp/k350/runs/hc2/4b.json
+4-5	4b	lc_r5	30	30	80.5	1.6	17205	r4 reply DONE; r5 +qwen sampling (9B not run: drive unplugged)	/tmp/k350/runs/hc2/4b.json
+6-7	4b	opt0	30	30	11.2	0.3	3094	r6 examples auto-run; r7 +compact system prompt (4B; 9B waits for AC)	/tmp/k350/runs/hc3/4b.json
+6-7	4b	lc_r4	30	30	64.2	1.6	14057	r6 examples auto-run; r7 +compact system prompt (4B; 9B waits for AC)	/tmp/k350/runs/hc3/4b.json
+6-7	4b	lc_r5	30	30	55.8	1.3	13131	r6 examples auto-run; r7 +compact system prompt (4B; 9B waits for AC)	/tmp/k350/runs/hc3/4b.json
+6-7	4b	lc_r6	30	30	56.5	1.5	11641	r6 examples auto-run; r7 +compact system prompt (4B; 9B waits for AC)	/tmp/k350/runs/hc3/4b.json
+6-7	4b	lc_r7	30	30	52.8	1.0	10830	r6 examples auto-run; r7 +compact system prompt (4B; 9B waits for AC)	/tmp/k350/runs/hc3/4b.json
+1-7-9b	9b	opt0	30	30	27.0	0.6	3218	9B, all rounds, on AC (--require-ac)	/tmp/k350/runs/hc3-9b/9b.json
+1-7-9b	9b	lc_r1	27	30	267.3	7.3	38903	9B, all rounds, on AC (--require-ac)	/tmp/k350/runs/hc3-9b/9b.json
+1-7-9b	9b	lc_r4	27	30	278.1	8.8	43529	9B, all rounds, on AC (--require-ac)	/tmp/k350/runs/hc3-9b/9b.json
+1-7-9b	9b	lc_r5	28	30	290.7	9.3	45046	9B, all rounds, on AC (--require-ac)	/tmp/k350/runs/hc3-9b/9b.json
+1-7-9b	9b	lc_r6	28	30	159.7	4.5	21716	9B, all rounds, on AC (--require-ac)	/tmp/k350/runs/hc3-9b/9b.json
+1-7-9b	9b	lc_r7	30	30	97.8	2.0	11091	9B, all rounds, on AC (--require-ac)	/tmp/k350/runs/hc3-9b/9b.json

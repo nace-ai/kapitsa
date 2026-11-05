@@ -1,0 +1,729 @@
+{
+ "label": "9b",
+ "argv": [
+  "/Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-bench/bench/coding10/coding10.py",
+  "--url",
+  "http://127.0.0.1:8350",
+  "--label",
+  "9b",
+  "--out",
+  "/tmp/k350/runs/b1/9b.json",
+  "--arms",
+  "bench/coding10/arms/base.json",
+  "bench/coding10/arms/opt0.json"
+ ],
+ "bench_commit": "5326b07e063677fd555dbf583553dc27340f524d",
+ "url": "http://127.0.0.1:8350",
+ "models": {
+  "object": "list",
+  "data": [
+   {
+    "id": "qwen3.5-9b",
+    "object": "model",
+    "type": "model",
+    "display_name": "qwen3.5-9b:4bit",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "context_length": 32768,
+    "context_fit": 32768,
+    "slots": 4,
+    "active": true,
+    "downloaded": true,
+    "quant": "MLX affine 4-bit, group 64"
+   },
+   {
+    "id": "drex-v2.0-q4",
+    "object": "model",
+    "type": "model",
+    "display_name": "drex-v2.0-q4",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "bytes": 24103497226,
+    "active": false,
+    "downloaded": true,
+    "variant": "gguf Q4_K_M"
+   },
+   {
+    "id": "drex-v2.0-q8",
+    "object": "model",
+    "type": "model",
+    "display_name": "drex-v2.0-q8",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "bytes": 36861413976,
+    "active": false,
+    "downloaded": true,
+    "variant": "gguf Q8_0"
+   },
+   {
+    "id": "qwen3.5-4b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "qwen3.5-4b:4bit",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "bytes": 4571200510,
+    "active": false,
+    "downloaded": true,
+    "variant": "4bit"
+   },
+   {
+    "id": "qwen3.8-27b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Qwen3.8-27B (4bit)",
+    "short_name": "27b",
+    "about": "dense: the strongest coder of the three, slower to write",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "qwen3.6-35b-a3b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Qwen3.6-35B-A3B (4bit)",
+    "short_name": "35b",
+    "about": "MoE, 3B active per token: fast replies and fast reading",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "qwen3.8-flash-next:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Qwen3.8-Flash-Next 180B-A7B (4bit)",
+    "short_name": "flash",
+    "about": "Qwen's 180B MoE, 7B active: hyper-connections, sparse attention, a 32 GB n-gram table read from the SSD",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-labs-dory1.0-4b:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron Dory1.0 4B (nvfp4)",
+    "short_name": "dory",
+    "about": "NVIDIA's looped 4B: a shared block run 1-4 times per token (--loops; 2 by default), small and fast",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3-nano-4b:fp8",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3 Nano 4B (fp8)",
+    "short_name": "nano-4b",
+    "about": "NVIDIA's small hybrid Mamba-2 model, text only: prompt lookup drafts from the conversation",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-nano-9b-v2:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron Nano 9B v2 (nvfp4)",
+    "short_name": "nano-9b",
+    "about": "NVIDIA's hybrid Mamba-2 9B in NVFP4, text only: reasoning switched with /think or enable_thinking",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3.5-lightning:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3.5 Lightning 30B-A3B (nvfp4)",
+    "short_name": "lightning",
+    "about": "NVIDIA's hybrid Mamba-2 MoE, 3B active, NVFP4 experts: fast replies on 32 GB Macs and up",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3.5-bolt:24gb",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3.5 Bolt 74B-A9B (24gb)",
+    "short_name": "bolt",
+    "about": "NVIDIA's hybrid Mamba-2 MoE, 9B active, 2-bit experts: an agentic model in 24 GB",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3.5-super-vl:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3.5 Super-VL 120B-A12B (nvfp4)",
+    "short_name": "super",
+    "about": "NVIDIA's hybrid Mamba-2 MoE, 12B active, NVFP4 experts (96 GB+ Macs, 128 GB for full context)",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "flint:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Recursive Flint 40B-A2.5B (4bit)",
+    "short_name": "flint",
+    "about": "Recursive's MoE for coding agents, 2.5B active per token: reasoning and tool calls, prompt lookup drafts",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "clover-35b-a3b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Clover-35B-A3B-Preview (4bit)",
+    "short_name": "clover",
+    "about": "DiffuSpace's block-diffusion MoE tuned from Qwen3.6-35B-A3B, 3B active: decodes with the 35B's drafter",
+    "created": 1793829996,
+    "created_at": "2026-11-04T22:06:36Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   }
+  ],
+  "has_more": false,
+  "first_id": "qwen3.5-9b",
+  "last_id": "clover-35b-a3b:4bit"
+ },
+ "server_argv": "/opt/homebrew/bin/kapitsa serve --model 9b --port 8350 --private --context 32k",
+ "kapitsa_version": "kapitsa 0.2.25 (7ea4fff)",
+ "arms": [
+  {
+   "name": "base",
+   "system": null,
+   "thinking": null,
+   "temperature": null,
+   "top_p": null,
+   "top_k": null,
+   "presence_penalty": null,
+   "max_tokens": 8192,
+   "show_examples": true,
+   "suffix": "",
+   "self_test_retries": 0,
+   "tools": null,
+   "max_turns": 6,
+   "extra": {},
+   "task_template": null,
+   "tool_runtime": "builtin",
+   "write_guard": true,
+   "text_tool_fallback": false,
+   "thinking_budget": null,
+   "retry_style": "plain"
+  },
+  {
+   "name": "opt0",
+   "system": null,
+   "thinking": false,
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "presence_penalty": null,
+   "max_tokens": 4096,
+   "show_examples": true,
+   "suffix": "Reply with only the complete function in one ```python block, no explanation.",
+   "self_test_retries": 1,
+   "tools": null,
+   "max_turns": 6,
+   "extra": {},
+   "task_template": null,
+   "tool_runtime": "builtin",
+   "write_guard": true,
+   "text_tool_fallback": false,
+   "thinking_budget": null,
+   "retry_style": "plain"
+  }
+ ],
+ "summary": {
+  "base": {
+   "pass": 7,
+   "n": 10,
+   "wall_s_total": 149.2,
+   "wall_s_median": 6.3,
+   "completion_tokens": 25187
+  },
+  "opt0": {
+   "pass": 10,
+   "n": 10,
+   "wall_s_total": 7.7,
+   "wall_s_median": 0.8,
+   "completion_tokens": 1217
+  }
+ },
+ "rows": [
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 4.01,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 799,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "3.07"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 0.5,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 101,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "3.07"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 0.62,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 52,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s: str) -> bool:\n    cleaned = []\n    for char in s:\n        if char.isalnum():\n            cleaned.append(char.lower())\n    return cleaned == cleaned[::-1]\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "3.07"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 5.02,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 987,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s):\n    cleaned = [char.lower() for char in s if char.isalnum()]\n    left, right = 0, len(cleaned) - 1\n    \n    while left < right:\n        if cleaned[left] != cleaned[right]:\n            return False\n        left += 1\n        right -= 1\n    \n    return True\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.91"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 4.38,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 865,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\nfrom collections import Counter\n\ndef word_count(text):\n    \"\"\"\n    Count the occurrences of each word in the given text.\n    \n    Words are defined as maximal runs of letters, digits, or apostrophes.\n    Words are compared in lowercase.\n    \n    Args:\n        text (str): The input text to analyze.\n        \n    Returns:\n        dict: A dictionary mapping each word to its occurrence count.\n    \"\"\"\n    # Use regex to extract words (letters, digits, and apostrophes)\n    words = re.findall(r\"[A-Za-z0-9']+\", text)\n    # Convert all words to lowercase for case-insensitive comparison\n    words = [word.lower() for word in words]\n    # Count occurrences using Counter\n    return Counter(words)\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.76"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 0.88,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 98,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\ndef word_count(text):\n    # Find all sequences of letters, digits, or apostrophes\n    matches = re.findall(r\"[A-Za-z0-9']+\", text)\n    # Convert to lowercase and count occurrences\n    counts = {}\n    for word in matches:\n        normalized = word.lower()\n        counts[normalized] = counts.get(normalized, 0) + 1\n    return counts\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.61"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 0.59,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 52,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.61"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p04_flatten",
+   "pass": false,
+   "wall_s": 4.69,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 986,
+   "finish": "stop",
+   "error": null,
+   "check_out": "Traceback (most recent call last):\n  File \"/var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/tmphsivzr2t/main.py\", line 14, in <module>\n    assert flatten([1, [2, [3, 4]], 5]) == [1, 2, 3, 4, 5]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+   "code": "def flatten(items):\n    result = []\n    stack = [items]\n    while stack:\n        current = stack.pop()\n        for item in current:\n            if isinstance(item, list):\n                stack.append(item)\n            else:\n                result.append(item)\n    return result[::-1]  # Reverse to preserve order\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.57"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 5.88,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 1254,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s):\n    roman_map = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    n = len(s)\n    \n    for i in range(n):\n        value = roman_map[s[i]]\n        # If the current value is less than the next, it's a subtractive case\n        if i + 1 < n and value < roman_map[s[i + 1]]:\n            total -= value\n        else:\n            total += value\n    \n    return total\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.44"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 0.8,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 188,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s: str) -> int:\n    values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    i = 0\n    n = len(s)\n    \n    while i < n:\n        current_val = values[s[i]]\n        \n        if i + 1 < n and current_val < values[s[i + 1]]:\n            total += values[s[i + 1]] - current_val\n            i += 2\n        else:\n            total += current_val\n            i += 1\n            \n    return total\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.44"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 1.24,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 180,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = []\n    current_start, current_end = intervals[0]\n    \n    for start, end in intervals[1:]:\n        # If the current interval overlaps with or touches the next interval\n        if start <= current_end:\n            # Extend the current interval's end if needed\n            current_end = max(current_end, end)\n        else:\n            # No overlap, add the current interval to the list\n            merged.append([current_start, current_end])\n            current_start, current_end = start, end\n    \n    # Add the last interval\n    merged.append([current_start, current_end])\n    \n    return merged\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.44"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 6.35,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 1230,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    result = [intervals[0]]\n    \n    for i in range(1, len(intervals)):\n        current_start, current_end = intervals[i]\n        last_start, last_end = result[-1]\n        \n        # Merge if current interval overlaps with or touches the last interval\n        if current_start <= last_end:\n            result[-1] = [last_start, max(last_end, current_end)]\n        else:\n            result.append([current_start, current_end])\n    \n    return result\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.32"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 6.64,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 1093,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Returns a tuple (i, j) with i < j such that nums[i] + nums[j] == target,\n    choosing the pair with the smallest j (and then smallest i).\n    Returns None if no such pair exists.\n    \"\"\"\n    num_to_indices = {}  # value -> list of indices\n    for idx, num in enumerate(nums):\n        if num not in num_to_indices:\n            num_to_indices[num] = []\n        num_to_indices[num].append(idx)\n    \n    for j in range(len(nums)):\n        complement = target - nums[j]\n        if complement in num_to_indices:\n            for i in num_to_indices[complement]:\n                if i < j:\n                    return (i, j)\n    \n    return None\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.43"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 0.87,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 180,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Returns a tuple (i, j) with i < j such that nums[i] + nums[j] == target,\n    choosing the pair with the smallest j (and then the smallest i).\n    Returns None if no such pair exists.\n    \"\"\"\n    seen = {}  # value -> list of indices\n    for j, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            # seen[complement] is a list of indices i where nums[i] == complement\n            for i in seen[complement]:\n                if i < j:\n                    return (i, j)\n        if num not in seen:\n            seen[num] = []\n        seen[num].append(j)\n    \n    return None\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.43"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 1.07,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 134,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text: str, shift: int) -> str:\n    def shift_char(c: str) -> str:\n        if 'a' <= c <= 'z':\n            base = ord('a')\n            return chr((ord(c) - base + shift) % 26 + base)\n        elif 'A' <= c <= 'Z':\n            base = ord('A')\n            return chr((ord(c) - base + shift) % 26 + base)\n        else:\n            return c\n    return ''.join(shift_char(c) for c in text)\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.43"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 8.39,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 1589,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    \"\"\"\n    Encrypts or decrypts text using the Caesar cipher.\n\n    Args:\n        text (str): The input string to be transformed.\n        shift (int): Number of positions to shift each letter. Can be negative or >26.\n\n    Returns:\n        str: Transformed string with letters shifted and case preserved.\n    \"\"\"\n    result = []\n    shift = shift % 26  # Normalize shift to range [0, 25]\n\n    for char in text:\n        if 'A' <= char <= 'Z':\n            # Uppercase letters\n            offset = ord(char) - ord('A')\n            new_char = chr(ord('A') + (offset + shift) % 26)\n            result.append(new_char)\n        elif 'a' <= char <= 'z':\n            # Lowercase letters\n            offset = ord(char) - ord('a')\n            new_char = chr(ord('a') + (offset + shift) % 26)\n            result.append(new_char)\n        else:\n            # Non-letter characters remain unchanged\n            result.append(char)\n\n    return ''.join(result)\n",
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "2.37"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p09_balanced",
+   "pass": false,
+   "wall_s": 50.54,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 8192,
+   "finish": "length",
+   "error": null,
+   "check_out": "no code",
+   "code": null,
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.51"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 0.58,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 115,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s: str) -> bool:\n    stack = []\n    mapping = {')': '(', ']': '[', '}': '{'}\n    \n    for char in s:\n        if char in '([{':\n            stack.append(char)\n        elif char in ')]}':\n            if not stack:\n                return False\n            top = stack.pop()\n            if mapping[char] != top:\n                return False\n        # Ignore other characters\n    \n    return len(stack) == 0\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.51"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 0.55,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 117,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s: str) -> str:\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(f\"{current_char}{count}\")\n            current_char = char\n            count = 1\n    \n    result.append(f\"{current_char}{count}\")\n    return ''.join(result)\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.51"
+    ],
+    "ac": true
+   }
+  },
+  {
+   "id": "p10_rle",
+   "pass": false,
+   "wall_s": 53.33,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 8192,
+   "finish": "length",
+   "error": null,
+   "check_out": "no code",
+   "code": null,
+   "arm": "base",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.27"
+    ],
+    "ac": true
+   }
+  }
+ ],
+ "started": "2026-11-05T03:09:18+0500"
+}
