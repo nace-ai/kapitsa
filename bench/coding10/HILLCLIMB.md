@@ -17,3 +17,8 @@ models) becomes `arms/lc_best.json`, and the final table goes into the task summ
 | 1 | thinking off |
 | 2 | Qwen's non-thinking sampling: T 0.7, top_p 0.8, top_k 20 |
 | 3 | only write_file and run_python, at most 4 turns |
+| 4 | on round 1 (best 4B, 30/30): reply DONE once tests pass, solution.py is the answer (no code repeat) |
+| 5 | round 4 + Qwen's non-thinking sampling (round 2 gave the 9B 30/30) |
+
+Rounds 1-3 (3 reps, 5 Nov 03:30): 4B opt0 30/30 0.4 s; lc 29/30 5.0 s; r1 30/30 2.8 s; r2 29/30 2.7 s; r3 29/30 3.1 s.
+9B opt0 30/30 0.7 s; lc 28/30 6.5 s; r1 29/30 6.2 s; r2 30/30 6.7 s; r3 26/30 7.0 s. No arm meets the stop line; r3 dropped.
