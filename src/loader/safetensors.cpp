@@ -78,6 +78,50 @@ struct ReadJob {
   uint8_t* dst;
   size_t len;
 };
+
+// F_NOCACHE skips the page cache only for a read whose file offset, length and destination are page-aligned: any
+// other read goes through the cache and leaves its pages there. Tensors in a safetensors file start at 8 + header
+// length + their offset, so almost none are aligned, and a plain pread leaves nearly every page it read in the cache:
+// a 106 GB pack's load on a 128 GB Mac filled it while the same bytes went into GPU memory (#939: in both panics the
+// readers were stuck in the kernel with 70 GB of file-backed pages and 900 free). So a misaligned piece is read whole pages at a time into a
+// page-aligned staging buffer and copied from there.
+constexpr size_t kPage = size_t(16) << 10;
+constexpr size_t kPiece = size_t(32) << 20;  // the largest piece a staging buffer takes
+
+struct Staging {
+  uint8_t* p = nullptr;
+  Staging() {
+    if (posix_memalign(reinterpret_cast<void**>(&p), kPage, kPiece + 2 * kPage)) fatal("staging buffer allocation failed");
+  }
+  ~Staging() { free(p); }
+  Staging(const Staging&) = delete;
+  Staging& operator=(const Staging&) = delete;
+};
+
+bool pread_all(int fd, uint8_t* dst, size_t len, size_t off) {
+  for (size_t done = 0; done < len;) {
+    const ssize_t r = pread(fd, dst + done, len - done, off_t(off + done));
+    if (r <= 0) return false;
+    done += size_t(r);
+  }
+  return true;
+}
+
+// len <= kPiece bytes at file offset off into dst, past the page cache
+bool read_uncached(int fd, uint8_t* dst, size_t len, size_t off, Staging& st) {
+  if (off % kPage == 0 && len % kPage == 0 && reinterpret_cast<uintptr_t>(dst) % kPage == 0)
+    return pread_all(fd, dst, len, off);
+  const size_t a = off / kPage * kPage, head = off - a;
+  const size_t want = head + len, span = (want + kPage - 1) / kPage * kPage;
+  size_t done = 0;
+  while (done < want) {  // the last page may run past the end of the file: a short read there is enough
+    const ssize_t r = pread(fd, st.p + done, span - done, off_t(a + done));
+    if (r <= 0) return false;
+    done += size_t(r);
+  }
+  memcpy(dst, st.p + head, len);
+  return true;
+}
 } // namespace
 
 void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Filter& file_filter, const Filter& defer) {
@@ -93,7 +137,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   std::sort(files.begin(), files.end());
   if (files.empty() && !file_filter) fatal("no .safetensors in %s", dir.c_str());
 
-  constexpr size_t kAlign = 256, kChunk = 32u << 20;
+  constexpr size_t kAlign = 256;
   std::vector<ReadJob> jobs;
   std::vector<Fd> fds;
   for (auto& path : files) {
@@ -145,8 +189,8 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     fds.push_back(std::move(opened));
     for (auto& it : items) {
       it.t.buf = fb.view(it.dst, it.len);
-      for (size_t o = 0; o < it.len; o += kChunk)
-        jobs.push_back({fd, it.src + o, fb.as<uint8_t>() + it.dst + o, std::min(kChunk, it.len - o)});
+      for (size_t o = 0; o < it.len; o += kPiece)
+        jobs.push_back({fd, it.src + o, fb.as<uint8_t>() + it.dst + o, std::min(kPiece, it.len - o)});
       tensors_[it.name] = it.t;
     }
   }
@@ -158,16 +202,12 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
+      Staging st;
       for (size_t k; (k = next.fetch_add(1)) < jobs.size();) {
         const ReadJob& jb = jobs[k];
-        size_t done = 0;
-        while (done < jb.len) {
-          ssize_t r = pread(jb.fd, jb.dst + done, jb.len - done, off_t(jb.file_off + done));
-          if (r <= 0) {
-            failed = true;
-            return;
-          }
-          done += size_t(r);
+        if (!read_uncached(jb.fd, jb.dst, jb.len, jb.file_off, st)) {
+          failed = true;
+          return;
         }
       }
     });
@@ -187,24 +227,19 @@ void WeightStore::read_deferred(const std::string& name, void* dst) const {
   if (fd < 0) fatal("open %s failed", p.path.c_str());
   fcntl(fd, F_NOCACHE, 1);
   // parallel reads of 32 MB pieces
-  constexpr size_t kChunk = 32u << 20;
   std::atomic<size_t> next{0};
   std::atomic<bool> failed{false};
-  const size_t n = (p.len + kChunk - 1) / kChunk;
+  const size_t n = (p.len + kPiece - 1) / kPiece;
   const unsigned nth = std::min<unsigned>(8, std::max<size_t>(1, n));
   LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
+      Staging st;
       for (size_t k; (k = next.fetch_add(1)) < n;) {
-        const size_t o = k * kChunk, len = std::min(kChunk, p.len - o);
-        size_t done = 0;
-        while (done < len) {
-          ssize_t r = pread(fd, static_cast<uint8_t*>(dst) + o + done, len - done, off_t(p.off + o + done));
-          if (r <= 0) {
-            failed = true;
-            return;
-          }
-          done += size_t(r);
+        const size_t o = k * kPiece, len = std::min(kPiece, p.len - o);
+        if (!read_uncached(fd, static_cast<uint8_t*>(dst) + o, len, p.off + o, st)) {
+          failed = true;
+          return;
         }
       }
     });
