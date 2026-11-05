@@ -69,6 +69,7 @@ python3 tests/test_drex_max.py --cli build   # Drex Max v1: head extraction, tok
 python3 tests/test_pr_size.py
 python3 tests/test_splash_patches.py --apply   # packaging/splash/: clones Splash and applies the patches; no build
 python3 tests/test_logit_compare.py
+python3 tests/test_sampled_tokens_harness.py # stand-in ni_run executables and temporary locks; no GPU
 python3 tests/test_logit_dump.py build      # its output directory only, before the lock and the model
 python3 tools/qwen4_exp_pack_test.py         # needs: numpy; the Flash-Next converter's n-gram table from a config.json
 python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
@@ -108,7 +109,7 @@ interleaved speed gates below, and does not establish an inference speedup.
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,
 `tests/test_structured.py URL`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
-`tests/test_ane_split_abort.py`, `tests/test_systemone.py`): run it only when allowed, and report it as run.
+`tests/test_ane_split_abort.py`, `tests/test_systemone.py`, `tests/test_sampled_tokens.py`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 
