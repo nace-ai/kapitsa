@@ -81,6 +81,9 @@ bool qmm_on();
 // The NI_QMT gate (defined in qwen35.cpp): the dense 4-bit group-64 prefill GEMMs on tensor ops (qmt_m64_n64).
 // Exported for DFlash2's context commit (enc_qmm_rows), which runs the same tile on the drafter's prompt rows.
 bool qmt_on();
+// The NI_QMT128 gate (defined in qwen35.cpp): whether a qmt GEMM of M rows takes the 128-row tile (qmt_m128_n64,
+// qmtg_m128_n64, qmt_m128_n64_ld: the 64-row tile's bits). Exported for DFlash2's context commit.
+bool qmt128_for(int M);
 
 struct Qwen35Config {
   int hidden = 0, layers = 0, vocab = 0;

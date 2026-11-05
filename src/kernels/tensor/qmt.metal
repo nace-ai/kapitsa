@@ -199,3 +199,114 @@ struct QmtLdParams {
   const device bfloat* B[1] = {Bd};
   qmt_tile<1, 64, 64, 32>(X, W, S, B, Y, pl.q, tg.y * 64, tg.x * 64, tid, sg, xs, ws, pl.w_ld, pl.s_ld);
 }
+
+// ---- qmt128: 4 simdgroups of 32 token rows each over 64 weight rows a tile, X read by the matmul from device memory and
+// only the dequantized weights in threadgroup memory (double-buffered, 8 KB), so a weight is dequantized once for 128
+// token rows (qmt_tile: once for 64). Each simdgroup runs two 32 x 32 x 32 matmuls a step, the op qmt_tile runs, on the
+// same elements in the same K order: the bits of qmt_m64_n64 / qmtg_m64_n64. A thread stages one run of 16 weights a
+// step. NP = 2: the tile's weight rows 0-31 are gate rows (W), 32-63 the up rows of the same columns (Wu), and
+// H = silu(g) * u as half. A simdgroup whose rows start past M runs no matmuls but stages and meets every barrier; the
+// last rows of a chunk (r0 + 32 > M; M >= 32) run on the 32 rows that end at M - 1 and store only their own.
+// Two shapes of the epilogue cost ~17% of the whole kernel on the M5 Max (bench_qmm, 27B shapes): a loop that reads both
+// accumulators at one index (H formed in the store loop, or both stored from one loop), and a per-item array of weight
+// pointers (qmt_tile's W[q]). So the gate/up product goes into the up accumulator first, and each accumulator is stored
+// by its own loop.
+template <int NP, typename YT>
+NI_INLINE void qmt128_tile(const device half* X, const device uint* W, const device bfloat* S, const device bfloat* B,
+                           device YT* Y, constant QmtParams& p, uint m0, uint n0, uint tid, uint sg,
+                           threadgroup half* ws, uint wld, uint sld, const device uint* Wu, const device bfloat* Su,
+                           const device bfloat* Bu) {
+  constexpr int BK = 32, WBUF = 64 * BK;
+  const uint r0 = m0 + sg * 32;
+  const bool mine = r0 < p.M;  // uniform per simdgroup
+  const uint rb = mine && r0 + 32 > p.M ? p.M - 32 : r0;
+  auto tX = tensor<device half, dextents<int32_t, 2>, tensor_inline>(
+      (device half*)(X + size_t(rb) * p.x_ld), dextents<int32_t, 2>(p.K, 32), array<int32_t, 2>{1, int32_t(p.x_ld)});
+  typedef tensor<threadgroup half, dextents<int32_t, 2>, tensor_inline> tg_t;
+  constexpr auto desc =
+      matmul2d_descriptor(32, 32, BK, false, true, false, matmul2d_descriptor::mode::multiply_accumulate);
+  matmul2d<desc, execution_simdgroup> op;
+  auto tW0a = tg_t(ws, dextents<int32_t, 2>(BK, 32));
+  auto tW1a = tg_t(ws + WBUF, dextents<int32_t, 2>(BK, 32));
+  auto tW0b = tg_t(ws + 32 * BK, dextents<int32_t, 2>(BK, 32));
+  auto tW1b = tg_t(ws + WBUF + 32 * BK, dextents<int32_t, 2>(BK, 32));
+  auto x0 = tX.template slice<BK, 32>(0, 0);
+  auto acc = op.template get_destination_cooperative_tensor<decltype(x0), decltype(tW0a), float>();
+  auto acc2 = op.template get_destination_cooperative_tensor<decltype(x0), decltype(tW0a), float>();
+  _Pragma("clang loop unroll(full)")
+  for (uint16_t i = 0; i < acc.get_capacity(); ++i) acc[i] = 0.0f, acc2[i] = 0.0f;
+  // this thread's 16 weights a step: tile row wr (64 rows x 2 runs of 16 over 128 threads) at K offset wk
+  const uint wr = tid / 2, wk = (tid % 2) * 16;
+  const uint wn = NP == 2 ? min(n0 + (wr % 32), p.N - 1) : min(n0 + wr, p.N - 1);
+  if (NP == 2 && wr >= 32) W = Wu, S = Su, B = Bu;
+  QmtRaw wv;
+  qmt_raw(W, S, B, wld, sld, wn, wk, true, wv);
+  qmt_dec(wv, ws + wr * BK + wk);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint steps = p.K / BK;
+  for (uint st = 0; st < steps; ++st) {
+    const bool more = st + 1 < steps;
+    if (more) qmt_raw(W, S, B, wld, sld, wn, (st + 1) * BK + wk, (((st + 1) * BK) & 63u) == 0, wv);
+    if (mine) {
+      auto xs = tX.template slice<BK, 32>(int32_t(st * BK), 0);
+      if (st & 1) {
+        op.run(xs, tW1a, acc);
+        op.run(xs, tW1b, acc2);
+      } else {
+        op.run(xs, tW0a, acc);
+        op.run(xs, tW0b, acc2);
+      }
+    }
+    if (more) qmt_dec(wv, ws + ((st + 1) & 1) * WBUF + wr * BK + wk);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  if (!mine) return;
+  auto put = [&](thread decltype(acc)& a, uint nb) {
+    _Pragma("clang loop unroll(full)")
+    for (uint16_t i = 0; i < a.get_capacity(); ++i) {
+      if (!a.is_valid_element(i)) continue;
+      const auto ix = a.get_multidimensional_index(i);
+      const uint n = n0 + nb + ix[0], m = rb + ix[1];
+      if (m < r0 || m >= p.M || n >= p.N) continue;
+      const size_t o = size_t(m) * p.y_ld + n;
+      const float v = a[i];
+      if (NP == 2) Y[o] = YT(v);
+      else Y[o] = p.add ? Y[o] + v : v;
+    }
+  };
+  if (NP == 2) {
+    _Pragma("clang loop unroll(full)")
+    for (uint16_t i = 0; i < acc.get_capacity(); ++i) acc2[i] = silu(acc[i]) * acc2[i];
+    put(acc2, 0);
+    return;
+  }
+  put(acc, 0);
+  put(acc2, 32);
+}
+[[kernel, max_total_threads_per_threadgroup(128)]] void qmt_m128_n64(
+    const device half* X [[buffer(0)]], const device uint* W [[buffer(1)]], const device bfloat* S [[buffer(2)]],
+    const device bfloat* B [[buffer(3)]], device float* Y [[buffer(4)]], constant QmtParams& p [[buffer(5)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]]) {
+  threadgroup half ws[2 * 64 * 32];
+  qmt128_tile<1>(X, W, S, B, Y, p, tg.y * 128, tg.x * 64, tid, sg, ws, p.K / 8, p.K / 64, W, S, B);
+}
+[[kernel, max_total_threads_per_threadgroup(128)]] void qmtg_m128_n64(
+    const device half* X [[buffer(0)]], const device uint* Wg [[buffer(1)]], const device bfloat* Sg [[buffer(2)]],
+    const device bfloat* Bg [[buffer(3)]], device half* H [[buffer(4)]], constant QmtParams& p [[buffer(5)]],
+    const device uint* Wu [[buffer(6)]], const device bfloat* Su [[buffer(7)]], const device bfloat* Bu [[buffer(8)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]]) {
+  threadgroup half ws[2 * 64 * 32];
+  qmt128_tile<2>(X, Wg, Sg, Bg, H, p, tg.y * 128, tg.x * 32, tid, sg, ws, p.K / 8, p.K / 64, Wu, Su, Bu);
+}
+// qmt_m128_n64 over a view of the leading K columns (QmtLdParams, as qmt_m64_n64_ld): the GPU's share of the down
+// projection in the Neural Engine split (NI_ANE).
+[[kernel, max_total_threads_per_threadgroup(128)]] void qmt_m128_n64_ld(
+    const device half* X [[buffer(0)]], const device uint* W [[buffer(1)]], const device bfloat* S [[buffer(2)]],
+    const device bfloat* B [[buffer(3)]], device float* Y [[buffer(4)]], constant QmtLdParams& pl [[buffer(5)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]]) {
+  threadgroup half ws[2 * 64 * 32];
+  qmt128_tile<1>(X, W, S, B, Y, pl.q, tg.y * 128, tg.x * 64, tid, sg, ws, pl.w_ld, pl.s_ld, W, S, B);
+}
