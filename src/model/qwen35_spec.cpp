@@ -748,14 +748,17 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
   }
   static const bool off = env_on("NI_NO_QMVR_MULTI");
   if (off || !special || (R != 2 && R != 3) || K > 2048 || segs.size() > 4) {
+    const Buffer* xin = &x;
+    size_t begin = 0;
+    bool x8_ready = false;
+    static const bool m4_pro = Gpu::get().name() == "Apple M4 Pro" && Gpu::get().core_count() == 20;
+    const bool moe35 = cfg_.moe && cfg_.hidden == 2048 && cfg_.layers == 40 && cfg_.experts == 256 &&
+                       cfg_.top_k == 8 && cfg_.moe_I == 512 && cfg_.shared_I == 512;
     // The measured 35B oQ4e path: fold rows_norm_f32 into the first projection's X8 preparation.
     // Keep its 256-thread scalar reduction and retain xrn_ for the remaining projections.
-    static const bool norm_x8 = env_int("NI_NORM_X8", 1) != 0 &&
-        Gpu::get().name() == "Apple M4 Pro" && Gpu::get().core_count() == 20;
+    static const bool norm_x8 = env_int("NI_NORM_X8", 1) != 0 && m4_pro;
     const QLinear& first = *segs[0].L;
-    if (norm_x8 && !off && norm && R >= 1 && R <= 2 && K == 2048 &&
-        cfg_.moe && cfg_.hidden == 2048 && cfg_.layers == 40 && cfg_.experts == 256 &&
-        cfg_.top_k == 8 && cfg_.moe_I == 512 && cfg_.shared_I == 512 &&
+    if (norm_x8 && !off && norm && R >= 1 && R <= 2 && K == 2048 && moe35 &&
         !(first.q4() || first.q8()) && env_int("NI_V8_PREP", 2) != 1) {
       if (xn_out && xn_out != &xrn_) fatal("enc_qmvr_multi: xn_out fallback needs xn_out == xrn_");
       v8_alloc();
@@ -765,17 +768,47 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
       e.buf(4, xrn_); e.val(5, p); e.buf(6, v8tl_); e.buf(7, v8sl_); e.buf(8, v8tl_);
       e.dispatch(K / 256, 1, 1, 256);
       enc_qmm8(e, {{&first, segs[0].y, first.N, !add.empty() && add[0]}}, R, v8t_, v8s_);
-      for (size_t i = 1; i < segs.size(); ++i)
-        enc_qmvr(e, *segs[i].L, xrn_, segs[i].y, R, i < add.size() && add[i]);
-      return;
-    }
-    const Buffer* xin = &x;
-    if (norm) {
+      xin = &xrn_;
+      begin = 1;
+      x8_ready = true;
+    } else if (norm) {
       enc_rows_norm(e, x, norm, xrn_, R, int(K));
       xin = &xrn_;
     }
     if (xn_out && xin != xn_out) fatal("enc_qmvr_multi: xn_out fallback needs xn_out == xrn_");
-    for (size_t i = 0; i < segs.size(); ++i) enc_qmvr(e, *segs[i].L, *xin, segs[i].y, R, i < add.size() && add[i]);
+    // Reuse the first projection's table (including NI_NORM_X8's) without changing any GEMM's K reduction.
+    // Default only for the measured 35B shape / 5-6-bit affine projections on the 20-core M4 Pro.
+    static const int share_x8 = env_int("NI_QMVR_SHARE_X8", -1);
+    if (share_x8 != 0 && !off && !special && R >= 1 && R < v8_rows_min(true) && segs.size() <= 4 && K % 64 == 0) {
+      size_t generic = 0;
+      bool same_k = true, measured_formats = !cfg_.iq;
+      for (const Seg& sg : segs) {
+        if (!(sg.L->q4() || sg.L->q8())) {
+          ++generic;
+          measured_formats = measured_formats && !sg.L->iq && !sg.L->q20 && !sg.L->exl3 &&
+                             (sg.L->bits == 5 || sg.L->bits == 6) && sg.L->gs == 64;
+        }
+        same_k = same_k && sg.L->K == K;
+      }
+      if (same_k && generic > 1 && (share_x8 > 0 || (m4_pro && moe35 && measured_formats))) {
+        if (!x8_ready) {
+          v8_alloc();
+          enc_x8(e, *xin, R, int(K), nullptr);
+        }
+        for (size_t i = begin; i < segs.size(); ++i) {
+          const Seg& sg = segs[i];
+          const bool accum = i < add.size() && add[i];
+          if (sg.L->q4() || sg.L->q8()) {
+            // Below the MMA threshold these encoders leave the shared X8 table intact.
+            enc_qmvr(e, *sg.L, *xin, sg.y, R, accum);
+          } else {
+            enc_qmm8(e, {{sg.L, sg.y, sg.L->N, accum}}, R, v8t_, v8s_);
+          }
+        }
+        return;
+      }
+    }
+    for (size_t i = begin; i < segs.size(); ++i) enc_qmvr(e, *segs[i].L, *xin, segs[i].y, R, i < add.size() && add[i]);
     return;
   }
   e.use(pipe2(R == 2 ? "qmvr_multi_t2" : "qmvr_multi_t3"));

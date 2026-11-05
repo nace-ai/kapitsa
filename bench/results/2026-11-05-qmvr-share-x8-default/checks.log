@@ -1,0 +1,384 @@
+# cpu-tests.log
+
+PASS api_test
+PASS prefix_cache_test
+PASS fn_store_test
+PASS fn_dflash_test
+PASS tokenizer_test
+PASS iq_layout_test
+PASS remote_test
+PASS cluster_test
+PASS split_place_test
+PASS ws_upgrade_test
+PASS test_server_cli
+PASS test_sidecar
+FAIL test_bench (<evidence>/cpu/mixed-projection-grouping-479931/15307917/cpu-tests/test_bench.log)
+PASS test_update
+FAIL test_community (<evidence>/cpu/mixed-projection-grouping-479931/15307917/cpu-tests/test_community.log)
+PASS test_reasoning
+PASS test_pr_size
+PASS test_logit_compare
+PASS test_sampled_tokens_harness
+PASS test_structured_cli
+2 failed
+
+
+# test-bench-final.log
+
+PASS bench_test self
+PASS plugged in at powermode 0 needs no POWER flag
+PASS battery in High Power Mode is one flag
+PASS battery at powermode 0 is flagged on the battery alone
+PASS powermode 1 is Low Power Mode on AC
+PASS AC in High Power Mode raises no flag
+PASS AC in High Power Mode records one POWER-INFO line
+PASS automatic mode and Low Power Mode need no info line (the low one is already a flag)
+PASS no power state recorded, no info note
+PASS no power state recorded, no claim made
+PASS the client's lowpowermode reading raises the flag without a powermode
+PASS powermode 1 and the client's reading are one flag, not two
+PASS powermode 1 reads as Low Power Mode
+PASS powermode 2 is High Power Mode, not Low Power Mode
+PASS the older lowpowermode 1 spelling still reads as Low Power Mode
+PASS the bare capability tokens pmset -g cap prints are not a mode
+PASS battery is read from pmset -g batt
+PASS the anchored read takes powermode past a lowpowermode line
+PASS lowpowermode alone still gives the mode
+PASS no pmset text, no mode
+PASS both clients read the same mode from the same text
+PASS an existing POWER flag is not duplicated
+PASS no flag when the power state is normal
+PASS the POWER-INFO note appears once, not twice
+PASS the mode is read from provenance.system_start.powermode, where the harness writes it
+PASS the odd-mode row is marked in the flag column
+PASS a best among the reference-mode rows still counts; the odd-mode row is out
+PASS a two-mode tie marks every arm
+PASS a two-mode tie keeps no best values
+PASS a table whose arms share one mode is not marked
+PASS the mismatch shows in the flag column
+PASS the C++ protocol runs against the scripted server
+PASS both send the same 14 requests
+PASS every request is the same, key for key, in order (bodies, paths, headers)
+PASS the 4K prompt is the harness's, from the frozen corpus
+PASS t_decode (decode) records alike
+PASS t_decode (decode): the same rate method over the same events
+PASS t_decode (greedy) records alike
+PASS t_decode (greedy): the same rate method over the same events
+PASS t_prefill records alike
+PASS the follow-ups alike
+PASS the follow-ups' checks alike
+PASS t_tools (tools_off): the streamed call alike
+PASS t_tools (tools_off): the whole reply alike
+PASS t_tools (tools_off): the round trip passes in both
+PASS t_tools (tools_on): the streamed call alike
+PASS t_tools (tools_on): the whole reply alike
+PASS t_tools (tools_on): the round trip passes in both
+PASS the scripted tool checks pass
+PASS the warm-up alike
+PASS bench_test protocol
+PASS build_context(4000, offset 0) is the harness's, byte for byte
+PASS build_context(16000, offset 0) is the harness's, byte for byte
+PASS build_context(2700, offset 100000) is the harness's, byte for byte
+PASS TOOLS, key for key
+PASS the follow-up questions
+PASS the tool test's messages
+PASS the decode prompt (with the same nonce)
+PASS the 4K prefill messages
+PASS the warm-up messages
+PASS the decode request body
+PASS the greedy request body
+PASS the thinking-on tool request body
+PASS decode_rates on 400 published runs' events and the edge cases (0 differ)
+PASS distinct4 on 406 texts
+PASS thinking_leak
+PASS Python's round()
+PASS bench.py's _summary
+PASS the full result validates against schema.json
+PASS the quick result validates against schema.json
+PASS schema.json refuses an extra field (a serial number) and a wrong type
+PASS tools/community_check.py accepts both
+PASS the result is small enough to read and to travel in an address
+PASS the result records its writing runs' temperature
+PASS no user name in the result
+PASS no home path in the result
+PASS no serial number in the result
+PASS no LocalHostName in the result
+PASS no ComputerName in the result
+PASS no HostName in the result
+PASS the pull request's title
+PASS the file's path
+PASS the fork, and nothing in the way
+PASS the plan has no issue form: a pull request is the only way in
+PASS Flint's card: writing at T = 1.0 (recorded result)
+PASS Flint's card: writing at T = 1.0 (older result)
+PASS the card's conditions line: DFlash2 drafter
+PASS the card's conditions line: KFlash decoding
+PASS the card's conditions line: prompt-lookup decoding
+PASS submit --dry-run with gh: prints the gh commands and no issue form
+PASS the dry run only asked gh who is logged in
+PASS --dry-run without --submit is a usage error
+PASS submit --dry-run without gh: says so and shows the pull request, no issue form
+PASS submit without gh: explains how to get gh, offers no other path
+PASS without a terminal nothing is submitted
+PASS and gh was asked for nothing else
+PASS a no sends nothing and names the saved file
+PASS nothing but the login was asked of gh
+PASS the result stays where it was saved
+PASS submitting a saved result shows its card first, with who used the GPU in words
+PASS a saved Flint result's card on screen: T = 1.0
+PASS one question, and Enter opens the pull request
+PASS the calls: login, fork, base, its head, the branch, the file, the pull request
+PASS the file sent is the saved file, byte for byte
+PASS the pull request: head, base, title and the summary table
+PASS a model that can't be downloaded stops the run before any server starts
+PASS a folder that is not a model is refused
+PASS --help
+PASS waits for lockf's holder of an immutable lock file, and names it
+PASS while it holds the lock lockf can't take it; released after
+PASS folder_precision counts weight bytes: one format, a dominant override, no quantization, no weights
+PASS held_by_caller under each spelling of NI_LOCK_HELD / NACE_GPU_LOCK_HELD
+PASS plain: a quick run against the scripted server completes and is saved
+PASS the quick protocol's 18 requests (warm-up 2, writing 3 + 3, the 4K prompt and 3 follow-ups, tools 6)
+PASS its result is invalid (an external server), so it can't be submitted
+PASS the model and the mode
+PASS the quick protocol: 3 + 3 runs, the 4K prompt
+PASS the prompt, the follow-ups and the tool check as the server answered
+PASS the follow-ups' prefill tok/s counts the uncached suffix only (additive field)
+PASS an external server's drafter is unknown, none recorded
+PASS writing runs record accepted drafts from the server's cycle counts (additive fields)
+PASS the progress shows the accepted drafts per second
+PASS this Mac
+PASS the run's result validates against schema.json
+PASS plain: the summary table on stdout, the progress on stderr
+PASS --submit refuses an invalid result
+PASS --json: the result on stdout, the progress on stderr
+PASS a terminal: the phases and the summary card
+PASS Flint from a folder: its writing at T = 1.0, shown and recorded
+PASS --ctx selects a labelled custom-context run
+PASS standard checkpoint is a standalone result saved before the context stage
+PASS atomic result writes leave no temporary files
+PASS 64k appends a separate context stage and retains the standard protocol
+PASS reading AND writing prompts fill the selected context
+PASS standard decode runs first, followed by six long-context decode requests
+PASS context fitting uses the same thinking-off template options as measured requests
+PASS standard reading and tool tests finish before context preparation
+PASS actual per-run context writing prompt counts are saved separately
+PASS three independent cold/cached pairs
+PASS telemetry is excluded from content event counts and reports per-request cycle yield
+PASS context speculative diagnostics summarize three measured writing runs
+PASS TTFT starts at content after early progress events, not at telemetry arrival
+PASS TTFT speedup uses each matched cold/cached pair
+PASS cold and cached TTFT each have three samples, median and range
+PASS cached throughput excludes reused tokens and cache percentage uses actual usage
+PASS context validity and standard measurements are preserved independently
+PASS custom-context JSON validates
+PASS saved custom runs cannot be submitted as standard benchmarks
+PASS --ctx rejects '0' before starting a benchmark
+PASS --ctx rejects '-1' before starting a benchmark
+PASS --ctx rejects 'max' before starting a benchmark
+PASS --ctx rejects '2k' before starting a benchmark
+PASS --ctx rejects 'abc' before starting a benchmark
+PASS --ctx rejects '9999999999999k' before starting a benchmark
+PASS --ctx --submit rejected before model loading
+PASS custom run refuses a server with a smaller context
+PASS failed context stage retains completed standard results
+PASS missing cache counts never produce a derived throughput or reuse summary
+PASS missing cache usage is explicitly flagged while TTFT stays usable
+PASS inconsistent cache counts never produce a derived throughput or reuse summary
+PASS impossible cache counts are rejected and excluded from summaries
+PASS reasoning-only models keep their benchmark temperature and extra reply headroom
+PASS interrupting the context stage retains the standard checkpoint and reports its location
+PASS omitting prefill chunk keeps the automatic default report
+PASS standalone chunk 1024: requested chunk and full/quick mode
+PASS standalone chunk: Markdown displays requested size
+PASS standalone chunk 1024: schema validates
+PASS standalone chunk 1024: saved custom report refused for standard submission
+PASS standalone chunk 4096: requested chunk and full/quick mode
+PASS standalone chunk: --json matches saved report
+PASS standalone chunk 4096: schema validates
+PASS standalone chunk 4096: saved custom report refused for standard submission
+PASS standalone chunk 2048: requested chunk and full/quick mode
+PASS standalone chunk: --json matches saved report
+PASS standalone chunk 2048: schema validates
+PASS standalone chunk 2048: saved custom report refused for standard submission
+PASS prefill chunk requires a value
+PASS invalid prefill chunk '0' rejected before loading
+PASS invalid prefill chunk '-1' rejected before loading
+PASS invalid prefill chunk 'abc' rejected before loading
+PASS invalid prefill chunk '4096x' rejected before loading
+PASS invalid prefill chunk '99999999999999999' rejected before loading
+PASS custom chunk submission rejected before loading
+
+ok: 0 failed
+
+
+# test-community-final.log
+
+PASS the catalog's models, in order
+PASS the 35B's precisions
+PASS Bolt's precision and the 4B's title
+PASS the Mac table
+PASS a variant whose .quant string spans several lines is still read
+PASS a known version from CMakeLists.txt
+PASS a full result passes
+PASS its contention flag is a warning, not an error (full)
+PASS a quick result passes
+PASS its contention flag is a warning, not an error (quick)
+PASS refused: a version never released
+PASS refused: a model outside the catalog
+PASS refused: a precision the model has not
+PASS refused: a precision that is not its variant's
+PASS refused: a wrong title
+PASS refused: a --ctx report
+PASS refused: a --quick --ctx report
+PASS refused: a --prefill-chunk report
+PASS refused: a --quick --prefill-chunk report
+PASS DSpark decoding (Lightning) passes
+PASS refused: DSpark decoding without its drafter
+PASS KFlash decoding with its drafter passes
+PASS prompt-lookup decoding, no drafter passes
+PASS refused: KFlash decoding without its drafter
+PASS refused: a decoding name outside the schema's
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: KFlash
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: KFlash
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: prompt-lookup
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: unknown
+PASS the table keeps a recorded decoding as it is
+PASS a title from an earlier release passes (Dory's, until 0.1.35)
+PASS the table names a model as the catalog does now
+PASS Flint's prompts pass against its own reference (3,874 and 15,066 tokens)
+PASS refused: Flint with the Qwen templates' prompt sizes
+PASS refused: Flint writing at 0.6, not its 1.0
+PASS a result from before the temperature was recorded passes
+PASS refused: the 35B writing at 1.0, not its 0.6
+PASS refused: a Mac name that is not its identifier's
+PASS refused: a name for an identifier the table does not have
+PASS refused: invalid measurements
+PASS refused: a median that is not its runs'
+PASS refused: too few runs for the mode
+PASS refused: a prompt 4% off the reference
+PASS refused: a rate that is not tokens / time
+PASS refused: follow-ups and a median that disagree
+PASS refused: a protocol that is not its mode's
+PASS refused: prompts from another corpus
+PASS refused: more memory than the Mac has
+PASS refused: a run in the future
+PASS refused: an impossible rate
+PASS refused: a copy of a result already in the table
+PASS refused: an extra field (a serial number)
+PASS refused: a chip that is not Apple's
+PASS refused: a phase name that is not a phase
+PASS an unknown Mac (no name) passes, with a warning
+PASS a failed tool check passes, with a warning
+PASS labels: a quick run with contention
+PASS labels: flagged, and invalid when a check fails
+PASS labels: a High Power Mode run is not flagged
+PASS labels: contention still labels an info-noted High Power Mode run
+PASS the table is written; a file that is not a result is skipped
+PASS grouped by Mac, the newest first, an M5 Mac named with its year
+PASS the table names MacBook Pro (14-inch, M5) MacBook Pro (14-inch, 2025)
+PASS the table names Mac mini (M6) Mac mini (2026)
+PASS the table names MacBook Air (15-inch, M4, 2025) MacBook Air (15-inch, M4, 2025)
+PASS the table names MacBook Pro (16-inch, M5 Pro or M5 Max) MacBook Pro (16-inch, 2026)
+PASS then by model and precision
+PASS a row per run
+PASS every number with its unit
+PASS a disturbed measurement is marked, and its flag listed
+PASS a quick run says so
+PASS Flint's writing is headed T = 1.0 (its model card's), every other model's T = 0.6
+PASS --check: up to date
+PASS --check: a result removed, the table is out of date
+PASS no results: says how to add the first
+PASS --github: one bad file fails the check
+PASS --github: the report names the passing file and why the other fails
+PASS --github: other files the pull request changes are mentioned
+PASS --github: the result files read as data at the head commit
+PASS --github: labels benchmark, invalid, quick, contention
+PASS --github: a stale label it manages is removed
+
+ok: 0 failed
+
+
+# cpu-extra.log
+
+PASS execution_session_test
+PASS http_stream_test
+PASS exl3_test
+PASS qwen4_config_test
+PASS json_file_test
+PASS affine_pack_test
+PASS systemone_test
+PASS systemone_codes_probe_test
+PASS splash_protocol_test
+PASS splash_runtime_test
+PASS splash_discover_test
+PASS splash_plan_test
+PASS test_drex_max
+PASS test_logit_dump
+PASS qwen4_exp_pack_test
+PASS test_splash_patches
+
+
+# server-regression.log
+
+PASS GET / serves the chat page
+PASS chat page is self-contained (no external requests)
+PASS chat page carries the server's --timing (ttft, prefill or both; the placeholder is filled in)
+PASS /v1/models lists the model as qwen35-oq4e
+PASS chat page budgets the reply by the model's context, not the API's 16384 default
+PASS thinking: reasoning streamed separately
+PASS thinking: correct answer
+PASS thinking: finish=stop + usage
+PASS tool call: finish=tool_calls
+PASS tool call: read_file or run_shell on /etc/hosts
+PASS tool call: no markup in content
+PASS tool result: final answer mentions 3
+PASS tool result: prefix reused (cached >= first prompt, less the generation prompt's tail)
+PASS next turn: cached prefix
+PASS next turn: answer
+PASS non-stream tool call + int arg
+PASS int argument is a JSON number
+PASS main slot survives side request
+PASS thinking + tools: a call on /etc/hosts returned as a tool call
+PASS one-offs keep the conversation in progress
+PASS a side request sent beside a first request does not evict it
+PASS anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)
+PASS anthropic: display omitted: the thinking block has no text and a signature
+PASS anthropic: count_tokens counts the prompt
+PASS anthropic stream: message_start, ping, blocks, message_delta, message_stop
+PASS anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)
+PASS anthropic stream: final answer mentions 3
+PASS anthropic: the next question's prompt continues the conversation (every turn's thinking kept)
+PASS anthropic: a prompt over the context is 400 "prompt is too long: N tokens > M maximum"
+PASS anthropic: streamed too, a plain 400 before any event
+PASS responses stream: created, in_progress, items, completed; sequence numbers in order
+PASS responses stream: a function_call on /etc/hosts
+PASS responses: the tool loop's next request is answered (mentions 3)
+PASS responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)
+PASS responses: previous_response_id continues a stored response
+PASS responses: an unknown previous_response_id is a 400
+PASS responses: a prompt over the context is 400 context_length_exceeded
+PASS responses: a max_output_tokens cut is status incomplete
+PASS /v1/models reports the requests that run at once (slots)
+PASS a request alone gives the same reply every time (greedy)
+PASS in flight together: the greedy reply is answered in full
+PASS in flight together: the sampled T=0.7 seed 11 reply is answered in full
+PASS in flight together: the greedy reply starts as it does alone
+PASS in flight together: a 2K-token request sent during a long reply finishes first
+PASS more requests than slots: every one is answered in full
+PASS a client gone mid-stream: the request beside it is answered, the next one starts at once
+PASS chat: a prompt over the context is a 400 context_length_exceeded
+PASS chat stream: a prompt over the context is a 400 context_length_exceeded
+PASS chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees
+ALL PASSED
+
+
+# prek.log
+
+check for merge conflicts................................................Passed
+check yaml...............................................................Passed
+check for added large files..............................................Passed
+check for case conflicts.................................................Passed
+trim trailing whitespace.................................................Passed
+ruff check...............................................................Passed
+shell scripts parse (bash -n)............................................Passed
