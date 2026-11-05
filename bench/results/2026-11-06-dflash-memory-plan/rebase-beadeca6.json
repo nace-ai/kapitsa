@@ -1,0 +1,532 @@
+{
+  "kind": "memory-plan-rebase-validation",
+  "base": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+  "candidate": "f7b1727c867d825b64f1b5527153f74fe508e3d4",
+  "reason": "Upstream merged #973 (9B down-only packing); preserve its guards in the memory plan.",
+  "local_m4_plan": [
+    {
+      "label": "4b-r0",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "5",
+        "--label",
+        "rebased-plan-4b-r0",
+        "--",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/build/dflash_plan_test",
+        "--gpu",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model"
+      ],
+      "head": "f7b1727c867d825b64f1b5527153f74fe508e3d4",
+      "binary_sha256": "11d84f25ac556e9926ed27cceacfdf0263bfc6e7fb6d5c074e46fcdd357fd9ac",
+      "log": "[kapitsa] read 2.37 GB of weights in 649 ms (3.6 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 76 ms (3.2 GB/s)\n[kapitsa] MTP head loaded in 206 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 249 static target projections, 2150.9 MiB in 704 ms; compressed 1948221/2053120 blocks\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 18 ms\n[kapitsa] prewarmed 94 prefill pipelines in 32 ms\n[kapitsa] loaded /Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model: 32 layers, dense, 2.4 GB mapped in 1757 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 18/18 units (9216 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 6 ms, program cached 1 ms + load 40 ms (13 functions, MIL 89 KB); 187.6 MB Metal; ready in 0.1 s\n[kapitsa] NI_ANE: startup check 2.11% of the ANE's part from the GPU alone (2 functions, 196 ms)\n[kapitsa] read 1.27 GB of weights in 102 ms (12.5 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 153 ms; compressed 447538/448000 blocks\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.96 GB), loaded in 402 ms\nDRAFT_PLAN={\"allocated\":1026555904,\"planned\":1082441728,\"page_allowance\":8388608,\"passed\":true}\n"
+    },
+    {
+      "label": "4b-r768",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "5",
+        "--label",
+        "rebased-plan-4b-r768",
+        "--",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/build/dflash_plan_test",
+        "--gpu",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model"
+      ],
+      "head": "f7b1727c867d825b64f1b5527153f74fe508e3d4",
+      "binary_sha256": "11d84f25ac556e9926ed27cceacfdf0263bfc6e7fb6d5c074e46fcdd357fd9ac",
+      "log": "[kapitsa] read 2.37 GB of weights in 680 ms (3.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 74 ms (3.2 GB/s)\n[kapitsa] MTP head loaded in 208 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 249 static target projections, 2150.9 MiB in 702 ms; compressed 1948221/2053120 blocks\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 10 ms\n[kapitsa] prewarmed 94 prefill pipelines in 16 ms\n[kapitsa] loaded /Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model: 32 layers, dense, 2.4 GB mapped in 1757 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 18/18 units (9216 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 0 ms, program cached 1 ms + load 47 ms (13 functions, MIL 89 KB); 187.6 MB Metal; ready in 0.1 s\n[kapitsa] NI_ANE: startup check 2.11% of the ANE's part from the GPU alone (2 functions, 183 ms)\n[kapitsa] read 1.27 GB of weights in 99 ms (12.9 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 2003 ms, rows 217 ms)\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 339.6 MiB in 105 ms; compressed 325829/326080 blocks\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.94 GB resident (process footprint +0.71 GB), loaded in 2572 ms\nDRAFT_PLAN={\"allocated\":937426944,\"planned\":1082441728,\"page_allowance\":8388608,\"passed\":true}\n"
+    },
+    {
+      "label": "9b-r0",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "5",
+        "--label",
+        "rebased-plan-9b-r0",
+        "--",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/build/dflash_plan_test",
+        "--gpu",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit"
+      ],
+      "head": "f7b1727c867d825b64f1b5527153f74fe508e3d4",
+      "binary_sha256": "11d84f25ac556e9926ed27cceacfdf0263bfc6e7fb6d5c074e46fcdd357fd9ac",
+      "log": "[kapitsa] read 5.04 GB of weights in 1169 ms (4.3 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.49 GB of weights in 111 ms (4.4 GB/s)\n[kapitsa] MTP head loaded in 421 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 32 static target projections, 823.6 MiB in 263 ms; compressed 748376/786432 blocks\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 10 ms\n[kapitsa] prewarmed 94 prefill pipelines in 15 ms\n[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit: 32 layers, dense, 5.0 GB mapped in 2091 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: Neural Engine split unavailable (hidden size is not whole 2560-channel segments); the GPU runs the prefill FFN alone\n[kapitsa] read 2.58 GB of weights in 591 ms (4.4 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 226 MB\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 6 static draft projections, 153.6 MiB in 51 ms; compressed 147456/147456 blocks\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit/dflash2: 6 layers, hidden 4096, 4-bit projections, 1.17 GB resident (process footprint +1.12 GB), loaded in 931 ms\nDRAFT_PLAN={\"allocated\":1167245312,\"planned\":1184599808,\"page_allowance\":8388608,\"passed\":true}\n"
+    },
+    {
+      "label": "9b-r768",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "5",
+        "--label",
+        "rebased-plan-9b-r768",
+        "--",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/cached-turn-increments/build/dflash_plan_test",
+        "--gpu",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit"
+      ],
+      "head": "f7b1727c867d825b64f1b5527153f74fe508e3d4",
+      "binary_sha256": "11d84f25ac556e9926ed27cceacfdf0263bfc6e7fb6d5c074e46fcdd357fd9ac",
+      "log": "[kapitsa] read 5.04 GB of weights in 1147 ms (4.4 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.49 GB of weights in 111 ms (4.4 GB/s)\n[kapitsa] MTP head loaded in 429 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 32 static target projections, 823.6 MiB in 266 ms; compressed 748376/786432 blocks\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 10 ms\n[kapitsa] prewarmed 94 prefill pipelines in 15 ms\n[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit: 32 layers, dense, 5.0 GB mapped in 2063 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: Neural Engine split unavailable (hidden size is not whole 2560-channel segments); the GPU runs the prefill FFN alone\n[kapitsa] read 2.58 GB of weights in 582 ms (4.4 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 226 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 6612 ms, rows 307 ms)\n[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 6 static draft projections, 153.6 MiB in 47 ms; compressed 147456/147456 blocks\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit/dflash2: 6 layers, hidden 4096, 4-bit projections, 1.21 GB resident (process footprint +1.16 GB), loaded in 7839 ms\nDRAFT_PLAN={\"allocated\":1211940864,\"planned\":1229279360,\"page_allowance\":8388608,\"passed\":true}\n"
+    }
+  ],
+  "remote_gpu": [
+    {
+      "label": "plan-r0",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "rebase-plan-r0",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/planner/build/dflash_plan_test",
+        "--gpu",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+      ],
+      "source_heads": {
+        "reference": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+        "planner": "f7b1727c867d825b64f1b5527153f74fe508e3d4"
+      },
+      "binary_sha256": "eacb3fd910d1ec01594423a4c7a1a8f91ec4b4a79ab35a8cc003665bffbb0094",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 17 ms (13.9 GB/s)\n[kapitsa] MTP head loaded in 226 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 22 ms\n[kapitsa] prewarmed 93 prefill pipelines in 39 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 695 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 76 ms (16.6 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.54 GB resident (process footprint +0.50 GB), loaded in 183 ms\nDRAFT_PLAN={\"allocated\":536739840,\"planned\":535881728,\"page_allowance\":8388608,\"passed\":true}\n"
+    },
+    {
+      "label": "plan-r768",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "rebase-plan-r768",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/planner/build/dflash_plan_test",
+        "--gpu",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+      ],
+      "source_heads": {
+        "reference": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+        "planner": "f7b1727c867d825b64f1b5527153f74fe508e3d4"
+      },
+      "binary_sha256": "eacb3fd910d1ec01594423a4c7a1a8f91ec4b4a79ab35a8cc003665bffbb0094",
+      "log": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 17 ms (14.1 GB/s)\n[kapitsa] MTP head loaded in 228 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 672 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 72 ms (17.6 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 2103 ms, rows 182 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2465 ms\nDRAFT_PLAN={\"allocated\":580780032,\"planned\":579897728,\"page_allowance\":8388608,\"passed\":true}\n"
+    },
+    {
+      "label": "logits-reference",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "rebase-logits-reference",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference"
+      ],
+      "source_heads": {
+        "reference": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+        "planner": "f7b1727c867d825b64f1b5527153f74fe508e3d4"
+      },
+      "binary_sha256": "fc42a86aa4e956e8639d1766d94a13c408d7c3258194798bafae8da1be2bb9db",
+      "log": "[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (298 ms)\n[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 15 ms (15.6 GB/s)\n[kapitsa] MTP head loaded in 245 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 14 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 669 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)\nprefill 8 rows: next-token NLL 1.8013, top-1 = next token 0.6250 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference/prefill\nstep   192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference/step\nverify 192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference/verify\nbatch  192 rows: next-token NLL 0.6792, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference/batch\n8 windows, 14848 prefilled tokens in 6.7 s; 8.7 s in all\n"
+    },
+    {
+      "label": "logits-planner",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "rebase-logits-planner",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/planner/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-planner",
+        "--from",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference"
+      ],
+      "source_heads": {
+        "reference": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+        "planner": "f7b1727c867d825b64f1b5527153f74fe508e3d4"
+      },
+      "binary_sha256": "07197c5c016cc952aad1b45d30b4a3a6ccce13babf2f8e8703d39c72f83afb1c",
+      "log": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 17 ms (14.6 GB/s)\n[kapitsa] MTP head loaded in 285 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 19 ms\n[kapitsa] prewarmed 93 prefill pipelines in 30 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 732 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)\nprefill 8 rows: next-token NLL 1.8013, top-1 = next token 0.6250 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-planner/prefill\nstep   192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-planner/step\nverify 192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-planner/verify\nbatch  192 rows: next-token NLL 0.6792, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-planner/batch\n8 windows, 14848 prefilled tokens in 6.7 s; 8.8 s in all\n"
+    },
+    {
+      "label": "logit-compare",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+        "/Users/bytedance/kapitsa-night-20261106/planner/tools/logit_compare.py",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-planner",
+        "--json",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/compare.json"
+      ],
+      "source_heads": {
+        "reference": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+        "planner": "f7b1727c867d825b64f1b5527153f74fe508e3d4"
+      },
+      "binary_sha256": "36984af9f922aec72ba5b03e811ee92512268785007192e20f826cbd07cf8d04",
+      "log": "prefill: 8 records (qwen3.5-4b-4bit)\n  reference: 0.2.30 (beadeca), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.30 (f7b1727), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\nbatch: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.30 (beadeca), batch {\"members\":4,\"rows\":2}, prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.30 (f7b1727), batch {\"members\":4,\"rows\":2}, prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../planner/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\nstep: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.30 (beadeca), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.30 (f7b1727), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../planner/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\nverify: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.30 (beadeca), verify \"KFlash tree (a chain of 8 live rows)\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.30 (f7b1727), verify \"KFlash tree (a chain of 8 live rows)\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../planner/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\n"
+    },
+    {
+      "label": "draft-reference",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "rebase-draft-reference",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/qmm_draft_check",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/draft-reference"
+      ],
+      "source_heads": {
+        "reference": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+        "planner": "f7b1727c867d825b64f1b5527153f74fe508e3d4"
+      },
+      "binary_sha256": "468434af0690b67b160fe7674d19a6e843be220f380de4e1310f4fc2970f6857",
+      "log": "[kapitsa] read 2.37 GB of weights in 418 ms (5.7 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 19 ms (12.9 GB/s)\n[kapitsa] MTP head loaded in 228 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 707 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 72 ms (17.6 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 2011 ms, rows 172 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2371 ms\nSaved 270 files / 35198376 bytes to /Users/bytedance/kapitsa-night-20261106/rebase-evidence/draft-reference\n"
+    },
+    {
+      "label": "draft-planner",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "rebase-draft-planner",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/planner/build/qmm_draft_check",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/draft-planner",
+        "--from",
+        "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/draft-reference"
+      ],
+      "source_heads": {
+        "reference": "beadeca623e668c0eb26a2e84be7eb92ce1558fe",
+        "planner": "f7b1727c867d825b64f1b5527153f74fe508e3d4"
+      },
+      "binary_sha256": "f9508fad8971bcc24832c47baf00aab53e5aa31fb92203abc1cd97b15219ed3d",
+      "log": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 15 ms (16.4 GB/s)\n[kapitsa] MTP head loaded in 240 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 12 ms\n[kapitsa] prewarmed 93 prefill pipelines in 17 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 664 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 72 ms (17.6 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 1974 ms, rows 185 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2340 ms\nAKO_CHECK={\"passed\":true,\"cases\":270,\"bytes\":35198376,\"mismatches\":0}\n"
+    }
+  ],
+  "logit_compare": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "../planner/tools/logit_floors/qwen3.5-4b-4bit.json"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (beadeca)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:15Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (f7b1727)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:26Z",
+          "env": {}
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../planner/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (beadeca)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:15Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (f7b1727)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:26Z",
+          "env": {}
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../planner/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (beadeca)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:15Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (f7b1727)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:26Z",
+          "env": {}
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../planner/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (beadeca)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:15Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (f7b1727)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/rebase-evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T19:46:26Z",
+          "env": {}
+        }
+      }
+    }
+  },
+  "cpu_checks": {
+    "cpu": "PASS api_test\nPASS prefix_cache_test\nPASS fn_store_test\nPASS fn_dflash_test\nPASS tokenizer_test\nPASS iq_layout_test\nPASS remote_test\nPASS cluster_test\nPASS split_place_test\nPASS ws_upgrade_test\nPASS test_server_cli\nPASS test_sidecar\nPASS test_bench\nPASS test_update\nPASS test_community\nPASS test_reasoning\nPASS test_pr_size\nPASS test_logit_compare\nPASS test_sampled_tokens_harness\nPASS test_structured_cli\n0 failed\nbuilt: execution_session_test http_stream_test exl3_test qwen4_config_test json_file_test affine_pack_test systemone systemone_test systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test (log: /Users/bytedance/kapitsa-night-20261106/rebase-evidence/vk/planner-3cd014/f7b1727c/build.log)\n........read model.safetensors (5 tensors)\n.GGUF v3: 3 tensors, 0 metadata KVs\narch: None name: None\n.read model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\n.read model.safetensors (1 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\n...GGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\n.\n----------------------------------------------------------------------\nRan 15 tests in 0.800s\n\nOK\nPASS nested path: stops at the corpus\nPASS nested path: dumps/x/ref made with its parents\nPASS existing path: kept, stops at the corpus\nPASS path under a file: cannot make, before the corpus\nPASS --verify-rows 12: refused before the directory\nall passed\n  ok    Flash-Next's multipliers from its seed\n  ok    Flash-Next's 16 head sizes: the primes from 20,000,000\n  ok    the heads' rows end to end\n  ok    320,001,536 rows in 128 shards of 2,500,012, rows of 160 values\n  ok    Flash-Next's ids as before\n  ok    Flash-Next's ids as ngram.cpp's\n  ok    5-grams of 3 heads: 12 heads of 40 values\n  ok    odd multipliers below 2^63 / vocab\n  ok    rows padded to 64, in 4 shards\n  ok    5-grams of 3 heads as ngram.cpp's\n  ok    Flash-Next's table: layer 1, its spec\n  ok    table_specs: 128 shards of 4-bit group-32 rows of 160 in layer 1\n  ok    a shard of another width is refused\n  ok    a missing shard is refused\n  ok    a shard past split_ngram_parts is refused\n  ok    the table in layer 5 (one-indexed) is read from layer 4's names, not layer 1's\n  ok    two n-gram layers are refused\n  ok    a hidden size the heads do not divide is refused\nPASS (0 failed)\nPASS pin: upstream Splash\nPASS pin: full commit hash\nPASS pin: release_binary_sha256\nPASS pin: release_metallib_sha256\nPASS pin: release_host_step_metallib_sha256\nPASS pin: kflash_binary_sha256\nPASS patches: present\nPASS patches: numbered 0001.. in order\nPASS 0001-runtime-kernels.patch: license header\nPASS 0001-runtime-kernels.patch: changes files\nPASS 0001-runtime-kernels.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: license header\nPASS 0002-h1-gate-replay.patch: changes files\nPASS 0002-h1-gate-replay.patch: runtime/metal/CommandGraph.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/ExpertStore.cpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/Runtime.cpp marked modified\nPASS gen: internals pragma first\nPASS gen: 8 staging pointers coherent\nPASS gen: stops before gguf_repack\nPASS gen: H1 kernels appended\nPASS gen: refuses 7 pointers\nPASS gen: refuses no gguf_repack\nPASS out: mine becomes an empty build dir\nPASS out: empty becomes an empty build dir\nPASS out: new becomes an empty build dir\nPASS out: refuses a directory that is not a build\nPASS out: refuses a file\nPASS out: the refused directory's files survive\nPASS install: another Splash release is left alone, not built\nPASS install: says why KFlash was not built\nPASS install: the pinned release builds KFlash, its files untouched\nPASS apply: every patch applies to the pinned Splash\nall passed\n",
+    "prek": "check for merge conflicts................................................Passed\ncheck yaml...............................................................Passed\ncheck for added large files..............................................Passed\ncheck for case conflicts.................................................Passed\ntrim trailing whitespace.................................................Passed\nruff check...............................................................Passed\nshell scripts parse (bash -n)............................................Passed\n",
+    "unit": "dflash_plan_test: ALL PASSED\n"
+  }
+}
