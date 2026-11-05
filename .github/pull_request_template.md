@@ -2,6 +2,12 @@
 
 <!-- One change per PR. -->
 
+## Default for
+
+<!-- A new feature (kernel path, decode/draft/verify strategy, cache or memory policy, flag or env variable) is on by default
+     for at least one model on at least one Mac: name them, e.g. "Qwen3.6-35B-A3B on M5 Pro". Off on every model and Mac
+     does not merge. Not a feature (kill switch, debug switch, measuring tool, docs): write "not a feature". -->
+
 ## Measured
 
 <!-- Before/after numbers, interleaved A/B on an idle GPU (A B A B), with a `Runs:` line: Mac, macOS, model, commit.
