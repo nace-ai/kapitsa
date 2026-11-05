@@ -1,0 +1,198 @@
+commit 2f6aa0f8770a4c2ce6a71b95da3168fe0a1b4449 dirty: 
+4290dd10617f6ad4807cb757fc05a1617422e16d03781ffc9d1408dffdc314e8  /Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-weaver-online/build/ni_run
+26.5.2
+Now drawing from 'AC Power'
+{ 0.94 1.79 2.67 }
+== r0 ctl n=73 03:12:19 'AC Power' load { 0.94 1.79 2.67 }
+rc=0
+online selector: lr 0, state cold (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 5485 tok in 2812 ms (1950.7 tok/s); dflash decode (verify 7 of 7, greedy): 72 tok in 610 ms (118.0 tok/s), 33 cycles, 2.182 tok/cycle, 18.03 ms GPU/cycle, 18.49 ms wall/cycle (mode 2), hist 11 10 8 3 1 0 0 0; 4.30 proposals verified per cycle; acceptance by position 0.73 0.63 0.40 0.25 0.00 0.00 0.00
+== r0 learn n=73 03:12:36 'AC Power' load { 1.03 1.77 2.65 }
+rc=0
+online selector: lr 0.003, state cold (0 A + 0 B rows loaded)
+online selector: 59 steps, 13 positions skipped (true token not a candidate), 39 A + 438 B rows touched
+prompt 5485 tok in 1912 ms (2868.7 tok/s); dflash decode (verify 7 of 7, greedy): 72 tok in 576 ms (125.1 tok/s), 28 cycles, 2.571 tok/cycle, 20.01 ms GPU/cycle, 20.56 ms wall/cycle (mode 2), hist 7 6 10 3 1 0 1 0; 6.54 proposals verified per cycle; acceptance by position 0.75 0.71 0.33 0.40 0.50 1.00 0.00
+== r1 ctl n=66 03:12:47 'AC Power' load { 1.23 1.78 2.63 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 8351 tok in 3219 ms (2594.2 tok/s); dflash decode (verify 7 of 7, greedy): 65 tok in 667 ms (97.5 tok/s), 32 cycles, 2.031 tok/cycle, 20.45 ms GPU/cycle, 20.84 ms wall/cycle (mode 2), hist 10 14 4 4 0 0 0 0; 6.78 proposals verified per cycle; acceptance by position 0.69 0.36 0.50 0.00 0.00 0.00 0.00
+== r1 learn n=66 03:13:00 'AC Power' load { 1.42 1.80 2.63 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (39 A + 438 B rows loaded)
+online selector: 48 steps, 17 positions skipped (true token not a candidate), 63 A + 695 B rows touched
+prompt 8351 tok in 3136 ms (2663.2 tok/s); dflash decode (verify 7 of 7, greedy): 65 tok in 654 ms (99.4 tok/s), 31 cycles, 2.097 tok/cycle, 20.66 ms GPU/cycle, 21.09 ms wall/cycle (mode 2), hist 9 12 7 3 0 0 0 0; 6.81 proposals verified per cycle; acceptance by position 0.71 0.45 0.30 0.00 0.00 0.00 0.00
+== r2 ctl n=117 03:13:13 'AC Power' load { 1.47 1.80 2.61 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 8510 tok in 3079 ms (2764.1 tok/s); dflash decode (verify 7 of 7, greedy): 116 tok in 637 ms (182.2 tok/s), 28 cycles, 4.143 tok/cycle, 22.29 ms GPU/cycle, 22.73 ms wall/cycle (mode 2), hist 4 4 3 7 2 1 5 2; 6.89 proposals verified per cycle; acceptance by position 0.86 0.83 0.85 0.59 0.80 0.88 0.29
+== r2 learn n=117 03:13:26 'AC Power' load { 2.42 1.98 2.67 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (63 A + 695 B rows loaded)
+online selector: 103 steps, 9 positions skipped (true token not a candidate), 71 A + 940 B rows touched
+prompt 8510 tok in 3089 ms (2754.8 tok/s); dflash decode (verify 7 of 7, greedy): 116 tok in 565 ms (205.3 tok/s), 25 cycles, 4.640 tok/cycle, 21.91 ms GPU/cycle, 22.60 ms wall/cycle (mode 2), hist 2 6 1 2 3 5 2 4; 6.80 proposals verified per cycle; acceptance by position 0.92 0.74 0.94 0.88 0.79 0.55 0.80
+== r3 ctl n=131 03:13:39 'AC Power' load { 2.24 1.97 2.65 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 13009 tok in 4870 ms (2671.5 tok/s); dflash decode (verify 7 of 7, greedy): 130 tok in 960 ms (135.3 tok/s), 43 cycles, 3.023 tok/cycle, 21.94 ms GPU/cycle, 22.34 ms wall/cycle (mode 2), hist 10 12 4 10 3 1 1 2; 6.63 proposals verified per cycle; acceptance by position 0.77 0.64 0.81 0.41 0.57 0.75 0.67
+== r3 learn n=131 03:13:53 'AC Power' load { 1.88 1.90 2.62 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (71 A + 940 B rows loaded)
+online selector: 108 steps, 19 positions skipped (true token not a candidate), 81 A + 1126 B rows touched
+prompt 13009 tok in 4875 ms (2668.6 tok/s); dflash decode (verify 7 of 7, greedy): 130 tok in 816 ms (159.4 tok/s), 36 cycles, 3.611 tok/cycle, 22.14 ms GPU/cycle, 22.66 ms wall/cycle (mode 2), hist 5 10 5 5 5 0 3 3; 6.75 proposals verified per cycle; acceptance by position 0.86 0.68 0.76 0.69 0.55 1.00 0.50
+== r4 ctl n=38 03:14:07 'AC Power' load { 1.75 1.87 2.60 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 17649 tok in 6954 ms (2538.1 tok/s); dflash decode (verify 7 of 7, greedy): 37 tok in 409 ms (90.4 tok/s), 18 cycles, 2.056 tok/cycle, 22.05 ms GPU/cycle, 22.75 ms wall/cycle (mode 2), hist 6 8 2 1 1 0 0 0; 6.67 proposals verified per cycle; acceptance by position 0.67 0.33 0.50 0.50 0.00 0.00 0.00
+== r4 learn n=38 03:14:22 'AC Power' load { 1.83 1.88 2.58 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (81 A + 1126 B rows loaded)
+online selector: 28 steps, 9 positions skipped (true token not a candidate), 84 A + 1178 B rows touched
+prompt 17649 tok in 6966 ms (2533.4 tok/s); dflash decode (verify 7 of 7, greedy): 37 tok in 357 ms (103.6 tok/s), 16 cycles, 2.312 tok/cycle, 21.71 ms GPU/cycle, 22.31 ms wall/cycle (mode 2), hist 4 6 4 1 1 0 0 0; 6.50 proposals verified per cycle; acceptance by position 0.75 0.50 0.33 0.50 0.00 0.00 0.00
+== r5 ctl n=31 03:14:38 'AC Power' load { 1.42 1.79 2.54 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 17721 tok in 7013 ms (2526.9 tok/s); dflash decode (verify 7 of 7, greedy): 30 tok in 210 ms (142.8 tok/s), 9 cycles, 3.333 tok/cycle, 22.67 ms GPU/cycle, 23.33 ms wall/cycle (mode 2), hist 2 2 1 1 1 2 0 0; 6.89 proposals verified per cycle; acceptance by position 0.78 0.71 0.80 0.75 0.67 0.00 0.00
+== r5 learn n=31 03:14:53 'AC Power' load { 1.40 1.77 2.52 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (84 A + 1178 B rows loaded)
+online selector: 24 steps, 6 positions skipped (true token not a candidate), 88 A + 1233 B rows touched
+prompt 17721 tok in 6964 ms (2544.5 tok/s); dflash decode (verify 7 of 7, greedy): 30 tok in 190 ms (157.6 tok/s), 8 cycles, 3.750 tok/cycle, 22.90 ms GPU/cycle, 23.80 ms wall/cycle (mode 2), hist 0 2 2 1 1 2 0 0; 7.00 proposals verified per cycle; acceptance by position 1.00 0.75 0.67 0.75 0.67 0.00 0.00
+== r6 ctl n=533 03:15:08 'AC Power' load { 1.46 1.76 2.50 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 18523 tok in 7417 ms (2497.3 tok/s); dflash decode (verify 7 of 7, greedy): 532 tok in 2865 ms (185.7 tok/s), 128 cycles, 4.156 tok/cycle, 22.02 ms GPU/cycle, 22.38 ms wall/cycle (mode 2), hist 27 25 14 10 8 4 6 34; 6.32 proposals verified per cycle; acceptance by position 0.79 0.75 0.82 0.84 0.86 0.91 0.85
+== r6 learn n=533 03:15:26 'AC Power' load { 1.72 1.80 2.50 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (88 A + 1233 B rows loaded)
+online selector: 478 steps, 25 positions skipped (true token not a candidate), 244 A + 2766 B rows touched
+prompt 18523 tok in 7398 ms (2503.9 tok/s); dflash decode (verify 7 of 7, greedy): 532 tok in 2658 ms (200.1 tok/s), 120 cycles, 4.433 tok/cycle, 21.80 ms GPU/cycle, 22.15 ms wall/cycle (mode 2), hist 14 20 21 14 9 5 7 30; 6.28 proposals verified per cycle; acceptance by position 0.88 0.83 0.76 0.78 0.82 0.88 0.81
+== r7 ctl n=761 03:15:45 'AC Power' load { 1.71 1.80 2.48 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 19081 tok in 7667 ms (2488.8 tok/s); dflash decode (verify 7 of 7, greedy): 760 tok in 3431 ms (221.5 tok/s), 149 cycles, 5.101 tok/cycle, 22.66 ms GPU/cycle, 23.03 ms wall/cycle (mode 2), hist 16 15 15 19 15 13 8 48; 6.17 proposals verified per cycle; acceptance by position 0.89 0.89 0.89 0.82 0.82 0.86 0.86
+== r7 learn n=761 03:16:04 'AC Power' load { 1.48 1.74 2.45 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (244 A + 2766 B rows loaded)
+online selector: 682 steps, 32 positions skipped (true token not a candidate), 358 A + 4195 B rows touched
+prompt 19081 tok in 7698 ms (2478.7 tok/s); dflash decode (verify 7 of 7, greedy): 760 tok in 3341 ms (227.5 tok/s), 147 cycles, 5.170 tok/cycle, 22.39 ms GPU/cycle, 22.73 ms wall/cycle (mode 2), hist 13 13 19 17 16 13 10 46; 5.78 proposals verified per cycle; acceptance by position 0.91 0.90 0.89 0.83 0.83 0.90 0.88
+== r8 ctl n=110 03:16:24 'AC Power' load { 1.52 1.74 2.43 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 19868 tok in 8015 ms (2478.9 tok/s); dflash decode (verify 7 of 7, greedy): 109 tok in 682 ms (159.8 tok/s), 30 cycles, 3.633 tok/cycle, 22.16 ms GPU/cycle, 22.74 ms wall/cycle (mode 2), hist 4 6 4 8 3 2 2 1; 5.87 proposals verified per cycle; acceptance by position 0.87 0.77 0.80 0.50 0.71 0.60 0.50
+== r8 learn n=110 03:16:40 'AC Power' load { 1.53 1.74 2.42 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (358 A + 4195 B rows loaded)
+online selector: 92 steps, 15 positions skipped (true token not a candidate), 378 A + 4372 B rows touched
+prompt 19868 tok in 7975 ms (2491.2 tok/s); dflash decode (verify 7 of 7, greedy): 109 tok in 594 ms (183.4 tok/s), 26 cycles, 4.192 tok/cycle, 22.38 ms GPU/cycle, 22.86 ms wall/cycle (mode 2), hist 2 3 4 8 1 4 2 2; 5.92 proposals verified per cycle; acceptance by position 0.92 0.88 0.81 0.53 0.89 0.50 1.00
+== r9 ctl n=142 03:16:57 'AC Power' load { 1.54 1.73 2.40 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 20003 tok in 8095 ms (2471.1 tok/s); dflash decode (verify 7 of 7, greedy): 141 tok in 738 ms (191.1 tok/s), 32 cycles, 4.406 tok/cycle, 22.64 ms GPU/cycle, 23.06 ms wall/cycle (mode 2), hist 7 2 5 6 0 2 1 9; 5.88 proposals verified per cycle; acceptance by position 0.78 0.92 0.78 0.67 1.00 0.83 1.00
+== r9 learn n=142 03:17:14 'AC Power' load { 1.39 1.68 2.37 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (378 A + 4372 B rows loaded)
+online selector: 125 steps, 8 positions skipped (true token not a candidate), 389 A + 4607 B rows touched
+prompt 20003 tok in 8055 ms (2483.1 tok/s); dflash decode (verify 7 of 7, greedy): 141 tok in 676 ms (208.5 tok/s), 29 cycles, 4.862 tok/cycle, 22.86 ms GPU/cycle, 23.31 ms wall/cycle (mode 2), hist 2 6 2 3 3 3 2 8; 6.31 proposals verified per cycle; acceptance by position 0.93 0.78 0.95 0.84 0.87 0.77 0.80
+== r10 ctl n=204 03:17:31 'AC Power' load { 1.28 1.65 2.34 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 20170 tok in 8184 ms (2464.7 tok/s); dflash decode (verify 7 of 7, greedy): 203 tok in 1055 ms (192.4 tok/s), 47 cycles, 4.319 tok/cycle, 22.04 ms GPU/cycle, 22.45 ms wall/cycle (mode 2), hist 4 9 8 8 3 4 2 9; 6.13 proposals verified per cycle; acceptance by position 0.91 0.79 0.76 0.69 0.88 0.73 0.82
+== r10 learn n=204 03:17:49 'AC Power' load { 1.40 1.65 2.33 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (389 A + 4607 B rows loaded)
+online selector: 183 steps, 8 positions skipped (true token not a candidate), 421 A + 5016 B rows touched
+prompt 20170 tok in 8170 ms (2468.7 tok/s); dflash decode (verify 7 of 7, greedy): 203 tok in 914 ms (222.2 tok/s), 40 cycles, 5.075 tok/cycle, 22.43 ms GPU/cycle, 22.84 ms wall/cycle (mode 2), hist 3 3 7 4 5 4 2 12; 6.15 proposals verified per cycle; acceptance by position 0.93 0.92 0.79 0.85 0.82 0.78 1.00
+== r11 ctl n=56 03:18:07 'AC Power' load { 1.29 1.62 2.30 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 20399 tok in 8273 ms (2465.8 tok/s); dflash decode (verify 7 of 7, greedy): 55 tok in 481 ms (114.3 tok/s), 21 cycles, 2.619 tok/cycle, 22.39 ms GPU/cycle, 22.90 ms wall/cycle (mode 2), hist 3 4 12 2 0 0 0 0; 6.38 proposals verified per cycle; acceptance by position 0.86 0.78 0.14 0.00 0.00 0.00 0.00
+== r11 learn n=56 03:18:25 'AC Power' load { 1.93 1.74 2.33 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (421 A + 5016 B rows loaded)
+online selector: 46 steps, 9 positions skipped (true token not a candidate), 424 A + 5069 B rows touched
+prompt 20399 tok in 8343 ms (2445.1 tok/s); dflash decode (verify 7 of 7, greedy): 55 tok in 435 ms (126.4 tok/s), 18 cycles, 3.056 tok/cycle, 23.57 ms GPU/cycle, 24.17 ms wall/cycle (mode 2), hist 1 2 10 3 2 0 0 0; 6.06 proposals verified per cycle; acceptance by position 0.94 0.88 0.33 0.40 0.00 0.00 0.00
+== r12 ctl n=323 03:18:42 'AC Power' load { 2.39 1.85 2.36 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 20688 tok in 8498 ms (2434.5 tok/s); dflash decode (verify 7 of 7, greedy): 322 tok in 1792 ms (179.7 tok/s), 74 cycles, 4.351 tok/cycle, 23.81 ms GPU/cycle, 24.22 ms wall/cycle (mode 2), hist 12 11 10 12 4 4 1 20; 5.77 proposals verified per cycle; acceptance by position 0.84 0.82 0.82 0.71 0.86 0.88 0.95
+== r12 learn n=323 03:19:02 'AC Power' load { 2.42 1.89 2.36 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (424 A + 5069 B rows loaded)
+online selector: 282 steps, 18 positions skipped (true token not a candidate), 464 A + 5413 B rows touched
+prompt 20688 tok in 8471 ms (2442.4 tok/s); dflash decode (verify 7 of 7, greedy): 322 tok in 1544 ms (208.5 tok/s), 69 cycles, 4.667 tok/cycle, 22.01 ms GPU/cycle, 22.38 ms wall/cycle (mode 2), hist 10 9 10 7 7 2 2 22; 5.64 proposals verified per cycle; acceptance by position 0.88 0.86 0.82 0.82 0.81 0.96 0.92
+== r13 ctl n=266 03:19:21 'AC Power' load { 2.42 1.93 2.36 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 21036 tok in 8622 ms (2439.8 tok/s); dflash decode (verify 7 of 7, greedy): 265 tok in 1429 ms (185.4 tok/s), 65 cycles, 4.077 tok/cycle, 21.63 ms GPU/cycle, 21.99 ms wall/cycle (mode 2), hist 13 12 8 4 3 8 6 11; 5.17 proposals verified per cycle; acceptance by position 0.81 0.77 0.91 0.88 0.89 0.68 0.73
+== r13 learn n=266 03:19:40 'AC Power' load { 2.14 1.90 2.34 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (464 A + 5413 B rows loaded)
+online selector: 230 steps, 21 positions skipped (true token not a candidate), 485 A + 5586 B rows touched
+prompt 21036 tok in 8675 ms (2425.0 tok/s); dflash decode (verify 7 of 7, greedy): 265 tok in 1318 ms (201.0 tok/s), 58 cycles, 4.569 tok/cycle, 22.32 ms GPU/cycle, 22.73 ms wall/cycle (mode 2), hist 8 10 9 4 1 7 5 14; 5.81 proposals verified per cycle; acceptance by position 0.86 0.80 0.78 0.87 0.96 0.73 0.88
+== r14 ctl n=207 03:19:58 'AC Power' load { 2.03 1.89 2.33 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 21327 tok in 8851 ms (2409.5 tok/s); dflash decode (verify 7 of 7, greedy): 206 tok in 804 ms (256.2 tok/s), 34 cycles, 6.059 tok/cycle, 23.24 ms GPU/cycle, 23.65 ms wall/cycle (mode 2), hist 1 3 4 2 2 2 3 17; 6.15 proposals verified per cycle; acceptance by position 0.97 0.91 0.90 1.00 0.92 0.91 0.89
+== r14 learn n=207 03:20:17 'AC Power' load { 2.66 2.04 2.37 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (485 A + 5586 B rows loaded)
+online selector: 184 steps, 3 positions skipped (true token not a candidate), 493 A + 5722 B rows touched
+prompt 21327 tok in 8787 ms (2427.1 tok/s); dflash decode (verify 7 of 7, greedy): 206 tok in 758 ms (271.8 tok/s), 31 cycles, 6.645 tok/cycle, 23.97 ms GPU/cycle, 24.45 ms wall/cycle (mode 2), hist 1 2 2 0 0 4 3 19; 6.81 proposals verified per cycle; acceptance by position 0.97 0.93 0.93 1.00 1.00 0.85 0.90
+== r15 ctl n=57 03:20:35 'AC Power' load { 2.60 2.07 2.38 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 21559 tok in 8848 ms (2436.6 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 410 ms (136.7 tok/s), 18 cycles, 3.111 tok/cycle, 22.03 ms GPU/cycle, 22.76 ms wall/cycle (mode 2), hist 1 7 5 3 0 1 0 1; 6.22 proposals verified per cycle; acceptance by position 0.94 0.59 0.50 0.40 1.00 0.50 1.00
+== r15 learn n=57 03:20:53 'AC Power' load { 2.38 2.05 2.36 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (493 A + 5722 B rows loaded)
+online selector: 47 steps, 8 positions skipped (true token not a candidate), 500 A + 5750 B rows touched
+prompt 21559 tok in 8839 ms (2439.1 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 395 ms (141.7 tok/s), 17 cycles, 3.294 tok/cycle, 22.51 ms GPU/cycle, 23.24 ms wall/cycle (mode 2), hist 0 6 4 5 0 1 0 1; 6.71 proposals verified per cycle; acceptance by position 1.00 0.65 0.64 0.29 1.00 0.50 1.00
+== r16 ctl n=83 03:21:10 'AC Power' load { 2.28 2.04 2.35 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 22538 tok in 9319 ms (2418.4 tok/s); dflash decode (verify 7 of 7, greedy): 82 tok in 548 ms (149.5 tok/s), 24 cycles, 3.417 tok/cycle, 22.20 ms GPU/cycle, 22.85 ms wall/cycle (mode 2), hist 7 1 5 4 3 2 1 1; 5.88 proposals verified per cycle; acceptance by position 0.71 0.94 0.69 0.64 0.57 0.50 1.00
+== r16 learn n=83 03:21:29 'AC Power' load { 2.40 2.09 2.36 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (500 A + 5750 B rows loaded)
+online selector: 70 steps, 11 positions skipped (true token not a candidate), 501 A + 5784 B rows touched
+prompt 22538 tok in 9333 ms (2414.9 tok/s); dflash decode (verify 7 of 7, greedy): 82 tok in 456 ms (180.0 tok/s), 19 cycles, 4.316 tok/cycle, 23.29 ms GPU/cycle, 23.98 ms wall/cycle (mode 2), hist 2 0 3 6 3 2 2 1; 6.68 proposals verified per cycle; acceptance by position 0.89 1.00 0.82 0.57 0.62 0.75 0.33
+== r17 ctl n=57 03:21:47 'AC Power' load { 2.67 2.16 2.38 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 22646 tok in 9512 ms (2380.9 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 448 ms (124.9 tok/s), 20 cycles, 2.800 tok/cycle, 21.82 ms GPU/cycle, 22.42 ms wall/cycle (mode 2), hist 3 5 7 3 2 0 0 0; 5.15 proposals verified per cycle; acceptance by position 0.85 0.71 0.45 0.40 0.00 0.00 0.00
+== r17 learn n=57 03:22:05 'AC Power' load { 2.42 2.14 2.37 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (501 A + 5784 B rows loaded)
+online selector: 47 steps, 9 positions skipped (true token not a candidate), 502 A + 5818 B rows touched
+prompt 22646 tok in 9511 ms (2381.1 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 414 ms (135.2 tok/s), 18 cycles, 3.111 tok/cycle, 22.45 ms GPU/cycle, 23.00 ms wall/cycle (mode 2), hist 3 1 8 3 3 0 0 0; 5.83 proposals verified per cycle; acceptance by position 0.83 0.93 0.46 0.50 0.00 0.00 0.00
+== r18 ctl n=322 03:22:23 'AC Power' load { 2.08 2.08 2.34 }
+rc=0
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 22779 tok in 9556 ms (2383.7 tok/s); dflash decode (verify 7 of 7, greedy): 321 tok in 2045 ms (157.0 tok/s), 93 cycles, 3.452 tok/cycle, 21.63 ms GPU/cycle, 21.99 ms wall/cycle (mode 2), hist 15 22 14 18 8 6 3 7; 5.82 proposals verified per cycle; acceptance by position 0.84 0.74 0.76 0.57 0.67 0.62 0.78
+== r18 learn n=322 03:22:41 'AC Power' load { 1.62 1.98 2.30 }
+rc=0
+online selector: lr 0.003, state /tmp/k350os/out/state.bin (502 A + 5818 B rows loaded)
+online selector: 281 steps, 34 positions skipped (true token not a candidate), 564 A + 6299 B rows touched
+prompt 22779 tok in 9599 ms (2373.1 tok/s); dflash decode (verify 7 of 7, greedy): 321 tok in 1998 ms (160.7 tok/s), 92 cycles, 3.489 tok/cycle, 21.36 ms GPU/cycle, 21.72 ms wall/cycle (mode 2), hist 22 12 14 17 10 6 4 7; 5.41 proposals verified per cycle; acceptance by position 0.78 0.85 0.76 0.61 0.63 0.65 0.70
+ALLDONE
+detach: resumed cpu-heavy k046-dock
+[detach] exit 0

@@ -1,0 +1,25 @@
+[kapitsa] read 19.51 GB of weights in 5695 ms (3.4 GB/s)
+[kapitsa] read 0.58 GB of weights in 183 ms (3.2 GB/s)
+[kapitsa] MTP head loaded in 189 ms (MoE, trunk hidden pre-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 19 ms
+[kapitsa] prewarmed 96 prefill pipelines in 29 ms
+[kapitsa] loaded /Users/alisheramantay/Documents/nace/models/qwen3.6-35b-a3b-4bit: 40 layers, MoE, 19.5 GB mapped in 7659 ms; weights 4-bit group 64 100%, 8-bit group 64 0%
+[kapitsa] read 1.05 GB of weights in 274 ms (3.8 GB/s)
+[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 113 MB
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash2 drafter /Users/alisheramantay/Documents/nace/models/qwen3.6-35b-a3b-4bit/dflash2: 6 layers, hidden 2048, 4-bit projections, 0.63 GB resident (process footprint +0.59 GB), loaded in 384 ms
+[kapitsa] DFlash2: prewarmed 111 pipelines in 11 ms
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] compiled the tensor kernels in 4 ms
+[kapitsa] NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+online selector: lr 0, state /tmp/k350os/out/ctl-state.bin (0 A + 0 B rows loaded)
+online selector: 0 steps, 0 positions skipped (true token not a candidate), 0 A + 0 B rows touched
+prompt 18523 tok in 7417 ms (2497.3 tok/s); dflash decode (verify 7 of 7, greedy): 532 tok in 2865 ms (185.7 tok/s), 128 cycles, 4.156 tok/cycle, 22.02 ms GPU/cycle, 22.38 ms wall/cycle (mode 2), hist 27 25 14 10 8 4 6 34; 6.32 proposals verified per cycle; acceptance by position 0.79 0.75 0.82 0.84 0.86 0.91 0.85
+KFlash: 128 cycles, 7.32 rows per cycle; cycles by rows 2:4 3:1 5:18 6:1 7:2 8:102; tokens per cycle expected 4.561, got 4.195; rate 0.2035 tok/ms; cost ms by rows 1:16.40 2:17.41 3:18.70 4:20.11 5:20.36 6:21.64 7:22.54 8:23.16; calibration (alpha, beta) by depth (-0.69, 0.44) (-0.68, 0.52) (-0.12, 0.37) (0.29, 0.42) (0.54, 0.39) (-0.06, 0.69) (0.43, 0.48) (0.00, 1.00)
+drafting pass: GPU ms/cycle mean 2.396 median 2.387 p10 2.375 p90 2.432 (127 cycles); GPU idle before the verify 0.001 ms/cycle
+[kapitsa] KFlash: budget saved (128 cycles) to /tmp/k350os/home/kflash/qwen3.6-35b-a3b-4bit-dflash2-b4-Apple_M5_Pro.json

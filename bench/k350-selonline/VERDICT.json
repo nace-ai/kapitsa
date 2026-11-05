@@ -1,0 +1,188 @@
+{
+ "task": "#350 online selector codebook update, real 35B-A3B on M5 Pro (session of 19 OpenCode agent requests, state carried)",
+ "commit": "2f6aa0f8 (k350-weaver-online)",
+ "model": "qwen3.6-35b-a3b-4bit + dflash2 drafter",
+ "argv": "NI_SEL_ONLINE={0|0.003} NI_SEL_STATE=<file> build/ni_run <model> @r<i>.ids <n> 0 --dflash auto --ignore-eos (mode 2 both arms)",
+ "n_requests": 19,
+ "outputs_identical": 19,
+ "before": {
+  "tok_per_cycle": 3.9621,
+  "decode_tok_s": 175.96
+ },
+ "after": {
+  "tok_per_cycle": 4.2971,
+  "decode_tok_s": 190.69
+ },
+ "delta_tok_per_cycle_pct": 8.45,
+ "delta_tok_s_pct": 8.37,
+ "replay_prediction_pct": 8.6,
+ "per_request": [
+  {
+   "req": 0,
+   "n": 72,
+   "tpc_ctl": 2.182,
+   "tpc_learn": 2.571,
+   "tps_ctl": 118.0,
+   "tps_learn": 125.0
+  },
+  {
+   "req": 1,
+   "n": 65,
+   "tpc_ctl": 2.031,
+   "tpc_learn": 2.097,
+   "tps_ctl": 97.5,
+   "tps_learn": 99.4
+  },
+  {
+   "req": 2,
+   "n": 116,
+   "tpc_ctl": 4.143,
+   "tpc_learn": 4.64,
+   "tps_ctl": 182.1,
+   "tps_learn": 205.3
+  },
+  {
+   "req": 3,
+   "n": 130,
+   "tpc_ctl": 3.023,
+   "tpc_learn": 3.611,
+   "tps_ctl": 135.4,
+   "tps_learn": 159.3
+  },
+  {
+   "req": 4,
+   "n": 37,
+   "tpc_ctl": 2.056,
+   "tpc_learn": 2.312,
+   "tps_ctl": 90.5,
+   "tps_learn": 103.6
+  },
+  {
+   "req": 5,
+   "n": 30,
+   "tpc_ctl": 3.333,
+   "tpc_learn": 3.75,
+   "tps_ctl": 142.9,
+   "tps_learn": 157.9
+  },
+  {
+   "req": 6,
+   "n": 532,
+   "tpc_ctl": 4.156,
+   "tpc_learn": 4.433,
+   "tps_ctl": 185.7,
+   "tps_learn": 200.2
+  },
+  {
+   "req": 7,
+   "n": 760,
+   "tpc_ctl": 5.101,
+   "tpc_learn": 5.17,
+   "tps_ctl": 221.5,
+   "tps_learn": 227.5
+  },
+  {
+   "req": 8,
+   "n": 109,
+   "tpc_ctl": 3.633,
+   "tpc_learn": 4.192,
+   "tps_ctl": 159.8,
+   "tps_learn": 183.5
+  },
+  {
+   "req": 9,
+   "n": 141,
+   "tpc_ctl": 4.406,
+   "tpc_learn": 4.862,
+   "tps_ctl": 191.1,
+   "tps_learn": 208.6
+  },
+  {
+   "req": 10,
+   "n": 203,
+   "tpc_ctl": 4.319,
+   "tpc_learn": 5.075,
+   "tps_ctl": 192.4,
+   "tps_learn": 222.1
+  },
+  {
+   "req": 11,
+   "n": 55,
+   "tpc_ctl": 2.619,
+   "tpc_learn": 3.056,
+   "tps_ctl": 114.3,
+   "tps_learn": 126.4
+  },
+  {
+   "req": 12,
+   "n": 322,
+   "tpc_ctl": 4.351,
+   "tpc_learn": 4.667,
+   "tps_ctl": 179.7,
+   "tps_learn": 208.5
+  },
+  {
+   "req": 13,
+   "n": 265,
+   "tpc_ctl": 4.077,
+   "tpc_learn": 4.569,
+   "tps_ctl": 185.4,
+   "tps_learn": 201.1
+  },
+  {
+   "req": 14,
+   "n": 206,
+   "tpc_ctl": 6.059,
+   "tpc_learn": 6.645,
+   "tps_ctl": 256.2,
+   "tps_learn": 271.8
+  },
+  {
+   "req": 15,
+   "n": 56,
+   "tpc_ctl": 3.111,
+   "tpc_learn": 3.294,
+   "tps_ctl": 136.6,
+   "tps_learn": 141.8
+  },
+  {
+   "req": 16,
+   "n": 82,
+   "tpc_ctl": 3.417,
+   "tpc_learn": 4.316,
+   "tps_ctl": 149.6,
+   "tps_learn": 179.8
+  },
+  {
+   "req": 17,
+   "n": 56,
+   "tpc_ctl": 2.8,
+   "tpc_learn": 3.111,
+   "tps_ctl": 125.0,
+   "tps_learn": 135.3
+  },
+  {
+   "req": 18,
+   "n": 321,
+   "tpc_ctl": 3.452,
+   "tpc_learn": 3.489,
+   "tps_ctl": 157.0,
+   "tps_learn": 160.7
+  }
+ ],
+ "logs": {
+  "job": "~/.agents/jobs/k350-selonline.log",
+  "legs": "/tmp/k350os/out/r<i>.{ctl,learn}.{out,err}",
+  "job_copy": "/tmp/k350os/k350-selonline.log"
+ },
+ "outputs_identical_note": "19/19 output files byte-identical (cmp) between arms: greedy verify keeps the target tokens",
+ "requests_improved": "19/19 requests higher tok/cycle with the learner",
+ "mac": "M5 Pro, macOS 26.5.2, AC power, load <3, DSH hidden via hide_dsh.sh; run 03:12-03:23 5 Nov 2026",
+ "binary_sha256": "4290dd10617f6ad4807cb757fc05a1617422e16d03781ffc9d1408dffdc314e8",
+ "caveats": [
+  "both arms run ni_run mode 2 (learner needs the host between cycles); the default mode 3 baseline was not measured here",
+  "learner host cost: mean wall 22.77 vs 22.47 ms/cycle (mean over requests), already inside the tok/s numbers",
+  "one session, one order (ctl then learn per request, A B per request), single repetition; selector state carried across the 19 requests (cold start at r0)",
+  "trained parameters: only the selector codebook rows (fp32 master deltas over bf16), lr 0.003; the 56.7M drafter weights are not trained"
+ ]
+}
