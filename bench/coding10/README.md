@@ -16,16 +16,17 @@ An arm is a JSON file in `arms/`: system prompt, sampling, thinking on or off, a
 ## Run
 
 ```bash
-REPS=3 lockf -k ${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock} bash bench/coding10/run_gpu.sh OUT "4b 9b" \
+REPS=3 bash bench/coding10/run_gpu.sh OUT "4b 9b" \
   bench/coding10/arms/opt0.json bench/coding10/arms/lc_best.json
 ```
 
-`run_gpu.sh` starts `kapitsa serve` per model, runs the arms interleaved per prompt, and writes `OUT/<model>.json`.
+`run_gpu.sh` takes the GPU lock (`$BENCH_GPU_LOCK`), starts `kapitsa serve` per model, runs the arms interleaved per prompt, and writes `OUT/<model>.json`.
 The harness waits for AC power before each prompt and reruns one that ends on battery (`--require-ac`).
 
 ## Results (M5 Pro 48 GB, Qwen 3.5 4-bit, 5 Nov 2026)
 
-Pass count over 10 prompts x 3 runs, median seconds per prompt. Raw rows: `bench/results/coding10/`.
+Pass count over 10 prompts x 3 runs, median seconds per prompt. Raw rows: `bench/results/coding10/`. The `lc` and
+`lc_best` rows come from different legs of the same day (03:30 and 10:45-11:38), not one interleaved leg.
 
 | arm | 4B | 9B |
 |---|---|---|
@@ -34,12 +35,14 @@ Pass count over 10 prompts x 3 runs, median seconds per prompt. Raw rows: `bench
 | lc as ported | 29/30, 5.0 s | 28/30, 6.5 s |
 | lc_best | 30/30, 1.0 s | 30/30, 2.0 s |
 
-Without tools, the small-model settings alone solve every prompt fastest. Tuned, little-coder's tool loop is 5x
-faster on 4B and 3x on 9B than as ported, with every prompt passing.
+Without tools, the small-model settings alone solve every prompt fastest. Tuned, little-coder's tool loop is about 5x
+faster on 4B and 3x on 9B than as ported, comparing legs run hours apart; the same arm moved by up to 1 s and by
+1-3 passes of 30 between legs. The arms were tuned and scored on the same ten prompts.
 
 ## Tuning rounds
 
-Each round changed one thing on the best arm so far, ran interleaved with `opt0` and `lc`, 3 runs. The stop line,
+Each round changed one thing on the best arm so far and ran interleaved with `opt0`, 3 runs. Rounds 1-3 also ran
+`lc` in the same leg; rounds 4-7 ran with earlier rounds' arms instead (`hc2`, `hc3` in the results). The stop line,
 set before the later rounds: 30/30 on both models at a median of at most 1.5 s (4B) and 3 s (9B), or round 7.
 `log_round.py` writes one row per model and arm to `bench/results/coding10/hillclimb.tsv`.
 
