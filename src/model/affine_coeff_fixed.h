@@ -127,14 +127,22 @@ inline void interleave_packed_slices(AffinePackedCoeff& img, uint32_t outputs, u
   const size_t pairs = (size_t(groups) + 1) / 2, rbs = (size_t(outputs) + 15) / 16;
   if (ks < 2 || pairs % ks || rg < 1 || rbs % rg) return;
   const size_t pps = pairs / ks;
-  std::vector<uint32_t> words(img.words.begin(), img.words.begin() + img.blocks * 272), headers = img.headers;
-  for (size_t rb = 0; rb < rbs; ++rb)
-    for (size_t s = 0; s < ks; ++s)
-      for (size_t j = 0; j < pps; ++j) {
-        const size_t from = rb * pairs + s * pps + j, to = (rb / rg) * rg * pairs + (j * rg + rb % rg) * ks + s;
-        std::copy_n(words.data() + from * 272, 272, img.words.data() + to * 272);
-        img.headers[to] = headers[from];
-      }
+  // Each row group permutes only its own records. Reuse one group's scratch instead of copying the whole image
+  // (the 4B LM head alone has 322 MiB of records); absolute raw-slab offsets and the slabs themselves stay put.
+  const size_t blocks = size_t(rg) * pairs;
+  std::vector<uint32_t> words(blocks * 272), headers(blocks);
+  for (size_t rb0 = 0; rb0 < rbs; rb0 += rg) {
+    const size_t base = rb0 * pairs;
+    std::copy_n(img.words.data() + base * 272, words.size(), words.data());
+    std::copy_n(img.headers.data() + base, blocks, headers.data());
+    for (size_t rb = 0; rb < rg; ++rb)
+      for (size_t s = 0; s < ks; ++s)
+        for (size_t j = 0; j < pps; ++j) {
+          const size_t from = rb * pairs + s * pps + j, to = base + (j * rg + rb) * ks + s;
+          std::copy_n(words.data() + from * 272, 272, img.words.data() + to * 272);
+          img.headers[to] = headers[from];
+        }
+  }
 }
 
 }  // namespace ni

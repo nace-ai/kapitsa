@@ -8,6 +8,7 @@
 //    is counted.
 //   affine_pack_test      (no model, no GPU)
 #include "model/affine_pack.h"
+#include "model/affine_coeff_fixed.h"
 
 #include <cmath>
 #include <cstdio>
@@ -31,6 +32,35 @@ _Float16 f16_from_bits(uint16_t b) {
 
 int main() {
   using namespace ni;
+  // Check the interleaved record address independently, including partial output blocks, multiple row groups,
+  // compressed and raw coefficient headers. The raw tail is compared too: its header offsets are absolute.
+  size_t interleaves = 0;
+  for (uint32_t N : {1u, 17u, 64u, 128u, 129u, 256u})
+    for (uint32_t G : {1u, 4u, 8u, 16u, 40u, 64u, 192u}) {
+      std::vector<uint32_t> w(size_t(N) * G * 8);
+      for (size_t i = 0; i < w.size(); ++i) w[i] = uint32_t(i * 2654435761u);
+      std::vector<uint16_t> sc(size_t(N) * G, 0x3b80), bi(size_t(N) * G, 0xbd80);
+      for (size_t i = 0; i < bi.size(); i += 97) bi[i] = 0x3f80;  // same sign forces raw coefficients
+      const auto original = pack_affine_packed_coeff(w.data(), sc.data(), bi.data(), N, G);
+      for (uint32_t ks : {1u, 2u, 4u, 8u}) for (uint32_t rg : {0u, 1u, 2u, 8u, 32u}) {
+        auto got = original, expected = original;
+        const size_t pairs = (G + 1) / 2, rbs = (N + 15) / 16;
+        if (ks >= 2 && pairs % ks == 0 && rg && rbs % rg == 0)
+          for (size_t dst = 0; dst < original.blocks; ++dst) {
+            const size_t group = dst / (rg * pairs), within = dst % (rg * pairs);
+            const size_t slice = within % ks, row = (within / ks) % rg, pair = within / (ks * rg);
+            const size_t src = (group * rg + row) * pairs + slice * (pairs / ks) + pair;
+            std::copy_n(original.words.data() + src * 272, 272, expected.words.data() + dst * 272);
+            expected.headers[dst] = original.headers[src];
+          }
+        interleave_packed_slices(got, N, G, ks, rg);
+        check(got.words == expected.words && got.headers == expected.headers, "packed interleave, records and raw tail");
+        check(got.blocks == original.blocks && got.compressed_blocks == original.compressed_blocks,
+              "interleave preserves codec counts");
+        ++interleaves;
+      }
+    }
+  printf("packed interleave: %zu cases\n", interleaves);
   check(affine_kernel_group_size(5, 128) == 64, "5-bit group 128 reuses group-64 kernels");
   check(affine_kernel_group_size(8, 128) == 64, "8-bit group 128 keeps its group-64 path");
   for (int bits : {3, 4, 6})
