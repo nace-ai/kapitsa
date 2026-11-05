@@ -121,7 +121,8 @@ be declared ambient instead: its load is then recorded, not flagged). *Loop*: a 
   and 151 greedy. Its memory is 0.7 GB higher from its first phase (decode 18.76 -> 19.47 GiB), #969's 4,096-row
   activations.
   - The same build read the 4K prompt at 1,308-1,319 tok/s (3.13-3.16 s) with the harness's decode phases skipped,
-    against 3.67 s in the cell after about 40 s of decoding.
+    against 3.67 s in the cell after about 40 s of decoding. Interleaved, the prompt after the decode phase read
+    1,122-1,131 against 1,310-1,313 alone, at the same foreign GPU load: the chip's state after decoding.
 - **The 35B-A3B:** prefill 6,558 -> 6,619 at 4K (6,615-6,642) and 5,657 -> 5,718 at 16K. Decode reads 349 at T 0.6
   (345-358) and 377 greedy, inside the morning's ranges.
 - **Contention:** the desktop app held 7-9% of the GPU in the 27B's prefill and sweep phases and 5-7% in the 35B-A3B's.

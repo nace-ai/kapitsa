@@ -47,6 +47,18 @@ The 4K prompt alone, the same build with the harness's other phases skipped ([pr
 40 s of decoding. The server logs show no other work between the phases. The 4,096-row split chunk ran about 20%
 slower in the cell, while the Neural Engine was busy 89% of the time (92-93% alone).
 
+The interleaved runs in [after-decode/](after-decode) ([run.sh](after-decode/run.sh)) confirm it. Each arm ran twice, 30 s
+idle before each run, the session idle:
+
+| Arm | 4K prompt (ms) | tok/s | The app's GPU load in the prefill phase |
+| --- | --- | --- | --- |
+| The decode phase, then the prompt (`dec`) | 3,645, 3,674 | 1,131, 1,122 | 8.1%, 9.2% |
+| The prompt alone (`alone`) | 3,131, 3,137 | 1,313, 1,310 | 7.6%, 7.4% |
+| `dec` with `NI_ANE_KEEP_MS=500` (`keep`) | 3,882, 3,761 | 1,061, 1,096 | 7.9%, 7.6% |
+
+The foreign load is the same, and the Neural Engine and the GPU both slow down: the chip's state after about 20 s of
+decoding, not the server's path. A Neural Engine keepalive every 500 ms instead of 2 s makes it worse.
+
 The 27B's memory rose 0.7 GiB from its first phase on (decode 18.76 -> 19.47 GiB, peak to 16K 20.1 -> 20.8). That is
 #969's 4,096-row activation buffers, which its memory plan allocates at load.
 
