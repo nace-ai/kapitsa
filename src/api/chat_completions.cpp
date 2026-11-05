@@ -106,13 +106,15 @@ std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tool
   return request_grammar(spec, tools);
 }
 
-std::string ChatCompletionsStream::chunk(const ojson& delta, const ojson& finish, const ojson* usage) const {
+std::string ChatCompletionsStream::chunk(const ojson& delta, const ojson& finish, const ojson* usage,
+                                         const ojson* progress) const {
   ojson c{{"id", id_},
           {"object", "chat.completion.chunk"},
           {"created", created_},
           {"model", model_},
           {"choices", ojson::array({ojson{{"index", 0}, {"delta", delta}, {"finish_reason", finish}}})}};
   if (usage) c["usage"] = *usage;
+  if (progress) c["prompt_progress"] = *progress;
   return "data: " + dump(c) + "\n\n";
 }
 
@@ -140,6 +142,14 @@ std::string ChatCompletionsStream::keepalive() {
   // The delta carries nothing, not even empty content, so no client takes it for the start of text, wherever it lands
   // (a reply also goes quiet mid-reasoning while the parser holds back a tool call, or while it waits for memory).
   return chunk(ojson::object(), nullptr);
+}
+
+std::string ChatCompletionsStream::progress(const PromptProgress& p) {
+  // llama.cpp's prompt_progress object beside the choices, on the keepalive's empty delta. llama.cpp's own chunk repeats
+  // the assistant's role (null content) instead, which OpenAI's Python stream helper concatenates into the message's
+  // role ("assistantassistant..."); an empty delta adds nothing, and the stream's one choice stays at [0].
+  const ojson pp{{"total", p.total}, {"cache", p.cache}, {"processed", p.processed}, {"time_ms", p.time_ms}};
+  return chunk(ojson::object(), nullptr, nullptr, &pp);
 }
 
 std::string ChatCompletionsStream::end(const ChatResult& res) {

@@ -17,10 +17,10 @@ using Json = nlohmann::ordered_json;
 
 enum class Mode { Success, EmptyEnd, EngineError, PreStreamError, BeginThrows, DeltaThrows, EndThrows,
                   EarlySuccess, EarlyFailedWrite, FailedWrite, IdleDisconnect, Abandoned, CompletedAbandoned, SinkThrows, Telemetry,
-                  MeterThrows, AbandonedMeterThrows, TokenMeterThrows };
+                  MeterThrows, AbandonedMeterThrows, TokenMeterThrows, Progress };
 struct Observed {
   std::atomic<bool> work_exited{false}, accepted_returned{false}, saw_cancel{false}, token_on_worker{false};
-  std::atomic<int> begins{0}, deltas{0}, ends{0}, tokens{0};
+  std::atomic<int> begins{0}, deltas{0}, ends{0}, tokens{0}, progresses{0}, processed{-1};
   int meters = 0, afters = 0, failures = 0, dones = 0, writes = 0;
   bool done_after_work = true, after_order = true, first_write_before_accept = true;
   std::string result_error, result_reason, wire;
@@ -48,13 +48,19 @@ struct Writer final : api::StreamWriter {
     return "event: end\ndata: " + result.finish_reason + "\n\n";
   }
   std::string keepalive() override { return ": keepalive\n\n"; }
+  std::string progress(const api::PromptProgress& p) override {
+    ++seen->progresses;
+    seen->processed = p.processed;
+    return "event: progress\ndata: " + std::to_string(p.total) + " " + std::to_string(p.cache) + " " +
+           std::to_string(p.processed) + "\n\n";
+  }
 };
 
 bool run(const char* name, Mode mode) {
   auto seen = std::make_shared<Observed>();
   const auto connection = std::this_thread::get_id();
   const bool abandoned = mode == Mode::Abandoned || mode == Mode::AbandonedMeterThrows;
-  const bool early = mode == Mode::EarlySuccess || mode == Mode::EarlyFailedWrite || abandoned;
+  const bool early = mode == Mode::EarlySuccess || mode == Mode::EarlyFailedWrite || abandoned || mode == Mode::Progress;
   const bool held = mode == Mode::EarlyFailedWrite || mode == Mode::FailedWrite ||
                     mode == Mode::IdleDisconnect || abandoned;
   const bool framing_failure = mode == Mode::DeltaThrows || mode == Mode::EndThrows;
@@ -64,7 +70,8 @@ bool run(const char* name, Mode mode) {
   {
     httplib::Response response;
     ChatRequest request;
-    if (mode == Mode::Telemetry) request.live = std::make_shared<LiveDecode>();
+    if (mode == Mode::Telemetry || mode == Mode::Progress) request.live = std::make_shared<LiveDecode>();
+    const auto live = request.live;
     server::stream_reply(request, std::make_shared<Writer>(mode, seen), response,
       [&](auto observer) {
         auto session = detail::ExecutionFactory::bind(
@@ -85,6 +92,22 @@ bool run(const char* name, Mode mode) {
               return result;
             }
             events.prompt(result);
+            if (mode == Mode::Progress) {
+              // the engine's stores for a 6000-token prompt with 2048 cached, read in two chunks; each step waits until
+              // the stream has sampled the one before
+              auto sampled = [&](int processed) {
+                const auto deadline = std::chrono::steady_clock::now() + 5s;
+                while (seen->processed != processed && std::chrono::steady_clock::now() < deadline)
+                  std::this_thread::sleep_for(1ms);
+              };
+              live->prompt = 6000, live->cached = 2048, live->read = 2048, live->phase = 1;
+              sampled(2048);
+              live->read = 4096;
+              sampled(4096);
+              live->read = 6000;
+              sampled(6000);
+              live->phase = 2;
+            }
             if (held) {
               const auto deadline = std::chrono::steady_clock::now() + 5s;
               while (!stop.stop_requested() && std::chrono::steady_clock::now() < deadline)
@@ -127,7 +150,7 @@ bool run(const char* name, Mode mode) {
          seen->result_error = result.error;
          seen->result_reason = result.finish_reason;
           if (mode == Mode::MeterThrows || mode == Mode::AbandonedMeterThrows) throw std::bad_alloc();
-       }}, early, mode == Mode::Telemetry);
+       }}, early, mode == Mode::Telemetry, mode == Mode::Progress);
     if (pre_stream) {
       seen->check(!response.content_provider_ && response.status == 500, "pre-stream failure installed provider");
       seen->check(seen->failures == 1 && seen->meters == 1 && seen->afters == 0, "pre-stream effects count");
@@ -201,6 +224,16 @@ bool run(const char* name, Mode mode) {
         seen->check(seen->first_write_before_accept, "early acceptance escaped before first write");
         if (mode == Mode::EngineError) seen->check(seen->result_reason == "error", "engine error changed");
         if (mode == Mode::Telemetry) seen->check(seen->wire.find("event: kapitsa_progress") != std::string::npos, "telemetry missing");
+        if (mode == Mode::Progress) {
+          const auto at = [&](const std::string& e) { return seen->wire.find(e); };
+          const auto begin = at("event: begin"), p0 = at("data: 6000 2048 2048\n"), p1 = at("data: 6000 2048 4096\n"),
+                     p2 = at("data: 6000 2048 6000\n"), delta = at("event: delta");
+          seen->check(p0 != std::string::npos && p1 != std::string::npos && p2 != std::string::npos && seen->progresses == 3,
+                      "progress events missing or repeated");
+          seen->check(begin < p0 && p0 < p1 && p1 < p2 && p2 < delta, "progress out of order");
+        } else {
+          seen->check(seen->progresses == 0, "progress events without the request asking");
+        }
       }
       seen->check(seen->meters == 1 && seen->afters == (provider_ok ? 1 : 0), "completion effects count");
       seen->check(seen->after_order, "after ran before done/join/meter");
@@ -268,7 +301,7 @@ int main() {
          {"idle-disconnect", Mode::IdleDisconnect}, {"abandoned-provider", Mode::Abandoned},
          {"completed-abandoned-provider", Mode::CompletedAbandoned}, {"sink-throws", Mode::SinkThrows}, {"telemetry", Mode::Telemetry},
          {"abandoned-throwing-meter", Mode::AbandonedMeterThrows}, {"throwing-meter", Mode::MeterThrows},
-          {"throwing-token-meter", Mode::TokenMeterThrows}})
+          {"throwing-token-meter", Mode::TokenMeterThrows}, {"progress", Mode::Progress}})
     ok = run(name, mode) && ok;
   return ok ? 0 : 1;
 }

@@ -20,6 +20,7 @@ struct StreamJob final : detail::ChatObserver {
   enum class Terminal { Pending, Enqueued, Failed };
   Terminal terminal = Terminal::Pending;
   bool started = false, sent = false;  // sent: the first event is out
+  bool replied = false;  // a delta came: the prompt has been read
   const server::StreamMeter meter;
   const std::shared_ptr<api::StreamWriter> writer;
   const bool early;
@@ -50,6 +51,7 @@ struct StreamJob final : detail::ChatObserver {
   bool delta(const ChatDelta& d) override {
     try { meter.token(); } catch (...) {}  // telemetry must not change framing or inference
     std::lock_guard<std::mutex> lk(mu);
+    replied = true;
     std::string s = writer->delta(d);
     if (!s.empty()) out.push_back(std::move(s));
     cv.notify_all();
@@ -106,7 +108,7 @@ struct StreamCompletion {
 void server::stream_reply(const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                           BindExecution bind, std::function<void(const ChatResult&, httplib::Response&)> failure,
                           std::function<void(const ChatResult&)> after, StreamMeter meter,
-                          bool early, bool telemetry) {
+                          bool early, bool telemetry, bool progress) {
   auto job = std::make_shared<StreamJob>(w, meter, early);
   auto execution = bind(job);
   auto completion = std::make_shared<StreamCompletion>(execution, meter);
@@ -121,7 +123,7 @@ void server::stream_reply(const ChatRequest& r, std::shared_ptr<api::StreamWrite
     return;
   }
   res.set_header("Cache-Control", "no-cache");
-  res.set_chunked_content_provider("text/event-stream", [completion, job, w, after, live = r.live, telemetry](size_t, httplib::DataSink& sink) {
+  res.set_chunked_content_provider("text/event-stream", [completion, job, w, after, live = r.live, telemetry, progress](size_t, httplib::DataSink& sink) {
     const auto& execution = completion->execution;
     // the client is gone: the engine stops at its next token, or gives the request up before it takes a slot
     auto gone = [&] {
@@ -133,13 +135,42 @@ void server::stream_reply(const ChatRequest& r, std::shared_ptr<api::StreamWrite
     bool first = true;
     auto progress_at = std::chrono::steady_clock::time_point::min();
     auto terminal = StreamJob::Terminal::Pending;
+    // Prompt progress (return_progress): an event whenever the GPU has finished more of the prompt. The engine stores
+    // the tokens read after each prefill chunk (LiveDecode::read); they are sampled every 50 ms until the whole prompt
+    // is read, so a chunk shorter than that may share an event with the next. The first event comes once the prompt
+    // is matched against the cache (processed == cache), the last at the whole prompt, ahead of the first delta.
+    bool reading = progress && live;
+    int progress_sent = -1;
+    auto read_from = std::chrono::steady_clock::time_point::min();
     for (;;) {
       std::deque<std::string> batch;
       {
         std::unique_lock<std::mutex> lk(job->mu);
-        // a second at a time while nothing comes, to see whether the client is still there
-        job->cv.wait_for(lk, std::chrono::seconds(1), [&] { return !job->out.empty() || job->terminal != StreamJob::Terminal::Pending; });
+        // a second at a time while nothing comes, to see whether the client is still there (50 ms while the prompt's
+        // progress is sampled)
+        job->cv.wait_for(lk, reading ? std::chrono::milliseconds(50) : std::chrono::milliseconds(1000),
+                         [&] { return !job->out.empty() || job->terminal != StreamJob::Terminal::Pending; });
         terminal = job->terminal;
+        const int phase = reading ? live->phase.load(std::memory_order_relaxed) : 0;
+        if (phase >= 1) {
+          const int prompt = live->prompt.load(std::memory_order_relaxed);
+          const int cached = live->cached.load(std::memory_order_relaxed);
+          // decoding, or a delta queued: every row is read, whether or not the last chunk's store is seen yet
+          const bool all = job->replied || phase >= 2;
+          const int read = all ? prompt : std::clamp(live->read.load(std::memory_order_relaxed), cached, prompt);
+          if (prompt > 0 && read != progress_sent) {
+            const auto now = std::chrono::steady_clock::now();
+            if (read_from == std::chrono::steady_clock::time_point::min()) read_from = now;
+            const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - read_from).count();
+            std::string e = w->progress({prompt, cached, read, ms});
+            // after the first event (begin(), queued before anything else and still here until the first write),
+            // ahead of the deltas the engine queued meanwhile
+            if (!e.empty()) job->out.insert(job->out.begin() + (!job->sent && !job->out.empty() ? 1 : 0), std::move(e));
+            progress_sent = read;
+          }
+          if (prompt > 0 && read == prompt) reading = false;
+        }
+        if (terminal != StreamJob::Terminal::Pending) reading = false;
         if (job->out.empty() && terminal == StreamJob::Terminal::Pending && std::chrono::steady_clock::now() - last >= std::chrono::seconds(15))
           job->out.push_back(w->keepalive());  // 15 s without an event
         batch.swap(job->out);

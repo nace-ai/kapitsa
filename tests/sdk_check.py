@@ -264,6 +264,28 @@ for name, (finish, think, text, ncalls) in chat_want.items():
         check("chat: tool calls carry their arguments and ids, indexed 0, 1",
               [json.loads(t.function.arguments) for t in msg.tool_calls] == [{"file_path": "/a"}, {"file_path": "/b", "limit": 5}]
               and [t.id for t in msg.tool_calls] == ["call_A", "call_B"], msg.tool_calls)
+# "return_progress": llama.cpp's prompt_progress object on chunks with an empty delta while the prompt is read
+events = raw_events(os.path.join(CASES, "chat-progress.sse"))
+bad = []
+for _, data in events:
+    try:
+        CHUNK.model_validate(data)
+    except Exception as e:
+        bad.append(str(e)[:300])
+check("chat progress: every chunk, progress chunks included, validates as a ChatCompletionChunk", not bad, bad)
+chunks = list(oc.chat.completions.create(model="progress", messages=MSG, stream=True))
+progress = [c.model_extra["prompt_progress"] for c in chunks if "prompt_progress" in (c.model_extra or {})]
+check("chat progress: chat.completions.create(stream=True) yields the progress chunks with prompt_progress, no text",
+      len(chunks) == len(events) and [p["processed"] for p in progress] == [60, 80, 100] and
+      "".join(c.choices[0].delta.content or "" for c in chunks) == "Hello",
+      [c.model_dump(exclude_unset=True) for c in chunks])
+with oc.chat.completions.stream(model="progress", messages=MSG) as s:
+    for _ in s:
+        pass
+    final = s.get_final_completion()
+check("chat progress: chat.completions.stream assembles the reply around them (one role, the text)",
+      final.choices[0].finish_reason == "stop" and final.choices[0].message.content == "Hello" and
+      final.choices[0].message.role == "assistant", final)
 try:
     for _ in oc.chat.completions.create(model="error", messages=MSG, stream=True):
         pass
