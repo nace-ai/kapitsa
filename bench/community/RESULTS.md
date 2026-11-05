@@ -19,6 +19,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (14-inch, 2026) · M5 Max 40-core GPU · 64 GB](#macbook-pro-14-inch-2026--m5-max-40-core-gpu--64-gb) | 1 |
 | [MacBook Pro (14-inch, 2026) · M5 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2026--m5-pro-16-core-gpu--48-gb) | 3 |
 | [MacBook Pro (14-inch, 2026) · M5 Pro 20-core GPU · 64 GB](#macbook-pro-14-inch-2026--m5-pro-20-core-gpu--64-gb) | 5 |
+| [MacBook Pro (16-inch, 2026) · M5 Max 40-core GPU · 128 GB](#macbook-pro-16-inch-2026--m5-max-40-core-gpu--128-gb) | 1 |
 | [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 48 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--48-gb) | 2 |
 | [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 64 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--64-gb) | 2 |
 | [Mac Studio (2025) · M3 Ultra 80-core GPU · 512 GB](#mac-studio-2025--m3-ultra-80-core-gpu--512-gb) | 4 |
@@ -242,6 +243,14 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-27](results/kapitsa-bench-2026-10-27-m5-pro-qwen3.8-flash-next-64gb-ea879f.json) | 44.0 tok/s | 47.2 tok/s | 378 tok/s | 366 tok/s | 0.29 s | 0.28 s | 37.0 GB + 5.5 mapped | pass | MTP | 0.2.22 | 27.0.1 | – |
+
+## MacBook Pro (16-inch, 2026) · M5 Max 40-core GPU · 128 GB
+
+### Qwen3.8 27B · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-03](results/kapitsa-bench-2026-11-03-m5-max-qwen3.8-27b-4bit-af2b18.json) | 129.7 tok/s | 145.9 tok/s | 783 tok/s | 815 tok/s | 0.14 s | 0.15 s | 19.4 GB | pass | KFlash | 0.2.26 | 26.5.1 | – |
 
 ## MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 48 GB
 
