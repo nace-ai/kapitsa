@@ -885,6 +885,16 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;
   }
+  // Single-stream Qwen3.8 27B with its Neural Engine split on the 40-core M5 Max: 4096-row chunks, so the two-half
+  // wavefront hands the Neural Engine 2048-row halves (FfnSplit::splits), which it runs ~10% faster per row than
+  // 1024-row ones (its time per evaluation 12.4 -> 22.6 ms for twice the rows). ni_run, M5 Max: a cold 4K prefill
+  // 3,088 -> 2,962 ms (-4.1%), 8K 6,216 -> 5,935 ms (-4.5%), a warm 8K level; the share stays 14 of 34 units.
+  // The plain split (NI_ANE_WAVE=0) keeps 2048.
+  if (slots == 1 && p.dense && p.hidden == 5120 && p.layers == 64 && ane > 0 && Gpu::get().apple10() &&
+      Gpu::get().core_count() >= 40 && !(getenv("NI_ANE_WAVE") && !strcmp(getenv("NI_ANE_WAVE"), "0"))) {
+    const MemPlan wide = model_plan(model_dir, 4096);
+    if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
+  }
   // Flash-Next's Q2_0 pack (Qwen4Exp) single stream on the M5, with NI_QSA_TATTN=1: 4096-row chunks. 32K Q2 prefill,
   // M5 Pro, 25 Oct, full-table pack, chunk 2048 vs 4096 (#571): TATTN on +0.7% to +13.7%, TATTN off -1.2% to -7.9%, so
   // without TATTN (the default since #585) the pack keeps 2048. Wider chunks halve the expert reads but the per-chunk

@@ -522,7 +522,11 @@ void FfnSplit::compute_row_scales() {
   }
 }
 
-bool FfnSplit::splits(int T) const { return T >= int(min_rows_) && T <= int(kMaxRows) && !h_->retired(); }
+// A chunk splits whole up to kMaxRows rows; the two-half wavefront (two lanes) takes up to two halves of kMaxRows, as
+// the model's schedule hands the Neural Engine one half at a time (Qwen35::ane_wave_rows).
+bool FfnSplit::splits(int T) const {
+  return T >= int(min_rows_) && T <= int(cfg_.lanes >= 2 ? 2 * kMaxRows : kMaxRows) && !h_->retired();
+}
 
 int FfnSplit::fn_for(int T) const {
   for (size_t i = 0; i < fn_rows_.size(); ++i)
@@ -531,7 +535,7 @@ int FfnSplit::fn_for(int T) const {
 }
 
 void FfnSplit::begin_chunk(int T) {
-  if (T < 1 || T > int(kMaxRows)) throw std::logic_error("ANE split: chunk rows out of range");
+  if (T < 1 || T > int(cfg_.lanes >= 2 ? 2 * kMaxRows : kMaxRows)) throw std::logic_error("ANE split: chunk rows out of range");
   in_chunk_ = true;
   struct Reset {  // a chunk that never starts must not leave the keepalive stopped
     std::atomic<bool>& f;
@@ -544,7 +548,7 @@ void FfnSplit::begin_chunk(int T) {
     std::unique_lock lk(keep_st_->eval_mu, std::defer_lock);
     if (!lk.try_lock_for(std::chrono::seconds(2))) h_->retire("the keepalive evaluation did not return");
   }
-  fn_ = fn_for(T);
+  fn_ = fn_for(std::min(T, int(kMaxRows)));  // a wavefront chunk past kMaxRows: each half picks its own (pack, launch)
   reset.armed = false;
   T_ = T;
   jobs_ = 0;
@@ -640,6 +644,7 @@ void FfnSplit::join(Encoder& e, int lane, const Buffer& x, int T) {
 void FfnSplit::encode_layer(Encoder& e, int li, const Buffer& xh, const Buffer& x,
                             const std::function<void(Encoder&)>& gpu_part, bool ane, bool stage) {
   if (fn_ < 0) throw std::logic_error("ANE split: begin_chunk() first");
+  if (T_ > int(kMaxRows)) throw std::logic_error("ANE split: a chunk past kMaxRows rows runs the wavefront only");
   if (stage && li == 0) stage_layer(e, 0, 0);
   pack(e, 0, xh, T_);
   if (ane) launch(e, 0, li, T_);
