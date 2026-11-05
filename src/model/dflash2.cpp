@@ -5,6 +5,7 @@
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
 // attention, exact-code MMA operands, a separate block K/V scratch.
 #include "model/dflash2.h"
+#include "model/clover.h"
 #include "hub/hub.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
@@ -32,10 +33,16 @@ using json = nlohmann::json;
 // Default for the history lane and the online selector update (#944): the Qwen3.6 35B-A3B shape on an M5 Pro, where the
 // interleaved A/B measured both faster (PR #944). NI_DFLASH_HIST / NI_DFLASH_SELUPD turn either off ("0") or set its knobs
 // on any model and Mac; unset takes this default. Other targets and Macs keep both off until they are measured.
-static bool dfl_lanes_default(const Qwen35Config& c) {
+// Clover-35B-A3B has the same shape and drafter and is not measured, so the gate also asks for "not Clover": by what the
+// target is here, by its config's model_type where only the folder is known (plan_bytes).
+static bool dfl_lanes_shape(const Qwen35Config& c) {
   static const bool m5_pro = Gpu::get().name() == "Apple M5 Pro";
   return m5_pro && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
          c.shared_I == 512;
+}
+static bool dfl_lanes_default(const Qwen35& t) { return dfl_lanes_shape(t.config()) && !dynamic_cast<const Clover*>(&t); }
+bool DFlash2::lanes_default(const std::string& model_dir, const Qwen35Config& c) {
+  return dfl_lanes_shape(c) && !Clover::is_model(model_dir);
 }
 
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
@@ -449,7 +456,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       // NI_DFLASH_SELUPD=<lr>: the codebooks the GPU rewrites after each tree verify (dfl_sel_update) are tracked
       // buffers, so the next drafting pass's reads wait for the writes; with it off they stay untracked, as before
       const char* su = getenv("NI_DFLASH_SELUPD");
-      selupd_lr_ = su && *su ? float(atof(su)) : dfl_lanes_default(tg_.config()) ? 0.02f : 0.0f;
+      selupd_lr_ = su && *su ? float(atof(su)) : dfl_lanes_default(tg_) ? 0.02f : 0.0f;
       if (!(selupd_lr_ > 0.0f)) selupd_lr_ = 0.0f;
       const char* st = getenv("NI_DFLASH_SELUPD_TAU");
       if (st && *st && atof(st) > 0) selupd_tau_ = float(atof(st));
@@ -476,7 +483,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // dfl_lanes_default says so
     const char* h = getenv("NI_DFLASH_HIST");
     const bool hist_env = h && *h;
-    if (hist_env ? strcmp(h, "0") != 0 : dfl_lanes_default(tg_.config())) {
+    if (hist_env ? strcmp(h, "0") != 0 : dfl_lanes_default(tg_)) {
       int a = 3, b = 8, c = 4;
       if (hist_env && sscanf(h, "%d,%d,%d", &a, &b, &c) < 1) a = 3;
       hist_nmin_ = std::clamp(a, 1, 8); hist_nmax_ = std::clamp(b, hist_nmin_, 8); hist_cap_ = std::clamp(c, 1, 7);
@@ -1101,7 +1108,7 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
 }
 
 size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
-                           size_t* per_slot, size_t* at_prefill, int block_rows) {
+                           size_t* per_slot, size_t* at_prefill, int block_rows, bool lanes) {
   namespace fs = std::filesystem;
   json c;
   if (std::ifstream f(dir + "/config.json"); f) {
@@ -1209,6 +1216,11 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     const size_t row = C + size_t(target.lin_hv) * (target.lin_dk + target.lin_dv + 1);
     if (per_slot) *per_slot += lin * extra * row * 4;
   }
+  // the online selector update's fp32 masters (see the constructor): off when NI_DFLASH_SELUPD says so or sets no rate
+  const char* su = getenv("NI_DFLASH_SELUPD");
+  const bool selupd = su && *su ? atof(su) > 0 : lanes;
+  const bool v1_drafter = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
+  if (selupd && !v1_drafter) w += 2 * V * kRank * 4;
   return w + b + pf;
 }
 

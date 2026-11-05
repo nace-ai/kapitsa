@@ -460,7 +460,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       size_t per_slot = 0, at_prefill = 0;
       const size_t planned =
           DFlash2::plan_bytes(dir, q35_->config(), Qwen35::plan(opts_.model_dir, 1024, rows16).head_row_bytes,
-                              &per_slot, &at_prefill, block_rows);
+                              &per_slot, &at_prefill, block_rows, DFlash2::lanes_default(opts_.model_dir, q35_->config()));
       logi("DFlash2: %.3f GB allocated at load (planned %.3f GB); %.3f GB more for %d slots' rings and %.3f GB at the "
            "first prefill", (Gpu::get().allocated_bytes() - a0) / 1e9, (planned - at_prefill - (size_t(4) << 20)) / 1e9,
            3.0 * per_slot * std::max(1, opts_.slots) / 1e9, std::max(1, opts_.slots), at_prefill / 1e9);
@@ -1000,7 +1000,8 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024, block_rows > DFlash2::kB);
       size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
       lp.dflash_bytes = lp.dflash_found_bytes =
-          DFlash2::plan_bytes(lp.dflash, dc, p.head_row_bytes, &per_slot, nullptr, block_rows) +
+          DFlash2::plan_bytes(lp.dflash, dc, p.head_row_bytes, &per_slot, nullptr, block_rows,
+                              DFlash2::lanes_default(model_dir, dc)) +
           3 * per_slot * size_t(slots);
       if (lp.dflash_auto &&
           !conversation_fits(model_dir, context, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0)) {

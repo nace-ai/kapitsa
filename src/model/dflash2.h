@@ -130,8 +130,12 @@ class DFlash2 {
   static bool tensor_path_ok();
   // block_rows: the drafting block the engine will load (plan_block_rows), whose rows the target's verify buffers and
   // every slot's verify tape are sized from.
+  // lanes: the model's default turns the online selector update on (lanes_default), whose fp32 masters of the two
+  // codebooks (2 x V x kRank x 4 B, about 0.5 GB) the plan then counts; NI_DFLASH_SELUPD overrides it either way.
   static size_t plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
-                           size_t* per_slot, size_t* at_prefill = nullptr, int block_rows = kB);
+                           size_t* per_slot, size_t* at_prefill = nullptr, int block_rows = kB, bool lanes = false);
+  // The default of the history lane and the selector update (#944): the Qwen3.6 35B-A3B on an M5 Pro, not Clover.
+  static bool lanes_default(const std::string& model_dir, const Qwen35Config& target);
   // The target's tensors the drafter borrows have a supported format (4-bit embedding, 4/8-bit g64 LM head).
   static bool supports(const Qwen35& target);
   // The reduction a draft for this target reads its layer outputs with: "stream_mean" for a hyper-connected target
