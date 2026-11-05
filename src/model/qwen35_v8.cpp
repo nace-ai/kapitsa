@@ -49,11 +49,14 @@ bool Qwen35::v8_packed_coeff_on(const Qwen35Config& c) {
   const char* flag = getenv("NI_V8_PACKED_COEFF_NF1");
   if (flag && *flag && !atoi(flag)) return false;
   if (c.moe || c.hidden != 2560 || c.dense_I != 9216 || c.layers != 32 || c.group_size != 64) return false;
-  if (Gpu::get().name() != "Apple M4" || Gpu::get().core_count() != 10) return false;
+  const Gpu& gpu = Gpu::get();
+  const bool m4 = gpu.name() == "Apple M4" && gpu.core_count() == 10;
+  const bool m4_pro = gpu.name() == "Apple M4 Pro" && gpu.core_count() == 20;
+  if (!m4 && !m4_pro) return false;
   if (flag && *flag) return true;
   uint64_t ram = 0;
   size_t len = sizeof(ram);
-  return sysctlbyname("hw.memsize", &ram, &len, nullptr, 0) == 0 && ram == (uint64_t(24) << 30);
+  return sysctlbyname("hw.memsize", &ram, &len, nullptr, 0) == 0 && ram == (uint64_t(m4_pro ? 48 : 24) << 30);
 }
 
 void Qwen35::load_v8_packed_coeff() {

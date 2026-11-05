@@ -108,6 +108,29 @@ original path. Failures exit nonzero; dispatch counts distinguish candidate cove
 retains the original K partitions, including when a geometry falls back to the original output tile.
 `NI_QMM_COEFF_FIXTURES=MANIFEST` enables `check-cpu-fixtures` (no GPU) and `check-real-coeff` (full GPU outputs and FP64).
 
+`tools/qmm_device_ab.py` checks the 4B packed-QMM device default with interleaved builds. Build
+`qmm_device_conditions` explicitly, then pass `--old OLD/kapitsa --new NEW/kapitsa --model MODEL_DIR
+--probe build/qmm_device_conditions --out NEW_DIRECTORY`. The controller holds the GPU lock and warms both greedy
+and 4K sampled execution with distinct inputs. Measured prompts are evicted between requests and must report zero
+cached tokens. It checks actual AC power, one-minute load, thermal state and paging counters before and after each
+arm and request, plus 250 ms GPU
+samples and CPU usage over rolling one-second windows. One resident native sampler reads IOKit's `AppUsage` counters
+directly, avoiding probe/ps/ioreg process launches at every sample. `proc_pid_rusage` records the tested process tree's CPU time;
+both total usage and estimated background usage (total minus that owned work, as a share of all CPU cores) are retained.
+Defaults require load <= 2, background CPU <= 10%, nominal thermal state, automatic AC power mode, no pageouts or swap,
+and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
+the run. CPU contention is gated on each timed request; CPU peaks in the surrounding bookkeeping remain diagnostic.
+The 10% background budget preserves the preparation rule of at least 90% total CPU idle when the tested process is
+idle; during inference its own CPU work is accounted separately. This is the limit used in the M4 Pro validation
+record, whose accepted requests peaked at 9.47% estimated background usage across all 14 CPU cores.
+All other checks cover the entire arm as well. All requested pairs and identical nonempty outputs are required.
+`--pair-attempts N` optionally retries both arms after an environment failure (default 1: no retry), accepting only the
+first fully valid pair within the declared cap. A valid half of a rejected pair is discarded with its counterpart;
+every attempt remains in the output, and output/shape/cache failures stop the series rather than trigger retries.
+`--start-seconds FIRST LAST` can restrict starts within each minute to avoid a known periodic desktop refresh;
+it never bypasses the environment checks. Use more pairs when reducing repeats per leg, and report the complete protocol.
+`python3 tests/test_qmm_device_ab.py` fault-injects these checks on the CPU without a model or GPU.
+
 End to end, against a running server (this one runs the 4B on the GPU and downloads it, 3.3 GB, the first time):
 
 ```bash
