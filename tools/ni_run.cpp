@@ -357,10 +357,10 @@ int main(int argc, char** argv) {
   }
   if (dfl) {
     dfl->end_prefill();
-    // NI_DFLASH_DUMP_CAPT=<file>: the prompt captures the drafter's ring is built from (raw bf16, rows =
+    // NI_KFLASH_DUMP_CAPT=<file>: the prompt captures the drafter's ring is built from (raw bf16, rows =
     // the last min(n, 2047) prompt positions, n_target_layers x hidden columns), e.g. to compare the
     // Neural Engine prefill schedules with NI_ANE=0
-    if (const char* fn = getenv("NI_DFLASH_DUMP_CAPT")) {
+    if (const char* fn = kenv("DUMP_CAPT")) {
       const int rows = std::min(n, int(DFlash2::kCtxKeep));
       const size_t nH = dfl->config().target_layers.size() * size_t(dfl->config().H);
       FILE* f = fopen(fn, "wb");
@@ -415,19 +415,19 @@ int main(int argc, char** argv) {
   out.push_back(s.tokens()[n]);
 
   if (dfl) {
-    // NI_DFLASH_VERIFY=k: verify only the first k of the 7 proposals (lossless; fewer verify rows)
+    // NI_KFLASH_VERIFY=k: verify only the first k of the 7 proposals (lossless; fewer verify rows)
     const int K = dfl->verify_depth();
     const bool trace = getenv("NI_TRACE") != nullptr;
-    // NI_DFLASH_CONF=<file>: per cycle "a c_0 .. c_6", c_p = softmax over the 16 candidates of the walk's
+    // NI_KFLASH_CONF=<file>: per cycle "a c_0 .. c_6", c_p = softmax over the 16 candidates of the walk's
     // scores S_p at the chosen candidate (the drafter's confidence; calibration data for a dynamic depth)
-    FILE* conf = getenv("NI_DFLASH_CONF") ? fopen(getenv("NI_DFLASH_CONF"), "a") : nullptr;
-    // NI_DFLASH_LAT=<file>: per cycle the drafter's whole lattice and the verify's rows (binary; tools/tree_sim.py
+    FILE* conf = kenv("CONF") ? fopen(kenv("CONF"), "a") : nullptr;
+    // NI_KFLASH_LAT=<file>: per cycle the drafter's whole lattice and the verify's rows (binary; tools/tree_sim.py
     // reads it, layout there): anchor P, accepted a, the verify's sampled ids, candidates / scores / edges / walk, and
     // per verify row the target's top-16 logits, its log-sum-exp and its logits of the 16 candidates of that position.
-    // NI_DFLASH_STEP1=1: every cycle emits only its first token (the verify's row-0 sample = plain decoding), so the
+    // NI_KFLASH_STEP1=1: every cycle emits only its first token (the verify's row-0 sample = plain decoding), so the
     // lattice is recorded at every position of the plain output (a tree simulator can then replay any policy).
-    FILE* lat = getenv("NI_DFLASH_LAT") ? fopen(getenv("NI_DFLASH_LAT"), "wb") : nullptr;
-    const bool step1 = env_on("NI_DFLASH_STEP1");
+    FILE* lat = kenv("LAT") ? fopen(kenv("LAT"), "wb") : nullptr;
+    const bool step1 = kenv_on("STEP1");
     if (lat || step1) dfl->set_tree(false);  // the recording is the walk's chain and its lattice
     if (lat) {
       const int32_t hdr[8] = {0x3154414c /* "LAT1" */, 1, n, int32_t(std::lround(sp.temperature * 1000)), K,
@@ -445,13 +445,13 @@ int main(int argc, char** argv) {
     double gap_sum = 0;
     bool stop2 = false;
     if (Encoder::profiling()) Encoder::profile_report(1);
-    // NI_DFLASH_CB: 1 = the whole cycle in one command buffer; 2 = its drafting and verify halves as two
+    // NI_KFLASH_CB: 1 = the whole cycle in one command buffer; 2 = its drafting and verify halves as two
     // command buffers committed back to back (the verify is encoded while the draft runs); 3 (default)
     // = double-buffered: the next cycle's drafting half (GPU-driven: anchor and ring rows from this
     // cycle's acceptance) is committed right behind each verify, before the host waits for it.
-    // NI_TRACE / NI_DFLASH_CONF read drafter buffers after each cycle, so they run mode 2; NI_PROFILE
+    // NI_TRACE / NI_KFLASH_CONF read drafter buffers after each cycle, so they run mode 2; NI_PROFILE
     // (one command buffer per dispatch) runs mode 1.
-    int mode = getenv("NI_DFLASH_CB") && *getenv("NI_DFLASH_CB") ? atoi(getenv("NI_DFLASH_CB")) : 3;
+    int mode = kenv("CB") && *kenv("CB") ? atoi(kenv("CB")) : 3;
     if ((trace || conf || lat || step1) && mode == 3) mode = 2;
     if (Encoder::profiling()) mode = 1;
     // NI_AB=key=value,... (V8Knobs keys): odd cycles run with those verify-kernel knobs, even cycles with the
@@ -567,7 +567,7 @@ int main(int argc, char** argv) {
           fwrite(cl, 4, 16, lat);
         }
       }
-      // NI_DFLASH_STEP1: keep only the first token, the verify's row-0 sample (the accepted d_0 at T > 0 is a
+      // NI_KFLASH_STEP1: keep only the first token, the verify's row-0 sample (the accepted d_0 at T > 0 is a
       // speculative-sampling draw, not the plain sampler's)
       if (step1) s.tokens()[P + 1] = m.samples()[0];
       const int a = step1 ? 0 : a_cycle;

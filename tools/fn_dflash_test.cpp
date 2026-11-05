@@ -97,37 +97,53 @@ void run_cpu() {
         "a target without streams + none or nothing: loads");
   check(!DFlash2::config_check("[1, 2]", flash).empty(), "not a config: refused");
 
-  // The drafting block the memory plan reserves rows for: a pure decision on (target, slots, NI_DFLASH_BLOCK), asked
+  // KFlash's knobs: NI_KFLASH_<NAME>, with the earlier NI_DFLASH_<NAME> read when the new name is unset (#362)
+  std::printf("kenv (NI_KFLASH_ names, NI_DFLASH_ aliases)\n");
+  unsetenv("NI_KFLASH_HIST");
+  unsetenv("NI_DFLASH_HIST");
+  check(kenv("HIST") == nullptr && !kenv_on("HIST"), "kenv: neither spelling set: unset");
+  setenv("NI_DFLASH_HIST", "3,8,4", 1);
+  check(kenv("HIST") && !strcmp(kenv("HIST"), "3,8,4") && kenv_on("HIST"), "kenv: the old spelling alone is read");
+  setenv("NI_KFLASH_HIST", "0", 1);
+  check(kenv("HIST") && !strcmp(kenv("HIST"), "0") && !kenv_on("HIST"), "kenv: the new spelling wins when both are set");
+  unsetenv("NI_DFLASH_HIST");
+  check(kenv("HIST") && !strcmp(kenv("HIST"), "0"), "kenv: the new spelling alone is read");
+  unsetenv("NI_KFLASH_HIST");
+  setenv("NI_DFLASH", "none", 1);
+  check(kenv("") == nullptr, "kenv: NI_DFLASH (the drafter folder) is not a KFlash knob");
+  unsetenv("NI_DFLASH");
+
+  // The drafting block the memory plan reserves rows for: a pure decision on (target, slots, NI_KFLASH_BLOCK), asked
   // several times in one process here, as an --allow-switch server does (each model decides its own at its load).
-  // The trees are the default, as they have been; the F74 depth cap NI_DFLASH_CAP=<n> opts into the capped chains
+  // The trees are the default, as they have been; the F74 depth cap NI_KFLASH_CAP=<n> opts into the capped chains
   // and takes the 16-row plan with them (kf_tree_default() in dflash2.cpp), whatever the tree knobs say.
   std::printf("drafting block (DFlash2::plan_block_rows)\n");
   Qwen35Config dense = plain, moe = plain;
   dense.moe = false;
   moe.moe = true;
   check(DFlash2::plan_block_rows(dense, 1, "", true) == 16, "one slot, dense target, unset: 16 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "auto", true) == 16, "NI_DFLASH_BLOCK=auto is the default: 16 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "8", true) == 8, "NI_DFLASH_BLOCK=8: 8 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "16", true) == 16, "NI_DFLASH_BLOCK=16, dense target: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "auto", true) == 16, "NI_KFLASH_BLOCK=auto is the default: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "8", true) == 8, "NI_KFLASH_BLOCK=8: 8 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "16", true) == 16, "NI_KFLASH_BLOCK=16, dense target: 16 rows");
   check(DFlash2::plan_block_rows(dense, 2, "", true) == 8, "two slots: 8 rows (a 16-row block has no batched cycle)");
   check(DFlash2::plan_block_rows(moe, 1, "", true) == 8, "one slot, MoE target: 8 rows (no wide tree verify to run)");
   check(DFlash2::plan_block_rows(moe, 1, "16", true) == 16,
-        "NI_DFLASH_BLOCK=16, MoE target: 16 rows (the load-time check refuses it)");
-  setenv("NI_DFLASH_BLOCK", "8", 1);
+        "NI_KFLASH_BLOCK=16, MoE target: 16 rows (the load-time check refuses it)");
+  setenv("NI_KFLASH_BLOCK", "8", 1);
   const int env8 = DFlash2::plan_block_rows(dense, 1, nullptr, true);
-  unsetenv("NI_DFLASH_BLOCK");
-  setenv("NI_DFLASH_CAP", "2", 1);
+  unsetenv("NI_KFLASH_BLOCK");
+  setenv("NI_KFLASH_CAP", "2", 1);
   const int envcap = DFlash2::plan_block_rows(dense, 1, nullptr, true);
-  unsetenv("NI_DFLASH_CAP");
+  unsetenv("NI_KFLASH_CAP");
   check(env8 == 8 && envcap == 8 && DFlash2::plan_block_rows(dense, 1, nullptr, true) == 16,
         "the environment is read when no value is passed: 16, 8 (BLOCK=8), 8 (CAP=2), 16");
-  // only a genuine cap engages: a NI_DFLASH_CAP at or above the full depth (block - 1) is a no-op, exactly as if
+  // only a genuine cap engages: a NI_KFLASH_CAP at or above the full depth (block - 1) is a no-op, exactly as if
   // it were unset -- an arm that names a full-depth cap measures what it believes it measures (kf_tree_default)
-  setenv("NI_DFLASH_CAP", "15", 1);
+  setenv("NI_KFLASH_CAP", "15", 1);
   const int capfull = DFlash2::plan_block_rows(dense, 1, nullptr, true);
-  setenv("NI_DFLASH_CAP", "20", 1);
+  setenv("NI_KFLASH_CAP", "20", 1);
   const int capover = DFlash2::plan_block_rows(dense, 1, nullptr, true);
-  unsetenv("NI_DFLASH_CAP");
+  unsetenv("NI_KFLASH_CAP");
   check(capfull == 16 && capover == 16,
         "a cap at or above the full depth (15, or 20 past it) is a no-op: the plan keeps 16 rows");
   const int first = DFlash2::plan_block_rows(dense, 1, "", true), moe_next = DFlash2::plan_block_rows(moe, 1, "", true),
@@ -140,65 +156,65 @@ void run_cpu() {
   setenv("NI_KFLASH", "0", 1);
   const int kf0 = DFlash2::plan_block_rows(dense, 1, "", true);
   unsetenv("NI_KFLASH");
-  setenv("NI_DFLASH_CAP", "2", 1);
+  setenv("NI_KFLASH_CAP", "2", 1);
   const int cap2 = DFlash2::plan_block_rows(dense, 1, "", true);
   setenv("NI_KFLASH", "1", 1);
   const int cap2kf1 = DFlash2::plan_block_rows(dense, 1, "", true);
-  unsetenv("NI_DFLASH_CAP");
+  unsetenv("NI_KFLASH_CAP");
   unsetenv("NI_KFLASH");
-  setenv("NI_DFLASH_VERIFY", "7", 1);
+  setenv("NI_KFLASH_VERIFY", "7", 1);
   const int shallow = DFlash2::plan_block_rows(dense, 1, "", true);
-  unsetenv("NI_DFLASH_VERIFY");
-  setenv("NI_DFLASH_ATTN", "scalar", 1);
+  unsetenv("NI_KFLASH_VERIFY");
+  setenv("NI_KFLASH_ATTN", "scalar", 1);
   const int scalar = DFlash2::plan_block_rows(dense, 1, "", true);
-  unsetenv("NI_DFLASH_ATTN");
+  unsetenv("NI_KFLASH_ATTN");
   check(kf0 == 8 && cap2 == 8 && cap2kf1 == 8 && shallow == 8 && scalar == 8,
-        "NI_KFLASH=0, NI_DFLASH_CAP=2 (trees asked or not), NI_DFLASH_VERIFY=7, NI_DFLASH_ATTN=scalar: the plan "
+        "NI_KFLASH=0, NI_KFLASH_CAP=2 (trees asked or not), NI_KFLASH_VERIFY=7, NI_KFLASH_ATTN=scalar: the plan "
         "keeps 8 rows");
   check(DFlash2::plan_block_rows(dense, 1, "", true) == 16, "and with the knobs back off: 16 rows");
   check(DFlash2::plan_block_rows(dense, 1, "", false) == 8,
         "no matrix units on this Mac (an M1-M4, or CI's virtual GPU): the plan keeps 8 rows too");
   // The cap's interactions, as reviewed (Cursor threads 4368392777, 4368445248). (1) An explicit
-  // NI_DFLASH_VERIFY overrides NI_DFLASH_CAP on the trees as it overrides the depth: CAP=2 + VERIFY=7 asks the
+  // NI_KFLASH_VERIFY overrides NI_KFLASH_CAP on the trees as it overrides the depth: CAP=2 + VERIFY=7 asks the
   // full-depth walk at 7 on an 8-row block, and the cap must not drop the trees under it (which silently
   // chained an asked-for tree). (2) The row-count reader (Qwen35::kf_dense_rows in qwen35_v8.cpp) read the cap
   // against a fixed 15, the 16-row block's full depth, while DFlash2 reads it against block_ - 1: a cap below
   // 15 takes the 16-row block away, so the block that runs is the 8-row one, full depth 7, and a cap of 7..14
   // is a no-op for it -- exactly as if the cap were unset.
-  std::printf("the cap's interactions (NI_DFLASH_VERIFY, NI_KFLASH_ROWS)\n");
+  std::printf("the cap's interactions (NI_KFLASH_VERIFY, NI_KFLASH_ROWS)\n");
   Qwen35Config wide = dense;
   wide.dense_I = 5120;  // a multiple of 256: this target runs wide tree verifies (v8_wide_ok_c)
   setenv("NI_KFLASH_ROWS", "8,16", 1);
-  setenv("NI_DFLASH_VERIFY", "7", 1);
+  setenv("NI_KFLASH_VERIFY", "7", 1);
   const uint32_t v7rows = Qwen35::kf_dense_rows(wide);
   const int v7plan = DFlash2::plan_block_rows(dense, 1, "", true);
-  setenv("NI_DFLASH_CAP", "2", 1);
+  setenv("NI_KFLASH_CAP", "2", 1);
   const uint32_t v7cap2rows = Qwen35::kf_dense_rows(wide);
   const int v7cap2plan = DFlash2::plan_block_rows(dense, 1, "", true);
-  unsetenv("NI_DFLASH_CAP");
+  unsetenv("NI_KFLASH_CAP");
   check(v7rows == v7cap2rows && (v7rows & (1u << 15)) && v7plan == 8 && v7cap2plan == 8,
         "CAP=2 + VERIFY=7: the same rows (8 and 16, trees kept) and the same 8-row plan as VERIFY=7 alone -- "
         "the explicit verify overrides the cap");
-  unsetenv("NI_DFLASH_VERIFY");
-  setenv("NI_DFLASH_CAP", "2", 1);  // the cap alone now: the verify unset, the rows still asked
+  unsetenv("NI_KFLASH_VERIFY");
+  setenv("NI_KFLASH_CAP", "2", 1);  // the cap alone now: the verify unset, the rows still asked
   const uint32_t cap2rows = Qwen35::kf_dense_rows(wide);
-  unsetenv("NI_DFLASH_CAP");
+  unsetenv("NI_KFLASH_CAP");
   unsetenv("NI_KFLASH_ROWS");
   check(cap2rows == (1u << 7), "CAP=2 alone still keeps the chains: one tile of 8 rows (unchanged)");
-  setenv("NI_DFLASH_BLOCK", "8", 1);
+  setenv("NI_KFLASH_BLOCK", "8", 1);
   setenv("NI_KFLASH_ROWS", "8,16", 1);
   const uint32_t nocaprows = Qwen35::kf_dense_rows(wide);
-  setenv("NI_DFLASH_CAP", "10", 1);
+  setenv("NI_KFLASH_CAP", "10", 1);
   const uint32_t cap10rows = Qwen35::kf_dense_rows(wide);
-  setenv("NI_DFLASH_CAP", "6", 1);
+  setenv("NI_KFLASH_CAP", "6", 1);
   const uint32_t cap6rows = Qwen35::kf_dense_rows(wide);
-  unsetenv("NI_DFLASH_CAP");
-  unsetenv("NI_DFLASH_BLOCK");
+  unsetenv("NI_KFLASH_CAP");
+  unsetenv("NI_KFLASH_BLOCK");
   unsetenv("NI_KFLASH_ROWS");
   check(cap10rows == nocaprows && (cap10rows & (1u << 15)) && cap6rows == (1u << 7),
         "CAP=10 + NI_KFLASH_ROWS=8,16 on an 8-row block: a no-op, exactly as if the cap were unset (the rows "
         "stay 8 and 16); CAP=6 is below the full depth 7 and keeps one tile");
-  // The downward depth gate (M3, NI_DFLASH_GATE): the rolling acceptance policy alone -- pure host
+  // The downward depth gate (M3, NI_KFLASH_GATE): the rolling acceptance policy alone -- pure host
   // arithmetic, exactly what encode_cycle_verify applies per cycle (kmax), fed by what it observes per
   // completed cycle (observe). The statistic is the MARGINAL acceptance of position i among the cycles
   // where tau kept it -- the quantity the break-even p was fitted from -- not a reached-conditional

@@ -440,7 +440,7 @@ struct DflAttnParams {
   }
 }
 
-// Same contract as dfl_attn with simdgroup-matrix tiles (NI_DFLASH_ATTN=mma): per simdgroup one q
+// Same contract as dfl_attn with simdgroup-matrix tiles (NI_KFLASH_ATTN=mma): per simdgroup one q
 // head x the 8 block rows; Q kept as 16 half 8x8 fragments, tiles of 32 keys staged as half in
 // threadgroup memory; S = Q K^T and O += P V with fp32 accumulation; online softmax on the S
 // fragments (a lane holds rows fm, keys fn/fn+1: row reductions are xor-shuffles over lane bits 0, 3).
@@ -1403,7 +1403,7 @@ struct DflMergeParams {
   }
 }
 
-// ---- top-16 with (value desc, id asc) order, simdgroup selection (NI_DFLASH_TOPK=1, default) ----
+// ---- top-16 with (value desc, id asc) order, simdgroup selection (NI_KFLASH_TOPK=1, default) ----
 NI_INLINE bool dfl_before(float va, uint ia, float vb, uint ib) { return va > vb || (va == vb && ia < ib); }
 #define DFL_CS(a, b)                                       \
   if (dfl_before(v[b], id[b], v[a], id[a])) {               \
@@ -1608,7 +1608,7 @@ struct DflSelectParams {
   }
 }
 
-// History lane (#316, NI_DFLASH_HIST): a prompt-lookup chain injected into the lattice's children tables before the
+// History lane (#316, NI_KFLASH_HIST): a prompt-lookup chain injected into the lattice's children tables before the
 // builder runs. The last n tokens (n = nmax .. nmin) ending at the anchor are searched in tokens[0 .. P] (latest earlier
 // occurrence within `window` positions); the up-to-`cap` tokens that followed it become a chain: slot d's candidate d
 // (the drafter's own if the token is among its 16, else it takes candidate 15's place in every children-row of the slot)
@@ -1868,7 +1868,7 @@ struct DflAcceptParams {
 //         argmax whatever is verified, so the proposal's own confidence may be used).
 // Proposal 0 is always verified. kdyn = {K, K + 1}; the verify then routes experts only for the K + 1 live rows
 // (moe8_plan row limit) and dfl_accept stops at K. rule: 0 = as above; 1 = prod_{j <= p} c_j at any T (tests only:
-// biased at T > 0); 2 = the earlier T > 0 rule, prod_{j < p} q_j(d_j) >= tau (exact; NI_DFLASH_DYN_RULE=2).
+// biased at T > 0); 2 = the earlier T > 0 rule, prod_{j < p} q_j(d_j) >= tau (exact; NI_KFLASH_DYN_RULE=2).
 // grid 1 x 32.
 struct DflDepthParams {
   uint kmax;

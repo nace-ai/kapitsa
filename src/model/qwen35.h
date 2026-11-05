@@ -443,7 +443,7 @@ class Qwen35 : public Model {
   bool verify_wide_ok() const;
   // The KFlash tree row counts a dense target's verifies may pick, bit n-1 set for n = 8, 16, 32: 8 alone, or 8 with 16
   // and 32 where the target runs wide verifies (verify_wide_ok) and the drafting pass's knobs (NI_KFLASH,
-  // NI_DFLASH_TREE, NI_KFLASH_ROWS) let them. DFlash2 picks its rows from it and plan() reserves the tape they need, so
+  // NI_KFLASH_TREE, NI_KFLASH_ROWS) let them. DFlash2 picks its rows from it and plan() reserves the tape they need, so
   // the sizes agree; a bad NI_KFLASH_ROWS is fatal here (before either).
   static uint32_t kf_dense_rows(const Qwen35Config& c);
   // The rows a cached suffix's chain pass runs (NI_VPF_ROWS, else the measured default: 32 on a dense target at or

@@ -35,7 +35,7 @@ they decode.
    and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
    (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
    not become committed recurrent history. KFlash (every drafter by default; `NI_KFLASH=0` keeps chains, and
-   `NI_DFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
+   `NI_KFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
    chains (the trees need the full depth) whose two clean depth-2/3 mode-3 anchors read cheaper per token than any
    deeper measured arm, ids-identical, with the shipping-binary sweep to
    decide whether it becomes their default): the
