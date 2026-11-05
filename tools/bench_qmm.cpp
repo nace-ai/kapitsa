@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
       e->buf(0, X); e->buf(1, XQ); e->buf(2, XS); e->val(3, qxp);
       e->dispatch((M * (K / 64) * 8 + 255) / 256, 1, 1, 256);
     };
-    QmmParams prm{M, N, K, K, N, 0, 64, 0, 0};
+    QmmParams prm{M, N, K, K, N, getenv("QMM_ADD") ? 1u : 0u, 64, 0, 0};  // QMM_ADD=1: Y += (each run adds)
     struct { QmmParams q; uint32_t w_ld, s_ld; } ldprm{prm, 2 * K / 8, 2 * K / 64};  // 4-bit rows of 2K
     auto run = [&](size_t ki, int n) {
       const Kern& k = kerns[ki];
