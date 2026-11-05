@@ -26,3 +26,6 @@ Rounds 1-3 (3 reps, 5 Nov 03:30): 4B opt0 30/30 0.4 s; lc 29/30 5.0 s; r1 30/30 
 9B opt0 30/30 0.7 s; lc 28/30 6.5 s; r1 29/30 6.2 s; r2 30/30 6.7 s; r3 26/30 7.0 s. No arm meets the stop line; r3 dropped.
 
 Rounds 4-5 (3 reps, 5 Nov 10:13): 4B opt0 30/30 0.4 s; r1 30/30 3.5 s; r4 30/30 1.7 s; r5 30/30 1.6 s. 9B not run: its weights are on the external drive, which was unplugged (server could not start).
+
+Rounds 6-7, 4B (3 reps, 5 Nov 10:45, all 150 prompts on AC): opt0 30/30 0.3 s; r4 30/30 1.6 s; r5 30/30 1.3 s; r6 30/30 1.5 s; r7 30/30 1.0 s.
+r7 meets the 4B line and ships as `arms/lc_best.json` on 4B evidence; the 9B leg (k350-hc3-9b2, `--require-ac`) confirms or replaces it.
