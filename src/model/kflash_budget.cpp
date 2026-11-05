@@ -290,6 +290,7 @@ void KfBudget::observe(const int32_t* t, double ms) {
     if (d < 1 || d > kf::kMaxRows) continue;
     float lq;
     memcpy(&lq, &t[kf::kRecLq + i], 4);
+    if (hist_lane_ && lq == kf::kHistLq) continue;  // a history-lane edge: not the drafter's probability (#316)
     add_record(d, lq, t[kf::kRecHit + i] != 0);
   }
   refit_tick();
