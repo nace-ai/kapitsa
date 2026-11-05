@@ -1,0 +1,279 @@
+diff --git a/src/kernels/gdn.metal b/src/kernels/gdn.metal
+index 904e7b18..d6e72545 100644
+--- a/src/kernels/gdn.metal
++++ b/src/kernels/gdn.metal
+@@ -536,3 +536,185 @@ struct RowsParams {
+   }
+   for (uint i = tid; i < p.D; i += ntg) Y[t * p.D + i] = half(p.norm ? x[i] * inv * float(w[i]) : x[i]);
+ }
++
++// ---- Chunked gated delta rule (NI_GDN_CHUNK): gdn_step_par's recurrence over blocks of 64 tokens ----
++// Per value head, S (dv x dk) evolves as S_t = g_t S_{t-1} + u_t k_t^T with u_t = beta_t (v_t - g_t S_{t-1} k_t), and
++// o_t = S_t q_t. Within a block with cumulative log decays l_i (Gam_i = exp(l_i)) that is the WY form:
++//   A_ij = beta_i exp(l_i - l_j) k_i.k_j (j < i),  (I + A) W = diag(beta Gam) K,  (I + A) Uv = diag(beta) V,
++//   U = Uv - W S^T,  O = diag(Gam) Q S^T + P U with P_ij = exp(l_i - l_j) q_i.k_j (j <= i),
++//   S <- Gam_last S + U^T diag(Gam_last / Gam) K.
++// gdn_chunk_prep (every block and head at once) writes W, Uv, P and l; gdn_chunk_scan walks one head's blocks in order
++// for a 16-row slice of S. fp32 throughout, but summed in another order than gdn_step_par: not bitwise its outputs.
++// Rows of the last block past T count as no decay and beta 0; their k rows are zeroed here (buffers hold whole blocks).
++// Scratch per (block b, head h), ch = b * Hv + h: W [ch][64][128], Uv [ch][64][128], P [ch][64][64], l [ch][64].
++// grid: blocks x Hv threadgroups of 256 threads.
++[[kernel]] void gdn_chunk_prep(device float* q [[buffer(0)]], device float* k [[buffer(1)]],
++                               const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
++                               const device float* beta [[buffer(4)]], device float* Ws [[buffer(5)]],
++                               device float* Us [[buffer(6)]], device float* Ps [[buffer(7)]],
++                               device float* Ls [[buffer(8)]], constant GdnStepParams& p [[buffer(9)]],
++                               uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
++                               uint sg [[simdgroup_index_in_threadgroup]]) {
++  constexpr uint D = 128, C = 64;
++  const uint blk = tg.x, h = tg.y, hk = h / (p.Hv / p.Hk);
++  const uint t0 = blk * C, n = min(C, p.T - t0), qk = p.Hk * D;
++  const size_t ch = size_t(blk) * p.Hv + h;
++  threadgroup float A[C * C];  // (16,384 B: the cumulative log decays pass through its first row first)
++  device float* L = Ls + ch * C;
++  // the last block's rows past T: q and k zeroed once per key head (the scan multiplies whole 8-row tiles)
++  if (n < C && h % (p.Hv / p.Hk) == 0)
++    for (uint e = tid; e < (C - n) * D; e += 256) {
++      const size_t o = size_t(t0 + n + e / D) * qk + hk * D + e % D;
++      q[o] = 0.0f;
++      k[o] = 0.0f;
++    }
++  if (tid < C) {
++    const float lv = tid < n ? max(metal::precise::log(g[(t0 + tid) * p.Hv + h]), -80.0f) : 0.0f;
++    A[tid] = simd_prefix_inclusive_sum(lv);
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  if (tid < C) L[tid] = A[tid] + (tid >= 32 ? A[31] : 0.0f);
++  threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
++  // K K^T into A and Q K^T into P, lower 8x8 tiles (36 of 64), raw
++  const device float* kb = k + size_t(t0) * qk + hk * D;
++  const device float* qb = q + size_t(t0) * qk + hk * D;
++  device float* P = Ps + ch * C * C;
++  for (uint tt = sg; tt < 36; tt += 8) {
++    uint a = 0;
++    while ((a + 1) * (a + 2) / 2 <= tt) ++a;
++    const uint b = tt - a * (a + 1) / 2;
++    simdgroup_float8x8 kk = simdgroup_float8x8(0), qq = simdgroup_float8x8(0), ka, kt, qa;
++    for (uint d0 = 0; d0 < D; d0 += 8) {
++      simdgroup_load(ka, kb, qk, ulong2(d0, 8 * a));
++      simdgroup_load(qa, qb, qk, ulong2(d0, 8 * a));
++      simdgroup_load(kt, kb, qk, ulong2(d0, 8 * b), true);
++      simdgroup_multiply_accumulate(kk, ka, kt, kk);
++      simdgroup_multiply_accumulate(qq, qa, kt, qq);
++    }
++    simdgroup_store(kk, A, C, ulong2(8 * b, 8 * a));
++    simdgroup_store(qq, P, C, ulong2(8 * b, 8 * a));
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
++  // decays and masks (select: rows past T may hold anything)
++  for (uint e = tid; e < C * C; e += 256) {
++    const uint i = e / C, j = e % C;
++    const float dec = metal::precise::exp(L[i] - L[j]);
++    const float bi = i < n ? beta[(t0 + i) * p.Hv + h] : 0.0f;
++    A[e] = (j < i && i < n) ? bi * dec * A[e] : 0.0f;
++    P[e] = (j <= i && i < n) ? dec * P[e] : 0.0f;
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  // forward substitution, one column a thread: W (threads 0-127) from beta Gam k, Uv (128-255) from beta v
++  const bool isw = tid < D;
++  const uint d = tid % D;
++  device float* X = (isw ? Ws : Us) + ch * C * D + d;
++  float x[C];
++  _Pragma("clang loop unroll(full)")
++  for (uint i = 0; i < C; ++i) {
++    float acc = 0.0f;
++    if (i < n) {
++      const float bi = beta[(t0 + i) * p.Hv + h];
++      acc = isw ? bi * metal::precise::exp(L[i]) * k[size_t(t0 + i) * qk + hk * D + d]
++                : bi * v[size_t(t0 + i) * p.Hv * D + h * D + d];
++    }
++    _Pragma("clang loop unroll(full)")
++    for (uint j = 0; j < i; ++j) acc = fma(-A[i * C + j], x[j], acc);
++    x[i] = acc;
++    X[i * D] = acc;
++  }
++}
++
++// One head's 16-row slice of S across the blocks in order (gdn_chunk_prep's scratch): per block U = Uv - W S^T,
++// O = diag(Gam) Q S^T + P U into out [t][h * 128 + dv] (whole blocks: rows past T are written too), then
++// S <- Gam_last S + U^T diag(Gam_last / Gam) K. grid: Hv * 8 threadgroups of 128 threads (4 simdgroups).
++[[kernel]] void gdn_chunk_scan(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
++                               const device float* Ws [[buffer(2)]], const device float* Us [[buffer(3)]],
++                               const device float* Ps [[buffer(4)]], const device float* Ls [[buffer(5)]],
++                               device float* state [[buffer(6)]], device float* out [[buffer(7)]],
++                               constant GdnStepParams& p [[buffer(8)]], uint tg [[threadgroup_position_in_grid]],
++                               uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
++                               uint lane [[thread_index_in_simdgroup]]) {
++  constexpr uint D = 128, C = 64, SV = 16;
++  const uint h = tg / (D / SV), v0 = (tg % (D / SV)) * SV;
++  const uint hk = h / (p.Hv / p.Hk), qk = p.Hk * D, vd = p.Hv * D;
++  threadgroup float S[SV * D];  // rows dv - v0, columns dk
++  threadgroup float U[C * SV];
++  threadgroup float lg[C];
++  threadgroup float dg[4 * 2 * 64];  // per simdgroup: diag(Gam) of its two row tiles
++  device float* St = state + (size_t(h) * D + v0) * D;
++  for (uint e = tid; e < SV * D; e += 128) S[e] = St[e];
++  const uint nblk = (p.T + C - 1) / C;
++  for (uint blk = 0; blk < nblk; ++blk) {
++    const uint t0 = blk * C;
++    const size_t ch = size_t(blk) * p.Hv + h;
++    const device float* W = Ws + ch * C * D;
++    const device float* Uv = Us + ch * C * D;
++    const device float* P = Ps + ch * C * C;
++    if (tid < C) lg[tid] = Ls[ch * C + tid];
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // U = Uv - W S^T: 8 x 2 tiles of 8x8, row tiles 2 sg, 2 sg + 1
++    for (uint ta = 0; ta < 2; ++ta)
++      for (uint tb = 0; tb < 2; ++tb) {
++        const uint a = 2 * sg + ta;
++        simdgroup_float8x8 m = simdgroup_float8x8(0), wf, sf, uf;
++        for (uint d0 = 0; d0 < D; d0 += 8) {
++          simdgroup_load(wf, W, D, ulong2(d0, 8 * a));
++          simdgroup_load(sf, S, D, ulong2(d0, 8 * tb), true);
++          simdgroup_multiply_accumulate(m, wf, sf, m);
++        }
++        simdgroup_load(uf, Uv, D, ulong2(v0 + 8 * tb, 8 * a));
++        uf.thread_elements()[0] -= m.thread_elements()[0];
++        uf.thread_elements()[1] -= m.thread_elements()[1];
++        simdgroup_store(uf, U, SV, ulong2(8 * tb, 8 * a));
++      }
++    // this simdgroup's diag(Gam) tiles
++    for (uint e = lane; e < 128; e += 32) {
++      const uint ta = e / 64, r = (e % 64) / 8, c = e % 8;
++      dg[sg * 128 + e] = r == c ? metal::precise::exp(lg[8 * (2 * sg + ta) + r]) : 0.0f;
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // O = diag(Gam) (Q S^T) + P U
++    for (uint ta = 0; ta < 2; ++ta)
++      for (uint tb = 0; tb < 2; ++tb) {
++        const uint a = 2 * sg + ta;
++        simdgroup_float8x8 qs = simdgroup_float8x8(0), o = simdgroup_float8x8(0), qf, sf, pf, uf, df;
++        for (uint d0 = 0; d0 < D; d0 += 8) {
++          simdgroup_load(qf, q + size_t(t0) * qk + hk * D, qk, ulong2(d0, 8 * a));
++          simdgroup_load(sf, S, D, ulong2(d0, 8 * tb), true);
++          simdgroup_multiply_accumulate(qs, qf, sf, qs);
++        }
++        for (uint c = 0; c <= a; ++c) {
++          simdgroup_load(pf, P, C, ulong2(8 * c, 8 * a));
++          simdgroup_load(uf, U, SV, ulong2(8 * tb, 8 * c));
++          simdgroup_multiply_accumulate(o, pf, uf, o);
++        }
++        simdgroup_load(df, dg + sg * 128 + ta * 64, 8);
++        simdgroup_multiply_accumulate(o, df, qs, o);
++        simdgroup_store(o, out + size_t(t0 + 8 * a) * vd + h * D + v0 + 8 * tb, vd);
++      }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // U <- diag(Gam_last / Gam) U
++    for (uint e = tid; e < C * SV; e += 128) U[e] *= metal::precise::exp(lg[C - 1] - lg[e / SV]);
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // S <- Gam_last S + U^T K: 2 x 16 tiles, simdgroup sg: row tile sg / 2, column tiles (sg % 2) * 8 .. + 7
++    const float gl = metal::precise::exp(lg[C - 1]);
++    const uint ra = sg / 2;
++    simdgroup_float8x8 acc[8];
++    for (uint cb = 0; cb < 8; ++cb) {
++      const uint col = ((sg % 2) * 8 + cb) * 8;
++      simdgroup_load(acc[cb], S, D, ulong2(col, 8 * ra));
++      acc[cb].thread_elements()[0] *= gl;
++      acc[cb].thread_elements()[1] *= gl;
++      for (uint c = 0; c < C / 8; ++c) {
++        simdgroup_float8x8 ut, kf;
++        simdgroup_load(ut, U, SV, ulong2(8 * ra, 8 * c), true);
++        simdgroup_load(kf, k + size_t(t0) * qk + hk * D, qk, ulong2(col, 8 * c));
++        simdgroup_multiply_accumulate(acc[cb], ut, kf, acc[cb]);
++      }
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    for (uint cb = 0; cb < 8; ++cb) simdgroup_store(acc[cb], S, D, ulong2(((sg % 2) * 8 + cb) * 8, 8 * ra));
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  for (uint e = tid; e < SV * D; e += 128) St[e] = S[e];
++}
+diff --git a/tools/bench_gdn.cpp b/tools/bench_gdn.cpp
+index 0317b5d5..33d567dd 100644
+--- a/tools/bench_gdn.cpp
++++ b/tools/bench_gdn.cpp
+@@ -64,20 +64,20 @@ int main(int argc, char** argv) {
+   struct Path {
+     Buffer conv, rec, q, k, v, gg, beta, out, y;
+   };
+-  auto make_path = [&]() {
++  auto make_path = [&](uint32_t rows) {
+     Path p;
+     p.conv = g.alloc(size_t(3) * C * 4);
+     p.rec = g.alloc(size_t(Hv) * D * D * 4);
+-    p.q = g.alloc(size_t(T) * QK * 4);
+-    p.k = g.alloc(size_t(T) * QK * 4);
+-    p.v = g.alloc(size_t(T) * VD * 4);
++    p.q = g.alloc(size_t(rows) * QK * 4);
++    p.k = g.alloc(size_t(rows) * QK * 4);
++    p.v = g.alloc(size_t(rows) * VD * 4);
+     p.gg = g.alloc(size_t(T) * Hv * 4);
+     p.beta = g.alloc(size_t(T) * Hv * 4);
+-    p.out = g.alloc(size_t(T) * VD * 4);
++    p.out = g.alloc(size_t(rows) * VD * 4);
+     p.y = g.alloc(size_t(T) * VD * 2);
+     return p;
+   };
+-  Path ref = make_path(), par = make_path();
++  Path ref = make_path(T), par = make_path(T);
+   auto reset = [&](Path& p) {
+     memcpy(p.conv.ptr(), conv0.ptr(), conv0.size);
+     memcpy(p.rec.ptr(), rec0.ptr(), rec0.size);
+@@ -207,6 +207,57 @@ int main(int argc, char** argv) {
+     bad_total += cmp("state", ref.rec, par.rec, size_t(Hv) * D * D, false);
+     bad_total += cmp("y", ref.y, par.y, size_t(T) * VD, true);
+   }
++  // NI_GDN_CHUNK: gdn_chunk_prep -> gdn_chunk_scan (blocks of 64 tokens) against gdn_step_parr4_l16 from the same
++  // state. Another summation order, so not bitwise: the max |diff| of out, state and y relative to max |ref|.
++  if (getenv("GDN_CHUNK")) {
++    constexpr uint32_t BC = 64;
++    const uint32_t nb = (T + BC - 1) / BC;
++    Path cp = make_path(nb * BC);  // whole blocks of q / k / v / out rows
++    Buffer Wsb = g.alloc(size_t(nb) * Hv * BC * D * 4), Usb = g.alloc(size_t(nb) * Hv * BC * D * 4);
++    Buffer Psb = g.alloc(size_t(nb) * Hv * BC * BC * 4), Lsb = g.alloc(size_t(nb) * Hv * BC * 4);
++    auto enc_chunk = [&](Encoder& e, Path& P, int which) {  // 1: prep, 2: scan, 3: both
++      if (which & 1) {
++        e.use(g.pipeline("gdn_chunk_prep"));
++        e.buf(0, P.q); e.buf(1, P.k); e.buf(2, P.v); e.buf(3, P.gg); e.buf(4, P.beta);
++        e.buf(5, Wsb); e.buf(6, Usb); e.buf(7, Psb); e.buf(8, Lsb);
++        e.val(9, sp);
++        e.dispatch(nb, Hv, 1, 256);
++      }
++      if (which & 2) {
++        e.use(g.pipeline("gdn_chunk_scan"));
++        e.buf(0, P.q); e.buf(1, P.k); e.buf(2, Wsb); e.buf(3, Usb); e.buf(4, Psb); e.buf(5, Lsb);
++        e.buf(6, P.rec); e.buf(7, P.out);
++        e.val(8, sp);
++        e.dispatch(Hv * (D / 16), 1, 1, 128);
++      }
++    };
++    const std::string base = "gdn_step_parr4_l16";
++    reset(cp);
++    run([&](Encoder& e) { enc_prep(e, cp, true); });
++    double t_base = timed([&](Encoder& e) { enc_step_par(e, par, base); });
++    double t_cprep = timed([&](Encoder& e) { enc_chunk(e, cp, 1); });
++    double t_cscan = timed([&](Encoder& e) { enc_chunk(e, cp, 2); });
++    printf("  NI_GDN_CHUNK: gdn_chunk_prep %.3f ms + gdn_chunk_scan %.3f ms = %.3f ms against %s %.3f ms (%.2fx)\n",
++           t_cprep, t_cscan, t_cprep + t_cscan, base.c_str(), t_base, t_base / (t_cprep + t_cscan));
++    reset(par);
++    run([&](Encoder& e) {
++      enc_prep(e, par, true);
++      enc_step_par(e, par, base);
++      enc_gnorm(e, par);
++    });
++    reset(cp);
++    run([&](Encoder& e) {
++      enc_prep(e, cp, true);
++      enc_chunk(e, cp, 3);
++      enc_gnorm(e, cp);
++    });
++    worst_rel = 0;
++    cmp("out", par.out, cp.out, size_t(T) * VD, false);
++    cmp("state", par.rec, cp.rec, size_t(Hv) * D * D, false);
++    cmp("y", par.y, cp.y, size_t(T) * VD, true);
++    printf("  NI_GDN_CHUNK against %s: worst max |diff| %.2g of max |ref|\n", base.c_str(), worst_rel);
++    return 0;
++  }
+   // Under the engine's fast math each kernel's sums are reassociated differently, so expect small
+   // differences (fp32 rounding, a few 1-ulp half outputs); NI_MATH_SAFE=1 must give bit-identical.
+   if (!bad_total) printf("all outputs bit-identical\n");

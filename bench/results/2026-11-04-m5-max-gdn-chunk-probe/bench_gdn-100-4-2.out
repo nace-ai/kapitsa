@@ -1,0 +1,17 @@
+[kapitsa] compiled kernels in 7 ms
+T=100 Hv=4 Hk=2 (C=1024), step threadgroups of 2 simdgroups
+  default: gdn_prep 0.244 ms + gdn_step 0.605 ms + rows_to_half 0.010 ms = 0.860 ms
+  NI_GDN_PAR gdn_step_parr4_l16: gdn_prep_par 0.031 ms + step 0.067 ms + gdn_gnorm 0.010 ms = 0.108 ms (7.96x)
+    q          8791 / 25600     differ  max |diff| 9.31e-09 (1.5e-07 of max |ref|)
+    k          9411 / 25600     differ  max |diff| 8.94e-08 (1.2e-07 of max |ref|)
+    v         14365 / 51200     differ  max |diff| 7.15e-07 (1.8e-07 of max |ref|)
+    g             0 / 400       differ  max |diff| 0 (0 of max |ref|)
+    beta          0 / 400       differ  max |diff| 0 (0 of max |ref|)
+    conv          0 / 3072      differ  max |diff| 0 (0 of max |ref|)
+    state     41470 / 65536     differ  max |diff| 8.94e-08 (1.8e-07 of max |ref|)
+    y            49 / 51200     differ  max |diff| 0.000977 (7.3e-05 of max |ref|)
+  NI_GDN_CHUNK: gdn_chunk_prep 0.169 ms + gdn_chunk_scan 0.070 ms = 0.239 ms against gdn_step_parr4_l16 0.061 ms (0.26x)
+    out       47440 / 51200     differ  max |diff| 4.1e-08 (8.9e-07 of max |ref|)
+    state     63036 / 65536     differ  max |diff| 5.96e-07 (1.2e-06 of max |ref|)
+    y           123 / 51200     differ  max |diff| 0.000488 (3.6e-05 of max |ref|)
+  NI_GDN_CHUNK against gdn_step_parr4_l16: worst max |diff| 3.6e-05 of max |ref|
