@@ -1,0 +1,768 @@
+{
+ "922-flint": {
+  "name": "922-flint",
+  "metric": "ms_step",
+  "old_median": 30.38,
+  "new_median": 29.72,
+  "faster_pct": 2.2207267833109112,
+  "pair_range_pct": [
+   1.2020033388981721,
+   2.9946164199192493
+  ],
+  "rounds": 3,
+  "clean_rounds": 0,
+  "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+  "argv": {
+   "old": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/flint_bench",
+    "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flint-4bit",
+    "--rows",
+    "8",
+    "--steps",
+    "128",
+    "--reps",
+    "3"
+   ],
+   "new": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/flint_bench",
+    "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flint-4bit",
+    "--rows",
+    "8",
+    "--steps",
+    "128",
+    "--reps",
+    "3"
+   ]
+  },
+  "env": {
+   "old": {},
+   "new": {}
+  },
+  "bin_sha256": {
+   "old": "9d50dbce517cae9d09076f90ef910d2a70264395915a34987d014066d731de93",
+   "new": "e7b40c8b05e5428cc60909233f8932c4dd44fcb91c102d4ea79ffe4cb9c3de1a"
+  },
+  "legs": [
+   {
+    "round": 0,
+    "arm": "old",
+    "ms_step": 30.38,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.99,
+    "load1_after": 2.2,
+    "gpu": "foreign GPU mean 0.58% max 2.88%"
+   },
+   {
+    "round": 0,
+    "arm": "new",
+    "ms_step": 29.67,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.94,
+    "load1_after": 1.85,
+    "gpu": "foreign GPU mean 0.13% max 0.99%"
+   },
+   {
+    "round": 1,
+    "arm": "new",
+    "ms_step": 29.95,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.84,
+    "load1_after": 1.73,
+    "gpu": "foreign GPU mean 0.77% max 2.13%"
+   },
+   {
+    "round": 1,
+    "arm": "old",
+    "ms_step": 30.31,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.58,
+    "load1_after": 1.97,
+    "gpu": "foreign GPU mean 0.14% max 1.2%"
+   },
+   {
+    "round": 2,
+    "arm": "old",
+    "ms_step": 30.61,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.99,
+    "load1_after": 2.42,
+    "gpu": "foreign GPU mean 3.23% max 12.77%"
+   },
+   {
+    "round": 2,
+    "arm": "new",
+    "ms_step": 29.72,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.86,
+    "load1_after": 2.12,
+    "gpu": "foreign GPU mean 0.14% max 0.76%"
+   },
+   {
+    "round": 3,
+    "arm": "new",
+    "ms_step": 30.09,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.9,
+    "load1_after": 2.34,
+    "gpu": "foreign GPU mean 5.24% max 9.05%"
+   },
+   {
+    "round": 3,
+    "arm": "old",
+    "ms_step": 30.23,
+    "ac_before": false,
+    "ac_after": true,
+    "load1_before": 1.95,
+    "load1_after": 2.12,
+    "gpu": "foreign GPU mean 5.45% max 8.2%; GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   }
+  ]
+ },
+ "923-down-R3": {
+  "name": "923-down-R3",
+  "metric": "us_call",
+  "old_median": 101.155,
+  "new_median": 96.235,
+  "faster_pct": 5.112485062607153,
+  "pair_range_pct": [
+   4.378501763851417,
+   5.848683525861165
+  ],
+  "rounds": 2,
+  "clean_rounds": 0,
+  "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+  "argv": {
+   "old": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_down",
+    "3",
+    "200",
+    "7"
+   ],
+   "new": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_down_d",
+    "3",
+    "200",
+    "7"
+   ]
+  },
+  "env": {
+   "old": {},
+   "new": {}
+  },
+  "bin_sha256": {
+   "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+   "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+  },
+  "legs": [
+   {
+    "round": 0,
+    "arm": "old",
+    "us_call": 100.6,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.34,
+    "load1_after": 2.39,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   },
+   {
+    "round": 0,
+    "arm": "new",
+    "us_call": 96.38,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.4,
+    "load1_after": 2.4,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   },
+   {
+    "round": 1,
+    "arm": "new",
+    "us_call": 96.09,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.12,
+    "load1_after": 2.12,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   },
+   {
+    "round": 1,
+    "arm": "old",
+    "us_call": 101.71,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 3.38,
+    "load1_after": 3.38,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   }
+  ]
+ },
+ "923-down-R4": {
+  "name": "923-down-R4",
+  "metric": "us_call",
+  "old_median": 131.835,
+  "new_median": 126.015,
+  "faster_pct": 4.618497797881216,
+  "pair_range_pct": [
+   4.583893147870088,
+   4.653386454183273
+  ],
+  "rounds": 2,
+  "clean_rounds": 0,
+  "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+  "argv": {
+   "old": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_down",
+    "4",
+    "200",
+    "7"
+   ],
+   "new": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_down_d",
+    "4",
+    "200",
+    "7"
+   ]
+  },
+  "env": {
+   "old": {},
+   "new": {}
+  },
+  "bin_sha256": {
+   "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+   "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+  },
+  "legs": [
+   {
+    "round": 0,
+    "arm": "old",
+    "us_call": 132.33,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 3.77,
+    "load1_after": 3.77,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   },
+   {
+    "round": 0,
+    "arm": "new",
+    "us_call": 126.53,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.9,
+    "load1_after": 2.9,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   },
+   {
+    "round": 1,
+    "arm": "new",
+    "us_call": 125.5,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 3.07,
+    "load1_after": 3.07,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   },
+   {
+    "round": 1,
+    "arm": "old",
+    "us_call": 131.34,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 3.75,
+    "load1_after": 3.75,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler); GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+   }
+  ]
+ },
+ "922-unique-R3": {
+  "name": "922-unique-R3",
+  "metric": "us_call",
+  "old_median": 18.485,
+  "new_median": 7.345000000000001,
+  "faster_pct": 151.66780122532333,
+  "pair_range_pct": [
+   59.79703356752535,
+   161.33879781420762
+  ],
+  "rounds": 4,
+  "clean_rounds": 0,
+  "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+  "argv": {
+   "old": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/moe4_time",
+    "moe4_unique",
+    "3",
+    "200",
+    "7"
+   ],
+   "new": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/moe4_time",
+    "moe4_unique",
+    "3",
+    "200",
+    "7"
+   ]
+  },
+  "env": {
+   "old": {},
+   "new": {}
+  },
+  "bin_sha256": {
+   "old": "75d8bf31741dff66307ad24790934611e70243f86a03a0b7d32b5a803af9ab40",
+   "new": "a6cf6ed2ce1698dcd8e3ae7a205b7d1fa44c7dfc21bc51e3029a52893e4e0f59"
+  },
+  "legs": [
+   {
+    "round": 0,
+    "arm": "old",
+    "us_call": 17.84,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.38,
+    "load1_after": 2.38,
+    "gpu": "foreign GPU mean 4.06% max 4.06%"
+   },
+   {
+    "round": 0,
+    "arm": "new",
+    "us_call": 7.37,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.09,
+    "load1_after": 2.0,
+    "gpu": "foreign GPU mean 0.0% max 0%"
+   },
+   {
+    "round": 1,
+    "arm": "new",
+    "us_call": 7.32,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.77,
+    "load1_after": 1.77,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 1,
+    "arm": "old",
+    "us_call": 19.13,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.78,
+    "load1_after": 1.78,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "old",
+    "us_call": 15.17,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.66,
+    "load1_after": 1.66,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "new",
+    "us_call": 6.86,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.82,
+    "load1_after": 1.82,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "new",
+    "us_call": 12.81,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.95,
+    "load1_after": 1.95,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "old",
+    "us_call": 20.47,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.54,
+    "load1_after": 1.54,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   }
+  ]
+ },
+ "922-unique-R4": {
+  "name": "922-unique-R4",
+  "metric": "us_call",
+  "old_median": 19.58,
+  "new_median": 10.815000000000001,
+  "faster_pct": 81.044845122515,
+  "pair_range_pct": [
+   76.84501845018453,
+   91.20370370370368
+  ],
+  "rounds": 4,
+  "clean_rounds": 0,
+  "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+  "argv": {
+   "old": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/moe4_time",
+    "moe4_unique",
+    "4",
+    "200",
+    "7"
+   ],
+   "new": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/moe4_time",
+    "moe4_unique",
+    "4",
+    "200",
+    "7"
+   ]
+  },
+  "env": {
+   "old": {},
+   "new": {}
+  },
+  "bin_sha256": {
+   "old": "75d8bf31741dff66307ad24790934611e70243f86a03a0b7d32b5a803af9ab40",
+   "new": "a6cf6ed2ce1698dcd8e3ae7a205b7d1fa44c7dfc21bc51e3029a52893e4e0f59"
+  },
+  "legs": [
+   {
+    "round": 0,
+    "arm": "old",
+    "us_call": 19.99,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.41,
+    "load1_after": 1.41,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 0,
+    "arm": "new",
+    "us_call": 10.81,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.3,
+    "load1_after": 1.3,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 1,
+    "arm": "new",
+    "us_call": 10.8,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.61,
+    "load1_after": 1.61,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 1,
+    "arm": "old",
+    "us_call": 20.65,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.42,
+    "load1_after": 2.54,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "old",
+    "us_call": 19.17,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.29,
+    "load1_after": 2.18,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "new",
+    "us_call": 10.84,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.37,
+    "load1_after": 2.37,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "new",
+    "us_call": 10.82,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.64,
+    "load1_after": 1.64,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "old",
+    "us_call": 19.16,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.58,
+    "load1_after": 1.58,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   }
+  ]
+ },
+ "923-gateup-R4": {
+  "name": "923-gateup-R4",
+  "metric": "us_call",
+  "old_median": 214.92000000000002,
+  "new_median": 210.485,
+  "faster_pct": 2.1070385063068686,
+  "pair_range_pct": [
+   -1.9589084779736643,
+   7.520160328291281
+  ],
+  "rounds": 4,
+  "clean_rounds": 0,
+  "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+  "argv": {
+   "old": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_gate_up",
+    "4",
+    "200",
+    "7"
+   ],
+   "new": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_gate_up_d",
+    "4",
+    "200",
+    "7"
+   ]
+  },
+  "env": {
+   "old": {},
+   "new": {}
+  },
+  "bin_sha256": {
+   "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+   "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+  },
+  "legs": [
+   {
+    "round": 0,
+    "arm": "old",
+    "us_call": 225.33,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.95,
+    "load1_after": 1.95,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 0,
+    "arm": "new",
+    "us_call": 209.57,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.2,
+    "load1_after": 2.18,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 1,
+    "arm": "new",
+    "us_call": 219.51,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.91,
+    "load1_after": 1.92,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 1,
+    "arm": "old",
+    "us_call": 215.21,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.8,
+    "load1_after": 1.97,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "old",
+    "us_call": 212.44,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.69,
+    "load1_after": 1.63,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "new",
+    "us_call": 211.4,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.71,
+    "load1_after": 1.74,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "new",
+    "us_call": 208.54,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.77,
+    "load1_after": 1.71,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "old",
+    "us_call": 214.63,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.05,
+    "load1_after": 2.12,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   }
+  ]
+ },
+ "923-gateup-R3": {
+  "name": "923-gateup-R3",
+  "metric": "us_call",
+  "old_median": 168.99,
+  "new_median": 167.23,
+  "faster_pct": 1.0524427435268935,
+  "pair_range_pct": [
+   0.3490401396160525,
+   2.3075240594925717
+  ],
+  "rounds": 4,
+  "clean_rounds": 0,
+  "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+  "argv": {
+   "old": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_gate_up",
+    "3",
+    "200",
+    "7"
+   ],
+   "new": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-153dff95/build/moe4_time",
+    "moe4_gate_up_d",
+    "3",
+    "200",
+    "7"
+   ]
+  },
+  "env": {
+   "old": {},
+   "new": {}
+  },
+  "bin_sha256": {
+   "old": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16",
+   "new": "8c636d978f23fd0ba8c752f4ed5bcd7bbf162d992778403c5c9b2a79abc72f16"
+  },
+  "legs": [
+   {
+    "round": 0,
+    "arm": "old",
+    "us_call": 166.75,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.54,
+    "load1_after": 1.49,
+    "gpu": "foreign GPU mean 0.0% max 0%"
+   },
+   {
+    "round": 0,
+    "arm": "new",
+    "us_call": 166.17,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.33,
+    "load1_after": 1.33,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 1,
+    "arm": "new",
+    "us_call": 168.29,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.38,
+    "load1_after": 1.38,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 1,
+    "arm": "old",
+    "us_call": 169.28,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.41,
+    "load1_after": 1.41,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "old",
+    "us_call": 168.7,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.01,
+    "load1_after": 2.01,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 2,
+    "arm": "new",
+    "us_call": 165.22,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.37,
+    "load1_after": 2.37,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "new",
+    "us_call": 182.88,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 2.36,
+    "load1_after": 2.36,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   },
+   {
+    "round": 3,
+    "arm": "old",
+    "us_call": 187.1,
+    "ac_before": true,
+    "ac_after": true,
+    "load1_before": 1.96,
+    "load1_after": 1.96,
+    "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+   }
+  ]
+ }
+}
