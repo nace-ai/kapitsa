@@ -35,12 +35,18 @@ using json = nlohmann::json;
 // faster. NI_KFLASH_HIST turns it off ("0") or sets its knobs on any model and Mac; unset takes this default. Other
 // targets and Macs keep it off until they are measured. Clover-35B-A3B has the same shape and drafter and is not
 // measured, so the gate also asks for "not Clover".
+// KFlash's online selector update (NI_KFLASH_SELUPD) on by default where the lanes shape matches: off until the interleaved
+// A/B on top of the history lane (#362) says it pays.
+static constexpr bool kSelUpdDefault = false;
 static bool dfl_lanes_shape(const Qwen35Config& c) {
   static const bool m5_pro = Gpu::get().name() == "Apple M5 Pro";
   return m5_pro && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
          c.shared_I == 512;
 }
 static bool dfl_lanes_default(const Qwen35& t) { return dfl_lanes_shape(t.config()) && !dynamic_cast<const Clover*>(&t); }
+bool DFlash2::lanes_default(const std::string& model_dir, const Qwen35Config& c) {
+  return dfl_lanes_shape(c) && !Clover::is_model(model_dir);
+}
 
 static int lowrank_request() {
   const char* v = kenv("LOWRANK");
@@ -243,8 +249,8 @@ void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out) {
   }
 }
 
-const Tensor* DFlash2::own(const Tensor& t, const char* label) {
-  Buffer b = Gpu::get().alloc(t.buf.size, label, /*tracked=*/false);
+const Tensor* DFlash2::own(const Tensor& t, const char* label, bool tracked) {
+  Buffer b = Gpu::get().alloc(t.buf.size, label, tracked);
   memcpy(b.ptr(), t.buf.ptr(), t.buf.size);
   owned_bufs_.push_back(b);
   resident_ += b.size;
@@ -455,8 +461,31 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     hnorm_ = own(expect("hidden_norm.weight", {H}), "dfl_norm");
     norm_ = own(expect("norm.weight", {H}), "dfl_norm");
     if (!v1) {
-      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
-      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
+      // NI_KFLASH_SELUPD=<lr>: the codebooks the GPU rewrites after each tree verify (dfl_sel_update) are tracked
+      // buffers, so the next drafting pass's reads wait for the writes; with it off they stay untracked, as before
+      const char* su = kenv("SELUPD");
+      selupd_lr_ = su && *su ? float(atof(su)) : kSelUpdDefault && dfl_lanes_default(tg_) ? 0.02f : 0.0f;
+      if (!(selupd_lr_ > 0.0f)) selupd_lr_ = 0.0f;
+      const char* st = kenv("SELUPD_TAU");
+      if (st && *st && atof(st) > 0) selupd_tau_ = float(atof(st));
+      const bool upd = selupd_lr_ > 0.0f;
+      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook", upd);
+      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook", upd);
+      if (upd) {  // fp32 masters of both codebooks: 2 x V x 256 x 4 B (about 0.5 GB at V = 248K), only when asked for
+        const size_t n = size_t(V) * kRank;
+        selupd_A_ = Gpu::get().alloc(n * 4, "dfl_selupd_A");
+        selupd_B_ = Gpu::get().alloc(n * 4, "dfl_selupd_B");
+        owned_bufs_.push_back(selupd_A_);
+        owned_bufs_.push_back(selupd_B_);
+        resident_ += selupd_A_.size + selupd_B_.size;
+        for (int c = 0; c < 2; ++c) {
+          const uint16_t* src = (c ? cbB_ : cbA_)->buf.as<uint16_t>();
+          uint32_t* dst = (c ? selupd_B_ : selupd_A_).as<uint32_t>();
+          for (size_t i = 0; i < n; ++i) dst[i] = uint32_t(src[i]) << 16;  // bf16 -> fp32 is exact
+        }
+        logi("KFlash: online selector update on (lr %g, tau %g; fp32 masters %.0f MB; %s, NI_KFLASH_SELUPD=0 turns it off)",
+             selupd_lr_, selupd_tau_, 2.0 * double(n) * 4 / 1048576.0, su && *su ? "NI_KFLASH_SELUPD" : "default");
+      }
     }
     // the history lane: NI_KFLASH_HIST=0 off, <nmin>,<nmax>,<cap> on with those knobs, unset: the default's 3,8,4 where
     // dfl_lanes_default says so
@@ -1078,7 +1107,7 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
 }
 
 size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
-                           size_t* per_slot, size_t* at_prefill, int block_rows) {
+                           size_t* per_slot, size_t* at_prefill, int block_rows, bool lanes) {
   namespace fs = std::filesystem;
   json c;
   if (std::ifstream f(dir + "/config.json"); f) {
@@ -1209,6 +1238,11 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     const size_t row = C + size_t(target.lin_hv) * (target.lin_dk + target.lin_dv + 1);
     if (per_slot) *per_slot += lin * extra * row * 4;
   }
+  // the online selector update's fp32 masters (see the constructor): off when NI_KFLASH_SELUPD says so or sets no rate
+  const char* su = kenv("SELUPD");
+  const bool selupd = su && *su ? atof(su) > 0 : lanes && kSelUpdDefault;
+  const bool v1_drafter = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
+  if (selupd && !v1_drafter) w += 2 * V * kRank * 4;
   return w + b + pf;
 }
 
@@ -2230,6 +2264,16 @@ void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const Sampli
     e.val(4, ap);
     e.buf(5, kf_live_); e.buf(6, s.pend_path); e.buf(7, gst_);
     e.dispatch(1, 1, 1, 32);
+    // #316 idea 3: this cycle's draft (sel_, cand_i_, cand_v_: the next drafting half is committed after this verify) against
+    // what the verify accepted; not a grammar-masked cycle's (its acceptance is distorted, as for the budget's observe())
+    if (selupd_lr_ > 0.0f && s.mask_rows == 0) {
+      struct SelUpd { float lr, tau; uint32_t nslots, V; } up{selupd_lr_, selupd_tau_, uint32_t(block() - 1), uint32_t(cfg_.vocab)};
+      e.use(dpipe("dfl_sel_update"));
+      e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, sel_); e.buf(3, s.tok); e.buf(4, tree_buf_); e.buf(5, gst_);
+      e.buf(6, selupd_A_); e.buf(7, selupd_B_); e.buf(8, cbA_->buf); e.buf(9, cbB_->buf);
+      e.val(10, up);
+      e.dispatch(1, 1, 1, 256);
+    }
     tg_.encode_kv_tree_compact(e, s, P, tree_buf_);
     s.pend_tree = true;
     gst_tree_ = true;
