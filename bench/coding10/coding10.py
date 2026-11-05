@@ -46,6 +46,7 @@ ARM_DEFAULTS = {
     "tool_runtime": "builtin", # "builtin" or "littlecoder" (littlecoder/tools_impl.py, a workdir per answer)
     "write_guard": True,       # littlecoder runtime: write_file refuses existing files
     "text_tool_fallback": False,  # parse tool calls the model printed as text (littlecoder parser)
+    "autorun": False,          # after write_file/edit_file of solution.py, append the examples' test result (saves a run turn)
     "thinking_budget": None,   # N: thinking turn capped at N tokens; if cut, re-ask with thinking off (little-coder)
     "retry_style": "plain",    # "plain" or "lc" (little-coder's "The tests failed. Output: ..." turn)
 }
@@ -201,6 +202,12 @@ def solve(url, arm, item):
                 else:
                     if arm["tool_runtime"] == "littlecoder":
                         out = tools_impl.run_tool(c["function"]["name"], args, workdir, write_guard=arm["write_guard"])
+                        sol = os.path.join(workdir, "solution.py")
+                        if (arm["autorun"] and c["function"]["name"] in ("write_file", "edit_file")
+                                and item.get("examples") and os.path.exists(sol)):
+                            with open(sol) as f:
+                                ok_ex, out_ex = check(f.read(), item["examples"])
+                            out += "\nexamples run automatically: " + ("ALL PASS" if ok_ex else "FAILED\n" + out_ex)
                     else:
                         out = tool_exec(c["function"]["name"], args, state)
                 messages.append({"role": "tool", "tool_call_id": c.get("id", ""), "content": out})

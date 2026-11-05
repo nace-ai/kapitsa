@@ -19,6 +19,10 @@ models) becomes `arms/lc_best.json`, and the final table goes into the task summ
 | 3 | only write_file and run_python, at most 4 turns |
 | 4 | on round 1 (best 4B, 30/30): reply DONE once tests pass, solution.py is the answer (no code repeat) |
 | 5 | round 4 + Qwen's non-thinking sampling (round 2 gave the 9B 30/30) |
+| 6 | round 5 + the examples run automatically after each write/edit of solution.py (saves the run_python turn) |
+| 7 | round 6 + a compact system prompt (644 to 178 words; tool cards cut to one line) |
 
 Rounds 1-3 (3 reps, 5 Nov 03:30): 4B opt0 30/30 0.4 s; lc 29/30 5.0 s; r1 30/30 2.8 s; r2 29/30 2.7 s; r3 29/30 3.1 s.
 9B opt0 30/30 0.7 s; lc 28/30 6.5 s; r1 29/30 6.2 s; r2 30/30 6.7 s; r3 26/30 7.0 s. No arm meets the stop line; r3 dropped.
+
+Rounds 4-5 (3 reps, 5 Nov 10:13): 4B opt0 30/30 0.4 s; r1 30/30 3.5 s; r4 30/30 1.7 s; r5 30/30 1.6 s. 9B not run: its weights are on the external drive, which was unplugged (server could not start).
