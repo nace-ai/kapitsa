@@ -29,6 +29,10 @@ struct Seq {
   // tree acceptance writes), not rows 0 .. n_pend
   Buffer pend_path;
   bool pend_tree = false;
+  // Qwen3.5 lazy GDN fold (Qwen35::encode_verify8): accepted rows of an earlier verify not yet stored into rec (per
+  // recurrent layer: k / g / d rows, n_back of them); every pass but the next tree verify folds them first
+  std::vector<Buffer> back_k, back_g, back_d;
+  int n_back = 0;
   int pend_pos = 0;                // position of the first pending row (Nemotron-H)
   int pend_half = 0;               // which half of pend_qkv holds the pending rows (Nemotron-H: 2 x 8 rows)
   Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)

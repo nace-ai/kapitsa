@@ -1097,6 +1097,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
   enc_embed(e, s.tok, pos, R, x_);
+  flush_backlog(e, s);
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];
@@ -1145,6 +1146,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
 }
 
 void Qwen35::encode_flush(Encoder& e, Seq& s) {
+  flush_backlog(e, s);  // (its rows precede the pending ones)
   if (s.n_pend == 0) {
     s.pend_tree = false;
     return;

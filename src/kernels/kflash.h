@@ -227,6 +227,51 @@ NI_INLINE void kf_build_impl(const device float* clq, const device int* ctok, co
     live[0] = n;
   }
 }
+// A built tree whose rows are all live (n = m <= 8, a dense target's 8-row verify) reordered depth first (pre-order,
+// children in insertion order: the likelier branch first). A row then follows its parent except where a branch starts,
+// so a verify that rebuilds a jumping row's recurrent state from its ancestors (the Gated DeltaNet tree step) replays
+// about half as many updates. Every row keeps its token, parent, depth and path; only the slots move, and a row's numbers
+// depend on its position and path alone, so the verify's outputs are the same. Lane 0 (after kf_build_impl's lane 0).
+NI_INLINE void kf_dfs_reorder(device int* tree, device int* tokens, uint P) {
+  const uint m = uint(tree[kKfNodes]);
+  if (uint(tree[kKfN]) != m || m < 3 || m > 8) return;
+  int par[8], dep[8], lq[8], sc[8], tok[8];
+  for (uint r = 0; r < m; ++r) {
+    par[r] = tree[kKfPar + r];
+    dep[r] = tree[kKfDep + r];
+    lq[r] = tree[kKfLq + r];
+    sc[r] = tree[kKfScore + r];
+    tok[r] = tokens[P + r];
+  }
+  uint order[8], nidx[8], st[8], ns = 0, no = 0;
+  st[ns++] = 0;
+  while (ns) {
+    const uint v = st[--ns];
+    order[no] = v;
+    nidx[v] = no++;
+    for (int c = int(m) - 1; c > int(v); --c)  // children of v, pushed last-first (popped in insertion order)
+      if (par[c] == int(v)) st[ns++] = uint(c);
+  }
+  uint jump = 0;
+  for (uint r = 0; r < m; ++r) {
+    const uint o = order[r];
+    const int pr = par[o] < 0 ? -1 : int(nidx[par[o]]);
+    tree[kKfPar + r] = pr;
+    tree[kKfDep + r] = dep[o];
+    tree[kKfLq + r] = lq[o];
+    tree[kKfScore + r] = sc[o];
+    tree[kKfMask + r] = (pr < 0 ? 0 : tree[kKfMask + pr]) | int(1u << r);
+    tokens[P + r] = tok[o];
+    if (r > 0 && pr != int(r) - 1) jump |= 1u << r;
+  }
+  float E = 1.0f;
+  for (uint r = 1; r < m; ++r) {  // E(n) in the new slot order (E(m), the one a full tree reads, is unchanged)
+    E += metal::precise::exp(as_type<float>(tree[kKfScore + r]));
+    tree[kKfE + r + 1] = as_type<int>(E);
+  }
+  tree[kKfJump] = int(jump);
+}
+
 [[kernel]] void kf_build(const device float* clq [[buffer(0)]], const device int* ctok [[buffer(1)]],
                          const device int* cnext [[buffer(2)]], constant KfParams& kp [[buffer(3)]],
                          device int* tree [[buffer(4)]], device int* tokens [[buffer(5)]],

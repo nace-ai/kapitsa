@@ -337,7 +337,7 @@ class DFlash2 {
     const Tensor *in_w = nullptr, *post_w = nullptr, *qn = nullptr, *kn = nullptr;
     const Tensor *ac_base = nullptr, *mc_base = nullptr;
     QLinear ac, q, kv, o, mc, gate, up, down;  // kv: row view of kv_all_
-    Qwen35::PackedCoeffBuffers gate_packed, up_packed, down_packed;
+    Qwen35::PackedCoeffBuffers gate_packed, up_packed, down_packed, q_packed, kv_packed, o_packed;
   };
 
   void load_config(const std::string& dir);
@@ -429,6 +429,7 @@ class DFlash2 {
   // into their table
   bool v8_ = false;
   Buffer v8t_, v8h_, v8hs_;
+  Qwen35::PackedCoeffBuffers kv_all_packed_, fc_packed_;  // the ring commit's K|V projection (NI_V8_PACKED_COEFF_NF1)
   // Reduced draft head (NI_DFLASH_HEAD=n rows, 0 = the full vocabulary): the target lm_head rows of the n
   // highest-ranked token ids (a ranked id list from NI_DFLASH_HEAD_IDS, kHeadRows by default; else id order =
   // the tokenizer's BPE merge order, kHeadRowsIdOrder) plus every id >= the first end-of-sequence id
@@ -436,6 +437,13 @@ class DFlash2 {
   // uses the full head, so outputs are unchanged).
   QLinear head_sub_;
   Qwen35::PackedCoeffBuffers head_packed_;
+  // The low-rank shortlist head (build_lowrank; NI_DFLASH_LOWRANK): logits ~ (x A) B^T pick each chunk's top 16,
+  // the head's rows rescore them (dfl_lr_rescore)
+  QLinear lrA_, lrB_;
+  Qwen35::PackedCoeffBuffers lrA_packed_;
+  uint32_t lr_r_ = 0;
+  Buffer lr_y_, lr_xh_, lr_xs_, lr_perm_;
+  void build_lowrank(uint32_t r);
   Buffer head_ids_;
   uint32_t head_n_ = 0;  // 0: full head
   void build_head(int n, bool explicit_n);

@@ -5,6 +5,7 @@
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
 // attention, exact-code MMA operands, a separate block K/V scratch.
 #include "model/dflash2.h"
+#include "hub/hub.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -544,6 +545,16 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     if (v && *v) build_head(atoi(v), true);
     else build_head(0, false);
   }
+  {
+    // The low-rank shortlist head (SlimSpec, arXiv 2605.10453, without training: build_lowrank): the reduced head's
+    // 4-bit GEMM (98,304 rows, 134 MB per drafting pass) becomes a rank-768 one (40 MB) whose chunk top-16s the
+    // head's own rows rescore. On the 10-core M4, 4B: drafting pass -0.75 ms, tok/cycle unchanged on 7 prompts (the
+    // shortlist holds the true top 16's probability mass to 0.9999). Default on the M4 family, where it was measured;
+    // NI_DFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
+    const char* v = getenv("NI_DFLASH_LOWRANK");
+    const int r = v && *v ? atoi(v) : Gpu::get().name().rfind("Apple M4", 0) == 0 ? 768 : 0;
+    if (r > 0 && v8_ && cfg_.v1) build_lowrank(uint32_t(r));
+  }
   load_v8_packed_coeff();
   Gpu::get().make_resident(owned_bufs_);
   // Dynamic verify depth on MoE targets (default tau 0.5, NI_DFLASH_DYN=tau overrides, 0 = off): the expert
@@ -694,15 +705,95 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
        "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
 }
 
+bool dfl_lowrank_factors(const uint32_t* w, const uint16_t* sc, const uint16_t* bi, uint32_t N, uint32_t K, uint32_t r,
+                         std::vector<float>& A, std::vector<float>& P);
+void dfl_lowrank_rows(const uint32_t* w, const uint16_t* sc, const uint16_t* bi, uint32_t K, uint32_t r,
+                      const std::vector<float>& P, const std::vector<uint32_t>& order, std::vector<uint16_t>& out);
+
+void DFlash2::build_lowrank(uint32_t r) {
+  const QLinear& hq = head_sub_;
+  const uint32_t K = uint32_t(cfg_.H);
+  if (!head_n_ || !hq.q4() || hq.K != K || head_n_ % 2048 || K % 64 || r % 64 || r >= K) return;
+  const double t0 = now_ms();
+  std::vector<float> A, P;
+  // The factors depend on the head's weights alone: cached (~/.cache/kapitsa/kflash), keyed by the head's scales,
+  // biases and shape (2-3 s to compute on an M4, 16 MB at r = 768)
+  uint64_t key = 1469598103934665603ull;
+  auto mix = [&](const void* p, size_t n) {
+    const uint8_t* b = static_cast<const uint8_t*>(p);
+    for (size_t i = 0; i < n; ++i) key = (key ^ b[i]) * 1099511628211ull;
+  };
+  const uint32_t shape[4] = {head_n_, K, r, 1u};  // [3]: the factors' version
+  mix(shape, sizeof shape);
+  mix(hq.s->buf.ptr(), size_t(head_n_) * (K / 64) * 2);
+  mix(hq.b->buf.ptr(), size_t(head_n_) * (K / 64) * 2);
+  char name[64];
+  snprintf(name, sizeof name, "dflash2-lowrank-%016llx.bin", (unsigned long long)key);
+  const std::string dir = hub::home_dir() + "/kflash", path = dir + "/" + name;
+  const size_t n = size_t(r) * K;
+  bool cached = false;
+  if (std::ifstream f{path, std::ios::binary}) {
+    A.resize(n);
+    P.resize(n);
+    f.read(reinterpret_cast<char*>(A.data()), std::streamsize(n * 4));
+    f.read(reinterpret_cast<char*>(P.data()), std::streamsize(n * 4));
+    cached = bool(f) && f.gcount() == std::streamsize(n * 4);
+  }
+  if (!cached) {
+    if (!dfl_lowrank_factors(hq.w->buf.as<uint32_t>(), hq.s->buf.as<uint16_t>(), hq.b->buf.as<uint16_t>(), head_n_, K,
+                             r, A, P))
+      return;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::string tmp = path + ".tmp";
+    {
+      std::ofstream f(tmp, std::ios::binary);
+      f.write(reinterpret_cast<const char*>(A.data()), std::streamsize(n * 4));
+      f.write(reinterpret_cast<const char*>(P.data()), std::streamsize(n * 4));
+    }
+    std::filesystem::rename(tmp, path, ec);
+  }
+  const double t1 = now_ms();
+  // shortlist position j = head row (j % 2048) x chunks + j / 2048: each 2048-wide top-16 chunk (dfl_top16) strides
+  // over the whole head, where id order would pack the likely tokens into the first chunks
+  const uint32_t nc = head_n_ / 2048;
+  std::vector<uint32_t> order(head_n_);
+  for (uint32_t j = 0; j < head_n_; ++j) order[j] = (j % 2048) * nc + j / 2048;
+  std::vector<uint16_t> brows;
+  dfl_lowrank_rows(hq.w->buf.as<uint32_t>(), hq.s->buf.as<uint16_t>(), hq.b->buf.as<uint16_t>(), K, r, P, order, brows);
+  Gpu& g = Gpu::get();
+  Buffer ab = g.alloc(size_t(r) * K * 2, "dfl_lr_a_bf16", false);
+  for (size_t i = 0; i < A.size(); ++i) ab.as<uint16_t>()[i] = f32_to_bf16(A[i]);
+  Buffer bb = g.alloc(brows.size() * 2, "dfl_lr_b_bf16", false);
+  memcpy(bb.ptr(), brows.data(), bb.size);
+  const Tensor ta{ab, DType::BF16, {int64_t(r), int64_t(K)}}, tb{bb, DType::BF16, {int64_t(head_n_), int64_t(r)}};
+  lrA_ = quantize({&ta}, "dfl_lr_a");
+  lrB_ = quantize({&tb}, "dfl_lr_b");
+  g.release(ab);
+  g.release(bb);
+  lr_perm_ = g.alloc(size_t(head_n_) * 4, "dfl_lr_perm", false);
+  memcpy(lr_perm_.ptr(), order.data(), lr_perm_.size);
+  owned_bufs_.push_back(lr_perm_);
+  lr_y_ = g.alloc(size_t(8) * r * 4, "dfl_lr_y");
+  lr_xh_ = g.alloc(size_t(16) * r * 2, "dfl_lr_xh");
+  lr_xs_ = g.alloc(size_t(r) / 64 * 8 * 4, "dfl_lr_xs");
+  lr_r_ = r;
+  logi("DFlash2: low-rank shortlist head r=%u (factors %s in %.0f ms, rows %.0f ms)", r, cached ? "cached" : "computed",
+       t1 - t0, now_ms() - t1);
+}
+
 void DFlash2::load_v8_packed_coeff() {
   if (!v8_ || bits_ != 4 || !cfg_.v1 || cfg_.H != 2560 || cfg_.I != 9216 || cfg_.NL != 6 ||
       !Qwen35::v8_packed_coeff_on(tg_.config())) return;
   const double start = now_ms();
   size_t bytes = 0, count = 0, compressed = 0, blocks = 0;
-  auto pack = [&](const QLinear& q, Qwen35::PackedCoeffBuffers& out) {
+  auto pack = [&](const QLinear& q, Qwen35::PackedCoeffBuffers& out, uint32_t ks = 0) {
     if (!q || !q.q4() || q.exl3 || q.q20 || !q.N || !q.K || q.K % 64) return;
-    const auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
-                                               q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
+                                          q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    out.ks = ks ? ks : Qwen35::v8_packed_ks(q.K);
+    out.rg = out.ks ? Qwen35::v8_packed_rg(q.N) : 1u;
+    if (out.ks) interleave_packed_slices(image, q.N, q.K / 64, out.ks, out.rg);
     out.payload = Gpu::get().alloc(image.words.size() * 4, "dfl_packed_coeff_payload", false);
     owned_bufs_.push_back(out.payload);
     memcpy(out.payload.ptr(), image.words.data(), out.payload.size);
@@ -717,9 +808,18 @@ void DFlash2::load_v8_packed_coeff() {
     pack(l.gate, l.gate_packed);
     pack(l.up, l.up_packed);
     pack(l.down, l.down_packed);
+    pack(l.q, l.q_packed);
+    pack(l.kv, l.kv_packed);
+    pack(l.o, l.o_packed);
   }
+  pack(kv_all_, kv_all_packed_);
+  // the ring commit's fc (K = 8 x 2560): 8 k-slices (the packed GEMM's most; enc_qmm8 runs a given image at 8)
+  static const bool fc_env = !getenv("NI_DFL_FC_PACK") || atoi(getenv("NI_DFL_FC_PACK")) != 0;
+  if (fc_env && fc_.K / 64 >= 256 && (fc_.K / 64 / 2) % 8 == 0) pack(fc_, fc_packed_, 8u);
   // A full head uses the target's existing image; only the reduced copy belongs to the drafter.
-  if (head_n_) pack(head_sub_, head_packed_);
+  // (with the low-rank shortlist the head's rows are only rescored, from their plain layout: no image)
+  if (head_n_ && !lr_r_) pack(head_sub_, head_packed_);
+  if (lr_r_) pack(lrA_, lrA_packed_);
   resident_ += bytes;
   logi("NI_V8_PACKED_COEFF_NF1: packed %zu static draft projections, %.1f MiB in %.0f ms; compressed %zu/%zu blocks",
        count, double(bytes) / (1024 * 1024), now_ms() - start, compressed, blocks);
@@ -777,7 +877,7 @@ void DFlash2::alloc_buffers() {
     v8_ = B == 8 && (v && *v ? atoi(v) != 0 : default_v8(H, tg_.config().moe, tg_.lm_head().q4()));
   }
   if (v8_) {
-    v8t_ = g.alloc(8 * H * 2, "dfl_v8_table");
+    v8t_ = g.alloc(8 * std::max<size_t>({H, 4096, nH}) * 2, "dfl_v8_table");  // (H, the attention output, the fc input)
     v8h_ = g.alloc(8 * I * 2, "dfl_v8_h");
     v8hs_ = g.alloc(I / 64 * 8 * 4, "dfl_v8_hs");
     resident_ += v8t_.size + v8h_.size + v8hs_.size;
@@ -1632,8 +1732,15 @@ void DFlash2::enc_commit_from(Encoder& e, DFlashSeq& d, int m, const Buffer& src
     e.buf(4, gst_);
     e.dispatch(B, (nH / 64 + 7) / 8, 1, 256);
   }
-  const float fs = tw_for({{&fc_, y8_, H, 1.0f}}, nH) ? 16.0f : 1.0f;  // (see encode_prefill_commit)
-  enc_qmm8(e, {{&fc_, y8_, H, 16.0f / fs}}, xh_, xs_, nH, nH, int(BT));
+  // the packed verify GEMM (no output scale: the norm takes the 16, as on the tensor path)
+  const bool fcp = v8_ && fc_packed_ && BT == 1 && size_t(nH) * 16 <= v8t_.size;
+  const float fs = fcp || tw_for({{&fc_, y8_, H, 1.0f}}, nH) ? 16.0f : 1.0f;  // (see encode_prefill_commit)
+  if (fcp) {
+    enc_to_v8(e, xh_, nH, v8t_);
+    tg_.enc_qmm8(e, {{&fc_, y8_, H, false, fc_packed_}}, 8, v8t_, xs_);
+  } else {
+    enc_qmm8(e, {{&fc_, y8_, H, 16.0f / fs}}, xh_, xs_, nH, nH, int(BT));
+  }
   {
     kp::DflNorm p{H, cfg_.eps, fs, 1u};
     e.use(dpipe("dfl_norm_x8"));
@@ -1641,7 +1748,12 @@ void DFlash2::enc_commit_from(Encoder& e, DFlashSeq& d, int m, const Buffer& src
     e.val(5, p);
     e.dispatch(B, 1, 1, 256);
   }
-  enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, 1.0f}}, xh_, xs_, H, H, int(BT));
+  if (v8_ && kv_all_packed_ && BT == 1) {  // the target's packed verify GEMM (the X8 table permuted to the verify's)
+    enc_to_v8(e, xh_, H, v8t_);
+    tg_.enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, false, kv_all_packed_}}, 8, v8t_, xs_);
+  } else {
+    enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, 1.0f}}, xh_, xs_, H, H, int(BT));
+  }
   enc_commit_kv(e, d, kv8_, gpu ? -1 : m, d.ctx);
   if (!gpu) d.ctx += m;
 }
@@ -1720,7 +1832,15 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   dfl_attn_plan(P, old_attn ? uint32_t(max_splits_) : splits, old_attn ? 256u : 0u, &lo, &chunk, &nsplit, d.valid_lo);
   if (gpu) {  // the kernels derive the plan from the GPU-side P: [max(P - 2047, valid_lo), P)
     lo = uint32_t(std::max(d.valid_lo, 0));
-    chunk = old_attn ? kGpuChunk : 0u;  // 0: dfl_attn_geom's plan (at most `nsplit` splits)
+    // NI_DFLASH_ATTN_MINC: splits of at least this many context keys (the default plan: the most splits of >= 32 keys).
+    // 128 on the 10-core M4, whose few cores the 16 short splits of a short context leave waiting on the reduce: the
+    // 4B's drafting pass 5.86 -> 5.75 ms after an 85-token prompt, server decode 144.9 -> 145.4 tok/s (interleaved, 3 x 3
+    // runs); from 2048 keys on (the window) the plans agree
+    static const uint32_t minc = [] {
+      if (const char* v = getenv("NI_DFLASH_ATTN_MINC")) return uint32_t(atoi(v));
+      return Gpu::get().name() == "Apple M4" && Gpu::get().core_count() <= 10 ? 128u : 0u;
+    }();
+    chunk = old_attn ? kGpuChunk : minc > 32 ? (0x80000000u | (minc + 31) / 32 * 32) : 0u;  // 0: dfl_attn_geom's plan
     nsplit = old_attn ? (kCtxKeep + kGpuChunk - 1) / kGpuChunk : splits;  // the grid; empty splits exit
   }
   const kp::DflConv cp{H, G, cfg_.eps};
@@ -1750,7 +1870,16 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     const Buffer& ah = v1 ? xh_ : xh2_;
     const Buffer& as = v1 ? xs_ : xs2_;
     dbg(e, "a" + sfx, ah, size_t(8) * H * 2);
-    if (!(skip & 8192)) enc_qmm8(e, {{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, ah, as, H, H, int(BT));
+    // the v1 drafter on the packed-coefficient image (NI_V8_PACKED_COEFF_NF1): its q|kv and o projections through the
+    // target's packed verify GEMM, as its MLP and head (the X8 table permuted to the verify's)
+    const bool pq = v1 && v8_ && Ly.q_packed && Ly.kv_packed && Ly.o_packed && BT == 1;
+    if (skip & 8192) {
+    } else if (pq) {
+      enc_to_v8(e, ah, H, v8t_);
+      tg_.enc_qmm8(e, {{&Ly.q, q_, 4096, false, Ly.q_packed}, {&Ly.kv, kv_, 2048, false, Ly.kv_packed}}, 8, v8t_, as);
+    } else {
+      enc_qmm8(e, {{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, ah, as, H, H, int(BT));
+    }
     // simdgroup-matrix attention by default (35B full window: 3.60 vs 4.52 ms per pass);
     // NI_DFLASH_ATTN=scalar selects the fp32 scalar kernel
     static const bool mma_env = !(getenv("NI_DFLASH_ATTN") && std::string(getenv("NI_DFLASH_ATTN")) == "scalar");
@@ -1797,7 +1926,12 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       }
     }
     dbg(e, "o" + sfx, xh_, size_t(8) * 4096 * 2);
-    proj({{&Ly.o, u_, H, 1.0f}}, 4096);
+    if (pq && !(skip & 8192)) {
+      enc_to_v8(e, xh_, 4096, v8t_);
+      tg_.enc_qmm8(e, {{&Ly.o, u_, H, false, Ly.o_packed}}, 8, v8t_, xs_);
+    } else {
+      proj({{&Ly.o, u_, H, 1.0f}}, 4096);
+    }
     dbg(e, "u" + sfx, u_, size_t(8) * H * 4);
     if (v1) {
       res_norm(Ly.post_w);
@@ -1863,6 +1997,18 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   const QLinear& head = draft_head();
   const uint32_t Vd = draft_vocab();  // draft logit columns: the vocabulary or the reduced head
   if (skip & 4096) {
+  } else if (v1 && lr_r_ && v8_ && B == 8) {
+    // the low-rank shortlist head (build_lowrank): logits ~ (x A) B^T, in the shortlist's strided row order; the
+    // chunks' top-16 are rescored exactly below
+    enc_to_v8(e, xh_, H, v8t_);
+    tg_.enc_qmm8(e, {{&lrA_, lr_y_, lr_r_, false, lrA_packed_}}, 8, v8t_, xs_);
+    kp::DflTop pr{lr_r_, 0, 0};
+    e.use(dpipe("dfl_x8_from_f32"));
+    e.buf(0, lr_y_); e.buf(1, lr_xh_); e.buf(2, lr_xs_);
+    e.val(3, pr);
+    e.dispatch(8, (lr_r_ / 64 + 7) / 8, 1, 256);
+    enc_to_v8(e, lr_xh_, lr_r_, v8t_);
+    tg_.enc_qmm8(e, {{&lrB_, logits_, Vd, false}}, 8, v8t_, lr_xs_);
   } else if (v1) {  // no candidate selector
     if (v8_) {
       enc_to_v8(e, xh_, H, v8t_);
@@ -1896,8 +2042,20 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.use(dpipe("dfl_top16"));
     e.buf(0, logits_, size_t(Vd) * 4); e.buf(1, head_n_ ? head_ids_ : tk_i_); e.buf(2, tk_v_); e.buf(3, tk_i_);
     e.val(4, p1);
-    e.val(5, no);
+    const bool lr = lr_r_ && v1 && v8_ && B == 8 && !(skip & 4096);
+    const uint32_t pos_ids = 0;  // the low-rank shortlist: positions, which dfl_lr_rescore maps
+    if (lr) e.val(5, pos_ids);
+    else e.val(5, no);
     e.dispatch(ntg, D, 1, 256);
+    if (lr) {  // the shortlist's exact logits (the head's 4-bit rows, x fp32) and token ids
+      kp::DflTop pr{H, ntg * 16, 0};
+      e.use(dpipe("dfl_lr_rescore"));
+      // (stage 1's rows are the logits' rows 1..)
+      e.buf(0, n_, size_t(H) * 4); e.buf(1, head_sub_.w->buf); e.buf(2, head_sub_.s->buf); e.buf(3, head_sub_.b->buf);
+      e.buf(4, head_ids_); e.buf(5, lr_perm_); e.buf(6, tk_v_); e.buf(7, tk_i_);
+      e.val(8, pr);
+      e.dispatch((ntg * 16 + 7) / 8, D, 1, 256);
+    }
     kp::DflTop p2{ntg * 16, ntg * 16, 1};
     e.use(dpipe("dfl_top16"));  // every dispatch sets its pipeline (NI_PROFILE splits encoders)
     e.buf(0, tk_v_); e.buf(1, tk_i_); e.buf(2, cand_v_); e.buf(3, cand_i_);
@@ -1932,7 +2090,11 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       // the GPU-driven anchor: the builder's P is unknown to the host, so the tokens' base comes from the drafter state
       // (kf_build reads P from its params: the host passes P; a GPU-driven pass passes the sentinel and the kernel reads
       // gst) -- see kf_build_gpu below
-      const kp::KfBuild bp{16u, Pk, 0u, 0u};
+      // NI_KFLASH_DFS (default on for dense targets): a full tree's rows in depth-first order (kf_dfs_reorder: about half
+      // the Gated DeltaNet replays of jumping rows; the same outputs)
+      static const int dfs_env = getenv("NI_KFLASH_DFS") ? atoi(getenv("NI_KFLASH_DFS")) : -1;
+      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe : dfs_env != 0) ? 1u : 0u;
+      const kp::KfBuild bp{16u, Pk, 0u, dfs};
       e.use(dpipe(gpu ? "kf_build_gpu" : "kf_build"));
       e.buf(0, kf_clq_); e.buf(1, kf_tok_); e.buf(2, kf_next_);
       e.val(3, kp);

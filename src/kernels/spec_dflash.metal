@@ -73,7 +73,8 @@ NI_INLINE void dfl_attn_geom(const device uint* gst, thread uint& P, thread uint
   if (P != kDflGpu) return;
   P = gst[0];
   lo = min(max(P > 2047u ? P - 2047u : 0u, lo), P);
-  if (chunk == 0) chunk = max(32u, ((P - lo + nsplit - 1) / nsplit + 31) / 32 * 32);
+  // chunk 0: the smallest multiple of 32 keys that needs at most nsplit splits; 0x80000000 | m: and at least m keys
+  if (chunk == 0 || (chunk & 0x80000000u)) chunk = max(chunk ? chunk & 0x7fffffffu : 32u, ((P - lo + nsplit - 1) / nsplit + 31) / 32 * 32);
   nsplit = max(1u, (P - lo + chunk - 1) / chunk);
 }
 
@@ -1621,6 +1622,7 @@ struct DflSelectParams {
   threadgroup uint nf, nodes;
   kf_build_impl(clq, ctok, cnext, kp, tree, tokens, live, p.K, dfl_pos(p.P, gst), p.root, fs, fq, fe, ns, tdep, nf,
                 nodes, lane);
+  if (lane == 0 && p.pad == 1u) kf_dfs_reorder(tree, tokens, dfl_pos(p.P, gst));
 }
 
 // ---- acceptance (SPEC §8): verify rows -> accepted length a and the bonus / correction token ----
@@ -1873,5 +1875,53 @@ struct DflPermParams {
     const uint kk = 16 * (fm / 2) + 8 * (f / 4) + (f % 4) + 4 * (fm % 2);
     xh[fn * p.K + g * 64 + kk] = table[(g * 32 + lane) * 16 + 2 * f];
     xh[(fn + 1) * p.K + g * 64 + kk] = table[(g * 32 + lane) * 16 + 2 * f + 1];
+  }
+}
+
+// The low-rank shortlist head (DFlash2::build_lowrank): fp32 rows [8][K] (x A) -> the X8 table of the B GEMM
+// (p.n = K). grid (8, blocks) x 256.
+[[kernel]] void dfl_x8_from_f32(const device float* src [[buffer(0)]], device half* xh [[buffer(1)]],
+                                device float* xs [[buffer(2)]], constant DflTopParams& p [[buffer(3)]],
+                                uint2 tg [[threadgroup_position_in_grid]], uint2 ntgs [[threadgroups_per_grid]],
+                                uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                uint lane [[thread_index_in_simdgroup]]) {
+  const uint r = tg.x, K = p.n;
+  for (uint g = tg.y * nsg + sg; g < K / 64; g += nsg * ntgs.y) {
+    const float2 v = *(const device float2*)(src + r * K + g * 64 + 2 * lane);
+    dfl_put2(xh, xs, r, K, g, lane, v.x, v.y);
+  }
+}
+// The shortlist's exact logits: candidate c of row r (dfl_top16's stage 1 over the approximate logits: a position,
+// perm -> the head row) scored with the head's 4-bit row and x fp32 [rows][H]; its id -> the token id (ids). The
+// stage-2 dfl_top16 then picks the row's 16. p.n = H, p.ld = candidates per row.
+// grid (ceil(ld / 8), rows) x 256: one simdgroup per candidate.
+[[kernel]] void dfl_lr_rescore(const device float* x [[buffer(0)]], const device uint* w [[buffer(1)]],
+                               const device bfloat* sc [[buffer(2)]], const device bfloat* bi [[buffer(3)]],
+                               const device uint* ids [[buffer(4)]], const device uint* perm [[buffer(5)]],
+                               device float* tv [[buffer(6)]], device uint* ti [[buffer(7)]],
+                               constant DflTopParams& p [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],
+                               uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint r = tg.y, c = tg.x * 8 + sg, H = p.n;
+  if (c >= p.ld) return;
+  const uint o = r * p.ld + c;
+  const uint pos = ti[o];
+  if (pos == 0xffffffffu) return;
+  const uint k = perm[pos];
+  const device uint* wr = w + size_t(k) * (H / 8);
+  const device float* xr = x + r * H;
+  float acc = 0.0f;
+  for (uint wi = lane; wi < H / 8; wi += 32) {
+    const uint q = wr[wi];
+    const uint gi = wi / 8;
+    const float s = float(sc[size_t(k) * (H / 64) + gi]), b = float(bi[size_t(k) * (H / 64) + gi]);
+    const float4 x0 = *(const device float4*)(xr + wi * 8), x1 = *(const device float4*)(xr + wi * 8 + 4);
+    const float4 q0 = float4(q & 15u, (q >> 4) & 15u, (q >> 8) & 15u, (q >> 12) & 15u);
+    const float4 q1 = float4((q >> 16) & 15u, (q >> 20) & 15u, (q >> 24) & 15u, (q >> 28) & 15u);
+    acc += s * (dot(q0, x0) + dot(q1, x1)) + b * (x0.x + x0.y + x0.z + x0.w + x1.x + x1.y + x1.z + x1.w);
+  }
+  acc = simd_sum(acc);
+  if (lane == 0) {
+    tv[o] = acc;
+    ti[o] = ids[k];
   }
 }
