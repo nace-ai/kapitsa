@@ -1360,6 +1360,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
                                  : size_t(c.hidden) + size_t(c.hidden / 64) * 4;
   if (packed) {
     auto add_image = [&](const std::string& name, uint32_t K) {
+      if (c.hidden == 4096 && !name.ends_with(".mlp.down_proj")) return;
       auto w = metas.find(name + ".weight"), s = metas.find(name + ".scales");
       if (!K || K % 64 || w == metas.end() || s == metas.end() || w->second.dtype != "U32" ||
           w->second.shape.size() != 2 || s->second.shape.size() != 2 || w->second.shape[0] <= 0 ||

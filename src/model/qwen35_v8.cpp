@@ -120,9 +120,12 @@ void Qwen35::flush_backlog(Encoder& e, Seq& s) {
 bool Qwen35::v8_packed_coeff_on(const Qwen35Config& c) {
   const char* flag = getenv("NI_V8_PACKED_COEFF_NF1");
   if (flag && *flag && !atoi(flag)) return false;
-  if (c.moe || c.hidden != 2560 || c.dense_I != 9216 || c.layers != 32 || c.group_size != 64) return false;
+  if (c.moe || c.layers != 32 || c.group_size != 64) return false;
+  const bool four_b = c.hidden == 2560 && c.dense_I == 9216;
+  const bool nine_b = c.hidden == 4096 && c.dense_I == 12288;
+  if (!four_b && !nine_b) return false;
   const Gpu& gpu = Gpu::get();
-  const bool m4 = gpu.name() == "Apple M4" && gpu.core_count() == 10;
+  const bool m4 = four_b && gpu.name() == "Apple M4" && gpu.core_count() == 10;
   const bool m4_pro = gpu.name() == "Apple M4 Pro" && gpu.core_count() == 20;
   if (!m4 && !m4_pro) return false;
   if (flag && *flag) return true;
@@ -153,11 +156,13 @@ void Qwen35::load_v8_packed_coeff() {
     compressed += image.compressed_blocks; blocks += image.blocks;
   };
   for (const Layer& l : layers_) {
+    // The 9B only packs the long-K down projection to bound the extra resident memory.
+    if (cfg_.hidden == 4096) { pack(l.md); continue; }
     for (const QLinear* q : {&l.mg, &l.mu, &l.md}) pack(*q);
     if (l.linear) for (const QLinear* q : {&l.qkv, &l.z, &l.a, &l.b, &l.out}) pack(*q);
     else for (const QLinear* q : {&l.q, &l.k, &l.v, &l.o}) pack(*q);
   }
-  pack(lm_head_);
+  if (cfg_.hidden != 4096) pack(lm_head_);
   logi("NI_V8_PACKED_COEFF_NF1: packed %zu static target projections, %.1f MiB in %.0f ms; compressed %zu/%zu blocks",
        v8_packed_coeff_.size(), double(bytes) / (1024 * 1024), now_ms() - start, compressed, blocks);
 }

@@ -299,7 +299,7 @@ static void check_case(Gpu& g, Checks& count, uint32_t N, uint32_t K, uint32_t R
     ++count.cases;
   }
 }
-static void checks(Gpu& g, const std::string& kernel, bool shapes, bool segments = false) {
+static void checks(Gpu& g, const std::string& kernel, bool shapes, bool segments = false, bool nine = false) {
   Checks c;
   if (segments) {
     for (uint32_t K : {192u, 256u, 512u}) for (uint32_t N : {17u, 65u})
@@ -307,8 +307,12 @@ static void checks(Gpu& g, const std::string& kernel, bool shapes, bool segments
         for (uint32_t nseg : {2u, 3u})
           check_case(g, c, N, K, R, ks, nseg, uint32_t(c.cases + 7), int((c.cases / 2) % 5), false, kernel);
   } else if (shapes) {
-    for (auto [N, K] : std::vector<std::pair<uint32_t, uint32_t>>{{18432, 2560}, {12352, 2560}, {10240, 2560},
-                                                                  {2560, 4096}, {2560, 9216}, {248320, 2560}})
+    const std::vector<std::pair<uint32_t, uint32_t>> dims = nine
+        ? std::vector<std::pair<uint32_t, uint32_t>>{{24576, 4096}, {12352, 4096}, {10240, 4096},
+                                                    {4096, 4096}, {4096, 12288}, {248320, 4096}}
+        : std::vector<std::pair<uint32_t, uint32_t>>{{18432, 2560}, {12352, 2560}, {10240, 2560},
+                                                    {2560, 4096}, {2560, 9216}, {248320, 2560}};
+    for (auto [N, K] : dims)
       for (uint32_t seed : {7u, 19u, 42u}) {
         check_case(g, c, N, K, 8, default_plan(g, N, K).ks, 1, seed, 0, false, kernel);
         printf("check_shape N=%u K=%u seed=%u passed=1\n", N, K, seed); fflush(stdout);
@@ -570,7 +574,7 @@ static void codec_checks(Gpu& g, const std::string& kernel) {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: qmm_packed_coeff_check check-cpu-codec|check-cpu-fixtures|check-codec|check-scales|check-small|check-segments|check-shapes|check-real-coeff [kernel]\n");
+    fprintf(stderr, "usage: qmm_packed_coeff_check check-cpu-codec|check-cpu-fixtures|check-codec|check-scales|check-small|check-segments|check-shapes|check-shapes-9b|check-real-coeff [kernel]\n");
     return 2;
   }
   if (std::string(argv[1]) == "check-cpu-codec") { cpu_codec_checks(); return 0; }
@@ -591,8 +595,8 @@ int main(int argc, char** argv) {
   }
   else if (mode == "check-codec") codec_checks(g, kernel);
   else if (mode == "check-scales") scale_checks(g, kernel);
-  else if (mode == "check-small" || mode == "check-shapes" || mode == "check-segments")
-    checks(g, kernel, mode == "check-shapes", mode == "check-segments");
+  else if (mode == "check-small" || mode == "check-shapes" || mode == "check-segments" || mode == "check-shapes-9b")
+    checks(g, kernel, mode == "check-shapes" || mode == "check-shapes-9b", mode == "check-segments", mode == "check-shapes-9b");
   else { fprintf(stderr, "unknown mode or missing arguments\n"); return 2; }
   printf("QMM_CD_DISPATCH={\"candidate\":%zu,\"original\":%zu}\n",
          candidate_dispatches, original_dispatches);

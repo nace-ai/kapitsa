@@ -110,6 +110,7 @@ and should run with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`. `check-shapes` 
 outputs and fixed FP64 samples. The default kernel is `qmm8pc_b4_nf1`; an explicit `qmm8snb_b4_nf2` checks the
 original path. Failures exit nonzero; dispatch counts distinguish candidate coverage from fallback. The kernel
 retains the original K partitions, including when a geometry falls back to the original output tile.
+`check-shapes-9b` additionally covers the 9B target/drafter matrix sizes, including the 4096-by-12288 down projection.
 `NI_QMM_COEFF_FIXTURES=MANIFEST` enables `check-cpu-fixtures` (no GPU) and `check-real-coeff` (full GPU outputs and FP64).
 
 `tools/qmm_device_ab.py` checks the 4B packed-QMM device default with interleaved builds. Build
