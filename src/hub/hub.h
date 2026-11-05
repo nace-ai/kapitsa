@@ -37,6 +37,11 @@ struct Companion {
   bool drafter() const { return kind == "dflash2" || kind == "dflash" || kind == "lilicorr" || kind == "dspark"; }
 };
 
+// The catalog's drafter for a target of this shape (hidden size, layer count): the companion of the catalog model
+// whose drafter was trained on it, or nullptr. A model of the same shape (a fine-tune, an imported GGUF) runs it; the
+// engine's load-time checks (DFlash2::find) are what decide whether it fits.
+const Companion* drafter_for_shape(int hidden, int layers);
+
 // A GGUF file of a repo, pinned: a variant's weights as llama.cpp's format ships them, converted after the download by
 // `kapitsa import` (src/gguf/import.h) into the variant's folder, which then holds the conversion and not the file
 // (its routed experts kept in the file's blocks are an APFS clone of it).
@@ -129,6 +134,11 @@ struct PullOptions {
 // file goes, its blocks stay in the experts' clone; a stopped import starts again from the downloaded file) before the
 // manifest. Throws Error.
 std::string ensure(const ModelRef& ref, const PullOptions& opt);
+// A model folder that was not downloaded from the catalog (a GGUF import): fetches the catalog drafter that matches its
+// shape (drafter_for_shape) into <dir>/dflash2/, unless the folder has one, and lists it in the manifest. Returns what
+// happened in a few words ("" when the folder's shape has no catalog drafter or already has one). Throws Error
+// (offline, disk full); the model runs without a drafter, only slower.
+std::string fetch_drafter(const std::string& dir, bool progress);
 // Every file the manifest lists is there (a finished download).
 bool is_complete(const std::string& dir);
 // Finished, and (catalog models) at the revisions this Kapitsa pins: ensure() needs no network.

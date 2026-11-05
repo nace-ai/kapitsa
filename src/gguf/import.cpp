@@ -1500,7 +1500,23 @@ bool is_gguf_file(const std::string& arg) {
   return f.read(m, 4) && memcmp(m, "GGUF", 4) == 0;
 }
 
+static std::string import_model_files(const ImportOptions& opt);
+
 std::string import_model(const ImportOptions& opt) {
+  const std::string dir = import_model_files(opt);
+  if (!opt.drafter || opt.dry_run || !opt.plan_dir.empty() || dir.empty()) return dir;
+  try {
+    const std::string got = hub::fetch_drafter(dir, opt.progress);
+    if (!got.empty() && opt.progress) fprintf(stderr, "Added the %s drafter to %s.\n", got.c_str(), hub::tilde(dir).c_str());
+  } catch (const std::exception& e) {
+    if (opt.progress)
+      fprintf(stderr, "kapitsa import: no drafter added (%s). %s runs without one, slower; `kapitsa import` again fetches it.\n", e.what(),
+              base_name(dir).c_str());
+  }
+  return dir;
+}
+
+static std::string import_model_files(const ImportOptions& opt) {
   Source s;
   s.path = opt.file;
   s.mtp = opt.mtp;

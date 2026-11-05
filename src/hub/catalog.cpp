@@ -130,6 +130,24 @@ Companion dspark_lightning() {
 
 }  // namespace
 
+const Companion* drafter_for_shape(int hidden, int layers) {
+  // what each catalog drafter's config.json says it was trained on (hidden_size, num_target_layers)
+  struct Shape {
+    const char* model;
+    int hidden, layers;
+  };
+  static const Shape shapes[] = {{"qwen3.8-27b", 5120, 64}, {"qwen3.6-35b-a3b", 2048, 40}, {"qwen3.5-4b", 2560, 32}, {"qwen3.5-9b", 4096, 32}};
+  for (const Shape& sh : shapes) {
+    if (sh.hidden != hidden || sh.layers != layers) continue;
+    const CatalogModel* m = find_model(sh.model);
+    const Variant* v = m ? m->variant() : nullptr;
+    if (v)
+      for (const Companion& c : v->companions)
+        if (c.drafter()) return &c;
+  }
+  return nullptr;
+}
+
 const std::vector<CatalogModel>& catalog() {
   static const std::vector<CatalogModel> c = {
       {.name = "qwen3.5-4b",
