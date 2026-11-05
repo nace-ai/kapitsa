@@ -1170,12 +1170,16 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
       const int r = lowrank_request();
       const bool lr = Bk == 8 && use_v8 && v1 && head_q4 && H % 64 == 0 && rows % 2048 == 0 &&
                       r > 0 && size_t(r) < H && r % 64 == 0;
+      size_t head_extra = packed_v8 && head_q4 && H != 4096 ? packed_bytes(rows, H) : 0;
       if (lr) {
-        w += (size_t(r) * H + rows * size_t(r)) * bits / 8 +
-             (size_t(r) * (H / 64) + rows * (size_t(r) / 64)) * 4;
-        b += rows * 4 + 8 * size_t(r) * 4 + 16 * size_t(r) * 2 + size_t(r) / 64 * 8 * 4;
+        size_t factors = (size_t(r) * H + rows * size_t(r)) * bits / 8 +
+                         (size_t(r) * (H / 64) + rows * (size_t(r) / 64)) * 4;
+        factors += rows * 4 + 8 * size_t(r) * 4 + 16 * size_t(r) * 2 + size_t(r) / 64 * 8 * 4;
+        if (packed_v8 && H != 4096) factors += packed_bytes(size_t(r), H);
+        // A failed factorization keeps the full packed head; reserve enough for either outcome.
+        head_extra = std::max(head_extra, factors);
       }
-      if (packed_v8 && head_q4 && H != 4096) w += lr ? packed_bytes(size_t(r), H) : packed_bytes(rows, H);
+      w += head_extra;
     }
   }
   b += size_t(4) << 20;  // the target's 8-row verify scratch (Qwen35::v8_alloc): ~1-3 MB
