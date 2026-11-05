@@ -258,6 +258,7 @@ def main():
     ap.add_argument("--reps", type=int, default=1)
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--label", default="")
+    ap.add_argument("--require-ac", action="store_true", help="wait for AC before each prompt, redo one that ends on battery, keep it out of the summary")
     a = ap.parse_args()
     with open(os.path.join(HERE, "prompts.json")) as f:
         items = json.load(f)
@@ -279,14 +280,24 @@ def main():
         for item in items:
             order = arms if (rep + items.index(item)) % 2 == 0 else list(reversed(arms))
             for arm in order:
-                r = solve(a.url, arm, item)
-                r.update(arm=arm["name"], rep=rep, sys=sysinfo())
-                rows.append(r)
-                print("%-10s %-22s rep%d %s %7.1fs tok=%d turns=%d" % (arm["name"], item["id"], rep,
-                      "PASS" if r["pass"] else "fail", r["wall_s"], r["completion_tokens"], r["turns"]), flush=True)
+                while True:  # a timed prompt counts only if it starts and ends on AC; one that ends on battery is redone
+                    while a.require_ac and not sysinfo()["ac"]:
+                        print("waiting for AC", time.strftime("%H:%M:%S"), flush=True)
+                        time.sleep(30)
+                    before = sysinfo()
+                    r = solve(a.url, arm, item)
+                    after = sysinfo()
+                    r.update(arm=arm["name"], rep=rep, sys=after, sys_before=before,
+                             on_battery=not (before["ac"] and after["ac"]))
+                    rows.append(r)
+                    print("%-10s %-22s rep%d %s %7.1fs tok=%d turns=%d%s" % (arm["name"], item["id"], rep,
+                          "PASS" if r["pass"] else "fail", r["wall_s"], r["completion_tokens"], r["turns"],
+                          " ON_BATTERY" if r["on_battery"] else ""), flush=True)
+                    if not (a.require_ac and r["on_battery"]):
+                        break
     summary = {}
     for arm in arms:
-        rs = [r for r in rows if r["arm"] == arm["name"]]
+        rs = [r for r in rows if r["arm"] == arm["name"] and not (a.require_ac and r.get("on_battery"))]
         summary[arm["name"]] = {"pass": sum(r["pass"] for r in rs), "n": len(rs),
                                 "wall_s_total": round(sum(r["wall_s"] for r in rs), 1),
                                 "wall_s_median": round(sorted(r["wall_s"] for r in rs)[len(rs) // 2], 1),
