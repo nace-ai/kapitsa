@@ -159,7 +159,7 @@ def agent_checks(run, home):
     Pi gets that server's model, nothing downloads or starts, and when the Homebrew service's launchd job serves that
     port the command says so and how to stop it (issue 653: the service's server, the best model for the Mac, outlived
     Pi and came back with its model after Activity Monitor's Quit)"""
-    import http.server, shutil, threading
+    import http.server, plistlib, shutil, threading
     class Models(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             body = json.dumps({"object": "list", "data": [{"id": "qwen3.6-35b-a3b", "object": "model", "owned_by": "nace",
@@ -184,17 +184,20 @@ def agent_checks(run, home):
                 f"open({seen!r}, 'w'))\n")
     os.chmod(os.path.join(bindir, "pi"), 0o755)
     agents = os.path.join(user, "Library", "LaunchAgents")
-    def pi(port_in_plist, label="sh.brew.kapitsa"):
+    def pi(port_in_plist, label="sh.brew.kapitsa", service_args=None, service_env=None, binary=False, workdir=None):
         plist = os.path.join(agents, label + ".plist")
         if os.path.exists(seen):
             os.remove(seen)
         if port_in_plist:  # as `brew services start kapitsa` writes it, with a --port so that the job serves this port
             os.makedirs(os.path.dirname(plist), exist_ok=True)
-            with open(plist, "w") as f:
-                f.write('<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n\t<key>Label</key>\n'
-                        f'\t<string>{label}</string>\n\t<key>ProgramArguments</key>\n\t<array>\n'
-                        '\t\t<string>/opt/homebrew/opt/kapitsa/bin/kapitsa</string>\n\t\t<string>serve</string>\n'
-                        f'\t\t<string>--port</string>\n\t\t<string>{port_in_plist}</string>\n\t</array>\n</dict>\n</plist>\n')
+            args = ["--port", str(port_in_plist)] if service_args is None else service_args
+            job = {"Label": label, "ProgramArguments": ["/opt/homebrew/opt/kapitsa/bin/kapitsa", "serve", *args]}
+            if service_env is not None:
+                job["EnvironmentVariables"] = service_env
+            if workdir is not None:
+                job["WorkingDirectory"] = workdir
+            with open(plist, "wb") as f:
+                plistlib.dump(job, f, fmt=plistlib.FMT_BINARY if binary else plistlib.FMT_XML)
         else:
             shutil.rmtree(agents, ignore_errors=True)
         rc, out, err = run("pi", "--port", str(port), "--", "-p", "hi",
@@ -238,6 +241,40 @@ def agent_checks(run, home):
         pi(None)
     rc, out, got = pi(port + 1 if port < 65535 else port - 1)
     check("cli: a service on another port is not the server found", rc == 0 and "brew services" not in out, out)
+    # A bare Homebrew command gets its port from the service's home, not the attaching agent's KAPITSA_HOME.
+    defaults = os.path.join(user, ".cache", "kapitsa")
+    os.makedirs(defaults)
+    with open(os.path.join(defaults, "serve.json"), "w") as f:
+        json.dump(["--port", str(port)], f)
+    for label in ["sh.brew.kapitsa", "homebrew.mxcl.kapitsa"]:
+        rc, out, _ = pi(port, label, service_args=[])
+        check(f"cli: pi recognizes a Homebrew port from serve.json ({label})",
+              rc == 0 and "Homebrew service" in out, out)
+        pi(None)
+    custom = os.path.join(home, "service & defaults")
+    os.makedirs(custom)
+    with open(os.path.join(custom, "serve.json"), "w") as f:
+        json.dump(["--port", "1", "--api-key", "--port", "--port", str(port)], f)
+    for binary in [False, True]:
+        rc, out, _ = pi(port, service_args=[], service_env={"KAPITSA_HOME": custom}, binary=binary)
+        check(f"cli: service KAPITSA_HOME and last port work in {'binary' if binary else 'XML'} plists",
+              rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"HOME": user}, binary=True)
+    check("cli: service HOME supplies its default config path", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"HOME": user, "KAPITSA_HOME": "~/.cache/kapitsa"})
+    check("cli: service KAPITSA_HOME expands its own HOME", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"KAPITSA_HOME": "service & defaults"}, workdir=home)
+    check("cli: relative service KAPITSA_HOME uses its working directory", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=["--context", "32k"])
+    check("cli: explicit service arguments bypass serve.json for service recognition",
+          rc == 0 and "Homebrew service" not in out, out)
+    with open(os.path.join(defaults, "serve.json"), "w") as f:
+        f.write("not JSON")
+    rc, out, _ = pi(port, service_args=[])
+    check("cli: a bad service config does not prevent attaching to its server", rc == 0, out)
+    rc, out, _ = pi(port)
+    check("cli: explicit plist port ignores a bad defaults file", rc == 0 and "Homebrew service" in out, out)
+    shutil.rmtree(defaults)
     check("cli: pi on a running server downloads nothing",
           (sorted(os.listdir(models)) if os.path.isdir(models) else []) == had, str(had))
     srv.shutdown()
@@ -830,11 +867,12 @@ def cli_checks(kapitsa):
     rc, _, err = run("serve")
     check("cli: a non-file serve.json is refused", rc == 2 and "regular file" in err, err)
     os.rmdir(serve_file)
-    # Neither run can fetch weights: the isolated home has no catalog model and HF_ENDPOINT is a closed port.
-    missing = run("serve")
-    with open(serve_file, "w") as f:
-        f.write("[]")
-    empty = run("serve")
+    # Keep the unconfigured starts apart from the fake downloaded models above; the Hub is a closed port too.
+    with tempfile.TemporaryDirectory(prefix="kapitsa-empty-serve-") as empty_home:
+        missing = run("serve", env_add={"KAPITSA_HOME": empty_home})
+        with open(os.path.join(empty_home, "serve.json"), "w") as f:
+            f.write("[]")
+        empty = run("serve", env_add={"KAPITSA_HOME": empty_home})
     check("cli: missing and empty serve defaults preserve the unconfigured startup",
           empty == missing and missing[0] == 1 and
           ("already in use" in missing[2] or "Can't reach" in missing[2]), str((missing, empty)))

@@ -1145,6 +1145,8 @@ A missing file or an empty array keeps the usual defaults. Strings are literal a
 quoting, and shell substitutions, environment variables and commands are not expanded. Changes apply on the next
 start; there is no live reload. The service's environment is separate from your shell's, so setting `KAPITSA_HOME`
 only in a terminal does not change a service already configured with another home.
+If the file sets `--port`, pass that port to `kapitsa claude|codex|opencode|pi` too. The agent command reads the
+Homebrew service's configuration to recognize it and display the command that stops it.
 
 ## Environment variables
 

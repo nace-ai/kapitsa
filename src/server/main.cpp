@@ -40,6 +40,7 @@
 #include "server/picker.h"
 #include "server/pair.h"
 #include "server/route.h"
+#include "server/serve_defaults.h"
 #include "splash/discover.h"
 #include "server/ui.h"
 #include "server/ws_upgrade.h"
@@ -62,7 +63,6 @@
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <mutex>
 #include <set>
@@ -811,36 +811,14 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
   return 0;
 }
 
-// Homebrew starts `kapitsa serve` without arguments. Keep explicit command lines self-contained, including help;
-// the file is an argument array so the same parser below owns every option and its validation.
-static std::vector<std::string> serve_args(int argc, char** argv, int first) {
-  if (argc > first) return {argv + first, argv + argc};
-  const std::string path = hub::home_dir() + "/serve.json";
-  const char* help = "kapitsa serve --help";
-  std::error_code ec;
-  const auto status = std::filesystem::status(path, ec);
-  if (status.type() == std::filesystem::file_type::not_found) return {};
-  if (ec || !std::filesystem::is_regular_file(status))
-    usage_error("Can't read " + path + " as a regular file.", help);
-  std::ifstream f(path);
-  if (!f) usage_error("Can't read " + path + ".", help);
-  const json config = json::parse(f, nullptr, false);
-  if (config.is_discarded() || !config.is_array())
-    usage_error(path + " must contain a JSON array of argument strings.", help);
-  std::vector<std::string> args;
-  for (const auto& value : config) {
-    if (!value.is_string()) usage_error(path + " must contain only argument strings.", help);
-    std::string a = value.get<std::string>();
-    if (a.find('\0') != std::string::npos) usage_error(path + " arguments must not contain NUL bytes.", help);
-    args.push_back(std::move(a));
-  }
-  return args;
-}
-
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
   keep_args(argc, argv);
-  const auto args = serve_args(argc, argv, first);
+  std::vector<std::string> args(argv + first, argv + argc);
+  if (args.empty()) {
+    try { args = serve_defaults(hub::home_dir()); }
+    catch (const std::exception& e) { usage_error(e.what(), "kapitsa serve --help"); }
+  }
   EngineOptions opt;
   int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
