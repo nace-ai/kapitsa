@@ -27,7 +27,8 @@ mode, under the GPU lock.
 - **4K:** the prompt is one chunk either way, and the wavefront leaves it level. The old and new builds read
   6,516-6,518 and 6,553-6,557 at 4K when interleaved ([cell-ab](../2026-11-05-m5-max-35b-gpu-wave/cell-ab)). The 1.2%
   here against the morning's cell is the spread between sessions.
-- **Decode** runs no prefill kernel and is level.
+- **Decode** runs no prefill kernel. T 0.6 reads 351.0 against 349.4; greedy reads 368.5 against 377.3, inside the overlapping
+  run ranges (368.4-375.1 against 369.4-381.7).
 - **Memory:** 1.0 GiB more, the 8,448-row chunks' activation buffers.
 - **Contention:** no phase is flagged; the desktop app's GPU load was 0.1% or less.
 
