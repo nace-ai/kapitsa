@@ -26,7 +26,8 @@ they decode.
    and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows. On the
    Qwen models a pass of at most 128 rows (a cached turn's message, the reply prefilled while idle, a draft read
    ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
-   into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise.
+   into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise (on an
+   M5, a dense model's passes from 64 rows, from 17 for the 27B on the M5 Max: `NI_SP_QMT`, `NI_QMT_MIN`).
 4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B
    and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
    (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do

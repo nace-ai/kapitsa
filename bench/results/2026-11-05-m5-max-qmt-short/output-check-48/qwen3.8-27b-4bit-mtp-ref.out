@@ -1,0 +1,18 @@
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (206 ms)
+[kapitsa] read 15.13 GB of weights in 848 ms (17.9 GB/s)
+[kapitsa] read 0.24 GB of weights in 12 ms (20.3 GB/s)
+[kapitsa] MTP head loaded in 12 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] prewarmed 94 prefill pipelines in 9 ms
+[kapitsa] loaded ~/models/qwen3.8-27b-4bit-mtp: 64 layers, dense, 15.1 GB mapped in 960 ms; weights 4-bit group 64 100%
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_ANE: prefill chunks of 48 rows never reach the split's 512; GPU only
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+[kapitsa] compiled the tensor kernels in 2 ms
+prefill 8 rows: next-token NLL 1.0209, top-1 = next token 0.7500 -> <scratch>/qs-oc48/qwen3.8-27b-4bit-mtp-ref/prefill
+step   192 rows: next-token NLL 0.4371, top-1 = next token 0.8646 -> <scratch>/qs-oc48/qwen3.8-27b-4bit-mtp-ref/step
+verify 192 rows: next-token NLL 0.4371, top-1 = next token 0.8646 -> <scratch>/qs-oc48/qwen3.8-27b-4bit-mtp-ref/verify
+batch  192 rows: next-token NLL 0.4371, top-1 = next token 0.8646 -> <scratch>/qs-oc48/qwen3.8-27b-4bit-mtp-ref/batch
+8 windows, 14848 prefilled tokens in 61.0 s; 69.4 s in all

@@ -1,0 +1,47 @@
+p33 round 1 old 'AC Power' reps 189.45 171.09 171.84 171.04 
+p33 round 1 new 'AC Power' reps 105.45 87.92 87.53 87.52 
+p33 round 2 new 'AC Power' reps 107.58 87.55 88.01 87.55 
+p33 round 2 old 'AC Power' reps 188.98 171.18 171.04 170.90 
+p33 round 3 old 'AC Power' reps 190.40 170.88 170.93 170.94 
+p33 round 3 new 'AC Power' reps 105.19 87.44 87.29 87.38 
+p48 round 1 old 'AC Power' reps 207.58 189.61 189.49 189.42 
+p48 round 1 new 'AC Power' reps 107.46 89.36 89.21 89.20 
+p48 round 2 new 'AC Power' reps 108.38 89.31 89.49 89.44 
+p48 round 2 old 'AC Power' reps 207.98 189.63 189.59 189.59 
+p48 round 3 old 'AC Power' reps 208.11 189.35 189.45 189.45 
+p48 round 3 new 'AC Power' reps 107.29 89.35 89.38 89.28 
+4k round 1 old 'AC Power' reps 3266.00 3276.37 
+4k round 1 new 'AC Power' reps 3188.63 3190.42 
+4k round 2 new 'AC Power' reps 3179.73 3181.11 
+4k round 2 old 'AC Power' reps 3265.41 3266.59 
+4k round 3 old 'AC Power' reps 3264.44 3268.83 
+4k round 3 new 'AC Power' reps 3179.80 3182.47 
+4k round 4 new 'AC Power' reps 3180.18 3189.16 
+4k round 4 old 'AC Power' reps 3262.92 3266.45 
+== output check qwen3.8-27b-4bit-mtp
+compare exit 0
+prefill: 8 records (qwen3.8-27b-4bit-mtp)
+  every row bitwise identical
+batch: 192 records (qwen3.8-27b-4bit-mtp)
+  every row bitwise identical
+  PASS (../../../tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+step: 192 records (qwen3.8-27b-4bit-mtp)
+  every row bitwise identical
+  PASS (../../../tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  every row bitwise identical
+  PASS (../../../tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+== output check qwen3.6-35b-a3b-4bit
+compare exit 0
+prefill: 8 records (qwen3.6-35b-a3b-4bit)
+  every row bitwise identical
+batch: 192 records (qwen3.6-35b-a3b-4bit)
+  every row bitwise identical
+  PASS (../../../tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+step: 192 records (qwen3.6-35b-a3b-4bit)
+  every row bitwise identical
+  PASS (../../../tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.6-35b-a3b-4bit)
+  every row bitwise identical
+  PASS (../../../tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+done

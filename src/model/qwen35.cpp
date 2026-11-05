@@ -362,17 +362,16 @@ static bool exact_qmms(double bytes, bool multi, uint32_t K) {
   return bytes < 32e6 && (multi || K < 12288);
 }
 
-// A chunk of M >= 64 new rows whose GEMM this matrix's tensor_ops tile can serve (qmtg_m64_n64 / qmt_m64_n64: qmt_on, 4-bit
-// group 64, K a multiple of 64, M >= 64) is faster there than in the short-prefill families, which are sized for the
+// A chunk of M >= qmt_min_rows() new rows whose GEMM this matrix's tensor_ops tile can serve (qmtg_m64_n64 / qmt_m64_n64:
+// qmt_on, 4-bit group 64, K a multiple of 64) is faster there than in the short-prefill families, which are sized for the
 // chunks under 64 rows (NI_SHORTPF's own comment). qmr_sel().on is checked too: the qmt tile is only reached behind it,
 // so NI_QMM=0 keeps the short-prefill path the chunk had. Measured on the M5 Pro, 27B, 16K cached prefix, one chunk of new
-// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. The short-prefill staging
-// bound (one weight read, fewer blocks) only wins below 64 rows, where qmt does not run; 8-bit and unaligned
+// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. 8-bit and unaligned
 // projections, and every MoE expert GEMM, keep the short path they have.
 bool Qwen35::sp_qmt_pref(const QLinear& L, int M) const {
   static const bool on = env_int("NI_SP_QMT", 1) != 0;  // 0 restores the pre-change short-prefill preference
   if (!on || cfg_.moe) return false;  // a MoE model's chunk keeps the short-prefill / qmtm split it had
-  return M >= 64 && qmt_on() && qmr_sel().on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0;
+  return M >= qmt_min_rows() && qmt_on() && qmr_sel().on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0;
 }
 
 // Short-prefill qmr tile for M <= 128 rows: R row tiles (1 up to 48 rows, 2 above; fused gate/up
@@ -396,7 +395,7 @@ static ShortTile short_tile(int M, bool gu, bool seg) {
 // Projections sharing the half input xh (same K): one short-prefill dispatch where the kernels
 // allow it, else one enc_qmm per projection.
 void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M) {
-  bool qmt = M >= 64 && qmt_on();
+  bool qmt = M >= qmt_min_rows() && qmt_on();
   for (auto& s : segs) qmt = qmt && sp_qmt_pref(*s.L, M);
   if (!qmt && small_t(M) && sp_gemm() != SpGemm::Qmr && segs.size() <= 4) {
     bool all_qmr = true, all_qmms = true;
@@ -2566,6 +2565,22 @@ bool qmt_on() {
 // TFLOP/s, down 48.1 -> 53.5, out_proj 47.8 -> 53.4, GDN in_proj 47.1 -> 55.1; the 35B's 8192 x 2048 45.3 -> 52.5,
 // 2048 x 4096 43.8 -> 50.7, shared expert gate/up (N 512) 37.6 -> 48.8; 4K prefill on ni_run -5.2% (35B-A3B), -7.3%
 // (27B), bench/results/2026-11-04-m5-max-qmt-128. Below 96 rows the 64-row tile stays (M 33, N 512: 39 vs 48 us).
+// NI_QMT_MIN (read once; 1-64): the fewest rows of a dense 4-bit g64 GEMM on the tensor_ops tile (qmt_m64_n64,
+// qmtg_m64_n64, whose rows past M load as zeros and store nothing); a GEMM of fewer rows runs the short-prefill or qmr
+// kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for the Qwen3.8 27B (hidden 5120,
+// FFN 17408, 64 layers) on an Apple10 GPU of 40 cores or more (the M5 Max), where it was measured; 64 elsewhere.
+// bench_qmm on the M5 Max, the 27B's shapes, the 64-row tile against the short-prefill tile the pass takes: gate/up
+// (17408 x 5120) at 17 rows 514 against 638 us, at 33 527 against 1,215; down (5120 x 17408) at 24 rows 334 against
+// 400, at 33 337 against 623; GDN in_proj (16384 x 5120) at 33 288 against 525. At 16 rows and fewer the short tiles
+// win (gate/up 509 against 611 us, down 295 against 330), and the 16-row verify runs qmm8 anyway.
+// bench/results/2026-11-05-m5-max-qmt-short.
+int Qwen35::qmt_min_rows() const {
+  static const int env = std::clamp(env_int("NI_QMT_MIN", 0), 0, 64);
+  static const bool max = Gpu::get().apple10() && Gpu::get().core_count() >= 40;
+  if (env) return env;
+  return max && !cfg_.moe && cfg_.hidden == 5120 && cfg_.dense_I == 17408 && cfg_.layers == 64 ? 17 : 64;
+}
+
 bool qmt128_for(int M) {
   static const bool on = [] {
     const bool o = qmt_on() && env_int("NI_QMT128", 1) != 0;
@@ -2738,7 +2753,7 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     e.dispatch((L.N + 127) / 128, (uint32_t(M) + 63) / 64, 1, 256);
     return;
   }
-  if (q.on && qmt_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+  if (q.on && qmt_on() && M >= qmt_min_rows() && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
     const uint32_t bm = qmt128_for(M) ? 128 : 64;
     e.use(pipe(bm == 128 ? "qmt_m128_n64" : "qmt_m64_n64"));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
@@ -3131,7 +3146,7 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
     return true;
   }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
-  if (!b8 && qmt_on() && M >= 64) {
+  if (!b8 && qmt_on() && M >= qmt_min_rows()) {
     const uint32_t bm = qmt128_for(M) ? 128 : 64;
     e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
     kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};

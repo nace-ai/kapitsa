@@ -1,0 +1,22 @@
+[kapitsa] read 19.51 GB of weights in 1060 ms (18.4 GB/s)
+[kapitsa] read 0.58 GB of weights in 62 ms (9.5 GB/s)
+[kapitsa] MTP head loaded in 91 ms (MoE, trunk hidden pre-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] prewarmed 96 prefill pipelines in 10 ms
+[kapitsa] loaded ~/models/qwen3.6-35b-a3b-4bit: 40 layers, MoE, 19.5 GB mapped in 1334 ms; weights 4-bit group 64 100%, 8-bit group 64 0%
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+[kapitsa] NI_QMT_MIN: dense qmt GEMMs from 17 rows
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMT128: qmt GEMMs of 96+ rows on the 128-row tile (qmt_m128_n64, qmtg_m128_n64)
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+prefill 8 rows: next-token NLL 1.8131, top-1 = next token 0.5000 -> <scratch>/qs-oc/qwen3.6-35b-a3b-4bit-new/prefill
+step   192 rows: next-token NLL 0.4988, top-1 = next token 0.8750 -> <scratch>/qs-oc/qwen3.6-35b-a3b-4bit-new/step
+verify 192 rows: next-token NLL 0.4988, top-1 = next token 0.8750 -> <scratch>/qs-oc/qwen3.6-35b-a3b-4bit-new/verify
+batch  192 rows: next-token NLL 0.4986, top-1 = next token 0.8750 -> <scratch>/qs-oc/qwen3.6-35b-a3b-4bit-new/batch
+8 windows, 14848 prefilled tokens in 2.6 s; 4.7 s in all

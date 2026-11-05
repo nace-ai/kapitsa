@@ -612,9 +612,11 @@ class Qwen35 : public Model {
     bool add;
   };
   bool small_t(int T) const;
-  // this matrix's tensor_ops tile (qmtg_m64_n64 / qmt_m64_n64) covers a chunk of M >= 64 rows, so the short-prefill
-  // families are not the faster path there (sp_qmt_pref, NI_SP_QMT=0 restores the earlier preference)
+  // this matrix's tensor_ops tile (qmtg_m64_n64 / qmt_m64_n64) covers a chunk of M >= qmt_min_rows() rows, so the
+  // short-prefill families are not the faster path there (sp_qmt_pref, NI_SP_QMT=0 restores the earlier preference)
   bool sp_qmt_pref(const QLinear& L, int M) const;
+  // The fewest rows of a dense 4-bit GEMM on the tensor_ops tile (NI_QMT_MIN, qwen35.cpp)
+  int qmt_min_rows() const;
   bool qmms_ok(const QLinear& L) const;
   void enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T);
   // enc_qmms over any T, in slices of at most 64 rows (NI_SHORTPF_EXACT)
