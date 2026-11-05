@@ -899,7 +899,7 @@ static int serve(int argc, char** argv, int first) {
     }
     else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
     else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
-    else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
+    else if (i == 0 && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);

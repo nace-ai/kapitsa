@@ -836,6 +836,15 @@ def cli_checks(kapitsa):
     got = run("serve")
     check("cli: bare serve reads KAPITSA_HOME/serve.json like explicit arguments",
           got == expected and got[0] == 1 and "already in use" in got[2], str(got))
+    with open(serve_file, "w") as f:
+        json.dump([folder, "--port", str(busy)], f)
+    expected = run("serve", folder, "--port", str(busy))
+    got = run("serve")
+    check("cli: a leading positional model works in explicit and file arguments",
+          got == expected and got[0] == 1 and "already in use" in got[2], str(got))
+    rc, _, err = run("serve", "--private", "--local", folder, "--port", str(busy))
+    check("cli: a positional model is still only accepted as the first argument",
+          rc == 2 and "unknown option " + folder in err, err)
     for args, message in [(["--context", "12q"], "--context takes tokens"),
                           (["--slots", "two"], "--slots needs a whole number"),
                           (["--context"], "--context needs a value"),
