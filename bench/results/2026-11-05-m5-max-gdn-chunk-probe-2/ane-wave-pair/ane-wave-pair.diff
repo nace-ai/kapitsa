@@ -1,0 +1,93 @@
+diff --git a/src/model/qwen35.cpp b/src/model/qwen35.cpp
+index 72e01385..e9bcf677 100644
+--- a/src/model/qwen35.cpp
++++ b/src/model/qwen35.cpp
+@@ -3770,16 +3770,20 @@ int Qwen35::gpu_wave_rows(int T) const {
+   return (T / 2 + 63) / 64 * 64;
+ }
+ 
++// xh2_ / hh2_ for a half of `rows` rows (at most the larger half of a chunk: tmax_ / 2 + 64 rows), made once
++void Qwen35::wave_scratch(int rows) {
++  if (xh2_ && xh2_.size >= size_t(rows) * (xh_.size / size_t(tmax_))) return;
++  const size_t n = size_t(tmax_) / 2 + 64;
++  xh2_ = Gpu::get().alloc(n * (xh_.size / size_t(tmax_)), "xh2");
++  hh2_ = Gpu::get().alloc(n * (hh_.size / size_t(tmax_)), "hh2");
++  owned_bufs_.push_back(xh2_);
++  owned_bufs_.push_back(hh2_);
++}
++
+ void Qwen35::enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
+   const int D = cfg_.hidden, TA = h, TB = T - h;
+   const Buffer xA = x_.view(0, size_t(TA) * D * 4), xB = x_.view(size_t(TA) * D * 4, size_t(TB) * D * 4);
+-  if (!xh2_ || xh2_.size < size_t(TB) * xh_.size / size_t(tmax_)) {  // the MoE's rows: at most the larger half's
+-    const size_t rows = size_t(tmax_) / 2 + 64;
+-    xh2_ = Gpu::get().alloc(rows * (xh_.size / size_t(tmax_)), "xh2");
+-    hh2_ = Gpu::get().alloc(rows * (hh_.size / size_t(tmax_)), "hh2");
+-    owned_bufs_.push_back(xh2_);
+-    owned_bufs_.push_back(hh2_);
+-  }
++  wave_scratch(TB);
+   Encoder::Tape ta, tb;
+   // half rows' MoE layer i (and the drafter's capture of its rows, which then hold layer i's output), on xh2_ / hh2_
+   auto moe = [&](Encoder::Tape& t, int i, int p, int rows, const Buffer& x) {
+diff --git a/src/model/qwen35.h b/src/model/qwen35.h
+index ccd565cc..c0e056f6 100644
+--- a/src/model/qwen35.h
++++ b/src/model/qwen35.h
+@@ -659,6 +659,7 @@ class Qwen35 : public Model {
+   int gpu_wave_rows(int T) const;
+   void enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+   Buffer xh2_, hh2_;  // the MoE chain's xh_ / hh_ while a mixer uses those (gpu_wave_rows)
++  void wave_scratch(int rows);
+   bool gpu_wave_model_ = true;  // false: this model was not measured with the wavefront (Clover), only NI_PF_WAVE=1
+   void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
+   // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
+diff --git a/src/model/qwen35_ane.cpp b/src/model/qwen35_ane.cpp
+index 500bf280..a9ede77f 100644
+--- a/src/model/qwen35_ane.cpp
++++ b/src/model/qwen35_ane.cpp
+@@ -389,9 +389,17 @@ void Qwen35::enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
+   const Buffer xA = x_.view(0, size_t(TA) * D * 4), xB = x_.view(size_t(TA) * D * 4, size_t(TB) * D * 4);
+   const uint32_t g = ane_->gpu_channels();
+   ane::FfnSplit& A = *ane_;
++  // NI_ANE_WAVE_PAIR (measuring): half B's GPU FFN part of layer i beside half A's mixer of layer i+1 (Encoder tapes:
++  // the mixer's DeltaNet scan or attention beside the FFN's gate/up GEMM), the mixer on xh2_ / hh2_
++  static const bool pair = getenv("NI_ANE_WAVE_PAIR") && atoi(getenv("NI_ANE_WAVE_PAIR")) != 0;
++  const bool paired = pair && e.grouped() && Encoder::tapes_ok();
++  if (paired) wave_scratch(TA);
++  Encoder::Tape tg_, tm_;
++  bool mixed = false;  // layer i's A mixer was encoded beside layer i-1's B FFN part
+   for (int i = 0; i < cfg_.layers; ++i) {
+     const Layer& L = layers_[i];
+-    enc_mixer_prefill(e, s, i, L, pos0, TA, xA);
++    if (!mixed) enc_mixer_prefill(e, s, i, L, pos0, TA, xA);
++    mixed = false;
+     enc_rows_half(e, xA, L.post_norm, xh_, TA, D);
+     if (i == 0) A.stage_layer(e, 0, 0);
+     A.pack(e, 0, xh_, TA);
+@@ -408,7 +416,24 @@ void Qwen35::enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
+     if (i + 1 < cfg_.layers) A.stage_layer(e, i + 1, (i + 1) & 1);
+     A.join(e, 0, xA, TA);
+     if (cap_) enc_capture(e, i, pos0, TA, &xA);  // layer i is complete in A's rows
+-    enc_mlp_gpu_part(e, L, TB, g, xB);
++    if (paired && i + 1 < cfg_.layers) {
++      tg_.clear();
++      e.record(&tg_);
++      enc_mlp_gpu_part(e, L, TB, g, xB);
++      e.record(nullptr);
++      tm_.clear();
++      e.record(&tm_);
++      std::swap(xh_, xh2_);
++      std::swap(hh_, hh2_);
++      enc_mixer_prefill(e, s, i + 1, layers_[i + 1], pos0, TA, xA);
++      std::swap(xh_, xh2_);
++      std::swap(hh_, hh2_);
++      e.record(nullptr);
++      e.play_pair(tg_, tm_);
++      mixed = true;
++    } else {
++      enc_mlp_gpu_part(e, L, TB, g, xB);
++    }
+   }
+   A.join(e, 1, xB, TB);
+   if (cap_) enc_capture(e, cfg_.layers - 1, pos0 + TA, TB, &xB);

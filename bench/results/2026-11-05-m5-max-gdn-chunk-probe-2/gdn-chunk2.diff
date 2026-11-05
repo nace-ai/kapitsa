@@ -1,0 +1,562 @@
+diff --git a/src/kernels/gdn.metal b/src/kernels/gdn.metal
+index 904e7b18..ba68f738 100644
+--- a/src/kernels/gdn.metal
++++ b/src/kernels/gdn.metal
+@@ -536,3 +536,318 @@ struct RowsParams {
+   }
+   for (uint i = tid; i < p.D; i += ntg) Y[t * p.D + i] = half(p.norm ? x[i] * inv * float(w[i]) : x[i]);
+ }
++
++// ---- Chunked gated delta rule (NI_GDN_CHUNK): gdn_step_par's recurrence over blocks of 64 tokens ----
++// Per value head, S (dv x dk) evolves as S_t = g_t S_{t-1} + u_t k_t^T with u_t = beta_t (v_t - g_t S_{t-1} k_t), and
++// o_t = S_t q_t. Within a block with cumulative log decays l_i (Gam_i = exp(l_i)) that is the WY form:
++//   A_ij = beta_i exp(l_i - l_j) k_i.k_j (j < i),  (I + A) W = diag(beta Gam) K,  (I + A) Uv = diag(beta) V,
++//   U = Uv - W S^T,  O = diag(Gam) Q S^T + P U with P_ij = exp(l_i - l_j) q_i.k_j (j <= i),
++//   S <- Gam_last S + U^T diag(Gam_last / Gam) K.
++// gdn_chunk_prep (every block and head at once) writes W, Uv, P and l; gdn_chunk_scan walks one head's blocks in order
++// for a 16-row slice of S. fp32 throughout, but summed in another order than gdn_step_par: not bitwise its outputs.
++// Rows of the last block past T count as no decay and beta 0; their k rows are zeroed here (buffers hold whole blocks).
++// Scratch per (block b, head h), ch = b * Hv + h: W [ch][64][128], Uv [ch][64][128], P [ch][64][64], l [ch][64].
++// grid: blocks x Hv threadgroups of 256 threads.
++[[kernel]] void gdn_chunk_prep(device float* q [[buffer(0)]], device float* k [[buffer(1)]],
++                               const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
++                               const device float* beta [[buffer(4)]], device float* Ws [[buffer(5)]],
++                               device float* Us [[buffer(6)]], device float* Ps [[buffer(7)]],
++                               device float* Ls [[buffer(8)]], constant GdnStepParams& p [[buffer(9)]],
++                               uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
++                               uint sg [[simdgroup_index_in_threadgroup]]) {
++  constexpr uint D = 128, C = 64;
++  const uint blk = tg.x, h = tg.y, hk = h / (p.Hv / p.Hk);
++  const uint t0 = blk * C, n = min(C, p.T - t0), qk = p.Hk * D;
++  const size_t ch = size_t(blk) * p.Hv + h;
++  threadgroup float A[C * C];  // (16,384 B: the cumulative log decays pass through its first row first)
++  device float* L = Ls + ch * C;
++  // the last block's rows past T: q and k zeroed once per key head (the scan multiplies whole 8-row tiles)
++  if (n < C && h % (p.Hv / p.Hk) == 0)
++    for (uint e = tid; e < (C - n) * D; e += 256) {
++      const size_t o = size_t(t0 + n + e / D) * qk + hk * D + e % D;
++      q[o] = 0.0f;
++      k[o] = 0.0f;
++    }
++  if (tid < C) {
++    const float lv = tid < n ? max(metal::precise::log(g[(t0 + tid) * p.Hv + h]), -80.0f) : 0.0f;
++    A[tid] = simd_prefix_inclusive_sum(lv);
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  if (tid < C) L[tid] = A[tid] + (tid >= 32 ? A[31] : 0.0f);
++  threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
++  // K K^T into A and Q K^T into P, lower 8x8 tiles (36 of 64), raw
++  const device float* kb = k + size_t(t0) * qk + hk * D;
++  const device float* qb = q + size_t(t0) * qk + hk * D;
++  device float* P = Ps + ch * C * C;
++  for (uint tt = sg; tt < 36; tt += 8) {
++    uint a = 0;
++    while ((a + 1) * (a + 2) / 2 <= tt) ++a;
++    const uint b = tt - a * (a + 1) / 2;
++    simdgroup_float8x8 kk = simdgroup_float8x8(0), qq = simdgroup_float8x8(0), ka, kt, qa;
++    for (uint d0 = 0; d0 < D; d0 += 8) {
++      simdgroup_load(ka, kb, qk, ulong2(d0, 8 * a));
++      simdgroup_load(qa, qb, qk, ulong2(d0, 8 * a));
++      simdgroup_load(kt, kb, qk, ulong2(d0, 8 * b), true);
++      simdgroup_multiply_accumulate(kk, ka, kt, kk);
++      simdgroup_multiply_accumulate(qq, qa, kt, qq);
++    }
++    simdgroup_store(kk, A, C, ulong2(8 * b, 8 * a));
++    simdgroup_store(qq, P, C, ulong2(8 * b, 8 * a));
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
++  // decays and masks (select: rows past T may hold anything)
++  for (uint e = tid; e < C * C; e += 256) {
++    const uint i = e / C, j = e % C;
++    const float dec = metal::precise::exp(L[i] - L[j]);
++    const float bi = i < n ? beta[(t0 + i) * p.Hv + h] : 0.0f;
++    A[e] = (j < i && i < n) ? bi * dec * A[e] : 0.0f;
++    P[e] = (j <= i && i < n) ? dec * P[e] : 0.0f;
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  // forward substitution, one column a thread: W (threads 0-127) from beta Gam k, Uv (128-255) from beta v
++  const bool isw = tid < D;
++  const uint d = tid % D;
++  device float* X = (isw ? Ws : Us) + ch * C * D + d;
++  float x[C];
++  _Pragma("clang loop unroll(full)")
++  for (uint i = 0; i < C; ++i) {
++    float acc = 0.0f;
++    if (i < n) {
++      const float bi = beta[(t0 + i) * p.Hv + h];
++      acc = isw ? bi * metal::precise::exp(L[i]) * k[size_t(t0 + i) * qk + hk * D + d]
++                : bi * v[size_t(t0 + i) * p.Hv * D + h * D + d];
++    }
++    _Pragma("clang loop unroll(full)")
++    for (uint j = 0; j < i; ++j) acc = fma(-A[i * C + j], x[j], acc);
++    x[i] = acc;
++    X[i * D] = acc;
++  }
++}
++
++// One head's 16-row slice of S across the blocks in order (gdn_chunk_prep's scratch): per block U = Uv - W S^T,
++// O = diag(Gam) Q S^T + P U into out [t][h * 128 + dv] (whole blocks: rows past T are written too), then
++// S <- Gam_last S + U^T diag(Gam_last / Gam) K. grid: Hv * 8 threadgroups of 128 threads (4 simdgroups).
++[[kernel]] void gdn_chunk_scan(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
++                               const device float* Ws [[buffer(2)]], const device float* Us [[buffer(3)]],
++                               const device float* Ps [[buffer(4)]], const device float* Ls [[buffer(5)]],
++                               device float* state [[buffer(6)]], device float* out [[buffer(7)]],
++                               constant GdnStepParams& p [[buffer(8)]], uint tg [[threadgroup_position_in_grid]],
++                               uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
++                               uint lane [[thread_index_in_simdgroup]]) {
++  constexpr uint D = 128, C = 64, SV = 16;
++  const uint h = tg / (D / SV), v0 = (tg % (D / SV)) * SV;
++  const uint hk = h / (p.Hv / p.Hk), qk = p.Hk * D, vd = p.Hv * D;
++  threadgroup float S[SV * D];  // rows dv - v0, columns dk
++  threadgroup float U[C * SV];
++  threadgroup float lg[C];
++  threadgroup float dg[4 * 2 * 64];  // per simdgroup: diag(Gam) of its two row tiles
++  device float* St = state + (size_t(h) * D + v0) * D;
++  for (uint e = tid; e < SV * D; e += 128) S[e] = St[e];
++  const uint nblk = (p.T + C - 1) / C;
++  for (uint blk = 0; blk < nblk; ++blk) {
++    const uint t0 = blk * C;
++    const size_t ch = size_t(blk) * p.Hv + h;
++    const device float* W = Ws + ch * C * D;
++    const device float* Uv = Us + ch * C * D;
++    const device float* P = Ps + ch * C * C;
++    if (tid < C) lg[tid] = Ls[ch * C + tid];
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // U = Uv - W S^T: 8 x 2 tiles of 8x8, row tiles 2 sg, 2 sg + 1
++    for (uint ta = 0; ta < 2; ++ta)
++      for (uint tb = 0; tb < 2; ++tb) {
++        const uint a = 2 * sg + ta;
++        simdgroup_float8x8 m = simdgroup_float8x8(0), wf, sf, uf;
++        for (uint d0 = 0; d0 < D; d0 += 8) {
++          simdgroup_load(wf, W, D, ulong2(d0, 8 * a));
++          simdgroup_load(sf, S, D, ulong2(d0, 8 * tb), true);
++          simdgroup_multiply_accumulate(m, wf, sf, m);
++        }
++        simdgroup_load(uf, Uv, D, ulong2(v0 + 8 * tb, 8 * a));
++        uf.thread_elements()[0] -= m.thread_elements()[0];
++        uf.thread_elements()[1] -= m.thread_elements()[1];
++        simdgroup_store(uf, U, SV, ulong2(8 * tb, 8 * a));
++      }
++    // this simdgroup's diag(Gam) tiles
++    for (uint e = lane; e < 128; e += 32) {
++      const uint ta = e / 64, r = (e % 64) / 8, c = e % 8;
++      dg[sg * 128 + e] = r == c ? metal::precise::exp(lg[8 * (2 * sg + ta) + r]) : 0.0f;
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // O = diag(Gam) (Q S^T) + P U
++    for (uint ta = 0; ta < 2; ++ta)
++      for (uint tb = 0; tb < 2; ++tb) {
++        const uint a = 2 * sg + ta;
++        simdgroup_float8x8 qs = simdgroup_float8x8(0), o = simdgroup_float8x8(0), qf, sf, pf, uf, df;
++        for (uint d0 = 0; d0 < D; d0 += 8) {
++          simdgroup_load(qf, q + size_t(t0) * qk + hk * D, qk, ulong2(d0, 8 * a));
++          simdgroup_load(sf, S, D, ulong2(d0, 8 * tb), true);
++          simdgroup_multiply_accumulate(qs, qf, sf, qs);
++        }
++        for (uint c = 0; c <= a; ++c) {
++          simdgroup_load(pf, P, C, ulong2(8 * c, 8 * a));
++          simdgroup_load(uf, U, SV, ulong2(8 * tb, 8 * c));
++          simdgroup_multiply_accumulate(o, pf, uf, o);
++        }
++        simdgroup_load(df, dg + sg * 128 + ta * 64, 8);
++        simdgroup_multiply_accumulate(o, df, qs, o);
++        simdgroup_store(o, out + size_t(t0 + 8 * a) * vd + h * D + v0 + 8 * tb, vd);
++      }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // U <- diag(Gam_last / Gam) U
++    for (uint e = tid; e < C * SV; e += 128) U[e] *= metal::precise::exp(lg[C - 1] - lg[e / SV]);
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // S <- Gam_last S + U^T K: 2 x 16 tiles, simdgroup sg: row tile sg / 2, column tiles (sg % 2) * 8 .. + 7
++    const float gl = metal::precise::exp(lg[C - 1]);
++    const uint ra = sg / 2;
++    simdgroup_float8x8 acc[8];
++    for (uint cb = 0; cb < 8; ++cb) {
++      const uint col = ((sg % 2) * 8 + cb) * 8;
++      simdgroup_load(acc[cb], S, D, ulong2(col, 8 * ra));
++      acc[cb].thread_elements()[0] *= gl;
++      acc[cb].thread_elements()[1] *= gl;
++      for (uint c = 0; c < C / 8; ++c) {
++        simdgroup_float8x8 ut, kf;
++        simdgroup_load(ut, U, SV, ulong2(8 * ra, 8 * c), true);
++        simdgroup_load(kf, k + size_t(t0) * qk + hk * D, qk, ulong2(col, 8 * c));
++        simdgroup_multiply_accumulate(acc[cb], ut, kf, acc[cb]);
++      }
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    for (uint cb = 0; cb < 8; ++cb) simdgroup_store(acc[cb], S, D, ulong2(((sg % 2) * 8 + cb) * 8, 8 * ra));
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  for (uint e = tid; e < SV * D; e += 128) St[e] = S[e];
++}
++
++// gdn_chunk_scan2: gdn_chunk_scan with one threadgroup per NS = 128 / (8 * SG) dv-row slice of a head (SG simdgroups,
++// 8 rows each), the slice's S^T held in registers (simdgroup s: S^T's columns dv 8s..8s+7, all 16 dk row tiles), and
++// each block's W, Q, K (32-column pieces) and P staged once in threadgroup memory for all simdgroups instead of read
++// from device by each. Per block, simdgroup s computes its own 8 dv columns:
++//   U = Uv - W S^T (8 row tiles), O = diag(Gam) Q S^T + P U, S^T <- Gam_last S^T + K^T diag(Gam_last / Gam) U.
++// grid: Hv * (128 / (8 * SG)) threadgroups of 32 * SG threads.
++// rows 0..63, columns col0..col0+31 of a row-major source (ld floats a row) into stg [64][32]
++NI_INLINE void gdn_chunk_stage(threadgroup float* stg, const device float* src, uint ld, uint col0, uint tid, uint nt) {
++  for (uint e = tid; e < 64 * 32; e += nt) stg[e] = src[size_t(e / 32) * ld + col0 + e % 32];
++}
++
++template <uint SG>
++NI_INLINE void gdn_chunk_scan2_impl(const device float* q, const device float* k, const device float* Ws,
++                                    const device float* Us, const device float* Ps, const device float* Ls,
++                                    device float* state, device float* out, constant GdnStepParams& p, uint tg,
++                                    uint tid, uint sg, uint lane, threadgroup float* stg, threadgroup float* Pt,
++                                    threadgroup float* lg, threadgroup float* dg) {
++  constexpr uint D = 128, C = 64, SV = 8 * SG, KC = 32;  // rows of the slice; columns per staged piece
++  const uint h = tg / (D / SV), v0 = (tg % (D / SV)) * SV + 8 * sg;  // this simdgroup's 8 dv rows
++  const uint hk = h / (p.Hv / p.Hk), qk = p.Hk * D, vd = p.Hv * D, nt = 32 * SG;
++  simdgroup_float8x8 st[D / 8];  // S^T tiles: rows dk 8c.., columns dv v0..v0+7
++  device float* Sd = state + size_t(h) * D * D;  // S row-major [dv][dk]
++  for (uint c = 0; c < D / 8; ++c) simdgroup_load(st[c], Sd, D, ulong2(8 * c, v0), true);
++  const uint nblk = (p.T + C - 1) / C;
++  for (uint blk = 0; blk < nblk; ++blk) {
++    const uint t0 = blk * C;
++    const size_t ch = size_t(blk) * p.Hv + h;
++    const device float* W = Ws + ch * C * D;
++    const device float* Uv = Us + ch * C * D;
++    const device float* qb = q + size_t(t0) * qk + hk * D;
++    const device float* kb = k + size_t(t0) * qk + hk * D;
++    for (uint e = tid; e < C * C; e += nt) Pt[e] = Ps[ch * C * C + e];
++    if (tid < C) lg[tid] = Ls[ch * C + tid];
++    // U = Uv - W S^T: u[a] is rows 8a.. of this simdgroup's 8 columns
++    simdgroup_float8x8 u[C / 8];
++    for (uint a = 0; a < C / 8; ++a) u[a] = simdgroup_float8x8(0);
++    for (uint d0 = 0; d0 < D; d0 += KC) {
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      gdn_chunk_stage(stg, W, D, d0, tid, nt);
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      for (uint a = 0; a < C / 8; ++a)
++        for (uint c = 0; c < KC / 8; ++c) {
++          simdgroup_float8x8 wf;
++          simdgroup_load(wf, stg, KC, ulong2(8 * c, 8 * a));
++          simdgroup_multiply_accumulate(u[a], wf, st[d0 / 8 + c], u[a]);
++        }
++    }
++    for (uint a = 0; a < C / 8; ++a) {
++      simdgroup_float8x8 uvf;
++      simdgroup_load(uvf, Uv, D, ulong2(v0, 8 * a));
++      uvf.thread_elements()[0] -= u[a].thread_elements()[0];
++      uvf.thread_elements()[1] -= u[a].thread_elements()[1];
++      u[a] = uvf;
++    }
++    threadgroup float* dgs = dg + sg * 64;  // this simdgroup's diagonal tile (diag(Gam), then diag(Gam_last / Gam))
++    // O = diag(Gam) Q S^T + P U, row tile a at a time (the diagonal tile of Gam rebuilt per a)
++    simdgroup_float8x8 qs[C / 8];
++    for (uint a = 0; a < C / 8; ++a) qs[a] = simdgroup_float8x8(0);
++    for (uint d0 = 0; d0 < D; d0 += KC) {
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      gdn_chunk_stage(stg, qb, qk, d0, tid, nt);
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      for (uint a = 0; a < C / 8; ++a)
++        for (uint c = 0; c < KC / 8; ++c) {
++          simdgroup_float8x8 qf;
++          simdgroup_load(qf, stg, KC, ulong2(8 * c, 8 * a));
++          simdgroup_multiply_accumulate(qs[a], qf, st[d0 / 8 + c], qs[a]);
++        }
++    }
++    for (uint a = 0; a < C / 8; ++a) {
++      for (uint e = lane; e < 64; e += 32) dgs[e] = e / 8 == e % 8 ? metal::precise::exp(lg[8 * a + e / 8]) : 0.0f;
++      simdgroup_barrier(mem_flags::mem_threadgroup);
++      simdgroup_float8x8 o = simdgroup_float8x8(0), df, pf;
++      for (uint c = 0; c <= a; ++c) {
++        simdgroup_load(pf, Pt, C, ulong2(8 * c, 8 * a));
++        simdgroup_multiply_accumulate(o, pf, u[c], o);
++      }
++      simdgroup_load(df, dgs, 8);
++      simdgroup_multiply_accumulate(o, df, qs[a], o);
++      simdgroup_store(o, out + size_t(t0 + 8 * a) * vd + h * D, vd, ulong2(v0, 0));
++      simdgroup_barrier(mem_flags::mem_threadgroup);
++    }
++    // u <- diag(Gam_last / Gam) u (every O tile has read u: only the state update reads it from here on)
++    for (uint a = 0; a < C / 8; ++a) {
++      for (uint e = lane; e < 64; e += 32)
++        dgs[e] = e / 8 == e % 8 ? metal::precise::exp(lg[C - 1] - lg[8 * a + e / 8]) : 0.0f;
++      simdgroup_barrier(mem_flags::mem_threadgroup);
++      simdgroup_float8x8 df, us = simdgroup_float8x8(0);
++      simdgroup_load(df, dgs, 8);
++      simdgroup_multiply_accumulate(us, df, u[a], us);
++      u[a] = us;
++      simdgroup_barrier(mem_flags::mem_threadgroup);
++    }
++    // S^T <- Gam_last S^T + K^T u: tile c of S^T (rows dk 8c..) += sum_a K(a, c)^T u[a]
++    const float gl = metal::precise::exp(lg[C - 1]);
++    for (uint c = 0; c < D / 8; ++c) {
++      st[c].thread_elements()[0] *= gl;
++      st[c].thread_elements()[1] *= gl;
++    }
++    for (uint d0 = 0; d0 < D; d0 += KC) {
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      gdn_chunk_stage(stg, kb, qk, d0, tid, nt);
++      threadgroup_barrier(mem_flags::mem_threadgroup);
++      for (uint c = 0; c < KC / 8; ++c)
++        for (uint a = 0; a < C / 8; ++a) {
++          simdgroup_float8x8 kt;
++          simdgroup_load(kt, stg, KC, ulong2(8 * c, 8 * a), true);
++          simdgroup_multiply_accumulate(st[d0 / 8 + c], kt, u[a], st[d0 / 8 + c]);
++        }
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++  }
++  for (uint c = 0; c < D / 8; ++c) simdgroup_store(st[c], Sd, D, ulong2(8 * c, v0), true);
++}
++
++#define NI_GDN_CHUNK_SCAN2(NAME, SG)                                                                       \
++  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],           \
++                       const device float* Ws [[buffer(2)]], const device float* Us [[buffer(3)]],         \
++                       const device float* Ps [[buffer(4)]], const device float* Ls [[buffer(5)]],         \
++                       device float* state [[buffer(6)]], device float* out [[buffer(7)]],                 \
++                       constant GdnStepParams& p [[buffer(8)]], uint tg [[threadgroup_position_in_grid]],  \
++                       uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]], \
++                       uint lane [[thread_index_in_simdgroup]]) {                                          \
++    threadgroup float stg[64 * 32];                                                                        \
++    threadgroup float Pt[64 * 64];                                                                         \
++    threadgroup float lg[64];                                                                              \
++    threadgroup float dg[SG * 64];                                                                         \
++    gdn_chunk_scan2_impl<SG>(q, k, Ws, Us, Ps, Ls, state, out, p, tg, tid, sg, lane, stg, Pt, lg, dg);    \
++  }
++NI_GDN_CHUNK_SCAN2(gdn_chunk_scan2_sg8, 8)
++NI_GDN_CHUNK_SCAN2(gdn_chunk_scan2_sg16, 16)
++NI_GDN_CHUNK_SCAN2(gdn_chunk_scan2_sg4, 4)
+diff --git a/src/kernels/tensor/zz_gdn_tprobe.metal b/src/kernels/tensor/zz_gdn_tprobe.metal
+new file mode 100644
+index 00000000..4b3fc8a0
+--- /dev/null
++++ b/src/kernels/tensor/zz_gdn_tprobe.metal
+@@ -0,0 +1,77 @@
++// scratch probe (not for merge): the matrix work of a chunked DeltaNet scan on the tensor units, half inputs, fp32
++// accumulators. One threadgroup per (head, 64-row dv slice), 4 simdgroups each one 32 x 32 output tile; per 64-token
++// block: U = W S^T (64 x 64 x 128), Y = Q S^T (64 x 64 x 128), U to threadgroup memory as half, S += U^T K
++// (64 x 128 x 64, two 32 x 32 tiles a simdgroup over 4 x 32 columns), S kept as half in threadgroup memory.
++#include "common.h"
++#include <metal_tensor>
++#include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
++using namespace mpp::tensor_ops;
++
++[[kernel, max_total_threads_per_threadgroup(128)]] void zz_gdn_tprobe(
++    const device half* W [[buffer(0)]], const device half* Q [[buffer(1)]], const device half* K [[buffer(2)]],
++    device float* out [[buffer(3)]], constant uint& nblk [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],
++    uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]]) {
++  constexpr int C = 64, D = 128, SV = 64;
++  threadgroup half S[SV * D];   // 16 KB
++  threadgroup half Ut[C * SV];  // 8 KB, [t][dv]
++  for (uint e = tid; e < SV * D; e += 128) S[e] = half(0.001f * float(e % 7));
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  typedef tensor<threadgroup half, dextents<int32_t, 2>, tensor_inline> tg_t;
++  typedef tensor<device half, dextents<int32_t, 2>, tensor_inline> dv_t;
++  constexpr auto dT = matmul2d_descriptor(32, 32, 32, false, true, false, matmul2d_descriptor::mode::multiply_accumulate);
++  constexpr auto dN = matmul2d_descriptor(32, 32, 32, true, false, false, matmul2d_descriptor::mode::multiply_accumulate);
++  matmul2d<dT, execution_simdgroup> opT;
++  matmul2d<dN, execution_simdgroup> opN;
++  const uint tr = sg / 2, tc = sg % 2;
++  auto tS = tg_t(S, dextents<int32_t, 2>(D, SV));    // [dv][d]: rows dv, columns d
++  auto tU = tg_t(Ut, dextents<int32_t, 2>(SV, C));   // [t][dv]
++  float sink = 0.0f;
++  for (uint b = 0; b < nblk; ++b) {
++    const size_t base = (size_t(tg) * nblk + b) * C * D;
++    auto tW = dv_t((device half*)W + base, dextents<int32_t, 2>(D, C));
++    auto tQ = dv_t((device half*)Q + base, dextents<int32_t, 2>(D, C));
++    auto tK = dv_t((device half*)K + base, dextents<int32_t, 2>(D, C));
++    auto w0 = tW.template slice<32, 32>(0, 0);
++    auto s0 = tS.template slice<32, 32>(0, 0);
++    auto u = opT.template get_destination_cooperative_tensor<decltype(w0), decltype(s0), float>();
++    auto y = opT.template get_destination_cooperative_tensor<decltype(w0), decltype(s0), float>();
++    for (uint16_t i = 0; i < u.get_capacity(); ++i) u[i] = 0.0f, y[i] = 0.0f;
++    for (int d0 = 0; d0 < D; d0 += 32) {
++      auto ws = tW.template slice<32, 32>(d0, int32_t(32 * tr));
++      auto qs = tQ.template slice<32, 32>(d0, int32_t(32 * tr));
++      auto ss = tS.template slice<32, 32>(d0, int32_t(32 * tc));
++      opT.run(ws, ss, u);
++      opT.run(qs, ss, y);
++    }
++    for (uint16_t i = 0; i < y.get_capacity(); ++i) sink += y[i];
++    for (uint16_t i = 0; i < u.get_capacity(); ++i) {
++      if (!u.is_valid_element(i)) continue;
++      const auto ix = u.get_multidimensional_index(i);
++      Ut[(32 * tr + ix[1]) * SV + 32 * tc + ix[0]] = half(u[i]);
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    // S[dv][d] += sum_t U[t][dv] K[t][d]: this simdgroup's dv rows 32 * tr.., columns 64 * tc .. + 63 (two tiles)
++    auto ua = tU.template slice<32, 32>(int32_t(32 * tr), 0);
++    auto ka = tK.template slice<32, 32>(int32_t(64 * tc), 0);
++    auto s1 = opN.template get_destination_cooperative_tensor<decltype(ua), decltype(ka), float>();
++    auto s2 = opN.template get_destination_cooperative_tensor<decltype(ua), decltype(ka), float>();
++    for (uint16_t i = 0; i < s1.get_capacity(); ++i) s1[i] = 0.0f, s2[i] = 0.0f;
++    for (int t0 = 0; t0 < C; t0 += 32) {
++      auto us = tU.template slice<32, 32>(int32_t(32 * tr), t0);
++      auto k1 = tK.template slice<32, 32>(int32_t(64 * tc), t0);
++      auto k2 = tK.template slice<32, 32>(int32_t(64 * tc + 32), t0);
++      opN.run(us, k1, s1);
++      opN.run(us, k2, s2);
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    for (uint16_t i = 0; i < s1.get_capacity(); ++i) {
++      if (!s1.is_valid_element(i)) continue;
++      const auto ix = s1.get_multidimensional_index(i);
++      const uint r = 32 * tr + ix[1], c = 64 * tc + ix[0];
++      S[r * D + c] = half(0.99f * float(S[r * D + c]) + s1[i]);
++      S[r * D + c + 32] = half(0.99f * float(S[r * D + c + 32]) + s2[i]);
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++  }
++  out[tg * 128 + tid] = sink + float(S[tid]);
++}
+diff --git a/tools/bench_gdn.cpp b/tools/bench_gdn.cpp
+index 0317b5d5..997e1c3c 100644
+--- a/tools/bench_gdn.cpp
++++ b/tools/bench_gdn.cpp
+@@ -64,20 +64,20 @@ int main(int argc, char** argv) {
+   struct Path {
+     Buffer conv, rec, q, k, v, gg, beta, out, y;
+   };
+-  auto make_path = [&]() {
++  auto make_path = [&](uint32_t rows) {
+     Path p;
+     p.conv = g.alloc(size_t(3) * C * 4);
+     p.rec = g.alloc(size_t(Hv) * D * D * 4);
+-    p.q = g.alloc(size_t(T) * QK * 4);
+-    p.k = g.alloc(size_t(T) * QK * 4);
+-    p.v = g.alloc(size_t(T) * VD * 4);
++    p.q = g.alloc(size_t(rows) * QK * 4);
++    p.k = g.alloc(size_t(rows) * QK * 4);
++    p.v = g.alloc(size_t(rows) * VD * 4);
+     p.gg = g.alloc(size_t(T) * Hv * 4);
+     p.beta = g.alloc(size_t(T) * Hv * 4);
+-    p.out = g.alloc(size_t(T) * VD * 4);
++    p.out = g.alloc(size_t(rows) * VD * 4);
+     p.y = g.alloc(size_t(T) * VD * 2);
+     return p;
+   };
+-  Path ref = make_path(), par = make_path();
++  Path ref = make_path(T), par = make_path(T);
+   auto reset = [&](Path& p) {
+     memcpy(p.conv.ptr(), conv0.ptr(), conv0.size);
+     memcpy(p.rec.ptr(), rec0.ptr(), rec0.size);
+@@ -207,6 +207,85 @@ int main(int argc, char** argv) {
+     bad_total += cmp("state", ref.rec, par.rec, size_t(Hv) * D * D, false);
+     bad_total += cmp("y", ref.y, par.y, size_t(T) * VD, true);
+   }
++  // NI_GDN_CHUNK: gdn_chunk_prep -> gdn_chunk_scan (blocks of 64 tokens) against gdn_step_parr4_l16 from the same
++  // state. Another summation order, so not bitwise: the max |diff| of out, state and y relative to max |ref|.
++  if (getenv("GDN_CHUNK")) {
++    constexpr uint32_t BC = 64;
++    const uint32_t nb = (T + BC - 1) / BC;
++    Path cp = make_path(nb * BC);  // whole blocks of q / k / v / out rows
++    Buffer Wsb = g.alloc(size_t(nb) * Hv * BC * D * 4), Usb = g.alloc(size_t(nb) * Hv * BC * D * 4);
++    Buffer Psb = g.alloc(size_t(nb) * Hv * BC * BC * 4), Lsb = g.alloc(size_t(nb) * Hv * BC * 4);
++    auto enc_chunk = [&](Encoder& e, Path& P, int which) {  // 1: prep, 2: scan, 3: both
++      if (which & 1) {
++        e.use(g.pipeline("gdn_chunk_prep"));
++        e.buf(0, P.q); e.buf(1, P.k); e.buf(2, P.v); e.buf(3, P.gg); e.buf(4, P.beta);
++        e.buf(5, Wsb); e.buf(6, Usb); e.buf(7, Psb); e.buf(8, Lsb);
++        e.val(9, sp);
++        e.dispatch(nb, Hv, 1, 256);
++      }
++      if (which & 2) {
++        e.use(g.pipeline("gdn_chunk_scan"));
++        e.buf(0, P.q); e.buf(1, P.k); e.buf(2, Wsb); e.buf(3, Usb); e.buf(4, Psb); e.buf(5, Lsb);
++        e.buf(6, P.rec); e.buf(7, P.out);
++        e.val(8, sp);
++        e.dispatch(Hv * (D / 16), 1, 1, 128);
++      }
++    };
++    const std::string base = "gdn_step_parr4_l16";
++    reset(cp);
++    run([&](Encoder& e) { enc_prep(e, cp, true); });
++    double t_base = timed([&](Encoder& e) { enc_step_par(e, par, base); });
++    double t_cprep = timed([&](Encoder& e) { enc_chunk(e, cp, 1); });
++    double t_cscan = timed([&](Encoder& e) { enc_chunk(e, cp, 2); });
++    printf("  NI_GDN_CHUNK: gdn_chunk_prep %.3f ms + gdn_chunk_scan %.3f ms = %.3f ms against %s %.3f ms (%.2fx)\n",
++           t_cprep, t_cscan, t_cprep + t_cscan, base.c_str(), t_base, t_base / (t_cprep + t_cscan));
++    reset(par);
++    run([&](Encoder& e) {
++      enc_prep(e, par, true);
++      enc_step_par(e, par, base);
++      enc_gnorm(e, par);
++    });
++    reset(cp);
++    run([&](Encoder& e) {
++      enc_prep(e, cp, true);
++      enc_chunk(e, cp, 3);
++      enc_gnorm(e, cp);
++    });
++    worst_rel = 0;
++    cmp("out", par.out, cp.out, size_t(T) * VD, false);
++    cmp("state", par.rec, cp.rec, size_t(Hv) * D * D, false);
++    cmp("y", par.y, cp.y, size_t(T) * VD, true);
++    printf("  NI_GDN_CHUNK against %s: worst max |diff| %.2g of max |ref|\n", base.c_str(), worst_rel);
++    // GDN_SCAN2: gdn_chunk_scan2_sg{4,8,16} (staged blocks, the slice's state in registers) in place of gdn_chunk_scan
++    for (uint32_t sgn : {4u, 8u, 16u}) {
++      if (!getenv("GDN_SCAN2")) break;
++      const std::string nm = "gdn_chunk_scan2_sg" + std::to_string(sgn);
++      auto enc_scan2 = [&](Encoder& e, Path& P) {
++        e.use(g.pipeline(nm));
++        e.buf(0, P.q); e.buf(1, P.k); e.buf(2, Wsb); e.buf(3, Usb); e.buf(4, Psb); e.buf(5, Lsb);
++        e.buf(6, P.rec); e.buf(7, P.out);
++        e.val(8, sp);
++        e.dispatch(Hv * (D / (8 * sgn)), 1, 1, 32 * sgn);
++      };
++      reset(cp);
++      run([&](Encoder& e) { enc_prep(e, cp, true); enc_chunk(e, cp, 1); });
++      const double t2 = timed([&](Encoder& e) { enc_scan2(e, cp); });
++      reset(cp);
++      run([&](Encoder& e) {
++        enc_prep(e, cp, true);
++        enc_chunk(e, cp, 1);
++        enc_scan2(e, cp);
++        enc_gnorm(e, cp);
++      });
++      worst_rel = 0;
++      cmp("out", par.out, cp.out, size_t(T) * VD, false);
++      cmp("state", par.rec, cp.rec, size_t(Hv) * D * D, false);
++      cmp("y", par.y, cp.y, size_t(T) * VD, true);
++      printf("  %s: %.3f ms (gdn_chunk_scan %.3f); worst max |diff| %.2g of max |ref|\n", nm.c_str(), t2, t_cscan,
++             worst_rel);
++    }
++    return 0;
++  }
+   // Under the engine's fast math each kernel's sums are reassociated differently, so expect small
+   // differences (fp32 rounding, a few 1-ulp half outputs); NI_MATH_SAFE=1 must give bit-identical.
+   if (!bad_total) printf("all outputs bit-identical\n");
+diff --git a/tools/zz_gdn_tprobe.cpp b/tools/zz_gdn_tprobe.cpp
+new file mode 100644
+index 00000000..38c323c5
+--- /dev/null
++++ b/tools/zz_gdn_tprobe.cpp
+@@ -0,0 +1,33 @@
++// scratch probe (not for merge): times zz_gdn_tprobe (src/kernels/tensor/zz_gdn_tprobe.metal) for heads x 2 slices x
++// T/64 blocks. zz_gdn_tprobe [T=2048] [Hv=32]
++#include "metal/gpu.h"
++#include <cstdio>
++#include <cstdlib>
++#include <random>
++using namespace ni;
++namespace ni { extern const char* const kTensorKernelSource; }
++int main(int argc, char** argv) {
++  const uint32_t T = argc > 1 ? atoi(argv[1]) : 2048, Hv = argc > 2 ? atoi(argv[2]) : 32, nblk = T / 64;
++  Gpu& g = Gpu::get();
++  g.compile_extra("tensor", kTensorKernelSource, true);
++  const uint32_t ntg = Hv * 2;
++  const size_t n = size_t(ntg) * nblk * 64 * 128;
++  Buffer W = g.alloc(n * 2), Q = g.alloc(n * 2), K = g.alloc(n * 2), out = g.alloc(ntg * 128 * 4);
++  std::mt19937 r(1);
++  for (size_t i = 0; i < n; ++i) {
++    W.as<uint16_t>()[i] = 0x2000 + (r() & 0x3ff);
++    Q.as<uint16_t>()[i] = 0x2000 + (r() & 0x3ff);
++    K.as<uint16_t>()[i] = 0x2000 + (r() & 0x3ff);
++  }
++  Pipeline p = g.pipeline("zz_gdn_tprobe");
++  double best = 1e9;
++  for (int t = 0; t < 8; ++t) {
++    auto e = g.begin();
++    e->use(p);
++    e->buf(0, W); e->buf(1, Q); e->buf(2, K); e->buf(3, out); e->val(4, nblk);
++    e->dispatch(ntg, 1, 1, 128);
++    e->commit_and_wait();
++    if (t) best = std::min(best, e->gpu_ms());
++  }
++  printf("T %u Hv %u: %u threadgroups x %u blocks: %.3f ms\n", T, Hv, ntg, nblk, best);
++}
