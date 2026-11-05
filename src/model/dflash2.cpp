@@ -29,6 +29,15 @@ namespace ni {
 extern const char* const kTensorKernelSource;
 using json = nlohmann::json;
 
+// Default for the history lane and the online selector update (#944): the Qwen3.6 35B-A3B shape on an M5 Pro, where the
+// interleaved A/B measured both faster (PR #944). NI_DFLASH_HIST / NI_DFLASH_SELUPD turn either off ("0") or set its knobs
+// on any model and Mac; unset takes this default. Other targets and Macs keep both off until they are measured.
+static bool dfl_lanes_default(const Qwen35Config& c) {
+  static const bool m5_pro = Gpu::get().name() == "Apple M5 Pro";
+  return m5_pro && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
+         c.shared_I == 512;
+}
+
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
   static const bool m1_max32 = Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32;
   return hidden >= 2560 || (m1_max32 && hidden == 2048 && moe && head_q4);
@@ -440,7 +449,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       // NI_DFLASH_SELUPD=<lr>: the codebooks the GPU rewrites after each tree verify (dfl_sel_update) are tracked
       // buffers, so the next drafting pass's reads wait for the writes; with it off they stay untracked, as before
       const char* su = getenv("NI_DFLASH_SELUPD");
-      selupd_lr_ = su && *su ? float(atof(su)) : 0.0f;
+      selupd_lr_ = su && *su ? float(atof(su)) : dfl_lanes_default(tg_.config()) ? 0.02f : 0.0f;
       if (!(selupd_lr_ > 0.0f)) selupd_lr_ = 0.0f;
       const char* st = getenv("NI_DFLASH_SELUPD_TAU");
       if (st && *st && atof(st) > 0) selupd_tau_ = float(atof(st));
@@ -459,16 +468,21 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
           uint32_t* dst = (c ? selupd_B_ : selupd_A_).as<uint32_t>();
           for (size_t i = 0; i < n; ++i) dst[i] = uint32_t(src[i]) << 16;  // bf16 -> fp32 is exact
         }
-        logi("DFlash2: online selector update on (NI_DFLASH_SELUPD lr %g, tau %g; fp32 masters %.0f MB)", selupd_lr_,
-             selupd_tau_, 2.0 * double(n) * 4 / 1048576.0);
+        logi("DFlash2: online selector update on (lr %g, tau %g; fp32 masters %.0f MB; %s, NI_DFLASH_SELUPD=0 turns it off)",
+             selupd_lr_, selupd_tau_, 2.0 * double(n) * 4 / 1048576.0, su && *su ? "NI_DFLASH_SELUPD" : "default");
       }
     }
-    if (const char* h = getenv("NI_DFLASH_HIST"); h && *h && strcmp(h, "0")) {
+    // the history lane: NI_DFLASH_HIST=0 off, <nmin>,<nmax>,<cap> on with those knobs, unset: the default's 3,8,4 where
+    // dfl_lanes_default says so
+    const char* h = getenv("NI_DFLASH_HIST");
+    const bool hist_env = h && *h;
+    if (hist_env ? strcmp(h, "0") != 0 : dfl_lanes_default(tg_.config())) {
       int a = 3, b = 8, c = 4;
-      if (sscanf(h, "%d,%d,%d", &a, &b, &c) < 1) a = 3;
+      if (hist_env && sscanf(h, "%d,%d,%d", &a, &b, &c) < 1) a = 3;
       hist_nmin_ = std::clamp(a, 1, 8); hist_nmax_ = std::clamp(b, hist_nmin_, 8); hist_cap_ = std::clamp(c, 1, 7);
       hist_ = true;
-      logi("DFlash2: history lane on (n %d..%d, up to %d tokens)", hist_nmin_, hist_nmax_, hist_cap_);
+      logi("DFlash2: history lane on (n %d..%d, up to %d tokens; %s, NI_DFLASH_HIST=0 turns it off)", hist_nmin_,
+           hist_nmax_, hist_cap_, hist_env ? "NI_DFLASH_HIST" : "default");
     }
     // k|v of every layer stacked: one GEMM projects a committed context row for all layers.
     std::vector<const Tensor*> kv_parts;
@@ -641,6 +655,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     for (char& c : key)
       if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '.') c = '_';
     kf_budget_ = std::make_unique<KfBudget>(key);
+    kf_budget_->set_hist_lane(hist_);
     // batched decode (Engine::batch_cycle): the rows of a batch's verify by the same rule; NI_BATCH_KF_FLOOR=1: every
     // member verifies at least one draft
     const char* fl = getenv("NI_BATCH_KF_FLOOR");
@@ -714,6 +729,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       std::string key8 = key;
       if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);
       kf_budget_alt_ = std::make_unique<KfBudget>(key8);
+      kf_budget_alt_->set_hist_lane(hist_);
       kf_budget_alt_->set_rows(1u << (kB - 1), kB);
       kf_budget_alt_->set_wide(false);
       tree_rows_alt_ = kB;

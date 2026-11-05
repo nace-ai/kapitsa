@@ -416,7 +416,7 @@ class DFlash2 {
   // KFlash (see tree()): the tree descriptor (int32 [kf::kWords]), the lattice's children tables (clq float
   // [7][16][16], ctok int, the constant successors), the builder's live-row word, the budget
   bool tree_ = false;
-  bool hist_ = false;  // #316 NI_DFLASH_HIST=<nmin>,<nmax>,<cap>: the history lane (dfl_hist)
+  bool hist_ = false;  // the history lane (dfl_hist): default on for the 35B-A3B on an M5 Pro, NI_DFLASH_HIST=<nmin>,<nmax>,<cap> or 0
   int hist_nmin_ = 3, hist_nmax_ = 8, hist_cap_ = 4;
   bool gst_tree_ = false;  // the drafter state's rows are a tree acceptance's path (gst[4 ..]): commits gather them
   int tree_rows_ = kB;     // the widest allowed verify (the budget's max rows)
