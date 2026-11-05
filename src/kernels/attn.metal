@@ -2050,3 +2050,15 @@ NI_ATTN11(attn_prefill11_k16x, 16, true)
   attn_prefill11_impl<16, true, false, false, true>(q, kc, vc, qg, out, p, tg, tid, sg, lane,
                                                     (threadgroup half*)kvm, xs);
 }
+
+// attn_prefill11g_k16xr: GQA-packed 16-key tile with skipped unit rescales and own exchange buffer
+[[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11g_k16xr(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<16>() / 8];
+  threadgroup float2 xs[attn11_xs<16>()];
+  attn_prefill11_impl<16, true, false, true, true>(q, kc, vc, qg, out, p, tg, tid, sg, lane,
+                                                   (threadgroup half*)kvm, xs);
+}
