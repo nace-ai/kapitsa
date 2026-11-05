@@ -251,7 +251,14 @@ are IQ blocks: below); a split file is named by any of its parts.
 
 The MTP head comes from the file, an `mtp-*.gguf` beside it, an Ollama model's draft layer, or `--mtp FILE`. Options:
 `--name NAME` (the folder; default: from the file name), `--threads N` (default: the performance cores, at most 8),
-`--force` (convert again over an existing folder), `--dry-run` (show the formats, size and folder, write nothing).
+`--force` (convert again over an existing folder), `--dry-run` (show the formats, size and folder, write nothing),
+`--no-drafter` (see below).
+
+A model with the shape of a catalog model (Qwen3.8-27B, Qwen3.6-35B-A3B, Qwen3.5-4B or 9B: a fine-tune of one, say) has no
+drafter in its GGUF, and without one `--dflash auto` finds none and decodes plainly (a 27B fine-tune ran at 15.6 tok/s
+without, 104.7 with the catalog drafter). The import fetches that catalog drafter into the folder's `dflash2/` (1.3 to 3.8 GB) after the
+conversion. If that fails (offline, disk full) the model is still imported and runs without a drafter; `kapitsa import`
+again retries. `--no-drafter` skips it.
 
 | GGUF type | Converted to |
 | --- | --- |

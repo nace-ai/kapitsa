@@ -1939,7 +1939,7 @@ static std::string import_model_files(const ImportOptions& opt) {
 int run_import(int argc, char** argv) {
   ImportOptions o;
   const char* usage =
-      "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force] [--dry-run]\n\n"
+      "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force] [--dry-run] [--no-drafter]\n\n"
       "Converts a GGUF of a Qwen3.5-family model (from LM Studio, Ollama, llama.cpp or a Hugging Face GGUF repo) once\n"
       "into a model folder in %s, which `kapitsa serve --model NAME` runs (`kapitsa serve --model FILE.gguf`\n"
       "converts on first use). A split file is given by any of its parts.\n\n"
@@ -1947,7 +1947,8 @@ int run_import(int argc, char** argv) {
       "  --mtp FILE     the model's MTP head as a separate GGUF (default: the file's own, or an mtp-*.gguf beside it)\n"
       "  --threads N    CPU threads (default: the performance cores, at most 8)\n"
       "  --force        convert again over an existing folder of that name\n"
-      "  --dry-run      show the formats, size and folder of the conversion, and write nothing\n\n"
+      "  --dry-run      show the formats, size and folder of the conversion, and write nothing\n"
+      "  --no-drafter   do not fetch the catalog drafter that matches the model's shape\n\n"
       "Formats: Q4_0/Q4_1/Q4_K keep their codes (4-bit group 32); Q8_0/Q6_K become 8-bit, Q5_x 6-bit, IQ4_x/MXFP4/NVFP4\n"
       "5-bit (group 64), IQ3_x/Q3_K 4-bit group 32, IQ1/IQ2/Q2_K 3-bit group 64, F16/BF16/F32 bf16; in a mostly\n"
       "4-bit-or-better file its 1-3-bit tensors take the file's majority format. MoE experts take 5-bit group 64 from\n"
@@ -1987,6 +1988,7 @@ int run_import(int argc, char** argv) {
       o.threads = int(n);
     }
     else if (a == "--force") o.force = true;
+    else if (a == "--no-drafter") o.drafter = false;
     else if (a == "--dry-run") o.dry_run = true;
     else if (!a.empty() && a[0] != '-' && o.file.empty()) o.file = a;
     else {
