@@ -104,6 +104,7 @@ std::string Clover::find_drafter(const std::string& model_dir) {
 }
 
 Clover::Clover(const std::string& dir, int prefill_chunk) : Qwen35(dir, prefill_chunk) {
+  gpu_wave_model_ = false;  // the 35B-A3B's GPU prefill wavefront (NI_PF_WAVE) was not measured on Clover
   const json c = read_json(dir + "/config.json", true);
   cfg_block_ = c.value("block_size", 32);
   mask_id_ = c.value("mask_token_id", -1);

@@ -3734,6 +3734,8 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (ane_chunk_) ane_begin_chunk(slabs ? ane::slab_rows(T, int(ane::FfnSplit::kMaxRows)) : T);
   if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
+  } else if (!ane_chunk_ && !snap && e.grouped() && gpu_wave_rows(T)) {
+    enc_prefill_gpu_wave(e, s, pos0, T, gpu_wave_rows(T));
   } else {
     for (int i = 0; i < cfg_.layers; ++i) {
       const Layer& L = layers_[i];
@@ -3747,6 +3749,85 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   }
   if (sample) enc_sample(e, s, x_.view(size_t(T - 1) * D * 4, size_t(D) * 4), pos0 + T, sp, step);
   if (snap) snap->pos = pos0 + snap_row;
+}
+
+// NI_PF_WAVE (read once; 0 off): a MoE prefill chunk of at least 1,024 rows as a two-half wavefront on the GPU alone.
+// Layer by layer, half B's token mixer (DeltaNet or attention, its rows after A's) runs beside half A's MoE, then half
+// A's next mixer beside half B's MoE, each pair on one grouped encoder (Encoder::play_pair): a DeltaNet scan or an
+// attention pass, which leaves the GPU's cores half busy, overlaps the other half's expert GEMMs. Each half's rows go
+// through the kernels a chunk of that size would, the second half after the first as a next chunk would, so the
+// logits are those of half-size chunks. Default on for the Qwen3.6 35B-A3B (hidden 2048, 40 layers, 4-bit experts) on
+// an Apple10 GPU of 40 cores or more (the M5 Max), with 8,192-row chunks (auto_chunk), so each half's MoE has as many
+// rows as the 4,096-row chunk it replaces: M5 Max, ni_run, 16,288 ids in 8,192-row chunks 2,767 -> 2,620 ms (-5.3%; in
+// 4,096-row chunks, the default before, 2,777); 4,129 ids in one chunk level (592 -> 590). Halves of 2,048 rows lose
+// what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767): the experts' weights are read once per half.
+bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
+  if (const char* v = getenv("NI_PF_WAVE")) return atoi(v) != 0;
+  return moe && hidden == 2048 && layers == 40 && Gpu::get().apple10() && Gpu::get().core_count() >= 40;
+}
+int Qwen35::gpu_wave_rows(int T) const {
+  static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);
+  static const bool forced = env_int("NI_PF_WAVE", 0) == 1;
+  if (!on || (!gpu_wave_model_ && !forced) || !cfg_.moe || !cfg_.causal || T < 1024 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
+  for (const Layer& L : layers_)
+    if (L.eg.exl3 || L.eg.iq || L.eg.q20 || L.eg.bits != 4) return 0;
+  return (T / 2 + 63) / 64 * 64;
+}
+
+void Qwen35::enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
+  const int D = cfg_.hidden, TA = h, TB = T - h;
+  const Buffer xA = x_.view(0, size_t(TA) * D * 4), xB = x_.view(size_t(TA) * D * 4, size_t(TB) * D * 4);
+  if (!xh2_ || xh2_.size < size_t(TB) * xh_.size / size_t(tmax_)) {  // the MoE's rows: at most the larger half's
+    const size_t rows = size_t(tmax_) / 2 + 64;
+    xh2_ = Gpu::get().alloc(rows * (xh_.size / size_t(tmax_)), "xh2");
+    hh2_ = Gpu::get().alloc(rows * (hh_.size / size_t(tmax_)), "hh2");
+    owned_bufs_.push_back(xh2_);
+    owned_bufs_.push_back(hh2_);
+  }
+  Encoder::Tape ta, tb;
+  // half rows' MoE layer i (and the drafter's capture of its rows, which then hold layer i's output), on xh2_ / hh2_
+  auto moe = [&](Encoder::Tape& t, int i, int p, int rows, const Buffer& x) {
+    t.clear();
+    e.record(&t);
+    std::swap(xh_, xh2_);
+    std::swap(hh_, hh2_);
+    try {
+      enc_moe_prefill(e, layers_[i], rows, x);
+      if (cap_) enc_capture(e, i, p, rows, &x);
+    } catch (...) {
+      std::swap(xh_, xh2_);
+      std::swap(hh_, hh2_);
+      e.record(nullptr);
+      throw;
+    }
+    std::swap(xh_, xh2_);
+    std::swap(hh_, hh2_);
+    e.record(nullptr);
+  };
+  auto mixer = [&](Encoder::Tape& t, int i, int p, int rows, const Buffer& x) {
+    t.clear();
+    e.record(&t);
+    try {
+      enc_mixer_prefill(e, s, i, layers_[i], p, rows, x);
+    } catch (...) {
+      e.record(nullptr);
+      throw;
+    }
+    e.record(nullptr);
+  };
+  enc_mixer_prefill(e, s, 0, layers_[0], pos0, TA, xA);
+  for (int i = 0; i < cfg_.layers; ++i) {
+    moe(ta, i, pos0, TA, xA);
+    mixer(tb, i, pos0 + TA, TB, xB);
+    e.play_pair(ta, tb);
+    moe(ta, i, pos0 + TA, TB, xB);
+    if (i + 1 < cfg_.layers) {
+      mixer(tb, i + 1, pos0, TA, xA);
+      e.play_pair(ta, tb);
+    } else {
+      e.play(ta);
+    }
+  }
 }
 
 void Qwen35::enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer* x) {

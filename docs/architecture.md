@@ -28,6 +28,9 @@ they decode.
    ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
    into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise (on an
    M5, a dense model's passes from 64 rows, from 17 for the 27B on the M5 Max: `NI_SP_QMT`, `NI_QMT_MIN`).
+   Two chunks of work overlap where one engine would idle: the 27B's FFN split hands half a chunk's FFN to the
+   Neural Engine while the GPU runs the other half's token mixer, and on the M5 Max the 35B-A3B's chunk runs as two
+   halves on the GPU alone, one half's DeltaNet scan or attention beside the other half's expert GEMMs (`NI_PF_WAVE`).
 4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B
    and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
    (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do

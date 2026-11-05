@@ -186,6 +186,8 @@ class Qwen35 : public Model {
   explicit Qwen35(const std::string& model_dir, int prefill_chunk = 2048);
   ~Qwen35() override;
   const Qwen35Config& config() const { return cfg_; }
+  // whether NI_PF_WAVE is on for a model of this shape on this GPU (the engine picks its chunk by it)
+  static bool gpu_wave_default(int hidden, int layers, bool moe);
   int vocab() const override { return cfg_.vocab; }
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
 
@@ -657,6 +659,12 @@ class Qwen35 : public Model {
   // NI_ANE wavefront: the first half's rows (0 = not used for a chunk of T rows)
   int ane_wave_rows(int T) const;
   void enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+  // NI_PF_WAVE: a MoE chunk in two halves on the GPU alone, half B's token mixer beside half A's MoE layer and half A's
+  // next mixer beside half B's MoE (Encoder tapes, play_pair): the first half's rows, 0 = not for a chunk of T rows
+  int gpu_wave_rows(int T) const;
+  void enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+  Buffer xh2_, hh2_;  // the MoE chain's xh_ / hh_ while a mixer uses those (gpu_wave_rows)
+  bool gpu_wave_model_ = true;  // false: this model was not measured with the wavefront (Clover), only NI_PF_WAVE=1
   void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
   bool enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
