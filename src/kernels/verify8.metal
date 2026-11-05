@@ -159,15 +159,12 @@ NI_INLINE uint v8t_input_of_slot(uint s) {
 // memory). With norm, every threadgroup computes the 8 row norms itself (each reads the rows once).
 // grid: K / 256 threadgroups x 256 threads (K a multiple of 256); x row tiles (grid y, v8_tiles: rows 8 y ..
 // 8 y + 7 into tile y's tables, K * 8 halfs / K / 64 * 8 sums apart; the T table's rows 8 y ..).
-[[kernel]] void x8_prep2(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
-                         device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
-                         device float* xn [[buffer(4)]], constant X8PrepParams& p [[buffer(5)]],
-                         device half* table_lo [[buffer(6)]], device float* sums_lo [[buffer(7)]],
-                         device half* table_t [[buffer(8)]],
-                         uint2 tg2 [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                         uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup half stg[2][8][256];
-  threadgroup float inv_s[8];
+template <bool ROWS_NORM>
+NI_INLINE void x8_prep2_impl(const device float* x, const device bfloat* w, device half* table,
+                             device float* sums, device float* xn, constant X8PrepParams& p,
+                             device half* table_lo, device float* sums_lo, device half* table_t,
+                             threadgroup half (*stg)[8][256], threadgroup float* inv_s, threadgroup float* red,
+                             uint2 tg2, uint tid, uint sg, uint lane) {
   const uint tg = tg2.x, tile = tg2.y;
   if (tile) {  // a row tile past the first: its rows and tables
     x += 8 * tile * p.x_ld;
@@ -181,7 +178,20 @@ NI_INLINE uint v8t_input_of_slot(uint s) {
   const uint t = sg;  // simdgroup = token row
   const bool live = 8 * tile + t < p.R;
   const device float* xr = x + t * p.x_ld;
-  if (p.norm) {
+  // Match rows_norm_f32's scalar per-thread chain and its 256-thread reduction.
+  // Every K tile repeats this reduction, preserving the coalesced table stores below.
+  if (ROWS_NORM && p.norm) {
+    for (uint r = 0; r < min(8u, p.R - 8 * tile); ++r) {
+      const device float* row = x + r * p.x_ld;
+      float ss = 0.0f;
+      for (uint i = tid; i < p.K; i += 256) ss += row[i] * row[i];
+      ss = tg_sum(ss, red, tid, 256);
+      const float inv = metal::precise::rsqrt(ss / float(p.K) + p.eps);
+      if (tid == 0) inv_s[r] = inv;
+    }
+    if (!live && lane == 0) inv_s[t] = 1.0f;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  } else if (p.norm) {
     float ss = 0.0f;
     if (live && p.unroll && p.K % 512 == 0) {
       float4 a0 = float4(0.0f), a1 = float4(0.0f), a2 = float4(0.0f), a3 = float4(0.0f);
@@ -267,6 +277,33 @@ NI_INLINE uint v8t_input_of_slot(uint s) {
         uint4(as_type<uint>(half2(o[0], o[1])), as_type<uint>(half2(o[2], o[3])), as_type<uint>(half2(o[4], o[5])),
               as_type<uint>(half2(o[6], o[7])));
   }
+}
+
+[[kernel]] void x8_prep2(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
+                         device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
+                         device float* xn [[buffer(4)]], constant X8PrepParams& p [[buffer(5)]],
+                         device half* table_lo [[buffer(6)]], device float* sums_lo [[buffer(7)]],
+                         device half* table_t [[buffer(8)]],
+                         uint2 tg2 [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                         uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup half stg[2][8][256];
+  threadgroup float inv_s[8];
+  x8_prep2_impl<false>(x, w, table, sums, xn, p, table_lo, sums_lo, table_t, stg, inv_s,
+                           inv_s, tg2, tid, sg, lane);
+}
+
+[[kernel]] void x8_prep2_rows_norm(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
+                         device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
+                         device float* xn [[buffer(4)]], constant X8PrepParams& p [[buffer(5)]],
+                         device half* table_lo [[buffer(6)]], device float* sums_lo [[buffer(7)]],
+                         device half* table_t [[buffer(8)]],
+                         uint2 tg2 [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                         uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup half stg[2][8][256];
+  threadgroup float inv_s[8];
+  threadgroup float red[32];
+  x8_prep2_impl<true>(x, w, table, sums, xn, p, table_lo, sums_lo, table_t, stg, inv_s,
+                           red, tg2, tid, sg, lane);
 }
 
 // ---- the GEMM core ----
