@@ -783,7 +783,7 @@ void DFlash2::build_lowrank(uint32_t r) {
 }
 
 void DFlash2::load_v8_packed_coeff() {
-  if (!v8_ || bits_ != 4 || !cfg_.v1 || cfg_.H != 2560 || cfg_.I != 9216 || cfg_.NL != 6 ||
+  if (!v8_ || bits_ != 4 || !cfg_.v1 || cfg_.H != tg_.config().hidden || cfg_.I != tg_.config().dense_I || cfg_.NL != 6 ||
       !Qwen35::v8_packed_coeff_on(tg_.config())) return;
   const double start = now_ms();
   size_t bytes = 0, count = 0, compressed = 0, blocks = 0;
@@ -805,6 +805,7 @@ void DFlash2::load_v8_packed_coeff() {
     ++count;
   };
   for (DLayer& l : layers_) {
+    if (cfg_.H == 4096) { pack(l.down, l.down_packed); continue; }
     pack(l.gate, l.gate_packed);
     pack(l.up, l.up_packed);
     pack(l.down, l.down_packed);
@@ -812,14 +813,16 @@ void DFlash2::load_v8_packed_coeff() {
     pack(l.kv, l.kv_packed);
     pack(l.o, l.o_packed);
   }
-  pack(kv_all_, kv_all_packed_);
-  // the ring commit's fc (K = 8 x 2560): 8 k-slices (the packed GEMM's most; enc_qmm8 runs a given image at 8)
-  static const bool fc_env = !getenv("NI_DFL_FC_PACK") || atoi(getenv("NI_DFL_FC_PACK")) != 0;
-  if (fc_env && fc_.K / 64 >= 256 && (fc_.K / 64 / 2) % 8 == 0) pack(fc_, fc_packed_, 8u);
-  // A full head uses the target's existing image; only the reduced copy belongs to the drafter.
-  // (with the low-rank shortlist the head's rows are only rescored, from their plain layout: no image)
-  if (head_n_ && !lr_r_) pack(head_sub_, head_packed_);
-  if (lr_r_) pack(lrA_, lrA_packed_);
+  if (cfg_.H != 4096) {
+    pack(kv_all_, kv_all_packed_);
+    // the ring commit's fc (K = 8 x 2560): 8 k-slices (the packed GEMM's most; enc_qmm8 runs a given image at 8)
+    static const bool fc_env = !getenv("NI_DFL_FC_PACK") || atoi(getenv("NI_DFL_FC_PACK")) != 0;
+    if (fc_env && fc_.K / 64 >= 256 && (fc_.K / 64 / 2) % 8 == 0) pack(fc_, fc_packed_, 8u);
+    // A full head uses the target's existing image; only the reduced copy belongs to the drafter.
+    // (with the low-rank shortlist the head's rows are only rescored, from their plain layout: no image)
+    if (head_n_ && !lr_r_) pack(head_sub_, head_packed_);
+    if (lr_r_) pack(lrA_, lrA_packed_);
+  }
   resident_ += bytes;
   logi("NI_V8_PACKED_COEFF_NF1: packed %zu static draft projections, %.1f MiB in %.0f ms; compressed %zu/%zu blocks",
        count, double(bytes) / (1024 * 1024), now_ms() - start, compressed, blocks);
@@ -1109,7 +1112,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   // A native 4-bit group-64 head row includes its packed codes, scales and biases.
   const bool head_q4 = head_row_bytes == size_t(target.hidden) / 2 + size_t(target.hidden) / 64 * 4;
   const bool use_v8 = v8 && *v8 ? atoi(v8) != 0 : default_v8(H, target.moe, head_q4);
-  const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == 2560 && I == 9216 && NL == 6 &&
+  const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == size_t(target.hidden) && I == size_t(target.dense_I) && NL == 6 &&
                          c.value("architectures", json::array()) == json::array({"DFlashDraftModel"}) &&
                          Qwen35::v8_packed_coeff_on(target);
   auto packed_bytes = [](size_t N, size_t K) {
@@ -1119,7 +1122,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   };
   if (use_v8)
     b += 8 * H * 2 + 8 * I * 2 + I / 64 * 8 * 4;
-  if (packed_v8) w += NL * (2 * packed_bytes(I, H) + packed_bytes(H, I));
+  if (packed_v8) w += NL * ((H == 4096 ? 0 : 2 * packed_bytes(I, H)) + packed_bytes(H, I));
   // build_head(): rows of the target's LM head (the ranked or id-order rows plus every id from the first
   // end-of-sequence id on)
   {
@@ -1130,7 +1133,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     if (req > 0 && req < V) {
       const size_t rows = std::max(req, V - special0);
       b += rows * (head_row_bytes + 4);
-      if (packed_v8 && head_q4) w += packed_bytes(rows, H);
+      if (packed_v8 && head_q4 && H != 4096) w += packed_bytes(rows, H);
     }
   }
   b += size_t(4) << 20;  // the target's 8-row verify scratch (Qwen35::v8_alloc): ~1-3 MB
