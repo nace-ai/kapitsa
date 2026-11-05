@@ -280,6 +280,29 @@ NI_INLINE void qmt128_tile(const device half* X, const device uint* W, const dev
     put(acc2, 0);
     return;
   }
+  // a whole simdgroup tile (its 32 rows and 64 columns inside Y) leaves through the cooperative tensors' own store:
+  // the same values as the element stores below, 4-6% faster on the 35B-A3B's K 2048 projections (bench_qmm)
+  if (NP == 1 && rb == r0 && n0 + 64 <= p.N) {
+    auto tY = tensor<device float, dextents<int32_t, 2>, tensor_inline>(
+        (device float*)Y + size_t(r0) * p.y_ld + n0, dextents<int32_t, 2>(64, 32), array<int32_t, 2>{1, int32_t(p.y_ld)});
+    auto y0 = tY.template slice<32, 32>(0, 0);
+    auto y1 = tY.template slice<32, 32>(32, 0);
+    if (p.add) {  // Y + v (fp32 addition commutes: the bits of Y[o] + v)
+      auto c = op.template get_destination_cooperative_tensor<decltype(x0), decltype(tW0a), float>();
+      c.load(y0);
+      _Pragma("clang loop unroll(full)")
+      for (uint16_t i = 0; i < c.get_capacity(); ++i) c[i] = c[i] + acc[i];
+      c.store(y0);
+      c.load(y1);
+      _Pragma("clang loop unroll(full)")
+      for (uint16_t i = 0; i < c.get_capacity(); ++i) c[i] = c[i] + acc2[i];
+      c.store(y1);
+      return;
+    }
+    acc.store(y0);
+    acc2.store(y1);
+    return;
+  }
   put(acc, 0);
   put(acc2, 32);
 }
