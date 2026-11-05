@@ -133,6 +133,8 @@ struct GdnVerify {
   float eps;
   uint32_t tree = 0, pidx = 0;  // the *_tree kernels: rows form a tree / pending rows are a tree cycle's path
   uint32_t pin = 0;             // gdn_step_verify8s_tree: the recurrence's update in one explicit form (gdn_update)
+  uint32_t nback = 0;           // gdn_step_verify8s_tree: backlog rows to fold before the pending ones (lazy fold)
+  uint32_t lazy = 0;            // 1: append the pending rows to the backlog instead of storing the folded state
 };
 
 struct SampleRows {

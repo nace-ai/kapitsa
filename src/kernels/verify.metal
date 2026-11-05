@@ -456,6 +456,8 @@ struct GdnVerifyParams {
   uint pidx;  // the pending rows are tape rows path[0 .. n_pend), not 0 .. n_pend
   uint pin;   // gdn_step_verify8s_tree: the recurrence's update in one explicit form (gdn_update), in the step, the fold and
               // the replay of a jumping row alike
+  uint nback; // gdn_step_verify8s_tree: backlog rows (back_k / back_g / back_d) folded before the pending rows
+  uint lazy;  // 1: the folded state is not stored; the pending rows join the backlog (the next verify stores it)
 };
 
 // grid: C/128 threadgroups x 128 threads (as gdn_prep).

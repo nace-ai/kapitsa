@@ -931,6 +931,7 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
   for (const Buffer& b : bufs) st.add(b.ptr(), b.size), h.u64(b.size);
   const uint64_t st_lay = h.done().lo;
   s.n_pend = 0;
+  s.n_back = 0;
   s.pend_tree = false;
   const double t0 = now_ms();
   const uint64_t r0 = d.store.stats().read;

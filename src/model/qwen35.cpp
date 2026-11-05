@@ -1640,6 +1640,7 @@ void Qwen35::enc_mrope_args(Encoder& e, const Seq& s) {
 
 void Qwen35::reset(Seq& s) {
   s.n_pend = 0;
+  s.n_back = 0;
   s.pend_tree = false;
   for (auto& b : s.conv)
     if (b) memset(b.ptr(), 0, b.size);
@@ -1698,6 +1699,7 @@ void Qwen35::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
 }
 
 void Qwen35::restore(Encoder& e, Seq& s, const Checkpoint& c) {
+  s.n_back = 0;  // (the checkpoint's states are complete)
   for (int i = lo_; i < hi_; ++i)
     if (cfg_.is_linear[i]) {
       enc_copy(e, c.conv[i], s.conv[i]);
@@ -2487,6 +2489,7 @@ void Qwen35::enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
 void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
   if (!cfg_.causal) fatal("noncausal Qwen3.5 requires a whole-prompt prefill, not decode");
   if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
+  flush_backlog(e, s);
   enc_embed(e, s.tok, pos, 1, x_);
   static int dbg_layers = getenv("NI_DEBUG_LAYERS") ? atoi(getenv("NI_DEBUG_LAYERS")) : -1;
   // profiling aid: NI_SKIP bitmask 1=moe 2=gdn 4=attn 8=head (output becomes garbage)
@@ -3715,6 +3718,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (!cfg_.causal && (pos0 != 0 || sample || snap))
     fatal("noncausal Qwen3.5 requires one whole-prompt prefill at position 0 without sampling or snapshots");
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
+  flush_backlog(e, s);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
   const GroupedPass gp(e, grouped_prefill());

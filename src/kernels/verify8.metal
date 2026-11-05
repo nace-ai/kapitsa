@@ -2233,13 +2233,19 @@ NI_INLINE float4 gdn_update(float4 st_g, float4 k, float d) { return fma(k, floa
 // tape rows path[0 .. n_pend)). A row whose parent is the row before it continues from that row's state; any other
 // row first rebuilds its parent's state from the base (kept in registers): the folds of its ancestors' tape entries
 // (st = st g + k d, rows in slot order = root to leaf; d: the tape rows this simdgroup wrote).
-template <bool TREE>
+// LAZY (gdn_step_verify8s_tree_lazy): the backlog rows (a previous verify's accepted rows the state was not stored
+// with: back_k / back_g / back_d, p.nback rows) fold first, then the pending rows; with p.lazy the folded state is not
+// stored, the pending rows' k / g / d join the backlog, and the jumping rows rebuild from a register copy of the folded
+// state (the stored state is stale). The next verify (p.lazy 0) stores it: the same updates in the same order.
+template <bool TREE, bool LAZY = false, bool DEFER = false>
 NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float* k, const device float* v,
                                       const device float* g, const device float* beta, device float* state,
                                       device float* out, device float* pend_k, device float* pend_g,
                                       device float* pend_d, constant GdnVerifyParams& p, device atomic_uint* cnt,
                                       const device int* tree, const device int* path, threadgroup uint& last,
-                                      uint2 tg, uint2 ntg, uint sg, uint nsg, uint lane, uint tid) {
+                                      uint2 tg, uint2 ntg, uint sg, uint nsg, uint lane, uint tid,
+                                      device float* back_k = nullptr, device float* back_g = nullptr,
+                                      device float* back_d = nullptr) {
   constexpr uint D = 128;
   const uint h = tg.x, hk = h / (p.Hv / p.Hk);
   const uint row0 = (tg.y * nsg + sg) * 4;  // this simdgroup's 4 value rows
@@ -2247,32 +2253,56 @@ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float*
   float4 st[4];
   for (int r = 0; r < 4; ++r) st[r] = *(device float4*)(S + (row0 + r) * D + lane * 4);
   const bool pin = TREE && p.pin != 0;
+  if (LAZY)
+    for (uint j = 0; j < p.nback; ++j) {
+      const float4 kk = *(const device float4*)(back_k + (j * p.Hv + h) * D + lane * 4);
+      const float gg = back_g[j * p.Hv + h];
+      const float4 dd = *(const device float4*)(back_d + (j * p.Hv + h) * D + row0);
+      for (int r = 0; r < 4; ++r) {
+        if (pin) st[r] = gdn_update(st[r] * gg, kk, dd[r]);
+        else st[r] = st[r] * gg + kk * dd[r];
+      }
+    }
   for (uint t0 = 0; t0 < p.n_pend; ++t0) {
     const uint t = TREE && p.pidx ? uint(path[t0]) : t0;
     float4 kk = *(const device float4*)(pend_k + (t * p.Hv + h) * D + lane * 4);
     float gg = pend_g[t * p.Hv + h];
+    float dl[4];
     for (int r = 0; r < 4; ++r) {
       const float d = pend_d[(t * p.Hv + h) * D + row0 + r];
+      dl[r] = d;
       if (pin) st[r] = gdn_update(st[r] * gg, kk, d);
       else st[r] = st[r] * gg + kk * d;
     }
+    if (DEFER && lane == 0)  // this simdgroup's rows of the pending row join the backlog
+      *(device float4*)(back_d + ((p.nback + t0) * p.Hv + h) * D + row0) = float4(dl[0], dl[1], dl[2], dl[3]);
   }
-  if (p.n_pend > 0)
+  const bool store = DEFER ? false : LAZY ? (p.n_pend > 0 || p.nback > 0) : p.n_pend > 0;
+  if (store)
     for (int r = 0; r < 4; ++r) *(device float4*)(S + (row0 + r) * D + lane * 4) = st[r];
+  float4 stl[4];  // DEFER: the folded state (the jumping rows' base; the stored one is stale)
+  if (DEFER)
+    for (int r = 0; r < 4; ++r) stl[r] = st[r];
   threadgroup_barrier(mem_flags::mem_device);  // this block's tape reads are done
   if (tid == 0) last = atomic_fetch_add_explicit(&cnt[h], 1u, memory_order_relaxed) == ntg.y - 1 ? 1u : 0u;
   threadgroup_barrier(mem_flags::mem_threadgroup);
   const bool writer = last != 0;  // every block of the head has read the old k / g tape
+  if (DEFER && writer && sg == 0)  // the pending rows' k / g join the backlog before the tape is rewritten
+    for (uint t0 = 0; t0 < p.n_pend; ++t0) {
+      const uint t = TREE && p.pidx ? uint(path[t0]) : t0;
+      *(device float4*)(back_k + ((p.nback + t0) * p.Hv + h) * D + lane * 4) =
+          *(const device float4*)(pend_k + (t * p.Hv + h) * D + lane * 4);
+      if (lane == 0) back_g[(p.nback + t0) * p.Hv + h] = pend_g[t * p.Hv + h];
+    }
   const uint rebuild = TREE && p.tree ? uint(tree[kKfJump]) : 0u;  // tree: rows whose parent is not the row before them
   // a wide tree verify (R = its capacity, > 8 rows): the live tiles' rows (kf_live_rows); else the tree's live rows
   const uint R = TREE && p.tree ? kf_live_rows(tree, p.R) : p.R;
-  float4 st0[4];  // tree: the base state
-  if (TREE)
-    for (int r = 0; r < 4; ++r) st0[r] = st[r];
+  // tree: a jumping row restarts from the base state, re-read from the state rows this thread holds (just stored by the
+  // fold, or unchanged when nothing was pending) instead of a register copy (16 registers fewer: more threads resident)
   for (uint t = 0; t < R; ++t) {
     if (TREE && ((rebuild >> t) & 1u)) {
       simdgroup_barrier(mem_flags::mem_device);  // this simdgroup's tape rows of the earlier rows
-      for (int r = 0; r < 4; ++r) st[r] = st0[r];
+      for (int r = 0; r < 4; ++r) st[r] = DEFER ? stl[r] : *(device float4*)(S + (row0 + r) * D + lane * 4);
       const uint anc = uint(tree[kKfMask + t]);
       for (uint j = 0; j < t; ++j) {
         if (!((anc >> j) & 1u)) continue;
@@ -2338,6 +2368,52 @@ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float*
   threadgroup uint last;
   gdn_step_verify8s_impl<true>(q, k, v, g, beta, state, out, pend_k, pend_g, pend_d, p, cnt, tree, path, last, tg, ntg,
                                sg, nsg, lane, tid);
+}
+
+[[kernel]] void gdn_step_verify8s_tree_lazy(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
+                                            const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
+                                            const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],
+                                            device float* out [[buffer(6)]], device float* pend_k [[buffer(9)]],
+                                            device float* pend_g [[buffer(10)]], device float* pend_d [[buffer(11)]],
+                                            constant GdnVerifyParams& p [[buffer(12)]],
+                                            device atomic_uint* cnt [[buffer(13)]], const device int* tree [[buffer(14)]],
+                                            const device int* path [[buffer(15)]], device float* back_k [[buffer(16)]],
+                                            device float* back_g [[buffer(17)]], device float* back_d [[buffer(18)]],
+                                            uint2 tg [[threadgroup_position_in_grid]],
+                                            uint2 ntg [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                                            uint nsg [[simdgroups_per_threadgroup]],
+                                            uint lane [[thread_index_in_simdgroup]],
+                                            uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup uint last;
+  if (p.lazy)
+    gdn_step_verify8s_impl<true, true, true>(q, k, v, g, beta, state, out, pend_k, pend_g, pend_d, p, cnt, tree, path,
+                                             last, tg, ntg, sg, nsg, lane, tid, back_k, back_g, back_d);
+  else
+    gdn_step_verify8s_impl<true, true, false>(q, k, v, g, beta, state, out, pend_k, pend_g, pend_d, p, cnt, tree, path,
+                                              last, tg, ntg, sg, nsg, lane, tid, back_k, back_g, back_d);
+}
+// The backlog alone folded into the state (any pass but the lazy tree step's: Qwen35::flush_backlog): the same
+// update form and order as gdn_step_verify8s_tree_lazy's fold. grid (Hv, 128 / (4 x simdgroups)).
+[[kernel]] void gdn_fold_backlog(device float* state [[buffer(0)]], const device float* back_k [[buffer(1)]],
+                                 const device float* back_g [[buffer(2)]], const device float* back_d [[buffer(3)]],
+                                 constant uint4& pp [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                                 uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                 uint lane [[thread_index_in_simdgroup]]) {
+  constexpr uint D = 128;
+  const uint h = tg.x, Hv = pp.x, nback = pp.y, pin = pp.z, row0 = (tg.y * nsg + sg) * 4;
+  device float* S = state + h * D * D;
+  float4 st[4];
+  for (int r = 0; r < 4; ++r) st[r] = *(device float4*)(S + (row0 + r) * D + lane * 4);
+  for (uint j = 0; j < nback; ++j) {
+    const float4 kk = *(const device float4*)(back_k + (j * Hv + h) * D + lane * 4);
+    const float gg = back_g[j * Hv + h];
+    const float4 dd = *(const device float4*)(back_d + (j * Hv + h) * D + row0);
+    for (int r = 0; r < 4; ++r) {
+      if (pin) st[r] = gdn_update(st[r] * gg, kk, dd[r]);
+      else st[r] = st[r] * gg + kk * dd[r];
+    }
+  }
+  for (int r = 0; r < 4; ++r) *(device float4*)(S + (row0 + r) * D + lane * 4) = st[r];
 }
 
 // The gated RMSNorm of gdn_step_verify8 (bitwise its values) from the raw outputs, written as the out_proj's X8

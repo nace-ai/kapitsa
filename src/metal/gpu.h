@@ -88,6 +88,8 @@ class Gpu {
   size_t max_threadgroup_memory() const;  // MTLDevice maxThreadgroupMemoryLength
   size_t max_buffer_length() const;       // MTLDevice maxBufferLength
   bool apple10() const;                   // MTLGPUFamilyApple10 (M5: Metal 4 neural accelerators)
+  // The base M4 with at most 10 GPU cores: the defaults tuned and gated on that chip alone turn on here
+  bool m4_base() const;
   int apple_family() const;               // the newest MTLGPUFamilyApple<n>: 7 on the M1, 8 M2, 9 M3 and M4, 10 M5
   size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
   static const char* thermal_state();  // NSProcessInfo thermalState: nominal, fair, serious, critical

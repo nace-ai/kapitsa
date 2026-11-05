@@ -118,4 +118,23 @@ inline AffinePackedCoeff pack_affine_packed_coeff(const uint32_t* weights, const
   return out;
 }
 
+// Reorder an image's records so the ks k-slices of rg consecutive 16-row blocks read adjacent records: record (block
+// row rb, slice s, pair j) moves from rb * pairs + s * (pairs / ks) + j to (rb / rg) * rg * pairs + (j * rg + rb % rg) *
+// ks + s (headers alike; raw slabs stay put, their offsets are absolute). The values are unchanged: a GEMM reading this
+// order computes the same sums. rg must divide the block rows.
+inline void interleave_packed_slices(AffinePackedCoeff& img, uint32_t outputs, uint32_t groups, uint32_t ks,
+                                     uint32_t rg = 1) {
+  const size_t pairs = (size_t(groups) + 1) / 2, rbs = (size_t(outputs) + 15) / 16;
+  if (ks < 2 || pairs % ks || rg < 1 || rbs % rg) return;
+  const size_t pps = pairs / ks;
+  std::vector<uint32_t> words(img.words.begin(), img.words.begin() + img.blocks * 272), headers = img.headers;
+  for (size_t rb = 0; rb < rbs; ++rb)
+    for (size_t s = 0; s < ks; ++s)
+      for (size_t j = 0; j < pps; ++j) {
+        const size_t from = rb * pairs + s * pps + j, to = (rb / rg) * rg * pairs + (j * rg + rb % rg) * ks + s;
+        std::copy_n(words.data() + from * 272, 272, img.words.data() + to * 272);
+        img.headers[to] = headers[from];
+      }
+}
+
 }  // namespace ni

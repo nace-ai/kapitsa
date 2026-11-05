@@ -428,6 +428,8 @@ class Qwen35 : public Model {
   // s.pend_tree: the next pass (or encode_flush) folds tape rows pend_path[0 .. n_pend).
   void set_verify_tree(const Buffer* tree) { v8_tree_ = tree; }
   // the 8-row verify can run a tree (its attention on attn8m, the split GDN step)
+  // the lazy GDN fold's backlog folded into the recurrent states (encode_verify8 defers storing them)
+  void flush_backlog(Encoder& e, Seq& s);
   bool verify_tree_ok() const;
   // Tree verifies wider than 8 rows (16 or 32: 2 or 4 tiles of 8 rows; KFlash's size rule picks the rows per cycle):
   // encode_verify with a tree set and R = 16 or 32 encodes that capacity, and the GPU runs the tiles of the tree's live
@@ -469,8 +471,11 @@ class Qwen35 : public Model {
   // The 8-row verify GEMMs, for other 8-row passes (the DFlash2 drafter). Inputs are X8 tables
   // (verify8.metal layout: half operands in fragment order + per-64 group sums), R <= 8 live rows.
   static bool v8_packed_coeff_on(const Qwen35Config& c);
+  static uint32_t v8_packed_ks(uint32_t K);
+  static uint32_t v8_packed_rg(uint32_t N);  // block rows interleaved together (divides N / 16)  // the k-slices v8_plan gives a packed GEMM of this K (its record order)
   struct PackedCoeffBuffers {
     Buffer payload, headers;
+    uint32_t ks, rg;  // ks > 1: records interleaved for ks k-slices of rg block rows for this many k-slices (interleave_packed_slices)
     explicit operator bool() const { return bool(payload) && bool(headers); }
   };
   struct Seg8 {
