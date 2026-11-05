@@ -22,7 +22,7 @@ Kapitsa's decode over the next fastest engine on that model.
 
 | Mac | Kapitsa's decode lead | Where another engine is ahead |
 | --- | --- | --- |
-| [M5 Max, 128 GB](#m5-max) | 35B-A3B **1.24x** Splash · Bolt **2.2x** oMLX · 27B 1.12x mlx-serve · Flint 1.18x rec · Lightning 1.51x · Super-VL 1.31x · Dory 1.61x | Flash-Next decode: mlx-serve's 2026-10-18 lead (108 against 106) stands; Kapitsa's 2026-11-04 cell reads 108.5 (105.7-113.0) against its 107.6, from another session and power mode, not run interleaved. Prefill: Flash-Next level with mlx-serve (1,726 against 1,720, inside Kapitsa's runs' 1,557-1,738) |
+| [M5 Max, 128 GB](#m5-max) | 35B-A3B **1.25x** Splash · Bolt **2.2x** oMLX · 27B 1.12x mlx-serve · Flint 1.18x rec · Lightning 1.51x · Super-VL 1.31x · Dory 1.61x | Flash-Next decode: mlx-serve's 2026-10-18 lead (108 against 106) stands; Kapitsa's 2026-11-04 cell reads 108.5 (105.7-113.0) against its 107.6, from another session and power mode, not run interleaved. Prefill: Flash-Next level with mlx-serve (1,726 against 1,720, inside Kapitsa's runs' 1,557-1,738) |
 | [M5 Pro, 48 GB](#m5-pro) | 35B-A3B **1.11x** Splash · Lightning 1.28x · Bolt 1.93x · Dory 1.32x · Flint 1.03x rec | Flash-Next Q2_0 decode: level with Splash 1.5.0, 61 against 56 at T 0, inside the runs' ranges. 27B decode: mlx-serve 78 against 77, inside the runs' spread. Prefill: Splash on the 35B-A3B (1.25x) and the 27B (1.11x) |
 | [M4 Pro, 48 GB](#m4-pro) | 4B **1.47x** mlx-serve · 27B 1.17x · 35B-A3B 1.19x Splash · Lightning 1.72x · Bolt 1.97x · Dory 1.33x · Flint 1.01x rec | Flint prefill: llama.cpp 977 against 968 |
 | [M3 Pro, 36 GB](#m3-pro) | 4B 1.79x · 9B **2.90x** · 27B 1.77x · 35B-A3B 1.84x · Lightning 1.92x · Flint 1.45x · Dory 1.21x | Nano 4B decode: llama.cpp 34.9 against 34.4. Nano 9B v2: mlx-lm 24.9 against 20.9 (both on lighter 4-bit files) |
@@ -106,6 +106,17 @@ be declared ambient instead: its load is then recorded, not flagged). *Loop*: a 
 <a id="m5-max"></a>
 
 ### MacBook Pro M5 Max, 128 GB
+
+**2026-11-05, evening: the 35B-A3B's cell on main `39f20c8`** ([results](../bench/results/2026-11-05-m5-max-35b-cell-39f20c8/README.md)).
+- **The build:** after #975, which on the 40-core M5 Max runs the single-slot 35B-A3B's prefill in 8,448-row chunks as
+  a two-half wavefront on the GPU alone: one half's DeltaNet scan and attention beside the other half's expert GEMMs.
+- **The runs:** the same label and command, three runs, 120 s idle before each, after 5 minutes idle.
+- **Prefill:** 16K 5,718 -> 6,046 (6,041-6,052), +5.7%. 4K reads 6,539 (6,534-6,546), one chunk either way:
+  interleaved with the build before, 6,516-6,518 against 6,553-6,557.
+- **Decode** reads 351 (326-353) and 368 greedy.
+- **Memory:** 1.0 GiB more (peak to 16K 23.3 GiB), the larger chunks' activations.
+- **A first set** with 60 s gaps after a day of GPU work read decode 282-351 and 16K 5,599-6,021, unflagged. That is
+  the machine's state; it is kept in the folder.
 
 **2026-11-05, later: the 27B's and the 35B-A3B's cells on main `87d7dd5`**
 ([results](../bench/results/2026-11-05-m5-max-qwen-cells-87d7dd5/README.md)).
@@ -307,14 +318,14 @@ README's charts show the 2026-11-02 sweep above, to each model's context limit):
 MacBook Pro (16-inch, 2026), 40-core GPU, macOS 26.4. Every cell ran on AC power, the 35B-A3B row in automatic mode and
 the 27B and Bolt rows in High Power mode, each row in one mode; six runs on battery (08:44-09:12) are not cells
 ([power per run](../bench/results/2026-10-25-m5-max/2026-10-26-reruns.md)). The tables' Kapitsa rows are its 2026-11-05
-cells on `7afb51d` (above, High Power mode); that session ran Kapitsa 0.2.17 (main `cd20dcc`) and every engine at its
+cells, on `7afb51d` for the 27B and `39f20c8` for the 35B-A3B (above, High Power mode); that session ran Kapitsa 0.2.17 (main `cd20dcc`) and every engine at its
 latest release: Splash 1.4.0, mlx-serve 26.10.3, oMLX 0.7.3.dev2, mlx-vlm 0.7.10, mlx-lm 0.32.2, MTPLX 2.12.2, Ollama
 0.40.11 and LM Studio with its MLX runtime 1.13.1, the build it picks on an M5. The MLX engines read the same 4-bit
 folders; LM Studio, mlx-serve and Ollama's MLX runner read clones of them.
 
 | Qwen3.6 35B-A3B | Prefill 4K / 16K | Decode T 0.6 / greedy | Cached follow-up 4K / 16K | Peak |
 | --- | ---: | ---: | ---: | ---: |
-| **Kapitsa** (KFlash, DFlash2 drafter) | **6,619 / 5,718** | **349 / 377** | **0.04 / 0.05 s** | 22.3 GB |
+| **Kapitsa** (KFlash, DFlash2 drafter) | **6,539 / 6,046** | **351 / 368** | **0.04 / 0.05 s** | 23.3 GB |
 | Splash (DFlash2) | 6,386 / 5,607 | 281 / 288 | 0.07 / 0.07 s | **22.0 GB** |
 | mlx-serve (MTP) | 4,622 / 5,369 | 235 / 255 | 0.13 / 0.16 s | 22.7 GB |
 | oMLX (DFlash2) | 3,005 / 3,034 | 189 / 238 | 0.17 / 0.25 s | 22.7 GB |
@@ -359,7 +370,7 @@ Each engine has at least one decode answer flagged for a repetition loop.
   Kapitsa's runs' 962-1,095). Kapitsa answers follow-ups fastest on the 35B-A3B and Bolt; on the 27B mlx-serve's draft tree does
   (0.08 against 0.13 s at 4K).
 - Kapitsa's own cells moved from 4,702 / 325 (2026-10-22, main `fd85910`) to 5,963 / 339 (2026-10-25, `cd20dcc`) and
-  6,036 / 346 (2026-11-01, `7f4e709`), 6,137 / 347 (2026-11-04, `3879b44`), 6,558 / 353 (2026-11-05, `446165e`) and 6,619 / 349 (2026-11-05, `7afb51d`) on the 35B-A3B, and from 459 / 140 to 907 / 133, 904 / 143, 1,104 / 143 and 1,126 / 144 on the 27B (one
+  6,036 / 346 (2026-11-01, `7f4e709`), 6,137 / 347 (2026-11-04, `3879b44`), 6,558 / 353 (2026-11-05, `446165e`), 6,619 / 349 (2026-11-05, `7afb51d`) and 6,539 / 351 (16K 6,046; 2026-11-05, `39f20c8`) on the 35B-A3B, and from 459 / 140 to 907 / 133, 904 / 143, 1,104 / 143 and 1,126 / 144 on the 27B (one
   run on 2026-10-22, the median of three since).
 - Several engines read lower than on their 2026-10-18 releases with the same configs (oMLX's DFlash2 config 189
   against 232 on the 35B-A3B, mlx-serve's MTP 235 against 264); none of those runs is flagged. Their settings were
