@@ -126,6 +126,8 @@ add_test(NAME load_error_test COMMAND load_error_test)
 set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)
 set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
+add_test(NAME think_control_test COMMAND think_control_test)
+set_tests_properties(think_control_test PROPERTIES TIMEOUT 30)
 
 # Exercise the real HTTP observer and chunked provider without native/UI linkage or sockets.
 add_executable(http_stream_test tools/http_stream_test.cpp src/server/http_stream.cpp src/engine/execution_session.cpp)
