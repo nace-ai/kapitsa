@@ -5,6 +5,7 @@
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
 // attention, exact-code MMA operands, a separate block K/V scratch.
 #include "model/dflash2.h"
+#include "model/clover.h"
 #include "hub/hub.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
@@ -28,6 +29,17 @@ namespace ni {
 
 extern const char* const kTensorKernelSource;
 using json = nlohmann::json;
+
+// Default for the history lane (#944): the Qwen3.6 35B-A3B shape on an M5 Pro, where the interleaved A/B measured it
+// faster. NI_DFLASH_HIST turns it off ("0") or sets its knobs on any model and Mac; unset takes this default. Other
+// targets and Macs keep it off until they are measured. Clover-35B-A3B has the same shape and drafter and is not
+// measured, so the gate also asks for "not Clover".
+static bool dfl_lanes_shape(const Qwen35Config& c) {
+  static const bool m5_pro = Gpu::get().name() == "Apple M5 Pro";
+  return m5_pro && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
+         c.shared_I == 512;
+}
+static bool dfl_lanes_default(const Qwen35& t) { return dfl_lanes_shape(t.config()) && !dynamic_cast<const Clover*>(&t); }
 
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
   static const bool m1_max32 = Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32;
@@ -440,6 +452,18 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
       cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
     }
+    // the history lane: NI_DFLASH_HIST=0 off, <nmin>,<nmax>,<cap> on with those knobs, unset: the default's 3,8,4 where
+    // dfl_lanes_default says so
+    const char* h = getenv("NI_DFLASH_HIST");
+    const bool hist_env = h && *h;
+    if (hist_env ? strcmp(h, "0") != 0 : dfl_lanes_default(tg_)) {
+      int a = 3, b = 8, c = 4;
+      if (hist_env && sscanf(h, "%d,%d,%d", &a, &b, &c) < 1) a = 3;
+      hist_nmin_ = std::clamp(a, 1, 8); hist_nmax_ = std::clamp(b, hist_nmin_, 8); hist_cap_ = std::clamp(c, 1, 7);
+      hist_ = true;
+      logi("DFlash2: history lane on (n %d..%d, up to %d tokens; %s, NI_DFLASH_HIST=0 turns it off)", hist_nmin_,
+           hist_nmax_, hist_cap_, hist_env ? "NI_DFLASH_HIST" : "default");
+    }
     // k|v of every layer stacked: one GEMM projects a committed context row for all layers.
     std::vector<const Tensor*> kv_parts;
     for (int l = 0; l < cfg_.NL; ++l) {
@@ -611,6 +635,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     for (char& c : key)
       if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '.') c = '_';
     kf_budget_ = std::make_unique<KfBudget>(key);
+    kf_budget_->set_hist_lane(hist_);
     // batched decode (Engine::batch_cycle): the rows of a batch's verify by the same rule; NI_BATCH_KF_FLOOR=1: every
     // member verifies at least one draft
     const char* fl = getenv("NI_BATCH_KF_FLOOR");
@@ -684,6 +709,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       std::string key8 = key;
       if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);
       kf_budget_alt_ = std::make_unique<KfBudget>(key8);
+      kf_budget_alt_->set_hist_lane(hist_);
       kf_budget_alt_->set_rows(1u << (kB - 1), kB);
       kf_budget_alt_->set_wide(false);
       tree_rows_alt_ = kB;
@@ -2078,6 +2104,14 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       e.use(dpipe("dfl_kf_table"));
       e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, edges_); e.buf(3, kf_clq_); e.buf(4, kf_tok_);
       e.dispatch(D * 16, 1, 1, 32);
+      if (hist_) {  // #316: the history lane (dfl_hist) edits the children tables the builder reads
+        const kp::DflHist hp{Pk, uint32_t(hist_nmin_), uint32_t(hist_nmax_), uint32_t(hist_cap_), 16384u, kf::kHistLq, 0u, 0u};
+        e.use(dpipe("dfl_hist"));
+        e.buf(0, s.tok); e.buf(1, cand_i_); e.buf(2, kf_clq_); e.buf(3, kf_tok_);
+        e.val(4, hp);
+        e.buf(5, gst_);
+        e.dispatch(1, 1, 1, 256);
+      }
       KfParams kp{};
       kf_budget_->write(kp);
       // the verify's capacity this cycle: the budget's (8, or the widest count when the per-cycle choice among them
