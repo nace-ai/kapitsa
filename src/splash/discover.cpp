@@ -248,7 +248,8 @@ std::string release_version(const std::string& binary) {
 
 bool kflash_by_default(const std::string& model_folder) {
   // Qwen3.8-Flash-Next Q2_0: score 1.051 (95% LB 1.030), decode 1.101x, 4K prefill 1.004x the Splash 1.5.0 release, M5 Pro 48 GB
-  // (docs/splash-backend.md#kflash). A model joins this list only after its own interleaved A/B and output check.
+  // (docs/splash-backend.md#kflash). One model so far: the one that A/B ran on. The class it stands for (KFlash on Splash for
+  // the Qwen MoE models) is a narrower gate today, listed for #369 to widen.
   static const char* const measured[] = {"ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:Q2_0"};
   std::ifstream f(fs::path(model_folder) / "model.json");
   const auto j = nlohmann::json::parse(f, nullptr, false);
@@ -280,7 +281,7 @@ EnginePick pick_engine(KFlashMode mode, const std::string& binary, bool binary_g
     if (kflash.tag.empty() || v != kflash.tag) {
       out.note = "stock engine " + (v.empty() ? std::string("(release unknown)") : v) + ": KFlash is built on release " +
                  (kflash.tag.empty() ? std::string("(unknown)") : kflash.tag) +
-                 " and measured faster only against that release; --splash-kflash on runs it anyway";
+                 " and a newer release is not checked against it; --splash-kflash on runs it anyway";
       return out;
     }
   }

@@ -3081,7 +3081,7 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 
 bool Qwen35::qmt_ready() { return qmt_on(); }
 
-// The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) only on the models listed here: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
+// The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) is on today for these shapes only: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
 // 4-bit group-64 dense model (the 9B) keeps the old default share, the whole FFN on the Neural Engine at 20 GPU cores,
 // today. NI_ANE_MMA=1 takes the M5 share on any such model, 0 the old share on these.
 bool Qwen35::mma_share_measured(const Qwen35Config& c) {

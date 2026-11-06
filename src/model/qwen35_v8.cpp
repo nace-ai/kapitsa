@@ -371,7 +371,8 @@ uint32_t Qwen35::kf_dense_rows(const Qwen35Config& c) {
   const bool tree = !capped && (v && *v ? atoi(v) != 0 : (kf && *kf ? atoi(kf) != 0 : true));
   const char* r = getenv("NI_KFLASH_ROWS");
   // wider rows are asked for (NI_KFLASH_ROWS names 16 or 32) on a target that runs them: the default stays one tile
-  // until a Mac's A/B says a wider count pays there (docs/kflash.md, docs/usage.md)
+  // (wider rows are opt-in). On the 27B the tok/s gain from wider rows is within noise (+3% at +12% tokens per cycle, n=3);
+  // the 4B with bf16 weights ran 11-16% faster with them forced (docs/kflash.md, docs/usage.md)
   if (!tree || !v8_wide_ok_c(c) || !r || !*r) return one;
   uint32_t allowed = one | (1u << 15) | (1u << 31);
   uint32_t want = 0;
