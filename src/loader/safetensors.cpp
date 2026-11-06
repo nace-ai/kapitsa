@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <limits>
 #include <thread>
 
 namespace ni {
@@ -31,6 +32,8 @@ size_t dtype_size(DType d) {
   fatal("%s is incomplete or not a safetensors file (%s, %lld bytes): copy or download it again", path.c_str(), why,
         size);
 }
+
+static DType parse_dtype(const std::string& s);
 
 // A file's header, checked: a copy cut short or a placeholder (zeros) stops with the file named rather than a JSON
 // exception. *size: the file's bytes (a file of headers alone serves the plans; its tensors are checked when read).
@@ -53,6 +56,21 @@ static nlohmann::json read_header(int fd, const std::string& path, uint64_t& hle
         o[1].get<uint64_t>() < o[0].get<uint64_t>() || !v.contains("dtype") || !v["dtype"].is_string() ||
         !v.contains("shape") || !v["shape"].is_array())
       incomplete(path, "bad tensor entry", st.st_size);
+    // Readers size their destinations from shape/dtype, but read the offset range into them.
+    const uint64_t limit = uint64_t(std::numeric_limits<int64_t>::max());
+    uint64_t count = 1;
+    for (const auto& dim : v["shape"]) {
+      if (!dim.is_number_unsigned() || dim.get<uint64_t>() > limit)
+        incomplete(path, "bad tensor shape", st.st_size);
+      const uint64_t n = dim.get<uint64_t>();
+      if (n && count > limit / n) incomplete(path, "tensor shape overflows", st.st_size);
+      count *= n;
+    }
+    const uint64_t b = o[0].get<uint64_t>(), e = o[1].get<uint64_t>();
+    if (e > limit - (8 + hlen)) incomplete(path, "tensor offset overflows", st.st_size);
+    const size_t width = dtype_size(parse_dtype(v["dtype"].get<std::string>()));
+    if (width && (count > limit / width || count * width != e - b))
+      incomplete(path, "tensor shape/dtype does not match its byte range", st.st_size);
   }
   return j;
 }
@@ -164,6 +182,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
       it.t.dtype = parse_dtype(v["dtype"].get<std::string>());
       for (auto& s : v["shape"]) it.t.shape.push_back(s.get<int64_t>());
       size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
+      if (e > fsize - data0) incomplete(path, "its tensors run past its end", (long long)fsize);
       it.src = data0 + b;
       it.len = e - b;
       if (defer && defer(name)) {  // listed without a buffer; read_deferred() reads it
@@ -178,8 +197,6 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     if (items.empty()) {
       continue;
     }
-    for (const Item& it : items)
-      if (it.src + it.len > fsize) incomplete(path, "its tensors run past its end", (long long)fsize);
     // Read in file order for sequential I/O.
     std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.src < b.src; });
     std::string base = path.substr(path.find_last_of('/') + 1);
