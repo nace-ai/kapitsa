@@ -1,0 +1,33 @@
+{
+  "scope": "PR1022 own full-library CPU row checks on pinned trained affine Q4 table; no GPU or speed measurement",
+  "model_revision": "f37e7ba46f0f2993b6ca373221530c579f258712",
+  "probe_source_sha256": "bf5d3bf89a6609b9a200db9d3db1b69ca384b5355ef3de2be3b3bb5142c7f6ec",
+  "variants": {
+    "base": {
+      "source": "01b4c6d69fbe69e862c00358f88c94a363129592",
+      "library_sha256": "00bc65909437c8c3516c8ac488f2d2038e9c9c771b6e66fb94ec0ff3ed41f9eb",
+      "probe_sha256": "beddcc2cf654df5896a39c4874e48b8471042af7123b66715554bfdd254f8584"
+    },
+    "candidate": {
+      "source": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+      "library_sha256": "f59fb8fa36218c85c2a6722f1da12f55649c906cb1030cc34cd07f7aa0dd3932",
+      "probe_sha256": "0d7ab22ec99f3c8fd7340dc1aa07e93b17cf5ed0dca010b3daae007338074cef"
+    }
+  },
+  "checks": [
+    {
+      "case": "corpus",
+      "bytes": 53313280,
+      "base_sha256": "2c0fb1bc313b693803f21a973257b8fd25b089f2d6d45874cb487264a9cf799d",
+      "candidate_sha256": "2c0fb1bc313b693803f21a973257b8fd25b089f2d6d45874cb487264a9cf799d",
+      "byte_equal": true
+    },
+    {
+      "case": "chat",
+      "bytes": 409600,
+      "base_sha256": "1ae266c91dc9da816e69e787eb524ff570d1ccebbce3e63e1dee8dd4132dd0ac",
+      "candidate_sha256": "1ae266c91dc9da816e69e787eb524ff570d1ccebbce3e63e1dee8dd4132dd0ac",
+      "byte_equal": true
+    }
+  ]
+}
