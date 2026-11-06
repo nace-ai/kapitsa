@@ -71,6 +71,25 @@ def read_baseline() -> dict[str, int]:
     return out
 
 
+# A class-scoped NI_* default must have a row in src/engine/device_profile.cpp. Add the id here when you add the row.
+CLASS_GATE_IDS = (
+    "pf_wave",
+    "kflash_hist",
+    "gemm_slices",
+    "hc_wide",
+    "moe4_dx",
+    "tree_g6",
+    "kflash_narrow",
+)
+
+
+def table_ids() -> set[str]:
+    text = (ROOT / "src/engine/device_profile.cpp").read_text(encoding="utf-8")
+    start = text.find("const DefaultRow kDefaults[]")
+    end = text.find("};", start)
+    return set(re.findall(r'\{"([a-z0-9_]+)"', text[start:end]))
+
+
 def main() -> int:
     got = counts()
     if len(sys.argv) > 1 and sys.argv[1] == "--write-baseline":
@@ -91,11 +110,17 @@ def main() -> int:
         bad.append(f"{path}: baseline has {want[path]}, tree has 0 (update the baseline; a drop is fine)")
     # A drop in a file that still has some hits is fine and does not fail. A file that dropped to zero
     # is reported above so the baseline does not keep a stale allow.
+    missing = [i for i in CLASS_GATE_IDS if i not in table_ids()]
+    if missing:
+        bad.append("class gate has no default-table row: " + ", ".join(missing))
     if bad:
         print("profile gate lint failed:")
         print("\n".join(bad))
         return 1
-    print(f"profile gate lint: ok ({sum(got.values())} call-form hits, {len(got)} files)")
+    print(
+        f"profile gate lint: ok ({sum(got.values())} call-form hits, {len(got)} files, "
+        f"{len(CLASS_GATE_IDS)} class gates)"
+    )
     return 0
 
 

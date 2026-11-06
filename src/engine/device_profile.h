@@ -59,7 +59,8 @@ struct DefaultRow {
   int win_pct;        // lower bound of the cited win, in percent. 0 if the row cites none.
   int win_pct_hi;     // 0 when win_pct is a single number, else the upper bound
   bool exclusive;     // true only when the row cites a miss on the wider class. A class row is false.
-  const char* where;  // the Mac the number was measured on, not a sentence
+  const char* where;  // the measured Mac. Append "; widened by judgment, sweep 1" when that class
+                      // take was not measured.
   bool live;          // false: the call site still has its own check
 };
 

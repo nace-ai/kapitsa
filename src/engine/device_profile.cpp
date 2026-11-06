@@ -20,6 +20,22 @@ const DefaultRow kDefaults[] = {
     // Matrix class (any M5): +12 to +15% on the M5 Pro, no measured miss on the others, so the class takes it, not the
     // name. The selector update uses the same gate.
     {"kflash_hist", ModelClass::kQwen35A3b, DefaultScope::kMatrix, nullptr, "on", 12, 15, false, "M5 Pro", false},
+    // NI_GEMM_SLICES. Drex Max v1, matrix class. M5 Pro, 16K 33.5-34.0 -> 30.3-30.7 s (-9.6%).
+    // The M5 Max was not measured.
+    {"gemm_slices", ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 9, 0, false,
+     "M5 Pro; widened by judgment, sweep 1", false},
+    // NI_HC_WIDE. Flash-Next, wide class. M5 Max, decode 105.9 -> 108.1 tok/s (+2.0%). Under 10%, so not a name gate.
+    {"hc_wide", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 2, 0, false,
+     "M5 Max; widened by judgment, sweep 1", false},
+    // NI_MOE4_DX. Flash-Next, wide class. M5 Max, decode 108.2 -> 109.3 tok/s (+1.0%). Under 10%, so not a name gate.
+    {"moe4_dx", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 1, 0, false,
+     "M5 Max; widened by judgment, sweep 1", false},
+    // NI_V8_TREE_G6. Qwen3.8 27B, wide class. M5 Max, ni_run, decode 48.6 -> 62.2 tok/s (27, the integer part).
+    // The wide class today is that Mac.
+    {"tree_g6", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 27, 0, false, "M5 Max", false},
+    // NI_KFLASH_NARROW. Qwen3.8 27B, wide class. M5 Max, 131K 56.1 -> 70.1 tok/s (24, the integer part);
+    // 32K 80.5 -> 85.6.
+    {"kflash_narrow", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 24, 0, false, "M5 Max", false},
 };
 
 }  // namespace
