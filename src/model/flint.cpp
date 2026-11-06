@@ -137,7 +137,7 @@ bool split_merges() {
   if (env_on("NI_FLINT_SPLIT")) return true;
   if (__builtin_available(macOS 15.0, *)) {
     if (getenv("NI_FLINT_SPLIT")) return false;
-    return Gpu::get().name().find("Ultra") != std::string::npos || Gpu::get().apple_family() < 9;
+    return ultra_gpu() || pre_m3_gpu();
   }
   return true;
 }

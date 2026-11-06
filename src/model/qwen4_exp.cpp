@@ -1114,7 +1114,7 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
     static const bool hc3 = !(getenv("NI_HC3") && !strcmp(getenv("NI_HC3"), "0"));
     constexpr int nr = 2, cpt = 2;
     if (hc3 && R <= 4 && rank <= 512 && rank % (8 * nr) == 0 && D % (16 * cpt) == 0) {
-      // NI_HC_WIDE (on by default on the M5 Max, a narrower gate than the class; 1 on the other Macs, 0 off): wider grids for
+      // NI_HC_WIDE (on by default on the wide class, the 40-core M5 Max; 1 on the other Macs, 0 off): wider grids for
       // the pair, the stats in R threadgroups of their own beside the down projection's dots (hc_down_sk4; hc_down_sk3
       // runs them after the dots of its row block 0) and the verify rows' up projection on 2 blocks of 16 channels per
       // threadgroup (hc_up_mix4_c2: 80 threadgroups at Flash-Next's shape against c4's 40, one a core on the M5 Max).
@@ -1123,7 +1123,7 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
       static const bool wide = [] {
         const char* v = getenv("NI_HC_WIDE");
         if (v && *v) return atoi(v) > 0;
-        return named_m5_max();
+        return wide_cores();
       }();
       e.use(pipe((wide ? "hc_down_sk4_n" : "hc_down_sk3_n") + std::to_string(nr) + b));
       e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);

@@ -1,11 +1,5 @@
 # path, call-form hits. A rise fails tests/test_profile_gates.py. A drop to zero fails until this row is removed.
 src/metal/gpu.h	1
 src/metal/gpu.mm	1
-src/model/dflash2.cpp	1
-src/model/flint.cpp	2
-src/model/qwen35.cpp	1
-src/model/qwen35_spec.cpp	2
-src/model/qwen35_v8.cpp	4
-src/vision/qwen_vit.cpp	1
 tools/coop_layout.cpp	1
 tools/nh_mlp_bench.cpp	1

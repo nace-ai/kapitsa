@@ -1,4 +1,5 @@
 // The Qwen3.5-family image encoder (see qwen_vit.h).
+#include "engine/device_profile.h"
 #include "vision/qwen_vit.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
@@ -400,7 +401,7 @@ void QwenViT::load() {
   const bool pack = (H == 1024 && c_.depth == 24 && c_.inter == 4096 && c_.out_hidden == 2560) ||
                     (H == 1152 && c_.depth == 27 && c_.inter == 4304 && c_.out_hidden == 2048);
   const char* prepack = getenv("NI_VIT_PREPACK");
-  if (pack && !(prepack && !strcmp(prepack, "0")) && Gpu::get().name() == "Apple M4 Pro") {
+  if (pack && !(prepack && !strcmp(prepack, "0")) && m4_pro_gpu()) {
     auto e = Gpu::get().begin();
     for (VitLin* L : {&patch_, &m1_, &m2_}) vit_pack_linear(*e, *L);
     for (Block& B : blocks_)

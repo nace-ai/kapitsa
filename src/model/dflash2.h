@@ -92,7 +92,7 @@ class DFlash2 {
   // A drafter loaded with a 16-row block drafts 8-row blocks too, request by request (set_block): its buffers are the
   // 16-row block's, and the 8-row block keeps the budget, rows and depth a drafter loaded with NI_KFLASH_BLOCK=8 has
   // (one 8-row tile, the 8-row budget file). narrow_ok(): this drafter can (a 16-row block with trees, by default on
-  // the M5 Max; NI_KFLASH_NARROW=1 elsewhere, 0 keeps it at 16 rows).
+  // the wide class, the 40-core M5 Max; NI_KFLASH_NARROW=1 elsewhere, 0 keeps it at 16 rows).
   bool narrow_ok() const { return kf_budget_alt_ != nullptr; }
   // the block of the cycles to come (8, or the block it loaded with), between requests: nothing of a cycle in flight
   void set_block(int rows);
@@ -135,7 +135,7 @@ class DFlash2 {
   // codebooks (2 x V x kRank x 4 B, about 0.5 GB) the plan then counts; NI_KFLASH_SELUPD overrides it either way.
   static size_t plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
                            size_t* per_slot, size_t* at_prefill = nullptr, int block_rows = kB, bool lanes = false);
-  // The default of the history lane and the selector update (#944): the Qwen3.6 35B-A3B on an M5 Pro, not Clover.
+  // The default of the history lane and the selector update (#944): the Qwen3.6 35B-A3B on an M5-class Mac, not Clover.
   static bool lanes_default(const std::string& model_dir, const Qwen35Config& target);
   // The target's tensors the drafter borrows have a supported format (4-bit embedding, 4/8-bit g64 LM head).
   static bool supports(const Qwen35& target);
@@ -421,7 +421,7 @@ class DFlash2 {
   // KFlash (see tree()): the tree descriptor (int32 [kf::kWords]), the lattice's children tables (clq float
   // [7][16][16], ctok int, the constant successors), the builder's live-row word, the budget
   bool tree_ = false;
-  bool hist_ = false;  // the history lane (dfl_hist): default on for the 35B-A3B on an M5 Pro, NI_KFLASH_HIST=<nmin>,<nmax>,<cap> or 0
+  bool hist_ = false;  // the history lane (dfl_hist): default on for the 35B-A3B on an M5-class Mac, NI_KFLASH_HIST=<nmin>,<nmax>,<cap> or 0
   int hist_nmin_ = 3, hist_nmax_ = 8, hist_cap_ = 4;
   bool gst_tree_ = false;  // the drafter state's rows are a tree acceptance's path (gst[4 ..]): commits gather them
   int tree_rows_ = kB;     // the widest allowed verify (the budget's max rows)

@@ -16,7 +16,8 @@ enum class ChipClass { kLegacy, kSimd, kMatrix, kWide };
 
 enum class ModelClass { kOther, kQwen35A3b };
 
-// A row's device half. A class matches only itself. kName is a narrow exception: the name must match, and the row
+// A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
+// units). kName is a narrow exception: the name must match, and the row
 // has to cite a win of at least 10% that the wider class does not get.
 enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kName };
 
@@ -83,14 +84,22 @@ bool matrix_units(const DeviceFacts&);  // apple_family() >= 10
 bool legacy_gpu(const DeviceFacts&);    // apple_family() <= 7: the M1 path
 bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores
 bool wide_cores(const DeviceFacts&);    // matrix units and 40 cores or more
-bool named_m5_max(const DeviceFacts&);  // the name contains "M5 Max"
+bool m4_10(const DeviceFacts&);         // name "Apple M4" and exactly 10 cores
+bool m4_pro_gpu(const DeviceFacts&);    // name "Apple M4 Pro" (14 or 20 cores)
+bool m4_pro_20(const DeviceFacts&);     // name "Apple M4 Pro" and exactly 20 cores
+bool ultra_gpu(const DeviceFacts&);     // the name contains "Ultra": two dies
+bool pre_m3_gpu(const DeviceFacts&);    // apple_family() < 9: M1 and M2
 bool m4_ten_core(const DeviceFacts&);   // name "Apple M4" and 10 cores or fewer
 
 bool matrix_units();
 bool legacy_gpu();
 bool m1_max_32();
 bool wide_cores();
-bool named_m5_max();
+bool m4_10();
+bool m4_pro_gpu();
+bool m4_pro_20();
+bool ultra_gpu();
+bool pre_m3_gpu();
 bool m4_ten_core();
 
 }  // namespace ni

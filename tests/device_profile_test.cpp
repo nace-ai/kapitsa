@@ -70,8 +70,9 @@ int main() {
   CHECK(!ni::default_matches(*wave, m5pro));
   CHECK(ni::default_matches(*wave, m5max));
   CHECK(ni::default_matches(*hist, m5pro));
-  CHECK(!ni::default_matches(*hist, m5max));
-  // NI_GPU_CORES can make an M5 Pro look wide. The wave follows cores; the lane follows the name.
+  CHECK(ni::default_matches(*hist, m5max));  // the matrix class includes the wide chips
+  CHECK(!ni::default_matches(*hist, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
+  // NI_GPU_CORES can make an M5 Pro look wide. Both rows follow the class, not the name.
   const auto faked = ni::resolve_device(mac(10, 40, "Apple M5 Pro", g48));
   CHECK(faked.chip == ChipClass::kWide);
   CHECK(ni::default_matches(*wave, faked));
@@ -88,7 +89,12 @@ int main() {
   CHECK(ni::legacy_gpu(m1) && !ni::legacy_gpu(m4pro) && !ni::legacy_gpu(m5pro_f));
   CHECK(ni::m1_max_32(m1) && !ni::m1_max_32(m1_24) && !ni::m1_max_32(m5max_f));
   CHECK(ni::wide_cores(m5max_f) && !ni::wide_cores(m5pro_f) && !ni::wide_cores(unread));
-  CHECK(ni::named_m5_max(m5max_f) && !ni::named_m5_max(m5pro_f) && !ni::named_m5_max(faked_f));
+  CHECK(ni::wide_cores(faked_f));  // NI_GPU_CORES=40 on a Pro: the class follows the cores, not the name
+  CHECK(ni::m4_10(m4) && !ni::m4_10(mac(9, 8, "Apple M4", 16L << 30)) && !ni::m4_10(m4pro));
+  CHECK(ni::m4_pro_gpu(m4pro) && ni::m4_pro_gpu(mac(9, 14, "Apple M4 Pro", g48)) && !ni::m4_pro_gpu(m4));
+  CHECK(ni::m4_pro_20(m4pro) && !ni::m4_pro_20(mac(9, 14, "Apple M4 Pro", g48)));
+  CHECK(ni::ultra_gpu(mac(10, 80, "Apple M5 Ultra", 512L << 30)) && !ni::ultra_gpu(m5max_f));
+  CHECK(ni::pre_m3_gpu(m1) && ni::pre_m3_gpu(mac(8, 10, "Apple M2", 24L << 30)) && !ni::pre_m3_gpu(m4pro));
   CHECK(ni::m4_ten_core(m4) && !ni::m4_ten_core(m4pro));
 
   const std::string text = ni::format_profile(m5pro, false);

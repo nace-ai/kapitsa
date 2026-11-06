@@ -25,7 +25,15 @@ bool m1_max_32() { return Gpu::get().name() == "Apple M1 Max" && Gpu::get().core
 
 bool wide_cores() { return matrix_units() && Gpu::get().core_count() >= 40; }
 
-bool named_m5_max() { return Gpu::get().name().find("M5 Max") != std::string::npos; }
+bool m4_10() { return Gpu::get().name() == "Apple M4" && Gpu::get().core_count() == 10; }
+
+bool m4_pro_gpu() { return Gpu::get().name() == "Apple M4 Pro"; }
+
+bool m4_pro_20() { return Gpu::get().name() == "Apple M4 Pro" && Gpu::get().core_count() == 20; }
+
+bool ultra_gpu() { return Gpu::get().name().find("Ultra") != std::string::npos; }
+
+bool pre_m3_gpu() { return Gpu::get().apple_family() < 9; }
 
 bool m4_ten_core() { return Gpu::get().name() == "Apple M4" && Gpu::get().core_count() <= 10; }
 
