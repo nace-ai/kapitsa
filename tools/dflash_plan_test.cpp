@@ -88,6 +88,11 @@ int main(int argc, char** argv) {
   setenv("NI_KFLASH_TREE", "0", 1);
   check(plan() == no_lanes, "NI_KFLASH_TREE=0: the update cannot run, no masters in the plan");
   unsetenv("NI_KFLASH_TREE");
+  setenv("NI_KFLASH_VERIFY", "3", 1);
+  check(plan() == no_lanes, "NI_KFLASH_VERIFY=3: the verify chains, the update cannot run, no masters in the plan");
+  setenv("NI_KFLASH_VERIFY", "7", 1);
+  check(plan() - no_lanes == masters, "NI_KFLASH_VERIFY=7: the full-depth trees run, the masters are in the plan");
+  unsetenv("NI_KFLASH_VERIFY");
   unsetenv("NI_KFLASH_SELUPD");
   unsetenv("NI_KFLASH_SELUPD");
   std::filesystem::remove_all(tmp);

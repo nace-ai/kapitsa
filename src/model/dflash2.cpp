@@ -442,6 +442,14 @@ bool DFlash2::rows16_auto_ok() const {
   return rows16_tensor_ok();
 }
 
+// The online selector update rides the tree verify, which set_tree() leaves on only at the block's full depth: not with the
+// trees off (kf_tree_default), and not with an explicit NI_KFLASH_VERIFY below the 8-row block's full depth of 7, which
+// keeps kf_tree_default true and runs the chain (see its VERIFY comment). The constructor and the plan read the same answer.
+static bool selupd_tree_runs() {
+  const char* vv = kenv("VERIFY");
+  return kf_tree_default(DFlash2::kB - 1) && !(vv && *vv && atoi(vv) < DFlash2::kB - 1);
+}
+
 DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) : tg_(target), dir_(dir) {
   const double t0 = now_ms(), fp0 = footprint_gb();
   bits_ = bits ? bits : (kenv("BITS") ? atoi(kenv("BITS")) : 4);
@@ -470,8 +478,9 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       const char* su = kenv("SELUPD");
       selupd_lr_ = su && *su ? float(atof(su)) : kSelUpdDefault && dfl_lanes_default(tg_) ? kSelUpdLr : 0.0f;
       if (!(selupd_lr_ > 0.0f)) selupd_lr_ = 0.0f;
-      if (selupd_lr_ > 0.0f && !kf_tree_default(kB - 1)) {  // the update runs in the tree verify: chains never reach it
-        logi("KFlash: online selector update off (the KFlash trees are off: NI_KFLASH=0, NI_KFLASH_TREE=0 or a depth cap)");
+      if (selupd_lr_ > 0.0f && !selupd_tree_runs()) {  // the update runs in the tree verify: chains never reach it
+        logi("KFlash: online selector update off (no KFlash trees: NI_KFLASH=0, NI_KFLASH_TREE=0, a depth cap or "
+             "NI_KFLASH_VERIFY below 7)");
         selupd_lr_ = 0.0f;
       }
       const char* st = kenv("SELUPD_TAU");
@@ -1248,7 +1257,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   }
   // the online selector update's fp32 masters (see the constructor): off when NI_KFLASH_SELUPD says so or sets no rate
   const char* su = kenv("SELUPD");
-  const bool selupd = (su && *su ? atof(su) > 0 : lanes && kSelUpdDefault) && kf_tree_default(kB - 1);  // as the constructor
+  const bool selupd = (su && *su ? atof(su) > 0 : lanes && kSelUpdDefault) && selupd_tree_runs();  // as the constructor
   const bool v1_drafter = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
   if (selupd && !v1_drafter) w += 2 * V * kRank * 4;
   return w + b + pf;
