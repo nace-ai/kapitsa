@@ -845,7 +845,7 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   static const bool tree_g6 = [] {
     const int v = env_int("NI_V8_TREE_G6", -1);
     if (env_int("NI_V8_ATTN_T", 1) == 0 || v == 0) return false;
-    return v > 0 || wide_cores();
+    return v > 0 || default_on(Knob::kTreeG6, ModelFacts{});
   }();
   const bool g6t = tree_g6 && G == 6 && tw_supported() && !kv_i8();
   const bool zone = tree && tree_attn >= 2 && !v8w_R_ && !g6t;

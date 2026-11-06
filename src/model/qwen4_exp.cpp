@@ -1134,7 +1134,7 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
       static const bool wide = [] {
         const char* v = getenv("NI_HC_WIDE");
         if (v && *v) return atoi(v) > 0;
-        return wide_cores();
+        return default_on(Knob::kHcWide, ModelFacts{});
       }();
       e.use(pipe((wide ? "hc_down_sk4_n" : "hc_down_sk3_n") + std::to_string(nr) + b));
       e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
