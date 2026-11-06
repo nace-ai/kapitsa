@@ -1,0 +1,2 @@
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (206 ms)
+{"output":"/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.json","sequences":1,"unique_rows":640}
