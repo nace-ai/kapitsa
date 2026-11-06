@@ -3003,8 +3003,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // whatever the target, so the pass wins there; on the 4B the same suffix prefills in ~53 ms and the pass costs
     // it ~30-40 ms (39/40/45 rows, 4K and 16K prefixes, replies identical either way), so it loses. The weight
     // scale hidden*intermediate*layers separates the two cases (27B 5.7e9, 4B 7.5e8). The floor is placed at
-    // 3e9, above the unmeasured middle (a 9B-class target lands around 2e9), so a target nobody has measured keeps
-    // the prefill path: the pass might win there, but only the two ends are known and off is the older behaviour.
+    // 3e9, above the middle (a 9B-class target lands around 2e9), so a target between the two ends keeps
+    // the prefill path today, which is the older behaviour.
     // MoE targets (whose verify reads the union of its rows' experts) and targets whose tables hold 8 rows need
     // NI_VPF=1 too.
     long long vpf_scale = 0;
