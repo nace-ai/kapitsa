@@ -104,6 +104,7 @@ bool dfl_lowrank_factors(const uint32_t* w, const uint16_t* sc, const uint16_t* 
     return false;
   }
   // A = R^-1 Z, P = R^T Z (column j of each = row j of the outputs)
+  // Copy into Ad before moving Z into Pd: both products need the eigenvectors.
   std::vector<double> Ad = Z, Pd = std::move(Z);
   cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, int(K), int(r), 1.0, R.data(), int(K),
               Ad.data(), int(K));
