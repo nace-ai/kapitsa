@@ -817,6 +817,14 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
   return 0;
 }
 
+// --idle-unload auto: 10 minutes idle, and only under memory pressure. NI_IDLE_UNLOAD_AUTO_S shortens the 10 minutes for
+// tests/test_idle_unload.py (the gate itself, Gpu::memory_pressed(), is what they run, not a shortcut around it).
+static int idle_unload_auto_s() {
+  const char* v = getenv("NI_IDLE_UNLOAD_AUTO_S");
+  const int s = v && *v ? atoi(v) : 0;
+  return s >= 5 && s <= 600 ? s : 600;
+}
+
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
   keep_args(argc, argv);
@@ -887,7 +895,7 @@ static int serve(int argc, char** argv, int first) {
       else {
         char* end = nullptr;
         const double m = strtod(v.c_str(), &end);
-        if (end == v.c_str() || *end || m < 0.5 || m > 10080)
+        if (end == v.c_str() || *end || !(m >= 0.5 && m <= 10080))  // (!: NaN is refused too)
           usage_error("--idle-unload takes auto, 0 (off) or the minutes the server idles first (0.5 or more), not \"" + v + "\"", help);
         idle_unload_min = m;
       }
@@ -1308,7 +1316,7 @@ static int serve(int argc, char** argv, int first) {
     return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
   }
   if (!engine_splash && idle_unload_min != 0)
-    model_mgr->set_idle_unload(idle_unload_min < 0 ? 600 : int(idle_unload_min * 60 + 0.5), idle_unload_min < 0,
+    model_mgr->set_idle_unload(idle_unload_min < 0 ? idle_unload_auto_s() : int(idle_unload_min * 60 + 0.5), idle_unload_min < 0,
                                [] { return split_now(); });
   if (engine_splash) {  // (absolute: the next run may start in another folder)
     std::error_code abs_ec;

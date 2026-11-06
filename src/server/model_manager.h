@@ -104,18 +104,18 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
       return nullptr;
     }
+    bool cur = false;
     {
       std::shared_lock<std::shared_mutex> lk(rw_mu_);
       if (switching_.load()) {
         if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
         return nullptr;
       }
-      if (!allow_switch_ || is_current_model_unlocked(requested_model)) {
-        if (!unloaded_.load()) return acquire_unlocked();
-      }
+      cur = !allow_switch_ || is_current_model_unlocked(requested_model);  // (read once: info_ changes under the exclusive lock)
+      if (cur && !unloaded_.load()) return acquire_unlocked();
     }
     // the engine was released while idle: this request loads it again (a model it names instead is a switch)
-    if (unloaded_.load() && (!allow_switch_ || is_current_model_unlocked(requested_model))) {
+    if (cur && unloaded_.load()) {
       if (!load_back(error_out)) return nullptr;
       std::shared_lock<std::shared_mutex> lk(rw_mu_);
       return acquire_unlocked();
@@ -258,6 +258,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         logi("reloading %s failed too: %s", ref_.name.c_str(), e2.what());
         if (error_out) error_out->message += std::string("; reloading the previous model failed too: ") + e2.what();
       }
+      unloaded_ = !engine_;  // (a live engine is not "released", whatever the idle watcher did before the switch)
       if (tui_) ui::loading_end(ref_.name);
       return nullptr;
     }
@@ -306,6 +307,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         logi("loading %s as it was failed too: %s", ref_.name.c_str(), e2.what());
         if (error_out) *error_out += std::string("; loading it as it was failed too: ") + e2.what();
       }
+      unloaded_ = !engine_;
       if (tui_) ui::loading_end(ref_.name);
       return false;
     }
@@ -624,12 +626,23 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     if (tui_) ui::note(ref_.name + " released while idle; the next request loads it again");
   }
   // The request that finds the engine released loads it again; requests arriving meanwhile wait on the lock.
+  // `switching_` is set for the whole load, like a switch or reload(): a request, /v1/models, /cluster and the pair
+  // watcher that come meanwhile get Busy (or null) at once instead of holding an HTTP thread on the lock.
   bool load_back(Error* error_out) {
+    if (switching_.exchange(true)) {
+      if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
+      return false;
+    }
+    struct Clear {
+      std::atomic<bool>& f;
+      ~Clear() { f = false; }
+    } clear{switching_};
     std::unique_lock<std::shared_mutex> lk(rw_mu_);
     return load_back_locked(error_out);
   }
   // (rw_mu_ held exclusively)
   bool load_back_locked(Error* error_out) {
+    if (engine_) unloaded_ = false;  // (never a second engine beside a live one)
     if (!unloaded_.load()) return true;  // (another request or a switch did)
     const int64_t t0 = mono_ms();
     if (tui_) ui::loading_begin(ref_.name);
