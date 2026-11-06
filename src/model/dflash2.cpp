@@ -652,8 +652,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   // T > 0 uses an exact rule (dfl_depth): default tau 0.3 (offline replay, 35B T = 0.6, 4 prompts x 6 seeds: 0.25 /
   // 0.3 / 0.35 within 0.4%); NI_KFLASH_DYN_T overrides. NI_KFLASH_DYN_RULE=2: the earlier T > 0 rule (exclusive
   // product of the walk's q; 35B code_35b 512, T = 0.6: 139.2 tok/s without, 149.4 / 147.8 / 140.3 at 0.3 / 0.5 / 0.7)
-  // Rule 0 is the default on the M5 (Apple10); other Macs keep rule 2, which they were tuned
-  // with.
+  // Rule 0 is the default on the M5 (Apple10); other Macs keep rule 2 today.
   dyn_tau_t_ = dyn_tau_ > 0 ? 0.3f : 0.0f;
   dyn_rule_ = Gpu::get().apple10() ? 0u : 2u;
   if (const char* v = kenv("DYN_RULE")) {  // rule 1 is biased at T > 0 (dflash_accept_test only)
@@ -955,7 +954,7 @@ void DFlash2::alloc_buffers() {
   {
     // the target's 8-row verify GEMMs for the drafter's projections (NI_KFLASH_V8=0/1 overrides): the 27B's drafter
     // (H 5120) and the 4B's (H 2560: 4-bit 4B, code / prose, 178.2 -> 179.8 / 142.1 -> 144.2 tok/s); the 35B's
-    // (H 2048) keeps dfl_qmm8 except for the measured 32-core M1 Max 4-bit MoE case
+    // (H 2048) keeps dfl_qmm8 except for the 32-core M1 Max 4-bit MoE case
     const char* v = kenv("V8");
     v8_ = B == 8 && (v && *v ? atoi(v) != 0 : default_v8(H, tg_.config().moe, tg_.lm_head().q4()));
   }

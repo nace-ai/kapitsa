@@ -396,7 +396,7 @@ void QwenViT::load() {
   m1_ = w_.lin("merger.linear_fc1");
   m2_ = w_.lin("merger.linear_fc2");
   w_.close();
-  // The measured Qwen 4B and 35B tower shapes on M4 Pro; other shapes keep the bf16 path.
+  // The Qwen 4B and 35B tower shapes on M4 Pro; other shapes keep the bf16 path today.
   const bool pack = (H == 1024 && c_.depth == 24 && c_.inter == 4096 && c_.out_hidden == 2560) ||
                     (H == 1152 && c_.depth == 27 && c_.inter == 4304 && c_.out_hidden == 2048);
   const char* prepack = getenv("NI_VIT_PREPACK");

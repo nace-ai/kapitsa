@@ -754,7 +754,7 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
     static const bool m4_pro = Gpu::get().name() == "Apple M4 Pro" && Gpu::get().core_count() == 20;
     const bool moe35 = cfg_.moe && cfg_.hidden == 2048 && cfg_.layers == 40 && cfg_.experts == 256 &&
                        cfg_.top_k == 8 && cfg_.moe_I == 512 && cfg_.shared_I == 512;
-    // The measured 35B oQ4e path: fold rows_norm_f32 into the first projection's X8 preparation.
+    // The 35B oQ4e path: fold rows_norm_f32 into the first projection's X8 preparation.
     // Keep its 256-thread scalar reduction and retain xrn_ for the remaining projections.
     static const bool norm_x8 = env_int("NI_NORM_X8", 1) != 0 && m4_pro;
     const QLinear& first = *segs[0].L;
@@ -777,7 +777,7 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
     }
     if (xn_out && xin != xn_out) fatal("enc_qmvr_multi: xn_out fallback needs xn_out == xrn_");
     // Reuse the first projection's table (including NI_NORM_X8's) without changing any GEMM's K reduction.
-    // Default only for the measured 35B shape / 5-6-bit affine projections on the 20-core M4 Pro.
+    // On by default today only for the 35B shape / 5-6-bit affine projections on the 20-core M4 Pro.
     static const int share_x8 = env_int("NI_QMVR_SHARE_X8", -1);
     if (share_x8 != 0 && !off && !special && R >= 1 && R < v8_rows_min(true) && segs.size() <= 4 && K % 64 == 0) {
       size_t generic = 0;

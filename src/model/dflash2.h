@@ -436,7 +436,7 @@ class DFlash2 {
   // T > 0: the walk samples its chain at T_q = walk_tf_ * T (NI_KFLASH_QT; 0 = argmax chain with one-hot q)
   float walk_tf_ = 1.0f;
   // MLP and LM head on the target's 8-row verify GEMMs (Qwen35::enc_gu8 / enc_qmm8 with the verify's V8Knobs;
-  // NI_KFLASH_V8, default on for hidden >= 4096, where they measured 6-16% faster than dfl_qmm8): inputs permuted
+  // NI_KFLASH_V8, default on for hidden >= 2560 (default_v8), 6-16% faster than dfl_qmm8 on the drafters measured): inputs permuted
   // into their table
   bool v8_ = false;
   Buffer v8t_, v8h_, v8hs_;
