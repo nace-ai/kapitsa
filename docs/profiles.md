@@ -23,9 +23,15 @@ in [benchmarks.md](benchmarks.md). It runs the rows teacher-forced, full vocabul
 | Model, Mac | Fastest other engine | Rows | Top-1 flips | Mean KL |
 |---|---|---|---|---|
 | Qwen3.8-Flash-Next Q2_0, M5 Pro | Splash 1.5.0 | 72 (16K, 32K, 64K windows) | 16 | 0.46 |
+| Qwen3.6-35B-A3B 4-bit, M5 Pro | Splash 1.5.0 | 192 (8 windows, 512 to 3,200 tokens) | 4 | 2.1e-3 |
 
-Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same top-1 on 31 of
-32 rows, mean KL at most 1.5e-2).
+On Flash-Next, Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same
+top-1 on 31 of 32 rows, mean KL at most 1.5e-2).
+
+**A model no other engine runs** (Nemotron 3.5 Lightning today) takes the strictest bar measured on any model: the
+lowest flip rate (flips per row) and the lowest mean KL in the table above, both from the same row. Today that is the
+35B-A3B's: 4 flips in 192 rows (2.1%), mean KL 2.1e-3. The member's own output check runs on its own model's rows and
+must be at or below both. When another engine starts running that model, its measured bar replaces the fallback.
 
 ## Members
 
@@ -38,18 +44,18 @@ bitwise identical to main on all 72 rows, and `fast` at 4096-row chunks is bitwi
 
 ## Candidates
 
-Ranked by measured speed, then how many models they cover, then drift. Status as of 6 Nov 2026.
+Ranked by measured speed, then how many models they cover, then drift. Status as of 6 Nov 2026, 17:30. Drift is against Kapitsa's precise path on the M5 Pro.
 
 | # | Speedup | Models, Mac | What moves | Measured speed | Measured drift (vs exact) | Status |
 |---|---|---|---|---|---|---|
 | 1 | TATTN sparse attention, Q and P as hi + lo halves (#818, `NI_QSA_TATTN`) | Flash-Next Q2_0, M5 Pro | sparse prefill attention on the matrix units, about 22 bits per operand; turns on 4096-row chunks | prefill 12% faster at 32K, 20% at 64K; decode about 3% slower | 4 of 72 flips, mean KL 8.8e-3 | first fast member |
-| 2 | W4A8 dense prefill GEMMs (`NI_QMT_I8`) | 4-bit group-64 dense projections on an M5: Flash-Next, 35B-A3B | activations rounded to int8 per 64-group | Flash-Next 32K prefill 3-13% faster (#572, before grouped prefill, which it turns off) | Flash-Next: 4 of 96 flips, mean KL 7.0e-3 | measured here, see Members |
+| 2 | W4A8 dense prefill GEMMs (`NI_QMT_I8`) | 4-bit group-64 dense projections on an M5: Flash-Next, 35B-A3B | activations rounded to int8 per 64-group | Flash-Next 32K prefill 3-13% faster (#572, before grouped prefill, which it turns off) | 35B, 192 rows: 5 flips, mean KL 4.0e-3 (bar 4, 2.1e-3); Flash-Next with TATTN: 6 of 72, 2.1e-2 | 35B: over the bar, and 4K prefill 3.5% slower (4 pairs); not a member |
 | 3 | TATTN single half (`NI_QSA_TATTN`, before #818) | Flash-Next, M5 | Q, K, P in half | 32K prefill 10-15% faster | 3 of 96 flips, mean KL 4.4e-3; a 64K reply ends at once (#585) | replaced by 1 |
 | 4 | Neural Engine prefill for hidden 2048-8192 (#775) | Qwen3.5 9B, M4 Pro | W8A8 FFN on the Neural Engine | 4K time to first token 63% less | 2 of 192 flips, mean KL 3.6e-4 | open PR |
-| 5 | int8 KV cache (`NI_KV_I8`) | Qwen3.5/3.6/3.8, Flint | KV rows int8 with a row scale | 35B on an M4 16 GB: decode 4% faster, 1.9x the context | to 9.7K: 3 of 200 flips, mean KL 6.4e-2 | opt-in; on an M5 it turns off the 35B's tree-verify attention kernel, likely slower there |
-| 6 | Verify MoE without row-independent numerics (`NI_DFLASH_EXACT_MOE=0`) | 35B-A3B, Clover | a verify row's logits depend on the other rows' routing | source comment: exact verify about 3% slower | not measured before | measured here, see Members |
-| 7 | Nemotron Lightning attention projections in 8-bit (`NI_NH_ATTN_Q8`) | Lightning | BF16 to 8-bit weights | decode about 3% faster | not measured | opt-in |
-| 8 | Fused Flash-Next indexer selection (`NI_QSA_FUSE`) | Flash-Next decode | block keys a few ulp off | not measured | kernel check only | opt-in |
+| 5 | int8 KV cache (`NI_KV_I8`) | Qwen3.5/3.6/3.8, Flint | KV rows int8 with a row scale | 35B on an M4 16 GB: decode 4% faster, 1.9x the context | 35B, 192 rows: 3 flips, mean KL 1.1e-3 (bar 4, 2.1e-3) | inside the 35B bar; speed A/B on the M5 Pro queued |
+| 6 | Verify MoE without row-independent numerics (`NI_DFLASH_EXACT_MOE=0`) | 35B-A3B, Clover | a verify row's logits depend on the other rows' routing | source comment: exact verify about 3% slower | 35B, 192 verify rows: 0 flips, mean KL 1.8e-4, passes the precise floor gate | decode about the same on the M5 Pro (4 pairs); passes precise's gate, so a precise question, not fast |
+| 7 | Nemotron Lightning attention projections in 8-bit (`NI_NH_ATTN_Q8`) | Lightning | BF16 to 8-bit weights | decode about 3% faster | 192 rows: 1 flip (a near-tie), mean KL 6.5e-4; inside the fallback bar (4 of 192, 2.1e-3) | fast candidate; speed A/B queued |
+| 8 | Fused Flash-Next indexer selection (`NI_QSA_FUSE`) | Flash-Next decode | block keys a few ulp off | not measured yet | 72 rows: every row bitwise identical to precise | no drift, so a precise question; speed A/B queued |
 | 9 | Prompt prefix routed to 4 experts instead of 8 (#853) | 35B-A3B | fewer experts per prefix token | not reproduced | 7 flips, mean KL 3.6e-2 | closed |
 
 Already lossy defaults (they passed their gates, so they are in precise): `NI_MOE_QTM`, `NI_QATTN_G8`/`D2` on the
