@@ -7,6 +7,13 @@ wait_ac() { until pmset -g batt | grep -q "AC Power"; do echo "waiting for AC $(
 # orchestrator 6 Nov: before training or eval takes the lock, free swap >= 3 GB and memory pressure normal (level 1)
 # orchestrator 7 Nov: used swap stays high for hours after pressure ends (#373's pressure test), so gate on what is free now:
 # pressure normal (level 1), free RAM >= 12 GB (vm_stat free+inactive+speculative+purgeable) and no other process over 20 GB RSS
+# the data, features and checkpoints live on the Extreme Pro (/tmp/k350d links there); wait outside the lock until it is
+# mounted with >= 26 GB free (orchestrator 7 Nov: leave 20 GB; a state save writes a 5.5 GB .tmp before the rename)
+drive_ok() { [ -d $D/data ] && dfree=$(df -g "$D/" | awk 'NR==2{print $4}') && [ "$dfree" -ge 26 ]; }
+wait_drive() { until drive_ok; do echo "waiting for the Extreme Pro $(date +%T): ${dfree:-not mounted} GB free"; dfree=; sleep 120; done; }
+# orchestrator 7 Nov: don't train between #373's legs (its pressure test pushes swap past 8 GB within 25 steps);
+# wait outside the lock until no detach job whose name contains 373 is running
+wait_373() { while python3 $DT list | grep -qE "^RUNNING +[^ ]*373"; do echo "waiting for #373 $(date +%T): $(python3 $DT list | awk '/^RUNNING +[^ ]*373/{printf "%s ", $2}')"; sleep 120; done; }
 mem_ok() { lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
   fr=$(vm_stat | awk '/page size of/{ps=$8} /Pages (free|inactive|speculative|purgeable):/{gsub("\\.","",$NF); n+=$NF} END{printf "%.1f", n*ps/2^30}')
   big=$(ps -axo rss=,pid=,comm= | awk '$1>20*2^20{printf "%s(%.0fGB) ", $3, $1/2^20}')
@@ -32,12 +39,12 @@ done
 [ -f $D/capt.done ] || { echo "capture not complete"; exit 3; }
 for c in $(seq 1 12); do
   [ -f $D/ckpt/DONE ] && break
-  wait_drive; wait_ac; wait_mem; $L bash $S/train_chunk.sh; rc=$?
+  wait_drive; wait_ac; wait_373; wait_mem; $L bash $S/train_chunk.sh; rc=$?
   [ $rc = 75 ] && { echo "chunk stopped on swap > 8 GB, state saved; gate again"; continue; }
   [ $rc = 0 ] || { echo "train chunk failed"; exit 4; }
 done
 [ -f $D/ckpt/DONE ] || { echo "training not done"; exit 4; }
 CK=$D/ckpt/best; [ -r $CK/model.safetensors ] || CK=$D/ckpt/last
 echo "drafter for eval: $CK"; bash $S/mkmodels.sh $CK || exit 5
-wait_drive; wait_ac; wait_mem; $L bash $S/eval_inner.sh; rc=$?
+wait_drive; wait_ac; wait_373; wait_mem; $L bash $S/eval_inner.sh; rc=$?
 python3 $S/verdict.py $D/eval; echo "PIPELINE DONE rc=$rc $(date +%T)"

@@ -144,6 +144,7 @@ else:
 ema = None
 tstart = time.time() - done_s
 tchunk = time.time()
+SWAP0 = float(re.search(r'used = ([\d.]+)M', os.popen('sysctl -n vm.swapusage').read()).group(1))  # swap at chunk start
 order = []
 def save_state():
     torch.save({'params': {k: d.w(k).detach().cpu() for k in W0 if k not in frozen}, 'opt': opt.state_dict(), 'step': step,
@@ -187,7 +188,7 @@ while True:
         say(f'step {step} done: anchors {BA}, seq len {m["n"]}, driver memory {mem:.2f} GiB, footprint {foot():.2f} GB, {time.time() - tchunk:.1f} s into chunk')
     if step % 25 == 0:  # orchestrator 7 Nov: abort on swap over 8 GB; exit 75 tells pipeline.sh to re-gate and resume
         su = float(re.search(r'used = ([\d.]+)M', os.popen('sysctl -n vm.swapusage').read()).group(1))
-        if su > 8192:
+        if su > 8192 and su > SWAP0 + 2048:  # swap stays high for hours after others' pressure ends: stop only if we added 2 GB
             save_state(); say(f'swap used {su / 1024:.1f} GB over 8 GB at step {step}: state saved, chunk stops'); sys.exit(75)
     if step % 25 == 0 and dev == 'mps' and foot() > float(os.environ.get('K350_MAX_GB', 30)):
         save_state(); say(f'footprint {foot():.1f} GB over K350_MAX_GB at step {step}: state saved, chunk ends early'); sys.exit(0)
