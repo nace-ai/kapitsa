@@ -246,11 +246,16 @@ void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out) {
   const uint16_t* S = H.s->buf.as<uint16_t>() + size_t(row) * (H.K / H.gs);
   const uint16_t* B = H.b->buf.as<uint16_t>() + size_t(row) * (H.K / H.gs);
   const uint32_t mask = (1u << H.bits) - 1u;
-  for (uint32_t k = 0; k < H.K; ++k) {
-    const uint32_t bit = k * uint32_t(H.bits), sh = bit % 32;
-    uint32_t v = W[bit / 32] >> sh;
-    if (sh + uint32_t(H.bits) > 32) v |= W[bit / 32 + 1] << (32 - sh);
-    out[k] = f32_to_bf16(bf16_to_f32(S[k / H.gs]) * float(v & mask) + bf16_to_f32(B[k / H.gs]));
+  // Coefficients are shared by every value in a quantization group.
+  for (uint32_t g0 = 0; g0 < H.K; g0 += H.gs) {
+    const float scale = bf16_to_f32(S[g0 / H.gs]), bias = bf16_to_f32(B[g0 / H.gs]);
+    const uint32_t end = std::min(g0 + uint32_t(H.gs), H.K);
+    for (uint32_t k = g0; k < end; ++k) {
+      const uint32_t bit = k * uint32_t(H.bits), sh = bit % 32;
+      uint32_t v = W[bit / 32] >> sh;
+      if (sh + uint32_t(H.bits) > 32) v |= W[bit / 32 + 1] << (32 - sh);
+      out[k] = f32_to_bf16(scale * float(v & mask) + bias);
+    }
   }
 }
 

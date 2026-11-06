@@ -46,6 +46,9 @@ The SDK model tests additionally exercise ownership on a temporary lock file. Re
 
 ## Tests
 
+`build/dflash_row_test` checks the CPU draft-row decoder against independently packed 2–8-bit rows and BF16 copies,
+including group boundaries, cross-word codes, buffer offsets and output guards. No model or GPU is needed.
+
 `build/dflash_lowrank_cache_test` checks the low-rank drafter cache identity on the CPU: changing Q4 codes
 with unchanged scales and biases changes both the key and the computed factors. No model or GPU is needed.
 `build/dflash_plan_test` checks optional low-rank drafter memory reservations on the CPU.
