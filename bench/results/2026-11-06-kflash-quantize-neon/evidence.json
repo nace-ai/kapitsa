@@ -1,0 +1,1586 @@
+{
+  "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+  "mac": "Mac Studio (2025), Apple M3 Ultra, 60 GPU cores, 96 GiB",
+  "macos": "26.4.1 (25E253)",
+  "compiler_flags": "Release -O3",
+  "model": "Qwen3.5-4B-4bit, six-layer BF16 DFlash checkpoint",
+  "drafter_sha256": "1eb221d36abb13a5f1b972f8d031a9723fad8cbb7d275abe548b60e77577eb42",
+  "no_metal_changes": true,
+  "candidate": "0f92834788846394200eed4627faad000e3d0608",
+  "cpu": {
+    "cpu": "PASS api_test\nPASS prefix_cache_test\nPASS fn_store_test\nPASS fn_dflash_test\nPASS tokenizer_test\nPASS iq_layout_test\nPASS remote_test\nPASS cluster_test\nPASS split_place_test\nPASS gemm_slices_test\nPASS ws_upgrade_test\nPASS test_server_cli\nPASS test_sidecar\nPASS test_bench\nPASS test_update\nPASS test_community\nPASS test_reasoning\nPASS test_pr_size\nPASS test_logit_compare\nPASS test_sampled_tokens_harness\nPASS test_structured_cli\n0 failed\nbuilt: execution_session_test http_stream_test exl3_test qwen4_config_test json_file_test affine_pack_test systemone systemone_test systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test (log: /Users/bytedance/kapitsa-batch2-20261106/evidence/vk/quant-4946bc/0f928347/build.log)\n........read model.safetensors (5 tensors)\n.GGUF v3: 3 tensors, 0 metadata KVs\narch: None name: None\n.read model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\n.read model.safetensors (1 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\n...GGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\n.\n----------------------------------------------------------------------\nRan 15 tests in 1.001s\n\nOK\nPASS nested path: stops at the corpus\nPASS nested path: dumps/x/ref made with its parents\nPASS existing path: kept, stops at the corpus\nPASS path under a file: cannot make, before the corpus\nPASS --verify-rows 12: refused before the directory\nall passed\n  ok    Flash-Next's multipliers from its seed\n  ok    Flash-Next's 16 head sizes: the primes from 20,000,000\n  ok    the heads' rows end to end\n  ok    320,001,536 rows in 128 shards of 2,500,012, rows of 160 values\n  ok    Flash-Next's ids as before\n  ok    Flash-Next's ids as ngram.cpp's\n  ok    5-grams of 3 heads: 12 heads of 40 values\n  ok    odd multipliers below 2^63 / vocab\n  ok    rows padded to 64, in 4 shards\n  ok    5-grams of 3 heads as ngram.cpp's\n  ok    Flash-Next's table: layer 1, its spec\n  ok    table_specs: 128 shards of 4-bit group-32 rows of 160 in layer 1\n  ok    a shard of another width is refused\n  ok    a missing shard is refused\n  ok    a shard past split_ngram_parts is refused\n  ok    the table in layer 5 (one-indexed) is read from layer 4's names, not layer 1's\n  ok    two n-gram layers are refused\n  ok    a hidden size the heads do not divide is refused\nPASS (0 failed)\nPASS pin: upstream Splash\nPASS pin: full commit hash\nPASS pin: release_binary_sha256\nPASS pin: release_metallib_sha256\nPASS pin: release_host_step_metallib_sha256\nPASS pin: kflash_binary_sha256\nPASS patches: present\nPASS patches: numbered 0001.. in order\nPASS 0001-runtime-kernels.patch: license header\nPASS 0001-runtime-kernels.patch: changes files\nPASS 0001-runtime-kernels.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: license header\nPASS 0002-h1-gate-replay.patch: changes files\nPASS 0002-h1-gate-replay.patch: runtime/metal/CommandGraph.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/ExpertStore.cpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/Runtime.cpp marked modified\nPASS gen: internals pragma first\nPASS gen: 8 staging pointers coherent\nPASS gen: stops before gguf_repack\nPASS gen: H1 kernels appended\nPASS gen: refuses 7 pointers\nPASS gen: refuses no gguf_repack\nPASS out: mine becomes an empty build dir\nPASS out: empty becomes an empty build dir\nPASS out: new becomes an empty build dir\nPASS out: refuses a directory that is not a build\nPASS out: refuses a file\nPASS out: the refused directory's files survive\nPASS install: another Splash release is left alone, not built\nPASS install: says why KFlash was not built\nPASS install: the pinned release builds KFlash, its files untouched\nPASS apply: every patch applies to the pinned Splash\nall passed\n",
+    "prek": "check for merge conflicts................................................Passed\ncheck yaml...............................................................Passed\ncheck for added large files..............................................Passed\ncheck for case conflicts.................................................Passed\ntrim trailing whitespace.................................................Passed\nruff check...............................................................Passed\nshell scripts parse (bash -n)............................................Passed\n",
+    "parser": "[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (253 ms)\nPASS unchanged stream: think, answer\nPASS unchanged stream: think, call after </think>\nPASS unchanged stream: think, text and call\nPASS unchanged stream: thinking off: call\nPASS unchanged stream: thinking off: answer\nPASS unchanged stream: unterminated call after </think>\nPASS unclosed think, switch off: the call stays reasoning (old behaviour)\nPASS unclosed think, switch on: returned as a tool call\nPASS unclosed think, switch on: reasoning without the markup\nPASS unclosed think, switch on: no call markup streamed as reasoning\nPASS unclosed think + trailing newline: returned as a tool call\nPASS two calls at the end of an unclosed think block\nPASS integer argument typed from the tool schema\nPASS call then </think> then the end, switch off: no call\nPASS call then </think> then the end, switch on: returned as a tool call\nPASS same result as before: draft, more reasoning, real call\nPASS same result as before: draft, </think>, a different real call\nPASS same result as before: draft, </think>, an answer\nPASS same result as before: unknown function at the end\nPASS same result as before: unterminated call at the end\nPASS same result as before: cut by max_tokens after a call\nPASS same result as before: <tool_call> mentioned, reasoning goes on\nPASS same result as before: non-ASCII reasoning after a draft\nPASS same result as before: stray </tool_call> after a call\nPASS request without tools: unchanged\nPASS think_ws: the newline before </think> stays in the reasoning\nPASS deltas add up to the result\nPASS utf8_valid: U+FFFD per maximal subpart, well-formed text unchanged\nPASS a reply cut inside a character ends in U+FFFD\nPASS GLM: string, number, boolean, object and array arguments\nPASS GLM: typing: a string as written, a typed value that is no JSON as text, an untyped one as JSON, an unknown one as text\nPASS GLM: two calls\nPASS GLM: a call without arguments\nPASS GLM: GLM-4.5's newlines between the elements and the calls\nPASS GLM: spaces around the name and a key; the value as written\nPASS GLM: content, then the call\nPASS GLM: reasoning (the model's own <think>), content, then calls\nPASS GLM: reasoning in the prompt's think block, then a call\nPASS GLM: non-ASCII values\nPASS GLM: a string value with the call's tags in it\nPASS GLM: a malformed call, then a good one\nPASS GLM: malformed, a name with a space\nPASS GLM: malformed, no name\nPASS GLM: malformed, an empty call\nPASS GLM: malformed, a value left open\nPASS GLM: malformed, a key without a value\nPASS GLM: malformed, text between a key and its value\nPASS GLM: malformed, text after a value\nPASS GLM: malformed, a tag in a key\nPASS GLM: malformed, Qwen's markup\nPASS GLM: malformed, unterminated at the end of the turn\nPASS GLM: each turn the same a token per byte, cut every 2, 3, 5, 7 bytes, NI_THINK_TOOLCALLS on\nPASS GLM: the default call format reads no GLM call\nPASS GLM: unclosed think, switch off: the call stays reasoning\nPASS GLM: unclosed think, switch on: returned as a tool call\nPASS GLM: unclosed think, switch on: no markup streamed; the same in other tokens\nPASS GLM: same result as before: a draft, more reasoning, a real call\nPASS GLM: same result as before: an unknown function at the end\nPASS GLM: same result as before: a malformed call at the end\nPASS GLM: a draft stays reasoning, the call after </think> is the call\nALL PASSED\n",
+    "structured-tokenizer": "PASS grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 8.2 us, median 3.7, p90 17.2, p99 47.2, max 62.8; 308 passed, 0 failed)\nPASS structured_check answers every request\nPASS chat: json_object: JSON\nPASS chat: json_schema, strict: JSON\nPASS chat: text: no grammar\nPASS chat: no format, tools, auto: no grammar\nPASS chat: json_schema without a schema: any object: JSON\nPASS chat: unknown format type: 400 (response_format.type)\nPASS chat: format not an object: 400 (response_format)\nPASS chat: json_schema missing: 400 (response_format.json_schema)\nPASS chat: schema not a schema: 400 (response_format.json_schema.schema)\nPASS chat: strict not a boolean: 400 (response_format.json_schema.strict)\nPASS chat: unknown type in the schema: 400 (response_format)\nPASS chat: remote $ref: 400 (response_format)\nPASS chat: a schema no value satisfies: 400 (response_format)\nPASS chat: tool_choice required: tool calls (get_weather, run_shell)\nPASS chat: tool_choice named: tool calls (get_weather)\nPASS chat: one call (parallel_tool_calls false): tool calls (get_weather, run_shell; one call)\nPASS chat: a named tool the request lacks: 400 (tool_choice)\nPASS chat: required without tools: 400 (tool_choice)\nPASS chat: unknown tool_choice: 400 (tool_choice)\nPASS chat: tool_choice object without a name: 400 (tool_choice)\nPASS chat: tool_choice none with a format: the format: JSON,\nPASS chat: a strict tool, auto: text or tool calls (get_weather, run_shell free)\nPASS chat: a format beside tools: JSON or tool calls\nPASS chat: a strict tool with a schema it cannot hold: 400 (tools)\nPASS responses: text.format json_schema: JSON\nPASS responses: text.format json_object: JSON\nPASS responses: text.format text: no grammar\nPASS responses: text.format unknown: 400 (text.format.type)\nPASS responses: text.format bad schema: 400 (text.format)\nPASS responses: tool_choice required: tool calls (get_weather)\nPASS responses: tool_choice a function: tool calls (run_shell)\nPASS responses: allowed_tools required: tool calls (run_shell)\nPASS responses: a built-in tool choice: 400 (tool_choice)\nPASS responses: a strict function: text or tool calls (get_weather)\nPASS responses: a function without strict is not strict: no grammar\nPASS responses: a namespace's strict function: text or tool calls (wx__get_weather)\nPASS responses: a custom tool named: tool calls (apply_patch)\nPASS messages: tool_choice any: tool calls (get_weather)\nPASS messages: tool_choice tool, one call: tool calls (run_shell; one call)\nPASS messages: tool_choice tool without a name: 400\nPASS messages: unknown tool_choice: 400\nPASS messages: output_format: JSON\nPASS messages: output_config.format: JSON\nPASS messages: output_format of another type: 400\nPASS messages: a strict tool: text or tool calls (get_weather)\nPASS messages: tool_choice none: no grammar\nALL PASSED\n"
+  },
+  "logit_comparison": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "../quant/tools/logit_floors/qwen3.5-4b-4bit.json"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:53Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0f92834)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:08Z",
+          "env": {}
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../quant/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:54Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0f92834)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:08Z",
+          "env": {}
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../quant/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:53Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0f92834)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:08Z",
+          "env": {}
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../quant/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:53Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0f92834)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:08Z",
+          "env": {}
+        }
+      }
+    }
+  },
+  "gpu_runs": [
+    {
+      "label": "logits-reference",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-logits-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference"
+      ],
+      "environment": null,
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "88fd3f20dafb3b0633d9561efefb79a7aa9809d8b0f08657c15a216a4f165722",
+      "log": "[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (292 ms)\n[kapitsa] read 2.37 GB of weights in 366 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 227 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 3634 ms\n[kapitsa] prewarmed 93 prefill pipelines in 3659 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 4320 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)\nprefill 8 rows: next-token NLL 1.8013, top-1 = next token 0.6250 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/prefill\nstep   192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/step\nverify 192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/verify\nbatch  192 rows: next-token NLL 0.6792, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/batch\n8 windows, 14848 prefilled tokens in 6.7 s; 8.8 s in all\n"
+    },
+    {
+      "label": "logits-quant",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-logits-quant",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/quant/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-quant",
+        "--from",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference"
+      ],
+      "environment": null,
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "c0e94708d51568626bc6813846163b44f3238f030891fa9d6c5c6e04851cb990",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 284 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 3609 ms\n[kapitsa] prewarmed 93 prefill pipelines in 3622 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 4332 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)\nprefill 8 rows: next-token NLL 1.8013, top-1 = next token 0.6250 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-quant/prefill\nstep   192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-quant/step\nverify 192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-quant/verify\nbatch  192 rows: next-token NLL 0.6792, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-quant/batch\n8 windows, 14848 prefilled tokens in 6.7 s; 9.0 s in all\n"
+    },
+    {
+      "label": "compare-quant",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+        "/Users/bytedance/kapitsa-batch2-20261106/quant/tools/logit_compare.py",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-quant",
+        "--json",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/compare-quant.json"
+      ],
+      "environment": null,
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "36984af9f922aec72ba5b03e811ee92512268785007192e20f826cbd07cf8d04",
+      "log": "prefill: 8 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (0f92834), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\nbatch: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), batch {\"members\":4,\"rows\":2}, prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (0f92834), batch {\"members\":4,\"rows\":2}, prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../quant/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\nstep: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (0f92834), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../quant/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\nverify: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), verify \"KFlash tree (a chain of 8 live rows)\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (0f92834), verify \"KFlash tree (a chain of 8 live rows)\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../quant/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\n"
+    },
+    {
+      "label": "draft-reference-b4",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-draft-reference-b4",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-bits-reference",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-b4"
+      ],
+      "environment": {
+        "NI_KFLASH_BITS": "4",
+        "NI_KFLASH_LOWRANK": "0"
+      },
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "e0a32a582e6400ae39c5f803de04ebb0b09fa2e45cf7345bfc035289422def5d",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 275 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 3402 ms\n[kapitsa] prewarmed 93 prefill pipelines in 3409 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 4112 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 194 ms (6.5 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.54 GB resident (process footprint +0.50 GB), loaded in 302 ms\nSaved 270 files / 35198376 bytes to /Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-b4\n"
+    },
+    {
+      "label": "draft-quant-b4",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-draft-quant-b4",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-bits-quant",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-quant-b4",
+        "--from",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-b4"
+      ],
+      "environment": {
+        "NI_KFLASH_BITS": "4",
+        "NI_KFLASH_LOWRANK": "0"
+      },
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "5f041ccb007571fa37c2659704402ab202d665b01b846ee10ddcceb563ca6272",
+      "log": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 18 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 668 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 194 ms (6.5 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.54 GB resident (process footprint +0.50 GB), loaded in 297 ms\nAKO_CHECK={\"passed\":true,\"cases\":270,\"bytes\":35198376,\"mismatches\":0}\n"
+    },
+    {
+      "label": "draft-reference-b8",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-draft-reference-b8",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-bits-reference",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-b8"
+      ],
+      "environment": {
+        "NI_KFLASH_BITS": "8",
+        "NI_KFLASH_LOWRANK": "0"
+      },
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "e0a32a582e6400ae39c5f803de04ebb0b09fa2e45cf7345bfc035289422def5d",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 275 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 18 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 716 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 194 ms (6.5 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 8-bit projections, 0.85 GB resident (process footprint +0.82 GB), loaded in 309 ms\nSaved 270 files / 35198376 bytes to /Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-b8\n"
+    },
+    {
+      "label": "draft-quant-b8",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-draft-quant-b8",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-bits-quant",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-quant-b8",
+        "--from",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-b8"
+      ],
+      "environment": {
+        "NI_KFLASH_BITS": "8",
+        "NI_KFLASH_LOWRANK": "0"
+      },
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "5f041ccb007571fa37c2659704402ab202d665b01b846ee10ddcceb563ca6272",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 18 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 662 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 195 ms (6.5 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 8-bit projections, 0.85 GB resident (process footprint +0.82 GB), loaded in 300 ms\nAKO_CHECK={\"passed\":true,\"cases\":270,\"bytes\":35198376,\"mismatches\":0}\n"
+    }
+  ],
+  "http": [
+    {
+      "variant": "reference",
+      "head": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "65211",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/http-home-reference"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1357.3, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008780956268310547, {'id': 'chatcmpl-179393859198014', 'object': 'chat.completion.chunk', 'created': 1793938591, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.142344951629639], first token at 17.2673020362854"
+      ]
+    },
+    {
+      "variant": "quant",
+      "head": "0f92834788846394200eed4627faad000e3d0608",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/quant/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "49453",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/http-home-quant"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1360.9, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.001241922378540039, {'id': 'chatcmpl-179393867110547', 'object': 'chat.completion.chunk', 'created': 1793938671, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.117184162139893], first token at 17.2254900932312"
+      ]
+    }
+  ],
+  "http_note": "47 pass / same two baseline timing failures in each arm; raw differences in timestamps retained.",
+  "host_runs": [
+    {
+      "label": "compile-quant-screen",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O3",
+        "-I/Users/bytedance/kapitsa-batch2-20261106/reference/src",
+        "-I/Users/bytedance/kapitsa-batch2-20261106/reference/third_party",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference-quant.cpp",
+        "/Users/bytedance/kapitsa-batch2-20261106/candidate-quant.cpp",
+        "/Users/bytedance/kapitsa-batch2-20261106/quant-screen.cpp",
+        "-o",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/quant-screen"
+      ],
+      "exit": 0,
+      "log": ""
+    },
+    {
+      "label": "compile-quant-real",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O3",
+        "-I/Users/bytedance/kapitsa-batch2-20261106/reference/src",
+        "-I/Users/bytedance/kapitsa-batch2-20261106/reference/third_party",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference-quant.cpp",
+        "/Users/bytedance/kapitsa-batch2-20261106/candidate-quant.cpp",
+        "/Users/bytedance/kapitsa-batch2-20261106/quant-real.cpp",
+        "-o",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/quant-real"
+      ],
+      "exit": 0,
+      "log": ""
+    },
+    {
+      "label": "quant-screen",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "quant-screen",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/quant-screen"
+      ],
+      "exit": 0,
+      "log": "PASS 1600 cases W/S/B bitwise\nN1 K2560 bits4 A0 0.002236 ms\nN1 K2560 bits4 B0 0.002836 ms\nN1 K2560 bits4 A1 0.002246 ms\nN1 K2560 bits4 B1 0.002835 ms\nN1 K2560 bits4 A2 0.002245 ms\nN1 K2560 bits4 B2 0.002836 ms\nN1 K2560 bits4 A3 0.002238 ms\nN1 K2560 bits4 B3 0.002849 ms\nN1 K2560 bits8 A0 0.002321 ms\nN1 K2560 bits8 B0 0.002883 ms\nN1 K2560 bits8 A1 0.002327 ms\nN1 K2560 bits8 B1 0.002889 ms\nN1 K2560 bits8 A2 0.002319 ms\nN1 K2560 bits8 B2 0.002889 ms\nN1 K2560 bits8 A3 0.002320 ms\nN1 K2560 bits8 B3 0.002913 ms\nN8 K2560 bits4 A0 0.017895 ms\nN8 K2560 bits4 B0 0.022686 ms\nN8 K2560 bits4 A1 0.017904 ms\nN8 K2560 bits4 B1 0.022654 ms\nN8 K2560 bits4 A2 0.017907 ms\nN8 K2560 bits4 B2 0.022673 ms\nN8 K2560 bits4 A3 0.017905 ms\nN8 K2560 bits4 B3 0.022663 ms\nN8 K2560 bits8 A0 0.018541 ms\nN8 K2560 bits8 B0 0.022989 ms\nN8 K2560 bits8 A1 0.018545 ms\nN8 K2560 bits8 B1 0.022984 ms\nN8 K2560 bits8 A2 0.018545 ms\nN8 K2560 bits8 B2 0.022987 ms\nN8 K2560 bits8 A3 0.018553 ms\nN8 K2560 bits8 B3 0.022980 ms\nN2560 K2560 bits4 A0 0.938792 ms\nN2560 K2560 bits4 B0 1.151667 ms\nN2560 K2560 bits4 A1 0.931722 ms\nN2560 K2560 bits4 B1 1.159028 ms\nN2560 K2560 bits4 A2 0.933097 ms\nN2560 K2560 bits4 B2 1.151750 ms\nN2560 K2560 bits4 A3 0.931389 ms\nN2560 K2560 bits4 B3 1.157167 ms\nN2560 K2560 bits8 A0 0.992889 ms\nN2560 K2560 bits8 B0 1.168195 ms\nN2560 K2560 bits8 A1 0.981069 ms\nN2560 K2560 bits8 B1 1.166542 ms\nN2560 K2560 bits8 A2 0.972444 ms\nN2560 K2560 bits8 B2 1.165833 ms\nN2560 K2560 bits8 A3 0.942972 ms\nN2560 K2560 bits8 B3 1.141097 ms\n"
+    },
+    {
+      "label": "quant-real",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "quant-real",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/quant-real",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2/model.safetensors"
+      ],
+      "exit": 0,
+      "log": "CHECK fc.weight N1 K20480 bits4 even0 W/S/B SHA256 1011a4330cb3885a7daae255b42662eefe2b942ed4986fb30c10b2bf6ae91083\nTIME fc.weight N1 K20480 bits4 even0 A0 0.031281 ms\nTIME fc.weight N1 K20480 bits4 even0 B0 0.026706 ms\nTIME fc.weight N1 K20480 bits4 even0 A1 0.025199 ms\nTIME fc.weight N1 K20480 bits4 even0 B1 0.021835 ms\nTIME fc.weight N1 K20480 bits4 even0 A2 0.021398 ms\nTIME fc.weight N1 K20480 bits4 even0 B2 0.019072 ms\nTIME fc.weight N1 K20480 bits4 even0 A3 0.018944 ms\nTIME fc.weight N1 K20480 bits4 even0 B3 0.016902 ms\nCHECK fc.weight N1 K20480 bits4 even1 W/S/B SHA256 1e8bb6c4e0087f15380f4cf9578ebe0036b46b2eb3c957a479c205c5202299bb\nTIME fc.weight N1 K20480 bits4 even1 A0 0.017989 ms\nTIME fc.weight N1 K20480 bits4 even1 B0 0.016847 ms\nTIME fc.weight N1 K20480 bits4 even1 A1 0.017932 ms\nTIME fc.weight N1 K20480 bits4 even1 B1 0.016752 ms\nTIME fc.weight N1 K20480 bits4 even1 A2 0.018004 ms\nTIME fc.weight N1 K20480 bits4 even1 B2 0.016759 ms\nTIME fc.weight N1 K20480 bits4 even1 A3 0.017947 ms\nTIME fc.weight N1 K20480 bits4 even1 B3 0.016774 ms\nCHECK fc.weight N1 K20480 bits8 even0 W/S/B SHA256 e49b09989439ea1c834311044efb8e7db54f53f85dd506c51a7e862fc6ee6f9c\nTIME fc.weight N1 K20480 bits8 even0 A0 0.018525 ms\nTIME fc.weight N1 K20480 bits8 even0 B0 0.016465 ms\nTIME fc.weight N1 K20480 bits8 even0 A1 0.018522 ms\nTIME fc.weight N1 K20480 bits8 even0 B1 0.016416 ms\nTIME fc.weight N1 K20480 bits8 even0 A2 0.018524 ms\nTIME fc.weight N1 K20480 bits8 even0 B2 0.016464 ms\nTIME fc.weight N1 K20480 bits8 even0 A3 0.018516 ms\nTIME fc.weight N1 K20480 bits8 even0 B3 0.016418 ms\nCHECK fc.weight N1 K20480 bits8 even1 W/S/B SHA256 f6c76ffd492dcb7bd1558b1bc25e88fdc54edf4dad4d7a0c21e8e4911bdfb55b\nTIME fc.weight N1 K20480 bits8 even1 A0 0.018507 ms\nTIME fc.weight N1 K20480 bits8 even1 B0 0.016448 ms\nTIME fc.weight N1 K20480 bits8 even1 A1 0.018506 ms\nTIME fc.weight N1 K20480 bits8 even1 B1 0.016452 ms\nTIME fc.weight N1 K20480 bits8 even1 A2 0.018508 ms\nTIME fc.weight N1 K20480 bits8 even1 B2 0.016452 ms\nTIME fc.weight N1 K20480 bits8 even1 A3 0.018511 ms\nTIME fc.weight N1 K20480 bits8 even1 B3 0.016442 ms\nCHECK fc.weight N8 K20480 bits4 even0 W/S/B SHA256 c6492697457c73272b17aa32bf17a72979d16013890831b29e0e4b381841f077\nTIME fc.weight N8 K20480 bits4 even0 A0 0.142809 ms\nTIME fc.weight N8 K20480 bits4 even0 B0 0.134693 ms\nTIME fc.weight N8 K20480 bits4 even0 A1 0.143026 ms\nTIME fc.weight N8 K20480 bits4 even0 B1 0.134580 ms\nTIME fc.weight N8 K20480 bits4 even0 A2 0.143418 ms\nTIME fc.weight N8 K20480 bits4 even0 B2 0.134138 ms\nTIME fc.weight N8 K20480 bits4 even0 A3 0.143558 ms\nTIME fc.weight N8 K20480 bits4 even0 B3 0.133564 ms\nCHECK fc.weight N8 K20480 bits4 even1 W/S/B SHA256 416ad5e211f0faeaeaac605f2efef7653b7f99a9cb01c24f08d378cc7d5acd4e\nTIME fc.weight N8 K20480 bits4 even1 A0 0.143407 ms\nTIME fc.weight N8 K20480 bits4 even1 B0 0.134103 ms\nTIME fc.weight N8 K20480 bits4 even1 A1 0.143303 ms\nTIME fc.weight N8 K20480 bits4 even1 B1 0.133657 ms\nTIME fc.weight N8 K20480 bits4 even1 A2 0.143318 ms\nTIME fc.weight N8 K20480 bits4 even1 B2 0.133699 ms\nTIME fc.weight N8 K20480 bits4 even1 A3 0.143303 ms\nTIME fc.weight N8 K20480 bits4 even1 B3 0.133842 ms\nCHECK fc.weight N8 K20480 bits8 even0 W/S/B SHA256 d5384ebb2f225cf57c7887b41a85fdfa0a76bffc74e2c22311b032fbcb9f2dd7\nTIME fc.weight N8 K20480 bits8 even0 A0 0.148492 ms\nTIME fc.weight N8 K20480 bits8 even0 B0 0.134460 ms\nTIME fc.weight N8 K20480 bits8 even0 A1 0.148153 ms\nTIME fc.weight N8 K20480 bits8 even0 B1 0.132851 ms\nTIME fc.weight N8 K20480 bits8 even0 A2 0.148193 ms\nTIME fc.weight N8 K20480 bits8 even0 B2 0.130236 ms\nTIME fc.weight N8 K20480 bits8 even0 A3 0.148269 ms\nTIME fc.weight N8 K20480 bits8 even0 B3 0.130225 ms\nCHECK fc.weight N8 K20480 bits8 even1 W/S/B SHA256 fc2e8663850f44732aeb856273dab28ee382e2f02f9405dd2ededdcb21c56c65\nTIME fc.weight N8 K20480 bits8 even1 A0 0.148042 ms\nTIME fc.weight N8 K20480 bits8 even1 B0 0.131341 ms\nTIME fc.weight N8 K20480 bits8 even1 A1 0.148024 ms\nTIME fc.weight N8 K20480 bits8 even1 B1 0.131287 ms\nTIME fc.weight N8 K20480 bits8 even1 A2 0.148050 ms\nTIME fc.weight N8 K20480 bits8 even1 B2 0.130825 ms\nTIME fc.weight N8 K20480 bits8 even1 A3 0.148062 ms\nTIME fc.weight N8 K20480 bits8 even1 B3 0.130815 ms\nCHECK fc.weight N2560 K20480 bits4 even0 W/S/B SHA256 feec0f691e940192fc3cda9dc8bbb572a457717471b61c0ab6873b19920ff5bb\nTIME fc.weight N2560 K20480 bits4 even0 A0 6.613069 ms\nTIME fc.weight N2560 K20480 bits4 even0 B0 6.237889 ms\nTIME fc.weight N2560 K20480 bits4 even0 A1 6.588556 ms\nTIME fc.weight N2560 K20480 bits4 even0 B1 6.253708 ms\nTIME fc.weight N2560 K20480 bits4 even0 A2 6.654903 ms\nTIME fc.weight N2560 K20480 bits4 even0 B2 6.275792 ms\nTIME fc.weight N2560 K20480 bits4 even0 A3 6.591667 ms\nTIME fc.weight N2560 K20480 bits4 even0 B3 6.242445 ms\nCHECK fc.weight N2560 K20480 bits4 even1 W/S/B SHA256 a5dcc4529c566c344533208d84c2ee7839d4ca4471f97fec50fb710940fa96fe\nTIME fc.weight N2560 K20480 bits4 even1 A0 6.619111 ms\nTIME fc.weight N2560 K20480 bits4 even1 B0 6.184181 ms\nTIME fc.weight N2560 K20480 bits4 even1 A1 6.603820 ms\nTIME fc.weight N2560 K20480 bits4 even1 B1 6.198514 ms\nTIME fc.weight N2560 K20480 bits4 even1 A2 6.614055 ms\nTIME fc.weight N2560 K20480 bits4 even1 B2 6.216389 ms\nTIME fc.weight N2560 K20480 bits4 even1 A3 6.611375 ms\nTIME fc.weight N2560 K20480 bits4 even1 B3 6.214445 ms\nCHECK fc.weight N2560 K20480 bits8 even0 W/S/B SHA256 ffbf2d97014bb7651c4ab929a8ca23d0880fe72d20a30c929cb86ee62f955e0b\nTIME fc.weight N2560 K20480 bits8 even0 A0 6.830778 ms\nTIME fc.weight N2560 K20480 bits8 even0 B0 6.176583 ms\nTIME fc.weight N2560 K20480 bits8 even0 A1 6.822653 ms\nTIME fc.weight N2560 K20480 bits8 even0 B1 6.174417 ms\nTIME fc.weight N2560 K20480 bits8 even0 A2 6.822319 ms\nTIME fc.weight N2560 K20480 bits8 even0 B2 6.175319 ms\nTIME fc.weight N2560 K20480 bits8 even0 A3 6.837903 ms\nTIME fc.weight N2560 K20480 bits8 even0 B3 6.174750 ms\nCHECK fc.weight N2560 K20480 bits8 even1 W/S/B SHA256 39e0eaa67980c6f89b405b3e2a42f365c3dd9c64aec02896c1395035d41113c3\nTIME fc.weight N2560 K20480 bits8 even1 A0 6.836528 ms\nTIME fc.weight N2560 K20480 bits8 even1 B0 6.041833 ms\nTIME fc.weight N2560 K20480 bits8 even1 A1 6.829347 ms\nTIME fc.weight N2560 K20480 bits8 even1 B1 6.046583 ms\nTIME fc.weight N2560 K20480 bits8 even1 A2 6.845458 ms\nTIME fc.weight N2560 K20480 bits8 even1 B2 6.046417 ms\nTIME fc.weight N2560 K20480 bits8 even1 A3 6.858208 ms\nTIME fc.weight N2560 K20480 bits8 even1 B3 6.067903 ms\nCHECK layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 W/S/B SHA256 2d0c98658f9ed800a07801725f500c8e79654d5371ff81742b800e3c0ec4d8d3\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 A0 0.008066 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 B0 0.007572 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 A1 0.008037 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 B1 0.007586 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 A2 0.008027 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 B2 0.007583 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 A3 0.008038 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even0 B3 0.007581 ms\nCHECK layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 W/S/B SHA256 8a0cebd232a529640e2ebc1800b98aaed0ea631e2b7442c2aaf289d9191899eb\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 A0 0.008049 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 B0 0.007561 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 A1 0.008060 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 B1 0.007549 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 A2 0.008068 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 B2 0.007548 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 A3 0.008057 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits4 even1 B3 0.007551 ms\nCHECK layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 W/S/B SHA256 6c4c02df46cc11baba220605a2484ab2d1011aa8ae506c06b788a7c009de1f45\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 A0 0.008325 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 B0 0.007371 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 A1 0.008324 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 B1 0.007330 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 A2 0.008323 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 B2 0.007362 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 A3 0.008360 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even0 B3 0.007366 ms\nCHECK layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 W/S/B SHA256 752c6147d621800c7f9aeac03237991d581dc129af998d82de39e88dfe9616ea\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 A0 0.008315 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 B0 0.007412 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 A1 0.008341 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 B1 0.007412 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 A2 0.008335 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 B2 0.007411 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 A3 0.008346 ms\nTIME layers.0.mlp.down_proj.weight N1 K9216 bits8 even1 B3 0.007412 ms\nCHECK layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 W/S/B SHA256 b8f7f5fefe192850d07a03881eb10e20179d9a22f342ea0e4ced44745a8b30ee\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 A0 0.064210 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 B0 0.060651 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 A1 0.064541 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 B1 0.060769 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 A2 0.064574 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 B2 0.060730 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 A3 0.064586 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even0 B3 0.060876 ms\nCHECK layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 W/S/B SHA256 48ef0f48f82d12b45c99e6c7a442b6cd20bc11384035a8815bba5878703a02c8\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 A0 0.064529 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 B0 0.060441 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 A1 0.064544 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 B1 0.060370 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 A2 0.064554 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 B2 0.060427 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 A3 0.064557 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits4 even1 B3 0.060400 ms\nCHECK layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 W/S/B SHA256 639e07fffd2a3c7f12100c2edcbd704aab3850189c1a6c0482a42cdea883e6aa\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 A0 0.066744 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 B0 0.060158 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 A1 0.067089 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 B1 0.060235 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 A2 0.067066 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 B2 0.060230 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 A3 0.067067 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even0 B3 0.058894 ms\nCHECK layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 W/S/B SHA256 1f79aadd6d8f09cde4bc51263f4dc3654b3803ee632ddea48df74adb2f9401a7\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 A0 0.066755 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 B0 0.059163 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 A1 0.067067 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 B1 0.059158 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 A2 0.067051 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 B2 0.059077 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 A3 0.066996 ms\nTIME layers.0.mlp.down_proj.weight N8 K9216 bits8 even1 B3 0.059168 ms\nCHECK layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 W/S/B SHA256 e65e42615ce9011fe10e5d415b327fa5958577268aa74110e70be521456d1fa9\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 A0 3.068403 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 B0 2.843625 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 A1 3.002222 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 B1 2.840153 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 A2 3.006445 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 B2 2.840097 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 A3 3.003208 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even0 B3 2.835014 ms\nCHECK layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 W/S/B SHA256 e5de69b3bd3260dbd697c473a49a177454e46fa0af654fad37cce7e490216199\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 A0 3.030042 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 B0 2.849917 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 A1 3.022139 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 B1 2.864555 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 A2 3.021986 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 B2 2.860792 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 A3 3.021278 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits4 even1 B3 2.857042 ms\nCHECK layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 W/S/B SHA256 53f3bd095eb781e95713591022c751bf884cd05437afe4d614b40e32f871e2d8\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 A0 3.138486 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 B0 2.843931 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 A1 3.126667 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 B1 2.842014 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 A2 3.122889 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 B2 2.843167 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 A3 3.154445 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even0 B3 2.892944 ms\nCHECK layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 W/S/B SHA256 b0ca5ffa2a95ce0b0eeb5daf3e81c480d60b9d9b8d6e0ce50eae005e5fbf2a50\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 A0 3.134417 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 B0 2.780069 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 A1 3.131042 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 B1 2.825722 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 A2 3.155736 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 B2 2.777361 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 A3 3.173055 ms\nTIME layers.0.mlp.down_proj.weight N2560 K9216 bits8 even1 B3 2.787847 ms\nCHECK layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 W/S/B SHA256 8a9f5e40e96ae610d61cc4a0632fe4c6cccc515e05d3c90397910d880b304a9d\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 A0 0.002245 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 B0 0.002109 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 A1 0.002275 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 B1 0.002077 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 A2 0.002228 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 B2 0.002077 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 A3 0.002229 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even0 B3 0.002077 ms\nCHECK layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 W/S/B SHA256 7227007a8a895e78cf9de58d6c49ccb2dbbae21ec781434ead7a4a41fb27c1f3\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 A0 0.002243 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 B0 0.002114 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 A1 0.002243 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 B1 0.002093 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 A2 0.002244 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 B2 0.002093 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 A3 0.002243 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits4 even1 B3 0.002093 ms\nCHECK layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 W/S/B SHA256 676b52985997c1cd44b7435b2e5becc1f5e0828094d89fbc5bc8bb3c2b4bad03\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 A0 0.002320 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 B0 0.002088 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 A1 0.002651 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 B1 0.002051 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 A2 0.002320 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 B2 0.002045 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 A3 0.002331 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even0 B3 0.002044 ms\nCHECK layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 W/S/B SHA256 185f3549c852140185f7d902237ca6190b39525c359f5ffb56e93ccc5f883ab2\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 A0 0.002318 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 B0 0.002049 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 A1 0.002319 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 B1 0.002052 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 A2 0.002330 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 B2 0.002052 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 A3 0.002318 ms\nTIME layers.0.mlp.gate_proj.weight N1 K2560 bits8 even1 B3 0.002052 ms\nCHECK layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 W/S/B SHA256 69810d4598310b67a23bcecf28a3b3fa87e31e161a7f6ff749c36dade3aad38c\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 A0 0.017917 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 B0 0.016838 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 A1 0.017929 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 B1 0.016845 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 A2 0.017906 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 B2 0.016852 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 A3 0.017907 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even0 B3 0.016868 ms\nCHECK layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 W/S/B SHA256 1fd518bd2441ab268873adb8606a4bb394c06d1a6a95181b4a1a53e830eaa99c\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 A0 0.017992 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 B0 0.016782 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 A1 0.017935 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 B1 0.016787 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 A2 0.017933 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 B2 0.016857 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 A3 0.017930 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits4 even1 B3 0.016827 ms\nCHECK layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 W/S/B SHA256 b36ebb50d4fcd28e2e8b806d3aeb61fe23589ea864faf0d5ed1a422780963679\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 A0 0.018556 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 B0 0.016561 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 A1 0.018555 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 B1 0.016674 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 A2 0.018557 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 B2 0.016426 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 A3 0.018555 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even0 B3 0.016387 ms\nCHECK layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 W/S/B SHA256 c1ea5b60fd474c29936ee428529db8fd1cb25b9fb812eb4cccea238e145a98ea\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 A0 0.018578 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 B0 0.016447 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 A1 0.018609 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 B1 0.016373 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 A2 0.018597 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 B2 0.016382 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 A3 0.018571 ms\nTIME layers.0.mlp.gate_proj.weight N8 K2560 bits8 even1 B3 0.016539 ms\nCHECK layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 W/S/B SHA256 71fb3af2c7526575371fbc09635ad16f1f575ea5f8139d3b397fd5d262390110\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 A0 3.081014 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 B0 2.867042 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 A1 3.040264 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 B1 2.872430 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 A2 3.039570 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 B2 2.890403 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 A3 3.045958 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even0 B3 2.884236 ms\nCHECK layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 W/S/B SHA256 4cc39748148bab19001e203f0ab306e4968a9eb9bfa386bd008e96e90764bf7c\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 A0 3.062778 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 B0 2.857736 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 A1 3.054778 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 B1 2.855333 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 A2 3.052167 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 B2 2.860444 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 A3 3.052458 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits4 even1 B3 2.864389 ms\nCHECK layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 W/S/B SHA256 41e2ac0431cf6ff0ccc28ba90583def6a918c202099b3c2c279385f67549341f\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 A0 3.175972 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 B0 2.865792 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 A1 3.163694 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 B1 2.867653 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 A2 3.167042 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 B2 2.865236 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 A3 3.172819 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even0 B3 2.871569 ms\nCHECK layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 W/S/B SHA256 219f5033e477f98522b385292b4d5031cf4ba9baef2686909714f2bf18901637\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 A0 3.176833 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 B0 2.802778 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 A1 3.167569 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 B1 2.808333 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 A2 3.170917 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 B2 2.814181 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 A3 3.166903 ms\nTIME layers.0.mlp.gate_proj.weight N9216 K2560 bits8 even1 B3 2.810125 ms\n"
+    }
+  ],
+  "quantization_statistics": [
+    {
+      "tensor": "fc.weight",
+      "rows": 1,
+      "columns": 20480,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 0.0232985,
+      "candidate_ms": 0.0204535,
+      "change_pct": -12.211086550636308,
+      "runs": {
+        "A": [
+          0.031281,
+          0.025199,
+          0.021398,
+          0.018944
+        ],
+        "B": [
+          0.026706,
+          0.021835,
+          0.019072,
+          0.016902
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 1,
+      "columns": 20480,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 0.017968,
+      "candidate_ms": 0.0167665,
+      "change_pct": -6.686887800534292,
+      "runs": {
+        "A": [
+          0.017989,
+          0.017932,
+          0.018004,
+          0.017947
+        ],
+        "B": [
+          0.016847,
+          0.016752,
+          0.016759,
+          0.016774
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 1,
+      "columns": 20480,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 0.018522999999999998,
+      "candidate_ms": 0.016440999999999997,
+      "change_pct": -11.240079900664046,
+      "runs": {
+        "A": [
+          0.018525,
+          0.018522,
+          0.018524,
+          0.018516
+        ],
+        "B": [
+          0.016465,
+          0.016416,
+          0.016464,
+          0.016418
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 1,
+      "columns": 20480,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 0.0185075,
+      "candidate_ms": 0.01645,
+      "change_pct": -11.11711468323653,
+      "runs": {
+        "A": [
+          0.018507,
+          0.018506,
+          0.018508,
+          0.018511
+        ],
+        "B": [
+          0.016448,
+          0.016452,
+          0.016452,
+          0.016442
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 8,
+      "columns": 20480,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 0.143222,
+      "candidate_ms": 0.134359,
+      "change_pct": -6.1882950943290655,
+      "runs": {
+        "A": [
+          0.142809,
+          0.143026,
+          0.143418,
+          0.143558
+        ],
+        "B": [
+          0.134693,
+          0.13458,
+          0.134138,
+          0.133564
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 8,
+      "columns": 20480,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 0.1433105,
+      "candidate_ms": 0.13377050000000001,
+      "change_pct": -6.65687440906283,
+      "runs": {
+        "A": [
+          0.143407,
+          0.143303,
+          0.143318,
+          0.143303
+        ],
+        "B": [
+          0.134103,
+          0.133657,
+          0.133699,
+          0.133842
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 8,
+      "columns": 20480,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 0.148231,
+      "candidate_ms": 0.13154349999999998,
+      "change_pct": -11.257766594032304,
+      "runs": {
+        "A": [
+          0.148492,
+          0.148153,
+          0.148193,
+          0.148269
+        ],
+        "B": [
+          0.13446,
+          0.132851,
+          0.130236,
+          0.130225
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 8,
+      "columns": 20480,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 0.148046,
+      "candidate_ms": 0.131056,
+      "change_pct": -11.476162814260437,
+      "runs": {
+        "A": [
+          0.148042,
+          0.148024,
+          0.14805,
+          0.148062
+        ],
+        "B": [
+          0.131341,
+          0.131287,
+          0.130825,
+          0.130815
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 2560,
+      "columns": 20480,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 6.602368,
+      "candidate_ms": 6.2480765,
+      "change_pct": -5.36612772871794,
+      "runs": {
+        "A": [
+          6.613069,
+          6.588556,
+          6.654903,
+          6.591667
+        ],
+        "B": [
+          6.237889,
+          6.253708,
+          6.275792,
+          6.242445
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 2560,
+      "columns": 20480,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 6.612715,
+      "candidate_ms": 6.2064795,
+      "change_pct": -6.143248272456914,
+      "runs": {
+        "A": [
+          6.619111,
+          6.60382,
+          6.614055,
+          6.611375
+        ],
+        "B": [
+          6.184181,
+          6.198514,
+          6.216389,
+          6.214445
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 2560,
+      "columns": 20480,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 6.8267155,
+      "candidate_ms": 6.175034500000001,
+      "change_pct": -9.546040112554843,
+      "runs": {
+        "A": [
+          6.830778,
+          6.822653,
+          6.822319,
+          6.837903
+        ],
+        "B": [
+          6.176583,
+          6.174417,
+          6.175319,
+          6.17475
+        ]
+      }
+    },
+    {
+      "tensor": "fc.weight",
+      "rows": 2560,
+      "columns": 20480,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 6.840993,
+      "candidate_ms": 6.0465,
+      "change_pct": -11.613708711586169,
+      "runs": {
+        "A": [
+          6.836528,
+          6.829347,
+          6.845458,
+          6.858208
+        ],
+        "B": [
+          6.041833,
+          6.046583,
+          6.046417,
+          6.067903
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 1,
+      "columns": 9216,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 0.0080375,
+      "candidate_ms": 0.007582,
+      "change_pct": -5.667185069984438,
+      "runs": {
+        "A": [
+          0.008066,
+          0.008037,
+          0.008027,
+          0.008038
+        ],
+        "B": [
+          0.007572,
+          0.007586,
+          0.007583,
+          0.007581
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 1,
+      "columns": 9216,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 0.0080585,
+      "candidate_ms": 0.00755,
+      "change_pct": -6.310107340075688,
+      "runs": {
+        "A": [
+          0.008049,
+          0.00806,
+          0.008068,
+          0.008057
+        ],
+        "B": [
+          0.007561,
+          0.007549,
+          0.007548,
+          0.007551
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 1,
+      "columns": 9216,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 0.0083245,
+      "candidate_ms": 0.007364,
+      "change_pct": -11.53823052435582,
+      "runs": {
+        "A": [
+          0.008325,
+          0.008324,
+          0.008323,
+          0.00836
+        ],
+        "B": [
+          0.007371,
+          0.00733,
+          0.007362,
+          0.007366
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 1,
+      "columns": 9216,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 0.008338,
+      "candidate_ms": 0.007412,
+      "change_pct": -11.105780762772843,
+      "runs": {
+        "A": [
+          0.008315,
+          0.008341,
+          0.008335,
+          0.008346
+        ],
+        "B": [
+          0.007412,
+          0.007412,
+          0.007411,
+          0.007412
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 8,
+      "columns": 9216,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 0.0645575,
+      "candidate_ms": 0.0607495,
+      "change_pct": -5.898617511520743,
+      "runs": {
+        "A": [
+          0.06421,
+          0.064541,
+          0.064574,
+          0.064586
+        ],
+        "B": [
+          0.060651,
+          0.060769,
+          0.06073,
+          0.060876
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 8,
+      "columns": 9216,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 0.064549,
+      "candidate_ms": 0.0604135,
+      "change_pct": -6.406760755395114,
+      "runs": {
+        "A": [
+          0.064529,
+          0.064544,
+          0.064554,
+          0.064557
+        ],
+        "B": [
+          0.060441,
+          0.06037,
+          0.060427,
+          0.0604
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 8,
+      "columns": 9216,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 0.0670665,
+      "candidate_ms": 0.060194,
+      "change_pct": -10.247291867027508,
+      "runs": {
+        "A": [
+          0.066744,
+          0.067089,
+          0.067066,
+          0.067067
+        ],
+        "B": [
+          0.060158,
+          0.060235,
+          0.06023,
+          0.058894
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 8,
+      "columns": 9216,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 0.0670235,
+      "candidate_ms": 0.059160500000000005,
+      "change_pct": -11.731706043402678,
+      "runs": {
+        "A": [
+          0.066755,
+          0.067067,
+          0.067051,
+          0.066996
+        ],
+        "B": [
+          0.059163,
+          0.059158,
+          0.059077,
+          0.059168
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 2560,
+      "columns": 9216,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 3.0048265,
+      "candidate_ms": 2.840125,
+      "change_pct": -5.481231611875092,
+      "runs": {
+        "A": [
+          3.068403,
+          3.002222,
+          3.006445,
+          3.003208
+        ],
+        "B": [
+          2.843625,
+          2.840153,
+          2.840097,
+          2.835014
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 2560,
+      "columns": 9216,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 3.0220625,
+      "candidate_ms": 2.858917,
+      "change_pct": -5.398481996980542,
+      "runs": {
+        "A": [
+          3.030042,
+          3.022139,
+          3.021986,
+          3.021278
+        ],
+        "B": [
+          2.849917,
+          2.864555,
+          2.860792,
+          2.857042
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 2560,
+      "columns": 9216,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 3.1325765,
+      "candidate_ms": 2.8435490000000003,
+      "change_pct": -9.22651050979919,
+      "runs": {
+        "A": [
+          3.138486,
+          3.126667,
+          3.122889,
+          3.154445
+        ],
+        "B": [
+          2.843931,
+          2.842014,
+          2.843167,
+          2.892944
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.down_proj.weight",
+      "rows": 2560,
+      "columns": 9216,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 3.1450765,
+      "candidate_ms": 2.783958,
+      "change_pct": -11.482025953899688,
+      "runs": {
+        "A": [
+          3.134417,
+          3.131042,
+          3.155736,
+          3.173055
+        ],
+        "B": [
+          2.780069,
+          2.825722,
+          2.777361,
+          2.787847
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 1,
+      "columns": 2560,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 0.0022370000000000003,
+      "candidate_ms": 0.002077,
+      "change_pct": -7.152436298614228,
+      "runs": {
+        "A": [
+          0.002245,
+          0.002275,
+          0.002228,
+          0.002229
+        ],
+        "B": [
+          0.002109,
+          0.002077,
+          0.002077,
+          0.002077
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 1,
+      "columns": 2560,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 0.002243,
+      "candidate_ms": 0.002093,
+      "change_pct": -6.68747213553279,
+      "runs": {
+        "A": [
+          0.002243,
+          0.002243,
+          0.002244,
+          0.002243
+        ],
+        "B": [
+          0.002114,
+          0.002093,
+          0.002093,
+          0.002093
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 1,
+      "columns": 2560,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 0.0023255000000000003,
+      "candidate_ms": 0.002048,
+      "change_pct": -11.932917652117837,
+      "runs": {
+        "A": [
+          0.00232,
+          0.002651,
+          0.00232,
+          0.002331
+        ],
+        "B": [
+          0.002088,
+          0.002051,
+          0.002045,
+          0.002044
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 1,
+      "columns": 2560,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 0.0023185000000000002,
+      "candidate_ms": 0.002052,
+      "change_pct": -11.494500754798375,
+      "runs": {
+        "A": [
+          0.002318,
+          0.002319,
+          0.00233,
+          0.002318
+        ],
+        "B": [
+          0.002049,
+          0.002052,
+          0.002052,
+          0.002052
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 8,
+      "columns": 2560,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 0.017911999999999997,
+      "candidate_ms": 0.0168485,
+      "change_pct": -5.937360428762828,
+      "runs": {
+        "A": [
+          0.017917,
+          0.017929,
+          0.017906,
+          0.017907
+        ],
+        "B": [
+          0.016838,
+          0.016845,
+          0.016852,
+          0.016868
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 8,
+      "columns": 2560,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 0.017934,
+      "candidate_ms": 0.016807000000000002,
+      "change_pct": -6.2841530054644545,
+      "runs": {
+        "A": [
+          0.017992,
+          0.017935,
+          0.017933,
+          0.01793
+        ],
+        "B": [
+          0.016782,
+          0.016787,
+          0.016857,
+          0.016827
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 8,
+      "columns": 2560,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 0.0185555,
+      "candidate_ms": 0.0164935,
+      "change_pct": -11.112608121581191,
+      "runs": {
+        "A": [
+          0.018556,
+          0.018555,
+          0.018557,
+          0.018555
+        ],
+        "B": [
+          0.016561,
+          0.016674,
+          0.016426,
+          0.016387
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 8,
+      "columns": 2560,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 0.0185875,
+      "candidate_ms": 0.0164145,
+      "change_pct": -11.690652320107608,
+      "runs": {
+        "A": [
+          0.018578,
+          0.018609,
+          0.018597,
+          0.018571
+        ],
+        "B": [
+          0.016447,
+          0.016373,
+          0.016382,
+          0.016539
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 9216,
+      "columns": 2560,
+      "bits": 4,
+      "even": false,
+      "reference_ms": 3.043111,
+      "candidate_ms": 2.878333,
+      "change_pct": -5.414787695880962,
+      "runs": {
+        "A": [
+          3.081014,
+          3.040264,
+          3.03957,
+          3.045958
+        ],
+        "B": [
+          2.867042,
+          2.87243,
+          2.890403,
+          2.884236
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 9216,
+      "columns": 2560,
+      "bits": 4,
+      "even": true,
+      "reference_ms": 3.053618,
+      "candidate_ms": 2.85909,
+      "change_pct": -6.370410444266438,
+      "runs": {
+        "A": [
+          3.062778,
+          3.054778,
+          3.052167,
+          3.052458
+        ],
+        "B": [
+          2.857736,
+          2.855333,
+          2.860444,
+          2.864389
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 9216,
+      "columns": 2560,
+      "bits": 8,
+      "even": false,
+      "reference_ms": 3.1699305,
+      "candidate_ms": 2.8667225,
+      "change_pct": -9.565130844351321,
+      "runs": {
+        "A": [
+          3.175972,
+          3.163694,
+          3.167042,
+          3.172819
+        ],
+        "B": [
+          2.865792,
+          2.867653,
+          2.865236,
+          2.871569
+        ]
+      }
+    },
+    {
+      "tensor": "layers.0.mlp.gate_proj.weight",
+      "rows": 9216,
+      "columns": 2560,
+      "bits": 8,
+      "even": true,
+      "reference_ms": 3.169243,
+      "candidate_ms": 2.809229,
+      "change_pct": -11.35962120922882,
+      "runs": {
+        "A": [
+          3.176833,
+          3.167569,
+          3.170917,
+          3.166903
+        ],
+        "B": [
+          2.802778,
+          2.808333,
+          2.814181,
+          2.810125
+        ]
+      }
+    }
+  ],
+  "benchmark_runs": [
+    {
+      "label": "bench-01-reference",
+      "head": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/bench-01-reference.json"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "bench-02-quant",
+      "head": "0f92834788846394200eed4627faad000e3d0608",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/quant/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/bench-02-quant.json"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "bench-03-reference",
+      "head": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/bench-03-reference.json"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "bench-04-quant",
+      "head": "0f92834788846394200eed4627faad000e3d0608",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/quant/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/bench-04-quant.json"
+      ],
+      "exit": 0
+    },
+    {
+      "label": "bench-05-reference",
+      "head": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/bench-05-reference.json"
+      ],
+      "exit": 0,
+      "reason": "additional A/B pair after bench02 reported a sampled repetition-loop flag; all earlier runs retained"
+    },
+    {
+      "label": "bench-06-quant",
+      "head": "0f92834788846394200eed4627faad000e3d0608",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/quant/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/bench-06-quant.json"
+      ],
+      "exit": 0,
+      "reason": "additional A/B pair after bench02 reported a sampled repetition-loop flag; all earlier runs retained"
+    }
+  ],
+  "benchmark_note": "bench02 has a sampled repetition-loop flag, preserved and not used as speed evidence. Additional bench05/06 have no flags/invalid results. No consistent inference throughput or TTFT change."
+}
