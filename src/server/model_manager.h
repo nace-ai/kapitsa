@@ -399,9 +399,14 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
     return ref_;
   }
+  // The engine serving now, or null when released while idle or while a model loads. For the server's own looks
+  // (the pair watcher every 2 s, what the cluster is told): not a request, so it does not count as use for
+  // --idle-unload, does not wait for a load and does not load the engine again.
   std::shared_ptr<Engine> current_engine() {
-    auto guard = acquire_current("");
-    return guard ? guard->get() : nullptr;
+    if (switching_.load()) return nullptr;
+    std::shared_lock<std::shared_mutex> lk(rw_mu_);
+    if (switching_.load()) return nullptr;
+    return engine_;
   }
 
   nlohmann::ordered_json list_models_json() const {
