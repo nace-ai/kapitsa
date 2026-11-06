@@ -89,6 +89,13 @@ static DType parse_dtype(const std::string& s) {
   return DType::Unknown;
 }
 
+// Check after tensor filtering: an unused tower may carry a dtype this engine does not support.
+static DType checked_dtype(const std::string& s, const std::string& path, const std::string& name) {
+  const DType d = parse_dtype(s);
+  if (d == DType::Unknown) fatal("%s: tensor %s has unsupported dtype %s", path.c_str(), name.c_str(), s.c_str());
+  return d;
+}
+
 namespace {
 struct ReadJob {
   int fd;
@@ -179,7 +186,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
       if (keep && !keep(name)) continue;
       Item it;
       it.name = name;
-      it.t.dtype = parse_dtype(v["dtype"].get<std::string>());
+      it.t.dtype = checked_dtype(v["dtype"].get<std::string>(), path, name);
       for (auto& s : v["shape"]) it.t.shape.push_back(s.get<int64_t>());
       size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
       if (e > fsize - data0) incomplete(path, "its tensors run past its end", (long long)fsize);
@@ -308,7 +315,7 @@ SafetensorsIndex::SafetensorsIndex(const std::string& dir, const std::function<b
       if (name == "__metadata__" || (skip && skip(name))) continue;
       Entry t;
       t.file = int(fi);
-      t.dtype = parse_dtype(v["dtype"].get<std::string>());
+      t.dtype = checked_dtype(v["dtype"].get<std::string>(), path, name);
       for (auto& x : v["shape"]) t.shape.push_back(x.get<int64_t>());
       const size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
       t.off = 8 + hlen + b;

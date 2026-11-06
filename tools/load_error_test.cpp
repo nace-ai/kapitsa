@@ -185,6 +185,52 @@ static void tensor_entries(const std::filesystem::path& parent) {
   std::filesystem::remove_all(dir);
   std::cout << "PASS tensor shape/range validation, header-only plans, deferred read guards\n";
 }
+// Unknown has width zero: admitting its nonempty range lets a deferred read overrun a shape-sized destination.
+static void unsupported_dtypes(const std::filesystem::path& parent) {
+  const auto dir = parent / "unsupported-dtypes";
+  std::filesystem::create_directory(dir);
+  const auto path = dir / "model.safetensors";
+  using J = nlohmann::json;
+  const auto skip = [](const std::string& n) { return n == "unused.weight"; };
+  const auto keep = [&](const std::string& n) { return !skip(n); };
+  const auto defer = [](const std::string&) { return true; };
+  FatalRecovery recover;
+  for (const std::string dtype : {"BOOL", "I16", "U64", "F64", "F8_E5M2", "BF61"}) {
+    for (const size_t bytes : {size_t(0), size_t(8)}) {
+      const J bad = {{"dtype", dtype}, {"shape", {bytes ? 1 : 0}}, {"data_offsets", {1, 1 + bytes}}};
+      const J good = {{"dtype", "U8"}, {"shape", {1}}, {"data_offsets", {0, 1}}};
+      const std::string hdr = J{{"unused.weight", bad}, {"kept.weight", good}}.dump();
+      const uint64_t len = hdr.size();
+      auto write = [&](bool payload) {
+        std::ofstream f(path, std::ios::binary);
+        f.write(reinterpret_cast<const char*>(&len), 8); f << hdr;
+        if (payload) f << "K" << std::string(bytes, 'x');
+      };
+      write(true);
+      const std::string why = path.string() + ": tensor unused.weight has unsupported dtype " + dtype;
+      fails([&] { SafetensorsIndex idx(dir); }, why);
+      fails([&] { WeightStore ws; ws.open_dir(dir); }, why);
+      fails([&] { WeightStore ws; ws.open_dir(dir, {}, {}, defer); }, why);
+      { WeightStore ws; ws.open_dir(dir, [](const std::string&) { return false; }); CHECK(ws.all().empty()); }
+      {
+        SafetensorsIndex idx(dir, skip);
+        CHECK(idx.all().size() == 1 && idx.get("kept.weight").dtype == DType::U8);
+        char out[3] = {'?', '?', '?'};
+        idx.read(idx.get("kept.weight"), 0, out + 1, 1);
+        CHECK(std::string(out, 3) == "?K?");
+        WeightStore ws; ws.open_dir(dir, keep, {}, defer);
+        CHECK(ws.all().size() == 1 && ws.get("kept.weight").dtype == DType::U8);
+        out[1] = '?'; ws.read_deferred("kept.weight", out + 1);
+        CHECK(std::string(out, 3) == "?K?");
+      }
+      write(false);  // a selected known dtype remains usable in a header-only plan
+      SafetensorsIndex idx(dir, skip);
+      CHECK(idx.get("kept.weight").numel() == 1 && idx.get("kept.weight").len == 1);
+    }
+  }
+  std::filesystem::remove_all(dir);
+  std::cout << "PASS unsupported dtypes rejected, tensor filters and header-only plans preserved\n";
+}
 static void cpu(const char* self) {
   CHECK(!FatalRecovery::enabled());
   {
@@ -233,6 +279,7 @@ static void cpu(const char* self) {
   CHECK(descriptors() == before);
   child_fails(self, "--bad-file", pattern);
   tensor_entries(dir);
+  unsupported_dtypes(dir);
   uncached_reads(dir);
   std::filesystem::remove_all(dir);
   std::cout << "PASS scoped errors, thread joining/isolation, loader FD cleanup, CLI exit 1\n";
