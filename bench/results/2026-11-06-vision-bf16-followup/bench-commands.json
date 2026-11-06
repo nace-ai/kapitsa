@@ -1,0 +1,66 @@
+[
+  {
+    "label": "bench-05-base",
+    "tag": "base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-05-base.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (d65a0afa)"
+  },
+  {
+    "label": "bench-06-vision",
+    "tag": "vision",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/vision-bf16-direct/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-06-vision.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (3c12d22c)"
+  },
+  {
+    "label": "bench-07-base",
+    "tag": "base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-07-base.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (d65a0afa)"
+  },
+  {
+    "label": "bench-08-vision",
+    "tag": "vision",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/vision-bf16-direct/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-08-vision.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (3c12d22c)"
+  }
+]
