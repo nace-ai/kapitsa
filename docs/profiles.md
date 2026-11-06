@@ -49,7 +49,7 @@ precise against fast on the rebased build (4 legs each). Legs and logs: [results
 | | 32K prefill | 64K prefill | Decode, ms per draft cycle |
 |---|---|---|---|
 | fast (2048-row chunks) | 8% faster | 10% faster | the same at 32K, 4% faster at 64K |
-| fast, #986's build 4187b609 (32K: fn_ab5; 64K: fn_ab6, every fast leg under memory pressure, fn_ab5's 64K legs voided by the swap guard) | 10% faster | 7% faster | 1% faster at 32K, 3% faster at 64K |
+| fast, #986's build 4187b609 (32K: fn_ab5; 64K: fn_ab6, every fast leg under memory pressure, fn_ab5's 64K legs voided by the swap guard) | 10% faster | 7% faster | the same at 32K (1%, inside the legs' spread), 3% faster at 64K |
 | fast with 4096-row chunks | 15% faster | 17% faster | 7 to 8% slower; 7 of 8 legs under memory pressure (the clean one 4% slower) |
 
 Decode tokens per second also differ because the greedy text differs (2.05 against 1.95 tokens per cycle at 32K), not

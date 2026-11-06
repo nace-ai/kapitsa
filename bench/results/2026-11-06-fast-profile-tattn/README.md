@@ -41,7 +41,9 @@ reverses the order in the next round. Legs marked `void-*` are left out of every
 - `fn_ab5-try1`: build 4187b609 (#986's head after its rebase onto 7381db44; the merged head c8f4ba9b changes only comments and docs) as built, precise against fast, 4
   legs each, expert store pinned at 24 GB. Fast picked 2048-row chunks itself (the prefill group's slots log -0.50 GB,
   as `NI_CHUNK=2048` did in fn_ab3). 32K: median wall ms per draft cycle 54.1 precise, 53.6 fast (1% faster); prefill
-  43.7 s against 39.5 s (10% faster). One leg per arm logged memory pressure. The 64K legs were voided: the first
+  43.7 s against 39.5 s (10% faster). The 1% decode gap is inside the legs' spread (53.6 to 55.6 ms
+  precise, 52.6 to 55.6 fast); tokens per second are 4% lower for fast because its greedy text drafts 1.95 tokens per
+  cycle against 2.05. One leg per arm logged memory pressure. The 64K legs were voided: the first
   precise 64K leg left used swap at 8.4 GB, and the guard (used swap over 8 GB or free disk under 40 GB) stopped the
   rest.
 - `fn_ab6-try1`: the same build and setup, 64K only, rerun right after. Median wall ms per draft cycle 59.4 precise,
@@ -68,7 +70,8 @@ Earlier runs, kept for the record:
 `tattn_validate.sh`, build 4187b609, fast profile, a 10,240-token prompt (its last 2048-row chunk passes 8,192 keys,
 so `qattn_t_sparse_g12d2` runs) and 8 tokens of decode. With `MTL_SHADER_VALIDATION=1` the run completed with no
 validation message (`shader-validation.out`). Adding `MTL_DEBUG_LAYER=1` aborts on the dense `attn_prefill11r`
-(40,960 B as the layer counts it, against 32,768 B) before the sparse kernel, as AGENTS.md describes for any prefill.
+(40,960 B as the layer counts it, against 32,768 B) before the sparse kernel, as AGENTS.md describes for any prefill. The same prompt with `NI_PROFILE=1` and no validation (`ni-profile.out`, build
+ef3dc9aa, the same kernels) shows `qattn_t_sparse_g12d2` dispatched: 1.7 calls per step, 2.8% of GPU time.
 
 ## Not run
 

@@ -3,6 +3,8 @@
 # prompt (chunks 5 of 5 pass 8,192 keys, so the sparse path runs), fast profile, 8 tokens of decode. Untimed.
 # Run 1: MTL_SHADER_VALIDATION=1 alone (out-of-bounds and nil-resource checks). Run 2: + MTL_DEBUG_LAYER=1, expected to
 # stop on a dense prefill kernel over 16,384 B (AGENTS.md), which is recorded, not retried.
+# It ran under `lockf -k /tmp/kapitsa-gpu.lock` (k363 resume8.sh). Run directly, it takes the lock itself first.
+[ -n "$NI_LOCK_HELD" ] || exec lockf -k "${BENCH_GPU_LOCK:-/tmp/kapitsa-gpu.lock}" env NI_LOCK_HELD=1 bash "$0" "$@"
 export NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1 NI_EXPERT_STORE=24 KAPITSA_PROFILE=fast
 B=$HOME/Documents/nace/kapitsa/.worktrees/k363-rebase/build/ni_run; M=$HOME/Documents/nace/kapitsa-m5pro/models/flash-next-q20
 O=${K363_OUT:?}; K=$HOME/Documents/nace/k363
