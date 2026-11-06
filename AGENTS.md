@@ -9,6 +9,23 @@ Kapitsa is a native C++20 inference engine for Apple silicon (Metal kernels, the
 runtime). Speed and exact outputs are the product. A change that is faster but not the same tokens is a different
 change and has to say so.
 
+## Names: KFlash is ours, DFlash2 is upstream (Alish, 6 Nov 2026, #362)
+
+- **KFlash** names everything Kapitsa built on top of DFlash2: the best-first trees, the budget, the history lane, the
+  selector update, and any other draft or verify change. Its knobs are `NI_KFLASH_<NAME>` (for example
+  `NI_KFLASH_HIST`) and its log lines start with `KFlash:`.
+- **DFlash2** names only the upstream method and the drafter checkpoint (`--dflash`, `NI_DFLASH` for the drafter
+  folder, `incoai/...-DFlash2`, the `DFlash2` class that loads it). A new extension never gets a `DFLASH` name.
+- The earlier `NI_DFLASH_<NAME>` knobs still work as aliases (`kenv()` in `src/util/log.h` reads `NI_KFLASH_<NAME>` first,
+  then `NI_DFLASH_<NAME>`); do not remove them without a deprecation note in `docs/usage.md`.
+
+## State on this Mac is not a privacy concern
+
+Kapitsa is a purely local engine: nothing a request teaches it (a learned selector, a history lane, a cache) leaves
+the Mac, and there is no telemetry. State that carries across conversations on the same Mac is therefore not a privacy
+reason to leave a speed-up out. The reasons that count are speed, memory and exact outputs. A feature that keeps state
+across requests still has to say where the state lives and how to reset it.
+
 ## What an agent can and cannot check
 
 - **You can** build, run the CPU tests, run `prek`, read and edit code. Do these before every push.

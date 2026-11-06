@@ -40,7 +40,7 @@ the drafter's candidates instead of one chain, exactly, sized by a budget that e
 | --- | --- | --- |
 | `e8c84b0` | Nemotron-H trees: DSpark / LiLiCorr lattices, Mamba-2 tree scan, exact acceptance | in `kflash-trees` |
 | `a7aaea4`, `7224485`, `de5c4d0`, `18c6576` | Qwen dense trees; online calibration and measured cost; `tree_sim.py`; one shared descriptor / builder / acceptance / budget | in `kflash-trees` |
-| `44e0e72` | docs for `NI_DFLASH_TREE` / `NI_KFLASH` | in `kflash-trees` |
+| `44e0e72` | docs for `NI_KFLASH_TREE` / `NI_KFLASH` | in `kflash-trees` |
 | `75260f0`, `8d220ef`, `d3f55b4`, `d9139c4`, `fc2a4a4`, `8f4351f`, `7a9af69`, `e5aad53` | the candidate decoder in Metal, rescoring the tree, plus its pass cap, 8-bit option and budget-cache key | `kflash` only (opt-in) |
 | `169c4a0` and the RESULTS commits (`bb0dd71`, `bcadc5c`, `fcb8be9`) | the decoder's data generator, MLX trainer, evaluation, `tools/kflash/RESULTS.md` | `kflash` only |
 | `bc46716` | budget persistence | in `kflash-trees` as `4afa619` |

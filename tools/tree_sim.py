@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Tree-verify simulator for DFlash2 / DFlash drafters, on ni_run's lattice recordings (NI_DFLASH_LAT).
+"""Tree-verify simulator for DFlash2 / DFlash drafters, on ni_run's lattice recordings (NI_KFLASH_LAT).
 
 Record the lattice at every position of a plain output (one token per cycle), then replay draft policies on it:
 
-  NI_DFLASH_LAT=x.lat NI_DFLASH_STEP1=1 ni_run <model> @prompt.ids 512 0 --dflash auto --ignore-eos
+  NI_KFLASH_LAT=x.lat NI_KFLASH_STEP1=1 ni_run <model> @prompt.ids 512 0 --dflash auto --ignore-eos
   tree_sim.py x.lat [y.lat ...]   (recordings of one model: the calibration is fitted leave-one-out)
 
 Replays the walk's chain, the engine's tree (DFlash2 tree drafting: best-first, 7 nodes, score temperature tau (1 +
@@ -50,7 +50,7 @@ class Run:
         self.path = path
         self.info, self.recs = load(path)
         if not self.info["step1"]:
-            sys.exit(f"{path}: recorded without NI_DFLASH_STEP1 (the replay needs the lattice at every position)")
+            sys.exit(f"{path}: recorded without NI_KFLASH_STEP1 (the replay needs the lattice at every position)")
         self.P0 = int(self.recs[0]["P"])
         self.by_P = {int(r["P"]): i for i, r in enumerate(self.recs)}
         last = self.recs[-1]

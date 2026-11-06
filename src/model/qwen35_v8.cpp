@@ -353,19 +353,19 @@ uint32_t Qwen35::kf_dense_rows(const Qwen35Config& c) {
   // one 8-row tile: the default, and all a MoE target or a target without the wide kernels can run
   const uint32_t one = 1u << (kMaxVerify - 1);
   const char* kf = getenv("NI_KFLASH");
-  const char* v = getenv("NI_DFLASH_TREE");
+  const char* v = kenv("TREE");
   // the same default as kf_tree_default() in dflash2.cpp: trees, unless a knob keeps the chains --
-  // NI_KFLASH=0, NI_DFLASH_TREE=0 -- or a genuine F74 depth cap NI_DFLASH_CAP=<n> does. The cap is read
+  // NI_KFLASH=0, NI_KFLASH_TREE=0 -- or a genuine F74 depth cap NI_KFLASH_CAP=<n> does. The cap is read
   // against the block that actually runs, not a fixed 15: a cap below 15 takes the 16-row block away
   // (rows16_auto_ok reads kf_tree_default(15)), so the walk that runs is the 8-row block's, full depth
   // kMaxVerify - 1 = 7, and a cap of 7..14 is a no-op for it -- exactly as DFlash2's constructor reads it
-  // against block_ - 1 (Cursor review 4368445248). An explicit NI_DFLASH_VERIFY overrides the cap as it
+  // against block_ - 1 (Cursor review 4368445248). An explicit NI_KFLASH_VERIFY overrides the cap as it
   // overrides the depth there. DFlash2::set_tree's full-depth guard stays the authority for which cycles
   // actually tree. The wide tiles only run in tree cycles, so asking
   // them (NI_KFLASH_ROWS) without trees keeps one tile.
-  const char* cv = getenv("NI_DFLASH_CAP");
+  const char* cv = kenv("CAP");
   const int cap = cv && *cv ? atoi(cv) : 0;
-  const char* vv = getenv("NI_DFLASH_VERIFY");
+  const char* vv = kenv("VERIFY");
   const bool capped = !(vv && *vv) && cap >= 1 && cap < kMaxVerify - 1;  // genuine against the block that runs
   const bool tree = !capped && (v && *v ? atoi(v) != 0 : (kf && *kf ? atoi(kf) != 0 : true));
   const char* r = getenv("NI_KFLASH_ROWS");
@@ -839,7 +839,7 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // The 27B (6 query heads per KV head) on the M5's matrix units takes the first at 8 rows too: its wide verify's
   // kernel, attn8t_partial_tree_g6, with one row tile, so an 8-row verify rounds as the 16-row default does, where the
   // zone runs attn8m_partial_zone on the shader ALUs. ni_run at 131K tokens, the 8-row drafting block (more than one
-  // slot, or NI_DFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block
+  // slot, or NI_KFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block
   // there: 49.3). NI_V8_TREE_G6: by default on the M5 Max, where it was measured; 1 on any M5-class Mac, 0 the zone
   static const bool tree_g6 = [] {
     const int v = env_int("NI_V8_TREE_G6", -1);

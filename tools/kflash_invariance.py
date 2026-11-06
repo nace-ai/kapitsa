@@ -16,7 +16,7 @@ picks cycle by cycle, which varies with its learned state). Exit status 1 if any
 The switches that undo the invariance fixes of the 35B's tree verify (pass them with --env to bisect a regression;
 each is on by default): NI_V8_TREE_ATTN=1 / 0 (the older attention variants: the block as one more chunk after
 history chunks cut by the anchor / its keys inside the MMA tiles; 2 = the default, tree_zone),
-NI_V8_TREE_PIN=0 (the GDN step's update back to the compiler's contraction), NI_DFLASH_EXACT_MOE=0 (the experts'
+NI_V8_TREE_PIN=0 (the GDN step's update back to the compiler's contraction), NI_KFLASH_EXACT_MOE=0 (the experts'
 numerics follow how many rows share an expert).
 """
 import argparse

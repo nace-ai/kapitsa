@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
                  "GPU attn+reduce median %.4f ms%s\n", P, gpu ? "gpu " : "host", splits, chunk, nsplit, md, ref, sd,
                  ts[ts.size() / 2], ok ? "" : "  FAIL");
         }
-      // The 16-row block (NI_DFLASH_BLOCK=16): dfl_attn_qk16 dispatches both row tiles (tg.z = 0, 1), every row sees
+      // The 16-row block (NI_KFLASH_BLOCK=16): dfl_attn_qk16 dispatches both row tiles (tg.z = 0, 1), every row sees
       // all 16 block keys, and dfl_attn_reduce sums with nr = 16 into two X8 tiles. A wrong row-tile index there would
       // not fault, it would only lower acceptance, so both kernels are checked against the same fp64 reference as the
       // 8-row ones above. The reference's normed / roped q, k and v come from two dfl_qk_prep calls (rows 0-7 at P,

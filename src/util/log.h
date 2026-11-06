@@ -38,6 +38,20 @@ inline bool env_on(const char* name) {
   return v && *v && !(v[0] == '0' && v[1] == 0);
 }
 
+// KFlash's knobs (#362): `NI_KFLASH_<NAME>`; the earlier `NI_DFLASH_<NAME>` is still read when the new name is unset.
+// (`NI_DFLASH` alone, the upstream drafter's folder, is not a knob of this kind.) Returns getenv's pointer or nullptr.
+inline const char* kenv(const char* name) {
+  char buf[96];
+  snprintf(buf, sizeof buf, "NI_KFLASH_%s", name);
+  if (const char* v = getenv(buf)) return v;
+  snprintf(buf, sizeof buf, "NI_DFLASH_%s", name);
+  return getenv(buf);
+}
+inline bool kenv_on(const char* name) {
+  const char* v = kenv(name);
+  return v && *v && !(v[0] == '0' && v[1] == 0);
+}
+
 inline int& log_level() {
   static int lvl = getenv("NI_LOG") ? atoi(getenv("NI_LOG")) : 1;
   return lvl;

@@ -5,6 +5,7 @@
 // Opt-in: nothing here is constructed unless a drafter directory is given.
 #pragma once
 #include "model/kflash_budget.h"
+#include "util/log.h"
 #include "model/qwen35.h"
 
 #include <algorithm>
@@ -52,7 +53,7 @@ struct DFlashSeq {
 
 // 8-row affine-quantized GEMM (dfl_qmm8): Y_i[8, N_i] = oscale_i * X[8, K] . W_i^T for up to 4
 // matrices sharing the X8 table (xh half [8][x_ld], xs float [K/64][8]). ks = 0 picks the K split;
-// rf = 2 gives each simdgroup 16 weight rows (0: NI_DFLASH_RF, default 1).
+// rf = 2 gives each simdgroup 16 weight rows (0: NI_KFLASH_RF, default 1).
 struct DflSeg8 {
   const QLinear* L;
   Buffer y;
@@ -74,7 +75,7 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rows, uint32_t K, int 
 void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out);
 
 // Draft attention split plan for anchor position P: context [lo, P) cut into nsplit chunks of
-// `chunk` positions (multiple of 32), at least min_chunk each (0: NI_DFLASH_ATTN_CHUNK, default 256),
+// `chunk` positions (multiple of 32), at least min_chunk each (0: NI_KFLASH_ATTN_CHUNK, default 256),
 // at most max_splits.
 void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit,
                    int valid_lo = 0);
@@ -83,23 +84,23 @@ class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
   // The drafting block's rows: kB (8, the tile), or 16 (the anchor + 15 mask rows, two 8-row tiles; KFlash tree cycles
-  // only). NI_DFLASH_BLOCK picks it (8, 16, or `auto` for the default); where that says nothing it is 8, and Engine asks
+  // only). NI_KFLASH_BLOCK picks it (8, 16, or `auto` for the default); where that says nothing it is 8, and Engine asks
   // for 16 on a single-slot engine that takes the 16-row paths (the ctor's rows16). Fixed while the drafter loads, since
   // alloc_buffers() and the reduced head size the rows from it; per drafter, so a process that switches models
   // (ModelManager::switch_to) picks its block again.
   int block() const { return block_; }
   // A drafter loaded with a 16-row block drafts 8-row blocks too, request by request (set_block): its buffers are the
-  // 16-row block's, and the 8-row block keeps the budget, rows and depth a drafter loaded with NI_DFLASH_BLOCK=8 has
+  // 16-row block's, and the 8-row block keeps the budget, rows and depth a drafter loaded with NI_KFLASH_BLOCK=8 has
   // (one 8-row tile, the 8-row budget file). narrow_ok(): this drafter can (a 16-row block with trees, by default on
-  // the M5 Max; NI_DFLASH_NARROW=1 elsewhere, 0 keeps it at 16 rows).
+  // the M5 Max; NI_KFLASH_NARROW=1 elsewhere, 0 keeps it at 16 rows).
   bool narrow_ok() const { return kf_budget_alt_ != nullptr; }
   // the block of the cycles to come (8, or the block it loaded with), between requests: nothing of a cycle in flight
   void set_block(int rows);
   static constexpr uint32_t kGpuChunk = 256;  // context positions per attention split, GPU-driven passes
-  // default reduced draft head rows: from a ranked id list (NI_DFLASH_HEAD_IDS), and in id order (the default)
+  // default reduced draft head rows: from a ranked id list (NI_KFLASH_HEAD_IDS), and in id order (the default)
   static constexpr int kHeadRows = 65536, kHeadRowsIdOrder = 98304;
-  // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4). rows16: draft a 16-row block where this target, the drafter's
-  // projections and the knobs allow it and NI_DFLASH_BLOCK says nothing (Engine passes slots == 1: a 16-row block has
+  // bits: 4 or 8 (0: NI_KFLASH_BITS, default 4). rows16: draft a 16-row block where this target, the drafter's
+  // projections and the knobs allow it and NI_KFLASH_BLOCK says nothing (Engine passes slots == 1: a 16-row block has
   // no batched cycle to lose, Engine::batch_rows).
   DFlash2(Qwen35& target, const std::string& dir, int bits = 0, bool rows16 = false);
   const DFlash2Config& config() const { return cfg_; }
@@ -114,13 +115,13 @@ class DFlash2 {
   // The longest name match wins.
   static std::string find(const std::string& model_dir, const Qwen35Config& target);
   // Memory a drafter takes, from its config.json and safetensors headers only (the engine's fit check): what the
-  // constructor allocates (projections quantized to NI_DFLASH_BITS, default 4; norms, codebooks and conv kernels
+  // constructor allocates (projections quantized to NI_KFLASH_BITS, default 4; norms, codebooks and conv kernels
   // as stored; buffers; the reduced draft head, rows of the target's LM head of head_row_bytes each), the target's
   // 8-row verify scratch and the prompt-capture buffers of the first prefill (*at_prefill, included); *per_slot:
   // one context ring (a slot holds three: the live state and its two checkpoints' snapshots).
-  // The drafting block the engine will load for `target` with `slots` slots: NI_DFLASH_BLOCK if it names 8 or 16, else
+  // The drafting block the engine will load for `target` with `slots` slots: NI_KFLASH_BLOCK if it names 8 or 16, else
   // 16 on a one-slot engine whose target has a wide tree verify, else 8 (the load-time checks repeat this in full).
-  // block_env: NI_DFLASH_BLOCK's value to decide from (nullptr: the environment; "" or "auto": the default), so the
+  // block_env: NI_KFLASH_BLOCK's value to decide from (nullptr: the environment; "" or "auto": the default), so the
   // decision can be asked several times in one process (a --allow-switch server decides each model at its load).
   // tw_ok: whether this Mac has the matrix-unit drafting pass (dfl_tw_supported(): M5-class GPU, macOS 26): the
   // caller asks the GPU, so that the decision stays a pure function a CPU test can drive both ways.
@@ -227,7 +228,7 @@ class DFlash2 {
     return tree_ ? (t[kf::kObs] > 0 ? t[kf::kObs] : t[kf::kN]) - 1
                  : dyn_tau_ > 0 ? std::min(K, int(kdyn_.as<uint32_t>()[0])) : K;
   }
-  // KFlash on every target (NI_KFLASH=0 or NI_DFLASH_TREE=0 keeps the chain; a genuine NI_DFLASH_CAP=<n> below the
+  // KFlash on every target (NI_KFLASH=0 or NI_KFLASH_TREE=0 keeps the chain; a genuine NI_KFLASH_CAP=<n> below the
   // full depth, the F74 depth cap, keeps chains too and caps the depth -- a cap at or above the full depth is a
   // no-op; kf_tree_default() in dflash2.cpp): the single-stream cycles (encode_cycle*)
   // verify a best-first tree over the lattice (the shared builder kf_build on this drafter's children tables,
@@ -248,14 +249,14 @@ class DFlash2 {
   // after each tree cycle completed: the cycle's GPU ms for the budget, its drafting half's command buffer and its
   // verify's (the loop calls it after its wait)
   void observe(double ms);
-  // proposals verified per cycle: NI_DFLASH_VERIFY (1..block - 1), or NI_DFLASH_CAP=<n> (the F74 depth cap, which
+  // proposals verified per cycle: NI_KFLASH_VERIFY (1..block - 1), or NI_KFLASH_CAP=<n> (the F74 depth cap, which
   // also keeps the chain; only a genuine cap below the full depth engages), default block() - 1
   int verify_depth() const { return vdepth_; }
-  // dynamic verify depth threshold (dfl_depth; MoE targets only): 0.5 by default, NI_DFLASH_DYN=tau, 0 = off
+  // dynamic verify depth threshold (dfl_depth; MoE targets only): 0.5 by default, NI_KFLASH_DYN=tau, 0 = off
   float dyn_tau() const { return dyn_tau_; }
   // sampled cycles verify with row-independent MoE numerics (Qwen35::set_verify_moe_exact)
   bool exact_moe() const { return exact_moe_; }
-  // The downward depth gate (M3; NI_DFLASH_GATE=<p>[:<win>], off by default): a rolling per-position acceptance
+  // The downward depth gate (M3; NI_KFLASH_GATE=<p>[:<win>], off by default): a rolling per-position acceptance
   // window over the completed cycles. Each observed cycle shifts in two bits per proposal position: tau kept
   // it (i < kdyn, dfl_depth's choice), and it was accepted. Greedy acceptance is a prefix, so i < a is an
   // acceptance and i >= a is not -- positions past the rejection were never tested, but the statistic this
@@ -321,9 +322,9 @@ class DFlash2 {
   void clear_h0() { h0_set_ = false; }
   // Per-stage copies (cycle-0 style intermediates) into named buffers; see dflash2.cpp.
   void set_debug(bool on) { debug_ = on; }
-  // draft attention kernel: 0 = default (simdgroup-matrix; NI_DFLASH_ATTN=scalar), 1 = scalar, 2 = mma
+  // draft attention kernel: 0 = default (simdgroup-matrix; NI_KFLASH_ATTN=scalar), 1 = scalar, 2 = mma
   void set_attn_variant(int v) { attn_variant_ = v; }
-  // prompt context commit: rows <= threshold go through 8-row chunks (-1: NI_DFLASH_PF8, default 256)
+  // prompt context commit: rows <= threshold go through 8-row chunks (-1: NI_KFLASH_PF8, default 256)
   void set_pf8(int rows) { pf8_ = rows; }
   const std::map<std::string, Buffer>& debug_bufs() const { return dbg_; }
   // fp32 c(j) = RMSNorm(x_ctx W_fc^T; hidden_norm) of the last commit: prefill rows [0, rows) or
@@ -347,9 +348,9 @@ class DFlash2 {
   void alloc_buffers();
   void load_v8_packed_coeff();
   // a 16-row block's drafting pass on the tensor path: not the v1 drafter, the matrix units on, 4-bit group-64
-  // projections, the fused attention (the load-time gate below refuses NI_DFLASH_BLOCK=16 without it)
+  // projections, the fused attention (the load-time gate below refuses NI_KFLASH_BLOCK=16 without it)
   bool rows16_tensor_ok() const;
-  // and whether this target and these knobs allow the block at all: trees on, a depth-15 walk (NI_DFLASH_VERIFY >= 15),
+  // and whether this target and these knobs allow the block at all: trees on, a depth-15 walk (NI_KFLASH_VERIFY >= 15),
   // the target's wide tree verify, and rows16_tensor_ok
   bool rows16_auto_ok() const;
 
@@ -396,15 +397,15 @@ class DFlash2 {
   Buffer dist_id_, dist_p_, dist_keep_, acc_, kdyn_, gst_;
   float dyn_tau_ = 0.0f;    // T = 0 (0: dynamic depth off)
   float dyn_tau_t_ = 0.0f;  // T > 0
-  uint32_t dyn_rule_ = 0;   // dfl_depth rule (NI_DFLASH_DYN_RULE)
-  bool exact_moe_ = true;  // MoE targets: row-independent expert numerics, tree verifies at every T and the chain's at T > 0 (NI_DFLASH_EXACT_MOE=0 off)
+  uint32_t dyn_rule_ = 0;   // dfl_depth rule (NI_KFLASH_DYN_RULE)
+  bool exact_moe_ = true;  // MoE targets: row-independent expert numerics, tree verifies at every T and the chain's at T > 0 (NI_KFLASH_EXACT_MOE=0 off)
   // the downward depth gate (gate_p()): one window per sampling mode (0 = greedy, 1 = sampled: tau differs,
   // the acceptance statistics must not mix), and the previous chain cycle's bookkeeping -- its (kdyn, accepted) pair is
   // read when the next chain cycle encodes (the loop waits every verify first, and a drafting half in
   // flight writes neither acc_ nor kdyn_)
   float gate_p_ = 0.0f;
   int gate_win_ = DepthGate::kWin;
-  bool gate_trace_ = false;  // NI_DFLASH_GATE_TRACE=1: one line per cycle with the pair and the cap
+  bool gate_trace_ = false;  // NI_KFLASH_GATE_TRACE=1: one line per cycle with the pair and the cap
   DepthGate gate_[2];
   bool gate_prev_ = false;        // acc_/kdyn_ hold a completed chain cycle of this run (gpu_state_reset clears)
   bool gate_prev_masked_ = false; // that cycle ran under grammar masks: its acceptance is distorted, not observed
@@ -412,7 +413,7 @@ class DFlash2 {
   // KFlash (see tree()): the tree descriptor (int32 [kf::kWords]), the lattice's children tables (clq float
   // [7][16][16], ctok int, the constant successors), the builder's live-row word, the budget
   bool tree_ = false;
-  bool hist_ = false;  // the history lane (dfl_hist): default on for the 35B-A3B on an M5 Pro, NI_DFLASH_HIST=<nmin>,<nmax>,<cap> or 0
+  bool hist_ = false;  // the history lane (dfl_hist): default on for the 35B-A3B on an M5 Pro, NI_KFLASH_HIST=<nmin>,<nmax>,<cap> or 0
   int hist_nmin_ = 3, hist_nmax_ = 8, hist_cap_ = 4;
   bool gst_tree_ = false;  // the drafter state's rows are a tree acceptance's path (gst[4 ..]): commits gather them
   int tree_rows_ = kB;     // the widest allowed verify (the budget's max rows)
@@ -424,22 +425,22 @@ class DFlash2 {
   std::unique_ptr<KfBudget> kf_budget_alt_;
   int tree_rows_alt_ = kB, vdepth_alt_ = kB - 1, block_alt_ = kB;
   std::unique_ptr<KfBatch> kf_batch_;  // batched decode's rows (the same key + "-batch")
-  // T > 0: the walk samples its chain at T_q = walk_tf_ * T (NI_DFLASH_QT; 0 = argmax chain with one-hot q)
+  // T > 0: the walk samples its chain at T_q = walk_tf_ * T (NI_KFLASH_QT; 0 = argmax chain with one-hot q)
   float walk_tf_ = 1.0f;
   // MLP and LM head on the target's 8-row verify GEMMs (Qwen35::enc_gu8 / enc_qmm8 with the verify's V8Knobs;
-  // NI_DFLASH_V8, default on for hidden >= 4096, where they measured 6-16% faster than dfl_qmm8): inputs permuted
+  // NI_KFLASH_V8, default on for hidden >= 4096, where they measured 6-16% faster than dfl_qmm8): inputs permuted
   // into their table
   bool v8_ = false;
   Buffer v8t_, v8h_, v8hs_;
   Qwen35::PackedCoeffBuffers kv_all_packed_, fc_packed_;  // the ring commit's K|V projection (NI_V8_PACKED_COEFF_NF1)
-  // Reduced draft head (NI_DFLASH_HEAD=n rows, 0 = the full vocabulary): the target lm_head rows of the n
-  // highest-ranked token ids (a ranked id list from NI_DFLASH_HEAD_IDS, kHeadRows by default; else id order =
+  // Reduced draft head (NI_KFLASH_HEAD=n rows, 0 = the full vocabulary): the target lm_head rows of the n
+  // highest-ranked token ids (a ranked id list from NI_KFLASH_HEAD_IDS, kHeadRows by default; else id order =
   // the tokenizer's BPE merge order, kHeadRowsIdOrder) plus every id >= the first end-of-sequence id
   // (added/special tokens), ascending; the drafter's top-16 then picks among those ids only (the verify always
   // uses the full head, so outputs are unchanged).
   QLinear head_sub_;
   Qwen35::PackedCoeffBuffers head_packed_;
-  // The low-rank shortlist head (build_lowrank; NI_DFLASH_LOWRANK): logits ~ (x A) B^T pick each chunk's top 16,
+  // The low-rank shortlist head (build_lowrank; NI_KFLASH_LOWRANK): logits ~ (x A) B^T pick each chunk's top 16,
   // the head's rows rescore them (dfl_lr_rescore)
   QLinear lrA_, lrB_;
   Qwen35::PackedCoeffBuffers lrA_packed_;
@@ -457,8 +458,8 @@ class DFlash2 {
   Buffer capt_, y8_, c8_, kv8_, cdbg_;
   Buffer pcap_, xph_, yph_, cph_, kvph_;
   int max_splits_ = 32;  // partial buffers (attention splits)
-  // context splits of the draft attention (NI_DFLASH_ATTN_SPLITS, <= max_splits_)
-  int attn_splits_ = std::clamp(getenv("NI_DFLASH_ATTN_SPLITS") ? atoi(getenv("NI_DFLASH_ATTN_SPLITS")) : 16, 1, 32);
+  // context splits of the draft attention (NI_KFLASH_ATTN_SPLITS, <= max_splits_)
+  int attn_splits_ = std::clamp(kenv("ATTN_SPLITS") ? atoi(kenv("ATTN_SPLITS")) : 16, 1, 32);
   bool h0_set_ = false, debug_ = false;
   int attn_variant_ = 0, pf8_ = -1;
   std::map<std::string, Buffer> dbg_;

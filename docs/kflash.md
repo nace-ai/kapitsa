@@ -21,10 +21,10 @@ On a MacBook Pro with an M4 Pro, against the engine just before it, KFlash made 
 faster on Qwen3.8-27B, 5% on Qwen3.5-4B and 3% on Qwen3.6-35B-A3B; on a prose answer, 16%, 9% and 6%. Long agent turns,
 where the chain already does well, landed between −5% and +3%. KFlash has been on by default since
 [#187](https://github.com/nace-ai/kapitsa/pull/187); `NI_KFLASH=0` brings the chain back. A verify-depth cap for the
-Qwen DFlash2 drafters is opt-in, as `NI_DFLASH_CAP=<n>`: the drafter verifies `n` proposals per cycle (1..block − 1)
+Qwen DFlash2 drafters is opt-in, as `NI_KFLASH_CAP=<n>`: the drafter verifies `n` proposals per cycle (1..block − 1)
 and keeps chains — the trees need the full depth, so a capped depth is always a chain, and below the full depth the
-cap is the same axis as the existing `NI_DFLASH_VERIFY=<n>`; a genuine cap decides even where the trees are
-explicitly asked (`NI_KFLASH=1`, `NI_DFLASH_TREE=1`), because a capped verify cannot tree. Only a genuine cap engages: a `NI_DFLASH_CAP` at or
+cap is the same axis as the existing `NI_KFLASH_VERIFY=<n>`; a genuine cap decides even where the trees are
+explicitly asked (`NI_KFLASH=1`, `NI_KFLASH_TREE=1`), because a capped verify cannot tree. Only a genuine cap engages: a `NI_KFLASH_CAP` at or
 above the full depth of the block that runs leaves that block at full depth with the trees — but the 16-row choice reads the cap at 15, so
 any cap below 15 keeps the 8-row block (trees at depth 7), and a cap of 7..14 is not the same machine state as the cap unset; only at or
 above 15 is it a no-op outright, and an arm that names such a cap measures what it believes it measures. The basis for the cap (ledger §2.16 as corrected through §2.32-E): two clean same-policy
@@ -258,18 +258,18 @@ the drafter's weights, so the drafting pass doubled (12.4 ms per cycle against 6
 won. The drafter's two tiles are 8-row tiles of the same GEMM (`dfl_put2` writes both), so a pair kernel (`qmm8t2d`)
 multiplies both from one weight load: each weight tile is read once and multiplied twice, one destination per tile.
 Sixteen rows is the default where the whole path exists: a one-slot engine (the benchmark harness, `--slots 1`, a
-`bench` run) drafts 16-row blocks, and `NI_DFLASH_BLOCK=8` keeps the 8-row block. It needs KFlash trees and a target
+`bench` run) drafts 16-row blocks, and `NI_KFLASH_BLOCK=8` keeps the 8-row block. It needs KFlash trees and a target
 with the wide verify, drafts with the matrix units only (an M5-class GPU on macOS 26, the tensor path on, 4-bit group-64
 projections, not the v1 drafter: a load-time check says so rather than the first request), and a server with more than
 one slot keeps 8 rows, because a block that drafts a depth-15 lattice has no batched cycle: two requests decoding
 together would share no verify and take turns, where the 8-row block shares one pass between them. The developer knobs
-that take the drafting pass or the attention off that path are refused the same way: `NI_DFLASH_ATTN=scalar`,
+that take the drafting pass or the attention off that path are refused the same way: `NI_KFLASH_ATTN=scalar`,
 `NI_AB=dfl=1` (the old attention) and `NI_AB=dfl=128` (the MLP's own `qmm8_gu`), and the debug dumps `dflash_check`
 turns on.
 
 A paired A/B on the 27B over a 256-token coding prompt (greedy, three interleaved runs each, `NI_ANE=0`, all under the
 GPU lock: MacBook Pro Mac17,8, Apple M5 Pro, macOS 26.5.2, this change's code) measures it: the default 8-row block runs
-67.5/68.5/68.6 tok/s at 4.81 tokens per cycle with cycles of 70.0-71.1 ms of GPU time, and `NI_DFLASH_BLOCK=16` runs
+67.5/68.5/68.6 tok/s at 4.81 tokens per cycle with cycles of 70.0-71.1 ms of GPU time, and `NI_KFLASH_BLOCK=16` runs
 71.3/72.1/72.5 tok/s at 5.54 tokens per cycle with cycles of 76.3-77.6 ms (median +5.3% at +15% tokens per cycle). The
 same block with the pair kernel off (`NI_DFL_PAIR=0`) runs 69.0/69.5/69.5 tok/s with cycles of 79.5-80.1 ms, so the pair
 GEMM is 3.5% of the cycle and all of the lead; without it the block measures at parity. At temperature 0.6 the same
@@ -280,7 +280,7 @@ identical (prefill 8 records, step 192, verify 192).
 
 The harness's corpus is where the block pays what it should, because its replies keep the depth-15 lattice full. Two
 cells of one binary, ten runs each, five greedy and five at temperature 0.6, interleaved forward and reverse under the
-GPU lock, `NI_DFLASH_BLOCK=8` against the default, on the harness's own server command (`--slots 1`, 32768 context,
+GPU lock, `NI_KFLASH_BLOCK=8` against the default, on the harness's own server command (`--slots 1`, 32768 context,
 512-token completions; MacBook Pro Mac17,8, Apple M5 Pro, macOS 26.5.2; both cells carried the harness's contention flag
 for foreign GPU load during their prefill and tool phases, and neither flagged its decode phases): the 8-row block reads
 76.07 tok/s greedy (all ten runs 71.7-76.8, which is the published 76.4) and 71.70 at temperature 0.6, the 16-row default
@@ -299,7 +299,7 @@ so a 16-row cost measured while something else held the GPU can leave a table th
 16-row block drafts the whole depth-15 lattice in one weight read, and an 8-row cycle verifies half of it: on this Mac a
 table written during a burst of foreign GPU load ran the 16-row block at 69.3 tok/s, 9% below the 8-row block's 76.5,
 where the same binary with all 72 cycles at 16 rows ran at 93.5. `pin_wide()` therefore fixes the capacity at the block's
-width, `NI_DFLASH_BLOCK=8` being the way back to the 8-row block, and a first run measures and keeps the 16-row cycle:
+width, `NI_KFLASH_BLOCK=8` being the way back to the 8-row block, and a first run measures and keeps the 16-row cycle:
 the A/B above started from that warm narrow-biased table and none of its 81,594 cycles verified 8 rows. The block
 itself is decided per drafter, while it loads: a server that switches models (`--allow-switch`) decides each one's
 block again, so a MoE target after a 27B keeps its 8-row block. The engine's memory plan is told which block will load
@@ -484,9 +484,9 @@ KFlash is on by default for every block drafter. To compare it with the chain, o
 | Switch | Effect |
 | --- | --- |
 | `NI_KFLASH=0` (environment) | chains on every model |
-| `NI_DFLASH_TREE=0` (environment) | chains on the Qwen models only (overrides `NI_KFLASH` there) |
-| `NI_DFLASH_CAP=<n>` (environment) | the verify-depth cap (F74, opt-in): a Qwen DFlash2 drafter verifies `n` proposals per cycle (1..block − 1) and keeps chains (the trees need the full depth). Only a genuine cap engages — a cap at or above the full depth of the block that runs leaves it at full depth with the trees, though any cap below 15 keeps the 8-row block (trees at depth 7) and only at or above 15 is it a no-op outright — and below the full depth it is the same axis as `NI_DFLASH_VERIFY=<n>`, which sets the depth directly and overrides it |
-| `NI_DFLASH_VERIFY=<n>` (environment) | the proposals a Qwen DFlash2 drafter verifies per cycle (1..block − 1); the block's full depth by default |
+| `NI_KFLASH_TREE=0` (environment) | chains on the Qwen models only (overrides `NI_KFLASH` there) |
+| `NI_KFLASH_CAP=<n>` (environment) | the verify-depth cap (F74, opt-in): a Qwen DFlash2 drafter verifies `n` proposals per cycle (1..block − 1) and keeps chains (the trees need the full depth). Only a genuine cap engages — a cap at or above the full depth of the block that runs leaves it at full depth with the trees, though any cap below 15 keeps the 8-row block (trees at depth 7) and only at or above 15 is it a no-op outright — and below the full depth it is the same axis as `NI_KFLASH_VERIFY=<n>`, which sets the depth directly and overrides it |
+| `NI_KFLASH_VERIFY=<n>` (environment) | the proposals a Qwen DFlash2 drafter verifies per cycle (1..block − 1); the block's full depth by default |
 | `--spec 0` (`kapitsa serve` option) | plain decoding, no drafter |
 | `NI_KFLASH_WRAP=0` (environment) | no KFlash label or accounting, and no prompt-lookup budget (also off by default, see below): prompt lookup verifies every draft it finds. Decoding is otherwise unchanged |
 | `NI_KFLASH_BUDGET=1` (environment) | the prompt-lookup budget (Nemotron Nano, Flint with `--spec`): a cycle verifies only the drafts that pay for their rows. Off by default, so prompt lookup verifies every draft as before; a pass of 2+ rows rounds differently from decode steps, so turning it on can change the text. `NI_KFLASH_ROW_COST=<steps>` sets the cost of an extra row (Flint 0.6, Nano 0.25 unmeasured) |

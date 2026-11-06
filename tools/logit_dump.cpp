@@ -11,7 +11,7 @@
 // whole vocabulary are written. The paths (each from the same prefilled state: a checkpoint restored per path):
 //   step    plain decoding, one row per pass (what --spec 0 runs)
 //   verify  the single-stream verify of 8 rows. Qwen: KFlash's tree verify (the default) as DFlash2's cycle encodes it,
-//           the tree a chain of 8 live rows, the experts' row-independent numerics (NI_DFLASH_EXACT_MOE), the K/V
+//           the tree a chain of 8 live rows, the experts' row-independent numerics (NI_KFLASH_EXACT_MOE), the K/V
 //           compaction and the next cycle's fold of the accepted path; NI_KFLASH=0 the chain verify instead (DFlash2
 //           without trees). --verify-rows 16 or 32: the tree a chain of that many live rows, a wide tree verify (the
 //           27B's 16-row block: GPU-driven row tiles, attn8t_partial_tree_g6 on the M5); --rows a multiple of it, since
@@ -306,15 +306,15 @@ int main(int argc, char** argv) {
   auto begin_pass = [&] { return m.grouped_passes() ? g.begin_grouped() : g.begin(); };
   const SamplingParams sp;  // greedy: no pass samples a token the next row reads
 
-  // KFlash, as DFlash2 decides it (NI_KFLASH, NI_DFLASH_TREE; the verify must have a tree path), and the experts'
-  // row-independent numerics its tree verifies run with (NI_DFLASH_EXACT_MOE)
+  // KFlash, as DFlash2 decides it (NI_KFLASH, NI_KFLASH_TREE; the verify must have a tree path), and the experts'
+  // row-independent numerics its tree verifies run with (NI_KFLASH_EXACT_MOE)
   bool tree = false, moe_exact = true;
   if (q) {
     const char* kf = getenv("NI_KFLASH");
-    const char* dt = getenv("NI_DFLASH_TREE");
+    const char* dt = kenv("TREE");
     tree = dt && *dt ? atoi(dt) != 0 : !(kf && *kf) || atoi(kf) != 0;
     tree = tree && q->block_drafter_ok() && q->verify_tree_ok();
-    if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) moe_exact = atoi(v) != 0;
+    if (const char* v = kenv("EXACT_MOE")) moe_exact = atoi(v) != 0;
   }
   if (tree_rows > kVerifyRows) {  // a wide tree verify: the verify buffers and every sequence's tape that wide
     if (!q || fn || !tree || !q->verify_wide_ok())

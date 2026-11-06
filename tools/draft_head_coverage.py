@@ -3,7 +3,7 @@
 
 The drafter drafts only tokens whose rows are in its reduced head. The engine's rules (src/model/dflash2.cpp
 build_head :764, :784; dflash2.h:93): with no ranked list the head is the first 98,304 token ids in id order (kHeadRowsIdOrder);
-with NI_DFLASH_HEAD_IDS it is 65,536 ranked rows (kHeadRows) unless NI_DFLASH_HEAD=n says otherwise; in both cases every id from the
+with NI_KFLASH_HEAD_IDS it is 65,536 ranked rows (kHeadRows) unless NI_KFLASH_HEAD=n says otherwise; in both cases every id from the
 first end-of-sequence id on (--special0, 248044 for the Qwen 3.x tokenizer) is added. The code comment says the id-order head covers
 99.8-100% of generated tokens on English text and code; it was measured on English only. For text in a language whose tokens sit
 past id 98,303 it does not cover them.
