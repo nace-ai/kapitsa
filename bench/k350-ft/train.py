@@ -10,7 +10,7 @@ greedy-walk acceptance proxy (accepted prefix + 1, the tokens a full-depth chain
 Resumes from <out_dir>/state.pt (weights, optimizer, step, elapsed); a run stops after chunk_minutes (or when the
 total is reached) and saves state.pt, so training runs as several short GPU-lock jobs. The LM head and its loss run
 in 64-row chunks (no [B x 7 x V] logits in one buffer)."""
-import json, math, os, random, sys, time
+import json, math, os, random, re, sys, time
 import torch
 import torch.nn.functional as F
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -185,6 +185,10 @@ while True:
         torch.mps.synchronize() if dev == 'mps' else None
         mem = torch.mps.driver_allocated_memory() / 2**30 if dev == 'mps' else 0
         say(f'step {step} done: anchors {BA}, seq len {m["n"]}, driver memory {mem:.2f} GiB, footprint {foot():.2f} GB, {time.time() - tchunk:.1f} s into chunk')
+    if step % 25 == 0:  # orchestrator 7 Nov: abort on swap over 8 GB; exit 75 tells pipeline.sh to re-gate and resume
+        su = float(re.search(r'used = ([\d.]+)M', os.popen('sysctl -n vm.swapusage').read()).group(1))
+        if su > 8192:
+            save_state(); say(f'swap used {su / 1024:.1f} GB over 8 GB at step {step}: state saved, chunk stops'); sys.exit(75)
     if step % 25 == 0 and dev == 'mps' and foot() > float(os.environ.get('K350_MAX_GB', 30)):
         save_state(); say(f'footprint {foot():.1f} GB over K350_MAX_GB at step {step}: state saved, chunk ends early'); sys.exit(0)
     if step % 25 == 0:

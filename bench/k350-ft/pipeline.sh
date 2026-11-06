@@ -5,11 +5,13 @@ S=~/Documents/nace/kapitsa/.worktrees/k350-ft/bench/k350-ft; D=/tmp/k350d; DT=~/
 L="lockf -k /tmp/kapitsa-gpu.lock"
 wait_ac() { until pmset -g batt | grep -q "AC Power"; do echo "waiting for AC $(date +%T) $(pmset -g batt | grep -o "[0-9]*%")"; sleep 60; done; }  # outside the lock
 # orchestrator 6 Nov: before training or eval takes the lock, free swap >= 3 GB and memory pressure normal (level 1)
-# macOS grows and shrinks its swap files, so "free" is only slack in them (1.2 GB of 5 GB with 3.9 GB used, 6 Nov 15:46): gate on swap used
-# the data, features and checkpoints live on the Extreme Pro (/tmp/k350d links there); wait outside the lock until it is mounted
-wait_drive() { until [ -d /tmp/k350d/data ]; do echo "waiting for the Extreme Pro $(date +%T)"; sleep 120; done; }
-wait_mem() { while :; do u=$(sysctl -n vm.swapusage | sed -E 's/.*used = ([0-9.]+)M.*/\1/'); lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
-  awk -v u="$u" 'BEGIN{exit !(u<=4096)}' && [ "$lv" = 1 ] && return; echo "waiting for memory $(date +%T) swap used ${u}M pressure level $lv"; sleep 60; done; }
+# orchestrator 7 Nov: used swap stays high for hours after pressure ends (#373's pressure test), so gate on what is free now:
+# pressure normal (level 1), free RAM >= 12 GB (vm_stat free+inactive+speculative+purgeable) and no other process over 20 GB RSS
+mem_ok() { lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
+  fr=$(vm_stat | awk '/page size of/{ps=$8} /Pages (free|inactive|speculative|purgeable):/{gsub("\\.","",$NF); n+=$NF} END{printf "%.1f", n*ps/2^30}')
+  big=$(ps -axo rss=,pid=,comm= | awk '$1>20*2^20{printf "%s(%.0fGB) ", $3, $1/2^20}')
+  [ "$lv" = 1 ] && awk -v f="$fr" 'BEGIN{exit !(f>=12)}' && [ -z "$big" ]; }
+wait_mem() { until mem_ok; do echo "waiting for memory $(date +%T) pressure level $lv, free ${fr} GB, big: ${big:-none}"; sleep 60; done; }
 while python3 $DT status k350-ft-j1 | head -1 | grep -q "k350-ft-j1 running"; do sleep 30; done
 echo "j1 ended $(date +%T): $(python3 $DT status k350-ft-j1 | head -1)"
 wait_drive; [ -s $D/data/capt.real.list ] || { echo "no capt.real.list"; exit 2; }
@@ -28,9 +30,11 @@ for c in $(seq 1 12); do  # capture in ~200-sequence chunks, each its own lockf 
   grep -q "capture complete" $D/capt.last.log && touch $D/capt.done
 done
 [ -f $D/capt.done ] || { echo "capture not complete"; exit 3; }
-for c in 1 2 3 4; do
+for c in $(seq 1 12); do
   [ -f $D/ckpt/DONE ] && break
-  wait_drive; wait_ac; wait_mem; $L bash $S/train_chunk.sh || { echo "train chunk failed"; exit 4; }
+  wait_drive; wait_ac; wait_mem; $L bash $S/train_chunk.sh; rc=$?
+  [ $rc = 75 ] && { echo "chunk stopped on swap > 8 GB, state saved; gate again"; continue; }
+  [ $rc = 0 ] || { echo "train chunk failed"; exit 4; }
 done
 [ -f $D/ckpt/DONE ] || { echo "training not done"; exit 4; }
 CK=$D/ckpt/best; [ -r $CK/model.safetensors ] || CK=$D/ckpt/last
