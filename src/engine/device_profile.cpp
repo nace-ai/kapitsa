@@ -49,9 +49,9 @@ const DefaultRow kDefaults[] = {
     {"m4_pro_20", ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "on", 0, 0, false,
      "20 cores and 48 GB for the 4B or 9B packed coeff; 35B X8 share on 5-6-bit affine projections", false},
     {"m4_ten_core", ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "narrow", 0, 0, false,
-     "10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys", false},
+     "10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
     {"ultra_gpu", ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
-     "name contains Ultra; fused attention merges fail past a 32-key tile (#421)", false},
+     "name contains Ultra; fused merges failed on the old arrival (#421); not re-run since, so the split merges stay", false},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
