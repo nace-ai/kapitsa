@@ -1,0 +1,116 @@
+kapitsa bench: qwen3.8-27b-4bit 4-bit on MacBook Pro (16-inch, 2024): Apple M4 Pro, 20-core GPU, 48 GB, macOS 15.7.1, quick
+Starting the server on 127.0.0.1:59976 (log ~/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/home-bench-27b-vision-01-base/logs/bench-59976-ctx32768.log)
+[?2026h  ✓ Loaded qwen3.8-27b-4bit  ·  4-bit in 6.0s  ·  KFlash speculative decoding …
+[?2026lReady after 6.0s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
+Warm-up done in 14s
+GPU quiet after 18s
+  decode T=0.6: 60.85 tok/s (512 tok, finish="length")
+  decode T=0.6: 58.67 tok/s (512 tok, finish="length")
+  decode T=0.6: 63.55 tok/s (512 tok, finish="length")
+decode T=0.6: median 60.85 tok/s over 3/3 valid, accepted drafts 48.61 tok/s (79.9% of tokens)
+  decode T=0: 65.69 tok/s (512 tok, finish="length")
+  decode T=0: 65.36 tok/s (512 tok, finish="length")
+  decode T=0: 65.31 tok/s (512 tok, finish="length")
+decode T=0: median 65.36 tok/s over 3/3 valid, accepted drafts 52.85 tok/s (80.9% of tokens)
+prefill 4000: 4132 tok, 393 tok/s; cached TTFT median 0.23 s (98 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-06T14:08:11Z",
+  "kapitsa": {
+    "version": "0.2.31",
+    "commit": "d65a0afa"
+  },
+  "mac": {
+    "identifier": "Mac16,7",
+    "name": "MacBook Pro (16-inch, 2024)",
+    "year": 2024,
+    "chip": "Apple M4 Pro",
+    "cpu_cores": 14,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "15.7.1",
+    "macos_build": "24G231"
+  },
+  "model": {
+    "name": "qwen3.8-27b-4bit",
+    "title": "qwen3.8-27b-4bit",
+    "variant": null,
+    "precision": "4-bit",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 60.85,
+      "runs_tps": [
+        60.85,
+        58.67,
+        63.55
+      ],
+      "median_accepted_draft_tps": 48.61,
+      "median_accepted_draft_share": 0.7988
+    },
+    "decode_greedy": {
+      "median_tps": 65.36,
+      "runs_tps": [
+        65.69,
+        65.36,
+        65.31
+      ],
+      "median_accepted_draft_tps": 52.85,
+      "median_accepted_draft_share": 0.8086
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 10.5212,
+        "tps": 392.7,
+        "followup_s": [
+          0.2261,
+          0.2866,
+          0.2253
+        ],
+        "followup_median_s": 0.2261,
+        "followup_suffix_tps": 97.7
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.17
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.05,
+    "gpu_other_max_pct": 1.2,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
+Saved /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/bench-27b-vision-01-base.json
