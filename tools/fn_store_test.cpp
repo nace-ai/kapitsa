@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cfenv>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -1421,6 +1422,74 @@ void case_ngram_bounds(const std::string& dir, std::vector<std::string>& files) 
   printf("n-gram bounds: %zu rejected fixtures, 3 valid formats\n", cases);
 }
 
+// Compare the mapped row path against a bit-at-a-time code reader. Cover vector groups,
+// generic widths/group boundaries, all code values, and BF16 exceptional coefficients.
+void case_ngram_affine_rows(const std::string& dir, std::vector<std::string>& files) {
+  const int f0 = g_fail, saved_rounding = std::fegetround();
+  const uint16_t edge[] = {0, 0x8000, 1, 0x8001, 0x007f, 0x0080, 0x3b80, 0x3f80, 0xbf80,
+                           0x7f7f, 0xff7f, 0x7f80, 0xff80, 0x7fc1, 0x7f81, 0xffc1};
+  struct Shape { int dim, gs, bits; };
+  size_t values = 0;
+  for (auto [dim, gs, bits] : {Shape{160, 32, 4}, {192, 64, 4}, {256, 128, 4}, {40, 5, 4},
+                              {96, 3, 4}, {160, 32, 8}, {160, 32, 6}, {192, 32, 3}, {160, 32, 2}}) {
+    constexpr int rows = 256;
+    const int groups = dim / gs, rb = dim * bits / 8, mask = (1 << bits) - 1;
+    std::vector<uint8_t> w(size_t(rows) * rb);
+    std::vector<uint16_t> scales(size_t(rows) * groups), biases(scales.size());
+    for (int r = 0; r < rows; ++r) {
+      for (int i = 0; i < dim; ++i) {
+        const int code = (r + i * 13) & mask;
+        for (int b = 0; b < bits; ++b)
+          w[size_t(r) * rb + (i * bits + b) / 8] |= uint8_t(((code >> b) & 1) << ((i * bits + b) % 8));
+      }
+      for (int g = 0; g < groups; ++g) {
+        scales[size_t(r) * groups + g] = edge[(r / 16 + g) % 16];
+        biases[size_t(r) * groups + g] = edge[(r + g) % 16];
+      }
+    }
+    const size_t ws = w.size(), ss = scales.size() * 2;
+    char hdr[600];
+    snprintf(hdr, sizeof hdr,
+             "{\"w\":{\"dtype\":\"U32\",\"shape\":[%d,%d],\"data_offsets\":[0,%zu]},"
+             "\"s\":{\"dtype\":\"BF16\",\"shape\":[%d,%d],\"data_offsets\":[%zu,%zu]},"
+             "\"b\":{\"dtype\":\"BF16\",\"shape\":[%d,%d],\"data_offsets\":[%zu,%zu]}}",
+             rows, rb / 4, ws, rows, groups, ws, ws + ss, rows, groups, ws + ss, ws + 2 * ss);
+    std::string h = hdr;
+    h.resize((h.size() + 7) / 8 * 8, ' ');
+    const std::string path = dir + "/affine_" + std::to_string(dim) + "_" + std::to_string(gs) + "_" +
+                             std::to_string(bits) + ".safetensors";
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) fatal("cannot create n-gram row fixture");
+    const uint64_t n = h.size();
+    fwrite(&n, 8, 1, f); fwrite(h.data(), 1, h.size(), f); fwrite(w.data(), 1, ws, f);
+    fwrite(scales.data(), 1, ss, f); fwrite(biases.data(), 1, ss, f); fclose(f);
+    files.push_back(path);
+    NgramTable table;
+    table.open({{path, "w", "s", "b"}}, NgramTable::Fmt::Affine, dim, bits, gs);
+    std::vector<float> got(size_t(dim) + 2, 123456.25f);
+    for (int rounding : {FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO}) {
+      std::fesetround(rounding);
+      int bad = 0;
+      for (int r = 0; r < rows; ++r) {
+        table.row(r, got.data() + 1);
+        bad += got.front() != 123456.25f || got.back() != 123456.25f;
+        for (int i = 0; i < dim; ++i) {
+          unsigned code = 0;
+          for (int b = 0; b < bits; ++b)
+            code |= unsigned((w[size_t(r) * rb + (i * bits + b) / 8] >> ((i * bits + b) % 8)) & 1) << b;
+          const float want = bf16_to_f32(scales[size_t(r) * groups + i / gs]) * float(code) +
+                             bf16_to_f32(biases[size_t(r) * groups + i / gs]);
+          bad += memcmp(&want, &got[size_t(i) + 1], sizeof(float)) != 0;
+          ++values;
+        }
+      }
+      CHECK(!bad, "n-gram affine rows: dim=%d group=%d bits=%d rounding=%d: %d mismatches", dim, gs, bits, rounding, bad);
+    }
+  }
+  std::fesetround(saved_rounding);
+  printf("n-gram affine rows: %zu bitwise values and output guards: %s\n", values, g_fail > f0 ? "FAILED" : "ok");
+}
+
 template <typename F>
 void await_test(F done, const char* why) {
   const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -2053,6 +2122,7 @@ int main(int argc, char** argv) {
       case_group_pin();
       case_ngram_table(dir, p.files);
       case_ngram_bounds(dir, p.files);
+      case_ngram_affine_rows(dir, p.files);
     }
     if (keep.empty()) {
       for (const std::string& f : p.files) unlink(f.c_str());
