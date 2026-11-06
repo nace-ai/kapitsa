@@ -78,7 +78,12 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 13);
+  CHECK(ni::default_count() == 14);
+  // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
+  const ni::DefaultRow* tattn = row("tattn_fast");
+  CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 12);
+  CHECK(ni::default_matches(*tattn, m5pro) && ni::default_matches(*tattn, m5max));
+  CHECK(!ni::default_matches(*tattn, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
   const ni::DefaultRow* slices = row("gemm_slices");
   const ni::DefaultRow* hc = row("hc_wide");
   const ni::DefaultRow* moe = row("moe4_dx");
