@@ -86,7 +86,7 @@ class Qwen4Exp : public Qwen35 {
   static bool tattn(const Qwen35Config& c);
   static bool tattn(const std::string& model_dir);
   // TATTN's 4096-row prefill chunks for the Q2_0 pack: only when NI_QSA_TATTN is set on, not under the fast
-  // profile's TATTN. On the M5 Pro 48 GB they put every fast leg under memory pressure, decode 7-12% slower per
+  // profile's TATTN. On the M5 Pro 48 GB they put every fast leg under memory pressure, decode about 8% slower per
   // draft cycle (docs/profiles.md).
   static bool tattn_chunks(const std::string& model_dir);
   // the process's split's share of the model (split()), or `split`'s

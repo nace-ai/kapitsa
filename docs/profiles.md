@@ -47,8 +47,8 @@ and fast with 4096-row chunks (the chunks `NI_QSA_TATTN=1` takes since #571), ex
 
 | | 32K prefill | 64K prefill | Decode, ms per draft cycle |
 |---|---|---|---|
-| fast (2048-row chunks) | 8% faster | 10% faster | the same as precise |
-| fast with 4096-row chunks | 15% faster | 17% faster | 7 to 12% slower; every leg under memory pressure |
+| fast (2048-row chunks) | 8% faster | 10% faster | the same at 32K, 4% faster at 64K |
+| fast with 4096-row chunks | 15% faster | 17% faster | 7 to 8% slower; every leg under memory pressure |
 
 Decode tokens per second also differ because the greedy text differs (2.05 against 1.95 tokens per cycle at 32K), not
 because a step is slower. The 4096-row chunks add 0.5 GB to the prefill group's slots, and on a 48 GB Mac that tips
@@ -61,7 +61,7 @@ Ranked by measured speed, then how many models they cover, then drift. Status as
 
 | # | Speedup | Models, Mac | What moves | Measured speed | Measured drift (vs exact) | Status |
 |---|---|---|---|---|---|---|
-| 1 | TATTN sparse attention, Q and P as hi + lo halves (#818, `NI_QSA_TATTN`) | Flash-Next Q2_0, M5 Pro | sparse prefill attention on the matrix units, about 22 bits per operand | prefill 8% faster at 32K, 10% at 64K; decode the same per cycle (with 4096-row chunks: 15% and 17%, but decode 7 to 12% slower under memory pressure) | 4 of 72 flips, mean KL 8.8e-3 | first fast member |
+| 1 | TATTN sparse attention, Q and P as hi + lo halves (#818, `NI_QSA_TATTN`) | Flash-Next Q2_0, M5 Pro | sparse prefill attention on the matrix units, about 22 bits per operand | prefill 8% faster at 32K, 10% at 64K; decode the same per cycle (with 4096-row chunks: 15% and 17%, but decode 7 to 8% slower per cycle under memory pressure) | 4 of 72 flips, mean KL 8.8e-3 | first fast member |
 | 2 | W4A8 dense prefill GEMMs (`NI_QMT_I8`) | 4-bit group-64 dense projections on an M5: Flash-Next, 35B-A3B | activations rounded to int8 per 64-group | Flash-Next 32K prefill 3-13% faster (#572, before grouped prefill, which it turns off) | 35B, 192 rows: 5 flips, mean KL 4.0e-3 (bar 4, 2.1e-3); Flash-Next with TATTN: 6 of 72, 2.1e-2 | 35B: over the bar, and 4K prefill 3.5% slower (4 pairs); not a member |
 | 3 | TATTN single half (`NI_QSA_TATTN`, before #818) | Flash-Next, M5 | Q, K, P in half | 32K prefill 10-15% faster | 3 of 96 flips, mean KL 4.4e-3; a 64K reply ends at once (#585) | replaced by 1 |
 | 4 | Neural Engine prefill for hidden 2048-8192 (#775) | Qwen3.5 9B, M4 Pro | W8A8 FFN on the Neural Engine | 4K time to first token 63% less | 2 of 192 flips, mean KL 3.6e-4 | open PR |
