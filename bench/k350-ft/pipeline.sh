@@ -5,8 +5,9 @@ S=~/Documents/nace/kapitsa/.worktrees/k350-ft/bench/k350-ft; D=/tmp/k350d; DT=~/
 L="lockf -k /tmp/kapitsa-gpu.lock"
 wait_ac() { until pmset -g batt | grep -q "AC Power"; do echo "waiting for AC $(date +%T) $(pmset -g batt | grep -o "[0-9]*%")"; sleep 60; done; }  # outside the lock
 # orchestrator 6 Nov: before training or eval takes the lock, free swap >= 3 GB and memory pressure normal (level 1)
-wait_mem() { while :; do f=$(sysctl -n vm.swapusage | sed -E 's/.*free = ([0-9.]+)M.*/\1/'); lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
-  awk -v f="$f" 'BEGIN{exit !(f>=3072)}' && [ "$lv" = 1 ] && return; echo "waiting for memory $(date +%T) swap free ${f}M pressure level $lv"; sleep 60; done; }
+# macOS grows and shrinks its swap files, so "free" is only slack in them (1.2 GB of 5 GB with 3.9 GB used, 6 Nov 15:46): gate on swap used
+wait_mem() { while :; do u=$(sysctl -n vm.swapusage | sed -E 's/.*used = ([0-9.]+)M.*/\1/'); lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
+  awk -v u="$u" 'BEGIN{exit !(u<=4096)}' && [ "$lv" = 1 ] && return; echo "waiting for memory $(date +%T) swap used ${u}M pressure level $lv"; sleep 60; done; }
 while python3 $DT status k350-ft-j1 | head -1 | grep -q "k350-ft-j1 running"; do sleep 30; done
 echo "j1 ended $(date +%T): $(python3 $DT status k350-ft-j1 | head -1)"
 [ -s $D/data/capt.real.list ] || { echo "no capt.real.list"; exit 2; }
