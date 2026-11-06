@@ -1,0 +1,40 @@
+{
+  "__metadata__": {
+    "format": "mlx-serve-ngram",
+    "bits": "4",
+    "group_size": "32"
+  },
+  "weight": {
+    "dtype": "U32",
+    "shape": [
+      320001536,
+      20
+    ],
+    "data_offsets": [
+      0,
+      25600122880
+    ]
+  },
+  "scales": {
+    "dtype": "BF16",
+    "shape": [
+      320001536,
+      5
+    ],
+    "data_offsets": [
+      25600122880,
+      28800138240
+    ]
+  },
+  "biases": {
+    "dtype": "BF16",
+    "shape": [
+      320001536,
+      5
+    ],
+    "data_offsets": [
+      28800138240,
+      32000153600
+    ]
+  }
+}
