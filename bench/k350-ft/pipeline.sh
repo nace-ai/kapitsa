@@ -3,6 +3,7 @@
 # eval, each phase under its own `lockf -k /tmp/kapitsa-gpu.lock` so other tasks' legs interleave between them.
 S=~/Documents/nace/kapitsa/.worktrees/k350-ft/bench/k350-ft; D=/tmp/k350d; DT=~/.agents/skills/session-orchestration/scripts/detach.py
 L="lockf -k /tmp/kapitsa-gpu.lock"
+wait_ac() { until pmset -g batt | grep -q "AC Power"; do echo "waiting for AC $(date +%T) $(pmset -g batt | grep -o "[0-9]*%")"; sleep 60; done; }  # outside the lock
 while python3 $DT status k350-ft-j1 | head -1 | grep -q "k350-ft-j1 running"; do sleep 30; done
 echo "j1 ended $(date +%T): $(python3 $DT status k350-ft-j1 | head -1)"
 [ -s $D/data/capt.real.list ] || { echo "no capt.real.list"; exit 2; }
@@ -23,10 +24,10 @@ done
 [ -f $D/capt.done ] || { echo "capture not complete"; exit 3; }
 for c in 1 2 3 4; do
   [ -f $D/ckpt/DONE ] && break
-  $L bash $S/train_chunk.sh || { echo "train chunk failed"; exit 4; }
+  wait_ac; $L bash $S/train_chunk.sh || { echo "train chunk failed"; exit 4; }
 done
 [ -f $D/ckpt/DONE ] || { echo "training not done"; exit 4; }
 CK=$D/ckpt/best; [ -r $CK/model.safetensors ] || CK=$D/ckpt/last
 echo "drafter for eval: $CK"; bash $S/mkmodels.sh $CK || exit 5
-$L bash $S/eval_inner.sh; rc=$?
+wait_ac; $L bash $S/eval_inner.sh; rc=$?
 python3 $S/verdict.py $D/eval; echo "PIPELINE DONE rc=$rc $(date +%T)"

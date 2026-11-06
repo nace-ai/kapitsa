@@ -53,6 +53,12 @@ def dbg(t):
     if DBG:
         torch.mps.synchronize(); print('dbg', t, flush=True)
 
+def foot():  # this process's phys_footprint in GB (what mem-guard reads)
+    out = os.popen(f'footprint -p {os.getpid()} 2>/dev/null').read()
+    import re
+    m_ = re.search(r'phys_footprint: ([\d.]+) (GB|MB)', out)
+    return float(m_[1]) / (1024 if m_ and m_[2] == 'MB' else 1) if m_ else -1.0
+
 def batch_loss(m, anchors=None, nmax=BA, stats=False):
     ids, c = load(m)
     n, n0 = m['n'], m['n_prompt']
@@ -165,23 +171,30 @@ while True:
     m = order.pop()
     lce, lsel = batch_loss(m)
     loss = lce + 0.5 * lsel
+    lv, lcev, lselv = loss.item(), lce.item(), lsel.item()
+    ema = lv if ema is None else 0.98 * ema + 0.02 * lv
     opt.zero_grad(set_to_none=True)
     loss.backward()
     torch.nn.utils.clip_grad_norm_(trainable, 1.0)
     opt.step()
+    del loss, lce, lsel
+    if dev == 'mps':
+        torch.mps.empty_cache()  # varying sequence lengths fragment MPS's cache: 44 GB footprint by step 600 without this
     step += 1
     if step == 1 or (step < 50 and step % 10 == 0):
         torch.mps.synchronize() if dev == 'mps' else None
         mem = torch.mps.driver_allocated_memory() / 2**30 if dev == 'mps' else 0
-        say(f'step {step} done: anchors {BA}, seq len {m["n"]}, loss {loss.item():.4f}, driver memory {mem:.2f} GiB, {time.time() - tchunk:.1f} s into chunk')
-    ema = loss.item() if ema is None else 0.98 * ema + 0.02 * loss.item()
+        say(f'step {step} done: anchors {BA}, seq len {m["n"]}, driver memory {mem:.2f} GiB, footprint {foot():.2f} GB, {time.time() - tchunk:.1f} s into chunk')
+    if step % 25 == 0 and dev == 'mps' and foot() > float(os.environ.get('K350_MAX_GB', 30)):
+        save_state(); say(f'footprint {foot():.1f} GB over K350_MAX_GB at step {step}: state saved, chunk ends early'); sys.exit(0)
     if step % 25 == 0:
-        say(f'step {step} loss {loss.item():.4f} ema {ema:.4f} ce {lce.item():.4f} sel {lsel.item():.4f} lr {cur:.2e} {time.time() - tstart:.0f} s')
+        say(f'step {step} footprint {foot():.1f} GB loss {lv:.4f} ema {ema:.4f} ce {lcev:.4f} sel {lselv:.4f} lr {cur:.2e} {time.time() - tstart:.0f} s')
     if step % 300 == 0:
         v = evaluate()
         say(f'step {step} val ce {v[0]:.4f} sel {v[1]:.4f} walk tok/cycle proxy {v[2]:.4f}')
         if v[2] > best:
             best = v[2]; save('best'); say(f'saved best at step {step}')
+        save_state()
 v = evaluate()
 say(f'final step {step} val ce {v[0]:.4f} sel {v[1]:.4f} walk tok/cycle proxy {v[2]:.4f} (shipped {v0[2]:.4f}) in {time.time() - tstart:.0f} s')
 save('last')
