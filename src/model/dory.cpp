@@ -281,7 +281,7 @@ void Dory::load(int prefill_chunk) {
   // 106.8 us, o 41.4 / 47.5, gate|up 122.7 / 146.6, down 68.4 / 77.3), L0 elsewhere as before
   const char* fv = getenv("NI_DORY_FP4");
   if (fv && *fv && strcmp(fv, "l0") && strcmp(fv, "l2")) fatal("NI_DORY_FP4=%s: expected l0 or l2", fv);
-  fp4_l2_ = fv && *fv ? !strcmp(fv, "l2") : g.apple_family() <= 7;
+  fp4_l2_ = fv && *fv ? !strcmp(fv, "l2") : legacy_gpu();
   st_ = std::make_unique<SafetensorsIndex>(path_);
   const SafetensorsIndex& idx = *st_;
   // matrices: one GPU buffer for the codes and one for the scales each, filled by parallel row jobs

@@ -15,6 +15,7 @@
 // drafting half and the verify, the GPU idle times between them, and the host wake-up latency after a verify.
 // Prints generated ids, prompt/decode speeds; optionally dumps the logits of the first
 // generated position (raw float32) for comparison against a reference implementation.
+#include "engine/device_profile.h"
 #include "metal/gpu.h"
 #include "ane/ffn_split.h"
 #include "model/dflash2.h"
@@ -118,7 +119,7 @@ int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
   // Flash-Next's Q2_0 pack on the M5 with NI_QSA_TATTN=1: 4096-row chunks for a prompt that fills two of them (the
   // engine's rule, engine.cpp auto_prefill_chunk and Engine::prefill_chunk_for)
-  const bool wide = Qwen4Exp::q20_pack(dir) && g.apple10() && Qwen4Exp::tattn(dir) && ids.size() >= 2 * 4096;
+  const bool wide = Qwen4Exp::q20_pack(dir) && matrix_units() && Qwen4Exp::tattn(dir) && ids.size() >= 2 * 4096;
   std::unique_ptr<Qwen35> mp = load_qwen(dir, getenv("NI_CHUNK") ? atoi(getenv("NI_CHUNK")) : wide ? 4096 : 2048);
   Qwen35& m = *mp;
   if (kv_grow && !dflash_dir.empty()) fatal("--kv-grow covers the plain, MTP and teacher-forced paths, not --dflash");

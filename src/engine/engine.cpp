@@ -738,7 +738,7 @@ q20::GroupWorld planned_group_world(const MemPlan& m, int slots, int ctx, size_t
   // memory: min(ctx, q20::kAutoKvCtxCap) positions per slot (NI_EXPERT_KV_POS overrides the total, 0 = none),
   // exactly as the live load in Qwen4Exp::init_store does.
   in.kv = q20::auto_store_kv(m.kv_per_pos, ctx, slots);
-  in.cap = q20::auto_store_cap(Gpu::get().apple10());
+  in.cap = q20::auto_store_cap(matrix_units());
   size_t pin = 0;
   if (q20::store_pin_bytes(getenv("NI_EXPERT_STORE"), m.store_all, pin))
     return q20::group_world(m.group_slots, in, &pin);
@@ -890,7 +890,7 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   }
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
       p.formats.rfind("4-bit group 64", 0) == 0 &&
-      (m1_max_32() || apple10_gpu())) {
+      (m1_max_32() || matrix_units())) {
     const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(4096) : 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;
@@ -909,7 +909,7 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // M5 Pro, 25 Oct, full-table pack, chunk 2048 vs 4096 (#571): TATTN on +0.7% to +13.7%, TATTN off -1.2% to -7.9%, so
   // without TATTN (the default since #585) the pack keeps 2048. Wider chunks halve the expert reads but the per-chunk
   // compute grows faster. The hidden size is 640, so the extra buffers are small.
-  if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && Gpu::get().apple10() && Qwen4Exp::tattn(model_dir)) {
+  if (q20_wide && slots == 1 && Qwen4Exp::q20_pack(model_dir) && matrix_units() && Qwen4Exp::tattn(model_dir)) {
     const MemPlan wide = model_plan(model_dir, 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) +
             group_world_charge(wide, 1, context, budget) <= budget)

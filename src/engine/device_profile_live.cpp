@@ -19,14 +19,14 @@ DeviceFacts facts_from_gpu(long ram_bytes, bool ane) {
 
 bool matrix_units() { return Gpu::get().apple_family() >= 10; }
 
-bool apple10_gpu() { return Gpu::get().apple10(); }
+bool legacy_gpu() { return Gpu::get().apple_family() <= 7; }
 
 bool m1_max_32() { return Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32; }
 
-bool wide_cores() { return Gpu::get().apple10() && Gpu::get().core_count() >= 40; }
+bool wide_cores() { return matrix_units() && Gpu::get().core_count() >= 40; }
 
 bool named_m5_max() { return Gpu::get().name().find("M5 Max") != std::string::npos; }
 
-bool m4_ten_core() { return Gpu::get().m4_base(); }
+bool m4_ten_core() { return Gpu::get().name() == "Apple M4" && Gpu::get().core_count() <= 10; }
 
 }  // namespace ni

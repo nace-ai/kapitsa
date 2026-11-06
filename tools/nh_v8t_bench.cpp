@@ -6,6 +6,7 @@
 //   nh_v8t_bench [--reps n] [--small] [--same] [--gpr] [--ks n] [filter ...]   (--ks: only that many simdgroups)
 // (--small: tiny shapes, one weight copy, for runs with MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1; --same: one copy of
 // the weights, which then stay in the system cache: the compute side)
+#include "engine/device_profile.h"
 #include "metal/gpu.h"
 #include "util/log.h"
 
@@ -153,7 +154,7 @@ int main(int argc, char** argv) {
   }
   if (reps < 1 || ks < 0 || ks > 8) fatal("nh_v8t_bench: --reps takes a positive count, --ks 1-8");
   Gpu& g = Gpu::get();
-  if (!g.apple10()) fatal("nh_v8t_bench: needs the M5's matrix units (Apple10)");
+  if (!matrix_units()) fatal("nh_v8t_bench: needs the M5's matrix units (Apple10)");
   g.compile_extra("Nemotron-H", kNhKernelSource);
   g.compile_extra("tensor", kTensorKernelSource, true);
   // the LM head, the shared expert's up and down, the drafter's 6144-row matrices

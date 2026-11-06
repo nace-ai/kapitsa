@@ -84,7 +84,8 @@ int main() {
   const auto m1_24 = mac(7, 24, "Apple M1 Max", 64L << 30);
   const auto m4 = mac(9, 10, "Apple M4", 16L << 30);
   const auto m4pro = mac(9, 20, "Apple M4 Pro", g48);
-  CHECK(ni::matrix_units(m5pro_f) && ni::apple10_gpu(m5pro_f) && !ni::matrix_units(m4pro));
+  CHECK(ni::matrix_units(m5pro_f) && !ni::matrix_units(m4pro));
+  CHECK(ni::legacy_gpu(m1) && !ni::legacy_gpu(m4pro) && !ni::legacy_gpu(m5pro_f));
   CHECK(ni::m1_max_32(m1) && !ni::m1_max_32(m1_24) && !ni::m1_max_32(m5max_f));
   CHECK(ni::wide_cores(m5max_f) && !ni::wide_cores(m5pro_f) && !ni::wide_cores(unread));
   CHECK(ni::named_m5_max(m5max_f) && !ni::named_m5_max(m5pro_f) && !ni::named_m5_max(faked_f));

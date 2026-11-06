@@ -381,7 +381,7 @@ int run_doctor(int argc, char** argv) {
   J["recommended_working_set_bytes"] = rws;
   J["memory_budget_bytes"] = budget;
   J["max_threadgroup_memory"] = g.max_threadgroup_memory();
-  J["apple10"] = g.apple10();
+  J["apple10"] = matrix_units();
   J["neural_engine"] = ane_why.empty() ? "available" : ane_why;
   J["bandwidth_gbs"] = bw;
   const bool tty = !as_json && term::fancy();
@@ -393,7 +393,7 @@ int run_doctor(int argc, char** argv) {
     printf("  Memory:  Metal recommended working set %.1f GB; Kapitsa's budget %.1f GB%s\n", rws / 1e9, budget / 1e9,
            budget_gb > 0 ? " (--mem-budget)" : getenv("NI_MEM_BUDGET") ? " (NI_MEM_BUDGET)" : " (4% / 512 MB below it)");
     printf("  GPU:     threadgroup memory %zu B, Metal 4 neural accelerators (Apple10): %s%s\n", g.max_threadgroup_memory(),
-           yesno(g.apple10()), bw > 0 ? ("; memory bandwidth " + std::to_string(int(bw)) + " GB/s").c_str() : "");
+           yesno(matrix_units()), bw > 0 ? ("; memory bandwidth " + std::to_string(int(bw)) + " GB/s").c_str() : "");
     printf("  Neural Engine: %s\n", ane_why.empty() ? "available" : ("unavailable (" + ane_why + ")").c_str());
     printf("\nModels (--context %s, --slots %s%s):\n", term::context(ctx).c_str(),
            slots_opt > 0 ? std::to_string(slots_opt).c_str() : "as each model's memory allows",

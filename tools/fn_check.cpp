@@ -13,6 +13,7 @@
 //                                   this is the cheapest run that can catch a source fault. Device-touching: fn_check
 //                                   takes no lock itself, so run it under `lockf -k /tmp/kapitsa-gpu.lock` like any other
 //                                   GPU run, with MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1
+#include "engine/device_profile.h"
 #include "metal/gpu.h"
 #include "model/ngram.h"
 #include "util/bf16.h"
@@ -766,7 +767,7 @@ void test_qsa_all() {
 // Qwen35 picks it there)
 void test_qmvht() {
   struct Shape { uint32_t N, K; };
-  const bool a10 = Gpu::get().apple10();
+  const bool a10 = matrix_units();
   const char* kn = getenv("FN_QMVHT") ? getenv("FN_QMVHT") : a10 ? "qmvhts_t3_r4" : "qmvht_t3_r4";
   const uint32_t R = uint32_t(strstr(kn, "_t")[2] - '0');
   // qmvht itself returns NaN under fast math on Apple10 (unused there): printed, not failed. Its half products are

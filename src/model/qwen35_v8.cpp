@@ -196,7 +196,7 @@ V8Knobs& v8_knobs() {
     V8Knobs d;
     d.cm = env_int("NI_V8_CM", d.cm);
     d.pair = env_int("NI_V8_PAIR", d.pair);
-    d.kplan = env_int("NI_V8_KPLAN", Gpu::get().apple_family() <= 7 ? 3 : d.kplan);
+    d.kplan = env_int("NI_V8_KPLAN", legacy_gpu() ? 3 : d.kplan);
     d.gusplit = env_int("NI_V8_GUSPLIT", d.gusplit);
     // the 10-core M4: GDN step blocks of 128 threads (with the fused tree-zone tail below: verify -0.13 ms per cycle,
     // 6 of 6 interleaved runs of 800 tokens, ids bitwise); other Macs keep 256
@@ -1003,7 +1003,7 @@ static int moe_emu_mode() {
     return n == 0;
   }();
   // default on the M5 (Apple10); other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
-  static const int env = std::clamp(env_int("NI_V8_MOE_EMU", Gpu::get().apple10() ? 1 : 0), 0, 2);
+  static const int env = std::clamp(env_int("NI_V8_MOE_EMU", matrix_units() ? 1 : 0), 0, 2);
   const int m = v8_knobs().emu >= 0 ? std::min(v8_knobs().emu, 2) : env;
   return m && ok ? m : 0;
 }

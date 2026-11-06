@@ -6,6 +6,7 @@
 // the layout differs). With --stats and no names, every kernel in the library is listed. Spill > 0
 // in a GEMM or attention kernel usually means a register array indexed dynamically (a loop the
 // compiler left rolled): qmm_b4_m32_n64 spills its 8 accumulators (2304 B) and runs at 2-3 TFLOP/s.
+#include "engine/device_profile.h"
 #include "metal/gpu.h"
 
 #include <objc/runtime.h>
@@ -39,7 +40,7 @@ int main(int argc, char** argv) {
   g.compile();
   // The tensor_ops kernels (qmt_*, qattn_t_*: kernels/tensor/) are a Metal 4 library of their own, compiled where
   // the models use them (an Apple10 GPU on macOS 26); without it their pipelines fail to create.
-  if (g.apple10())
+  if (matrix_units())
     if (__builtin_available(macOS 26.0, *)) g.compile_extra("tensor", ni::kTensorKernelSource, true);
   bool stats = false, limits = false;
   std::vector<std::string> names;
@@ -54,7 +55,7 @@ int main(int argc, char** argv) {
     // threads per threadgroup is below 1024 (a dispatch above it fails; Encoder::dispatch checks)
     const size_t dev = g.max_threadgroup_memory();
     printf("%s: %d GPU cores (%s), max threadgroup memory %zu B, Apple10 %s\n", g.name().c_str(), g.core_count(),
-           g.core_count_measured() ? "IORegistry" : "not measured", dev, g.apple10() ? "yes" : "no");
+           g.core_count_measured() ? "IORegistry" : "not measured", dev, matrix_units() ? "yes" : "no");
     int over = 0;
     for (auto& n : names.empty() ? g.function_names() : names) {
       ni::Pipeline p = g.pipeline(n, false);

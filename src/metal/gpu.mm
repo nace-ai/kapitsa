@@ -3,6 +3,7 @@
 
 #include <sys/sysctl.h>
 #include <unistd.h>
+#include "engine/device_profile.h"
 #include "metal/gpu.h"
 #include <IOKit/IOKitLib.h>
 #include <mach/mach_time.h>
@@ -312,10 +313,6 @@ size_t Gpu::recommended_working_set() const { return dev(device_).recommendedMax
 size_t Gpu::allocated_bytes() const { return dev(device_).currentAllocatedSize; }
 size_t Gpu::max_threadgroup_memory() const { return dev(device_).maxThreadgroupMemoryLength; }
 size_t Gpu::max_buffer_length() const { return dev(device_).maxBufferLength; }
-bool Gpu::apple10() const {
-  // MTLGPUFamilyApple10 = 1010 (macOS 26 SDK); the raw value keeps older SDKs building
-  return [dev(device_) supportsFamily:(MTLGPUFamily)1010];
-}
 int Gpu::apple_family() const {
   static const int f = apple_family_probed([this](int n) {
     return [dev(device_) supportsFamily:(MTLGPUFamily)(1000 + n)];  // MTLGPUFamilyApple<n> = 1000 + n
@@ -365,7 +362,6 @@ static int cores_cached(bool* measured) {
   return n;
 }
 int Gpu::core_count() const { return cores_cached(nullptr); }
-bool Gpu::m4_base() const { return name() == "Apple M4" && core_count() <= 10; }
 bool Gpu::core_count_measured() const {
   bool m = false;
   cores_cached(&m);
@@ -471,7 +467,7 @@ bool Gpu::heat_on() {
     // NI_GPU_HEAT=0 turns it off, NI_GPU_HEAT=1 on, on any chip.
     const char* v = getenv("NI_GPU_HEAT");
     if (v && *v) return atoi(v) > 0;
-    return Gpu::get().apple10();
+    return matrix_units();
   }();
   return on;
 }

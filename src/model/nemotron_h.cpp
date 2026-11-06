@@ -516,7 +516,7 @@ void NemotronH::prewarm_pipelines() {
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
   // relu^2 decode, the short scans of several rows per simdgroup but the M5's nh_ssm1r4): not created for the MoE
   // models, whose prewarm stays as it was
-  const bool m5 = g.apple10();
+  const bool m5 = matrix_units();
   auto dense_only = [m5](const std::string& n) {
     return (n.size() > 2 && n.compare(n.size() - 2, 2, "_t") == 0) || n == "nh_ssm_h80" ||
            n == "nh_attn_pf2_q1_h5_k32" || n == "nh_x4_mv_relu2" ||
@@ -754,7 +754,7 @@ void NemotronH::load(int prefill_chunk) {
       return !v || atoi(v) != 0;
     };
     fp4_l2_ = dense_model(cfg_) && on("NI_NH_X4") && on("NI_NH_V8") && on("NI_NH_ROWS_GEMM") &&
-              (fv && *fv ? !strcmp(fv, "l2") : g.apple_family() <= 7);
+              (fv && *fv ? !strcmp(fv, "l2") : legacy_gpu());
     // NVFP4 routed experts without latent projections (Lightning): L2 on the M5, where a verify's expert products
     // (per pair, nh_x4_moe_up / _dn) were bound by L0's table decode, not by memory: up + down + sum 196.4 against
     // 223.0 us per layer (548 / 483 GB/s of distinct experts, tools/nh_moe_bench; a read-only pass of the same
@@ -762,7 +762,7 @@ void NemotronH::load(int prefill_chunk) {
     // L2 twins with the same outputs to the bit; the latent models' (nh_x4_moe_dn_sum) do not, nor the IQ2 ones
     const char* ev = getenv("NI_NH_FP4_EXPERTS");
     if (ev && *ev && strcmp(ev, "l0") && strcmp(ev, "l2")) fatal("NI_NH_FP4_EXPERTS=%s: expected l0 or l2", ev);
-    experts_l2_ = ev && *ev ? !strcmp(ev, "l2") : g.apple10();
+    experts_l2_ = ev && *ev ? !strcmp(ev, "l2") : matrix_units();
   }
   // 1. what goes where: every tensor's converted size, placed in 1 GB weight buffers (bigger tensors get their own)
   struct Want {
@@ -1154,7 +1154,7 @@ void NemotronH::alloc_buffers() {
   if (const char* v = getenv("NI_NH_V8")) v8_ = atoi(v) != 0;
   // attention's keys per chunk (threadgroup) before the 64-chunk cap doubles it: on the M5 64 (Lightning's verify at
   // ~600 positions: partial + reduce 27.0 against 36.8 us per layer with 256, NI_PROFILE; 32: 26.9)
-  attn_chunk_ = Gpu::get().apple10() ? 64 : 256;
+  attn_chunk_ = matrix_units() ? 64 : 256;
   if (const char* v = getenv("NI_NH_ATTN_CHUNK")) attn_chunk_ = std::max(32, atoi(v));
   if (const char* v = getenv("NI_NH_ATTN_TV")) attn_tv_ = atoi(v) != 0;
   if (const char* v = getenv("NI_NH_ATTN_TS")) attn_ts_ = atoi(v) != 0;
@@ -1173,11 +1173,11 @@ void NemotronH::alloc_buffers() {
   // a verify's IQ2 routed experts' down projection: 4 simdgroups per threadgroup on the M5 (16 rows of a tile; tools/
   // nh_x2moe_bench, a 5-row harness verify's 29 experts: 52.0 against 59.1 us with 1, 52.8 with 2, 52.0 with 8; the
   // up projection 46.4-46.6 with 1-4: left at 1), the same outputs to the bit. NI_NH_X2_SGD (1-8) overrides.
-  x2_sgd_ = g.apple10() ? 4u : 1u;
+  x2_sgd_ = matrix_units() ? 4u : 1u;
   if (const char* v = getenv("NI_NH_X2_SGD")) x2_sgd_ = uint32_t(std::clamp(atoi(v), 1, 8));
   // a verify's NVFP4 routed experts without latent projections (Lightning): 4 simdgroups per threadgroup on the M5
   // (tools/nh_moe_bench: up + down + sum 223 against 230 us per layer with 8; the same outputs to the bit)
-  moe_thr_ = g.apple10() ? 128u : 256u;
+  moe_thr_ = matrix_units() ? 128u : 256u;
   if (const char* v = getenv("NI_NH_MOE_THR")) moe_thr_ = std::clamp(uint32_t(atoi(v)) / 32u * 32u, 32u, 1024u);
   if (const char* v = getenv("NI_NH_GROUP")) group_ = atoi(v) != 0;
   // the M5's verify (Lightning): router and routing beside the shared expert (enc_moe)
@@ -1187,7 +1187,7 @@ void NemotronH::alloc_buffers() {
   // M5
   moe_args_ = g.alloc(32, "nh_moe_pair_args");
   memset(moe_args_.ptr(), 0, 32);
-  pair_ind_ = g.apple10();
+  pair_ind_ = matrix_units();
   if (const char* v = getenv("NI_NH_PAIR_IND")) pair_ind_ = atoi(v) != 0;
   moe_lightning_ = true;
   for (const NhLayer& L : layers_) {
@@ -1199,12 +1199,12 @@ void NemotronH::alloc_buffers() {
     moe_k_ = uint32_t(L.k_used);
   }
   if (!moe_I_) moe_lightning_ = false;
-  sample_sg_ = g.apple10();
+  sample_sg_ = matrix_units();
   if (const char* v = getenv("NI_NH_SAMPLE_SG")) sample_sg_ = atoi(v) != 0;
   sdv_ = g.alloc(size_t(kMaxRows) * cfg_.hidden * 4, "nh_shared_down_rows");
   // the M5: a verify's 8-row FP8 / BF16 products and the drafter's Q8 at 8 weight rows per threadgroup (nh_*_v8_n1),
   // twice the threadgroups of 16 (each row's sums as before)
-  v8_n1_ = g.apple10();
+  v8_n1_ = matrix_units();
   if (const char* v = getenv("NI_NH_V8_N1")) v8_n1_ = atoi(v) != 0;
   live_ = g.alloc(16, "nh_live_rows");
   live_all_ = g.alloc(16, "nh_live_all");
@@ -1591,7 +1591,7 @@ void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer
                                           : "f32";
   // BF16 for 2-8 rows on the M5 (the router in verify): nh_mv_bf16_rt, the same outputs to the bit, 2 weight rows x 2
   // activation rows per simdgroup (Bolt's router 12.2 against 46 us per layer)
-  if (W.fmt == NhFmt::BF16 && R >= 2 && epi == 0 && W.K % 256 == 0 && Gpu::get().apple10()) {
+  if (W.fmt == NhFmt::BF16 && R >= 2 && epi == 0 && W.K % 256 == 0 && matrix_units()) {
     const MvP p{W.N, W.K, xs ? xs : W.K, ys ? ys : W.N, W.gs, uint32_t(R)};
     e.use(pipe("nh_mv_bf16_rt"));
     e.buf(0, W.q);
@@ -1705,7 +1705,7 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   // threadgroup): Lightning's 8-row verify 22.7 against 35.3 us per layer (NI_PROFILE; 2 rows 27.8, 8 rows 24.8).
   // NI_NH_SSM1R=0 / 2 / 4 / 5 / 8 / 10 picks nh_ssm1 / nh_ssm1r<n>.
   static const int rps_env = getenv("NI_NH_SSM1R") ? atoi(getenv("NI_NH_SSM1R")) : -1;
-  const int rps_want = rps_env >= 0 ? rps_env : dense_ ? 5 : Gpu::get().apple10() ? 4 : 0;
+  const int rps_want = rps_env >= 0 ? rps_env : dense_ ? 5 : matrix_units() ? 4 : 0;
   const int rps = short_pass && !tree && (rps_want == 2 || rps_want == 4 || rps_want == 5 || rps_want == 8 || rps_want == 10) &&
                           cfg_.head_dim % (8 * rps_want) == 0
                       ? rps_want
@@ -2146,7 +2146,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     uint32_t P, E, BM, k, up_x, dn_x;
   } bp{uint32_t(R) * k, uint32_t(L.E), 2, k, (uint32_t(L.I) + (up8 ? 7 : 3)) / (up8 ? 8 : 4),
        (uint32_t(cfg_.latent) + 4 * x2_sgd_ - 1) / (4 * x2_sgd_)};
-  const bool fused_bucket = x2e && R >= 2 && route1 && Gpu::get().apple10() && route_bucket_;
+  const bool fused_bucket = x2e && R >= 2 && route1 && matrix_units() && route_bucket_;
   if (fused_bucket) {
     e.use(pipe("nh_x2_route_bucket"));
     e.buf(0, rl_);

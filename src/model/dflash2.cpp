@@ -655,7 +655,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   // Rule 0 is the default on the M5 (Apple10); other Macs keep rule 2, which they were tuned
   // with.
   dyn_tau_t_ = dyn_tau_ > 0 ? 0.3f : 0.0f;
-  dyn_rule_ = Gpu::get().apple10() ? 0u : 2u;
+  dyn_rule_ = matrix_units() ? 0u : 2u;
   if (const char* v = kenv("DYN_RULE")) {  // rule 1 is biased at T > 0 (dflash_accept_test only)
     const int r = atoi(v);
     if (r != 0 && r != 2) fatal("NI_KFLASH_DYN_RULE=%s: 0 or 2 (rule 1 is biased at T > 0, for tests only)", v);
@@ -1371,7 +1371,7 @@ void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t
 // keep the earlier core today; NI_KFLASH_CORE4=1 / 0 forces the new / earlier one.
 static bool dfl_old4() {
   static const bool old = kenv("CORE4") ? atoi(kenv("CORE4")) == 0
-      : !(apple10_gpu() || m1_max_32());
+      : !(matrix_units() || m1_max_32());
   return old;
 }
 
