@@ -241,6 +241,8 @@ struct Bucket2Params {
   uint E;
   uint BM;
   uint S;   // shared-expert rows (0: none)
+  uint gx_gu;
+  uint gx_dn;
 };
 
 [[kernel]] void moe_bucket2(const device uint* idx [[buffer(0)]], device uint* yrows [[buffer(1)]],
@@ -273,6 +275,16 @@ struct Bucket2Params {
       ++nt;
     }
     ntiles[0] = nt;
+    if (p.gx_gu > 0) {
+      ntiles[4] = p.gx_gu;
+      ntiles[5] = nt;
+      ntiles[6] = 1;
+      ntiles[7] = 0;
+      ntiles[8] = p.gx_dn;
+      ntiles[9] = nt;
+      ntiles[10] = 1;
+      ntiles[11] = 0;
+    }
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   for (uint e = tid; e < p.E; e += ntg) atomic_store_explicit(&cnt[e], 0u, memory_order_relaxed);
@@ -342,7 +354,20 @@ struct Bucket2Params {
     tiles[(nt_routed + r) * 3 + 1] = p.P + r * p.BM;
     tiles[(nt_routed + r) * 3 + 2] = p.P + min((r + 1) * p.BM, p.S);
   }
-  if (tid == 0) ntiles[0] = nt_routed + nt_shared;
+  if (tid == 0) {
+    const uint nt = nt_routed + nt_shared;
+    ntiles[0] = nt;
+    if (p.gx_gu > 0) {
+      ntiles[4] = p.gx_gu;
+      ntiles[5] = nt;
+      ntiles[6] = 1;
+      ntiles[7] = 0;
+      ntiles[8] = p.gx_dn;
+      ntiles[9] = nt;
+      ntiles[10] = 1;
+      ntiles[11] = 0;
+    }
+  }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   for (uint e = tid; e < p.E; e += ntg) atomic_store_explicit(&cnt[e], 0u, memory_order_relaxed);
   threadgroup_barrier(mem_flags::mem_threadgroup);
