@@ -282,10 +282,26 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
       const uint16_t* src = rowp[n];
       for (uint32_t gi = 0; gi < gpr; ++gi) {
         float lo = 3.38953139e38f, hi = 0.0f;  // MLX starts from (Limits<bf16>::max, 0)
-        for (int k = 0; k < 64; ++k) {
-          v[k] = bf16_to_f32(src[gi * 64 + k]);
-          lo = std::min(lo, v[k]);
-          hi = std::max(hi, v[k]);
+        float32x4_t low = vdupq_n_f32(lo), high = vdupq_n_f32(hi);
+        uint16x4_t max_bits = vdup_n_u16(0);
+        for (int k = 0; k < 64; k += 4) {
+          const uint16x4_t bits = vld1_u16(src + gi * 64 + k);
+          const float32x4_t x = vreinterpretq_f32_u32(vshll_n_u16(bits, 16));
+          vst1q_f32(v + k, x);
+          low = vminq_f32(low, x);
+          high = vmaxq_f32(high, x);
+          max_bits = vmax_u16(max_bits, vand_u16(bits, vdup_n_u16(0x7fff)));
+        }
+        lo = vminvq_f32(low);
+        hi = vmaxvq_f32(high);
+        // Preserve the scalar scan's NaN handling and first-zero sign on exceptional groups.
+        if (vmaxv_u16(max_bits) >= 0x7f80 || lo == 0.0f || hi == 0.0f) {
+          lo = 3.38953139e38f;
+          hi = 0.0f;
+          for (int k = 0; k < 64; ++k) {
+            lo = std::min(lo, v[k]);
+            hi = std::max(hi, v[k]);
+          }
         }
         float scale = std::max((hi - lo) / n_bins, 1e-7f);
         const bool side = std::fabs(lo) > std::fabs(hi);
