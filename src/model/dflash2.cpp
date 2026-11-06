@@ -48,8 +48,11 @@ static int lowrank_request() {
 }
 
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
-  static const bool m1_max32 = Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32;
-  return hidden >= 2560 || (m1_max32 && hidden == 2048 && moe && head_q4);
+  const std::string& name = Gpu::get().name();
+  const bool wide_chip = (name == "Apple M1 Max" && Gpu::get().core_count() == 32) ||
+                         name == "Apple M1 Ultra" || name == "Apple M2 Ultra" ||
+                         Gpu::get().core_count() >= 60;
+  return hidden >= 2560 || (wide_chip && hidden == 2048 && moe && head_q4);
 }
 
 // process physical footprint (what Activity Monitor / bench.py report), bytes
