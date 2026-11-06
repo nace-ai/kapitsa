@@ -29,7 +29,7 @@ enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, 
 // has to cite a win of at least 10% that the wider class does not get.
 // kGuard is not that. It documents a predicate the call site still reads: a shape, a RAM size, or a
 // correctness miss on the wider chip. It is not a class, and it does not claim a 10% win.
-enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kName, kGuard };
+enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kAne, kName, kGuard };
 
 struct DeviceFacts {
   int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.

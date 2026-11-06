@@ -33,6 +33,11 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
 namespace {
 
 const DefaultRow kDefaults[] = {
+    // PR #775 proposes fast membership for dense Qwen 2048-channel inputs through hidden 8192.
+    // Usable ANE class; init_ane retains availability/calibration, weight and memory checks.
+    // Historical M4 Pro/M3 Ultra latency wins: numerical qualification against another engine is pending.
+    {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAne, nullptr, "fast profile", 24, 63, false,
+     "M4 Pro; M3 Ultra with calibrated share; #775 evidence", false},
     // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
     // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site.
     {"pf_wave", Knob::kPfWave, ModelClass::kQwen35Shape, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max",
@@ -167,6 +172,7 @@ const DefaultRow& default_at(int i) { return kDefaults[i]; }
 
 bool default_matches(const DefaultRow& row, const DeviceProfile& dev) {
   switch (row.scope) {
+    case DefaultScope::kAne: return dev.ane;
     case DefaultScope::kLegacy: return dev.chip == ChipClass::kLegacy;
     case DefaultScope::kSimd: return dev.chip == ChipClass::kSimd;
     case DefaultScope::kMatrix: return dev.chip == ChipClass::kMatrix || dev.chip == ChipClass::kWide;
@@ -182,6 +188,7 @@ namespace {
 const char* scope_name(const DefaultRow& row) {
   if (row.scope == DefaultScope::kName) return row.chip_name ? row.chip_name : "name";
   switch (row.scope) {
+    case DefaultScope::kAne: return "ane";
     case DefaultScope::kLegacy: return "legacy";
     case DefaultScope::kSimd: return "simd";
     case DefaultScope::kMatrix: return "matrix";

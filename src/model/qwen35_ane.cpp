@@ -1,7 +1,7 @@
 // GPU + Neural Engine split of the dense prefill FFN (NI_ANE). See src/ane/ffn_split.h.
 //
 //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
-//   Dense hidden sizes divisible by 2048 up to 8192 are eligible by default; NI_ANE=0 keeps the GPU-only path.
+//   New 2048-channel inputs run under the fast profile; NI_ANE=1/0 overrides. Existing 2560 inputs stay on.
 //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
 //   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
 //   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
@@ -10,6 +10,7 @@
 //   NI_ANE_WAVE=0       the plain split (default: the two-half wavefront, for chunks >= 2 x the
 //                       smallest function; smaller chunks always run the plain split)
 #include "ane/ffn_split.h"
+#include "ane/input_profile.h"
 #include "ane/slabs.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
@@ -190,6 +191,8 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
   if (!m.ffn_ane) return a.source = "FFN weight format not staged by the split; GPU", a;
   if (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")) return a.source = "NI_ANE=0", a;
   if (!ane::FfnSplit::rotate_simdgroups(uint32_t(m.hidden))) return a.source = "hidden size not supported", a;
+  if (!ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(m.hidden))))
+    return a.source = "precise profile: GPU", a;
   if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
   const std::string chip = Gpu::get().name();
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");

@@ -83,7 +83,14 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 18);
+  CHECK(ni::default_count() == 19);
+  const auto* segmented = row("ane_segmented_fast");
+  CHECK(segmented && segmented->scope == ni::DefaultScope::kAne && !segmented->exclusive);
+  auto with_ane = m5pro;
+  with_ane.ane = true;
+  CHECK(ni::default_matches(*segmented, with_ane));
+  with_ane.ane = false;
+  CHECK(!ni::default_matches(*segmented, with_ane));
   // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
   const ni::DefaultRow* tattn = row("tattn_fast");
   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);

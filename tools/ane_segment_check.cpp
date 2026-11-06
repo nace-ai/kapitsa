@@ -5,8 +5,10 @@
 // The GPU mode takes BENCH_GPU_LOCK (default /tmp/kapitsa-gpu.lock), unless the caller holds it.
 // Run with MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1; these kernels fit the layer's doubled cap.
 #include "ane/ffn_split.h"
+#include "ane/input_profile.h"
 #include "bench/bench.h"
 #include "metal/gpu.h"
+#include "model/qwen35.h"
 #include "util/bf16.h"
 #include "util/log.h"
 
@@ -217,8 +219,23 @@ void check_weights(uint32_t K, uint32_t N, uint32_t row0) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (argc == 2 && !strcmp(argv[1], "--profile")) {
+    for (uint32_t h : {0u, 2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u}) {
+      const bool on = ane::input_profile_enabled(ane::FfnSplit::input_segment(h));
+      printf("%u %d\n", h, int(on));
+      if (!on) {
+        Qwen35::MemPlan m;
+        m.dense = m.ffn_ane = true;
+        m.hidden = int(h);
+        m.ffn = 12288;
+        const auto plan = Qwen35::ane_plan("", m);
+        if (plan.units || plan.bytes) return 1;  // disabled paths must not probe hardware or reserve ANE memory
+      }
+    }
+    return 0;
+  }
   if (argc > 2 || (argc == 2 && strcmp(argv[1], "--gpu"))) {
-    fprintf(stderr, "usage: ane_segment_check [--gpu]\n");
+    fprintf(stderr, "usage: ane_segment_check [--gpu|--profile]\n");
     return 2;
   }
   auto expect = [](bool ok, const char* what) {
@@ -231,7 +248,7 @@ int main(int argc, char** argv) {
   for (uint32_t n = 1; n <= 4; ++n) {
     const uint32_t h = n * 2048, segment = ane::FfnSplit::input_segment(h);
     expect(segment == 2048 && ane::FfnSplit::rotate_simdgroups(h) == 8,
-           "multiples of 2048 through 8192 are eligible without an opt-in");
+           "multiples of 2048 through 8192 have supported input geometry");
     expect(ane::split_bytes(h, 12288, 24, 32, 2) > 0, "eligible input has a split budget");
   }
   for (uint32_t h : {8193u, 10240u, 12288u, 16384u, 18432u, 20480u, 131072u, UINT32_MAX}) {

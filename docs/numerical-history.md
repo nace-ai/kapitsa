@@ -134,8 +134,9 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this 
 
 ## ANE prefill for hidden sizes divisible by 2048
 
-Hidden sizes divisible by 2048 up to 8192 are eligible for the existing W8A8 split by default;
-`NI_ANE=0` disables it. Larger widths remain on the GPU.
+Hidden sizes divisible by 2048 up to 8192 are proposed for the fast profile (`KAPITSA_PROFILE=fast`);
+precise keeps these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
+disables it in either profile. Larger widths remain on the GPU. The existing 4B/27B defaults remain.
 The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
 and rotation stay unchanged. All supported inputs use the existing rotation kernel and its token-wide scale.
 
@@ -155,9 +156,14 @@ top-1 flips; the prefill had 0/8 flips. These decode paths score the same token 
 samples. [Integration evidence at those commits and limits](../bench/results/2026-10-29-m4-9b-ane-review/README.md).
 
 These historical opt-in comparisons deliberately changed outputs; no 9B noise-floor pass or `--reorder`
-exception is claimed. No floor is changed. The new default extends ANE eligibility, not numerical
+exception is claimed. No floor is changed. The proposed fast default extends ANE eligibility, not numerical
 equivalence: the 9B/4B primary mean-KL ratio was 0.456 (document-bootstrap 95% [0.242, 1.021]), and
 9B/27B was 2.176 [1.685, 2.820]. At 4K/16K the latter ratios were 2.904/2.039. This code-only sample
 shows comparable orders of drift, not a bound on other models or tasks. The new widths beyond 9B
 require their own model-level numerical and performance measurements; shape support alone does not
 establish their quality or speed.
+
+The M3 Ultra follow-up records a speed win, nonzero drift and a regression on the sole ANE-exposed
+Math500 prompt; [all results and limits](../bench/results/2026-11-06-m3ultra-9b-ane/README.md).
+Fast-profile integration does not establish admission: the same-machine 9B fastest-other-engine bar
+in [profiles](profiles.md#the-bar) remains unmeasured. No historical result is relabeled as that check.
