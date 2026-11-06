@@ -1,6 +1,7 @@
 #include "util/load_threads.h"
 #include "model/qwen35.h"
 #include "model/affine_pack.h"
+#include "model/gemm_slices.h"
 #include "ane/ffn_split.h"
 #include "ane/slabs.h"
 #include "gguf/gguf.h"
@@ -2596,6 +2597,17 @@ bool qmt128_for(int M) {
 
 static bool qmt_i8_on();
 
+// NI_GEMM_SLICES (read once): Drex Max v1's dense qmt / qmtg prefill GEMMs of more than 2048 rows run as 2048-row
+// dispatches (src/model/gemm_slices.h); bitwise the same outputs. Default on the M5 Pro only, where it was measured;
+// 1 = on any Mac on the dense QMT path (the other M5s, not measured), 0 = off.
+static bool gemm_slices_on() {
+  static const bool on = [] {
+    const int v = env_int("NI_GEMM_SLICES", -1);
+    return v < 0 ? Gpu::get().name() == "Apple M5 Pro" : v > 0;
+  }();
+  return on;
+}
+
 // NI_PF_GROUPED (read once): a prefill pass on a grouped encoder, its independent dispatches side by side - enc_proj's
 // projections (DeltaNet's four, attention's q / k / v, the router and the shared-expert gate) and the routed and shared
 // experts' GEMMs - while the rest keep a barrier between them. The same kernels on the same data: bitwise the same
@@ -2758,12 +2770,23 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     return;
   }
   if (q.on && qmt_on() && M >= qmt_min_rows() && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
-    const uint32_t bm = qmt128_for(M) ? 128 : 64;
-    e.use(pipe(bm == 128 ? "qmt_m128_n64" : "qmt_m64_n64"));
-    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
-    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
-    e.val(5, p);
-    e.dispatch((L.N + 63) / 64, (uint32_t(M) + bm - 1) / bm, 1, 128);
+    auto run = [&](const Buffer& x, const Buffer& out, int rows) {
+      const uint32_t bm = qmt128_for(rows) ? 128 : 64;
+      e.use(pipe(bm == 128 ? "qmt_m128_n64" : "qmt_m64_n64"));
+      kp::Qmm p{uint32_t(rows), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+      e.buf(0, x); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, out);
+      e.val(5, p);
+      e.dispatch((L.N + 63) / 64, (uint32_t(rows) + bm - 1) / bm, 1, 128);
+    };
+    if (gemm_slices::eligible(gemm_slices_on(), cfg_.causal, cfg_.moe, cfg_.layers, cfg_.hidden, cfg_.dense_I, M)) {
+      const gemm_slices::Plan plan(size_t(M), L.K, L.N, xh, y, sizeof(float));
+      for (size_t i = 0; i < plan.count(); ++i) {
+        const auto sl = plan.slice(i);
+        run(sl.input, sl.output, int(sl.rows));
+      }
+    } else {
+      run(xh, y, M);
+    }
     return;
   }
   if (q.on && qmt6_on() && M >= 64 && L.bits == 6 && L.gs == 64 && L.K % 64 == 0) {
@@ -3151,13 +3174,24 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
   if (!b8 && qmt_on() && M >= qmt_min_rows()) {
-    const uint32_t bm = qmt128_for(M) ? 128 : 64;
-    e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
-    kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
-    e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
-    e.val(5, p);
-    e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
-    e.dispatch((G.N + 31) / 32, (uint32_t(M) + bm - 1) / bm, 1, 128);
+    auto run = [&](const Buffer& x, const Buffer& out, int rows) {
+      const uint32_t bm = qmt128_for(rows) ? 128 : 64;
+      e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
+      kp::Qmm p{uint32_t(rows), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+      e.buf(0, x); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, out);
+      e.val(5, p);
+      e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+      e.dispatch((G.N + 31) / 32, (uint32_t(rows) + bm - 1) / bm, 1, 128);
+    };
+    if (gemm_slices::eligible(gemm_slices_on(), cfg_.causal, cfg_.moe, cfg_.layers, cfg_.hidden, cfg_.dense_I, M)) {
+      const gemm_slices::Plan plan(size_t(M), G.K, G.N, xh, h, sizeof(uint16_t));
+      for (size_t i = 0; i < plan.count(); ++i) {
+        const auto sl = plan.slice(i);
+        run(sl.input, sl.output, int(sl.rows));
+      }
+    } else {
+      run(xh, h, M);
+    }
     return true;
   }
   const char* n = gu;
