@@ -10,7 +10,8 @@
 // 17408-FFN shape: a GEMM of more than `cap` rows runs as dispatches of at most `cap` rows over views of the same
 // input and output buffers. Each row's products and K order are unchanged, so the outputs are bitwise the same; what
 // changes is how many rows' tiles one dispatch puts in flight against the same weights. Measured on the M5 Pro
-// (#308): a Drex Max request about 12% faster at 4K and 16K, logits bitwise identical. NI_GEMM_SLICES=0 turns it off.
+// (macOS 26.5.2, three interleaved rounds): a Drex Max request 9.6% faster at 16K and 5.0% at 4K, readouts bitwise
+// identical on 8 frozen inputs. NI_GEMM_SLICES=0 turns it off.
 namespace ni::gemm_slices {
 
 inline constexpr size_t cap = 2048;
