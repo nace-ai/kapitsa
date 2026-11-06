@@ -816,3 +816,7 @@ After rebasing onto `3f3b3cef`, `50fadecc` on the M4 Pro repeated the HTTP ABAB 
 contention flags were empty. This does not relabel the native-engine measurements or M3 timing above.
 [Rebase evidence](../bench/results/2026-11-07-pr775-rebase-3f3b/README.md) retains the earlier attempt with
 concurrent evidence I/O and the complete isolated repeat, as well as the unchanged M3 prefill exceedance.
+
+The final #775 default excludes calibration-only chips following the M3 prefill bar failure. The M3
+timings above describe the earlier calibrated path; reproducing it now requires explicit `NI_ANE=1` and
+a share such as the measured `NI_ANE_UNITS=16`. Calibration alone does not enable the new fast default.

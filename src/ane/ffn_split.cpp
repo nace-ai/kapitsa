@@ -1,5 +1,6 @@
 // GPU + Neural Engine FFN split (see ffn_split.h).
 #include "ane/ffn_split.h"
+#include "engine/device_profile.h"
 #include "util/log.h"
 
 #include <algorithm>
@@ -793,7 +794,7 @@ uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool 
   // larger ANE share also keeps a fanless Air cooler: the ANE draws a fraction of the GPU's power for the
   // same work. M4 and M5 family only (the W8A8 program was verified on the M4's ANE; older ANEs are left to
   // a calibration: ane_calib --wave --write).
-  if (!total || (chip.find("M4") == std::string::npos && chip.find("M5") == std::string::npos)) return 0;
+  if (!total || !ane_builtin_share(chip)) return 0;
   const double c = std::max(1, cores), k = 20.0 / c;
   if (gpu_mma) {
     // gpu_mma: the GPU's share runs on the M5's matrix units (Qwen35's NI_QMT, 4-bit group 64), ~3.5x cheaper per

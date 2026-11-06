@@ -26,6 +26,8 @@ const DeviceProfile& current_device() {
 
 bool default_on(Knob k, const ModelFacts& m) { return default_on(k, current_device(), m); }
 
+bool ane_segmented_default() { return ane_segmented_default(facts_from_gpu(0, false)); }
+
 bool matrix_units() { return Gpu::get().apple_family() >= 10; }
 
 bool legacy_gpu() { return Gpu::get().apple_family() <= 7; }

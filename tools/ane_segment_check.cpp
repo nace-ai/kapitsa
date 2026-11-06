@@ -221,10 +221,21 @@ void check_weights(uint32_t K, uint32_t N, uint32_t row0) {
 int main(int argc, char** argv) {
   if ((argc == 2 || argc == 3) && !strcmp(argv[1], "--profile")) {
     const bool injected = argc == 3;
-    if (injected && strcmp(argv[2], "simd") && strcmp(argv[2], "matrix")) return 2;
+    DeviceFacts facts;
+    if (injected) {
+      const std::string device = argv[2];
+      if (device == "m1") { facts.name = "Apple M1"; facts.apple_family = 7; }
+      else if (device == "m2") { facts.name = "Apple M2"; facts.apple_family = 8; }
+      else if (device == "m3") { facts.name = "Apple M3 Ultra"; facts.apple_family = 9; }
+      else if (device == "m4") { facts.name = "Apple M4 Pro"; facts.apple_family = 9; }
+      else if (device == "m4-max") { facts.name = "Apple M4 Max"; facts.apple_family = 9; }
+      else if (device == "m5") { facts.name = "Apple M5 Pro"; facts.apple_family = 10; }
+      else if (device == "m5-max") { facts.name = "Apple M5 Max"; facts.apple_family = 10; }
+      else return 2;
+    }
     for (uint32_t h : {0u, 2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u}) {
       const auto segment = ane::FfnSplit::input_segment(h);
-      const bool on = injected ? ane::input_profile_enabled(segment, !strcmp(argv[2], "matrix"))
+      const bool on = injected ? ane::input_profile_enabled(segment, ane_segmented_default(facts))
                                : ane::input_profile_enabled(segment);
       printf("%u %d\n", h, int(on));
       if (!on && (!injected || !segment || profile() != Profile::kFast ||
@@ -240,7 +251,7 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (argc > 2 || (argc == 2 && strcmp(argv[1], "--gpu"))) {
-    fprintf(stderr, "usage: ane_segment_check [--gpu|--profile [simd|matrix]]\n");
+    fprintf(stderr, "usage: ane_segment_check [--gpu|--profile [m1|m2|m3|m4|m4-max|m5|m5-max]]\n");
     return 2;
   }
   auto expect = [](bool ok, const char* what) {

@@ -10,14 +10,14 @@
 
 namespace ni::ane {
 
-inline bool input_profile_enabled(uint32_t segment, bool matrix) {
+inline bool input_profile_enabled(uint32_t segment, bool fast_default) {
   if (segment == 2560) {
     const char* v = std::getenv("NI_ANE");
     return !v || std::strcmp(v, "0") != 0;  // preserve the existing 4B/27B defaults
   }
   if (segment != 2048) return false;
-  // Matrix-unit Macs keep the GPU default; an explicit NI_ANE override still wins.
-  return profile_switch("NI_ANE", !matrix, "dense ANE FFN with 2048-channel inputs");
+  // Only non-matrix Macs with a built-in share earn this default; NI_ANE still overrides it.
+  return profile_switch("NI_ANE", fast_default, "dense ANE FFN with 2048-channel inputs");
 }
 
 inline bool input_profile_enabled(uint32_t segment) {
@@ -26,7 +26,7 @@ inline bool input_profile_enabled(uint32_t segment) {
     const char* v = std::getenv("NI_ANE");
     // Explicit overrides and precise need no device read (including CPU planning checks).
     const bool automatic = (!v || !*v) && profile() == Profile::kFast;
-    return input_profile_enabled(2048, automatic && matrix_units());
+    return input_profile_enabled(2048, automatic && ane_segmented_default());
   }();
   return on;
 }

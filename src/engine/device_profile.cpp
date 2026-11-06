@@ -21,6 +21,14 @@ bool qwen35_a3b(const ModelFacts& m) {
 
 }  // namespace
 
+bool ane_builtin_share(const std::string& chip) {
+  return chip.find("M4") != std::string::npos || chip.find("M5") != std::string::npos;
+}
+
+bool ane_segmented_default(const DeviceFacts& facts) {
+  return ane_builtin_share(facts.name) && !matrix_units(facts);
+}
+
 bool model_class_matches(ModelClass c, const ModelFacts& m) {
   switch (c) {
     case ModelClass::kOther: return true;
@@ -33,13 +41,12 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
 namespace {
 
 const DefaultRow kDefaults[] = {
-    // PR #775 proposes fast membership for dense Qwen 2048-channel inputs through hidden 8192.
-    // Non-matrix ANE class; init_ane retains availability/calibration, weight and memory checks.
-    // M4 Pro at 50fadecc: -61.94% TTFT (bench/results/2026-11-07-pr775-rebase-3f3b); calibrated M3 at 9cca6b0d: -23.63%
-    // (bench/results/2026-11-07-pr775-m3-current). Both pass the 576-row bar; extra M3 prefill exceeds MLX.
-    // This remains a proposed member with that caveat, not an unconditional all-path admission claim.
-    {"ane_segmented_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 23, 62, false,
-     "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+    // Dense Qwen 2048-channel inputs through hidden 8192: built-in ANE share, non-matrix GPUs (M4 today).
+    // M4 Pro -61.94% loaded TTFT and all-path bar pass: bench/results/2026-11-07-pr775-rebase-3f3b.
+    // Calibrated M3 prefill exceeds MLX (mean KL 1.846e-4 vs 1.472e-4); calibration-only chips stay off.
+    // Matrix GPUs stay off per #775 review 6690600497; built-in-share restriction: review 6698446394.
+    {"ane_segmented_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kAneBuiltinNonMatrix, nullptr, "fast profile", 61, 0, false,
+     "M4 built-in share; M3 prefill bar failure excludes calibration-only chips; matrix GPUs excluded", false},
     // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
     // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site.
     {"pf_wave", Knob::kPfWave, ModelClass::kQwen35Shape, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max",
@@ -174,8 +181,8 @@ const DefaultRow& default_at(int i) { return kDefaults[i]; }
 
 bool default_matches(const DefaultRow& row, const DeviceProfile& dev) {
   switch (row.scope) {
-    case DefaultScope::kAneNonMatrix:
-      return dev.ane && dev.chip != ChipClass::kMatrix && dev.chip != ChipClass::kWide;
+    case DefaultScope::kAneBuiltinNonMatrix:
+      return dev.ane && ane_builtin_share(dev.name) && dev.chip != ChipClass::kMatrix && dev.chip != ChipClass::kWide;
     case DefaultScope::kLegacy: return dev.chip == ChipClass::kLegacy;
     case DefaultScope::kSimd: return dev.chip == ChipClass::kSimd;
     case DefaultScope::kMatrix: return dev.chip == ChipClass::kMatrix || dev.chip == ChipClass::kWide;
@@ -191,7 +198,7 @@ namespace {
 const char* scope_name(const DefaultRow& row) {
   if (row.scope == DefaultScope::kName) return row.chip_name ? row.chip_name : "name";
   switch (row.scope) {
-    case DefaultScope::kAneNonMatrix: return "ane-nonmatrix";
+    case DefaultScope::kAneBuiltinNonMatrix: return "ane-builtin-nonmatrix";
     case DefaultScope::kLegacy: return "legacy";
     case DefaultScope::kSimd: return "simd";
     case DefaultScope::kMatrix: return "matrix";

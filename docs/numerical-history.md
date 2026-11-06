@@ -134,9 +134,9 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this 
 
 ## ANE prefill for hidden sizes divisible by 2048
 
-Hidden sizes divisible by 2048 up to 8192 are proposed for the fast profile (`KAPITSA_PROFILE=fast`);
-the proposed default covers non-matrix Macs with a usable built-in or calibrated ANE share. M5/matrix-unit
-Macs and precise keep these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
+Hidden sizes divisible by 2048 up to 8192 are enabled by the fast profile (`KAPITSA_PROFILE=fast`);
+the final default covers non-matrix Macs with a built-in ANE share (M4 today). Calibration-only chips are excluded
+after the M3 prefill bar failure. M5/matrix-unit Macs and precise keep these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
 disables it in either profile. Larger widths remain on the GPU. The existing 4B/27B defaults remain.
 The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
 and rotation stay unchanged. All supported inputs use the existing rotation kernel and its token-wide scale.
@@ -200,6 +200,11 @@ not averaged away, removed or made to pass with a different bound. [M3 evidence]
 The rebase onto `3f3b3cef`, with the profile-row schema fix at `50fadecc`, preserved all 584 rows per profile
 on both Macs bit for bit against `9cca6b0d`. Fresh M4 Pro ABAB reduced mean loaded HTTP TTFT by 61.94%
 (8.597692 -> 3.272273 seconds), with its built-in share. The M3 prefill bar exceedance remains, and the M3
-23.63% timing above remains pinned to the earlier head; a fresh timing is queued behind another GPU user.
+23.63% timing above remains pinned to the earlier head; that queued repeat was stopped when the final class excluded calibration-only chips.
 The full CPU suite had one intermittent APFS deletion-space assertion failure, retained alongside passing
 targeted candidate and clean-main reproductions. [Rebase results and raw records](../bench/results/2026-11-07-pr775-rebase-3f3b/README.md).
+
+Review 6698446394 selected the built-in-share class: the fast default now excludes M1/M2/M3 even with a
+calibration or `NI_ANE_UNITS`; `NI_ANE=1` remains an explicit diagnostic override. The shared built-in-share
+predicate is also used by `default_units`, with unchanged share values. The M4 path and arithmetic are unchanged.
+The stopped, still-queued M3 timing repeat did not start a GPU leg and is no longer relevant to the final default.
