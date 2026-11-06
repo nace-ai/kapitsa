@@ -45,14 +45,14 @@ Earlier runs, kept for the record:
 
 - `fn_ab3-try1`: build 4d9a9ec8, expert store pinned at 24 GB, three arms: precise, fast at 4096-row chunks, fast at
   2048 (`NI_CHUNK=2048`), 4 legs each at 32K and 64K. Median ms per draft cycle: precise 54.2 and 60.1, fast at 2048
-  54.2 and 57.6, fast at 4096 58.7 and 64.5, every 4096 leg under memory pressure. Prefill against precise: 2048 8%
+  54.2 and 57.6, fast at 4096 58.7 and 64.5, 7 of 8 4096 legs under memory pressure (the clean one, 56.3 ms at 32K, still 4% slower). Prefill against precise: 2048 8%
   and 10% faster, 4096 15% and 17%. This run set the fast profile's chunk at 2048.
 - `fn_ab4-try1`: the same without the store pin. The run went into swap (past 8 GB) and was stopped after 15 legs;
   every leg logged memory pressure. Not used.
 - `fn_ab2-try1`: precise against fast at 4096, during a CPU job; 4 of 16 legs void. Not used.
 - `b35ab`: 35B, `NI_QMT_I8` prefill at 4K and 16K and `NI_DFLASH_EXACT_MOE=0` decode at 4K, 4 pairs each. I8 prefill
   3.5% slower at 4K, about the same at 16K; EXACT_MOE=0 decode about the same.
-- `queue3_ab-try1`: 35B `NI_KV_I8` decode at 4K (117.0 against 116.8 tok/s, 4 pairs) and Flash-Next `NI_QSA_FUSE`
+- `queue3_ab-try1`: 35B `NI_KV_I8` decode at 4K (117.6 against 116.8 tok/s, 4 pairs; the greedy text differs, 43 decoded tokens against 41) and Flash-Next `NI_QSA_FUSE`
   decode at 32K (40.5 against 42.9 tok/s, 2 legs against 1; 1 void). Lightning skipped: its model is on an external
   drive that was not mounted.
 

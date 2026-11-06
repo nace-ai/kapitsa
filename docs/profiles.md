@@ -48,7 +48,7 @@ and fast with 4096-row chunks (the chunks `NI_QSA_TATTN=1` takes since #571), ex
 | | 32K prefill | 64K prefill | Decode, ms per draft cycle |
 |---|---|---|---|
 | fast (2048-row chunks) | 8% faster | 10% faster | the same at 32K, 4% faster at 64K |
-| fast with 4096-row chunks | 15% faster | 17% faster | 7 to 8% slower; every leg under memory pressure |
+| fast with 4096-row chunks | 15% faster | 17% faster | 7 to 8% slower; 7 of 8 legs under memory pressure (the clean one 4% slower) |
 
 Decode tokens per second also differ because the greedy text differs (2.05 against 1.95 tokens per cycle at 32K), not
 because a step is slower. The 4096-row chunks add 0.5 GB to the prefill group's slots, and on a 48 GB Mac that tips
@@ -65,7 +65,7 @@ Ranked by measured speed, then how many models they cover, then drift. Status as
 | 2 | W4A8 dense prefill GEMMs (`NI_QMT_I8`) | 4-bit group-64 dense projections on an M5: Flash-Next, 35B-A3B | activations rounded to int8 per 64-group | Flash-Next 32K prefill 3-13% faster (#572, before grouped prefill, which it turns off) | 35B, 192 rows: 5 flips, mean KL 4.0e-3 (bar 4, 2.1e-3); Flash-Next with TATTN: 6 of 72, 2.1e-2 | 35B: over the bar, and 4K prefill 3.5% slower (4 pairs); not a member |
 | 3 | TATTN single half (`NI_QSA_TATTN`, before #818) | Flash-Next, M5 | Q, K, P in half | 32K prefill 10-15% faster | 3 of 96 flips, mean KL 4.4e-3; a 64K reply ends at once (#585) | replaced by 1 |
 | 4 | Neural Engine prefill for hidden 2048-8192 (#775) | Qwen3.5 9B, M4 Pro | W8A8 FFN on the Neural Engine | 4K time to first token 63% less | 2 of 192 flips, mean KL 3.6e-4 | open PR |
-| 5 | int8 KV cache (`NI_KV_I8`) | Qwen3.5/3.6/3.8, Flint | KV rows int8 with a row scale | 35B on an M4 16 GB: decode 4% faster, 1.9x the context; 35B on the M5 Pro 48 GB, 4K prompt: decode about the same (117.0 against 116.8 tok/s, 4 pairs) | 35B, 192 rows: 3 flips, mean KL 1.1e-3 (bar 4, 2.1e-3) | inside the 35B bar but not faster on the M5 Pro; its win is context on small Macs; not a member here |
+| 5 | int8 KV cache (`NI_KV_I8`) | Qwen3.5/3.6/3.8, Flint | KV rows int8 with a row scale | 35B on an M4 16 GB: decode 4% faster, 1.9x the context; 35B on the M5 Pro 48 GB, 4K prompt: decode about the same (117.6 against 116.8 tok/s, 4 pairs; the greedy text differs, 43 decoded tokens against 41) | 35B, 192 rows: 3 flips, mean KL 1.1e-3 (bar 4, 2.1e-3) | inside the 35B bar but not faster on the M5 Pro; its win is context on small Macs; not a member here |
 | 6 | Verify MoE without row-independent numerics (`NI_DFLASH_EXACT_MOE=0`) | 35B-A3B, Clover | a verify row's logits depend on the other rows' routing | source comment: exact verify about 3% slower | 35B, 192 verify rows: 0 flips, mean KL 1.8e-4, passes the precise floor gate | decode about the same on the M5 Pro (4 pairs); passes precise's gate, so a precise question, not fast |
 | 7 | Nemotron Lightning attention projections in 8-bit (`NI_NH_ATTN_Q8`) | Lightning | BF16 to 8-bit weights | decode about 3% faster | 192 rows: 1 flip (a near-tie), mean KL 6.5e-4; inside the fallback bar (4 of 192, 2.1e-3) | fast candidate; speed A/B not run: the model sits on the external drive, unmounted on 6 Nov |
 | 8 | Fused Flash-Next indexer selection (`NI_QSA_FUSE`) | Flash-Next decode | block keys a few ulp off | Flash-Next 32K, decode about 6% slower (40.5 against 42.9 tok/s, 2 legs against 1; 1 leg void for load) | 72 rows: every row bitwise identical to precise | slower and no drift; not a member |
