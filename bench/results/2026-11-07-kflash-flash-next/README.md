@@ -1,0 +1,13 @@
+# Flash-Next covered-window fallback check
+
+Runs: Apple M3 Ultra, 96 GiB, macOS 26.4.1 (25E253). Own complete reference `2fe7c3fa208c098b4e00b1bae9033172dfafaac7` and candidate implementation `0be92def43f00c7c5f15b889daa71309dce4d5a7` binaries. Both builds were explicitly CMake-configured in the earlier follow-up. The unchanged ARM64/macOS-14-minimum executables were transferred from the M4 Pro and their hashes verified before remote execution; Metal compiled on the M3 Ultra GPU. The candidate's implementation version label is distinct from the prior evidence/docs checkout head `a263df92`. `identity.json` and `results/results.json` retain those identities and every command.
+
+Pinned model: `beamster/Qwen3.8-Flash-Next-Sushi-2bpw` revision `f37e7ba46f0f2993b6ca373221530c579f258712`. Its complete non-table weights and covered corpus inputs are shared preparation. Every output here was newly generated with this PR's own binaries. The n-gram table is sparse; all 83,302 rows needed by these eight corpus windows were rechecked before and after the runs. This does not validate arbitrary requests or a complete checkpoint.
+
+**392/392 full-vocabulary rows are byte identical, finite and nonzero:** 8 prefill, 192 step and 192 verify. The unchanged comparator exits zero and reports no calibrated floor for this model. Both sets of sequences and record indexes match, and the sequences match the covered corpus. Raw float dumps were removed after the comparison; per-path metadata, row manifests, sequences, full-output SHA256 values and the comparator report remain.
+
+The run held and released the remote GPU lock. This is target-model/Flash-Next fallback coverage. It neither exercises a second packed 4B drafter setup nor establishes a model performance or full-generation result. Run times are not controlled A/B timing evidence.
+
+The original orchestration snapshot is `run.py`. Reproduction requires the same source builds, `bench/corpus.txt` (hash in `identity.json`), the unchanged repository `tools/logit_compare.py`, and the pinned fully covered model inputs; adapt the original paths and choose a fresh output directory. The original controller waits for preceding shared-input preparation jobs. Do not substitute another PR's output files. Earlier published evidence is unchanged.
+
+Not verified: complete Flash-Next checkpoint, arbitrary HTTP/native benchmarks, another applicable packed-profile setup or a consistent full-inference gain. The 4B HTTP series remains 48 PASS / 1 identical busy-slot keepalive FAIL per arm. No noise floor or default was changed for this measurement; the PR remains Draft.

@@ -1,0 +1,20 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (0be92def)",
+  "model": "model-sushi",
+  "model_dir": "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+  "path": "step",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "/Users/bytedance/kapitsa-reduce-v8-20261107/fallback-2057/results/logits-base",
+  "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+  "macos": "26.4.1",
+  "date": "2026-11-06T21:10:11Z",
+  "env": {}
+}
