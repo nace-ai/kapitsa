@@ -160,6 +160,7 @@ else:
     best, step, done_s = v0[2], 0, 0.0
 ema = None
 STOP = int(os.environ.get('K350_STOP_STEP', 0))
+T25, NW = None, 0
 tstart = time.time() - done_s
 tchunk = time.time()
 SWAP0 = float(re.search(r'used = ([\d.]+)M', os.popen('sysctl -n vm.swapusage').read()).group(1))  # swap at chunk start
@@ -187,6 +188,15 @@ while True:
         g['lr'] = cur
     if step % 25 == 0 and dev == 'mps':
         say(f'mem step {step}: allocated {torch.mps.current_allocated_memory() / 2**30:.2f} GiB, driver {torch.mps.driver_allocated_memory() / 2**30:.2f} GiB, footprint {foot():.2f} GB')
+    if step % 25 == 0:
+        if T25 is not None:
+            sps = (time.time() - T25[1]) / (step - T25[0]); say(f'step time {sps:.2f} s over steps {T25[0]}-{step} (pad {PAD})')
+            # orchestrator 7 Nov: 512 padding ran 1.17 s/step; if 2048 is > 30% slower, go back to 512 (same losses, padded rows are masked)
+            # skip the chunk's first window (graph build) and a window holding the held-out check (step % 300 == 0)
+            if PAD == 2048 and NW >= 1 and step % 300 != 0 and sps > 1.17 * 1.3:
+                PAD = 512; say(f'pad 2048 is {sps / 1.17:.2f}x the 512 step time: back to pad 512')
+            NW += 1
+        T25 = (step, time.time())
     if STOP and step >= STOP:
         say(f'K350_STOP_STEP {STOP} reached: test run ends without saving'); sys.exit(0)
     if not order:
