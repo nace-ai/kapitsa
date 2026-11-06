@@ -204,7 +204,7 @@ static bool moe_qtm() {
   return v;
 }
 
-// The 35B's grouped prefill on the 32-core M1 Max benefits from staging a full
+// The 35B's grouped prefill on the 32-core M1 Max and on M1/M2 Ultra benefits from staging a full
 // 64-input group per step. Other measured devices keep their 32-input tiles.
 static int moe_qmr_k(int hidden, int intermediate) {
   static const int override_k = [] {
@@ -213,8 +213,11 @@ static int moe_qmr_k(int hidden, int intermediate) {
     return v;
   }();
   if (override_k) return override_k;
-  return hidden == 2048 && intermediate == 512 && Gpu::get().name() == "Apple M1 Max" &&
-                 Gpu::get().core_count() == 32 ? 64 : 32;
+  const std::string& name = Gpu::get().name();
+  const bool wide_chip = (name == "Apple M1 Max" && Gpu::get().core_count() == 32) ||
+                         name == "Apple M1 Ultra" || name == "Apple M2 Ultra" ||
+                         Gpu::get().core_count() >= 60;
+  return hidden == 2048 && intermediate == 512 && wide_chip ? 64 : 32;
 }
 
 // NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.
