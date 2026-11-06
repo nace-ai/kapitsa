@@ -6,11 +6,13 @@ L="lockf -k /tmp/kapitsa-gpu.lock"
 wait_ac() { until pmset -g batt | grep -q "AC Power"; do echo "waiting for AC $(date +%T) $(pmset -g batt | grep -o "[0-9]*%")"; sleep 60; done; }  # outside the lock
 # orchestrator 6 Nov: before training or eval takes the lock, free swap >= 3 GB and memory pressure normal (level 1)
 # macOS grows and shrinks its swap files, so "free" is only slack in them (1.2 GB of 5 GB with 3.9 GB used, 6 Nov 15:46): gate on swap used
+# the data, features and checkpoints live on the Extreme Pro (/tmp/k350d links there); wait outside the lock until it is mounted
+wait_drive() { until [ -d /tmp/k350d/data ]; do echo "waiting for the Extreme Pro $(date +%T)"; sleep 120; done; }
 wait_mem() { while :; do u=$(sysctl -n vm.swapusage | sed -E 's/.*used = ([0-9.]+)M.*/\1/'); lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
   awk -v u="$u" 'BEGIN{exit !(u<=4096)}' && [ "$lv" = 1 ] && return; echo "waiting for memory $(date +%T) swap used ${u}M pressure level $lv"; sleep 60; done; }
 while python3 $DT status k350-ft-j1 | head -1 | grep -q "k350-ft-j1 running"; do sleep 30; done
 echo "j1 ended $(date +%T): $(python3 $DT status k350-ft-j1 | head -1)"
-[ -s $D/data/capt.real.list ] || { echo "no capt.real.list"; exit 2; }
+wait_drive; [ -s $D/data/capt.real.list ] || { echo "no capt.real.list"; exit 2; }
 # orchestrator queue order (6 Nov): these jobs take the GPU first; wait until each reports "not running: finished"
 GATE=${GATE:-"k276-ab k363-q1 swift8b ab362 k361-rerun"}
 while :; do
@@ -28,10 +30,10 @@ done
 [ -f $D/capt.done ] || { echo "capture not complete"; exit 3; }
 for c in 1 2 3 4; do
   [ -f $D/ckpt/DONE ] && break
-  wait_ac; wait_mem; $L bash $S/train_chunk.sh || { echo "train chunk failed"; exit 4; }
+  wait_drive; wait_ac; wait_mem; $L bash $S/train_chunk.sh || { echo "train chunk failed"; exit 4; }
 done
 [ -f $D/ckpt/DONE ] || { echo "training not done"; exit 4; }
 CK=$D/ckpt/best; [ -r $CK/model.safetensors ] || CK=$D/ckpt/last
 echo "drafter for eval: $CK"; bash $S/mkmodels.sh $CK || exit 5
-wait_ac; wait_mem; $L bash $S/eval_inner.sh; rc=$?
+wait_drive; wait_ac; wait_mem; $L bash $S/eval_inner.sh; rc=$?
 python3 $S/verdict.py $D/eval; echo "PIPELINE DONE rc=$rc $(date +%T)"
