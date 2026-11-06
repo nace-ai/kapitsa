@@ -3758,13 +3758,16 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
 // attention pass, which leaves the GPU's cores half busy, overlaps the other half's expert GEMMs. Each half's rows go
 // through the kernels a chunk of that size would, the second half after the first as a next chunk would, so the
 // logits are those of half-size chunks. Default on for the Qwen3.6 35B-A3B (hidden 2048, 40 layers, 4-bit experts) on
-// an Apple10 GPU of 40 cores or more (the M5 Max), with 8,192-row chunks (auto_chunk), so each half's MoE has as many
-// rows as the 4,096-row chunk it replaces: M5 Max, ni_run, 16,288 ids in 8,192-row chunks 2,767 -> 2,620 ms (-5.3%; in
-// 4,096-row chunks, the default before, 2,777); 4,129 ids in one chunk level (592 -> 590). Halves of 2,048 rows lose
-// what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767): the experts' weights are read once per half.
+// an Apple10 GPU of 20 cores or more (the 20-core M5 Pro and the M5 Max), with 8,192-row chunks (auto_chunk), so each
+// half's MoE has as many rows as the 4,096-row chunk it replaces. M5 Max, ni_run, 16,288 ids in 8,192-row chunks
+// 2,767 -> 2,620 ms (-5.3%; in 4,096-row chunks, the default before, 2,777); 4,129 ids in one chunk level (592 -> 590).
+// M5 Pro (20 cores), ni_run, three interleaved rounds, off at a pinned 4,096-row chunk against on at 8,192: 16,288 ids
+// 5,635 -> 5,465 ms (-3.0%), 4,129 ids level (1,199 -> 1,200); logit_dump of that pair, every row of every path bitwise
+// identical. Halves of 2,048 rows lose what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767 on the M5 Max; on
+// the M5 Pro a flag-only run that kept the small chunk was slower): the experts' weights are read once per half.
 bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
   if (const char* v = getenv("NI_PF_WAVE")) return atoi(v) != 0;
-  return moe && hidden == 2048 && layers == 40 && Gpu::get().apple10() && Gpu::get().core_count() >= 40;
+  return moe && hidden == 2048 && layers == 40 && Gpu::get().apple10() && Gpu::get().core_count() >= 20;
 }
 int Qwen35::gpu_wave_rows(int T) const {
   static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);
