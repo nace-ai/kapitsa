@@ -11,7 +11,7 @@ enum class Profile { kPrecise, kFast };
 Profile profile();
 
 // One switch's value under the profile. The switch's own environment variable wins when set ("0" off, other values
-// on). When unset, the switch is on under the fast profile where `fast_here` says it was measured (the model and Mac).
+// on). When unset, the switch is on under the fast profile where `fast_here` is true: the member's class (AGENTS.md).
 // Under the precise profile the switch stays off. `what` names the member in the one log line the fast profile prints
 // for it.
 bool profile_switch(const char* env, bool fast_here, const char* what);

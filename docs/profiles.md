@@ -7,7 +7,8 @@ Kapitsa runs one of two profiles.
 - **fast** is precise plus every speedup that moves the outputs no more than the fastest other engine does for that
   model on that Mac. `kapitsa serve --profile fast` or `KAPITSA_PROFILE=fast` turns it on.
 
-A fast member is on only for the model and Mac it was measured on. Anywhere else the fast profile is the precise one.
+A fast member is on for the whole class of Macs or models it targets, as every default is (AGENTS.md, "Defaults follow
+the concept"); its class is a row in `src/engine/device_profile.cpp`. Outside its class the fast profile is the precise one.
 
 ## The bar
 
@@ -59,9 +60,9 @@ Already lossy defaults (they passed their gates, so they are in precise): `NI_MO
 - **precise never moves.** A member never runs under precise. A change that passes the floor's gate belongs in precise.
 - **One switch per member.** The member reads its switch through `profile_switch(env, fast_here, what)`
   (`src/engine/profile.h`): the switch's own variable wins (`0` off, anything else on), and when it is unset the member is
-  on under fast where `fast_here` names the measured model and Mac. The fast profile logs one line per member it turns on.
-- **On by default counts.** A member on in the fast profile for a model and Mac is on by default there (AGENTS.md,
-  "New features ship on by default somewhere").
+  on under fast where `fast_here` is true: the member's class, read from the profile table or a check the call site already has. The fast profile logs one line per member it turns on.
+- **On by default counts.** A member on in the fast profile for its class is on by default there (AGENTS.md,
+  "Defaults follow the concept, not the measured cell").
 - **Measure at what ships.** The output check runs at the prefill chunk and paths the profile runs; the bar is
   re-measured when the other engine releases a faster version.
 - **Members stack.** Before a second member joins for the same model, the stack is checked against the bar as a whole.

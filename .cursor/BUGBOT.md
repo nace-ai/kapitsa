@@ -73,7 +73,7 @@ not ask for abstractions, interfaces or configuration the change does not need.
 - The fast profile counts (docs/profiles.md): a feature that moves outputs past the floor's gate may be on by default
   only in the fast profile, for its whole class, as in the rules above. Check that its switch is read through
   `profile_switch()`, that the class is a row in `src/engine/device_profile.cpp`, and that the PR's output check shows
-  flips and mean KL against the precise path within the bar docs/profiles.md gives for that model and Mac. Flag a
+  flips and mean KL against the precise path within the bar docs/profiles.md gives for the model and Mac it ran on. Flag a
   fast-only default whose drift exceeds the bar, or whose output check passes the floor's gate (that belongs in
   precise).
 - Not features, so do not flag them: a kill switch for an existing default (`NI_X=0`), a debug or profiling switch, a

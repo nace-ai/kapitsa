@@ -1428,7 +1428,7 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
     const AttnSparseParams p{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), maxn, uint32_t(cap), scale, 1, qidx_ld_};
     // The lists on the matrix units (tensor/qsattn_t.metal, qattn_t_sparse_g12d2) where the kernel fits: 12 query
     // heads per KV head, head dim 256, Apple10 and macOS 26 (the Metal 4 library). Else attn_sparse_rows.
-    // Off in the precise profile; on in the fast profile on the M5 Pro (tattn_env). Q and P enter as hi + lo halves since
+    // Off in the precise profile; on in the fast profile on Macs with matrix units (tattn_env). Q and P enter as hi + lo halves since
     // #818, which fixed #585's 64K decode that ended early and looped.
     // tattn() is also engine.cpp auto_chunk's gate for the Q2_0 pack's 4096-row chunks.
     const bool tat = tattn(cfg_);
