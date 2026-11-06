@@ -36,11 +36,11 @@ using json = nlohmann::json;
 // targets and Macs keep it off until they are measured. Clover-35B-A3B has the same shape and drafter and is not
 // measured, so the gate also asks for "not Clover".
 // KFlash's online selector update (NI_KFLASH_SELUPD=<lr>) on by default where the lanes shape matches (the 35B-A3B on an
-// M5 Pro, with the history lane): learning rate 0.003, which the interleaved A/B on top of the history lane (#362) measured
-// faster in 3 of 3 rounds (accept length +3.8%, 19-request OpenCode session +3%); 0.02 gained half as much.
+// M5 Pro, with the history lane): learning rate 0.02, which the interleaved A/B on top of the history lane (#362) measured
+// faster in 3 of 3 rounds (+4.4% tok/s on the 11 turns whose answer matches the recording; 0.003 gave +3.3%).
 // NI_KFLASH_SELUPD=0 turns it off; its fp32 masters take 0.5 GB.
 static constexpr bool kSelUpdDefault = true;
-static constexpr float kSelUpdLr = 0.003f;
+static constexpr float kSelUpdLr = 0.02f;
 static bool dfl_lanes_shape(const Qwen35Config& c) {
   static const bool m5_pro = Gpu::get().name() == "Apple M5 Pro";
   return m5_pro && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
