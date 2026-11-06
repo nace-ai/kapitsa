@@ -749,7 +749,7 @@ q20::GroupWorld planned_group_world(const MemPlan& m, int slots, int ctx, size_t
   // memory: min(ctx, q20::kAutoKvCtxCap) positions per slot (NI_EXPERT_KV_POS overrides the total, 0 = none),
   // exactly as the live load in Qwen4Exp::init_store does.
   in.kv = q20::auto_store_kv(m.kv_per_pos, ctx, slots);
-  in.cap = q20::auto_store_cap(matrix_units());
+  in.cap = q20::auto_store_cap(q20::auto_store_unconstrained(in.ram, matrix_units(), Gpu::get().core_count()));
   size_t pin = 0;
   if (q20::store_pin_bytes(getenv("NI_EXPERT_STORE"), m.store_all, pin))
     return q20::group_world(m.group_slots, in, &pin);
