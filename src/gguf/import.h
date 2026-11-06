@@ -35,6 +35,9 @@ struct ImportOptions {
   // so that `--dflash auto` finds one: an imported 27B or 35B-A3B fine-tune runs the catalog's drafter (#967, #364).
   // Offline or out of disk space: the import is kept and prints one line; the model runs without a drafter.
   bool drafter = true;
+  // `kapitsa import` itself (not serve / bench / agent launch): asks for the drafter again even when an earlier
+  // `--no-drafter` import of this file declined it
+  bool from_import_command = false;
 };
 
 // Converts the GGUF, or finds its earlier conversion (same files, sizes and dates), and returns the model folder.

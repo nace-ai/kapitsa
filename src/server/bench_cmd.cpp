@@ -695,6 +695,7 @@ int run(const Options& o) {
     try {
       gguf::ImportOptions io;
       io.file = expand_home(model);
+      io.drafter = false;  // a measured run must not change what it measures by fetching a drafter partway through
       model = gguf::import_model(io);
     } catch (const gguf::Error& e) {
       return fail(e.what(), 2);

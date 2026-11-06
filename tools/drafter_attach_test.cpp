@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <string>
 
 using namespace ni;
@@ -29,6 +30,12 @@ static bool exists(const std::string& p) {
 
 int main(int argc, char** argv) {
   const bool net = argc > 1 && !strcmp(argv[1], "--net");
+  // Offline mode must never download: a point of the hub's fetch at a dead local address makes any fetch fail at once
+  // (a missed case in this file once started a 3.8 GB download). --net leaves the network alone.
+  if (!net) {
+    setenv("HF_ENDPOINT", "http://127.0.0.1:9", 1);
+    setenv("HF_HUB_OFFLINE", "1", 1);
+  }
   auto repo = [](int h, int l) -> std::string {
     const hub::Companion* c = hub::drafter_for_shape(h, l);
     return c ? c->repo : "";
@@ -51,19 +58,49 @@ int main(int argc, char** argv) {
   check(hub::fetch_drafter(unknown, false).empty() && !exists(unknown + "/dflash2"), "an unknown shape: nothing fetched");
   const std::string has = folder("has", 5120, 64);
   mkdir((has + "/dflash2").c_str(), 0755);
-  check(hub::fetch_drafter(has, false).empty() && !exists(has + "/dflash2/model.safetensors"), "a folder with dflash2/: left alone");
+  write(has + "/dflash2/model.safetensors", "x");  // its weights: an installed drafter (a folder without them is resumed)
+  check(hub::fetch_drafter(has, false).empty() && !exists(has + "/dflash2/config.json"), "a folder with dflash2/ and weights: left alone");
+  // a stopped download leaves config.json in dflash2/: that is not an installed drafter, the next fetch resumes it
+  const std::string partial = folder("partial", 5120, 64);
+  mkdir((partial + "/dflash2").c_str(), 0755);
+  write(partial + "/dflash2/config.json", "{}");
+  check(!hub::drafter_installed(partial), "dflash2/ with config.json alone: not an installed drafter (resumes)");
+  write(partial + "/dflash2/model.safetensors", "x");
+  check(hub::drafter_installed(partial), "dflash2/ with its weights: installed");
+  // --no-drafter is remembered in the manifest; a plain import clears it
+  const std::string declined = folder("declined", 5120, 64);
+  mkdir((declined + "/.kapitsa").c_str(), 0755);
+  write(declined + "/.kapitsa/manifest.json", "{\"files\": [], \"companions\": [], \"total_bytes\": 7}");
+  check(!hub::drafter_declined(declined), "a fresh manifest: the drafter is not declined");
+  hub::set_drafter_declined(declined, true);
+  check(hub::drafter_declined(declined), "--no-drafter is remembered");
+  hub::set_drafter_declined(declined, false);
+  check(!hub::drafter_declined(declined), "a plain import clears it");
   const std::string nocfg = root + "/nocfg";
   mkdir(nocfg.c_str(), 0755);
   check(hub::fetch_drafter(nocfg, false).empty(), "a folder with no config.json: nothing");
 
   if (net) {
     const std::string d = folder("four", 2560, 32);
+    mkdir((d + "/.kapitsa").c_str(), 0755);
+    write(d + "/.kapitsa/manifest.json", "{\"files\": [], \"companions\": [], \"total_bytes\": 100}");
     const std::string got = hub::fetch_drafter(d, true);
     check(got == "Qwen3.5-4B-DFlash", "4B shape: fetched " + got);
     struct stat st;
     check(stat((d + "/dflash2/model.safetensors").c_str(), &st) == 0 && st.st_size > 1000000000, "dflash2/model.safetensors is there");
     check(exists(d + "/dflash2/config.json") && !exists(d + "/.kapitsa/parts/dflash2/model.safetensors.part"), "config.json there, no part left");
     check(hub::fetch_drafter(d, false).empty(), "a second call fetches nothing");
+    auto manifest = [&] { std::ifstream f(d + "/.kapitsa/manifest.json"); return std::string((std::istreambuf_iterator<char>(f)), {}); };
+    auto count = [](const std::string& h, const std::string& n) { size_t c = 0; for (size_t p = 0; (p = h.find(n, p)) != std::string::npos; p += n.size()) ++c; return c; };
+    check(count(manifest(), "\"companions\"") == 1 && count(manifest(), "Qwen3.5-4B-DFlash") == 1, "the manifest lists the drafter once as a companion");
+    check(hub::is_complete(d), "the drafter is not in \"files\": is_complete() ignores it");
+    // deleting dflash2/ (disk cleanup) and fetching again: still one companion entry, bytes not counted twice
+    std::system(("rm -rf '" + d + "/dflash2'").c_str());
+    check(hub::is_complete(d), "a folder without its drafter is still a complete import");
+    check(hub::fetch_drafter(d, false) == "Qwen3.5-4B-DFlash", "fetched again after the folder was deleted");
+    check(count(manifest(), "Qwen3.5-4B-DFlash") == 1, "still one companion entry");
+    const std::string tb = manifest().substr(manifest().find("\"total_bytes\":"));
+    check(atoll(tb.c_str() + tb.find(':') + 1) > 1000000000 && atoll(tb.c_str() + tb.find(':') + 1) < 2000000000, "total_bytes counts the drafter once (100 + about 1.3 GB, not twice)");
   }
   std::string rm = "rm -rf " + root;
   if (root.rfind("/tmp/drafter_attach_", 0) == 0) std::system(rm.c_str());

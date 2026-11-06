@@ -1504,7 +1504,15 @@ static std::string import_model_files(const ImportOptions& opt);
 
 std::string import_model(const ImportOptions& opt) {
   const std::string dir = import_model_files(opt);
-  if (!opt.drafter || opt.dry_run || !opt.plan_dir.empty() || dir.empty()) return dir;
+  if (opt.dry_run || !opt.plan_dir.empty() || dir.empty()) return dir;
+  if (!opt.drafter) {
+    hub::set_drafter_declined(dir, true);  // `serve --model FILE.gguf` later keeps to it
+    return dir;
+  }
+  if (hub::drafter_declined(dir)) {
+    if (!opt.from_import_command) return dir;
+    hub::set_drafter_declined(dir, false);
+  }
   try {
     const std::string got = hub::fetch_drafter(dir, opt.progress);
     if (!got.empty() && opt.progress) fprintf(stderr, "Added the %s drafter to %s.\n", got.c_str(), hub::tilde(dir).c_str());
@@ -1938,6 +1946,7 @@ static std::string import_model_files(const ImportOptions& opt) {
 
 int run_import(int argc, char** argv) {
   ImportOptions o;
+  o.from_import_command = true;
   const char* usage =
       "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force] [--dry-run] [--no-drafter]\n\n"
       "Converts a GGUF of a Qwen3.5-family model (from LM Studio, Ollama, llama.cpp or a Hugging Face GGUF repo) once\n"

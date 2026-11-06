@@ -1936,8 +1936,46 @@ std::vector<Installed> installed() {
   return out;
 }
 
+// A drafter folder whose weights are there. download() renames model.safetensors into place last (it is the biggest file
+// and only a verified one is renamed), so a folder that a stopped or failed download left with config.json alone is not
+// an installed drafter and the next fetch resumes it.
+bool drafter_installed(const std::string& dir) {
+  for (const char* sub : {"/dflash2", "/drafter"}) {
+    DIR* d = opendir((dir + sub).c_str());
+    if (!d) continue;
+    bool found = false;
+    while (const dirent* e = readdir(d)) {
+      const std::string n = e->d_name;
+      if (n.size() > 12 && n.compare(n.size() - 12, 12, ".safetensors") == 0) found = true;
+    }
+    closedir(d);
+    if (found) return true;
+  }
+  return false;
+}
+
+bool drafter_declined(const std::string& dir) {
+  try {
+    return ojson::parse(read_text(manifest_path(dir))).value("no_drafter", false);
+  } catch (...) {
+    return false;
+  }
+}
+
+void set_drafter_declined(const std::string& dir, bool declined) {
+  try {
+    ojson m = ojson::parse(read_text(manifest_path(dir)));
+    if (m.value("no_drafter", false) == declined) return;
+    if (declined) m["no_drafter"] = true;
+    else m.erase("no_drafter");
+    write_atomic(manifest_path(dir), m.dump(2) + "\n");
+  } catch (const std::exception&) {
+    // a folder without a manifest (hand-made): nothing to remember it in
+  }
+}
+
 std::string fetch_drafter(const std::string& dir, bool progress) {
-  if (is_dir(dir + "/dflash2") || is_dir(dir + "/drafter")) return "";
+  if (drafter_installed(dir)) return "";
   json cfg;
   try {
     cfg = json::parse(read_text(dir + "/config.json"));
@@ -2004,14 +2042,31 @@ std::string fetch_drafter(const std::string& dir, bool progress) {
     prog.show = progress;
     prog.tty = isatty(2);
     if (progress) fprintf(stderr, "Fetching the %s drafter (%s) into %s/%s...\n", c->repo.c_str(), fmt_bytes(bytes).c_str(), tilde(dir).c_str(), c->subdir.c_str());
-    download(todo, prog);
+    try {
+      download(todo, prog);
+    } catch (...) {
+      // a stopped or failed download leaves the small files (config.json, LICENSE) in dflash2/ and the weights as a .part:
+      // without the weights `--dflash auto` must not find the folder (DFlash2::find accepts it on config.json alone)
+      if (!drafter_installed(dir))
+        for (const auto& name : c->files) std::remove((dir + "/" + c->subdir + "/" + name).c_str());
+      rmdir((dir + "/" + c->subdir).c_str());
+      throw;
+    }
   }
-  // the manifest lists it, so is_complete() checks it and `kapitsa list` shows it
+  // `kapitsa list` shows it: a companions entry (one per kind, so a drafter deleted and fetched again is not listed twice)
+  // and its bytes. Not in "files": is_complete() decides whether an import is reused, and a drafter deleted to save disk
+  // must not make the whole conversion look unfinished (`serve --model FILE.gguf` would then ask for --force)
   try {
     ojson m = ojson::parse(read_text(manifest_path(dir)));
-    for (const auto& e : added) m["files"].push_back(e);
-    m["companions"].push_back(ojson{{"kind", c->kind}, {"repo", c->repo}, {"revision", c->revision}, {"commit", L.commit}, {"files", ojson::array()}});
-    m["total_bytes"] = m.value("total_bytes", uint64_t(0)) + bytes;
+    ojson comps = ojson::array();
+    bool counted = false;
+    for (const auto& e : m.value("companions", ojson::array())) {
+      if (e.value("kind", "") == c->kind) counted = true;
+      else comps.push_back(e);
+    }
+    comps.push_back(ojson{{"kind", c->kind}, {"repo", c->repo}, {"revision", c->revision}, {"commit", L.commit}, {"files", ojson::array()}});
+    m["companions"] = comps;
+    if (!counted) m["total_bytes"] = m.value("total_bytes", uint64_t(0)) + bytes;
     write_atomic(manifest_path(dir), m.dump(2) + "\n");
   } catch (const std::exception&) {
     // a folder without a manifest (hand-made): the files stand on their own

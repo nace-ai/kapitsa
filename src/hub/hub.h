@@ -139,6 +139,13 @@ std::string ensure(const ModelRef& ref, const PullOptions& opt);
 // happened in a few words ("" when the folder's shape has no catalog drafter or already has one). Throws Error
 // (offline, disk full); the model runs without a drafter, only slower.
 std::string fetch_drafter(const std::string& dir, bool progress);
+// A drafter folder (dflash2/ or drafter/) with its weights in it: what fetch_drafter leaves alone. A folder with only a
+// config.json (a download that stopped) does not count, and the next fetch resumes it.
+bool drafter_installed(const std::string& dir);
+// `kapitsa import --no-drafter` is remembered in the folder's manifest, so `serve --model FILE.gguf` later does not fetch
+// the drafter the user declined; a plain `kapitsa import` (no flag) clears it and fetches.
+bool drafter_declined(const std::string& dir);
+void set_drafter_declined(const std::string& dir, bool declined);
 // Every file the manifest lists is there (a finished download).
 bool is_complete(const std::string& dir);
 // Finished, and (catalog models) at the revisions this Kapitsa pins: ensure() needs no network.
