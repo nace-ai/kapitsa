@@ -17,6 +17,7 @@
 #include <mach/mach.h>
 
 #include <algorithm>
+#include <arm_neon.h>
 #include <atomic>
 #include <cctype>
 #include <cmath>
@@ -285,10 +286,14 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
         const int per = 32 / bits;
         for (int w = 0; w < 64 / per; ++w) {
           uint32_t word = 0;
-          for (int j = 0; j < per; ++j) {
-            float c = std::min(rnd((v[w * per + j] - bias) / scale), n_bins);
-            c = std::max(c, 0.0f);
-            word |= uint32_t(c) << (bits * j);
+          // Four independent codes at a time; keep the scalar scale/bias and both rounding modes.
+          const int32x4_t shifts = {0, bits, 2 * bits, 3 * bits};
+          for (int j = 0; j < per; j += 4) {
+            float32x4_t c = vdivq_f32(vsubq_f32(vld1q_f32(v + w * per + j), vdupq_n_f32(bias)),
+                                     vdupq_n_f32(scale));
+            c = even ? vrndiq_f32(c) : vrndaq_f32(c);
+            c = vmaxq_f32(vminq_f32(c, vdupq_n_f32(n_bins)), vdupq_n_f32(0.0f));
+            word |= vaddvq_u32(vshlq_u32(vcvtq_u32_f32(c), shifts)) << (bits * j);
           }
           wr[w] = word;
         }
