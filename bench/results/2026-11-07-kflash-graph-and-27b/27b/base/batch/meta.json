@@ -1,0 +1,24 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (2fe7c3fa)",
+  "model": "qwen3.8-27b-4bit",
+  "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+  "path": "batch",
+  "batch": {
+    "members": 4,
+    "rows": 2
+  },
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 10,
+    "evals": 1152,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "bench/corpus.txt",
+  "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+  "macos": "15.7.1",
+  "date": "2026-11-06T19:56:12Z",
+  "env": {}
+}

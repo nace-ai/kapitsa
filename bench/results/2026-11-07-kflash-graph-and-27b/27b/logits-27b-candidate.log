@@ -1,0 +1,16 @@
+[kapitsa] read 15.13 GB of weights in 3427 ms (4.4 GB/s)
+[kapitsa] read 0.24 GB of weights in 56 ms (4.3 GB/s)
+[kapitsa] MTP head loaded in 20 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 3619 ms
+[kapitsa] prewarmed 93 prefill pipelines in 3627 ms
+[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 7304 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 34/34 units (17408 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 3 ms, program cached 2 ms + load 76 ms (13 functions, MIL 133 KB); 629.0 MB Metal; ready in 0.1 s
+[kapitsa] NI_ANE: startup check 0.75% of the ANE's part from the GPU alone (2 functions, 565 ms)
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+prefill 8 rows: next-token NLL 1.0187, top-1 = next token 0.7500 -> /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-candidate/prefill
+step   192 rows: next-token NLL 0.4385, top-1 = next token 0.8646 -> /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-candidate/step
+verify 192 rows: next-token NLL 0.4386, top-1 = next token 0.8646 -> /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-candidate/verify
+batch  192 rows: next-token NLL 0.4385, top-1 = next token 0.8646 -> /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-candidate/batch
+8 windows, 14848 prefilled tokens in 42.2 s; 60.5 s in all
