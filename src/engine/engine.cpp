@@ -306,12 +306,16 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if (opts_.prefill_chunk <= 0) {
       opts_.prefill_chunk = sp.prefill_chunk;
       narrow_chunk_ = lp.prefill_narrow;
+      concurrent_chunk_ = lp.prefill_concurrent;
       const int base = opts_.prefill_chunk > 2048 && opts_.prefill_chunk <= prefill_chunk_room(2048)
                            ? 2048  // only its tail room: the 2048-row chunk still fits
                            : opts_.prefill_chunk;
       if (base < 2048)
         logi("memory: %d-row prefill chunks (2048 would leave less than one %d-token conversation in the %.1f GB budget)",
              base, opts_.context, budget_ / 1e9);
+      else if (concurrent_chunk_ > 0)  // the wide scratch is allocated; a step uses it only while this request is alone
+        logi("prefill: %d-row chunks when this request is alone (%d while another request holds a slot)", base,
+             concurrent_chunk_);
       else if (base > 2048)  // the single-slot 35B's wide chunk (auto_prefill_chunk): chosen for speed, memory permitting
         logi("prefill: %d-row chunks (fewer expert-weight reads; the memory plan fits them)%s", base,
              narrow_chunk_ ? ", for a prefill of at least two of them" : "");
@@ -859,7 +863,8 @@ int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even) {
   return rows;
 }
 
-static int auto_chunk(const std::string& model_dir, int context, int slots, size_t budget, bool q20_wide) {
+static int auto_chunk(const std::string& model_dir, int context, int slots, size_t budget, bool q20_wide,
+                      bool wave_wide = true) {
   // 1024-row buffers need ~45% less than 2048-row ones (35B: 0.75 -> 0.38 GB, 27B: 0.94 -> 0.52) for a few % of
   // prefill speed
   if (NemotronH::is_model(model_dir))
@@ -873,20 +878,23 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // bound, so a sliver of rows costs little, and a model whose prefill splits on the Neural Engine keeps the plain
   // chunk (the split runs chunks of at most 2048 rows, so room would push every chunk off it).
   const bool room = prefill_even_chunks() && !p.dense && ane == 0;
-  // Single-stream 35B-A3B 4-bit on the 32-core M1 Max and on the M5 (Apple10): larger prompt chunks
-  // reduce expert-tile padding and weight rereads. Keep the existing chunk for
-  // concurrent slots, other formats/devices, or when the extra buffers do not fit.
+  // 35B-A3B 4-bit on the 32-core M1 Max and on the M5 (Apple10): larger prompt chunks reduce expert-tile padding
+  // and weight rereads. The 4096-row chunk stays a single slot. The 8192-row wave scratch is one set of buffers (the
+  // turn runs one request's chunk at a time), so it is allocated whenever that scratch plus every slot's state and one
+  // conversation fit. A step uses it only while this request is alone (Engine::prefill_chunk_for); a concurrent step
+  // keeps the smaller chunk. wave_wide false is that smaller chunk.
   // M5 Pro, ni_run cold prefill, 2112 -> 4224 rows: 4K 2,637 -> 2,808 tok/s, 16K 2,095 -> 2,192 (logits bitwise the
   // same in dumps of at most 3,200 tokens, i.e. one chunk; a 16K prompt split over chunks was not dumped); the plan counts 0.75 GB more buffers, the measured peak footprint grows by 0.58 GB.
   // With its GPU wavefront (NI_PF_WAVE, on an Apple10 GPU of 20 cores or more) the same model takes 8192-row chunks,
   // so each half has the rows a 4096-row chunk had: ni_run, 16,288 ids 2,777 -> 2,620 ms on the M5 Max, 5,635 -> 5,465
   // ms on the 20-core M5 Pro (Qwen35::gpu_wave_rows).
-  if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 && p.formats.rfind("4-bit group 64", 0) == 0 &&
+  if (wave_wide && !p.dense && p.hidden == 2048 && p.layers == 40 && p.formats.rfind("4-bit group 64", 0) == 0 &&
       Qwen35::gpu_wave_default(p.hidden, p.layers, true) &&
       (!Clover::is_model(model_dir) || (getenv("NI_PF_WAVE") && atoi(getenv("NI_PF_WAVE")) == 1))) {
-    const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(8192) : 8192);
-    if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
-      return room ? prefill_chunk_room(8192) : 8192;
+    const int wide_rows = room ? prefill_chunk_room(8192) : 8192;
+    const MemPlan wide = model_plan(model_dir, wide_rows);
+    if (wide.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
+      return wide_rows;
   }
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
       p.formats.rfind("4-bit group 64", 0) == 0 &&
@@ -1022,7 +1030,15 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
     logd("prefill chunk %d planned, the peers take %d a pass: %d rows", lp.prefill_chunk, prefill_chunk_cap, plain);
     lp.prefill_chunk = plain;
   }
-  if (prefill_chunk <= 0) lp.prefill_narrow = prefill_narrow_chunk(model_dir, context, slots, left);
+  if (prefill_chunk <= 0) {
+    lp.prefill_narrow = prefill_narrow_chunk(model_dir, context, slots, left);
+    // More than one slot: remember the chunk a concurrent step keeps, so auto_slots does not drop a slot the small
+    // chunk still affords just because the wide scratch fits only at fewer slots.
+    if (slots > 1) {
+      const int small = auto_chunk(model_dir, context, slots, left, true, false);
+      if (small > 0 && small < lp.prefill_chunk) lp.prefill_concurrent = small;
+    }
+  }
   return lp;
 }
 
@@ -1140,10 +1156,14 @@ int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t bu
     const bool spec_off = opt.spec_depth == 0;
     const LoadPlan two = plan_load(model_dir, opt.dflash, spec_off, opt.context, 2, budget, opt.prefill_chunk);
     // the most slots up to kAutoSlots that cost nothing two slots have: the same decoding (a drafter two slots keep is
-    // kept), the same prefill chunk, and one full --ctx conversation beside them
+    // kept), the same chunk a concurrent step uses (a wide scratch that fits only at fewer slots must not drop a slot
+    // the small chunk still affords), and one full --ctx conversation beside them
+    auto step_base = [](const LoadPlan& lp) {
+      return lp.prefill_concurrent > 0 ? lp.prefill_concurrent : lp.prefill_chunk;
+    };
     for (int n = kAutoSlots; n > 2; --n) {
       const LoadPlan more = plan_load(model_dir, opt.dflash, spec_off, opt.context, n, budget, opt.prefill_chunk);
-      if (more.dflash == two.dflash && more.prefill_chunk == two.prefill_chunk &&
+      if (more.dflash == two.dflash && step_base(more) == step_base(two) &&
           conversation_fits(model_dir, opt.context, n, budget > more.dflash_bytes ? budget - more.dflash_bytes : 0))
         return n;
     }
@@ -2830,7 +2850,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
   } mask_off{s};
   double t0 = now_ms();
-  const int C = prefill_chunk_for(n - start);
   int p = start;
   int last_chunk_row = 0;
   int saved_ckpt = -1;  // the checkpoint this prefill saves (DFlash2: its ring snapshot follows the prompt commit)
@@ -2962,6 +2981,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // (q20::group_chunks); the engine's own cap keeps Ts[] below in bounds)
   const int pgroup = std::min(model_->prefill_group(), 8);
   std::unique_ptr<Encoder> last, last2;
+  bool logged_wide = false;
   while (p < n) {
     if (last2) {
       last2->wait();
@@ -2988,7 +3008,14 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (dfl_) dfl_->begin_prefill(n, start);
       if (lili_) lili_->begin_prefill(n, start);
     }
+    // The wide scratch is one set of buffers. Recompute after a yield: a request that arrived during the chunk so far
+    // keeps the smaller chunk, and a request that is alone again takes the wide one.
+    const int C = prefill_chunk_for(n - p);
     int T = prefill_chunk_rows(C, p, n, prefill_even_chunks() && !model_->ane_split_on());
+    if (!logged_wide && concurrent_chunk_ > 0 && T > concurrent_chunk_) {
+      logi("prefill: %d-row pass (this request is alone)", T);
+      logged_wide = true;
+    }
     // NI_VPF: a request whose whole new suffix is a few rows over a long cached prefix (an agent turn) runs the
     // suffix as verify passes: one pass per up to 32 rows (16 or 8 where the target verifies narrow, NI_VPF_ROWS), the sampler of the
     // last row giving the reply's first token. Its rows are chain rows, exactly what the verify pass verifies, and

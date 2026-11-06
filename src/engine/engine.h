@@ -159,6 +159,9 @@ struct LoadPlan {
   size_t dflash_found_bytes = 0;  // the same for the drafter found, loaded or left out
   int prefill_chunk = 2048;
   int prefill_narrow = 0;  // prefill_narrow_chunk (an auto prefill_chunk only): a prefill under 2 chunks runs these rows
+  // The smaller chunk a step uses while another request holds a slot. The wide scratch is one set of buffers, so it is
+  // allocated whenever the plan fits, including a server of more than one slot; 0 means every step uses prefill_chunk.
+  int prefill_concurrent = 0;
 };
 // dflash: "auto", "none" / "0" / "off", a drafter directory, or "" (NI_DFLASH if set, else auto); spec_off: --spec 0.
 // auto leaves a drafter out where one conversation of `context` tokens would not fit the budget beside it (context
@@ -682,8 +685,12 @@ class Engine {
   // LoadPlan::prefill_narrow: Flash-Next Q2_0's 4096-row chunks only for a prefill that fills two of them. 32K gains
   // (fewer expert reads); a 4K prompt measured no gain, so it keeps the chunk it ran before (0: always the model's)
   int narrow_chunk_ = 0;
+  int concurrent_chunk_ = 0;  // LoadPlan::prefill_concurrent: a step uses this while another request holds a slot
   int prefill_chunk_for(int64_t rows) const {
     const int C = model_->prefill_chunk();
+    // Another request holds a slot for its whole chat, including decode, so a concurrent step keeps the smaller chunk.
+    // A queued request that has no slot yet does not: a one-slot server stays on the wide chunk it measured.
+    if (concurrent_chunk_ > 0 && concurrent_chunk_ < C && active_ > 1) return concurrent_chunk_;
     return narrow_chunk_ > 0 && narrow_chunk_ < C && rows < 2 * int64_t(C) ? narrow_chunk_ : C;
   }
   int context_fit_ = 0;  // see context_fit()

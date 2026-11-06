@@ -543,6 +543,7 @@ int run_doctor(int argc, char** argv) {
     o["weights_bytes"] = m.weights;
     o["mtp_bytes"] = m.mtp;
     o["prefill_chunk"] = ch;
+    if (lp.prefill_concurrent > 0) o["prefill_concurrent"] = lp.prefill_concurrent;
     o["slots"] = slots;
     o["activation_bytes"] = m.activations;
     // the store-world charge the fit numbers carry (#628): 0 when the predicted store is complete, the pin
