@@ -196,6 +196,11 @@ jobs:
       - name: dflash_lowrank_cache_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/dflash_lowrank_cache_test
+      - name: dflash_row_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target dflash_row_test
+          build/dflash_row_test
       - name: dflash_plan_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/dflash_plan_test
