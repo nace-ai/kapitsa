@@ -382,6 +382,11 @@ bool DFlash2::rows16_tensor_ok() const {
   for (const DLayer& L : layers_)
     for (const QLinear* q : {&L.q, &L.kv, &L.o, &L.gate, &L.up, &L.down})
       tw = tw && q->q4() && q->gs == 64 && q->K % 64 == 0;
+  // The draft head's GEMM runs on the same path: the reduced head keeps the target head's format (an 8-bit copy when
+  // that has no 4/8-bit group-64 kernels), so a target whose head is 8-bit (a GGUF import: Swift-1.5's lm_head is 8-bit
+  // group 64) cannot draft a 16-row block ("a GEMM (K 5120) needs the tensor path", #967) and keeps the 8-row one.
+  // Before build_head the head is the target's own; after it, the reduced copy.
+  tw = tw && (head_n_ ? head_sub_ : tg_.lm_head()).q4();
   return tw;
 }
 

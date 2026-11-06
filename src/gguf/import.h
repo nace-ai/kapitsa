@@ -31,6 +31,16 @@ struct ImportOptions {
   // gone}); nothing in the models dir
   std::string plan_dir;
   bool progress = true;
+  // After the conversion: fetch the catalog drafter that matches the model's shape into dflash2/ (hub::fetch_drafter),
+  // so that `--dflash auto` finds one: an imported 27B or 35B-A3B fine-tune runs the catalog's drafter (#967, #364).
+  // Offline or out of disk space: the import is kept and prints one line; the model runs without a drafter.
+  bool drafter = true;
+  // true with --no-drafter: remembered in the folder's manifest, so a later `serve --model FILE.gguf` keeps to it.
+  // `drafter = false` alone (kapitsa bench) fetches nothing now and remembers nothing.
+  bool decline_drafter = false;
+  // `kapitsa import` itself (not serve / bench / agent launch): asks for the drafter again even when an earlier
+  // `--no-drafter` import of this file declined it
+  bool from_import_command = false;
 };
 
 // Converts the GGUF, or finds its earlier conversion (same files, sizes and dates), and returns the model folder.

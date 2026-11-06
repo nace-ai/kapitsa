@@ -1515,6 +1515,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     io.name = ref.dir.substr(ref.dir.find_last_of('/') + 1);
     io.force = true;
     io.progress = opt.progress;
+    io.drafter = false;  // the catalog variant lists its own companions
     if (models_dir() + "/" + io.name != ref.dir) throw Error("internal: " + tilde(ref.dir) + " is not in " + tilde(models_dir()));
     try {
       gguf::import_model(io);
@@ -1933,6 +1934,147 @@ std::vector<Installed> installed() {
     out.push_back(m);
   }
   return out;
+}
+
+// A drafter folder whose weights are there. download() renames model.safetensors into place last (it is the biggest file
+// and only a verified one is renamed), so a folder that a stopped or failed download left with config.json alone is not
+// an installed drafter and the next fetch resumes it.
+bool drafter_installed(const std::string& dir) {
+  for (const char* sub : {"/dflash2", "/drafter"}) {
+    DIR* d = opendir((dir + sub).c_str());
+    if (!d) continue;
+    bool found = false;
+    while (const dirent* e = readdir(d)) {
+      const std::string n = e->d_name;
+      if (n.size() > 12 && n.compare(n.size() - 12, 12, ".safetensors") == 0) found = true;
+    }
+    closedir(d);
+    if (found) return true;
+  }
+  return false;
+}
+
+bool drafter_declined(const std::string& dir) {
+  try {
+    return ojson::parse(read_text(manifest_path(dir))).value("no_drafter", false);
+  } catch (...) {
+    return false;
+  }
+}
+
+void set_drafter_declined(const std::string& dir, bool declined) {
+  try {
+    ojson m = ojson::parse(read_text(manifest_path(dir)));
+    if (m.value("no_drafter", false) == declined) return;
+    if (declined) m["no_drafter"] = true;
+    else m.erase("no_drafter");
+    write_atomic(manifest_path(dir), m.dump(2) + "\n");
+  } catch (const std::exception&) {
+    // a folder without a manifest (hand-made): nothing to remember it in
+  }
+}
+
+std::string fetch_drafter(const std::string& dir, bool progress) {
+  if (drafter_installed(dir)) return "";
+  json cfg;
+  try {
+    cfg = json::parse(read_text(dir + "/config.json"));
+  } catch (...) {
+    return "";
+  }
+  const json t = cfg.contains("text_config") ? cfg["text_config"] : cfg;
+  if (!t.contains("hidden_size") || !t.contains("num_hidden_layers")) return "";
+  const Companion* c = drafter_for_shape(t["hidden_size"].get<int>(), t["num_hidden_layers"].get<int>());
+  if (!c) return "";
+  SignalGuard sig;
+  FolderLock lock(dir);
+  HttpClient api(30);
+  const Listing L = list_repo(api, c->repo, c->revision);
+  std::vector<std::unique_ptr<Target>> targets;
+  std::vector<Target*> todo;
+  ojson added = ojson::array();
+  uint64_t need = 0, bytes = 0;
+  for (const auto& name : c->files) {
+    const RemoteFile* f = L.find(name);
+    if (!f) throw Error(c->repo + " has no " + name + " at " + c->revision.substr(0, 7) + ". Please report this.");
+    auto tg = std::make_unique<Target>();
+    const std::string rel = c->subdir + "/" + name;
+    tg->label = rel;
+    tg->size = f->size;
+    tg->sha256 = f->sha256;
+    tg->blob = f->sha256.empty() ? f->blob : "";
+    tg->id = !f->sha256.empty() ? f->sha256 : f->blob;
+    tg->final_path = dir + "/" + rel;
+    tg->part_path = dir + "/.kapitsa/parts/" + rel + ".part";
+    tg->state_path = tg->part_path + ".json";
+    tg->pieces.push_back(Piece{file_url(L.repo, L.commit, f->path), 0, 0, f->size, false});
+    std::string cache_repo = L.repo;
+    for (size_t q; (q = cache_repo.find('/')) != std::string::npos;) cache_repo.replace(q, 1, "--");
+    tg->hf_cached = hf_cache_root() + "/models--" + cache_repo + "/snapshots/" + L.commit + "/" + f->path;
+    ojson e{{"path", rel}, {"size", f->size}};
+    if (!f->sha256.empty()) e["sha256"] = f->sha256;
+    added.push_back(e);
+    bytes += f->size;
+    uint64_t sz;
+    if (file_size(tg->final_path, sz) && sz == tg->size) {
+      targets.push_back(std::move(tg));
+      continue;
+    }
+    const FromIndex none;
+    bool hf = false;
+    const std::string src = reusable(*tg, none, hf);
+    Target* raw = tg.get();
+    targets.push_back(std::move(tg));
+    if (!src.empty()) {
+      if (device_of(src) != device_of(dir)) need += raw->size;
+      place(src, raw->final_path);
+      continue;
+    }
+    const uint64_t part = part_bytes(*raw);
+    need += raw->size - part;
+    todo.push_back(raw);
+  }
+  if (need + (1ull << 30) > free_bytes(dir))
+    throw Error("Not enough disk space for the " + fmt_bytes(bytes) + " drafter of " + tilde(dir) + ": " + fmt_bytes(need) +
+                " needed, " + fmt_bytes(free_bytes(dir)) + " free (keeping 1 GB spare).");
+  if (!todo.empty()) {
+    Progress prog;
+    prog.show = progress;
+    prog.tty = isatty(2);
+    if (progress) fprintf(stderr, "Fetching the %s drafter (%s) into %s/%s...\n", c->repo.c_str(), fmt_bytes(bytes).c_str(), tilde(dir).c_str(), c->subdir.c_str());
+    try {
+      download(todo, prog);
+    } catch (...) {
+      // a stopped or failed download leaves the small files (config.json, LICENSE) in dflash2/ and the weights as a .part:
+      // without the weights `--dflash auto` must not find the folder (DFlash2::find accepts it on config.json alone)
+      if (!drafter_installed(dir))
+        for (const auto& name : c->files) std::remove((dir + "/" + c->subdir + "/" + name).c_str());
+      rmdir((dir + "/" + c->subdir).c_str());
+      throw;
+    }
+  }
+  // `kapitsa list` shows it: a companions entry (one per kind, so a drafter deleted and fetched again is not listed twice)
+  // and its bytes. Not in "files": is_complete() decides whether an import is reused, and a drafter deleted to save disk
+  // must not make the whole conversion look unfinished (`serve --model FILE.gguf` would then ask for --force)
+  try {
+    ojson m = ojson::parse(read_text(manifest_path(dir)));
+    ojson comps = ojson::array();
+    bool counted = false;
+    for (const auto& e : m.value("companions", ojson::array())) {
+      if (e.value("kind", "") == c->kind) counted = true;
+      else comps.push_back(e);
+    }
+    comps.push_back(ojson{{"kind", c->kind}, {"repo", c->repo}, {"revision", c->revision}, {"commit", L.commit}, {"files", ojson::array()}});
+    m["companions"] = comps;
+    if (!counted) m["total_bytes"] = m.value("total_bytes", uint64_t(0)) + bytes;
+    write_atomic(manifest_path(dir), m.dump(2) + "\n");
+  } catch (const std::exception&) {
+    // a folder without a manifest (hand-made): the files stand on their own
+  }
+  for (const auto& tg : targets)
+    for (std::string d = dirname_of(tg->part_path); d.size() > dir.size() + 15 && rmdir(d.c_str()) == 0;) d = dirname_of(d);
+  rmdir((dir + "/.kapitsa/parts").c_str());
+  return c->repo.substr(c->repo.find('/') + 1);
 }
 
 }  // namespace ni::hub
