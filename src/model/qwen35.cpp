@@ -1093,7 +1093,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
   // Dense ANE FFN: legacy 2560-channel inputs keep their defaults; new 2048-channel inputs
-  // follow the fast profile. init_ane still requires calibration or a chip share and all runtime guards.
+  // follow fast on non-matrix Macs. init_ane still requires calibration or a chip share and runtime guards.
   if (!cfg_.moe && ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)))) init_ane();
 }
 

@@ -135,7 +135,8 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this 
 ## ANE prefill for hidden sizes divisible by 2048
 
 Hidden sizes divisible by 2048 up to 8192 are proposed for the fast profile (`KAPITSA_PROFILE=fast`);
-precise keeps these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
+the proposed default covers non-matrix Macs with a usable built-in or calibrated ANE share. M5/matrix-unit
+Macs and precise keep these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
 disables it in either profile. Larger widths remain on the GPU. The existing 4B/27B defaults remain.
 The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
 and rotation stay unchanged. All supported inputs use the existing rotation kernel and its token-wide scale.

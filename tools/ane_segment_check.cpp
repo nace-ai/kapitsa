@@ -219,11 +219,16 @@ void check_weights(uint32_t K, uint32_t N, uint32_t row0) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc == 2 && !strcmp(argv[1], "--profile")) {
+  if ((argc == 2 || argc == 3) && !strcmp(argv[1], "--profile")) {
+    const bool injected = argc == 3;
+    if (injected && strcmp(argv[2], "simd") && strcmp(argv[2], "matrix")) return 2;
     for (uint32_t h : {0u, 2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u}) {
-      const bool on = ane::input_profile_enabled(ane::FfnSplit::input_segment(h));
+      const auto segment = ane::FfnSplit::input_segment(h);
+      const bool on = injected ? ane::input_profile_enabled(segment, !strcmp(argv[2], "matrix"))
+                               : ane::input_profile_enabled(segment);
       printf("%u %d\n", h, int(on));
-      if (!on) {
+      if (!on && (!injected || !segment || profile() != Profile::kFast ||
+                  (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")))) {
         Qwen35::MemPlan m;
         m.dense = m.ffn_ane = true;
         m.hidden = int(h);
@@ -235,7 +240,7 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (argc > 2 || (argc == 2 && strcmp(argv[1], "--gpu"))) {
-    fprintf(stderr, "usage: ane_segment_check [--gpu|--profile]\n");
+    fprintf(stderr, "usage: ane_segment_check [--gpu|--profile [simd|matrix]]\n");
     return 2;
   }
   auto expect = [](bool ok, const char* what) {
