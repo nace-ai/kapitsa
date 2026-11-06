@@ -1,0 +1,313 @@
+PASS object, required, closed: accepts {"name":"Bob","age":42}
+PASS object, required, closed: accepts { "age" : -3 ,"name": "x" }
+PASS object, required, closed: accepts {"name":"a\\"b\\\\\xc3\xa9\\n","age":0}
+PASS object, required, closed: accepts {\n  "name": "Zo\xc3\xab",\n  "age": 7\n}
+PASS object, required, closed: accepts {"name":"","age":-9223372036854775807}
+PASS object, required, closed: leaves open {"name":"Bob"
+PASS object, required, closed: leaves open {"name":"Bob","age":4
+PASS object, required, closed: leaves open {
+PASS object, required, closed: leaves open {"na
+PASS object, required, closed: leaves open {"name":"Bob\\
+PASS object, required, closed: rejects {"name":"Bob"}
+PASS object, required, closed: rejects {"name":"Bob","age":42,"x":1}
+PASS object, required, closed: rejects {"name":"Bob","name":"x","age":1}
+PASS object, required, closed: rejects {"name":1,"age":1}
+PASS object, required, closed: rejects {"name":"a","age":4.5}
+PASS object, required, closed: rejects {"name":"a","age":042}
+PASS object, required, closed: rejects {"name":"a","age":1,}
+PASS object, required, closed: rejects {"name":"a","age":1} 
+PASS object, required, closed: rejects []
+PASS object, required, closed: rejects {"name":"a\x01","age":1}
+PASS object, required, closed: rejects {"name":"\xff","age":1}
+PASS object, required, closed: rejects {"name":"\xc3","age":1}
+PASS object, required, closed: rejects {"name":"\\q","age":1}
+PASS object, required, closed: rejects {"name":"\\u12G4","age":1}
+PASS object, required, closed: rejects {                                                 "name":"a","age":1}
+PASS object, required, closed: rejects {\n\n\n"name":"a","age":1}
+PASS object, required, closed: rejects {"age":1,"name":"a","age":2}
+PASS enum, const: accepts {"color":"red"}
+PASS enum, const: accepts {"k":5,"color":"blue"}
+PASS enum, const: accepts {"color":"green","mode":"b","extra":[1,{"z":null}]}
+PASS enum, const: leaves open {"color":"gr
+PASS enum, const: leaves open {"color":"green"
+PASS enum, const: rejects {"color":"reds"}
+PASS enum, const: rejects {"color":"Red"}
+PASS enum, const: rejects {"color":"red","k":6}
+PASS enum, const: rejects {"color":"red","k":5.0}
+PASS enum, const: rejects {"color":"red","mode":1}
+PASS enum, const: rejects {"k":5}
+PASS array of numbers, 1-3 items: accepts [1]
+PASS array of numbers, 1-3 items: accepts [1.5, -2e10, 3E+2]
+PASS array of numbers, 1-3 items: accepts [ 0 ]
+PASS array of numbers, 1-3 items: accepts [-0.0]
+PASS array of numbers, 1-3 items: accepts [1e-7,2]
+PASS array of numbers, 1-3 items: leaves open [1,
+PASS array of numbers, 1-3 items: leaves open [
+PASS array of numbers, 1-3 items: leaves open [1.
+PASS array of numbers, 1-3 items: leaves open [1e
+PASS array of numbers, 1-3 items: rejects []
+PASS array of numbers, 1-3 items: rejects [1,2,3,4]
+PASS array of numbers, 1-3 items: rejects [1,]
+PASS array of numbers, 1-3 items: rejects [01]
+PASS array of numbers, 1-3 items: rejects [1.]
+PASS array of numbers, 1-3 items: rejects [.5]
+PASS array of numbers, 1-3 items: rejects [+1]
+PASS array of numbers, 1-3 items: rejects [1e]
+PASS array of numbers, 1-3 items: rejects ["a"]
+PASS array of numbers, 1-3 items: rejects [1 2]
+PASS array of numbers, 1-3 items: rejects [NaN]
+PASS nested, anyOf with null: accepts {"tags":[],"meta":null}
+PASS nested, anyOf with null: accepts {"tags":["a","b"],"meta":{"id":3}}
+PASS nested, anyOf with null: accepts {"meta":{"id":-1,"x":true},"tags":["\xc3\xa9"]}
+PASS nested, anyOf with null: leaves open {"tags":["a"
+PASS nested, anyOf with null: leaves open {"tags":[],"meta":{
+PASS nested, anyOf with null: rejects {"tags":[],"meta":{}}
+PASS nested, anyOf with null: rejects {"tags":[1],"meta":null}
+PASS nested, anyOf with null: rejects {"tags":[],"meta":nul}
+PASS nested, anyOf with null: rejects {"tags":[],"meta":"x"}
+PASS recursive $ref: accepts {"v":1}
+PASS recursive $ref: accepts {"v":1,"kids":[{"v":2},{"v":3,"kids":[{"v":4,"kids":[]}]}]}
+PASS recursive $ref: leaves open {"v":1,"kids":[{"v":2
+PASS recursive $ref: rejects {"v":1,"kids":[{}]}
+PASS recursive $ref: rejects {"v":1,"kids":[{"v":"2"}]}
+PASS recursive $ref: rejects {"v":1,"other":2}
+PASS integer bounds: accepts 0
+PASS integer bounds: accepts -5
+PASS integer bounds: accepts 120
+PASS integer bounds: accepts 7
+PASS integer bounds: accepts -0
+PASS integer bounds: accepts 99
+PASS integer bounds: leaves open -
+PASS integer bounds: rejects 121
+PASS integer bounds: rejects -6
+PASS integer bounds: rejects 1000
+PASS integer bounds: rejects -50
+PASS integer bounds: rejects 007
+PASS integer bounds: rejects 1.0
+PASS integer bounds: rejects 1e2
+PASS integer bounds: rejects 130
+PASS integer exclusive bounds: accepts 1
+PASS integer exclusive bounds: accepts 9
+PASS integer exclusive bounds: rejects 0
+PASS integer exclusive bounds: rejects 10
+PASS integer exclusive bounds: rejects -1
+PASS integer exclusive bounds: rejects -0
+PASS non-negative number: accepts 0
+PASS non-negative number: accepts 3.25
+PASS non-negative number: accepts 1e3
+PASS non-negative number: rejects -1
+PASS non-negative number: rejects -0.5
+PASS string or null: accepts null
+PASS string or null: accepts "x"
+PASS string or null: accepts ""
+PASS string or null: leaves open "x
+PASS string or null: leaves open nu
+PASS string or null: rejects 1
+PASS string or null: rejects {}
+PASS string or null: rejects nulll
+PASS string or null: rejects true
+PASS booleans and null: accepts {"ok":true,"n":null}
+PASS booleans and null: accepts {"n":null,"ok":false}
+PASS booleans and null: leaves open {"ok":tr
+PASS booleans and null: rejects {"ok":"true","n":null}
+PASS booleans and null: rejects {"ok":1,"n":null}
+PASS booleans and null: rejects {"ok":true,"n":0}
+PASS open object (additional properties): accepts {"a":1}
+PASS open object (additional properties): accepts {"b":"x","a":2,"c":[1,{"d":false}]}
+PASS open object (additional properties): accepts {}
+PASS open object (additional properties): accepts {"ab":1.5}
+PASS open object (additional properties): accepts {"":0}
+PASS open object (additional properties): leaves open {"a"
+PASS open object (additional properties): rejects {"a":"x"}
+PASS open object (additional properties): rejects {"a":1,"a":2}
+PASS the same, strict: closed: accepts {"a":1}
+PASS the same, strict: closed: accepts {}
+PASS the same, strict: closed: rejects {"b":1}
+PASS the same, strict: closed: rejects {"a":1,"b":2}
+PASS the same, strict: closed: rejects {"ab":1}
+PASS oneOf by const: accepts {"kind":"circle","r":2}
+PASS oneOf by const: accepts {"w":1,"kind":"rect","h":2}
+PASS oneOf by const: leaves open {"kind":"rect","w":1
+PASS oneOf by const: rejects {"kind":"circle","w":2}
+PASS oneOf by const: rejects {"kind":"rect","w":1}
+PASS oneOf by const: rejects {"kind":"square","r":1}
+PASS tuple (prefixItems): accepts ["a",1]
+PASS tuple (prefixItems): accepts ["a"]
+PASS tuple (prefixItems): accepts []
+PASS tuple (prefixItems): rejects ["a",1,2]
+PASS tuple (prefixItems): rejects [1,"a"]
+PASS tuple (prefixItems): rejects ["a","b"]
+PASS allOf: accepts {"a":"x","b":0}
+PASS allOf: accepts {"b":3,"a":""}
+PASS allOf: rejects {"a":"x"}
+PASS allOf: rejects {"a":"x","b":-1}
+PASS allOf: rejects {"a":"x","b":1,"c":1}
+PASS string lengths: accepts {"code":"ab"}
+PASS string lengths: accepts {"code":"abcde"}
+PASS string lengths: accepts {"code":"\xc3\xa9\xc3\xa9"}
+PASS string lengths: accepts {"code":"\xc3\xa9\\u00e9x"}
+PASS string lengths: accepts {"code":"\\n\\t"}
+PASS string lengths: accepts {"code":"xyz","note":""}
+PASS string lengths: accepts {"code":"\xf0\x9f\x98\x80\xf0\x9f\x98\x80"}
+PASS string lengths: leaves open {"code":"a
+PASS string lengths: leaves open {"code":"abcde
+PASS string lengths: rejects {"code":"a"}
+PASS string lengths: rejects {"code":"abcdef"}
+PASS string lengths: rejects {"code":""}
+PASS string lengths: rejects {"code":"ab","note":"x"}
+PASS string lengths: rejects {"code":"\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"}
+PASS any JSON value: accepts 1
+PASS any JSON value: accepts "s"
+PASS any JSON value: accepts [1,"2",{"3":[null,true,false]}]
+PASS any JSON value: accepts {"a":{"b":{}}}
+PASS any JSON value: accepts -0.5e+3
+PASS any JSON value: leaves open [
+PASS any JSON value: leaves open {"a"
+PASS any JSON value: rejects 
+PASS any JSON value: rejects {,}
+PASS any JSON value: rejects [1,]
+PASS any JSON value: rejects tru
+PASS any JSON value: rejects {'a':1}
+PASS any JSON value: rejects 1 2
+PASS keys with escapes and non-ASCII: accepts {"caf\xc3\xa9":"x","a\\"b":1}
+PASS keys with escapes and non-ASCII: rejects {"cafe":"x","a\\"b":1}
+PASS json_object: accepts {}
+PASS json_object: accepts {"a":[1,2,{"b":null}],"c":"d"}
+PASS json_object: accepts \n{"x": 1}
+PASS json_object: rejects []
+PASS json_object: rejects 1
+PASS json_object: rejects "x"
+PASS json_object: rejects {} 
+PASS json_object: rejects {}{}
+PASS no format, no tools: no grammar
+PASS refuses {"$ref":"http://example.com/s.json"} ($ref "http://example.com/s.json": only references within the schema (#/...) are supported)
+PASS refuses {"$ref":"#/$defs/missing"} ($ref "#/$defs/missing" does not resolve within the schema)
+PASS refuses {"type":"widget"} (unknown type "widget")
+PASS refuses {"anyOf":[]} (anyOf must be a non-empty array)
+PASS refuses {"type":"object","properties":{"a":false},"required":["a"]} (the schema allows no value)
+PASS refuses {"type":"integer","minimum":5,"maximum":2} (the schema allows no value)
+PASS refuses {"type":"array","minItems":3,"maxItems":1} (the schema allows no value)
+PASS refuses {"enum":[]} (enum must be a non-empty array)
+PASS refuses {"type":"object","properties":{"a":{"type":"string"}},"required":["b"],"additionalProperties":false} (the schema allows no value)
+PASS refuses {"anyOf":[{"type":"string"}],"oneOf":[{"type":"string"}]} (a schema with both anyOf and oneOf is not supported)
+PASS refuses {"$defs":{"a":{"$ref":"#/$defs/a"}},"$ref":"#/$defs/a"} (the schema allows no value)
+PASS refuses 5 (a schema must be an object or a boolean)
+PASS refuses a schema nested 70 levels deep
+PASS required: accepts <tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS required: accepts <tool_call>\n<function=get_weather>\n<parameter=unit>\nc\n</parameter>\n<parameter=location>\nOslo\n</parameter>\n<parameter=detail>\n{"hourly":true}\n</parameter>\n</function>\n</tool_call>
+PASS required: accepts <tool_call>\n<function=run_shell>\n<parameter=command>\nls -la\n echo </param> done\n</parameter>\n</function>\n</tool_call>
+PASS required: accepts \n<tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS required: accepts <tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>\n<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la\n echo </param> done\n</parameter>\n</function>\n</tool_call>
+PASS required: accepts <tool_call>\n<function=noop>\n</function>\n</tool_call>
+PASS required: accepts <tool_call>\n<function=run_shell>\n<parameter=command>\n\n</parameter>\n</function>\n</tool_call>
+PASS required: accepts <tool_call>\n<function=run_shell>\n<parameter=command>\n</parameter>\n</function>\n</tool_call>
+PASS required: accepts <tool_call>\n<function=run_shell>\n<parameter=command>\nx\n</parameter>\n<parameter=cwd>\n/tmp\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects Sure.<tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_wether>\n<parameter=location>\nx\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_weather>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_weather>\n<parameter=location>\nx\n</parameter>\n<parameter=days>\n3.5\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_weather>\n<parameter=location>\nx\n</parameter>\n<parameter=days>\n15\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (295 ms)
+[kapitsa] grammar: 248044 tokens in a 591554-node trie (48 ms)
+=get_weather>\n<parameter=location>\nx\n</parameter>\n<parameter=unit>\nk\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_weather>\n<parameter=location>\nx\n</parameter>\n<parameter=zone>\ny\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_weather>\n<parameter=location>\nx\n</parameter>\n<parameter=location>\ny\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=run_shell>\n<parameter=command>\na</parameter>b\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_weather>\n<parameter=location>\nx\n</parameter>\n<parameter=detail>\n{"hourly":"yes"}\n</parameter>\n</function>\n</tool_call>
+PASS required: rejects <tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>Done.
+PASS required: rejects 
+PASS required: a call in progress is open
+PASS named: accepts its call
+PASS named: rejects another tool
+PASS named, parallel_tool_calls false: rejects a second call
+PASS named: refuses a tool the request does not offer
+PASS required: refuses a request without tools
+PASS auto + strict tool: accepts Hello, no call needed.
+PASS auto + strict tool: accepts 
+PASS auto + strict tool: accepts Let me check.\n\n<tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS auto + strict tool: accepts <tool_call>\n<function=run_shell>\n<parameter=command>\nanything\n</parameter>\n<parameter=free>\nform\n</parameter>\n</function>\n</tool_call>
+PASS auto + strict tool: rejects the strict tool's call without its required argument
+PASS 40 tools: a free call to the 38th
+PASS 40 tools: a tool not offered is rejected
+PASS 40 tools: the strict one's arguments are held (days below its minimum)
+PASS format + tools: accepts the JSON
+PASS format + tools: accepts a call
+PASS format + tools: rejects free text
+token table: 248077 tokens (model vocabulary 248320), 591554 trie nodes, built in 48 ms
+PASS object, required, closed: the end of a complete reply is allowed: {"name":"Bob","age":42}
+PASS object, required, closed: the end of a complete reply is allowed: { "age" : -3 ,"name": "x" }
+PASS object, required, closed: the end of a complete reply is allowed: {"name":"a\\"b\\\\\xc3\xa9\\n","age":0}
+PASS object, required, closed: the end of a complete reply is allowed: {\n  "name": "Zo\xc3\xab",\n  "age": 7\n}
+PASS object, required, closed: the end of a complete reply is allowed: {"name":"","age":-9223372036854775807}
+PASS enum, const: the end of a complete reply is allowed: {"color":"red"}
+PASS enum, const: the end of a complete reply is allowed: {"k":5,"color":"blue"}
+PASS enum, const: the end of a complete reply is allowed: {"color":"green","mode":"b","extra":[1,{"z":null}]}
+PASS array of numbers, 1-3 items: the end of a complete reply is allowed: [1]
+PASS array of numbers, 1-3 items: the end of a complete reply is allowed: [1.5, -2e10, 3E+2]
+PASS array of numbers, 1-3 items: the end of a complete reply is allowed: [ 0 ]
+PASS array of numbers, 1-3 items: the end of a complete reply is allowed: [-0.0]
+PASS array of numbers, 1-3 items: the end of a complete reply is allowed: [1e-7,2]
+PASS nested, anyOf with null: the end of a complete reply is allowed: {"tags":[],"meta":null}
+PASS nested, anyOf with null: the end of a complete reply is allowed: {"tags":["a","b"],"meta":{"id":3}}
+PASS nested, anyOf with null: the end of a complete reply is allowed: {"meta":{"id":-1,"x":true},"tags":["\xc3\xa9"]}
+PASS recursive $ref: the end of a complete reply is allowed: {"v":1}
+PASS recursive $ref: the end of a complete reply is allowed: {"v":1,"kids":[{"v":2},{"v":3,"kids":[{"v":4,"kids":[]}]}]}
+PASS integer bounds: the end of a complete reply is allowed: 0
+PASS integer bounds: the end of a complete reply is allowed: -5
+PASS integer bounds: the end of a complete reply is allowed: 120
+PASS integer bounds: the end of a complete reply is allowed: 7
+PASS integer bounds: the end of a complete reply is allowed: -0
+PASS integer bounds: the end of a complete reply is allowed: 99
+PASS integer exclusive bounds: the end of a complete reply is allowed: 1
+PASS integer exclusive bounds: the end of a complete reply is allowed: 9
+PASS non-negative number: the end of a complete reply is allowed: 0
+PASS non-negative number: the end of a complete reply is allowed: 3.25
+PASS non-negative number: the end of a complete reply is allowed: 1e3
+PASS string or null: the end of a complete reply is allowed: null
+PASS string or null: the end of a complete reply is allowed: "x"
+PASS string or null: the end of a complete reply is allowed: ""
+PASS booleans and null: the end of a complete reply is allowed: {"ok":true,"n":null}
+PASS booleans and null: the end of a complete reply is allowed: {"n":null,"ok":false}
+PASS open object (additional properties): the end of a complete reply is allowed: {"a":1}
+PASS open object (additional properties): the end of a complete reply is allowed: {"b":"x","a":2,"c":[1,{"d":false}]}
+PASS open object (additional properties): the end of a complete reply is allowed: {}
+PASS open object (additional properties): the end of a complete reply is allowed: {"ab":1.5}
+PASS open object (additional properties): the end of a complete reply is allowed: {"":0}
+PASS the same, strict: closed: the end of a complete reply is allowed: {"a":1}
+PASS the same, strict: closed: the end of a complete reply is allowed: {}
+PASS oneOf by const: the end of a complete reply is allowed: {"kind":"circle","r":2}
+PASS oneOf by const: the end of a complete reply is allowed: {"w":1,"kind":"rect","h":2}
+PASS tuple (prefixItems): the end of a complete reply is allowed: ["a",1]
+PASS tuple (prefixItems): the end of a complete reply is allowed: ["a"]
+PASS tuple (prefixItems): the end of a complete reply is allowed: []
+PASS allOf: the end of a complete reply is allowed: {"a":"x","b":0}
+PASS allOf: the end of a complete reply is allowed: {"b":3,"a":""}
+PASS string lengths: the end of a complete reply is allowed: {"code":"ab"}
+PASS string lengths: the end of a complete reply is allowed: {"code":"abcde"}
+PASS string lengths: the end of a complete reply is allowed: {"code":"\xc3\xa9\xc3\xa9"}
+PASS string lengths: the end of a complete reply is allowed: {"code":"\xc3\xa9\\u00e9x"}
+PASS string lengths: the end of a complete reply is allowed: {"code":"\\n\\t"}
+PASS string lengths: the end of a complete reply is allowed: {"code":"xyz","note":""}
+PASS string lengths: the end of a complete reply is allowed: {"code":"\xf0\x9f\x98\x80\xf0\x9f\x98\x80"}
+PASS any JSON value: the end of a complete reply is allowed: 1
+PASS any JSON value: the end of a complete reply is allowed: "s"
+PASS any JSON value: the end of a complete reply is allowed: [1,"2",{"3":[null,true,false]}]
+PASS any JSON value: the end of a complete reply is allowed: {"a":{"b":{}}}
+PASS any JSON value: the end of a complete reply is allowed: -0.5e+3
+PASS keys with escapes and non-ASCII: the end of a complete reply is allowed: {"caf\xc3\xa9":"x","a\\"b":1}
+PASS json_object: the end of a complete reply is allowed: {}
+PASS json_object: the end of a complete reply is allowed: {"a":[1,2,{"b":null}],"c":"d"}
+PASS json_object: the end of a complete reply is allowed: \n{"x": 1}
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=get_weather>\n<parameter=unit>\nc\n</parameter>\n<parameter=location>\nOslo\n</parameter>\n<parameter=detail>\n{"hourly":true}\n</parameter>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=run_shell>\n<parameter=command>\nls -la\n echo </param> done\n</parameter>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: \n<tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>\n<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la\n echo </param> done\n</parameter>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=noop>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=run_shell>\n<parameter=command>\n\n</parameter>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=run_shell>\n<parameter=command>\n</parameter>\n</function>\n</tool_call>
+PASS tool_choice required: the end of a complete reply is allowed: <tool_call>\n<function=run_shell>\n<parameter=command>\nx\n</parameter>\n<parameter=cwd>\n/tmp\n</parameter>\n</function>\n</tool_call>
+PASS auto + strict tool: the end of a complete reply is allowed: Let me check.\n\n<tool_call>\n<function=get_weather>\n<parameter=location>\nParis, France\n</parameter>\n<parameter=days>\n3\n</parameter>\n</function>\n</tool_call>
+PASS masks equal brute force at 614 states
+mask time per token over 248320 tokens (1786 states, warm): mean 7.6 us, median 3.4, p90 16.0, p99 42.9, max 59.6
+308 passed, 0 failed

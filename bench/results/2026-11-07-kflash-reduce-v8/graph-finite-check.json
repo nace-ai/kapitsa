@@ -1,0 +1,434 @@
+[
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-0-base/debug0-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-0-base/debug1-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug0-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-1536-check-1-candidate/debug1-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-0-base/debug0-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-0-base/debug1-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor0-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor1-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor2-logits.bin",
+    "values": 688128,
+    "all_finite": true,
+    "nonzero": 688128
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor0-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor1-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor2-hidden.bin",
+    "values": 20480,
+    "all_finite": true,
+    "nonzero": 20480
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug0-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor0-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor1-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  },
+  {
+    "file": "graph-64-check-1-candidate/debug1-anchor2-candidate_values.bin",
+    "values": 112,
+    "all_finite": true,
+    "nonzero": 112
+  }
+]

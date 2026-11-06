@@ -1,0 +1,80 @@
+[
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/config.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/config.json",
+    "bytes": 3366,
+    "sha256": "f3efc81b2ea8d96a45301037d3ccccbcccdef44a961845c87f286aaddbc6eaaa"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/model.safetensors",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/model.safetensors",
+    "bytes": 3034301037,
+    "sha256": "52dc943eaf6093a2313271a7a0abc36d127b2a16609a0a7c54ee1b4e4ed06cb8"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/model.safetensors.index.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/model.safetensors.index.json",
+    "bytes": 101944,
+    "sha256": "52e534c41f7b97708329c85f762e5882bf48bd5955a422c6ae74eba321e6048a"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/mtp.safetensors",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/mtp.safetensors",
+    "bytes": 241200816,
+    "sha256": "4f491dd27975520ec9c9bfa970ca215cc7f12a0328761d3656ab7b9f388e472a"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/preprocessor_config.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/preprocessor_config.json",
+    "bytes": 390,
+    "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/processor_config.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/processor_config.json",
+    "bytes": 991,
+    "sha256": "45fc17c8dd2474af6b493b52483c26c0584b0082d368c480f9fa611e73070040"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/tokenizer.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/tokenizer.json",
+    "bytes": 19989325,
+    "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/tokenizer_config.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/tokenizer_config.json",
+    "bytes": 9187,
+    "sha256": "fa71760892f5c601d345e626ebd602055825a50beed7ee160709c95fffa475f0"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/validation-download.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/validation-download.json",
+    "bytes": 136,
+    "sha256": "6da7eb77938737d65e7779f4ba4f8c8fe833f5cf0b860cae9b74aa16a116cf37"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/video_preprocessor_config.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/video_preprocessor_config.json",
+    "bytes": 385,
+    "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/vocab.json",
+    "resolved": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit/vocab.json",
+    "bytes": 6722759,
+    "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2/config.json",
+    "resolved": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2/config.json",
+    "bytes": 1220,
+    "sha256": "6fa9ca0d10d2c3f5c93043bdd492e35283e284e4eb6a9e0479ba663609117203"
+  },
+  {
+    "file": "batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2/model.safetensors",
+    "resolved": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2/model.safetensors",
+    "bytes": 1268859081,
+    "sha256": "1eb221d36abb13a5f1b972f8d031a9723fad8cbb7d275abe548b60e77577eb42"
+  }
+]

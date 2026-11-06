@@ -1,0 +1,47 @@
+2026-11-07 01:53:32.194 check[12789:13196389] Metal API Validation Enabled
+2026-11-07 01:53:32.196 check[12789:13196389] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 3844 ms
+device=Apple M4 Pro thermal=nominal tg_original=16 tg_normal=16 tg_packed=16 reps=0
+case nr=8 splits=1 plan=0 active=1 bytes=65536 PASS
+case nr=8 splits=1 plan=1 active=1 bytes=65536 PASS
+case nr=8 splits=1 plan=2 active=1 bytes=65536 PASS
+case nr=8 splits=2 plan=0 active=2 bytes=65536 PASS
+case nr=8 splits=2 plan=1 active=2 bytes=65536 PASS
+case nr=8 splits=2 plan=2 active=2 bytes=65536 PASS
+case nr=8 splits=4 plan=0 active=4 bytes=65536 PASS
+case nr=8 splits=4 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=4 plan=2 active=4 bytes=65536 PASS
+case nr=8 splits=8 plan=0 active=8 bytes=65536 PASS
+case nr=8 splits=8 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=8 plan=2 active=8 bytes=65536 PASS
+case nr=8 splits=16 plan=0 active=16 bytes=65536 PASS
+case nr=8 splits=16 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=16 plan=2 active=16 bytes=65536 PASS
+case nr=8 splits=32 plan=0 active=32 bytes=65536 PASS
+case nr=8 splits=32 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=32 plan=2 active=16 bytes=65536 PASS
+case nr=8 splits=64 plan=0 active=64 bytes=65536 PASS
+case nr=8 splits=64 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=64 plan=2 active=16 bytes=65536 PASS
+case nr=16 splits=1 plan=0 active=1 bytes=131072 PASS
+case nr=16 splits=1 plan=1 active=1 bytes=131072 PASS
+case nr=16 splits=1 plan=2 active=1 bytes=131072 PASS
+case nr=16 splits=2 plan=0 active=2 bytes=131072 PASS
+case nr=16 splits=2 plan=1 active=2 bytes=131072 PASS
+case nr=16 splits=2 plan=2 active=2 bytes=131072 PASS
+case nr=16 splits=4 plan=0 active=4 bytes=131072 PASS
+case nr=16 splits=4 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=4 plan=2 active=4 bytes=131072 PASS
+case nr=16 splits=8 plan=0 active=8 bytes=131072 PASS
+case nr=16 splits=8 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=8 plan=2 active=8 bytes=131072 PASS
+case nr=16 splits=16 plan=0 active=16 bytes=131072 PASS
+case nr=16 splits=16 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=16 plan=2 active=16 bytes=131072 PASS
+case nr=16 splits=32 plan=0 active=32 bytes=131072 PASS
+case nr=16 splits=32 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=32 plan=2 active=16 bytes=131072 PASS
+case nr=16 splits=64 plan=0 active=64 bytes=131072 PASS
+case nr=16 splits=64 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=64 plan=2 active=16 bytes=131072 PASS
+cases=42 failures=0

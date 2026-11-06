@@ -1,0 +1,51 @@
+[
+  {
+    "build_command": [
+      "c++",
+      "-std=c++20",
+      "-O3",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-I",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/src",
+      "-I",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/include",
+      "-I",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/third_party",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/public-materials/check.cpp",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/libnaceinfer.a",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate",
+      "-o",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/public-run/check"
+    ]
+  },
+  {
+    "label": "validation",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/public-run/check",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/public-materials/original-reduce.metal",
+      "0"
+    ],
+    "exit": 0
+  }
+]

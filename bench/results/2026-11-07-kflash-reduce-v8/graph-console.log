@@ -1,0 +1,24 @@
+START graph-64-check-0-base
+END graph-64-check-0-base None {'samples': 39, 'mean_foreign_gpu_pct': 0.17, 'max_foreign_gpu_pct': 4.51, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-64-check-1-candidate
+END graph-64-check-1-candidate None {'samples': 40, 'mean_foreign_gpu_pct': 2.22, 'max_foreign_gpu_pct': 7.25, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 5, 'longest_busy_run': 2, 'top': ['Google Chrome He'], 'flagged': False}
+START graph-64-time-0-base
+END graph-64-time-0-base 2623.2782115 {'samples': 7, 'mean_foreign_gpu_pct': 0.14, 'max_foreign_gpu_pct': 0.96, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-64-time-1-candidate
+END graph-64-time-1-candidate 2567.4730904999997 {'samples': 7, 'mean_foreign_gpu_pct': 0.22, 'max_foreign_gpu_pct': 1.52, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-64-time-2-base
+END graph-64-time-2-base 2629.237413 {'samples': 7, 'mean_foreign_gpu_pct': 3.82, 'max_foreign_gpu_pct': 8.85, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 3, 'longest_busy_run': 2, 'top': ['Codex (Aperitif)'], 'flagged': False}
+START graph-64-time-3-candidate
+END graph-64-time-3-candidate 2560.3237849999996 {'samples': 7, 'mean_foreign_gpu_pct': 0.64, 'max_foreign_gpu_pct': 2.41, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-1536-check-0-base
+END graph-1536-check-0-base None {'samples': 7, 'mean_foreign_gpu_pct': 0.13, 'max_foreign_gpu_pct': 0.93, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-1536-check-1-candidate
+END graph-1536-check-1-candidate None {'samples': 7, 'mean_foreign_gpu_pct': 0.11, 'max_foreign_gpu_pct': 0.74, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-1536-time-0-base
+END graph-1536-time-0-base 2975.9487845000003 {'samples': 9, 'mean_foreign_gpu_pct': 0.75, 'max_foreign_gpu_pct': 6.71, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 1, 'longest_busy_run': 1, 'top': ['Google Chrome He'], 'flagged': False}
+START graph-1536-time-1-candidate
+END graph-1536-time-1-candidate 2948.90625 {'samples': 9, 'mean_foreign_gpu_pct': 0.0, 'max_foreign_gpu_pct': 0, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-1536-time-2-base
+END graph-1536-time-2-base 2996.8511285 {'samples': 9, 'mean_foreign_gpu_pct': 0.28, 'max_foreign_gpu_pct': 1.47, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 0, 'longest_busy_run': 0, 'top': [], 'flagged': False}
+START graph-1536-time-3-candidate
+END graph-1536-time-3-candidate 3025.2387154999997 {'samples': 9, 'mean_foreign_gpu_pct': 4.16, 'max_foreign_gpu_pct': 11.34, 'mean_ambient_gpu_pct': 0.0, 'busy_samples': 3, 'longest_busy_run': 2, 'top': ['Lark Helper', 'Codex (Aperitif)'], 'flagged': False}

@@ -1,0 +1,179 @@
+-- The C compiler identification is AppleClang 17.0.0.17000013
+-- The CXX compiler identification is AppleClang 17.0.0.17000013
+-- The OBJCXX compiler identification is AppleClang 17.0.0.17000013
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting OBJCXX compiler ABI info
+-- Detecting OBJCXX compiler ABI info - done
+-- Check for working OBJCXX compiler: /usr/bin/clang++ - skipped
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Configuring done (1.2s)
+-- Generating done (0.5s)
+-- Build files have been written to: /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build
+[  0%] Embedding the benchmark's prompt corpus
+[  4%] Embedding Metal kernels
+[  4%] Embedding the Metal 4 tensor kernels
+[  4%] Embedding the Dory Metal kernels
+[  4%] Embedding the Mac models
+[  4%] Embedding the Nemotron-H Metal kernels
+[  8%] Embedding the Flint Metal kernels
+[ 12%] Building OBJCXX object CMakeFiles/naceinfer.dir/src/ane/ane.mm.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/ane/ffn_split.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/api/clients.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/bench/monitor.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/api/common.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/api/responses.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/api/chat_completions.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/api/anthropic.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/bench/protocol.cpp.o
+[ 16%] Building CXX object CMakeFiles/naceinfer.dir/src/bench/result.cpp.o
+[ 20%] Building CXX object CMakeFiles/naceinfer.dir/src/bench/submit.cpp.o
+[ 20%] Building OBJCXX object CMakeFiles/naceinfer.dir/src/bench/system.mm.o
+[ 20%] Building CXX object CMakeFiles/naceinfer.dir/src/cluster/cluster.cpp.o
+[ 24%] Building CXX object CMakeFiles/naceinfer.dir/src/cluster/discovery.cpp.o
+[ 24%] Building CXX object CMakeFiles/naceinfer.dir/src/cluster/pipe.cpp.o
+[ 24%] Building CXX object CMakeFiles/naceinfer.dir/src/cluster/place.cpp.o
+[ 24%] Building CXX object CMakeFiles/naceinfer.dir/src/cluster/stage.cpp.o
+[ 28%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/device_profile.cpp.o
+[ 28%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/device_profile_live.cpp.o
+[ 28%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/doctor.cpp.o
+[ 28%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/engine.cpp.o
+[ 32%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/engine_disk.cpp.o
+[ 32%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/engine_splash.cpp.o
+[ 32%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/execution_session.cpp.o
+[ 36%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/grammar.cpp.o
+[ 36%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/prefix_cache.cpp.o
+[ 36%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/profile.cpp.o
+[ 36%] Building CXX object CMakeFiles/naceinfer.dir/src/gguf/gguf.cpp.o
+[ 40%] Building CXX object CMakeFiles/naceinfer.dir/src/gguf/import.cpp.o
+[ 40%] Building CXX object CMakeFiles/naceinfer.dir/src/gguf/quant.cpp.o
+[ 40%] Building CXX object CMakeFiles/naceinfer.dir/src/hub/catalog.cpp.o
+[ 44%] Building CXX object CMakeFiles/naceinfer.dir/src/hub/fetch.cpp.o
+[ 44%] Building OBJCXX object CMakeFiles/naceinfer.dir/src/hub/http.mm.o
+[ 44%] Building CXX object CMakeFiles/naceinfer.dir/src/hub/resolve.cpp.o
+[ 44%] Building CXX object CMakeFiles/naceinfer.dir/src/loader/safetensors.cpp.o
+[ 48%] Building OBJCXX object CMakeFiles/naceinfer.dir/src/metal/gpu.mm.o
+[ 48%] Building CXX object CMakeFiles/naceinfer.dir/src/model/clover.cpp.o
+[ 48%] Building CXX object CMakeFiles/naceinfer.dir/src/model/dflash2.cpp.o
+[ 52%] Building CXX object CMakeFiles/naceinfer.dir/src/model/dflash2_lowrank.cpp.o
+[ 52%] Building CXX object CMakeFiles/naceinfer.dir/src/model/dory.cpp.o
+[ 52%] Building CXX object CMakeFiles/naceinfer.dir/src/model/dspark.cpp.o
+[ 52%] Building CXX object CMakeFiles/naceinfer.dir/src/model/expert_store.cpp.o
+[ 56%] Building CXX object CMakeFiles/naceinfer.dir/src/model/flint.cpp.o
+[ 56%] Building CXX object CMakeFiles/naceinfer.dir/src/model/iq_experts.cpp.o
+[ 56%] Building CXX object CMakeFiles/naceinfer.dir/src/model/kflash_budget.cpp.o
+[ 60%] Building CXX object CMakeFiles/naceinfer.dir/src/model/lilicorr.cpp.o
+[ 60%] Building CXX object CMakeFiles/naceinfer.dir/src/model/logit_mask.cpp.o
+[ 60%] Building CXX object CMakeFiles/naceinfer.dir/src/model/moe_exl3.cpp.o
+[ 60%] Building CXX object CMakeFiles/naceinfer.dir/src/model/moe_q20.cpp.o
+[ 64%] Building CXX object CMakeFiles/naceinfer.dir/src/model/nemotron_ane.cpp.o
+[ 64%] Building CXX object CMakeFiles/naceinfer.dir/src/model/nemotron_h.cpp.o
+[ 64%] Building CXX object CMakeFiles/naceinfer.dir/src/model/ngram.cpp.o
+[ 68%] Building CXX object CMakeFiles/naceinfer.dir/src/model/nh_drafter.cpp.o
+/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/src/model/nemotron_h.cpp:478:10: warning: __builtin_available does not guard availability here; use if (__builtin_available) instead [-Wunsupported-availability-guard]
+  478 |     if (!__builtin_available(macOS 15.0, *)) return true;
+      |          ^
+[ 68%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35.cpp.o
+[ 68%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_ane.cpp.o
+[ 68%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_iq.cpp.o
+[ 72%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_spec.cpp.o
+[ 72%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_v8.cpp.o
+[ 72%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen4_config.cpp.o
+[ 76%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen4_exp.cpp.o
+[ 76%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen4_exp_spec.cpp.o
+[ 76%] Building CXX object CMakeFiles/naceinfer.dir/src/splash/discover.cpp.o
+[ 76%] Building CXX object CMakeFiles/naceinfer.dir/src/splash/plan.cpp.o
+[ 80%] Building CXX object CMakeFiles/naceinfer.dir/src/splash/protocol.cpp.o
+1 warning generated.
+[ 80%] Building CXX object CMakeFiles/naceinfer.dir/src/splash/runtime.cpp.o
+[ 80%] Building CXX object CMakeFiles/naceinfer.dir/src/systemone/systemone.cpp.o
+[ 84%] Building CXX object CMakeFiles/naceinfer.dir/src/tokenizer/tokenizer.cpp.o
+[ 84%] Building OBJCXX object CMakeFiles/naceinfer.dir/src/update/update.mm.o
+[ 84%] Building CXX object CMakeFiles/naceinfer.dir/src/util/json_file.cpp.o
+[ 84%] Building CXX object CMakeFiles/naceinfer.dir/src/util/term.cpp.o
+[ 88%] Building CXX object CMakeFiles/naceinfer.dir/src/vision/encoder.cpp.o
+[ 88%] Building OBJCXX object CMakeFiles/naceinfer.dir/src/vision/image.mm.o
+[ 88%] Building CXX object CMakeFiles/naceinfer.dir/src/vision/qwen_vit.cpp.o
+[ 92%] Building CXX object CMakeFiles/naceinfer.dir/src/vision/radio_vit.cpp.o
+[ 92%] Building CXX object CMakeFiles/naceinfer.dir/src/vision/vit_common.cpp.o
+[ 92%] Building CXX object CMakeFiles/naceinfer.dir/generated/kernels_embed.cpp.o
+[ 92%] Building CXX object CMakeFiles/naceinfer.dir/generated/nh_kernels_embed.cpp.o
+[ 96%] Building CXX object CMakeFiles/naceinfer.dir/generated/dory_kernels_embed.cpp.o
+[ 96%] Building CXX object CMakeFiles/naceinfer.dir/generated/flint_kernels_embed.cpp.o
+[ 96%] Building CXX object CMakeFiles/naceinfer.dir/generated/tensor_kernels_embed.cpp.o
+[100%] Building CXX object CMakeFiles/naceinfer.dir/generated/bench_corpus.cpp.o
+[100%] Building CXX object CMakeFiles/naceinfer.dir/generated/mac_models.cpp.o
+[100%] Linking CXX static library libnaceinfer.a
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/qmm_draft_check.dir/tools/qmm_draft_check.cpp.o
+[100%] Linking CXX executable qmm_draft_check
+[100%] Built target qmm_draft_check
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/ni_run.dir/tools/ni_run.cpp.o
+[100%] Linking CXX executable ni_run
+[100%] Built target ni_run
+[ 83%] Built target naceinfer
+[ 86%] Embedding the chat page
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/main.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/beam.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/launch.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/http_stream.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/native_execution.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/bench_cmd.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/ui.cpp.o
+[ 93%] Building CXX object CMakeFiles/kapitsa.dir/src/server/picker.cpp.o
+[ 93%] Building CXX object CMakeFiles/kapitsa.dir/src/server/update_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/stage_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/route.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/cluster_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/pair.cpp.o
+[100%] Building CXX object CMakeFiles/kapitsa.dir/generated/chat_page.cpp.o
+[100%] Linking CXX executable kapitsa
+[100%] Built target kapitsa
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/logit_dump.dir/tools/logit_dump.cpp.o
+[100%] Linking CXX executable logit_dump
+[100%] Built target logit_dump
+-- Configuring done (0.1s)
+-- Generating done (0.6s)
+-- Build files have been written to: /Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/qmm_draft_check.dir/tools/qmm_draft_check.cpp.o
+[100%] Linking CXX executable qmm_draft_check
+[100%] Built target qmm_draft_check
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/ni_run.dir/tools/ni_run.cpp.o
+[100%] Linking CXX executable ni_run
+[100%] Built target ni_run
+[ 83%] Built target naceinfer
+[ 86%] Embedding the chat page
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/main.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/native_execution.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/http_stream.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/ui.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/beam.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/launch.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/bench_cmd.cpp.o
+[ 93%] Building CXX object CMakeFiles/kapitsa.dir/src/server/picker.cpp.o
+[ 93%] Building CXX object CMakeFiles/kapitsa.dir/src/server/update_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/stage_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/route.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/cluster_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/pair.cpp.o
+[100%] Building CXX object CMakeFiles/kapitsa.dir/generated/chat_page.cpp.o
+[100%] Linking CXX executable kapitsa
+[100%] Built target kapitsa
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/logit_dump.dir/tools/logit_dump.cpp.o
+[100%] Linking CXX executable logit_dump
+[100%] Built target logit_dump

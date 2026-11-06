@@ -1,0 +1,21 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (0be92def)",
+  "model": "qwen3.5-4b-4bit",
+  "model_dir": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+  "path": "verify",
+  "verify": "KFlash tree (a chain of 8 live rows)",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 10,
+    "evals": 576,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/logits-base-v2",
+  "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+  "macos": "15.7.1",
+  "date": "2026-11-06T18:06:48Z",
+  "env": {}
+}

@@ -1,0 +1,63 @@
+[kapitsa] compiled kernels in 3492 ms
+device=Apple M3 Ultra thermal=nominal tg_original=16 tg_normal=16 tg_packed=16 reps=96
+case nr=8 splits=1 plan=0 active=1 bytes=65536 PASS
+case nr=8 splits=1 plan=1 active=1 bytes=65536 PASS
+case nr=8 splits=1 plan=2 active=1 bytes=65536 PASS
+case nr=8 splits=2 plan=0 active=2 bytes=65536 PASS
+case nr=8 splits=2 plan=1 active=2 bytes=65536 PASS
+case nr=8 splits=2 plan=2 active=2 bytes=65536 PASS
+case nr=8 splits=4 plan=0 active=4 bytes=65536 PASS
+case nr=8 splits=4 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=4 plan=2 active=4 bytes=65536 PASS
+case nr=8 splits=8 plan=0 active=8 bytes=65536 PASS
+time splits=8 arm=0 variant=A thermal=nominal us= 19.999134 20.164065 21.289059 20.934895 18.634547 12.839848 12.733940
+time splits=8 arm=1 variant=B thermal=nominal us= 8.892360 8.841579 8.662328 9.108941 9.036458 9.324217 8.901043
+time splits=8 arm=2 variant=A thermal=nominal us= 11.704430 11.908856 11.888022 11.970051 11.454429 11.256513 12.012587
+time splits=8 arm=3 variant=B thermal=nominal us= 9.854169 9.035158 9.092449 9.110678 8.993491 9.290365 8.966143
+time splits=8 arm=4 variant=A thermal=nominal us= 11.506946 11.457033 11.097654 11.329428 11.199654 11.171011 11.610677
+time splits=8 arm=5 variant=B thermal=nominal us= 8.917971 8.813367 9.223959 9.085066 8.830296 8.947051 9.144530
+case nr=8 splits=8 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=8 plan=2 active=8 bytes=65536 PASS
+case nr=8 splits=16 plan=0 active=16 bytes=65536 PASS
+time splits=16 arm=0 variant=A thermal=nominal us= 16.895831 16.839845 17.100256 17.273439 17.294267 16.736114 16.960505
+time splits=16 arm=1 variant=B thermal=nominal us= 13.881077 14.008246 14.010851 13.802079 13.758244 13.595049 13.475263
+time splits=16 arm=2 variant=A thermal=nominal us= 16.488280 16.790800 16.654080 16.801214 16.483076 17.419268 16.929688
+time splits=16 arm=3 variant=B thermal=nominal us= 14.019529 14.065105 13.795575 14.167100 14.111545 14.034721 14.162327
+time splits=16 arm=4 variant=A thermal=nominal us= 16.914496 16.953127 16.949222 16.814234 16.841145 16.907987 16.880644
+time splits=16 arm=5 variant=B thermal=nominal us= 14.045576 13.924044 14.196616 13.845056 14.382812 14.158853 14.148003
+case nr=8 splits=16 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=16 plan=2 active=16 bytes=65536 PASS
+case nr=8 splits=32 plan=0 active=32 bytes=65536 PASS
+time splits=32 arm=0 variant=A thermal=nominal us= 26.868487 27.746098 27.042537 27.466148 27.275605 27.346357 27.719182
+time splits=32 arm=1 variant=B thermal=nominal us= 24.593314 24.503470 24.705732 24.688804 24.656251 24.654514 24.802517
+time splits=32 arm=2 variant=A thermal=nominal us= 27.648004 26.852863 27.118057 26.688804 26.740886 27.282552 27.587240
+time splits=32 arm=3 variant=B thermal=nominal us= 24.497397 24.612411 24.559898 24.716147 24.698781 24.667965 24.446616
+time splits=32 arm=4 variant=A thermal=nominal us= 27.578993 27.387156 27.203559 27.022135 27.089845 27.293834 27.209200
+time splits=32 arm=5 variant=B thermal=nominal us= 24.106334 24.149738 24.503470 24.537323 24.676211 24.568144 24.746095
+case nr=8 splits=32 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=32 plan=2 active=16 bytes=65536 PASS
+case nr=8 splits=64 plan=0 active=64 bytes=65536 PASS
+case nr=8 splits=64 plan=1 active=3 bytes=65536 PASS
+case nr=8 splits=64 plan=2 active=16 bytes=65536 PASS
+case nr=16 splits=1 plan=0 active=1 bytes=131072 PASS
+case nr=16 splits=1 plan=1 active=1 bytes=131072 PASS
+case nr=16 splits=1 plan=2 active=1 bytes=131072 PASS
+case nr=16 splits=2 plan=0 active=2 bytes=131072 PASS
+case nr=16 splits=2 plan=1 active=2 bytes=131072 PASS
+case nr=16 splits=2 plan=2 active=2 bytes=131072 PASS
+case nr=16 splits=4 plan=0 active=4 bytes=131072 PASS
+case nr=16 splits=4 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=4 plan=2 active=4 bytes=131072 PASS
+case nr=16 splits=8 plan=0 active=8 bytes=131072 PASS
+case nr=16 splits=8 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=8 plan=2 active=8 bytes=131072 PASS
+case nr=16 splits=16 plan=0 active=16 bytes=131072 PASS
+case nr=16 splits=16 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=16 plan=2 active=16 bytes=131072 PASS
+case nr=16 splits=32 plan=0 active=32 bytes=131072 PASS
+case nr=16 splits=32 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=32 plan=2 active=16 bytes=131072 PASS
+case nr=16 splits=64 plan=0 active=64 bytes=131072 PASS
+case nr=16 splits=64 plan=1 active=3 bytes=131072 PASS
+case nr=16 splits=64 plan=2 active=16 bytes=131072 PASS
+cases=42 failures=0

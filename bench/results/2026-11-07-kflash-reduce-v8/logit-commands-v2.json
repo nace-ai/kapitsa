@@ -1,0 +1,30 @@
+[
+  {
+    "variant": "base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/logit_dump",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/logits-base-v2",
+      "--corpus",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/bench/corpus.txt"
+    ],
+    "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline",
+    "home": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/home-logits-base-v2",
+    "exit": 0
+  },
+  {
+    "variant": "candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/logit_dump",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/logits-candidate-v2",
+      "--corpus",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/bench/corpus.txt",
+      "--from",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/logits-base-v2"
+    ],
+    "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+    "home": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/home-logits-candidate-v2",
+    "exit": 0
+  }
+]

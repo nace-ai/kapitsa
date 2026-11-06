@@ -1,0 +1,10 @@
+{
+  "source_commit": "0be92def43f00c7c5f15b889daa71309dce4d5a7",
+  "version": "kapitsa 0.2.31 (0be92def)",
+  "standard_cpu_commands": 21,
+  "failures": 0,
+  "supplements": "execution_session,http_stream,drafter_attach,exl3,qwen4_config,json_file,affine_pack,systemone,systemone_codes_probe,splash_protocol/runtime/discover/plan,dflash_accept--cpu,device_profile,drex_max,logit_dump_cli,qwen4_exp_pack,splash_patches,parser,profile/comment-gates,prek PASS",
+  "real_tokenizer": "grammar quick308/308;structured CLI allpassed",
+  "gpu": "isolated42eachM3/M4+canonicalpublicrunner42;540drafterfilesequal;584targetlogitrowsbitwise/floorPASS",
+  "pending": "speculativecontinuations/acceptance,HTTP,nativebench/controlledlonggraph,27B/35B/FlashNextfallbackmodelchecks,otherpackedclasssetup"
+}

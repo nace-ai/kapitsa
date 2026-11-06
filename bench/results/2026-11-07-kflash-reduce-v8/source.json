@@ -1,0 +1,22 @@
+{
+  "base": "2fe7c3fa208c098b4e00b1bae9033172dfafaac7",
+  "branch": "perf/kflash-reduce-v8",
+  "status": "implemented, GPU check pending",
+  "sha256": {
+    "src/model/dflash2.cpp": "33429948b9ec62d766b7c1f22d110c9b217ae8dffd0464da0c645807cec4c8b1",
+    "src/kernels/spec_dflash.metal": "983c3cef979034348d61b8537cb89e0c451370fa3a6b84f99764011e97209987",
+    "../batch2-20261106/kflash-reduce-v8/check.cpp": "b0995be0107b113dc2ab53f469f9cd1399a06fff506496eae2f3be6df4a3af68",
+    "../batch2-20261106/kflash-reduce-v8/check": "82736b908a4170c7d79c87dd6daad4d7a872c5c41e5e34743e5718df43947d04",
+    "../batch2-20261106/kflash-reduce-v8/original-reduce.metal": "6bb055b530e439ceedef72f9733e4dfe59f18b7fcd6d28a44da819963affc8fa"
+  },
+  "implementation_commit": "0be92def43f00c7c5f15b889daa71309dce4d5a7",
+  "note": "Preliminary GPU binaries were built from base2fe7c3fa with the exact source bytes now committed as implementation_commit; they predate that commit and used the base version label. Both complete base and candidate libraries were separately built after explicit configure. Final canonical source build/CPU runs use implementation_commit. Remote M3 runs execute the same macOS14-minimum ARM64 binary compiled locally, with Metal compiling on that host.",
+  "canonical_model_logit_comparison": {
+    "base": "2fe7c3fa",
+    "candidate": "0be92def",
+    "rows": 584,
+    "all_bitwise": true,
+    "all_finite": true,
+    "gate": "standing tools/logit_floors/qwen3.5-4b-4bit.json unchanged"
+  }
+}
