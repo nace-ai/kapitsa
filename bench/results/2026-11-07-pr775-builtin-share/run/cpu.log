@@ -1,0 +1,25 @@
+PASS api_test
+PASS prefix_cache_test
+PASS fn_store_test
+PASS fn_dflash_test
+PASS tokenizer_test
+PASS iq_layout_test
+PASS remote_test
+PASS cluster_test
+PASS split_place_test
+PASS gemm_slices_test
+PASS ws_upgrade_test
+PASS test_server_cli
+PASS test_sidecar
+PASS test_bench
+FAIL test_update (/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_update.log)
+PASS test_community
+PASS test_reasoning
+FAIL test_pr_size (/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_pr_size.log)
+.dsh/skills/verify-kapitsa/scripts/vk: line 124: /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_logit_compare.log: No space left on device
+FAIL test_logit_compare (/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_logit_compare.log)
+.dsh/skills/verify-kapitsa/scripts/vk: line 124: /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_sampled_tokens_harness.log: No space left on device
+FAIL test_sampled_tokens_harness (/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_sampled_tokens_harness.log)
+.dsh/skills/verify-kapitsa/scripts/vk: line 124: /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_structured_cli.log: No space left on device
+FAIL test_structured_cli (/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/vk/ane-pr775-6327c2/92689bea/cpu-tests/test_structured_cli.log)
+5 failed

@@ -58,6 +58,8 @@ The ANE default excludes matrix GPUs and calibration-only chips. The measured M3
 same-Mac MLX bar, so a calibration file or `NI_ANE_UNITS` alone no longer enables these new widths under fast.
 An explicit diagnostic `NI_ANE=1` still overrides the profile and requires a usable share. The M3 measurements
 are retained as the reason for this exclusion, not as evidence of a shipping M3 default. No bar was loosened.
+[Built-in-share policy checks](../bench/results/2026-11-07-pr775-builtin-share/README.md) cover the excluded
+chips, explicit overrides and unchanged M4 outputs.
 The [long-prompt diagnostic](../bench/results/2026-11-07-pr775-long-quality/README.md) retains the large KL tails:
 precise/fast each scored 1/4, BF16 3/4; this does not establish equivalence.
 
