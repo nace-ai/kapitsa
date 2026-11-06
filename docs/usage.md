@@ -260,7 +260,7 @@ the catalog's). The import fetches that catalog drafter into the folder's `dflas
 conversion. If that fails (offline, disk full, a stopped download) the model is still imported and runs without a drafter;
 `kapitsa import` again retries, resuming the download. `--no-drafter` skips it, and `kapitsa serve --model FILE.gguf` then
 keeps to that choice for this conversion (a plain `kapitsa import FILE.gguf` fetches the drafter after all). `kapitsa bench`
-never fetches one.
+never fetches one and does not record that as a choice.
 
 | GGUF type | Converted to |
 | --- | --- |

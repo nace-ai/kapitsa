@@ -1506,7 +1506,7 @@ std::string import_model(const ImportOptions& opt) {
   const std::string dir = import_model_files(opt);
   if (opt.dry_run || !opt.plan_dir.empty() || dir.empty()) return dir;
   if (!opt.drafter) {
-    hub::set_drafter_declined(dir, true);  // `serve --model FILE.gguf` later keeps to it
+    if (opt.decline_drafter) hub::set_drafter_declined(dir, true);  // `serve --model FILE.gguf` later keeps to it
     return dir;
   }
   if (hub::drafter_declined(dir)) {
@@ -1997,7 +1997,7 @@ int run_import(int argc, char** argv) {
       o.threads = int(n);
     }
     else if (a == "--force") o.force = true;
-    else if (a == "--no-drafter") o.drafter = false;
+    else if (a == "--no-drafter") o.drafter = false, o.decline_drafter = true;
     else if (a == "--dry-run") o.dry_run = true;
     else if (!a.empty() && a[0] != '-' && o.file.empty()) o.file = a;
     else {
