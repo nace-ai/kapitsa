@@ -4,6 +4,7 @@
 // row's slot is rewritten when its position is fed again).
 #include "model/kparams.h"
 #include "model/qwen4_exp.h"
+#include "engine/device_profile.h"
 #include "util/log.h"
 #include "vision/embed.h"
 
@@ -31,7 +32,7 @@ bool moe4_dx() {
   static const bool on = [] {
     const char* v = getenv("NI_MOE4_DX");
     if (v && *v) return atoi(v) > 0;
-    return Gpu::get().name().find("M5 Max") != std::string::npos;
+    return named_m5_max();
   }();
   return on;
 }

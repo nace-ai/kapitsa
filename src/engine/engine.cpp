@@ -1,5 +1,6 @@
 #include "engine/history_gate.h"
 #include "engine/engine.h"
+#include "engine/device_profile.h"
 #include "engine/output_parser.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
@@ -889,7 +890,7 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   }
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
       p.formats.rfind("4-bit group 64", 0) == 0 &&
-      ((Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32) || Gpu::get().apple10())) {
+      (m1_max_32() || apple10_gpu())) {
     const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(4096) : 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;
@@ -899,8 +900,8 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // 1024-row ones (its time per evaluation 12.4 -> 22.6 ms for twice the rows). ni_run, M5 Max: a cold 4K prefill
   // 3,088 -> 2,962 ms (-4.1%), 8K 6,216 -> 5,935 ms (-4.5%), a warm 8K level; the share stays 14 of 34 units.
   // The plain split (NI_ANE_WAVE=0) keeps 2048.
-  if (slots == 1 && p.dense && p.hidden == 5120 && p.layers == 64 && ane > 0 && Gpu::get().apple10() &&
-      Gpu::get().core_count() >= 40 && !(getenv("NI_ANE_WAVE") && !strcmp(getenv("NI_ANE_WAVE"), "0"))) {
+  if (slots == 1 && p.dense && p.hidden == 5120 && p.layers == 64 && ane > 0 && wide_cores() &&
+      !(getenv("NI_ANE_WAVE") && !strcmp(getenv("NI_ANE_WAVE"), "0"))) {
     const MemPlan wide = model_plan(model_dir, 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget) return 4096;
   }

@@ -21,7 +21,7 @@ enum class ModelClass { kOther, kQwen35A3b };
 enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kName };
 
 struct DeviceFacts {
-  int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5. 7 is also the fallback.
+  int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.
   int cores = 0;         // Gpu::core_count(), which honors NI_GPU_CORES and the unread-IORegistry fallback.
   bool cores_measured = false;
   std::string name;
@@ -54,9 +54,12 @@ struct DefaultRow {
   ModelClass model;
   DefaultScope scope;
   const char* chip_name;  // kName only
-  const char* value;      // what the table would turn on, once the call site reads it
-  const char* measured_on;
-  bool live;  // false: the call site still has its own check
+  const char* value;  // what the table would turn on, once the call site reads it
+  int win_pct;        // lower bound of the cited win, in percent. 0 if the row cites none.
+  int win_pct_hi;     // 0 when win_pct is a single number, else the upper bound
+  bool exclusive;     // true only when the row cites a miss on the wider class. A class row is false.
+  const char* where;  // the Mac the number was measured on, not a sentence
+  bool live;          // false: the call site still has its own check
 };
 
 DeviceProfile resolve_device(const DeviceFacts&);
@@ -73,5 +76,21 @@ std::string format_profile(const DeviceProfile&, bool as_json);
 
 // The one live read. Doctor passes RAM and the Neural Engine; this reads the GPU. Not linked into the CPU test.
 DeviceFacts facts_from_gpu(long ram_bytes, bool ane);
+
+// The duplicated checks. The no-argument forms read the live GPU by calling the same Gpu methods the sites used. The
+// DeviceFacts forms are those predicates for the CPU test. The table above is still not what the sites read.
+bool matrix_units(const DeviceFacts&);  // apple_family() >= 10
+bool apple10_gpu(const DeviceFacts&);   // apple10(), which is family 10
+bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores
+bool wide_cores(const DeviceFacts&);    // apple10() and 40 cores or more
+bool named_m5_max(const DeviceFacts&);  // the name contains "M5 Max"
+bool m4_ten_core(const DeviceFacts&);   // Gpu::m4_base(): name "Apple M4" and 10 cores or fewer
+
+bool matrix_units();
+bool apple10_gpu();
+bool m1_max_32();
+bool wide_cores();
+bool named_m5_max();
+bool m4_ten_core();
 
 }  // namespace ni

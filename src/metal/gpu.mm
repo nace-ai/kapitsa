@@ -317,11 +317,9 @@ bool Gpu::apple10() const {
   return [dev(device_) supportsFamily:(MTLGPUFamily)1010];
 }
 int Gpu::apple_family() const {
-  static const int f = [this] {
-    for (int n = 10; n > 7; --n)  // MTLGPUFamilyApple<n> = 1000 + n, by value as above
-      if ([dev(device_) supportsFamily:(MTLGPUFamily)(1000 + n)]) return n;
-    return 7;  // every Mac GPU Kapitsa runs on (M1) is Apple7
-  }();
+  static const int f = apple_family_probed([this](int n) {
+    return [dev(device_) supportsFamily:(MTLGPUFamily)(1000 + n)];  // MTLGPUFamilyApple<n> = 1000 + n
+  });
   return f;
 }
 

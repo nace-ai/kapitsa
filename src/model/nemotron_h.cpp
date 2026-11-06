@@ -1,5 +1,6 @@
 #include "util/load_threads.h"
 #include "model/nemotron_h.h"
+#include "engine/device_profile.h"
 #include "model/kflash_budget.h"
 #include "ane/ffn_split.h"
 #include "util/bf16.h"
@@ -489,7 +490,7 @@ NemotronH::NemotronH(const std::string& path, int prefill_chunk) {
   dense_ = dense_model(cfg_);
   Gpu::get().compile_extra("Nemotron-H", kNhKernelSource);
   // the M5's matrix units (Apple10, Metal 4 on macOS 26) for the 8-row NVFP4 GEMMs
-  if (Gpu::get().apple_family() >= 10 && !(getenv("NI_NH_V8T") && atoi(getenv("NI_NH_V8T")) == 0))
+  if (matrix_units() && !(getenv("NI_NH_V8T") && atoi(getenv("NI_NH_V8T")) == 0))
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       v8t_ = true;
@@ -1219,7 +1220,7 @@ void NemotronH::alloc_buffers() {
   if (const char* v = getenv("NI_NH_X2")) x2_ = atoi(v) != 0;
   tg_ = [] {
     if (const char* v = getenv("NI_NH_TG"); v && !atoi(v)) return false;
-    if (Gpu::get().apple_family() < 10) return false;
+    if (!matrix_units()) return false;
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       return Gpu::get().pipeline("nh_gemm_t_fp8_m64", false).pso != nullptr;
@@ -1249,7 +1250,7 @@ int NemotronH::wide_chunk(const std::string& path) {
   // rows 3113 at 16K; NI_NH_WIDE_CHUNK=0: 2048. The MoE models whose prefill stays on the GPU alone (Lightning).
   if (const char* v = getenv("NI_NH_WIDE_CHUNK"); v && !atoi(v)) return 0;
   if (const char* v = getenv("NI_NH_TG"); v && !atoi(v)) return 0;
-  if (Gpu::get().apple_family() < 10) return 0;
+  if (!matrix_units()) return 0;
   if (__builtin_available(macOS 26.0, *)) {
     // not where the Neural Engine split runs the prefill (Bolt, Super-VL): it takes chunks of up to 2048 rows
     const NhConfig c = read_config(path);
