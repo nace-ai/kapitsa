@@ -4,8 +4,6 @@ Implementation: `0be92def43f00c7c5f15b889daa71309dce4d5a7`; reference: `2fe7c3fa
 
 The packed o projection now consumes the attention reducer's output directly in V8 fragment order. The existing ordered softmax reduction, half conversion and group sums are unchanged. Debug and skip paths retain X8. On the packed path this removes the duplicate T-layout output and one permutation dispatch per draft layer: 6 dispatches per ordinary 6-layer draft pass. Logical table traffic falls from a 128 KiB X8/T write plus 64 KiB read and 64 KiB V8 write to one 64 KiB V8 write per layer. These are logical buffer operations, not measured DRAM traffic or peak-memory savings; allocations are unchanged.
 
-Idea source: [Splash #702](https://github.com/incoai/splash/pull/702) writes draft-attention output in the layout its next operator consumes. This implementation uses Kapitsa's own V8 mapping and reduction, with no Splash code copied. Splash's performance numbers are not evidence for Kapitsa.
-
 ## Environments and source identity
 
 - Local Apple M4 Pro, 20-core GPU, 48 GiB RAM, macOS 15.7.1 (24G231), Apple Clang 17. Complete baseline and candidate libraries were configured and built separately in Release. Local actual 4B drafter checks select the existing packed-coefficient profile, with 39 packed static draft projections in the logs.
