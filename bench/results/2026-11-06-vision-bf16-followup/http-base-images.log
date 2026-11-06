@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/tests/vision/check_server.py", line 73, in <module>
+    img = {k: data_url(os.path.join(DIR, k + ".png")) for k in ("chart", "terminal", "aerial")}
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/tests/vision/check_server.py", line 30, in data_url
+    return "data:image/png;base64," + base64.b64encode(open(path, "rb").read()).decode()
+                                                       ^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/http-images-base/chart.png'

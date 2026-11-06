@@ -1,0 +1,537 @@
+{
+  "platform": "macOS-15.7.1-arm64-arm-64bit-Mach-O",
+  "sources": {
+    "base": {
+      "head": "d65a0afa35a176e1ecd1107f176a1b4028753f1d",
+      "vision_source_sha256": "944c18e45fd30ba4b0a92338eed61e319b73d7c322f6479824711f09d02dc39e",
+      "library_sha256": "0a2cba0e9f38815e0a785ac70a71913c6006b8215a9d6d9c1a7929058f4778ea",
+      "runner_sha256": "fd971cc666e470413b457e780e901fb001cf009dc19d51425c5245ca00e3a8cd",
+      "version": "kapitsa 0.2.31 (d65a0afa)"
+    },
+    "candidate": {
+      "head": "3c12d22c33994ca4bebbeafcd3615019943cc0d8",
+      "vision_source_sha256": "263a1cb69b3e990e8e5917ba4b2ca48ba03e9ad1310becf043bb9afc3cc9f9f1",
+      "library_sha256": "0ee36037b958c8ed9dc7af7e8b33f1640f9e6329d0b0af07c2660a777c6b49b9",
+      "runner_sha256": "5ec5fac99c8ea000eea4724d62560ec0f78c9220eeea594943928f2235bdf3dd",
+      "version": "kapitsa 0.2.31 (3c12d22c)"
+    }
+  },
+  "records": [
+    {
+      "model": "qwen3.5-4b-4bit",
+      "pairs": [
+        {
+          "file": "reload-0-case-0.bf16",
+          "bytes": 327680,
+          "all_bytes_equal": true,
+          "base_sha256": "2565749444e9a05b4457fd1288338ba4bbc21b2756fd5a65b8bbc21f7729cdec",
+          "candidate_sha256": "2565749444e9a05b4457fd1288338ba4bbc21b2756fd5a65b8bbc21f7729cdec"
+        },
+        {
+          "file": "reload-0-case-1.bf16",
+          "bytes": 327680,
+          "all_bytes_equal": true,
+          "base_sha256": "2c89f034dcfc6cdda83022d44ec6c241e6938210996c10ff0f9699a8011fc1fa",
+          "candidate_sha256": "2c89f034dcfc6cdda83022d44ec6c241e6938210996c10ff0f9699a8011fc1fa"
+        },
+        {
+          "file": "reload-0-case-2.bf16",
+          "bytes": 491520,
+          "all_bytes_equal": true,
+          "base_sha256": "4e89e95586906ed015ad66cb351ab359e3125098b3b501171c1bd5488482da1a",
+          "candidate_sha256": "4e89e95586906ed015ad66cb351ab359e3125098b3b501171c1bd5488482da1a"
+        },
+        {
+          "file": "reload-1-case-0.bf16",
+          "bytes": 327680,
+          "all_bytes_equal": true,
+          "base_sha256": "2565749444e9a05b4457fd1288338ba4bbc21b2756fd5a65b8bbc21f7729cdec",
+          "candidate_sha256": "2565749444e9a05b4457fd1288338ba4bbc21b2756fd5a65b8bbc21f7729cdec"
+        },
+        {
+          "file": "reload-1-case-1.bf16",
+          "bytes": 327680,
+          "all_bytes_equal": true,
+          "base_sha256": "2c89f034dcfc6cdda83022d44ec6c241e6938210996c10ff0f9699a8011fc1fa",
+          "candidate_sha256": "2c89f034dcfc6cdda83022d44ec6c241e6938210996c10ff0f9699a8011fc1fa"
+        },
+        {
+          "file": "reload-1-case-2.bf16",
+          "bytes": 491520,
+          "all_bytes_equal": true,
+          "base_sha256": "4e89e95586906ed015ad66cb351ab359e3125098b3b501171c1bd5488482da1a",
+          "candidate_sha256": "4e89e95586906ed015ad66cb351ab359e3125098b3b501171c1bd5488482da1a"
+        }
+      ],
+      "raw_reports": {
+        "base": {
+          "encoder": "Qwen3.5 ViT (24 blocks, width 1024, 16-pixel patches; images of 65536 to 16777216 pixels)",
+          "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "reload_bytes_equal": true,
+          "runs": [
+            {
+              "bytes": 327680,
+              "case": 0,
+              "encode_ms": 60.79466700553894,
+              "file": "reload-0-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 4701.056958973408,
+              "peak_rss_bytes": 865878016,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 327680,
+              "case": 1,
+              "encode_ms": 32.02208399772644,
+              "file": "reload-0-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 4701.056958973408,
+              "peak_rss_bytes": 865878016,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 491520,
+              "case": 2,
+              "encode_ms": 42.46520799398422,
+              "file": "reload-0-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 4701.056958973408,
+              "peak_rss_bytes": 866385920,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 0,
+              "tokens": 96,
+              "width": 384
+            },
+            {
+              "bytes": 327680,
+              "case": 0,
+              "encode_ms": 39.29741704463959,
+              "file": "reload-1-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 413.9137090444565,
+              "peak_rss_bytes": 883572736,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 327680,
+              "case": 1,
+              "encode_ms": 32.01637500524521,
+              "file": "reload-1-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 413.9137090444565,
+              "peak_rss_bytes": 883949568,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 491520,
+              "case": 2,
+              "encode_ms": 42.80674999952316,
+              "file": "reload-1-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 413.9137090444565,
+              "peak_rss_bytes": 884113408,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 1,
+              "tokens": 96,
+              "width": 384
+            }
+          ],
+          "scope": "complete image encoder; not language-model logits or controlled performance timing"
+        },
+        "candidate": {
+          "encoder": "Qwen3.5 ViT (24 blocks, width 1024, 16-pixel patches; images of 65536 to 16777216 pixels)",
+          "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "reload_bytes_equal": true,
+          "runs": [
+            {
+              "bytes": 327680,
+              "case": 0,
+              "encode_ms": 39.92933398485184,
+              "file": "reload-0-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 382.98916602134705,
+              "peak_rss_bytes": 739393536,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 327680,
+              "case": 1,
+              "encode_ms": 31.88050001859665,
+              "file": "reload-0-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 382.98916602134705,
+              "peak_rss_bytes": 739786752,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 491520,
+              "case": 2,
+              "encode_ms": 42.45258301496506,
+              "file": "reload-0-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 382.98916602134705,
+              "peak_rss_bytes": 740573184,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 0,
+              "tokens": 96,
+              "width": 384
+            },
+            {
+              "bytes": 327680,
+              "case": 0,
+              "encode_ms": 54.42079198360443,
+              "file": "reload-1-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 355.6154170036316,
+              "peak_rss_bytes": 773963776,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 327680,
+              "case": 1,
+              "encode_ms": 31.829291999340057,
+              "file": "reload-1-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 355.6154170036316,
+              "peak_rss_bytes": 774881280,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 491520,
+              "case": 2,
+              "encode_ms": 42.92337501049042,
+              "file": "reload-1-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 355.6154170036316,
+              "peak_rss_bytes": 775634944,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 1,
+              "tokens": 96,
+              "width": 384
+            }
+          ],
+          "scope": "complete image encoder; not language-model logits or controlled performance timing"
+        }
+      }
+    },
+    {
+      "model": "qwen3.5-9b-4bit",
+      "pairs": [
+        {
+          "file": "reload-0-case-0.bf16",
+          "bytes": 524288,
+          "all_bytes_equal": true,
+          "base_sha256": "578ef5d760f0e353f76e55fed7a43a2ac8042b0ba4b04535e61ffa984e5f9037",
+          "candidate_sha256": "578ef5d760f0e353f76e55fed7a43a2ac8042b0ba4b04535e61ffa984e5f9037"
+        },
+        {
+          "file": "reload-0-case-1.bf16",
+          "bytes": 524288,
+          "all_bytes_equal": true,
+          "base_sha256": "8c1c8c12609c2af62af8d10dc4d535eff55817c4edb0831785aedceed9794979",
+          "candidate_sha256": "8c1c8c12609c2af62af8d10dc4d535eff55817c4edb0831785aedceed9794979"
+        },
+        {
+          "file": "reload-0-case-2.bf16",
+          "bytes": 786432,
+          "all_bytes_equal": true,
+          "base_sha256": "2a3cd005e12ee760abfeec6527303242940a23cdfdf0ea69c5bdb63cab6fddfb",
+          "candidate_sha256": "2a3cd005e12ee760abfeec6527303242940a23cdfdf0ea69c5bdb63cab6fddfb"
+        },
+        {
+          "file": "reload-1-case-0.bf16",
+          "bytes": 524288,
+          "all_bytes_equal": true,
+          "base_sha256": "578ef5d760f0e353f76e55fed7a43a2ac8042b0ba4b04535e61ffa984e5f9037",
+          "candidate_sha256": "578ef5d760f0e353f76e55fed7a43a2ac8042b0ba4b04535e61ffa984e5f9037"
+        },
+        {
+          "file": "reload-1-case-1.bf16",
+          "bytes": 524288,
+          "all_bytes_equal": true,
+          "base_sha256": "8c1c8c12609c2af62af8d10dc4d535eff55817c4edb0831785aedceed9794979",
+          "candidate_sha256": "8c1c8c12609c2af62af8d10dc4d535eff55817c4edb0831785aedceed9794979"
+        },
+        {
+          "file": "reload-1-case-2.bf16",
+          "bytes": 786432,
+          "all_bytes_equal": true,
+          "base_sha256": "2a3cd005e12ee760abfeec6527303242940a23cdfdf0ea69c5bdb63cab6fddfb",
+          "candidate_sha256": "2a3cd005e12ee760abfeec6527303242940a23cdfdf0ea69c5bdb63cab6fddfb"
+        }
+      ],
+      "raw_reports": {
+        "base": {
+          "encoder": "Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 16777216 pixels)",
+          "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+          "reload_bytes_equal": true,
+          "runs": [
+            {
+              "bytes": 524288,
+              "case": 0,
+              "encode_ms": 69.34395903348923,
+              "file": "reload-0-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 470.47870802879333,
+              "peak_rss_bytes": 1083621376,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 524288,
+              "case": 1,
+              "encode_ms": 41.792584002017975,
+              "file": "reload-0-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 470.47870802879333,
+              "peak_rss_bytes": 1084194816,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 786432,
+              "case": 2,
+              "encode_ms": 60.403082966804504,
+              "file": "reload-0-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 470.47870802879333,
+              "peak_rss_bytes": 1084522496,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 0,
+              "tokens": 96,
+              "width": 384
+            },
+            {
+              "bytes": 524288,
+              "case": 0,
+              "encode_ms": 52.5546669960022,
+              "file": "reload-1-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 464.4687919616699,
+              "peak_rss_bytes": 1109835776,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 524288,
+              "case": 1,
+              "encode_ms": 42.415458023548126,
+              "file": "reload-1-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 464.4687919616699,
+              "peak_rss_bytes": 1110392832,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 786432,
+              "case": 2,
+              "encode_ms": 60.669040977954865,
+              "file": "reload-1-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 464.4687919616699,
+              "peak_rss_bytes": 1111162880,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 1,
+              "tokens": 96,
+              "width": 384
+            }
+          ],
+          "scope": "complete image encoder; not language-model logits or controlled performance timing"
+        },
+        "candidate": {
+          "encoder": "Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 16777216 pixels)",
+          "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+          "reload_bytes_equal": true,
+          "runs": [
+            {
+              "bytes": 524288,
+              "case": 0,
+              "encode_ms": 70.1526250243187,
+              "file": "reload-0-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 450.74420899152756,
+              "peak_rss_bytes": 1011236864,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 524288,
+              "case": 1,
+              "encode_ms": 41.38862502574921,
+              "file": "reload-0-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 450.74420899152756,
+              "peak_rss_bytes": 1011793920,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 0,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 786432,
+              "case": 2,
+              "encode_ms": 60.575625002384186,
+              "file": "reload-0-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 450.74420899152756,
+              "peak_rss_bytes": 1013006336,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 0,
+              "tokens": 96,
+              "width": 384
+            },
+            {
+              "bytes": 524288,
+              "case": 0,
+              "encode_ms": 52.30458301305771,
+              "file": "reload-1-case-0.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 64,
+              "load_ms": 432.9020410180092,
+              "peak_rss_bytes": 1013465088,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 64
+            },
+            {
+              "bytes": 524288,
+              "case": 1,
+              "encode_ms": 42.29112499952316,
+              "file": "reload-1-case-1.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 224,
+              "load_ms": 432.9020410180092,
+              "peak_rss_bytes": 1014382592,
+              "prepared_height": 256,
+              "prepared_width": 256,
+              "reload": 1,
+              "tokens": 64,
+              "width": 224
+            },
+            {
+              "bytes": 786432,
+              "case": 2,
+              "encode_ms": 60.57041698694229,
+              "file": "reload-1-case-2.bf16",
+              "finite_nonzero": true,
+              "guards": true,
+              "height": 256,
+              "load_ms": 432.9020410180092,
+              "peak_rss_bytes": 1014890496,
+              "prepared_height": 256,
+              "prepared_width": 384,
+              "reload": 1,
+              "tokens": 96,
+              "width": 384
+            }
+          ],
+          "scope": "complete image encoder; not language-model logits or controlled performance timing"
+        }
+      }
+    }
+  ],
+  "result": "PASS: 12 complete old/new image-encoder outputs equal; both models reload with equal outputs",
+  "limitations": "One M4 Pro. CPU regression jobs concurrent: load/encode times and peak RSS are diagnostic only, not controlled performance measurements. No language-model logits or HTTP checks in this run."
+}

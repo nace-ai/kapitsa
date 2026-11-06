@@ -1,0 +1,20 @@
+ok   answer about chart: ' May had the most active users with 73.'; prompt 799 tokens, time to first token 1.58 s
+ok   answer about terminal: 'The error shown in the terminal is a **ZeroDivisionError: division by zero**.\n\nIt occurred on **line 81** of the file **`train.py`**.\n\nThis happened because the'; prompt 1033 tokens, time to first token 1.19 s
+ok   answer about aerial: 'The Golden Gate Bridge.'; prompt 906 tokens, time to first token 1.00 s
+ok   follow-up with the same image hits the prefix cache: 807 of 828 prompt tokens cached, time to first token 0.05 s, answer 'January had the fewest active users with 24.'
+ok   the same image prompt again: cached: 792 of 799; time to first token 0.02 s
+ok   a different image of the same size misses the cache: 0 of 799 cached; answer ' May had the most active users with 87.'
+ok   http:// image URL: 'Monthly active users'
+ok   http:// URL that is not there: 400: can't download the image at http://127.0.0.1:64296/missing.png: HTTP 404
+ok   anthropic: an image block is read: 200 ' May had the most active users with 73.' usage {'input_tokens': 7, 'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 792, 'output_tokens': 12}
+ok   anthropic count_tokens counts the image's rows: count_tokens 799, the request's prompt 799
+ok   anthropic stream: message_start's usage counts the image's rows: message_start usage {'input_tokens': 7, 'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 792, 'output_tokens': 0}, the request's prompt 799, text ' May had the most active users with 73.'
+ok   responses: an input_image is read: 200 ' May had the most active users with 73.' usage {'input_tokens': 799, 'input_tokens_details': {'cached_tokens': 792, 'cache_write_tokens': 7}, 'output_tokens': 12, 'output_tokens_details': {'reasoning_tokens': 0}, 'total_tokens': 811}
+ok   anthropic: an image that cannot be decoded is a 400 invalid_request_error: 400 {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': "can't decode the image: not a format macOS reads (PNG, JPEG, WebP, GIF, HEIC, TIFF, BMP ...)"}}
+ok   video part: 400: video input is not supported: Kapitsa takes images only (image_url parts with a data: or http(s) URL
+ok   broken base64: 400: an image data: URL is not valid base64
+ok   bytes that are no image: 400: can't decode the image: not a format macOS reads (PNG, JPEG, WebP, GIF, HEIC, TIFF, BMP ...)
+ok   file:// URL: 400: unsupported image URL "file:///etc/passwd": Kapitsa takes data: URLs (base64) and http(s) URLs
+ok   text-only request: '5'
+
+0 failed
