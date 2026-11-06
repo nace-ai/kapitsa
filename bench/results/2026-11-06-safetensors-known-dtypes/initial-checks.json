@@ -1,0 +1,30 @@
+{
+  "stage": "initial CPU-only checks before Draft publication",
+  "heads": {
+    "baseline": "96d2de68a0799f8c9e5a5b0eec85aa067600881a",
+    "candidate": "61fdbafbea085289bd9a61ebbc56074af4205c6c"
+  },
+  "environment": {
+    "chip": "Apple M4 Pro",
+    "memory_bytes": 51539607552,
+    "macos": "15.7.1 (24G231)",
+    "compiler": "Apple Clang 17.0.0 (clang-1700.0.13.5)",
+    "flags": "-O3 -std=c++20 -mmacosx-version-min=14.0"
+  },
+  "probe": {
+    "baseline": "shape/dtype destination bytes=0, declared tensor bytes=8; guard after destination='ABCDEFGH' (expected eight untouched guard bytes)\n",
+    "candidate": "rejected before read: /tmp/kapitsa-dtype-probe-nPPvzH/model.safetensors: tensor w has unsupported dtype BOOL\n"
+  },
+  "initial_candidate_regressions": {
+    "description": "Compile and run the exact tensor_entries and unsupported_dtypes functions from tools/load_error_test.cpp with production safetensors.cpp and throwing GPU stubs. Checks initialize no GPU. This is not the full load_error_test executable or full CPU suite.",
+    "log": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\nPASS tensor shape/range validation, header-only plans, deferred read guards\nPASS unsupported dtypes rejected, tensor filters and header-only plans preserved\n"
+  },
+  "prek": "check for merge conflicts................................................Passed\ncheck yaml...............................................................Passed\ncheck for added large files..............................................Passed\ncheck for case conflicts.................................................Passed\ntrim trailing whitespace.................................................Passed\nruff check...............................................................Passed\nshell scripts parse (bash -n)............................................Passed\n",
+  "not_yet_run": [
+    "Full Release CLI build and vk cpu-tests",
+    "Full load_error_test executable against baseline and candidate",
+    "4B logit/HTTP/AB regression checks on remote M3 Ultra",
+    "Other-model GPU checks"
+  ],
+  "source_sha256": "feb7310c3f23106d6a652d02542bbbb77e1357856fa13b0f2fe9875d3f993a28"
+}
