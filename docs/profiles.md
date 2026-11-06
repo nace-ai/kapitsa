@@ -23,8 +23,8 @@ in [benchmarks.md](benchmarks.md). It runs the rows teacher-forced, full vocabul
 |---|---|---|---|---|
 | Qwen3.8-Flash-Next Q2_0, M5 Pro | Splash 1.5.0 | 72 (16K, 32K, 64K windows) | 16 | 0.46 |
 
-Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (no flip between them on
-24 of 32 rows' top-1, mean KL at most 1.5e-2).
+Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same top-1 on 31 of
+32 rows, mean KL at most 1.5e-2).
 
 ## Members
 
