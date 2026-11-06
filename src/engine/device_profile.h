@@ -21,7 +21,7 @@ enum class ModelClass { kOther, kQwen35A3b };
 enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kName };
 
 struct DeviceFacts {
-  int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5. 7 is also the fallback.
+  int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.
   int cores = 0;         // Gpu::core_count(), which honors NI_GPU_CORES and the unread-IORegistry fallback.
   bool cores_measured = false;
   std::string name;
@@ -54,9 +54,12 @@ struct DefaultRow {
   ModelClass model;
   DefaultScope scope;
   const char* chip_name;  // kName only
-  const char* value;      // what the table would turn on, once the call site reads it
-  const char* measured_on;
-  bool live;  // false: the call site still has its own check
+  const char* value;  // what the table would turn on, once the call site reads it
+  int win_pct;        // lower bound of the cited win, in percent. 0 if the row cites none.
+  int win_pct_hi;     // 0 when win_pct is a single number, else the upper bound
+  bool exclusive;     // true only when the row cites a miss on the wider class. A class row is false.
+  const char* where;  // the Mac the number was measured on, not a sentence
+  bool live;          // false: the call site still has its own check
 };
 
 DeviceProfile resolve_device(const DeviceFacts&);

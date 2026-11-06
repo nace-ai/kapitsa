@@ -14,14 +14,13 @@ bool qwen35_a3b(const ModelFacts& m) {
 }
 
 const DefaultRow kDefaults[] = {
-    // Wide class, not a chip name: apple10 and 40 cores or more. The call site also wants one slot and a 4-bit
-    // group-64 expert pack; those are not a device class, so they stay at the call site when it moves.
-    {"pf_wave", ModelClass::kQwen35A3b, DefaultScope::kWide, nullptr, "on",
-     "M5 Max, 16,288 ids 2,767 -> 2,620 ms (-5.3%). Not a name.", false},
-    // Narrow: the name, not the matrix class. +12 to +15% on the M5 Pro, and not shown slower on the wider class,
-    // so the name stays until a later row cites that miss or widens. The selector update uses the same gate.
-    {"kflash_hist", ModelClass::kQwen35A3b, DefaultScope::kName, "Apple M5 Pro", "on",
-     "M5 Pro, +12 to +15% tok/s in 3 of 3. Not shown slower on the wider matrix class, so the name stays.", false},
+    // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
+    // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site when it moves.
+    {"pf_wave", ModelClass::kQwen35A3b, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max", false},
+    // Name row. +12 to +15% on the M5 Pro. exclusive is false: no measured miss on the wider class, so a later
+    // slice either cites that miss or widens the row. The selector update uses the same gate.
+    {"kflash_hist", ModelClass::kQwen35A3b, DefaultScope::kName, "Apple M5 Pro", "on", 12, 15, false, "M5 Pro",
+     false},
 };
 
 }  // namespace
@@ -85,6 +84,23 @@ const char* scope_name(const DefaultRow& row) {
   return "name";
 }
 
+void append_json_string(std::ostream& o, const char* s) {
+  o << '"';
+  if (s) {
+    for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
+      if (*p == '"' || *p == '\\') o << '\\' << char(*p);
+      else if (*p < 0x20) {
+        char buf[8];
+        std::snprintf(buf, sizeof(buf), "\\u%04x", *p);
+        o << buf;
+      } else {
+        o << char(*p);
+      }
+    }
+  }
+  o << '"';
+}
+
 std::string mac_line(const DeviceProfile& p) {
   char buf[160];
   std::snprintf(buf, sizeof(buf), "%s, %d cores%s, %.0f GB RAM, Neural Engine %s", p.name.c_str(), p.cores,
@@ -98,15 +114,28 @@ std::string mac_line(const DeviceProfile& p) {
 std::string format_profile(const DeviceProfile& p, bool as_json) {
   if (as_json) {
     std::ostringstream o;
-    o << "{\"chip_class\":\"" << chip_class_name(p.chip) << "\",\"name\":\"" << p.name << "\",\"cores\":" << p.cores
-      << ",\"cores_measured\":" << (p.cores_measured ? "true" : "false") << ",\"ram_bytes\":" << p.ram_bytes
-      << ",\"ane\":" << (p.ane ? "true" : "false") << ",\"defaults\":[";
+    o << "{\"chip_class\":";
+    append_json_string(o, chip_class_name(p.chip));
+    o << ",\"name\":";
+    append_json_string(o, p.name.c_str());
+    o << ",\"cores\":" << p.cores << ",\"cores_measured\":" << (p.cores_measured ? "true" : "false")
+      << ",\"ram_bytes\":" << p.ram_bytes << ",\"ane\":" << (p.ane ? "true" : "false") << ",\"defaults\":[";
     for (int i = 0; i < default_count(); ++i) {
       const DefaultRow& r = default_at(i);
       if (i) o << ',';
-      o << "{\"id\":\"" << r.id << "\",\"model\":\"" << model_class_name(r.model) << "\",\"scope\":\"" << scope_name(r)
-        << "\",\"value\":\"" << r.value << "\",\"matches\":" << (default_matches(r, p) ? "true" : "false")
-        << ",\"live\":" << (r.live ? "true" : "false") << ",\"measured_on\":\"" << r.measured_on << "\"}";
+      o << "{\"id\":";
+      append_json_string(o, r.id);
+      o << ",\"model\":";
+      append_json_string(o, model_class_name(r.model));
+      o << ",\"scope\":";
+      append_json_string(o, scope_name(r));
+      o << ",\"value\":";
+      append_json_string(o, r.value);
+      o << ",\"matches\":" << (default_matches(r, p) ? "true" : "false") << ",\"live\":" << (r.live ? "true" : "false")
+        << ",\"where\":";
+      append_json_string(o, r.where);
+      o << ",\"win_pct\":" << r.win_pct << ",\"win_pct_hi\":" << r.win_pct_hi
+        << ",\"exclusive\":" << (r.exclusive ? "true" : "false") << '}';
     }
     o << "]}\n";
     return o.str();
@@ -119,7 +148,11 @@ std::string format_profile(const DeviceProfile& p, bool as_json) {
   for (int i = 0; i < default_count(); ++i) {
     const DefaultRow& r = default_at(i);
     o << "    " << r.id << "  " << model_class_name(r.model) << "  " << scope_name(r) << "  "
-      << (default_matches(r, p) ? "matches" : "no") << "  " << r.measured_on << "\n";
+      << (default_matches(r, p) ? "matches" : "no") << "  " << (r.where ? r.where : "") << "  win " << r.win_pct;
+    if (r.win_pct_hi) o << '-' << r.win_pct_hi;
+    o << '%';
+    if (r.scope == DefaultScope::kName) o << (r.exclusive ? "  exclusive" : "  not exclusive");
+    o << "  live " << (r.live ? "yes" : "no") << "\n";
   }
   return o.str();
 }

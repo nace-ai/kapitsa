@@ -1,4 +1,5 @@
 #include "engine/device_profile.h"
+#include "metal/gpu.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -38,6 +39,9 @@ int main() {
   CHECK(ni::resolve_device(mac(9, 40, "Apple M4 Max", 64L << 30)).chip == ChipClass::kSimd);
   CHECK(ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48)).chip == ChipClass::kMatrix);
   CHECK(ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30)).chip == ChipClass::kWide);
+  // A family past 10 is still matrix or wide. apple_family() must not clamp it to 10.
+  CHECK(ni::resolve_device(mac(11, 20, "Apple M6 Pro", g48)).chip == ChipClass::kMatrix);
+  CHECK(ni::resolve_device(mac(11, 40, "Apple M6 Max", 128L << 30)).chip == ChipClass::kWide);
   // An unread core count falls back to 24 for a Max. That is matrix, not wide, which is what the wave gate does today.
   ni::DeviceFacts unread = mac(10, 24, "Apple M5 Max", 128L << 30);
   unread.cores_measured = false;
@@ -59,6 +63,8 @@ int main() {
   const ni::DefaultRow* hist = row("kflash_hist");
   CHECK(wave && hist);
   CHECK(!wave->live && !hist->live);
+  CHECK(wave->win_pct == 5 && wave->win_pct_hi == 0 && !wave->exclusive);
+  CHECK(hist->win_pct == 12 && hist->win_pct_hi == 15 && !hist->exclusive);
   const auto m5pro = ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48));
   const auto m5max = ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30));
   CHECK(!ni::default_matches(*wave, m5pro));
@@ -91,6 +97,18 @@ int main() {
   const std::string json = ni::format_profile(m5max, true);
   CHECK(json.find("\"chip_class\":\"wide\"") != std::string::npos);
   CHECK(json.find("\"id\":\"pf_wave\"") != std::string::npos);
+  CHECK(json.find("\"win_pct\":5") != std::string::npos);
+  CHECK(json.find("\"exclusive\":false") != std::string::npos);
+  CHECK(json.find("measured_on") == std::string::npos);
+  ni::DeviceProfile quoted = m5pro;
+  quoted.name = "Apple \"M5\"\\Pro\n";
+  const std::string escaped = ni::format_profile(quoted, true);
+  CHECK(escaped.find("\"name\":\"Apple \\\"M5\\\"\\\\Pro\\u000a\"") != std::string::npos);
+  CHECK(ni::apple_family_probed([](int n) { return n == 10; }) == 10);
+  CHECK(ni::apple_family_probed([](int n) { return n == 11 || n == 10; }) == 11);
+  CHECK(ni::apple_family_probed([](int) { return false; }) == 7);
+  CHECK(ni::apple_family_probed([](int n) { return n == 8; }) == 8);
+  CHECK(ni::apple_family_probed([](int n) { return n <= 16; }) == ni::kAppleFamilyProbeMax);
   std::printf("device_profile_test: ok (%d defaults)\n", ni::default_count());
   return 0;
 }

@@ -27,6 +27,20 @@ inline size_t kv_row_bytes(int head_dim) {
   return kv_i8() ? size_t((head_dim + 16) / 16 * 16) : size_t(head_dim) * 2;
 }
 
+// Newest Apple GPU family this binary asks Metal about. Family n is the MTLGPUFamily value 1000+n.
+// 10 is the M5. supportsFamily returns false for a value the OS does not know, so probing past the
+// current chip does not invent a family. Raise this when a new family ships; do not stop at 10.
+inline constexpr int kAppleFamilyProbeMax = 16;
+
+// Highest n in (7, kAppleFamilyProbeMax] for which supports(n) is true, else 7 (every Mac GPU
+// Kapitsa runs on is at least Apple7).
+template <class Supports>
+int apple_family_probed(Supports supports) {
+  for (int n = kAppleFamilyProbeMax; n > 7; --n)
+    if (supports(n)) return n;
+  return 7;
+}
+
 // A GPU-visible buffer (shared storage, so `ptr` is CPU-addressable on Apple silicon).
 // `offset` lets one MTLBuffer back many tensors (e.g. a whole mmapped safetensors file).
 struct Buffer {
@@ -90,7 +104,7 @@ class Gpu {
   bool apple10() const;                   // MTLGPUFamilyApple10 (M5: Metal 4 neural accelerators)
   // The base M4 with at most 10 GPU cores: the defaults tuned and gated on that chip alone turn on here
   bool m4_base() const;
-  int apple_family() const;               // the newest MTLGPUFamilyApple<n>: 7 on the M1, 8 M2, 9 M3 and M4, 10 M5
+  int apple_family() const;               // apple_family_probed: 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when the OS says so
   size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
   static const char* thermal_state();  // NSProcessInfo thermalState: nominal, fair, serious, critical
 
