@@ -1,3 +1,4 @@
+#include "engine/device_profile.h"
 #include "model/lilicorr.h"
 #include "model/dspark.h"
 #include "util/bf16.h"
@@ -327,7 +328,7 @@ LiliCorr::LiliCorr(NemotronH& target, const std::string& dir) : tg_(target), pat
     fatal("%s: a draft vocabulary other than the target's is not supported", dir.c_str());
   load();
   st_.reset();
-  xq8_ = Gpu::get().apple10() && c.H % 128 == 0;
+  xq8_ = matrix_units() && c.H % 128 == 0;
   if (const char* v = getenv("NI_LILI_XQ8")) xq8_ = xq8_ && atoi(v) != 0;
   if (xq8_) make_xq8();
   alloc_buffers();

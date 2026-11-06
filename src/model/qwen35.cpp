@@ -138,7 +138,7 @@ static int env_int(const char* n, int def) {
 // Q5_K, 8-bit from Q6_K) reads 4096 tokens in 8.15 instead of 9.07 s (6-bit alone: 8.28). The other chips keep the
 // N-fast order today.
 static bool prefill_mfast() {
-  static const bool v = env_int("NI_QRF_MF", Gpu::get().apple_family() <= 7 ? 1 : 0) != 0;
+  static const bool v = env_int("NI_QRF_MF", legacy_gpu() ? 1 : 0) != 0;
   return v;
 }
 
@@ -240,7 +240,7 @@ static const QmrSel& qmr_sel() {
     // Qwen3.5-4B's and 9B's projections: 3.07-3.17 TFLOP/s against 2.53-2.69 for qmr_k32_w14_m32_n128, on all 9
     // shapes (4B: 8192x2560 28.7 vs 33.9 ms, 2560x9216 30.6 vs 36.2; 9B: 8192x4096 43.4 vs 51.5, 4096x12288 65.2
     // vs 77.2), the fastest of the 7 qmr tiles on each
-    if (Gpu::get().apple_family() <= 7) q.name = "qmr_k64_w12_m32_n64", q.bn = 64, q.threads = 64;
+    if (legacy_gpu()) q.name = "qmr_k64_w12_m32_n64", q.bn = 64, q.threads = 64;
     if (v && *v && strcmp(v, "1") != 0) {
       unsigned bm = 0, bn = 0, wm = 0, wn = 0;
       const char* w = strstr(v, "_w");
@@ -495,7 +495,7 @@ void Qwen35::prewarm_pipelines() {
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
   if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
-  if (Gpu::get().apple_family() <= 7)  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
+  if (legacy_gpu())  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
     for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
     const std::string k = std::to_string(moe_qmr_k(cfg_.hidden, cfg_.moe_I));
@@ -1461,7 +1461,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
 void Qwen35::alloc_state() {
   Gpu& g = Gpu::get();
   // Match Nemotron's default; older Macs can opt in for measured comparisons.
-  sample_sg_ = g.apple10();
+  sample_sg_ = matrix_units();
   if (const char* v = getenv("NI_QWEN_SAMPLE_SG")) sample_sg_ = atoi(v) != 0;
   for (const ActBuf& a : act_layout(cfg_, tmax_, kMaxVerify, mtp_loaded_, dense_hgu_rows()))
     this->*(a.member) = g.alloc(a.bytes, a.label);
@@ -2297,13 +2297,13 @@ bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
   // dequantization is per row), so a single pass stays bit-identical to a batched one; the other 6-bit models keep
   // qmvg_multi (sums reassociated: not the same bits), the other chips today. NI_QMVF6=0 turns it off.
   static const bool b6_on = env_int("NI_QMVF6", 1) != 0;
-  const bool b6 = b6_ok && b6_on && bits == 6 && R == 1 && !gu && cfg_.iq && Gpu::get().apple_family() <= 7;
+  const bool b6 = b6_ok && b6_on && bits == 6 && R == 1 && !gu && cfg_.iq && legacy_gpu();
   if (bits != 4 && bits != 8 && !b6) return false;
   // 4-bit group 32 (GGUF imports' Q4_K LM heads), one matrix, on the M1 (Apple7): its 248K-row head on
   // qmvf_b4g32 2.6 instead of 3.1 ms (qmvg_f4g32_r4_norm, Qwen3.6-35B-A3B UD-IQ2_XXS on the M1 Pro); the other
   // chips keep the existing path today
   const bool g32 = segs.size() == 1 && !gu && bits == 4 && segs[0].L->gs == 32 && !segs[0].L->iq &&
-                   Gpu::get().apple_family() <= 7;
+                   legacy_gpu();
   for (const Seg& s : segs)
     if (!(s.L->q4() || s.L->q8() || g32 || (b6 && s.L->gs == 64 && !s.L->iq)) || s.L->bits != bits || s.L->K != K)
       return false;
@@ -3141,7 +3141,7 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   }
   // the M1 (Apple7): 64-deep K steps (bench_qmm on the M1 Pro, 2048 rows: 4B 9216x2560 3.25 vs 3.02 TFLOP/s, 9B
   // 12288x4096 3.27 vs 3.03, the faster of the 3 qmr_gu tiles on both)
-  static const char* const gu = Gpu::get().apple_family() <= 7 ? "qmr_gu_k64_w14_m32_n64" : "qmr_gu_k32_w14_m32_n64";
+  static const char* const gu = legacy_gpu() ? "qmr_gu_k64_w14_m32_n64" : "qmr_gu_k32_w14_m32_n64";
   static const bool on = [] {
     const char* g = getenv("NI_QMM_GU");
     const bool v = !(g && !strcmp(g, "0")) && qmr_sel().on;
@@ -3638,7 +3638,7 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // 309.2 for attn_prefill11r. The 16-key tiles' online softmax rounds differently: outputs are not bit-identical to
   // 11r's, error against an fp64 reference the same (2.1-2.4e-4).
   static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
-                                  : Gpu::get().apple_family() <= 7 ? "attn_prefill11_k16xr" : an;
+                                  : legacy_gpu() ? "attn_prefill11_k16xr" : an;
   uint32_t qb = 4, th = 256, gy = cfg_.hkv;
   // NI_QATTN (default on, 0 = off): D 256, 4 or 8 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5.
   // G = 8 (the 35B) runs qattn_t_g8s4k16: 2 tokens x the KV head's 8 heads per 16-row tile, 8 tokens per

@@ -1,3 +1,4 @@
+#include "engine/device_profile.h"
 #include "model/dspark.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -273,10 +274,10 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   if (const char* v = getenv("NI_DSPARK_K")) K_ = std::clamp(atoi(v), 1, kMaxCand);
   head_rows_ = tg_.vocab();
   if (const char* v = getenv("NI_DSPARK_HEAD"); v && atoi(v) > 0) head_rows_ = std::min(tg_.vocab(), atoi(v));
-  if (Gpu::get().apple10()) dyn_ratio_ = 0.3f;
+  if (matrix_units()) dyn_ratio_ = 0.3f;
   if (const char* v = getenv("NI_DSPARK_DYN")) dyn_ratio_ = float(atof(v));
   if (const char* v = getenv("NI_DSPARK_CHAIN")) chain_ = atoi(v) != 0;
-  xq8_ = Gpu::get().apple10();
+  xq8_ = matrix_units();
   if (const char* v = getenv("NI_DSPARK_XQ8")) xq8_ = atoi(v) != 0;
   if (H_ % 128) xq8_ = false;  // (nh_xq8_v8: K % 128 == 0; o's K, heads x 128, always is)
   if (const char* v = getenv("NI_DSPARK_DEPTH")) fixed_depth_ = std::clamp(atoi(v), 0, kB - 1);

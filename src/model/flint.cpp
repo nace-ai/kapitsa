@@ -877,7 +877,7 @@ void Flint::enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buff
   } else if (W.bits == 4) {
     if (M <= 8) n = "qmr_k64_w12_m8_n64", bm = 8, bn = 64, th = 64;
     else if (M < 64 || W.N <= 64) n = "qmr_k64_w14_m16_n64", bm = 16, bn = 64;
-    else if (Gpu::get().apple_family() <= 7) n = "qmr_k64_w12_m32_n64", bn = 64, th = 64;
+    else if (legacy_gpu()) n = "qmr_k64_w12_m32_n64", bn = 64, th = 64;
     else n = "qmr_k32_w14_m32_n128";
   } else {  // 8-bit group 64
     if (M < 64 || W.N <= 64) n = "qmr8_k32_w14_m16_n64", bm = 16, bn = 64;

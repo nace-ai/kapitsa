@@ -159,7 +159,7 @@ std::string format_profile(const DeviceProfile& p, bool as_json) {
 
 bool matrix_units(const DeviceFacts& f) { return f.apple_family >= 10; }
 
-bool apple10_gpu(const DeviceFacts& f) { return f.apple_family >= 10; }
+bool legacy_gpu(const DeviceFacts& f) { return f.apple_family <= 7; }
 
 bool m1_max_32(const DeviceFacts& f) { return f.name == "Apple M1 Max" && f.cores == 32; }
 
