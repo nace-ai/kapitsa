@@ -34,11 +34,11 @@ int main(int argc, char** argv) {
   char tmp[] = "/tmp/kapitsa-draft-plan-XXXXXX";
   if (!mkdtemp(tmp)) return 2;
   // All device-dependent defaults are overridden before calling the planner: no Metal device is created.
-  setenv("NI_DFLASH_V8", "1", 1);
+  setenv("NI_KFLASH_V8", "1", 1);
   setenv("NI_V8_PACKED_COEFF_NF1", "0", 1);
-  setenv("NI_DFLASH_HEAD", "98304", 1);
-  setenv("NI_DFLASH_BITS", "4", 1);
-  setenv("NI_DFLASH_LOWRANK", "0", 1);
+  setenv("NI_KFLASH_HEAD", "98304", 1);
+  setenv("NI_KFLASH_BITS", "4", 1);
+  setenv("NI_KFLASH_LOWRANK", "0", 1);
   Qwen35Config target;
   target.hidden = 2560; target.dense_I = 9216; target.layers = 32; target.group_size = 64;
   nlohmann::json config{{"hidden_size", 2560}, {"intermediate_size", 9216}, {"num_hidden_layers", 6},
@@ -49,25 +49,42 @@ int main(int argc, char** argv) {
   int fails = 0;
   auto check = [&](bool ok, const char* why) { if (!ok) { ++fails; printf("FAIL %s\n", why); } };
   const auto plain = plan();
-  setenv("NI_DFLASH_LOWRANK", "768", 1);
+  setenv("NI_KFLASH_LOWRANK", "768", 1);
   check(plan() == plain + 44016000, "rank768 reserves both Q4 factors, permutation and three scratch buffers");
   for (const char* bad : {"-1", "0", "63", "2560", "4096"}) {
-    setenv("NI_DFLASH_LOWRANK", bad, 1);
+    setenv("NI_KFLASH_LOWRANK", bad, 1);
     check(plan() == plain, "ineligible rank reserves no factors");
   }
-  setenv("NI_DFLASH_LOWRANK", "0", 1);
+  setenv("NI_KFLASH_LOWRANK", "0", 1);
   const auto wide = plan(16);
-  setenv("NI_DFLASH_LOWRANK", "768", 1);
+  setenv("NI_KFLASH_LOWRANK", "768", 1);
   check(plan(16) == wide, "16-row drafter has no v8 low-rank path");
-  setenv("NI_DFLASH_BITS", "8", 1);
-  setenv("NI_DFLASH_LOWRANK", "0", 1);
+  setenv("NI_KFLASH_BITS", "8", 1);
+  setenv("NI_KFLASH_LOWRANK", "0", 1);
   const auto eight = plan();
-  setenv("NI_DFLASH_LOWRANK", "768", 1);
+  setenv("NI_KFLASH_LOWRANK", "768", 1);
   check(plan() == eight + 82747776, "8-bit drafter factors reserve their own format");
-  setenv("NI_DFLASH_HEAD", "0", 1);
+  setenv("NI_KFLASH_HEAD", "0", 1);
   const auto full = plan();
-  setenv("NI_DFLASH_LOWRANK", "0", 1);
+  setenv("NI_KFLASH_LOWRANK", "0", 1);
   check(plan() == full, "full head has no low-rank factors");
+  // The online selector update's fp32 masters of the two codebooks (2 x vocab x rank 256 x 4 bytes = 485 MB at 248320
+  // ids) are in the plan when the update runs: by NI_KFLASH_SELUPD, by default with lanes, and not when it is 0 (#362)
+  setenv("NI_KFLASH_LOWRANK", "0", 1);
+  setenv("NI_KFLASH_BITS", "4", 1);
+  setenv("NI_KFLASH_HEAD", "98304", 1);
+  config["architectures"] = {"DFlash2DraftModel"};
+  save();
+  const size_t masters = size_t(2) * 248320 * 256 * 4;
+  unsetenv("NI_KFLASH_SELUPD");
+  const auto no_lanes = plan();
+  const auto with_lanes = DFlash2::plan_bytes(tmp, target, 1440, nullptr, nullptr, 8, true);
+  check(with_lanes - no_lanes == masters, "lanes default: the plan takes the 2 fp32 codebook masters (485 MB)");
+  setenv("NI_KFLASH_SELUPD", "0", 1);
+  check(DFlash2::plan_bytes(tmp, target, 1440, nullptr, nullptr, 8, true) == no_lanes, "NI_KFLASH_SELUPD=0: no masters in the plan");
+  setenv("NI_KFLASH_SELUPD", "0.003", 1);
+  check(plan() - no_lanes == masters, "NI_KFLASH_SELUPD=<lr> without lanes: the masters are in the plan");
+  unsetenv("NI_KFLASH_SELUPD");
   std::filesystem::remove_all(tmp);
   printf("dflash_plan_test: %s\n", fails ? "FAILED" : "ALL PASSED");
   return fails ? 1 : 0;
