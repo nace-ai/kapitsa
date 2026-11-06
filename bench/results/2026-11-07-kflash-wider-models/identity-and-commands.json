@@ -1,0 +1,327 @@
+{
+  "identities": {
+    "base": {
+      "head": "2fe7c3fa208c098b4e00b1bae9033172dfafaac7",
+      "version": "kapitsa 0.2.31 (2fe7c3fa)",
+      "ni_run_sha256": "86842a339a0ce367ed58437dba86b644a624915c5195be696e041f1f0ac81214",
+      "kapitsa_sha256": "042a64ba703bcca92cdc7495e3001f4b5c37e24d97e25c4178bdc1d0b1669cc6",
+      "source_sha256": {
+        "src/model/dflash2.cpp": "3e5542a750705d510e62bd56b9a60d9fb7934ba6686d4d88ffeb77f600107c90",
+        "src/kernels/spec_dflash.metal": "9ee5806613f2f245ddab8b934d96de3b5d9e6312daddef8220e0738ebb954cd2"
+      },
+      "logit_dump_sha256": "4681e6b63f1ddd25e25a23a2211de9353e725527b860dfbe64d8fd42ceea28fd",
+      "libnaceinfer_sha256": "19f5752c56284839916c2ef348fbce054c175b915279cc39da7a1aa2f02c543f"
+    },
+    "candidate": {
+      "head": "a263df926a987c9b67e027cb4e5bd9287afddc79",
+      "version": "kapitsa 0.2.31 (0be92def)",
+      "ni_run_sha256": "893a08f514355d39e8342a1fa95b134e29e44a79956cdfccd3b3f9b4f020c5be",
+      "kapitsa_sha256": "534dc411d19b0a121b7c34fc0ed3c3a26fee332db01a24a87eb3573a25a66610",
+      "source_sha256": {
+        "src/model/dflash2.cpp": "33429948b9ec62d766b7c1f22d110c9b217ae8dffd0464da0c645807cec4c8b1",
+        "src/kernels/spec_dflash.metal": "983c3cef979034348d61b8537cb89e0c451370fa3a6b84f99764011e97209987"
+      },
+      "logit_dump_sha256": "f533614f6b5549e5b8c33e325979ef9ee226dbcf2325150fbb2863c80a17a692",
+      "libnaceinfer_sha256": "658f0e444e545cd86dfaf389d4ba11fec7c7a5283cba5c6e39c626f9878cb58f"
+    }
+  },
+  "identity_note": "Reuses both complete builds that were explicitly configured in followup1827. Candidate source0be92def with matching source hashes; evidence/docs head recorded separately. No new source/build version or other PR output is substituted.",
+  "commands": [
+    {
+      "label": "logits-27b-base",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/logit_dump",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-base"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-logits-27b-base"
+      }
+    },
+    {
+      "label": "logits-27b-candidate",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/logit_dump",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-candidate",
+        "--from",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-base"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-logits-27b-candidate"
+      }
+    },
+    {
+      "label": "compare-27b",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/tools/logit_compare.py",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-base",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-27b-candidate",
+        "--json",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/compare-27b.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-compare-27b"
+      }
+    },
+    {
+      "label": "bench-27b-0-base",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-27b-0-base.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-27b-0-base"
+      }
+    },
+    {
+      "label": "bench-27b-1-candidate",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-27b-1-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-27b-1-candidate"
+      }
+    },
+    {
+      "label": "bench-27b-2-base",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-27b-2-base.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-27b-2-base"
+      }
+    },
+    {
+      "label": "bench-27b-3-candidate",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-27b-3-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-27b-3-candidate"
+      }
+    },
+    {
+      "label": "logits-35b-base",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/logit_dump",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-35b-base"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-logits-35b-base"
+      }
+    },
+    {
+      "label": "logits-35b-candidate",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/logit_dump",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-35b-candidate",
+        "--from",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-35b-base"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-logits-35b-candidate"
+      }
+    },
+    {
+      "label": "compare-35b",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/tools/logit_compare.py",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-35b-base",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/logits-35b-candidate",
+        "--json",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/compare-35b.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-compare-35b"
+      }
+    },
+    {
+      "label": "bench-35b-0-base",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-35b-0-base.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-35b-0-base"
+      }
+    },
+    {
+      "label": "bench-35b-1-candidate",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-35b-1-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-35b-1-candidate"
+      }
+    },
+    {
+      "label": "bench-35b-2-base",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-35b-2-base.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-35b-2-base"
+      }
+    },
+    {
+      "label": "bench-35b-3-candidate",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/bench-35b-3-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-reduce-v8",
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1927/wider-kflash/home-bench-35b-3-candidate"
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "model": "qwen3.8-27b-4bit",
+      "report": "compare-27b.json",
+      "metadata_sha256": {
+        "config.json": "14b65a0ee06517060a6bbd979bb1a8ff54e7b304b1a1f01d54344b88b8285e85",
+        "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+      },
+      "every_row_bitwise": true,
+      "scope": "Own complete baseline/candidate target-model output comparison; verify drafter load lines separately. 35B OQ4E is fallback coverage, not another packed drafter setup."
+    },
+    {
+      "model": "qwen3.6-35b-a3b-oq4e-mtp",
+      "report": "compare-35b.json",
+      "metadata_sha256": {
+        "config.json": "54cc369e17c16ec0c3e87cd8a865c6565966f91a4b2afc82b1c40d5a185e90f5",
+        "tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+      },
+      "every_row_bitwise": true,
+      "scope": "Own complete baseline/candidate target-model output comparison; verify drafter load lines separately. 35B OQ4E is fallback coverage, not another packed drafter setup."
+    }
+  ]
+}
