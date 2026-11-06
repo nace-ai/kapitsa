@@ -1,6 +1,7 @@
 #include "engine/device_profile.h"
 
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 
 namespace ni {
@@ -37,7 +38,36 @@ const DefaultRow kDefaults[] = {
     // NI_KFLASH_NARROW. Qwen3.8 27B, wide class. M5 Max, 131K 56.1 -> 70.1 tok/s (24, the integer part);
     // 32K 80.5 -> 85.6.
     {"kflash_narrow", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 24, 0, false, "M5 Max", false},
+    // Name predicates the call sites still read. Not kName: none of these cites a 10% win the wider class misses.
+    // The id is the predicate. chip_name is the exact name when the predicate has one.
+    {"m1_max_32", ModelClass::kOther, DefaultScope::kGuard, "Apple M1 Max", "64", 0, 0, false,
+     "32 cores; 35B group of 64 when hidden is 2048 and intermediate is 512, else 32", false},
+    {"m4_10", ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "on", 0, 0, false,
+     "10 cores and 24 GB; 4B packed-coeff shape only", false},
+    {"m4_pro_gpu", ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "pack", 0, 0, false,
+     "Qwen 4B and 35B vision-tower shapes; other shapes keep bf16", false},
+    {"m4_pro_20", ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "on", 0, 0, false,
+     "20 cores and 48 GB for the 9B packed coeff; 35B X8 share on 5-6-bit affine projections", false},
+    {"m4_ten_core", ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "narrow", 0, 0, false,
+     "10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys", false},
+    {"ultra_gpu", ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
+     "name contains Ultra; fused attention merges fail past a 32-key tile (#421)", false},
 };
+
+bool guard_matches(const char* id, const DeviceProfile& dev) {
+  if (!id) return false;
+  DeviceFacts f;
+  f.name = dev.name;
+  f.cores = dev.cores;
+  f.cores_measured = dev.cores_measured;
+  if (std::strcmp(id, "m1_max_32") == 0) return m1_max_32(f);
+  if (std::strcmp(id, "m4_10") == 0) return m4_10(f);
+  if (std::strcmp(id, "m4_pro_gpu") == 0) return m4_pro_gpu(f);
+  if (std::strcmp(id, "m4_pro_20") == 0) return m4_pro_20(f);
+  if (std::strcmp(id, "m4_ten_core") == 0) return m4_ten_core(f);
+  if (std::strcmp(id, "ultra_gpu") == 0) return ultra_gpu(f);
+  return false;
+}
 
 }  // namespace
 
@@ -82,6 +112,7 @@ bool default_matches(const DefaultRow& row, const DeviceProfile& dev) {
     case DefaultScope::kMatrix: return dev.chip == ChipClass::kMatrix || dev.chip == ChipClass::kWide;
     case DefaultScope::kWide: return dev.chip == ChipClass::kWide;
     case DefaultScope::kName: return row.chip_name && dev.name == row.chip_name;
+    case DefaultScope::kGuard: return guard_matches(row.id, dev);
   }
   return false;
 }
@@ -96,6 +127,7 @@ const char* scope_name(const DefaultRow& row) {
     case DefaultScope::kMatrix: return "matrix";
     case DefaultScope::kWide: return "wide";
     case DefaultScope::kName: return "name";
+    case DefaultScope::kGuard: return "guard";
   }
   return "name";
 }
@@ -167,7 +199,8 @@ std::string format_profile(const DeviceProfile& p, bool as_json) {
       << (default_matches(r, p) ? "matches" : "no") << "  " << (r.where ? r.where : "") << "  win " << r.win_pct;
     if (r.win_pct_hi) o << '-' << r.win_pct_hi;
     o << '%';
-    if (r.scope == DefaultScope::kName) o << (r.exclusive ? "  exclusive" : "  not exclusive");
+    if (r.scope == DefaultScope::kName || r.scope == DefaultScope::kGuard)
+      o << (r.exclusive ? "  exclusive" : "  not exclusive");
     o << "  live " << (r.live ? "yes" : "no") << "\n";
   }
   return o.str();

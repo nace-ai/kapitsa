@@ -82,6 +82,17 @@ CLASS_GATE_IDS = (
     "kflash_narrow",
 )
 
+# A name predicate the call sites still read. Each id must be a kGuard row, not a kName row:
+# none of them cites a 10% win the wider class misses.
+GUARD_IDS = (
+    "m1_max_32",
+    "m4_10",
+    "m4_pro_gpu",
+    "m4_pro_20",
+    "m4_ten_core",
+    "ultra_gpu",
+)
+
 
 def table_ids() -> set[str]:
     text = (ROOT / "src/engine/device_profile.cpp").read_text(encoding="utf-8")
@@ -110,16 +121,23 @@ def main() -> int:
         bad.append(f"{path}: baseline has {want[path]}, tree has 0 (update the baseline; a drop is fine)")
     # A drop in a file that still has some hits is fine and does not fail. A file that dropped to zero
     # is reported above so the baseline does not keep a stale allow.
-    missing = [i for i in CLASS_GATE_IDS if i not in table_ids()]
+    ids = table_ids()
+    missing = [i for i in CLASS_GATE_IDS if i not in ids]
     if missing:
         bad.append("class gate has no default-table row: " + ", ".join(missing))
+    text = (ROOT / "src/engine/device_profile.cpp").read_text(encoding="utf-8")
+    start = text.find("const DefaultRow kDefaults[]")
+    table = text[start : text.find("};", start)]
+    unguarded = [i for i in GUARD_IDS if not re.search(rf'\{{"{i}".*DefaultScope::kGuard', table)]
+    if unguarded:
+        bad.append("name predicate has no kGuard row: " + ", ".join(unguarded))
     if bad:
         print("profile gate lint failed:")
         print("\n".join(bad))
         return 1
     print(
         f"profile gate lint: ok ({sum(got.values())} call-form hits, {len(got)} files, "
-        f"{len(CLASS_GATE_IDS)} class gates)"
+        f"{len(CLASS_GATE_IDS)} class gates, {len(GUARD_IDS)} guard rows)"
     )
     return 0
 

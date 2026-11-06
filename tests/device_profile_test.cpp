@@ -78,7 +78,7 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 7);
+  CHECK(ni::default_count() == 13);
   const ni::DefaultRow* slices = row("gemm_slices");
   const ni::DefaultRow* hc = row("hc_wide");
   const ni::DefaultRow* moe = row("moe4_dx");
@@ -96,6 +96,29 @@ int main() {
   CHECK(!ni::default_matches(*slices, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
   CHECK(ni::default_matches(*hc, m5max) && !ni::default_matches(*hc, m5pro));
   CHECK(ni::default_matches(*tree, m5max) && !ni::default_matches(*narrow, m5pro));
+
+  const char* guards[] = {"m1_max_32", "m4_10", "m4_pro_gpu", "m4_pro_20", "m4_ten_core", "ultra_gpu"};
+  for (const char* id : guards) {
+    const ni::DefaultRow* g = row(id);
+    CHECK(g && g->scope == ni::DefaultScope::kGuard && g->win_pct == 0 && !g->live);
+    CHECK(!ni::default_matches(*g, m5pro) && !ni::default_matches(*g, m5max));
+  }
+  const auto m1p = ni::resolve_device(mac(7, 32, "Apple M1 Max", 64L << 30));
+  const auto m4p = ni::resolve_device(mac(9, 10, "Apple M4", 24L << 30));
+  const auto m4_8 = ni::resolve_device(mac(9, 8, "Apple M4", 16L << 30));
+  const auto m4pro14 = ni::resolve_device(mac(9, 14, "Apple M4 Pro", g48));
+  const auto m4pro20 = ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48));
+  const auto ultra = ni::resolve_device(mac(10, 80, "Apple M5 Ultra", 512L << 30));
+  CHECK(ni::default_matches(*row("m1_max_32"), m1p));
+  CHECK(!ni::default_matches(*row("m1_max_32"), ni::resolve_device(mac(7, 24, "Apple M1 Max", 64L << 30))));
+  CHECK(ni::default_matches(*row("m4_10"), m4p) && !ni::default_matches(*row("m4_10"), m4_8));
+  CHECK(ni::default_matches(*row("m4_ten_core"), m4p) && ni::default_matches(*row("m4_ten_core"), m4_8));
+  CHECK(!ni::default_matches(*row("m4_ten_core"), m4pro20));
+  CHECK(ni::default_matches(*row("m4_pro_gpu"), m4pro14) && ni::default_matches(*row("m4_pro_gpu"), m4pro20));
+  CHECK(!ni::default_matches(*row("m4_pro_20"), m4pro14) && ni::default_matches(*row("m4_pro_20"), m4pro20));
+  CHECK(ni::default_matches(*row("ultra_gpu"), ultra) && row("ultra_gpu")->exclusive);
+  CHECK(std::string(row("ultra_gpu")->where).find("#421") != std::string::npos);
+  CHECK(ni::format_profile(ultra, false).find("exclusive") != std::string::npos);
 
   const auto m5pro_f = mac(10, 20, "Apple M5 Pro", g48);
   const auto m5max_f = mac(10, 40, "Apple M5 Max", 128L << 30);
