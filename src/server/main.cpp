@@ -607,7 +607,7 @@ static void exit_with_parent() {
 static bool reject_while_switching(const ModelManager& mgr, httplib::Response& res, const std::string& body) {
   if (!mgr.switching()) return false;
   res.status = 503;
-  res.set_header("Retry-After", "30");
+  res.set_header("Retry-After", std::to_string(mgr.retry_after_s()));
   res.set_content(body, "application/json");
   return true;
 }
@@ -1367,7 +1367,7 @@ static int serve(int argc, char** argv, int first) {
     }
     if (model_mgr->switching()) {
       res.status = 503;
-      res.set_header("Retry-After", "30");
+      res.set_header("Retry-After", std::to_string(model_mgr->retry_after_s()));
       res.set_content(R"({"error":{"message":"another model switch is in progress","type":"server_error"}})", "application/json");
       return;
     }
@@ -1389,7 +1389,7 @@ static int serve(int argc, char** argv, int first) {
     if (!eng) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", "30");
+      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
       json eb{{"error", {{"message", err.message.empty() ? "Failed to switch model" : err.message}, {"type", busy ? "server_error" : "invalid_request_error"}}}};
       res.set_content(eb.dump(), "application/json");
       return;
@@ -1426,7 +1426,7 @@ static int serve(int argc, char** argv, int first) {
     if (!guard) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", "30");
+      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
       res.set_content(api::dump(api::chat_error("Model error: " + err.message)), "application/json");
       return;
     }
@@ -1501,7 +1501,7 @@ static int serve(int argc, char** argv, int first) {
     if (!guard) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", "30");
+      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
       res.set_content(api::dump(api::messages_error(busy ? "overloaded_error" : "invalid_request_error", "Model error: " + err.message)), "application/json");
       return;
     }
@@ -1551,7 +1551,7 @@ static int serve(int argc, char** argv, int first) {
       if (!guard) {
         const bool busy = err.code == ModelManager::Error::Code::Busy;
         res.status = busy ? 503 : 400;
-        if (busy) res.set_header("Retry-After", "30");
+        if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
         res.set_content(api::dump(api::messages_error(busy ? "overloaded_error" : "invalid_request_error", "Model error")), "application/json");
         return;
       }
@@ -1585,7 +1585,7 @@ static int serve(int argc, char** argv, int first) {
     if (!guard) {
       const bool busy = err.code == ModelManager::Error::Code::Busy;
       res.status = busy ? 503 : 400;
-      if (busy) res.set_header("Retry-After", "30");
+      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
       res.set_content(api::dump(api::responses_error("Model error: " + err.message, busy ? "server_error" : "invalid_request_error")), "application/json");
       return;
     }
