@@ -1,0 +1,120 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-11-02T06:42:33Z",
+  "kapitsa": {
+    "version": "0.1.38",
+    "commit": "3cc97ce"
+  },
+  "mac": {
+    "identifier": "Mac14,5",
+    "name": "MacBook Pro (14-inch, 2023)",
+    "year": 2023,
+    "chip": "Apple M2 Max",
+    "cpu_cores": 12,
+    "gpu_cores": 38,
+    "memory_gb": 64,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "qwen3.5-4b",
+    "title": "Qwen3.5-4B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "c43ee1d",
+    "decoding": "DFlash2",
+    "decoding_detail": "DFlash2 speculative decoding (verify 7 of 7)",
+    "drafter": "z-lab/Qwen3.5-4B-DFlash@9a1996c"
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 85.43,
+      "runs_tps": [
+        85.43,
+        88.15,
+        77.88,
+        88.15,
+        81.39
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 87.54,
+      "runs_tps": [
+        90.33,
+        79.66,
+        86.02,
+        87.54,
+        88.9
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 6.18,
+        "tps": 668.8,
+        "followup_s": [
+          0.0644,
+          0.0827,
+          0.0583
+        ],
+        "followup_median_s": 0.0644
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16286,
+        "ttft_s": 29.7334,
+        "tps": 547.7,
+        "followup_s": [
+          0.0768,
+          0.0889,
+          0.0785
+        ],
+        "followup_median_s": 0.0785
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 4.37
+  },
+  "conditions": {
+    "power_source": "battery",
+    "power_mode": "low",
+    "low_power_mode": true,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 301.9,
+    "gpu_other_mean_pct": 17.78,
+    "gpu_other_max_pct": 43.32,
+    "gpu_ambient_mean_pct": 0.25,
+    "gpu_users": [
+      "Open Design"
+    ],
+    "contention": [
+      "decode",
+      "decode_greedy",
+      "prefill_4000",
+      "prefill_16000",
+      "tools"
+    ]
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.4498)",
+    "CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000', 'prefill_16000', 'tools'] (mean 17.78%, top ['Open Design'])",
+    "power: on battery (a Mac on battery may run slower)",
+    "power: Low Power Mode (the GPU runs slower)"
+  ],
+  "invalid": []
+}
