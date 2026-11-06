@@ -6,8 +6,9 @@
 namespace ni {
 namespace {
 
-// The 35B-A3B shape the wave and the KFlash lanes were measured on. Clover has the same numbers and is excluded by
-// the caller (config.json model_type), not by a second chip check.
+// The 35B-A3B shape the wave and the KFlash lanes were run on. Clover has the same numbers and is left out by the
+// caller (config.json model_type), not by a second chip check: no run on Clover shows a loss or a break, so this is a
+// narrower gate than the shape, for #369 to widen.
 bool qwen35_a3b(const ModelFacts& m) {
   return m.moe && !m.clover && m.hidden == 2048 && m.layers == 40 && m.experts == 256 && m.top_k == 8 &&
          m.moe_i == 512 && m.shared_i == 512;

@@ -55,12 +55,18 @@ def tracked() -> list[str]:
     return keep
 
 
-def allowed() -> set[str]:
+def allowed() -> set[tuple[str, str]]:
+    """(path, stripped line) pairs: a copy of an allowed sentence in another file is not allowed."""
     out = set()
     for line in ALLOWED.read_text(encoding="utf-8").splitlines():
         if line.strip() and not line.startswith("#"):
-            out.add(line.split("\t", 1)[1].strip() if "\t" in line else line.strip())
+            path, _, text = line.partition("\t")
+            out.add((path.strip(), text.strip()))
     return out
+
+
+def is_allowed(path: str, text: str, listed: set[tuple[str, str]]) -> bool:
+    return (path, text) in listed
 
 
 def find() -> list[tuple[str, int, str]]:
@@ -100,6 +106,11 @@ def self_test() -> int:
         if matches(comment_part("x.cpp", t)):
             print("self-test: wrongly caught:", t)
             ok = False
+    # the allowlist is keyed on the path: the same line in another file is not allowed
+    listed = {("src/a.cpp", "// only after X")}
+    if not is_allowed("src/a.cpp", "// only after X", listed) or is_allowed("src/b.cpp", "// only after X", listed):
+        print("self-test: the allowlist must match its own path and no other")
+        ok = False
     print("self-test:", "ok" if ok else "FAILED")
     return 0 if ok else 1
 
@@ -112,7 +123,7 @@ def main() -> int:
             print(f"{f}:{i}\t{t}")
         return 0
     ok = allowed()
-    new = [(f, i, t) for f, i, t in find() if t not in ok]
+    new = [(f, i, t) for f, i, t in find() if not is_allowed(f, t, ok)]
     for f, i, t in new:
         print(f"{f}:{i}: {t[:150]}")
     if new:
