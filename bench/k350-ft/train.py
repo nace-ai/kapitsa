@@ -161,13 +161,14 @@ else:
 ema = None
 STOP = int(os.environ.get('K350_STOP_STEP', 0))
 T25, NW = None, 0
+SKIP = S0.get('skipped', 0) if os.path.exists(st) else 0  # conversations skipped on GPU out-of-memory, whole run
 tstart = time.time() - done_s
 tchunk = time.time()
 SWAP0 = float(re.search(r'used = ([\d.]+)M', os.popen('sysctl -n vm.swapusage').read()).group(1))  # swap at chunk start
 order = []
 def save_state():
     torch.save({'params': {k: d.w(k).detach().cpu() for k in W0 if k not in frozen}, 'opt': opt.state_dict(), 'step': step,
-                'elapsed': time.time() - tstart, 'best': best, 'v0': v0, 'rng': rng.getstate()}, st + '.tmp')
+                'elapsed': time.time() - tstart, 'best': best, 'v0': v0, 'rng': rng.getstate(), 'skipped': SKIP}, st + '.tmp')
     os.replace(st + '.tmp', st)
 def save(tag):
     sd = {k: v.detach().to('cpu', torch.bfloat16) for k, v in ((k, d.w(k)) for k in W0 if k not in frozen)}
@@ -207,7 +208,11 @@ while True:
     except RuntimeError as e:  # 7 Nov: at a 0.6 cap one step's peak hit 22.5 GiB; skip that conversation instead of losing the chunk
         if 'out of memory' not in str(e):
             raise
-        torch.mps.empty_cache(); say(f'step {step}: out of GPU memory on conversation {m["id"]} (n {m["n"]}), skipped'); continue
+        torch.mps.empty_cache(); SKIP += 1
+        say(f'step {step}: out of GPU memory on conversation {m["id"]} (n {m["n"]}), skipped ({SKIP} so far)')
+        if SKIP > max(1, 0.01 * step):  # orchestrator 7 Nov: skipping data changes the result; more than 1% of steps fails the chunk
+            save_state(); say(f'FAIL: {SKIP} conversations skipped at step {step}, over 1% of steps'); sys.exit(6)
+        continue
     loss = lce + 0.5 * lsel
     lv, lcev, lselv = loss.item(), lce.item(), lsel.item()
     ema = lv if ema is None else 0.98 * ema + 0.02 * lv
@@ -230,7 +235,7 @@ while True:
     if step % 25 == 0 and dev == 'mps' and foot() > float(os.environ.get('K350_MAX_GB', 30)):
         save_state(); say(f'footprint {foot():.1f} GB over K350_MAX_GB at step {step}: state saved, chunk ends early'); sys.exit(0)
     if step % 25 == 0:
-        say(f'step {step} footprint {foot():.1f} GB loss {lv:.4f} ema {ema:.4f} ce {lcev:.4f} sel {lselv:.4f} lr {cur:.2e} {time.time() - tstart:.0f} s')
+        say(f'step {step} skipped {SKIP} footprint {foot():.1f} GB loss {lv:.4f} ema {ema:.4f} ce {lcev:.4f} sel {lselv:.4f} lr {cur:.2e} {time.time() - tstart:.0f} s')
     if step % 300 == 0:
         v = evaluate()
         say(f'step {step} val ce {v[0]:.4f} sel {v[1]:.4f} walk tok/cycle proxy {v[2]:.4f}')
@@ -238,9 +243,9 @@ while True:
             best = v[2]; save('best'); say(f'saved best at step {step}')
         save_state()
 v = evaluate()
-say(f'final step {step} val ce {v[0]:.4f} sel {v[1]:.4f} walk tok/cycle proxy {v[2]:.4f} (shipped {v0[2]:.4f}) in {time.time() - tstart:.0f} s')
+say(f'final step {step} val ce {v[0]:.4f} sel {v[1]:.4f} walk tok/cycle proxy {v[2]:.4f} (shipped {v0[2]:.4f}) in {time.time() - tstart:.0f} s; {SKIP} conversations skipped on GPU out-of-memory ({100 * SKIP / max(1, step):.2f}% of steps)')
 save('last')
 if v[2] >= best:
     best = v[2]; save('best')
 say(f'DONE best proxy {best:.4f}')
-open(out + '/DONE', 'w').write(f'{best}\n')
+open(out + '/DONE', 'w').write(f'{best}\nskipped {SKIP} of {step} steps\n')
