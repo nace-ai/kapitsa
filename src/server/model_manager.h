@@ -54,6 +54,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
   ModelManager() = default;
   ~ModelManager() {
+    stop_idle_watch();
     stop_prefill();
   }
 
@@ -70,8 +71,25 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
     if (tui_) ui::loading_begin(ref_.name);
     engine_ = load_engine(opt_);
+    remember_info();
     if (tui_) ui::loading_end(ref_.name);
   }
+
+  // --idle-unload: after `idle_s` seconds with no request the engine is released (its weights, KV cache and
+  // activations: the whole GPU footprint) and loaded again by the next request. `only_pressed`: only while macOS's
+  // memory pressure is at warning or critical (the default: an idle server then gives its memory back where it is
+  // wanted). `veto` says when the engine must stay (a pair of Macs holding one split model). 0 seconds: never.
+  void set_idle_unload(int idle_s, bool only_pressed, std::function<bool()> veto = nullptr) {
+    stop_idle_watch();
+    if (idle_s <= 0) return;
+    idle_s_ = idle_s;
+    only_pressed_ = only_pressed;
+    veto_ = std::move(veto);
+    touch();
+    idle_stop_ = false;
+    idle_th_ = std::thread([this] { idle_watch(); });
+  }
+  bool unloaded() const { return unloaded_.load(); }
 
   // --allow-switch: a request naming another model (or POST /v1/models/switch) may swap the served model. Off by
   // default: clients send their own model names (Claude Code, Cursor), which the server ignores, as it always did.
@@ -92,7 +110,15 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         if (error_out) *error_out = {Error::Code::Busy, "another model load is in progress"};
         return nullptr;
       }
-      if (!allow_switch_ || is_current_model_unlocked(requested_model)) return acquire_unlocked();
+      if (!allow_switch_ || is_current_model_unlocked(requested_model)) {
+        if (!unloaded_.load()) return acquire_unlocked();
+      }
+    }
+    // the engine was released while idle: this request loads it again (a model it names instead is a switch)
+    if (unloaded_.load() && (!allow_switch_ || is_current_model_unlocked(requested_model))) {
+      if (!load_back(error_out)) return nullptr;
+      std::shared_lock<std::shared_mutex> lk(rw_mu_);
+      return acquire_unlocked();
     }
     std::shared_ptr<RequestGuard> guard;
     switch_to_impl(requested_model, error_out, &guard);
@@ -145,6 +171,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
     std::unique_lock<std::shared_mutex> lk(rw_mu_);
     if (is_current_model_unlocked(target_model)) {
+      if (unloaded_.load() && !load_back_locked(nullptr)) return nullptr;  // (released while idle: load it again)
       if (request_out) *request_out = acquire_unlocked();
       return engine_;
     }
@@ -238,6 +265,9 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
     ref_ = new_ref;
     opt_ = new_opt;
+    unloaded_ = false;
+    remember_info();
+    touch();
     logi("switched model to %s (id: %s, context: %d)", ref_.name.c_str(), opt_.model_id.c_str(), opt_.context);
     if (request_out) *request_out = acquire_unlocked();
     return engine_;
@@ -281,6 +311,9 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     }
     if (tui_) ui::loading_end(ref_.name);
     opt_ = opt;
+    unloaded_ = false;
+    remember_info();
+    touch();
     return true;
   }
   EngineOptions options() const {
@@ -344,19 +377,19 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
   std::string current_model_id() const {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
-    return engine_ ? engine_->model_id() : "";
+    return info_.model_id;
   }
   int current_context_length() const {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
-    return engine_ ? engine_->context_length() : 0;
+    return info_.context;
   }
   int current_context_fit() const {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
-    return engine_ ? engine_->context_fit() : 0;
+    return info_.fit;
   }
   int current_slots() const {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
-    return engine_ ? engine_->slots() : 0;
+    return info_.slots;
   }
   std::string current_name() const {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
@@ -378,8 +411,8 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     std::set<std::string> seen;
 
     // 1. Current active model is first
-    if (engine_) {
-      const std::string cur_id = engine_->model_id();
+    if (engine_ || unloaded_.load()) {
+      const std::string cur_id = info_.model_id;
       seen.insert(cur_id);
       seen.insert(ref_.name);
       if (ref_.model) {
@@ -394,9 +427,9 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         {"created", long(started_)},
         {"created_at", started_at_},
         {"owned_by", "nace"},
-        {"context_length", engine_->context_length()},
-        {"context_fit", engine_->context_fit()},
-        {"slots", engine_->slots()},
+        {"context_length", info_.context},
+        {"context_fit", info_.fit},
+        {"slots", info_.slots},
         {"active", true},
         {"downloaded", true}
       };
@@ -409,7 +442,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       const auto installed = hub::installed();
       for (const auto& m : installed) {
         if (!m.complete) continue;
-        if (seen.count(m.name) || (engine_ && m.name == engine_->model_id())) continue;
+        if (seen.count(m.name) || ((engine_ || unloaded_.load()) && m.name == info_.model_id)) continue;
         seen.insert(m.name);
 
         std::string disp = m.name;
@@ -509,6 +542,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       std::lock_guard<std::mutex> lk(in_flight_mu_);
       in_flight_.fetch_add(1);
     }
+    touch();
     return guard;
   }
 
@@ -523,14 +557,97 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
   }
 
   void remove_in_flight() {
+    touch();  // (idle time counts from the end of the last request)
     std::lock_guard<std::mutex> lk(in_flight_mu_);
     if (in_flight_.fetch_sub(1) == 1) in_flight_cv_.notify_all();
   }
 
+  // ---- --idle-unload ----
+  static int64_t mono_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+  }
+  void touch() { last_use_ms_.store(mono_ms()); }
+  // what the accessors answer while the engine is released
+  void remember_info() {
+    if (!engine_) return;
+    info_ = {engine_->model_id(), engine_->context_length(), engine_->context_fit(), engine_->slots()};
+  }
+
+  void stop_idle_watch() {
+    {
+      std::lock_guard<std::mutex> lk(idle_mu_);
+      idle_stop_ = true;
+    }
+    idle_cv_.notify_all();
+    if (idle_th_.joinable()) idle_th_.join();
+  }
+  void idle_watch() {
+    std::unique_lock<std::mutex> lk(idle_mu_);
+    while (!idle_stop_) {
+      idle_cv_.wait_for(lk, std::chrono::seconds(kIdleCheckS));
+      if (idle_stop_) break;
+      lk.unlock();
+      try_unload();
+      lk.lock();
+    }
+  }
+  // Release the engine if the server has been idle for idle_s_ (and, by default, macOS is short of memory).
+  // The checks are repeated under the exclusive lock: a request registers under the shared one, so none can slip in.
+  void try_unload() {
+    if (unloaded_.load() || switching_.load() || in_flight_.load() != 0) return;
+    if (mono_ms() - last_use_ms_.load() < int64_t(idle_s_) * 1000) return;
+    if (only_pressed_ && !Gpu::memory_pressed()) return;
+    if (veto_ && veto_()) return;
+    if (switching_.exchange(true)) return;
+    struct Clear {
+      std::atomic<bool>& f;
+      ~Clear() { f = false; }
+    } clear{switching_};
+    std::unique_lock<std::shared_mutex> lk(rw_mu_);
+    if (!engine_ || in_flight_.load() != 0 || mono_ms() - last_use_ms_.load() < int64_t(idle_s_) * 1000) return;
+    const size_t before = Gpu::get().allocated_bytes();
+    logi("idle for %d s%s: releasing %s from the GPU; the next request loads it again", idle_s_,
+         only_pressed_ ? " with memory pressure" : "", ref_.name.c_str());
+    stop_prefill();
+    engine_->save_kflash();
+    engine_->save_disk_cache();
+    engine_.reset();
+    unloaded_ = true;
+    const size_t after = Gpu::get().allocated_bytes();
+    logi("released %s: GPU memory %.1f -> %.1f GB", ref_.name.c_str(), before / 1e9, after / 1e9);
+    if (tui_) ui::note(ref_.name + " released while idle; the next request loads it again");
+  }
+  // The request that finds the engine released loads it again; requests arriving meanwhile wait on the lock.
+  bool load_back(Error* error_out) {
+    std::unique_lock<std::shared_mutex> lk(rw_mu_);
+    return load_back_locked(error_out);
+  }
+  // (rw_mu_ held exclusively)
+  bool load_back_locked(Error* error_out) {
+    if (!unloaded_.load()) return true;  // (another request or a switch did)
+    const int64_t t0 = mono_ms();
+    if (tui_) ui::loading_begin(ref_.name);
+    try {
+      engine_ = load_engine(opt_);
+    } catch (const std::exception& e) {
+      if (tui_) ui::loading_end(ref_.name);
+      logi("loading %s again failed: %s", ref_.name.c_str(), e.what());
+      if (error_out) *error_out = {Error::Code::Busy, std::string("loading the model again failed: ") + e.what()};
+      return false;
+    }
+    if (tui_) ui::loading_end(ref_.name);
+    unloaded_ = false;
+    remember_info();
+    touch();
+    logi("loaded %s again in %.1f s for a request", ref_.name.c_str(), double(mono_ms() - t0) / 1e3);
+    return true;
+  }
+
   bool is_current_model_unlocked(const std::string& model_name) const {
     if (model_name.empty() || model_name == "default") return true;
-    if (!engine_) return false;
-    if (model_name == engine_->model_id()) return true;
+    if (!engine_ && !unloaded_.load()) return false;
+    if (model_name == info_.model_id) return true;
     if (model_name == ref_.name || model_name == ref_.id || model_name == ref_.dir) return true;
     if (ref_.model) {
       if (model_name == ref_.model->name) return true;
@@ -579,6 +696,23 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
   bool allow_switch_ = false;
   std::atomic<bool> switching_{false};
+
+  // --idle-unload
+  struct Info {
+    std::string model_id;
+    int context = 0, fit = 0, slots = 0;
+  };
+  static constexpr int kIdleCheckS = 15;
+  Info info_;  // the engine's model id, context and slots (under rw_mu_), kept while it is released
+  std::atomic<bool> unloaded_{false};
+  std::atomic<int64_t> last_use_ms_{0};
+  int idle_s_ = 0;
+  bool only_pressed_ = true;
+  std::function<bool()> veto_;
+  std::thread idle_th_;
+  std::mutex idle_mu_;
+  std::condition_variable idle_cv_;
+  bool idle_stop_ = false;
   std::atomic<int> in_flight_{0};
   std::mutex in_flight_mu_;
   std::condition_variable in_flight_cv_;

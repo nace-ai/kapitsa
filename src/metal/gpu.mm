@@ -60,8 +60,10 @@ static inline id<MTLDevice> dev(void* p) { return (__bridge id<MTLDevice>)p; }
 //   wired (default): the set is not on the command queue. A heartbeat requests it every 500 ms while command buffers
 //     are committed and for NI_RESIDENCY_KEEP_S seconds after the last one (default 600; 0 = for good), so it stays
 //     wired between requests; the first commit after that restarts the heartbeat. Under memory pressure (macOS's
-//     warning or critical level) there is no heartbeat, so macOS can take the memory of an idle model back, as before;
-//     the first commit once the pressure is back to normal restarts it. Metal makes resident what each command buffer
+//     warning or critical level) there is no heartbeat and the set can be unwired, but that frees nothing: the weights
+//     are dirty GPU memory, so macOS can only compress them, and 4-bit weights compress about 1.05x (#1020: an idle
+//     27B kept 9.6 GB of the compressor after 10 minutes). Only releasing the buffers gives the memory back
+//     (kapitsa serve --idle-unload); the first commit once the pressure is back to normal restarts the heartbeat. Metal makes resident what each command buffer
 //     binds, which is everything a kernel reads: Kapitsa binds every buffer to its dispatches (Encoder::buf,
 //     dispatch_indirect's arguments), with no GPU addresses, argument buffers or useResource.
 //   queue: the set on the command queue, requested only at make_resident() (Kapitsa before).
@@ -786,6 +788,8 @@ std::unique_ptr<Encoder> Gpu::begin_grouped() {
   e->auto_barrier_ = true;
   return e;
 }
+
+bool Gpu::memory_pressed() { return Keeper::pressed(); }
 
 void Gpu::make_resident(const std::vector<Buffer>& bufs) {
 #if !NI_SDK_MACOS15

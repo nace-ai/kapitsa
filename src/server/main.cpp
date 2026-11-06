@@ -370,6 +370,9 @@ static void print_serve_help() {
          "  --allow-switch         a request naming another model, or POST /v1/models/switch, loads it (may download\n"
          "                         gigabytes; 503 + Retry-After meanwhile). Default off: the \"model\" field is ignored.\n"
          "                         Without --api-key it keeps the server on this Mac, as --private does\n"
+         "  --idle-unload MIN|auto|0  release the model from the GPU after MIN minutes without a request; the next\n"
+         "                         request loads it again (a few seconds). auto (default): after 10 minutes, and only\n"
+         "                         while macOS reports memory pressure; 0: never\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
          "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
@@ -827,6 +830,7 @@ static int serve(int argc, char** argv, int first) {
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
   std::vector<std::string> split;  // --split: the stages' addresses, in the order of their layers
   int port = 8000;
+  double idle_unload_min = -1;  // --idle-unload: auto (-1: 10 min idle and macOS short of memory), 0 off, else minutes
   bool verbose = false, yes = false, allow_switch = false, priv = false, local = false, engine_splash = false, check_only = false;
   std::string splash_kflash = "auto";  // --splash-kflash (splash::pick_engine)
   std::string splash_found_binary;     // the stock engine given or found, which the next run starts from (splash.json)
@@ -876,6 +880,18 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--prefill-chunk") opt.prefill_chunk = to_int(a, next(), help);
     else if (a == "--api-key") api_key = next();
     else if (a == "--allow-switch") allow_switch = true;
+    else if (a == "--idle-unload") {
+      const std::string v = next();
+      if (v == "auto") idle_unload_min = -1;
+      else if (v == "0" || v == "off") idle_unload_min = 0;
+      else {
+        char* end = nullptr;
+        const double m = strtod(v.c_str(), &end);
+        if (end == v.c_str() || *end || m < 0.5 || m > 10080)
+          usage_error("--idle-unload takes auto, 0 (off) or the minutes the server idles first (0.5 or more), not \"" + v + "\"", help);
+        idle_unload_min = m;
+      }
+    }
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
     else if (a == "--timing") {
@@ -1291,6 +1307,9 @@ static int serve(int argc, char** argv, int first) {
     if (!engine_splash) throw;
     return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
   }
+  if (!engine_splash && idle_unload_min != 0)
+    model_mgr->set_idle_unload(idle_unload_min < 0 ? 600 : int(idle_unload_min * 60 + 0.5), idle_unload_min < 0,
+                               [] { return split_now(); });
   if (engine_splash) {  // (absolute: the next run may start in another folder)
     std::error_code abs_ec;
     const std::filesystem::path bin = std::filesystem::absolute(splash_found_binary, abs_ec);
