@@ -16,7 +16,7 @@ namespace ni::gemm_slices {
 
 inline constexpr size_t cap = 2048;
 
-// enabled: NI_GEMM_SLICES (default on the M5 Pro only). The shape check keeps it to the model it was measured on.
+// enabled: NI_GEMM_SLICES (default on the M5 Pro only). The shape check keeps it to that model's shape.
 inline bool eligible(bool enabled, bool causal, bool moe, int layers, int hidden, int dense_I, int rows) {
   return enabled && !causal && !moe && layers == 64 && hidden == 5120 && dense_I == 17408 && rows > int(cap);
 }

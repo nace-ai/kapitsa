@@ -18,7 +18,7 @@ constexpr double kFloorWriteBpms = 4e5;   // write speed not measured yet: 400 M
 
 // ahead_bytes: bytes still to write, up to and including the copy the prompt continues (the writer takes them in order);
 // rows: how many rows of the prompt that copy saves over what the slot holds; write_bpms: bytes per ms the SSD takes
-// captures at; prefill_tpms: rows per ms the engine reads a prompt at (each 0 until measured).
+// captures at; prefill_tpms: rows per ms the engine reads a prompt at (each 0 until the engine has timed one).
 // It waits when the write is estimated to finish sooner than prefilling those rows, and never past kMaxWaitMs. An
 // unmeasured write speed is the floor above, so even the first wait after a start is bounded by the queued bytes.
 inline Decision decide(double ahead_bytes, int rows, double write_bpms, double prefill_tpms) {

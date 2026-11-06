@@ -34,8 +34,8 @@ using json = nlohmann::json;
 
 // Default for KFlash's history lane (#944): the Qwen3.6 35B-A3B shape on an M5 Pro, where the interleaved A/B measured it
 // faster. NI_KFLASH_HIST turns it off ("0") or sets its knobs on any model and Mac; unset takes this default. Other
-// targets and Macs keep it off until they are measured. Clover-35B-A3B has the same shape and drafter and is not
-// measured, so the gate also asks for "not Clover".
+// targets and Macs keep it off today, which is a narrower gate than the class the lane targets. Clover-35B-A3B has the
+// same shape and drafter, so the gate still asks for "not Clover".
 // KFlash's online selector update (NI_KFLASH_SELUPD=<lr>) on by default where the lanes shape matches (the 35B-A3B on an
 // M5 Pro, with the history lane): learning rate 0.003, which the interleaved A/B on top of the history lane (#362) measured
 // faster in 3 of 3 rounds (x1.027, 1.028, 1.024 on the whole 19-turn session's write tok/s, outputs identical); 0.02 was
@@ -606,7 +606,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // 8-row block, trees at depth 7, and 7..14 is not the same machine state as the cap unset; only at or above
     // 15 is it a no-op outright -- and below the full depth the CAP is
     // the same axis as the existing NI_KFLASH_VERIFY -- a capped depth is always a chain, because set_tree keeps
-    // the trees only at the full depth. The shipping default changes only where the pre-registered shipping-binary
+    // the trees only at the full depth. The shipping default changes only when the pre-registered shipping-binary
     // sweep (4K AND 32K, ids match, ABBA >= 8) says so (docs/kflash.md, ledger rulings v2). The batched cycle
     // (Engine::batch_cycle under the KfBatch budget) keeps its own rows -- a batch amortizes the per-row weight
     // read that a deeper verify pays.
@@ -635,8 +635,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // The low-rank shortlist head (SlimSpec, arXiv 2605.10453, without training: build_lowrank): the reduced head's
     // 4-bit GEMM (98,304 rows, 134 MB per drafting pass) becomes a rank-768 one (40 MB) whose chunk top-16s the
     // head's own rows rescore. On the 10-core M4, 4B: drafting pass -0.75 ms, tok/cycle unchanged on 7 prompts (the
-    // shortlist holds the true top 16's probability mass to 0.9999). Default on the 10-core M4, where it was measured
-    // and gated; NI_KFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
+    // shortlist holds the true top 16's probability mass to 0.9999). Default on the 10-core M4, a narrower
+    // gate than the class; NI_KFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
     const int r = lowrank_request();
     if (r > 0 && v8_ && cfg_.v1) build_lowrank(uint32_t(r));
   }
@@ -651,8 +651,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   // T > 0 uses an exact rule (dfl_depth): default tau 0.3 (offline replay, 35B T = 0.6, 4 prompts x 6 seeds: 0.25 /
   // 0.3 / 0.35 within 0.4%); NI_KFLASH_DYN_T overrides. NI_KFLASH_DYN_RULE=2: the earlier T > 0 rule (exclusive
   // product of the walk's q; 35B code_35b 512, T = 0.6: 139.2 tok/s without, 149.4 / 147.8 / 140.3 at 0.3 / 0.5 / 0.7)
-  // Rule 0 is the default on the M5 (Apple10), where it was measured; other Macs keep rule 2, which they were tuned
-  // with, until it is measured there.
+  // Rule 0 is the default on the M5 (Apple10); other Macs keep rule 2, which they were tuned
+  // with.
   dyn_tau_t_ = dyn_tau_ > 0 ? 0.3f : 0.0f;
   dyn_rule_ = Gpu::get().apple10() ? 0u : 2u;
   if (const char* v = kenv("DYN_RULE")) {  // rule 1 is biased at T > 0 (dflash_accept_test only)
@@ -762,8 +762,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
     if (block() > kB) kf_budget_->pin_wide();
     // the 8-row block of a drafter loaded with 16 rows (set_block): its own budget (the 8-row block's file), one 8-row
-    // tile, the full depth, as NI_KFLASH_BLOCK=8 has them. NI_KFLASH_NARROW: by default on the M5 Max, where it was
-    // measured; 1 on any Mac a 16-row block runs on, 0 never
+    // tile, the full depth, as NI_KFLASH_BLOCK=8 has them. NI_KFLASH_NARROW: by default on the M5 Max (a narrower
+    // gate than the class); 1 on any Mac a 16-row block runs on, 0 never
     const char* nv = kenv("NARROW");
     const bool narrow = nv && *nv ? atoi(nv) != 0 : Gpu::get().name().find("M5 Max") != std::string::npos;
     if (block() > kB && tree_ && narrow) {
@@ -1367,7 +1367,7 @@ void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t
 
 // The drafter's 4-bit GEMMs on the core before dfl_q8_run4: dfl_q8_run4 (two groups per step, the next step's loads
 // first, subnormal codes) is measured on M5 and the 32-core M1 Max. Other Macs
-// keep the earlier core; NI_KFLASH_CORE4=1 / 0 forces the new / earlier one.
+// keep the earlier core today; NI_KFLASH_CORE4=1 / 0 forces the new / earlier one.
 static bool dfl_old4() {
   static const bool old = kenv("CORE4") ? atoi(kenv("CORE4")) == 0
       : !(Gpu::get().apple10() || (Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32));
@@ -2208,7 +2208,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       // the GPU-driven anchor: the builder's P is unknown to the host, so the tokens' base comes from the drafter state
       // (kf_build reads P from its params: the host passes P; a GPU-driven pass passes the sentinel and the kernel reads
       // gst) -- see kf_build_gpu below
-      // NI_KFLASH_DFS (default on for dense targets on the 10-core M4, where it was measured and gated): a full tree's
+      // NI_KFLASH_DFS (default on for dense targets on the 10-core M4, a narrower gate than the class): a full tree's
       // rows in depth-first order (kf_dfs_reorder: about half the Gated DeltaNet replays of jumping rows)
       static const int dfs_env = getenv("NI_KFLASH_DFS") ? atoi(getenv("NI_KFLASH_DFS")) : -1;
       const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe && Gpu::get().m4_base() : dfs_env != 0) ? 1u : 0u;

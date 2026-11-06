@@ -200,10 +200,13 @@ without and after a draft.
 - A default changes only after an interleaved A/B and the [output check](#output-check): the logits against the old
   build's, with differences allowed only within this Mac's noise floor (near-ties).
 - Put the numbers in the pull request, with the change that produced them.
-- A new feature ships on by default for at least one model on at least one Mac. The other way in: a well-known paper or
-  a major engine already has it and it fits Kapitsa. Once it is a default somewhere, other models may reach it opt-in.
-  A feature that is promising but not yet faster anywhere stays an open PR until it is. Kill switches, debug switches
-  and measuring tools are exempt. AGENTS.md ("New features ship on by default somewhere") has the full rule.
+- A new feature ships on by default for the whole class of hardware or model it targets: a matrix-unit optimization for
+  every Mac with matrix units, a MoE path for every MoE model. Show the interleaved A/B and the output check on at least
+  two setups that differ in chip class or model family when two such setups exist for the class (one is enough when
+  only one exists). A narrow gate (an exact chip, core count, RAM size or one model) needs a win of at least 10% on the
+  target that is slower or broken on the wider class, with that evidence cited. A feature that is promising but not yet
+  faster anywhere stays an open PR until it is, even when a paper or another engine has the idea. Kill switches, debug switches and measuring tools are exempt.
+  AGENTS.md ("Defaults follow the concept, not the measured cell") has the full rule.
 
 ## Output check
 
