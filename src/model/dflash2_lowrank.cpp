@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
+#include <utility>
 
 #include "util/bf16.h"
 #include "util/log.h"
@@ -28,38 +29,40 @@ namespace ni {
 bool dfl_lowrank_factors(const uint32_t* w, const uint16_t* sc, const uint16_t* bi, uint32_t N, uint32_t K, uint32_t r,
                          std::vector<float>& A, std::vector<float>& P) {
   const uint32_t gpr = K / 64, wpr = K / 8;
-  std::vector<float> G(size_t(K) * K, 0.0f), Cz(size_t(K) * K, 0.0f);
-  constexpr uint32_t kChunk = 4096;
-  std::vector<float> rows(size_t(kChunk) * K), rows_w(size_t(kChunk) * K);
-  for (uint32_t r0 = 0; r0 < N; r0 += kChunk) {
-    const uint32_t n = std::min(kChunk, N - r0);
-    for (uint32_t i = 0; i < n; ++i) {
-      const uint32_t t = r0 + i;
-      float* dst = rows.data() + size_t(i) * K;
-      for (uint32_t g = 0; g < gpr; ++g) {
-        const float s = bf16_to_f32(sc[size_t(t) * gpr + g]), b = bf16_to_f32(bi[size_t(t) * gpr + g]);
-        for (uint32_t u = 0; u < 8; ++u) {
-          const uint32_t q = w[size_t(t) * wpr + g * 8 + u];
-          for (uint32_t j = 0; j < 8; ++j) dst[g * 64 + u * 8 + j] = s * float((q >> (4 * j)) & 15u) + b;
-        }
-      }
-      const float sw = std::sqrt(1.0f / (float(t) + 100.0f));
-      for (uint32_t k = 0; k < K; ++k) rows_w[size_t(i) * K + k] = dst[k] * sw;
-    }
-    cblas_ssyrk(CblasRowMajor, CblasUpper, CblasTrans, int(K), int(n), 1.0f, rows.data(), int(K), 1.0f, G.data(),
-                int(K));
-    cblas_ssyrk(CblasRowMajor, CblasUpper, CblasTrans, int(K), int(n), 1.0f, rows_w.data(), int(K), 1.0f, Cz.data(),
-                int(K));
-  }
-  double wsum = 0;
-  for (uint32_t t = 0; t < N; ++t) wsum += 1.0 / (double(t) + 100.0);
-  // full symmetric double matrices (row-major upper = column-major lower; symmetric either way once mirrored)
   std::vector<double> Gd(size_t(K) * K), C(size_t(K) * K);
-  for (uint32_t i = 0; i < K; ++i)
-    for (uint32_t j = i; j < K; ++j) {
-      Gd[size_t(i) * K + j] = Gd[size_t(j) * K + i] = G[size_t(i) * K + j];
-      C[size_t(i) * K + j] = C[size_t(j) * K + i] = Cz[size_t(i) * K + j] / wsum;
+  {  // The row tiles and fp32 moments are no longer needed after promotion.
+    std::vector<float> G(size_t(K) * K, 0.0f), Cz(size_t(K) * K, 0.0f);
+    constexpr uint32_t kChunk = 4096;
+    std::vector<float> rows(size_t(kChunk) * K), rows_w(size_t(kChunk) * K);
+    for (uint32_t r0 = 0; r0 < N; r0 += kChunk) {
+      const uint32_t n = std::min(kChunk, N - r0);
+      for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t t = r0 + i;
+        float* dst = rows.data() + size_t(i) * K;
+        for (uint32_t g = 0; g < gpr; ++g) {
+          const float s = bf16_to_f32(sc[size_t(t) * gpr + g]), b = bf16_to_f32(bi[size_t(t) * gpr + g]);
+          for (uint32_t u = 0; u < 8; ++u) {
+            const uint32_t q = w[size_t(t) * wpr + g * 8 + u];
+            for (uint32_t j = 0; j < 8; ++j) dst[g * 64 + u * 8 + j] = s * float((q >> (4 * j)) & 15u) + b;
+          }
+        }
+        const float sw = std::sqrt(1.0f / (float(t) + 100.0f));
+        for (uint32_t k = 0; k < K; ++k) rows_w[size_t(i) * K + k] = dst[k] * sw;
+      }
+      cblas_ssyrk(CblasRowMajor, CblasUpper, CblasTrans, int(K), int(n), 1.0f, rows.data(), int(K), 1.0f, G.data(),
+                  int(K));
+      cblas_ssyrk(CblasRowMajor, CblasUpper, CblasTrans, int(K), int(n), 1.0f, rows_w.data(), int(K), 1.0f, Cz.data(),
+                  int(K));
     }
+    double wsum = 0;
+    for (uint32_t t = 0; t < N; ++t) wsum += 1.0 / (double(t) + 100.0);
+    // full symmetric double matrices (row-major upper = column-major lower; symmetric either way once mirrored)
+    for (uint32_t i = 0; i < K; ++i)
+      for (uint32_t j = i; j < K; ++j) {
+        Gd[size_t(i) * K + j] = Gd[size_t(j) * K + i] = G[size_t(i) * K + j];
+        C[size_t(i) * K + j] = C[size_t(j) * K + i] = Cz[size_t(i) * K + j] / wsum;
+      }
+  }
   double tr = 0;
   for (uint32_t i = 0; i < K; ++i) tr += C[size_t(i) * K + i];
   for (uint32_t i = 0; i < K; ++i) C[size_t(i) * K + i] += tr / K * 0.05;
@@ -75,7 +78,7 @@ bool dfl_lowrank_factors(const uint32_t* w, const uint16_t* sc, const uint16_t* 
     for (uint32_t i = j + 1; i < K; ++i) C[size_t(j) * K + i] = 0.0;
   const std::vector<double>& R = C;
   // M = R G R^T
-  std::vector<double> M = Gd;
+  std::vector<double> M = std::move(Gd);
   cblas_dtrmm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, int(K), int(K), 1.0, R.data(), int(K),
               M.data(), int(K));
   cblas_dtrmm(CblasColMajor, CblasRight, CblasUpper, CblasTrans, CblasNonUnit, int(K), int(K), 1.0, R.data(), int(K),
@@ -101,7 +104,8 @@ bool dfl_lowrank_factors(const uint32_t* w, const uint16_t* sc, const uint16_t* 
     return false;
   }
   // A = R^-1 Z, P = R^T Z (column j of each = row j of the outputs)
-  std::vector<double> Ad = Z, Pd = Z;
+  // Copy into Ad before moving Z into Pd: both products need the eigenvectors.
+  std::vector<double> Ad = Z, Pd = std::move(Z);
   cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit, int(K), int(r), 1.0, R.data(), int(K),
               Ad.data(), int(K));
   cblas_dtrmm(CblasColMajor, CblasLeft, CblasUpper, CblasTrans, CblasNonUnit, int(K), int(r), 1.0, R.data(), int(K),

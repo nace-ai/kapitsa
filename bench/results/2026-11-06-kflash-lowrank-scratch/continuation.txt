@@ -1,0 +1,7 @@
+<|im_start|>user
+Count from 1 to 2000, one number per line, nothing else.<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+
