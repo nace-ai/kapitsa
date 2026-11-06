@@ -19,7 +19,9 @@ enum class ModelClass { kOther, kQwen35A3b };
 // A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
 // units). kName is a narrow exception: the name must match, and the row
 // has to cite a win of at least 10% that the wider class does not get.
-enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kName };
+// kGuard is not that. It documents a predicate the call site still reads: a shape, a RAM size, or a
+// correctness miss on the wider chip. It is not a class, and it does not claim a 10% win.
+enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kName, kGuard };
 
 struct DeviceFacts {
   int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.
@@ -54,7 +56,7 @@ struct DefaultRow {
   const char* id;
   ModelClass model;
   DefaultScope scope;
-  const char* chip_name;  // kName only
+  const char* chip_name;  // kName, and a kGuard row that has an exact name. Null when the guard matches a substring.
   const char* value;  // what the table would turn on, once the call site reads it
   int win_pct;        // lower bound of the cited win, in percent. 0 if the row cites none.
   int win_pct_hi;     // 0 when win_pct is a single number, else the upper bound
