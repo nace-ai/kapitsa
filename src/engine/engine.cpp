@@ -2904,8 +2904,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     return !(v && v[0] == '0' && v[1] == 0);
   }();
   // NI_VPF=1 forces it on a target the default leaves out (a MoE one): a verify reads the union of its rows'
-  // routed experts, so "one weight pass whatever the rows" does not hold there and only the measured dense case
-  // keeps it on by default
+  // routed experts, so "one weight pass whatever the rows" does not hold there and only the dense case
+  // keeps it on by default today
   static const bool vpf_forced = [] {
     const char* v = getenv("NI_VPF");
     return v && v[0] == '1' && v[1] == 0;
@@ -2998,7 +2998,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // two passes; a prefix checkpoint inside the suffix or a grammar mask keeps the old path.
     // A pass costs the same whatever the prefix (the weights are the traffic), so a prefix this short is a case the
     // prefill path already runs cheaply: 1K cached rows is the floor measured to win at 4K and 16K.
-    // The default covers the case that was measured: a dense target big enough that a narrow prefill pays for a
+    // The default covers a dense target big enough that a narrow prefill pays for a
     // whole weight pass. On the 27B a 39-58-row suffix prefills in 250-490 ms while a verify pass costs ~95 ms
     // whatever the target, so the pass wins there; on the 4B the same suffix prefills in ~53 ms and the pass costs
     // it ~30-40 ms (39/40/45 rows, 4K and 16K prefixes, replies identical either way), so it loses. The weight
@@ -3012,7 +3012,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       const Qwen35Config& vcfg = q35_->config();
       vpf_scale = (long long)vcfg.hidden * vcfg.dense_I * vcfg.layers;
     }
-    // the measured case: a dense target at the weight floor whose drafter drafts a 16-row block (DFlash2). A dense
+    // the default case: a dense target at the weight floor whose drafter drafts a 16-row block (DFlash2). A dense
     // target whose drafter drafts 8 rows keeps the prefill path, whatever capacity the pass sized for itself.
     const bool vpf_default =
         q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->drafter_wide() && q35_->verify_wide_ok();

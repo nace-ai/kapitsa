@@ -330,7 +330,7 @@ bool Qwen35::verify_wide_ok() const { return v8_wide_ok_c(cfg_); }
 int Qwen35::vpf_pass_rows(const Qwen35Config& c) {
   // NI_VPF_ROWS names the widest chain pass a cached suffix may run (8, 16 or 32 rows: the widths the verify buffers
   // hold - set_tree_rows rounds to whole 8-row tiles, and a 24 there would reserve three tiles for four); the default is
-  // the measured case: a dense target at or above the weight floor of the NI_VPF default (engine.cpp), where a pass'
+  // a dense target at or above the weight floor of the NI_VPF default (engine.cpp), where a pass'
   // weights are worth a whole turn's prefill, so the suffix's rows stream them once instead of once per 8-row tile. The
   // width is reserved at load (plan, the model's buffers, every sequence's tape), so a run that turns the path off
   // (NI_VPF=0) keeps the 16-row block's capacity rather than holding memory for a pass it can never take.

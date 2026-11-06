@@ -446,7 +446,7 @@ class Qwen35 : public Model {
   // NI_KFLASH_TREE, NI_KFLASH_ROWS) let them. DFlash2 picks its rows from it and plan() reserves the tape they need, so
   // the sizes agree; a bad NI_KFLASH_ROWS is fatal here (before either).
   static uint32_t kf_dense_rows(const Qwen35Config& c);
-  // The rows a cached suffix's chain pass runs (NI_VPF_ROWS, else the measured default: 32 on a dense target at or
+  // The rows a cached suffix's chain pass runs (NI_VPF_ROWS, else the default: 32 on a dense target at or
   // above the weight floor the NI_VPF default uses, 8 elsewhere): plan() reserves the tape for them and the model
   // sizes its verify buffers for them at load. Kept apart from kf_dense_rows, which is the drafter's tree width: the
   // pass is the engine's own, not a decode cycle's, so it may be wider than anything the drafter drafts.
@@ -459,7 +459,7 @@ class Qwen35 : public Model {
   void set_tree_rows(int rows, bool drafting = false);
   int tree_rows() const { return tree_rows_; }
   // The widest tree verify the drafter itself asked for (set_tree_rows with drafting): its drafting block, where the
-  // target's own chain passes may run wider (pass_rows). NI_VPF's default is measured on a target whose drafter drafts
+  // target's own chain passes may run wider (pass_rows). NI_VPF's default is for a target whose drafter drafts
   // 16 rows, so the default keys on this and not on the capacity the pass raised.
   bool drafter_wide() const { return drafter_wide_; }
   // The rows one chain pass of a cached suffix runs (8, 16 or 32: vpf_pass_rows at load; a 24-row tail of a ladder
@@ -664,12 +664,12 @@ class Qwen35 : public Model {
   int gpu_wave_rows(int T) const;
   void enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h);
   Buffer xh2_, hh2_;  // the MoE chain's xh_ / hh_ while a mixer uses those (gpu_wave_rows)
-  bool gpu_wave_model_ = true;  // false: this model was not measured with the wavefront (Clover), only NI_PF_WAVE=1
+  bool gpu_wave_model_ = true;  // false: the wavefront is off on this model today (Clover), only NI_PF_WAVE=1
   void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
   bool enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   static bool qmt_ready();  // NI_QMT's tensor_ops GEMMs are on
-  // the M5 default share of the split (default_units' gpu_mma) applies to this model: measured on it (NI_ANE_MMA)
+  // the M5 default share of the split (default_units' gpu_mma) applies to this model (NI_ANE_MMA)
   static bool mma_share_measured(const Qwen35Config& c);
   void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
   // A noncausal pass (Max) splits its FFN slab by slab (src/ane/slabs.h), any length >= min_rows; NI_ANE_NONCAUSAL=0: off

@@ -205,7 +205,7 @@ static bool moe_qtm() {
 }
 
 // The 35B's grouped prefill on the 32-core M1 Max benefits from staging a full
-// 64-input group per step. Other measured devices keep their 32-input tiles.
+// 64-input group per step. Other devices keep their 32-input tiles today.
 static int moe_qmr_k(int hidden, int intermediate) {
   static const int override_k = [] {
     const int v = getenv("NI_MOE_QMR_K") ? atoi(getenv("NI_MOE_QMR_K")) : 0;
@@ -1413,7 +1413,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
     const auto ff = fmt_of("layers.0.mlp.gate_proj.weight", "layers.0.mlp.gate_proj.scales");
     m.ffn_ane = format_supported(ff.first, ff.second);
     // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, on
-    // a model the M5 share was measured on, as init_ane decides it, so the planned and the loaded default share agree
+    // a model with an M5 share (mma_share_measured), as init_ane decides it, so the planned and the loaded default share agree
     m.ffn_mma = qmt_on() && mma_share_measured(c);
     for (int i = 0; i < c.layers && m.ffn_mma; ++i)
       for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
@@ -2300,8 +2300,8 @@ bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
   const bool b6 = b6_ok && b6_on && bits == 6 && R == 1 && !gu && cfg_.iq && Gpu::get().apple_family() <= 7;
   if (bits != 4 && bits != 8 && !b6) return false;
   // 4-bit group 32 (GGUF imports' Q4_K LM heads), one matrix, on the M1 (Apple7): its 248K-row head on
-  // qmvf_b4g32 2.6 instead of 3.1 ms (qmvg_f4g32_r4_norm, Qwen3.6-35B-A3B UD-IQ2_XXS on the M1 Pro); not yet
-  // measured on the other chips
+  // qmvf_b4g32 2.6 instead of 3.1 ms (qmvg_f4g32_r4_norm, Qwen3.6-35B-A3B UD-IQ2_XXS on the M1 Pro); the other
+  // chips keep the existing path today
   const bool g32 = segs.size() == 1 && !gu && bits == 4 && segs[0].L->gs == 32 && !segs[0].L->iq &&
                    Gpu::get().apple_family() <= 7;
   for (const Seg& s : segs)

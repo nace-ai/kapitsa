@@ -584,7 +584,7 @@ class Engine {
   static void verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq& s, int P, int rows, const int* parent,
                            int live);
   // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
-  // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched);
+  // n requests take turns instead (one pass over their rows does not pay, or the drafter is not one batch_rows batches by default);
   // kBatchBudget: KFlash's batch budget (KfBatch, DFlash2) chooses each member's rows every cycle from the members'
   // drafts. NI_BATCH=0 turns batching off, NI_BATCH=1 on with every drafter; NI_BATCH_ROWS="n:rows,..." overrides
   // the table and the budget; NI_BATCH_KF=0 keeps the table where the budget would choose.
@@ -647,7 +647,7 @@ class Engine {
   int decoding_ = 0;         // of those, requests in their decode loop (under the turn)
   std::vector<BatchJob*> batch_;  // the batch's members (under the turn)
   bool batch_runner_ = false;     // a member's thread runs the batch
-  bool batch_measured_ = false;   // batched decode measured with this model's drafter (batch_rows' default)
+  bool batch_measured_ = false;   // batched decode is on by default with this model's drafter (batch_rows' default)
   double batch_backoff_ = 0;      // now_ms() before which no batch forms (the last one's members did not all come)
   // batch statistics since the last log line: cycles, rows, wall and GPU ms of the cycles, the GPU's idle time between
   // the drafting passes and the verify (cycles with drafting passes)

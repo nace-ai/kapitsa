@@ -118,7 +118,7 @@ struct MemPlan {
   bool dense = false;
   bool ffn_ane = true;        // dense FFN weights in a format the Neural Engine split stages (any Kapitsa reads)
   bool ffn_mma = false;       // the M5 default share: the split's GPU share on the matrix units (Qwen35: NI_QMT,
-                              // 4-bit g64, a model it was measured on)
+                              // 4-bit g64, a model with an M5 share)
   std::string formats;        // "bf16", "4-bit group 64 + 80 modules 8-bit group 64", ...
   size_t ane = 0;             // a GPU + Neural Engine prefill split the model runs by default (Nemotron-H)
   size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }
