@@ -32,7 +32,7 @@ Buffer iq_read_matrix(const WeightStore& ws, const std::string& name, uint32_t t
   raw.resize(rows * rb);
   ws.read_deferred(name, raw.data());
   Buffer b = Gpu::get().alloc(lay->bytes, "iq_experts", /*tracked=*/false);
-  const unsigned nth = std::max(2u, std::min(8u, std::thread::hardware_concurrency()));
+  const unsigned nth = std::max(2u, std::min(16u, std::thread::hardware_concurrency()));
   LoadThreads th;
   const size_t per = (rows + nth - 1) / nth;
   for (unsigned i = 0; i < nth; ++i) {

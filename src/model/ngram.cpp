@@ -372,7 +372,7 @@ void NgramTable::gather(const int64_t* ids, int T, int heads, float* out) const 
   // cache overlap instead of faulting one after another, and resident pages are mapped in one call each rather than
   // by faults. Decode (16 rows on the GPU's path: the next pass waits for them), real pack, M5 Max: 1.35-1.48 ms ->
   // 0.04-0.27 ms per token, 76 -> 87 tok/s (NI_PLE_PREFETCH=0: off). Large gathers (prefill chunks) also take threads.
-  const unsigned nt = n >= 256 ? std::max(1u, std::min(8u, std::thread::hardware_concurrency())) : 1u;
+  const unsigned nt = n >= 256 ? std::max(1u, std::min(16u, std::thread::hardware_concurrency())) : 1u;
   if (nt == 1) {
     work(0, n);
     return;

@@ -600,7 +600,7 @@ void Qwen35::prewarm_pipelines() {
     }
   Gpu& g = Gpu::get();
   g.pipeline(v[0]);  // compiles the library once, before the threads
-  const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
+  const unsigned nt = std::max(1u, std::min(16u, std::thread::hardware_concurrency()));
   LoadThreads th;
   for (unsigned i = 0; i < nt; ++i)
     th.emplace_back([&, i] {
@@ -1992,7 +1992,7 @@ void Qwen35::test_transforms() {
         for (uint32_t gi = 0; gi < gpr; ++gi) ds[r * gpr + gi] = f32_to_bf16(bf16_to_f32(ss[r * gpr + gi]) / float(1u << sh));
       }
     };
-    const unsigned nth = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
+    const unsigned nth = std::max(1u, std::min(16u, std::thread::hardware_concurrency()));
     LoadThreads th;
     const size_t per = (rows + nth - 1) / nth;
     for (unsigned t = 0; t < nth; ++t)
