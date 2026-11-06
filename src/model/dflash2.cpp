@@ -283,7 +283,7 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
         S[size_t(n) * gpr + gi] = f32_to_bf16(scale);
         B[size_t(n) * gpr + gi] = f32_to_bf16(bias);
         uint32_t* wr = W + size_t(n) * wpr + gi * (64 * bits / 32);
-        const int per = 32 / bits;
+        const int per = 32 / bits;  // Callers pass 4 or 8 bits, so each word holds whole four-lane groups.
         for (int w = 0; w < 64 / per; ++w) {
           uint32_t word = 0;
           // Four independent codes at a time; keep the scalar scale/bias and both rounding modes.
