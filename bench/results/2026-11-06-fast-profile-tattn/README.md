@@ -38,8 +38,15 @@ a cache fault in the scoring patch.
 script's own log with each leg's verdict (load, AC, memory pressure). Every run alternates its arms within a round and
 reverses the order in the next round. Legs marked `void-*` are left out of every median.
 
-- `fn_ab5-try1` (PR head 38592e88 as built, precise against fast with the chunk fast picks itself): queued behind
-  another job's GPU lock; its numbers go here.
+- `fn_ab5-try1`: build 4187b609 (#986's head after its rebase onto 7381db44; the merged head c8f4ba9b changes only comments and docs) as built, precise against fast, 4
+  legs each, expert store pinned at 24 GB. Fast picked 2048-row chunks itself (the prefill group's slots log -0.50 GB,
+  as `NI_CHUNK=2048` did in fn_ab3). 32K: median wall ms per draft cycle 54.1 precise, 53.6 fast (1% faster); prefill
+  43.7 s against 39.5 s (10% faster). One leg per arm logged memory pressure. The 64K legs were voided: the first
+  precise 64K leg left used swap at 8.4 GB, and the guard (used swap over 8 GB or free disk under 40 GB) stopped the
+  rest.
+- `fn_ab6-try1`: the same build and setup, 64K only, rerun right after. Median wall ms per draft cycle 59.4 precise,
+  57.5 fast (3% faster); prefill 93.3 s against 87.2 s (7% faster). Every fast leg and 2 of 4 precise legs logged
+  memory pressure; no leg tripped the guard.
 
 Earlier runs, kept for the record:
 
@@ -55,6 +62,13 @@ Earlier runs, kept for the record:
 - `queue3_ab-try1`: 35B `NI_KV_I8` decode at 4K (117.6 against 116.8 tok/s, 4 pairs; the greedy text differs, 43 decoded tokens against 41) and Flash-Next `NI_QSA_FUSE`
   decode at 32K (40.5 against 42.9 tok/s, 2 legs against 1; 1 void). Lightning skipped: its model is on an external
   drive that was not mounted.
+
+## Metal validation (`validation/`)
+
+`tattn_validate.sh`, build 4187b609, fast profile, a 10,240-token prompt (its last 2048-row chunk passes 8,192 keys,
+so `qattn_t_sparse_g12d2` runs) and 8 tokens of decode. With `MTL_SHADER_VALIDATION=1` the run completed with no
+validation message (`shader-validation.out`). Adding `MTL_DEBUG_LAYER=1` aborts on the dense `attn_prefill11r`
+(40,960 B as the layer counts it, against 32,768 B) before the sparse kernel, as AGENTS.md describes for any prefill.
 
 ## Not run
 

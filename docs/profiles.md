@@ -43,11 +43,13 @@ Measured 6 Nov 2026 on an M5 Pro 48 GB, macOS 26.5.2, `logit_dump --paths step` 
 bitwise identical to main on all 72 rows, and `fast` at 4096-row chunks is bitwise identical to `fast` at 2048.
 
 Speed, same Mac, `ni_run` with a 32K and a 64K prompt and 128 tokens of decode, 4 interleaved rounds of precise, fast,
-and fast with 4096-row chunks (the chunks `NI_QSA_TATTN=1` takes since #571), expert store pinned at 24 GB:
+and fast with 4096-row chunks (the chunks `NI_QSA_TATTN=1` takes since #571), expert store pinned at 24 GB; then
+precise against fast on the rebased build (4 legs each). Legs and logs: [results](../bench/results/2026-11-06-fast-profile-tattn/).
 
 | | 32K prefill | 64K prefill | Decode, ms per draft cycle |
 |---|---|---|---|
 | fast (2048-row chunks) | 8% faster | 10% faster | the same at 32K, 4% faster at 64K |
+| fast, #986's build 4187b609 (fn_ab5, fn_ab6) | 10% faster | 7% faster | 1% faster at 32K, 3% faster at 64K |
 | fast with 4096-row chunks | 15% faster | 17% faster | 7 to 8% slower; 7 of 8 legs under memory pressure (the clean one 4% slower) |
 
 Decode tokens per second also differ because the greedy text differs (2.05 against 1.95 tokens per cycle at 32K), not
