@@ -1,0 +1,6 @@
+# Lines tests/test_comment_gates.py matches that are not a reason to limit a default. One per line: <path>\t<the line, stripped>.
+# Add one only for an order of events ("only after X happens"), never for a gate; say why in the PR.
+src/engine/engine.cpp	// Only after a final answer ("stop"): the next message is then a user query, and the template renders
+src/kernels/exl3moe.metal	// up near 400 on MiMo, a product past 65504), so the down input is rounded to f16 only after H128, where suh has scaled
+src/kernels/spec_dflash.metal	for (int pp = 0; pp < 16; ++pp) {  // candidate 15 becomes the chain token, valid only after the chain's own parent
+src/model/qwen35.cpp	// in another format is refused before its weights are read (qlin refuses it only after all of them are: issue 787, 20 GB

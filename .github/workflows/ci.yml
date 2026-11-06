@@ -46,12 +46,15 @@ jobs:
       - run: python3 tests/test_pr_size.py
 
   profile-gates:
-    # A new inline chip, core or RAM check outside src/engine/device_profile.cpp fails this. No build.
+    # A new inline chip, core or RAM check outside src/engine/device_profile.cpp fails this, and so does a comment or doc line
+    # that gives 'only measured here' as the reason for a narrow default (tests/test_comment_gates.py). No build.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - run: python3 tests/test_profile_gates.py
+      - run: python3 tests/test_comment_gates.py --self-test
+      - run: python3 tests/test_comment_gates.py
 
   splash-patches:
     # packaging/splash/: the patches' headers, the kernel generator, and every patch applied to the pinned Splash (clones it).

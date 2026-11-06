@@ -38,7 +38,7 @@ struct ModelFacts {
   int top_k = 0;
   int moe_i = 0;
   int shared_i = 0;
-  bool clover = false;  // same 35B-A3B shape; not measured, so not kQwen35A3b
+  bool clover = false;  // DiffuSpace's Clover: the 35B-A3B shape on its own path (Clover::is_model); kQwen35A3b excludes it
 };
 
 struct DeviceProfile {
