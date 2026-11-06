@@ -1,0 +1,17 @@
+leg,cell,arm,status,prefill_tokens,prefill_ms,decode_tokens,decode_ms,cycles,tok_per_cycle,ms_wall_per_cycle,memory_pressure_lines
+1,32K,P,ok+mempressure,32768,47617,127,3445,62,2.05,55.560,1
+2,32K,F,ok,32768,39306,127,3467,65,1.95,53.338,0
+3,32K,F,ok,32768,39036,127,3501,65,1.95,53.863,0
+4,32K,P,ok,32768,42368,127,3336,62,2.05,53.801,0
+5,32K,F,ok,32768,39634,127,3418,65,1.95,52.583,0
+6,32K,P,ok,32768,42402,127,3370,62,2.05,54.361,0
+7,32K,P,ok,32768,45060,127,3324,62,2.05,53.620,0
+8,32K,F,ok+mempressure,32768,40590,127,3616,65,1.95,55.636,1
+9,64K,P,ok+mempressure,65000,102673,127,3125,52,2.44,60.105,4
+10,64K,F,void-guard(swap,,,,,,,,4
+11,64K,F,void-guard(swap,,,,,,,,0
+12,64K,P,void-guard(swap,,,,,,,,0
+13,64K,F,void-guard(swap,,,,,,,,0
+14,64K,P,void-guard(swap,,,,,,,,0
+15,64K,P,void-guard(swap,,,,,,,,0
+16,64K,F,void-guard(swap,,,,,,,,0

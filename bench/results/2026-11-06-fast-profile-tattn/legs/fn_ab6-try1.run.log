@@ -1,0 +1,11 @@
+20:56:12 1 64K arm=P rc=0 load 3.04->2.61 ok prompt 65000 tok in 92403 ms (703.4 tok/s); spec decode D=2: 127 tok in 3145 ms (40.4 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+20:57:47 2 64K arm=F rc=0 load 2.61->2.64 ok+mempressure prompt 65000 tok in 87485 ms (743.0 tok/s); spec decode D=2: 127 tok in 3054 ms (41.6 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+20:59:20 3 64K arm=F rc=0 load 2.64->4.11 ok+mempressure prompt 65000 tok in 86938 ms (747.7 tok/s); spec decode D=2: 127 tok in 3019 ms (42.1 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+20:59:21 waiting for load 4.11
+21:01:15 4 64K arm=P rc=0 load 3.41->2.67 ok prompt 65000 tok in 92758 ms (700.7 tok/s); spec decode D=2: 127 tok in 3071 ms (41.4 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+21:02:47 5 64K arm=F rc=0 load 2.67->3.77 ok+mempressure prompt 65000 tok in 85300 ms (762.0 tok/s); spec decode D=2: 127 tok in 3038 ms (41.8 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+21:04:29 6 64K arm=P rc=0 load 3.77->3.89 ok+mempressure prompt 65000 tok in 94420 ms (688.4 tok/s); spec decode D=2: 127 tok in 3102 ms (40.9 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+21:06:09 7 64K arm=P rc=0 load 3.89->2.29 ok+mempressure prompt 65000 tok in 93902 ms (692.2 tok/s); spec decode D=2: 127 tok in 3073 ms (41.3 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+21:07:54 8 64K arm=F rc=0 load 2.35->3.87 ok+mempressure prompt 65000 tok in 98300 ms (661.2 tok/s); spec decode D=2: 127 tok in 3105 ms (40.9 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+21:07:54 QDONE
+detach: resumed cpu-heavy k369-head-rebuild2

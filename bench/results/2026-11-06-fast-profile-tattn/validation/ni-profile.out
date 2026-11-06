@@ -1,0 +1,82 @@
+[kapitsa] read 4.99 GB of weights in 415 ms (12.0 GB/s)
+[kapitsa] RMSNorm weights zero-centred (indexer norm mean -0.04): read as 1 + w
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] expert store: NI_PREFILL_GROUP=4 slots -0.50 GB
+[kapitsa] expert store: 24.0 GB of the 34.2 GB of experts, the NI_EXPERT_STORE pin
+[kapitsa] expert store: 17233 slots of 1.39 MB (24.00 GB, 70.1% of the 24576 experts) in one buffer (up to 30.15 GB each); 17233 read at load in 2340 ms (10.82 GB/s)
+[kapitsa] GPU heater: 108 rounds per ms
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] compiled kernels in 3014 ms
+[kapitsa] compiled the tensor kernels in 919 ms
+[kapitsa] compiled the weight-format kernels in 6442 ms
+[kapitsa] prewarmed 140 prefill pipelines in 10392 ms
+[kapitsa] loaded /Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flash-next-q20: Qwen3.8-Flash-Next, 48 layers (12 attention), 5.0 GB of weights in 14105 ms; 4-bit group 64 4%, 6-bit group 64 3%, 8-bit group 64 2%, Q2_0 91%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped; routed experts: 17233 of 24576 experts in memory (24.0 GB, 70%), the rest read from the SSD
+(profiling: prompt timings not meaningful)
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMT128: qmt GEMMs of 96+ rows on the 128-row tile (qmt_m128_n64, qmtg_m128_n64)
+[kapitsa] NI_MOE_QTM_Q20: routed Q2_0 expert GEMMs on tensor_ops (qmtm_gu_q20_m64_n64, qmtm_dn_q20_m64_n64, 64-row tiles)
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] profile fast: Flash-Next sparse prefill attention on the matrix units (NI_QSA_TATTN) (NI_QSA_TATTN=0 or KAPITSA_PROFILE=precise turns it off)
+[kapitsa] NI_QSA_TATTN: sparse list attention on the matrix units (qattn_t_sparse_g12d2)
+expert store, prompt: 240 turns, 91782 experts looked up: 95.4% in memory, 4.4% read ahead and waited for, 0.1% read at the turn; 40706 read ahead (33360 routed), 60.01 GB read; GPU stalled 2.814 ms a turn (2.789 waiting for reads)
+---- GPU profile per step (7 steps, 1446.111 ms/step total, isolated dispatches) ----
+  qmtm_gu_q20_m64_n64_slot      250.403 ms/step   17.3%    34.3 calls/step  7303.42 us/call
+  qmt_m128_n64                  242.371 ms/step   16.8%   162.9 calls/step  1488.25 us/call
+  attn_prefill11m               193.783 ms/step   13.4%     5.1 calls/step  37680.03 us/call
+  qmtm_dn_q20_m64_n64_slot      151.085 ms/step   10.4%    34.3 calls/step  4406.64 us/call
+  qmt6_m64_n64                  136.461 ms/step    9.4%   102.9 calls/step  1326.70 us/call
+  gdn_step_parr4_l16             79.466 ms/step    5.5%    25.7 calls/step  3090.35 us/call
+  qmt6_mix_m64_n64               76.562 ms/step    5.3%    68.6 calls/step  1116.52 us/call
+  hc_pre_comb_h                  58.516 ms/step    4.0%    32.9 calls/step  1780.91 us/call
+  qattn_t_sparse_g12d2           40.536 ms/step    2.8%     1.7 calls/step  23646.17 us/call
+  qmm_b8_m32_n32                 39.047 ms/step    2.7%    68.6 calls/step   569.44 us/call
+  hc_pre_h                       32.603 ms/step    2.3%    35.7 calls/step   912.89 us/call
+  qmr8_k32_w14_m32_n128          22.446 ms/step    1.6%    10.0 calls/step  2244.58 us/call
+  gdn_prep_par                   17.310 ms/step    1.2%    25.7 calls/step   673.18 us/call
+  qmtg_m128_n64                  15.981 ms/step    1.1%    34.3 calls/step   466.10 us/call
+  qsa_score                      15.888 ms/step    1.1%    18.9 calls/step   842.53 us/call
+  attn_prefill11r                13.035 ms/step    0.9%     1.7 calls/step  7603.85 us/call
+  gdn_gnorm_sg                   12.368 ms/step    0.9%    25.7 calls/step   480.96 us/call
+  qsa_select_mask                 6.817 ms/step    0.5%     5.1 calls/step  1325.57 us/call
+  attn_prep                       4.193 ms/step    0.3%    20.6 calls/step   203.82 us/call
+  moe_topk_rows                   3.985 ms/step    0.3%    34.3 calls/step   116.24 us/call
+  qmvf_b4_t1_r4                   3.594 ms/step    0.2%    36.0 calls/step    99.85 us/call
+  qsa_select                      2.917 ms/step    0.2%    13.7 calls/step   212.70 us/call
+  moe_q20_gate_up_slot            2.747 ms/step    0.2%    48.0 calls/step    57.22 us/call
+  hc_up_mix3_c2_b6                2.276 ms/step    0.2%    97.1 calls/step    23.43 us/call
+  rows_to_half                    2.262 ms/step    0.2%     8.6 calls/step   263.94 us/call
+  hc_down_sk3_n2_b6               1.904 ms/step    0.1%    97.1 calls/step    19.60 us/call
+  moe_q20_down_slot               1.751 ms/step    0.1%    48.0 calls/step    36.47 us/call
+  qmv3_b4_r2                      1.668 ms/step    0.1%    36.0 calls/step    46.32 us/call
+  moe_combine                     1.615 ms/step    0.1%     1.4 calls/step  1130.65 us/call
+  qmv2_b4_g64_r4                  1.415 ms/step    0.1%     1.1 calls/step  1238.43 us/call
+  qmvg_multi_f6g64                1.370 ms/step    0.1%    12.0 calls/step   114.19 us/call
+  hc_inject                       1.158 ms/step    0.1%     2.4 calls/step   476.63 us/call
+  qmvf_b8_t1_r4                   1.148 ms/step    0.1%    61.0 calls/step    18.81 us/call
+  ple_gate_rows                   1.040 ms/step    0.1%     0.7 calls/step  1456.68 us/call
+  ple_conv_rows                   1.016 ms/step    0.1%     0.7 calls/step  1422.08 us/call
+  hc_act_h                        0.871 ms/step    0.1%    68.6 calls/step    12.71 us/call
+  gdn_step_sg                     0.792 ms/step    0.1%    36.0 calls/step    22.01 us/call
+  qmvg_f6g64_r2                   0.687 ms/step    0.0%    12.0 calls/step    57.24 us/call
+  moe_bucket3                     0.632 ms/step    0.0%    34.3 calls/step    18.45 us/call
+  qsa_prep                        0.540 ms/step    0.0%    20.6 calls/step    26.24 us/call
+  moe_topk512                     0.456 ms/step    0.0%    95.0 calls/step     4.80 us/call
+  attn_rows_sparse                0.416 ms/step    0.0%    12.0 calls/step    34.63 us/call
+  hc_expand                       0.403 ms/step    0.0%     1.7 calls/step   235.09 us/call
+  gdn_prep                        0.181 ms/step    0.0%    36.0 calls/step     5.04 us/call
+  qsa_block                       0.157 ms/step    0.0%    20.6 calls/step     7.64 us/call
+  attn_rows_reduce                0.117 ms/step    0.0%    12.0 calls/step     9.76 us/call
+  embed_f8g64                     0.096 ms/step    0.0%     1.7 calls/step    56.09 us/call
+  ple_rows                        0.008 ms/step    0.0%     1.0 calls/step     7.55 us/call
+  topk_stage1                     0.007 ms/step    0.0%     1.1 calls/step     5.94 us/call
+  ple_ring_rows                   0.007 ms/step    0.0%     0.7 calls/step     9.20 us/call
+  sample_stage2                   0.004 ms/step    0.0%     1.1 calls/step     3.57 us/call
+mean GPU time per step: 0.00 ms (7 steps)
+prompt 10240 tok in 12500 ms (819.2 tok/s); decode 7 tok in 288 ms (24.3 tok/s)
+expert store, decode: 336 turns, 3360 experts looked up: 78.8% in memory, 9.5% read ahead and waited for, 11.7% read at the turn; 773 read ahead (483 routed), 1.71 GB read; GPU stalled 0.340 ms a turn (0.334 waiting for reads)
+[kapitsa] GPU heater: 339 command buffers run, 0 in flight at exit (after 0.0 ms)
+ids: 421 7166 26 1892 524 16384 13 271
