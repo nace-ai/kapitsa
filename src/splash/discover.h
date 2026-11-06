@@ -67,8 +67,8 @@ struct KFlash {
 // The most recently built complete one there (by its kflash.json's time).
 KFlash find_kflash(const std::string& kapitsa_home);
 
-// The resolved models KFlash runs by default today: those an interleaved A/B against stock Splash showed faster on this
-// kind of Mac (docs/splash-backend.md lists them with the run); other models run the stock engine. Matched on model.json's "model" (the source), exactly.
+// The resolved models KFlash runs by default today: one so far, the model the interleaved A/B against stock Splash ran on
+// (docs/splash-backend.md lists the run); other models run the stock engine today, a narrower gate than the class. Matched on model.json's "model" (the source), exactly.
 bool kflash_by_default(const std::string& model_folder);
 
 // The release of the Splash engine at `binary` (<release>/engine/splash): release.json's "version" next to it, else "".
