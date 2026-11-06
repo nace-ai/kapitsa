@@ -782,3 +782,31 @@ result files and READMEs stay in [bench/results](../bench/results/); each row li
 | 2026-10-23 | M5 Pro | The 35B-A3B after #362 and the 27B after #360 | [2026-10-23-m5-pro-35b-27b](../bench/results/2026-10-23-m5-pro-35b-27b/README.md) |
 | 2026-10-27 | M5 Pro | Flash-Next 180B Q2_0 streamed from the SSD: Splash 1.4.0, Kapitsa with MTP and llama.cpp, with memory footprints | [2026-10-28-m5-pro-flash-next-engines](../bench/results/2026-10-28-m5-pro-flash-next-engines/README.md) |
 | 2026-10-30 | M5 Pro | Flash-Next 180B Q2_0 re-measure: Kapitsa with KFlash against Splash 1.5.0, interleaved, the poster's Q2 row | [2026-10-30-m5-pro-flash-next-kflash](../bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md) |
+
+
+## Qwen3.5 9B fast-profile engine yardstick (7 Nov 2026)
+
+PR #775 measured native single-stream decode to select the [fast-profile bar](profiles.md#the-bar), separately
+from its loaded HTTP TTFT benchmark. On an M4 Pro (20 GPU cores, 48 GiB, macOS 15.7.1), MLX 0.32.4 / mlx-lm
+0.32.2 reached a median **50.212 tok/s**, llama.cpp b12110 (`cd959bae9`) **39.076 tok/s**. Both used the same
+75-token chat prompt, a warmup and three greedy 256-token continuations, without early EOS. MLX therefore sets
+the same-Mac 9B bar for this run. This short-prompt yardstick does not claim either engine wins at every context.
+
+MLX used Kapitsa's Qwen3.5-9B MLX 4-bit weights and its native activation dtype; llama.cpp used unsloth's Q4_K_M
+GGUF (different quantization), all layers on the GPU and flash attention enabled. A 7 GiB RAM disk held the GGUF
+through **both** engines' timed runs, then was detached. The native probes, versions, model hashes, generated
+tokens and contention samples are in the [M4 evidence](../bench/results/2026-11-07-pr775-m4-default-share/README.md).
+
+At Kapitsa `9cca6b0d`, the same M4's precise/fast/precise/fast HTTP legs took 8.594536 / 3.162654 / 8.601435 /
+3.239195 seconds to the first token after an uncached 4135-token prompt: **62.77% lower mean TTFT** under fast.
+This run used the built-in ANE share, with no `NI_ANE_UNITS` and no calibration file. It measures loaded HTTP
+latency after warmup, not cold compilation or native decode speed. The full-vocabulary bar passed on all four
+paths, but verify's mean-KL margin was only 1.56e-8; zero drift failed. Long-prompt quality is a separate check,
+not implied by the speed or bar result.
+
+On the M3 Ultra (60 GPU cores, 96 GiB, macOS 26.4.1), the same current head and protocol measured native MLX at
+114.095 tok/s versus llama.cpp at 80.998, so MLX also sets that Mac's bar. Precise/fast HTTP TTFT means were
+3.540469 -> 2.703975 seconds, **23.63% lower**, with explicit pre-calibrated `NI_ANE_UNITS=16`; no built-in M3 share
+is added. Each leg had just one two-second telemetry sample. All 576 step/verify/batch comparisons passed, but the
+additional eight-row M3 prefill mean KL exceeded MLX (1.845748e-4 vs 1.471647e-4, no top-1 flips). This failure is
+retained and prevents an unconditional all-path admission claim. [M3 raw runs, exact bounds and audit](../bench/results/2026-11-07-pr775-m3-current/README.md).

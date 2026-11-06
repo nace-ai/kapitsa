@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/ni_eval_positions",
+    "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+    "--ref",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/precise.ref",
+    "--chunk",
+    "2048",
+    "@/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-quality/case-0.txt",
+    "@/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-quality/case-1.txt",
+    "@/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-quality/case-2.txt",
+    "@/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-quality/case-3.txt"
+  ],
+  "returncode": 0,
+  "profile": "fast"
+}

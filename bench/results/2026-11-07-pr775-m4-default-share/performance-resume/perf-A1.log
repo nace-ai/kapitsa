@@ -1,0 +1,6 @@
+  warm-up prefill~2.9k+decode64: ok (7.22s)
+  warm-up tools: ok (1.45s)
+== A1
+  prefill 4000: 4135 tok (ref 4133), TTFT 8.59s -> 481 tok/s, cold cached=0 | cached TTFT median NAs over 0 turns (cached [])
+  memory: phys_footprint_peak 6.60 GB, resident mapped files 0.01 GB, swap used 1127.69 MB
+  -> /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/performance-resume/perf-A1.json

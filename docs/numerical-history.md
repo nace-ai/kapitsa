@@ -166,5 +166,33 @@ establish their quality or speed.
 
 The M3 Ultra follow-up records a speed win, nonzero drift and a regression on the sole ANE-exposed
 Math500 prompt; [all results and limits](../bench/results/2026-11-06-m3ultra-9b-ane/README.md).
-Fast-profile integration does not establish admission: the same-machine 9B fastest-other-engine bar
-in [profiles](profiles.md#the-bar) remains unmeasured. No historical result is relabeled as that check.
+The current-head M4 Pro follow-up (`9cca6b0d`, macOS 15.7.1, built-in 24/24 share, no calibration override)
+measured MLX as the faster native engine (50.212 vs llama.cpp 39.076 tok/s). On each of the 192 step, verify
+and batch rows, fast had 2 top-1 flips against MLX's 3 and mean KL below the same-path MLX bar; eight prefill
+rows passed too. Verify's KL margin was only 1.56e-8. Fresh fast and MLX dumps were bitwise identical to their
+first dumps, but that narrow margin is not a guarantee across environments or prompts. The loaded HTTP ABAB
+reduced mean TTFT by 62.77%. [M4 evidence and exact bounds](../bench/results/2026-11-07-pr775-m4-default-share/README.md).
+Zero drift still fails. No historical run is relabeled as this current-head check, and a bar pass does not establish
+long-prompt reasoning equivalence.
+
+
+The new long-prompt diagnostic selected all four MATH500 questions whose thinking-enabled prompts exceed 512
+tokens, before observing results. Each fast request actually used the ANE (32/32/32/64 evaluations). At `9cca6b0d`,
+on the M4 Pro, precise and fast each scored 1/4; the native BF16 reference on the M3 Ultra scored 3/4. Both 4-bit
+paths exhausted 32768 tokens on the same three questions. This is a new set/seed configuration, not a replacement
+for the historical 50-question result. Four questions do not establish equivalence.
+
+For the same prompts plus reference solutions, the 3964-position top-4096-plus-residual-bucket KL lower bound
+against BF16 weights with FP32 activations averaged 1.139286 (precise) and 1.162663 (fast). Direct fast-versus-precise
+mean KL lower bound was 0.094076, maximum 20.775124, with 159 top-1 flips; on the 1111 answer-only positions it was
+0.000438, maximum 0.009127, with 11 flips. Large prompt-position tails remain in the record. This is not full-vocabulary
+KL or the separate admission bar: up to 36.75% of the BF16 reference mass is outside the retained prompt top-k.
+[All transcripts, per-position tails, reference settings and limits](../bench/results/2026-11-07-pr775-long-quality/README.md).
+
+
+At the same current head on the M3 Ultra, explicit calibrated share 16 reduced loaded HTTP TTFT by 23.63%.
+MLX won the native decode comparison (114.095 vs llama.cpp 80.998 tok/s). Fast passed the requested 576
+step/verify/batch comparisons (3 flips, mean KL 2.612211092966838e-4; MLX 12 flips, 3.9909652322670414e-4).
+The additional eight prefill rows had no flips on either side, but fast mean KL **1.845747910960617e-4 exceeded
+MLX's 1.4716473412187535e-4**. Full-vocabulary and prefix alignment were audited; the exceedance remains. It was
+not averaged away, removed or made to pass with a different bound. [M3 evidence](../bench/results/2026-11-07-pr775-m3-current/README.md).

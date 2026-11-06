@@ -1,0 +1,6 @@
+  warm-up prefill~2.9k+decode64: ok (2.47s)
+  warm-up tools: ok (0.64s)
+== B1
+  prefill 4000: 4135 tok (ref 4133), TTFT 2.71s -> 1525 tok/s, cold cached=0 | cached TTFT median NAs over 0 turns (cached [])
+  memory: phys_footprint_peak 6.30 GB, resident mapped files 0.01 GB, swap used 72.06 MB
+  -> /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current-performance/perf-B1.json

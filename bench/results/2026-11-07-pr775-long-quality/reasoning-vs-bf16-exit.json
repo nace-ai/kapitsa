@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "bench/reasoning/reasoning.py",
+    "report",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/bf16-reference/bf16-reasoning.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/precise-case-0.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/precise-case-1.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/precise-case-2.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/precise-case-3.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/fast-case-0.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/fast-case-1.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/fast-case-2.jsonl",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/fast-case-3.jsonl",
+    "--baseline",
+    "bf16-m3",
+    "--json",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/bench/results/2026-11-07-pr775-long-quality/reasoning-vs-bf16.json"
+  ],
+  "returncode": 0
+}
