@@ -125,9 +125,8 @@ bool Qwen35::v8_packed_coeff_on(const Qwen35Config& c) {
   const bool four_b = c.hidden == 2560 && c.dense_I == 9216;
   const bool nine_b = c.hidden == 4096 && c.dense_I == 12288;
   if (!four_b && !nine_b) return false;
-  const Gpu& gpu = Gpu::get();
-  const bool m4 = four_b && gpu.name() == "Apple M4" && gpu.core_count() == 10;
-  const bool m4_pro = gpu.name() == "Apple M4 Pro" && gpu.core_count() == 20;
+  const bool m4 = four_b && m4_10();
+  const bool m4_pro = m4_pro_20();
   if (!m4 && !m4_pro) return false;
   if (flag && *flag) return true;
   uint64_t ram = 0;
@@ -841,11 +840,11 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // kernel, attn8t_partial_tree_g6, with one row tile, so an 8-row verify rounds as the 16-row default does, where the
   // zone runs attn8m_partial_zone on the shader ALUs. ni_run at 131K tokens, the 8-row drafting block (more than one
   // slot, or NI_KFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block
-  // there: 49.3). NI_V8_TREE_G6: by default on the M5 Max (a narrower gate than the class); 1 on any M5-class Mac, 0 the zone
+  // there: 49.3). NI_V8_TREE_G6: by default on the wide class (the 40-core M5 Max); 1 on any M5-class Mac, 0 the zone
   static const bool tree_g6 = [] {
     const int v = env_int("NI_V8_TREE_G6", -1);
     if (env_int("NI_V8_ATTN_T", 1) == 0 || v == 0) return false;
-    return v > 0 || named_m5_max();
+    return v > 0 || wide_cores();
   }();
   const bool g6t = tree_g6 && G == 6 && tw_supported() && !kv_i8();
   const bool zone = tree && tree_attn >= 2 && !v8w_R_ && !g6t;

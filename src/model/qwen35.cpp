@@ -2598,12 +2598,12 @@ bool qmt128_for(int M) {
 static bool qmt_i8_on();
 
 // NI_GEMM_SLICES (read once): Drex Max v1's dense qmt / qmtg prefill GEMMs of more than 2048 rows run as 2048-row
-// dispatches (src/model/gemm_slices.h); bitwise the same outputs. Default on the M5 Pro only, a narrower gate than the class;
-// 1 = on any Mac on the dense QMT path (the other M5s), 0 = off.
+// dispatches (src/model/gemm_slices.h); bitwise the same outputs. Default on the M5 class (matrix units), measured on the M5 Pro;
+// 1 = on any Mac on the dense QMT path, 0 = off.
 static bool gemm_slices_on() {
   static const bool on = [] {
     const int v = env_int("NI_GEMM_SLICES", -1);
-    return v < 0 ? Gpu::get().name() == "Apple M5 Pro" : v > 0;
+    return v < 0 ? matrix_units() : v > 0;
   }();
   return on;
 }

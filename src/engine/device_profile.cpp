@@ -17,10 +17,9 @@ const DefaultRow kDefaults[] = {
     // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
     // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site when it moves.
     {"pf_wave", ModelClass::kQwen35A3b, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max", false},
-    // Name row. +12 to +15% on the M5 Pro. exclusive is false: no measured miss on the wider class, so a later
-    // slice either cites that miss or widens the row. The selector update uses the same gate.
-    {"kflash_hist", ModelClass::kQwen35A3b, DefaultScope::kName, "Apple M5 Pro", "on", 12, 15, false, "M5 Pro",
-     false},
+    // Matrix class (any M5): +12 to +15% on the M5 Pro, no measured miss on the others, so the class takes it, not the
+    // name. The selector update uses the same gate.
+    {"kflash_hist", ModelClass::kQwen35A3b, DefaultScope::kMatrix, nullptr, "on", 12, 15, false, "M5 Pro", false},
 };
 
 }  // namespace
@@ -63,7 +62,7 @@ bool default_matches(const DefaultRow& row, const DeviceProfile& dev) {
   switch (row.scope) {
     case DefaultScope::kLegacy: return dev.chip == ChipClass::kLegacy;
     case DefaultScope::kSimd: return dev.chip == ChipClass::kSimd;
-    case DefaultScope::kMatrix: return dev.chip == ChipClass::kMatrix;
+    case DefaultScope::kMatrix: return dev.chip == ChipClass::kMatrix || dev.chip == ChipClass::kWide;
     case DefaultScope::kWide: return dev.chip == ChipClass::kWide;
     case DefaultScope::kName: return row.chip_name && dev.name == row.chip_name;
   }
@@ -165,7 +164,15 @@ bool m1_max_32(const DeviceFacts& f) { return f.name == "Apple M1 Max" && f.core
 
 bool wide_cores(const DeviceFacts& f) { return f.apple_family >= 10 && f.cores >= 40; }
 
-bool named_m5_max(const DeviceFacts& f) { return f.name.find("M5 Max") != std::string::npos; }
+bool m4_10(const DeviceFacts& f) { return f.name == "Apple M4" && f.cores == 10; }
+
+bool m4_pro_gpu(const DeviceFacts& f) { return f.name == "Apple M4 Pro"; }
+
+bool m4_pro_20(const DeviceFacts& f) { return f.name == "Apple M4 Pro" && f.cores == 20; }
+
+bool ultra_gpu(const DeviceFacts& f) { return f.name.find("Ultra") != std::string::npos; }
+
+bool pre_m3_gpu(const DeviceFacts& f) { return f.apple_family < 9; }
 
 bool m4_ten_core(const DeviceFacts& f) { return f.name == "Apple M4" && f.cores <= 10; }
 

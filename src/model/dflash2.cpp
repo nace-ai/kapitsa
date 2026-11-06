@@ -33,20 +33,19 @@ namespace ni {
 extern const char* const kTensorKernelSource;
 using json = nlohmann::json;
 
-// Default for KFlash's history lane (#944): the Qwen3.6 35B-A3B shape on an M5 Pro, where the interleaved A/B measured it
-// faster. NI_KFLASH_HIST turns it off ("0") or sets its knobs on any model and Mac; unset takes this default. Other
-// targets and Macs keep it off today, which is a narrower gate than the class the lane targets. Clover-35B-A3B has the
+// Default for KFlash's history lane (#944): the Qwen3.6 35B-A3B shape on an M5-class Mac (matrix units), where the interleaved A/B
+// measured it faster on the M5 Pro. NI_KFLASH_HIST turns it off ("0") or sets its knobs on any model and Mac; unset takes this default. Other
+// targets and Macs without matrix units keep it off; the M5 and M5 Max take it by the class and are not measured. Clover-35B-A3B has the
 // same shape and drafter, so the gate still asks for "not Clover".
 // KFlash's online selector update (NI_KFLASH_SELUPD=<lr>) on by default where the lanes shape matches (the 35B-A3B on an
-// M5 Pro, with the history lane): learning rate 0.003, which the interleaved A/B on top of the history lane (#362) measured
+// M5-class Mac, with the history lane): learning rate 0.003, which the interleaved A/B on top of the history lane (#362) measured
 // faster in 3 of 3 rounds (x1.027, 1.028, 1.024 on the whole 19-turn session's write tok/s, outputs identical); 0.02 was
 // slower in 3 of 3 (x0.988, 0.993, 0.996). NI_KFLASH_SELUPD=0 turns it off; its fp32 masters take 0.5 GB, and only
 // where the KFlash trees run (the update rides the tree verify): not with NI_KFLASH=0 or NI_KFLASH_TREE=0.
 static constexpr bool kSelUpdDefault = true;
 static constexpr float kSelUpdLr = 0.003f;
 static bool dfl_lanes_shape(const Qwen35Config& c) {
-  static const bool m5_pro = Gpu::get().name() == "Apple M5 Pro";
-  return m5_pro && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
+  return matrix_units() && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
          c.shared_I == 512;
 }
 static bool dfl_lanes_default(const Qwen35& t) { return dfl_lanes_shape(t.config()) && !dynamic_cast<const Clover*>(&t); }
@@ -762,10 +761,10 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
     if (block() > kB) kf_budget_->pin_wide();
     // the 8-row block of a drafter loaded with 16 rows (set_block): its own budget (the 8-row block's file), one 8-row
-    // tile, the full depth, as NI_KFLASH_BLOCK=8 has them. NI_KFLASH_NARROW: by default on the M5 Max (a narrower
-    // gate than the class); 1 on any Mac a 16-row block runs on, 0 never
+    // tile, the full depth, as NI_KFLASH_BLOCK=8 has them. NI_KFLASH_NARROW: by default on the wide class (the
+    // 40-core M5 Max); 1 on any Mac a 16-row block runs on, 0 never
     const char* nv = kenv("NARROW");
-    const bool narrow = nv && *nv ? atoi(nv) != 0 : named_m5_max();
+    const bool narrow = nv && *nv ? atoi(nv) != 0 : wide_cores();
     if (block() > kB && tree_ && narrow) {
       std::string key8 = key;
       if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);

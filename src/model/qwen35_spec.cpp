@@ -752,7 +752,7 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
     const Buffer* xin = &x;
     size_t begin = 0;
     bool x8_ready = false;
-    static const bool m4_pro = Gpu::get().name() == "Apple M4 Pro" && Gpu::get().core_count() == 20;
+    static const bool m4_pro = m4_pro_20();
     const bool moe35 = cfg_.moe && cfg_.hidden == 2048 && cfg_.layers == 40 && cfg_.experts == 256 &&
                        cfg_.top_k == 8 && cfg_.moe_I == 512 && cfg_.shared_I == 512;
     // The 35B oQ4e path: fold rows_norm_f32 into the first projection's X8 preparation.
