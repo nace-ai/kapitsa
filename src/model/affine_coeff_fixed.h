@@ -105,14 +105,16 @@ inline AffinePackedCoeff pack_affine_packed_coeff(const uint32_t* weights, const
       std::copy_n(coefficients.words.data() + original_raw, 32, out.words.data() + raw);
       raw += 32;
     }
+    // Each source row supplies two contiguous four-word spans in the SIMD execution layout.
     for (uint32_t half = 0; half < 2; ++half) for (uint32_t f = 0; f < 2; ++f)
-      for (uint32_t lane = 0; lane < 32; ++lane) {
-        const uint32_t q = lane >> 2, fm = (q & 4) | ((lane >> 1) & 3);
-        const uint32_t fn = ((q & 2) << 1) | ((lane & 1) << 1);
+      for (uint32_t fm = 0; fm < 8; ++fm) {
         const size_t n = std::min(first_row + f * 8 + fm, size_t(outputs) - 1);
         const size_t g = first_group + half;
-        if (g < groups) std::copy_n(weights + (n * groups + g) * 8 + fn, 2,
-                                    out.words.data() + block * 272 + (half * 2 + f) * 64 + lane * 2);
+        if (g >= groups) continue;
+        const uint32_t* src = weights + (n * groups + g) * 8;
+        uint32_t* dst = out.words.data() + block * 272 + (half * 2 + f) * 64 + ((fm & 4) << 3) + ((fm & 3) << 2);
+        std::copy_n(src, 4, dst);
+        std::copy_n(src + 4, 4, dst + 16);
       }
   }
   return out;
