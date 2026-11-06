@@ -790,14 +790,12 @@ struct DflAttnRedParams {
   uint P, lo, chunk;  // P == kDflGpu: the split plan of dfl_attn_geom (nsplit derived from gst)
   uint nr;            // block rows (8, or 16 = two X8 tiles)
 };
-// Combines the splits in order; writes o as the o_proj X8 table (K = 4096). grid (32, 8) x 128.
-[[kernel]] void dfl_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
-                                device half* xh [[buffer(2)]], device float* xs [[buffer(3)]],
-                                constant DflAttnRedParams& p [[buffer(4)]], const device uint* gst [[buffer(5)]],
-                                uint2 tg [[threadgroup_position_in_grid]],
-                                uint d [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
-                                uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup float red[4];
+// Combines the splits in order; writes the o projection's X8 or packed verify table (K = 4096).
+template <bool V8>
+NI_INLINE void dfl_attn_reduce_impl(const device float* part_o, const device float* part_ml,
+                                  device half* xh, device float* xs, constant DflAttnRedParams& p,
+                                  const device uint* gst, uint2 tg, uint d, uint sg, uint lane,
+                                  threadgroup float* red) {
   const uint h = tg.x, r = tg.y;
   uint P = p.P, lo = p.lo, chunk = p.chunk, nsplit = p.nsplit;
   dfl_attn_geom(gst, P, lo, chunk, nsplit);
@@ -814,11 +812,20 @@ struct DflAttnRedParams {
   }
   const half o = half(num / den);
   const uint rt = r >> 3;  // X8 tile of the row (16-row blocks: each tile has its own half + T table and sums)
-  xh += size_t(rt) * 16 * 4096;
+  xh += size_t(rt) * (V8 ? 8 : 16) * 4096;
   xs += rt * 512;
   const uint r8 = r & 7u;
-  xh[r8 * 4096 + h * 128 + d] = o;
-  xh[(8 + r8) * 4096 + h * 128 + (d & 64u) + dfl_tslot(d & 63u)] = o;  // T table
+  if (V8) {
+    // Inverse of dfl_x8_to_v8's (lane, fragment, element) -> (row, column) mapping.
+    const uint k = d & 63u, g = 2 * h + (d >> 6);
+    const uint vlane = ((k & 32u) >> 1) | ((k & 16u) >> 2) | ((k & 4u) >> 1)
+                     | ((r8 & 4u) << 1) | ((r8 & 2u) >> 1);
+    const uint f = ((k & 8u) >> 1) | (k & 3u);
+    xh[(g * 32 + vlane) * 16 + 2 * f + (r8 & 1u)] = o;
+  } else {
+    xh[r8 * 4096 + h * 128 + d] = o;
+    xh[(8 + r8) * 4096 + h * 128 + (d & 64u) + dfl_tslot(d & 63u)] = o;  // T table
+  }
   const float sm = simd_sum(float(o));
   if (lane == 0) red[sg] = sm;
   threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -826,6 +833,26 @@ struct DflAttnRedParams {
     xs[(2 * h) * 8 + r8] = red[0] + red[1];
     xs[(2 * h + 1) * 8 + r8] = red[2] + red[3];
   }
+}
+
+// grid (32 heads, nr rows) x 128. Both layouts keep the same reduction order and group sums.
+[[kernel]] void dfl_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
+                                device half* xh [[buffer(2)]], device float* xs [[buffer(3)]],
+                                constant DflAttnRedParams& p [[buffer(4)]], const device uint* gst [[buffer(5)]],
+                                uint2 tg [[threadgroup_position_in_grid]],
+                                uint d [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                                uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[4];
+  dfl_attn_reduce_impl<false>(part_o, part_ml, xh, xs, p, gst, tg, d, sg, lane, red);
+}
+[[kernel]] void dfl_attn_reduce_v8(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
+                                   device half* table [[buffer(2)]], device float* xs [[buffer(3)]],
+                                   constant DflAttnRedParams& p [[buffer(4)]], const device uint* gst [[buffer(5)]],
+                                   uint2 tg [[threadgroup_position_in_grid]],
+                                   uint d [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                                   uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[4];
+  dfl_attn_reduce_impl<true>(part_o, part_ml, table, xs, p, gst, tg, d, sg, lane, red);
 }
 
 // ---- context commit (SPEC §6.2) ----

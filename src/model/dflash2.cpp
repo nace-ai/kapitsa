@@ -2003,6 +2003,8 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     // the v1 drafter on the packed-coefficient image (NI_V8_PACKED_COEFF_NF1): its q|kv and o projections through the
     // target's packed verify GEMM, as its MLP and head (the X8 table permuted to the verify's)
     const bool pq = v1 && v8_ && Ly.q_packed && Ly.kv_packed && Ly.o_packed && BT == 1;
+    // The packed o projection consumes the reduce's fragment-order output directly. Keep X8 for dumps and skips.
+    const bool reduce_v8 = pq && !debug_ && !(skip & (8192 | 32768 | 262144));
     if (skip & 8192) {
     } else if (pq) {
       enc_to_v8(e, ah, H, v8t_);
@@ -2048,8 +2050,8 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       }
       if (!(skip & 262144)) {
         kp::DflAttnRed rp{nsplit, Pk, lo, chunk, B};
-        e.use(dpipe("dfl_attn_reduce"));
-        e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, xh_); e.buf(3, xs_);
+        e.use(dpipe(reduce_v8 ? "dfl_attn_reduce_v8" : "dfl_attn_reduce"));
+        e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, reduce_v8 ? v8t_ : xh_); e.buf(3, xs_);
         e.val(4, rp);
         e.buf(5, gst_);
         e.dispatch(32, B, 1, 128);
@@ -2057,7 +2059,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     }
     dbg(e, "o" + sfx, xh_, size_t(8) * 4096 * 2);
     if (pq && !(skip & 8192)) {
-      enc_to_v8(e, xh_, 4096, v8t_);
+      if (!reduce_v8) enc_to_v8(e, xh_, 4096, v8t_);
       tg_.enc_qmm8(e, {{&Ly.o, u_, H, false, Ly.o_packed}}, 8, v8t_, xs_);
     } else {
       proj({{&Ly.o, u_, H, 1.0f}}, 4096);
