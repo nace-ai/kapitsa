@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     if (dir.empty()) fatal("no drafter");
     size_t prefill = 0;
     const auto plan = DFlash2::plan_bytes(dir, target.config(), Qwen35::plan(argv[2], 2048).head_row_bytes,
-                                        nullptr, &prefill);
+                                        nullptr, &prefill, DFlash2::kB, DFlash2::lanes_default(argv[2], target.config()));
     auto& g = Gpu::get();
     const auto before = g.allocated_bytes();
     DFlash2 drafter(target, dir);
@@ -84,6 +84,11 @@ int main(int argc, char** argv) {
   check(DFlash2::plan_bytes(tmp, target, 1440, nullptr, nullptr, 8, true) == no_lanes, "NI_KFLASH_SELUPD=0: no masters in the plan");
   setenv("NI_KFLASH_SELUPD", "0.003", 1);
   check(plan() - no_lanes == masters, "NI_KFLASH_SELUPD=<lr> without lanes: the masters are in the plan");
+  setenv("NI_KFLASH_SELUPD", "0.003", 1);
+  setenv("NI_KFLASH_TREE", "0", 1);
+  check(plan() == no_lanes, "NI_KFLASH_TREE=0: the update cannot run, no masters in the plan");
+  unsetenv("NI_KFLASH_TREE");
+  unsetenv("NI_KFLASH_SELUPD");
   unsetenv("NI_KFLASH_SELUPD");
   std::filesystem::remove_all(tmp);
   printf("dflash_plan_test: %s\n", fails ? "FAILED" : "ALL PASSED");

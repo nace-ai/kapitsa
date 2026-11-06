@@ -36,11 +36,12 @@ using json = nlohmann::json;
 // targets and Macs keep it off until they are measured. Clover-35B-A3B has the same shape and drafter and is not
 // measured, so the gate also asks for "not Clover".
 // KFlash's online selector update (NI_KFLASH_SELUPD=<lr>) on by default where the lanes shape matches (the 35B-A3B on an
-// M5 Pro, with the history lane): learning rate 0.02, which the interleaved A/B on top of the history lane (#362) measured
-// faster in 3 of 3 rounds (+4.4% tok/s on the 11 turns whose answer matches the recording; 0.003 gave +3.3%).
-// NI_KFLASH_SELUPD=0 turns it off; its fp32 masters take 0.5 GB.
+// M5 Pro, with the history lane): learning rate 0.003, which the interleaved A/B on top of the history lane (#362) measured
+// faster in 3 of 3 rounds (x1.027, 1.028, 1.024 on the whole 19-turn session's write tok/s, outputs identical); 0.02 was
+// slower in 3 of 3 (x0.988, 0.993, 0.996). NI_KFLASH_SELUPD=0 turns it off; its fp32 masters take 0.5 GB, and only
+// where the KFlash trees run (the update rides the tree verify): not with NI_KFLASH=0 or NI_KFLASH_TREE=0.
 static constexpr bool kSelUpdDefault = true;
-static constexpr float kSelUpdLr = 0.02f;
+static constexpr float kSelUpdLr = 0.003f;
 static bool dfl_lanes_shape(const Qwen35Config& c) {
   static const bool m5_pro = Gpu::get().name() == "Apple M5 Pro";
   return m5_pro && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
@@ -469,6 +470,10 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       const char* su = kenv("SELUPD");
       selupd_lr_ = su && *su ? float(atof(su)) : kSelUpdDefault && dfl_lanes_default(tg_) ? kSelUpdLr : 0.0f;
       if (!(selupd_lr_ > 0.0f)) selupd_lr_ = 0.0f;
+      if (selupd_lr_ > 0.0f && !kf_tree_default(kB - 1)) {  // the update runs in the tree verify: chains never reach it
+        logi("KFlash: online selector update off (the KFlash trees are off: NI_KFLASH=0, NI_KFLASH_TREE=0 or a depth cap)");
+        selupd_lr_ = 0.0f;
+      }
       const char* st = kenv("SELUPD_TAU");
       if (st && *st && atof(st) > 0) selupd_tau_ = float(atof(st));
       const bool upd = selupd_lr_ > 0.0f;
@@ -1243,7 +1248,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   }
   // the online selector update's fp32 masters (see the constructor): off when NI_KFLASH_SELUPD says so or sets no rate
   const char* su = kenv("SELUPD");
-  const bool selupd = su && *su ? atof(su) > 0 : lanes && kSelUpdDefault;
+  const bool selupd = (su && *su ? atof(su) > 0 : lanes && kSelUpdDefault) && kf_tree_default(kB - 1);  // as the constructor
   const bool v1_drafter = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
   if (selupd && !v1_drafter) w += 2 * V * kRank * 4;
   return w + b + pf;
