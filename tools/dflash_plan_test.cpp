@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     if (dir.empty()) fatal("no drafter");
     size_t prefill = 0;
     const auto plan = DFlash2::plan_bytes(dir, target.config(), Qwen35::plan(argv[2], 2048).head_row_bytes,
-                                        nullptr, &prefill);
+                                        nullptr, &prefill, DFlash2::kB, DFlash2::lanes_default(argv[2], target.config()));
     auto& g = Gpu::get();
     const auto before = g.allocated_bytes();
     DFlash2 drafter(target, dir);
@@ -68,6 +68,33 @@ int main(int argc, char** argv) {
   const auto full = plan();
   setenv("NI_KFLASH_LOWRANK", "0", 1);
   check(plan() == full, "full head has no low-rank factors");
+  // The online selector update's fp32 masters of the two codebooks (2 x vocab x rank 256 x 4 bytes = 485 MB at 248320
+  // ids) are in the plan when the update runs: by NI_KFLASH_SELUPD, by default with lanes, and not when it is 0 (#362)
+  setenv("NI_KFLASH_LOWRANK", "0", 1);
+  setenv("NI_KFLASH_BITS", "4", 1);
+  setenv("NI_KFLASH_HEAD", "98304", 1);
+  config["architectures"] = {"DFlash2DraftModel"};
+  save();
+  const size_t masters = size_t(2) * 248320 * 256 * 4;
+  unsetenv("NI_KFLASH_SELUPD");
+  const auto no_lanes = plan();
+  const auto with_lanes = DFlash2::plan_bytes(tmp, target, 1440, nullptr, nullptr, 8, true);
+  check(with_lanes - no_lanes == masters, "lanes default: the plan takes the 2 fp32 codebook masters (485 MB)");
+  setenv("NI_KFLASH_SELUPD", "0", 1);
+  check(DFlash2::plan_bytes(tmp, target, 1440, nullptr, nullptr, 8, true) == no_lanes, "NI_KFLASH_SELUPD=0: no masters in the plan");
+  setenv("NI_KFLASH_SELUPD", "0.003", 1);
+  check(plan() - no_lanes == masters, "NI_KFLASH_SELUPD=<lr> without lanes: the masters are in the plan");
+  setenv("NI_KFLASH_SELUPD", "0.003", 1);
+  setenv("NI_KFLASH_TREE", "0", 1);
+  check(plan() == no_lanes, "NI_KFLASH_TREE=0: the update cannot run, no masters in the plan");
+  unsetenv("NI_KFLASH_TREE");
+  setenv("NI_KFLASH_VERIFY", "3", 1);
+  check(plan() == no_lanes, "NI_KFLASH_VERIFY=3: the verify chains, the update cannot run, no masters in the plan");
+  setenv("NI_KFLASH_VERIFY", "7", 1);
+  check(plan() - no_lanes == masters, "NI_KFLASH_VERIFY=7: the full-depth trees run, the masters are in the plan");
+  unsetenv("NI_KFLASH_VERIFY");
+  unsetenv("NI_KFLASH_SELUPD");
+  unsetenv("NI_KFLASH_SELUPD");
   std::filesystem::remove_all(tmp);
   printf("dflash_plan_test: %s\n", fails ? "FAILED" : "ALL PASSED");
   return fails ? 1 : 0;
