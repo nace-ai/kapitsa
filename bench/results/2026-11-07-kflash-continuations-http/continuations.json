@@ -1,0 +1,577 @@
+[
+  {
+    "label": "continuation-0-base",
+    "exit": 0,
+    "tokens": 256,
+    "eos_count": 0,
+    "before_first_eos": 256,
+    "text_nonempty": true,
+    "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+    "acceptance_histogram": [
+      15,
+      19,
+      28,
+      15,
+      6,
+      0,
+      2,
+      2
+    ],
+    "cycles": 87,
+    "accepted_draft_tokens_per_cycle": 1.9540229885057472,
+    "decode_line": "prompt 63 tok in 151 ms (417.2 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 1496 ms (170.4 tok/s), 87 cycles, 2.931 tok/cycle, 17.13 ms GPU/cycle, 17.20 ms wall/cycle (mode 3), hist 15 19 28 15 6 0 2 2; 7.00 proposals verified per cycle; acceptance by position 0.83 0.74 0.47 0.40 0.40 1.00 0.50",
+    "drafter_lines": [
+      "[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 145 ms; compressed 447538/448000 blocks",
+      "[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)",
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.94 GB), loaded in 641 ms"
+    ],
+    "contention": {
+      "samples": 34,
+      "mean_foreign_gpu_pct": 5.65,
+      "max_foreign_gpu_pct": 12.52,
+      "mean_ambient_gpu_pct": 0.0,
+      "busy_samples": 17,
+      "longest_busy_run": 9,
+      "top": [
+        "Codex (Aperitif)"
+      ],
+      "flagged": true
+    },
+    "samples": [
+      [
+        1793989875.178,
+        1.99,
+        "Lark Helper",
+        1.99,
+        0.0
+      ],
+      [
+        1793989875.751,
+        3.29,
+        "Lark Helper",
+        3.29,
+        0.0
+      ],
+      [
+        1793989876.321,
+        3.35,
+        "Lark Helper",
+        1.77,
+        0.0
+      ],
+      [
+        1793989876.88,
+        6.08,
+        "Codex (Aperitif)",
+        5.23,
+        0.0
+      ],
+      [
+        1793989877.439,
+        11.45,
+        "Codex (Aperitif)",
+        11.45,
+        0.0
+      ],
+      [
+        1793989877.982,
+        7.05,
+        "Codex (Aperitif)",
+        7.05,
+        0.0
+      ],
+      [
+        1793989878.527,
+        6.2,
+        "Codex (Aperitif)",
+        5.56,
+        0.0
+      ],
+      [
+        1793989879.075,
+        4.1,
+        "Codex (Aperitif)",
+        2.85,
+        0.0
+      ],
+      [
+        1793989879.62,
+        3.2,
+        "Codex (Aperitif)",
+        1.61,
+        0.0
+      ],
+      [
+        1793989880.162,
+        3.07,
+        "Lark Helper",
+        1.56,
+        0.0
+      ],
+      [
+        1793989880.707,
+        5.95,
+        "Codex (Aperitif)",
+        4.73,
+        0.0
+      ],
+      [
+        1793989881.252,
+        6.05,
+        "Codex (Aperitif)",
+        4.33,
+        0.0
+      ],
+      [
+        1793989881.795,
+        3.06,
+        "Codex (Aperitif)",
+        1.6,
+        0.0
+      ],
+      [
+        1793989882.338,
+        3.44,
+        "Codex (Aperitif)",
+        1.73,
+        0.0
+      ],
+      [
+        1793989882.878,
+        2.88,
+        "Lark Helper",
+        1.47,
+        0.0
+      ],
+      [
+        1793989883.422,
+        3.07,
+        "Codex (Aperitif)",
+        1.56,
+        0.0
+      ],
+      [
+        1793989883.961,
+        3.03,
+        "Lark Helper",
+        1.65,
+        0.0
+      ],
+      [
+        1793989884.507,
+        5.03,
+        "Codex (Aperitif)",
+        3.55,
+        0.0
+      ],
+      [
+        1793989885.052,
+        5.99,
+        "Codex (Aperitif)",
+        4.63,
+        0.0
+      ],
+      [
+        1793989885.596,
+        3.93,
+        "Codex (Aperitif)",
+        2.45,
+        0.0
+      ],
+      [
+        1793989886.141,
+        3.06,
+        "Lark Helper",
+        1.56,
+        0.0
+      ],
+      [
+        1793989886.686,
+        3.67,
+        "Codex (Aperitif)",
+        2.45,
+        0.0
+      ],
+      [
+        1793989887.231,
+        5.05,
+        "Codex (Aperitif)",
+        3.66,
+        0.0
+      ],
+      [
+        1793989887.77,
+        12.52,
+        "Codex (Aperitif)",
+        12.52,
+        0.0
+      ],
+      [
+        1793989888.316,
+        9.93,
+        "Codex (Aperitif)",
+        9.93,
+        0.0
+      ],
+      [
+        1793989888.862,
+        12.19,
+        "Codex (Aperitif)",
+        12.19,
+        0.0
+      ],
+      [
+        1793989889.407,
+        6.03,
+        "Codex (Aperitif)",
+        5.14,
+        0.0
+      ],
+      [
+        1793989889.952,
+        7.34,
+        "Codex (Aperitif)",
+        6.16,
+        0.0
+      ],
+      [
+        1793989890.497,
+        11.42,
+        "Codex (Aperitif)",
+        11.42,
+        0.0
+      ],
+      [
+        1793989891.037,
+        8.77,
+        "Codex (Aperitif)",
+        8.77,
+        0.0
+      ],
+      [
+        1793989891.663,
+        10.92,
+        "Codex (Aperitif)",
+        9.19,
+        0.0
+      ],
+      [
+        1793989892.24,
+        4.64,
+        "Codex (Aperitif)",
+        3.55,
+        0.0
+      ],
+      [
+        1793989892.798,
+        1.83,
+        "Lark Helper",
+        0.93,
+        0.0
+      ],
+      [
+        1793989893.345,
+        2.47,
+        "Google Chrome He",
+        0.96,
+        0.0
+      ]
+    ]
+  },
+  {
+    "label": "continuation-1-candidate",
+    "exit": 0,
+    "tokens": 256,
+    "eos_count": 0,
+    "before_first_eos": 256,
+    "text_nonempty": true,
+    "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+    "acceptance_histogram": [
+      15,
+      19,
+      28,
+      15,
+      6,
+      0,
+      2,
+      2
+    ],
+    "cycles": 87,
+    "accepted_draft_tokens_per_cycle": 1.9540229885057472,
+    "decode_line": "prompt 63 tok in 116 ms (541.2 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 1486 ms (171.6 tok/s), 87 cycles, 2.931 tok/cycle, 17.00 ms GPU/cycle, 17.08 ms wall/cycle (mode 3), hist 15 19 28 15 6 0 2 2; 7.00 proposals verified per cycle; acceptance by position 0.83 0.74 0.47 0.40 0.40 1.00 0.50",
+    "drafter_lines": [
+      "[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 145 ms; compressed 447538/448000 blocks",
+      "[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)",
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.91 GB), loaded in 672 ms"
+    ],
+    "contention": {
+      "samples": 9,
+      "mean_foreign_gpu_pct": 10.99,
+      "max_foreign_gpu_pct": 54.02,
+      "mean_ambient_gpu_pct": 0.0,
+      "busy_samples": 4,
+      "longest_busy_run": 4,
+      "top": [
+        "Google Chrome He"
+      ],
+      "flagged": true
+    },
+    "samples": [
+      [
+        1793989954.873,
+        0,
+        "-",
+        0.0,
+        0.0
+      ],
+      [
+        1793989955.419,
+        2.87,
+        "Codex (Aperitif)",
+        2.87,
+        0.0
+      ],
+      [
+        1793989955.969,
+        17.24,
+        "Google Chrome He",
+        13.74,
+        0.0
+      ],
+      [
+        1793989956.517,
+        6.77,
+        "Google Chrome He",
+        6.77,
+        0.0
+      ],
+      [
+        1793989957.063,
+        54.02,
+        "Google Chrome He",
+        54.02,
+        0.0
+      ],
+      [
+        1793989957.638,
+        17.25,
+        "Google Chrome He",
+        17.25,
+        0.0
+      ],
+      [
+        1793989958.18,
+        0,
+        "-",
+        0.0,
+        0.0
+      ],
+      [
+        1793989958.721,
+        0,
+        "-",
+        0.0,
+        0.0
+      ],
+      [
+        1793989959.267,
+        0.78,
+        "Codex (Aperitif)",
+        0.78,
+        0.0
+      ]
+    ]
+  },
+  {
+    "label": "continuation-2-base",
+    "exit": 0,
+    "tokens": 256,
+    "eos_count": 0,
+    "before_first_eos": 256,
+    "text_nonempty": true,
+    "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+    "acceptance_histogram": [
+      15,
+      19,
+      28,
+      15,
+      6,
+      0,
+      2,
+      2
+    ],
+    "cycles": 87,
+    "accepted_draft_tokens_per_cycle": 1.9540229885057472,
+    "decode_line": "prompt 63 tok in 140 ms (450.0 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 1479 ms (172.4 tok/s), 87 cycles, 2.931 tok/cycle, 16.94 ms GPU/cycle, 17.00 ms wall/cycle (mode 3), hist 15 19 28 15 6 0 2 2; 7.00 proposals verified per cycle; acceptance by position 0.83 0.74 0.47 0.40 0.40 1.00 0.50",
+    "drafter_lines": [
+      "[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 141 ms; compressed 447538/448000 blocks",
+      "[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)",
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.92 GB), loaded in 624 ms"
+    ],
+    "contention": {
+      "samples": 8,
+      "mean_foreign_gpu_pct": 1.3,
+      "max_foreign_gpu_pct": 1.79,
+      "mean_ambient_gpu_pct": 0.0,
+      "busy_samples": 0,
+      "longest_busy_run": 0,
+      "top": [],
+      "flagged": false
+    },
+    "samples": [
+      [
+        1793989968.564,
+        1.67,
+        "Codex (Aperitif)",
+        1.67,
+        0.0
+      ],
+      [
+        1793989969.109,
+        1.61,
+        "Codex (Aperitif)",
+        1.61,
+        0.0
+      ],
+      [
+        1793989969.662,
+        1.54,
+        "Codex (Aperitif)",
+        1.54,
+        0.0
+      ],
+      [
+        1793989970.207,
+        1.79,
+        "Codex (Aperitif)",
+        1.79,
+        0.0
+      ],
+      [
+        1793989970.753,
+        1.73,
+        "Codex (Aperitif)",
+        1.73,
+        0.0
+      ],
+      [
+        1793989971.291,
+        0.69,
+        "Codex (Aperitif)",
+        0.69,
+        0.0
+      ],
+      [
+        1793989971.838,
+        0.6,
+        "Codex (Aperitif)",
+        0.6,
+        0.0
+      ],
+      [
+        1793989972.384,
+        0.76,
+        "Codex (Aperitif)",
+        0.76,
+        0.0
+      ]
+    ]
+  },
+  {
+    "label": "continuation-3-candidate",
+    "exit": 0,
+    "tokens": 256,
+    "eos_count": 0,
+    "before_first_eos": 256,
+    "text_nonempty": true,
+    "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+    "acceptance_histogram": [
+      15,
+      19,
+      28,
+      15,
+      6,
+      0,
+      2,
+      2
+    ],
+    "cycles": 87,
+    "accepted_draft_tokens_per_cycle": 1.9540229885057472,
+    "decode_line": "prompt 63 tok in 124 ms (506.4 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 1503 ms (169.7 tok/s), 87 cycles, 2.931 tok/cycle, 17.20 ms GPU/cycle, 17.27 ms wall/cycle (mode 3), hist 15 19 28 15 6 0 2 2; 7.00 proposals verified per cycle; acceptance by position 0.83 0.74 0.47 0.40 0.40 1.00 0.50",
+    "drafter_lines": [
+      "[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 130 ms; compressed 447538/448000 blocks",
+      "[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)",
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.92 GB), loaded in 597 ms"
+    ],
+    "contention": {
+      "samples": 8,
+      "mean_foreign_gpu_pct": 3.4,
+      "max_foreign_gpu_pct": 6.64,
+      "mean_ambient_gpu_pct": 0.0,
+      "busy_samples": 1,
+      "longest_busy_run": 1,
+      "top": [
+        "Codex (Aperitif)"
+      ],
+      "flagged": false
+    },
+    "samples": [
+      [
+        1793989981.612,
+        1.77,
+        "Codex (Aperitif)",
+        1.77,
+        0.0
+      ],
+      [
+        1793989982.159,
+        1.8,
+        "Codex (Aperitif)",
+        1.8,
+        0.0
+      ],
+      [
+        1793989982.704,
+        4.36,
+        "Codex (Aperitif)",
+        4.36,
+        0.0
+      ],
+      [
+        1793989983.249,
+        3.73,
+        "Codex (Aperitif)",
+        3.73,
+        0.0
+      ],
+      [
+        1793989983.799,
+        6.64,
+        "Codex (Aperitif)",
+        3.34,
+        0.0
+      ],
+      [
+        1793989984.342,
+        2.55,
+        "Google Chrome He",
+        1.64,
+        0.0
+      ],
+      [
+        1793989984.889,
+        3.15,
+        "Lark Helper",
+        3.15,
+        0.0
+      ],
+      [
+        1793989985.433,
+        3.19,
+        "Lark Helper",
+        3.19,
+        0.0
+      ]
+    ]
+  }
+]

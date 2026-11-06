@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/ni_run",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+    "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/prompt.ids",
+    "256",
+    "0",
+    "--dflash",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2"
+  ],
+  "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827"
+}

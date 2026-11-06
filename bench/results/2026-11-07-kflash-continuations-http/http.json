@@ -1,0 +1,21 @@
+{
+  "same_test_outcomes": true,
+  "runs": [
+    {
+      "label": "http-base",
+      "exit": 1,
+      "passes": 48,
+      "failures": [
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.001010894775390625, {'id': 'chatcmpl-179399001525228', 'object': 'chat.completion.chunk', 'created': 1793990015, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.056657791137695], first token at 22.63774585723877"
+      ]
+    },
+    {
+      "label": "http-candidate",
+      "exit": 1,
+      "passes": 48,
+      "failures": [
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.001132965087890625, {'id': 'chatcmpl-179399009094091', 'object': 'chat.completion.chunk', 'created': 1793990090, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.057310104370117], first token at 22.81074810028076"
+      ]
+    }
+  ]
+}

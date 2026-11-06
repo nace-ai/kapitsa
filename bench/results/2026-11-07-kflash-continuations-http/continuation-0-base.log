@@ -1,0 +1,26 @@
+[kapitsa] read 2.37 GB of weights in 667 ms (3.5 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 77 ms (3.1 GB/s)
+[kapitsa] MTP head loaded in 247 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 249 static target projections, 2150.9 MiB in 809 ms; compressed 1948221/2053120 blocks
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 23 ms
+[kapitsa] prewarmed 94 prefill pipelines in 47 ms
+[kapitsa] loaded /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 1968 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 18/18 units (9216 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 9 ms, program compiled 13919 ms + load 58 ms (13 functions, MIL 89 KB); 187.6 MB Metal; ready in 14.0 s
+[kapitsa] NI_ANE: startup check 2.11% of the ANE's part from the GPU alone (2 functions, 252 ms)
+[kapitsa] read 1.27 GB of weights in 369 ms (3.4 GB/s)
+[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 145 ms; compressed 447538/448000 blocks
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)
+[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.94 GB), loaded in 641 ms
+[kapitsa] DFlash2: prewarmed 117 pipelines in 18 ms
+ane: system wired memory +-131 MB at the program load, +368 MB after the first split chunk (split surfaces 188 MB)
+ane: 0 split chunks, 0 evaluations, ANE 0 ms (0.0 ms each), reruns 0; memory: Metal 7170 MB, process footprint 7019 MB; thermal nominal
+prompt 63 tok in 151 ms (417.2 tok/s); dflash decode (verify 7 of 7, greedy): 255 tok in 1496 ms (170.4 tok/s), 87 cycles, 2.931 tok/cycle, 17.13 ms GPU/cycle, 17.20 ms wall/cycle (mode 3), hist 15 19 28 15 6 0 2 2; 7.00 proposals verified per cycle; acceptance by position 0.83 0.74 0.47 0.40 0.40 1.00 0.50
+KFlash: 87 cycles, 8.00 rows per cycle; cycles by rows 8:87; tokens per cycle expected 2.825, got 2.954; rate 0.1778 tok/ms; cost ms by rows 8:17.38; calibration (alpha, beta) by depth (-0.20, 1.21) (-0.18, 0.84) (-0.33, 0.83) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+drafting pass: GPU ms/cycle mean 2.946 median 2.933 p10 2.858 p90 3.009 (86 cycles); GPU idle before the verify 0.001 ms/cycle
+[kapitsa] KFlash: could not write the budget's cache /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/home-continuation-0-base/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M4_Pro.json.38513.tmp
+ids: 248068 271 248069 271 2 5369 8483 310 12588 25 357 64605 12347 310 279 67708 8340 271 13160 7728 264 15019 3992 369 799 314 279 1379 54231 3482 15346 8806 303 6165 7785 13 1049 369 279 13759 1881 3611 80347 7859 18890 321 279 7620 5484 1970 421 35378 8754 13 1061 17454 369 524 15756 264 4145 14053 26 424 369 264 7072 48470 11 7309 32237 14855 421 17077 8396 279 5759 314 279 1970 11 66532 1141 55404 11 70558 1141 4906 11 321 5326 12366 424 310 279 3050 11436 17120 13 12757 52397 264 1496 11258 3992 1040 12654 466 264 3238 11258 3992 1040 351 11 279 6007 15694 6922 13375 12594 11 3384 279 2119 314 56764 33094 13 271 623 411 11346 20856 11 567 668 4088 1472 279 4307 45924 314 264 18826 11 20434 383 264 56111 2526 3992 2512 328 50 6455 43 1 318 15893 11106 553 181796 43 11222 7308 33633 11 6557 7101 11 321 709 16954 13 3113 2614 279 1970 1472 1754 6228 11 567 668 2350 582 1386 279 6150 21207 1881 74931 6157 11 21621 11 913 12910 11 24460 11 4025 23014 11 321 1970 9191 13 271 550 21427 220 16 25 25962 908 17775 318 760 9372 3035 8 271 760 11285 11690 440 279 6891 2450 1970 11 864 369 15327 264 4129 314 5587 13 561 18826 579 1118 2531 369 310 1387 411 632 49422 4129 314 5587 1083

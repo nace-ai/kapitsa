@@ -1,0 +1,1 @@
+["/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/kapitsa", "serve", "--model", "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit", "--host", "127.0.0.1", "--port", "60765", "--private", "--slots", "2", "--context", "32768", "--disk-cache", "0"]

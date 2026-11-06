@@ -1,0 +1,6 @@
+[ 83%] Built target naceinfer
+[100%] Built target kapitsa
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/ni_run.dir/tools/ni_run.cpp.o
+[100%] Linking CXX executable ni_run
+[100%] Built target ni_run
