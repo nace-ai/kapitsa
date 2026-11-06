@@ -202,7 +202,12 @@ while True:
     if not order:
         order = tr[:]; rng.shuffle(order)
     m = order.pop()
-    lce, lsel = batch_loss(m)
+    try:
+        lce, lsel = batch_loss(m)
+    except RuntimeError as e:  # 7 Nov: at a 0.6 cap one step's peak hit 22.5 GiB; skip that conversation instead of losing the chunk
+        if 'out of memory' not in str(e):
+            raise
+        torch.mps.empty_cache(); say(f'step {step}: out of GPU memory on conversation {m["id"]} (n {m["n"]}), skipped'); continue
     loss = lce + 0.5 * lsel
     lv, lcev, lselv = loss.item(), lce.item(), lsel.item()
     ema = lv if ema is None else 0.98 * ema + 0.02 * lv
