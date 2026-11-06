@@ -149,8 +149,12 @@ bool Qwen4Exp::q20_pack(const std::string& dir) {
 // (profile table row "tattn_fast"). #818 measured it on the M5 Pro: 32K prefill about 12% faster, 64K about 20%, for
 // 4 top-1 flips in 72 rows against attn_sparse_rows (docs/profiles.md). NI_QSA_TATTN=1 or 0 overrides.
 static bool tattn_env() {
-  static const bool on = profile_switch("NI_QSA_TATTN", true,
-                                        "Flash-Next sparse prefill attention on the matrix units (NI_QSA_TATTN)");
+  static const bool on = [] {
+    bool here = false;  // the class the kernel runs in: matrix units and the Metal 4 library (macOS 26)
+    if (__builtin_available(macOS 26.0, *)) here = matrix_units();
+    return profile_switch("NI_QSA_TATTN", here,
+                          "Flash-Next sparse prefill attention on the matrix units (NI_QSA_TATTN)");
+  }();
   return on;
 }
 
@@ -1428,8 +1432,8 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
     const AttnSparseParams p{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), maxn, uint32_t(cap), scale, 1, qidx_ld_};
     // The lists on the matrix units (tensor/qsattn_t.metal, qattn_t_sparse_g12d2) where the kernel fits: 12 query
     // heads per KV head, head dim 256, Apple10 and macOS 26 (the Metal 4 library). Else attn_sparse_rows.
-    // Off in the precise profile; on in the fast profile on Macs with matrix units (tattn_env). Q and P enter as hi + lo halves since
-    // #818, which fixed #585's 64K decode that ended early and looped.
+    // Off in the precise profile; on in the fast profile on Macs with matrix units (tattn_env). Q and P enter as
+    // hi + lo halves since #818, which fixed #585's 64K decode that ended early and looped.
     // tattn() is also engine.cpp auto_chunk's gate for the Q2_0 pack's 4096-row chunks.
     const bool tat = tattn(cfg_);
     if (tattn_env()) {

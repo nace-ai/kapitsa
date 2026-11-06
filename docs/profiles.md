@@ -31,7 +31,7 @@ Splash's rows were scored from its prefix cache; on the 32 rows also scored cold
 
 | Member | Model, Mac | Switch | Faster | Drift against precise (72 rows: 16K, 32K, 64K windows) |
 |---|---|---|---|---|
-| Sparse prefill attention on the matrix units, Q and P as hi + lo halves; 4096-row prefill chunks with it | Qwen3.8-Flash-Next Q2_0, M5 Pro | `NI_QSA_TATTN` | prefill 12% faster at 32K, 20% at 64K (#818) | 4 flips, mean KL 8.8e-3, NLL +0.018 nats |
+| Sparse prefill attention on the matrix units, Q and P as hi + lo halves; 4096-row prefill chunks with it (Q2_0 pack only) | Qwen3.8-Flash-Next on Macs with matrix units; measured: Q2_0, M5 Pro (the 4-bit pack and the M5 Max did not run) | `NI_QSA_TATTN` | prefill 12% faster at 32K, 20% at 64K (#818) | 4 flips, mean KL 8.8e-3, NLL +0.018 nats |
 
 Measured 6 Nov 2026 on an M5 Pro 48 GB, macOS 26.5.2, `logit_dump --paths step` at the profile's chunk: `precise` is
 bitwise identical to main on all 72 rows, and `fast` at 4096-row chunks is bitwise identical to `fast` at 2048.
