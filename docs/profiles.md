@@ -19,11 +19,21 @@ flips and its mean KL against precise are both at or below the bar, and an inter
 in [benchmarks.md](benchmarks.md). It runs the rows teacher-forced, full vocabulary, in `logit_dump`'s layout
 (`sequences.txt`, `records.txt`, `logits.f32`), so the same `logit_compare.py` reads both engines.
 
-BAR_TABLE
+| Model, Mac | Fastest other engine | Rows | Top-1 flips | Mean KL |
+|---|---|---|---|---|
+| Qwen3.8-Flash-Next Q2_0, M5 Pro | Splash 1.5.0 | 72 (16K, 32K, 64K windows) | 16 | 0.46 |
+
+Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (no flip between them on
+24 of 32 rows' top-1, mean KL at most 1.5e-2).
 
 ## Members
 
-MEMBER_TABLE
+| Member | Model, Mac | Switch | Faster | Drift against precise (72 rows: 16K, 32K, 64K windows) |
+|---|---|---|---|---|
+| Sparse prefill attention on the matrix units, Q and P as hi + lo halves; 4096-row prefill chunks with it | Qwen3.8-Flash-Next Q2_0, M5 Pro | `NI_QSA_TATTN` | prefill 12% faster at 32K, 20% at 64K (#818) | 4 flips, mean KL 8.8e-3, NLL +0.018 nats |
+
+Measured 6 Nov 2026 on an M5 Pro 48 GB, macOS 26.5.2, `logit_dump --paths step` at the profile's chunk: `precise` is
+bitwise identical to main on all 72 rows, and `fast` at 4096-row chunks is bitwise identical to `fast` at 2048.
 
 ## Candidates
 
