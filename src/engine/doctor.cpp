@@ -1,6 +1,7 @@
 // `kapitsa doctor`: this Mac (GPU, cores, memory budget, Neural Engine) and, per model, whether and how it
 // runs here: memory at the requested context and slots, the Neural Engine split, rough speeds.
 #include "engine/doctor.h"
+#include "engine/device_profile.h"
 #include "vision/encoder.h"
 #include "ane/ffn_split.h"
 #include "engine/engine.h"
@@ -269,7 +270,7 @@ int run_doctor(int argc, char** argv) {
                                                // the engine picks it (auto_prefill_chunk)
   bool ctx_given = false;  // --context given: the expert store line plans at it, else at serve's (start_plan)
   std::string dflash;                      // as the server's --dflash ("": NI_DFLASH or auto)
-  bool as_json = false;
+  bool as_json = false, print_profile = false;
   double budget_gb = 0;
   std::vector<Row> tty_rows;  // the styled view (a terminal)
   std::vector<Variant> tty_vars;
@@ -307,20 +308,28 @@ int run_doctor(int argc, char** argv) {
     }
     else if (a == "--dflash") dflash = next();
     else if (a == "--json") as_json = true;
+    else if (a == "--print-profile") print_profile = true;
     else {
       const char* usage =
           "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--context 64k] [--slots N] [--prefill-chunk 2048]\n"
-          "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json]\n";
+          "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json] [--print-profile]\n";
       if (!term::fancy()) fputs(usage, stderr);
       else if (a == "--help" || a == "-h")
         term::help("kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--context 64k] [--slots N] [--prefill-chunk 2048] "
-                   "[--dflash auto|none|DIR] [--mem-budget GB] [--json]: This Mac's GPU and memory, and which models fit "
+                   "[--dflash auto|none|DIR] [--mem-budget GB] [--json] [--print-profile]: This Mac's GPU and memory, and which models fit "
                    "it at the context and slots given (what kapitsa serve would hold; without --slots, the slots each "
-                   "model would get), with the context kapitsa serve takes by default here.\n");
+                   "model would get), with the context kapitsa serve takes by default here. --print-profile prints the "
+                   "chip class and the default table, and does not scan models.\n");
       else
         term::error("unknown option " + a, "kapitsa doctor --help shows how to use it.");
       return 2;
     }
+  }
+  // before any model scan: the chip class and the default table, from the GPU facts alone
+  if (print_profile) {
+    const DeviceProfile p = resolve_device(facts_from_gpu(long(ram_bytes()), ane::unavailable().empty()));
+    fputs(format_profile(p, as_json).c_str(), stdout);
+    return 0;
   }
   // in a terminal: a spinner while the models are planned (a few seconds)
   std::unique_ptr<term::Spinner> spin;

@@ -50,7 +50,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test gemm_slices_test qwen4_config_test json_file_test systemone systemone_test
+exl3_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test json_file_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
@@ -66,6 +66,7 @@ build/remote_test                            # a split model's reserve on its ot
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
 build/gemm_slices_test                       # a large GEMM's 2048-row slices and their bounds (src/model/gemm_slices.h)
+build/device_profile_test                    # chip class and the default table from injected facts (src/engine/device_profile.h)
 build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
@@ -86,6 +87,7 @@ python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
 python3 tests/test_drex_max.py --cli build   # Drex Max v1: head extraction, tokenizer-only request layouts (no model, no GPU)
 python3 tests/test_pr_size.py
+python3 tests/test_profile_gates.py          # no new inline chip, core or RAM check outside the profile module
 python3 tests/test_splash_patches.py --apply   # packaging/splash/: clones Splash and applies the patches; no build
 python3 tests/test_logit_compare.py
 python3 tests/test_sampled_tokens_harness.py # stand-in ni_run executables and temporary locks; no GPU
@@ -175,9 +177,9 @@ sense.
 - **Narrow gates are the exception.** An exact chip name, core count, RAM size or single model is allowed only when the
   win is both big (at least 10% faster on the target) and exclusive (measured slower, or broken, on the wider class).
   The profile table row cites that evidence. "Only measured here" is not a reason for a narrow gate.
-- **One place.** Every device- or model-dependent default lives in the device profile table, resolved once at startup
-  (#369 builds it). No new inline `apple_family()`, chip-name or core-count checks outside it. Until the table exists, a
-  gate that meets the narrow-gate bar goes next to the existing ones, with the evidence in the comment above it.
+- **One place.** Every device- or model-dependent default lives in the device profile table
+  (`src/engine/device_profile.cpp`, printed by `kapitsa doctor --print-profile`). No new inline `apple_family()`,
+  chip-name or core-count checks outside it.
 - **Off everywhere never merges**, even when the flag-off path is byte-identical to main, the idea is established
   elsewhere, or the PR says "a later PR flips the default". "Off by default" in a title is a NO GO. (5 Nov 2026: #819
   and #944 sat open as off-by-default PRs; #944 measured +7% and +6% on the 35B on an M5 Pro and still left both off.)
