@@ -1,0 +1,188 @@
+[
+  {
+    "label": "fixed4b-01-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/ni_run",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/continuation.ids",
+      "1024",
+      "0",
+      "--dflash",
+      "auto"
+    ],
+    "time": 1793972275.627501,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "ids_match_reference": true
+  },
+  {
+    "label": "fixed4b-02-range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/ni_run",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/continuation.ids",
+      "1024",
+      "0",
+      "--dflash",
+      "auto"
+    ],
+    "time": 1793972299.439939,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "ids_match_reference": true
+  },
+  {
+    "label": "fixed4b-03-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/ni_run",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/continuation.ids",
+      "1024",
+      "0",
+      "--dflash",
+      "auto"
+    ],
+    "time": 1793972308.632494,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "ids_match_reference": true
+  },
+  {
+    "label": "fixed4b-04-range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/ni_run",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/continuation.ids",
+      "1024",
+      "0",
+      "--dflash",
+      "auto"
+    ],
+    "time": 1793972317.780189,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "ids_match_reference": true
+  },
+  {
+    "label": "logits-9b-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/logit_dump",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-9b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-9b-base"
+    ],
+    "time": 1793972326.868151,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n"
+  },
+  {
+    "label": "logits-9b-range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/logit_dump",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-9b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-9b-range",
+      "--from",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-9b-base"
+    ],
+    "time": 1793972369.705271,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n"
+  },
+  {
+    "label": "compare-9b-range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/tools/logit_compare.py",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-9b-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-9b-range",
+      "--json",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/compare-9b-range.json"
+    ],
+    "time": 1793972412.622916,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n"
+  },
+  {
+    "label": "logits-27b-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/logit_dump",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-27b-base"
+    ],
+    "time": 1793972422.078248,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n"
+  },
+  {
+    "label": "logits-27b-range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/logit_dump",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-27b-range",
+      "--from",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-27b-base"
+    ],
+    "time": 1793972531.07235,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":0,\"low_power\":false}\n"
+  },
+  {
+    "label": "compare-27b-range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/tools/logit_compare.py",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-27b-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/logits-27b-range",
+      "--json",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1330/compare-27b-range.json"
+    ],
+    "time": 1793972600.447443,
+    "thermal_before": "{\"thermal_state\":0,\"low_power\":false}\n",
+    "power_before": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+    "scope": "output verification; elapsed times alone are not controlled idle-GPU speed evidence",
+    "exit": 0,
+    "thermal_after": "{\"thermal_state\":1,\"low_power\":false}\n"
+  }
+]

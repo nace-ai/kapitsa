@@ -1,0 +1,40 @@
+[
+  {
+    "run": "bench-01-base",
+    "flags": [],
+    "invalid": [],
+    "other_gpu_mean_pct": 0.0,
+    "other_gpu_max_pct": 0.0,
+    "gpu_users": []
+  },
+  {
+    "run": "bench-02-range",
+    "flags": [],
+    "invalid": [],
+    "other_gpu_mean_pct": 0.0,
+    "other_gpu_max_pct": 0.0,
+    "gpu_users": []
+  },
+  {
+    "run": "bench-03-base",
+    "flags": [
+      "decode: repetition loop (distinct-4-gram 0.4492)",
+      "decode: repetition loop (distinct-4-gram 0.4778)"
+    ],
+    "invalid": [],
+    "other_gpu_mean_pct": 0.0,
+    "other_gpu_max_pct": 0.0,
+    "gpu_users": []
+  },
+  {
+    "run": "bench-04-range",
+    "flags": [
+      "decode: repetition loop (distinct-4-gram 0.4656)",
+      "decode: repetition loop (distinct-4-gram 0.4994)"
+    ],
+    "invalid": [],
+    "other_gpu_mean_pct": 0.0,
+    "other_gpu_max_pct": 0.0,
+    "gpu_users": []
+  }
+]

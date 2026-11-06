@@ -1,0 +1,38 @@
+[
+  {
+    "model": "qwen3.5-4b-4bit",
+    "exit": 0,
+    "before": {
+      "thermal": "{\"thermal_state\":0,\"low_power\":false}\n",
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+      "load": "21:25  up 3 days,  8:20, 6 users, load averages: 1.97 2.14 2.50\n",
+      "swap": "vm.swapusage: total = 3072.00M  used = 1685.75M  free = 1386.25M  (encrypted)\n"
+    },
+    "after": {
+      "thermal": "{\"thermal_state\":0,\"low_power\":false}\n",
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+      "load": "21:25  up 3 days,  8:20, 6 users, load averages: 1.97 2.13 2.49\n",
+      "swap": "vm.swapusage: total = 3072.00M  used = 1685.75M  free = 1386.25M  (encrypted)\n"
+    },
+    "source_reference": "d65a0afa",
+    "source_candidate": "279ce236"
+  },
+  {
+    "model": "qwen3.5-9b-4bit",
+    "exit": 0,
+    "before": {
+      "thermal": "{\"thermal_state\":0,\"low_power\":false}\n",
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+      "load": "21:25  up 3 days,  8:20, 6 users, load averages: 1.97 2.13 2.49\n",
+      "swap": "vm.swapusage: total = 3072.00M  used = 1685.75M  free = 1386.25M  (encrypted)\n"
+    },
+    "after": {
+      "thermal": "{\"thermal_state\":0,\"low_power\":false}\n",
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=21692515)\t100%; charged; 0:00 remaining present: true\n",
+      "load": "21:25  up 3 days,  8:20, 6 users, load averages: 1.89 2.11 2.48\n",
+      "swap": "vm.swapusage: total = 3072.00M  used = 1685.75M  free = 1386.25M  (encrypted)\n"
+    },
+    "source_reference": "d65a0afa",
+    "source_candidate": "279ce236"
+  }
+]
