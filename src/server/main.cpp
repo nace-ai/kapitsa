@@ -382,6 +382,9 @@ static void print_serve_help() {
          "                         Dory with --loop-kv per-loop: drafts per cycle (default 2 at 1-2 loops, 3 at 3-4)\n"
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
+         "  --profile NAME         precise (default): the exact outputs. fast: also the speedups that move the\n"
+         "                         outputs no more than the fastest other engine does, where they were measured\n"
+         "                         (docs/profiles.md; also KAPITSA_PROFILE)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
          "  --disk-cache SIZE      SSD prefix cache: conversations kept on the SSD, also across restarts, in\n"
          "                         %s/prefix-cache. auto (default): a quarter of the free space beyond\n"
@@ -854,6 +857,11 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--check") check_only = true;
     else if (a == "--host") host = next();
     else if (a == "--port") port = to_int(a, next(), help);
+    else if (a == "--profile") {  // engine/profile.h reads it from the environment, as tools and children do
+      const std::string v = next();
+      if (v != "fast" && v != "precise") usage_error("--profile takes fast or precise, not \"" + v + "\"", help);
+      setenv("KAPITSA_PROFILE", v.c_str(), 1);
+    }
     else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
     else if (a == "--local") local = true;   // never routed: the model runs here
     else if (a == "--peer") cluster::add_peer(next());  // another Mac's server, where Bonjour does not reach

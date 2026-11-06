@@ -1,0 +1,35 @@
+detach: paused cpu-heavy k1003-ab
+detach: paused cpu-heavy k365-pr-tests3
+detach: paused cpu-heavy k370-install
+user active (0s idle): not hiding DSH
+SKIP Lightning: /Users/alisheramantay/Documents/nace/models/nemotron-3.5-lightning-nvfp4 not readable (external drive unmounted?)
+18:25:23 waiting for load 7.12
+18:25:38 waiting for load 5.83
+18:25:53 waiting for load 5.38
+18:26:08 waiting for load 4.70
+18:26:23 waiting for load 4.07
+18:26:42 1 dec4kkv arm=P rc=0 load 3.46->3.26 ok | prompt 4129 tok in 1336 ms (3089.8 tok/s); decode 41 tok in 351 ms (116.9 tok/s)
+18:26:49 2 dec4kkv arm=K rc=0 load 3.26->3.16 ok | prompt 4129 tok in 2264 ms (1824.0 tok/s); decode 43 tok in 367 ms (117.2 tok/s)
+18:26:53 3 dec4kkv arm=K rc=0 load 3.16->3.39 ok | prompt 4129 tok in 1320 ms (3128.2 tok/s); decode 43 tok in 365 ms (117.9 tok/s)
+18:26:57 4 dec4kkv arm=P rc=0 load 3.39->3.28 ok | prompt 4129 tok in 1319 ms (3131.4 tok/s); decode 41 tok in 353 ms (116.3 tok/s)
+18:27:01 5 dec4kkv arm=K rc=0 load 3.28->3.09 ok | prompt 4129 tok in 1322 ms (3123.1 tok/s); decode 43 tok in 363 ms (118.5 tok/s)
+18:27:05 6 dec4kkv arm=P rc=0 load 3.09->3.09 ok | prompt 4129 tok in 1320 ms (3129.1 tok/s); decode 41 tok in 348 ms (117.7 tok/s)
+18:27:08 7 dec4kkv arm=P rc=0 load 2.93->2.93 ok | prompt 4129 tok in 1314 ms (3141.2 tok/s); decode 41 tok in 352 ms (116.6 tok/s)
+18:27:12 8 dec4kkv arm=K rc=0 load 2.93->3.33 ok | prompt 4129 tok in 1321 ms (3125.1 tok/s); decode 43 tok in 367 ms (117.3 tok/s)
+18:28:13 9 fn32kfuse arm=P rc=0 load 3.33->4.69 void-load | prompt 32768 tok in 44098 ms (743.1 tok/s); spec decode D=2: 255 tok in 5953 ms (42.8 tok/s), 120 cycles, 2.12 tok/cycle, accepted/drafted 0.56, 49.394 ms GPU/cycle, 49.605 ms wall
+18:28:13 waiting for load 4.69
+18:29:23 10 fn32kfuse arm=U rc=0 load 3.88->2.44 ok | prompt 32768 tok in 45289 ms (723.5 tok/s); spec decode D=2: 255 tok in 6276 ms (40.6 tok/s), 120 cycles, 2.12 tok/cycle, accepted/drafted 0.56, 52.039 ms GPU/cycle, 52.296 ms wall
+18:30:17 11 fn32kfuse arm=U rc=0 load 2.44->2.90 ok | prompt 32768 tok in 44177 ms (741.7 tok/s); spec decode D=2: 255 tok in 6330 ms (40.3 tok/s), 120 cycles, 2.12 tok/cycle, accepted/drafted 0.56, 52.469 ms GPU/cycle, 52.748 ms wall
+18:31:14 12 fn32kfuse arm=P rc=0 load 2.90->2.82 ok | prompt 32768 tok in 47169 ms (694.7 tok/s); spec decode D=2: 255 tok in 5950 ms (42.9 tok/s), 120 cycles, 2.12 tok/cycle, accepted/drafted 0.56, 49.308 ms GPU/cycle, 49.580 ms wall
+dec4kkv P: n=4 prefill ms median 1320 [1336, 1319, 1320, 1314] | decode tok/s median 116.8 [116.9, 116.3, 117.7, 116.6]
+dec4kkv K: n=4 prefill ms median 1322 [2264, 1320, 1322, 1321] | decode tok/s median 117.6 [117.2, 117.9, 118.5, 117.3]
+  K vs P: prefill -0.2% speed, decode +0.7%, greedy ids same as P: False
+fn32kfuse P: n=2 prefill ms median 45634 [44098, 47169] | decode tok/s median 42.8 [42.8, 42.9] | memory-pressure legs 2
+fn32kfuse U: n=2 prefill ms median 44733 [45289, 44177] | decode tok/s median 40.5 [40.6, 40.3] | memory-pressure legs 2
+  U vs P: prefill +2.0% speed, decode -5.6%, greedy ids same as P: True
+
+18:31:14 Q3DONE
+detach: resumed cpu-heavy k1003-ab
+detach: resumed cpu-heavy k365-pr-tests3
+detach: resumed cpu-heavy k370-install
+detach: resumed cpu-heavy k370-tests

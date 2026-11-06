@@ -1,0 +1,44 @@
+diff --git a/dev/benchmarks/backend_benchmark.mm b/dev/benchmarks/backend_benchmark.mm
+index 18853387..5d5605fd 100644
+--- a/dev/benchmarks/backend_benchmark.mm
++++ b/dev/benchmarks/backend_benchmark.mm
+@@ -6,6 +6,7 @@
+ #include "PrefillWork.hpp"
+ #include "TranscriptPrompts.hpp"
+ 
++#include <cstdlib>
+ #include <algorithm>
+ #include <iterator>
+ #include <array>
+@@ -949,6 +950,9 @@ int main(int argc, char **argv) {
+     config.model = model::servedFor(model::inspectModelRoot(config.modelRoot), maxContext);
+     config.buildId = SPLASH_BUILD_ID;
+     config.aneFfn = engine::AneFfnSetting::fromGiven(aneFfnShare, aneFfnMinimumRows);
++    // k363: SPLASH_EXPERT_MEMORY=BYTES streams the routed experts through a store of that size, as serve's --expert-memory.
++    if (const char *bytes = std::getenv("SPLASH_EXPERT_MEMORY"))
++      config.expertMemory = {engine::StreamedSetting::Mode::Size, std::strtoull(bytes, nullptr, 10)};
+     // The verify budget's rows follow the wall times and acceptance of the
+     // cycles before them, so a MoE target's outputs would not repeat from
+     // round to round: every cycle verifies every row (--verify-rows all), and
+@@ -1386,7 +1390,10 @@ int main(int argc, char **argv) {
+       std::ofstream logits(*logitsDirectory / "logits.f32", std::ios::binary | std::ios::trunc);
+       for (size_t first = 0; first < dump.records.size(); first += logitsWidth) {
+         const size_t count = std::min<size_t>(logitsWidth, dump.records.size() - first);
+-        evictAllCache(resources->cache());
++        // k363: SPLASH_LOGITS_KEEP_CACHE=1 lets each prefix resume from the
++        // cached state of the one before it, as a chat or decode would.
++        if (!std::getenv("SPLASH_LOGITS_KEEP_CACHE"))
++          evictAllCache(resources->cache());
+         for (size_t offset = 0; offset < count; ++offset) {
+           const auto [sequence, prefix] = dump.records[first + offset];
+           EngineRequest request;
+@@ -1399,6 +1406,9 @@ int main(int argc, char **argv) {
+         }
+         driver.untilIdle();
+         for (size_t offset = 0; offset < count; ++offset) {
++          std::cerr << "k363 record " << (first + offset) << " prompt "
++                    << dump.records[first + offset].second << " matched "
++                    << events.get(requestId + offset).matchedTokens << '\n';
+           const std::vector<float> row = events.takeOptionLogits(requestId + offset);
+           if (row.size() != vocabulary.size())
+             throw std::runtime_error("a score request returned no row of the vocabulary");

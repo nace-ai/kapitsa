@@ -210,6 +210,8 @@ without and after a draft.
   target that is slower or broken on the wider class, with that evidence cited. A feature that is promising but not yet
   faster anywhere stays an open PR until it is, even when a paper or another engine has the idea. Kill switches, debug switches and measuring tools are exempt.
   AGENTS.md ("Defaults follow the concept, not the measured cell") has the full rule.
+- On in the fast profile for a class counts as on by default, for a feature that moves outputs no more than the
+  fastest other engine does there (docs/profiles.md). The same class and evidence rules apply.
 
 ## Output check
 

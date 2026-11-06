@@ -9,7 +9,8 @@
      that differ in chip class or model family that ran the A/B and output check (1 if only one exists for the class).
      A narrow gate (exact chip, core count, RAM size, one model) needs a win of at least 10% on the target that is slower or
      broken on the wider class: cite it. Off on every model and Mac does not merge. Not a feature (kill switch, debug
-     switch, measuring tool, docs): write "not a feature". -->
+     switch, measuring tool, docs): write "not a feature". A feature that moves outputs within docs/profiles.md's bar
+     may take its class in the fast profile only: write "fast profile: <class>". -->
 
 ## Measured
 

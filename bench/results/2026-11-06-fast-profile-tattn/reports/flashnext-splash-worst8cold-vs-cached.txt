@@ -1,0 +1,8 @@
+step: 8 records (flash-next-q20)
+  reference: 1.5.0 (cabbad27) + splash-logits.patch, prefill_chunk 2048
+  candidate: 1.5.0 (cabbad27) + splash-logits.patch, prefill_chunk 2048
+  bitwise identical rows 3 of 8; max |logit diff| 0.9697
+  top-1 agreement 0.8750 (1 flip)
+  KL mean 1.689e-02 median 1.830e-03 p99 8.431e-02 max 8.783e-02; top-2 margin change up to 0.7802
+  next-token NLL change +3.073e-02 nats per record (candidate minus reference)
+    flip at sequence 2 prefix 64017: top-1 10885 -> 23, reference margin 0.2584
