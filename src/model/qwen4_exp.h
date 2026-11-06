@@ -80,10 +80,15 @@ class Qwen4Exp : public Qwen35 {
   // Qwen's zero-centred weights (a mean of at most 0.25), 0 where a converter added the 1 (at least 0.75), -1 between
   static float norm_offset(double indexer_norm_mean);
   // Whether the prefill sparse attention runs on the matrix units (qattn_t_sparse_g12d2), the decision enc_attn_sparse
-  // makes: NI_QSA_TATTN=1 (opt-in since #585), 12 query heads per KV head, head dim 256, an Apple10 GPU and macOS 26.
+  // makes: NI_QSA_TATTN=1 or the fast profile (off in precise since #585), 12 query heads per KV head, head dim 256,
+  // an Apple10 GPU and macOS 26.
   // The model_dir form reads config.json (false for a folder that is not Flash-Next).
   static bool tattn(const Qwen35Config& c);
   static bool tattn(const std::string& model_dir);
+  // TATTN's 4096-row prefill chunks for the Q2_0 pack: only when NI_QSA_TATTN is set on, not under the fast
+  // profile's TATTN. On the M5 Pro 48 GB they put every fast leg under memory pressure, decode 7-12% slower per
+  // draft cycle (docs/profiles.md).
+  static bool tattn_chunks(const std::string& model_dir);
   // the process's split's share of the model (split()), or `split`'s
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, const Split* split = nullptr);
   // For placing a split (src/cluster/place.h), from the headers: each trunk layer's weight bytes as stored (its routed

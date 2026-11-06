@@ -166,6 +166,11 @@ bool Qwen4Exp::tattn(const Qwen35Config& c) {
 
 bool Qwen4Exp::tattn(const std::string& dir) { return is_model(dir) && tattn(read_config(dir)); }
 
+bool Qwen4Exp::tattn_chunks(const std::string& dir) {
+  const char* v = getenv("NI_QSA_TATTN");
+  return v && *v && strcmp(v, "0") != 0 && tattn(dir);
+}
+
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
 
@@ -1434,7 +1439,7 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
     // heads per KV head, head dim 256, Apple10 and macOS 26 (the Metal 4 library). Else attn_sparse_rows.
     // Off in the precise profile; on in the fast profile on Macs with matrix units (tattn_env). Q and P enter as
     // hi + lo halves since #818, which fixed #585's 64K decode that ended early and looped.
-    // tattn() is also engine.cpp auto_chunk's gate for the Q2_0 pack's 4096-row chunks.
+    // tattn_chunks() (NI_QSA_TATTN=1 only) is engine.cpp auto_chunk's gate for the Q2_0 pack's 4096-row chunks.
     const bool tat = tattn(cfg_);
     if (tattn_env()) {
       static bool logged = false;

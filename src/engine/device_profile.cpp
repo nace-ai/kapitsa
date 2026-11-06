@@ -54,9 +54,10 @@ const DefaultRow kDefaults[] = {
      "name contains Ultra; fused merges failed on the old arrival (#421); not re-run since, so the split merges stay", false},
     // Fast profile only (docs/profiles.md): Flash-Next's sparse prefill attention on the matrix units, Q and P as hi + lo
     // halves (#818). Matrix class, not the name: the kernel needs matrix units and nothing was measured slower on them.
-    // M5 Pro, 32K and 64K prompts: prefill +12 to +20%, 4 top-1 flips in 72 rows (Splash 1.5.0: 16). The call site is
+    // M5 Pro, 32K and 64K prompts at 2048-row chunks: prefill +8 to +10%, decode the same per draft cycle; 4 top-1
+    // flips in 72 rows (Splash 1.5.0: 16). The call site is
     // tattn() in qwen4_exp.cpp, whose matrix-unit check predates this table.
-    {"tattn_fast", ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 12, 20, false, "M5 Pro", false},
+    {"tattn_fast", ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 8, 10, false, "M5 Pro", false},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
