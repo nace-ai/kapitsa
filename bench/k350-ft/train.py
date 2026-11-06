@@ -59,15 +59,21 @@ def foot():  # this process's phys_footprint in GB (what mem-guard reads)
     m_ = re.search(r'phys_footprint: ([\d.]+) (GB|MB)', out)
     return float(m_[1]) / (1024 if m_ and m_[2] == 'MB' else 1) if m_ else -1.0
 
-def batch_loss(m, anchors=None, nmax=BA, stats=False):
+PAD = int(os.environ.get('K350_PAD', 512))
+def batch_loss(m, anchors=None, nmax=BA, stats=False, pad=None):
     ids, c = load(m)
     n, n0 = m['n'], m['n_prompt']
+    pad = PAD if pad is None else pad
+    if pad:  # MPS compiles and keeps a graph per new shape; every conversation's own length grew the footprint ~1 GB per 25 steps.
+        # Zero rows at positions >= n: blocks() masks context positions >= P, and every anchor P < n, so they get weight exp(-inf) = 0.
+        npad = -(-n // pad) * pad
+        c = torch.cat([c, c.new_zeros(npad - n, c.shape[1])])
     cand = list(range(n0, n - 1))
     if anchors is None:
         anchors = rng.sample(cand, min(nmax, len(cand)))
     P = torch.tensor(anchors, dtype=torch.long)
     idsd = ids.to(dev); c = c.to(dev).float()
-    cpos = torch.arange(n, device=dev)
+    cpos = torch.arange(c.shape[0], device=dev)
     kv = d.ctx_kv(c, cpos); dbg('kv')
     x = emb[torch.cat([idsd[P.to(dev)][:, None], torch.full((len(anchors), 7), dfl.MASK, device=dev)], 1)]
     dbg('x')
@@ -123,6 +129,15 @@ def evaluate():
     d.train()
     return L / N, S / N, 1 + A / N
 
+if os.environ.get('K350_CHECK_PAD'):  # CPU check: padded context rows change nothing
+    worst = 0.0
+    for m in val[:4]:
+        vr = random.Random(m['id']); an = vr.sample(list(range(m['n_prompt'], m['n'] - 1)), min(8, m['n'] - 1 - m['n_prompt']))
+        with torch.no_grad():
+            a = batch_loss(m, an, stats=True, pad=0); b = batch_loss(m, an, stats=True, pad=512)
+        df = max(abs(a[0].item() - b[0].item()), abs(a[1].item() - b[1].item()), (a[2] - b[2]).abs().max().item())
+        worst = max(worst, df); say(f'pad check {m["id"]} n {m["n"]}: ce {a[0].item():.6f} vs {b[0].item():.6f}, sel {a[1].item():.6f} vs {b[1].item():.6f}, max diff {df:.2e}')
+    say(f'pad check worst diff {worst:.2e}'); sys.exit(0 if worst < 1e-4 else 1)
 trainable = [p for p in d.parameters()]
 opt = torch.optim.AdamW(trainable, lr=lr, betas=(0.9, 0.95), weight_decay=0.0)
 t0 = time.time()
@@ -142,6 +157,7 @@ else:
     say(f'step 0 val ce {v0[0]:.4f} sel {v0[1]:.4f} walk tok/cycle proxy {v0[2]:.4f} ({time.time() - t0:.0f} s)')
     best, step, done_s = v0[2], 0, 0.0
 ema = None
+STOP = int(os.environ.get('K350_STOP_STEP', 0))
 tstart = time.time() - done_s
 tchunk = time.time()
 SWAP0 = float(re.search(r'used = ([\d.]+)M', os.popen('sysctl -n vm.swapusage').read()).group(1))  # swap at chunk start
@@ -167,6 +183,10 @@ while True:
     cur = lr * min(1.0, (step + 1) / 50) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * frac)))
     for g in opt.param_groups:
         g['lr'] = cur
+    if step % 25 == 0 and dev == 'mps':
+        say(f'mem step {step}: allocated {torch.mps.current_allocated_memory() / 2**30:.2f} GiB, driver {torch.mps.driver_allocated_memory() / 2**30:.2f} GiB, footprint {foot():.2f} GB')
+    if STOP and step >= STOP:
+        say(f'K350_STOP_STEP {STOP} reached: test run ends without saving'); sys.exit(0)
     if not order:
         order = tr[:]; rng.shuffle(order)
     m = order.pop()
