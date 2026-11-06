@@ -4,6 +4,7 @@
 #include "loader/safetensors.h"
 #include "model/expert_store.h"
 #include "bench/bench.h"
+#include <nlohmann/json.hpp>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -112,6 +113,78 @@ static void uncached_reads(const std::filesystem::path& dir) {
   std::cout << "page cache: " << before << " -> " << after << " of " << pages << " pages\n";
   CHECK(after <= before + pages / 10);
 }
+// The destination for a deferred read is sized from shape/dtype, never from data_offsets.
+static void tensor_entries(const std::filesystem::path& parent) {
+  const auto dir = parent / "tensor-entries";
+  std::filesystem::create_directory(dir);
+  const auto path = dir / "model.safetensors";
+  using J = nlohmann::json;
+  auto write = [&](const J& entry, const std::string& data = "") {
+    const std::string hdr = J{{"weight", entry}}.dump();
+    const uint64_t n = hdr.size();
+    std::ofstream f(path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&n), 8); f << hdr << data;
+  };
+  const auto deferred = [](const std::string&) { return true; };
+  FatalRecovery recover;
+  auto reject = [&](const J& entry, const std::string& why) {
+    write(entry, "ABCDEFGH");
+    fails([&] { SafetensorsIndex index(dir); }, why);
+    fails([&] { WeightStore ws; ws.open_dir(dir); }, why);
+    fails([&] { WeightStore ws; ws.open_dir(dir, {}, {}, deferred); }, why);
+    // The recoverable diagnostic must identify the bad file too.
+    fails([&] { SafetensorsIndex index(dir); }, path.string());
+  };
+  J entry = {{"dtype", "BF16"}, {"shape", {1}}, {"data_offsets", {0, 8}}};
+  reject(entry, "shape/dtype");  // an eight-byte read would overwrite a two-byte destination
+  entry["shape"] = {8};
+  reject(entry, "shape/dtype");  // the other direction leaves part of the destination unread
+  for (const J& dim : {J(-1), J(1.5), J("1"), J(nullptr), J(true), J(uint64_t(1) << 63)}) {
+    entry["shape"] = J::array({dim});
+    reject(entry, "bad tensor shape");
+  }
+  entry["shape"] = {uint64_t(1) << 62, 4};
+  reject(entry, "tensor shape overflows");
+  entry["shape"] = {uint64_t(1) << 62};
+  entry["dtype"] = "F32";
+  reject(entry, "shape/dtype");  // element count fits, byte count does not
+  entry["shape"] = {0};
+  entry["data_offsets"] = {UINT64_MAX, UINT64_MAX};
+  reject(entry, "tensor offset overflows");
+
+  // Header-only files still serve the memory planner, but cannot be admitted for deferred reads.
+  entry = {{"dtype", "BF16"}, {"shape", {4}}, {"data_offsets", {0, 8}}};
+  write(entry);
+  { SafetensorsIndex index(dir); CHECK(index.get("weight").numel() == 4 && index.get("weight").len == 8); }
+  fails([&] { WeightStore ws; ws.open_dir(dir); }, "past its end");
+  fails([&] { WeightStore ws; ws.open_dir(dir, {}, {}, deferred); }, "past its end");
+  { WeightStore ws; ws.open_dir(dir, [](const std::string&) { return false; }); }
+
+  // Scalar and empty tensors, all supported element widths, an unaligned range and a read after rejection.
+  for (const auto& [dtype, width] : std::vector<std::pair<std::string, size_t>>{
+           {"U8", 1}, {"I8", 1}, {"F8_E4M3", 1}, {"U16", 2}, {"BF16", 2}, {"F16", 2},
+           {"U32", 4}, {"I32", 4}, {"F32", 4}, {"I64", 8}}) {
+    for (const J& shape : {J::array(), J::array({2, 3}), J::array({2, 0, 3})}) {
+      const size_t count = shape.empty() ? 1 : (shape[1] == 0 ? 0 : 6), bytes = count * width;
+      write({{"dtype", dtype}, {"shape", shape}, {"data_offsets", {1, 1 + bytes}}},
+            "!" + std::string(bytes, 'x'));
+      SafetensorsIndex index(dir);
+      CHECK(size_t(index.get("weight").numel()) == count && index.get("weight").len == bytes);
+      WeightStore ws; ws.open_dir(dir, {}, {}, deferred);
+      CHECK(size_t(ws.get("weight").numel()) == count);
+      std::vector<char> out(bytes + 2, '?');
+      ws.read_deferred("weight", out.data() + 1);
+      CHECK(out.front() == '?' && out.back() == '?');
+      CHECK(std::string(out.data() + 1, bytes) == std::string(bytes, 'x'));
+      std::fill(out.begin(), out.end(), '?');
+      index.read(index.get("weight"), 0, out.data() + 1, bytes);
+      CHECK(out.front() == '?' && out.back() == '?');
+      CHECK(std::string(out.data() + 1, bytes) == std::string(bytes, 'x'));
+    }
+  }
+  std::filesystem::remove_all(dir);
+  std::cout << "PASS tensor shape/range validation, header-only plans, deferred read guards\n";
+}
 static void cpu(const char* self) {
   CHECK(!FatalRecovery::enabled());
   {
@@ -159,6 +232,7 @@ static void cpu(const char* self) {
   }
   CHECK(descriptors() == before);
   child_fails(self, "--bad-file", pattern);
+  tensor_entries(dir);
   uncached_reads(dir);
   std::filesystem::remove_all(dir);
   std::cout << "PASS scoped errors, thread joining/isolation, loader FD cleanup, CLI exit 1\n";
