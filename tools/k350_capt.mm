@@ -15,6 +15,8 @@
 #include "util/bf16.h"
 #include "util/log.h"
 
+#include <mach/mach.h>
+
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -23,6 +25,13 @@
 #include <vector>
 
 using namespace ni;
+
+static double footprint_gb() {  // the process's phys_footprint (what Activity Monitor and mem-guard read)
+  task_vm_info_data_t v;
+  mach_msg_type_number_t c = TASK_VM_INFO_COUNT;
+  if (task_info(mach_task_self(), TASK_VM_INFO, task_info_t(&v), &c) != KERN_SUCCESS) return -1;
+  return double(v.phys_footprint) / (1 << 30);
+}
 
 static std::vector<int> read_ids(const std::string& path) {
   std::ifstream f(path);
@@ -58,8 +67,13 @@ int main(int argc, char** argv) {
   int done = 0;
   long rows_total = 0;
   const double t0 = now_ms();
+  const double max_gb = getenv("K350_MAX_GB") ? atof(getenv("K350_MAX_GB")) : 32;
   std::vector<uint16_t> ob;
-  while (std::getline(lf, line)) {
+  constexpr int kLimit = 4096;
+  auto seq = m.new_seq(kLimit);
+  Seq& s = *seq;
+  auto dseq = dr.new_seq();
+  while (std::getline(lf, line)) @autoreleasepool {  // per sequence: command buffers and buffers freed here
     std::stringstream ls(line);
     std::string mode, idf, outf;
     ls >> mode >> idf >> outf;
@@ -67,11 +81,18 @@ int main(int argc, char** argv) {
     std::vector<int> ids = read_ids(idf);
     const bool draft = mode == "d";
     const int n = int(ids.size()) - (draft ? 1 : 0);
-    if (n < 2) { fprintf(stderr, "skip %s: %d ids\n", idf.c_str(), n); continue; }
-    auto seq = m.new_seq(n + 64);
-    Seq& s = *seq;
+    if (n < 2) {
+      fprintf(stderr, "skip %s: %d ids\n", idf.c_str(), n);
+      continue;
+    }
+    if (n + 64 > kLimit) {
+      fprintf(stderr, "skip %s: %d ids over the reused sequence's %d\n", idf.c_str(), n, kLimit - 64);
+      continue;
+    }
+    m.reset(s);  // one sequence and one drafter state for every line: a new one per line leaked its buffers
+    DFlash2::reset(*dseq);
     for (int i = 0; i < n; ++i) s.tokens()[i] = ids[i];
-    auto d = dr.new_seq();
+    DFlashSeq* d = dseq.get();
     dr.begin_prefill(n);
     for (int p = 0; p < n; p += m.prefill_chunk()) {
       const int T = std::min(m.prefill_chunk(), n - p);
@@ -114,8 +135,11 @@ int main(int argc, char** argv) {
     }
     ++done;
     rows_total += rows;
-    if (done % 50 == 0)
-      fprintf(stderr, "k350_capt: %d sequences, %ld rows, %.0f s\n", done, rows_total, (now_ms() - t0) / 1000);
+    if (const double fp = footprint_gb(); fp > max_gb)
+      fatal("k350_capt: footprint %.1f GB after %d sequences is over K350_MAX_GB=%.0f", fp, done, max_gb);
+    if (done % 10 == 0)
+      fprintf(stderr, "k350_capt: %d sequences, %ld rows, %.0f s, footprint %.2f GB\n", done, rows_total,
+              (now_ms() - t0) / 1000, footprint_gb());
   }
   fprintf(stderr, "k350_capt: done %d sequences, %ld rows in %.0f s\n", done, rows_total, (now_ms() - t0) / 1000);
   return 0;
