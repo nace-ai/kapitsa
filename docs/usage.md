@@ -14,7 +14,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa list [--json]` | The downloaded models: size on disk, complete or not, MTP head and draft model. |
 | `kapitsa rm M...` | Deletes downloaded models and says how much space that gave back. Folders outside the store are left alone. |
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
-| `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
+| `kapitsa doctor [--model M]... [--json] [--print-profile]` | This Mac and which models fit it. `--print-profile` prints the chip class and the default table, and does not scan models ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--prefill-chunk N] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
 | `kapitsa stage --model M [--layers A-B] [--port P] [--host H] [--mem-budget GB] [--prefill-chunk N]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
@@ -893,6 +893,8 @@ the parts in use in the page cache and can drop them under pressure. When memory
   other requests in flight, a request that fits only once one of them ends waits for it, and only a prompt that does
   not fit even alone gets the error; a reply in progress may take the cache of a request still waiting (that request
   then reads its prompt again). A reply that cannot grow its cache ends with finish reason `length`.
+
+`kapitsa doctor --print-profile` prints this Mac's chip class and the default table, and does not scan models.
 
 `kapitsa doctor` shows this Mac (chip, GPU cores, RAM, macOS, the working set, Kapitsa's budget, the Neural Engine) and,
 per model, its memory part by part, whether it starts, the tokens of KV cache that fit, its decoding (draft model, MTP
