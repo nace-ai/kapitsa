@@ -59,7 +59,7 @@ def foot():  # this process's phys_footprint in GB (what mem-guard reads)
     m_ = re.search(r'phys_footprint: ([\d.]+) (GB|MB)', out)
     return float(m_[1]) / (1024 if m_ and m_[2] == 'MB' else 1) if m_ else -1.0
 
-PAD = int(os.environ.get('K350_PAD', 512))
+PAD = int(os.environ.get('K350_PAD', 2048))  # 7 Nov: at 512 (4 shapes) allocated stayed flat at 11.4 GiB but driver grew 20.6 -> 23.1 GiB over 100 steps; every conversation is < 2048 rows, so one shape
 def batch_loss(m, anchors=None, nmax=BA, stats=False, pad=None):
     ids, c = load(m)
     n, n0 = m['n'], m['n_prompt']
@@ -127,6 +127,8 @@ def evaluate():
             lce, lsel, alen = batch_loss(m, an, stats=True)
             L += lce.item() * len(an); S += lsel.item() * len(an); A += alen.sum().item(); N += len(an)
     d.train()
+    if dev == 'mps':
+        torch.mps.empty_cache()
     return L / N, S / N, 1 + A / N
 
 if os.environ.get('K350_CHECK_PAD'):  # CPU check: padded context rows change nothing
