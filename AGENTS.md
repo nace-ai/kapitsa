@@ -88,7 +88,7 @@ python3 tests/test_reasoning.py
 python3 tests/test_drex_max.py --cli build   # Drex Max v1: head extraction, tokenizer-only request layouts (no model, no GPU)
 python3 tests/test_pr_size.py
 python3 tests/test_profile_gates.py          # no new inline chip, core or RAM check outside the profile module
-python3 tests/test_comment_gates.py          # no comment or doc line in the repo (not third_party/, bench/results/) gives "only measured here" or "not run, so" as the reason for a narrow default
+python3 tests/test_comment_gates.py          # no comment or doc line in the repo (not third_party/, bench/results/) gives "measured only here" or "nothing was run" as the reason for a narrow default
 python3 tests/test_splash_patches.py --apply   # packaging/splash/: clones Splash and applies the patches; no build
 python3 tests/test_logit_compare.py
 python3 tests/test_sampled_tokens_harness.py # stand-in ni_run executables and temporary locks; no GPU

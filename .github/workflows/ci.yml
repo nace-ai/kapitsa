@@ -47,7 +47,7 @@ jobs:
 
   profile-gates:
     # A new inline chip, core or RAM check outside src/engine/device_profile.cpp fails this, and so does a comment or doc line
-    # that gives 'only measured here' or 'not run, so' as the reason for a narrow default, anywhere in the repo
+    # that gives a measured-only-here or nothing-was-run reason for a narrow default, anywhere in the repo
     # (tests/test_comment_gates.py). No build.
     runs-on: ubuntu-latest
     timeout-minutes: 5
