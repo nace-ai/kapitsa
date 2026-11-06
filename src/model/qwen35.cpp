@@ -2597,10 +2597,14 @@ bool qmt128_for(int M) {
 
 static bool qmt_i8_on();
 
-// NI_GEMM_SLICES (read once; default on, 0 = off): Drex Max v1's dense qmt / qmtg prefill GEMMs of more than 2048 rows
-// run as 2048-row dispatches (src/model/gemm_slices.h); bitwise the same outputs.
+// NI_GEMM_SLICES (read once): Drex Max v1's dense qmt / qmtg prefill GEMMs of more than 2048 rows run as 2048-row
+// dispatches (src/model/gemm_slices.h); bitwise the same outputs. Default on the M5 Pro only, where it was measured;
+// 1 = on any Mac on the dense QMT path (the other M5s, not measured), 0 = off.
 static bool gemm_slices_on() {
-  static const bool on = env_int("NI_GEMM_SLICES", 1) != 0;
+  static const bool on = [] {
+    const int v = env_int("NI_GEMM_SLICES", -1);
+    return v < 0 ? Gpu::get().name() == "Apple M5 Pro" : v > 0;
+  }();
   return on;
 }
 
