@@ -44,13 +44,25 @@ using json = nlohmann::json;
 // where the KFlash trees run (the update rides the tree verify): not with NI_KFLASH=0 or NI_KFLASH_TREE=0.
 static constexpr bool kSelUpdDefault = true;
 static constexpr float kSelUpdLr = 0.003f;
-static bool dfl_lanes_shape(const Qwen35Config& c) {
-  return matrix_units() && c.moe && c.hidden == 2048 && c.layers == 40 && c.experts == 256 && c.top_k == 8 && c.moe_I == 512 &&
-         c.shared_I == 512;
+// The kflash_hist row of the device profile table is the default; the shape fill is the config plus whether this is
+// Clover (its instance type, or the config's model_type before it loads).
+static ModelFacts dfl_lanes_facts(const Qwen35Config& c, bool clover) {
+  ModelFacts f;
+  f.moe = c.moe;
+  f.hidden = c.hidden;
+  f.layers = c.layers;
+  f.experts = c.experts;
+  f.top_k = c.top_k;
+  f.moe_i = c.moe_I;
+  f.shared_i = c.shared_I;
+  f.clover = clover;
+  return f;
 }
-static bool dfl_lanes_default(const Qwen35& t) { return dfl_lanes_shape(t.config()) && !dynamic_cast<const Clover*>(&t); }
+static bool dfl_lanes_default(const Qwen35& t) {
+  return default_on(Knob::kKflashHist, dfl_lanes_facts(t.config(), dynamic_cast<const Clover*>(&t) != nullptr));
+}
 bool DFlash2::lanes_default(const std::string& model_dir, const Qwen35Config& c) {
-  return dfl_lanes_shape(c) && !Clover::is_model(model_dir);
+  return default_on(Knob::kKflashHist, dfl_lanes_facts(c, Clover::is_model(model_dir)));
 }
 
 static int lowrank_request() {
@@ -769,7 +781,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // tile, the full depth, as NI_KFLASH_BLOCK=8 has them. NI_KFLASH_NARROW: by default on the wide class (the
     // 40-core M5 Max); 1 on any Mac a 16-row block runs on, 0 never
     const char* nv = kenv("NARROW");
-    const bool narrow = nv && *nv ? atoi(nv) != 0 : wide_cores();
+    const bool narrow = nv && *nv ? atoi(nv) != 0 : default_on(Knob::kKflashNarrow, ModelFacts{});
     if (block() > kB && tree_ && narrow) {
       std::string key8 = key;
       if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);

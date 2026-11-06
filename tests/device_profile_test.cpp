@@ -57,12 +57,17 @@ int main() {
   a3b.shared_i = 512;
   CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35A3b);
   a3b.clover = true;
-  CHECK(ni::resolve_model(a3b) == ni::ModelClass::kOther);
+  CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35Shape);  // Clover has the wave's shape, not the drafter's
+  ni::ModelFacts shape_only;
+  shape_only.moe = true;
+  shape_only.hidden = 2048;
+  shape_only.layers = 40;
+  CHECK(ni::resolve_model(shape_only) == ni::ModelClass::kQwen35Shape);
 
   const ni::DefaultRow* wave = row("pf_wave");
   const ni::DefaultRow* hist = row("kflash_hist");
   CHECK(wave && hist);
-  CHECK(!wave->live && !hist->live);
+  CHECK(wave->live && hist->live);
   CHECK(wave->win_pct == 5 && wave->win_pct_hi == 0 && !wave->exclusive);
   CHECK(hist->win_pct == 12 && hist->win_pct_hi == 15 && !hist->exclusive);
   const auto m5pro = ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48));
@@ -90,7 +95,7 @@ int main() {
   const ni::DefaultRow* tree = row("tree_g6");
   const ni::DefaultRow* narrow = row("kflash_narrow");
   CHECK(slices && hc && moe && tree && narrow);
-  CHECK(slices->scope == ni::DefaultScope::kMatrix && slices->win_pct == 9 && !slices->live && !slices->exclusive);
+  CHECK(slices->scope == ni::DefaultScope::kMatrix && slices->win_pct == 9 && slices->live && !slices->exclusive);
   CHECK(hc->scope == ni::DefaultScope::kWide && hc->win_pct == 2 && moe->win_pct == 1);
   CHECK(tree->win_pct == 27 && narrow->win_pct == 24 && tree->scope == ni::DefaultScope::kWide);
   CHECK(std::string(slices->where).find("widened by judgment, sweep 1") != std::string::npos);
@@ -146,7 +151,7 @@ int main() {
 
   const std::string text = ni::format_profile(m5pro, false);
   CHECK(text.find("chip class: matrix") != std::string::npos);
-  CHECK(text.find("call sites still decide") != std::string::npos);
+  CHECK(text.find("the call sites read this table") != std::string::npos);
   CHECK(text.find("pf_wave") != std::string::npos);
   const std::string json = ni::format_profile(m5max, true);
   CHECK(json.find("\"chip_class\":\"wide\"") != std::string::npos);
@@ -163,6 +168,67 @@ int main() {
   CHECK(ni::apple_family_probed([](int) { return false; }) == 7);
   CHECK(ni::apple_family_probed([](int n) { return n == 8; }) == 8);
   CHECK(ni::apple_family_probed([](int n) { return n <= 16; }) == ni::kAppleFamilyProbeMax);
+
+  // Every knob has exactly one row, and the row's id stays the string the lint and the doctor print.
+  const ni::Knob knobs[] = {ni::Knob::kPfWave,      ni::Knob::kKflashHist,  ni::Knob::kGemmSlices, ni::Knob::kHcWide,
+                            ni::Knob::kMoe4Dx,      ni::Knob::kTreeG6,      ni::Knob::kKflashNarrow};
+  const char* const ids[] = {"pf_wave", "kflash_hist", "gemm_slices", "hc_wide", "moe4_dx", "tree_g6", "kflash_narrow"};
+  for (int k = 0; k < 7; ++k) {
+    int n = 0;
+    for (int i = 0; i < ni::default_count(); ++i)
+      if (ni::default_at(i).knob == knobs[k]) {
+        ++n;
+        CHECK(std::string(ni::default_at(i).id) == ids[k]);
+        CHECK(ni::default_at(i).live);
+      }
+    CHECK(n == 1);
+  }
+
+  // The proof the move changes nothing: default_on() must agree, on every (device, model) pair, with the inline
+  // expression the call site had before it read the table. These lambdas are those expressions, copied verbatim.
+  const auto old_pf_wave = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {
+    return m.moe && m.hidden == 2048 && m.layers == 40 && d.apple_family >= 10 && d.cores >= 40;
+  };
+  const auto old_hist = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {
+    return d.apple_family >= 10 && m.moe && !m.clover && m.hidden == 2048 && m.layers == 40 && m.experts == 256 &&
+           m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
+  };
+  const auto old_matrix = [](const ni::DeviceFacts& d, const ni::ModelFacts&) { return d.apple_family >= 10; };
+  const auto old_wide = [](const ni::DeviceFacts& d, const ni::ModelFacts&) {
+    return d.apple_family >= 10 && d.cores >= 40;
+  };
+  ni::ModelFacts models[5];
+  models[0] = ni::ModelFacts{};  // a model nothing keys on
+  models[1].moe = true;  // the 35B-A3B
+  models[1].hidden = 2048;
+  models[1].layers = 40;
+  models[1].experts = 256;
+  models[1].top_k = 8;
+  models[1].moe_i = 512;
+  models[1].shared_i = 512;
+  models[2] = models[1];
+  models[2].clover = true;  // Clover-35B-A3B
+  models[3].moe = true;  // the wave's shape without the drafter fields (engine.cpp's chunk pick fills only these)
+  models[3].hidden = 2048;
+  models[3].layers = 40;
+  models[4].hidden = 3584;  // a dense 27B
+  models[4].layers = 64;
+  const int families[] = {5, 7, 8, 9, 10, 11, 16};
+  const int cores[] = {0, 8, 10, 20, 24, 32, 39, 40, 48, 64, 80};
+  for (int fam : families)
+    for (int c : cores)
+      for (const ni::ModelFacts& m : models) {
+        const ni::DeviceFacts d = mac(fam, c, "Apple M5 Pro", g48);
+        const ni::DeviceProfile p = ni::resolve_device(d);
+        CHECK(ni::default_on(ni::Knob::kPfWave, p, m) == old_pf_wave(d, m));
+        CHECK(ni::default_on(ni::Knob::kKflashHist, p, m) == old_hist(d, m));
+        CHECK(ni::default_on(ni::Knob::kGemmSlices, p, m) == old_matrix(d, m));
+        CHECK(ni::default_on(ni::Knob::kHcWide, p, m) == old_wide(d, m));
+        CHECK(ni::default_on(ni::Knob::kMoe4Dx, p, m) == old_wide(d, m));
+        CHECK(ni::default_on(ni::Knob::kTreeG6, p, m) == old_wide(d, m));
+        CHECK(ni::default_on(ni::Knob::kKflashNarrow, p, m) == old_wide(d, m));
+      }
+
   std::printf("device_profile_test: ok (%d defaults)\n", ni::default_count());
   return 0;
 }
