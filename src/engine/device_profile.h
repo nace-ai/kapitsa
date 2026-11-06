@@ -74,4 +74,20 @@ std::string format_profile(const DeviceProfile&, bool as_json);
 // The one live read. Doctor passes RAM and the Neural Engine; this reads the GPU. Not linked into the CPU test.
 DeviceFacts facts_from_gpu(long ram_bytes, bool ane);
 
+// The duplicated checks. The no-argument forms read the live GPU by calling the same Gpu methods the sites used. The
+// DeviceFacts forms are those predicates for the CPU test. The table above is still not what the sites read.
+bool matrix_units(const DeviceFacts&);  // apple_family() >= 10
+bool apple10_gpu(const DeviceFacts&);   // apple10(), which is family 10
+bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores
+bool wide_cores(const DeviceFacts&);    // apple10() and 40 cores or more
+bool named_m5_max(const DeviceFacts&);  // the name contains "M5 Max"
+bool m4_ten_core(const DeviceFacts&);   // Gpu::m4_base(): name "Apple M4" and 10 cores or fewer
+
+bool matrix_units();
+bool apple10_gpu();
+bool m1_max_32();
+bool wide_cores();
+bool named_m5_max();
+bool m4_ten_core();
+
 }  // namespace ni

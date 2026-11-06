@@ -71,6 +71,19 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
+  const auto m5pro_f = mac(10, 20, "Apple M5 Pro", g48);
+  const auto m5max_f = mac(10, 40, "Apple M5 Max", 128L << 30);
+  const auto faked_f = mac(10, 40, "Apple M5 Pro", g48);
+  const auto m1 = mac(7, 32, "Apple M1 Max", 64L << 30);
+  const auto m1_24 = mac(7, 24, "Apple M1 Max", 64L << 30);
+  const auto m4 = mac(9, 10, "Apple M4", 16L << 30);
+  const auto m4pro = mac(9, 20, "Apple M4 Pro", g48);
+  CHECK(ni::matrix_units(m5pro_f) && ni::apple10_gpu(m5pro_f) && !ni::matrix_units(m4pro));
+  CHECK(ni::m1_max_32(m1) && !ni::m1_max_32(m1_24) && !ni::m1_max_32(m5max_f));
+  CHECK(ni::wide_cores(m5max_f) && !ni::wide_cores(m5pro_f) && !ni::wide_cores(unread));
+  CHECK(ni::named_m5_max(m5max_f) && !ni::named_m5_max(m5pro_f) && !ni::named_m5_max(faked_f));
+  CHECK(ni::m4_ten_core(m4) && !ni::m4_ten_core(m4pro));
+
   const std::string text = ni::format_profile(m5pro, false);
   CHECK(text.find("chip class: matrix") != std::string::npos);
   CHECK(text.find("call sites still decide") != std::string::npos);

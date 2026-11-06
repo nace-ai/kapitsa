@@ -1,5 +1,6 @@
 #include "util/load_threads.h"
 #include "model/qwen35.h"
+#include "engine/device_profile.h"
 #include "model/affine_pack.h"
 #include "model/gemm_slices.h"
 #include "ane/ffn_split.h"
@@ -213,8 +214,7 @@ static int moe_qmr_k(int hidden, int intermediate) {
     return v;
   }();
   if (override_k) return override_k;
-  return hidden == 2048 && intermediate == 512 && Gpu::get().name() == "Apple M1 Max" &&
-                 Gpu::get().core_count() == 32 ? 64 : 32;
+  return hidden == 2048 && intermediate == 512 && m1_max_32() ? 64 : 32;
 }
 
 // NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.
@@ -2553,7 +2553,7 @@ static Pipeline pipe(const std::string& n) {
 bool qmt_on() {
   static const bool on = [] {
     if (env_int("NI_QMT", 1) == 0) return false;
-    if (Gpu::get().apple_family() < 10) return false;
+    if (!matrix_units()) return false;
     bool ok = false;
     if (__builtin_available(macOS 26.0, *)) ok = true;
     if (ok) logi("NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64");
@@ -2581,7 +2581,7 @@ bool qmt_on() {
 // bench/results/2026-11-05-m5-max-qmt-short.
 int Qwen35::qmt_min_rows() const {
   static const int env = std::clamp(env_int("NI_QMT_MIN", 0), 0, 64);
-  static const bool max = Gpu::get().apple10() && Gpu::get().core_count() >= 40;
+  static const bool max = wide_cores();
   if (env) return env;
   return max && !cfg_.moe && cfg_.hidden == 5120 && cfg_.dense_I == 17408 && cfg_.layers == 64 ? 17 : 64;
 }
@@ -3797,7 +3797,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
 // what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767): the experts' weights are read once per half.
 bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
   if (const char* v = getenv("NI_PF_WAVE")) return atoi(v) != 0;
-  return moe && hidden == 2048 && layers == 40 && Gpu::get().apple10() && Gpu::get().core_count() >= 40;
+  return moe && hidden == 2048 && layers == 40 && wide_cores();
 }
 int Qwen35::gpu_wave_rows(int T) const {
   static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);

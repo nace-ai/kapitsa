@@ -124,4 +124,16 @@ std::string format_profile(const DeviceProfile& p, bool as_json) {
   return o.str();
 }
 
+bool matrix_units(const DeviceFacts& f) { return f.apple_family >= 10; }
+
+bool apple10_gpu(const DeviceFacts& f) { return f.apple_family >= 10; }
+
+bool m1_max_32(const DeviceFacts& f) { return f.name == "Apple M1 Max" && f.cores == 32; }
+
+bool wide_cores(const DeviceFacts& f) { return f.apple_family >= 10 && f.cores >= 40; }
+
+bool named_m5_max(const DeviceFacts& f) { return f.name.find("M5 Max") != std::string::npos; }
+
+bool m4_ten_core(const DeviceFacts& f) { return f.name == "Apple M4" && f.cores <= 10; }
+
 }  // namespace ni

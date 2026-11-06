@@ -74,7 +74,10 @@ def read_baseline() -> dict[str, int]:
 def main() -> int:
     got = counts()
     if len(sys.argv) > 1 and sys.argv[1] == "--write-baseline":
-        lines = [f"{p}\t{got[p]}" for p in sorted(got)]
+        lines = [
+            "# path, call-form hits. A rise fails tests/test_profile_gates.py. A drop to zero fails until this row is removed.",
+            *[f"{p}\t{got[p]}" for p in sorted(got)],
+        ]
         BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"wrote {len(lines)} rows to {BASELINE}")
         return 0

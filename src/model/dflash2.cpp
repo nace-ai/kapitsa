@@ -6,6 +6,7 @@
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
 // attention, exact-code MMA operands, a separate block K/V scratch.
 #include "model/dflash2.h"
+#include "engine/device_profile.h"
 #include "model/clover.h"
 #include "hub/hub.h"
 #include "model/kparams.h"
@@ -55,11 +56,11 @@ bool DFlash2::lanes_default(const std::string& model_dir, const Qwen35Config& c)
 
 static int lowrank_request() {
   const char* v = kenv("LOWRANK");
-  return v && *v ? atoi(v) : Gpu::get().m4_base() ? 768 : 0;
+  return v && *v ? atoi(v) : m4_ten_core() ? 768 : 0;
 }
 
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
-  static const bool m1_max32 = Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32;
+  static const bool m1_max32 = m1_max_32();
   return hidden >= 2560 || (m1_max32 && hidden == 2048 && moe && head_q4);
 }
 
@@ -765,7 +766,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // tile, the full depth, as NI_KFLASH_BLOCK=8 has them. NI_KFLASH_NARROW: by default on the M5 Max (a narrower
     // gate than the class); 1 on any Mac a 16-row block runs on, 0 never
     const char* nv = kenv("NARROW");
-    const bool narrow = nv && *nv ? atoi(nv) != 0 : Gpu::get().name().find("M5 Max") != std::string::npos;
+    const bool narrow = nv && *nv ? atoi(nv) != 0 : named_m5_max();
     if (block() > kB && tree_ && narrow) {
       std::string key8 = key;
       if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);
@@ -1370,7 +1371,7 @@ void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t
 // keep the earlier core today; NI_KFLASH_CORE4=1 / 0 forces the new / earlier one.
 static bool dfl_old4() {
   static const bool old = kenv("CORE4") ? atoi(kenv("CORE4")) == 0
-      : !(Gpu::get().apple10() || (Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32));
+      : !(apple10_gpu() || m1_max_32());
   return old;
 }
 
@@ -1465,7 +1466,7 @@ void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffe
 // if the target has not yet), V8Knobs::tw on and V8Knobs::dfl bit 32 off (the drafter alone back on dfl_qmm8)
 static bool dfl_tw_supported() {
   static const bool ok = [] {
-    if (Gpu::get().apple_family() < 10) return false;
+    if (!matrix_units()) return false;
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       return Gpu::get().pipeline("qmm8t_b4_nt16", false).pso != nullptr;
@@ -1948,7 +1949,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     // runs); from 2048 keys on (the window) the plans agree
     static const uint32_t minc = [] {
       if (const char* v = kenv("ATTN_MINC")) return uint32_t(atoi(v));
-      return Gpu::get().m4_base() ? 128u : 0u;
+      return m4_ten_core() ? 128u : 0u;
     }();
     chunk = old_attn ? kGpuChunk : minc > 32 ? (0x80000000u | (minc + 31) / 32 * 32) : 0u;  // 0: dfl_attn_geom's plan
     nsplit = old_attn ? (kCtxKeep + kGpuChunk - 1) / kGpuChunk : splits;  // the grid; empty splits exit
@@ -2211,7 +2212,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       // NI_KFLASH_DFS (default on for dense targets on the 10-core M4, a narrower gate than the class): a full tree's
       // rows in depth-first order (kf_dfs_reorder: about half the Gated DeltaNet replays of jumping rows)
       static const int dfs_env = getenv("NI_KFLASH_DFS") ? atoi(getenv("NI_KFLASH_DFS")) : -1;
-      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe && Gpu::get().m4_base() : dfs_env != 0) ? 1u : 0u;
+      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe && m4_ten_core() : dfs_env != 0) ? 1u : 0u;
       const kp::KfBuild bp{16u, Pk, 0u, dfs};
       e.use(dpipe(gpu ? "kf_build_gpu" : "kf_build"));
       e.buf(0, kf_clq_); e.buf(1, kf_tok_); e.buf(2, kf_next_);

@@ -1,4 +1,5 @@
 #include "model/qwen4_exp.h"
+#include "engine/device_profile.h"
 #include "loader/safetensors.h"
 #include "model/kparams.h"
 #include "model/qwen4_config.h"
@@ -153,7 +154,7 @@ static bool tattn_env() {
 
 bool Qwen4Exp::tattn(const Qwen35Config& c) {
   if (!tattn_env() || c.hkv <= 0 || c.hq / c.hkv != 12 || c.head_dim != 256) return false;
-  if (__builtin_available(macOS 26.0, *)) return Gpu::get().apple_family() >= 10;
+  if (__builtin_available(macOS 26.0, *)) return matrix_units();
   return false;
 }
 
@@ -1122,7 +1123,7 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
       static const bool wide = [] {
         const char* v = getenv("NI_HC_WIDE");
         if (v && *v) return atoi(v) > 0;
-        return Gpu::get().name().find("M5 Max") != std::string::npos;
+        return named_m5_max();
       }();
       e.use(pipe((wide ? "hc_down_sk4_n" : "hc_down_sk3_n") + std::to_string(nr) + b));
       e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);

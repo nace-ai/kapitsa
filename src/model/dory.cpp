@@ -1,5 +1,6 @@
 #include "util/load_threads.h"
 #include "model/dory.h"
+#include "engine/device_profile.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -243,7 +244,7 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
   // (tensor/nh_dory_attn_t.metal against dory_attn_prefill, NI_DORY_ATTN_T=0).
   const bool tg_on = !(getenv("NI_DORY_TG") && atoi(getenv("NI_DORY_TG")) == 0);
   const bool at_on = !(getenv("NI_DORY_ATTN_T") && atoi(getenv("NI_DORY_ATTN_T")) == 0);
-  if (Gpu::get().apple_family() >= 10 && (tg_on || at_on))
+  if (matrix_units() && (tg_on || at_on))
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       if (tg_on) tg_ = Gpu::get().pipeline("nh_gemm_t_fp4_m64", false).pso != nullptr;
@@ -263,7 +264,7 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
     }
   {
     const char* w = getenv("NI_DORY_DRAFT_WIN");
-    draft_out_window_ = w && *w ? std::max(0, atoi(w)) : Gpu::get().apple_family() >= 10 ? 4096 : 0;
+    draft_out_window_ = w && *w ? std::max(0, atoi(w)) : matrix_units() ? 4096 : 0;
   }
   load(prefill_chunk);
 }
@@ -1042,7 +1043,7 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
   // attention after 262K positions 3.77 -> 3.0 ms, one row 2.19 -> 2.03
   static const bool k8 = [] {
     const char* v = getenv("NI_DORY_ATTN_K8");
-    return v && *v ? atoi(v) != 0 : Gpu::get().apple_family() >= 10;
+    return v && *v ? atoi(v) != 0 : matrix_units();
   }();
   e.use(pipe(rt ? (k8 ? "dory_attn_partial_rows_k8" : "dory_attn_partial_rows")
                 : (k8 ? "dory_attn_partial_k8" : "dory_attn_partial")));

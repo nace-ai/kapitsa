@@ -1,4 +1,5 @@
 #include "model/flint.h"
+#include "engine/device_profile.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 #include "model/iq_experts.h"
@@ -107,7 +108,7 @@ uint32_t gpu_cores() {
 // an Apple10 GPU. NI_QMT=0 turns them off.
 bool qmt_available() {
   const char* v = getenv("NI_QMT");
-  if ((v && !strcmp(v, "0")) || Gpu::get().apple_family() < 10) return false;
+  if ((v && !strcmp(v, "0")) || !matrix_units()) return false;
   if (__builtin_available(macOS 26.0, *)) return true;
   return false;
 }
