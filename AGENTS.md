@@ -175,15 +175,16 @@ sense.
 - **Narrow gates are the exception.** An exact chip name, core count, RAM size or single model is allowed only when the
   win is both big (at least 10% faster on the target) and exclusive (measured slower, or broken, on the wider class).
   The profile table row cites that evidence. "Only measured here" is not a reason for a narrow gate.
-- **One place.** Every device- or model-dependent default lives in the device profile table, resolved once at startup.
-  No new inline `apple_family()`, chip-name or core-count checks elsewhere in the code.
+- **One place.** Every device- or model-dependent default lives in the device profile table, resolved once at startup
+  (#369 builds it). No new inline `apple_family()`, chip-name or core-count checks outside it. Until the table exists, a
+  gate that meets the narrow-gate bar goes next to the existing ones, with the evidence in the comment above it.
 - **Off everywhere never merges**, even when the flag-off path is byte-identical to main, the idea is established
   elsewhere, or the PR says "a later PR flips the default". "Off by default" in a title is a NO GO. (5 Nov 2026: #819
   and #944 sat open as off-by-default PRs; #944 measured +7% and +6% on the 35B on an M5 Pro and still left both off.)
 - **Not faster anywhere yet:** the PR stays open (a draft is fine) and keeps improving until it wins a default, or it is
   closed. It does not merge opt-in "for later".
 - **A class member that is slower or broken** is the exception: the profile table row for it says so and cites the
-  measurement. A member nobody has measured is not an exception; it gets the class default.
+  measurement.
 
 Here a feature means a kernel path, a decode, drafting or verify strategy, a cache or memory policy, or a new user-facing
 flag or environment variable. Three things are not features, so this rule does not apply to them: a kill switch for an

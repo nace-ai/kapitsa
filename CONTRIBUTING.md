@@ -205,8 +205,7 @@ without and after a draft.
   two setups that differ in chip class or model family when two such setups exist for the class (one is enough when
   only one exists). A narrow gate (an exact chip, core count, RAM size or one model) needs a win of at least 10% on the
   target that is slower or broken on the wider class, with that evidence cited. A feature that is promising but not yet
-  faster anywhere stays an open PR until it is. The other way in, as before: a well-known paper or a major engine
-  already has it and it fits Kapitsa. Kill switches, debug switches and measuring tools are exempt.
+  faster anywhere stays an open PR until it is, even when a paper or another engine has the idea. Kill switches, debug switches and measuring tools are exempt.
   AGENTS.md ("Defaults follow the concept, not the measured cell") has the full rule.
 
 ## Output check

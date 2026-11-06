@@ -67,9 +67,10 @@ not ask for abstractions, interfaces or configuration the change does not need.
 - If the PR's own measurements show the feature faster and the output check passes, but the default stays off, flag it:
   the default belongs on for the class in this PR.
 - Flag a default narrowed to the setup the author measured (an exact chip name, core count, RAM size or one model) unless
-  the PR cites a win of at least 10% on that target that is slower or broken on the wider class. Do not ask for a narrow
-  gate "until measured elsewhere": an unmeasured class member gets the class default.
-- Flag a new inline `apple_family()`, chip-name or core-count check outside the device profile table.
+  the PR cites a win of at least 10% on that target that is slower or broken on the wider class.
+- Flag a new inline `apple_family()`, chip-name or core-count check outside the device profile table, except a gate that
+  meets the narrow-gate bar above, placed next to the existing ones with its evidence in a comment, until the table
+  exists (#369).
 - Not features, so do not flag them: a kill switch for an existing default (`NI_X=0`), a debug or profiling switch, a
   measuring tool under `tools/` or `bench/`.
 
