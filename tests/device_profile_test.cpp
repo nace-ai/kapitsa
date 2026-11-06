@@ -78,6 +78,25 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
+  CHECK(ni::default_count() == 7);
+  const ni::DefaultRow* slices = row("gemm_slices");
+  const ni::DefaultRow* hc = row("hc_wide");
+  const ni::DefaultRow* moe = row("moe4_dx");
+  const ni::DefaultRow* tree = row("tree_g6");
+  const ni::DefaultRow* narrow = row("kflash_narrow");
+  CHECK(slices && hc && moe && tree && narrow);
+  CHECK(slices->scope == ni::DefaultScope::kMatrix && slices->win_pct == 9 && !slices->live && !slices->exclusive);
+  CHECK(hc->scope == ni::DefaultScope::kWide && hc->win_pct == 2 && moe->win_pct == 1);
+  CHECK(tree->win_pct == 27 && narrow->win_pct == 24 && tree->scope == ni::DefaultScope::kWide);
+  CHECK(std::string(slices->where).find("widened by judgment, sweep 1") != std::string::npos);
+  CHECK(std::string(hc->where).find("widened by judgment, sweep 1") != std::string::npos);
+  CHECK(std::string(moe->where).find("widened by judgment, sweep 1") != std::string::npos);
+  CHECK(std::string(tree->where) == "M5 Max" && std::string(narrow->where) == "M5 Max");
+  CHECK(ni::default_matches(*slices, m5pro) && ni::default_matches(*slices, m5max));
+  CHECK(!ni::default_matches(*slices, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
+  CHECK(ni::default_matches(*hc, m5max) && !ni::default_matches(*hc, m5pro));
+  CHECK(ni::default_matches(*tree, m5max) && !ni::default_matches(*narrow, m5pro));
+
   const auto m5pro_f = mac(10, 20, "Apple M5 Pro", g48);
   const auto m5max_f = mac(10, 40, "Apple M5 Max", 128L << 30);
   const auto faked_f = mac(10, 40, "Apple M5 Pro", g48);
