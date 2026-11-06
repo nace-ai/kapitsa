@@ -13,7 +13,7 @@ drive_ok() { [ -d $D/data ] && dfree=$(df -g "$D/" | awk 'NR==2{print $4}') && [
 wait_drive() { until drive_ok; do echo "waiting for the Extreme Pro $(date +%T): ${dfree:-not mounted} GB free"; dfree=; sleep 120; done; }
 # orchestrator 7 Nov: don't train between #373's legs (its pressure test pushes swap past 8 GB within 25 steps);
 # wait outside the lock until no detach job whose name contains 373 is running
-wait_373() { while python3 $DT list | grep -qE "^RUNNING +[^ ]*373"; do echo "waiting for #373 $(date +%T): $(python3 $DT list | awk '/^RUNNING +[^ ]*373/{printf "%s ", $2}')"; sleep 120; done; }
+wait_373() { while python3 $DT list 2>/dev/null | grep -E "^RUNNING +[^ ]*373" >/dev/null; do echo "waiting for #373 $(date +%T): $(python3 $DT list | awk '/^RUNNING +[^ ]*373/{printf "%s ", $2}')"; sleep 120; done; }
 mem_ok() { lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
   fr=$(vm_stat | awk '/page size of/{ps=$8} /Pages (free|inactive|speculative|purgeable):/{gsub("\\.","",$NF); n+=$NF} END{printf "%.1f", n*ps/2^30}')
   big=$(ps -axo rss=,pid=,comm= | awk '$1>20*2^20{printf "%s(%.0fGB) ", $3, $1/2^20}')
@@ -37,7 +37,7 @@ for c in $(seq 1 12); do  # capture in ~200-sequence chunks, each its own lockf 
   grep -q "capture complete" $D/capt.last.log && touch $D/capt.done
 done
 [ -f $D/capt.done ] || { echo "capture not complete"; exit 3; }
-for c in $(seq 1 12); do
+for c in $(seq 1 40); do  # a chunk ends at a 30 GB footprint after ~225 steps (~4 min of the 80): ~20 chunks
   [ -f $D/ckpt/DONE ] && break
   wait_drive; wait_ac; wait_373; wait_mem; $L bash $S/train_chunk.sh; rc=$?
   [ $rc = 75 ] && { echo "chunk stopped on swap > 8 GB, state saved; gate again"; continue; }
