@@ -35,10 +35,10 @@ namespace {
 const DefaultRow kDefaults[] = {
     // PR #775 proposes fast membership for dense Qwen 2048-channel inputs through hidden 8192.
     // Non-matrix ANE class; init_ane retains availability/calibration, weight and memory checks.
-    // Current-head M4 Pro -62.77% TTFT, calibrated M3 Ultra -23.63%: bench/results/2026-11-07-pr775-m4-default-share
-    // and 2026-11-07-pr775-m3-current. Both pass the 576-row bar; the extra M3 prefill check exceeds MLX.
+    // M4 Pro at 50fadecc: -61.94% TTFT (bench/results/2026-11-07-pr775-rebase-3f3b); calibrated M3 at 9cca6b0d: -23.63%
+    // (bench/results/2026-11-07-pr775-m3-current). Both pass the 576-row bar; extra M3 prefill exceeds MLX.
     // This remains a proposed member with that caveat, not an unconditional all-path admission claim.
-    {"ane_segmented_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
+    {"ane_segmented_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 23, 62, false,
      "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
     // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
     // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site.

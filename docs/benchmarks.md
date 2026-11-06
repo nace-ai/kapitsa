@@ -804,9 +804,15 @@ latency after warmup, not cold compilation or native decode speed. The full-voca
 paths, but verify's mean-KL margin was only 1.56e-8; zero drift failed. Long-prompt quality is a separate check,
 not implied by the speed or bar result.
 
-On the M3 Ultra (60 GPU cores, 96 GiB, macOS 26.4.1), the same current head and protocol measured native MLX at
+On the M3 Ultra (60 GPU cores, 96 GiB, macOS 26.4.1), the same `9cca6b0d` head and protocol measured native MLX at
 114.095 tok/s versus llama.cpp at 80.998, so MLX also sets that Mac's bar. Precise/fast HTTP TTFT means were
 3.540469 -> 2.703975 seconds, **23.63% lower**, with explicit pre-calibrated `NI_ANE_UNITS=16`; no built-in M3 share
 is added. Each leg had just one two-second telemetry sample. All 576 step/verify/batch comparisons passed, but the
 additional eight-row M3 prefill mean KL exceeded MLX (1.845748e-4 vs 1.471647e-4, no top-1 flips). This failure is
 retained and prevents an unconditional all-path admission claim. [M3 raw runs, exact bounds and audit](../bench/results/2026-11-07-pr775-m3-current/README.md).
+
+After rebasing onto `3f3b3cef`, `50fadecc` on the M4 Pro repeated the HTTP ABAB with no units override:
+8.598489 / 3.290836 / 8.596896 / 3.253710 seconds, **61.94% lower mean TTFT**. All requests matched and
+contention flags were empty. This does not relabel the native-engine measurements or M3 timing above.
+[Rebase evidence](../bench/results/2026-11-07-pr775-rebase-3f3b/README.md) retains the earlier attempt with
+concurrent evidence I/O and the complete isolated repeat, as well as the unchanged M3 prefill exceedance.

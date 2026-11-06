@@ -166,13 +166,13 @@ establish their quality or speed.
 
 The M3 Ultra follow-up records a speed win, nonzero drift and a regression on the sole ANE-exposed
 Math500 prompt; [all results and limits](../bench/results/2026-11-06-m3ultra-9b-ane/README.md).
-The current-head M4 Pro follow-up (`9cca6b0d`, macOS 15.7.1, built-in 24/24 share, no calibration override)
+The M4 Pro follow-up (`9cca6b0d`, macOS 15.7.1, built-in 24/24 share, no calibration override)
 measured MLX as the faster native engine (50.212 vs llama.cpp 39.076 tok/s). On each of the 192 step, verify
 and batch rows, fast had 2 top-1 flips against MLX's 3 and mean KL below the same-path MLX bar; eight prefill
 rows passed too. Verify's KL margin was only 1.56e-8. Fresh fast and MLX dumps were bitwise identical to their
 first dumps, but that narrow margin is not a guarantee across environments or prompts. The loaded HTTP ABAB
 reduced mean TTFT by 62.77%. [M4 evidence and exact bounds](../bench/results/2026-11-07-pr775-m4-default-share/README.md).
-Zero drift still fails. No historical run is relabeled as this current-head check, and a bar pass does not establish
+Zero drift still fails. No historical run is relabeled as this `9cca6b0d` check, and a bar pass does not establish
 long-prompt reasoning equivalence.
 
 
@@ -190,9 +190,16 @@ KL or the separate admission bar: up to 36.75% of the BF16 reference mass is out
 [All transcripts, per-position tails, reference settings and limits](../bench/results/2026-11-07-pr775-long-quality/README.md).
 
 
-At the same current head on the M3 Ultra, explicit calibrated share 16 reduced loaded HTTP TTFT by 23.63%.
+At the same `9cca6b0d` head on the M3 Ultra, explicit calibrated share 16 reduced loaded HTTP TTFT by 23.63%.
 MLX won the native decode comparison (114.095 vs llama.cpp 80.998 tok/s). Fast passed the requested 576
 step/verify/batch comparisons (3 flips, mean KL 2.612211092966838e-4; MLX 12 flips, 3.9909652322670414e-4).
 The additional eight prefill rows had no flips on either side, but fast mean KL **1.845747910960617e-4 exceeded
 MLX's 1.4716473412187535e-4**. Full-vocabulary and prefix alignment were audited; the exceedance remains. It was
 not averaged away, removed or made to pass with a different bound. [M3 evidence](../bench/results/2026-11-07-pr775-m3-current/README.md).
+
+The rebase onto `3f3b3cef`, with the profile-row schema fix at `50fadecc`, preserved all 584 rows per profile
+on both Macs bit for bit against `9cca6b0d`. Fresh M4 Pro ABAB reduced mean loaded HTTP TTFT by 61.94%
+(8.597692 -> 3.272273 seconds), with its built-in share. The M3 prefill bar exceedance remains, and the M3
+23.63% timing above remains pinned to the earlier head; a fresh timing is queued behind another GPU user.
+The full CPU suite had one intermittent APFS deletion-space assertion failure, retained alongside passing
+targeted candidate and clean-main reproductions. [Rebase results and raw records](../bench/results/2026-11-07-pr775-rebase-3f3b/README.md).

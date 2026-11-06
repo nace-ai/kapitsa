@@ -99,7 +99,7 @@ std::string format_profile(const DeviceProfile&, bool as_json);
 // The one live read. Doctor passes RAM and the Neural Engine; this reads the GPU. Not linked into the CPU test.
 DeviceFacts facts_from_gpu(long ram_bytes, bool ane);
 
-// The live device, resolved once. RAM and the ANE stay 0/false in it: no row keys on them, and doctor resolves its
+// The live device, resolved once. RAM and the ANE stay 0/false in it: no default_on row keys on them, and doctor resolves its
 // own with them filled for its print.
 const DeviceProfile& current_device();
 

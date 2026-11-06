@@ -1,0 +1,29 @@
+{
+  "binary": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/reference-3f3b/build/kapitsa",
+  "rows": [
+    {
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/reference-3f3b/build/kapitsa",
+        "rm",
+        "copy-b"
+      ],
+      "returncode": 0,
+      "stdout": "Deleted /var/folders/bv/2dmpdk3552gd42p15z1sw9xm0000gn/T/pr775-apfs-rm-88p_lajz/models/copy-b (nothing freed: its files are shared with another copy).\n",
+      "stderr": "",
+      "expected_text": "nothing freed",
+      "passed": true
+    },
+    {
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/reference-3f3b/build/kapitsa",
+        "rm",
+        "copy-a"
+      ],
+      "returncode": 0,
+      "stdout": "Deleted /var/folders/bv/2dmpdk3552gd42p15z1sw9xm0000gn/T/pr775-apfs-rm-88p_lajz/models/copy-a (21 MB freed).\n",
+      "stderr": "",
+      "expected_text": "MB freed",
+      "passed": true
+    }
+  ]
+}
