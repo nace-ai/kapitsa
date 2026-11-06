@@ -1,0 +1,46 @@
+[
+  {
+    "run": "fixed4b-01-base",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "token_ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "drafter_and_timing_lines": [
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.92 GB), loaded in 543 ms",
+      "prompt 31 tok in 71 ms (436.8 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 2382 ms (429.4 tok/s), 129 cycles, 7.930 tok/cycle, 18.42 ms GPU/cycle, 18.47 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+    ]
+  },
+  {
+    "run": "fixed4b-02-range",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "token_ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "drafter_and_timing_lines": [
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.94 GB), loaded in 486 ms",
+      "prompt 31 tok in 59 ms (522.7 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 2275 ms (449.6 tok/s), 129 cycles, 7.930 tok/cycle, 17.59 ms GPU/cycle, 17.64 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+    ]
+  },
+  {
+    "run": "fixed4b-03-base",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "token_ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "drafter_and_timing_lines": [
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.92 GB), loaded in 541 ms",
+      "prompt 31 tok in 58 ms (533.3 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 2226 ms (459.6 tok/s), 129 cycles, 7.930 tok/cycle, 17.22 ms GPU/cycle, 17.25 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+    ]
+  },
+  {
+    "run": "fixed4b-04-range",
+    "tokens": 1024,
+    "eos_count": 0,
+    "text_nonempty": true,
+    "token_ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+    "drafter_and_timing_lines": [
+      "[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.94 GB), loaded in 493 ms",
+      "prompt 31 tok in 58 ms (538.0 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 2257 ms (453.3 tok/s), 129 cycles, 7.930 tok/cycle, 17.46 ms GPU/cycle, 17.49 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+    ]
+  }
+]
