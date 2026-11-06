@@ -171,7 +171,7 @@ sense.
 - **Evidence: at least 2 different setups.** Interleaved A/B plus the output check on at least two setups that differ in
   chip class or model family, when two such setups exist for the class (our M5 Pro plus another model, the EC2 M4 Pro,
   or a contributor's Mac). If only one setup exists for the class, one is enough. The default then applies to the whole
-  class. Say in the PR which setups ran and which class they stand for.
+  class. Say in the PR which setups ran, which class they stand for, and which members of the class did not run.
 - **Narrow gates are the exception.** An exact chip name, core count, RAM size or single model is allowed only when the
   win is both big (at least 10% faster on the target) and exclusive (measured slower, or broken, on the wider class).
   The profile table row cites that evidence. "Only measured here" is not a reason for a narrow gate.
