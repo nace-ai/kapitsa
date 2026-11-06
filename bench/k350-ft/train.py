@@ -71,6 +71,10 @@ def batch_loss(m, anchors=None, nmax=BA, stats=False, pad=None):
     cand = list(range(n0, n - 1))
     if anchors is None:
         anchors = rng.sample(cand, min(nmax, len(cand)))
+    na = len(anchors)
+    if pad and na < BA:  # 7 Nov: 369 short conversations gave 30 different batch sizes, and the driver kept growing; pad to BA rows of weight 0
+        anchors = list(anchors) + [anchors[0]] * (BA - na)
+    aw = (torch.arange(len(anchors)) < na).to(dev)
     P = torch.tensor(anchors, dtype=torch.long)
     idsd = ids.to(dev); c = c.to(dev).float()
     cpos = torch.arange(c.shape[0], device=dev)
@@ -80,7 +84,7 @@ def batch_loss(m, anchors=None, nmax=BA, stats=False, pad=None):
     hid = d.blocks(x, P.to(dev), kv, cpos)[:, 1:]  # [B][7][H]
     dbg('blocks')
     tpos = P[:, None] + torch.arange(1, 8)[None]
-    valid = (tpos < n).to(dev)
+    valid = (tpos < n).to(dev) & aw[:, None]
     tgt = idsd[tpos.clamp(max=n - 1).to(dev)]
     hf = hid.contiguous().reshape(-1, dfl.H)
     tf = tgt.reshape(-1)
@@ -136,8 +140,8 @@ if os.environ.get('K350_CHECK_PAD'):  # CPU check: padded context rows change no
     for m in val[:4]:
         vr = random.Random(m['id']); an = vr.sample(list(range(m['n_prompt'], m['n'] - 1)), min(8, m['n'] - 1 - m['n_prompt']))
         with torch.no_grad():
-            a = batch_loss(m, an, stats=True, pad=0); b = batch_loss(m, an, stats=True, pad=512)
-        df = max(abs(a[0].item() - b[0].item()), abs(a[1].item() - b[1].item()), (a[2] - b[2]).abs().max().item())
+            a = batch_loss(m, an, stats=True, pad=0); b = batch_loss(m, an, stats=True, pad=2048)
+        df = max(abs(a[0].item() - b[0].item()), abs(a[1].item() - b[1].item()), (a[2].sum() - b[2].sum()).abs().item())
         worst = max(worst, df); say(f'pad check {m["id"]} n {m["n"]}: ce {a[0].item():.6f} vs {b[0].item():.6f}, sel {a[1].item():.6f} vs {b[1].item():.6f}, max diff {df:.2e}')
     say(f'pad check worst diff {worst:.2e}'); sys.exit(0 if worst < 1e-4 else 1)
 trainable = [p for p in d.parameters()]
