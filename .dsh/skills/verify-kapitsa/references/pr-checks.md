@@ -26,11 +26,13 @@ different change, and the PR has to say which one it is.
 
 ## Opt-in features
 
-A new feature must be on by default for at least one model and Mac, or be widely established (a well-known paper or
-a major engine has it, and it fits Kapitsa). AGENTS.md has the rule. So the checks above are what a feature PR
-needs to turn the feature on for the setting it measured, not proof that an opt-in switch does no harm. If a
-promising feature loses the A/B everywhere it was measured, it stays an open PR (a draft is fine). Do not ship it
-off by default. Kill switches for an existing default, debug and profiling switches, and measuring tools are
+A new feature must be on by default for the whole class of hardware or model it targets, or be widely established (a
+well-known paper or a major engine has it, and it fits Kapitsa). AGENTS.md ("Defaults follow the concept, not the
+measured cell") has the rule. So the checks above, on at least two setups that differ in chip class or model family
+when two exist for the class, are what a feature PR needs to turn the feature on for that class, not proof that an
+opt-in switch does no harm. A narrow gate needs a win of at least 10% on the target that is slower or broken on the
+wider class. If a promising feature loses the A/B everywhere it was measured, it stays an open PR (a draft is fine).
+Do not ship it off by default. Kill switches for an existing default, debug and profiling switches, and measuring tools are
 exempt.
 
 ## Which models

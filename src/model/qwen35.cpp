@@ -135,7 +135,7 @@ static int env_int(const char* n, int def) {
 // M1 Pro, 2048 x 8192 x 2048 alone: 6-bit group 64 25.3 -> 23.8 ms, 5-bit 24.9 -> 23.8, 3-bit 27.3 -> 25.8, 4-bit
 // group 32 59.5 -> 21.4, 8-bit 26.6 -> 24.9; a 40-layer stand-in of Qwen3.6-35B-A3B UD-IQ2_XXS (6-bit projections from
 // Q5_K, 8-bit from Q6_K) reads 4096 tokens in 8.15 instead of 9.07 s (6-bit alone: 8.28). The other chips keep the
-// N-fast order until measured there.
+// N-fast order today.
 static bool prefill_mfast() {
   static const bool v = env_int("NI_QRF_MF", Gpu::get().apple_family() <= 7 ? 1 : 0) != 0;
   return v;
@@ -2295,7 +2295,7 @@ bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
   // M1 Pro: 12352 x 2048 (qkv | z) 144 instead of 172 us (qmvg_multi_f6g64, which normalizes x again in every
   // threadgroup), 8192 x 2048 100 / 118. Verify / batched rows keep the X8 GEMMs (two rows here cost 1.75x one: the
   // dequantization is per row), so a single pass stays bit-identical to a batched one; the other 6-bit models keep
-  // qmvg_multi (sums reassociated: not the same bits), the other chips until measured there. NI_QMVF6=0 turns it off.
+  // qmvg_multi (sums reassociated: not the same bits), the other chips today. NI_QMVF6=0 turns it off.
   static const bool b6_on = env_int("NI_QMVF6", 1) != 0;
   const bool b6 = b6_ok && b6_on && bits == 6 && R == 1 && !gu && cfg_.iq && Gpu::get().apple_family() <= 7;
   if (bits != 4 && bits != 8 && !b6) return false;
@@ -2573,7 +2573,7 @@ bool qmt_on() {
 // NI_QMT_MIN (read once; 1-64): the fewest rows of a dense 4-bit g64 GEMM on the tensor_ops tile (qmt_m64_n64,
 // qmtg_m64_n64, whose rows past M load as zeros and store nothing); a GEMM of fewer rows runs the short-prefill or qmr
 // kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for the Qwen3.8 27B (hidden 5120,
-// FFN 17408, 64 layers) on an Apple10 GPU of 40 cores or more (the M5 Max), where it was measured; 64 elsewhere.
+// FFN 17408, 64 layers) on an Apple10 GPU of 40 cores or more (the M5 Max); 64 elsewhere.
 // bench_qmm on the M5 Max, the 27B's shapes, the 64-row tile against the short-prefill tile the pass takes: gate/up
 // (17408 x 5120) at 17 rows 514 against 638 us, at 33 527 against 1,215; down (5120 x 17408) at 24 rows 334 against
 // 400, at 33 337 against 623; GDN in_proj (16384 x 5120) at 33 288 against 525. At 16 rows and fewer the short tiles
@@ -2598,8 +2598,8 @@ bool qmt128_for(int M) {
 static bool qmt_i8_on();
 
 // NI_GEMM_SLICES (read once): Drex Max v1's dense qmt / qmtg prefill GEMMs of more than 2048 rows run as 2048-row
-// dispatches (src/model/gemm_slices.h); bitwise the same outputs. Default on the M5 Pro only, where it was measured;
-// 1 = on any Mac on the dense QMT path (the other M5s, not measured), 0 = off.
+// dispatches (src/model/gemm_slices.h); bitwise the same outputs. Default on the M5 Pro only, a narrower gate than the class;
+// 1 = on any Mac on the dense QMT path (the other M5s), 0 = off.
 static bool gemm_slices_on() {
   static const bool on = [] {
     const int v = env_int("NI_GEMM_SLICES", -1);
@@ -3081,10 +3081,9 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 
 bool Qwen35::qmt_ready() { return qmt_on(); }
 
-// The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) only on the models it was measured
-// and output-checked on: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
+// The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) only on the models listed here: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
 // 4-bit group-64 dense model (the 9B) keeps the old default share, the whole FFN on the Neural Engine at 20 GPU cores,
-// until it is measured. NI_ANE_MMA=1 takes the M5 share on any such model (to measure one), 0 the old share on these.
+// today. NI_ANE_MMA=1 takes the M5 share on any such model, 0 the old share on these.
 bool Qwen35::mma_share_measured(const Qwen35Config& c) {
   if (const char* v = getenv("NI_ANE_MMA")) return atoi(v) != 0;
   return (c.hidden == 2560 && c.dense_I == 9216 && c.layers == 32) ||

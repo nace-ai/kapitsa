@@ -54,18 +54,22 @@ not ask for abstractions, interfaces or configuration the change does not need.
   against `origin/main` and says so. Flag a GPU-tier PR that claims outputs or speed without the runs it lists.
 - More than one unrelated change in a PR (speed change plus refactor plus docs rewrite): say it should be split.
 
-## New features: on by default somewhere, no exceptions
+## New features: on by default for the whole class, no exceptions
 
 - A PR that adds a feature (a kernel path, a decode, drafting or verify strategy, a cache or memory policy, a new
-  user-facing flag or environment variable) must turn it on by default for at least one model on at least one Mac, with
-  the interleaved A/B and the output check above, and name that model and Mac. Flag every feature that is off by default
-  on every model and Mac as blocking. A byte-identical flag-off path, a paper or other engine that has it, or "a later PR
-  flips the default" does not make it mergeable. Check the code, not the title: find where the new flag or env variable
-  is read and confirm some model/Mac path enables it without the user setting anything.
-- If the PR's own measurements show the feature faster for a model on a Mac and the output check passes there, but the
-  default stays off, flag it: the default belongs on for that pair in this PR.
-- Once a feature is a default somewhere, other models may reach it opt-in. Do not flag a default scoped to the models
-  the author measured: a later PR widens it.
+  user-facing flag or environment variable) must turn it on by default for the whole class of hardware or model it
+  targets (a matrix-unit optimization for every Mac with matrix units, a MoE path for every MoE model), with the
+  interleaved A/B and the output check above on at least two setups that differ in chip class or model family when two
+  exist for the class, and name the class and the setups. Flag every feature that is off by default on every model and
+  Mac as blocking. A byte-identical flag-off path, a paper or other engine that has it, or "a later PR flips the
+  default" does not make it mergeable. Check the code, not the title: find where the new flag or env variable is read
+  and confirm the class's path enables it without the user setting anything.
+- If the PR's own measurements show the feature faster and the output check passes, but the default stays off, flag it:
+  the default belongs on for the class in this PR.
+- Flag a default narrowed to the setup the author measured (an exact chip name, core count, RAM size or one model) unless
+  the PR cites a win of at least 10% on that target that is slower or broken on the wider class. Do not ask for a narrow
+  gate "until measured elsewhere": an unmeasured class member gets the class default.
+- Flag a new inline `apple_family()`, chip-name or core-count check outside the device profile table.
 - Not features, so do not flag them: a kill switch for an existing default (`NI_X=0`), a debug or profiling switch, a
   measuring tool under `tools/` or `bench/`.
 

@@ -22,7 +22,7 @@ Pipeline pipe4(const std::string& n) {
   return it->second;
 }
 
-// NI_MOE4_DX (on by default on the M5 Max, where it was measured; 1 on the other Macs, 0 off): the verify MoE's gate/up
+// NI_MOE4_DX (on by default on the M5 Max, a narrower gate than the class; 1 on the other Macs, 0 off): the verify MoE's gate/up
 // and down kernels read their row's input (x, 10 KB at Flash-Next's shape; h, 28 KB) from device memory through the
 // caches (moe4_gate_up_d, moe4_down_d: qmv2_rows_dx) instead of staging it in threadgroup memory, whose 28 KB held the
 // down kernel to one threadgroup a core. The same arithmetic, so bitwise the same (fn_check FN_ROWS). M5 Max,

@@ -81,7 +81,7 @@ per-member dispatches take their rows when encoded), so the verify is encoded on
 first layer goes to the GPU at once. With LiLiCorr the rows follow a table, as measured (`Engine::batch_rows`): two
 requests verify 3 drafts each, three 1 draft each and four plain rows (`NI_BATCH_KF=0` gives DFlash2 its table too:
 two requests 3 drafts each, three or four 1 draft each, the 27B's three taking turns). The Qwen3.5 4B's DFlash
-drafter, Nemotron 3.5 Lightning and Super-VL take turns until measured
+drafter, Nemotron 3.5 Lightning and Super-VL take turns today
 (`NI_BATCH=1` batches them too). A member that finishes leaves the batch, and the last one goes back to its own loop.
 One request alone runs the single-stream path unchanged. Requests decoded together can get other tokens than alone where
 two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;

@@ -198,7 +198,7 @@ V8Knobs& v8_knobs() {
     d.kplan = env_int("NI_V8_KPLAN", Gpu::get().apple_family() <= 7 ? 3 : d.kplan);
     d.gusplit = env_int("NI_V8_GUSPLIT", d.gusplit);
     // the 10-core M4: GDN step blocks of 128 threads (with the fused tree-zone tail below: verify -0.13 ms per cycle,
-    // 6 of 6 interleaved runs of 800 tokens, ids bitwise); other Macs keep 256, where it was tuned
+    // 6 of 6 interleaved runs of 800 tokens, ids bitwise); other Macs keep 256
     const bool m4 = Gpu::get().m4_base();
     d.gdnsplit = env_int("NI_V8_GDNSPLIT", m4 ? 128 : d.gdnsplit);
     d.prepu = env_int("NI_V8_PREPU", d.prepu);
@@ -840,7 +840,7 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // kernel, attn8t_partial_tree_g6, with one row tile, so an 8-row verify rounds as the 16-row default does, where the
   // zone runs attn8m_partial_zone on the shader ALUs. ni_run at 131K tokens, the 8-row drafting block (more than one
   // slot, or NI_KFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block
-  // there: 49.3). NI_V8_TREE_G6: by default on the M5 Max, where it was measured; 1 on any M5-class Mac, 0 the zone
+  // there: 49.3). NI_V8_TREE_G6: by default on the M5 Max (a narrower gate than the class); 1 on any M5-class Mac, 0 the zone
   static const bool tree_g6 = [] {
     const int v = env_int("NI_V8_TREE_G6", -1);
     if (env_int("NI_V8_ATTN_T", 1) == 0 || v == 0) return false;
@@ -1001,7 +1001,7 @@ static int moe_emu_mode() {
     if (n) logi("moe8e: this GPU's MMA rounds differently (%u of 4096 check values); sampled verifies keep MMA tiles", n);
     return n == 0;
   }();
-  // default on the M5 (Apple10), where it was measured; other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
+  // default on the M5 (Apple10); other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
   static const int env = std::clamp(env_int("NI_V8_MOE_EMU", Gpu::get().apple10() ? 1 : 0), 0, 2);
   const int m = v8_knobs().emu >= 0 ? std::min(v8_knobs().emu, 2) : env;
   return m && ok ? m : 0;
@@ -1302,7 +1302,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   static const bool tree_pin = env_int("NI_V8_TREE_PIN", 1) != 0;
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps,
                    tree ? 1u : 0u, ptree ? 1u : 0u, (tree || ptree) && tree_pin ? 1u : 0u};
-  // Lazy GDN fold (NI_GDN_LAZY, default on the 10-core M4, where it was measured and gated): a pinned 8-row tree verify
+  // Lazy GDN fold (NI_GDN_LAZY, default on the 10-core M4, a narrower gate than the class): a pinned 8-row tree verify
   // defers storing the folded state to the next one (the pending rows join a backlog that verify folds first), so the
   // state is written every other cycle; a verify that stores folds the backlog itself, any other pass folds it first
   // (flush_backlog)

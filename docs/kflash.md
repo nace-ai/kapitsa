@@ -443,7 +443,7 @@ The reduction also computes its shared softmax statistics once per eight output 
 dimension. History chunk boundaries, KV reads and scratch allocation sizes do not change; neither do wide verifies,
 batched chains or the other model backends.
 It is the default on the 10-core M4 (with Gated DeltaNet step blocks of 128 threads, `NI_V8_GDNSPLIT`): the 4B's
-verify -0.13 ms per cycle over 6 interleaved 800-token runs, ids bitwise; other Macs keep it off.
+verify -0.13 ms per cycle over 6 interleaved 800-token runs, ids bitwise; other Macs keep it off today.
 
 For the 27B's eight rows and 24 query heads, the tail is 198,144 bytes per full-attention layer (256 output floats
 and two statistics per row/head). Fusion removes that logical scratch write and its subsequent read, not an

@@ -5,8 +5,11 @@
 ## Default for
 
 <!-- A new feature (kernel path, decode/draft/verify strategy, cache or memory policy, flag or env variable) is on by default
-     for at least one model on at least one Mac: name them, e.g. "Qwen3.6-35B-A3B on M5 Pro". Off on every model and Mac
-     does not merge. Not a feature (kill switch, debug switch, measuring tool, docs): write "not a feature". -->
+     for the whole class it targets: name the class (e.g. "every Mac with matrix units", "every MoE model") and the 2 setups
+     that differ in chip class or model family that ran the A/B and output check (1 if only one exists for the class).
+     A narrow gate (exact chip, core count, RAM size, one model) needs a win of at least 10% on the target that is slower or
+     broken on the wider class: cite it. Off on every model and Mac does not merge. Not a feature (kill switch, debug
+     switch, measuring tool, docs): write "not a feature". -->
 
 ## Measured
 

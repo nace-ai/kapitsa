@@ -578,9 +578,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       vision_ = std::make_unique<vision::Vision>(std::move(enc));
     }
   }
-  // batched decode where it was measured: DFlash2 drafters (Qwen3.6 35B-A3B, Qwen3.8 27B) and LiLiCorr on Bolt's 24 GB
-  // checkpoint; the 4B's DFlash (v1) drafter, Super-VL's LiLiCorr and Lightning's DSpark take turns until measured
-  // (NI_BATCH=1 batches them too)
+  // batched decode for DFlash2 drafters (Qwen3.6 35B-A3B, Qwen3.8 27B) and LiLiCorr on Bolt's 24 GB checkpoint; the
+  // 4B's DFlash (v1) drafter, Super-VL's LiLiCorr and Lightning's DSpark take turns today, a narrower gate than the
+  // class (NI_BATCH=1 batches them too)
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
                     (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
   if (kflash_budget_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) {
@@ -1479,7 +1479,7 @@ void Engine::verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq&
 // ---- batched decode ----
 
 int Engine::batch_rows(int n) const {
-  // NI_BATCH: 0 = requests take turns, 1 = batched with every drafter; unset: batched where it was measured
+  // NI_BATCH: 0 = requests take turns, 1 = batched with every drafter; unset: batched for the drafters listed at batch_measured_
   static const int mode = [] {
     const char* v = getenv("NI_BATCH");
     return v && *v ? atoi(v) : -1;
