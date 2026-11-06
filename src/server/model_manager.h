@@ -412,36 +412,36 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
 
   nlohmann::ordered_json list_models_json() const {
     const Shown now = shown();  // (not rw_mu_: a poll of /v1/models must not wait on a load or a release)
-    const hub::ModelRef& ref_ = now.ref;
-    const Info& info_ = now.info;
+    const hub::ModelRef& now_ref = now.ref;
+    const Info& now_info = now.info;
     using json = nlohmann::ordered_json;
     json data = json::array();
     std::set<std::string> seen;
 
     // 1. Current active model is first
     if (now.have) {
-      const std::string cur_id = info_.model_id;
+      const std::string cur_id = now_info.model_id;
       seen.insert(cur_id);
-      seen.insert(ref_.name);
-      if (ref_.model) {
-        seen.insert(ref_.model->name);
-        for (const auto& a : ref_.model->aliases) seen.insert(a);
+      seen.insert(now_ref.name);
+      if (now_ref.model) {
+        seen.insert(now_ref.model->name);
+        for (const auto& a : now_ref.model->aliases) seen.insert(a);
       }
       json item{
         {"id", cur_id},
         {"object", "model"},
         {"type", "model"},
-        {"display_name", ref_.name.empty() ? cur_id : ref_.name},
+        {"display_name", now_ref.name.empty() ? cur_id : now_ref.name},
         {"created", long(started_)},
         {"created_at", started_at_},
         {"owned_by", "nace"},
-        {"context_length", info_.context},
-        {"context_fit", info_.fit},
-        {"slots", info_.slots},
+        {"context_length", now_info.context},
+        {"context_fit", now_info.fit},
+        {"slots", now_info.slots},
         {"active", true},
         {"downloaded", true}
       };
-      if (ref_.variant) item["quant"] = ref_.variant->quant;
+      if (now_ref.variant) item["quant"] = now_ref.variant->quant;
       data.push_back(item);
     }
 
@@ -450,7 +450,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
       const auto installed = hub::installed();
       for (const auto& m : installed) {
         if (!m.complete) continue;
-        if (seen.count(m.name) || (now.have && m.name == info_.model_id)) continue;
+        if (seen.count(m.name) || (now.have && m.name == now_info.model_id)) continue;
         seen.insert(m.name);
 
         std::string disp = m.name;
