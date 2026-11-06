@@ -222,7 +222,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   double t0 = now_ms();
   std::atomic<size_t> next{0};
   std::atomic<bool> failed{false};
-  unsigned nth = std::min(8u, std::max(1u, std::thread::hardware_concurrency()));
+  unsigned nth = std::min(16u, std::max(1u, std::thread::hardware_concurrency()));
   LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
