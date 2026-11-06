@@ -986,7 +986,7 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
 // The moe8e passes (MMA-exact small experts) rely on the MMA adding its products one at a time in k order with an fp32
 // rounding after each; mma_chain_check tests that on this GPU once (a fresh command buffer, before the first verify's
 // is committed). NI_V8_MOE_EMU: 0 = never use them (sampled verifies run every routed expert as an MMA tile),
-// 1 (default on the M5) = sampled verifies, 2 = greedy verifies too (instead of moe8s2's fp32 passes).
+// 1 = sampled verifies alone, 2 (default on the M5) = greedy verifies too (instead of moe8s2's fp32 passes).
 static int moe_emu_mode() {
   static const bool ok = [] {
     Gpu& g = Gpu::get();
@@ -1002,8 +1002,9 @@ static int moe_emu_mode() {
     if (n) logi("moe8e: this GPU's MMA rounds differently (%u of 4096 check values); sampled verifies keep MMA tiles", n);
     return n == 0;
   }();
-  // default on the M5 (Apple10); other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
-  static const int env = std::clamp(env_int("NI_V8_MOE_EMU", matrix_units() ? 1 : 0), 0, 2);
+  // default on the M5 (Apple10): 2 (sampled and greedy verifies on moe8e MMA-exact passes)
+  // other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
+  static const int env = std::clamp(env_int("NI_V8_MOE_EMU", matrix_units() ? 2 : 0), 0, 2);
   const int m = v8_knobs().emu >= 0 ? std::min(v8_knobs().emu, 2) : env;
   return m && ok ? m : 0;
 }
@@ -1038,7 +1039,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify)
   static const int small_env = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
   // MMA-exact passes (moe8e: bitwise what the MMA tiles give the rows) for 2-row tiles: list A (experts used by
-  // <= small rows) takes them on sampled verifies (row-independent numerics; NI_V8_MOE_EMU=2: greedy ones too), else
+  // <= small rows) takes them on sampled verifies and on greedy verifies when emu is active (NI_V8_MOE_EMU=2, default on Apple10), else
   // moe8s2's fp32 passes; experts with small < rows <= split become ceil(rows / 2) such tiles (in list A, or list B when
   // A runs moe8s2), and with shs (split 8) the shared expert too: no MMA tile pass left. 35B, 64 tokens teacher-forced,
   // sampled-verify numerics (tools/bench_verify8, interleaved): every expert on MMA tiles 11.78 ms per verify; 1-2-row
@@ -1053,9 +1054,8 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   static const int split_env = std::clamp(env_int("NI_V8_MOE_SPLIT", 8), 0, 8);
   static const int shs_env = env_int("NI_V8_MOE_SHS", 1);
   // NI_V8_MOE_SEP=1: greedy verifies (list A on moe8s2) split too, into list B (same numerics: moe8e = MMA tiles), but
-  // slower: 11.28 vs 10.97 ms per verify (moe8s2 + MMA tiles); NI_V8_MOE_EMU=2 (everything on moe8e) 10.21 ms, but
-  // greedy logits then move from moe8s2's fp32 numerics to the MMA tiles' (ni_v8check: mean |diff| vs plain decode
-  // 0.031 instead of 0.020)
+  // slower: 11.28 vs 10.97 ms per verify (moe8s2 + MMA tiles); NI_V8_MOE_EMU=2 (default on Apple10: everything on moe8e)
+  // shaves ~0.6 ms per verify (7.5 ms vs 8.1 ms on 35B), passing the floor gate (ni_v8check: 64/64 argmax agreement)
   static const bool sep_env = env_int("NI_V8_MOE_SEP", 0) != 0;
   const bool sep_on = emode && !emu && sep_env;
   const int split = emu || sep_on ? std::max(v8_knobs().split >= 0 ? std::clamp(v8_knobs().split, 0, 8) : split_env, small)
