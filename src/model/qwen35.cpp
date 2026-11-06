@@ -3752,7 +3752,8 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (snap) snap->pos = pos0 + snap_row;
 }
 
-// NI_PF_WAVE (read once; 0 off): a MoE prefill chunk of at least 1,024 rows as a two-half wavefront on the GPU alone.
+// NI_PF_WAVE (read once; 0 off): a MoE prefill chunk of at least 1,024 rows (4,096 by default below 40 GPU cores) as
+// a two-half wavefront on the GPU alone.
 // Layer by layer, half B's token mixer (DeltaNet or attention, its rows after A's) runs beside half A's MoE, then half
 // A's next mixer beside half B's MoE, each pair on one grouped encoder (Encoder::play_pair): a DeltaNet scan or an
 // attention pass, which leaves the GPU's cores half busy, overlaps the other half's expert GEMMs. Each half's rows go
@@ -3762,9 +3763,10 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
 // half's MoE has as many rows as the 4,096-row chunk it replaces. M5 Max, ni_run, 16,288 ids in 8,192-row chunks
 // 2,767 -> 2,620 ms (-5.3%; in 4,096-row chunks, the default before, 2,777); 4,129 ids in one chunk level (592 -> 590).
 // M5 Pro (20 cores), ni_run, three interleaved rounds, off at a pinned 4,096-row chunk against on at 8,192: 16,288 ids
-// 5,635 -> 5,465 ms (-3.0%), 4,129 ids level (1,199 -> 1,200); logit_dump of that pair, every row of every path bitwise
-// identical. Halves of 2,048 rows lose what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767 on the M5 Max; on
-// the M5 Pro a flag-only run that kept the small chunk was slower): the experts' weights are read once per half.
+// 5,635 -> 5,465 ms (-3.0%), 4,129 ids level (1,199 -> 1,200). Halves of 2,048 rows lose what the overlap gains (16K
+// in 4,096-row chunks 2,777 -> 2,767 on the M5 Max; on the M5 Pro a flag-only run that kept the small chunk was
+// slower): the experts' weights are read once per half, so below 40 cores the wave waits for 4,096 rows and a shorter
+// chunk runs single-pass (gpu_wave_rows).
 bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
   if (const char* v = getenv("NI_PF_WAVE")) return atoi(v) != 0;
   return moe && hidden == 2048 && layers == 40 && Gpu::get().apple10() && Gpu::get().core_count() >= 20;
@@ -3775,6 +3777,10 @@ int Qwen35::gpu_wave_rows(int T) const {
   if (!on || (!gpu_wave_model_ && !forced) || !cfg_.moe || !cfg_.causal || T < 1024 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
   for (const Layer& L : layers_)
     if (L.eg.exl3 || L.eg.iq || L.eg.q20 || L.eg.bits != 4) return 0;
+  // Below 40 cores the wave waits for a chunk of 4,096 rows: halves under 2,048 rows read the experts' weights once
+  // per half and lose what the overlap gains, so a shorter prompt runs single-pass. NI_PF_WAVE=1 keeps the 1,024-row
+  // floor, for measuring the short end.
+  if (!forced && Gpu::get().core_count() < 40 && T < 4096) return 0;
   return (T / 2 + 63) / 64 * 64;
 }
 

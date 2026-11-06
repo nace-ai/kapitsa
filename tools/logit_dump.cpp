@@ -27,7 +27,8 @@
 //           dumps, the decode paths' differences are the decode passes' own (logit_compare.py gates them at their floor)
 // Default windows: the 8 files of bench/corpus.txt, tokenized as they are (no chat template); window i prefills the
 // first 3200 - 384 i tokens of file i (3200 .. 512: two prefill chunks past 2048, one up to it) and scores the next
-// --rows W = 24 (192 rows in all). --from DIR scores the records of an earlier dump instead (Kapitsa's or another
+// --rows W = 24 (192 rows in all). --l0 N prefills the first N tokens of every window instead (for a window that spans
+// wavefront-sized chunks). --from DIR scores the records of an earlier dump instead (Kapitsa's or another
 // engine's): per sequence, its scored prefixes form the window, and the files keep DIR's lines in DIR's order.
 //
 // out_dir/<path>/ (a layout another engine's teacher-forced dumps can share, so that either engine's dumps compare with the other's;
@@ -114,7 +115,7 @@ std::vector<std::vector<long>> read_int_lines(const std::string& path) {
 
 // The default windows: file i of the corpus ("### FILE:" sections), the first 512 + 384 (n - 1 - i) tokens prefilled
 // (the longest prefixes from the first files: bench/corpus.txt's last file is its shortest)
-std::vector<Window> corpus_windows(const std::string& corpus, const std::string& model_dir, int n, int W) {
+std::vector<Window> corpus_windows(const std::string& corpus, const std::string& model_dir, int n, int W, int l0) {
   const std::string text = read_file(corpus);
   std::vector<std::string> docs;
   for (size_t a = text.find("### FILE:"); a != std::string::npos;) {
@@ -128,7 +129,7 @@ std::vector<Window> corpus_windows(const std::string& corpus, const std::string&
   std::vector<Window> ws;
   for (int i = 0; i < n; ++i) {
     Window w;
-    w.L0 = 512 + 384 * (n - 1 - i);
+    w.L0 = l0 > 0 ? l0 : 512 + 384 * (n - 1 - i);
     w.W = W;
     std::vector<int> ids = tok.encode(docs[size_t(i) % docs.size()]);
     if (int(ids.size()) < w.L0 + W + 1)
@@ -197,13 +198,13 @@ std::string now_iso() {
 int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] "
-                    "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
+                    "[--windows N] [--rows W] [--l0 N] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
                     "[--loop-kv last-loop|per-loop] [--verify-rows N]\n");
     return 1;
   }
   const std::string dir = argv[1], out = argv[2];
   std::string from, corpus = "bench/corpus.txt", paths_arg = "step,verify,batch", loop_kv;
-  int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1;
+  int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1, l0 = 0;
   int tree_rows = kVerifyRows;  // --verify-rows: a Qwen KFlash tree's live rows (8, or a wide verify's 16 or 32)
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
@@ -216,6 +217,7 @@ int main(int argc, char** argv) {
     else if (a == "--corpus") corpus = next();
     else if (a == "--windows") n_windows = std::stoi(next());
     else if (a == "--rows") rows = std::stoi(next());
+    else if (a == "--l0") l0 = std::stoi(next());
     else if (a == "--chunk") chunk = std::stoi(next());
     else if (a == "--batch") members = std::stoi(next());
     else if (a == "--batch-rows") member_rows = std::stoi(next());
@@ -228,8 +230,8 @@ int main(int argc, char** argv) {
   const std::vector<std::string> paths = split(paths_arg, ',');
   for (const auto& p : paths)
     if (p != "step" && p != "verify" && p != "batch") fatal("--paths: unknown path %s (step, verify, batch)", p.c_str());
-  if (n_windows < 1 || rows < 1 || chunk < 1 || members < 1 || members > 8)
-    fatal("--windows, --rows, --chunk: positive; --batch: 1 to 8");
+  if (n_windows < 1 || rows < 1 || chunk < 1 || members < 1 || members > 8 || l0 < 0)
+    fatal("--windows, --rows, --chunk: positive; --batch: 1 to 8; --l0: 0 or more");
   if (tree_rows != 8 && tree_rows != 16 && tree_rows != 32) fatal("--verify-rows: 8, 16 or 32");
   {
     std::error_code ec;
@@ -243,7 +245,7 @@ int main(int argc, char** argv) {
   if (!from.empty()) {
     wins = dump_windows(from, records);
   } else {
-    wins = corpus_windows(corpus, dir, n_windows, rows);
+    wins = corpus_windows(corpus, dir, n_windows, rows, l0);
     for (size_t i = 0; i < wins.size(); ++i) {
       wins[i].rec.resize(size_t(wins[i].W));
       for (int r = 0; r < wins[i].W; ++r) {
