@@ -1,0 +1,13 @@
+leg,cell,arm,status,prefill_tokens,prefill_ms,decode_tokens,decode_ms,cycles,tok_per_cycle,ms_wall_per_cycle,memory_pressure_lines
+1,dec4kkv,P,ok,4129,1336,,,,,,0
+2,dec4kkv,K,ok,4129,2264,,,,,,0
+3,dec4kkv,K,ok,4129,1320,,,,,,0
+4,dec4kkv,P,ok,4129,1319,,,,,,0
+5,dec4kkv,K,ok,4129,1322,,,,,,0
+6,dec4kkv,P,ok,4129,1320,,,,,,0
+7,dec4kkv,P,ok,4129,1314,,,,,,0
+8,dec4kkv,K,ok,4129,1321,,,,,,0
+9,fn32kfuse,P,void-load,32768,44098,255,5953,120,2.12,49.605,4
+10,fn32kfuse,U,ok,32768,45289,255,6276,120,2.12,52.296,5
+11,fn32kfuse,U,ok,32768,44177,255,6330,120,2.12,52.748,8
+12,fn32kfuse,P,ok,32768,47169,255,5950,120,2.12,49.580,4
