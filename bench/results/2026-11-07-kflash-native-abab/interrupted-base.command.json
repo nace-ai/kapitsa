@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/kapitsa",
+    "bench",
+    "--model",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+    "--quick",
+    "--json",
+    "--out",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/bench-0-base.json"
+  ],
+  "cwd": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827"
+}

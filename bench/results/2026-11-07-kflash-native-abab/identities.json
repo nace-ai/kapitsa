@@ -1,0 +1,30 @@
+{
+  "identities": {
+    "base": {
+      "head": "2fe7c3fa208c098b4e00b1bae9033172dfafaac7",
+      "version": "kapitsa 0.2.31 (2fe7c3fa)",
+      "ni_run_sha256": "86842a339a0ce367ed58437dba86b644a624915c5195be696e041f1f0ac81214",
+      "kapitsa_sha256": "042a64ba703bcca92cdc7495e3001f4b5c37e24d97e25c4178bdc1d0b1669cc6",
+      "source_sha256": {
+        "src/model/dflash2.cpp": "3e5542a750705d510e62bd56b9a60d9fb7934ba6686d4d88ffeb77f600107c90",
+        "src/kernels/spec_dflash.metal": "9ee5806613f2f245ddab8b934d96de3b5d9e6312daddef8220e0738ebb954cd2"
+      }
+    },
+    "candidate": {
+      "head": "a263df926a987c9b67e027cb4e5bd9287afddc79",
+      "version": "kapitsa 0.2.31 (0be92def)",
+      "ni_run_sha256": "893a08f514355d39e8342a1fa95b134e29e44a79956cdfccd3b3f9b4f020c5be",
+      "kapitsa_sha256": "534dc411d19b0a121b7c34fc0ed3c3a26fee332db01a24a87eb3573a25a66610",
+      "source_sha256": {
+        "src/model/dflash2.cpp": "33429948b9ec62d766b7c1f22d110c9b217ae8dffd0464da0c645807cec4c8b1",
+        "src/kernels/spec_dflash.metal": "983c3cef979034348d61b8537cb89e0c451370fa3a6b84f99764011e97209987"
+      }
+    }
+  },
+  "model": {
+    "config.json": "f3efc81b2ea8d96a45301037d3ccccbcccdef44a961845c87f286aaddbc6eaaa",
+    "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    "dflash2/model.safetensors": "1eb221d36abb13a5f1b972f8d031a9723fad8cbb7d275abe548b60e77577eb42"
+  },
+  "source_note": "Candidate source implementation0be92def; checkout at follow-up configure was evidence/docs heada263df92. Explicit CMake configure was run for both; cache retained candidate implementation label. Binary hashes checked again before these arms."
+}

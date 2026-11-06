@@ -1,0 +1,29 @@
+{
+  "label": "0-base",
+  "argv": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-reduce-v8/baseline/build/kapitsa",
+    "bench",
+    "--model",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+    "--quick",
+    "--json",
+    "--out",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/bench-resume-1857/0-base.json"
+  ],
+  "source_identity": {
+    "head": "2fe7c3fa208c098b4e00b1bae9033172dfafaac7",
+    "version": "kapitsa 0.2.31 (2fe7c3fa)",
+    "ni_run_sha256": "86842a339a0ce367ed58437dba86b644a624915c5195be696e041f1f0ac81214",
+    "kapitsa_sha256": "042a64ba703bcca92cdc7495e3001f4b5c37e24d97e25c4178bdc1d0b1669cc6",
+    "source_sha256": {
+      "src/model/dflash2.cpp": "3e5542a750705d510e62bd56b9a60d9fb7934ba6686d4d88ffeb77f600107c90",
+      "src/kernels/spec_dflash.metal": "9ee5806613f2f245ddab8b934d96de3b5d9e6312daddef8220e0738ebb954cd2"
+    }
+  },
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/bench-resume-1857/home-0-base"
+  }
+}

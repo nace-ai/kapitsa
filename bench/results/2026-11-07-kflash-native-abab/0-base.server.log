@@ -1,0 +1,75 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 2.37 GB of weights in 662 ms (3.6 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 73 ms (3.3 GB/s)
+[kapitsa] MTP head loaded in 224 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 249 static target projections, 2150.9 MiB in 524 ms; compressed 1948221/2053120 blocks
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 3627 ms
+[kapitsa] prewarmed 94 prefill pipelines in 3633 ms
+[kapitsa] loaded /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 5154 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (330 ms)
+[kapitsa] read 1.27 GB of weights in 366 ms (3.5 GB/s)
+[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 118 ms; compressed 447538/448000 blocks
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)
+[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +1.00 GB), loaded in 560 ms
+[kapitsa] DFlash2: prewarmed 117 pipelines in 2 ms
+[kapitsa] DFlash2: 1.027 GB allocated at load (planned 1.082 GB); 0.151 GB more for 1 slots' rings and 0.138 GB at the first prefill
+[kapitsa] GPU: Apple M4 Pro, 20 cores
+[kapitsa] memory: 6.70 GB allocated (model, buffers, 1 slot's state), budget 37.1 GB (recommended working set 38.7 GB): KV room 30.41 GB = 825001 tokens (36 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (24 blocks, width 1024, 16-pixel patches; images of 65536 to 1200000 pixels), 0.67 GB loaded on the first image
+[kapitsa] drafter: DFlash dflash2 (found in the model's folder)
+[kapitsa] engine ready: qwen3.5-4b-4bit, context 32768, 1 slots, KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2), images on
+[kapitsa] listening on http://127.0.0.1:63677
+Ready: chat at http://127.0.0.1:63677, API at http://127.0.0.1:63677/v1 (model "qwen3.5-4b-4bit"). Ctrl+C stops.
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] KFlash: 24 cycles, 8.00 rows per cycle; cycles by rows 8:24; tokens per cycle expected 3.133, got 2.750; rate 0.1526 tok/ms; cost ms by rows 8:18.03; calibration (alpha, beta) by depth (-0.09, 0.63) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] chat: prompt 2926 (cached 0) in 3471 ms (+1.6 ms template/tokenize; last chunk: encoded by 1784.1 ms, GPU start +1652.8 ms, GPU 33.7 ms, wake +0.1 ms), 64 tokens in 499 ms (126.2 tok/s), length, 2.62 tok/cycle, KFlash (DFlash2): 24 cycles
+[kapitsa] KFlash: 36 cycles, 8.00 rows per cycle; cycles by rows 8:36; tokens per cycle expected 3.476, got 2.583; rate 0.1444 tok/ms; cost ms by rows 8:16.86; calibration (alpha, beta) by depth (-0.32, 0.70) (-0.30, 0.67) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] chat: prompt 430 (cached 0) in 495 ms (+0.8 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +454.2 ms, GPU 40.2 ms, wake +0.1 ms), 27 tokens in 221 ms (117.4 tok/s), tool_calls, 2.17 tok/cycle, KFlash (DFlash2): 12 cycles
+[kapitsa] NI_ANE: Neural Engine program ready in the background (program compiled in 13985 ms, 14.1 s)
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 18/18 units (9216 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 5 ms, program cached 2 ms + load 71 ms (13 functions, MIL 89 KB); 187.6 MB Metal; ready in 0.1 s
+[kapitsa] NI_ANE: startup check 2.11% of the ANE's part from the GPU alone (2 functions, 200 ms)
+[kapitsa] KFlash: 187 cycles, 8.00 rows per cycle; cycles by rows 8:187; tokens per cycle expected 3.265, got 3.262; rate 0.2020 tok/ms; cost ms by rows 8:17.23; calibration (alpha, beta) by depth (-0.16, 0.93) (-0.25, 0.99) (-0.18, 0.81) (-0.71, 1.06) (-0.46, 0.62) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] chat: prompt 85 (cached 0) in 120 ms (+1.1 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +6.4 ms, GPU 113.6 ms, wake +0.2 ms), 512 tokens in 2641 ms (193.5 tok/s), length, 3.38 tok/cycle, KFlash (DFlash2): 151 cycles
+[kapitsa] KFlash: 351 cycles, 8.00 rows per cycle; cycles by rows 8:351; tokens per cycle expected 3.213, got 3.208; rate 0.2001 tok/ms; cost ms by rows 8:17.86; calibration (alpha, beta) by depth (-0.13, 0.96) (-0.27, 0.82) (-0.22, 0.96) (-0.44, 1.10) (-0.22, 0.74) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] KFlash: budget saved (351 cycles) to /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/bench-resume-1857/home-0-base/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M4_Pro.json
+[kapitsa] chat: prompt 85 (cached 0) in 114 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.9 ms, GPU 112.3 ms, wake +0.1 ms), 512 tokens in 2867 ms (178.2 tok/s), length, 3.12 tok/cycle, KFlash (DFlash2): 164 cycles
+[kapitsa] KFlash: 488 cycles, 8.00 rows per cycle; cycles by rows 8:488; tokens per cycle expected 3.292, got 3.355; rate 0.2305 tok/ms; cost ms by rows 8:17.35; calibration (alpha, beta) by depth (-0.10, 0.97) (-0.25, 0.87) (-0.20, 0.98) (-0.28, 1.17) (-0.12, 0.83) (-0.50, 1.67) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] chat: prompt 85 (cached 0) in 116 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.8 ms, GPU 113.9 ms, wake +0.1 ms), 512 tokens in 2443 ms (209.2 tok/s), length, 3.73 tok/cycle, KFlash (DFlash2): 137 cycles
+[kapitsa] KFlash: 630 cycles, 8.00 rows per cycle; cycles by rows 8:630; tokens per cycle expected 3.345, got 3.411; rate 0.2223 tok/ms; cost ms by rows 8:17.87; calibration (alpha, beta) by depth (-0.08, 1.03) (-0.20, 0.90) (-0.27, 0.99) (-0.14, 1.13) (-0.12, 0.88) (-0.60, 1.87) (0.40, 0.62) (0.00, 1.00)
+[kapitsa] KFlash: budget saved (630 cycles) to /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/bench-resume-1857/home-0-base/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M4_Pro.json
+[kapitsa] chat: prompt 85 (cached 0) in 115 ms (+0.5 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +2.0 ms, GPU 113.1 ms, wake +0.1 ms), 512 tokens in 2531 ms (201.9 tok/s), length, 3.60 tok/cycle, KFlash (DFlash2): 142 cycles
+[kapitsa] KFlash: 777 cycles, 8.00 rows per cycle; cycles by rows 8:777; tokens per cycle expected 3.359, got 3.423; rate 0.2131 tok/ms; cost ms by rows 8:17.65; calibration (alpha, beta) by depth (-0.05, 1.07) (-0.21, 0.90) (-0.31, 1.00) (-0.12, 1.13) (-0.17, 0.88) (-0.59, 1.94) (0.50, 0.53) (0.00, 1.00)
+[kapitsa] chat: prompt 85 (cached 0) in 120 ms (+1.5 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +4.0 ms, GPU 115.9 ms, wake +0.1 ms), 512 tokens in 2567 ms (199.0 tok/s), length, 3.48 tok/cycle, KFlash (DFlash2): 147 cycles
+[kapitsa] KFlash: 918 cycles, 8.00 rows per cycle; cycles by rows 8:918; tokens per cycle expected 3.400, got 3.461; rate 0.2323 tok/ms; cost ms by rows 8:17.13; calibration (alpha, beta) by depth (-0.04, 1.09) (-0.21, 0.89) (-0.34, 1.02) (-0.22, 1.19) (-0.13, 0.86) (-0.69, 2.08) (0.52, 0.50) (0.00, 1.00)
+[kapitsa] KFlash: budget saved (918 cycles) to /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/bench-resume-1857/home-0-base/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M4_Pro.json
+[kapitsa] chat: prompt 85 (cached 0) in 122 ms (+0.5 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +2.4 ms, GPU 119.8 ms, wake +0.1 ms), 512 tokens in 2424 ms (210.8 tok/s), length, 3.62 tok/cycle, KFlash (DFlash2): 141 cycles
+[kapitsa] prefill: Neural Engine busy 64% of 2150 ms over 2 split chunks (128 evaluations)
+[kapitsa] KFlash: 935 cycles, 8.00 rows per cycle; cycles by rows 8:935; tokens per cycle expected 3.395, got 3.460; rate 0.2195 tok/ms; cost ms by rows 8:19.33; calibration (alpha, beta) by depth (-0.04, 1.10) (-0.20, 0.90) (-0.35, 1.02) (-0.19, 1.19) (-0.15, 0.89) (-0.71, 1.86) (0.56, 0.49) (0.00, 1.00)
+[kapitsa] chat: prompt 4135 (cached 0) in 2150 ms (+8.0 ms template/tokenize; last chunk: encoded by 2080.6 ms, GPU start +24.4 ms, GPU 44.8 ms, wake +0.1 ms), 57 tokens in 384 ms (145.7 tok/s), stop, 3.29 tok/cycle, KFlash (DFlash2): 17 cycles
+[kapitsa] history: prefilled 60 tokens of the rendered reply (from 4128) in 102 ms
+[kapitsa] KFlash: 938 cycles, 8.00 rows per cycle; cycles by rows 8:938; tokens per cycle expected 3.395, got 3.464; rate 0.2205 tok/ms; cost ms by rows 8:19.75; calibration (alpha, beta) by depth (-0.04, 1.10) (-0.20, 0.90) (-0.35, 1.02) (-0.19, 1.19) (-0.15, 0.89) (-0.71, 1.86) (0.56, 0.49) (0.00, 1.00)
+[kapitsa] chat: prompt 4210 (cached 4188) in 39 ms (+1.5 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +2.2 ms, GPU 36.7 ms, wake +0.1 ms), 13 tokens in 64 ms (187.0 tok/s), stop, 4.00 tok/cycle, KFlash (DFlash2): 3 cycles
+[kapitsa] history: prefilled 16 tokens of the rendered reply (from 4203) in 28 ms
+[kapitsa] KFlash: 941 cycles, 8.00 rows per cycle; cycles by rows 8:941; tokens per cycle expected 3.397, got 3.470; rate 0.2233 tok/ms; cost ms by rows 8:19.41; calibration (alpha, beta) by depth (-0.04, 1.10) (-0.20, 0.90) (-0.35, 1.02) (-0.19, 1.19) (-0.15, 0.89) (-0.71, 1.86) (0.56, 0.49) (0.00, 1.00)
+[kapitsa] chat: prompt 4246 (cached 4219) in 54 ms (+1.8 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +0.9 ms, GPU 53.2 ms, wake +0.1 ms), 16 tokens in 63 ms (237.9 tok/s), stop, 5.00 tok/cycle, KFlash (DFlash2): 3 cycles
+[kapitsa] history: prefilled 19 tokens of the rendered reply (from 4239) in 44 ms
+[kapitsa] KFlash: 1007 cycles, 8.00 rows per cycle; cycles by rows 8:1007; tokens per cycle expected 3.462, got 3.499; rate 0.1984 tok/ms; cost ms by rows 8:19.72; calibration (alpha, beta) by depth (-0.04, 1.10) (-0.21, 0.90) (-0.36, 1.03) (-0.22, 1.13) (-0.22, 0.92) (-0.69, 1.86) (0.49, 0.54) (0.00, 1.00)
+[kapitsa] chat: prompt 4278 (cached 4258) in 60 ms (+1.2 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +0.9 ms, GPU 58.4 ms, wake +0.1 ms), 256 tokens in 1357 ms (187.9 tok/s), length, 3.86 tok/cycle, KFlash (DFlash2): 66 cycles
+[kapitsa] KFlash: 1019 cycles, 8.00 rows per cycle; cycles by rows 8:1019; tokens per cycle expected 3.471, got 3.484; rate 0.1843 tok/ms; cost ms by rows 8:19.09; calibration (alpha, beta) by depth (-0.05, 1.09) (-0.21, 0.90) (-0.38, 1.02) (-0.24, 1.13) (-0.22, 0.92) (-0.68, 1.89) (0.52, 0.46) (0.00, 1.00)
+[kapitsa] chat: prompt 430 (cached 0) in 521 ms (+0.6 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +475.5 ms, GPU 45.4 ms, wake +0.1 ms), 27 tokens in 250 ms (104.0 tok/s), tool_calls, 2.17 tok/cycle, KFlash (DFlash2): 12 cycles
+[kapitsa] KFlash: 1031 cycles, 8.00 rows per cycle; cycles by rows 8:1031; tokens per cycle expected 3.480, got 3.469; rate 0.1755 tok/ms; cost ms by rows 8:17.43; calibration (alpha, beta) by depth (-0.06, 1.07) (-0.23, 0.89) (-0.41, 0.98) (-0.24, 1.13) (-0.23, 0.87) (-0.68, 1.89) (0.52, 0.46) (0.00, 1.00)
+[kapitsa] chat: prompt 430 (cached 423) in 17 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.1 ms, GPU 16.5 ms, wake +0.1 ms), 27 tokens in 213 ms (122.1 tok/s), tool_calls, 2.17 tok/cycle, KFlash (DFlash2): 12 cycles
+[kapitsa] KFlash: 1054 cycles, 8.00 rows per cycle; cycles by rows 8:1054; tokens per cycle expected 3.485, got 3.483; rate 0.1892 tok/ms; cost ms by rows 8:18.42; calibration (alpha, beta) by depth (-0.08, 1.05) (-0.23, 0.90) (-0.41, 0.98) (-0.20, 1.11) (-0.22, 0.83) (-0.67, 1.92) (0.43, 0.48) (0.00, 1.00)
+[kapitsa] chat: prompt 510 (cached 456) in 78 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.7 ms, GPU 77.2 ms, wake +0.1 ms), 93 tokens in 423 ms (217.5 tok/s), stop, 4.00 tok/cycle, KFlash (DFlash2): 23 cycles
+[kapitsa] KFlash: 1074 cycles, 8.00 rows per cycle; cycles by rows 8:1074; tokens per cycle expected 3.501, got 3.476; rate 0.1863 tok/ms; cost ms by rows 8:16.81; calibration (alpha, beta) by depth (-0.09, 1.05) (-0.24, 0.88) (-0.41, 0.95) (-0.23, 1.13) (-0.22, 0.83) (-0.67, 1.92) (0.52, 0.47) (0.00, 1.00)
+[kapitsa] chat: prompt 428 (cached 423) in 17 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +0.4 ms, GPU 15.9 ms, wake +0.1 ms), 61 tokens in 344 ms (174.2 tok/s), tool_calls, 3.00 tok/cycle, KFlash (DFlash2): 20 cycles
+[kapitsa] KFlash: 1094 cycles, 8.00 rows per cycle; cycles by rows 8:1094; tokens per cycle expected 3.522, got 3.473; rate 0.1871 tok/ms; cost ms by rows 8:16.75; calibration (alpha, beta) by depth (-0.09, 1.05) (-0.25, 0.87) (-0.43, 0.95) (-0.26, 1.15) (-0.21, 0.84) (-0.70, 1.71) (0.37, 0.51) (0.00, 1.00)
+[kapitsa] chat: prompt 428 (cached 423) in 16 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.5 ms, GPU 15.7 ms, wake +0.1 ms), 65 tokens in 343 ms (186.6 tok/s), tool_calls, 3.20 tok/cycle, KFlash (DFlash2): 20 cycles
+[kapitsa] KFlash: 1186 cycles, 8.00 rows per cycle; cycles by rows 8:1186; tokens per cycle expected 3.526, got 3.483; rate 0.1973 tok/ms; cost ms by rows 8:18.54; calibration (alpha, beta) by depth (-0.07, 1.05) (-0.26, 0.89) (-0.43, 0.95) (-0.23, 1.08) (-0.23, 0.89) (-0.52, 1.61) (0.20, 0.52) (0.00, 1.00)
+[kapitsa] KFlash: budget saved (1186 cycles) to /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/kflash-followup-1827/bench-resume-1857/home-0-base/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M4_Pro.json
+[kapitsa] chat: prompt 544 (cached 492) in 76 ms (+0.5 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.7 ms, GPU 74.8 ms, wake +0.1 ms), 331 tokens in 1661 ms (198.6 tok/s), stop, 3.59 tok/cycle, KFlash (DFlash2): 92 cycles

@@ -1,0 +1,59 @@
+{
+  "runs": [
+    {
+      "label": "0-base",
+      "exit": 0,
+      "sampled_tps": 197.12,
+      "greedy_tps": 203.53,
+      "ttft_s": 2.1592,
+      "prompt_tokens": 4135,
+      "peak_memory_gb": 6.9,
+      "flags": [
+        "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000', 'tools'] (mean 3.59%, top ['ChatGPT'])"
+      ],
+      "invalid": []
+    },
+    {
+      "label": "1-candidate",
+      "exit": 0,
+      "sampled_tps": 178.29,
+      "greedy_tps": 207.17,
+      "ttft_s": 2.2457,
+      "prompt_tokens": 4134,
+      "peak_memory_gb": 6.94,
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4506)",
+        "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000'] (mean 4.06%, top ['ChatGPT'])"
+      ],
+      "invalid": []
+    },
+    {
+      "label": "2-base",
+      "exit": 0,
+      "sampled_tps": 193.32,
+      "greedy_tps": 210.19,
+      "ttft_s": 2.1016,
+      "prompt_tokens": 4134,
+      "peak_memory_gb": 6.94,
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4612)"
+      ],
+      "invalid": []
+    },
+    {
+      "label": "3-candidate",
+      "exit": 0,
+      "sampled_tps": 194.6,
+      "greedy_tps": 206.24,
+      "ttft_s": 2.0997,
+      "prompt_tokens": 4133,
+      "peak_memory_gb": 6.94,
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4602)"
+      ],
+      "invalid": []
+    }
+  ],
+  "interpretation": "All native commands complete with no invalid entries; flags retained. No full inference speedup established. Prompt nonces and sampling differ between native invocations; this is not exact-output evidence.",
+  "interrupted_attempt": "Prior native baseline stopped after warm-up without a result JSON. Its transcript is retained and is not a fifth completed measurement."
+}
