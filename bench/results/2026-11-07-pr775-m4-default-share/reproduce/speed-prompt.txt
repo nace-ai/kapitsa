@@ -1,0 +1,8 @@
+<|im_start|>user
+Write a thorough technical tutorial of at least 2000 words explaining how relational databases execute SQL joins. Cover nested-loop, hash, and merge joins, include SQL examples and step-by-step worked examples, and discuss indexes, cardinality estimates, memory, and query planning. Start directly with the tutorial.
+<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+

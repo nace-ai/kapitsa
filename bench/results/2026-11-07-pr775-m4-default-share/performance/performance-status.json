@@ -1,0 +1,6 @@
+{
+  "phase": "paused_by_user",
+  "time": 1793991666.729227,
+  "prior_phase": "B2",
+  "gpu_lock_free": false
+}

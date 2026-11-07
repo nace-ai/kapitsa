@@ -561,7 +561,8 @@ int main(int argc, char** argv) {
   using bench::ojson;
   ojson env = ojson::object();
   for (char** e = environ; *e; ++e)
-    if (!strncmp(*e, "NI_", 3) && strncmp(*e, "NI_LOCK_HELD=", 13) && strncmp(*e, "NI_LOG=", 7)) {
+    if ((!strncmp(*e, "NI_", 3) || !strncmp(*e, "KAPITSA_PROFILE=", 16)) &&
+        strncmp(*e, "NI_LOCK_HELD=", 13) && strncmp(*e, "NI_LOG=", 7)) {
       const std::string kv = *e;
       env[kv.substr(0, kv.find('='))] = kv.substr(kv.find('=') + 1);
     }
@@ -595,6 +596,7 @@ int main(int argc, char** argv) {
     meta["macos"] = mac.macos;
     meta["date"] = now_iso();
     meta["env"] = env;
+    meta["disk_format"] = m.disk_format();
     std::ofstream(o.dir + "/meta.json") << meta.dump(2) << "\n";
     printf("%-6s %ld rows: next-token NLL %.4f, top-1 = next token %.4f -> %s\n", o.name.c_str(), o.done,
            o.done ? o.nll / double(o.done) : 0.0, o.done ? double(o.hits) / double(o.done) : 0.0, o.dir.c_str());

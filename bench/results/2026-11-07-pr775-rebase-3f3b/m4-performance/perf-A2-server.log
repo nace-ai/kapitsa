@@ -1,0 +1,20 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 5.04 GB of weights in 312 ms (16.1 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 32 static target projections, 823.6 MiB in 186 ms; compressed 748376/786432 blocks
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 11 ms
+[kapitsa] prewarmed 94 prefill pipelines in 18 ms
+[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit: 32 layers, dense, 5.0 GB mapped in 571 ms; weights 4-bit group 64 100%
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (237 ms)
+[kapitsa] GPU: Apple M4 Pro, 20 cores
+[kapitsa] memory: 6.69 GB allocated (model, buffers, 1 slot's state), budget 37.1 GB (recommended working set 38.7 GB): KV room 30.41 GB = 928185 tokens (32 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.92 GB loaded on the first image
+[kapitsa] drafter: none (turned off with --dflash none or NI_DFLASH)
+[kapitsa] engine ready: qwen3.5-9b, context 32768, 1 slots, plain decoding, KFlash (none), images on
+[kapitsa] listening on http://127.0.0.1:18781
+Ready: chat at http://127.0.0.1:18781, API at http://127.0.0.1:18781/v1 (model "qwen3.5-9b"). Ctrl+C stops.
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] chat: prompt 2927 (cached 0) in 5943 ms (+4.5 ms template/tokenize; last chunk: encoded by 2969.7 ms, GPU start +2907.8 ms, GPU 65.5 ms, wake +0.1 ms), 64 tokens in 1266 ms (49.8 tok/s), length, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] chat: prompt 430 (cached 0) in 926 ms (+0.7 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +844.8 ms, GPU 80.8 ms, wake +0.1 ms), 27 tokens in 525 ms (49.6 tok/s), tool_calls, KFlash (none): 26 cycles, 26 rows, 0 drafts accepted
+[kapitsa] chat: prompt 4135 (cached 0) in 8579 ms (+16.7 ms template/tokenize; last chunk: encoded by 5667.9 ms, GPU start +2826.2 ms, GPU 84.9 ms, wake +0.1 ms), 44 tokens in 870 ms (49.4 tok/s), stop, KFlash (none): 43 cycles, 43 rows, 0 drafts accepted

@@ -1,0 +1,59 @@
+prefill: 8 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: llama.cpp b12110 cd959bae9, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 8; max |logit diff| 6.815
+  top-1 agreement 0.8750 (1 flip)
+  KL mean 7.864e-02 median 5.474e-03 p99 4.817e-01 max 5.139e-01; top-2 margin change up to 3.735
+  next-token NLL change +1.034e-01 nats per record (candidate minus reference)
+    flip at sequence 1 prefix 2816: top-1 11870 -> 369, reference margin 0.07268
+batch: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: llama.cpp b12110 cd959bae9, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 192; max |logit diff| 14.1
+  top-1 agreement 0.8958 (20 flips)
+  KL mean 9.693e-02 median 9.941e-03 p99 1.339e+00 max 1.875e+00; top-2 margin change up to 6.23
+  next-token NLL change -3.030e-02 nats per record (candidate minus reference)
+    flip at sequence 5 prefix 1286: top-1 2124 -> 293, reference margin 2.094
+    flip at sequence 2 prefix 2455: top-1 16141 -> 5242, reference margin 0.8742
+    flip at sequence 3 prefix 2072: top-1 198 -> 25216, reference margin 0.8369
+    flip at sequence 0 prefix 3220: top-1 198 -> 1358, reference margin 0.6911
+    flip at sequence 5 prefix 1287: top-1 56723 -> 529, reference margin 0.6762
+    flip at sequence 1 prefix 2825: top-1 68163 -> 10885, reference margin 0.6188
+    flip at sequence 3 prefix 2067: top-1 460 -> 11246, reference margin 0.5802
+    flip at sequence 1 prefix 2832: top-1 15 -> 16, reference margin 0.5017
+    flip at sequence 5 prefix 1284: top-1 11 -> 2291, reference margin 0.4785
+    flip at sequence 5 prefix 1294: top-1 32367 -> 7, reference margin 0.4623
+step: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: llama.cpp b12110 cd959bae9, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 192; max |logit diff| 14.09
+  top-1 agreement 0.8958 (20 flips)
+  KL mean 9.696e-02 median 9.886e-03 p99 1.341e+00 max 1.872e+00; top-2 margin change up to 6.229
+  next-token NLL change -3.024e-02 nats per record (candidate minus reference)
+    flip at sequence 5 prefix 1286: top-1 2124 -> 293, reference margin 2.093
+    flip at sequence 2 prefix 2455: top-1 16141 -> 5242, reference margin 0.8726
+    flip at sequence 3 prefix 2072: top-1 198 -> 25216, reference margin 0.835
+    flip at sequence 0 prefix 3220: top-1 198 -> 1358, reference margin 0.69
+    flip at sequence 5 prefix 1287: top-1 56723 -> 529, reference margin 0.6766
+    flip at sequence 1 prefix 2825: top-1 68163 -> 10885, reference margin 0.6181
+    flip at sequence 3 prefix 2067: top-1 460 -> 11246, reference margin 0.579
+    flip at sequence 1 prefix 2832: top-1 15 -> 16, reference margin 0.5012
+    flip at sequence 5 prefix 1284: top-1 11 -> 2291, reference margin 0.4763
+    flip at sequence 5 prefix 1294: top-1 32367 -> 7, reference margin 0.4639
+verify: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: llama.cpp b12110 cd959bae9, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 192; max |logit diff| 14.1
+  top-1 agreement 0.8958 (20 flips)
+  KL mean 9.706e-02 median 9.900e-03 p99 1.341e+00 max 1.870e+00; top-2 margin change up to 6.23
+  next-token NLL change -3.027e-02 nats per record (candidate minus reference)
+    flip at sequence 5 prefix 1286: top-1 2124 -> 293, reference margin 2.098
+    flip at sequence 2 prefix 2455: top-1 16141 -> 5242, reference margin 0.8756
+    flip at sequence 3 prefix 2072: top-1 198 -> 25216, reference margin 0.8363
+    flip at sequence 0 prefix 3220: top-1 198 -> 1358, reference margin 0.69
+    flip at sequence 5 prefix 1287: top-1 56723 -> 529, reference margin 0.6746
+    flip at sequence 1 prefix 2825: top-1 68163 -> 10885, reference margin 0.6183
+    flip at sequence 3 prefix 2067: top-1 460 -> 11246, reference margin 0.5792
+    flip at sequence 1 prefix 2832: top-1 15 -> 16, reference margin 0.5012
+    flip at sequence 5 prefix 1284: top-1 11 -> 2291, reference margin 0.4762
+    flip at sequence 5 prefix 1294: top-1 32367 -> 7, reference margin 0.4683

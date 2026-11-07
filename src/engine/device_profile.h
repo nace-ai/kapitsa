@@ -27,9 +27,10 @@ enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, 
 // A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
 // units). kName is a narrow exception: the name must match, and the row
 // has to cite a win of at least 10% that the wider class does not get.
+// kAneBuiltinNonMatrix requires an ANE and a built-in share, excluding matrix/wide GPUs and calibration-only chips.
 // kGuard is not that. It documents a predicate the call site still reads: a shape, a RAM size, or a
 // correctness miss on the wider chip. It is not a class, and it does not claim a 10% win.
-enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kName, kGuard };
+enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kAneBuiltinNonMatrix, kName, kGuard };
 
 struct DeviceFacts {
   int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.
@@ -98,12 +99,15 @@ std::string format_profile(const DeviceProfile&, bool as_json);
 // The one live read. Doctor passes RAM and the Neural Engine; this reads the GPU. Not linked into the CPU test.
 DeviceFacts facts_from_gpu(long ram_bytes, bool ane);
 
-// The live device, resolved once. RAM and the ANE stay 0/false in it: no row keys on them, and doctor resolves its
+// The live device, resolved once. RAM and the ANE stay 0/false in it: no default_on row keys on them, and doctor resolves its
 // own with them filled for its print.
 const DeviceProfile& current_device();
 
 // The named checks the remaining gates call. The no-argument forms read the live GPU by calling the same Gpu methods
 // the sites used. The DeviceFacts forms are those predicates for the CPU test.
+bool ane_builtin_share(const std::string& chip);  // the families default_units() supports, independent of calibration
+bool ane_segmented_default(const DeviceFacts&);   // built-in share, non-matrix GPU; runtime ANE checks still apply
+bool ane_segmented_default();
 bool matrix_units(const DeviceFacts&);  // apple_family() >= 10
 bool legacy_gpu(const DeviceFacts&);    // apple_family() <= 7: the M1 path
 bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores

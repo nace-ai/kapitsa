@@ -1,0 +1,65 @@
+{
+  "quiet": true,
+  "quiet_wait_seconds": 18.66087508201599,
+  "busy": [],
+  "samples": [
+    [
+      1794003261.327,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1794003263.363,
+      0.8,
+      "com.apple.WebKit",
+      0.8,
+      0.0
+    ],
+    [
+      1794003265.401,
+      0.79,
+      "iTerm2",
+      0.79,
+      0.0
+    ],
+    [
+      1794003267.439,
+      0.78,
+      "iTerm2",
+      0.78,
+      0.0
+    ]
+  ],
+  "overall": {
+    "samples": 4,
+    "mean_foreign_gpu_pct": 0.59,
+    "max_foreign_gpu_pct": 0.8,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+  },
+  "phases": {
+    "prefill_4000": {
+      "samples": 4,
+      "mean_foreign_gpu_pct": 0.59,
+      "max_foreign_gpu_pct": 0.8,
+      "mean_ambient_gpu_pct": 0.0,
+      "busy_samples": 0,
+      "longest_busy_run": 0,
+      "top": [],
+      "flagged": false
+    }
+  },
+  "ignored_processes": [
+    "WindowServer"
+  ],
+  "ambient_processes": [
+    "VisualIntelligenceCore",
+    "mediaanalysisd",
+    "photoanalysisd"
+  ]
+}
