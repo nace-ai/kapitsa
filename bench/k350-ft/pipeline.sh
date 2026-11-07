@@ -9,8 +9,8 @@ wait_ac() { until pmset -g batt | grep -q "AC Power"; do echo "waiting for AC $(
 # pressure normal (level 1), free RAM >= 12 GB (vm_stat free+inactive+speculative+purgeable) and no other process over 20 GB RSS
 # the data, features and checkpoints live on the Extreme Pro (/tmp/k350d links there); wait outside the lock until it is
 # mounted with >= 26 GB free (orchestrator 7 Nov: leave 20 GB; a state save writes a 5.5 GB .tmp before the rename)
-drive_ok() { [ -d $D/data ] && dfree=$(df -g "$D/" | awk 'NR==2{print $4}') && [ "$dfree" -ge 26 ]; }
-wait_drive() { until drive_ok; do echo "waiting for the Extreme Pro $(date +%T): ${dfree:-not mounted} GB free"; dfree=; sleep 120; done; }
+drive_ok() { [ -d $D/data ] && dfree=$(df -g "$D/" | awk 'NR==2{print $4}') && [ "$dfree" -ge "${1:-26}" ]; }  # eval saves no state: 20 GB
+wait_drive() { until drive_ok "$1"; do echo "waiting for the Extreme Pro $(date +%T): ${dfree:-not mounted} GB free"; dfree=; sleep 120; done; }
 # orchestrator 7 Nov: don't train between #373's legs (its pressure test pushes swap past 8 GB within 25 steps);
 # wait outside the lock until no detach job whose name contains 373 is running
 wait_373() { while python3 $DT list 2>/dev/null | grep -E "^RUNNING +[^ ]*373" >/dev/null; do echo "waiting for #373 $(date +%T): $(python3 $DT list | awk '/^RUNNING +[^ ]*373/{printf "%s ", $2}')"; sleep 120; done; }
@@ -46,5 +46,5 @@ done
 [ -f $D/ckpt/DONE ] || { echo "training not done"; exit 4; }
 CK=$D/ckpt/best; [ -r $CK/model.safetensors ] || CK=$D/ckpt/last
 echo "drafter for eval: $CK"; bash $S/mkmodels.sh $CK || exit 5
-wait_drive; wait_ac; wait_373; wait_mem; $L bash $S/eval_inner.sh; rc=$?
+wait_drive 20; wait_ac; wait_373; wait_mem; $L bash $S/eval_inner.sh; rc=$?
 python3 $S/verdict.py $D/eval; echo "PIPELINE DONE rc=$rc $(date +%T)"
