@@ -7,62 +7,96 @@
 namespace ni {
 namespace {
 
-// The 35B-A3B shape the wave and the KFlash lanes were run on. Clover has the same numbers and is left out by the
-// caller (config.json model_type), not by a second chip check: no run on Clover shows a loss or a break, so this is a
+// The 35B-A3B's prefill shape: MoE, hidden 2048, 40 layers. Clover-35B-A3B has the same numbers; a row keyed on this
+// class decides for both, the way the wave's call site always has (Clover's instance flag keeps the wave off there:
+// nothing has been run on it).
+bool qwen35_shape(const ModelFacts& m) { return m.moe && m.hidden == 2048 && m.layers == 40; }
+
+// The 35B-A3B shape the KFlash lanes were run on. Clover has the same numbers and is left out by the caller
+// (config.json model_type), not by a second chip check: no run on Clover shows a loss or a break, so this is a
 // narrower gate than the shape, for #369 to widen.
 bool qwen35_a3b(const ModelFacts& m) {
-  return m.moe && !m.clover && m.hidden == 2048 && m.layers == 40 && m.experts == 256 && m.top_k == 8 &&
-         m.moe_i == 512 && m.shared_i == 512;
+  return qwen35_shape(m) && !m.clover && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
 }
+
+}  // namespace
+
+bool model_class_matches(ModelClass c, const ModelFacts& m) {
+  switch (c) {
+    case ModelClass::kOther: return true;
+    case ModelClass::kQwen35Shape: return qwen35_shape(m);
+    case ModelClass::kQwen35A3b: return qwen35_a3b(m);
+  }
+  return false;
+}
+
+namespace {
 
 const DefaultRow kDefaults[] = {
     // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
-    // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site when it moves.
-    {"pf_wave", ModelClass::kQwen35A3b, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max", false},
+    // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site.
+    {"pf_wave", Knob::kPfWave, ModelClass::kQwen35Shape, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max",
+     true},
     // Matrix class (any M5): +12 to +15% on the M5 Pro, no measured miss on the others, so the class takes it, not the
-    // name. The selector update uses the same gate.
-    {"kflash_hist", ModelClass::kQwen35A3b, DefaultScope::kMatrix, nullptr, "on", 12, 15, false, "M5 Pro", false},
+    // name. The selector update reads the same row.
+    {"kflash_hist", Knob::kKflashHist, ModelClass::kQwen35A3b, DefaultScope::kMatrix, nullptr, "on", 12, 15, false,
+     "M5 Pro", true},
     // NI_GEMM_SLICES. Drex Max v1, matrix class. M5 Pro, 16K 33.5-34.0 -> 30.3-30.7 s (-9.6%).
-    // The M5 Max was not measured.
-    {"gemm_slices", ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 9, 0, false,
-     "M5 Pro; widened by judgment, sweep 1", false},
+    // The M5 Max was not measured. The shape check that keeps it to Drex Max v1 stays at the call site.
+    {"gemm_slices", Knob::kGemmSlices, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 9, 0, false,
+     "M5 Pro; widened by judgment, sweep 1", true},
     // NI_HC_WIDE. Flash-Next, wide class. M5 Max, decode 105.9 -> 108.1 tok/s (+2.0%). Under 10%, so not a name gate.
-    {"hc_wide", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 2, 0, false,
-     "M5 Max; widened by judgment, sweep 1", false},
+    {"hc_wide", Knob::kHcWide, ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 2, 0, false,
+     "M5 Max; widened by judgment, sweep 1", true},
     // NI_MOE4_DX. Flash-Next, wide class. M5 Max, decode 108.2 -> 109.3 tok/s (+1.0%). Under 10%, so not a name gate.
-    {"moe4_dx", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 1, 0, false,
-     "M5 Max; widened by judgment, sweep 1", false},
+    {"moe4_dx", Knob::kMoe4Dx, ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 1, 0, false,
+     "M5 Max; widened by judgment, sweep 1", true},
     // NI_V8_TREE_G6. Qwen3.8 27B, wide class. M5 Max, ni_run, decode 48.6 -> 62.2 tok/s (27, the integer part).
     // The wide class today is that Mac.
-    {"tree_g6", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 27, 0, false, "M5 Max", false},
+    {"tree_g6", Knob::kTreeG6, ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 27, 0, false, "M5 Max", true},
     // NI_KFLASH_NARROW. Qwen3.8 27B, wide class. M5 Max, 131K 56.1 -> 70.1 tok/s (24, the integer part);
-    // 32K 80.5 -> 85.6.
-    {"kflash_narrow", ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 24, 0, false, "M5 Max", false},
-    // Name predicates the call sites still read. Not kName: none of these cites a 10% win the wider class misses.
-    // The id is the predicate. chip_name is the exact name when the predicate has one.
-    {"m1_max_32", ModelClass::kOther, DefaultScope::kGuard, "Apple M1 Max", "64", 0, 0, false,
-     "32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path", false},
-    {"m4_10", ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "on", 0, 0, false,
-     "10 cores and 24 GB; 4B packed-coeff shape only", false},
-    {"m4_pro_gpu", ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "pack", 0, 0, false,
-     "Qwen 4B and 35B vision-tower shapes; other shapes keep bf16", false},
-    {"m4_pro_20", ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "on", 0, 0, false,
-     "20 cores and 48 GB for the 4B or 9B packed coeff; 35B X8 share on 5-6-bit affine projections", false},
-    {"m4_ten_core", ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "narrow", 0, 0, false,
-     "10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
-    {"ultra_gpu", ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
-     "name contains Ultra; fused merges failed on the old arrival (#421); not re-run since, so the split merges stay", false},
+    // 32K 80.5 -> 85.6. The 16-row drafting block it applies to stays at the call site.
+    {"kflash_narrow", Knob::kKflashNarrow, ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 24, 0, false,
+     "M5 Max", true},
+    // Capability classes the call sites still read. Not a name gate: the predicate is the class. The site count is
+    // calls outside this module; tests/test_profile_gates.py checks the where string against that count.
+    {"matrix_units", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "class", 0, 0, false,
+     "46 sites; capability class: apple_family >= 10, the matrix half of ChipClass", false},
+    {"legacy_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kLegacy, nullptr, "class", 0, 0, false,
+     "11 sites; capability class: apple_family <= 7, the M1 path", false},
+    {"wide_cores", Knob::kNone, ModelClass::kOther, DefaultScope::kWide, nullptr, "class", 0, 0, false,
+     "2 sites; capability class: matrix units and 40 cores or more", false},
+    // Name and correctness predicates the call sites still read. Not kName: none of these cites a 10% win the wider
+    // class misses. The id is the predicate. chip_name is the exact name when the predicate has one.
+    // Knob::kNone: not a lookup. A shape guard stays because the wider class is the wrong shape. A correctness
+    // guard stays because the fused path failed on that class.
+    {"m1_max_32", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M1 Max", "64", 0, 0, false,
+     "4 sites; shape guard: 32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path", false},
+    {"m4_10", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "on", 0, 0, false,
+     "1 site; shape guard: 10 cores and 24 GB; 4B packed-coeff shape only", false},
+    {"m4_pro_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "pack", 0, 0, false,
+     "1 site; shape guard: Qwen 4B and 35B vision-tower shapes; other shapes keep bf16", false},
+    {"m4_pro_20", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "on", 0, 0, false,
+     "2 sites; shape guard: 20 cores and 48 GB for the 4B or 9B packed coeff; 35B X8 share on 5-6-bit affine projections", false},
+    {"m4_ten_core", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "narrow", 0, 0, false,
+     "6 sites; shape guard: 10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
+    {"ultra_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
+     "1 site; correctness guard: two dies; fused merges failed past a 32-key tile on the old arrival (#421); the new arrival's fused merges are unverified on an Ultra", false},
+    {"pre_m3_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
+     "1 site; correctness guard: apple_family under 9; fused merges produced garbage on an M1 Max on 0.2.15, old arrival (#478); the new arrival is unverified on M1 and M2", false},
     // Fast profile only (docs/profiles.md): Flash-Next's sparse prefill attention on the matrix units, Q and P as hi + lo
     // halves (#818). Matrix class, not the name: the kernel needs matrix units and nothing was measured slower on them.
     // M5 Pro, 32K and 64K prompts at 2048-row chunks: prefill +8 to +10%, decode the same per draft cycle; 4 top-1
     // flips in 72 rows (Splash 1.5.0: 16). The call site is
-    // tattn() in qwen4_exp.cpp, whose matrix-unit check predates this table.
-    {"tattn_fast", ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 8, 10, false, "M5 Pro", false},
+    // tattn() in qwen4_exp.cpp, whose matrix-unit check predates this table. Knob::kNone: not a default_on lookup.
+    {"tattn_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 8, 10, false,
+     "M5 Pro", false},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
   if (!id) return false;
   DeviceFacts f;
+  f.apple_family = dev.apple_family;
   f.name = dev.name;
   f.cores = dev.cores;
   f.cores_measured = dev.cores_measured;
@@ -72,6 +106,7 @@ bool guard_matches(const char* id, const DeviceProfile& dev) {
   if (std::strcmp(id, "m4_pro_20") == 0) return m4_pro_20(f);
   if (std::strcmp(id, "m4_ten_core") == 0) return m4_ten_core(f);
   if (std::strcmp(id, "ultra_gpu") == 0) return ultra_gpu(f);
+  if (std::strcmp(id, "pre_m3_gpu") == 0) return pre_m3_gpu(f);
   return false;
 }
 
@@ -79,6 +114,7 @@ bool guard_matches(const char* id, const DeviceProfile& dev) {
 
 DeviceProfile resolve_device(const DeviceFacts& f) {
   DeviceProfile p;
+  p.apple_family = f.apple_family;
   p.cores = f.cores;
   p.cores_measured = f.cores_measured;
   p.name = f.name;
@@ -91,7 +127,11 @@ DeviceProfile resolve_device(const DeviceFacts& f) {
   return p;
 }
 
-ModelClass resolve_model(const ModelFacts& m) { return qwen35_a3b(m) ? ModelClass::kQwen35A3b : ModelClass::kOther; }
+ModelClass resolve_model(const ModelFacts& m) {
+  if (qwen35_a3b(m)) return ModelClass::kQwen35A3b;
+  if (qwen35_shape(m)) return ModelClass::kQwen35Shape;
+  return ModelClass::kOther;
+}
 
 const char* chip_class_name(ChipClass c) {
   switch (c) {
@@ -104,7 +144,21 @@ const char* chip_class_name(ChipClass c) {
 }
 
 const char* model_class_name(ModelClass m) {
-  return m == ModelClass::kQwen35A3b ? "qwen35-a3b" : "other";
+  switch (m) {
+    case ModelClass::kQwen35A3b: return "qwen35-a3b";
+    case ModelClass::kQwen35Shape: return "qwen35-shape";
+    case ModelClass::kOther: return "other";
+  }
+  return "other";
+}
+
+bool default_on(Knob k, const DeviceProfile& d, const ModelFacts& m) {
+  for (int i = 0; i < default_count(); ++i) {
+    const DefaultRow& r = default_at(i);
+    if (r.knob == k)
+      return std::string(r.value) == "on" && default_matches(r, d) && model_class_matches(r.model, m);
+  }
+  return false;
 }
 
 int default_count() { return int(sizeof(kDefaults) / sizeof(kDefaults[0])); }
@@ -198,7 +252,7 @@ std::string format_profile(const DeviceProfile& p, bool as_json) {
   o << "Kapitsa profile\n";
   o << "  chip class: " << chip_class_name(p.chip) << "\n";
   o << "  Mac: " << mac_line(p) << "\n";
-  o << "  defaults (call sites still decide; this is the table they move to):\n";
+  o << "  defaults (the call sites read this table; env overrides apply at the site):\n";
   for (int i = 0; i < default_count(); ++i) {
     const DefaultRow& r = default_at(i);
     o << "    " << r.id << "  " << model_class_name(r.model) << "  " << scope_name(r) << "  "

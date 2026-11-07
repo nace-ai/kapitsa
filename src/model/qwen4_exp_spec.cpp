@@ -32,7 +32,7 @@ bool moe4_dx() {
   static const bool on = [] {
     const char* v = getenv("NI_MOE4_DX");
     if (v && *v) return atoi(v) > 0;
-    return wide_cores();
+    return default_on(Knob::kMoe4Dx, ModelFacts{});
   }();
   return on;
 }

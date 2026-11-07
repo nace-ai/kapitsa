@@ -17,6 +17,15 @@ DeviceFacts facts_from_gpu(long ram_bytes, bool ane) {
   return f;
 }
 
+const DeviceProfile& current_device() {
+  // Resolved once, the way the call sites cached their own checks. No row keys on RAM or the ANE, so they stay
+  // unset here; doctor resolves its own with them filled for its print.
+  static const DeviceProfile p = resolve_device(facts_from_gpu(0, false));
+  return p;
+}
+
+bool default_on(Knob k, const ModelFacts& m) { return default_on(k, current_device(), m); }
+
 bool matrix_units() { return Gpu::get().apple_family() >= 10; }
 
 bool legacy_gpu() { return Gpu::get().apple_family() <= 7; }

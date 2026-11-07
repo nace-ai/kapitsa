@@ -866,6 +866,71 @@ ojson anthropic_reply(const std::vector<Event>& ev) {
   return {{"role", "assistant"}, {"content", blocks}};
 }
 
+void nameless_tool_replies(const TmplModel& m, const std::string& tag) {
+  const ojson tools = J(R"([{"type":"function","function":{"name":"read_file","parameters":{
+    "type":"object","properties":{"path":{"type":"string"}}}}}])");
+  const std::string valid = "<tool_call>\n<function=read_file>\n<parameter=path>\na.txt\n</parameter>\n</function>\n</tool_call>";
+  for (const std::string& name : {std::string(""), std::string(" \t\r\n ")}) for (bool following : {false, true}) {
+    const std::string bad = "<tool_call>\n<function=" + name + ">\n<parameter=path>\na.txt\n</parameter>\n</function>\n</tool_call>";
+    const std::string label = tag + "nameless=" + ojson(name).dump() + " following=" + std::to_string(following);
+    std::vector<int> ids;
+    const auto ds = generate(m, bad + (following ? valid : ""), false, tools, &ids);
+    const auto res = finished(ds, int(ids.size()));
+    const size_t count = following ? 1 : 0;
+    const std::string finish = following ? "tool_calls" : "stop";
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    check(res.content == bad && calls.size() == count &&
+              (!following || (calls[0]["function"]["name"] == "read_file" &&
+                               calls[0]["function"]["arguments"] == R"({"path":"a.txt"})")), label + " chat reply");
+
+    ChatCompletionsStream cw("chat", "m", 1);
+    std::string wire = cw.begin(res);
+    for (const auto& d : ds) wire += cw.delta(d);
+    wire += cw.end(res);
+    const size_t done = wire.find("data: [DONE]");
+    check(done != std::string::npos, label + " chat stream ends");
+    std::string text, reason;
+    ojson streamed = ojson::array();
+    for (const auto& e : parse_sse(wire.substr(0, done))) {
+      const auto& choice = e.data["choices"][0];
+      const auto& delta = choice["delta"];
+      if (delta.contains("content")) text += delta["content"].get<std::string>();
+      if (delta.contains("tool_calls")) for (auto c : delta["tool_calls"]) {
+        c.erase("index");
+        streamed.push_back(std::move(c));
+      }
+      if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+    }
+    check(text == bad && streamed == calls && reason == finish, label + " chat stream");
+
+    MessagesStream mw("msg", "m", true);
+    const auto events = run(mw, ds, res);
+    const auto blocks = anthropic_reply(events)["content"];
+    const auto message = messages_response("msg", "m", res, true);
+    const std::string stop = following ? "tool_use" : "end_turn";
+    std::string stream_stop;
+    for (const auto& e : events) if (e.name == "message_delta") stream_stop = e.data["delta"]["stop_reason"];
+    check(blocks == message["content"] && blocks.size() == 1 + count && blocks[0]["type"] == "text" &&
+              blocks[0]["text"] == bad &&
+              (!following || (blocks[1]["type"] == "tool_use" && blocks[1]["name"] == "read_file" &&
+                               blocks[1]["input"] == J(R"({"path":"a.txt"})"))) &&
+              stream_stop == stop && message["stop_reason"] == stop, label + " messages stream and reply");
+
+    ResponsesRequest rq;
+    ResponsesStream rw(rq, "resp", "m", 1);
+    const auto response = responses_response(rq, "resp", "m", 1, res);
+    const auto output = run(rw, ds, res).back().data["response"]["output"];
+    const auto expected = response["output"];
+    auto correct = [&](const ojson& items) {
+      return items.size() == 1 + count && items[0]["type"] == "message" &&
+             items[0]["content"][0]["text"] == bad &&
+             (!following || (items[1]["type"] == "function_call" && items[1]["name"] == "read_file" &&
+                              items[1]["arguments"] == R"({"path":"a.txt"})"));
+    };
+    check(correct(output) && correct(expected), label + " responses stream and reply");
+  }
+}
+
 // Whether `next`'s prompt continues `prev`'s prompt and the generated ids (+ the end of the turn) token for token
 bool continues(const TmplModel& m, const std::string& prev, const std::vector<int>& gen, const std::string& next, std::string* why) {
   std::vector<int> want = m.tok.encode(prev);
@@ -2223,6 +2288,7 @@ int main(int argc, char** argv) {
     m.tmpl = std::make_unique<minja::chat_template>(chat_template_source(dir), "", "<|im_end|>");
     const std::string tag = "[" + dir.substr(dir.find_last_of('/') + 1) + "] ";
     anthropic_round_trip(m, tag);
+    nameless_tool_replies(m, tag);
     reasoning_memory(m, tag);
     responses_round_trip(m, tag, false);
     responses_round_trip(m, tag, true);

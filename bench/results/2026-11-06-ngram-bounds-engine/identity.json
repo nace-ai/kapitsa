@@ -1,0 +1,10 @@
+{
+  "candidate_head": "dd8f9f2c04ef6a78e1c7534293ce139afcd8821f",
+  "reference_ngram_revision": "934a6d72",
+  "reference_kind": "same complete candidate engine with pre-change ngram.cpp.o substituted; not a full baseline checkout",
+  "reference_ngram_sha256": "17f6a47b0b0d53f96d90c06722792ed91ca2ebe0324d4452ea121c056071fdf5",
+  "candidate_library_sha256": "b36fa0d3fb61674e0e10a89f9fcac55edc81553c2310cf0628093bf218dd8864",
+  "reference_library_sha256": "c49caf894732b1cb2e926973f300b20c73bf78171f57bbc44e618ef2aad0fc32",
+  "synthetic_generator_sha256": "ab8728a856789e99f684baa6fd19dc66c60fe5baa7abecda04400238784d7f1f",
+  "scope": "random synthetic 6-layer hidden512 Flash-Next structure; validates integration, not actual-checkpoint quality/performance"
+}

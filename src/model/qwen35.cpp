@@ -2603,7 +2603,7 @@ static bool qmt_i8_on();
 static bool gemm_slices_on() {
   static const bool on = [] {
     const int v = env_int("NI_GEMM_SLICES", -1);
-    return v < 0 ? matrix_units() : v > 0;
+    return v < 0 ? default_on(Knob::kGemmSlices, ModelFacts{}) : v > 0;
   }();
   return on;
 }
@@ -3797,7 +3797,11 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
 // what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767): the experts' weights are read once per half.
 bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
   if (const char* v = getenv("NI_PF_WAVE")) return atoi(v) != 0;
-  return moe && hidden == 2048 && layers == 40 && wide_cores();
+  ModelFacts f;
+  f.moe = moe;
+  f.hidden = hidden;
+  f.layers = layers;
+  return default_on(Knob::kPfWave, f);
 }
 int Qwen35::gpu_wave_rows(int T) const {
   static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);

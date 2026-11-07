@@ -220,6 +220,14 @@ both paths' error the same against a double-precision reference) plus what the t
 and 16K prompts: the 35B-A3B's came out identical). That flag is a claim about the diff:
 anything that changes *what* is computed stays on the floor's gate.
 
+An A/B of an environment switch through `kapitsa bench` needs its own server: bench starts its server with every `NI_`
+variable removed ("Left out of the server, as the harness does"), so `NI_X=1 kapitsa bench` measures the default in
+both arms (7 Nov 2026, #372: a Lightning `NI_NH_ATTN_Q8` A/B ran A/A). Start `kapitsa serve --model M --port P --ctx
+32768 --slots 1 --disk-cache 0` with the switch set, run `KAPITSA_BENCH_SERVER=P kapitsa bench --model M --quick
+--json` against it, and check the server's load log that the switch took effect. Bench then marks the result
+`INVALID: server: a server kapitsa bench did not start` and exits 1 with the JSON saved: expected for this use, not a
+failed run. A server reading weights from an external drive can take 5 to 10 minutes to answer `/health`.
+
 Historical measurements, known gate exceedances and model coverage are recorded in
 [docs/numerical-history.md](docs/numerical-history.md), with links to the public changes. Those records do not
 waive the output check for a new change or authorize changing a default.

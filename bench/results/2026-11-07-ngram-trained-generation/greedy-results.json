@@ -1,0 +1,71 @@
+{
+  "runs": [
+    {
+      "label": "greedy-01-base",
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "all_logits_byte_equal": true,
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919
+    },
+    {
+      "label": "greedy-02-candidate",
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "all_logits_byte_equal": true,
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919
+    },
+    {
+      "label": "greedy-03-base",
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "all_logits_byte_equal": true,
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919
+    },
+    {
+      "label": "greedy-04-candidate",
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "all_logits_byte_equal": true,
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919
+    }
+  ],
+  "coverage": {
+    "required_rows": 3655,
+    "missing_rows": 0,
+    "all_row_bytes_rechecked": true,
+    "ordered_row_digest": "1c5529f5ac1e7f6ece2517396963c67cab95bfd65da7afd6899af19204e874f5",
+    "label": "greedy-final-coverage",
+    "new_rows": 0,
+    "downloaded_bytes": 0,
+    "table_logical_bytes": 32000153976,
+    "table_allocated_bytes": 11503783936,
+    "full_table_downloaded": false,
+    "revision": "f37e7ba46f0f2993b6ca373221530c579f258712",
+    "response_ranges_verified": true
+  },
+  "seed_driver_instrumented": true,
+  "measurement_drivers_unmodified": true,
+  "seed_prefetch_caveat": "Before filling each newly sampled input, an unused speculative gather may read sparse holes. The seed driver invalidates it with ple_forget() before computing that input; all consumed rows are verified. Unmodified A/B runs start with every greedy input and final speculative row present.",
+  "full_checkpoint_file": false,
+  "http_and_native_bench": "Not run; arbitrary generation rows are not covered by a sparse table."
+}
