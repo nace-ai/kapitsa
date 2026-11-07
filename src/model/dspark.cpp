@@ -1,6 +1,7 @@
 #include "engine/device_profile.h"
 #include "model/dspark.h"
 #include "util/bf16.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -10,7 +11,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 
 namespace ni {
 
@@ -50,16 +50,6 @@ struct CycP {
 // byte offsets of nh_dsp_cycle's blocks in cyc_
 constexpr size_t kCycEmbed = 0, kCycAttn = 256, kCycWalk = 512, kCycRing = 768;
 
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
-}
-
 // as loaded: NVFP4 as stored, BF16 matrices quantized to Q8 (34 bytes per 32), BF16 vectors as fp32, the Markov
 // embedding as stored; of the embedding table only the mask token's row
 size_t loaded_bytes(const SafetensorsIndex& idx, int hidden) {
@@ -77,7 +67,7 @@ size_t loaded_bytes(const SafetensorsIndex& idx, int hidden) {
 }  // namespace
 
 bool DSpark::is_dspark(const std::string& dir, int hidden) {
-  const nlohmann::json c = read_json(dir + "/config.json");
+  const nlohmann::json c = *json_file(dir + "/config.json");
   if (!c.is_object() || !c.contains("dflash_config") || !c["dflash_config"].is_object()) return false;
   const bool markov = c.value("dspark_fixup_head_type", std::string()) == "markov" || c.value("markov_rank", 0) > 0;
   struct stat st;
@@ -85,7 +75,7 @@ bool DSpark::is_dspark(const std::string& dir, int hidden) {
 }
 
 size_t DSpark::plan_bytes(const std::string& dir, size_t* per_slot) {
-  const nlohmann::json c = read_json(dir + "/config.json");
+  const nlohmann::json c = *json_file(dir + "/config.json");
   const SafetensorsIndex idx(dir);
   const nlohmann::json& d = c.contains("dflash_config") ? c["dflash_config"] : c;
   const int64_t H = c.value("hidden_size", 2688), NL = c.value("num_hidden_layers", 6);
@@ -243,7 +233,7 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   const NhConfig& tc = tg_.config();
   if (!is_dspark(path_, tc.hidden)) fatal("%s is not a DSpark drafter for this model", dir.c_str());
-  const nlohmann::json j = read_json(path_ + "/config.json");
+  const nlohmann::json j = *json_file(path_ + "/config.json");
   const nlohmann::json& d = j["dflash_config"];
   H_ = j.value("hidden_size", 0);
   NL_ = j.value("num_hidden_layers", 0);

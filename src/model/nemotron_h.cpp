@@ -19,7 +19,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -137,16 +136,6 @@ size_t align_up(size_t v, size_t a) { return (v + a - 1) / a * a; }
 
 // ---- discovery ----
 namespace {
-
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
-}
 
 // The language model's part of a checkpoint's config.json: llm_config (Nemotron Omni releases), text_config, or the
 // whole file (text-only releases).
@@ -278,7 +267,7 @@ static NhConfig read_config(const std::string& dir) {
       for (auto& x : v)
         if (x.is_number_integer() && std::find(out.begin(), out.end(), x.get<int>()) == out.end()) out.push_back(x.get<int>());
   };
-  const nlohmann::json g = read_json(dir + "/generation_config.json");
+  const nlohmann::json g = *json_file(dir + "/generation_config.json");
   if (g.is_object() && g.contains("eos_token_id")) add_ids(g["eos_token_id"], c.eos);
   if (c.eos.empty() && t.contains("eos_token_id")) add_ids(t["eos_token_id"], c.eos);
   if (j.contains("eos_token_id")) add_ids(j["eos_token_id"], c.eos);

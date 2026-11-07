@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 
 namespace ni {
 
@@ -77,16 +76,6 @@ struct DepthP {
 // ---- discovery and plan ----
 namespace {
 
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
-}
-
 // A LiLiCorr drafter folder: config.json of a DFlash drafter with the LiLiCorr projector, and model.safetensors.
 bool is_lilicorr(const std::string& dir, int hidden) {
   const auto cp = json_file(dir + "/config.json");
@@ -135,7 +124,7 @@ std::string LiliCorr::find(const std::string& model_dir) {
 }
 
 size_t LiliCorr::plan_bytes(const std::string& dir, size_t* per_slot) {
-  const nlohmann::json c = read_json(dir + "/config.json");
+  const nlohmann::json c = *json_file(dir + "/config.json");
   const SafetensorsIndex idx(dir);
   const size_t w = loaded_bytes(idx);
   const nlohmann::json& d = c.contains("dflash_config") ? c["dflash_config"] : c;
@@ -285,7 +274,7 @@ LiliCorr::LiliCorr(NemotronH& target, const std::string& dir) : tg_(target), pat
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   const NhConfig& tc = tg_.config();
   if (!is_lilicorr(path_, tc.hidden)) fatal("%s is not a LiLiCorr drafter for this model", dir.c_str());
-  const nlohmann::json j = read_json(path_ + "/config.json");
+  const nlohmann::json j = *json_file(path_ + "/config.json");
   const nlohmann::json& d = j["dflash_config"];
   LiliConfig& c = cfg_;
   c.H = j.value("hidden_size", 0);
