@@ -1,0 +1,120 @@
+{
+  "name": "retry",
+  "progress": [
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 1015,
+      "time_ms": 420
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 2030,
+      "time_ms": 900
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 3045,
+      "time_ms": 1380
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 4060,
+      "time_ms": 1860
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 5075,
+      "time_ms": 2341
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 6090,
+      "time_ms": 2881
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 7105,
+      "time_ms": 3421
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 8120,
+      "time_ms": 3901
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 9135,
+      "time_ms": 4441
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 10150,
+      "time_ms": 4982
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 11165,
+      "time_ms": 5582
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 12180,
+      "time_ms": 6122
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 13195,
+      "time_ms": 6722
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 14209,
+      "time_ms": 7323
+    },
+    {
+      "total": 15223,
+      "cache": 0,
+      "processed": 15223,
+      "time_ms": 7882
+    }
+  ],
+  "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 15223,
+    "completion_tokens": 32,
+    "total_tokens": 15255,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "kapitsa": {
+      "prefill_ms": 7941.3,
+      "kflash": {
+        "source": "DFlash2",
+        "cycles": 10
+      }
+    }
+  },
+  "finish_reason": "length"
+}

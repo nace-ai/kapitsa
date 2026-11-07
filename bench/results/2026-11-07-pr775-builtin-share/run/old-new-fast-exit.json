@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "tools/logit_compare.py",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-versioned/logits-fast",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/logits-fast",
+    "--min-top1",
+    "1",
+    "--max-mean-kl",
+    "0",
+    "--json",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/builtin-share/run/old-new-fast.json"
+  ],
+  "returncode": 0,
+  "extra_env": {}
+}

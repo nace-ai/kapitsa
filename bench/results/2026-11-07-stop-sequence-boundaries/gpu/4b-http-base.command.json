@@ -1,0 +1,16 @@
+{
+  "label": "4b-http-base",
+  "argv": [
+    "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+    "/Users/bytedance/kapitsa-stop-sequence-20261107/base/tests/test_server.py",
+    "http://127.0.0.1:53059"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-stop-sequence-20261107/base",
+  "started_at": "2026-11-07T07:23:33.356217+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/home-4b-http-base"
+  }
+}

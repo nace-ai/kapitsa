@@ -1,0 +1,21 @@
+{
+  "label": "4b-bench-2-base",
+  "argv": [
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+    "bench",
+    "--model",
+    "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+    "--quick",
+    "--json",
+    "--out",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/4b-bench-2-base.json"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference",
+  "started_at": "2026-11-07T13:53:36.646295+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-4b-bench-2-base"
+  }
+}

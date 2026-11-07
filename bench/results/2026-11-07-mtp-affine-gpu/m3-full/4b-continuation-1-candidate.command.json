@@ -1,0 +1,22 @@
+{
+  "label": "4b-continuation-1-candidate",
+  "argv": [
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/ni_run",
+    "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+    "@/Users/bytedance/kapitsa-mtp-affine-20261107/m3-full/4b-prompt.ids",
+    "256",
+    "0",
+    "--dflash",
+    "none",
+    "--spec",
+    "2"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+  "started_at": "2026-11-07T05:50:57.491964+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-full/home-4b-continuation-1-candidate"
+  }
+}

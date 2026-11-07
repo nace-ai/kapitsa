@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/device_profile_test"
+  ],
+  "returncode": 0,
+  "env": {
+    "NI_ANE_ASYNC": "0",
+    "NI_ANE_KEEP_S": "0",
+    "NI_NO_MTP": "1",
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1"
+  }
+}

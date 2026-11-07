@@ -1,0 +1,20 @@
+{
+  "head": "92689bea1bce8c956b84815fcebc72cf2d5088d0",
+  "parent": "ea4af55b6e8dbc47799b760c76db8a663e872398",
+  "binary_sha256": {
+    "kapitsa": "2e320350571992b14ab71a0c4e46a7ad033cb75578097c1e9c28734411efeb47",
+    "logit_dump": "bee482850fe3ed3818d0b805ef616631b8e6d542648a33d49afd92461f13a62e",
+    "ane_segment_check": "79362af90236ebcf04ca3863e9cb0fd9bd87469026c8b2909833058e4d2156bd"
+  },
+  "fallback_paragraph_and_nemotron_row_identical_to_base": true,
+  "M4_fast_bitwise_rows": 584,
+  "CPU_initial_pass": 16,
+  "CPU_affected_checks_retried": 5,
+  "all_retries_and_final_gates_passed": true,
+  "prior_head_CI": {
+    "head": "ea4af55b",
+    "run": 42304567009,
+    "conclusion": "success"
+  },
+  "current_head_CI": "not yet pushed; must be assessed separately"
+}

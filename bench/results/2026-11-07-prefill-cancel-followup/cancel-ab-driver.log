@@ -1,0 +1,72 @@
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+FAIL retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+PASS retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+FAIL retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+PASS retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+FAIL retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+PASS retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+FAIL retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference
+PASS control has a cached prefix
+PASS uninterrupted continuation has a cached prefix
+PASS cancel has a cached prefix
+PASS retry keeps the completed prefix
+PASS completed retry can be reused
+PASS repeat output matches
+PASS cold cancellation discards unfinished checkpoints
+PASS seed output matches reference
+PASS retry output matches uninterrupted reference

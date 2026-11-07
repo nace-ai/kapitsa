@@ -1,0 +1,5 @@
+data: {"id":"chatcmpl-179405891850073","object":"chat.completion.chunk","created":1794058918,"model":"Qwen3.6-35B-A3B-4bit","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-179405891850073","object":"chat.completion.chunk","created":1794058918,"model":"Qwen3.6-35B-A3B-4bit","choices":[{"index":0,"delta":{},"finish_reason":null}],"prompt_progress":{"total":15217,"cache":2051,"processed":2051,"time_ms":0}}
+
+data: {"id":"chatcmpl-179405891850073","object":"chat.completion.chunk","created":1794058918,"model":"Qwen3.6-35B-A3B-4bit","choices":[{"index":0,"delta":{},"finish_reason":null}],"prompt_progress":{"total":15217,"cache":2051,"processed":3932,"time_ms":660}}

@@ -1,0 +1,137 @@
+{
+  "source": "work/pr775/m4-local/performance-rebase-3f3b-isolated",
+  "files": [
+    {
+      "path": "perf-A1-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-A1-server.log",
+      "bytes": 2358,
+      "sha256": "c4397b3ef2c241f073d4a5fba8da5297514e528d067864bf02a7305b7cd158b9",
+      "included": true
+    },
+    {
+      "path": "perf-A1-telemetry.json",
+      "bytes": 1069,
+      "sha256": "104fdae1656fea9cdb693620b4517036537e0377015dd4578e2ccac96ac1653e",
+      "included": true
+    },
+    {
+      "path": "perf-A1.json",
+      "bytes": 4083,
+      "sha256": "762194d7398ef7b483930873988e3fd390d9d3236d6cc1fef25ca1da3fec065d",
+      "included": true
+    },
+    {
+      "path": "perf-A1.log",
+      "bytes": 408,
+      "sha256": "d21541b935f675d744992b550d6582a32444ed4c50bc460a72064a7e60aa995f",
+      "included": true
+    },
+    {
+      "path": "perf-A2-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-A2-server.log",
+      "bytes": 2358,
+      "sha256": "1ea97dbbbd147967a8e7806ed84b09b532bf3862d2c514621c6e33e15138b5a1",
+      "included": true
+    },
+    {
+      "path": "perf-A2-telemetry.json",
+      "bytes": 1059,
+      "sha256": "97d37d9fb04e8659b7533870fb0a30a2f17f7bb7c48045ba26060d41ebb04eb5",
+      "included": true
+    },
+    {
+      "path": "perf-A2.json",
+      "bytes": 4105,
+      "sha256": "807e7407bb91a7513f5e44ff65e22b8504494f4c2360a4bb93ed437f72d2a0d5",
+      "included": true
+    },
+    {
+      "path": "perf-A2.log",
+      "bytes": 409,
+      "sha256": "f85c875baeefe0b1c1e5ce163813fd80fc509326588fd32910c40061681cc73c",
+      "included": true
+    },
+    {
+      "path": "perf-B1-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-B1-server.log",
+      "bytes": 3134,
+      "sha256": "8ce7831944ef196488e25d86e3276cbd23ef1e063a486dbc43fd66ee90b61d04",
+      "included": true
+    },
+    {
+      "path": "perf-B1-telemetry.json",
+      "bytes": 883,
+      "sha256": "741325d754e34b65bd6c1dce0bb3f3f39ce1eb72f9db4c198a7835e437efd13e",
+      "included": true
+    },
+    {
+      "path": "perf-B1.json",
+      "bytes": 4104,
+      "sha256": "3fa9d149c1223d283c30604f55e2a3c00e1221bc2ac7dd1d52bec9b3eb0a9d95",
+      "included": true
+    },
+    {
+      "path": "perf-B1.log",
+      "bytes": 409,
+      "sha256": "86ccf2456b87d688cc5d776482af61b582aee372a0ab80d4711583b484b1de79",
+      "included": true
+    },
+    {
+      "path": "perf-B2-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-B2-server.log",
+      "bytes": 3133,
+      "sha256": "3c8541f51d995c91ae3546c768dd102ba4f846936a4e57ff297ee017d307066f",
+      "included": true
+    },
+    {
+      "path": "perf-B2-telemetry.json",
+      "bytes": 883,
+      "sha256": "ea9db5fd33a7dc2922d41a4531e9f5dfa843376a301cfed8426591e5e7a7efed",
+      "included": true
+    },
+    {
+      "path": "perf-B2.json",
+      "bytes": 4114,
+      "sha256": "a41f9513c7f795615596a0e8709f06f58c7f72c67393dd6b6b7da68d56317fc7",
+      "included": true
+    },
+    {
+      "path": "perf-B2.log",
+      "bytes": 410,
+      "sha256": "16d1878d248e43926296a093eb02020b4c3dc61231abd838f0f89677136a9ff8",
+      "included": true
+    },
+    {
+      "path": "performance-legs.json",
+      "bytes": 28644,
+      "sha256": "c678e99e72c29fead5717ae69263bc673c53866969ceb733a0bc6b8cef24fb66",
+      "included": true
+    },
+    {
+      "path": "performance-status.json",
+      "bytes": 49,
+      "sha256": "ac0ce241b0648decf1b035d3f39f004c17ad93b1d0a40577696a37718f667ce2",
+      "included": true
+    }
+  ]
+}

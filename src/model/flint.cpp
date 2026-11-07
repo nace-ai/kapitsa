@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <unordered_map>
 
@@ -63,16 +62,6 @@ Pipeline pipe(const std::string& n) {
   auto it = cache.find(n);
   if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   return it->second;
-}
-
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
 }
 
 // GPU shader validation's instrumentation doubles a kernel's threadgroup memory: the 16-key attention tiles under it

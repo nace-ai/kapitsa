@@ -1,0 +1,8 @@
+{
+  "head": "92689bea1bce8c956b84815fcebc72cf2d5088d0",
+  "version": "kapitsa 0.2.31 (92689bea)",
+  "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+  "old_evidence": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-versioned",
+  "units_override": null,
+  "calibration_file_exists": false
+}

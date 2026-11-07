@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "bench/reasoning/reasoning.py",
+    "run",
+    "--problems",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/inputs/3/long-reasoning.jsonl",
+    "--max-tokens",
+    "32768",
+    "--samples",
+    "1",
+    "--label",
+    "m4-fast",
+    "--base",
+    "http://127.0.0.1:18779/v1",
+    "--out",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/fast-case-3.jsonl",
+    "--serve",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/kapitsa serve --private --model /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit --port 18779 --ctx 65536 --slots 1 --prefill-chunk 2048 --disk-cache 0 --dflash none"
+  ],
+  "returncode": 0,
+  "profile": "fast"
+}

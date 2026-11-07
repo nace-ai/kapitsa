@@ -1,0 +1,72 @@
+{
+  "quiet": true,
+  "quiet_wait_seconds": 18.592401027679443,
+  "busy": [],
+  "samples": [
+    [
+      1793991578.187,
+      0.55,
+      "CorpLink Helper ",
+      0.55,
+      0.0
+    ],
+    [
+      1793991580.235,
+      0.55,
+      "CorpLink Helper ",
+      0.55,
+      0.0
+    ],
+    [
+      1793991582.266,
+      1.14,
+      "iTerm2",
+      0.61,
+      0.0
+    ],
+    [
+      1793991584.301,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793991586.337,
+      0,
+      "-",
+      0.0,
+      0.0
+    ]
+  ],
+  "overall": {
+    "samples": 5,
+    "mean_foreign_gpu_pct": 0.45,
+    "max_foreign_gpu_pct": 1.14,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+  },
+  "phases": {
+    "prefill_4000": {
+      "samples": 5,
+      "mean_foreign_gpu_pct": 0.45,
+      "max_foreign_gpu_pct": 1.14,
+      "mean_ambient_gpu_pct": 0.0,
+      "busy_samples": 0,
+      "longest_busy_run": 0,
+      "top": [],
+      "flagged": false
+    }
+  },
+  "ignored_processes": [
+    "WindowServer"
+  ],
+  "ambient_processes": [
+    "VisualIntelligenceCore",
+    "mediaanalysisd",
+    "photoanalysisd"
+  ]
+}

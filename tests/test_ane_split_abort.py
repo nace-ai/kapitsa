@@ -8,7 +8,7 @@ a leg's prompt from an earlier leg's), greedy replies, thinking off. A leg first
 builds the split from its chat path (Engine::chat's ane_poll), not when the model loads.
   0. NI_ANE=0: the two prompts' replies on the GPU alone, the reference for leg 2's rerun (leg 1's are not compared:
      the split runs the FFN in int8 on the Neural Engine, so its rows are an approximation)
-  1. the split on: both prompts run split chunks, and the log's "prefill: Neural Engine busy ... evaluations" says
+  1. the fast profile (legacy splits remain on too): both prompts run split chunks, and the log's "prefill: Neural Engine busy ... evaluations" says
      they held (no chunk was given up)
   2. the fault (NI_ANE_FAULT=0: the ANE job of layer 0 of the first split chunk never starts, NI_ANE_VERIFY=0 so the
      startup check does not consume it) with NI_ANE_SPLIT_WAIT_MS=250: the bound runs out long before the per-job
@@ -181,7 +181,14 @@ def warm(server):
 
 def ane_line(server, since, timeout):
     """waits for the split to be on (the server compiles its program in the background)"""
-    m = server.wait_log(r"NI_ANE: Neural Engine FFN split[^:]*: \d+/\d+ units", timeout, since=since)
+    split = r"NI_ANE: Neural Engine FFN split[^:]*: \d+/\d+ units"
+    started = time.monotonic()
+    m = server.wait_log(split + r"|NI_ANE: Neural Engine program ready in the background", timeout, since=since)
+    if m is not None and "program ready" in m.group(0):
+        # A cold compile may finish after warm()'s request. Only a new request calls ane_poll()
+        # again and builds the split; another one-token prompt cannot consume the injected fault.
+        warm(server)
+        m = server.wait_log(split, max(0, timeout - (time.monotonic() - started)), since=since)
     if m is None:
         for why in (r"NI_ANE: (Neural Engine unavailable[^\n]*)", r"NI_ANE: (no calibration[^\n]*)",
                     r"NI_ANE: (releasing the Neural Engine split[^\n]*)"):
@@ -194,7 +201,7 @@ def ane_line(server, since, timeout):
 # 512 rows (the default calibration) so the 700-row prompt's chunk splits and takes the single-lane schedule: on that
 # schedule the GPU's command buffer waits on the job, which is what a bound has to release. The wavefront schedule (from
 # 256 rows: two row halves) does not wait on the GPU side, so the chunk's own Handoff::finish bound gives it up instead.
-MIN_ROWS = {"NI_ANE_MIN_ROWS": "512"}
+MIN_ROWS = {"NI_ANE_MIN_ROWS": "512", "KAPITSA_PROFILE": "fast"}
 lock, root = gpu_lock(), tempfile.mkdtemp(prefix="kap-ane-abort-")
 print(f"logs in {root}", flush=True)
 try:

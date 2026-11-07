@@ -1,3 +1,4 @@
+#include "ane/input_profile.h"
 #include "util/load_threads.h"
 #include "model/qwen35.h"
 #include "engine/device_profile.h"
@@ -125,10 +126,6 @@ size_t QLinear::row_bytes() const {
 }
 static bool gdn_par();
 static bool qmm8_on();
-static int env_int(const char* n, int def) {
-  const char* v = getenv(n);
-  return v && *v ? atoi(v) : def;
-}
 
 // The large prefill tiles with M tiles along grid x for the formats other than bf16 (enc_qrf: 3/5/6-bit and 4-bit
 // group 32; enc_qmm_large: 8-bit), the M1's default (NI_QRF_MF=0/1 overrides): the threadgroups running together
@@ -1095,9 +1092,9 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   prewarm_pipelines();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
-  // GPU + Neural Engine split of the dense prefill FFN: on by default for dense models with a
-  // calibration or a default share for this chip (27B 4k prefill ~2.8x); NI_ANE=0 keeps the GPU alone.
-  if (!cfg_.moe && !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0"))) init_ane();
+  // Dense ANE FFN: legacy 2560-channel inputs keep their defaults; new 2048-channel inputs
+  // follow fast on non-matrix Macs. init_ane still requires calibration or a chip share and runtime guards.
+  if (!cfg_.moe && ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)))) init_ane();
 }
 
 Qwen35::Qwen35(const std::string& dir, int prefill_chunk, NoLoad) : dir_(dir), tmax_(prefill_chunk) {}
@@ -1720,7 +1717,13 @@ std::string Qwen35::disk_format() const {
            kinds.c_str(), kv_i8() ? "i8" : "f16", cfg_.hkv, int(kv_row_bytes(cfg_.head_dim)),
            kv_i8() ? " (int8 codes, an f32 scale a row)" : "", mtp_loaded_ ? " (MTP head too)" : "",
            2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv, cfg_.lin_hv, cfg_.lin_dv, cfg_.lin_dk);
-  return b;
+  std::string format = b;
+  // Newly supported widths can leave different KV/recurrent values after W8A8 prefill. Separate
+  // their prefixes from pre-support binaries and NI_ANE=0, even if a particular chunk stays on the GPU.
+  if (!cfg_.moe && ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)) == 2048 &&
+      ane::input_profile_enabled(2048))
+    format += "; prefill: ANE W8A8 segmented input";
+  return format;
 }
 
 void Qwen35::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {

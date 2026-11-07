@@ -1,0 +1,12 @@
+{
+  "command": [
+    ".dsh/skills/verify-kapitsa/scripts/vk",
+    "build",
+    "kapitsa",
+    "logit_dump",
+    "ane_segment_check",
+    "device_profile_test"
+  ],
+  "returncode": 0,
+  "extra_env": {}
+}
