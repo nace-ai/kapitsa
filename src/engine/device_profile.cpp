@@ -81,9 +81,9 @@ const DefaultRow kDefaults[] = {
     {"m4_ten_core", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "narrow", 0, 0, false,
      "6 sites; shape guard: 10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
     {"ultra_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
-     "1 site; correctness guard: fused merges failed past a 32-key tile (#421), so the split merges stay", false},
+     "1 site; correctness guard: fused merges failed past a 32-key tile on the old arrival (#421); not re-run with the new arrival, so the split merges stay", false},
     {"pre_m3_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
-     "1 site; correctness guard: fused merges produced garbage on an M1 Max (#478), so M1 and M2 keep the split path", false},
+     "1 site; correctness guard: fused merges produced garbage on an M1 Max on 0.2.15 (#478); an M2 and the new arrival are not verified, so M1 and M2 keep the split path", false},
     // Fast profile only (docs/profiles.md): Flash-Next's sparse prefill attention on the matrix units, Q and P as hi + lo
     // halves (#818). Matrix class, not the name: the kernel needs matrix units and nothing was measured slower on them.
     // M5 Pro, 32K and 64K prompts at 2048-row chunks: prefill +8 to +10%, decode the same per draft cycle; 4 top-1
