@@ -1,5 +1,6 @@
 #include "engine/history_gate.h"
 #include "engine/engine.h"
+#include "engine/slot_policy.h"
 #include "engine/device_profile.h"
 #include "engine/output_parser.h"
 #include "engine/stop_filter.h"
@@ -2375,7 +2376,8 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
       if (!s.busy) return &s;
     return nullptr;
   }
-  if (best_lcp < 64) {
+  // Keep a slot when the request extends all of its live rows, even when that exact prefix is shorter than 64 rows.
+  if (should_allocate_new_conversation(size_t(best_lcp), best->tokens.size(), prompt.size())) {
     // Nothing worth reusing: a new conversation. It takes an empty slot, else one holding a one-off
     // (a conversation never continued, like an agent's title or commit-message request), and only
     // then a continued conversation; least recently used first within each. So one-offs never evict
