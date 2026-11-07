@@ -1,0 +1,1 @@
+["/Users/bytedance/kapitsa-full-table-20261107/kapitsa-1023-candidate", "serve", "--model", "/Users/bytedance/kapitsa-full-table-20261107/model-full", "--host", "127.0.0.1", "--port", "52095", "--private", "--slots", "2", "--context", "32768", "--disk-cache", "0"]

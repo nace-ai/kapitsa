@@ -1,0 +1,118 @@
+kapitsa bench: model-full 8-bit (mixed) on Mac Studio (2025): Apple M3 Ultra, 60-core GPU, 96 GB, macOS 26.4.1, quick
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:52716 (log ~/kapitsa-full-table-20261107/results/home-1023-bench-3-candidate/logs/bench-52716-ctx32768.log)
+[?2026h  ✓ Loaded model-full  ·  8-bit (mixed) in 6.8s  ·  MTP speculative decoding d…
+[?2026lReady after 6.8s: MTP speculative decoding depth 2, KFlash (MTP)
+Warm-up done in 6.5s
+GPU quiet after 18s
+  decode T=0.6: 55.64 tok/s (512 tok, finish="length")
+  decode T=0.6: 52.72 tok/s (512 tok, finish="length")
+  decode T=0.6: 60.94 tok/s (512 tok, finish="length")
+decode T=0.6: median 55.64 tok/s over 3/3 valid, accepted drafts 32.06 tok/s (57.6% of tokens)
+  decode T=0: 59.15 tok/s (512 tok, finish="length")
+  decode T=0: 59.44 tok/s (512 tok, finish="length")
+  decode T=0: 58.84 tok/s (512 tok, finish="length")
+decode T=0: median 59.15 tok/s over 3/3 valid, accepted drafts 35.12 tok/s (59.4% of tokens)
+prefill 4000: 4135 tok, 854 tok/s; cached TTFT median 0.16 s (148 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-07T00:11:15Z",
+  "kapitsa": {
+    "version": "0.2.31",
+    "commit": "0be92def"
+  },
+  "mac": {
+    "identifier": "Mac15,14",
+    "name": "Mac Studio (2025)",
+    "year": 2025,
+    "chip": "Apple M3 Ultra",
+    "cpu_cores": 28,
+    "gpu_cores": 60,
+    "memory_gb": 96,
+    "macos": "26.4.1",
+    "macos_build": "25E253"
+  },
+  "model": {
+    "name": "model-full",
+    "title": "model-full",
+    "variant": null,
+    "precision": "8-bit (mixed)",
+    "catalog": false,
+    "revision": null,
+    "decoding": "MTP",
+    "decoding_detail": "MTP speculative decoding depth 2, KFlash (MTP)",
+    "drafter": null,
+    "drafter_kind": "MTP",
+    "drafter_source": null,
+    "drafter_reason": "this model takes no block drafter, MTP head drafts depth 2"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 55.64,
+      "runs_tps": [
+        55.64,
+        52.72,
+        60.94
+      ],
+      "median_accepted_draft_tps": 32.06,
+      "median_accepted_draft_share": 0.5762
+    },
+    "decode_greedy": {
+      "median_tps": 59.15,
+      "runs_tps": [
+        59.15,
+        59.44,
+        58.84
+      ],
+      "median_accepted_draft_tps": 35.12,
+      "median_accepted_draft_share": 0.5938
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4135,
+        "ttft_s": 4.8407,
+        "tps": 854.2,
+        "followup_s": [
+          0.1551,
+          0.1781,
+          0.1495
+        ],
+        "followup_median_s": 0.1551,
+        "followup_suffix_tps": 148.3
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 36.8,
+    "mapped_gb": 3.66
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.03,
+    "gpu_other_max_pct": 0.89,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
+Saved /Users/bytedance/kapitsa-full-table-20261107/results/1023-bench-3-candidate.json
