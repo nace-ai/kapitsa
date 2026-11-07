@@ -92,7 +92,7 @@ struct Router {
       ids[v] = ids_store[v].view(guard * 4, size_t(R) * K * 4);
       wts[v] = wts_store[v].view(guard * 4, size_t(R) * (K + 1) * 4);
     }
-    pipes[0] = g.pipeline("moe_topk512_reference"); pipes[1] = g.pipeline("moe_topk512");
+    pipes[0] = g.pipeline("moe_topk512_reference"); pipes[1] = g.pipeline(R > 1 ? "moe_topk512_rows" : "moe_topk512");
   }
   ~Router() { for (Buffer* b : {&logits, &shared, &ids_store[0], &ids_store[1], &wts_store[0], &wts_store[1]}) g.release(*b); }
   double run(int v, int repeats = 1) {
@@ -148,7 +148,10 @@ int main(int argc, char** argv) {
   Gpu& g = Gpu::get(); g.compile_extra("ordered router reference", reference_source);
   printf("GPU %s, threadgroup bytes A=%u B=%u\n", g.name().c_str(), g.pipeline("moe_topk512_reference").tg_mem, g.pipeline("moe_topk512").tg_mem);
   if (!strcmp(argv[1], "--bench")) {
-    for (unsigned rows : {1u, 8u, 32u, 256u}) for (unsigned norm : {0u, 1u}) {
+    { Router warm(256, 10, 1, 0);
+      for (int i = 0; i < 48; ++i) { warm.run(0, 8192); warm.run(1, 8192); }
+    }
+    for (unsigned rows : {1u, 2u, 3u, 4u, 8u, 16u, 32u, 64u, 256u}) for (unsigned norm : {0u, 1u}) {
       Router t(rows, 10, norm, 0);
       for (int i = 0; i < 4; ++i) { t.run(0, 256); t.run(1, 256); }
       for (int pair = 0; pair < 8; ++pair) for (int v = 0; v < 2; ++v) {
@@ -160,7 +163,7 @@ int main(int argc, char** argv) {
     return 0;
   }
   int bad = 0, cases = 0;
-  for (unsigned rows : {1u, 3u, 8u, 64u, 257u}) {
+  for (unsigned rows : {1u, 2u, 3u, 4u, 8u, 16u, 64u, 257u}) {
     if (argc == 3 && rows > 3) continue;
     for (unsigned k : {1u, 2u, 8u, 10u, 16u}) for (unsigned norm : {0u, 1u}) for (unsigned pattern = 0; pattern < 9; ++pattern) {
       Router t(rows, k, norm, pattern); bad += !t.check(); ++cases;

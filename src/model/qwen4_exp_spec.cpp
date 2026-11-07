@@ -134,12 +134,12 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
   if (pred) segs.push_back({&layers_[size_t(li + 1)].router, plog_});
   enc_rows(e, segs, xrn_, R);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
-  e.use(pipe4("moe_topk512"));
+  e.use(pipe4(R > 1 ? "moe_topk512_rows" : "moe_topk512"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(uint32_t(R), 1, 1, 32);
   if (pred) {
-    e.use(pipe4("moe_topk512"));
+    e.use(pipe4(R > 1 ? "moe_topk512_rows" : "moe_topk512"));
     e.buf(0, plog_); e.buf(1, slog_); e.buf(2, pidx_); e.buf(3, pwts_);
     e.val(4, tp);
     e.dispatch(uint32_t(R), 1, 1, 32);
@@ -208,7 +208,7 @@ void Qwen4Exp::enc_moe_exl3_rows(Encoder& e, const Layer& L, int R) {
   if (cfg_.experts != 512 || cfg_.top_k > 16) fatal("EXL3 experts: the 512-expert top-k of up to 16 is supported");
   enc_rows(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}, {&L.sg, sgb_}, {&L.su, sub_}}, xrn_, R);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(cfg_.top_k), cfg_.norm_topk ? 1u : 0u};
-  e.use(pipe4("moe_topk512"));
+  e.use(pipe4(R > 1 ? "moe_topk512_rows" : "moe_topk512"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(uint32_t(R), 1, 1, 32);
