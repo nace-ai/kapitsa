@@ -9,6 +9,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <arm_neon.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -324,12 +325,31 @@ void NgramTable::row(int64_t r, float* out) const {
       const uint16_t* bi = reinterpret_cast<const uint16_t*>(m.b + size_t(lr) * group_row_bytes_);
       const uint32_t* q = reinterpret_cast<const uint32_t*>(w);
       const uint32_t mask = (1u << bits_) - 1;
-      for (int i = 0; i < dim_; ++i) {
-        const uint64_t bit = uint64_t(i) * uint64_t(bits_);
-        uint64_t word = q[bit / 32];
-        if (bit % 32 + uint64_t(bits_) > 32) word |= uint64_t(q[bit / 32 + 1]) << 32;
-        const uint32_t c = uint32_t(word >> (bit % 32)) & mask;
-        out[i] = bf16_to_f32(sc[i / gs_]) * float(c) + bf16_to_f32(bi[i / gs_]);
+      // A packed word contains eight independent codes sharing one group coefficient pair.
+      if (bits_ == 4 && gs_ % 8 == 0 && dim_ % 8 == 0) {
+        const int32x4_t shifts = {0, -4, -8, -12};
+        const uint32x4_t nibble = vdupq_n_u32(15);
+        for (int begin = 0, gi = 0; begin < dim_; ++gi) {
+          const float sv = bf16_to_f32(sc[gi]), bv = bf16_to_f32(bi[gi]);
+          const int end = begin + std::min(gs_, dim_ - begin);
+          const float32x4_t scale = vdupq_n_f32(sv), bias = vdupq_n_f32(bv);
+          for (int i = begin; i < end; i += 8) {
+            const uint32x4_t word = vdupq_n_u32(q[i / 8]);
+            const uint32x4_t lo = vandq_u32(vshlq_u32(word, shifts), nibble);
+            const uint32x4_t hi = vandq_u32(vshlq_u32(vshrq_n_u32(word, 16), shifts), nibble);
+            vst1q_f32(out + i, vfmaq_f32(bias, scale, vcvtq_f32_u32(lo)));
+            vst1q_f32(out + i + 4, vfmaq_f32(bias, scale, vcvtq_f32_u32(hi)));
+          }
+          begin = end;
+        }
+      } else {
+        for (int i = 0; i < dim_; ++i) {
+          const uint64_t bit = uint64_t(i) * uint64_t(bits_);
+          uint64_t word = q[bit / 32];
+          if (bit % 32 + uint64_t(bits_) > 32) word |= uint64_t(q[bit / 32 + 1]) << 32;
+          const uint32_t c = uint32_t(word >> (bit % 32)) & mask;
+          out[i] = bf16_to_f32(sc[i / gs_]) * float(c) + bf16_to_f32(bi[i / gs_]);
+        }
       }
       break;
     }
