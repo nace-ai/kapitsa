@@ -92,7 +92,7 @@ struct Router {
       ids[v] = ids_store[v].view(guard * 4, size_t(R) * K * 4);
       wts[v] = wts_store[v].view(guard * 4, size_t(R) * (K + 1) * 4);
     }
-    pipes[0] = g.pipeline("moe_topk512_reference"); pipes[1] = g.pipeline(R > 1 ? "moe_topk512_rows" : "moe_topk512");
+    pipes[0] = g.pipeline("moe_topk512_reference"); pipes[1] = g.pipeline(R > 1 && norm ? "moe_topk512_rows" : "moe_topk512");
   }
   ~Router() { for (Buffer* b : {&logits, &shared, &ids_store[0], &ids_store[1], &wts_store[0], &wts_store[1]}) g.release(*b); }
   double run(int v, int repeats = 1) {
