@@ -1049,7 +1049,7 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
     float sg;
   } rg{uint32_t(c.hq), nch, NQ, L.sg};
   // combined, gated, not normalized (o_proj is linear and the residual's justnorm of its output cancels the norm)
-  e.use(pipe("dory_attn_reduce_gate"));
+  e.use(pipe(nch >= 16 && nch <= 64 ? "dory_attn_reduce_gate_shared" : "dory_attn_reduce_gate"));
   e.buf(0, part_o_);
   e.buf(1, part_ml_);
   e.buf(2, qkvg_, size_t(QD + 2 * KD) * 4);

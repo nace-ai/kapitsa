@@ -92,7 +92,7 @@ struct Reduction {
       }
     }
     pipelines[0] = g.pipeline("dory_attn_reduce_reference");
-    pipelines[1] = g.pipeline("dory_attn_reduce_gate");
+    pipelines[1] = g.pipeline(S >= 16 && S <= 64 ? "dory_attn_reduce_gate_shared" : "dory_attn_reduce_gate");
   }
   ~Reduction() {
     for (Buffer* b : {&po, &ml, &qg, &sg2, &storage[0], &storage[1]}) g.release(*b);
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
   g.compile_extra("Dory", kDoryKernelSource);
   g.compile_extra("Dory ordered reference", reference_source);
-  printf("GPU %s, reduction static threadgroup bytes %u\n", g.name().c_str(), g.pipeline("dory_attn_reduce_gate").tg_mem);
+  printf("GPU %s, reduction static threadgroup bytes %u\n", g.name().c_str(), g.pipeline("dory_attn_reduce_gate_shared").tg_mem);
   if (!strcmp(argv[1], "--bench")) {
     { Reduction warmup(16, 8, 64, 0); warmup.run(0, 512); warmup.run(1, 512); }
     for (unsigned rows : {1u, 3u, 8u})
