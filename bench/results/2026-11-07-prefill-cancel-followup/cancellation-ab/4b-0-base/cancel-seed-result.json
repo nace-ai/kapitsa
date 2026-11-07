@@ -1,0 +1,42 @@
+{
+  "name": "cancel-seed",
+  "progress": [
+    {
+      "total": 2058,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 2058,
+      "cache": 0,
+      "processed": 1029,
+      "time_ms": 480
+    },
+    {
+      "total": 2058,
+      "cache": 0,
+      "processed": 2058,
+      "time_ms": 945
+    }
+  ],
+  "text": "The `forward` method of the `GraniteSpeechConformerAttention` class reshapes input tensors into blocks, applies Shaw's relative positional embeddings, and performs",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 2058,
+    "completion_tokens": 32,
+    "total_tokens": 2090,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "kapitsa": {
+      "prefill_ms": 1004.7,
+      "kflash": {
+        "source": "DFlash2",
+        "cycles": 9
+      }
+    }
+  },
+  "finish_reason": "length"
+}

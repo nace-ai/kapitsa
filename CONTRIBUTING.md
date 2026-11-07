@@ -162,6 +162,13 @@ The SSD prefix cache across restarts (starts its own servers, takes the GPU lock
 cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit`
 (`--ttft` also times the follow-up cold, from the SSD and from memory).
 
+Cancellation during continuation prefill (starts its own servers, takes the GPU lock):
+`python3 tests/test_prefill_cancel.py --cli build/kapitsa --model MODEL_DIR --output NEW_DIR` checks repeated
+prefill cancellation, retention of a completed prefix, retry text against an uninterrupted request, and cold-cancel
+fallback. It takes the GPU lock, disables the SSD cache and ANE, and retains request/event/server logs in a new folder.
+`--reference OTHER_BINARY` uses another build for the uninterrupted request. This does not replace the logit gate or
+interleaved performance checks.
+
 Reading a user's draft ahead (`POST /v1/draft`; starts its own servers, takes the GPU lock):
 `python3 tests/test_draft.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit` checks that a follow-up writes the
 same tokens with and without drafts before it (drafts extended, edited in the middle, deleted, a paste, a reading a

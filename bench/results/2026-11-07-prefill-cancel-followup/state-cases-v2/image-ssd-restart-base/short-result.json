@@ -1,0 +1,29 @@
+{
+  "name": "short",
+  "progress": [
+    {
+      "total": 2174,
+      "cache": 2117,
+      "processed": 2174,
+      "time_ms": 0
+    }
+  ],
+  "text": "One possible failure in the `GraniteSpeechConformerAttention` class is a `ValueError` being raised if the `context_size` parameter is either less",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 2174,
+    "completion_tokens": 32,
+    "total_tokens": 2206,
+    "prompt_tokens_details": {
+      "cached_tokens": 2117
+    },
+    "kapitsa": {
+      "kflash": {
+        "source": "DFlash2",
+        "cycles": 7
+      }
+    }
+  },
+  "finish_reason": "length"
+}

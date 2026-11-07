@@ -2975,7 +2975,44 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       e.reset();
       if (dfl_) dfl_->end_prefill();
       if (lili_) lili_->end_prefill();
-      drop_slot(slot);
+      // Keep only checkpoints from the reused prefix. A checkpoint saved by this unfinished prefill may not
+      // have its matching drafter ring yet: that snapshot is committed when the whole prompt has been read.
+      const TurnCheckpoint* keep = nullptr;
+      const int before = std::min(start, int(common));
+      for (auto& c : slot.ckpts) {
+        if (c.pos > before) c.pos = -1;
+        if (c.pos > 0 && (!keep || c.pos > keep->pos)) keep = &c;
+      }
+      if (keep) {
+        auto rewind = g.begin();
+        model_->restore(*rewind, s, *keep);
+        if (dfl_) {
+          if (keep->prefix) DFlash2::reset(*slot.dseq);
+          else dfl_->encode_ring_copy(*rewind, *slot.dckpts[size_t(keep - slot.ckpts.data())], *slot.dseq);
+          DFlash2::rewind(*slot.dseq, keep->pos);
+        }
+        if (lili_) {
+          lili_->encode_copy(*rewind, *slot.lckpts[size_t(keep - slot.ckpts.data())], *slot.lseq);
+          NhDrafter::rewind(*slot.lseq, keep->pos);
+        }
+        rewind->commit_and_wait();
+        slot.tokens.assign(keys.begin(), keys.begin() + keep->pos);
+        slot.img_spans.clear();
+        slot.img_digests.clear();
+        for (size_t i = 0; i < mm.spans.size(); ++i)
+          if (mm.spans[i].pos + mm.spans[i].n <= keep->pos) {
+            slot.img_spans.push_back(mm.spans[i]);
+            slot.img_digests.push_back(mm.digests[i]);
+          }
+        s.embeds = nullptr;
+        disk_filled(slot, keep->pos, keep->pos);  // trim the discarded suffix without assigning new KV provenance
+        slot.live_ok = false;
+        ++slot.gen;
+        ++slot.version;
+        logd("checkpoints: cancelled prefill kept the completed checkpoint at %d", keep->pos);
+      } else {
+        drop_slot(slot);
+      }
       res.prefill_ms = now_ms() - t0;
       res.finish_reason = "cancelled";
       if (live) live->phase.store(3, std::memory_order_relaxed);
