@@ -208,6 +208,7 @@ class OutputParser {
       if (!c.is_object() || !c.contains("name") || !c["name"].is_string()) return false;
       ToolCall tc;
       tc.name = c["name"].get<std::string>();
+      if (trim_ws(tc.name).empty()) return false;
       const ojson a = c.contains("arguments") ? c["arguments"] : ojson::object();
       if (a.is_string()) {
         const ojson pa = ojson::parse(a.get<std::string>(), nullptr, false);
