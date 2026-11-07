@@ -1,0 +1,278 @@
+[
+  {
+    "label": "compile-seed-driver",
+    "argv": [
+      "/usr/bin/clang++",
+      "-DKAPITSA_GIT=\"934a6d72\"",
+      "-DKAPITSA_VERSION=\"0.2.31\"",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/base/src",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/base/include",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/base/third_party",
+      "-O3",
+      "-std=gnu++20",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-c",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/seed-driver.cpp",
+      "-o",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/seed-driver.o"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build",
+    "exit": 0,
+    "start": 1793982492.836365,
+    "elapsed_seconds": 1.0879812240600586
+  },
+  {
+    "label": "link-seed-driver",
+    "argv": [
+      "/usr/bin/c++",
+      "-O3",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-Wl,-search_paths_first",
+      "-Wl,-headerpad_max_install_names",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/seed-driver.o",
+      "-o",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/seed-driver",
+      "libnaceinfer.a",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build",
+    "exit": 0,
+    "start": 1793982493.925227,
+    "elapsed_seconds": 0.1037452220916748
+  },
+  {
+    "label": "host-os",
+    "argv": [
+      "/usr/bin/sw_vers"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995172.968009,
+    "elapsed_seconds": 0.015431880950927734
+  },
+  {
+    "label": "host-hardware",
+    "argv": [
+      "/usr/sbin/sysctl",
+      "machdep.cpu.brand_string",
+      "hw.memsize",
+      "hw.ncpu"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995172.984958,
+    "elapsed_seconds": 0.004703044891357422
+  },
+  {
+    "label": "disk-before-gpu",
+    "argv": [
+      "/bin/df",
+      "-h",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995172.990705,
+    "elapsed_seconds": 0.005978107452392578
+  },
+  {
+    "label": "logits-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-base",
+      "--paths",
+      "step,verify"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/base",
+    "exit": 0,
+    "start": 1793995173.2240372,
+    "elapsed_seconds": 33.90473985671997
+  },
+  {
+    "label": "logits-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-candidate",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-base"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate",
+    "exit": 0,
+    "start": 1793995207.349251,
+    "elapsed_seconds": 31.637911796569824
+  },
+  {
+    "label": "logit-compare",
+    "argv": [
+      "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/tools/logit_compare.py",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-base",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-candidate"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995239.468043,
+    "elapsed_seconds": 1.9918310642242432
+  },
+  {
+    "label": "decode-generated",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-candidate",
+      "decode",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/generated.json",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/generated-text.json"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793998966.66715,
+    "elapsed_seconds": 0.2707099914550781
+  },
+  {
+    "label": "greedy-01-base-thermal",
+    "argv": [
+      "/usr/bin/pmset",
+      "-g",
+      "therm"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793998967.17637,
+    "elapsed_seconds": 0.017347097396850586
+  },
+  {
+    "label": "greedy-01-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+      "256",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/greedy-01-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793998967.1952481,
+    "elapsed_seconds": 13.600758790969849
+  },
+  {
+    "label": "greedy-02-candidate-thermal",
+    "argv": [
+      "/usr/bin/pmset",
+      "-g",
+      "therm"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793998980.9759629,
+    "elapsed_seconds": 0.011734962463378906
+  },
+  {
+    "label": "greedy-02-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+      "256",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/greedy-02-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793998980.989333,
+    "elapsed_seconds": 12.573377132415771
+  },
+  {
+    "label": "greedy-03-base-thermal",
+    "argv": [
+      "/usr/bin/pmset",
+      "-g",
+      "therm"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793998993.752048,
+    "elapsed_seconds": 0.011462926864624023
+  },
+  {
+    "label": "greedy-03-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+      "256",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/greedy-03-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793998993.7651782,
+    "elapsed_seconds": 11.728566646575928
+  },
+  {
+    "label": "greedy-04-candidate-thermal",
+    "argv": [
+      "/usr/bin/pmset",
+      "-g",
+      "therm"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793999005.674428,
+    "elapsed_seconds": 0.010905981063842773
+  },
+  {
+    "label": "greedy-04-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+      "256",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/greedy-04-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793999005.6869912,
+    "elapsed_seconds": 11.566787719726562
+  }
+]

@@ -293,6 +293,9 @@ jobs:
       - name: test_server --cli
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_server.py --cli build/kapitsa
+      - name: test_idle_unload (the --idle-unload flag; the GPU cases need a Mac with a model)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: python3 tests/test_idle_unload.py --no-gpu
       - name: test_sidecar
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_sidecar.py build/kapitsa

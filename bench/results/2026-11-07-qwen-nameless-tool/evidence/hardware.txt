@@ -1,0 +1,3 @@
+hw.model: Mac15,14
+hw.memsize: 103079215104
+machdep.cpu.brand_string: Apple M3 Ultra

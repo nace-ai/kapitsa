@@ -104,6 +104,9 @@ class Gpu {
   // The base M4 with at most 10 GPU cores: the defaults tuned and gated on that chip alone turn on here
   int apple_family() const;               // apple_family_probed: 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when the OS says so
   size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
+  // macOS's memory pressure is at warning or critical (kern.memorystatus_vm_pressure_level above 1; the
+  // NI_RESIDENCY_PRESSURE_TEST file stands in for it in tests)
+  static bool memory_pressed();
   static const char* thermal_state();  // NSProcessInfo thermalState: nominal, fair, serious, critical
 
   // tracked=false skips Metal's hazard tracking: only for buffers the GPU never writes after
