@@ -238,6 +238,10 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
         const nhf_h8 ka = qa_load_kv<LD>(kt, 0, d0 + id * 16, fm, fn);
         nhf_mma<half, half, true>(s, s1, qf[id], ka, ka);
       }
+    }
+    // Every SIMD group finishes its K reads before the score exchange overwrites K's scratch.
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (live) {
       xme[0] = float4(s[0], s[1], s[2], s[3]);
       xme[1] = float4(s[4], s[5], s[6], s[7]);
     }
@@ -308,11 +312,11 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
       const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant QaParams& p [[buffer(5)]],     \
       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],                       \
       uint lane [[thread_index_in_simdgroup]]) {                                                                     \
-    threadgroup half kt[16 * 256], vt[16 * 256];                                                                     \
-    threadgroup float xs[NS * 256];                                                                                  \
-    /* Apple7-Apple10 allow 32 KB per threadgroup; ni_kstats --limits prints the pipeline's own figure */            \
-    static_assert(sizeof(kt) + sizeof(vt) + sizeof(xs) <= 32768, "qattn_t d2: threadgroup memory over 32 KB");      \
-    qattn_t_d2_impl<NS, G, BIDI>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), kt, vt, xs);                                 \
+    threadgroup float k_scratch[NS * 256 > 2048 ? NS * 256 : 2048];                                  \
+    threadgroup half vt[16 * 256];                                                                                 \
+    static_assert(sizeof(k_scratch) + sizeof(vt) <= 32768, "qattn_t d2: threadgroup memory over 32 KB");           \
+    qattn_t_d2_impl<NS, G, BIDI>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), (threadgroup half*)k_scratch, vt,      \
+                               k_scratch);                                                                                 \
   }
 // The 35B (G = 8): 4 pairs x 2 tokens = 8 tokens per threadgroup. bench_attn on the M5 Pro, T 4224 against 8448 keys
 // and T 3328 against 16000 (a 16K prompt's 2nd and 4th chunks): 24.22 / 44.42 ms vs qattn_t_g8s4k16's 44.08 / 78.23
