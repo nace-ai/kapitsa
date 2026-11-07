@@ -110,45 +110,7 @@ size_t DSpark::plan_bytes(const std::string& dir, size_t* per_slot) {
 
 // ---- loading ----
 // NVFP4 (ModelOpt) as the target's kernels run it; BF16 matrices quantized to Q8 rows (drafts only propose)
-NhMat DSpark::mat(const std::string& name) {
-  const SafetensorsIndex& idx = *st_;
-  const SafetensorsIndex::Entry& t = idx.get(name);
-  const std::string base = name.size() > 7 && name.compare(name.size() - 7, 7, ".weight") == 0 ? name.substr(0, name.size() - 7) : name;
-  const SafetensorsIndex::Entry* sc = idx.find(base + ".weight_scale");
-  Gpu& g = Gpu::get();
-  NhMat m;
-  uint32_t N = 0, K = 0;
-  if (!nh_describe(t, sc, m.fmt, N, K) || (m.fmt != NhFmt::FP4 && m.fmt != NhFmt::BF16))
-    fatal("%s: tensor %s has a format the drafter does not run", path_.c_str(), name.c_str());
-  m.N = N;
-  m.K = K;
-  std::vector<uint8_t> raw(t.len);
-  idx.read(t, 0, raw.data(), t.len);
-  if (m.fmt == NhFmt::FP4) {
-    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
-    m.q = g.alloc(m.q_row * N, name.c_str(), false);
-    m.s = g.alloc(m.s_row * N, "scales", false);
-    nh_repack_rows(m.fmt, m.K, raw.data(), N, m.q.as<uint8_t>(), nullptr);
-    idx.read(*sc, 0, m.s.ptr(), m.s_row * N);
-    if (const SafetensorsIndex::Entry* s2 = idx.find(base + ".weight_scale_2")) idx.read(*s2, 0, &m.gs, 4);
-  } else {
-    if (m.K % 32) fatal("%s: %s cannot be quantized (K = %u)", path_.c_str(), name.c_str(), m.K);
-    m.fmt = NhFmt::Q8;
-    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
-    m.q = g.alloc(m.q_row * N, name.c_str(), false);
-    m.s = g.alloc(m.s_row * N, "scales", false);
-    std::vector<float> row(m.K);
-    const uint16_t* src = reinterpret_cast<const uint16_t*>(raw.data());
-    for (uint32_t r = 0; r < N; ++r) {
-      for (uint32_t i = 0; i < m.K; ++i) row[i] = bf16_to_f32(src[size_t(r) * m.K + i]);
-      nh_quant_q8(row.data(), m.K, m.q.as<uint8_t>() + size_t(r) * m.q_row, m.s.as<uint8_t>() + size_t(r) * m.s_row);
-    }
-  }
-  owned_.push_back(m.q);
-  owned_.push_back(m.s);
-  weight_bytes_ += m.q.size + m.s.size;
-  return m;
-}
+NhMat DSpark::mat(const std::string& name) { return nh_load_mat(*st_, path_, name, owned_, weight_bytes_); }
 
 NhMat DSpark::mat_cat(const std::vector<std::string>& names, std::vector<float>& gs, bool shared) {
   std::vector<NhMat> parts;
@@ -208,23 +170,7 @@ NhMat DSpark::rows(const NhMat& m, uint32_t r0, uint32_t n) {
   return v;
 }
 
-std::vector<float> DSpark::host(const std::string& name) {
-  const SafetensorsIndex::Entry& t = st_->get(name);
-  if (t.dtype != DType::BF16 && t.dtype != DType::F32) fatal("%s: %s is neither BF16 nor F32", path_.c_str(), name.c_str());
-  std::vector<uint8_t> raw(t.len);
-  st_->read(t, 0, raw.data(), t.len);
-  std::vector<float> v(size_t(t.numel()));
-  for (size_t i = 0; i < v.size(); ++i) {
-    if (t.dtype == DType::F32) {
-      memcpy(&v[i], raw.data() + 4 * i, 4);
-    } else {
-      uint16_t h;
-      memcpy(&h, raw.data() + 2 * i, 2);
-      v[i] = bf16_to_f32(h);
-    }
-  }
-  return v;
-}
+std::vector<float> DSpark::host(const std::string& name) { return nh_host_f32(*st_, path_, name); }
 
 Buffer DSpark::upload(const void* p, size_t bytes, const char* label) {
   Buffer b = Gpu::get().alloc(std::max<size_t>(bytes, 16), label, false);
