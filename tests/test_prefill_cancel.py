@@ -77,6 +77,7 @@ def request(port, output, name, messages, cancel_after=None):
 class Server:
     def __init__(self, cli, model, port, home, log):
         with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind(("127.0.0.1", port))  # refuse a port another server already owns
         self.path = log
         self.log = log.open("w")
