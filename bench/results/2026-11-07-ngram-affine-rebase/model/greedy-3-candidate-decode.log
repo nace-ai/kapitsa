@@ -1,0 +1,2 @@
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (200 ms)
+{"output":"/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-3-candidate.text.json","sequences":1,"unique_rows":3328}

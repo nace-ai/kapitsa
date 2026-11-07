@@ -71,6 +71,11 @@ void nh_quant_q8(const float* x, int64_t K, uint8_t* q, uint8_t* s);
 // scale, else null); false if unknown.
 bool nh_describe(const SafetensorsIndex::Entry& w, const SafetensorsIndex::Entry* scale, NhFmt& f, uint32_t& N,
                  uint32_t& K);
+// A drafter weight: NVFP4 as stored, a BF16 matrix as Q8 rows. New buffers are appended to owned.
+NhMat nh_load_mat(const SafetensorsIndex& idx, const std::string& path, const std::string& name,
+                  std::vector<Buffer>& owned, size_t& weight_bytes);
+// A BF16 or F32 checkpoint tensor as fp32. path is the fatal message's prefix.
+std::vector<float> nh_host_f32(const SafetensorsIndex& idx, const std::string& path, const std::string& name);
 
 struct NhLayer {
   char kind = 'M';

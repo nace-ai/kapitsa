@@ -1,0 +1,9 @@
+{
+  "base": "934a6d72",
+  "implementation": "877e7b4d",
+  "tested_tree_head": "399dae9b54c2fd552c39cec74fd6462d1756a78b",
+  "actual_binary_version": "kapitsa 0.2.31 (399dae9b)",
+  "library_sha256": "b36fa0d3fb61674e0e10a89f9fcac55edc81553c2310cf0628093bf218dd8864",
+  "cpu": "Release build; all 21 vk CPU commands passed; supplementary tests, real 4B tokenizer/parser/structured checks, prek and extra AGENTS tests passed",
+  "scope": "Only the named PR is covered; no production source changes in this evidence addition."
+}

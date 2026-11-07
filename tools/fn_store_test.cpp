@@ -24,6 +24,8 @@
 #include "util/bf16.h"
 #include "model/expert_store_test.h"
 #include "util/log.h"
+#include <nlohmann/json.hpp>
+#include <fstream>
 
 #include <fcntl.h>
 #include <libproc.h>
@@ -38,6 +40,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cfenv>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -1347,6 +1350,146 @@ void case_ngram_table(const std::string& dir, std::vector<std::string>& files) {
   printf("n-gram table: GGUF IQ4_NL and Q8_0 rows, affine shards: %s\n", g_fail > f0 ? "FAILED" : "ok");
 }
 
+
+// A truncated PLE table must fail admission, before a mapped row is accessed.
+void case_ngram_bounds(const std::string& dir, std::vector<std::string>& files) {
+  using nlohmann::json;
+  const std::string path = dir + "/ngram_table.bin";
+  files.push_back(path);
+  FatalRecovery recover;
+  size_t cases = 0;
+  auto write = [&](const json& h, size_t bytes) {
+    const std::string text = h.dump();
+    const uint64_t len = text.size();
+    std::ofstream f(path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&len), 8);
+    f.write(text.data(), text.size());
+    const std::vector<char> body(bytes, 0);
+    f.write(body.data(), body.size());
+  };
+  auto reject = [&](NgramTable::Fmt fmt, int dim = 64) {
+    bool caught = false;
+    try {
+      NgramTable t;
+      t.open({{path, "weight", "scales", "biases"}}, fmt, dim);
+    } catch (const FatalError& e) { caught = std::string(e.what()).find("n-gram table:") != std::string::npos; }
+    CHECK(caught, "n-gram table rejects malformed fixture %zu", cases);
+    ++cases;
+  };
+  const json dense = {{"weight", {{"dtype", "BF16"}, {"shape", {2, 64}}, {"data_offsets", {0, 256}}}}};
+  write(dense, 0); reject(NgramTable::Fmt::BF16);  // first: safe baseline failure, no row access
+  for (const json& offsets : {json::array({0, 254}), json::array({8, 256}), json::array({256, 0}),
+                              json::array({-1, 255}), json::array({0, UINT64_MAX}), json::array({0})}) {
+    json h = dense; h["weight"]["data_offsets"] = offsets; write(h, 256); reject(NgramTable::Fmt::BF16);
+  }
+  for (const json& shape : {json::array({-1, 64}), json::array({2, 32}), json::array({UINT64_MAX, 64}),
+                            json::array({INT64_MAX, 64}), json::array({2}), json::array({2, 64, 1})}) {
+    json h = dense; h["weight"]["shape"] = shape; write(h, 256); reject(NgramTable::Fmt::BF16);
+  }
+  { json h = dense; h["weight"]["dtype"] = "F16"; write(h, 256); reject(NgramTable::Fmt::BF16); }
+  { json h = dense; h["weight"].erase("shape"); h["z"] = dense["weight"]; write(h, 256); reject(NgramTable::Fmt::BF16); }
+  for (uint64_t declared : {uint64_t(1), UINT64_MAX, uint64_t(1024)}) {
+    { std::ofstream f(path, std::ios::binary); f.write(reinterpret_cast<const char*>(&declared), 8); f << "{}"; }
+    reject(NgramTable::Fmt::BF16);
+  }
+  { std::ofstream f(path, std::ios::binary); f << "short"; }
+  reject(NgramTable::Fmt::BF16);
+  { std::ofstream f(path, std::ios::binary); uint64_t n = 2; f.write(reinterpret_cast<const char*>(&n), 8); f << "xx"; }
+  reject(NgramTable::Fmt::BF16);
+  const json affine = {
+      {"weight", {{"dtype", "U32"}, {"shape", {2, 8}}, {"data_offsets", {0, 64}}}},
+      {"scales", {{"dtype", "BF16"}, {"shape", {2, 1}}, {"data_offsets", {64, 68}}}},
+      {"biases", {{"dtype", "BF16"}, {"shape", {2, 1}}, {"data_offsets", {68, 72}}}}};
+  for (const char* name : {"scales", "biases"}) {
+    json h = affine; h[name]["shape"] = {1, 2}; write(h, 72); reject(NgramTable::Fmt::Affine);
+    h = affine; h[name]["dtype"] = "F16"; write(h, 72); reject(NgramTable::Fmt::Affine);
+  }
+  write(affine, 70); reject(NgramTable::Fmt::Affine);
+  write(dense, 256); reject(NgramTable::Fmt::BF16, 0);
+  // Complete valid BF16, FP8 and affine mappings still read exact zeros. Affine row/gather arithmetic is
+  // independently checked with nonzero weights and two uneven shards in case_ngram_table above.
+  for (NgramTable::Fmt fmt : {NgramTable::Fmt::BF16, NgramTable::Fmt::F8E4M3, NgramTable::Fmt::Affine}) {
+    json h = fmt == NgramTable::Fmt::Affine ? affine : dense;
+    size_t bytes = fmt == NgramTable::Fmt::Affine ? 72 : 256;
+    if (fmt == NgramTable::Fmt::F8E4M3) { h["weight"]["dtype"] = "F8_E4M3"; h["weight"]["data_offsets"] = {0, 128}; bytes = 128; }
+    write(h, bytes);
+    NgramTable t; t.open({{path, "weight", "scales", "biases"}}, fmt, 64);
+    std::vector<float> out(66, 123.0f); t.row(1, out.data() + 1);
+    CHECK(t.rows() == 2 && out.front() == 123.0f && out.back() == 123.0f &&
+              std::all_of(out.begin() + 1, out.end() - 1, [](float v) { return v == 0.0f; }),
+          "valid n-gram mapping and guarded row survive header validation");
+  }
+  printf("n-gram bounds: %zu rejected fixtures, 3 valid formats\n", cases);
+}
+
+// Compare the mapped row path against a bit-at-a-time code reader. Cover vector groups,
+// generic widths/group boundaries, all code values, and BF16 exceptional coefficients.
+void case_ngram_affine_rows(const std::string& dir, std::vector<std::string>& files) {
+  const int f0 = g_fail, saved_rounding = std::fegetround();
+  const uint16_t edge[] = {0, 0x8000, 1, 0x8001, 0x007f, 0x0080, 0x3b80, 0x3f80, 0xbf80,
+                           0x7f7f, 0xff7f, 0x7f80, 0xff80, 0x7fc1, 0x7f81, 0xffc1};
+  struct Shape { int dim, gs, bits; };
+  size_t values = 0;
+  for (auto [dim, gs, bits] : {Shape{160, 32, 4}, {192, 64, 4}, {256, 128, 4}, {40, 5, 4},
+                              {96, 3, 4}, {160, 32, 8}, {160, 32, 6}, {192, 32, 3}, {160, 32, 2}}) {
+    constexpr int rows = 256;
+    const int groups = dim / gs, rb = dim * bits / 8, mask = (1 << bits) - 1;
+    std::vector<uint8_t> w(size_t(rows) * rb);
+    std::vector<uint16_t> scales(size_t(rows) * groups), biases(scales.size());
+    for (int r = 0; r < rows; ++r) {
+      for (int i = 0; i < dim; ++i) {
+        const int code = (r + i * 13) & mask;
+        for (int b = 0; b < bits; ++b)
+          w[size_t(r) * rb + (i * bits + b) / 8] |= uint8_t(((code >> b) & 1) << ((i * bits + b) % 8));
+      }
+      for (int g = 0; g < groups; ++g) {
+        scales[size_t(r) * groups + g] = edge[(r / 16 + g) % 16];
+        biases[size_t(r) * groups + g] = edge[(r + g) % 16];
+      }
+    }
+    const size_t ws = w.size(), ss = scales.size() * 2;
+    char hdr[600];
+    snprintf(hdr, sizeof hdr,
+             "{\"w\":{\"dtype\":\"U32\",\"shape\":[%d,%d],\"data_offsets\":[0,%zu]},"
+             "\"s\":{\"dtype\":\"BF16\",\"shape\":[%d,%d],\"data_offsets\":[%zu,%zu]},"
+             "\"b\":{\"dtype\":\"BF16\",\"shape\":[%d,%d],\"data_offsets\":[%zu,%zu]}}",
+             rows, rb / 4, ws, rows, groups, ws, ws + ss, rows, groups, ws + ss, ws + 2 * ss);
+    std::string h = hdr;
+    h.resize((h.size() + 7) / 8 * 8, ' ');
+    const std::string path = dir + "/affine_" + std::to_string(dim) + "_" + std::to_string(gs) + "_" +
+                             std::to_string(bits) + ".safetensors";
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) fatal("cannot create n-gram row fixture");
+    const uint64_t n = h.size();
+    fwrite(&n, 8, 1, f); fwrite(h.data(), 1, h.size(), f); fwrite(w.data(), 1, ws, f);
+    fwrite(scales.data(), 1, ss, f); fwrite(biases.data(), 1, ss, f); fclose(f);
+    files.push_back(path);
+    NgramTable table;
+    table.open({{path, "w", "s", "b"}}, NgramTable::Fmt::Affine, dim, bits, gs);
+    std::vector<float> got(size_t(dim) + 2, 123456.25f);
+    for (int rounding : {FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO}) {
+      std::fesetround(rounding);
+      int bad = 0;
+      for (int r = 0; r < rows; ++r) {
+        table.row(r, got.data() + 1);
+        bad += got.front() != 123456.25f || got.back() != 123456.25f;
+        for (int i = 0; i < dim; ++i) {
+          unsigned code = 0;
+          for (int b = 0; b < bits; ++b)
+            code |= unsigned((w[size_t(r) * rb + (i * bits + b) / 8] >> ((i * bits + b) % 8)) & 1) << b;
+          const float want = bf16_to_f32(scales[size_t(r) * groups + i / gs]) * float(code) +
+                             bf16_to_f32(biases[size_t(r) * groups + i / gs]);
+          bad += memcmp(&want, &got[size_t(i) + 1], sizeof(float)) != 0;
+          ++values;
+        }
+      }
+      CHECK(!bad, "n-gram affine rows: dim=%d group=%d bits=%d rounding=%d: %d mismatches", dim, gs, bits, rounding, bad);
+    }
+  }
+  std::fesetround(saved_rounding);
+  printf("n-gram affine rows: %zu bitwise values and output guards: %s\n", values, g_fail > f0 ? "FAILED" : "ok");
+}
+
 template <typename F>
 void await_test(F done, const char* why) {
   const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -1978,6 +2121,8 @@ int main(int argc, char** argv) {
       case_group_plan();
       case_group_pin();
       case_ngram_table(dir, p.files);
+      case_ngram_bounds(dir, p.files);
+      case_ngram_affine_rows(dir, p.files);
     }
     if (keep.empty()) {
       for (const std::string& f : p.files) unlink(f.c_str());

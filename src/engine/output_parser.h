@@ -360,6 +360,7 @@ class OutputParser {
     size_t fe = body.find('>', f);
     if (fe == std::string::npos) return false;
     tc.name = body.substr(f + 10, fe - f - 10);
+    if (trim_ws(tc.name).empty()) return false;
     ojson args = ojson::object();
     std::vector<std::pair<std::string, std::string>> raw;  // the text of each value that is not a string
     size_t p = fe + 1;

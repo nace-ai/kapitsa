@@ -1,0 +1,20 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (cf2f25c)",
+  "model": "qwen3.5-4b-4bit",
+  "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+  "path": "prefill",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 8,
+  "vocab": 248320,
+  "source": "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/4b-logits-base",
+  "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+  "macos": "26.4.1",
+  "date": "2026-11-07T07:25:57Z",
+  "env": {}
+}

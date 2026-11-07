@@ -1,0 +1,32 @@
+[
+  {
+    "file": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/tokenizer.json",
+    "size": 19989325,
+    "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+  },
+  {
+    "file": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/tokenizer_config.json",
+    "size": 9187,
+    "sha256": "fa71760892f5c601d345e626ebd602055825a50beed7ee160709c95fffa475f0"
+  },
+  {
+    "file": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/chat_template.jinja",
+    "size": 7756,
+    "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+  },
+  {
+    "file": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit/tokenizer.json",
+    "size": 19989343,
+    "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4"
+  },
+  {
+    "file": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit/tokenizer_config.json",
+    "size": 1139,
+    "sha256": "e98f1901ac6f0adff67b1d540bfa0c36ac1a0cf59eb72ed78146ef89aafa1182"
+  },
+  {
+    "file": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit/chat_template.jinja",
+    "size": 7764,
+    "sha256": "e84f32a23fdda27689f868aa4a1a5621f41133e51a48d7f3efcbea2839574259"
+  }
+]

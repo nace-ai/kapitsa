@@ -175,6 +175,26 @@ int main(int argc, char** argv) {
   const std::string read_b = call("read_file", param("path", "b.txt"));
   const std::string read_3 = call("read_file", param("path", "notes/step3.txt"));
 
+  // A nameless Qwen call stays raw text; a valid call after it must still be returned, at every token boundary.
+  {
+    const auto bytes = byte_ids(tok);
+    for (const std::string& name : {std::string(""), std::string(" "), std::string("\t"),
+                                    std::string("\r\n"), std::string(" \t\r\n ")}) {
+      const std::string bad = call(name, param("path", "a.txt"));
+      for (bool following : {false, true}) for (bool think_tools : {false, true}) for (size_t cut : {0u, 1u, 5u}) {
+        const std::string text = bad + (following ? read_a : "");
+        const auto ids = cut ? cut_ids(tok, text, cut, bytes) : tok.encode(text);
+        Out out = run_ids(tok, ids, think_tools, false, true, kTools, false, CallFormat::QwenXml);
+        check(out.reasoning.empty() && out.content == bad &&
+                  calls_str(out.calls) == (following ? R"([read_file{"path":"a.txt"}])" : "[]"),
+              "nameless Qwen call preserved: " + ojson(name).dump() + " cut=" + std::to_string(cut) +
+                  " following=" + std::to_string(following) + " think_tools=" + std::to_string(think_tools), show(out));
+      }
+      Out off = run(tok, "Plan:\n" + bad, false), on = run(tok, "Plan:\n" + bad, true);
+      check(on.calls.empty() && same_result(off, on), "nameless Qwen call stays reasoning: " + ojson(name).dump(), show(on));
+    }
+  }
+
   // Turns without a call inside the reasoning: the stream is identical with and without the switch.
   struct Same {
     const char* name;
