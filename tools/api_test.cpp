@@ -17,6 +17,7 @@
 #include "api/clients.h"
 #include "api/responses.h"
 #include "engine/output_parser.h"
+#include "engine/stop_filter.h"
 #include "engine/disk_wait.h"
 #include "engine/disk_saved.h"
 #include "engine/engine.h"
@@ -120,6 +121,74 @@ std::vector<Event> run(StreamWriter& w, const std::vector<ChatDelta>& ds, const 
   for (auto& d : ds) s += w.delta(d);
   s += w.end(res);
   return parse_sse(s);
+}
+
+void stop_filter_unit() {
+  struct Case {
+    std::vector<std::string> stops, chunks;
+    std::string text, matched;
+  };
+  const std::vector<Case> cases = {
+      {{"one,"}, {"one", ", two"}, "", "one,"},
+      {{"hello"}, {"say h", "el", "lo there"}, "say ", "hello"},
+      {{"hello"}, {"hel", "p me"}, "help me", ""},
+      {{"hello"}, {"hel"}, "hel", ""},  // unmatched prefix survives EOS / max_tokens
+      {{"hello"}, {"hel", "lo"}, "", "hello"},  // a match completed by the parser's final flush
+      {{"world", "hello"}, {"hello world"}, "", "hello"},
+      {{"ab", "a"}, {"ab"}, "", "ab"},  // list order breaks equal-position ties
+      {{"aab"}, {"aa", "a", "b"}, "a", "aab"},
+      {{"abc", "bcdef"}, {"x b", "c", "d", "ef tail"}, "x ", "bcdef"},
+      {{"", "END"}, {"safe", " END", "ignored"}, "safe ", "END"},
+      {{""}, {"unchanged", " text"}, "unchanged text", ""},
+      {{}, {"unchanged", " text"}, "unchanged text", ""},
+      {{"世界"}, {"Hello 世", "界!"}, "Hello ", "世界"},
+      {{"👋!"}, {"Hi 👋", "?"}, "Hi 👋?", ""},
+  };
+  for (size_t i = 0; i < cases.size(); ++i) {
+    const auto& c = cases[i];
+    // The final parser flush can itself contain text or be empty.
+    for (bool tail_has_text : {false, true}) {
+      StopFilter f(c.stops);
+      std::string out;
+      for (size_t j = 0; j < c.chunks.size(); ++j) {
+        std::string d = c.chunks[j];
+        f.filter(d, tail_has_text && j + 1 == c.chunks.size());
+        out += d;
+      }
+      std::string tail;
+      f.filter(tail, true);
+      out += tail;
+      check(out == c.text && f.matched() == c.matched,
+            "stop filter case " + std::to_string(i) + (tail_has_text ? " final text" : " empty final"), out);
+    }
+  }
+  // Every partition of this stream must trim the same prefix, including a stop spanning three deltas.
+  const std::string text = "x ababa!";
+  const std::vector<std::string> stops = {"aba", "ba!"};
+  for (size_t i = 0; i <= text.size(); ++i) {
+    for (size_t j = i; j <= text.size(); ++j) {
+      StopFilter f(stops);
+      std::string out;
+      for (std::string d : {text.substr(0, i), text.substr(i, j - i), text.substr(j)}) {
+        f.filter(d);
+        out += d;
+      }
+      std::string tail;
+      f.filter(tail, true);
+      check(out + tail == "x " && f.matched() == "aba", "stop filter split " + std::to_string(i) + ":" + std::to_string(j));
+    }
+  }
+  const std::vector<std::string> stops_at_end = {"STOP"};
+  StopFilter f(stops_at_end);
+  std::string d = "visible S";
+  f.filter(d);
+  check(d == "visible ", "stop prefix is withheld before it matches");
+  d = "T";
+  f.filter(d);
+  check(d.empty(), "stop prefix stays withheld across another delta");
+  d = "OP";
+  f.filter(d);
+  check(d.empty() && f.matched() == "STOP", "matched prefix never reaches a delta");
 }
 
 // ---------------------------------------------------------------- request mapping
@@ -2249,6 +2318,7 @@ void norm_layout_unit() {
 }
 
 int main(int argc, char** argv) {
+  stop_filter_unit();
   anthropic_mapping();
   responses_mapping();
   anthropic_events();

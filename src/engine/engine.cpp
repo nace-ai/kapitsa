@@ -2,6 +2,7 @@
 #include "engine/engine.h"
 #include "engine/device_profile.h"
 #include "engine/output_parser.h"
+#include "engine/stop_filter.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
 #include "model/qwen4_config.h"
@@ -3221,7 +3222,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
-  std::string content_so_far;
+  StopFilter stop_filter(r.stop);
   std::string finish;
   // structured output: </think> ends a speculative loop running the reasoning (g_in_spec), whose drafts and verify
   // know no grammar; the constrained loop below takes the reply from there (g_break)
@@ -3260,18 +3261,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
     if (parser.in_think()) ++res.reasoning_tokens;
     ChatDelta d = parser.push(t);
-    if (!d.content.empty()) {
-      content_so_far += d.content;
-      for (auto& st : r.stop) {
-        size_t at = st.empty() ? std::string::npos : content_so_far.find(st);
-        if (at != std::string::npos) {
-          size_t over = content_so_far.size() - at;
-          d.content.resize(d.content.size() > over ? d.content.size() - over : 0);
-          finish = "stop";
-          res.stop_sequence = st;
-          break;
-        }
-      }
+    stop_filter.filter(d.content);
+    if (!stop_filter.matched().empty()) {
+      finish = "stop";
+      res.stop_sequence = stop_filter.matched();
     }
     res.reasoning += d.reasoning;
     res.content += d.content;
@@ -4191,6 +4184,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     res.images = std::make_shared<const std::vector<vision::Prepared>>(std::move(images));
   }
   ChatDelta tail = parser.finish(finish == "stop");
+  stop_filter.filter(tail.content, true);
+  if (!stop_filter.matched().empty() && finish != "cancelled" && finish != "error") {
+    finish = "stop";
+    res.stop_sequence = stop_filter.matched();
+  }
   res.reasoning += tail.reasoning;
   res.content += tail.content;
   for (auto& tc : tail.tool_calls) res.tool_calls.push_back(tc);
@@ -4198,13 +4196,19 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // Dory (NVIDIA's nemotron_v3 reasoning parser): with force_nonempty_content, on by default here (the card asks
   // coding agents to set it), a reply that put everything in its reasoning and left the content empty returns that
   // text as its content too (a last delta), so agents that read the content alone get the answer
-  if (dory_ && res.tool_calls.empty() && content_text(ojson(res.content)).empty() && !res.reasoning.empty()) {
+  if (dory_ && stop_filter.matched().empty() && res.tool_calls.empty() &&
+      content_text(ojson(res.content)).empty() && !res.reasoning.empty()) {
     const auto f = r.template_kwargs.find("force_nonempty_content");
     const bool force = f == r.template_kwargs.end() || !f->is_boolean() || f->get<bool>();
     if (force) {
       ChatDelta d;
       d.content = res.reasoning;
-      res.content = res.reasoning;
+      stop_filter.filter(d.content, true);
+      if (!stop_filter.matched().empty() && finish != "cancelled" && finish != "error") {
+        finish = "stop";
+        res.stop_sequence = stop_filter.matched();
+      }
+      res.content = d.content;
       res.reasoning.clear();
       on_delta(d);
     }
