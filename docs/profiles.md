@@ -24,6 +24,22 @@ in [benchmarks.md](benchmarks.md). It runs the rows teacher-forced, full vocabul
 |---|---|---|---|---|
 | Qwen3.8-Flash-Next Q2_0, M5 Pro | Splash 1.5.0 | 72 (16K, 32K, 64K windows) | 16 | 0.46 |
 | Qwen3.6-35B-A3B 4-bit, M5 Pro | Splash 1.5.0 | 192 (8 windows, 512 to 3,200 tokens) | 4 | 2.1e-3 |
+
+On Flash-Next, Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same
+top-1 on 31 of 32 rows, mean KL at most 1.5e-2).
+
+**A model no other engine runs** (Nemotron 3.5 Lightning today) takes the strictest bar measured on any model: the
+lowest flip rate (flips per row) and the lowest mean KL in the table above, both from the same row. Today that is the
+35B-A3B's: 4 flips in 192 rows (2.1%), mean KL 2.1e-3. The member's own output check runs on its own model's rows and
+must be at or below both. When another engine starts running that model, its measured bar replaces the fallback.
+
+### Qwen3.5-9B model-specific bar
+
+These #775 measurements apply to Qwen3.5-9B only. They are separate from the fallback table above and do not
+change the fallback or another candidate's admission.
+
+| Model, Mac | Fastest other engine | Rows | Top-1 flips | Mean KL |
+|---|---|---|---|---|
 | Qwen3.5-9B 4-bit, M4 Pro | MLX 0.32.4 / mlx-lm 0.32.2 | 576 comparisons (192 shared positions, step/verify/batch) | 9 | 3.747187506485964e-4 |
 | Qwen3.5-9B 4-bit, M3 Ultra | MLX 0.32.4 / mlx-lm 0.32.2 | 576 comparisons (192 shared positions, step/verify/batch) | 12 | 3.9909652322670414e-4 |
 
@@ -35,16 +51,6 @@ fast mean KL 1.845747910960617e-4 vs MLX 1.4716473412187535e-4, both with zero f
 aggregate bar. [M4 exact bounds and narrow verify margin](../bench/results/2026-11-07-pr775-m4-default-share/README.md);
 [M3 bounds, failed prefill and row-alignment audit](../bench/results/2026-11-07-pr775-m3-current/README.md).
 
-On Flash-Next, Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same
-top-1 on 31 of 32 rows, mean KL at most 1.5e-2).
-
-The 9B rows above are model-specific evidence for #775; its scope does not change the existing cross-model
-fallback or the admission of other candidates below.
-
-**A model no other engine runs** (Nemotron 3.5 Lightning today) takes the strictest bar measured on any model: the
-lowest flip rate (flips per row) and the lowest mean KL in the table above, both from the same row. Today that is the
-35B-A3B's: 4 flips in 192 rows (2.1%), mean KL 2.1e-3. The member's own output check runs on its own model's rows and
-must be at or below both. When another engine starts running that model, its measured bar replaces the fallback.
 
 ## Members
 
