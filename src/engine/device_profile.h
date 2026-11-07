@@ -20,7 +20,7 @@ enum class ChipClass { kLegacy, kSimd, kMatrix, kWide };
 enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b };
 
 // The knobs the table decides, in the table's order. A call site passes the enum, not the string: a typo is a
-// compile error, not a default that silently reads as off. kNone is a documentation row (a kGuard predicate the
+// compile error, not a default that silently reads as off. kNone is a documentation row (a class or a guard the
 // call site still reads itself); default_on never looks one up.
 enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, kKflashNarrow, kNone };
 
@@ -53,6 +53,7 @@ struct ModelFacts {
 
 struct DeviceProfile {
   ChipClass chip = ChipClass::kLegacy;
+  int apple_family = 0;  // kept so a guard that keys on the family (pre_m3_gpu) matches in doctor
   int cores = 0;
   bool cores_measured = false;
   std::string name;

@@ -58,20 +58,32 @@ const DefaultRow kDefaults[] = {
     // 32K 80.5 -> 85.6. The 16-row drafting block it applies to stays at the call site.
     {"kflash_narrow", Knob::kKflashNarrow, ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 24, 0, false,
      "M5 Max", true},
-    // Name predicates the call sites still read. Not kName: none of these cites a 10% win the wider class misses.
-    // The id is the predicate. chip_name is the exact name when the predicate has one. Knob::kNone: not a lookup.
+    // Capability classes the call sites still read. Not a name gate: the predicate is the class. The site count is
+    // calls outside this module; tests/test_profile_gates.py checks the where string against that count.
+    {"matrix_units", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "class", 0, 0, false,
+     "46 sites; capability class: apple_family >= 10, the matrix half of ChipClass", false},
+    {"legacy_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kLegacy, nullptr, "class", 0, 0, false,
+     "11 sites; capability class: apple_family <= 7, the M1 path", false},
+    {"wide_cores", Knob::kNone, ModelClass::kOther, DefaultScope::kWide, nullptr, "class", 0, 0, false,
+     "2 sites; capability class: matrix units and 40 cores or more", false},
+    // Name and correctness predicates the call sites still read. Not kName: none of these cites a 10% win the wider
+    // class misses. The id is the predicate. chip_name is the exact name when the predicate has one.
+    // Knob::kNone: not a lookup. A shape guard stays because the wider class is the wrong shape. A correctness
+    // guard stays because the fused path failed on that class.
     {"m1_max_32", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M1 Max", "64", 0, 0, false,
-     "32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path", false},
+     "4 sites; shape guard: 32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path", false},
     {"m4_10", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "on", 0, 0, false,
-     "10 cores and 24 GB; 4B packed-coeff shape only", false},
+     "1 site; shape guard: 10 cores and 24 GB; 4B packed-coeff shape only", false},
     {"m4_pro_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "pack", 0, 0, false,
-     "Qwen 4B and 35B vision-tower shapes; other shapes keep bf16", false},
+     "1 site; shape guard: Qwen 4B and 35B vision-tower shapes; other shapes keep bf16", false},
     {"m4_pro_20", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "on", 0, 0, false,
-     "20 cores and 48 GB for the 4B or 9B packed coeff; 35B X8 share on 5-6-bit affine projections", false},
+     "2 sites; shape guard: 20 cores and 48 GB for the 4B or 9B packed coeff; 35B X8 share on 5-6-bit affine projections", false},
     {"m4_ten_core", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "narrow", 0, 0, false,
-     "10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
+     "6 sites; shape guard: 10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
     {"ultra_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
-     "name contains Ultra; fused merges failed on the old arrival (#421); not re-run since, so the split merges stay", false},
+     "1 site; correctness guard: fused merges failed past a 32-key tile (#421), so the split merges stay", false},
+    {"pre_m3_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
+     "1 site; correctness guard: fused merges produced garbage on an M1 Max (#478), so M1 and M2 keep the split path", false},
     // Fast profile only (docs/profiles.md): Flash-Next's sparse prefill attention on the matrix units, Q and P as hi + lo
     // halves (#818). Matrix class, not the name: the kernel needs matrix units and nothing was measured slower on them.
     // M5 Pro, 32K and 64K prompts at 2048-row chunks: prefill +8 to +10%, decode the same per draft cycle; 4 top-1
@@ -84,6 +96,7 @@ const DefaultRow kDefaults[] = {
 bool guard_matches(const char* id, const DeviceProfile& dev) {
   if (!id) return false;
   DeviceFacts f;
+  f.apple_family = dev.apple_family;
   f.name = dev.name;
   f.cores = dev.cores;
   f.cores_measured = dev.cores_measured;
@@ -93,6 +106,7 @@ bool guard_matches(const char* id, const DeviceProfile& dev) {
   if (std::strcmp(id, "m4_pro_20") == 0) return m4_pro_20(f);
   if (std::strcmp(id, "m4_ten_core") == 0) return m4_ten_core(f);
   if (std::strcmp(id, "ultra_gpu") == 0) return ultra_gpu(f);
+  if (std::strcmp(id, "pre_m3_gpu") == 0) return pre_m3_gpu(f);
   return false;
 }
 
@@ -100,6 +114,7 @@ bool guard_matches(const char* id, const DeviceProfile& dev) {
 
 DeviceProfile resolve_device(const DeviceFacts& f) {
   DeviceProfile p;
+  p.apple_family = f.apple_family;
   p.cores = f.cores;
   p.cores_measured = f.cores_measured;
   p.name = f.name;
