@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
       Router t(rows, 10, norm, 0);
       for (int i = 0; i < 4; ++i) { t.run(0, 256); t.run(1, 256); }
       for (int pair = 0; pair < 8; ++pair) for (int v = 0; v < 2; ++v) {
-        const double us = t.run(v, 512);
+        const double us = t.run(v, 8192);
         printf("{\"R\":%u,\"norm\":%u,\"pair\":%d,\"variant\":\"%c\",\"us\":%.6f,\"thermal\":\"%s\"}\n", rows, norm, pair, v ? 'B' : 'A', us, Gpu::thermal_state());
         fflush(stdout);
       }
