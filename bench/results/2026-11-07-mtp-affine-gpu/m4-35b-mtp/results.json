@@ -1,0 +1,1150 @@
+{
+  "pid": 78616,
+  "started_at": "2026-11-07T06:00:39.570429+00:00",
+  "status": "complete: additional real MoE MTP continuation coverage, not a full second 35B benchmark",
+  "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+  "runs": [
+    {
+      "label": "35b-mtp-0-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/home-35b-mtp-0-base"
+      },
+      "exit": 0,
+      "tokens": 256,
+      "text_nonempty": true,
+      "eos_count": 0,
+      "before_first_eos": 256,
+      "sha256": "b5ff9b3c2ef07e732215fcb23553401648d86af819729ba7faf9ff7119c40490",
+      "mtp_load_lines": [
+        "[kapitsa] MTP head loaded in 1502 ms (MoE, trunk hidden post-norm, drafts over ids < 32768 + specials, a 4-bit copy of the output layer's rows)",
+        "[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp: 40 layers, MoE, 20.2 GB mapped in 21935 ms; weights 4-bit group 64 90%, 5-bit group 64 3%, 6-bit group 64 4%, 8-bit group 64 3%, bf16 0%"
+      ],
+      "decode_lines": [
+        "prompt 63 tok in 331 ms (190.4 tok/s); spec decode D=2: 255 tok in 2827 ms (90.2 tok/s), 102 cycles, 2.50 tok/cycle, accepted/drafted 0.75, 26.930 ms GPU/cycle, 27.715 ms wall/cycle, hist 16 18 68"
+      ],
+      "contention": {
+        "samples": 43,
+        "mean_foreign_gpu_pct": 34.63,
+        "max_foreign_gpu_pct": 64.23,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 36,
+        "longest_busy_run": 34,
+        "top": [
+          "Google Chrome He"
+        ],
+        "flagged": true
+      },
+      "samples": [
+        [
+          1794031879.344,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794031879.881,
+          5.81,
+          "Google Chrome He",
+          5.81,
+          0
+        ],
+        [
+          1794031880.42,
+          3.17,
+          "Google Chrome He",
+          3.17,
+          0
+        ],
+        [
+          1794031880.96,
+          1.79,
+          "Google Chrome He",
+          1.79,
+          0
+        ],
+        [
+          1794031881.499,
+          6.17,
+          "Google Chrome He",
+          6.17,
+          0
+        ],
+        [
+          1794031882.039,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794031882.652,
+          3.88,
+          "Google Chrome He",
+          3.88,
+          0
+        ],
+        [
+          1794031883.194,
+          4.95,
+          "Google Chrome He",
+          4.95,
+          0
+        ],
+        [
+          1794031884.198,
+          4.96,
+          "Google Chrome He",
+          4.96,
+          0
+        ],
+        [
+          1794031885.34,
+          9.83,
+          "Google Chrome He",
+          9.83,
+          0
+        ],
+        [
+          1794031885.887,
+          40.56,
+          "Google Chrome He",
+          37.74,
+          0
+        ],
+        [
+          1794031886.426,
+          42.2,
+          "Google Chrome He",
+          41.12,
+          0
+        ],
+        [
+          1794031886.967,
+          38.7,
+          "Google Chrome He",
+          35.72,
+          0
+        ],
+        [
+          1794031887.944,
+          44.09,
+          "Google Chrome He",
+          41.84,
+          0
+        ],
+        [
+          1794031888.484,
+          39.37,
+          "Google Chrome He",
+          38.59,
+          0
+        ],
+        [
+          1794031889.028,
+          45.9,
+          "Google Chrome He",
+          44.34,
+          0
+        ],
+        [
+          1794031889.576,
+          41.4,
+          "Google Chrome He",
+          40.22,
+          0
+        ],
+        [
+          1794031890.116,
+          43.86,
+          "Google Chrome He",
+          40.54,
+          0
+        ],
+        [
+          1794031890.658,
+          44.06,
+          "Google Chrome He",
+          39.16,
+          0
+        ],
+        [
+          1794031891.227,
+          44.69,
+          "Google Chrome He",
+          44.14,
+          0
+        ],
+        [
+          1794031891.774,
+          41.55,
+          "Google Chrome He",
+          40.06,
+          0
+        ],
+        [
+          1794031892.312,
+          38.7,
+          "Google Chrome He",
+          38.7,
+          0
+        ],
+        [
+          1794031892.866,
+          39.26,
+          "Google Chrome He",
+          37.74,
+          0
+        ],
+        [
+          1794031893.46,
+          40.61,
+          "Google Chrome He",
+          39.43,
+          0
+        ],
+        [
+          1794031894.013,
+          42.25,
+          "Google Chrome He",
+          41.64,
+          0
+        ],
+        [
+          1794031894.56,
+          43.21,
+          "Google Chrome He",
+          41.65,
+          0
+        ],
+        [
+          1794031895.101,
+          40.95,
+          "Google Chrome He",
+          40.12,
+          0
+        ],
+        [
+          1794031895.641,
+          43.96,
+          "Google Chrome He",
+          43.28,
+          0
+        ],
+        [
+          1794031896.184,
+          43.78,
+          "Google Chrome He",
+          43.18,
+          0
+        ],
+        [
+          1794031896.737,
+          37.24,
+          "Google Chrome He",
+          36.64,
+          0
+        ],
+        [
+          1794031897.293,
+          44.2,
+          "Google Chrome He",
+          42.33,
+          0
+        ],
+        [
+          1794031897.834,
+          45.04,
+          "Google Chrome He",
+          42.9,
+          0
+        ],
+        [
+          1794031898.383,
+          36.41,
+          "Google Chrome He",
+          33.6,
+          0
+        ],
+        [
+          1794031898.925,
+          35.76,
+          "Google Chrome He",
+          32.33,
+          0
+        ],
+        [
+          1794031899.469,
+          37.93,
+          "Google Chrome He",
+          35.09,
+          0
+        ],
+        [
+          1794031900.009,
+          44.85,
+          "Google Chrome He",
+          43.07,
+          0
+        ],
+        [
+          1794031900.55,
+          44.13,
+          "Google Chrome He",
+          44.13,
+          0
+        ],
+        [
+          1794031901.152,
+          49.72,
+          "Google Chrome He",
+          47.48,
+          0
+        ],
+        [
+          1794031901.703,
+          44.17,
+          "Google Chrome He",
+          43.54,
+          0
+        ],
+        [
+          1794031902.259,
+          48.36,
+          "Google Chrome He",
+          46.7,
+          0
+        ],
+        [
+          1794031902.803,
+          53.28,
+          "Google Chrome He",
+          49.81,
+          0
+        ],
+        [
+          1794031903.362,
+          64.23,
+          "Google Chrome He",
+          60.19,
+          0
+        ],
+        [
+          1794031903.93,
+          64.0,
+          "Google Chrome He",
+          58.36,
+          0
+        ]
+      ]
+    },
+    {
+      "label": "35b-mtp-1-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/home-35b-mtp-1-candidate"
+      },
+      "exit": 0,
+      "tokens": 256,
+      "text_nonempty": true,
+      "eos_count": 0,
+      "before_first_eos": 256,
+      "sha256": "b5ff9b3c2ef07e732215fcb23553401648d86af819729ba7faf9ff7119c40490",
+      "mtp_load_lines": [
+        "[kapitsa] MTP head loaded in 439 ms (MoE, trunk hidden post-norm, drafts over ids < 32768 + specials, a 4-bit copy of the output layer's rows)",
+        "[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp: 40 layers, MoE, 20.2 GB mapped in 21647 ms; weights 4-bit group 64 90%, 5-bit group 64 3%, 6-bit group 64 4%, 8-bit group 64 3%, bf16 0%"
+      ],
+      "decode_lines": [
+        "prompt 63 tok in 271 ms (232.3 tok/s); spec decode D=2: 255 tok in 2390 ms (106.7 tok/s), 102 cycles, 2.50 tok/cycle, accepted/drafted 0.75, 22.492 ms GPU/cycle, 23.427 ms wall/cycle, hist 16 18 68"
+      ],
+      "contention": {
+        "samples": 42,
+        "mean_foreign_gpu_pct": 37.21,
+        "max_foreign_gpu_pct": 48.42,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 42,
+        "longest_busy_run": 42,
+        "top": [
+          "Google Chrome He"
+        ],
+        "flagged": true
+      },
+      "samples": [
+        [
+          1794032025.237,
+          35.07,
+          "Google Chrome He",
+          32.96,
+          0
+        ],
+        [
+          1794032025.78,
+          47.18,
+          "Google Chrome He",
+          44.05,
+          0
+        ],
+        [
+          1794032026.321,
+          33.4,
+          "Google Chrome He",
+          33.4,
+          0
+        ],
+        [
+          1794032026.863,
+          34.81,
+          "Google Chrome He",
+          33.67,
+          0
+        ],
+        [
+          1794032027.406,
+          36.99,
+          "Google Chrome He",
+          34.68,
+          0
+        ],
+        [
+          1794032027.948,
+          37.18,
+          "Google Chrome He",
+          37.18,
+          0
+        ],
+        [
+          1794032028.494,
+          37.23,
+          "Google Chrome He",
+          31.9,
+          0
+        ],
+        [
+          1794032029.114,
+          32.09,
+          "Google Chrome He",
+          29.63,
+          0
+        ],
+        [
+          1794032030.706,
+          16.52,
+          "Google Chrome He",
+          15.51,
+          0
+        ],
+        [
+          1794032031.609,
+          35.45,
+          "Google Chrome He",
+          34.26,
+          0
+        ],
+        [
+          1794032032.17,
+          36.64,
+          "Google Chrome He",
+          33.88,
+          0
+        ],
+        [
+          1794032032.707,
+          37.46,
+          "Google Chrome He",
+          35.76,
+          0
+        ],
+        [
+          1794032033.245,
+          34.2,
+          "Google Chrome He",
+          34.2,
+          0
+        ],
+        [
+          1794032033.787,
+          35.1,
+          "Google Chrome He",
+          35.1,
+          0
+        ],
+        [
+          1794032034.335,
+          36.25,
+          "Google Chrome He",
+          36.25,
+          0
+        ],
+        [
+          1794032034.884,
+          36.29,
+          "Google Chrome He",
+          36.29,
+          0
+        ],
+        [
+          1794032035.422,
+          32.97,
+          "Google Chrome He",
+          32.97,
+          0
+        ],
+        [
+          1794032035.963,
+          41.38,
+          "Google Chrome He",
+          41.38,
+          0
+        ],
+        [
+          1794032036.524,
+          36.89,
+          "Google Chrome He",
+          36.14,
+          0
+        ],
+        [
+          1794032037.066,
+          41.92,
+          "Google Chrome He",
+          41.92,
+          0
+        ],
+        [
+          1794032037.605,
+          41.8,
+          "Google Chrome He",
+          41.8,
+          0
+        ],
+        [
+          1794032038.146,
+          38.95,
+          "Google Chrome He",
+          38.95,
+          0
+        ],
+        [
+          1794032038.686,
+          40.9,
+          "Google Chrome He",
+          40.9,
+          0
+        ],
+        [
+          1794032039.222,
+          32.69,
+          "Google Chrome He",
+          32.69,
+          0
+        ],
+        [
+          1794032039.762,
+          35.22,
+          "Google Chrome He",
+          35.22,
+          0
+        ],
+        [
+          1794032040.305,
+          36.88,
+          "Google Chrome He",
+          36.88,
+          0
+        ],
+        [
+          1794032040.845,
+          40.28,
+          "Google Chrome He",
+          39.28,
+          0
+        ],
+        [
+          1794032041.387,
+          36.62,
+          "Google Chrome He",
+          34.67,
+          0
+        ],
+        [
+          1794032041.928,
+          32.67,
+          "Google Chrome He",
+          31.12,
+          0
+        ],
+        [
+          1794032042.469,
+          36.17,
+          "Google Chrome He",
+          35.21,
+          0
+        ],
+        [
+          1794032043.01,
+          35.65,
+          "Google Chrome He",
+          35.65,
+          0
+        ],
+        [
+          1794032043.55,
+          35.27,
+          "Google Chrome He",
+          35.27,
+          0
+        ],
+        [
+          1794032044.089,
+          34.26,
+          "Google Chrome He",
+          34.26,
+          0
+        ],
+        [
+          1794032044.629,
+          33.89,
+          "Google Chrome He",
+          33.89,
+          0
+        ],
+        [
+          1794032045.17,
+          34.92,
+          "Google Chrome He",
+          34.92,
+          0
+        ],
+        [
+          1794032045.713,
+          37.42,
+          "Google Chrome He",
+          37.42,
+          0
+        ],
+        [
+          1794032046.253,
+          41.27,
+          "Google Chrome He",
+          40.24,
+          0
+        ],
+        [
+          1794032046.796,
+          48.42,
+          "Google Chrome He",
+          47.56,
+          0
+        ],
+        [
+          1794032047.343,
+          46.97,
+          "Google Chrome He",
+          46.97,
+          0
+        ],
+        [
+          1794032047.884,
+          45.14,
+          "Google Chrome He",
+          44.35,
+          0
+        ],
+        [
+          1794032048.425,
+          39.87,
+          "Google Chrome He",
+          39.87,
+          0
+        ],
+        [
+          1794032048.967,
+          42.34,
+          "Google Chrome He",
+          42.34,
+          0
+        ]
+      ]
+    },
+    {
+      "label": "35b-mtp-2-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/home-35b-mtp-2-base"
+      },
+      "exit": 0,
+      "tokens": 256,
+      "text_nonempty": true,
+      "eos_count": 0,
+      "before_first_eos": 256,
+      "sha256": "b5ff9b3c2ef07e732215fcb23553401648d86af819729ba7faf9ff7119c40490",
+      "mtp_load_lines": [
+        "[kapitsa] MTP head loaded in 120 ms (MoE, trunk hidden post-norm, drafts over ids < 32768 + specials, a 4-bit copy of the output layer's rows)",
+        "[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp: 40 layers, MoE, 20.2 GB mapped in 16233 ms; weights 4-bit group 64 90%, 5-bit group 64 3%, 6-bit group 64 4%, 8-bit group 64 3%, bf16 0%"
+      ],
+      "decode_lines": [
+        "prompt 63 tok in 188 ms (335.2 tok/s); spec decode D=2: 255 tok in 2031 ms (125.6 tok/s), 102 cycles, 2.50 tok/cycle, accepted/drafted 0.75, 19.341 ms GPU/cycle, 19.910 ms wall/cycle, hist 16 18 68"
+      ],
+      "contention": {
+        "samples": 34,
+        "mean_foreign_gpu_pct": 2.25,
+        "max_foreign_gpu_pct": 19.37,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 5,
+        "longest_busy_run": 4,
+        "top": [
+          "Google Chrome He"
+        ],
+        "flagged": true
+      },
+      "samples": [
+        [
+          1794032075.028,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032075.567,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032076.106,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032076.647,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032077.187,
+          0.61,
+          "Google Chrome He",
+          0.61,
+          0
+        ],
+        [
+          1794032077.728,
+          4.61,
+          "Google Chrome He",
+          4.61,
+          0
+        ],
+        [
+          1794032078.268,
+          0.69,
+          "Google Chrome He",
+          0.69,
+          0
+        ],
+        [
+          1794032078.803,
+          4.44,
+          "Google Chrome He",
+          4.44,
+          0
+        ],
+        [
+          1794032079.342,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032079.881,
+          0.57,
+          "Google Chrome He",
+          0.57,
+          0
+        ],
+        [
+          1794032080.419,
+          0.74,
+          "Google Chrome He",
+          0.74,
+          0
+        ],
+        [
+          1794032080.958,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032081.497,
+          11.89,
+          "Google Chrome He",
+          11.89,
+          0
+        ],
+        [
+          1794032082.04,
+          11.99,
+          "Google Chrome He",
+          11.99,
+          0
+        ],
+        [
+          1794032082.577,
+          19.37,
+          "Google Chrome He",
+          19.37,
+          0
+        ],
+        [
+          1794032083.116,
+          13.31,
+          "Google Chrome He",
+          13.31,
+          0
+        ],
+        [
+          1794032083.654,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032084.193,
+          6.22,
+          "Google Chrome He",
+          6.22,
+          0
+        ],
+        [
+          1794032084.732,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032085.27,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032085.808,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032086.348,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032086.886,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032087.425,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032087.964,
+          1.37,
+          "Google Chrome He",
+          1.37,
+          0
+        ],
+        [
+          1794032088.499,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032089.037,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032089.571,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032090.111,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032090.651,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032091.19,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032091.725,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032092.264,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032092.81,
+          0.6,
+          "Google Chrome He",
+          0.6,
+          0
+        ]
+      ]
+    },
+    {
+      "label": "35b-mtp-3-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-35b-mtp/home-35b-mtp-3-candidate"
+      },
+      "exit": 0,
+      "tokens": 256,
+      "text_nonempty": true,
+      "eos_count": 0,
+      "before_first_eos": 256,
+      "sha256": "b5ff9b3c2ef07e732215fcb23553401648d86af819729ba7faf9ff7119c40490",
+      "mtp_load_lines": [
+        "[kapitsa] MTP head loaded in 123 ms (MoE, trunk hidden post-norm, drafts over ids < 32768 + specials, a 4-bit copy of the output layer's rows)",
+        "[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp: 40 layers, MoE, 20.2 GB mapped in 5022 ms; weights 4-bit group 64 90%, 5-bit group 64 3%, 6-bit group 64 4%, 8-bit group 64 3%, bf16 0%"
+      ],
+      "decode_lines": [
+        "prompt 63 tok in 116 ms (542.4 tok/s); spec decode D=2: 255 tok in 2023 ms (126.0 tok/s), 102 cycles, 2.50 tok/cycle, accepted/drafted 0.75, 19.298 ms GPU/cycle, 19.838 ms wall/cycle, hist 16 18 68"
+      ],
+      "contention": {
+        "samples": 13,
+        "mean_foreign_gpu_pct": 0.36,
+        "max_foreign_gpu_pct": 1.87,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794032102.261,
+          1.87,
+          "Google Chrome He",
+          1.87,
+          0
+        ],
+        [
+          1794032102.804,
+          0.63,
+          "Google Chrome He",
+          0.63,
+          0
+        ],
+        [
+          1794032103.343,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032103.882,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032104.423,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032104.96,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032105.5,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032106.038,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032106.576,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032107.113,
+          1.57,
+          "Google Chrome He",
+          1.57,
+          0
+        ],
+        [
+          1794032107.652,
+          0.63,
+          "Google Chrome He",
+          0.63,
+          0
+        ],
+        [
+          1794032108.191,
+          0,
+          "-",
+          0.0,
+          0
+        ],
+        [
+          1794032108.73,
+          0,
+          "-",
+          0.0,
+          0
+        ]
+      ]
+    }
+  ],
+  "identities": {
+    "base": {
+      "head": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+      "version": "kapitsa 0.2.31 (b171f983)",
+      "binaries": {
+        "kapitsa": "3f1f56dea2c64deff131f80a79d0eb4456d192500b8d31af791f476502af6b8c",
+        "ni_run": "25e08a5c2946d3b8c6e3ff14cb323f2d92e49705551d074b27a1403d16ca0c60",
+        "logit_dump": "4acec4e43c9d136e1fdb48776fda1cda64d17c6588ac24b8e6aad6d0a029110f"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "bde8632354ce54e1ee40ebb30f2df2da1abe5569928991ffe84129de065d85dd",
+        "src/model/qwen35_spec.cpp": "5ca89d5a1823d2bf31d9656ff949f6758a0c9aead368455b2a58cf59d46009e2"
+      }
+    },
+    "candidate": {
+      "head": "02e53017f19aaac71d4f64795ec55d0fb4c12d0e",
+      "version": "kapitsa 0.2.31 (02e53017)",
+      "binaries": {
+        "kapitsa": "e295493fd8767de21f1099feebdf7b5062d966428f793f5958571fecd25120a1",
+        "ni_run": "7ee96f6a1efb132e6ec7dec6eef8b13ac2e6beefa6c18b78ce489c21fa9939d3",
+        "logit_dump": "98e962e01fd68977fb133d49e7ed646c3a398680de32a8f384789b2215c5d29b"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "c008bcbacf24ab0c137312027960101386e5a60e8285ae0a19ed7608966f20c6",
+        "src/model/qwen35_spec.cpp": "b1b7df3ebc16e3b25ead07429303706505aef36d707d235cab8d9fc644258331"
+      }
+    }
+  },
+  "metadata": {
+    "config.json": "54cc369e17c16ec0c3e87cd8a865c6565966f91a4b2afc82b1c40d5a185e90f5",
+    "tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+  }
+}

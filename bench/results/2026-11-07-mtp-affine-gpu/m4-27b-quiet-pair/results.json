@@ -1,0 +1,8 @@
+{
+  "pid": 80882,
+  "started_at": "2026-11-07T06:09:25.851068+00:00",
+  "status": "stopped before any run: corrected quiet-wait tuple handling in v2 runner",
+  "reason": "Original 27B A2 native bench flagged sustained foreign GPU activity during prefill; retain it and repeat its A/B pair under a fresh label.",
+  "runs": [],
+  "stopped_at": "2026-11-07T06:14:34.029123+00:00"
+}
