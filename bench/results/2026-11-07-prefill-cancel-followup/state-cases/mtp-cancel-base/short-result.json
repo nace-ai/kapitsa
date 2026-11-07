@@ -1,0 +1,36 @@
+{
+  "name": "short",
+  "progress": [
+    {
+      "total": 2108,
+      "cache": 2051,
+      "processed": 2051,
+      "time_ms": 0
+    },
+    {
+      "total": 2108,
+      "cache": 2051,
+      "processed": 2108,
+      "time_ms": 10
+    }
+  ],
+  "text": "The `forward` method of the `GraniteSpeechConformerAttention` class may fail if the `attention_dists` input is missing or malformed, causing",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 2108,
+    "completion_tokens": 32,
+    "total_tokens": 2140,
+    "prompt_tokens_details": {
+      "cached_tokens": 2051
+    },
+    "kapitsa": {
+      "prefill_ms": 69.7,
+      "kflash": {
+        "source": "MTP",
+        "cycles": 10
+      }
+    }
+  },
+  "finish_reason": "length"
+}

@@ -1,0 +1,38 @@
+{
+  "rule": "All MATH-500 questions whose thinking chat prompt exceeds 512 tokens; selection by length only before outcomes",
+  "dataset_sha256": "35dc41080a3680858b27fa7e0533d2d547825316fc5dafe5d316f4ccc5a06132",
+  "selected": [
+    {
+      "id": "test/counting_and_probability/181.json",
+      "prompt_tokens": 720,
+      "problem": "There is a total of 70 squares of three sizes whose vertices are points on this rectangular $3\\times n$ grid of points. What is the value of $n$?\n\n[asy]\n\nunitsize(0.4 inch);\n\ndot((0,0),linewidth(9bp));\ndot((1,0),linewidth(9bp));\ndot((2,0),linewidth(9bp));\ndot((0,1),linewidth(9bp));\ndot((0,2),linewidth(9bp));\ndot((1,1),linewidth(9bp));\ndot((2,1),linewidth(9bp));\ndot((1,2),linewidth(9bp));\ndot((2,2),linewidth(9bp));\n\nfilldraw((2.95,-0.05)--(3.05,-0.05)--(3.05,0.05)--(2.95,0.05)--cycle,black);\nfilldraw((2.45,-0.05)--(2.55,-0.05)--(2.55,0.05)--(2.45,0.05)--cycle,black);\nfilldraw((3.45,-0.05)--(3.55,-0.05)--(3.55,0.05)--(3.45,0.05)--cycle,black);\n\nfilldraw((2.95,0.95)--(3.05,0.95)--(3.05,1.05)--(2.95,1.05)--cycle,black);\nfilldraw((2.45,0.95)--(2.55,0.95)--(2.55,1.05)--(2.45,1.05)--cycle,black);\nfilldraw((3.45,0.95)--(3.55,0.95)--(3.55,1.05)--(3.45,1.05)--cycle,black);\n\nfilldraw((2.95,1.95)--(3.05,1.95)--(3.05,2.05)--(2.95,2.05)--cycle,black);\nfilldraw((2.45,1.95)--(2.55,1.95)--(2.55,2.05)--(2.45,2.05)--cycle,black);\nfilldraw((3.45,1.95)--(3.55,1.95)--(3.55,2.05)--(3.45,2.05)--cycle,black);\n\ndot((4,0),linewidth(9bp));\ndot((5,0),linewidth(9bp));\ndot((4,1),linewidth(9bp));\ndot((5,1),linewidth(9bp));\ndot((4,2),linewidth(9bp));\ndot((5,2),linewidth(9bp));\n\n[/asy]",
+      "answer": "19",
+      "level": 5,
+      "subject": "Counting & Probability"
+    },
+    {
+      "id": "test/geometry/702.json",
+      "prompt_tokens": 520,
+      "problem": "Five points $A$, $B$, $C$, $D$, and $O$ lie on a flat field.  $A$ is directly north of $O$, $B$ is directly west of $O$, $C$ is directly south of $O$, and $D$ is directly east of $O$. The  distance between $C$ and $D$ is 140 m.  A hot-air balloon is positioned in the air at $H$ directly above $O$. The balloon is held in place by four ropes $HA$, $HB$, $HC$, and $HD$.  Rope $HC$ has length 150 m and rope $HD$ has length 130 m. [asy]\nsize(250);\npair A, B, C, D, O, H, W, X, Y, Z;\nO=(0,0);\nA=(1,1);\nD=(1.5,-.3);\nB=(-1.5,.3);\nC=(-1,-1);\nH=(0,2.5);\nW=(5/3)*(A+D);\nX=(5/3)*(A+B);\nY=(-1)*(W);\nZ=(-1)*(X);\ndraw(W--X--Y--Z--W);\ndraw(A--C);\ndraw(B--D);\ndraw(O--H, linewidth(1));\ndraw(A--H, dashed);\ndraw(B--H, dashed);\ndraw(C--H, dashed);\ndraw(D--H, dashed);\ndot(A);\ndot(B);\ndot(C);\ndot(D);\ndot(O);\ndot(H);\nlabel(\"A\", A, NE);\nlabel(\"B\", B, SW);\nlabel(\"C\", C, SE);\nlabel(\"D\", D, NE);\nlabel(\"O\", O, SE);\nlabel(\"H\", H, NW);\n[/asy]\n\nTo reduce the total length of rope used, rope $HC$ and rope $HD$ are to be replaced by a single rope $HP$ where $P$ is a point on the straight line between $C$ and $D$. (The balloon remains at the same position $H$ above $O$ as described above.)  Determine the greatest length of rope that can be saved.",
+      "answer": "160",
+      "level": 5,
+      "subject": "Geometry"
+    },
+    {
+      "id": "test/counting_and_probability/282.json",
+      "prompt_tokens": 760,
+      "problem": "The wheel shown is spun twice, so that the numbers indicated by the pointer are randomly determined (with each number on the wheel being equally likely). The two numbers determined in this way are recorded. The first number is divided by 4, determining one of the remainders 1,2,3 marking the columns of the checkerboard shown. The second number is divided by 5, determining one of the remainders 1,2,3,4 marking the rows of the checkerboard. Finally, a checker is placed on the square where this column and row meet. What is the probability that the checker is placed on a shaded square of the checkerboard?\n\n[asy]\nunitsize(1cm);\ndraw(Circle((0,0),2),linewidth(0.7));\ndraw((1.7,1)--(-1.7,-1),linewidth(0.7));\ndraw((1.7,-1)--(-1.7,1),linewidth(0.7));\ndraw((0,2)--(0,-2));\nlabel(\"1\",(0.8,0.5),NW);\nlabel(\"2\",(0.8,-0.5),SW);\nlabel(\"6\",(-0.8,0.5),NE);\nlabel(\"9\",(-0.8,-0.5),SE);\nlabel(\"3\",(-0.7,0),W);\nlabel(\"7\",(0.7,0),E);\ndraw((-2.8,0)--(-2.1,0),Arrow);\nlabel(\"Pointer\",(-2.8,0),W);\nfill((3,0)--(3,1)--(4,1)--(4,0)--cycle,gray(0.7));\nfill((3,-2)--(3,-1)--(4,-1)--(4,-2)--cycle,gray(0.7));\nfill((4,1)--(4,2)--(5,2)--(5,1)--cycle,gray(0.7));\nfill((4,-1)--(4,0)--(5,0)--(5,-1)--cycle,gray(0.7));\nfill((5,0)--(5,1)--(6,1)--(6,0)--cycle,gray(0.7));\nfill((5,-2)--(5,-1)--(6,-1)--(6,-2)--cycle,gray(0.7));\ndraw((3,-2)--(3,2)--(6,2)--(6,-2)--cycle,linewidth(0.7));\ndraw((3,-1)--(6,-1),linewidth(0.7));\ndraw((3,0)--(6,0),linewidth(0.7));\ndraw((3,1)--(6,1),linewidth(0.7));\ndraw((4,-2)--(4,2),linewidth(0.7));\ndraw((5,-2)--(5,2),linewidth(0.7));\nlabel(\"1\",(3.5,-2),S);\nlabel(\"2\",(4.5,-2),S);\nlabel(\"3\",(5.5,-2),S);\nlabel(\"1\",(3,-1.5),W);\nlabel(\"2\",(3,-0.5),W);\nlabel(\"3\",(3,0.5),W);\nlabel(\"4\",(3,1.5),W);\n[/asy]",
+      "answer": "\\frac{1}{2}",
+      "level": 4,
+      "subject": "Counting & Probability"
+    },
+    {
+      "id": "test/prealgebra/1044.json",
+      "prompt_tokens": 857,
+      "problem": "$\\textbf{Juan's Old Stamping Grounds}$\n\nJuan organizes the stamps in his collection by country and by the decade in which they were issued. The prices he paid for them at a stamp shop were: Brazil and France, $6$ cents each, Peru $4$ cents each, and Spain $5$ cents each. (Brazil and Peru are South American countries and France and Spain are in Europe.) [asy]\n/* AMC8 2002 #8, 9, 10 Problem */\nsize(3inch, 1.5inch);\nfor ( int y = 0; y <= 5; ++y )\n{\n\ndraw((0,y)--(18,y));\n}\ndraw((0,0)--(0,5));\ndraw((6,0)--(6,5));\ndraw((9,0)--(9,5));\ndraw((12,0)--(12,5));\ndraw((15,0)--(15,5));\ndraw((18,0)--(18,5));\n\nlabel(scale(0.8)*\"50s\", (7.5,4.5));\nlabel(scale(0.8)*\"4\", (7.5,3.5));\nlabel(scale(0.8)*\"8\", (7.5,2.5));\nlabel(scale(0.8)*\"6\", (7.5,1.5));\nlabel(scale(0.8)*\"3\", (7.5,0.5));\n\nlabel(scale(0.8)*\"60s\", (10.5,4.5));\nlabel(scale(0.8)*\"7\", (10.5,3.5));\nlabel(scale(0.8)*\"4\", (10.5,2.5));\nlabel(scale(0.8)*\"4\", (10.5,1.5));\nlabel(scale(0.8)*\"9\", (10.5,0.5));\n\nlabel(scale(0.8)*\"70s\", (13.5,4.5));\nlabel(scale(0.8)*\"12\", (13.5,3.5));\nlabel(scale(0.8)*\"12\", (13.5,2.5));\nlabel(scale(0.8)*\"6\", (13.5,1.5));\nlabel(scale(0.8)*\"13\", (13.5,0.5));\n\nlabel(scale(0.8)*\"80s\", (16.5,4.5));\nlabel(scale(0.8)*\"8\", (16.5,3.5));\nlabel(scale(0.8)*\"15\", (16.5,2.5));\nlabel(scale(0.8)*\"10\", (16.5,1.5));\nlabel(scale(0.8)*\"9\", (16.5,0.5));\n\nlabel(scale(0.8)*\"Country\", (3,4.5));\nlabel(scale(0.8)*\"Brazil\", (3,3.5));\nlabel(scale(0.8)*\"France\", (3,2.5));\nlabel(scale(0.8)*\"Peru\", (3,1.5));\nlabel(scale(0.8)*\"Spain\", (3,0.5));\n\nlabel(scale(0.9)*\"Juan's Stamp Collection\", (9,0), S);\nlabel(scale(0.9)*\"Number of Stamps by Decade\", (9,5), N);\n[/asy] What was the average price, in cents, of his $70\\text{'s}$ stamps? Round your answer to the nearest tenth of a cent.",
+      "answer": "5.4 \\text{ cents}",
+      "level": 5,
+      "subject": "Prealgebra"
+    }
+  ]
+}

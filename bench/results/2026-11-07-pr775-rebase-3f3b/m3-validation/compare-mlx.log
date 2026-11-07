@@ -1,0 +1,40 @@
+prefill: 8 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: mlx-lm 0.32.2 / mlx 0.32.4, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 8; max |logit diff| 0.8817
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.472e-04 median 4.073e-05 p99 4.928e-04 max 5.071e-04; top-2 margin change up to 0.2657
+  next-token NLL change +5.577e-04 nats per record (candidate minus reference)
+batch: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: mlx-lm 0.32.2 / mlx 0.32.4, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 192; max |logit diff| 1.794
+  top-1 agreement 0.9792 (4 flips)
+  KL mean 3.991e-04 median 4.101e-05 p99 4.453e-03 max 4.882e-03; top-2 margin change up to 0.3781
+  next-token NLL change -7.802e-04 nats per record (candidate minus reference)
+    flip at sequence 4 prefix 1665: top-1 20467 -> 7402, reference margin 0.1903
+    flip at sequence 3 prefix 2067: top-1 460 -> 413, reference margin 0.1295
+    flip at sequence 6 prefix 908: top-1 535 -> 3390, reference margin 0.07684
+    flip at sequence 0 prefix 3211: top-1 42598 -> 32995, reference margin 0.05203
+step: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: mlx-lm 0.32.2 / mlx 0.32.4, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 192; max |logit diff| 1.758
+  top-1 agreement 0.9792 (4 flips)
+  KL mean 3.987e-04 median 4.178e-05 p99 4.521e-03 max 4.995e-03; top-2 margin change up to 0.3724
+  next-token NLL change -7.212e-04 nats per record (candidate minus reference)
+    flip at sequence 4 prefix 1665: top-1 20467 -> 7402, reference margin 0.1922
+    flip at sequence 3 prefix 2067: top-1 460 -> 413, reference margin 0.1269
+    flip at sequence 6 prefix 908: top-1 535 -> 3390, reference margin 0.07909
+    flip at sequence 0 prefix 3211: top-1 42598 -> 32995, reference margin 0.0509
+verify: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (50fadecc), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: mlx-lm 0.32.2 / mlx 0.32.4, prefill_chunk 2048, ane {"evals":0}
+  bitwise identical rows 0 of 192; max |logit diff| 1.746
+  top-1 agreement 0.9792 (4 flips)
+  KL mean 3.995e-04 median 4.134e-05 p99 4.474e-03 max 4.948e-03; top-2 margin change up to 0.3758
+  next-token NLL change -7.525e-04 nats per record (candidate minus reference)
+    flip at sequence 4 prefix 1665: top-1 20467 -> 7402, reference margin 0.1914
+    flip at sequence 3 prefix 2067: top-1 460 -> 413, reference margin 0.1268
+    flip at sequence 6 prefix 908: top-1 535 -> 3390, reference margin 0.078
+    flip at sequence 0 prefix 3211: top-1 42598 -> 32995, reference margin 0.05047

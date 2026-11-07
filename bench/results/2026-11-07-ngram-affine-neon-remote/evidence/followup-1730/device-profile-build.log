@@ -1,0 +1,4 @@
+[100%] Building CXX object CMakeFiles/device_profile_test.dir/src/engine/device_profile.cpp.o
+[100%] Building CXX object CMakeFiles/device_profile_test.dir/tests/device_profile_test.cpp.o
+[100%] Linking CXX executable device_profile_test
+[100%] Built target device_profile_test

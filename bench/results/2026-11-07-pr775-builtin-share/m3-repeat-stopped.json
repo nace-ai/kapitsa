@@ -1,0 +1,10 @@
+{
+  "reason": "Reviewer 6698446394 option (a) selected; M3 excluded from the new default, redundant old-policy timing no longer needed",
+  "last_phase": "waiting_for_GPU",
+  "timing_legs_started": 0,
+  "controller_pid": 68699,
+  "signal": "SIGTERM",
+  "process_absence_verified": true,
+  "unrelated_gpu_holder_untouched": 70062,
+  "recorded_at": 1794008206.263592
+}

@@ -1,0 +1,57 @@
+{
+  "scope": "Fresh M4 CPU trained row output check; not model/GPU coverage",
+  "variants": {
+    "base": {
+      "source": "01b4c6d69fbe69e862c00358f88c94a363129592",
+      "library_sha256": "00bc65909437c8c3516c8ac488f2d2038e9c9c771b6e66fb94ec0ff3ed41f9eb",
+      "probe_sha256": "beddcc2cf654df5896a39c4874e48b8471042af7123b66715554bfdd254f8584"
+    },
+    "candidate": {
+      "source": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+      "library_sha256": "f59fb8fa36218c85c2a6722f1da12f55649c906cb1030cc34cd07f7aa0dd3932",
+      "probe_sha256": "0d7ab22ec99f3c8fd7340dc1aa07e93b17cf5ed0dca010b3daae007338074cef"
+    }
+  },
+  "rows": 16064,
+  "commands": [
+    {
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/probe-base",
+        "rows",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/fixture",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/required-rows.json",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/base-rows.f32"
+      ],
+      "exit": 0,
+      "output": {
+        "dimension": 160,
+        "finite": true,
+        "guards": true,
+        "mapped_bytes": 32000153976,
+        "nonzero_values": 2396446,
+        "rows": 16064
+      }
+    },
+    {
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/probe-candidate",
+        "rows",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/fixture",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/required-rows.json",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/draft-resolution-20261107/m4/candidate-rows.f32"
+      ],
+      "exit": 0,
+      "output": {
+        "dimension": 160,
+        "finite": true,
+        "guards": true,
+        "mapped_bytes": 32000153976,
+        "nonzero_values": 2396446,
+        "rows": 16064
+      }
+    }
+  ],
+  "byte_equal": true,
+  "output_bytes": 10280960,
+  "output_sha256": "fa68c5cabaa05c2429cbc4c452a6f358ffbe98a610040c4f103081192c360231"
+}

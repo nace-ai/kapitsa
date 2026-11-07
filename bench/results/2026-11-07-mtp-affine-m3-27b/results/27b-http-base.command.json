@@ -1,0 +1,16 @@
+{
+  "label": "27b-http-base",
+  "argv": [
+    "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/base/tests/test_server.py",
+    "http://127.0.0.1:59031"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+  "started_at": "2026-11-07T08:57:28.234664+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-http-base"
+  }
+}

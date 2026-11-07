@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/candidate-rebase-3f3b/tools/logit_compare.py",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-rebase-3f3b/logits-precise/batch",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-rebase-3f3b/logits-fast/batch",
+    "--min-top1",
+    "0.9791666666666666",
+    "--max-mean-kl",
+    "0.00039909276793284755",
+    "--json",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-rebase-3f3b/fast-gate-batch.json"
+  ],
+  "returncode": 0,
+  "env": {
+    "NI_ANE_ASYNC": "0",
+    "NI_ANE_KEEP_S": "0",
+    "NI_NO_MTP": "1",
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "NI_ANE_UNITS": "16"
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "sharded": {
+    "model-00005-of-00007.safetensors": {
+      "bytes": 16175136,
+      "sha256": "c0b16776a34cc7f0d8e9b98f1f9cc26ca5780046e8e5e47d330ba0a29059844f"
+    },
+    "config.json": {
+      "bytes": 21060,
+      "sha256": "223abb2a341e18322847ea1f490ab08bd12a17e3e362a0d579fd6a8001c0fc24"
+    },
+    "mtp.safetensors": {
+      "bytes": 31618080,
+      "sha256": "bd0d3e073894a174c67d66bd3e2a08e21d5ffb973c0c5abd9dbf821c90b6ed8b"
+    },
+    "model-00001-of-00007.safetensors": {
+      "bytes": 1937408,
+      "sha256": "a95558e55db5c721cb7fce2233a50ec39ce811610adc58e0f25125ce1831bd0f"
+    },
+    "model-00004-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "54064e2944e1c871b8b74ac4693b1e7fc9f01ec67c4b7fec534511e944e748db"
+    },
+    "model-00007-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "76dd6975c9134475a31d7a7a71dc2c6e1fb916aca65f343d1a3f6499ac71750b"
+    },
+    "model-00002-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "ac318fb7b17dde48cbd04d136efacbf22f6230c86e3af92567d190ffeefd8bbf"
+    },
+    "ple.safetensors": {
+      "bytes": 344944,
+      "sha256": "1d314097c635709031722943bea216c9e28e95e02c48f6b19875dcda2d14c888"
+    },
+    "model-00006-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "d6f363b427bca43c16c1c52cb672733c8a6466eaf9e3472763628851921a646d"
+    },
+    "model-00003-of-00007.safetensors": {
+      "bytes": 16807404,
+      "sha256": "8f1ccb7a4e67d8084fb3b49bdcddb65469080eea96c4fad13632e8ad90e9a3bd"
+    }
+  },
+  "bin-affine": {
+    "model-00005-of-00007.safetensors": {
+      "bytes": 16175136,
+      "sha256": "c0b16776a34cc7f0d8e9b98f1f9cc26ca5780046e8e5e47d330ba0a29059844f"
+    },
+    "config.json": {
+      "bytes": 21060,
+      "sha256": "223abb2a341e18322847ea1f490ab08bd12a17e3e362a0d579fd6a8001c0fc24"
+    },
+    "mtp.safetensors": {
+      "bytes": 31618080,
+      "sha256": "bd0d3e073894a174c67d66bd3e2a08e21d5ffb973c0c5abd9dbf821c90b6ed8b"
+    },
+    "model-00001-of-00007.safetensors": {
+      "bytes": 1937408,
+      "sha256": "a95558e55db5c721cb7fce2233a50ec39ce811610adc58e0f25125ce1831bd0f"
+    },
+    "model-00004-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "54064e2944e1c871b8b74ac4693b1e7fc9f01ec67c4b7fec534511e944e748db"
+    },
+    "model-00007-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "76dd6975c9134475a31d7a7a71dc2c6e1fb916aca65f343d1a3f6499ac71750b"
+    },
+    "model-00002-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "ac318fb7b17dde48cbd04d136efacbf22f6230c86e3af92567d190ffeefd8bbf"
+    },
+    "ngram_table.bin": {
+      "bytes": 344944,
+      "sha256": "c5812e4ad759cb2e2df02bc8547695a74ef93266b56ee3d233514c72adda1d1e"
+    },
+    "model-00006-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "d6f363b427bca43c16c1c52cb672733c8a6466eaf9e3472763628851921a646d"
+    },
+    "model-00003-of-00007.safetensors": {
+      "bytes": 16807404,
+      "sha256": "8f1ccb7a4e67d8084fb3b49bdcddb65469080eea96c4fad13632e8ad90e9a3bd"
+    }
+  },
+  "bin-bf16": {
+    "model-00005-of-00007.safetensors": {
+      "bytes": 16175136,
+      "sha256": "c0b16776a34cc7f0d8e9b98f1f9cc26ca5780046e8e5e47d330ba0a29059844f"
+    },
+    "config.json": {
+      "bytes": 21060,
+      "sha256": "223abb2a341e18322847ea1f490ab08bd12a17e3e362a0d579fd6a8001c0fc24"
+    },
+    "mtp.safetensors": {
+      "bytes": 31618080,
+      "sha256": "bd0d3e073894a174c67d66bd3e2a08e21d5ffb973c0c5abd9dbf821c90b6ed8b"
+    },
+    "model-00001-of-00007.safetensors": {
+      "bytes": 1937408,
+      "sha256": "a95558e55db5c721cb7fce2233a50ec39ce811610adc58e0f25125ce1831bd0f"
+    },
+    "model-00004-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "54064e2944e1c871b8b74ac4693b1e7fc9f01ec67c4b7fec534511e944e748db"
+    },
+    "model-00007-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "76dd6975c9134475a31d7a7a71dc2c6e1fb916aca65f343d1a3f6499ac71750b"
+    },
+    "model-00002-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "ac318fb7b17dde48cbd04d136efacbf22f6230c86e3af92567d190ffeefd8bbf"
+    },
+    "ngram_table.bin": {
+      "bytes": 1067776,
+      "sha256": "def8d80d3f8f50ca2aa698c6efd3256ee4c73907dd05c4539a8dcaedc1d9cde2"
+    },
+    "model-00006-of-00007.safetensors": {
+      "bytes": 15386092,
+      "sha256": "d6f363b427bca43c16c1c52cb672733c8a6466eaf9e3472763628851921a646d"
+    },
+    "model-00003-of-00007.safetensors": {
+      "bytes": 16807404,
+      "sha256": "8f1ccb7a4e67d8084fb3b49bdcddb65469080eea96c4fad13632e8ad90e9a3bd"
+    }
+  }
+}

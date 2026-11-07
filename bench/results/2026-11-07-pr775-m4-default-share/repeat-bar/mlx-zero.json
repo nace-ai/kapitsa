@@ -1,0 +1,29 @@
+{
+  "paths": {
+    "step.f32": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": null,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "source": "flags"
+      },
+      "reference": {},
+      "candidate": {}
+    }
+  }
+}

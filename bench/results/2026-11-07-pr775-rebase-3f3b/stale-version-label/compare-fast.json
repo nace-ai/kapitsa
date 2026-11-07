@@ -1,0 +1,341 @@
+{
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.00047847517260584294,
+      "kl_median": 8.722135629633018e-05,
+      "kl_p99": 0.001989358387337623,
+      "kl_max": 0.002064196454376971,
+      "margin_change_max": 0.3213653564453125,
+      "tie_margin": 0.07268142700195312,
+      "nll_change_mean": 7.509512929670947e-05,
+      "max_abs_diff": 0.8046739101409912,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:57:37Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "fast"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]; prefill: ANE W8A8 segmented input"
+      }
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.9895833333333334,
+      "flips": 2,
+      "kl_mean": 0.0003638997966277224,
+      "kl_median": 1.3307385841443736e-05,
+      "kl_p99": 0.006972980239398841,
+      "kl_max": 0.009528184544307879,
+      "margin_change_max": 0.5129156112670898,
+      "tie_margin": 0.3152885437011719,
+      "nll_change_mean": 0.0016311985587391664,
+      "max_abs_diff": 3.2830371856689453,
+      "flip_list": [
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 413,
+          "margin": 0.12948989868164062
+        },
+        {
+          "record": "sequence 0 prefix 3210",
+          "ref_top": 4211,
+          "cand_top": 51319,
+          "margin": 0.03107452392578125
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "batch",
+        "batch": {
+          "members": 4,
+          "rows": 2
+        },
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "batch",
+        "batch": {
+          "members": 4,
+          "rows": 2
+        },
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:57:37Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "fast"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]; prefill: ANE W8A8 segmented input"
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.9895833333333334,
+      "flips": 2,
+      "kl_mean": 0.00036914095033037934,
+      "kl_median": 1.3612462872191672e-05,
+      "kl_p99": 0.007209771662615709,
+      "kl_max": 0.009696857130143208,
+      "margin_change_max": 0.5207071304321289,
+      "tie_margin": 0.314605712890625,
+      "nll_change_mean": 0.0016801951376544944,
+      "max_abs_diff": 3.36077544093132,
+      "flip_list": [
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 413,
+          "margin": 0.12694931030273438
+        },
+        {
+          "record": "sequence 0 prefix 3210",
+          "ref_top": 4211,
+          "cand_top": 51319,
+          "margin": 0.045131683349609375
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:57:37Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "fast"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]; prefill: ANE W8A8 segmented input"
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.9895833333333334,
+      "flips": 2,
+      "kl_mean": 0.0003767443686522171,
+      "kl_median": 1.3823097092279298e-05,
+      "kl_p99": 0.007340711699394486,
+      "kl_max": 0.010124970732502346,
+      "margin_change_max": 0.5122699737548828,
+      "tie_margin": 0.31450653076171875,
+      "nll_change_mean": 0.0016965787883759982,
+      "max_abs_diff": 3.3148902654647827,
+      "flip_list": [
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 413,
+          "margin": 0.1267986297607422
+        },
+        {
+          "record": "sequence 0 prefix 3210",
+          "ref_top": 4211,
+          "cand_top": 51319,
+          "margin": 0.05923271179199219
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 10,
+          "evals": 576,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:57:37Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "fast"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]; prefill: ANE W8A8 segmented input"
+      }
+    }
+  }
+}

@@ -18,13 +18,15 @@ DeviceFacts facts_from_gpu(long ram_bytes, bool ane) {
 }
 
 const DeviceProfile& current_device() {
-  // Resolved once, the way the call sites cached their own checks. No row keys on RAM or the ANE, so they stay
+  // Resolved once, the way the call sites cached their own checks. No default_on row keys on RAM or the ANE, so they stay
   // unset here; doctor resolves its own with them filled for its print.
   static const DeviceProfile p = resolve_device(facts_from_gpu(0, false));
   return p;
 }
 
 bool default_on(Knob k, const ModelFacts& m) { return default_on(k, current_device(), m); }
+
+bool ane_segmented_default() { return ane_segmented_default(facts_from_gpu(0, false)); }
 
 bool matrix_units() { return Gpu::get().apple_family() >= 10; }
 

@@ -1,0 +1,15 @@
+# Trained Flash-Next fixed-generation comparison
+
+Runs: Apple M3 Ultra, 96 GiB, macOS 26.4.1 (25E253). Own complete Release reference `934a6d72f2a393b6987baf0b98ebe5a9e07d69be` and candidate `dd166319cc746fd439beb77119416e610f9acf63`, each explicitly CMake-configured with its matching version label. Source/build identities and the commands are retained here and in the preceding trained-window evidence. No production source changed for this run.
+
+Pinned model: `beamster/Qwen3.8-Flash-Next-Sushi-2bpw` at `f37e7ba46f0f2993b6ca373221530c579f258712`. All non-table weights are complete and source-digest verified. The n-gram table is a sparse, exact-length 32,000,153,976-byte file; it is not a complete checkpoint.
+
+The controller prepared every row for one fixed 256-token continuation, then ran four unmodified `ni_run` reference/candidate/reference/candidate arms with greedy decoding and `--dflash none`. All four generated 256 IDs with no EOS and nonempty decoded text. The IDs match, and each complete 254,279,680-byte full-vocabulary logit dump is byte identical, finite and nonzero. Every arm's SHA256 is `454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc`.
+
+The fixed prompt plus continuation requires 3,655 unique n-gram rows. Each row's source range, pinned revision and bytes were checked before the unmodified runs, including the final speculative row. The table occupied 11,503,783,936 bytes on disk at that point, much more than the fetched payload because scattered ranges allocate filesystem blocks. This does not imply other rows are populated.
+
+The seed driver alone pauses before consuming each newly sampled input, fetches its true table rows, and invalidates the earlier speculative gather with `ple_forget()`. That unused speculative read may have touched sparse holes before invalidation. The subsequent four measurement drivers are unmodified and start only after all their input/final speculative rows are present. The seed driver's runtime is not a performance result. Exact seed/controller snapshots, coverage reports, IDs, decoded text, commands and transcripts are included. Previously published window results remain frozen.
+
+The GPU lock covered the model runs and was released at completion. There was no per-process contention monitor for this generation series; its times are not accepted as controlled speed evidence. These are this PR's own libraries and freshly generated outputs. The independently executed results of other PRs are not used here.
+
+Not verified: a complete table, arbitrary HTTP requests, native `kapitsa bench --quick` A/B/A/B, unrestricted speculative generation and streamed-expert/long-context configurations. No calibrated floor exists for this exact model. These fixed-input checks establish neither language quality nor inference speed. At collection the remote filesystem had about 14.7 GB free, while fully allocating the remaining table would need about 20.5 GB more, before preserving the disk reserve. The PR remains Draft.

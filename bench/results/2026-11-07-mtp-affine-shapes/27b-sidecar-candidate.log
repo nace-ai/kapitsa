@@ -1,0 +1,10 @@
+mtp.fc.scales N=5120 K=10240 bits=4
+mtp.layers.0.mlp.down_proj.scales N=5120 K=17408 bits=4
+mtp.layers.0.mlp.gate_proj.scales N=17408 K=5120 bits=4
+mtp.layers.0.mlp.up_proj.scales N=17408 K=5120 bits=4
+mtp.layers.0.self_attn.k_proj.scales N=1024 K=5120 bits=4
+mtp.layers.0.self_attn.o_proj.scales N=5120 K=6144 bits=4
+mtp.layers.0.self_attn.q_proj.scales N=12288 K=5120 bits=4
+mtp.layers.0.self_attn.v_proj.scales N=1024 K=5120 bits=4
+matrices=8 bytes=238878720
+[kapitsa] read 0.24 GB of weights in 55 ms (4.4 GB/s)

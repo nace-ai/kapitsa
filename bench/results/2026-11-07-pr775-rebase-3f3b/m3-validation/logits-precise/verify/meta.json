@@ -1,0 +1,28 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (50fadecc)",
+  "model": "qwen3.5-9b-4bit",
+  "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+  "path": "verify",
+  "verify": "KFlash tree (a chain of 8 live rows)",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current/logits-precise/step",
+  "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+  "macos": "26.4.1",
+  "date": "2026-11-06T21:57:51Z",
+  "env": {
+    "NI_ANE_ASYNC": "0",
+    "NI_ANE_KEEP_S": "0",
+    "NI_NO_MTP": "1",
+    "NI_ANE_UNITS": "16",
+    "KAPITSA_PROFILE": "precise"
+  },
+  "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+}

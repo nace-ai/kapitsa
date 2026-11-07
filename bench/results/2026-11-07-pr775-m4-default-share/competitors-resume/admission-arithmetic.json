@@ -1,0 +1,34 @@
+{
+  "prefill": {
+    "fast_flips": 0,
+    "bar_flips": 0,
+    "fast_mean_kl": 0.00047847517260584294,
+    "bar_mean_kl": 0.0008544665307031944,
+    "margin_mean_kl": 0.00037599135809735147,
+    "pass": true
+  },
+  "batch": {
+    "fast_flips": 2,
+    "bar_flips": 3,
+    "fast_mean_kl": 0.0003638997966277224,
+    "bar_mean_kl": 0.0003731982332792418,
+    "margin_mean_kl": 9.29843665151939e-06,
+    "pass": true
+  },
+  "step": {
+    "fast_flips": 2,
+    "bar_flips": 3,
+    "fast_mean_kl": 0.00036914095033037934,
+    "bar_mean_kl": 0.00037419804915126646,
+    "margin_mean_kl": 5.057098820887118e-06,
+    "pass": true
+  },
+  "verify": {
+    "fast_flips": 2,
+    "bar_flips": 3,
+    "fast_mean_kl": 0.0003767443686522171,
+    "bar_mean_kl": 0.0003767599695152809,
+    "margin_mean_kl": 1.5600863063805048e-08,
+    "pass": true
+  }
+}

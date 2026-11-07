@@ -1,0 +1,30 @@
+      |                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:41:77: error: cannot initialize a member subobject of type 'DefaultScope' with an rvalue of type 'std::nullptr_t'
+   41 |     {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
+      |                                                                             ^~~~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:41:102: error: cannot initialize a member subobject of type 'const char *' with an rvalue of type 'int'
+   41 |     {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
+      |                                                                                                      ^~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:42:6: error: type 'const char[109]' cannot be narrowed to 'bool' in initializer list [-Wc++11-narrowing]
+   42 |      "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+      |      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:42:6: note: insert an explicit cast to silence this issue
+   42 |      "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+      |      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |      static_cast<bool>(                                                                                            )
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:42:118: error: cannot initialize a member subobject of type 'const char *' with an rvalue of type 'bool'
+   42 |      "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+      |                                                                                                                      ^~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:156:40: error: invalid application of 'sizeof' to an incomplete type 'const DefaultRow[]'
+  156 | int default_count() { return int(sizeof(kDefaults) / sizeof(kDefaults[0])); }
+      |                                        ^~~~~~~~~~~
+7 errors generated.
+make[3]: *** [CMakeFiles/naceinfer.dir/src/engine/device_profile.cpp.o] Error 1
+make[3]: *** Waiting for unfinished jobs....
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/model/nemotron_h.cpp:478:10: warning: __builtin_available does not guard availability here; use if (__builtin_available) instead [-Wunsupported-availability-guard]
+  478 |     if (!__builtin_available(macOS 15.0, *)) return true;
+      |          ^
+1 warning generated.
+make[2]: *** [CMakeFiles/naceinfer.dir/all] Error 2
+make[1]: *** [CMakeFiles/kapitsa.dir/rule] Error 2
+make: *** [kapitsa] Error 2
