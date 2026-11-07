@@ -910,7 +910,8 @@ void nameless_tool_replies(const TmplModel& m, const std::string& tag) {
     const std::string stop = following ? "tool_use" : "end_turn";
     std::string stream_stop;
     for (const auto& e : events) if (e.name == "message_delta") stream_stop = e.data["delta"]["stop_reason"];
-    check(blocks == message["content"] && blocks.size() == 1 + count && blocks[0]["text"] == bad &&
+    check(blocks == message["content"] && blocks.size() == 1 + count && blocks[0]["type"] == "text" &&
+              blocks[0]["text"] == bad &&
               (!following || (blocks[1]["type"] == "tool_use" && blocks[1]["name"] == "read_file" &&
                                blocks[1]["input"] == J(R"({"path":"a.txt"})"))) &&
               stream_stop == stop && message["stop_reason"] == stop, label + " messages stream and reply");
