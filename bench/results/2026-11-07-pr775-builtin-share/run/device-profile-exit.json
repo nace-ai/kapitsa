@@ -1,0 +1,7 @@
+{
+  "command": [
+    "build/device_profile_test"
+  ],
+  "returncode": 0,
+  "extra_env": {}
+}

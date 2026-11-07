@@ -7,6 +7,9 @@
 #include "util/bf16.h"
 #include "util/log.h"
 
+#include <nlohmann/json.hpp>
+
+#include <arm_neon.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -119,6 +122,7 @@ std::pair<const uint8_t*, size_t> NgramTable::map_file(const std::string& path) 
 }
 
 void NgramTable::open(const std::vector<Part>& parts, Fmt fmt, int dim, int bits, int gs, float scale) {
+  if (dim <= 0) fatal("n-gram table: nonpositive row dimension %d", dim);
   fmt_ = fmt;
   dim_ = dim;
   bits_ = bits;
@@ -131,40 +135,61 @@ void NgramTable::open(const std::vector<Part>& parts, Fmt fmt, int dim, int bits
     if (it == files.end()) it = files.emplace(path, map_file(path)).first;
     return it->second.first;
   };
-  // tensor offsets from each file's header
-  auto entry = [&](const std::string& path, const std::string& name, size_t& off, std::vector<int64_t>& shape) {
+  // Parse each mapped header once, and admit only complete tensors of the requested format.
+  std::map<std::string, nlohmann::json> headers;
+  auto entry = [&](const std::string& path, const std::string& name, const char* dtype, size_t& off,
+                   std::vector<int64_t>& shape) {
     const uint8_t* base = mapped(path);
+    const size_t size = files.at(path).second;
+    auto h = headers.find(path);
+    if (h == headers.end()) {
+      uint64_t n = 0;
+      if (size < 8) fatal("n-gram table: short header in %s", path.c_str());
+      memcpy(&n, base, 8);
+      if (n < 2 || n > (512u << 20) || n > size - 8)
+        fatal("n-gram table: bad header length in %s", path.c_str());
+      auto j = nlohmann::json::parse(base + 8, base + 8 + n, nullptr, false);
+      if (!j.is_object()) fatal("n-gram table: bad header in %s", path.c_str());
+      h = headers.emplace(path, std::move(j)).first;
+    }
+    const auto it = h->second.find(name);
+    if (it == h->second.end()) fatal("n-gram table: %s has no tensor %s", path.c_str(), name.c_str());
+    const auto& v = *it;
+    auto bad = [&] { fatal("n-gram table: invalid tensor %s in %s", name.c_str(), path.c_str()); };
+    if (!v.is_object() || !v.contains("dtype") || v["dtype"] != dtype || !v.contains("shape") ||
+        !v["shape"].is_array() || v["shape"].size() != 2 || !v.contains("data_offsets") ||
+        !v["data_offsets"].is_array() || v["data_offsets"].size() != 2) bad();
+    shape.clear();
+    uint64_t count = 1;
+    for (const auto& d : v["shape"]) {
+      if (!d.is_number_unsigned() || d.get<uint64_t>() > uint64_t(INT64_MAX)) bad();
+      const uint64_t n = d.get<uint64_t>();
+      if (n && count > uint64_t(INT64_MAX) / n) bad();
+      count *= n;
+      shape.push_back(int64_t(n));
+    }
+    const auto& offsets = v["data_offsets"];
+    if (!offsets[0].is_number_unsigned() || !offsets[1].is_number_unsigned()) bad();
+    const uint64_t b = offsets[0].get<uint64_t>(), e = offsets[1].get<uint64_t>();
     uint64_t n = 0;
     memcpy(&n, base, 8);
-    const std::string h(reinterpret_cast<const char*>(base) + 8, size_t(n));
-    // a minimal scan of the header: "name":{"dtype":"..","shape":[..],"data_offsets":[a,b]}
-    const std::string key = "\"" + name + "\"";
-    const size_t at = h.find(key);
-    if (at == std::string::npos) fatal("n-gram table: %s has no tensor %s", path.c_str(), name.c_str());
-    const size_t sp = h.find("\"shape\"", at), dp = h.find("\"data_offsets\"", at);
-    if (sp == std::string::npos || dp == std::string::npos) fatal("n-gram table: bad header in %s", path.c_str());
-    shape.clear();
-    size_t i = h.find('[', sp) + 1;
-    while (h[i] != ']') {
-      shape.push_back(std::stoll(h.substr(i)));
-      i = h.find_first_of(",]", i);
-      if (h[i] == ',') ++i;
-    }
-    const size_t j = h.find('[', dp) + 1;
-    off = 8 + size_t(n) + size_t(std::stoull(h.substr(j)));
+    const size_t width = !strcmp(dtype, "U32") ? 4 : !strcmp(dtype, "BF16") ? 2 : 1;
+    if (b > e || e > size - 8 - n || count > (e - b) / width || count * width != e - b) bad();
+    off = 8 + size_t(n) + size_t(b);
   };
   parts_.clear();
   rows_ = 0;
   if (fmt == Fmt::Affine && (bits_ == 0 || gs_ == 0) && !parts.empty()) {  // from the first part's shapes
     size_t off = 0;
     std::vector<int64_t> ws, ss;
-    entry(parts[0].file, parts[0].w, off, ws);
-    entry(parts[0].file, parts[0].s, off, ss);
-    if (ws.size() != 2 || ss.size() != 2 || ss[1] <= 0) fatal("n-gram table: unexpected shapes");
+    entry(parts[0].file, parts[0].w, "U32", off, ws);
+    entry(parts[0].file, parts[0].s, "BF16", off, ss);
+    if (ws[1] > INT64_MAX / 32 || ss[1] <= 0 || (ws[1] * 32) % dim || dim % ss[1]) fatal("n-gram table: unexpected shapes");
+    if (ws[1] * 32 / dim > 8) fatal("n-gram table: unsupported bit width");
     bits_ = int(ws[1] * 32 / dim);
     gs_ = int(dim / ss[1]);
   }
-  if (fmt == Fmt::Affine && (bits_ < 2 || bits_ > 8 || gs_ <= 0 || dim % gs_ || (dim * bits_) % 32))
+  if (fmt == Fmt::Affine && (bits_ < 2 || bits_ > 8 || gs_ <= 0 || dim % gs_ || (size_t(dim) * size_t(bits_)) % 32))
     fatal("n-gram table: %d-bit group %d codes of %d values per row unsupported", bits_, gs_, dim);
   row_bytes_ = fmt == Fmt::BF16 ? size_t(dim) * 2 : fmt == Fmt::F8E4M3 ? size_t(dim) : size_t(dim) * size_t(bits_) / 8;
   group_row_bytes_ = fmt == Fmt::Affine ? size_t(dim / gs_) * 2 : 0;
@@ -172,19 +197,22 @@ void NgramTable::open(const std::vector<Part>& parts, Fmt fmt, int dim, int bits
     Map m;
     size_t off = 0;
     std::vector<int64_t> shape;
-    entry(p.file, p.w, off, shape);
+    entry(p.file, p.w, fmt == Fmt::Affine ? "U32" : fmt == Fmt::BF16 ? "BF16" : "F8_E4M3", off, shape);
     m.w = mapped(p.file) + off;
     if (shape.size() != 2) fatal("n-gram table: %s is not 2-D", p.w.c_str());
     m.rows = shape[0];
     const size_t want = fmt == Fmt::Affine ? row_bytes_ / 4 : size_t(dim);
     if (size_t(shape[1]) != want) fatal("n-gram table: %s has %lld columns, expected %zu", p.w.c_str(), (long long)shape[1], want);
     if (fmt == Fmt::Affine) {
-      entry(p.file, p.s, off, shape);
+      entry(p.file, p.s, "BF16", off, shape);
+      if (shape[0] != m.rows || shape[1] != dim / gs_) fatal("n-gram table: %s has wrong coefficient shape", p.s.c_str());
       m.s = mapped(p.file) + off;
-      entry(p.file, p.b, off, shape);
+      entry(p.file, p.b, "BF16", off, shape);
+      if (shape[0] != m.rows || shape[1] != dim / gs_) fatal("n-gram table: %s has wrong coefficient shape", p.b.c_str());
       m.b = mapped(p.file) + off;
     }
     m.first = rows_;
+    if (m.rows > INT64_MAX - rows_) fatal("n-gram table: row count overflows");
     rows_ += m.rows;
     parts_.push_back(m);
   }
@@ -297,12 +325,31 @@ void NgramTable::row(int64_t r, float* out) const {
       const uint16_t* bi = reinterpret_cast<const uint16_t*>(m.b + size_t(lr) * group_row_bytes_);
       const uint32_t* q = reinterpret_cast<const uint32_t*>(w);
       const uint32_t mask = (1u << bits_) - 1;
-      for (int i = 0; i < dim_; ++i) {
-        const uint64_t bit = uint64_t(i) * uint64_t(bits_);
-        uint64_t word = q[bit / 32];
-        if (bit % 32 + uint64_t(bits_) > 32) word |= uint64_t(q[bit / 32 + 1]) << 32;
-        const uint32_t c = uint32_t(word >> (bit % 32)) & mask;
-        out[i] = bf16_to_f32(sc[i / gs_]) * float(c) + bf16_to_f32(bi[i / gs_]);
+      // A packed word contains eight independent codes sharing one group coefficient pair.
+      if (bits_ == 4 && gs_ % 8 == 0 && dim_ % 8 == 0) {
+        const int32x4_t shifts = {0, -4, -8, -12};
+        const uint32x4_t nibble = vdupq_n_u32(15);
+        for (int begin = 0, gi = 0; begin < dim_; ++gi) {
+          const float sv = bf16_to_f32(sc[gi]), bv = bf16_to_f32(bi[gi]);
+          const int end = begin + std::min(gs_, dim_ - begin);
+          const float32x4_t scale = vdupq_n_f32(sv), bias = vdupq_n_f32(bv);
+          for (int i = begin; i < end; i += 8) {
+            const uint32x4_t word = vdupq_n_u32(q[i / 8]);
+            const uint32x4_t lo = vandq_u32(vshlq_u32(word, shifts), nibble);
+            const uint32x4_t hi = vandq_u32(vshlq_u32(vshrq_n_u32(word, 16), shifts), nibble);
+            vst1q_f32(out + i, vfmaq_f32(bias, scale, vcvtq_f32_u32(lo)));
+            vst1q_f32(out + i + 4, vfmaq_f32(bias, scale, vcvtq_f32_u32(hi)));
+          }
+          begin = end;
+        }
+      } else {
+        for (int i = 0; i < dim_; ++i) {
+          const uint64_t bit = uint64_t(i) * uint64_t(bits_);
+          uint64_t word = q[bit / 32];
+          if (bit % 32 + uint64_t(bits_) > 32) word |= uint64_t(q[bit / 32 + 1]) << 32;
+          const uint32_t c = uint32_t(word >> (bit % 32)) & mask;
+          out[i] = bf16_to_f32(sc[i / gs_]) * float(c) + bf16_to_f32(bi[i / gs_]);
+        }
       }
       break;
     }

@@ -1,0 +1,70 @@
+tier 2: 54 changed file(s)
+  [0] bench/results/2026-11-07-mtp-affine-shapes/27b-sidecar-base.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/27b-sidecar-candidate.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/27b-sidecar-comparison.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/README.md  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/base-spec-compile.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/build-base.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/build-candidate-summary.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/build-full-summary.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/build-loader-final.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/cli-scalar-model-base.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/cli-scalar-model-base.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/cli-scalar-model.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/cli-scalar-model.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/cmake-base.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/load_error_test-base.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/loader-probe.cpp  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/make-fixtures.py  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/mtp-loader-test-final.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/parser-4b.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/patches-final.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/prek-final-code.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/probe-base-results.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/probe-candidate-results.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/reference-build.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/required-checks.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/sidecar-compare.cpp  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/source-identity.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/structured-4b.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/00-drafter_attach_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/01-exl3_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/02-device_profile_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/03-qwen4_config_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/04-json_file_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/05-affine_pack_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/06-systemone_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/07-systemone_codes_probe_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/08-execution_session_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/09-http_stream_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/10-ws_upgrade_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/11-splash_protocol_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/12-splash_runtime_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/13-splash_discover_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/14-splash_plan_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/15-load_error_test.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/16-python3.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/17-python3.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/18-python3.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/19-python3.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/20-python3.log  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [0] bench/results/2026-11-07-mtp-affine-shapes/supplement/results.json  (frozen benchmark data: do not reformat or regenerate (AGENTS.md))
+  [2] src/model/affine_pack.h  (kernel or model code every model may reach)
+  [2] src/model/qwen35_spec.cpp  (Qwen3.5/3.6/3.8 model code)
+  [1] tools/affine_pack_test.cpp  (unclassified path: treated as host code on the hot path until a rule says otherwise)
+  [1] tools/load_error_test.cpp  (unclassified path: treated as host code on the hot path until a rule says otherwise)
+required checks:
+  - cpu: `vk cpu-tests` (AGENTS.md's CPU list) and `prek run --all-files`
+  - tokens: build/tokenizer_test, build/structured_check, build/grammar_test, `python3 tests/test_structured.py --cli build` with a model folder's tokenizer, `build/parser_test MODEL_DIR`
+  - gpu e2e: `vk serve <4B dir>` then `python3 tests/test_server.py http://127.0.0.1:8090`
+  - outputs: logit gate per model below (CONTRIBUTING.md "Output check"); a change not meant to move outputs shows "every row bitwise identical" or passes the gate
+  - speed: one interleaved A B A B on an idle GPU per model below (`kapitsa bench --quick` of `vk ref` and build/), every run reported with Mac, macOS, commit
+  - metal: changed kernels at small sizes under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1 (static threadgroup memory > 16,384 B: say the layer cannot run it, with the size)
+  - if the PR means to move outputs (tier 3): it fails the gate and says so with numbers, plus ni_eval against bf16 (bench/quality) and, for a default, bench/reasoning math500-quick
+  - decode legs (decode path; references/output-check.md "Decode legs"): (a) assert non-empty text and print the token count before any md5/ids comparison, else VOID; (b) print the count of 248044/248046 (<|endoftext|>/<|im_end|>) in the first N ids and the ids before the first, on a chat-templated prompt that gives >=256 tokens before <|im_end|>; (c) a speculative row prints the drafter load line (drafter, path, sha), tok/cycle and accepted draft tokens/cycle
+models (this Mac: M4; floor file the gate will use):
+  - Qwen3.5 4B 4-bit (dense, Neural Engine split): floor qwen3.5-4b-4bit.json; not downloaded under /Users/bytedance/.cache/kapitsa/models
+  - Qwen3.6 35B-A3B 4-bit (MoE): floor qwen3.6-35b-a3b-4bit.json; not downloaded under /Users/bytedance/.cache/kapitsa/models
+  - Qwen3.8 27B 4-bit (dense): floor qwen3.8-27b-4bit.json; not downloaded under /Users/bytedance/.cache/kapitsa/models
+note: frozen benchmark data: do not reformat or regenerate (AGENTS.md)
+note: unclassified path: treated as host code on the hot path until a rule says otherwise

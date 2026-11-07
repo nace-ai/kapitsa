@@ -1,0 +1,78 @@
+{
+  "name": "cancel-reply",
+  "progress": [
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 1903,
+      "time_ms": 656
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 3805,
+      "time_ms": 1317
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 5707,
+      "time_ms": 2097
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 7609,
+      "time_ms": 2877
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 9511,
+      "time_ms": 3657
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 11413,
+      "time_ms": 4558
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 13315,
+      "time_ms": 5458
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 15217,
+      "time_ms": 6359
+    }
+  ],
+  "text": "The source code defines a function named `pixel_shuffle` within the `ModernVBertConnector` class.",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 15217,
+    "completion_tokens": 22,
+    "total_tokens": 15239,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "kapitsa": {
+      "prefill_ms": 6418.1,
+      "kflash": {
+        "source": "none",
+        "cycles": 21
+      }
+    }
+  },
+  "finish_reason": "stop"
+}

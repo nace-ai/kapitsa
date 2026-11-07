@@ -1,0 +1,9 @@
+{
+  "initial_build": "Missing upstream Knob initializer; no GPU started",
+  "initial_performance": "Stopped on failed build dependency",
+  "resume_performance": "Stopped by SIGINT while waiting CPU; version label needed refresh, no GPU started",
+  "remote_initial_launch": "/opt/homebrew/bin/python3 did not exist; command failed before evaluation; restarted with /usr/bin/python3",
+  "local_stale_matrix_storage": "All eight SHA256-verified original paths retained with hardlinks to identical immutable prior matrices",
+  "partial_remote_transfer": "Not used as an authoritative archive",
+  "cpu": "20/21 full suite; targeted APFS assertions passed candidate and clean main, full failure retained"
+}

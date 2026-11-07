@@ -1,0 +1,41 @@
+{
+  "old_new_gate_exit_codes": {
+    "precise": 0,
+    "fast": 0
+  },
+  "external_engine": "mlx",
+  "gates": [
+    {
+      "path": "prefill",
+      "returncode": 1,
+      "fast_flips": 0,
+      "bar_flips": 0,
+      "fast_mean_kl": 0.00018457479109651155,
+      "bar_mean_kl": 0.00014716473412232375
+    },
+    {
+      "path": "batch",
+      "returncode": 0,
+      "fast_flips": 1,
+      "bar_flips": 4,
+      "fast_mean_kl": 0.0002591454284963465,
+      "bar_mean_kl": 0.00039909276793284755
+    },
+    {
+      "path": "step",
+      "returncode": 0,
+      "fast_flips": 1,
+      "bar_flips": 4,
+      "fast_mean_kl": 0.0002578932421356083,
+      "bar_mean_kl": 0.0003986586947195181
+    },
+    {
+      "path": "verify",
+      "returncode": 0,
+      "fast_flips": 1,
+      "bar_flips": 4,
+      "fast_mean_kl": 0.0002666246572581954,
+      "bar_mean_kl": 0.000399538107027523
+    }
+  ]
+}

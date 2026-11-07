@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state_cases.py", line 43, in <module>
+    s=start(binary,home,p/'server-first.log',extra);request,cache=seed_and_cancel(s,p,case.startswith('image'))
+                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state_cases.py", line 30, in seed_and_cancel
+    c=server.cancel(8298,p,'cancel',request);cache=c['progress'][0]['cache'];assert cache>=64
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py", line 118, in cancel
+    result = request(port, output, name, messages, cancel_after=after)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py", line 71, in request
+    raise RuntimeError(f"{name}: no mid-prefill cancellation")
+RuntimeError: cancel: no mid-prefill cancellation

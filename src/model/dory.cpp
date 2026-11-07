@@ -16,7 +16,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -84,16 +83,6 @@ Pipeline pipe(const std::string& n) {
   auto it = cache.find(n);
   if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   return it->second;
-}
-
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
 }
 
 uint32_t gpu_cores() {
@@ -203,7 +192,7 @@ DoryConfig Dory::read_config(const std::string& dir) {
       for (auto& x : v)
         if (x.is_number_integer() && std::find(out.begin(), out.end(), x.get<int>()) == out.end()) out.push_back(x.get<int>());
   };
-  const nlohmann::json g = read_json(dir + "/generation_config.json");
+  const nlohmann::json g = *json_file(dir + "/generation_config.json");
   if (g.is_object() && g.contains("eos_token_id")) add_ids(g["eos_token_id"], c.eos);
   if (c.eos.empty() && t.contains("eos_token_id")) add_ids(t["eos_token_id"], c.eos);
   c.bos = int(num("bos_token_id", -1));
@@ -1060,7 +1049,7 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
     float sg;
   } rg{uint32_t(c.hq), nch, NQ, L.sg};
   // combined, gated, not normalized (o_proj is linear and the residual's justnorm of its output cancels the norm)
-  e.use(pipe("dory_attn_reduce_gate"));
+  e.use(pipe(nch >= 16 && nch <= 64 ? "dory_attn_reduce_gate_shared" : "dory_attn_reduce_gate"));
   e.buf(0, part_o_);
   e.buf(1, part_ml_);
   e.buf(2, qkvg_, size_t(QD + 2 * KD) * 4);

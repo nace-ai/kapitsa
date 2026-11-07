@@ -6,6 +6,7 @@
 #include "engine/engine.h"
 #include "engine/grammar.h"
 #include "engine/output_parser.h"
+#include "engine/stop_filter.h"
 #include "model/expert_store.h"
 #include "splash/plan.h"
 #include "splash/runtime.h"
@@ -308,7 +309,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
 
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools, true, false,
                       text_tags_, CallFormat::QwenXml);
-  std::string content_so_far, finish;
+  StopFilter stop_filter(r.stop);
+  std::string finish;
   int gen = 0;
   bool prompted = false, cancel_sent = false;
   bool g_ok = true;  // every committed token was the grammar's
@@ -355,18 +357,10 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     }
     if (parser.in_think()) ++res.reasoning_tokens;
     ChatDelta d = parser.push(int(t));
-    if (!d.content.empty()) {
-      content_so_far += d.content;
-      for (auto& st : r.stop) {
-        const size_t at = st.empty() ? std::string::npos : content_so_far.find(st);
-        if (at != std::string::npos) {
-          const size_t over = content_so_far.size() - at;
-          d.content.resize(d.content.size() > over ? d.content.size() - over : 0);
-          finish = "stop";
-          res.stop_sequence = st;
-          break;
-        }
-      }
+    stop_filter.filter(d.content);
+    if (!stop_filter.matched().empty()) {
+      finish = "stop";
+      res.stop_sequence = stop_filter.matched();
     }
     res.reasoning += d.reasoning;
     res.content += d.content;
@@ -455,6 +449,11 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     } else finish = "cancelled";
   }
   ChatDelta tail = parser.finish(finish == "stop");
+  stop_filter.filter(tail.content, true);
+  if (!stop_filter.matched().empty() && finish != "cancelled" && finish != "error") {
+    finish = "stop";
+    res.stop_sequence = stop_filter.matched();
+  }
   res.reasoning += tail.reasoning;
   res.content += tail.content;
   for (auto& tc : tail.tool_calls) res.tool_calls.push_back(tc);

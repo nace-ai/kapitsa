@@ -1,0 +1,15 @@
+[kapitsa] read 0.04 GB of weights in 7 ms (6.3 GB/s)
+[kapitsa] RMSNorm weights zero-centred (indexer norm mean 0.00): read as 1 + w
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] expert store: all 0.1 GB of experts fit the 78.2 GB the budget leaves: resident, no SSD reads
+[kapitsa] expert store: 3072 slots of 0.03 MB (0.10 GB, 100.0% of the 3072 experts) in one buffer (up to 62.62 GB each); 3072 read at load in 45 ms (1.89 GB/s) (all of them: no handshakes)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 3450 ms
+[kapitsa] compiled the weight-format kernels in 7622 ms
+[kapitsa] prewarmed 136 prefill pipelines in 11079 ms
+[kapitsa] loaded /Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded: Qwen3.8-Flash-Next, 6 layers (1 attention), 0.0 GB of weights in 11155 ms; 4-bit group 64 3%, 6-bit group 64 4%, 8-bit group 64 5%, Q2_0 88%, bf16 0%; n-gram table 8214 x 64, 4-bit group 32, 0.0 GB mapped; routed experts: 3072 of 3072 experts in memory (0.1 GB, 100%)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+mean GPU time per step: 0.71 ms (63 steps)
+prompt 16 tok in 12 ms (1316.5 tok/s); decode 63 tok in 73 ms (862.2 tok/s)
+ids: 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374 1374

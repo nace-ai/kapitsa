@@ -1,0 +1,308 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index c2617065..ae7c1749 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -171,7 +171,7 @@ jobs:
+         if: steps.changes.outputs.code == 'true'
+         run: |
+           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test json_file_test affine_pack_test systemone_test systemone_codes_probe_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions
++          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa ane_segment_check systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test json_file_test affine_pack_test systemone_test systemone_codes_probe_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions
+       - name: SDK C ABI contract
+         if: steps.changes.outputs.code == 'true'
+         run: |
+@@ -252,6 +252,12 @@ jobs:
+       - name: device_profile_test
+         if: steps.changes.outputs.code == 'true' && !cancelled()
+         run: build/device_profile_test
++      - name: ane_segment_check (CPU)
++        if: steps.changes.outputs.code == 'true' && !cancelled()
++        run: build/ane_segment_check
++      - name: ANE profile policy (CPU)
++        if: steps.changes.outputs.code == 'true' && !cancelled()
++        run: $RUNNER_TEMP/venv/bin/python tests/test_ane_profile.py build/ane_segment_check
+       - name: qwen4_config_test
+         if: steps.changes.outputs.code == 'true' && !cancelled()
+         run: build/qwen4_config_test
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index da3d10c4..abc3b4c4 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -105,7 +105,7 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
+ | `python3 tests/test_drex_max.py --cli build` | Drex Max v1: `tools/drex_pointer.py` extracting the readout head from a synthetic safetensors / GGUF, and `systemone --encode` laying out Max requests (one ChatML row per question, the decide row, refused images and oversize rows) with no backbone weights | nothing |
+ | `build/remote_test` | A split model's reserve on its other Macs (`src/model/remote.h`, `remote_reserve`): a fake stage records each growth asked of it and answers by its own rounding (or fails, or is lost); the reserves the engine makes must ask only past what it holds, take what it holds from its answer, and ask again after a failure | nothing |
+ | `build/ane_segment_check [--gpu]` | Dense ANE FFN supported input widths through 8192 and rejection of wider inputs; `--gpu` checks rotation against an fp64 reference and segmented/full activation packing and weight staging, offsets, tails, padding and guards. GPU mode takes the GPU lock; use `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` | nothing (`--gpu`: a Mac with Metal) |
+-| `python3 tests/test_ane_profile.py [build/ane_segment_check]` | Fresh-process precise/fast and NI_ANE override matrix; disabled shapes reserve no ANE memory | built segment checker; CPU only |
++| `python3 tests/test_ane_profile.py [build/ane_segment_check]` | 32 fresh-process non-matrix/matrix, precise/fast and NI_ANE override cases; device-independent disabled shapes reserve no ANE memory | built segment checker; CPU only |
+ | `build/iq_layout_test` | GGUF IQ expert blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S) repacked into the layout of `src/kernels/wfmt_iq.metal` and decoded as the kernels build their MMA operands, from the Metal source's own grid tables, against `gguf::dequantize`; the type helpers | nothing |
+ | `build/bench_moe_iq --validate --fmt GU:DN [--topk K --shared SI --shared-bits 4]` | The IQ MoE kernels (rows, 8-row verify, prefill) at small shapes against a CPU reference in double (`gguf::dequantize` of the GGUF blocks); without `--validate`, the real shapes and their time per call; `--tensors FILE.gguf --layer L` a real layer. Flint's forms: `--topk 6 --shared 1024 --shared-bits 4`. Run `--validate` under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` and the GPU lock | the GPU |
+ | `build/flint_compile` | Compiles Flint's kernels and the base library's pipelines it runs (no GPU work); run Flint's kernels themselves under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` (`build/logit_dump` on a Flint folder takes the 16-key tiles there) | a Mac with Metal |
+diff --git a/docs/numerical-history.md b/docs/numerical-history.md
+index 565ccf5b..d4af1357 100644
+--- a/docs/numerical-history.md
++++ b/docs/numerical-history.md
+@@ -135,7 +135,8 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this
+ ## ANE prefill for hidden sizes divisible by 2048
+ 
+ Hidden sizes divisible by 2048 up to 8192 are proposed for the fast profile (`KAPITSA_PROFILE=fast`);
+-precise keeps these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
++the proposed default covers non-matrix Macs with a usable built-in or calibrated ANE share. M5/matrix-unit
++Macs and precise keep these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
+ disables it in either profile. Larger widths remain on the GPU. The existing 4B/27B defaults remain.
+ The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
+ and rotation stay unchanged. All supported inputs use the existing rotation kernel and its token-wide scale.
+diff --git a/docs/profiles.md b/docs/profiles.md
+index c78b3e4b..04869615 100644
+--- a/docs/profiles.md
++++ b/docs/profiles.md
+@@ -64,7 +64,7 @@ Ranked by measured speed, then how many models they cover, then drift. Status as
+ | 1 | TATTN sparse attention, Q and P as hi + lo halves (#818, `NI_QSA_TATTN`) | Flash-Next Q2_0, M5 Pro | sparse prefill attention on the matrix units, about 22 bits per operand | prefill 8% faster at 32K, 10% at 64K; decode the same per cycle (with 4096-row chunks: 15% and 17%, but decode 7 to 8% slower per cycle under memory pressure) | 4 of 72 flips, mean KL 8.8e-3 | first fast member |
+ | 2 | W4A8 dense prefill GEMMs (`NI_QMT_I8`) | 4-bit group-64 dense projections on an M5: Flash-Next, 35B-A3B | activations rounded to int8 per 64-group | Flash-Next 32K prefill 3-13% faster (#572, before grouped prefill, which it turns off) | 35B, 192 rows: 5 flips, mean KL 4.0e-3 (bar 4, 2.1e-3); Flash-Next with TATTN: 6 of 72, 2.1e-2 | 35B: over the bar, and 4K prefill 3.5% slower (4 pairs); not a member |
+ | 3 | TATTN single half (`NI_QSA_TATTN`, before #818) | Flash-Next, M5 | Q, K, P in half | 32K prefill 10-15% faster | 3 of 96 flips, mean KL 4.4e-3; a 64K reply ends at once (#585) | replaced by 1 |
+-| 4 | Neural Engine prefill for hidden 2048-8192 (#775) | Qwen3.5 9B, M4 Pro | W8A8 FFN on the Neural Engine | 4K time to first token 63% less | 2 of 192 flips, mean KL 3.6e-4 | open PR; proposed fast integration, 9B same-machine competitor bar pending |
++| 4 | Neural Engine prefill for hidden 2048-8192 (#775) | Qwen3.5 9B, M3 Ultra, calibrated `NI_ANE_UNITS=16` | W8A8 FFN on the Neural Engine | 4135-token loaded HTTP TTFT 23.83% less | step 1/192 flips, mean KL 2.579e-4; [full evidence](../bench/results/2026-11-07-pr775-fast-profile/README.md) | open PR; proposed fast default on non-matrix Macs with built-in or calibrated ANE share; M5 excluded; current-head M4 and 9B same-machine competitor bar pending |
+ | 5 | int8 KV cache (`NI_KV_I8`) | Qwen3.5/3.6/3.8, Flint | KV rows int8 with a row scale | 35B on an M4 16 GB: decode 4% faster, 1.9x the context; 35B on the M5 Pro 48 GB, 4K prompt: decode about the same (117.6 against 116.8 tok/s, 4 pairs; the greedy text differs, 43 decoded tokens against 41) | 35B, 192 rows: 3 flips, mean KL 1.1e-3 (bar 4, 2.1e-3) | inside the 35B bar but not faster on the M5 Pro; its win is context on small Macs; not a member here |
+ | 6 | Verify MoE without row-independent numerics (`NI_DFLASH_EXACT_MOE=0`) | 35B-A3B, Clover | a verify row's logits depend on the other rows' routing | source comment: exact verify about 3% slower | 35B, 192 verify rows: 0 flips, mean KL 1.8e-4, passes the precise floor gate | decode about the same on the M5 Pro (4 pairs); passes precise's gate, so a precise question, not fast |
+ | 7 | Nemotron Lightning attention projections in 8-bit (`NI_NH_ATTN_Q8`) | Lightning | BF16 to 8-bit weights | decode about 3% faster | 192 rows: 1 flip (a near-tie), mean KL 6.5e-4; inside the fallback bar (4 of 192, 2.1e-3) | fast candidate; speed A/B not run: the model sits on the external drive, unmounted on 6 Nov |
+diff --git a/docs/usage.md b/docs/usage.md
+index 3816b123..2b8a471d 100644
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -1205,7 +1205,7 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
+ | `NI_SHORTPF_EXACT` | on | A short prefill pass (at most 128 rows: a cached turn's new message, the reply the server prefills while idle, a draft read ahead) gives each row the same bits whatever the pass's length, so reading a prompt's tail in several such passes gives the logits one pass gives (a follow-up after the idle history prefill replies as with `NI_HISTORY_PREFILL=0`). The short path's choices that followed the row count are fixed: each projection group keeps one GEMM family (`qmms` over up to 128 rows in one dispatch, the qmr tiles for the 27B's large groups; `NI_SHORTPF_EXACT_GEMM=qmms` or `tile` forces one), the 8-bit router `qmms`, the routed experts `qmms_moe3` (`qmms_moe2`'s FMA arithmetic for every expert: an MMA that reproduces it from 3 rows), attention's keys split at fixed tiles (`NI_SHORTPF_EXACT_SEG`, 32 tiles of 32 keys) through `attn_prefill11gs` even for one split. Passes above 128 rows run the large-prefill kernels, whose sums are ordered otherwise, so a tail read across that bound can still part at a near-tie; on an M5 so can a dense model's pass across 64 rows (`NI_SP_QMT`), or across 17 for the 27B on the M5 Max (`NI_QMT_MIN`). `0` restores the row-count choices. Cost on the 35B-A3B (MacBook Pro M4 Pro): a pass of 1-16 rows after a 16K prefix the same, 32-64 rows +4-7%, 116-128 rows +5.5%; cold prefill and decode unchanged (their passes are not short). |
+ | `NI_SP_QMT` | `1` | `0` restores the earlier preference. A chunk of 64 to 128 rows (from `NI_QMT_MIN` rows) whose projections the tensor-op GEMM covers - 4-bit group 64, `K` a multiple of 64, a dense model - runs on the 64-row-tile `qmt` / `qmtg` kernels rather than the short-prefill GEMMs, which are built for chunks of at most 64 rows: one weights read through register tiles, cheaper than the tile kernels only while that read is one tile's. At a 16K cached prefix it makes a 73-row chunk 14% and a 124-row one 33% faster, and its output gate (one 27B and one 4B, `logit_dump` at a 128-row chunk, `NI_SP_QMT=0` against the default) passes both models' floor files on all three decode paths with no top-1 flip and a mean KL of 3.4e-07 (27B) and 6.3e-06 (4B, PR #366). MoE expert GEMMs and every MoE model keep the short-prefill tiles whatever this says. |
+ | `NI_QMT_MIN` | 17 for the Qwen3.8 27B on an M5 Max (an Apple10 GPU of 40 cores or more), 64 elsewhere | The fewest rows of a dense 4-bit group-64 GEMM that run on the 64-row tensor-op tile (`qmt_m64_n64`, `qmtg_m64_n64`; it loads the rows past the pass's as zeros) instead of the short-prefill or `qmr` kernels; 1-64. A prompt's last chunk and a short turn's message are such passes. On the 27B on the M5 Max (`bench_qmm`) the tile runs gate/up 514 against 638 us at 17 rows and 527 against 1,215 at 33, down 337 against 623 at 33; at 16 rows and fewer the short tiles stay faster. A prompt of 33 ids prefills in 87.6 instead of 171.1 ms, 48 ids in 89.3 instead of 189.5, and the harness's 4K length (4,129 tokens: 2,048 + 2,048 + a 33-row tail) in 3,182 instead of 3,265 ms (-2.5%; interleaved A/B, M5 Max, macOS 26.4, `bench/results/2026-11-05-m5-max-qmt-short`). Its output check (`logit_dump --chunk 48`, every prefill pass on the tile) passes the 27B's M5 floor with no top-1 flip and a prefill mean KL of 1.5e-7: the same products, summed in another K order. Other models and Macs keep 64 today. |
+-| `NI_ANE` | legacy inputs on; new inputs in fast | `0` keeps prefill on the GPU. Dense Qwen models with hidden size divisible by 2048 up to 8192 become eligible under `--profile fast` / `KAPITSA_PROFILE=fast`; `NI_ANE=1` explicitly enables them and `NI_ANE=0` overrides either profile. The default precise profile keeps these new widths on the GPU; existing 2560/5120 inputs keep their prior defaults. The existing 2560-channel geometry takes precedence where it fits, otherwise inputs use 2048-channel segments. All supported widths use the existing GPU input rotation; widths above 8192 remain on the GPU. Chip/calibration, weight format, memory, chunk and startup-check requirements still apply; unsupported cases remain on the GPU. This W8A8 approximation changes logits and can change greedy replies. Newly supported widths have a separate SSD prefix-cache namespace from precise, `NI_ANE=0` and older GPU-only builds when enabled. See [numerical history](numerical-history.md#ane-prefill-for-hidden-sizes-divisible-by-2048) for measured scope and limits. |
++| `NI_ANE` | legacy inputs on; new inputs in fast on non-matrix Macs | `0` keeps prefill on the GPU. Dense Qwen models with hidden size divisible by 2048 up to 8192 become eligible on non-matrix Macs under `--profile fast` / `KAPITSA_PROFILE=fast`; M5 and other matrix-unit Macs retain the GPU default for these new widths; `NI_ANE=1` explicitly enables them and `NI_ANE=0` overrides either profile. The default precise profile keeps these new widths on the GPU; existing 2560/5120 inputs keep their prior defaults. The existing 2560-channel geometry takes precedence where it fits, otherwise inputs use 2048-channel segments. All supported widths use the existing GPU input rotation; widths above 8192 remain on the GPU. M4 built-in ANE shares or explicit calibration on other non-matrix Macs (such as M3) are still required. Chip/calibration, weight format, memory, chunk and startup-check requirements still apply; unsupported cases remain on the GPU. This W8A8 approximation changes logits and can change greedy replies. Newly supported widths have a separate SSD prefix-cache namespace from precise, `NI_ANE=0` and older GPU-only builds when enabled. See [numerical history](numerical-history.md#ane-prefill-for-hidden-sizes-divisible-by-2048) for measured scope and limits. |
+ | `NI_ANE_MMA` | on for the Qwen 4B and 27B | M5 with macOS 26, 4-bit group-64 Qwen dense models: the Neural Engine split's default share for the GPU's FFN on the matrix units (27B: 14 of 34 units on the 40-core M5 Max, 22 on the 20-core M5 Pro; 4B: 8 of 18 and 12). The per-unit costs were measured on the M5 Pro, then scaled by the 128-row tile's GEMM speedups (`NI_QMT128`); the M5 Max's 14 was measured best (27B 4K prefill -12.7% against 16, [results](../bench/results/2026-11-04-m5-max-ane-share-qmt128/README.md)), the M5 Pro's 22 is derived, not measured. Other models (the 9B) keep the older default share today. `1` takes it on any such model, `0` keeps the older one. This moves the share only: whenever the GPU keeps channels (any share below all units, a calibration, `NI_ANE_UNITS`), they run on the tensor-ops kernel, so the 9B and `0` are not fully pre-#318. |
+ | `NI_ANE_SPLIT_WAIT_MS` | `60000` | A split chunk whose Neural Engine work has not finished within this many ms gives up the split: the log says the bound ran out and that the chunk reruns on the GPU, and the rest of the process stays on the GPU. A job that started and never reported is retired by its own 2 s watchdog first; this bound is the backstop for a chunk stuck before that. `tests/test_ane_split_abort.py` runs it at 250 ms with an injected fault. |
+ | `NI_ANE_KEEP_S` | `300` | Seconds after the last prefill chunk (or model load) during which a background evaluation keeps the Neural Engine awake, so a short prompt after a pause skips its 70–120 ms wake. `0` turns it off. |
+diff --git a/src/ane/input_profile.h b/src/ane/input_profile.h
+index 397ef5f0..f1c44019 100644
+--- a/src/ane/input_profile.h
++++ b/src/ane/input_profile.h
+@@ -2,6 +2,7 @@
+ // memory and startup checks still decide whether an eligible split can run.
+ #pragma once
+ 
++#include "engine/device_profile.h"
+ #include "engine/profile.h"
+ #include <cstdint>
+ #include <cstdlib>
+@@ -9,15 +10,24 @@
+ 
+ namespace ni::ane {
+ 
+-inline bool input_profile_enabled(uint32_t segment) {
++inline bool input_profile_enabled(uint32_t segment, bool matrix) {
+   if (segment == 2560) {
+     const char* v = std::getenv("NI_ANE");
+     return !v || std::strcmp(v, "0") != 0;  // preserve the existing 4B/27B defaults
+   }
+   if (segment != 2048) return false;
+-  // The profile table's ane_segmented_fast row covers usable ANEs. Hardware and
+-  // calibration checks remain in init_ane; cache keys use this same policy.
+-  static const bool on = profile_switch("NI_ANE", true, "dense ANE FFN with 2048-channel inputs");
++  // Matrix-unit Macs keep the GPU default; an explicit NI_ANE override still wins.
++  return profile_switch("NI_ANE", !matrix, "dense ANE FFN with 2048-channel inputs");
++}
++
++inline bool input_profile_enabled(uint32_t segment) {
++  if (segment != 2048) return input_profile_enabled(segment, false);
++  static const bool on = [] {
++    const char* v = std::getenv("NI_ANE");
++    // Explicit overrides and precise need no device read (including CPU planning checks).
++    const bool automatic = (!v || !*v) && profile() == Profile::kFast;
++    return input_profile_enabled(2048, automatic && matrix_units());
++  }();
+   return on;
+ }
+ 
+diff --git a/src/engine/device_profile.cpp b/src/engine/device_profile.cpp
+index bbee6372..bc912b6b 100644
+--- a/src/engine/device_profile.cpp
++++ b/src/engine/device_profile.cpp
+@@ -17,10 +17,10 @@ bool qwen35_a3b(const ModelFacts& m) {
+ 
+ const DefaultRow kDefaults[] = {
+     // PR #775 proposes fast membership for dense Qwen 2048-channel inputs through hidden 8192.
+-    // Usable ANE class; init_ane retains availability/calibration, weight and memory checks.
++    // Non-matrix ANE class; init_ane retains availability/calibration, weight and memory checks.
+     // Historical M4 Pro/M3 Ultra latency wins: numerical qualification against another engine is pending.
+-    {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAne, nullptr, "fast profile", 24, 63, false,
+-     "M4 Pro; M3 Ultra with calibrated share; #775 evidence", false},
++    {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
++     "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+     // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
+     // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site when it moves.
+     {"pf_wave", ModelClass::kQwen35A3b, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max", false},
+@@ -118,7 +118,8 @@ const DefaultRow& default_at(int i) { return kDefaults[i]; }
+ 
+ bool default_matches(const DefaultRow& row, const DeviceProfile& dev) {
+   switch (row.scope) {
+-    case DefaultScope::kAne: return dev.ane;
++    case DefaultScope::kAneNonMatrix:
++      return dev.ane && dev.chip != ChipClass::kMatrix && dev.chip != ChipClass::kWide;
+     case DefaultScope::kLegacy: return dev.chip == ChipClass::kLegacy;
+     case DefaultScope::kSimd: return dev.chip == ChipClass::kSimd;
+     case DefaultScope::kMatrix: return dev.chip == ChipClass::kMatrix || dev.chip == ChipClass::kWide;
+@@ -134,7 +135,7 @@ namespace {
+ const char* scope_name(const DefaultRow& row) {
+   if (row.scope == DefaultScope::kName) return row.chip_name ? row.chip_name : "name";
+   switch (row.scope) {
+-    case DefaultScope::kAne: return "ane";
++    case DefaultScope::kAneNonMatrix: return "ane-nonmatrix";
+     case DefaultScope::kLegacy: return "legacy";
+     case DefaultScope::kSimd: return "simd";
+     case DefaultScope::kMatrix: return "matrix";
+diff --git a/src/engine/device_profile.h b/src/engine/device_profile.h
+index 871f0e57..3e891b9d 100644
+--- a/src/engine/device_profile.h
++++ b/src/engine/device_profile.h
+@@ -19,9 +19,10 @@ enum class ModelClass { kOther, kQwen35A3b };
+ // A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
+ // units). kName is a narrow exception: the name must match, and the row
+ // has to cite a win of at least 10% that the wider class does not get.
++// kAneNonMatrix requires an ANE and excludes matrix/wide GPUs; runtime share checks still apply.
+ // kGuard is not that. It documents a predicate the call site still reads: a shape, a RAM size, or a
+ // correctness miss on the wider chip. It is not a class, and it does not claim a 10% win.
+-enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kAne, kName, kGuard };
++enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kAneNonMatrix, kName, kGuard };
+ 
+ struct DeviceFacts {
+   int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.
+diff --git a/src/model/qwen35.cpp b/src/model/qwen35.cpp
+index 080d5f5b..e0fa7418 100644
+--- a/src/model/qwen35.cpp
++++ b/src/model/qwen35.cpp
+@@ -1097,7 +1097,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
+   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
+        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
+   // Dense ANE FFN: legacy 2560-channel inputs keep their defaults; new 2048-channel inputs
+-  // follow the fast profile. init_ane still requires calibration or a chip share and all runtime guards.
++  // follow fast on non-matrix Macs. init_ane still requires calibration or a chip share and runtime guards.
+   if (!cfg_.moe && ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)))) init_ane();
+ }
+ 
+diff --git a/src/model/qwen35_ane.cpp b/src/model/qwen35_ane.cpp
+index 85f7bc38..40e26a21 100644
+--- a/src/model/qwen35_ane.cpp
++++ b/src/model/qwen35_ane.cpp
+@@ -1,7 +1,7 @@
+ // GPU + Neural Engine split of the dense prefill FFN (NI_ANE). See src/ane/ffn_split.h.
+ //
+ //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
+-//   New 2048-channel inputs run under the fast profile; NI_ANE=1/0 overrides. Existing 2560 inputs stay on.
++//   New 2048-channel inputs default to fast on non-matrix Macs; NI_ANE=1/0 overrides. Existing 2560 inputs stay on.
+ //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
+ //   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
+ //   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
+@@ -192,7 +192,7 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
+   if (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")) return a.source = "NI_ANE=0", a;
+   if (!ane::FfnSplit::rotate_simdgroups(uint32_t(m.hidden))) return a.source = "hidden size not supported", a;
+   if (!ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(m.hidden))))
+-    return a.source = "precise profile: GPU", a;
++    return a.source = "ANE profile/device policy: GPU", a;
+   if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
+   const std::string chip = Gpu::get().name();
+   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
+diff --git a/tests/device_profile_test.cpp b/tests/device_profile_test.cpp
+index ae4f040b..d8bd9fa4 100644
+--- a/tests/device_profile_test.cpp
++++ b/tests/device_profile_test.cpp
+@@ -80,12 +80,15 @@ int main() {
+ 
+   CHECK(ni::default_count() == 15);
+   const auto* segmented = row("ane_segmented_fast");
+-  CHECK(segmented && segmented->scope == ni::DefaultScope::kAne && !segmented->exclusive);
+-  auto with_ane = m5pro;
+-  with_ane.ane = true;
+-  CHECK(ni::default_matches(*segmented, with_ane));
+-  with_ane.ane = false;
+-  CHECK(!ni::default_matches(*segmented, with_ane));
++  CHECK(segmented && segmented->scope == ni::DefaultScope::kAneNonMatrix && !segmented->exclusive);
++  for (const auto& facts : {mac(9, 20, "Apple M4 Pro", g48), mac(9, 60, "Apple M3 Ultra", g48),
++                            mac(10, 20, "Apple M5 Pro", g48), mac(10, 40, "Apple M5 Max", g48)}) {
++    auto with_ane = ni::resolve_device(facts);
++    with_ane.ane = true;
++    CHECK(ni::default_matches(*segmented, with_ane) == !ni::matrix_units(facts));
++    with_ane.ane = false;
++    CHECK(!ni::default_matches(*segmented, with_ane));
++  }
+   // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
+   const ni::DefaultRow* tattn = row("tattn_fast");
+   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);
+diff --git a/tests/test_ane_profile.py b/tests/test_ane_profile.py
+index 326e556c..a730fb24 100644
+--- a/tests/test_ane_profile.py
++++ b/tests/test_ane_profile.py
+@@ -5,19 +5,20 @@ import subprocess
+ import sys
+ 
+ binary = sys.argv[1] if len(sys.argv) > 1 else 'build/ane_segment_check'
+-for profile in (None, 'precise', 'fast', 'invalid'):
+-    for override in (None, '', '0', '1'):
+-        env = {k: v for k, v in os.environ.items() if k not in ('KAPITSA_PROFILE', 'NI_ANE')}
+-        if profile is not None:
+-            env['KAPITSA_PROFILE'] = profile
+-        if override is not None:
+-            env['NI_ANE'] = override
+-        p = subprocess.run([binary, '--profile'], env=env, capture_output=True, text=True, check=True)
+-        got = {int(h): int(on) for h, on in (line.split() for line in p.stdout.splitlines())}
+-        new = override == '1' or (override in (None, '') and profile == 'fast')
+-        old = override != '0'
+-        expected = {0: 0, 2048: int(new), 2560: int(old), 4096: int(new),
+-                    5120: int(old), 6144: int(new), 8192: int(new), 10240: 0}
+-        assert got == expected, (profile, override, got, expected)
+-        print(f'PASS profile={profile!r}, NI_ANE={override!r}')
+-print('16 profile/override cases passed; no GPU or model loaded')
++for device in ('simd', 'matrix'):
++    for profile in (None, 'precise', 'fast', 'invalid'):
++        for override in (None, '', '0', '1'):
++            env = {k: v for k, v in os.environ.items() if k not in ('KAPITSA_PROFILE', 'NI_ANE')}
++            if profile is not None:
++                env['KAPITSA_PROFILE'] = profile
++            if override is not None:
++                env['NI_ANE'] = override
++            p = subprocess.run([binary, '--profile', device], env=env, capture_output=True, text=True, check=True)
++            got = {int(h): int(on) for h, on in (line.split() for line in p.stdout.splitlines())}
++            new = override == '1' or (override in (None, '') and profile == 'fast' and device == 'simd')
++            old = override != '0'
++            expected = {0: 0, 2048: int(new), 2560: int(old), 4096: int(new),
++                        5120: int(old), 6144: int(new), 8192: int(new), 10240: 0}
++            assert got == expected, (device, profile, override, got, expected)
++            print(f'PASS device={device}, profile={profile!r}, NI_ANE={override!r}')
++print('32 device/profile/override cases passed; no GPU or model loaded')
+diff --git a/tools/ane_segment_check.cpp b/tools/ane_segment_check.cpp
+index 74fb2d5e..0fe082da 100644
+--- a/tools/ane_segment_check.cpp
++++ b/tools/ane_segment_check.cpp
+@@ -219,11 +219,16 @@ void check_weights(uint32_t K, uint32_t N, uint32_t row0) {
+ }  // namespace
+ 
+ int main(int argc, char** argv) {
+-  if (argc == 2 && !strcmp(argv[1], "--profile")) {
++  if ((argc == 2 || argc == 3) && !strcmp(argv[1], "--profile")) {
++    const bool injected = argc == 3;
++    if (injected && strcmp(argv[2], "simd") && strcmp(argv[2], "matrix")) return 2;
+     for (uint32_t h : {0u, 2048u, 2560u, 4096u, 5120u, 6144u, 8192u, 10240u}) {
+-      const bool on = ane::input_profile_enabled(ane::FfnSplit::input_segment(h));
++      const auto segment = ane::FfnSplit::input_segment(h);
++      const bool on = injected ? ane::input_profile_enabled(segment, !strcmp(argv[2], "matrix"))
++                               : ane::input_profile_enabled(segment);
+       printf("%u %d\n", h, int(on));
+-      if (!on) {
++      if (!on && (!injected || !segment || profile() != Profile::kFast ||
++                  (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")))) {
+         Qwen35::MemPlan m;
+         m.dense = m.ffn_ane = true;
+         m.hidden = int(h);
+@@ -235,7 +240,7 @@ int main(int argc, char** argv) {
+     return 0;
+   }
+   if (argc > 2 || (argc == 2 && strcmp(argv[1], "--gpu"))) {
+-    fprintf(stderr, "usage: ane_segment_check [--gpu|--profile]\n");
++    fprintf(stderr, "usage: ane_segment_check [--gpu|--profile [simd|matrix]]\n");
+     return 2;
+   }
+   auto expect = [](bool ok, const char* what) {

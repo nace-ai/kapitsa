@@ -326,9 +326,21 @@ void ExpertCache::serve(const Req& r) {
   // the predictions are copied before the go (the GPU rewrites them in its next layer)
   std::vector<uint32_t> pred;
   if (r.pred_layer >= 0 && !r.pred_all && r.pred) pred.assign(r.pred, r.pred + r.npred);
+  // the turn's counters are published before the go: the caller reads them as soon as it is released
+  const double t_go = Encoder::host_ms();
+  {
+    std::lock_guard<std::mutex> lk(st_mu_);
+    ++st_.handshakes;
+    st_.lookups += keys.size();
+    st_.hits += hits;
+    st_.late += late;
+    st_.misses += misses;
+    st_.prefetch_used += used;
+    st_.stall_ms += t_go - t_ready;
+    st_.read_wait_ms += t_loaded - t_rd;
+  }
   std::atomic_thread_fence(std::memory_order_seq_cst);
   sync_.set(r.go);
-  const double t_go = Encoder::host_ms();
   if (r.warm && sync_.warm) sync_.warm();
   active_ = keys;
   // read ahead (a read-ahead expert enters the order as recent, unrouted: its first routed use counts as its first)
@@ -355,16 +367,10 @@ void ExpertCache::serve(const Req& r) {
         if (e < E_) mark_[e] = 0;
     }
   }
-  std::lock_guard<std::mutex> lk(st_mu_);
-  ++st_.handshakes;
-  st_.lookups += keys.size();
-  st_.hits += hits;
-  st_.late += late;
-  st_.misses += misses;
-  st_.prefetches += pf;
-  st_.prefetch_used += used;
-  st_.stall_ms += t_go - t_ready;
-  st_.read_wait_ms += t_loaded - t_rd;
+  if (pf) {
+    std::lock_guard<std::mutex> lk(st_mu_);
+    st_.prefetches += pf;
+  }
 }
 
 // ---- replacement: ARC (Megiddo and Modha) over (layer, expert) keys; T1 / T2 in the arena, B1 / B2 their ghosts ----

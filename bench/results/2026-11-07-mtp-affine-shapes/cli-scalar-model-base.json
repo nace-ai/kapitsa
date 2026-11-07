@@ -1,0 +1,22 @@
+{
+  "cmd": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/kapitsa-base",
+    "serve",
+    "--model",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/scalar-model",
+    "--host",
+    "127.0.0.1",
+    "--private",
+    "--port",
+    "18147",
+    "--slots",
+    "1",
+    "--ctx",
+    "2048",
+    "--disk-cache",
+    "0"
+  ],
+  "source": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+  "exit": -11,
+  "at": "2026-11-07T05:22:52.311426+00:00"
+}

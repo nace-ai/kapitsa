@@ -1,0 +1,39 @@
+{
+  "active_jobs": [],
+  "gpu_lock_openers": "",
+  "gpu_lock_lsof_rc": 1,
+  "sources": {
+    "reference": {
+      "head": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+      "status": ""
+    },
+    "candidate": {
+      "head": "3ce432031569e364af6731ffb59aec1bc67355ef",
+      "status": ""
+    }
+  },
+  "cleanup": [
+    {
+      "tree": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference",
+      "rc": 0,
+      "stdout": "no server started by this run\nremoved /tmp/verify-kapitsa/state/cancel-checkpoint-133912; evidence kept in /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/evidence/cancel-checkpoint-133912/2c41b56c\n",
+      "stderr": ""
+    },
+    {
+      "tree": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate",
+      "rc": 0,
+      "stdout": "no server started by this run\nremoved /tmp/verify-kapitsa/state/cancel-checkpoint-133912; evidence kept in /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/evidence/cancel-checkpoint-133912/3ce43203\n",
+      "stderr": ""
+    }
+  ],
+  "removed_own_bench_homes": [
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-4b-bench-3-candidate",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-35b-bench-1-candidate",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-35b-bench-0-base",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-4b-bench-2-base",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-4b-bench-0-base",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-35b-bench-2-base",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-4b-bench-1-candidate",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-35b-bench-3-candidate"
+  ]
+}

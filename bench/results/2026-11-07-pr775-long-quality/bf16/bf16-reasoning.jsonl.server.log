@@ -1,0 +1,37 @@
+/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/.venv/lib/python3.13/site-packages/mlx_lm/server.py:1894: UserWarning: mlx_lm.server is not recommended for production as it only implements basic security checks.
+  warnings.warn(
+2026-11-07 03:13:44,602 - INFO - Starting httpd at 127.0.0.1 on port 18778...
+127.0.0.1 - - [07/Nov/2026 03:13:46] "GET /v1/models HTTP/1.1" 200 -
+127.0.0.1 - - [07/Nov/2026 03:13:46] "GET /v1/models HTTP/1.1" 200 -
+127.0.0.1 - - [07/Nov/2026 03:13:47] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-11-07 03:13:47,431 - INFO - Prompt Cache: 0 sequences, 0.00 GB
+2026-11-07 03:13:47,431 - INFO - - assistant: 0 sequences, 0.00 GB
+2026-11-07 03:13:47,431 - INFO - - user: 0 sequences, 0.00 GB
+2026-11-07 03:13:47,431 - INFO - - system: 0 sequences, 0.00 GB
+2026-11-07 03:13:47,433 - INFO - Prompt processing progress: 0/720
+2026-11-07 03:13:49,030 - INFO - Prompt processing progress: 719/720
+2026-11-07 03:13:50,241 - INFO - Prompt processing progress: 720/720
+127.0.0.1 - - [07/Nov/2026 03:26:47] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-11-07 03:26:47,592 - INFO - Prompt Cache: 1 sequences, 1.01 GB
+2026-11-07 03:26:47,592 - INFO - - assistant: 1 sequences, 1.01 GB
+2026-11-07 03:26:47,592 - INFO - - user: 0 sequences, 0.00 GB
+2026-11-07 03:26:47,592 - INFO - - system: 0 sequences, 0.00 GB
+2026-11-07 03:26:48,590 - INFO - Prompt processing progress: 0/520
+2026-11-07 03:26:49,092 - INFO - Prompt processing progress: 519/520
+2026-11-07 03:26:49,137 - INFO - Prompt processing progress: 520/520
+127.0.0.1 - - [07/Nov/2026 03:33:59] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-11-07 03:33:59,876 - INFO - Prompt Cache: 2 sequences, 1.60 GB
+2026-11-07 03:33:59,876 - INFO - - assistant: 2 sequences, 1.60 GB
+2026-11-07 03:33:59,876 - INFO - - user: 0 sequences, 0.00 GB
+2026-11-07 03:33:59,876 - INFO - - system: 0 sequences, 0.00 GB
+2026-11-07 03:34:00,355 - INFO - Prompt processing progress: 0/760
+2026-11-07 03:34:01,005 - INFO - Prompt processing progress: 759/760
+2026-11-07 03:34:01,051 - INFO - Prompt processing progress: 760/760
+127.0.0.1 - - [07/Nov/2026 03:44:31] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-11-07 03:44:31,528 - INFO - Prompt Cache: 3 sequences, 2.44 GB
+2026-11-07 03:44:31,528 - INFO - - assistant: 3 sequences, 2.44 GB
+2026-11-07 03:44:31,528 - INFO - - user: 0 sequences, 0.00 GB
+2026-11-07 03:44:31,528 - INFO - - system: 0 sequences, 0.00 GB
+2026-11-07 03:44:32,524 - INFO - Prompt processing progress: 0/857
+2026-11-07 03:44:33,265 - INFO - Prompt processing progress: 856/857
+2026-11-07 03:44:33,312 - INFO - Prompt processing progress: 857/857

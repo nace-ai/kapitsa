@@ -1,0 +1,21 @@
+{
+  "label": "35b-bench-2-base",
+  "argv": [
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/kapitsa",
+    "bench",
+    "--model",
+    "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+    "--quick",
+    "--json",
+    "--out",
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-full/35b-bench-2-base.json"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+  "started_at": "2026-11-07T06:02:33.614380+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-full/home-35b-bench-2-base"
+  }
+}
