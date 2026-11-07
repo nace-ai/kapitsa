@@ -26,7 +26,8 @@ The harness waits for AC power before each prompt and reruns one that ends on ba
 ## Results (M5 Pro 48 GB, Qwen 3.5 4-bit, 5 Nov 2026)
 
 Pass count over 10 prompts x 3 runs, median seconds per prompt. Raw rows: `bench/results/coding10/`. The `lc` and
-`lc_best` rows come from different legs of the same day (03:30 and 10:45-11:38), not one interleaved leg.
+`lc_best` rows below come from different legs of the same day (03:30 and 10:45-11:38); the same-leg rerun after the
+table runs them together.
 
 | arm | 4B | 9B |
 |---|---|---|
@@ -38,6 +39,18 @@ Pass count over 10 prompts x 3 runs, median seconds per prompt. Raw rows: `bench
 Without tools, the small-model settings alone solve every prompt fastest. Tuned, little-coder's tool loop is about 5x
 faster on 4B and 3x on 9B than as ported, comparing legs run hours apart; the same arm moved by up to 1 s and by
 1-3 passes of 30 between legs. The arms were tuned and scored on the same ten prompts.
+
+Same-leg rerun (7 Nov 2026, same Mac, AC power): `opt0`, `lc` and `lc_best` interleaved per prompt in one leg per
+model (`same-4b.json`, `same-9b.json`).
+
+| arm | 4B | 9B |
+|---|---|---|
+| opt0 | 30/30, 0.4 s | 29/30, 0.7 s |
+| lc as ported | 29/30, 4.4 s | 28/30, 7.9 s |
+| lc_best | 30/30, 0.9 s | 29/30, 2.2 s |
+
+Run side by side, the tuned tool loop is about 5x faster than as ported on 4B and about 3.5x on 9B, so the earlier
+ratios hold. The 9B misses are one run each of `p05_roman` (opt0) and `p06_merge_intervals` (lc_best).
 
 ## Tuning rounds
 
