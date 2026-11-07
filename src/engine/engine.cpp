@@ -2976,7 +2976,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (dfl_) dfl_->end_prefill();
       if (lili_) lili_->end_prefill();
       // Keep only checkpoints from the reused prefix. A checkpoint saved by this unfinished prefill may not
-      // have its matching drafter ring yet: that snapshot is committed only after the whole prompt is read.
+      // have its matching drafter ring yet: that snapshot is committed when the whole prompt has been read.
       const TurnCheckpoint* keep = nullptr;
       const int before = std::min(start, int(common));
       for (auto& c : slot.ckpts) {
