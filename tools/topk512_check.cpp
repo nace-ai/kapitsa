@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
   ni::bench::GpuLock lock;
   if (!ni::bench::GpuLock::held_by_caller() && !lock.acquire()) fatal("cannot acquire GPU lock");
   Gpu& g = Gpu::get(); g.compile();
-  printf("GPU %s, threadgroup bytes A=%u B=%u\n", g.name().c_str(), g.pipeline("moe_topk512").tg_mem, g.pipeline("moe_topk512").tg_mem);
+  printf("GPU %s, threadgroup bytes A=%u B=%u\n", g.name().c_str(), g.pipeline("moe_topk512").tg_mem, g.pipeline("moe_topk512_rows").tg_mem);
   if (!strcmp(argv[1], "--bench")) {
     { Router warm(256, 10, 1, 0);
       for (int i = 0; i < 48; ++i) { warm.run(0, 8192); warm.run(1, 8192); }
