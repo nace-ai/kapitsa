@@ -13,51 +13,6 @@
 #include <vector>
 using namespace ni;
 namespace {
-// moe_topk512 from f22effb9, before reusing the first selection's maximum.
-constexpr const char* reference_source = R"METAL(#include <metal_stdlib>
-using namespace metal;
-struct TopkParams { uint E, k, norm; };
-inline float sigmoid(float x) { return 1.0f / (1.0f + metal::fast::exp(-x)); }
-[[kernel]] void moe_topk512_reference(const device float* logits [[buffer(0)]], const device float* shared [[buffer(1)]],
-                            device uint* idx [[buffer(2)]], device float* wts [[buffer(3)]],
-                            constant TopkParams& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
-                            uint lane [[thread_index_in_simdgroup]]) {
-  const device float4* l4 = (const device float4*)(logits + r * 512 + lane * 16);
-  const float4 a = l4[0], b = l4[1], c = l4[2], d = l4[3];
-  float v[16] = {a.x, a.y, a.z, a.w, b.x, b.y, b.z, b.w, c.x, c.y, c.z, c.w, d.x, d.y, d.z, d.w};
-  float mx = v[0];
-  for (uint i = 1; i < 16; ++i) mx = max(mx, v[i]);
-  mx = simd_max(mx);
-  float total = 0.0f;  // the full softmax denominator (no renormalization only)
-  if (!p.norm) {
-    for (uint i = 0; i < 16; ++i) total += metal::precise::exp(v[i] - mx);
-    total = simd_sum(total);
-  }
-  uint taken = 0;
-  float sel = 0.0f, my_w = 0.0f;
-  uint my_i = 0;
-  for (uint q = 0; q < p.k; ++q) {
-    float best = -INFINITY;
-    uint bi = 0xffffffffu;
-    for (uint i = 0; i < 16; ++i)
-      if (!(taken & (1u << i)) && v[i] > best) {
-        best = v[i];
-        bi = lane * 16 + i;
-      }
-    const float g = simd_max(best);
-    const uint win = simd_min(best == g ? bi : 0xffffffffu);
-    if (win / 16 == lane) taken |= 1u << (win % 16);
-    const float e = metal::precise::exp(g - mx);
-    sel += e;
-    if (lane == q) my_w = e, my_i = win;
-  }
-  if (lane < p.k) {
-    idx[r * p.k + lane] = my_i;
-    wts[r * (p.k + 1) + lane] = my_w / (p.norm ? sel : total);
-  }
-  if (lane == p.k) wts[r * (p.k + 1) + p.k] = sigmoid(shared[r]);
-}
-)METAL";
 struct Router {
   static constexpr unsigned E = 512, guard = 16;
   static constexpr uint32_t sentinel = 0x4abc1234;
@@ -92,7 +47,7 @@ struct Router {
       ids[v] = ids_store[v].view(guard * 4, size_t(R) * K * 4);
       wts[v] = wts_store[v].view(guard * 4, size_t(R) * (K + 1) * 4);
     }
-    pipes[0] = g.pipeline("moe_topk512_reference"); pipes[1] = g.pipeline(R > 1 && norm ? "moe_topk512_rows" : "moe_topk512");
+    pipes[0] = g.pipeline("moe_topk512"); pipes[1] = g.pipeline(R > 1 && norm ? "moe_topk512_rows" : "moe_topk512");
   }
   ~Router() { for (Buffer* b : {&logits, &shared, &ids_store[0], &ids_store[1], &wts_store[0], &wts_store[1]}) g.release(*b); }
   double run(int v, int repeats = 1) {
@@ -145,8 +100,8 @@ int main(int argc, char** argv) {
       (argc == 3 && (strcmp(argv[1], "--gpu") || strcmp(argv[2], "--small")))) fatal("usage: topk512_check --gpu [--small] | --bench");
   ni::bench::GpuLock lock;
   if (!ni::bench::GpuLock::held_by_caller() && !lock.acquire()) fatal("cannot acquire GPU lock");
-  Gpu& g = Gpu::get(); g.compile_extra("ordered router reference", reference_source);
-  printf("GPU %s, threadgroup bytes A=%u B=%u\n", g.name().c_str(), g.pipeline("moe_topk512_reference").tg_mem, g.pipeline("moe_topk512").tg_mem);
+  Gpu& g = Gpu::get(); g.compile();
+  printf("GPU %s, threadgroup bytes A=%u B=%u\n", g.name().c_str(), g.pipeline("moe_topk512").tg_mem, g.pipeline("moe_topk512").tg_mem);
   if (!strcmp(argv[1], "--bench")) {
     { Router warm(256, 10, 1, 0);
       for (int i = 0; i < 48; ++i) { warm.run(0, 8192); warm.run(1, 8192); }
