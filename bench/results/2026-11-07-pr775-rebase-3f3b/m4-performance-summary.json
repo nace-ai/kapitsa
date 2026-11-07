@@ -1,0 +1,15 @@
+{
+  "head": "50fadecc932863bff4d3f81a7a20d3913be3e15b",
+  "ttft_seconds": {
+    "A1": 8.598488666990306,
+    "B1": 3.2908358750282787,
+    "A2": 8.596896165981889,
+    "B2": 3.2537097500171512
+  },
+  "precise_mean": 8.597692416486097,
+  "fast_mean": 3.272272812522715,
+  "ttft_reduction_pct": 61.94010376263144,
+  "all_requests_identical": true,
+  "all_quiet": true,
+  "all_flags_empty": true
+}

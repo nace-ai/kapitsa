@@ -1,0 +1,5 @@
+started `/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/kapitsa serve --private --model /Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit --port 18779 --ctx 65536 --slots 1 --prefill-chunk 2048 --disk-cache 0 --dflash none` (pid 83911, log /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/fast-case-0.jsonl.server.log)
+server ready after 28 s
+long-reasoning: 1 problems x 1 samples, 0 already graded, 1 to run; m4-fast at http://127.0.0.1:18779/v1, max_tokens 32768, parallel 1 -> /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/long-results/fast-case-0.jsonl
+[1/1] test/counting_and_probability/181.json #0: wrong (None), cut short, 32768 tokens, 46.02 tok/s; 0/1 right so far, 713s
+done: 0/1 right

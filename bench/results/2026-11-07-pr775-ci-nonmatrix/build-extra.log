@@ -1,0 +1,8 @@
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/ane_segment_check.dir/tools/ane_segment_check.cpp.o
+[100%] Linking CXX executable ane_segment_check
+[100%] Built target ane_segment_check
+[  0%] Building CXX object CMakeFiles/device_profile_test.dir/src/engine/device_profile.cpp.o
+[  0%] Building CXX object CMakeFiles/device_profile_test.dir/tests/device_profile_test.cpp.o
+[100%] Linking CXX executable device_profile_test
+[100%] Built target device_profile_test

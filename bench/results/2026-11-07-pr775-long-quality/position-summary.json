@@ -1,0 +1,80 @@
+{
+  "tf-precise": {
+    "all": {
+      "positions": 3964,
+      "mean_kl_lower_bound": 1.139286289109414,
+      "p99_kl_lower_bound": 18.585535984556994,
+      "max_kl_lower_bound": 26.9293232431,
+      "top1_flips": 694,
+      "max_reference_tail_mass": 0.367494235558
+    },
+    "prompt": {
+      "positions": 2853,
+      "mean_kl_lower_bound": 1.5672272497456559,
+      "p99_kl_lower_bound": 19.823307122988005,
+      "max_kl_lower_bound": 26.9293232431,
+      "top1_flips": 623,
+      "max_reference_tail_mass": 0.367494235558
+    },
+    "answer": {
+      "positions": 1111,
+      "mean_kl_lower_bound": 0.04035239109393406,
+      "p99_kl_lower_bound": 0.3655087218588014,
+      "max_kl_lower_bound": 1.08657681694,
+      "top1_flips": 71,
+      "max_reference_tail_mass": 0.00705040396002
+    }
+  },
+  "tf-fast": {
+    "all": {
+      "positions": 3964,
+      "mean_kl_lower_bound": 1.1626634318370026,
+      "p99_kl_lower_bound": 18.863357398423986,
+      "max_kl_lower_bound": 27.0250773403,
+      "top1_flips": 705,
+      "max_reference_tail_mass": 0.367494235558
+    },
+    "prompt": {
+      "positions": 2853,
+      "mean_kl_lower_bound": 1.599468546084787,
+      "p99_kl_lower_bound": 20.066602563384002,
+      "max_kl_lower_bound": 27.0250773403,
+      "top1_flips": 632,
+      "max_reference_tail_mass": 0.367494235558
+    },
+    "answer": {
+      "positions": 1111,
+      "mean_kl_lower_bound": 0.040966770316814026,
+      "p99_kl_lower_bound": 0.3726662415451016,
+      "max_kl_lower_bound": 1.0748927534,
+      "top1_flips": 73,
+      "max_reference_tail_mass": 0.00705040396002
+    }
+  },
+  "tf-fast-vs-precise": {
+    "all": {
+      "positions": 3964,
+      "mean_kl_lower_bound": 0.0940758821273094,
+      "p99_kl_lower_bound": 1.8158800292334898,
+      "max_kl_lower_bound": 20.7751236705,
+      "top1_flips": 159,
+      "max_reference_tail_mass": 0.170387949729
+    },
+    "prompt": {
+      "positions": 2853,
+      "mean_kl_lower_bound": 0.13053989858595483,
+      "p99_kl_lower_bound": 3.372538453468803,
+      "max_kl_lower_bound": 20.7751236705,
+      "top1_flips": 148,
+      "max_reference_tail_mass": 0.170387949729
+    },
+    "answer": {
+      "positions": 1111,
+      "mean_kl_lower_bound": 0.00043786326455927805,
+      "p99_kl_lower_bound": 0.004534540161951001,
+      "max_kl_lower_bound": 0.00912668469794,
+      "top1_flips": 11,
+      "max_reference_tail_mass": 0.0127895587436
+    }
+  }
+}

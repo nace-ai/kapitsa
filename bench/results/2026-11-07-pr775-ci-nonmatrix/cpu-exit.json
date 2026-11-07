@@ -1,0 +1,1 @@
+{"command": ["bash", ".dsh/skills/verify-kapitsa/scripts/vk", "cpu-tests"], "returncode": 0}

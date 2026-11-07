@@ -83,7 +83,22 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 18);
+  CHECK(ni::default_count() == 19);
+  const auto* segmented = row("ane_segmented_fast");
+  CHECK(segmented && segmented->scope == ni::DefaultScope::kAneBuiltinNonMatrix && !segmented->exclusive);
+  for (const auto& facts : {mac(7, 8, "Apple M1", g48), mac(8, 10, "Apple M2", g48),
+                            mac(9, 60, "Apple M3 Ultra", g48), mac(9, 10, "Apple M4", g48),
+                            mac(9, 20, "Apple M4 Pro", g48), mac(9, 40, "Apple M4 Max", g48),
+                            mac(10, 20, "Apple M5 Pro", g48), mac(10, 40, "Apple M5 Max", g48)}) {
+    const bool expected = facts.name == "Apple M4" || facts.name == "Apple M4 Pro" || facts.name == "Apple M4 Max";
+    CHECK(ni::ane_segmented_default(facts) == expected);
+    CHECK(ni::ane_builtin_share(facts.name) == (expected || facts.apple_family == 10));
+    auto with_ane = ni::resolve_device(facts);
+    with_ane.ane = true;
+    CHECK(ni::default_matches(*segmented, with_ane) == expected);
+    with_ane.ane = false;
+    CHECK(!ni::default_matches(*segmented, with_ane));
+  }
   // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
   const ni::DefaultRow* tattn = row("tattn_fast");
   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);

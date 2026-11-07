@@ -1,0 +1,9 @@
+[  0%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35.cpp.o
+[  0%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_ane.cpp.o
+[  0%] Linking CXX static library libnaceinfer.a
+[ 86%] Built target naceinfer
+[ 86%] Linking CXX executable kapitsa
+[100%] Built target kapitsa
+[100%] Built target naceinfer
+[100%] Linking CXX executable ane_segment_check
+[100%] Built target ane_segment_check

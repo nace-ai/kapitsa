@@ -1,0 +1,6 @@
+{
+  "device": "/dev/disk5",
+  "returncode": 0,
+  "stdout": "\"disk5\" ejected.\n",
+  "stderr": ""
+}
