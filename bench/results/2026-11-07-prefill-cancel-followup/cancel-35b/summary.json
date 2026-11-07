@@ -1,0 +1,45 @@
+{
+  "cli": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa",
+  "reference": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+  "model": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+  "flags": {
+    "NI_ANE": "0",
+    "disk_cache": "0",
+    "slots": 1,
+    "ctx": 32768
+  },
+  "checks": [
+    {
+      "name": "control has a cached prefix",
+      "pass": true
+    },
+    {
+      "name": "cancel has a cached prefix",
+      "pass": true
+    },
+    {
+      "name": "retry keeps the completed prefix",
+      "pass": false
+    },
+    {
+      "name": "completed retry can be reused",
+      "pass": true
+    },
+    {
+      "name": "repeat output matches",
+      "pass": true
+    },
+    {
+      "name": "cold cancellation discards unfinished checkpoints",
+      "pass": true
+    },
+    {
+      "name": "seed output matches reference",
+      "pass": true
+    },
+    {
+      "name": "retry output matches uninterrupted reference",
+      "pass": true
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "name": "other",
+  "progress": [
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 1016,
+      "time_ms": 420
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 2032,
+      "time_ms": 900
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 3048,
+      "time_ms": 1380
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 4064,
+      "time_ms": 1853
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 5080,
+      "time_ms": 2393
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 6096,
+      "time_ms": 2873
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 7112,
+      "time_ms": 3413
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 8128,
+      "time_ms": 3891
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 9144,
+      "time_ms": 4432
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 10159,
+      "time_ms": 5032
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 11174,
+      "time_ms": 5572
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 12189,
+      "time_ms": 6112
+    },
+    {
+      "total": 13204,
+      "cache": 0,
+      "processed": 13204,
+      "time_ms": 6692
+    }
+  ],
+  "text": "Based on the code provided in `modeling_altclip.py`, here is a function definition:\n\n```python\ndef eager_attention_forward(\n    module:",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 13204,
+    "completion_tokens": 32,
+    "total_tokens": 13236,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "kapitsa": {
+      "prefill_ms": 6750.5,
+      "kflash": {
+        "source": "DFlash2",
+        "cycles": 7
+      }
+    }
+  },
+  "finish_reason": "length"
+}

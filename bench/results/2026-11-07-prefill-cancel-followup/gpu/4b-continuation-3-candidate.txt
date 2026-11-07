@@ -1,0 +1,13 @@
+<think>
+
+</think>
+
+# From Source to Machine: A Comprehensive Guide to the Compilation Process
+
+Compiling a programming language is one of the most intricate yet fundamental tasks in computer science. It is the bridge between human-readable abstract syntax and the binary machine code that processors execute. This transformation is not merely a simple translation; it is a multi-stage, highly optimized pipeline that involves understanding the structure of the code, verifying its correctness, optimizing its performance, and finally mapping it to the specific hardware architecture. Whether compiling a high-level language like Python or a low-level language like C, the core principles remain largely consistent, though the level of abstraction varies.
+
+In this detailed tutorial, we will walk through the entire lifecycle of a compiler, focusing on a hypothetical small language called "SimpL" (Simple Language). SimpL supports integer arithmetic, basic variables, and function definitions. By following the code through each stage, we will demystify the complex interactions between lexical analysis, parsing, type checking, optimization, register allocation, and code generation.
+
+## Stage 1: Lexical Analysis (The Tokenizer)
+
+The journey begins with the raw source code, which is essentially a stream of characters. The compiler's first job is to break this unstructured stream of characters into

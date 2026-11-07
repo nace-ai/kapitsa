@@ -1,0 +1,28 @@
+{
+  "label": "tokenizer-build",
+  "argv": [
+    "/usr/bin/c++",
+    "-std=c++20",
+    "-O3",
+    "-arch",
+    "arm64",
+    "-mmacosx-version-min=14.0",
+    "-I/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/src",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/tokenizer.cpp",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/libnaceinfer.a",
+    "-framework",
+    "Foundation",
+    "-framework",
+    "CoreFoundation",
+    "-o",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/tokenizer"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate",
+  "started_at": "2026-11-07T13:45:13.204136+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-tokenizer-build"
+  }
+}
