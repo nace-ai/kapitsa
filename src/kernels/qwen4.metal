@@ -1370,7 +1370,16 @@ NI_HC_UP_MIX2(hc_up_mix2_b8, 8)
   const device float4* l4 = (const device float4*)(logits + r * 512 + lane * 16);
   const float4 a = l4[0], b = l4[1], c = l4[2], d = l4[3];
   float v[16] = {a.x, a.y, a.z, a.w, b.x, b.y, b.z, b.w, c.x, c.y, c.z, c.w, d.x, d.y, d.z, d.w};
-  float mx = -INFINITY;
+  float first = -INFINITY;
+  uint first_i = 0xffffffffu;
+  for (uint i = 0; i < 16; ++i)
+    if (v[i] > first) {
+      first = v[i];
+      first_i = lane * 16 + i;
+    }
+  const float g0 = simd_max(first);
+  const uint win0 = simd_min(first == g0 ? first_i : 0xffffffffu);
+  float mx = g0;
   float total = 0.0f;  // the full softmax denominator (no renormalization only)
   if (!p.norm) {
     mx = v[0];
@@ -1379,10 +1388,10 @@ NI_HC_UP_MIX2(hc_up_mix2_b8, 8)
     for (uint i = 0; i < 16; ++i) total += metal::precise::exp(v[i] - mx);
     total = simd_sum(total);
   }
-  uint taken = 0;
-  float sel = 0.0f, my_w = 0.0f;
-  uint my_i = 0;
-  for (uint q = 0; q < p.k; ++q) {
+  uint taken = win0 / 16 == lane ? 1u << (win0 % 16) : 0u;
+  float sel = metal::precise::exp(g0 - mx), my_w = sel;
+  uint my_i = win0;
+  for (uint q = 1; q < p.k; ++q) {
     float best = -INFINITY;
     uint bi = 0xffffffffu;
     for (uint i = 0; i < 16; ++i)
@@ -1391,7 +1400,6 @@ NI_HC_UP_MIX2(hc_up_mix2_b8, 8)
         bi = lane * 16 + i;
       }
     const float g = simd_max(best);
-    if (p.norm && q == 0) mx = g;  // the first selected logit is the softmax maximum
     const uint win = simd_min(best == g ? bi : 0xffffffffu);
     if (win / 16 == lane) taken |= 1u << (win % 16);
     const float e = metal::precise::exp(g - mx);
