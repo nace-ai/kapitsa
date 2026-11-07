@@ -1,0 +1,10 @@
+{
+  "production_source": "dc82cf0f39b942157e86b0cd5e518e5caed17e61",
+  "vk_cpu_entries": 21,
+  "supplemental_native_entries": 14,
+  "additional_cpu_scripts": 6,
+  "failures": 0,
+  "cleanup_rc": 0,
+  "archive_sha256": "bb3f4db1066c5efbf7f35641d5da46ab3021bef1ad4ff6f04b3ed2339a0dba73",
+  "raw_files": 46
+}
