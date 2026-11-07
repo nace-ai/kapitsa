@@ -42,11 +42,6 @@ static Pipeline pipe8(const std::string& n) {
   return it->second;
 }
 
-static int env_int(const char* n, int def) {
-  const char* v = getenv(n);
-  return v && *v ? atoi(v) : def;
-}
-
 // The packed-coefficient GEMMs' tiling on the 10-core M4 (set when a model packs its projections): 40-group rows (K 2560:
 // GDN in_proj, q|k|v, gate|up, the LM head; the drafter's) as 2 k-slices x 2 column blocks instead of 4 x 2 (interleaved
 // records, interleave_packed_slices: the 4B's verify cycle -0.2 ms, ni_run on the server's prompt, 3 interleaved runs)

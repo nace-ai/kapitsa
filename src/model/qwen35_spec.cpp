@@ -20,11 +20,6 @@
 
 namespace ni {
 
-static int env_int(const char* n, int def) {
-  const char* v = getenv(n);
-  return v && *v ? atoi(v) : def;
-}
-
 static Pipeline pipe2(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
