@@ -1,0 +1,12 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/cmake",
+    "-S",
+    ".",
+    "-B",
+    "build",
+    "-DCMAKE_BUILD_TYPE=Release"
+  ],
+  "returncode": 0,
+  "extra_env": {}
+}

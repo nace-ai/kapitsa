@@ -1,0 +1,30 @@
+{
+  "name": "control-short",
+  "progress": [
+    {
+      "total": 2102,
+      "cache": 2081,
+      "processed": 2102,
+      "time_ms": 0
+    }
+  ],
+  "text": "The `forward` method in `GraniteSpeechConformerAttention` may fail with a `NameError` because the variable `t` is used in the",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 2102,
+    "completion_tokens": 32,
+    "total_tokens": 2134,
+    "prompt_tokens_details": {
+      "cached_tokens": 2081
+    },
+    "kapitsa": {
+      "prefill_ms": 27.7,
+      "kflash": {
+        "source": "none",
+        "cycles": 31
+      }
+    }
+  },
+  "finish_reason": "length"
+}

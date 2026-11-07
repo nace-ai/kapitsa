@@ -1,0 +1,113 @@
+kapitsa bench: Qwen3.6 35B-A3B-4bit 4-bit (mixed) on Mac Studio (2025): Apple M3 Ultra, 60-core GPU, 96 GB, macOS 26.4.1, quick
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:54147 (log ~/kapitsa-stop-sequence-20261107/gpu-results-checked/home-35b-bench-1-candidate/logs/bench-54147-ctx32768.log)
+[?2026h  ✓ Loaded Qwen3.6 35B-A3B-4bit  ·  4-bit (mixed) in 3.9s  ·  plain decoding, …
+[?2026lReady after 3.9s: plain decoding, KFlash (none)
+Warm-up done in 1.9s
+GPU quiet after 18s
+  decode T=0.6: 187.24 tok/s (512 tok, finish="length")
+  decode T=0.6: 186.63 tok/s (512 tok, finish="length")
+  decode T=0.6: 187.34 tok/s (512 tok, finish="length")
+decode T=0.6: median 187.24 tok/s over 3/3 valid
+  decode T=0: 190.25 tok/s (512 tok, finish="length")
+  decode T=0: 191.62 tok/s (512 tok, finish="length")
+  decode T=0: 184.26 tok/s (512 tok, finish="length")
+decode T=0: median 190.25 tok/s over 3/3 valid
+prefill 4000: 4132 tok, 2782 tok/s; cached TTFT median 0.04 s (506 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-07T07:36:36Z",
+  "kapitsa": {
+    "version": "0.2.31",
+    "commit": "cf2f25c"
+  },
+  "mac": {
+    "identifier": "Mac15,14",
+    "name": "Mac Studio (2025)",
+    "year": 2025,
+    "chip": "Apple M3 Ultra",
+    "cpu_cores": 28,
+    "gpu_cores": 60,
+    "memory_gb": 96,
+    "macos": "26.4.1",
+    "macos_build": "25E253"
+  },
+  "model": {
+    "name": "Qwen3.6-35B-A3B-4bit",
+    "title": "Qwen3.6-35B-A3B-4bit",
+    "variant": null,
+    "precision": "4-bit (mixed)",
+    "catalog": false,
+    "revision": null,
+    "decoding": "plain",
+    "decoding_detail": "plain decoding, KFlash (none)",
+    "drafter": null,
+    "drafter_kind": "none",
+    "drafter_source": null,
+    "drafter_reason": "no matching drafter found"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 187.24,
+      "runs_tps": [
+        187.24,
+        186.63,
+        187.34
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 190.25,
+      "runs_tps": [
+        190.25,
+        191.62,
+        184.26
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 1.4852,
+        "tps": 2782.1,
+        "followup_s": [
+          0.0435,
+          0.0428,
+          0.0422
+        ],
+        "followup_median_s": 0.0428,
+        "followup_suffix_tps": 505.9
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.45
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
+Saved /Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/35b-bench-1-candidate.json

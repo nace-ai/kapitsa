@@ -83,7 +83,22 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 14);
+  CHECK(ni::default_count() == 19);
+  const auto* segmented = row("ane_segmented_fast");
+  CHECK(segmented && segmented->scope == ni::DefaultScope::kAneBuiltinNonMatrix && !segmented->exclusive);
+  for (const auto& facts : {mac(7, 8, "Apple M1", g48), mac(8, 10, "Apple M2", g48),
+                            mac(9, 60, "Apple M3 Ultra", g48), mac(9, 10, "Apple M4", g48),
+                            mac(9, 20, "Apple M4 Pro", g48), mac(9, 40, "Apple M4 Max", g48),
+                            mac(10, 20, "Apple M5 Pro", g48), mac(10, 40, "Apple M5 Max", g48)}) {
+    const bool expected = facts.name == "Apple M4" || facts.name == "Apple M4 Pro" || facts.name == "Apple M4 Max";
+    CHECK(ni::ane_segmented_default(facts) == expected);
+    CHECK(ni::ane_builtin_share(facts.name) == (expected || facts.apple_family == 10));
+    auto with_ane = ni::resolve_device(facts);
+    with_ane.ane = true;
+    CHECK(ni::default_matches(*segmented, with_ane) == expected);
+    with_ane.ane = false;
+    CHECK(!ni::default_matches(*segmented, with_ane));
+  }
   // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
   const ni::DefaultRow* tattn = row("tattn_fast");
   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);
@@ -107,7 +122,7 @@ int main() {
   CHECK(ni::default_matches(*hc, m5max) && !ni::default_matches(*hc, m5pro));
   CHECK(ni::default_matches(*tree, m5max) && !ni::default_matches(*narrow, m5pro));
 
-  const char* guards[] = {"m1_max_32", "m4_10", "m4_pro_gpu", "m4_pro_20", "m4_ten_core", "ultra_gpu"};
+  const char* guards[] = {"m1_max_32", "m4_10", "m4_pro_gpu", "m4_pro_20", "m4_ten_core", "ultra_gpu", "pre_m3_gpu"};
   for (const char* id : guards) {
     const ni::DefaultRow* g = row(id);
     CHECK(g && g->scope == ni::DefaultScope::kGuard && g->win_pct == 0 && !g->live);
@@ -129,6 +144,21 @@ int main() {
   CHECK(ni::default_matches(*row("ultra_gpu"), ultra) && row("ultra_gpu")->exclusive);
   CHECK(std::string(row("ultra_gpu")->where).find("#421") != std::string::npos);
   CHECK(ni::format_profile(ultra, false).find("exclusive") != std::string::npos);
+  const auto m2p = ni::resolve_device(mac(8, 10, "Apple M2", 24L << 30));
+  CHECK(ni::default_matches(*row("pre_m3_gpu"), m1p) && ni::default_matches(*row("pre_m3_gpu"), m2p));
+  CHECK(!ni::default_matches(*row("pre_m3_gpu"), m4p) && row("pre_m3_gpu")->exclusive);
+  CHECK(std::string(row("pre_m3_gpu")->where).find("#478") != std::string::npos);
+  CHECK(row("matrix_units") && row("matrix_units")->scope == ni::DefaultScope::kMatrix && !row("matrix_units")->live);
+  CHECK(ni::default_matches(*row("matrix_units"), m5pro) && !ni::default_matches(*row("matrix_units"), m4pro20));
+  CHECK(row("legacy_gpu")->scope == ni::DefaultScope::kLegacy);
+  CHECK(ni::default_matches(*row("legacy_gpu"), m1p) && !ni::default_matches(*row("legacy_gpu"), m5pro));
+  CHECK(row("wide_cores")->scope == ni::DefaultScope::kWide);
+  CHECK(ni::default_matches(*row("wide_cores"), m5max) && !ni::default_matches(*row("wide_cores"), m5pro));
+  const std::string m1_text = ni::format_profile(m1p, false);
+  const auto m1_at = m1_text.find("m1_max_32");
+  CHECK(m1_at != std::string::npos);
+  const auto m1_nl = m1_text.find('\n', m1_at);
+  CHECK(m1_text.substr(m1_at, m1_nl - m1_at).find("live no") != std::string::npos);
 
   const auto m5pro_f = mac(10, 20, "Apple M5 Pro", g48);
   const auto m5max_f = mac(10, 40, "Apple M5 Max", 128L << 30);

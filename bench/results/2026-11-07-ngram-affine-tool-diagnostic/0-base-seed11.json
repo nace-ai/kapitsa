@@ -1,0 +1,786 @@
+{
+  "label": "0-base-seed11",
+  "controls": {
+    "temperature": 0.7,
+    "seed": 11
+  },
+  "initial_call_valid": true,
+  "original_limit_pass": false,
+  "original_response": {
+    "reasoning": "",
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_6hSIhVDcpKfEdC4wgyHJkhVA",
+        "type": "function",
+        "function": {
+          "name": "run_shell",
+          "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+        },
+        "index": 0
+      }
+    ],
+    "finish": "tool_calls",
+    "usage": {
+      "prompt_tokens": 618,
+      "completion_tokens": 39,
+      "total_tokens": 657,
+      "prompt_tokens_details": {
+        "cached_tokens": 595
+      },
+      "kapitsa": {
+        "prefill_ms": 137.0,
+        "kflash": {
+          "source": "MTP",
+          "cycles": 15
+        }
+      }
+    },
+    "chunks": 3,
+    "t_first": null
+  },
+  "extended_limit_pass": false,
+  "extra_rounds": 3,
+  "final_response": {
+    "reasoning": "",
+    "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+    "tool_calls": [],
+    "finish": "stop",
+    "usage": {
+      "prompt_tokens": 679,
+      "completion_tokens": 49,
+      "total_tokens": 728,
+      "prompt_tokens_details": {
+        "cached_tokens": 656
+      },
+      "kapitsa": {
+        "prefill_ms": 132.0,
+        "kflash": {
+          "source": "MTP",
+          "cycles": 19
+        }
+      }
+    },
+    "chunks": 3,
+    "t_first": 0.936143159866333
+  },
+  "transcript": [
+    {
+      "request": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a coding agent. Use tools to answer."
+          },
+          {
+            "role": "user",
+            "content": "Read the file /etc/hosts and tell me how many lines it has."
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a text file from disk.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Absolute path"
+                  },
+                  "max_lines": {
+                    "type": "integer",
+                    "description": "Optional line limit"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "description": "Run a shell command.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ]
+              }
+            }
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "temperature": 0.7,
+        "seed": 11
+      },
+      "response": {
+        "reasoning": "",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "arguments": "{\"path\":\"/etc/hosts\"}"
+            },
+            "index": 0
+          }
+        ],
+        "finish": "tool_calls",
+        "usage": {
+          "prompt_tokens": 378,
+          "completion_tokens": 27,
+          "total_tokens": 405,
+          "prompt_tokens_details": {
+            "cached_tokens": 371
+          },
+          "kapitsa": {
+            "prefill_ms": 71.9,
+            "kflash": {
+              "source": "MTP",
+              "cycles": 10
+            }
+          }
+        },
+        "chunks": 3,
+        "t_first": null
+      }
+    },
+    {
+      "request": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a coding agent. Use tools to answer."
+          },
+          {
+            "role": "user",
+            "content": "Read the file /etc/hosts and tell me how many lines it has."
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+                "type": "function",
+                "function": {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+            "content": "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a text file from disk.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Absolute path"
+                  },
+                  "max_lines": {
+                    "type": "integer",
+                    "description": "Optional line limit"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "description": "Run a shell command.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ]
+              }
+            }
+          }
+        ],
+        "max_tokens": 2048,
+        "stream": true,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "temperature": 0.7,
+        "seed": 11
+      },
+      "response": {
+        "reasoning": "",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_JTPAcPdDzArAjFuGl6aU370J",
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+            },
+            "index": 0
+          }
+        ],
+        "finish": "tool_calls",
+        "usage": {
+          "prompt_tokens": 454,
+          "completion_tokens": 70,
+          "total_tokens": 524,
+          "prompt_tokens_details": {
+            "cached_tokens": 404
+          },
+          "kapitsa": {
+            "prefill_ms": 198.6,
+            "kflash": {
+              "source": "MTP",
+              "cycles": 27
+            }
+          }
+        },
+        "chunks": 3,
+        "t_first": null
+      }
+    },
+    {
+      "request": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a coding agent. Use tools to answer."
+          },
+          {
+            "role": "user",
+            "content": "Read the file /etc/hosts and tell me how many lines it has."
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+                "type": "function",
+                "function": {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+            "content": "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_JTPAcPdDzArAjFuGl6aU370J",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_JTPAcPdDzArAjFuGl6aU370J",
+            "content": "3 /etc/hosts\n"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a text file from disk.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Absolute path"
+                  },
+                  "max_lines": {
+                    "type": "integer",
+                    "description": "Optional line limit"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "description": "Run a shell command.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ]
+              }
+            }
+          }
+        ],
+        "max_tokens": 2048,
+        "stream": true,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "temperature": 0.7,
+        "seed": 11
+      },
+      "response": {
+        "reasoning": "",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_ZGhUvEzLaTx5aJ5MQ1LZ9Qf7",
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+            },
+            "index": 0
+          }
+        ],
+        "finish": "tool_calls",
+        "usage": {
+          "prompt_tokens": 546,
+          "completion_tokens": 50,
+          "total_tokens": 596,
+          "prompt_tokens_details": {
+            "cached_tokens": 523
+          },
+          "kapitsa": {
+            "prefill_ms": 135.0,
+            "kflash": {
+              "source": "MTP",
+              "cycles": 17
+            }
+          }
+        },
+        "chunks": 3,
+        "t_first": null
+      }
+    },
+    {
+      "request": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a coding agent. Use tools to answer."
+          },
+          {
+            "role": "user",
+            "content": "Read the file /etc/hosts and tell me how many lines it has."
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+                "type": "function",
+                "function": {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+            "content": "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_JTPAcPdDzArAjFuGl6aU370J",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_JTPAcPdDzArAjFuGl6aU370J",
+            "content": "3 /etc/hosts\n"
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_ZGhUvEzLaTx5aJ5MQ1LZ9Qf7",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_ZGhUvEzLaTx5aJ5MQ1LZ9Qf7",
+            "content": "3 /etc/hosts\n"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a text file from disk.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Absolute path"
+                  },
+                  "max_lines": {
+                    "type": "integer",
+                    "description": "Optional line limit"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "description": "Run a shell command.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ]
+              }
+            }
+          }
+        ],
+        "max_tokens": 2048,
+        "stream": true,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "temperature": 0.7,
+        "seed": 11
+      },
+      "response": {
+        "reasoning": "",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_6hSIhVDcpKfEdC4wgyHJkhVA",
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+            },
+            "index": 0
+          }
+        ],
+        "finish": "tool_calls",
+        "usage": {
+          "prompt_tokens": 618,
+          "completion_tokens": 39,
+          "total_tokens": 657,
+          "prompt_tokens_details": {
+            "cached_tokens": 595
+          },
+          "kapitsa": {
+            "prefill_ms": 137.0,
+            "kflash": {
+              "source": "MTP",
+              "cycles": 15
+            }
+          }
+        },
+        "chunks": 3,
+        "t_first": null
+      }
+    },
+    {
+      "request": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a coding agent. Use tools to answer."
+          },
+          {
+            "role": "user",
+            "content": "Read the file /etc/hosts and tell me how many lines it has."
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+                "type": "function",
+                "function": {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_hk18nlRfD6SbD2c6H5YNoVYt",
+            "content": "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_JTPAcPdDzArAjFuGl6aU370J",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_JTPAcPdDzArAjFuGl6aU370J",
+            "content": "3 /etc/hosts\n"
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_ZGhUvEzLaTx5aJ5MQ1LZ9Qf7",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_ZGhUvEzLaTx5aJ5MQ1LZ9Qf7",
+            "content": "3 /etc/hosts\n"
+          },
+          {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_6hSIhVDcpKfEdC4wgyHJkhVA",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_6hSIhVDcpKfEdC4wgyHJkhVA",
+            "content": "3 /etc/hosts\n"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a text file from disk.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Absolute path"
+                  },
+                  "max_lines": {
+                    "type": "integer",
+                    "description": "Optional line limit"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "run_shell",
+              "description": "Run a shell command.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ]
+              }
+            }
+          }
+        ],
+        "max_tokens": 2048,
+        "stream": true,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "temperature": 0.7,
+        "seed": 11
+      },
+      "response": {
+        "reasoning": "",
+        "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+        "tool_calls": [],
+        "finish": "stop",
+        "usage": {
+          "prompt_tokens": 679,
+          "completion_tokens": 49,
+          "total_tokens": 728,
+          "prompt_tokens_details": {
+            "cached_tokens": 656
+          },
+          "kapitsa": {
+            "prefill_ms": 132.0,
+            "kflash": {
+              "source": "MTP",
+              "cycles": 19
+            }
+          }
+        },
+        "chunks": 3,
+        "t_first": 0.936143159866333
+      }
+    }
+  ],
+  "deterministic_signature": [
+    {
+      "content": "",
+      "reasoning": "",
+      "finish": "tool_calls",
+      "functions": [
+        {
+          "name": "read_file",
+          "arguments": "{\"path\":\"/etc/hosts\"}"
+        }
+      ]
+    },
+    {
+      "content": "",
+      "reasoning": "",
+      "finish": "tool_calls",
+      "functions": [
+        {
+          "name": "run_shell",
+          "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+        }
+      ]
+    },
+    {
+      "content": "",
+      "reasoning": "",
+      "finish": "tool_calls",
+      "functions": [
+        {
+          "name": "run_shell",
+          "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+        }
+      ]
+    },
+    {
+      "content": "",
+      "reasoning": "",
+      "finish": "tool_calls",
+      "functions": [
+        {
+          "name": "run_shell",
+          "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+        }
+      ]
+    },
+    {
+      "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+      "reasoning": "",
+      "finish": "stop",
+      "functions": []
+    }
+  ]
+}

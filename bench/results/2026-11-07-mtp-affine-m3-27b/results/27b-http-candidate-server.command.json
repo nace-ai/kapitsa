@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/kapitsa",
+    "serve",
+    "--model",
+    "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "59166",
+    "--private",
+    "--slots",
+    "2",
+    "--ctx",
+    "32768",
+    "--disk-cache",
+    "0"
+  ],
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-http-candidate"
+  }
+}

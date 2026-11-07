@@ -171,7 +171,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test json_file_test affine_pack_test systemone_test systemone_codes_probe_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa ane_segment_check systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test json_file_test affine_pack_test systemone_test systemone_codes_probe_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions
       - name: SDK C ABI contract
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -252,6 +252,12 @@ jobs:
       - name: device_profile_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/device_profile_test
+      - name: ane_segment_check (CPU)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/ane_segment_check
+      - name: ANE profile policy (CPU)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_ane_profile.py build/ane_segment_check
       - name: qwen4_config_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/qwen4_config_test
@@ -293,6 +299,9 @@ jobs:
       - name: test_server --cli
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_server.py --cli build/kapitsa
+      - name: test_idle_unload (the --idle-unload flag; the GPU cases need a Mac with a model)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: python3 tests/test_idle_unload.py --no-gpu
       - name: test_sidecar
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_sidecar.py build/kapitsa

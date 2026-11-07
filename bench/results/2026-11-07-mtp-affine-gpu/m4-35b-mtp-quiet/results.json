@@ -1,0 +1,40 @@
+{
+  "pid": 83943,
+  "started_at": "2026-11-07T06:15:39.166712+00:00",
+  "status": "stopped before any model run: local GPU remained busy; moved primary 27B validation to idle M3",
+  "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.6-35b-a3b-oq4e-mtp",
+  "runs": [],
+  "identities": {
+    "base": {
+      "head": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+      "version": "kapitsa 0.2.31 (b171f983)",
+      "binaries": {
+        "kapitsa": "3f1f56dea2c64deff131f80a79d0eb4456d192500b8d31af791f476502af6b8c",
+        "ni_run": "25e08a5c2946d3b8c6e3ff14cb323f2d92e49705551d074b27a1403d16ca0c60",
+        "logit_dump": "4acec4e43c9d136e1fdb48776fda1cda64d17c6588ac24b8e6aad6d0a029110f"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "bde8632354ce54e1ee40ebb30f2df2da1abe5569928991ffe84129de065d85dd",
+        "src/model/qwen35_spec.cpp": "5ca89d5a1823d2bf31d9656ff949f6758a0c9aead368455b2a58cf59d46009e2"
+      }
+    },
+    "candidate": {
+      "head": "02e53017f19aaac71d4f64795ec55d0fb4c12d0e",
+      "version": "kapitsa 0.2.31 (02e53017)",
+      "binaries": {
+        "kapitsa": "e295493fd8767de21f1099feebdf7b5062d966428f793f5958571fecd25120a1",
+        "ni_run": "7ee96f6a1efb132e6ec7dec6eef8b13ac2e6beefa6c18b78ce489c21fa9939d3",
+        "logit_dump": "98e962e01fd68977fb133d49e7ed646c3a398680de32a8f384789b2215c5d29b"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "c008bcbacf24ab0c137312027960101386e5a60e8285ae0a19ed7608966f20c6",
+        "src/model/qwen35_spec.cpp": "b1b7df3ebc16e3b25ead07429303706505aef36d707d235cab8d9fc644258331"
+      }
+    }
+  },
+  "metadata": {
+    "config.json": "54cc369e17c16ec0c3e87cd8a865c6565966f91a4b2afc82b1c40d5a185e90f5",
+    "tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+  },
+  "stopped_at": "2026-11-07T06:26:37.968354+00:00"
+}

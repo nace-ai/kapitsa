@@ -61,6 +61,7 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | Command | What it checks | Needs |
 | --- | --- | --- |
 | `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors | nothing |
+| `python3 tests/test_idle_unload.py [--no-gpu] [--model 4b]` | `kapitsa serve --idle-unload`: bad values refused (CPU, `--no-gpu`, also in CI); on a Mac with a small model (takes the GPU lock): released after idle, loaded again by the next request with the same reply, the `auto` pressure gate both ways, `/v1/models` and a second request during a slow load | `--no-gpu`: `build/kapitsa`; the rest: a Mac and a small model |
 | `python3 tests/test_sidecar.py build/kapitsa` | `kapitsa mtp-sidecar` writes the same bytes as `tools/mtp_sidecar.py` | nothing |
 | `python3 tests/test_bench.py build` | `kapitsa bench` against the harness: the same requests as `bench.py` (both run against a scripted server), its rates on the published runs' data, the result file, submitting (dry runs, a stand-in gh), the GPU lock; `build/bench_test self` checks the Mac table and formats | `pip install jsonschema` for the schema check |
 | `python3 tests/test_update.py build` | `kapitsa update` and the automatic update against a release server in the test (`KAPITSA_UPDATE_URL`; nothing from GitHub), on temporary installs made by `install.sh`: real signed releases, the checks that refuse bad ones, the switch, the rollback, Homebrew, app and source installs, the background check (throttle, off switches, time limit, `kapitsa bench`), what the requests carry; `build/update_test` checks version order and kinds of install | nothing (the full build, for `build/update_test`) |
@@ -104,6 +105,8 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | `build/systemone_test` | System One's pointer heads (`src/systemone/systemone.cpp`): a readout head (Drex Max v1) and a projected one (Drex v2.0) read back from synthetic files, the first N readout outputs, the temperature rules, wrong sizes and options past the head's width refused | nothing |
 | `python3 tests/test_drex_max.py --cli build` | Drex Max v1: `tools/drex_pointer.py` extracting the readout head from a synthetic safetensors / GGUF, and `systemone --encode` laying out Max requests (one ChatML row per question, the decide row, refused images and oversize rows) with no backbone weights | nothing |
 | `build/remote_test` | A split model's reserve on its other Macs (`src/model/remote.h`, `remote_reserve`): a fake stage records each growth asked of it and answers by its own rounding (or fails, or is lost); the reserves the engine makes must ask only past what it holds, take what it holds from its answer, and ask again after a failure | nothing |
+| `build/ane_segment_check [--gpu]` | Dense ANE FFN supported input widths through 8192 and rejection of wider inputs; `--gpu` checks rotation against an fp64 reference and segmented/full activation packing and weight staging, offsets, tails, padding and guards. GPU mode takes the GPU lock; use `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` | nothing (`--gpu`: a Mac with Metal) |
+| `python3 tests/test_ane_profile.py [build/ane_segment_check]` | 224 fresh-process M1/M2/M3/M4/M4 Max/M5/M5 Max, profile, NI_ANE override and NI_ANE_UNITS cases; device-independent disabled shapes reserve no ANE memory | built segment checker; CPU only |
 | `build/iq_layout_test` | GGUF IQ expert blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S) repacked into the layout of `src/kernels/wfmt_iq.metal` and decoded as the kernels build their MMA operands, from the Metal source's own grid tables, against `gguf::dequantize`; the type helpers | nothing |
 | `build/bench_moe_iq --validate --fmt GU:DN [--topk K --shared SI --shared-bits 4]` | The IQ MoE kernels (rows, 8-row verify, prefill) at small shapes against a CPU reference in double (`gguf::dequantize` of the GGUF blocks); without `--validate`, the real shapes and their time per call; `--tensors FILE.gguf --layer L` a real layer. Flint's forms: `--topk 6 --shared 1024 --shared-bits 4`. Run `--validate` under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` and the GPU lock | the GPU |
 | `build/flint_compile` | Compiles Flint's kernels and the base library's pipelines it runs (no GPU work); run Flint's kernels themselves under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` (`build/logit_dump` on a Flint folder takes the 16-key tiles there) | a Mac with Metal |
@@ -158,6 +161,13 @@ kill %1
 The SSD prefix cache across restarts (starts its own servers, takes the GPU lock; a temporary `KAPITSA_HOME`, a 2 GiB
 cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit`
 (`--ttft` also times the follow-up cold, from the SSD and from memory).
+
+Cancellation during continuation prefill (starts its own servers, takes the GPU lock):
+`python3 tests/test_prefill_cancel.py --cli build/kapitsa --model MODEL_DIR --output NEW_DIR` checks repeated
+prefill cancellation, retention of a completed prefix, retry text against an uninterrupted request, and cold-cancel
+fallback. It takes the GPU lock, disables the SSD cache and ANE, and retains request/event/server logs in a new folder.
+`--reference OTHER_BINARY` uses another build for the uninterrupted request. This does not replace the logit gate or
+interleaved performance checks.
 
 Reading a user's draft ahead (`POST /v1/draft`; starts its own servers, takes the GPU lock):
 `python3 tests/test_draft.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit` checks that a follow-up writes the

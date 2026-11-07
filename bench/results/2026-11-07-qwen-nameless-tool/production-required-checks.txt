@@ -1,0 +1,5 @@
+tier 0.5: 1 changed file(s)
+  [0.5] src/engine/output_parser.h  (tokens in or out on the CPU: tokenizer, chat template, output parser, grammar, tool arguments)
+required checks:
+  - cpu: `vk cpu-tests` (AGENTS.md's CPU list) and `prek run --all-files`
+  - tokens: build/tokenizer_test, build/structured_check, build/grammar_test, `python3 tests/test_structured.py --cli build` with a model folder's tokenizer, `build/parser_test MODEL_DIR`

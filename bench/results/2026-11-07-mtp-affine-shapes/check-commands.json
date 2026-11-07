@@ -1,0 +1,55 @@
+[
+  {
+    "command": [
+      "python3",
+      "tests/test_splash_patches.py",
+      "--apply"
+    ],
+    "exit": 0,
+    "log": "patches-final.log",
+    "environment": {}
+  },
+  {
+    "command": [
+      "prek",
+      "run",
+      "--all-files"
+    ],
+    "exit": 0,
+    "log": "prek-final-code.log",
+    "environment": {}
+  },
+  {
+    "command": [
+      "build/load_error_test",
+      "--mtp-gpu"
+    ],
+    "exit": 0,
+    "log": "mtp-loader-test-final.log",
+    "environment": {
+      "MTL_SHADER_VALIDATION": "1",
+      "MTL_DEBUG_LAYER": "1"
+    }
+  },
+  {
+    "command": [
+      "build/parser_test",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit"
+    ],
+    "exit": 0,
+    "log": "parser-4b.log",
+    "environment": {}
+  },
+  {
+    "command": [
+      "python3",
+      "tests/test_structured.py",
+      "--cli",
+      "build",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit"
+    ],
+    "exit": 0,
+    "log": "structured-4b.log",
+    "environment": {}
+  }
+]

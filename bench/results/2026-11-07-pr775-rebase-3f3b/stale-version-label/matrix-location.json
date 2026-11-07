@@ -1,0 +1,54 @@
+{
+  "method": "Content-verified hardlinks to immutable original raw matrices; all original paths and bytes preserved locally",
+  "partial_remote_copy": "Stopped before completion; not an authoritative archive",
+  "files": [
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-fast/verify/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/verify/logits.f32",
+      "sha256": "575435ded5e26bd0b15a7defe24d10804d38a229704e8826176504377441462e",
+      "same_inode": true
+    },
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-fast/prefill/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/prefill/logits.f32",
+      "sha256": "6c930446fc61f9a14d0bf52f250f1629d8ae19fb046d43f695e1f26fc47b4015",
+      "same_inode": true
+    },
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-fast/step/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/step/logits.f32",
+      "sha256": "180fc7ea8d3a2c183550f566ce3e656b828101fd7b7943a763e2aa64e4509f44",
+      "same_inode": true
+    },
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-fast/batch/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/batch/logits.f32",
+      "sha256": "227085cc612d01a69344a014b79626e5b5ed4ec8f0e8d5389e8b4e3054aa1e66",
+      "same_inode": true
+    },
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-precise/verify/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/verify/logits.f32",
+      "sha256": "b70dd0514767becd9e84a479c7817da5c4c80dcc21df7a06fc5b18459b8ba1b2",
+      "same_inode": true
+    },
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-precise/prefill/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/prefill/logits.f32",
+      "sha256": "ef1c3b40ee3c48605e75d5abfb214ddb79c700632990d7ce70c5d2979374f21e",
+      "same_inode": true
+    },
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-precise/step/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step/logits.f32",
+      "sha256": "b3c8346c3ddcebbbeb68897a8d0ada5e64b8261b66fd0f3812ae500464e5ade0",
+      "same_inode": true
+    },
+    {
+      "path": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/rebase-3f3b/validation-resume/logits-precise/batch/logits.f32",
+      "same_content_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/batch/logits.f32",
+      "sha256": "066e7c596dc04d18bd3b1b7c1cb43f8059bc8e45c5841a8048caeb039895dc26",
+      "same_inode": true
+    }
+  ]
+}

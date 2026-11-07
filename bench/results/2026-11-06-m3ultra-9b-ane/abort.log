@@ -1,0 +1,20 @@
+logs in /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/abort-scratch/kap-ane-abort-s85vbzmx
+PASS gpu alone: prompt 0 replies (24 tokens, 0.8 s)
+PASS gpu alone: prompt 1 replies (24 tokens, 0.8 s)
+PASS gpu alone: no split chunk in the log
+PASS split: prompt 0 ran split chunks that held (0.9 s)
+PASS split: prompt 1 ran split chunks that held (0.8 s)
+PASS split: no chunk was given up
+PASS fault: the injected fault is armed
+PASS fault: prompt 0 gives the GPU-alone reply again (24 tokens, 3.0 s)
+PASS fault: prompt 0 came back right after the bound (3.0 s)
+PASS fault: the 250 ms bound gave the chunk up
+PASS fault: the abort, not the per-job watchdog, retired the split
+PASS fault: the given-up chunk counted no evaluation
+PASS fault: the bound and the rerun were reported once each
+PASS fault: prompt 1 gives the GPU-alone reply again (24 tokens, 0.8 s)
+PASS fault: prompt 1 came back right after the bound (0.8 s)
+PASS fault: the second prompt does not split (and so does not bound) again
+PASS fault: no split chunk after the split was given up
+kept /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/abort-scratch/kap-ane-abort-s85vbzmx
+OK

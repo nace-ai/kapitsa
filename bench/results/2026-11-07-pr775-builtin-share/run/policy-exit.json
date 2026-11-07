@@ -1,0 +1,9 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "tests/test_ane_profile.py",
+    "build/ane_segment_check"
+  ],
+  "returncode": 0,
+  "extra_env": {}
+}
