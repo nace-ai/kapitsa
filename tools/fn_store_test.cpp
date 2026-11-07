@@ -730,7 +730,7 @@ void case_scan_victim(const Pack& p) {
       steps[0].pred_layer = l + 1 < L ? int(l + 1) : -1;
       bad2 += run_pass(d, ev2, a2, p.lay, value2, steps, rng2);
     }
-  quiesce(d, ev2, value2);  // #512: the last chunk's serve() updates the stats after its go; settle before reading
+  quiesce(d, ev2, value2);  // #512: the read-ahead count is published after the go; settle before comparing it
   const StoreStats t = d.stats();
   CHECK(bad2 == 0, "scan victim off: %d experts not in their slots", bad2);
   CHECK(t.prefetches > s.prefetches, "scan victim off: %llu read ahead, the rule's arm %llu: the switch does nothing",
