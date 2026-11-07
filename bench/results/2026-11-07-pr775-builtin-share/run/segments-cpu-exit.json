@@ -1,0 +1,7 @@
+{
+  "command": [
+    "build/ane_segment_check"
+  ],
+  "returncode": 0,
+  "extra_env": {}
+}

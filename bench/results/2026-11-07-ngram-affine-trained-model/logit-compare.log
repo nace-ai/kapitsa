@@ -1,0 +1,13 @@
+prefill: 8 records (model-sushi)
+  reference: 0.2.31 (01b4c6d6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.31 (8c0a7ec3), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+step: 192 records (model-sushi)
+  reference: 0.2.31 (01b4c6d6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.31 (8c0a7ec3), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+verify: 192 records (model-sushi)
+  reference: 0.2.31 (01b4c6d6), verify "MTP cycle's chain of 3 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.31 (8c0a7ec3), verify "MTP cycle's chain of 3 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+no noise floor for this model and no bounds given: reported only (tools/logit_floor.py measures one)

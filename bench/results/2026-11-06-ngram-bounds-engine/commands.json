@@ -1,0 +1,457 @@
+[
+  {
+    "label": "build-driver",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/blog/work/sdk-build-tools/cmake/data/bin/cmake",
+      "--build",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/build",
+      "-j6",
+      "--target",
+      "ni_run"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "compile-reference-object",
+    "command": [
+      "/usr/bin/c++",
+      "-O3",
+      "-std=gnu++20",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-DKAPITSA_VERSION=\"0.2.31\"",
+      "-I/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/include",
+      "-I/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/third_party",
+      "-I/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/src",
+      "-c",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/reference/ngram.cpp",
+      "-o",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/reference/ngram.cpp.o"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "replace-reference-object",
+    "command": [
+      "/usr/bin/ar",
+      "-r",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/reference/libnaceinfer.a",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/reference/ngram.cpp.o"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "index-reference-library",
+    "command": [
+      "/usr/bin/ranlib",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/reference/libnaceinfer.a"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "link-base",
+    "command": [
+      "/usr/bin/c++",
+      "-O3",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/build/CMakeFiles/ni_run.dir/tools/ni_run.cpp.o",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/reference/libnaceinfer.a",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate",
+      "-o",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "link-candidate",
+    "command": [
+      "/usr/bin/c++",
+      "-O3",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/build/CMakeFiles/ni_run.dir/tools/ni_run.cpp.o",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/build/libnaceinfer.a",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate",
+      "-o",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "generate-model",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-tensor-bounds/tools/fn_synth.py",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "--seed",
+      "1"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-prefill-step-01-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-prefill-step-01-base.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-prefill-step-02-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-prefill-step-02-candidate.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-prefill-step-03-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-prefill-step-03-base.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-prefill-step-04-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-prefill-step-04-candidate.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-tbt-01-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-tbt-01-base.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-tbt-02-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-tbt-02-candidate.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-tbt-03-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-tbt-03-base.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-sharded-tbt-04-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-sharded-tbt-04-candidate.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-prefill-step-01-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-prefill-step-01-base.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-prefill-step-02-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-prefill-step-02-candidate.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-prefill-step-03-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-prefill-step-03-base.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-prefill-step-04-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-prefill-step-04-candidate.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-tbt-01-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-tbt-01-base.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-tbt-02-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-tbt-02-candidate.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-tbt-03-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-tbt-03-base.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-affine-tbt-04-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-affine-tbt-04-candidate.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-prefill-step-01-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-prefill-step-01-base.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-prefill-step-02-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-prefill-step-02-candidate.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-prefill-step-03-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-prefill-step-03-base.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-prefill-step-04-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-prefill-step-04-candidate.f32"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-tbt-01-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-tbt-01-base.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-tbt-02-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-tbt-02-candidate.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-tbt-03-base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-base",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-tbt-03-base.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  },
+  {
+    "label": "synthetic-bin-bf16-tbt-04-candidate",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/ni-run-candidate",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dump-all-logits",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/ngram-synthetic-1350/synthetic-bin-bf16-tbt-04-candidate.f32",
+      "--tbt"
+    ],
+    "exit": 0
+  }
+]

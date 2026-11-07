@@ -1,0 +1,12 @@
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/parser_test.dir/tools/parser_test.cpp.o
+[100%] Linking CXX executable parser_test
+[100%] Built target parser_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/structured_check.dir/tools/structured_check.cpp.o
+[100%] Linking CXX executable structured_check
+[100%] Built target structured_check
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/grammar_test.dir/tools/grammar_test.cpp.o
+[100%] Linking CXX executable grammar_test
+[100%] Built target grammar_test

@@ -19,7 +19,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -137,16 +136,6 @@ size_t align_up(size_t v, size_t a) { return (v + a - 1) / a * a; }
 
 // ---- discovery ----
 namespace {
-
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
-}
 
 // The language model's part of a checkpoint's config.json: llm_config (Nemotron Omni releases), text_config, or the
 // whole file (text-only releases).
@@ -278,7 +267,7 @@ static NhConfig read_config(const std::string& dir) {
       for (auto& x : v)
         if (x.is_number_integer() && std::find(out.begin(), out.end(), x.get<int>()) == out.end()) out.push_back(x.get<int>());
   };
-  const nlohmann::json g = read_json(dir + "/generation_config.json");
+  const nlohmann::json g = *json_file(dir + "/generation_config.json");
   if (g.is_object() && g.contains("eos_token_id")) add_ids(g["eos_token_id"], c.eos);
   if (c.eos.empty() && t.contains("eos_token_id")) add_ids(t["eos_token_id"], c.eos);
   if (j.contains("eos_token_id")) add_ids(j["eos_token_id"], c.eos);
@@ -469,6 +458,65 @@ bool nh_describe(const SafetensorsIndex::Entry& w, const SafetensorsIndex::Entry
     return true;
   }
   return false;
+}
+
+NhMat nh_load_mat(const SafetensorsIndex& idx, const std::string& path, const std::string& name,
+                  std::vector<Buffer>& owned, size_t& weight_bytes) {
+  const SafetensorsIndex::Entry& t = idx.get(name);
+  const std::string base = name.size() > 7 && name.compare(name.size() - 7, 7, ".weight") == 0 ? name.substr(0, name.size() - 7) : name;
+  const SafetensorsIndex::Entry* sc = idx.find(base + ".weight_scale");
+  Gpu& g = Gpu::get();
+  NhMat m;
+  uint32_t N = 0, K = 0;
+  if (!nh_describe(t, sc, m.fmt, N, K) || (m.fmt != NhFmt::FP4 && m.fmt != NhFmt::BF16))
+    fatal("%s: tensor %s has a format the drafter does not run", path.c_str(), name.c_str());
+  m.N = N;
+  m.K = K;
+  std::vector<uint8_t> raw(t.len);
+  idx.read(t, 0, raw.data(), t.len);
+  if (m.fmt == NhFmt::FP4) {
+    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
+    m.q = g.alloc(m.q_row * N, name.c_str(), false);
+    m.s = g.alloc(m.s_row * N, "scales", false);
+    nh_repack_rows(m.fmt, m.K, raw.data(), N, m.q.as<uint8_t>(), nullptr);
+    idx.read(*sc, 0, m.s.ptr(), m.s_row * N);
+    if (const SafetensorsIndex::Entry* s2 = idx.find(base + ".weight_scale_2")) idx.read(*s2, 0, &m.gs, 4);
+  } else {
+    if (m.K % 32) fatal("%s: %s cannot be quantized (K = %u)", path.c_str(), name.c_str(), m.K);
+    m.fmt = NhFmt::Q8;
+    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
+    m.q = g.alloc(m.q_row * N, name.c_str(), false);
+    m.s = g.alloc(m.s_row * N, "scales", false);
+    std::vector<float> row(m.K);
+    const uint16_t* src = reinterpret_cast<const uint16_t*>(raw.data());
+    for (uint32_t r = 0; r < N; ++r) {
+      for (uint32_t i = 0; i < m.K; ++i) row[i] = bf16_to_f32(src[size_t(r) * m.K + i]);
+      nh_quant_q8(row.data(), m.K, m.q.as<uint8_t>() + size_t(r) * m.q_row, m.s.as<uint8_t>() + size_t(r) * m.s_row);
+    }
+  }
+  owned.push_back(m.q);
+  owned.push_back(m.s);
+  weight_bytes += m.q.size + m.s.size;
+  return m;
+}
+
+std::vector<float> nh_host_f32(const SafetensorsIndex& idx, const std::string& path, const std::string& name) {
+  const SafetensorsIndex::Entry& t = idx.get(name);
+  if (t.dtype != DType::BF16 && t.dtype != DType::F32)
+    fatal("%s: %s is neither BF16 nor F32", path.c_str(), name.c_str());
+  std::vector<uint8_t> raw(t.len);
+  idx.read(t, 0, raw.data(), t.len);
+  std::vector<float> v(size_t(t.numel()));
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (t.dtype == DType::F32) {
+      memcpy(&v[i], raw.data() + 4 * i, 4);
+    } else {
+      uint16_t h;
+      memcpy(&h, raw.data() + 2 * i, 2);
+      v[i] = bf16_to_f32(h);
+    }
+  }
+  return v;
 }
 
 bool NemotronH::split_merges() {

@@ -1,0 +1,33 @@
+{
+  "model": "beamster/Qwen3.8-Flash-Next-Sushi-2bpw",
+  "revision": "f37e7ba46f0f2993b6ca373221530c579f258712",
+  "original_bytes": 32000153976,
+  "parts": [
+    [
+      376,
+      80
+    ],
+    [
+      25600123256,
+      10
+    ],
+    [
+      28800138616,
+      10
+    ]
+  ],
+  "coverage": {
+    "required_rows": 83302,
+    "missing_rows": 0,
+    "all_row_bytes_rechecked": true,
+    "ordered_row_digest": "2a980066952074fd22cec306c2d741cff4022ba22eedc2ec012dca805dce6229"
+  },
+  "files": {
+    "corpus.json": "eb068d939984f2f9dc56721af718ae0c9b6809176db01fa1d86ed10447c71495",
+    "config.json": "65e6702e7457eece52168107b830d1dc50f602d6f1eb03abc9b7908b1da62ea6",
+    "rows.json": "a38aaf51672ab13155f5bec18ac4abe007b8efacafdec2fa5bed7f4b48476837",
+    "header.bin": "986962c7711063c48593ea6b4cbd600714e6bf277858873c57efc7714a199a16",
+    "rows.bin": "53bf8df49689d726f4713b794a70e8f164f062e1ef273d6e3be16a7ae2b642a1"
+  },
+  "scope": "Only source-verified corpus rows for CPU row/gather diagnosis. Not a complete model or full table. No new source download."
+}

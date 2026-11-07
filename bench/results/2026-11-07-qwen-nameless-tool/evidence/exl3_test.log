@@ -1,0 +1,18 @@
+PASS decode_tile: K2.5 window 12 tile 0 equals exllamav3's 256 weights (0 differ)
+PASS decode_tile: K3 window 16 tile 0 equals exllamav3's 256 weights (0 differ)
+PASS perm: the 256 codewords fill the 256 cells of a tile
+PASS mcg: codeword 0 is the half sum of 0x3B60 twice (0x3F60)
+PASS rate_of: the even rates 16-64 of a 4-D trellis
+PASS rate_of: an odd rate, one above 64 or below 16, a 3-D tensor: 0
+PASS shapes_ok: Flash-Next's experts ()
+PASS shapes_ok refuses a down trellis two bytes short: the trellis, suh or svh tensors are smaller than the experts' shapes need
+PASS shapes_ok refuses an up svh two bytes short: the trellis, suh or svh tensors are smaller than the experts' shapes need
+PASS shapes_ok refuses no experts: no experts
+PASS shapes_ok refuses a hidden size off the 512 grid: hidden must be a multiple of 512 and the expert width of 128 (H128 blocks)
+PASS shapes_ok refuses a 17-bit window: a codeword window of 17 bits (8-16)
+PASS shapes_ok refuses a rate of 66 halfwords: a rate of 66 halfwords a tile (16-64: K1-K4)
+PASS project: refuses a width off the 128 grid, takes 128 x 128
+PASS norm_offset: Nace AI's packs (-0.08 to -0.02) and the synthetic packs (0) are zero-centred: 1 + w
+PASS norm_offset: Sushi's packs (0.92 to 0.98) have the 1 added: w
+PASS norm_offset: a mean between 0.25 and 0.75 decides nothing
+17 passed, 0 failed

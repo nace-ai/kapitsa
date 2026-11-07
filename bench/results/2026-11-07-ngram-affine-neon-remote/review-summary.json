@@ -1,0 +1,28 @@
+{
+  "reviewed_at": "2026-11-06T17:33:30.426114+00:00",
+  "mac": "M3 Ultra 96 GiB",
+  "os": "macOS 26.4.1 (25E253)",
+  "compiler": "Apple Clang 17",
+  "generation_runs": 24,
+  "generated_ids_per_run": 64,
+  "prefill_step_dump_rows_per_run": 16,
+  "tbt_dump_rows_per_run": 64,
+  "teacher_forced_rows_per_layout": {
+    "prefill": 3,
+    "step": 72,
+    "verify": 72
+  },
+  "synthetic_logit_rows_total": 441,
+  "commands": 32,
+  "nonzero_command_exits": 0,
+  "cpu": "21 vk entries, supplements, device_profile_test, profile/comment gates and prek passed",
+  "gpu_scope": "Random synthetic graph only. Repeated synthetic IDs are expected, not language quality. Generation prefill-step dumps only16prompt rows, not all decode logits. Separate teacher-forced tests exercise72step+72verify rows per layout.",
+  "unverified": [
+    "real trained model outputs",
+    "real table row/gather timings",
+    "paired HTTP",
+    "native benchmark",
+    "other chip GPU coverage"
+  ],
+  "gpu_lock_released": true
+}

@@ -1,0 +1,20 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (cf2f25c)",
+  "model": "Qwen3.6-35B-A3B-4bit",
+  "model_dir": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+  "path": "step",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/35b-logits-base",
+  "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+  "macos": "26.4.1",
+  "date": "2026-11-07T07:33:40Z",
+  "env": {}
+}

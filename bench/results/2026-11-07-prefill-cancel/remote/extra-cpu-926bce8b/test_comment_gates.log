@@ -1,0 +1,3 @@
+src/engine/engine.cpp:2979: // have its matching drafter ring yet: that snapshot is committed only after the whole prompt is read.
+
+1 line(s) give 'only measured here' as the reason for a narrow default. Say what the code does today, or the class the default covers (AGENTS.md: defaults follow the concept). tests/comment_gates_allowed.txt is only for a match that is not a gate.

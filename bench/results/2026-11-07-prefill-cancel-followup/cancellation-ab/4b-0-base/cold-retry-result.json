@@ -1,0 +1,78 @@
+{
+  "name": "cold-retry",
+  "progress": [
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 2004,
+      "time_ms": 840
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 4008,
+      "time_ms": 1800
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 6011,
+      "time_ms": 2701
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 8014,
+      "time_ms": 3721
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 10017,
+      "time_ms": 4741
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 12020,
+      "time_ms": 5757
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 14023,
+      "time_ms": 6897
+    },
+    {
+      "total": 16026,
+      "cache": 0,
+      "processed": 16026,
+      "time_ms": 7981
+    }
+  ],
+  "text": "Based on the code provided in `modeling_xcodec.py`, here is a function definition:\n\n```python\nclass XcodecResidualUnit(nn.Module):",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 16026,
+    "completion_tokens": 32,
+    "total_tokens": 16058,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "kapitsa": {
+      "prefill_ms": 8040.8,
+      "kflash": {
+        "source": "DFlash2",
+        "cycles": 7
+      }
+    }
+  },
+  "finish_reason": "length"
+}

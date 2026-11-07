@@ -1,0 +1,58 @@
+[
+  {
+    "check": "device-profile",
+    "command": [
+      "build/device_profile_test"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "segments-cpu",
+    "command": [
+      "build/ane_segment_check"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "ane-policy",
+    "command": [
+      "python3",
+      "tests/test_ane_profile.py",
+      "build/ane_segment_check"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "profile-gate",
+    "command": [
+      "python3",
+      "tests/test_profile_gates.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "comment-gate",
+    "command": [
+      "python3",
+      "tests/test_comment_gates.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "docs-links",
+    "command": [
+      "python3",
+      "tests/test_docs_links.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "lint",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/prek",
+      "run",
+      "--all-files"
+    ],
+    "returncode": 0
+  }
+]

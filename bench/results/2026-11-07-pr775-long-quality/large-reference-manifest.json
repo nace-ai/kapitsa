@@ -1,0 +1,14 @@
+[
+  {
+    "path": "long-quality/bf16.ref",
+    "bytes": 129924116,
+    "sha256": "199e26c2cd60aeaa139a9352bb5d3769976a328875681030d016212926c6c789",
+    "included": false
+  },
+  {
+    "path": "long-results/precise.ref",
+    "bytes": 129924116,
+    "sha256": "1be855a16c350c772b1fa0498b76a4d37ed849b7b408819b285c3f59005e409d",
+    "included": false
+  }
+]

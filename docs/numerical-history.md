@@ -115,7 +115,7 @@ The decode rows use the prefill-scale gate, not the file's `decode_gate` of 1.02
 The changed prefill produces the KV inherited by decode. With `NI_ANE=0`, the same switch moves the 4B's
 decode paths at the 1e-7 scale.
 
-The 9B has hidden size 4096, no ANE split and no floor file of its own. The PR measured it on an M5 Max:
+At that measurement, the 9B (hidden size 4096) had no ANE split and no floor file of its own. The PR measured it on an M5 Max:
 prefill mean KL 1.4e-7, decode mean KL 2.6e-7 to 5.8e-7, 0 flips in 192 rows. Applied for scale, the 4B's
 gate passes by four orders of magnitude. The M5 Pro pair shows the same order of magnitude with the split
 off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this path enabled requires a separate PR.
@@ -131,3 +131,80 @@ off. This is not a measured 9B noise floor. Re-measuring the 4B floor with this 
   default-off revert [#586](https://github.com/nace-ai/kapitsa/pull/586).
 - Qwen 4B and 9B attention: [#581](https://github.com/nace-ai/kapitsa/pull/581),
   numerical record [#583](https://github.com/nace-ai/kapitsa/pull/583).
+
+## ANE prefill for hidden sizes divisible by 2048
+
+Hidden sizes divisible by 2048 up to 8192 are enabled by the fast profile (`KAPITSA_PROFILE=fast`);
+the final default covers non-matrix Macs with a built-in ANE share (M4 today). Calibration-only chips are excluded
+after the M3 prefill bar failure. M5/matrix-unit Macs and precise keep these new widths on the GPU. `NI_ANE=1` explicitly enables the split and `NI_ANE=0`
+disables it in either profile. Larger widths remain on the GPU. The existing 4B/27B defaults remain.
+The older `NI_ANE_H4096=1` experimental switch is removed. Existing 2560/5120-hidden input geometry
+and rotation stay unchanged. All supported inputs use the existing rotation kernel and its token-wide scale.
+
+At experimental commit `92e8b88`, on an M4 Pro 20-core GPU / 48 GiB /
+macOS 26.4.1 (25E253), 768 teacher-forced step rows against the same 4-bit GPU model gave mean KL
+1.795e-4 and 3 top-1 flips. The corresponding existing 4B/27B paths gave 3.940e-4 / 8.249e-5 and
+3 / 2 flips. On 8192 code-token positions, 9B PPL was 2.01072 -> 2.01052; its document-bootstrap
+interval crossed zero. This does not establish quality equivalence. An earlier M4 mini summary
+reported PPL 6.41118 -> 6.41682 on a separate 4092-position sample and changed greedy answers.
+
+[Historical numerical evidence, controls and limitations](https://github.com/KeyingSong0123/kapitsa/blob/9f8dd15a81aa67a69b4e1a86a5c4e2c67495194d/bench/results/2026-10-28-m4pro-9b-ane/README.md).
+Those GPU data are pinned to the earlier experimental commit. A fresh integration check of main
+`6d5c2aa` against `82e9b9e` on an M4 Mac mini / 24 GiB / macOS 26.5.2 (25F84) found every row bitwise
+identical for the 4B default and 9B opt-out: 8 prefill plus 192 rows each of step, verify and batch.
+For the 9B opt-in, step / verify / batch mean KL was 3.692e-4 / 3.767e-4 / 3.639e-4, each with 2/192
+top-1 flips; the prefill had 0/8 flips. These decode paths score the same token positions, not independent
+samples. [Integration evidence at those commits and limits](../bench/results/2026-10-29-m4-9b-ane-review/README.md).
+
+These historical opt-in comparisons deliberately changed outputs; no 9B noise-floor pass or `--reorder`
+exception is claimed. No floor is changed. The proposed fast default extends ANE eligibility, not numerical
+equivalence: the 9B/4B primary mean-KL ratio was 0.456 (document-bootstrap 95% [0.242, 1.021]), and
+9B/27B was 2.176 [1.685, 2.820]. At 4K/16K the latter ratios were 2.904/2.039. This code-only sample
+shows comparable orders of drift, not a bound on other models or tasks. The new widths beyond 9B
+require their own model-level numerical and performance measurements; shape support alone does not
+establish their quality or speed.
+
+The M3 Ultra follow-up records a speed win, nonzero drift and a regression on the sole ANE-exposed
+Math500 prompt; [all results and limits](../bench/results/2026-11-06-m3ultra-9b-ane/README.md).
+The M4 Pro follow-up (`9cca6b0d`, macOS 15.7.1, built-in 24/24 share, no calibration override)
+measured MLX as the faster native engine (50.212 vs llama.cpp 39.076 tok/s). On each of the 192 step, verify
+and batch rows, fast had 2 top-1 flips against MLX's 3 and mean KL below the same-path MLX bar; eight prefill
+rows passed too. Verify's KL margin was only 1.56e-8. Fresh fast and MLX dumps were bitwise identical to their
+first dumps, but that narrow margin is not a guarantee across environments or prompts. The loaded HTTP ABAB
+reduced mean TTFT by 62.77%. [M4 evidence and exact bounds](../bench/results/2026-11-07-pr775-m4-default-share/README.md).
+Zero drift still fails. No historical run is relabeled as this `9cca6b0d` check, and a bar pass does not establish
+long-prompt reasoning equivalence.
+
+
+The new long-prompt diagnostic selected all four MATH500 questions whose thinking-enabled prompts exceed 512
+tokens, before observing results. Each fast request actually used the ANE (32/32/32/64 evaluations). At `9cca6b0d`,
+on the M4 Pro, precise and fast each scored 1/4; the native BF16 reference on the M3 Ultra scored 3/4. Both 4-bit
+paths exhausted 32768 tokens on the same three questions. This is a new set/seed configuration, not a replacement
+for the historical 50-question result. Four questions do not establish equivalence.
+
+For the same prompts plus reference solutions, the 3964-position top-4096-plus-residual-bucket KL lower bound
+against BF16 weights with FP32 activations averaged 1.139286 (precise) and 1.162663 (fast). Direct fast-versus-precise
+mean KL lower bound was 0.094076, maximum 20.775124, with 159 top-1 flips; on the 1111 answer-only positions it was
+0.000438, maximum 0.009127, with 11 flips. Large prompt-position tails remain in the record. This is not full-vocabulary
+KL or the separate admission bar: up to 36.75% of the BF16 reference mass is outside the retained prompt top-k.
+[All transcripts, per-position tails, reference settings and limits](../bench/results/2026-11-07-pr775-long-quality/README.md).
+
+
+At the same `9cca6b0d` head on the M3 Ultra, explicit calibrated share 16 reduced loaded HTTP TTFT by 23.63%.
+MLX won the native decode comparison (114.095 vs llama.cpp 80.998 tok/s). Fast passed the requested 576
+step/verify/batch comparisons (3 flips, mean KL 2.612211092966838e-4; MLX 12 flips, 3.9909652322670414e-4).
+The additional eight prefill rows had no flips on either side, but fast mean KL **1.845747910960617e-4 exceeded
+MLX's 1.4716473412187535e-4**. Full-vocabulary and prefix alignment were audited; the exceedance remains. It was
+not averaged away, removed or made to pass with a different bound. [M3 evidence](../bench/results/2026-11-07-pr775-m3-current/README.md).
+
+The rebase onto `3f3b3cef`, with the profile-row schema fix at `50fadecc`, preserved all 584 rows per profile
+on both Macs bit for bit against `9cca6b0d`. Fresh M4 Pro ABAB reduced mean loaded HTTP TTFT by 61.94%
+(8.597692 -> 3.272273 seconds), with its built-in share. The M3 prefill bar exceedance remains, and the M3
+23.63% timing above remains pinned to the earlier head; that queued repeat was stopped when the final class excluded calibration-only chips.
+The full CPU suite had one intermittent APFS deletion-space assertion failure, retained alongside passing
+targeted candidate and clean-main reproductions. [Rebase results and raw records](../bench/results/2026-11-07-pr775-rebase-3f3b/README.md).
+
+Review 6698446394 selected the built-in-share class: the fast default now excludes M1/M2/M3 even with a
+calibration or `NI_ANE_UNITS`; `NI_ANE=1` remains an explicit diagnostic override. The shared built-in-share
+predicate is also used by `default_units`, with unchanged share values. The M4 path and arithmetic are unchanged.
+The stopped, still-queued M3 timing repeat did not start a GPU leg and is no longer relevant to the final default.

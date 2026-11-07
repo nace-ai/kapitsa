@@ -1,0 +1,1046 @@
+[
+  {
+    "label": "A1",
+    "build": "50fadecc",
+    "profile": "precise",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/kapitsa",
+      "serve",
+      "--private",
+      "--model",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+      "--model-id",
+      "qwen3.5-9b",
+      "--port",
+      "18781",
+      "--ctx",
+      "32768",
+      "--slots",
+      "1",
+      "--prefill-chunk",
+      "2048",
+      "--disk-cache",
+      "0",
+      "--dflash",
+      "none"
+    ],
+    "result": {
+      "schema": 2,
+      "label": "A1",
+      "model": "qwen3.5-9b",
+      "base_url": "http://127.0.0.1:18781/v1",
+      "when": "2026-11-07 06:14:19",
+      "temperature": 0.6,
+      "args": {
+        "base_url": "http://127.0.0.1:18781/v1",
+        "model": "qwen3.5-9b",
+        "label": "A1",
+        "pid": 23786,
+        "decode_tokens": 512,
+        "decode_runs": 5,
+        "greedy_runs": 5,
+        "window_head": 16,
+        "window_tail": 4,
+        "rep_threshold": 0.5,
+        "sizes": "4000",
+        "corpus": null,
+        "ref_prompt_tokens": "",
+        "cached_samples": 0,
+        "turn_gap": 1.0,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0,
+        "sampling_overrides": "",
+        "extra_body": "",
+        "reasoning_effort": "low",
+        "no_think_style": "both",
+        "always_reasons": false,
+        "warmup": "none",
+        "adaptive_warm": false,
+        "no_gpu_lock": false,
+        "skip": "decode,greedy,tools,agent",
+        "cached_increment": false,
+        "increment_prefixes": "8000",
+        "increment_tokens": 8000,
+        "increment_turns": 2,
+        "increment_repeats": 2,
+        "agentic": false,
+        "sweep_sizes": "1000,2000,4000,8000,16000,max",
+        "sweep_repeats": 2,
+        "sweep_task": "summary",
+        "max_ctx": 32768,
+        "cache_tokens": 8000,
+        "server_slots": 0,
+        "sustain_s": 300,
+        "agent_trace": "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/bench/harness/agent-traces/opencode-ledger.json",
+        "agent_tool_mode": "rendered",
+        "agent_gaps": "recorded",
+        "agent_max_turns": null,
+        "agent_timeout": 2400,
+        "out": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/performance-rebase-3f3b-versioned/perf-A1.json"
+      },
+      "sampling": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "sampling_greedy": {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "top_k": 1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "no_think": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": "none"
+      },
+      "corpus": {
+        "path": "corpus/bench_corpus.txt",
+        "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "frozen": true
+      },
+      "harness": {
+        "git_head": "50fadecc932863bff4d3f81a7a20d3913be3e15b",
+        "dirty": false
+      },
+      "phases": {
+        "prefill_4000": [
+          1794003259.342,
+          1794003268.909
+        ]
+      },
+      "memory": {
+        "prefill_4000": {
+          "pids": [
+            {
+              "pid": 23786,
+              "name": "kapitsa",
+              "phys_footprint": 6991090992,
+              "phys_footprint_peak": 7082808624,
+              "mapped_file_dirty": 0,
+              "mapped_file_clean": 9027584,
+              "mapped_file_wired": 0
+            }
+          ],
+          "phys_footprint_mb": 6667.2,
+          "phys_footprint_peak_mb": 6754.7,
+          "mapped_file_clean_mb": 8.6,
+          "swap_used_mb": 1103.69,
+          "memorystatus_level": 77,
+          "swapouts_delta": 0
+        }
+      },
+      "gpu_lock": {
+        "held_by": "caller",
+        "path": "/tmp/kapitsa-gpu.lock",
+        "wait_s": null
+      },
+      "vm_start": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 79
+      },
+      "prefill": [
+        {
+          "target": 4000,
+          "invalid": [],
+          "flags": [],
+          "prompt_tokens": 4135,
+          "expected_prompt_tokens": 4133,
+          "ttft_s": 8.587199083005544,
+          "prefill_tps": 481.53070169100334,
+          "cold_cached_tokens": 0,
+          "first_event_chars": 4,
+          "timings": null,
+          "finish": "stop",
+          "answer": "This file defines the `GraniteSpeechModel`, a multimodal architecture that combines an audio encoder (based on Conformer layers), a projector (using a Q-Former), and a text language model to process both audio and text inputs.",
+          "reasoning_chars": 0,
+          "cached": {
+            "samples": [],
+            "invalid": [],
+            "flags": [],
+            "median_ttft_s": null
+          },
+          "turn2_ttft_s": null,
+          "turn1_finish": "stop"
+        }
+      ],
+      "peak_rss_mb": 6041,
+      "peak_footprint_mb": 6699,
+      "power_info": [],
+      "invalid": [],
+      "flags": [],
+      "peak_memory_mb": 6754.7,
+      "mapped_file_clean_mb": 8.6,
+      "vm_end": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 77
+      },
+      "when_end": "2026-11-07 06:14:28"
+    },
+    "telemetry": {
+      "quiet": true,
+      "quiet_wait_seconds": 18.66087508201599,
+      "busy": [],
+      "samples": [
+        [
+          1794003261.327,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794003263.363,
+          0.8,
+          "com.apple.WebKit",
+          0.8,
+          0.0
+        ],
+        [
+          1794003265.401,
+          0.79,
+          "iTerm2",
+          0.79,
+          0.0
+        ],
+        [
+          1794003267.439,
+          0.78,
+          "iTerm2",
+          0.78,
+          0.0
+        ]
+      ],
+      "overall": {
+        "samples": 4,
+        "mean_foreign_gpu_pct": 0.59,
+        "max_foreign_gpu_pct": 0.8,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "phases": {
+        "prefill_4000": {
+          "samples": 4,
+          "mean_foreign_gpu_pct": 0.59,
+          "max_foreign_gpu_pct": 0.8,
+          "mean_ambient_gpu_pct": 0.0,
+          "busy_samples": 0,
+          "longest_busy_run": 0,
+          "top": [],
+          "flagged": false
+        }
+      },
+      "ignored_processes": [
+        "WindowServer"
+      ],
+      "ambient_processes": [
+        "VisualIntelligenceCore",
+        "mediaanalysisd",
+        "photoanalysisd"
+      ]
+    },
+    "request_sha256": [
+      "d9d5ed35300b96d416a66046766fcff82cafbccd8cdfbad671205e1fc74f0cc5",
+      "40879d908a291a9bbce0ae335b1da5aed182c800e564d7dbe7e5305d5044aa15",
+      "4f788880c578359e9eadec51adcb22785591c0e06b82ae1a0ca3e73961357538"
+    ]
+  },
+  {
+    "label": "B1",
+    "build": "50fadecc",
+    "profile": "fast",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/kapitsa",
+      "serve",
+      "--private",
+      "--model",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+      "--model-id",
+      "qwen3.5-9b",
+      "--port",
+      "18781",
+      "--ctx",
+      "32768",
+      "--slots",
+      "1",
+      "--prefill-chunk",
+      "2048",
+      "--disk-cache",
+      "0",
+      "--dflash",
+      "none"
+    ],
+    "result": {
+      "schema": 2,
+      "label": "B1",
+      "model": "qwen3.5-9b",
+      "base_url": "http://127.0.0.1:18781/v1",
+      "when": "2026-11-07 06:15:19",
+      "temperature": 0.6,
+      "args": {
+        "base_url": "http://127.0.0.1:18781/v1",
+        "model": "qwen3.5-9b",
+        "label": "B1",
+        "pid": 24056,
+        "decode_tokens": 512,
+        "decode_runs": 5,
+        "greedy_runs": 5,
+        "window_head": 16,
+        "window_tail": 4,
+        "rep_threshold": 0.5,
+        "sizes": "4000",
+        "corpus": null,
+        "ref_prompt_tokens": "",
+        "cached_samples": 0,
+        "turn_gap": 1.0,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0,
+        "sampling_overrides": "",
+        "extra_body": "",
+        "reasoning_effort": "low",
+        "no_think_style": "both",
+        "always_reasons": false,
+        "warmup": "none",
+        "adaptive_warm": false,
+        "no_gpu_lock": false,
+        "skip": "decode,greedy,tools,agent",
+        "cached_increment": false,
+        "increment_prefixes": "8000",
+        "increment_tokens": 8000,
+        "increment_turns": 2,
+        "increment_repeats": 2,
+        "agentic": false,
+        "sweep_sizes": "1000,2000,4000,8000,16000,max",
+        "sweep_repeats": 2,
+        "sweep_task": "summary",
+        "max_ctx": 32768,
+        "cache_tokens": 8000,
+        "server_slots": 0,
+        "sustain_s": 300,
+        "agent_trace": "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/bench/harness/agent-traces/opencode-ledger.json",
+        "agent_tool_mode": "rendered",
+        "agent_gaps": "recorded",
+        "agent_max_turns": null,
+        "agent_timeout": 2400,
+        "out": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/performance-rebase-3f3b-versioned/perf-B1.json"
+      },
+      "sampling": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "sampling_greedy": {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "top_k": 1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "no_think": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": "none"
+      },
+      "corpus": {
+        "path": "corpus/bench_corpus.txt",
+        "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "frozen": true
+      },
+      "harness": {
+        "git_head": "50fadecc932863bff4d3f81a7a20d3913be3e15b",
+        "dirty": false
+      },
+      "phases": {
+        "prefill_4000": [
+          1794003319.352,
+          1794003323.686
+        ]
+      },
+      "memory": {
+        "prefill_4000": {
+          "pids": [
+            {
+              "pid": 24056,
+              "name": "kapitsa",
+              "phys_footprint": 7445665336,
+              "phys_footprint_peak": 7532779064,
+              "mapped_file_dirty": 0,
+              "mapped_file_clean": 9060352,
+              "mapped_file_wired": 0
+            }
+          ],
+          "phys_footprint_mb": 7100.7,
+          "phys_footprint_peak_mb": 7183.8,
+          "mapped_file_clean_mb": 8.6,
+          "swap_used_mb": 1103.69,
+          "memorystatus_level": 76,
+          "swapouts_delta": 0
+        }
+      },
+      "gpu_lock": {
+        "held_by": "caller",
+        "path": "/tmp/kapitsa-gpu.lock",
+        "wait_s": null
+      },
+      "vm_start": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 77
+      },
+      "prefill": [
+        {
+          "target": 4000,
+          "invalid": [],
+          "flags": [],
+          "prompt_tokens": 4135,
+          "expected_prompt_tokens": 4133,
+          "ttft_s": 3.2192782920319587,
+          "prefill_tps": 1284.4493780592209,
+          "cold_cached_tokens": 0,
+          "first_event_chars": 3,
+          "timings": null,
+          "finish": "stop",
+          "answer": "The file `modeling_granite_speech.py` defines the core neural network components for the Granite Speech model, including an audio encoder (CTC-based), a projector for multimodal alignment, and a causal language model, along with their corresponding input/output dataclasses.",
+          "reasoning_chars": 0,
+          "cached": {
+            "samples": [],
+            "invalid": [],
+            "flags": [],
+            "median_ttft_s": null
+          },
+          "turn2_ttft_s": null,
+          "turn1_finish": "stop"
+        }
+      ],
+      "peak_rss_mb": 6143,
+      "peak_footprint_mb": 7109,
+      "power_info": [],
+      "invalid": [],
+      "flags": [],
+      "peak_memory_mb": 7183.8,
+      "mapped_file_clean_mb": 8.6,
+      "vm_end": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 76
+      },
+      "when_end": "2026-11-07 06:15:23"
+    },
+    "telemetry": {
+      "quiet": true,
+      "quiet_wait_seconds": 18.638204097747803,
+      "busy": [],
+      "samples": [
+        [
+          1794003321.335,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794003323.374,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ],
+      "overall": {
+        "samples": 2,
+        "mean_foreign_gpu_pct": 0.0,
+        "max_foreign_gpu_pct": 0,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "phases": {
+        "prefill_4000": {
+          "samples": 2,
+          "mean_foreign_gpu_pct": 0.0,
+          "max_foreign_gpu_pct": 0,
+          "mean_ambient_gpu_pct": 0.0,
+          "busy_samples": 0,
+          "longest_busy_run": 0,
+          "top": [],
+          "flagged": false
+        }
+      },
+      "ignored_processes": [
+        "WindowServer"
+      ],
+      "ambient_processes": [
+        "VisualIntelligenceCore",
+        "mediaanalysisd",
+        "photoanalysisd"
+      ]
+    },
+    "request_sha256": [
+      "d9d5ed35300b96d416a66046766fcff82cafbccd8cdfbad671205e1fc74f0cc5",
+      "40879d908a291a9bbce0ae335b1da5aed182c800e564d7dbe7e5305d5044aa15",
+      "4f788880c578359e9eadec51adcb22785591c0e06b82ae1a0ca3e73961357538"
+    ]
+  },
+  {
+    "label": "A2",
+    "build": "50fadecc",
+    "profile": "precise",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/kapitsa",
+      "serve",
+      "--private",
+      "--model",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+      "--model-id",
+      "qwen3.5-9b",
+      "--port",
+      "18781",
+      "--ctx",
+      "32768",
+      "--slots",
+      "1",
+      "--prefill-chunk",
+      "2048",
+      "--disk-cache",
+      "0",
+      "--dflash",
+      "none"
+    ],
+    "result": {
+      "schema": 2,
+      "label": "A2",
+      "model": "qwen3.5-9b",
+      "base_url": "http://127.0.0.1:18781/v1",
+      "when": "2026-11-07 06:15:52",
+      "temperature": 0.6,
+      "args": {
+        "base_url": "http://127.0.0.1:18781/v1",
+        "model": "qwen3.5-9b",
+        "label": "A2",
+        "pid": 24591,
+        "decode_tokens": 512,
+        "decode_runs": 5,
+        "greedy_runs": 5,
+        "window_head": 16,
+        "window_tail": 4,
+        "rep_threshold": 0.5,
+        "sizes": "4000",
+        "corpus": null,
+        "ref_prompt_tokens": "",
+        "cached_samples": 0,
+        "turn_gap": 1.0,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0,
+        "sampling_overrides": "",
+        "extra_body": "",
+        "reasoning_effort": "low",
+        "no_think_style": "both",
+        "always_reasons": false,
+        "warmup": "none",
+        "adaptive_warm": false,
+        "no_gpu_lock": false,
+        "skip": "decode,greedy,tools,agent",
+        "cached_increment": false,
+        "increment_prefixes": "8000",
+        "increment_tokens": 8000,
+        "increment_turns": 2,
+        "increment_repeats": 2,
+        "agentic": false,
+        "sweep_sizes": "1000,2000,4000,8000,16000,max",
+        "sweep_repeats": 2,
+        "sweep_task": "summary",
+        "max_ctx": 32768,
+        "cache_tokens": 8000,
+        "server_slots": 0,
+        "sustain_s": 300,
+        "agent_trace": "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/bench/harness/agent-traces/opencode-ledger.json",
+        "agent_tool_mode": "rendered",
+        "agent_gaps": "recorded",
+        "agent_max_turns": null,
+        "agent_timeout": 2400,
+        "out": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/performance-rebase-3f3b-versioned/perf-A2.json"
+      },
+      "sampling": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "sampling_greedy": {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "top_k": 1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "no_think": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": "none"
+      },
+      "corpus": {
+        "path": "corpus/bench_corpus.txt",
+        "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "frozen": true
+      },
+      "harness": {
+        "git_head": "50fadecc932863bff4d3f81a7a20d3913be3e15b",
+        "dirty": false
+      },
+      "phases": {
+        "prefill_4000": [
+          1794003352.808,
+          1794003362.504
+        ]
+      },
+      "memory": {
+        "prefill_4000": {
+          "pids": [
+            {
+              "pid": 24591,
+              "name": "kapitsa",
+              "phys_footprint": 6989518176,
+              "phys_footprint_peak": 7081366880,
+              "mapped_file_dirty": 0,
+              "mapped_file_clean": 9027584,
+              "mapped_file_wired": 0
+            }
+          ],
+          "phys_footprint_mb": 6665.7,
+          "phys_footprint_peak_mb": 6753.3,
+          "mapped_file_clean_mb": 8.6,
+          "swap_used_mb": 1103.69,
+          "memorystatus_level": 77,
+          "swapouts_delta": 0
+        }
+      },
+      "gpu_lock": {
+        "held_by": "caller",
+        "path": "/tmp/kapitsa-gpu.lock",
+        "wait_s": null
+      },
+      "vm_start": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 78
+      },
+      "prefill": [
+        {
+          "target": 4000,
+          "invalid": [],
+          "flags": [],
+          "prompt_tokens": 4135,
+          "expected_prompt_tokens": 4133,
+          "ttft_s": 8.597115292039234,
+          "prefill_tps": 480.9752875861665,
+          "cold_cached_tokens": 0,
+          "first_event_chars": 3,
+          "timings": null,
+          "finish": "stop",
+          "answer": "The file `modeling_granite_speech.py` defines the `GraniteSpeechModel`, which is a multimodal model architecture that integrates an audio encoder (CTC-based), a projector, and a text-based language model to process both audio and text inputs.",
+          "reasoning_chars": 0,
+          "cached": {
+            "samples": [],
+            "invalid": [],
+            "flags": [],
+            "median_ttft_s": null
+          },
+          "turn2_ttft_s": null,
+          "turn1_finish": "stop"
+        }
+      ],
+      "peak_rss_mb": 6038,
+      "peak_footprint_mb": 6698,
+      "power_info": [],
+      "invalid": [],
+      "flags": [],
+      "peak_memory_mb": 6753.3,
+      "mapped_file_clean_mb": 8.6,
+      "vm_end": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 77
+      },
+      "when_end": "2026-11-07 06:16:02"
+    },
+    "telemetry": {
+      "quiet": true,
+      "quiet_wait_seconds": 18.686285257339478,
+      "busy": [],
+      "samples": [
+        [
+          1794003354.793,
+          0.74,
+          "iTerm2",
+          0.74,
+          0.0
+        ],
+        [
+          1794003356.833,
+          1.39,
+          "iTerm2",
+          1.39,
+          0.0
+        ],
+        [
+          1794003358.87,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794003360.907,
+          1.03,
+          "iTerm2",
+          1.03,
+          0.0
+        ]
+      ],
+      "overall": {
+        "samples": 4,
+        "mean_foreign_gpu_pct": 0.79,
+        "max_foreign_gpu_pct": 1.39,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "phases": {
+        "prefill_4000": {
+          "samples": 4,
+          "mean_foreign_gpu_pct": 0.79,
+          "max_foreign_gpu_pct": 1.39,
+          "mean_ambient_gpu_pct": 0.0,
+          "busy_samples": 0,
+          "longest_busy_run": 0,
+          "top": [],
+          "flagged": false
+        }
+      },
+      "ignored_processes": [
+        "WindowServer"
+      ],
+      "ambient_processes": [
+        "VisualIntelligenceCore",
+        "mediaanalysisd",
+        "photoanalysisd"
+      ]
+    },
+    "request_sha256": [
+      "d9d5ed35300b96d416a66046766fcff82cafbccd8cdfbad671205e1fc74f0cc5",
+      "40879d908a291a9bbce0ae335b1da5aed182c800e564d7dbe7e5305d5044aa15",
+      "4f788880c578359e9eadec51adcb22785591c0e06b82ae1a0ca3e73961357538"
+    ]
+  },
+  {
+    "label": "B2",
+    "build": "50fadecc",
+    "profile": "fast",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/kapitsa",
+      "serve",
+      "--private",
+      "--model",
+      "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+      "--model-id",
+      "qwen3.5-9b",
+      "--port",
+      "18781",
+      "--ctx",
+      "32768",
+      "--slots",
+      "1",
+      "--prefill-chunk",
+      "2048",
+      "--disk-cache",
+      "0",
+      "--dflash",
+      "none"
+    ],
+    "result": {
+      "schema": 2,
+      "label": "B2",
+      "model": "qwen3.5-9b",
+      "base_url": "http://127.0.0.1:18781/v1",
+      "when": "2026-11-07 06:16:52",
+      "temperature": 0.6,
+      "args": {
+        "base_url": "http://127.0.0.1:18781/v1",
+        "model": "qwen3.5-9b",
+        "label": "B2",
+        "pid": 24768,
+        "decode_tokens": 512,
+        "decode_runs": 5,
+        "greedy_runs": 5,
+        "window_head": 16,
+        "window_tail": 4,
+        "rep_threshold": 0.5,
+        "sizes": "4000",
+        "corpus": null,
+        "ref_prompt_tokens": "",
+        "cached_samples": 0,
+        "turn_gap": 1.0,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0,
+        "sampling_overrides": "",
+        "extra_body": "",
+        "reasoning_effort": "low",
+        "no_think_style": "both",
+        "always_reasons": false,
+        "warmup": "none",
+        "adaptive_warm": false,
+        "no_gpu_lock": false,
+        "skip": "decode,greedy,tools,agent",
+        "cached_increment": false,
+        "increment_prefixes": "8000",
+        "increment_tokens": 8000,
+        "increment_turns": 2,
+        "increment_repeats": 2,
+        "agentic": false,
+        "sweep_sizes": "1000,2000,4000,8000,16000,max",
+        "sweep_repeats": 2,
+        "sweep_task": "summary",
+        "max_ctx": 32768,
+        "cache_tokens": 8000,
+        "server_slots": 0,
+        "sustain_s": 300,
+        "agent_trace": "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/bench/harness/agent-traces/opencode-ledger.json",
+        "agent_tool_mode": "rendered",
+        "agent_gaps": "recorded",
+        "agent_max_turns": null,
+        "agent_timeout": 2400,
+        "out": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/performance-rebase-3f3b-versioned/perf-B2.json"
+      },
+      "sampling": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "sampling_greedy": {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "top_k": 1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "repeat_penalty": 1.0
+      },
+      "no_think": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": "none"
+      },
+      "corpus": {
+        "path": "corpus/bench_corpus.txt",
+        "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "frozen": true
+      },
+      "harness": {
+        "git_head": "50fadecc932863bff4d3f81a7a20d3913be3e15b",
+        "dirty": false
+      },
+      "phases": {
+        "prefill_4000": [
+          1794003412.99,
+          1794003417.289
+        ]
+      },
+      "memory": {
+        "prefill_4000": {
+          "pids": [
+            {
+              "pid": 24768,
+              "name": "kapitsa",
+              "phys_footprint": 7441258016,
+              "phys_footprint_peak": 7528322568,
+              "mapped_file_dirty": 0,
+              "mapped_file_clean": 9060352,
+              "mapped_file_wired": 0
+            }
+          ],
+          "phys_footprint_mb": 7096.5,
+          "phys_footprint_peak_mb": 7179.6,
+          "mapped_file_clean_mb": 8.6,
+          "swap_used_mb": 1103.69,
+          "memorystatus_level": 76,
+          "swapouts_delta": 0
+        }
+      },
+      "gpu_lock": {
+        "held_by": "caller",
+        "path": "/tmp/kapitsa-gpu.lock",
+        "wait_s": null
+      },
+      "vm_start": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 77
+      },
+      "prefill": [
+        {
+          "target": 4000,
+          "invalid": [],
+          "flags": [],
+          "prompt_tokens": 4135,
+          "expected_prompt_tokens": 4133,
+          "ttft_s": 3.2638446249766275,
+          "prefill_tps": 1266.9107984972204,
+          "cold_cached_tokens": 0,
+          "first_event_chars": 3,
+          "timings": null,
+          "finish": "stop",
+          "answer": "The file `modeling_granite_speech.py` defines the core model architecture for the Granite Speech multimodal model, including components for audio encoding (CTC encoder), a projector for aligning audio and text representations, and the language model structure.",
+          "reasoning_chars": 0,
+          "cached": {
+            "samples": [],
+            "invalid": [],
+            "flags": [],
+            "median_ttft_s": null
+          },
+          "turn2_ttft_s": null,
+          "turn1_finish": "stop"
+        }
+      ],
+      "peak_rss_mb": 6139,
+      "peak_footprint_mb": 7105,
+      "power_info": [],
+      "invalid": [],
+      "flags": [],
+      "peak_memory_mb": 7179.6,
+      "mapped_file_clean_mb": 8.6,
+      "vm_end": {
+        "swap_used_mb": 1103.69,
+        "swapouts": 1724284,
+        "swapins": 693702,
+        "pageouts": 561761,
+        "memorystatus_level": 76
+      },
+      "when_end": "2026-11-07 06:16:57"
+    },
+    "telemetry": {
+      "quiet": true,
+      "quiet_wait_seconds": 18.676222801208496,
+      "busy": [],
+      "samples": [
+        [
+          1794003414.977,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794003417.016,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ],
+      "overall": {
+        "samples": 2,
+        "mean_foreign_gpu_pct": 0.0,
+        "max_foreign_gpu_pct": 0,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "phases": {
+        "prefill_4000": {
+          "samples": 2,
+          "mean_foreign_gpu_pct": 0.0,
+          "max_foreign_gpu_pct": 0,
+          "mean_ambient_gpu_pct": 0.0,
+          "busy_samples": 0,
+          "longest_busy_run": 0,
+          "top": [],
+          "flagged": false
+        }
+      },
+      "ignored_processes": [
+        "WindowServer"
+      ],
+      "ambient_processes": [
+        "VisualIntelligenceCore",
+        "mediaanalysisd",
+        "photoanalysisd"
+      ]
+    },
+    "request_sha256": [
+      "d9d5ed35300b96d416a66046766fcff82cafbccd8cdfbad671205e1fc74f0cc5",
+      "40879d908a291a9bbce0ae335b1da5aed182c800e564d7dbe7e5305d5044aa15",
+      "4f788880c578359e9eadec51adcb22785591c0e06b82ae1a0ca3e73961357538"
+    ]
+  }
+]

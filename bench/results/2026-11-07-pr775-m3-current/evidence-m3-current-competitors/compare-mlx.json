@@ -1,0 +1,348 @@
+{
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.00014716473412187535,
+      "kl_median": 4.073386305610173e-05,
+      "kl_p99": 0.0004928145750829887,
+      "kl_max": 0.0005070550233210319,
+      "margin_change_max": 0.26570606231689453,
+      "tie_margin": 0.07268142700195312,
+      "nll_change_mean": 0.0005576617810301165,
+      "max_abs_diff": 0.8817291259765625,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "NI_ANE_UNITS": "16",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "mlx",
+        "build": "mlx-lm 0.32.2 / mlx 0.32.4",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.9791666666666666,
+      "flips": 4,
+      "kl_mean": 0.0003990927679329574,
+      "kl_median": 4.100954438601024e-05,
+      "kl_p99": 0.004452964368032491,
+      "kl_max": 0.0048820223131920346,
+      "margin_change_max": 0.3781108856201172,
+      "tie_margin": 0.41489410400390625,
+      "nll_change_mean": -0.0007801970624726392,
+      "max_abs_diff": 1.7937283515930176,
+      "flip_list": [
+        {
+          "record": "sequence 4 prefix 1665",
+          "ref_top": 20467,
+          "cand_top": 7402,
+          "margin": 0.19034576416015625
+        },
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 413,
+          "margin": 0.12948989868164062
+        },
+        {
+          "record": "sequence 6 prefix 908",
+          "ref_top": 535,
+          "cand_top": 3390,
+          "margin": 0.07683563232421875
+        },
+        {
+          "record": "sequence 0 prefix 3211",
+          "ref_top": 42598,
+          "cand_top": 32995,
+          "margin": 0.05203056335449219
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "batch",
+        "batch": {
+          "members": 4,
+          "rows": 2
+        },
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "NI_ANE_UNITS": "16",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "mlx",
+        "build": "mlx-lm 0.32.2 / mlx 0.32.4",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "batch",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.9791666666666666,
+      "flips": 4,
+      "kl_mean": 0.00039865869471963374,
+      "kl_median": 4.177596782227557e-05,
+      "kl_p99": 0.004521267675092528,
+      "kl_max": 0.004995032892668255,
+      "margin_change_max": 0.372406005859375,
+      "tie_margin": 0.1921844482421875,
+      "nll_change_mean": -0.0007211912411219656,
+      "max_abs_diff": 1.7578835487365723,
+      "flip_list": [
+        {
+          "record": "sequence 4 prefix 1665",
+          "ref_top": 20467,
+          "cand_top": 7402,
+          "margin": 0.1921844482421875
+        },
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 413,
+          "margin": 0.12693023681640625
+        },
+        {
+          "record": "sequence 6 prefix 908",
+          "ref_top": 535,
+          "cand_top": 3390,
+          "margin": 0.0790863037109375
+        },
+        {
+          "record": "sequence 0 prefix 3211",
+          "ref_top": 42598,
+          "cand_top": 32995,
+          "margin": 0.05089569091796875
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "NI_ANE_UNITS": "16",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "mlx",
+        "build": "mlx-lm 0.32.2 / mlx 0.32.4",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.9791666666666666,
+      "flips": 4,
+      "kl_mean": 0.00039953810702752124,
+      "kl_median": 4.1336458259185615e-05,
+      "kl_p99": 0.0044738094189337285,
+      "kl_max": 0.0049484161213078914,
+      "margin_change_max": 0.3758354187011719,
+      "tie_margin": 0.19136619567871094,
+      "nll_change_mean": -0.0007524728150300289,
+      "max_abs_diff": 1.745682954788208,
+      "flip_list": [
+        {
+          "record": "sequence 4 prefix 1665",
+          "ref_top": 20467,
+          "cand_top": 7402,
+          "margin": 0.19136619567871094
+        },
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 413,
+          "margin": 0.1267986297607422
+        },
+        {
+          "record": "sequence 6 prefix 908",
+          "ref_top": 535,
+          "cand_top": 3390,
+          "margin": 0.07800483703613281
+        },
+        {
+          "record": "sequence 0 prefix 3211",
+          "ref_top": 42598,
+          "cand_top": 32995,
+          "margin": 0.05046844482421875
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "NI_ANE_UNITS": "16",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "mlx",
+        "build": "mlx-lm 0.32.2 / mlx 0.32.4",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+        "path": "verify",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+        "macos": "26.4.1",
+        "date": "2026-11-06T21:04:01Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    }
+  }
+}

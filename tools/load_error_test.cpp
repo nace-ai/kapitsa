@@ -1,8 +1,10 @@
 // CPU by default. --gpu checks real Metal failure/retry and allocation ownership,
-// under the GPU lock; never run that mode automatically in CTest.
+// under the GPU lock; never run that mode automatically in CTest. --mtp-gpu checks sidecar tensor admission
+// through the real loader using tiny Metal buffers, without dispatching a kernel.
 #include "util/load_threads.h"
 #include "loader/safetensors.h"
 #include "model/expert_store.h"
+#include "model/qwen35.h"
 #include "bench/bench.h"
 #include <nlohmann/json.hpp>
 #include <atomic>
@@ -284,6 +286,97 @@ static void cpu(const char* self) {
   std::filesystem::remove_all(dir);
   std::cout << "PASS scoped errors, thread joining/isolation, loader FD cleanup, CLI exit 1\n";
 }
+// NoLoad avoids unrelated trunk weights; load_mtp still opens the actual sidecar and reads its linears.
+struct MtpLoadProbe : Qwen35 {
+  MtpLoadProbe() : Qwen35("", 1, NoLoad{}) {}
+  void load(const std::string& dir) { load_mtp(dir); }
+  QLinear linear(const WeightStore& w) { return own_qlin(w, "mtp.fc"); }
+};
+static void mtp_gpu() {
+  bench::GpuLock lock;
+  CHECK(bench::GpuLock::held_by_caller() || lock.acquire());
+  FatalRecovery recover;
+  char pattern[] = "/tmp/kapitsa-mtp-shapes-XXXXXX";
+  CHECK(mkdtemp(pattern));
+  const std::filesystem::path dir(pattern);
+  struct Cleanup {
+    std::filesystem::path dir;
+    ~Cleanup() { std::error_code ec; std::filesystem::remove_all(dir, ec); }
+  } cleanup{dir};
+  using J = nlohmann::json;
+  auto write = [&](J w, J sc, J bi, const std::string& wd = "U32", const std::string& sd = "BF16",
+                   const std::string& bd = "BF16") {
+    J hdr;
+    std::string data;
+    auto add = [&](const std::string& name, const std::string& dtype, const J& shape) {
+      size_t count = 1;
+      for (const auto& d : shape) count *= d.get<size_t>();
+      const size_t bytes = count * (dtype == "U32" || dtype == "F32" ? 4 : 2);
+      hdr[name] = {{"dtype", dtype}, {"shape", shape}, {"data_offsets", {data.size(), data.size() + bytes}}};
+      const size_t start = data.size();
+      data += std::string(bytes, '\0');
+      if (name == "mtp.fc.weight") std::fill(data.begin() + start, data.end(), char(0xA5));
+      else if (dtype == "BF16" || dtype == "F16") {
+        const uint16_t one = dtype == "BF16" ? 0x3f80 : 0x3c00;
+        for (size_t i = start; i < data.size(); i += 2) memcpy(data.data() + i, &one, 2);
+      } else if (dtype == "F32") {
+        const float one = 1.0f;
+        for (size_t i = start; i < data.size(); i += 4) memcpy(data.data() + i, &one, 4);
+      }
+    };
+    for (const char* n : {"mtp.pre_fc_norm_embedding.weight", "mtp.pre_fc_norm_hidden.weight", "mtp.norm.weight"})
+      add(n, "BF16", J::array({1}));
+    add("mtp.fc.weight", wd, w); add("mtp.fc.scales", sd, sc); add("mtp.fc.biases", bd, bi);
+    const std::string h = hdr.dump();
+    const uint64_t len = h.size();
+    std::ofstream f(dir / "mtp.safetensors", std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&len), 8); f << h << data;
+  };
+  auto reject = [&](const J& w, const J& sc, const J& bi, const std::string& wd = "U32",
+                    const std::string& sd = "BF16", const std::string& bd = "BF16") {
+    write(w, sc, bi, wd, sd, bd);
+    Gpu::AllocationScope allocations;
+    MtpLoadProbe probe;
+    fails([&] { probe.load(dir); }, "mtp.fc: invalid affine tensor shapes or dtypes");
+  };
+  reject(J::array(), {1, 1}, {1, 1});
+  reject({8}, {1, 1}, {1, 1});
+  reject({1, 1, 1, 8}, {1, 1, 1, 1}, {1, 1, 1, 1});
+  reject({2, 8}, J::array(), {2, 1});
+  reject({2, 8}, {2, 1}, J::array());
+  reject({2, 8}, {1, 1}, {2, 1});
+  reject({2, 8}, {2, 1}, {2, 2});
+  reject({2, 3, 8}, {1, 3, 1}, {1, 3, 1});
+  reject({0, 8}, {0, 1}, {0, 1});
+  reject({0, 8}, {0, uint64_t(1) << 58}, {0, uint64_t(1) << 58});
+  reject({2, 8}, {2, 1}, {2, 1}, "F16");
+  reject({2, 8}, {2, 1}, {2, 1}, "U32", "U16");
+  reject({2, 8}, {2, 1}, {2, 1}, "U32", "BF16", "U16");
+  size_t accepted = 0;
+  for (int bits : {3, 4, 5, 6, 8})
+    for (bool stacked : {false, true})
+      for (const char* dtype : {"BF16", "F16", "F32"}) {
+        J w = stacked ? J{2, 3, 2 * bits} : J{3, 2 * bits};
+        J sc = stacked ? J{2, 3, 1} : J{3, 1};
+        write(w, sc, sc, "U32", dtype, dtype);
+        Gpu::AllocationScope allocations;
+        WeightStore weights;
+        weights.open_dir(dir);
+        MtpLoadProbe probe;
+        const QLinear q = probe.linear(weights);
+        CHECK(q.N == 3 && q.K == 64 && q.gs == 64 && q.bits == bits);
+        CHECK(q.w->shape == weights.get("mtp.fc.weight").shape && q.w->dtype == DType::U32);
+        CHECK(q.s->shape == weights.get("mtp.fc.scales").shape && q.s->dtype == DType::BF16);
+        CHECK(q.b->shape == q.s->shape && q.b->dtype == DType::BF16);
+        for (int64_t i = 0; i < q.s->numel(); ++i)
+          CHECK(q.s->buf.as<uint16_t>()[i] == 0x3f80 && q.b->buf.as<uint16_t>()[i] == 0x3f80);
+        const auto& original = weights.get("mtp.fc.weight");
+        CHECK(!memcmp(q.w->buf.ptr(), original.buf.ptr(), original.buf.size));
+        ++accepted;
+      }
+  std::cout << "PASS MTP sidecar admission: 13 malformed cases rejected; " << accepted
+            << " dense/stacked format and parameter-dtype combinations accepted (Metal buffers, no dispatch)\n";
+}
 static void gpu() {
   bench::GpuLock lock;
   CHECK(bench::GpuLock::held_by_caller() || lock.acquire());
@@ -337,7 +430,8 @@ int main(int argc, char** argv) {
   }
   if (argc > 2 && std::string(argv[1]) == "--bad-file") { WeightStore ws; ws.open_dir(argv[2]); }
   try {
-    if (argc > 1 && std::string(argv[1]) == "--gpu") gpu();
+    if (argc > 1 && std::string(argv[1]) == "--mtp-gpu") mtp_gpu();
+    else if (argc > 1 && std::string(argv[1]) == "--gpu") gpu();
     else cpu(argv[0]);
   } catch (const std::exception& e) { std::cerr << "FAIL " << e.what() << '\n'; return 1; }
 }

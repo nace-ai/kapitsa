@@ -1,0 +1,48 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 2.37 GB of weights in 365 ms (6.5 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 16 ms (15.1 GB/s)
+[kapitsa] MTP head loaded in 230 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 14 ms
+[kapitsa] prewarmed 93 prefill pipelines in 21 ms
+[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 654 ms; weights 4-bit group 64 100%
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (241 ms)
+[kapitsa] sequence: recurrent state 53 MB, KV for 0 of 32768 tokens (0 MB)
+[kapitsa] GPU: Apple M3 Ultra, 60 cores
+[kapitsa] memory: 3.26 GB allocated (model, buffers, 1 slot's state), budget 80.2 GB (recommended working set 83.5 GB): KV room 76.89 GB = 2085909 tokens (36 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (24 blocks, width 1024, 16-pixel patches; images of 65536 to 1200000 pixels), 0.67 GB loaded on the first image
+[kapitsa] drafter: MTP (turned off with --dflash none or NI_DFLASH, MTP head drafts depth 4)
+[kapitsa] engine ready: qwen3.5-4b-4bit, context 32768, 1 slots, MTP speculative decoding depth 4, KFlash (MTP), images on
+[kapitsa] listening on http://127.0.0.1:8298
+Ready: chat at http://127.0.0.1:8298, API at http://127.0.0.1:8298/v1 (model "qwen3.5-4b-4bit"). Ctrl+C stops.
+[kapitsa] KV cache 0 -> 3072 positions (113 MB) in 0.2 ms
+[kapitsa] checkpoints: prompt diverges at 0 of 2058, none usable, prefill from 0
+[kapitsa] prefill chunk of 1029 rows: 2058 of 2058 left, chunk 2048 even
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] prefill chunk of 1029 rows: 1029 of 2058 left, chunk 2048 even
+[kapitsa] checkpoints: query boundary at 2051 overwrites an empty one
+[kapitsa] spec: 0.40 accepted/drafted over 12 cycles
+[kapitsa] chat: prompt 2058 (cached 0) in 1017 ms (+3.1 ms template/tokenize; last chunk: encoded by 1.2 ms, GPU start +523.5 ms, GPU 492.1 ms, wake +0.2 ms), 32 tokens in 129 ms (241.1 tok/s), length, KFlash (MTP): 12 cycles
+[kapitsa] checkpoints: prompt diverges at 2054 of 2108, restored query checkpoint at 2051
+[kapitsa] prefill chunk of 57 rows: 57 of 2108 left, chunk 2048 even
+[kapitsa] checkpoints: query boundary at 2101 overwrites an empty one
+[kapitsa] spec: 0.45 accepted/drafted over 22 cycles
+[kapitsa] chat: prompt 2108 (cached 2051) in 47 ms (+2.5 ms template/tokenize; last chunk: encoded by 1.3 ms, GPU start +3.6 ms, GPU 42.1 ms, wake +0.2 ms), 32 tokens in 103 ms (302.4 tok/s), length, KFlash (MTP): 10 cycles
+[kapitsa] KV cache 3072 -> 15360 positions (566 MB) in 23.7 ms
+[kapitsa] checkpoints: prompt diverges at 2091 of 15223, restored query checkpoint at 2051
+[kapitsa] prefill chunk of 1882 rows: 13172 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 11290 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 9408 of 15223 left, chunk 2048 even
+[kapitsa] checkpoints: cancelled prefill kept the completed checkpoint at 2051
+[kapitsa] chat: cancelled during prefill at 7697 of 15223 tokens after 2799 ms
+[kapitsa] prefill chunk of 1882 rows: 13172 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 11290 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 9408 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 7526 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 5644 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1881 rows: 3762 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1881 rows: 1881 of 15223 left, chunk 2048 even
+[kapitsa] checkpoints: query boundary at 15216 overwrites an empty one
+[kapitsa] spec: 0.48 accepted/drafted over 33 cycles
+[kapitsa] chat: prompt 15223 (cached 2051) in 6979 ms (+7.4 ms template/tokenize; last chunk: encoded by 4843.2 ms, GPU start +1079.2 ms, GPU 1055.9 ms, wake +0.2 ms), 32 tokens in 180 ms (172.4 tok/s), length, KFlash (MTP): 11 cycles

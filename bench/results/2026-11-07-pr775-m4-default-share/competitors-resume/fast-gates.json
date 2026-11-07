@@ -1,0 +1,70 @@
+[
+  {
+    "path": "prefill",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/tools/logit_compare.py",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/prefill",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/prefill",
+      "--min-top1",
+      "1.0",
+      "--max-mean-kl",
+      "0.0008544665307031944",
+      "--json",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/fast-gate-prefill.json"
+    ],
+    "returncode": 0,
+    "bar_from": "same-Mac measured faster engine MLX; no noise-floor modification"
+  },
+  {
+    "path": "batch",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/tools/logit_compare.py",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/batch",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/batch",
+      "--min-top1",
+      "0.984375",
+      "--max-mean-kl",
+      "0.0003731982332792418",
+      "--json",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/fast-gate-batch.json"
+    ],
+    "returncode": 0,
+    "bar_from": "same-Mac measured faster engine MLX; no noise-floor modification"
+  },
+  {
+    "path": "step",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/tools/logit_compare.py",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/step",
+      "--min-top1",
+      "0.984375",
+      "--max-mean-kl",
+      "0.00037419804915126646",
+      "--json",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/fast-gate-step.json"
+    ],
+    "returncode": 0,
+    "bar_from": "same-Mac measured faster engine MLX; no noise-floor modification"
+  },
+  {
+    "path": "verify",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/tools/logit_compare.py",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/verify",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast/verify",
+      "--min-top1",
+      "0.984375",
+      "--max-mean-kl",
+      "0.0003767599695152809",
+      "--json",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/fast-gate-verify.json"
+    ],
+    "returncode": 0,
+    "bar_from": "same-Mac measured faster engine MLX; no noise-floor modification"
+  }
+]

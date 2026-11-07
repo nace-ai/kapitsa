@@ -1,0 +1,1347 @@
+{
+  "gpu_status": "complete; inspect HTTP failures and all benchmark flags before Ready",
+  "identities": {
+    "base": {
+      "head": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+      "version": "kapitsa 0.2.31 (2c41b56)",
+      "binaries": {
+        "kapitsa": "6d2f49381ebe76cad702ab0deac73386697f2065a1835818f9c012c52b75e13c",
+        "ni_run": "76c7fa6dbfad4ab3fb6f24f7fde458ada3585ef8e8cc5be5610d5f4df4f60d01",
+        "logit_dump": "e79af196a32244b8e321321cfd9175d2491e8c9d5eb81ef9b9442918e786653b"
+      },
+      "sources": {
+        "src/engine/engine.cpp": "814794b0ddc139855869f6e5f750031e78380ac1b446c0e48d378440ce795027",
+        "src/engine/engine_disk.cpp": "d9b23f18d1cde918c59251f46d78137dc66f09e19a3f3756783b180139a1e94e"
+      }
+    },
+    "candidate": {
+      "head": "3ce432031569e364af6731ffb59aec1bc67355ef",
+      "version": "kapitsa 0.2.31 (3ce4320)",
+      "binaries": {
+        "kapitsa": "59f10e286ddbe88821f8c2df4621ddd1e44969b37d1f158b3c8d9f9b3eb6590d",
+        "ni_run": "76c7fa6dbfad4ab3fb6f24f7fde458ada3585ef8e8cc5be5610d5f4df4f60d01",
+        "logit_dump": "e841eb9c0f3843003af6c9f15b725adb59f6a455f266e321e946c5e22916d85d"
+      },
+      "sources": {
+        "src/engine/engine.cpp": "6c2d3d7cef0a8e1a18de670fb99c44989b2d8856a0edb6f1abcaa21439881d6a",
+        "src/engine/engine_disk.cpp": "d9b23f18d1cde918c59251f46d78137dc66f09e19a3f3756783b180139a1e94e"
+      }
+    }
+  },
+  "models": [
+    {
+      "name": "4b",
+      "logits": {
+        "prefill": {
+          "records": 8,
+          "bitwise": 8,
+          "non_finite": []
+        },
+        "batch": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": []
+        },
+        "step": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": []
+        },
+        "verify": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": []
+        }
+      },
+      "http": [
+        {
+          "label": "4b-http-base",
+          "exit": 1,
+          "passes": 47,
+          "failures": [
+            "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1353.2, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+            "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0010199546813964844, {'id': 'chatcmpl-179405926091745', 'object': 'chat.completion.chunk', 'created': 1794059260, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.13994288444519], first token at 17.339575052261353"
+          ]
+        },
+        {
+          "label": "4b-http-candidate",
+          "exit": 1,
+          "passes": 47,
+          "failures": [
+            "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1355.4, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+            "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0010309219360351562, {'id': 'chatcmpl-179405932391745', 'object': 'chat.completion.chunk', 'created': 1794059323, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.141885042190552], first token at 17.424389123916626"
+          ]
+        }
+      ],
+      "http_same_outcomes": true,
+      "continuations": [
+        {
+          "label": "4b-continuation-0-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+          "contention": {
+            "samples": 4,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        },
+        {
+          "label": "4b-continuation-1-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+          "contention": {
+            "samples": 3,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        },
+        {
+          "label": "4b-continuation-2-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+          "contention": {
+            "samples": 3,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        },
+        {
+          "label": "4b-continuation-3-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "174097cd1503c82311f53135bccda8685fb540e9b13d4cb0c5070b7a8df9629f",
+          "contention": {
+            "samples": 3,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        }
+      ],
+      "native": [
+        {
+          "label": "4b-bench-0-base",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "2c41b56"
+          },
+          "sampled_tps": 349.19,
+          "greedy_tps": 378.62,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4135,
+              "ttft_s": 1.937,
+              "tps": 2134.7,
+              "followup_s": [
+                0.0308,
+                0.0309,
+                0.0316
+              ],
+              "followup_median_s": 0.0309,
+              "followup_suffix_tps": 715.4
+            }
+          ],
+          "peak_memory_gb": 4.55,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 0.13,
+            "gpu_other_max_pct": 0.9,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "4b-bench-1-candidate",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "3ce4320"
+          },
+          "sampled_tps": 381.59,
+          "greedy_tps": 379.47,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 1.9365,
+              "tps": 2134.3,
+              "followup_s": [
+                0.0272,
+                0.0335,
+                0.0311
+              ],
+              "followup_median_s": 0.0311,
+              "followup_suffix_tps": 805.1
+            }
+          ],
+          "peak_memory_gb": 4.55,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "4b-bench-2-base",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "2c41b56"
+          },
+          "sampled_tps": 351.98,
+          "greedy_tps": 367.16,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4134,
+              "ttft_s": 1.9352,
+              "tps": 2136.2,
+              "followup_s": [
+                0.0313,
+                0.034,
+                0.0297
+              ],
+              "followup_median_s": 0.0313,
+              "followup_suffix_tps": 703.5
+            }
+          ],
+          "peak_memory_gb": 4.55,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "4b-bench-3-candidate",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "3ce4320"
+          },
+          "sampled_tps": 351.59,
+          "greedy_tps": 347.31,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4131,
+              "ttft_s": 1.9358,
+              "tps": 2134.0,
+              "followup_s": [
+                0.0313,
+                0.0341,
+                0.0359
+              ],
+              "followup_median_s": 0.0341,
+              "followup_suffix_tps": 701.8
+            }
+          ],
+          "peak_memory_gb": 4.53,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [
+            "decode: repetition loop (distinct-4-gram 0.4763)"
+          ],
+          "invalid": []
+        }
+      ]
+    },
+    {
+      "name": "35b",
+      "logits": {
+        "prefill": {
+          "records": 8,
+          "bitwise": 8,
+          "non_finite": []
+        },
+        "batch": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": []
+        },
+        "step": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": []
+        },
+        "verify": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": []
+        }
+      },
+      "http": [
+        {
+          "label": "35b-http-base",
+          "exit": 0,
+          "passes": 49,
+          "failures": []
+        },
+        {
+          "label": "35b-http-candidate",
+          "exit": 0,
+          "passes": 49,
+          "failures": []
+        }
+      ],
+      "http_same_outcomes": true,
+      "continuations": [
+        {
+          "label": "35b-continuation-0-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "cbbd748a1d3c8c272eb86e331f2eaf7ed3cfc459b59b749821b9f25f6890b576",
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        },
+        {
+          "label": "35b-continuation-1-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "cbbd748a1d3c8c272eb86e331f2eaf7ed3cfc459b59b749821b9f25f6890b576",
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        },
+        {
+          "label": "35b-continuation-2-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "cbbd748a1d3c8c272eb86e331f2eaf7ed3cfc459b59b749821b9f25f6890b576",
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        },
+        {
+          "label": "35b-continuation-3-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "cbbd748a1d3c8c272eb86e331f2eaf7ed3cfc459b59b749821b9f25f6890b576",
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          }
+        }
+      ],
+      "native": [
+        {
+          "label": "35b-bench-0-base",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "2c41b56"
+          },
+          "sampled_tps": 183.89,
+          "greedy_tps": 186.39,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4135,
+              "ttft_s": 1.486,
+              "tps": 2782.7,
+              "followup_s": [
+                0.0417,
+                0.045,
+                0.0396
+              ],
+              "followup_median_s": 0.0417,
+              "followup_suffix_tps": 528.0
+            }
+          ],
+          "peak_memory_gb": 19.45,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.11,
+            "gpu_other_max_pct": 1.19,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "35b-bench-1-candidate",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "3ce4320"
+          },
+          "sampled_tps": 188.8,
+          "greedy_tps": 189.78,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 1.4876,
+              "tps": 2778.4,
+              "followup_s": [
+                0.0327,
+                0.0332,
+                0.0382
+              ],
+              "followup_median_s": 0.0332,
+              "followup_suffix_tps": 673.6
+            }
+          ],
+          "peak_memory_gb": 19.45,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "35b-bench-2-base",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "2c41b56"
+          },
+          "sampled_tps": 187.13,
+          "greedy_tps": 188.01,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 1.4852,
+              "tps": 2782.8,
+              "followup_s": [
+                0.042,
+                0.0386,
+                0.0376
+              ],
+              "followup_median_s": 0.0386,
+              "followup_suffix_tps": 531.9
+            }
+          ],
+          "peak_memory_gb": 19.45,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [
+            "decode: repetition loop (distinct-4-gram 0.4735)"
+          ],
+          "invalid": []
+        },
+        {
+          "label": "35b-bench-3-candidate",
+          "exit": 0,
+          "source": {
+            "version": "0.2.31",
+            "commit": "3ce4320"
+          },
+          "sampled_tps": 189.43,
+          "greedy_tps": 189.41,
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 1.4886,
+              "tps": 2776.4,
+              "followup_s": [
+                0.0411,
+                0.0395,
+                0.0451
+              ],
+              "followup_median_s": 0.0411,
+              "followup_suffix_tps": 535.4
+            }
+          ],
+          "peak_memory_gb": 19.45,
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 0.05,
+            "gpu_other_max_pct": 0.56,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        }
+      ]
+    }
+  ],
+  "cancel_status": "complete",
+  "cancellation_arms": [
+    {
+      "label": "4b-0-base",
+      "exit": 1,
+      "failures": [
+        "retry keeps the completed prefix"
+      ],
+      "retry_seconds": 7.769308542367071,
+      "retry_usage": {
+        "prompt_tokens": 15223,
+        "completion_tokens": 32,
+        "total_tokens": 15255,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "kapitsa": {
+          "prefill_ms": 7615.1,
+          "kflash": {
+            "source": "DFlash2",
+            "cycles": 10
+          }
+        }
+      },
+      "rss_before_retry": 3556065280,
+      "rss_after_retry": 3556163584,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.8062091669999063,
+          "rss_bytes": 3555672064
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.65903150010854,
+          "rss_bytes": 3556065280
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.802791249938309,
+          "rss_bytes": 3556786176
+        }
+      ],
+      "contention": {
+        "samples": 74,
+        "mean_foreign_gpu_pct": 0.18,
+        "max_foreign_gpu_pct": 8.27,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 1,
+        "longest_busy_run": 1,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      }
+    },
+    {
+      "label": "4b-1-candidate",
+      "exit": 0,
+      "failures": [],
+      "retry_seconds": 6.877310709096491,
+      "retry_usage": {
+        "prompt_tokens": 15223,
+        "completion_tokens": 32,
+        "total_tokens": 15255,
+        "prompt_tokens_details": {
+          "cached_tokens": 2051
+        },
+        "kapitsa": {
+          "prefill_ms": 6720.1,
+          "kflash": {
+            "source": "DFlash2",
+            "cycles": 10
+          }
+        }
+      },
+      "rss_before_retry": 3542073344,
+      "rss_after_retry": 3542597632,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.8027962907217443,
+          "rss_bytes": 3541811200
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.7867742078378797,
+          "rss_bytes": 3542073344
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.871526916977018,
+          "rss_bytes": 3542958080
+        }
+      ],
+      "contention": {
+        "samples": 73,
+        "mean_foreign_gpu_pct": 0.26,
+        "max_foreign_gpu_pct": 11.33,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 2,
+        "longest_busy_run": 2,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      }
+    },
+    {
+      "label": "4b-2-base",
+      "exit": 1,
+      "failures": [
+        "retry keeps the completed prefix"
+      ],
+      "retry_seconds": 7.768075458239764,
+      "retry_usage": {
+        "prompt_tokens": 15223,
+        "completion_tokens": 32,
+        "total_tokens": 15255,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "kapitsa": {
+          "prefill_ms": 7614.8,
+          "kflash": {
+            "source": "DFlash2",
+            "cycles": 10
+          }
+        }
+      },
+      "rss_before_retry": 3540942848,
+      "rss_after_retry": 3541057536,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.811262832954526,
+          "rss_bytes": 3540680704
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.6872760830447078,
+          "rss_bytes": 3540942848
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.8727534590289,
+          "rss_bytes": 3541516288
+        }
+      ],
+      "contention": {
+        "samples": 74,
+        "mean_foreign_gpu_pct": 0.14,
+        "max_foreign_gpu_pct": 5.14,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 1,
+        "longest_busy_run": 1,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      }
+    },
+    {
+      "label": "4b-3-candidate",
+      "exit": 0,
+      "failures": [],
+      "retry_seconds": 6.86791279213503,
+      "retry_usage": {
+        "prompt_tokens": 15223,
+        "completion_tokens": 32,
+        "total_tokens": 15255,
+        "prompt_tokens_details": {
+          "cached_tokens": 2051
+        },
+        "kapitsa": {
+          "prefill_ms": 6716.1,
+          "kflash": {
+            "source": "DFlash2",
+            "cycles": 10
+          }
+        }
+      },
+      "rss_before_retry": 3556360192,
+      "rss_after_retry": 3557212160,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.74082533409819,
+          "rss_bytes": 3554066432
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.782866124995053,
+          "rss_bytes": 3556360192
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.806216875091195,
+          "rss_bytes": 3559653376
+        }
+      ],
+      "contention": {
+        "samples": 72,
+        "mean_foreign_gpu_pct": 0.23,
+        "max_foreign_gpu_pct": 9.67,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 2,
+        "longest_busy_run": 2,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      }
+    },
+    {
+      "label": "35b-0-base",
+      "exit": 1,
+      "failures": [
+        "retry keeps the completed prefix"
+      ],
+      "retry_seconds": 6.560489208903164,
+      "retry_usage": {
+        "prompt_tokens": 15217,
+        "completion_tokens": 22,
+        "total_tokens": 15239,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "kapitsa": {
+          "prefill_ms": 6412.2,
+          "kflash": {
+            "source": "none",
+            "cycles": 21
+          }
+        }
+      },
+      "rss_before_retry": 19717472256,
+      "rss_after_retry": 19717767168,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.305099666118622,
+          "rss_bytes": 19717177344
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.1728594158776104,
+          "rss_bytes": 19717472256
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.893263790756464,
+          "rss_bytes": 19718242304
+        }
+      ],
+      "contention": {
+        "samples": 72,
+        "mean_foreign_gpu_pct": 0.26,
+        "max_foreign_gpu_pct": 11.03,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 2,
+        "longest_busy_run": 2,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      }
+    },
+    {
+      "label": "35b-1-candidate",
+      "exit": 0,
+      "failures": [],
+      "retry_seconds": 5.8346809996291995,
+      "retry_usage": {
+        "prompt_tokens": 15217,
+        "completion_tokens": 22,
+        "total_tokens": 15239,
+        "prompt_tokens_details": {
+          "cached_tokens": 2051
+        },
+        "kapitsa": {
+          "prefill_ms": 5685.8,
+          "kflash": {
+            "source": "none",
+            "cycles": 21
+          }
+        }
+      },
+      "rss_before_retry": 19720044544,
+      "rss_after_retry": 19720503296,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.3577462090179324,
+          "rss_bytes": 19719553024
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.2908723750151694,
+          "rss_bytes": 19720044544
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.8951769159175456,
+          "rss_bytes": 19720994816
+        }
+      ],
+      "contention": {
+        "samples": 71,
+        "mean_foreign_gpu_pct": 0.2,
+        "max_foreign_gpu_pct": 10.5,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 1,
+        "longest_busy_run": 1,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      }
+    },
+    {
+      "label": "35b-2-base",
+      "exit": 1,
+      "failures": [
+        "retry keeps the completed prefix"
+      ],
+      "retry_seconds": 6.5658605000935495,
+      "retry_usage": {
+        "prompt_tokens": 15217,
+        "completion_tokens": 22,
+        "total_tokens": 15239,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "kapitsa": {
+          "prefill_ms": 6418.1,
+          "kflash": {
+            "source": "none",
+            "cycles": 21
+          }
+        }
+      },
+      "rss_before_retry": 19719847936,
+      "rss_after_retry": 19720208384,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.3007081667892635,
+          "rss_bytes": 19717554176
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.173658291809261,
+          "rss_bytes": 19719847936
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.893625416327268,
+          "rss_bytes": 19721322496
+        }
+      ],
+      "contention": {
+        "samples": 72,
+        "mean_foreign_gpu_pct": 0.06,
+        "max_foreign_gpu_pct": 2.35,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      }
+    },
+    {
+      "label": "35b-3-candidate",
+      "exit": 0,
+      "failures": [],
+      "retry_seconds": 5.830003082752228,
+      "retry_usage": {
+        "prompt_tokens": 15217,
+        "completion_tokens": 22,
+        "total_tokens": 15239,
+        "prompt_tokens_details": {
+          "cached_tokens": 2051
+        },
+        "kapitsa": {
+          "prefill_ms": 5681.6,
+          "kflash": {
+            "source": "none",
+            "cycles": 21
+          }
+        }
+      },
+      "rss_before_retry": 19717865472,
+      "rss_after_retry": 19718045696,
+      "cancellations": [
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.305735250003636,
+          "rss_bytes": 19717586944
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.2693533338606358,
+          "rss_bytes": 19717865472
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.9915878754109144,
+          "rss_bytes": 19718553600
+        }
+      ],
+      "contention": {
+        "samples": 71,
+        "mean_foreign_gpu_pct": 0.04,
+        "max_foreign_gpu_pct": 1.87,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      }
+    }
+  ],
+  "state_cases": {
+    "pid": 59682,
+    "config": {
+      "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state-cases",
+      "test": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py",
+      "test_commit": "d1b3c89154ecceb5e6ff1c792d7d4934bfc94c31",
+      "binaries": {
+        "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+        "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa"
+      },
+      "heads": {
+        "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+        "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+      },
+      "model": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+    },
+    "started_at": "2026-11-07T14:14:27.365777+00:00",
+    "cases": [
+      {
+        "label": "mtp-cancel-base",
+        "initial_cache": 2051,
+        "retry_cache": 0,
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "drafter": {
+          "source": "MTP",
+          "cycles": 11
+        },
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_retained": true
+        }
+      },
+      {
+        "label": "mtp-cancel-candidate",
+        "initial_cache": 2051,
+        "retry_cache": 2051,
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "drafter": {
+          "source": "MTP",
+          "cycles": 11
+        },
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_retained": true
+        }
+      }
+    ],
+    "status": "memory-eviction-base",
+    "comparisons": [
+      {
+        "case": "mtp-cancel",
+        "same_returned_text": true
+      }
+    ]
+  },
+  "state_cases_v2": {
+    "pid": 60076,
+    "config": {
+      "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state-cases-v2",
+      "test": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py",
+      "test_commit": "d1b3c89154ecceb5e6ff1c792d7d4934bfc94c31",
+      "binaries": {
+        "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+        "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa"
+      },
+      "heads": {
+        "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+        "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+      },
+      "model": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+    },
+    "started_at": "2026-11-07T14:16:29.817477+00:00",
+    "cases": [
+      {
+        "label": "memory-eviction-base",
+        "initial_cache": 2051,
+        "retry_cache": 0,
+        "memory_drops": [],
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "checks": {
+          "nonempty": true,
+          "candidate_eviction_exercised": true
+        }
+      },
+      {
+        "label": "memory-eviction-candidate",
+        "initial_cache": 2051,
+        "retry_cache": 0,
+        "memory_drops": [
+          "[kapitsa] memory: dropping the KV cache of slot 0 (2051 tokens cached) for a 13236-token context in slot 1"
+        ],
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "checks": {
+          "nonempty": true,
+          "candidate_eviction_exercised": true
+        }
+      },
+      {
+        "label": "ssd-restart-base",
+        "initial_cache": 2051,
+        "retry_cache": 0,
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": true
+        }
+      },
+      {
+        "label": "ssd-restart-candidate",
+        "initial_cache": 2051,
+        "retry_cache": 0,
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": false
+        }
+      },
+      {
+        "label": "image-ssd-restart-base",
+        "initial_cache": 2117,
+        "retry_cache": 0,
+        "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": true,
+          "candidate_cached_image_not_reencoded": true
+        },
+        "cached_image_not_reencoded": false
+      },
+      {
+        "label": "image-ssd-restart-candidate",
+        "initial_cache": 2117,
+        "retry_cache": 0,
+        "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": false,
+          "candidate_cached_image_not_reencoded": false
+        },
+        "cached_image_not_reencoded": false
+      }
+    ],
+    "status": "complete",
+    "comparisons": [
+      {
+        "case": "memory-eviction",
+        "same_returned_text": true
+      },
+      {
+        "case": "ssd-restart",
+        "same_returned_text": true
+      },
+      {
+        "case": "image-ssd-restart",
+        "same_returned_text": true
+      }
+    ],
+    "all_checks_pass": false
+  },
+  "state_cases_ramfs_v3": {
+    "pid": 60326,
+    "config": {
+      "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state-cases-ramfs-v3",
+      "test": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py",
+      "test_commit": "d1b3c89154ecceb5e6ff1c792d7d4934bfc94c31",
+      "binaries": {
+        "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+        "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa"
+      },
+      "heads": {
+        "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+        "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+      },
+      "model": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+      "temporary_parent": "/Volumes/KapitsaCancel133912",
+      "filesystem_note": "Dedicated 14GiB RAM volume: actual file-cache serialization/restart, no physical SSD timing or durability evidence"
+    },
+    "started_at": "2026-11-07T14:19:54.808219+00:00",
+    "cases": [
+      {
+        "label": "ssd-restart-base",
+        "initial_cache": 2051,
+        "retry_cache": 2051,
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": true
+        }
+      },
+      {
+        "label": "ssd-restart-candidate",
+        "initial_cache": 2051,
+        "retry_cache": 2051,
+        "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": true
+        }
+      },
+      {
+        "label": "image-ssd-restart-base",
+        "initial_cache": 2117,
+        "retry_cache": 2117,
+        "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": true,
+          "candidate_cached_image_not_reencoded": true
+        },
+        "cached_image_not_reencoded": true
+      },
+      {
+        "label": "image-ssd-restart-candidate",
+        "initial_cache": 2117,
+        "retry_cache": 2117,
+        "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_survives_restart": true,
+          "candidate_cached_image_not_reencoded": true
+        },
+        "cached_image_not_reencoded": true
+      }
+    ],
+    "status": "complete",
+    "comparisons": [
+      {
+        "case": "ssd-restart",
+        "same_returned_text": true
+      },
+      {
+        "case": "image-ssd-restart",
+        "same_returned_text": true
+      }
+    ],
+    "all_checks_pass": true
+  },
+  "state_cases_image_ram_v4": {
+    "pid": 60814,
+    "config": {
+      "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state-cases-image-ram-v4",
+      "test": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py",
+      "test_commit": "d1b3c89154ecceb5e6ff1c792d7d4934bfc94c31",
+      "binaries": {
+        "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+        "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa"
+      },
+      "heads": {
+        "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+        "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+      },
+      "model": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+    },
+    "started_at": "2026-11-07T14:22:08.917123+00:00",
+    "cases": [
+      {
+        "label": "image-ram-only-base",
+        "initial_cache": 2117,
+        "retry_cache": 0,
+        "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+        "drafter": {
+          "source": "DFlash2",
+          "cycles": 11
+        },
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_retained": true,
+          "candidate_cached_image_not_reencoded": true
+        },
+        "image_log": "[kapitsa] KV cache 0 -> 15360 positions (566 MB) in 0.3 ms\n[kapitsa] checkpoints: prompt diverges at 0 of 15289, none usable, prefill from 0\n[kapitsa] prefill chunk of 1912 rows: 15289 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 13377 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 11466 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 9555 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 7644 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 5733 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 3822 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 1911 of 15289 left, chunk 2048 even\n[kapitsa] checkpoints: query boundary at 15282 overwrites an empty one\n[kapitsa] KFlash: 25 cycles, 8.00 rows per cycle; cycles by rows 8:25; tokens per cycle expected 3.217, got 3.720; rate 0.3327 tok/ms; cost ms by rows 8:11.85; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)\n[kapitsa] dflash: 3.72 tokens/cycle over 25 cycles\n[kapitsa] chat: 1 image(s), 64 tokens: 0 encoded in 0 ms, 1 from earlier embeddings, 0 in the cached prefix (+0 ms decode/resize before the request)\n[kapitsa] chat: prompt 15289 (cached 0) in 7625 ms (+3.5 ms template/tokenize; last chunk: encoded by 5525.3 ms, GPU start +1031.5 ms, GPU 1068.1 ms, wake +0.1 ms), 32 tokens in 159 ms (194.8 tok/s), length, 2.82 tok/cycle, KFlash (DFlash2): 11 cycles\n"
+      },
+      {
+        "label": "image-ram-only-candidate",
+        "initial_cache": 2117,
+        "retry_cache": 2117,
+        "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+        "drafter": {
+          "source": "DFlash2",
+          "cycles": 11
+        },
+        "checks": {
+          "nonempty": true,
+          "candidate_prefix_retained": true,
+          "candidate_cached_image_not_reencoded": true
+        },
+        "image_log": "[kapitsa] prefill chunk of 1882 rows: 13172 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 11290 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 9408 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 7526 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 5644 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1881 rows: 3762 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1881 rows: 1881 of 15289 left, chunk 2048 even\n[kapitsa] checkpoints: query boundary at 15282 overwrites an empty one\n[kapitsa] KFlash: 25 cycles, 8.00 rows per cycle; cycles by rows 8:25; tokens per cycle expected 3.217, got 3.720; rate 0.3298 tok/ms; cost ms by rows 8:12.08; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)\n[kapitsa] dflash: 3.72 tokens/cycle over 25 cycles\n[kapitsa] chat: 1 image(s), 64 tokens: 0 encoded in 0 ms, 0 from earlier embeddings, 1 in the cached prefix (+0 ms decode/resize before the request)\n[kapitsa] chat: prompt 15289 (cached 2117) in 6722 ms (+2.5 ms template/tokenize; last chunk: encoded by 4640.4 ms, GPU start +1025.3 ms, GPU 1056.5 ms, wake +0.2 ms), 32 tokens in 160 ms (193.5 tok/s), length, 2.82 tok/cycle, KFlash (DFlash2): 11 cycles\n"
+      }
+    ],
+    "status": "complete",
+    "comparisons": [
+      {
+        "case": "image-ram-only",
+        "same_returned_text": true
+      }
+    ],
+    "all_checks_pass": true
+  }
+}

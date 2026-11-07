@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/tmp/verify-kapitsa/ref/b171f983/build/kapitsa",
+    "serve",
+    "--model",
+    "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "50203",
+    "--private",
+    "--slots",
+    "2",
+    "--ctx",
+    "32768",
+    "--disk-cache",
+    "0"
+  ],
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-http-base"
+  }
+}
