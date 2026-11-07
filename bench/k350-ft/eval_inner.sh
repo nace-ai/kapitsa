@@ -6,7 +6,7 @@
 # only dflash2/ differs. Every leg waits for AC and 1-min load < 4; a leg that ends on battery is dropped (rerun once).
 {
 export NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1
-W=~/Documents/nace/kapitsa/.worktrees/k350-ft; BIN=$W/build/ni_run; AG=~/Documents/nace/kapitsa-online-drafter-notes/f3/agent
+W=~/Documents/nace/kapitsa/.worktrees/k350-ft; BIN=$W/build/ni_run; AG=${AG:-~/Documents/nace/kapitsa-online-drafter-notes/f3/agent}
 FT=$W/.ftmodels; O=${O:-/tmp/k350d/eval}; PASSES=${PASSES:-2}
 mkdir -p $O; rm -rf $O/home-ship $O/home-ft; mkdir -p $O/home-ship $O/home-ft
 [ -r $FT/ship/qwen3.6-35b-a3b-4bit/config.json ] && [ -r $FT/ft/qwen3.6-35b-a3b-4bit/dflash2/model.safetensors ] || { echo PREFLIGHT FAIL; exit 9; }
@@ -34,7 +34,7 @@ leg() {  # pass i arm
   done
 }
 for p in $(seq 1 $PASSES); do
-  for i in $(seq 0 18); do
+  for i in $(seq 0 $((${NREQ:-19} - 1))); do
     if [ $((p % 2)) = 1 ]; then leg $p $i ship; leg $p $i ft; else leg $p $i ft; leg $p $i ship; fi
   done
 done

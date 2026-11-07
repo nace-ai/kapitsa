@@ -6,7 +6,7 @@ extra = json.load(open(sys.argv[2])) if len(sys.argv) > 2 else {}
 pat = re.compile(r'dflash decode .*?: (\d+) tok in ([\d.]+) ms .*?, (\d+) cycles, ([\d.]+) tok/cycle')
 rows, hist_on, legs = [], 0, 0
 for p in (1, 2, 3, 4):
-    for i in range(19):
+    for i in range(int(os.environ.get('NREQ', 19))):
         r = {'pass': p, 'req': i}
         for arm in ('ship', 'ft'):
             try:
@@ -39,6 +39,6 @@ for p in sorted({r['pass'] for r in rows}):
 v['per_request'] = [{'pass': r['pass'], 'req': r['req'], 'n': r['ship']['tok'], 'tpc_ship': r['ship']['tpc'], 'tpc_ft': r['ft']['tpc'],
                      'tps_ship': round(r['ship']['tok'] / r['ship']['ms'] * 1000, 1), 'tps_ft': round(r['ft']['tok'] / r['ft']['ms'] * 1000, 1),
                      'identical': r['ship_ids'] == r['ft_ids']} for r in rows]
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERDICT.json')
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.environ.get('VERDICT_NAME', 'VERDICT.json'))
 json.dump(v, open(out, 'w'), indent=1)
 print(json.dumps({k: v[k] for k in v if k != 'per_request'}, indent=1))
