@@ -1,0 +1,9 @@
+ProductName:		macOS
+ProductVersion:		26.4.1
+BuildVersion:		25E253
+hw.memsize: 103079215104
+machdep.cpu.brand_string: Apple M3 Ultra
+Apple clang version 17.0.0 (clang-1700.6.4.2)
+Target: arm64-apple-darwin25.4.0
+Thread model: posix
+InstalledDir: /Library/Developer/CommandLineTools/usr/bin

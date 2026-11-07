@@ -1,0 +1,3 @@
+c7ae3a382e2c46d1da5285140617900469be3fbc69fcaf5cb0a3352ee06bb70e  tools/nh_chat_check.cpp
+2247f3be5bdf0a339cff1c3b5a68e9abba5c94755be4d152663b743ce60f2903  src/engine/output_parser.h
+c136c119a245449387358e665a528ac19eca5ff8699326b46b2edf77dfeaf8ba  build/nh_chat_check
