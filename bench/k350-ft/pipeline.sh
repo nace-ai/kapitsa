@@ -21,7 +21,7 @@ mem_ok() { lv=$(sysctl -n kern.memorystatus_vm_pressure_level)
 wait_mem() { until mem_ok; do echo "waiting for memory $(date +%T) pressure level $lv, free ${fr} GB, big: ${big:-none}"; sleep 60; done; }
 while python3 $DT status k350-ft-j1 | head -1 | grep -q "k350-ft-j1 running"; do sleep 30; done
 echo "j1 ended $(date +%T): $(python3 $DT status k350-ft-j1 | head -1)"
-wait_drive; [ -s $D/data/capt.real.list ] || { echo "no capt.real.list"; exit 2; }
+wait_drive 20; [ -s $D/data/capt.real.list ] || { echo "no capt.real.list"; exit 2; }
 # orchestrator queue order (6 Nov): these jobs take the GPU first; wait until each reports "not running: finished"
 GATE=${GATE:-"k276-ab k363-q1 swift8b ab362 k361-rerun"}
 while :; do
