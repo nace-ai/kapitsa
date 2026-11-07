@@ -12,7 +12,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [Mac Studio (2026) · M5 Max 40-core GPU · 48 GB](#mac-studio-2026--m5-max-40-core-gpu--48-gb) | 2 |
 | [Mac Studio (2026) · M5 Max 40-core GPU · 64 GB](#mac-studio-2026--m5-max-40-core-gpu--64-gb) | 1 |
 | [Mac Studio (2026) · M5 Max 40-core GPU · 128 GB](#mac-studio-2026--m5-max-40-core-gpu--128-gb) | 1 |
-| [Mac Studio (2026) · M5 Ultra 64-core GPU · 96 GB](#mac-studio-2026--m5-ultra-64-core-gpu--96-gb) | 4 |
+| [Mac Studio (2026) · M5 Ultra 64-core GPU · 96 GB](#mac-studio-2026--m5-ultra-64-core-gpu--96-gb) | 5 |
 | [Mac Studio (2026) · M5 Ultra 80-core GPU · 256 GB](#mac-studio-2026--m5-ultra-80-core-gpu--256-gb) | 8 |
 | [Mac mini (2026) · M5 Pro 20-core GPU · 64 GB](#mac-mini-2026--m5-pro-20-core-gpu--64-gb) | 1 |
 | [MacBook Air (13-inch, 2026) · M5 10-core GPU · 24 GB](#macbook-air-13-inch-2026--m5-10-core-gpu--24-gb) | 1 |
@@ -123,6 +123,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-11-06](results/kapitsa-bench-2026-11-06-m5-ultra-qwen3.5-4b-4bit-792517.json) | 503.7 tok/s | 558.7 tok/s | 9,310 tok/s | 8,199 tok/s | 0.03 s | 0.04 s | 5.0 GB | pass | KFlash | 0.2.31 | 27.2 | repetition loop |
+
+### Qwen3.8 27B · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-06](results/kapitsa-bench-2026-11-06-m5-ultra-qwen3.8-27b-4bit-42b33a.json) | 233.5 tok/s | 246.2 tok/s | 1,855 tok/s | 1,782 tok/s | 0.10 s | 0.11 s | 20.5 GB | pass | KFlash | 0.2.31 | 27.2 | – |
 
 ### Qwen3.6 35B-A3B · 4-bit
 
