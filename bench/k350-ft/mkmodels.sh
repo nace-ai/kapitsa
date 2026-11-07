@@ -3,7 +3,10 @@
 # drafter) and ft (dflash2/ = the fine-tuned drafter, copied to the internal disk). Usage: mkmodels.sh <ft_drafter_dir>
 set -e
 W=~/Documents/nace/kapitsa/.worktrees/k350-ft; FT=$W/.ftmodels
-SRC=$(readlink -f ~/Documents/nace/models/qwen3.6-35b-a3b-4bit)
+# 7 Nov: the Extreme Pro came back on a 480 Mb/s link and each eval leg spent 477 s reading the 35B from it; use the
+# internal copy (same shipped drafter, sha256 d1f16c0f...) when present
+SRC=$(readlink -f ~/Documents/nace/kapitsa-home/models-internal/qwen3.6-35b-a3b-4bit)
+[ -r "$SRC/model-00001-of-00004.safetensors" ] || SRC=$(readlink -f ~/Documents/nace/models/qwen3.6-35b-a3b-4bit)
 [ -r "$SRC/config.json" ] && [ -r "$1/model.safetensors" ] || { echo "missing source"; exit 1; }
 for arm in ship ft; do
   D=$FT/$arm/qwen3.6-35b-a3b-4bit; rm -rf "$D"; mkdir -p "$D/dflash2"

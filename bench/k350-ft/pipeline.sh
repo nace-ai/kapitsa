@@ -46,5 +46,5 @@ done
 [ -f $D/ckpt/DONE ] || { echo "training not done"; exit 4; }
 CK=$D/ckpt/best; [ -r $CK/model.safetensors ] || CK=$D/ckpt/last
 echo "drafter for eval: $CK"; bash $S/mkmodels.sh $CK || exit 5
-wait_drive 20; wait_ac; wait_373; wait_mem; $L bash $S/eval_inner.sh; rc=$?
-python3 $S/verdict.py $D/eval; echo "PIPELINE DONE rc=$rc $(date +%T)"
+wait_drive 20; wait_ac; wait_373; wait_mem; O=~/Documents/nace/kapitsa/.worktrees/k350-ft/.ftmodels/eval $L bash $S/eval_inner.sh; rc=$?  # internal disk: KAPITSA_HOME state off the slow drive
+python3 $S/verdict.py ~/Documents/nace/kapitsa/.worktrees/k350-ft/.ftmodels/eval; echo "PIPELINE DONE rc=$rc $(date +%T)"
