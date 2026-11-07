@@ -1,7 +1,7 @@
 {
  "label": "9b",
  "argv": [
-  "/Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-sameleg/bench/coding10/coding10.py",
+  "bench/coding10/coding10.py",
   "--url",
   "http://127.0.0.1:8350",
   "--label",

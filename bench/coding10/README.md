@@ -50,7 +50,8 @@ model (`same-4b.json`, `same-9b.json`).
 | lc_best | 30/30, 0.9 s | 29/30, 2.2 s |
 
 Run side by side, the tuned tool loop is about 5x faster than as ported on 4B and about 3.5x on 9B, so the earlier
-ratios hold. The 9B misses are one run each of `p05_roman` (opt0) and `p06_merge_intervals` (lc_best).
+ratios hold. Misses, one run each: 4B `lc` `p08_caesar`; 9B `opt0` `p05_roman`, `lc` `p07_two_sum` and `p02_palindrome`,
+`lc_best` `p06_merge_intervals`.
 
 ## Tuning rounds
 
