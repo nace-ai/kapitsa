@@ -1,0 +1,25 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 5.04 GB of weights in 253 ms (20.0 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 13 ms
+[kapitsa] prewarmed 93 prefill pipelines in 18 ms
+[kapitsa] loaded /Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit: 32 layers, dense, 5.0 GB mapped in 327 ms; weights 4-bit group 64 100%
+[kapitsa] profile fast: dense ANE FFN with 2048-channel inputs (NI_ANE=0 or KAPITSA_PROFILE=precise turns it off)
+[kapitsa] NI_ANE: 4096-hidden FFN on the Neural Engine (2048-channel input segments; W8A8 changes prefill numerics; NI_ANE=0 disables)
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 16/24 units (8192 channels; GPU 4096) from the NI_ANE_UNITS, chunks >= 512 rows; row scales 0 ms, program cached 1 ms + load 127 ms (13 functions, MIL 106 KB); 272.4 MB Metal; ready in 0.1 s
+[kapitsa] NI_ANE: startup check 2.00% of the ANE's part from the GPU alone (2 functions, 257 ms)
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (228 ms)
+[kapitsa] GPU: Apple M3 Ultra, 60 cores
+[kapitsa] memory: 6.17 GB allocated (model, buffers, 1 slot's state), budget 80.2 GB (recommended working set 83.5 GB): KV room 73.99 GB = 2257865 tokens (32 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.92 GB loaded on the first image
+[kapitsa] drafter: none (turned off with --dflash none or NI_DFLASH)
+[kapitsa] engine ready: qwen3.5-9b, context 32768, 1 slots, plain decoding, KFlash (none), images on
+[kapitsa] listening on http://127.0.0.1:18776
+Ready: chat at http://127.0.0.1:18776, API at http://127.0.0.1:18776/v1 (model "qwen3.5-9b"). Ctrl+C stops.
+[kapitsa] prefill: Neural Engine busy 109% of 1969 ms over 2 split chunks (128 evaluations)
+[kapitsa] chat: prompt 2927 (cached 0) in 1969 ms (+7.8 ms template/tokenize; last chunk: encoded by 1928.4 ms, GPU start +2.6 ms, GPU 38.0 ms, wake +0.2 ms), 64 tokens in 535 ms (117.7 tok/s), length, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] chat: prompt 430 (cached 0) in 413 ms (+0.7 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +367.0 ms, GPU 45.3 ms, wake +0.2 ms), 27 tokens in 222 ms (117.2 tok/s), tool_calls, KFlash (none): 26 cycles, 26 rows, 0 drafts accepted
+[kapitsa] prefill: Neural Engine busy 100% of 2683 ms over 2 split chunks (128 evaluations)
+[kapitsa] chat: prompt 4135 (cached 0) in 2683 ms (+11.1 ms template/tokenize; last chunk: encoded by 2605.5 ms, GPU start +30.2 ms, GPU 47.5 ms, wake +0.2 ms), 42 tokens in 356 ms (115.3 tok/s), stop, KFlash (none): 41 cycles, 41 rows, 0 drafts accepted

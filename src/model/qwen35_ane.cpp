@@ -1,6 +1,7 @@
 // GPU + Neural Engine split of the dense prefill FFN (NI_ANE). See src/ane/ffn_split.h.
 //
 //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
+//   New 2048-channel inputs default to fast on non-matrix Macs; NI_ANE=1/0 overrides. Existing 2560 inputs stay on.
 //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
 //   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
 //   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
@@ -9,6 +10,7 @@
 //   NI_ANE_WAVE=0       the plain split (default: the two-half wavefront, for chunks >= 2 x the
 //                       smallest function; smaller chunks always run the plain split)
 #include "ane/ffn_split.h"
+#include "ane/input_profile.h"
 #include "ane/slabs.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
@@ -189,6 +191,8 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
   if (!m.ffn_ane) return a.source = "FFN weight format not staged by the split; GPU", a;
   if (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")) return a.source = "NI_ANE=0", a;
   if (!ane::FfnSplit::rotate_simdgroups(uint32_t(m.hidden))) return a.source = "hidden size not supported", a;
+  if (!ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(m.hidden))))
+    return a.source = "ANE profile/device policy: GPU", a;
   if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
   const std::string chip = Gpu::get().name();
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
@@ -234,6 +238,10 @@ void Qwen35::ane_finish_init() {
   const uint32_t units = ane_init_.units, min_rows = ane_init_.min_rows;
   const int fault = ane_init_.fault, lanes = ane_init_.lanes;
   if (!ane_rebuild(units, min_rows, ane_init_.fns, fault, lanes)) return;
+  if (cfg_.hidden % 2048 == 0)
+    logi("NI_ANE: %d-hidden FFN on the Neural Engine (%u-channel input segments; "
+         "W8A8 changes prefill numerics; NI_ANE=0 disables)", cfg_.hidden,
+         ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)));
   const char* source = ane_init_.source;
   logi("NI_ANE: Neural Engine FFN split%s: %u/%d units (%u channels; GPU %u) from the %s, chunks >= %u rows; %s; "
        "%.1f MB Metal; ready in %.1f s",

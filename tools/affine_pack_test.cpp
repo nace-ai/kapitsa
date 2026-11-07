@@ -78,6 +78,34 @@ int main() {
   check(affine_bits(0, 80, 64) == 0 && affine_bits(960, 0, 64) == 0 && affine_bits(960, 80, 0) == 0, "empty shapes");
   check(affine_bits(8000, 80, 64) == 0, "more than 8 bits");
 
+  check(affine_bits(8, int64_t(1) << 58, 64) == 0, "group product overflow");
+  check(affine_bits(std::numeric_limits<int64_t>::max(), 1, 64) == 0, "packed word product overflow");
+  check(affine_bits(8, -1, 64) == 0, "negative dimension");
+  auto shape = [](std::vector<int64_t> w, std::vector<int64_t> sc, std::vector<int64_t> bi, int64_t gs = 64) {
+    return affine_matrix_shape(w, sc, bi, gs);
+  };
+  for (int bits : {2, 3, 4, 5, 6, 8}) {
+    check(shape({3, 2 * bits}, {3, 1}, {3, 1}), "affine matrix");
+    check(shape({2, 3, 2 * bits}, {2, 3, 1}, {2, 3, 1}), "stacked affine experts");
+  }
+  check(!shape({}, {1, 1}, {1, 1}), "scalar weight");
+  check(!shape({8}, {1, 1}, {1, 1}), "rank-one weight");
+  check(!shape({1, 1, 1, 8}, {1, 1, 1, 1}, {1, 1, 1, 1}), "rank-four weight");
+  check(!shape({2, 8}, {}, {2, 1}), "scalar scales");
+  check(!shape({2, 8}, {2, 1}, {}), "scalar biases");
+  check(!shape({2, 8}, {1, 1}, {2, 1}), "scale rows differ");
+  check(!shape({2, 8}, {2, 1}, {2, 2}), "bias groups differ");
+  check(!shape({2, 3, 8}, {1, 3, 1}, {1, 3, 1}), "expert count differs");
+  check(!shape({0, 8}, {0, 1}, {0, 1}), "zero rows");
+  check(!shape({2, 0}, {2, 0}, {2, 0}), "zero width");
+  check(!shape({-1, 8}, {-1, 1}, {-1, 1}), "negative rows");
+  check(!shape({2, 8}, {2, 1}, {2, 1}, 0), "zero group size");
+  check(!shape({2, 9}, {2, 1}, {2, 1}), "fractional bit width");
+  const int64_t u32 = std::numeric_limits<uint32_t>::max();
+  check(!shape({u32 + 1, 8}, {u32 + 1, 1}, {u32 + 1, 1}), "rows exceed kernel dimension");
+  check(!shape({2, (u32 / 64 + 1) * 8}, {2, u32 / 64 + 1}, {2, u32 / 64 + 1}), "input width exceeds kernel dimension");
+  check(shape({2, u32 / 64 * 8}, {2, u32 / 64}, {2, u32 / 64}), "largest group-aligned kernel width");
+
   // float16 -> bf16, every bit pattern
   size_t finite = 0, inexact = 0;
   for (uint32_t b = 0; b < 65536; ++b) {

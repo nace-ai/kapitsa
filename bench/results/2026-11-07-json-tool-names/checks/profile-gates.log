@@ -1,0 +1,2 @@
+profile predicate self-test: ok (zz_probe_gate.cpp with wide_cores/m4_pro_20/matrix_units fails)
+profile gate lint: ok (4 call-form hits, 4 files, 75 predicate calls, 7 class gates, 7 guard rows)

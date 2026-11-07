@@ -1,0 +1,8 @@
+PASS: --idle-unload soon is refused
+PASS: --idle-unload -3 is refused
+PASS: --idle-unload 0.1 is refused
+PASS: --idle-unload 20000 is refused
+PASS: --idle-unload nan is refused
+PASS: --idle-unload inf is refused
+PASS: --help names --idle-unload
+test_idle_unload: ok

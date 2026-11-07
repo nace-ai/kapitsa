@@ -1,0 +1,1 @@
+{"command": ["/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/build/logit_dump", "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit", "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/repeat-bar/fast", "--chunk", "2048", "--from", "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step"], "returncode": 0}

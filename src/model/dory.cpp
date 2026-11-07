@@ -16,7 +16,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -84,16 +83,6 @@ Pipeline pipe(const std::string& n) {
   auto it = cache.find(n);
   if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   return it->second;
-}
-
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
 }
 
 uint32_t gpu_cores() {
@@ -203,7 +192,7 @@ DoryConfig Dory::read_config(const std::string& dir) {
       for (auto& x : v)
         if (x.is_number_integer() && std::find(out.begin(), out.end(), x.get<int>()) == out.end()) out.push_back(x.get<int>());
   };
-  const nlohmann::json g = read_json(dir + "/generation_config.json");
+  const nlohmann::json g = *json_file(dir + "/generation_config.json");
   if (g.is_object() && g.contains("eos_token_id")) add_ids(g["eos_token_id"], c.eos);
   if (c.eos.empty() && t.contains("eos_token_id")) add_ids(t["eos_token_id"], c.eos);
   c.bos = int(num("bos_token_id", -1));

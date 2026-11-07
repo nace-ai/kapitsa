@@ -1,0 +1,6 @@
+{
+  "source_sha256": "995ae524216d1fff7ba2e308238e1b9f2eedd42f758a964a579e51cb24c84f37",
+  "binary_sha256": "8a21c03787f1d0468c47a5c42f0b5b276692c3ae9e41197f97d158a4e098470a",
+  "base_library_sha256": "a89905f22aef643a69a23dcf12a0960d3a298d1d65793a0698f8d7a56d421acc",
+  "change": "Driver-only stdin pause before plain encode_step, then ple_forget() to invalidate the speculative gather performed before the input rows were fetched. Libraries unchanged; no timing claim."
+}

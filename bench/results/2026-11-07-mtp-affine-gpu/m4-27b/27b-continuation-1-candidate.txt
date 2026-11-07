@@ -1,0 +1,28 @@
+<think>
+The user wants a detailed tutorial on how a compiler transforms a small programming language into machine code. I need to cover:
+1. Lexical analysis
+2. Parsing
+3. Type checking
+4. Optimization
+5. Register allocation
+6. Code generation
+
+I need to include examples and explain each stage in depth, with at least 2000 words. Let me structure this as a comprehensive tutorial with a running example that flows through all stages. I'll use a simple language (let's call it "MiniLang") and show how a small program gets transformed at each stage.
+
+Let me plan the example:
+- Source: a simple program like `let x = 3; let y = 4; let z = x + y; print(z);`
+- Or maybe something slightly more complex to show more stages: a function with a loop.
+
+Let me use:
+```
+let x = 10;
+let y = 20;
+let z = x + y;
+print(z);
+```
+
+And maybe a slightly more complex one for optimization:
+```
+let a = 5;
+let b = 3;
+let c = a * b + a * b

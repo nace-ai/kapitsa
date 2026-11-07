@@ -1,0 +1,8 @@
+{
+  "head": "5013b61aa69d7115ea769df80d55ecfbf6535ee8",
+  "model": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+  "units_override": null,
+  "calibration_file_exists": false,
+  "old_evidence": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs",
+  "external_engine_evidence_reused": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume"
+}

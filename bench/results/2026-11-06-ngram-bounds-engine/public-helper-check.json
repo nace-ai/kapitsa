@@ -1,0 +1,14 @@
+[
+  {
+    "variant": "affine",
+    "bytes": 344944,
+    "complete_bytes_equal_to_recorded_input": true,
+    "sha256": "c5812e4ad759cb2e2df02bc8547695a74ef93266b56ee3d233514c72adda1d1e"
+  },
+  {
+    "variant": "bf16",
+    "bytes": 1067776,
+    "complete_bytes_equal_to_recorded_input": true,
+    "sha256": "def8d80d3f8f50ca2aa698c6efd3256ee4c73907dd05c4539a8dcaedc1d9cde2"
+  }
+]

@@ -1,0 +1,157 @@
+[
+  {
+    "cmd": [
+      "build/drafter_attach_test"
+    ],
+    "exit": 0,
+    "log": "00-drafter_attach_test.log"
+  },
+  {
+    "cmd": [
+      "build/exl3_test"
+    ],
+    "exit": 0,
+    "log": "01-exl3_test.log"
+  },
+  {
+    "cmd": [
+      "build/device_profile_test"
+    ],
+    "exit": 0,
+    "log": "02-device_profile_test.log"
+  },
+  {
+    "cmd": [
+      "build/qwen4_config_test"
+    ],
+    "exit": 0,
+    "log": "03-qwen4_config_test.log"
+  },
+  {
+    "cmd": [
+      "build/json_file_test"
+    ],
+    "exit": 0,
+    "log": "04-json_file_test.log"
+  },
+  {
+    "cmd": [
+      "build/affine_pack_test"
+    ],
+    "exit": 0,
+    "log": "05-affine_pack_test.log"
+  },
+  {
+    "cmd": [
+      "build/systemone_test"
+    ],
+    "exit": 0,
+    "log": "06-systemone_test.log"
+  },
+  {
+    "cmd": [
+      "build/systemone_codes_probe_test"
+    ],
+    "exit": 0,
+    "log": "07-systemone_codes_probe_test.log"
+  },
+  {
+    "cmd": [
+      "build/execution_session_test"
+    ],
+    "exit": 0,
+    "log": "08-execution_session_test.log"
+  },
+  {
+    "cmd": [
+      "build/http_stream_test"
+    ],
+    "exit": 0,
+    "log": "09-http_stream_test.log"
+  },
+  {
+    "cmd": [
+      "build/ws_upgrade_test"
+    ],
+    "exit": 0,
+    "log": "10-ws_upgrade_test.log"
+  },
+  {
+    "cmd": [
+      "build/splash_protocol_test"
+    ],
+    "exit": 0,
+    "log": "11-splash_protocol_test.log"
+  },
+  {
+    "cmd": [
+      "build/splash_runtime_test"
+    ],
+    "exit": 0,
+    "log": "12-splash_runtime_test.log"
+  },
+  {
+    "cmd": [
+      "build/splash_discover_test"
+    ],
+    "exit": 0,
+    "log": "13-splash_discover_test.log"
+  },
+  {
+    "cmd": [
+      "build/splash_plan_test"
+    ],
+    "exit": 0,
+    "log": "14-splash_plan_test.log"
+  },
+  {
+    "cmd": [
+      "build/load_error_test"
+    ],
+    "exit": 1,
+    "log": "15-load_error_test.log"
+  },
+  {
+    "cmd": [
+      "python3",
+      "tests/test_drex_max.py",
+      "--cli",
+      "build"
+    ],
+    "exit": 0,
+    "log": "16-python3.log"
+  },
+  {
+    "cmd": [
+      "python3",
+      "tests/test_profile_gates.py"
+    ],
+    "exit": 0,
+    "log": "17-python3.log"
+  },
+  {
+    "cmd": [
+      "python3",
+      "tests/test_comment_gates.py"
+    ],
+    "exit": 0,
+    "log": "18-python3.log"
+  },
+  {
+    "cmd": [
+      "python3",
+      "tests/test_logit_dump.py",
+      "build"
+    ],
+    "exit": 0,
+    "log": "19-python3.log"
+  },
+  {
+    "cmd": [
+      "python3",
+      "tools/qwen4_exp_pack_test.py"
+    ],
+    "exit": 0,
+    "log": "20-python3.log"
+  }
+]

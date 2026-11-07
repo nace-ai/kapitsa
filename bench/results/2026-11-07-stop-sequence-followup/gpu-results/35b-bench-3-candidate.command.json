@@ -1,0 +1,21 @@
+{
+  "label": "35b-bench-3-candidate",
+  "argv": [
+    "/Users/bytedance/kapitsa-stop-sequence-20261107/candidate/build/kapitsa",
+    "bench",
+    "--model",
+    "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+    "--quick",
+    "--json",
+    "--out",
+    "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/35b-bench-3-candidate.json"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-stop-sequence-20261107/candidate",
+  "started_at": "2026-11-07T07:39:59.988887+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/home-35b-bench-3-candidate"
+  }
+}

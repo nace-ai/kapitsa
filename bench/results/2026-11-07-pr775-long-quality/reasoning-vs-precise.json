@@ -1,0 +1,91 @@
+{
+ "labels": {
+  "long-reasoning": {
+   "bf16-m3": {
+    "problems": 4,
+    "samples": 4,
+    "accuracy": 0.75,
+    "ci95": [
+     0.25,
+     1.0
+    ],
+    "cut_short": 1,
+    "no_answer": 1,
+    "answered_in_thinking": 0,
+    "looping": 3,
+    "completion_tokens_median": 25815,
+    "tok_s_median": 36.7,
+    "by_level": {
+     "4": 1.0,
+     "5": 0.6666666666666666
+    }
+   },
+   "m4-precise": {
+    "problems": 4,
+    "samples": 4,
+    "accuracy": 0.25,
+    "ci95": [
+     0.0,
+     0.75
+    ],
+    "cut_short": 3,
+    "no_answer": 3,
+    "answered_in_thinking": 0,
+    "looping": 4,
+    "completion_tokens_median": 32768,
+    "tok_s_median": 45.8,
+    "by_level": {
+     "4": 0.0,
+     "5": 0.3333333333333333
+    }
+   },
+   "m4-fast": {
+    "problems": 4,
+    "samples": 4,
+    "accuracy": 0.25,
+    "ci95": [
+     0.0,
+     0.75
+    ],
+    "cut_short": 3,
+    "no_answer": 3,
+    "answered_in_thinking": 0,
+    "looping": 4,
+    "completion_tokens_median": 32768,
+    "tok_s_median": 46.0,
+    "by_level": {
+     "4": 0.0,
+     "5": 0.3333333333333333
+    }
+   }
+  }
+ },
+ "paired": {
+  "long-reasoning": {
+   "bf16-m3": {
+    "problems": 4,
+    "difference": 0.5,
+    "ci95": [
+     0.0,
+     1.0
+    ],
+    "better": 2,
+    "worse": 0,
+    "mcnemar_p": 0.5,
+    "baseline": "m4-precise"
+   },
+   "m4-fast": {
+    "problems": 4,
+    "difference": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "better": 0,
+    "worse": 0,
+    "mcnemar_p": 1.0,
+    "baseline": "m4-precise"
+   }
+  }
+ }
+}

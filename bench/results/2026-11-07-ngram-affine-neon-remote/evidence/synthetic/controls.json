@@ -1,0 +1,5 @@
+{
+  "identical_affine_layouts_agree": true,
+  "different_bf16_payload_changes_logits": true,
+  "scope": "Synthetic integration only; no tokenizer/language or inference speed claim."
+}

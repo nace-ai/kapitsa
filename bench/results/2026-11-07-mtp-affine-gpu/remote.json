@@ -1,0 +1,34 @@
+{
+  "output": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-full",
+  "trees": {
+    "base": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+    "candidate": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate"
+  },
+  "builds": {
+    "base": "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build",
+    "candidate": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build"
+  },
+  "heads": {
+    "base": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+    "candidate": "8e12c3d09ac4118775755000d75f5fdbe6cbca35"
+  },
+  "ready_files": [
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/base-built-1041",
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate-built-1041"
+  ],
+  "models": [
+    {
+      "name": "4b",
+      "path": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+      "mtp": true
+    },
+    {
+      "name": "35b",
+      "path": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+      "mtp": false
+    }
+  ],
+  "tokenizer_source": "/Users/bytedance/kapitsa-mtp-affine-20261107/tokenizer.cpp",
+  "loader_test": true,
+  "min_free_bytes": 6442450944
+}

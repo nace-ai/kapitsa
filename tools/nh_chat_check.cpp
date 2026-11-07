@@ -157,6 +157,36 @@ int main(int argc, char** argv) {
     parse("<TOOLCALL>[{not json}]</TOOLCALL>", false, true, b);
     check("a call that is not JSON stays text", b.tool_calls.empty() && b.content == "<TOOLCALL>[{not json}]</TOOLCALL>",
           show(b.content));
+    const ojson valid = {{"name", "read_file"}, {"arguments", {{"path", "/etc/hosts"}}}};
+    const std::string following = "<TOOLCALL>" + ojson::array({valid}).dump() + "</TOOLCALL>";
+    for (const std::string name : {"", " ", "\t\r\n"}) {
+      const ojson blank = {{"name", name}, {"arguments", ojson::object()}};
+      for (const ojson& body : {blank, ojson::array({blank}), ojson::array({valid, blank}),
+                                ojson::array({blank, valid})}) {
+        const std::string raw = "<TOOLCALL>" + body.dump() + "</TOOLCALL>";
+        const std::string label = "blank JSON call name " + body.dump();
+        ChatResult alone;
+        parse(raw, false, true, alone);
+        check(label + ": the whole object or list stays text",
+              alone.tool_calls.empty() && alone.content == raw, show(alone.content));
+        ChatResult next;
+        parse(raw + following, false, true, next);
+        check(label + ": a later valid block still becomes a call",
+              next.content == raw && next.tool_calls.size() == 1 && next.tool_calls[0].name == "read_file" &&
+                  ojson::parse(next.tool_calls[0].arguments) == valid["arguments"], show(next.content));
+        ChatResult disabled;
+        parse(raw + following, false, false, disabled);
+        check(label + ": parsing disabled keeps both blocks",
+              disabled.tool_calls.empty() && disabled.content == raw + following, show(disabled.content));
+      }
+    }
+    for (const std::string name : {" read_file ", "read_file", "讀檔"}) {
+      ChatResult named;
+      const ojson body = {{"name", name}, {"arguments", ojson::object()}};
+      parse("<TOOLCALL>" + body.dump() + "</TOOLCALL>", false, true, named);
+      check("a nonblank JSON name is not normalized: " + ojson(name).dump(),
+            named.content.empty() && named.tool_calls.size() == 1 && named.tool_calls[0].name == name);
+    }
     ChatResult c;
     parse("The tag starts with <TOOL", false, true, c);
     check("a reply cut inside a tag: the text as it is", c.tool_calls.empty() && c.content == "The tag starts with <TOOL",

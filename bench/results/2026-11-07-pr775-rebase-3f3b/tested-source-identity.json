@@ -1,0 +1,10 @@
+{
+  "tested_head": "50fadecc932863bff4d3f81a7a20d3913be3e15b",
+  "base": "3f3b3cef4b2e81138e072c86c8448247abfc21a4",
+  "source_comments_only_uncommitted": "diff --git a/src/engine/device_profile.h b/src/engine/device_profile.h\nindex 34f3980f..268fd313 100644\n--- a/src/engine/device_profile.h\n+++ b/src/engine/device_profile.h\n@@ -98,7 +98,7 @@ std::string format_profile(const DeviceProfile&, bool as_json);\n // The one live read. Doctor passes RAM and the Neural Engine; this reads the GPU. Not linked into the CPU test.\n DeviceFacts facts_from_gpu(long ram_bytes, bool ane);\n \n-// The live device, resolved once. RAM and the ANE stay 0/false in it: no row keys on them, and doctor resolves its\n+// The live device, resolved once. RAM and the ANE stay 0/false in it: no default_on row keys on them, and doctor resolves its\n // own with them filled for its print.\n const DeviceProfile& current_device();\n \ndiff --git a/src/engine/device_profile_live.cpp b/src/engine/device_profile_live.cpp\nindex 26ddc209..35f8ff3c 100644\n--- a/src/engine/device_profile_live.cpp\n+++ b/src/engine/device_profile_live.cpp\n@@ -18,7 +18,7 @@ DeviceFacts facts_from_gpu(long ram_bytes, bool ane) {\n }\n \n const DeviceProfile& current_device() {\n-  // Resolved once, the way the call sites cached their own checks. No row keys on RAM or the ANE, so they stay\n+  // Resolved once, the way the call sites cached their own checks. No default_on row keys on RAM or the ANE, so they stay\n   // unset here; doctor resolves its own with them filled for its print.\n   static const DeviceProfile p = resolve_device(facts_from_gpu(0, false));\n   return p;\n",
+  "binary_sha256": {
+    "kapitsa": "57da10f901b654277ec5f9f99f6c93de43d2e206d55d438623e14cfefee7dbb2",
+    "logit_dump": "ff5f2837be4ac12882877c7502a61bbd881f4418815136238396ac6444e026b5",
+    "ane_segment_check": "72080449976d737641b698bc75fdc86670562d9d1e4c690484f2e21652c20e40"
+  }
+}

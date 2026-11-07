@@ -31,11 +31,6 @@ Pipeline pipe_iq(const std::string& n) {
 
 kp::IqSec sec(const QLinear& q) { return kp::IqSec{q.iq_x1, q.iq_x2, q.iq_x3, q.iq_d}; }
 
-int env_int(const char* n, int def) {
-  const char* v = getenv(n);
-  return v && *v ? atoi(v) : def;
-}
-
 }  // namespace
 
 // The routed experts' blocks are deferred by the WeightStore: read here, one matrix at a time, and moved into the GPU

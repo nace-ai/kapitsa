@@ -1,0 +1,24 @@
+{
+  "cmd": [
+    "build/kapitsa",
+    "serve",
+    "--model",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/scalar-model",
+    "--host",
+    "127.0.0.1",
+    "--private",
+    "--port",
+    "18147",
+    "--slots",
+    "1",
+    "--ctx",
+    "2048",
+    "--disk-cache",
+    "0"
+  ],
+  "source": "b171f983 + working diff",
+  "exit": 1,
+  "at": "2026-11-07T05:21:16.972168+00:00",
+  "original_model": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+  "overlay": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/scalar-model"
+}

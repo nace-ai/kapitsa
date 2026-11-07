@@ -1,0 +1,172 @@
+{
+ "schema": 2,
+ "label": "B2",
+ "model": "qwen3.5-9b",
+ "base_url": "http://127.0.0.1:18776/v1",
+ "when": "2026-11-07 05:08:52",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:18776/v1",
+  "model": "qwen3.5-9b",
+  "label": "B2",
+  "pid": 62360,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 0,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,tools,agent",
+  "cached_increment": false,
+  "increment_prefixes": "8000",
+  "increment_tokens": 8000,
+  "increment_turns": 2,
+  "increment_repeats": 2,
+  "agentic": false,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 2,
+  "sweep_task": "summary",
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/candidate-current-pr775/bench/harness/agent-traces/opencode-ledger.json",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current-performance/perf-B2.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "9cca6b0d181d020cad9949eb002ba274baeaaf45",
+  "dirty": false
+ },
+ "phases": {
+  "prefill_4000": [
+   1793999332.071,
+   1793999335.123
+  ]
+ },
+ "memory": {
+  "prefill_4000": {
+   "pids": [
+    {
+     "pid": 62360,
+     "name": "kapitsa",
+     "phys_footprint": 6723015144,
+     "phys_footprint_peak": 6769086952,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 8830976,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 6411.6,
+   "phys_footprint_peak_mb": 6455.5,
+   "mapped_file_clean_mb": 8.4,
+   "swap_used_mb": 72.06,
+   "memorystatus_level": 86,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null
+ },
+ "vm_start": {
+  "swap_used_mb": 72.06,
+  "swapouts": 10252,
+  "swapins": 5692,
+  "pageouts": 3268,
+  "memorystatus_level": 88
+ },
+ "prefill": [
+  {
+   "target": 4000,
+   "invalid": [],
+   "flags": [],
+   "prompt_tokens": 4135,
+   "expected_prompt_tokens": 4133,
+   "ttft_s": 2.6959159588441253,
+   "prefill_tps": 1533.8015216812926,
+   "cold_cached_tokens": 0,
+   "first_event_chars": 3,
+   "timings": null,
+   "finish": "stop",
+   "answer": "The file `modeling_granite_speech.py` defines the core neural network components and forward passes for the Granite Speech multimodal model, including its audio encoder, projector, and language modeling architecture.",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [],
+    "invalid": [],
+    "flags": [],
+    "median_ttft_s": null
+   },
+   "turn2_ttft_s": null,
+   "turn1_finish": "stop"
+  }
+ ],
+ "peak_rss_mb": 5057,
+ "peak_footprint_mb": 6380,
+ "power_info": [],
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 6455.5,
+ "mapped_file_clean_mb": 8.4,
+ "vm_end": {
+  "swap_used_mb": 72.06,
+  "swapouts": 10252,
+  "swapins": 5692,
+  "pageouts": 3268,
+  "memorystatus_level": 86
+ },
+ "when_end": "2026-11-07 05:08:55"
+}
