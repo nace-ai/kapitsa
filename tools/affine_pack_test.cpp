@@ -10,6 +10,7 @@
 #include "model/affine_pack.h"
 #include "model/affine_coeff_fixed.h"
 
+#include <bit>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -107,12 +108,18 @@ int main() {
   check(shape({2, u32 / 64 * 8}, {2, u32 / 64}, {2, u32 / 64}), "largest group-aligned kernel width");
 
   // float16 -> bf16, every bit pattern
-  size_t finite = 0, inexact = 0;
+  size_t finite = 0, inexact = 0, half_nans = 0;
   for (uint32_t b = 0; b < 65536; ++b) {
     const _Float16 h = f16_from_bits(uint16_t(b));
     const float v = float(h);
-    if (std::isnan(v)) continue;
     uint16_t out = 0;
+    if (std::isnan(v)) {
+      check(to_bf16(&h, &out, 1) == 1, "NaN stays counted as inexact");
+      check(std::isnan(bf16_to_f32(out)) && (out & 0x40), "float16 NaN stays a quiet NaN");
+      check((out & 0x8000) == (b & 0x8000), "float16 NaN sign preserved");
+      ++half_nans;
+      continue;
+    }
     const size_t lossy = to_bf16(&h, &out, 1);
     const float back = bf16_to_f32(out);
     if (std::isinf(v)) {
@@ -149,6 +156,42 @@ int main() {
     check(to_bf16(&h, &out, 1) == 0 && out == uint16_t(b), "a bf16 value that float16 holds round-trips");
   }
   check(from_bf16 > 7000, "many bf16 values pass through float16 exactly");
+  check(half_nans == 2046, "all float16 NaN patterns were visited");
+  // Every binary32 NaN payload and sign must remain a quiet NaN, even when the payload lies entirely in
+  // discarded bits or the old rounding carry overflows the exponent. Exercise the loader's bulk helper too.
+  size_t float_nans = 0;
+  for (uint32_t sign : {0u, 0x80000000u}) {
+    for (uint32_t payload = 1; payload < 0x800000u; ++payload) {
+      const float f = std::bit_cast<float>(sign | 0x7f800000u | payload);
+      uint16_t out = 0;
+      check(to_bf16(&f, &out, 1) == 1, "float32 NaN stays counted as inexact");
+      check(std::isnan(bf16_to_f32(out)) && (out & 0x40), "float32 NaN stays a quiet NaN");
+      check((out & 0x8000) == (sign >> 16), "float32 NaN sign preserved");
+      ++float_nans;
+    }
+  }
+  // Adjacent bf16 numbers bound every finite rounding interval. Check its endpoints and both sides of the
+  // midpoint using double-precision distances, including the subnormal/normal boundary and overflow to infinity.
+  size_t rounding_cases = 0;
+  for (uint32_t hi = 0; hi < 0x7f80u; ++hi) {
+    for (uint32_t lo : {0u, 1u, 0x7fffu, 0x8000u, 0x8001u, 0xffffu}) {
+      const uint32_t bits = (hi << 16) | lo;
+      const double f = std::bit_cast<float>(bits);
+      const double lower = bf16_to_f32(uint16_t(hi));
+      const double upper = hi == 0x7f7fu ? std::ldexp(1.0, 128) : bf16_to_f32(uint16_t(hi + 1));
+      const double dl = f - lower, du = upper - f;
+      const uint16_t expected = uint16_t(hi + (du < dl || (du == dl && (hi & 1u))));
+      for (uint32_t sign : {0u, 0x80000000u}) {
+        const float input = std::bit_cast<float>(bits | sign);
+        check(f32_to_bf16(input) == uint16_t(expected | (sign >> 16)), "nearest-even finite rounding");
+        ++rounding_cases;
+      }
+    }
+  }
+  for (uint32_t bits : {0u, 0x80000000u, 0x7f800000u, 0xff800000u})
+    check(f32_to_bf16(std::bit_cast<float>(bits)) == uint16_t(bits >> 16), "signed zero and infinity unchanged");
+  printf("bf16 special values: %zu float16 NaNs, %zu float32 NaNs; %zu finite rounding cases\n",
+         half_nans, float_nans, rounding_cases);
   // float32
   {
     const float f[3] = {1.0f, 1.0f + 0x1p-10f, 3.0e-39f};
