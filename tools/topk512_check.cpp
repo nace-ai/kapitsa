@@ -52,9 +52,10 @@ struct Router {
   ~Router() { for (Buffer* b : {&logits, &shared, &ids_store[0], &ids_store[1], &wts_store[0], &wts_store[1]}) g.release(*b); }
   double run(int v, int repeats = 1) {
     const struct { unsigned E, k, norm; } p{E, K, norm};
+    const int storage_variant = repeats > 1 ? 0 : v;  // timing arms write the same addresses
     auto e = g.begin();
     for (int i = 0; i < repeats; ++i) {
-      e->use(pipes[v]); e->buf(0, logits); e->buf(1, shared); e->buf(2, ids[v]); e->buf(3, wts[v]); e->val(4, p);
+      e->use(pipes[v]); e->buf(0, logits); e->buf(1, shared); e->buf(2, ids[storage_variant]); e->buf(3, wts[storage_variant]); e->val(4, p);
       e->dispatch(R, 1, 1, 32);
     }
     e->commit_and_wait(); return e->gpu_ms() * 1000 / repeats;
