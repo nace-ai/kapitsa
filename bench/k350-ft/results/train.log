@@ -1,0 +1,335 @@
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+step 0 val ce 1.9541 sel 0.8452 walk tok/cycle proxy 4.5019 (46 s)
+step 1 done: anchors 48, seq len 1430, driver memory 14.69 GiB, footprint 18.00 GB, 1.4 s into chunk
+step 10 done: anchors 48, seq len 815, driver memory 16.16 GiB, footprint 19.00 GB, 10.0 s into chunk
+step 20 done: anchors 48, seq len 983, driver memory 16.64 GiB, footprint 20.00 GB, 19.9 s into chunk
+swap used 9.9 GB over 8 GB at step 25: state saved, chunk stops
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 25, 25 s done
+step 30 done: anchors 48, seq len 1617, driver memory 16.62 GiB, footprint 22.00 GB, 5.5 s into chunk
+step 40 done: anchors 48, seq len 1259, driver memory 17.61 GiB, footprint 24.00 GB, 15.4 s into chunk
+swap used 9.8 GB over 8 GB at step 50: state saved, chunk stops
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 50, 51 s done
+step 75 footprint 21.0 GB loss 1.3748 ema 0.9542 ce 1.1480 sel 0.4537 lr 3.00e-05 77 s
+step 100 footprint 23.0 GB loss 0.0003 ema 0.9377 ce 0.0002 sel 0.0003 lr 3.00e-05 103 s
+step 125 footprint 24.0 GB loss 0.6800 ema 0.9091 ce 0.5443 sel 0.2714 lr 3.00e-05 129 s
+step 150 footprint 25.0 GB loss 2.0281 ema 0.8724 ce 1.6774 sel 0.7014 lr 2.99e-05 155 s
+step 175 footprint 25.0 GB loss 0.4789 ema 0.9077 ce 0.3570 sel 0.2437 lr 2.99e-05 181 s
+step 200 footprint 28.0 GB loss 2.5244 ema 0.9823 ce 2.1588 sel 0.7313 lr 2.99e-05 206 s
+step 225 footprint 28.0 GB loss 2.6965 ema 1.0027 ce 2.2357 sel 0.9215 lr 2.98e-05 232 s
+step 250 footprint 29.0 GB loss 1.1720 ema 1.0080 ce 0.9921 sel 0.3599 lr 2.98e-05 259 s
+footprint 31.0 GB over K350_MAX_GB at step 275: state saved, chunk ends early
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 275, 285 s done
+mem step 275: allocated 9.30 GiB, driver 9.78 GiB, footprint 15.00 GB
+step 300 footprint 25.0 GB loss 0.9028 ema 1.4997 ce 0.7052 sel 0.3954 lr 2.97e-05 309 s
+step 300 val ce 0.6692 sel 0.3005 walk tok/cycle proxy 6.1600
+saved best at step 300
+mem step 300: allocated 11.52 GiB, driver 18.13 GiB, footprint 25.00 GB
+step 325 footprint 28.0 GB loss 0.4984 ema 1.2288 ce 0.4095 sel 0.1779 lr 2.90e-05 598 s
+mem step 325: allocated 11.47 GiB, driver 20.57 GiB, footprint 28.00 GB
+step 350 footprint 28.0 GB loss 0.4274 ema 1.1617 ce 0.3491 sel 0.1568 lr 2.89e-05 628 s
+mem step 350: allocated 11.41 GiB, driver 20.51 GiB, footprint 28.00 GB
+step 375 footprint 28.0 GB loss 0.0401 ema 1.1438 ce 0.0241 sel 0.0319 lr 2.88e-05 658 s
+mem step 375: allocated 11.36 GiB, driver 20.92 GiB, footprint 28.00 GB
+step 400 footprint 30.0 GB loss 0.8046 ema 0.9664 ce 0.6127 sel 0.3837 lr 2.87e-05 687 s
+mem step 400: allocated 11.46 GiB, driver 22.74 GiB, footprint 30.00 GB
+step 425 footprint 30.0 GB loss 0.8372 ema 0.9200 ce 0.6376 sel 0.3992 lr 2.86e-05 715 s
+mem step 425: allocated 11.44 GiB, driver 23.06 GiB, footprint 30.00 GB
+footprint 31.0 GB over K350_MAX_GB at step 450: state saved, chunk ends early
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 450, 745 s done
+mem step 450: allocated 9.30 GiB, driver 9.78 GiB, footprint 13.00 GB
+step 475 footprint 24.0 GB loss 0.8870 ema 1.2469 ce 0.7542 sel 0.2656 lr 2.83e-05 771 s
+mem step 475: allocated 11.28 GiB, driver 19.59 GiB, footprint 24.00 GB
+step time 1.07 s over steps 450-475 (pad 2048)
+step 500 footprint 24.0 GB loss 0.0251 ema 1.0655 ce 0.0210 sel 0.0082 lr 2.82e-05 798 s
+mem step 500: allocated 11.28 GiB, driver 20.45 GiB, footprint 24.00 GB
+step time 1.08 s over steps 475-500 (pad 2048)
+step 525 footprint 24.0 GB loss 1.1062 ema 1.1014 ce 0.9149 sel 0.3827 lr 2.81e-05 827 s
+mem step 525: allocated 11.28 GiB, driver 20.29 GiB, footprint 24.00 GB
+step time 1.13 s over steps 500-525 (pad 2048)
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 450, 745 s done
+mem step 450: allocated 9.30 GiB, driver 9.78 GiB, footprint 13.00 GB
+step 475 skipped 0 footprint 24.0 GB loss 0.8870 ema 1.2469 ce 0.7542 sel 0.2656 lr 2.83e-05 775 s
+mem step 475: allocated 11.28 GiB, driver 19.78 GiB, footprint 24.00 GB
+step time 1.22 s over steps 450-475 (pad 2048)
+step 500 skipped 0 footprint 25.0 GB loss 0.0251 ema 1.0655 ce 0.0210 sel 0.0082 lr 2.82e-05 804 s
+mem step 500: allocated 11.28 GiB, driver 20.60 GiB, footprint 25.00 GB
+step time 1.16 s over steps 475-500 (pad 2048)
+step 525 skipped 0 footprint 25.0 GB loss 1.1063 ema 1.1014 ce 0.9149 sel 0.3827 lr 2.80e-05 835 s
+mem step 525: allocated 11.28 GiB, driver 20.54 GiB, footprint 25.00 GB
+step time 1.24 s over steps 500-525 (pad 2048)
+step 550 skipped 0 footprint 26.0 GB loss 0.5392 ema 1.0011 ce 0.3835 sel 0.3113 lr 2.79e-05 866 s
+mem step 550: allocated 11.28 GiB, driver 22.03 GiB, footprint 26.00 GB
+step time 1.25 s over steps 525-550 (pad 2048)
+step 575 skipped 0 footprint 26.0 GB loss 0.3025 ema 0.9813 ce 0.2336 sel 0.1378 lr 2.78e-05 895 s
+mem step 575: allocated 11.27 GiB, driver 22.13 GiB, footprint 26.00 GB
+step time 1.14 s over steps 550-575 (pad 2048)
+step 600 skipped 0 footprint 27.0 GB loss 0.5980 ema 0.8239 ce 0.4480 sel 0.3001 lr 2.76e-05 920 s
+step 600 val ce 0.7066 sel 0.3149 walk tok/cycle proxy 6.0516
+mem step 600: allocated 11.28 GiB, driver 21.38 GiB, footprint 28.00 GB
+step time 8.62 s over steps 575-600 (pad 2048)
+step 625 skipped 0 footprint 29.0 GB loss 0.1355 ema 0.9389 ce 0.1026 sel 0.0659 lr 2.64e-05 1136 s
+mem step 625: allocated 11.28 GiB, driver 22.90 GiB, footprint 29.00 GB
+step time 1.02 s over steps 600-625 (pad 2048)
+step 650 skipped 0 footprint 29.0 GB loss 0.6533 ema 0.9419 ce 0.5132 sel 0.2803 lr 2.63e-05 1162 s
+mem step 650: allocated 11.27 GiB, driver 23.10 GiB, footprint 29.00 GB
+step time 1.05 s over steps 625-650 (pad 2048)
+step 675 skipped 0 footprint 29.0 GB loss 0.0681 ema 0.9216 ce 0.0594 sel 0.0175 lr 2.61e-05 1190 s
+mem step 675: allocated 11.23 GiB, driver 23.42 GiB, footprint 29.00 GB
+step time 1.11 s over steps 650-675 (pad 2048)
+footprint 30.0 GB over K350_MAX_GB at step 700: state saved, chunk ends early
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 700, 1218 s done
+mem step 700: allocated 9.30 GiB, driver 9.78 GiB, footprint 13.00 GB
+step 725 skipped 0 footprint 23.0 GB loss 2.3294 ema 0.7275 ce 1.9752 sel 0.7084 lr 2.58e-05 1246 s
+mem step 725: allocated 11.40 GiB, driver 18.98 GiB, footprint 23.00 GB
+step time 1.13 s over steps 700-725 (pad 2048)
+step 750 skipped 0 footprint 24.0 GB loss 0.6232 ema 0.6845 ce 0.5286 sel 0.1893 lr 2.56e-05 1273 s
+mem step 750: allocated 11.27 GiB, driver 20.40 GiB, footprint 24.00 GB
+step time 1.07 s over steps 725-750 (pad 2048)
+step 775 skipped 0 footprint 25.0 GB loss 0.7508 ema 0.7697 ce 0.5581 sel 0.3853 lr 2.54e-05 1300 s
+mem step 775: allocated 11.28 GiB, driver 20.92 GiB, footprint 25.00 GB
+step time 1.09 s over steps 750-775 (pad 2048)
+step 800 skipped 0 footprint 25.0 GB loss 0.0152 ema 0.8057 ce 0.0112 sel 0.0079 lr 2.52e-05 1327 s
+mem step 800: allocated 11.27 GiB, driver 21.48 GiB, footprint 25.00 GB
+step time 1.09 s over steps 775-800 (pad 2048)
+step 825 skipped 0 footprint 25.0 GB loss 0.3295 ema 0.8742 ce 0.2142 sel 0.2306 lr 2.50e-05 1355 s
+mem step 825: allocated 11.45 GiB, driver 21.23 GiB, footprint 25.00 GB
+step time 1.11 s over steps 800-825 (pad 2048)
+step 850 skipped 0 footprint 26.0 GB loss 0.5741 ema 0.8590 ce 0.4555 sel 0.2372 lr 2.48e-05 1384 s
+mem step 850: allocated 11.24 GiB, driver 21.85 GiB, footprint 26.00 GB
+step time 1.16 s over steps 825-850 (pad 2048)
+step 875 skipped 0 footprint 26.0 GB loss 1.5329 ema 0.7129 ce 1.3357 sel 0.3944 lr 2.46e-05 1413 s
+mem step 875: allocated 11.28 GiB, driver 21.95 GiB, footprint 26.00 GB
+step time 1.16 s over steps 850-875 (pad 2048)
+step 900 skipped 0 footprint 27.0 GB loss 3.4982 ema 0.7540 ce 2.9735 sel 1.0494 lr 2.44e-05 1443 s
+step 900 val ce 0.6305 sel 0.2800 walk tok/cycle proxy 6.2249
+saved best at step 900
+mem step 900: allocated 11.28 GiB, driver 20.82 GiB, footprint 28.00 GB
+step time 21.49 s over steps 875-900 (pad 2048)
+step 925 skipped 0 footprint 30.0 GB loss 1.4232 ema 0.7831 ce 1.1620 sel 0.5224 lr 2.02e-05 1980 s
+mem step 925: allocated 11.28 GiB, driver 22.59 GiB, footprint 30.00 GB
+step time 1.20 s over steps 900-925 (pad 2048)
+step 950 skipped 0 footprint 30.0 GB loss 1.0797 ema 0.7626 ce 0.8626 sel 0.4342 lr 1.99e-05 2009 s
+mem step 950: allocated 11.28 GiB, driver 22.47 GiB, footprint 30.00 GB
+step time 1.19 s over steps 925-950 (pad 2048)
+step 975 skipped 0 footprint 29.0 GB loss 0.2433 ema 0.8062 ce 0.2190 sel 0.0486 lr 1.97e-05 2040 s
+mem step 975: allocated 11.28 GiB, driver 22.90 GiB, footprint 29.00 GB
+step time 1.22 s over steps 950-975 (pad 2048)
+step 1000 skipped 0 footprint 29.0 GB loss 1.1871 ema 0.8798 ce 0.9527 sel 0.4688 lr 1.94e-05 2070 s
+mem step 1000: allocated 11.28 GiB, driver 22.71 GiB, footprint 29.00 GB
+step time 1.20 s over steps 975-1000 (pad 2048)
+step 1025 skipped 0 footprint 29.0 GB loss 0.6048 ema 0.8040 ce 0.4481 sel 0.3135 lr 1.91e-05 2100 s
+mem step 1025: allocated 11.28 GiB, driver 23.28 GiB, footprint 29.00 GB
+step time 1.21 s over steps 1000-1025 (pad 2048)
+step 1050 skipped 0 footprint 30.0 GB loss 2.2535 ema 0.8768 ce 1.9145 sel 0.6781 lr 1.89e-05 2131 s
+mem step 1050: allocated 11.28 GiB, driver 23.49 GiB, footprint 30.00 GB
+step time 1.24 s over steps 1025-1050 (pad 2048)
+step 1075 skipped 0 footprint 30.0 GB loss 0.3427 ema 0.8060 ce 0.2197 sel 0.2459 lr 1.86e-05 2161 s
+mem step 1075: allocated 11.27 GiB, driver 23.44 GiB, footprint 30.00 GB
+step time 1.20 s over steps 1050-1075 (pad 2048)
+step 1100 skipped 0 footprint 29.0 GB loss 0.7451 ema 0.7670 ce 0.6430 sel 0.2040 lr 1.84e-05 2190 s
+mem step 1100: allocated 11.28 GiB, driver 23.14 GiB, footprint 29.00 GB
+step time 1.17 s over steps 1075-1100 (pad 2048)
+step 1125 skipped 0 footprint 30.0 GB loss 1.4504 ema 0.7696 ce 1.1885 sel 0.5237 lr 1.81e-05 2218 s
+mem step 1125: allocated 11.28 GiB, driver 23.46 GiB, footprint 29.00 GB
+step time 1.11 s over steps 1100-1125 (pad 2048)
+step 1150 skipped 0 footprint 29.0 GB loss 0.7959 ema 0.7812 ce 0.6244 sel 0.3431 lr 1.79e-05 2246 s
+mem step 1150: allocated 11.28 GiB, driver 23.41 GiB, footprint 29.00 GB
+step time 1.10 s over steps 1125-1150 (pad 2048)
+step 1175 skipped 0 footprint 30.0 GB loss 0.3281 ema 0.7108 ce 0.2604 sel 0.1355 lr 1.76e-05 2273 s
+mem step 1175: allocated 11.26 GiB, driver 23.82 GiB, footprint 30.00 GB
+step time 1.07 s over steps 1150-1175 (pad 2048)
+step 1184: out of GPU memory on conversation 1389 (n 749), skipped (1 so far)
+step 1184: out of GPU memory on conversation 32 (n 1885), skipped (2 so far)
+step 1197: out of GPU memory on conversation 1126 (n 416), skipped (3 so far)
+step 1197: out of GPU memory on conversation 660 (n 1570), skipped (4 so far)
+step 1197: out of GPU memory on conversation 1621 (n 1301), skipped (5 so far)
+step 1197: out of GPU memory on conversation 314 (n 1541), skipped (6 so far)
+footprint 30.0 GB over K350_MAX_GB at step 1200: state saved, chunk ends early
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 1200, 2304 s done
+mem step 1200: allocated 9.30 GiB, driver 9.78 GiB, footprint 13.00 GB
+step 1225 skipped 6 footprint 20.0 GB loss 0.4753 ema 0.7977 ce 0.3993 sel 0.1521 lr 1.71e-05 2331 s
+mem step 1225: allocated 11.37 GiB, driver 16.61 GiB, footprint 20.00 GB
+step time 1.08 s over steps 1200-1225 (pad 2048)
+step 1250 skipped 6 footprint 20.0 GB loss 0.6282 ema 0.6854 ce 0.5108 sel 0.2348 lr 1.69e-05 2359 s
+mem step 1250: allocated 11.37 GiB, driver 16.61 GiB, footprint 20.00 GB
+step time 1.12 s over steps 1225-1250 (pad 2048)
+step 1275 skipped 6 footprint 21.0 GB loss 0.1340 ema 0.6965 ce 0.0972 sel 0.0735 lr 1.66e-05 2387 s
+mem step 1275: allocated 11.37 GiB, driver 16.61 GiB, footprint 21.00 GB
+step time 1.13 s over steps 1250-1275 (pad 2048)
+step 1300 skipped 6 footprint 20.0 GB loss 0.5542 ema 0.7581 ce 0.4570 sel 0.1945 lr 1.64e-05 2416 s
+mem step 1300: allocated 11.37 GiB, driver 16.61 GiB, footprint 20.00 GB
+step time 1.13 s over steps 1275-1300 (pad 2048)
+step 1325 skipped 6 footprint 20.0 GB loss 2.0237 ema 0.7708 ce 1.5700 sel 0.9074 lr 1.61e-05 2444 s
+mem step 1325: allocated 11.37 GiB, driver 16.61 GiB, footprint 20.00 GB
+step time 1.13 s over steps 1300-1325 (pad 2048)
+step 1350 skipped 6 footprint 21.0 GB loss 0.3081 ema 0.7760 ce 0.2497 sel 0.1169 lr 1.59e-05 2472 s
+mem step 1350: allocated 11.37 GiB, driver 16.61 GiB, footprint 20.00 GB
+step time 1.12 s over steps 1325-1350 (pad 2048)
+step 1375 skipped 6 footprint 20.0 GB loss 1.1078 ema 0.8786 ce 0.8630 sel 0.4897 lr 1.56e-05 2500 s
+mem step 1375: allocated 11.37 GiB, driver 16.61 GiB, footprint 20.00 GB
+step time 1.12 s over steps 1350-1375 (pad 2048)
+step 1400 skipped 6 footprint 20.0 GB loss 0.6155 ema 0.8550 ce 0.4563 sel 0.3184 lr 1.54e-05 2528 s
+mem step 1400: allocated 11.37 GiB, driver 16.62 GiB, footprint 20.00 GB
+step time 1.12 s over steps 1375-1400 (pad 2048)
+step 1425 skipped 6 footprint 21.0 GB loss 0.7741 ema 0.7991 ce 0.6652 sel 0.2177 lr 1.51e-05 2556 s
+mem step 1425: allocated 11.37 GiB, driver 16.62 GiB, footprint 20.00 GB
+step time 1.13 s over steps 1400-1425 (pad 2048)
+step 1450 skipped 6 footprint 21.0 GB loss 0.2937 ema 0.8541 ce 0.2260 sel 0.1355 lr 1.49e-05 2585 s
+mem step 1450: allocated 11.37 GiB, driver 16.68 GiB, footprint 21.00 GB
+step time 1.14 s over steps 1425-1450 (pad 2048)
+step 1475 skipped 6 footprint 21.0 GB loss 0.0656 ema 0.8358 ce 0.0549 sel 0.0213 lr 1.46e-05 2613 s
+mem step 1475: allocated 11.37 GiB, driver 16.62 GiB, footprint 20.00 GB
+step time 1.12 s over steps 1450-1475 (pad 2048)
+step 1500 skipped 6 footprint 20.0 GB loss 0.0031 ema 0.8084 ce 0.0024 sel 0.0013 lr 1.44e-05 2641 s
+step 1500 val ce 0.5972 sel 0.2594 walk tok/cycle proxy 6.3267
+saved best at step 1500
+mem step 1500: allocated 11.37 GiB, driver 15.27 GiB, footprint 22.00 GB
+step time 10.74 s over steps 1475-1500 (pad 2048)
+step 1525 skipped 6 footprint 23.0 GB loss 3.4076 ema 0.7952 ce 2.8693 sel 1.0764 lr 1.21e-05 2910 s
+mem step 1525: allocated 11.37 GiB, driver 16.68 GiB, footprint 23.00 GB
+step time 1.16 s over steps 1500-1525 (pad 2048)
+step 1550 skipped 6 footprint 24.0 GB loss 0.5059 ema 0.7541 ce 0.3864 sel 0.2390 lr 1.18e-05 2939 s
+mem step 1550: allocated 11.37 GiB, driver 16.68 GiB, footprint 23.00 GB
+step time 1.14 s over steps 1525-1550 (pad 2048)
+step 1575 skipped 6 footprint 23.0 GB loss 0.0526 ema 0.8258 ce 0.0413 sel 0.0226 lr 1.16e-05 2968 s
+mem step 1575: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.16 s over steps 1550-1575 (pad 2048)
+step 1600 skipped 6 footprint 24.0 GB loss 0.6093 ema 0.7917 ce 0.4632 sel 0.2923 lr 1.14e-05 2996 s
+mem step 1600: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.13 s over steps 1575-1600 (pad 2048)
+step 1625 skipped 6 footprint 23.0 GB loss 0.5290 ema 0.8514 ce 0.4386 sel 0.1808 lr 1.11e-05 3025 s
+mem step 1625: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.14 s over steps 1600-1625 (pad 2048)
+step 1650 skipped 6 footprint 23.0 GB loss 1.0412 ema 0.8717 ce 0.8215 sel 0.4395 lr 1.09e-05 3053 s
+mem step 1650: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.15 s over steps 1625-1650 (pad 2048)
+step 1675 skipped 6 footprint 23.0 GB loss 0.2788 ema 0.8624 ce 0.2026 sel 0.1523 lr 1.07e-05 3081 s
+mem step 1675: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.13 s over steps 1650-1675 (pad 2048)
+step 1700 skipped 6 footprint 23.0 GB loss 0.0151 ema 0.8270 ce 0.0143 sel 0.0015 lr 1.05e-05 3110 s
+mem step 1700: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.15 s over steps 1675-1700 (pad 2048)
+step 1725 skipped 6 footprint 23.0 GB loss 0.2007 ema 0.8700 ce 0.1416 sel 0.1183 lr 1.02e-05 3139 s
+mem step 1725: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.13 s over steps 1700-1725 (pad 2048)
+step 1750 skipped 6 footprint 23.0 GB loss 0.4517 ema 0.7408 ce 0.3508 sel 0.2019 lr 1.00e-05 3167 s
+mem step 1750: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.13 s over steps 1725-1750 (pad 2048)
+step 1775 skipped 6 footprint 23.0 GB loss 0.5483 ema 0.6666 ce 0.4165 sel 0.2635 lr 9.80e-06 3195 s
+mem step 1775: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.13 s over steps 1750-1775 (pad 2048)
+step 1800 skipped 6 footprint 23.0 GB loss 0.0251 ema 0.6740 ce 0.0168 sel 0.0166 lr 9.58e-06 3223 s
+step 1800 val ce 0.5940 sel 0.2604 walk tok/cycle proxy 6.3170
+mem step 1800: allocated 11.37 GiB, driver 15.27 GiB, footprint 23.00 GB
+step time 9.35 s over steps 1775-1800 (pad 2048)
+step 1825 skipped 6 footprint 25.0 GB loss 0.1587 ema 0.7203 ce 0.1236 sel 0.0701 lr 7.90e-06 3457 s
+mem step 1825: allocated 11.37 GiB, driver 16.67 GiB, footprint 25.00 GB
+step time 1.13 s over steps 1800-1825 (pad 2048)
+step 1850 skipped 6 footprint 22.0 GB loss 0.5101 ema 0.6045 ce 0.3895 sel 0.2412 lr 7.71e-06 3485 s
+mem step 1850: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.13 s over steps 1825-1850 (pad 2048)
+step 1875 skipped 6 footprint 23.0 GB loss 0.7117 ema 0.6557 ce 0.5390 sel 0.3454 lr 7.51e-06 3514 s
+mem step 1875: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.15 s over steps 1850-1875 (pad 2048)
+step 1900 skipped 6 footprint 22.0 GB loss 0.5473 ema 0.6300 ce 0.4367 sel 0.2210 lr 7.33e-06 3542 s
+mem step 1900: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.12 s over steps 1875-1900 (pad 2048)
+step 1925 skipped 6 footprint 23.0 GB loss 0.9807 ema 0.7147 ce 0.8406 sel 0.2801 lr 7.15e-06 3570 s
+mem step 1925: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.12 s over steps 1900-1925 (pad 2048)
+step 1950 skipped 6 footprint 23.0 GB loss 0.0402 ema 0.7122 ce 0.0324 sel 0.0156 lr 6.97e-06 3598 s
+mem step 1950: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.12 s over steps 1925-1950 (pad 2048)
+step 1975 skipped 6 footprint 23.0 GB loss 0.0066 ema 0.6895 ce 0.0050 sel 0.0033 lr 6.80e-06 3627 s
+mem step 1975: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.13 s over steps 1950-1975 (pad 2048)
+step 2000 skipped 6 footprint 22.0 GB loss 0.0198 ema 0.8011 ce 0.0163 sel 0.0071 lr 6.63e-06 3655 s
+mem step 2000: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.13 s over steps 1975-2000 (pad 2048)
+step 2025 skipped 6 footprint 23.0 GB loss 0.1588 ema 0.7552 ce 0.1054 sel 0.1069 lr 6.46e-06 3683 s
+mem step 2025: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.13 s over steps 2000-2025 (pad 2048)
+step 2050 skipped 6 footprint 23.0 GB loss 2.6333 ema 0.7178 ce 2.1889 sel 0.8887 lr 6.29e-06 3711 s
+mem step 2050: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.12 s over steps 2025-2050 (pad 2048)
+step 2075 skipped 6 footprint 23.0 GB loss 1.3430 ema 0.7588 ce 1.1134 sel 0.4593 lr 6.13e-06 3740 s
+mem step 2075: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.14 s over steps 2050-2075 (pad 2048)
+step 2100 skipped 6 footprint 22.0 GB loss 0.5783 ema 0.7408 ce 0.4517 sel 0.2531 lr 5.97e-06 3768 s
+step 2100 val ce 0.5823 sel 0.2517 walk tok/cycle proxy 6.3318
+saved best at step 2100
+mem step 2100: allocated 11.37 GiB, driver 15.27 GiB, footprint 22.00 GB
+step time 10.42 s over steps 2075-2100 (pad 2048)
+step 2125 skipped 6 footprint 23.0 GB loss 2.6285 ema 0.7593 ce 2.2501 sel 0.7567 lr 4.69e-06 4029 s
+mem step 2125: allocated 11.37 GiB, driver 16.61 GiB, footprint 23.00 GB
+step time 1.14 s over steps 2100-2125 (pad 2048)
+step 2150 skipped 6 footprint 23.0 GB loss 1.0829 ema 0.8597 ce 0.9493 sel 0.2671 lr 4.57e-06 4057 s
+mem step 2150: allocated 11.37 GiB, driver 16.67 GiB, footprint 23.00 GB
+step time 1.15 s over steps 2125-2150 (pad 2048)
+step 2175 skipped 6 footprint 23.0 GB loss 0.2529 ema 0.7893 ce 0.2090 sel 0.0877 lr 4.45e-06 4086 s
+mem step 2175: allocated 11.37 GiB, driver 16.67 GiB, footprint 23.00 GB
+step time 1.14 s over steps 2150-2175 (pad 2048)
+step 2200 skipped 6 footprint 23.0 GB loss 0.9452 ema 0.8101 ce 0.7874 sel 0.3155 lr 4.34e-06 4114 s
+mem step 2200: allocated 11.37 GiB, driver 16.67 GiB, footprint 23.00 GB
+step time 1.14 s over steps 2175-2200 (pad 2048)
+step 2225 skipped 6 footprint 22.0 GB loss 0.4495 ema 0.6909 ce 0.3397 sel 0.2196 lr 4.23e-06 4143 s
+mem step 2225: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.16 s over steps 2200-2225 (pad 2048)
+step 2250 skipped 6 footprint 23.0 GB loss 0.5662 ema 0.6828 ce 0.4400 sel 0.2524 lr 4.13e-06 4172 s
+mem step 2250: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.13 s over steps 2225-2250 (pad 2048)
+step 2275 skipped 6 footprint 22.0 GB loss 0.2294 ema 0.6839 ce 0.1814 sel 0.0960 lr 4.03e-06 4200 s
+mem step 2275: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.13 s over steps 2250-2275 (pad 2048)
+step 2300 skipped 6 footprint 22.0 GB loss 0.0007 ema 0.6839 ce 0.0005 sel 0.0004 lr 3.94e-06 4229 s
+mem step 2300: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.14 s over steps 2275-2300 (pad 2048)
+step 2325 skipped 6 footprint 22.0 GB loss 0.5821 ema 0.6336 ce 0.4543 sel 0.2556 lr 3.85e-06 4257 s
+mem step 2325: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.13 s over steps 2300-2325 (pad 2048)
+step 2350 skipped 6 footprint 22.0 GB loss 0.3821 ema 0.6222 ce 0.3166 sel 0.1311 lr 3.76e-06 4285 s
+mem step 2350: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.12 s over steps 2325-2350 (pad 2048)
+step 2375 skipped 6 footprint 22.0 GB loss 0.2030 ema 0.7372 ce 0.1656 sel 0.0749 lr 3.68e-06 4313 s
+mem step 2375: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.14 s over steps 2350-2375 (pad 2048)
+step 2400 skipped 6 footprint 22.0 GB loss 2.0360 ema 0.7001 ce 1.7140 sel 0.6440 lr 3.61e-06 4342 s
+step 2400 val ce 0.5814 sel 0.2567 walk tok/cycle proxy 6.3304
+mem step 2400: allocated 11.37 GiB, driver 15.27 GiB, footprint 21.00 GB
+step time 9.69 s over steps 2375-2400 (pad 2048)
+step 2425 skipped 6 footprint 22.0 GB loss 0.0459 ema 0.7054 ce 0.0360 sel 0.0198 lr 3.14e-06 4584 s
+mem step 2425: allocated 11.37 GiB, driver 16.68 GiB, footprint 22.00 GB
+step time 1.14 s over steps 2400-2425 (pad 2048)
+step 2450 skipped 6 footprint 22.0 GB loss 0.7186 ema 0.7453 ce 0.5953 sel 0.2466 lr 3.10e-06 4612 s
+mem step 2450: allocated 11.37 GiB, driver 16.68 GiB, footprint 22.00 GB
+step time 1.14 s over steps 2425-2450 (pad 2048)
+step 2475 skipped 6 footprint 22.0 GB loss 1.2782 ema 0.7263 ce 1.0303 sel 0.4956 lr 3.07e-06 4641 s
+mem step 2475: allocated 11.37 GiB, driver 16.62 GiB, footprint 22.00 GB
+step time 1.13 s over steps 2450-2475 (pad 2048)
+step 2500 skipped 6 footprint 23.0 GB loss 0.6256 ema 0.8214 ce 0.5054 sel 0.2404 lr 3.05e-06 4669 s
+mem step 2500: allocated 11.37 GiB, driver 16.61 GiB, footprint 22.00 GB
+step time 1.15 s over steps 2475-2500 (pad 2048)
+step 2525 skipped 6 footprint 23.0 GB loss 0.1619 ema 0.7927 ce 0.1077 sel 0.1083 lr 3.03e-06 4698 s
+mem step 2525: allocated 11.37 GiB, driver 16.62 GiB, footprint 22.00 GB
+step time 1.13 s over steps 2500-2525 (pad 2048)
+chunk end at step 2531, 4705 s of 4800; state saved
+data: 1623 train / 85 val conversations, answer tokens 353304 / 16860; device mps, lr 3e-05, anchors/step 48
+resumed at step 2531, 4705 s done
+step 2550 skipped 6 footprint 23.0 GB loss 0.0005 ema 0.5888 ce 0.0003 sel 0.0004 lr 3.02e-06 4725 s
+mem step 2550: allocated 11.37 GiB, driver 16.67 GiB, footprint 23.00 GB
+step 2575 skipped 6 footprint 23.0 GB loss 0.2085 ema 0.6145 ce 0.1662 sel 0.0845 lr 3.01e-06 4754 s
+mem step 2575: allocated 11.37 GiB, driver 16.62 GiB, footprint 22.00 GB
+step time 1.14 s over steps 2550-2575 (pad 2048)
+step 2600 skipped 6 footprint 22.0 GB loss 0.5226 ema 0.6215 ce 0.4147 sel 0.2159 lr 3.00e-06 4782 s
+mem step 2600: allocated 11.37 GiB, driver 16.67 GiB, footprint 22.00 GB
+step time 1.14 s over steps 2575-2600 (pad 2048)
+final step 2616 val ce 0.5716 sel 0.2513 walk tok/cycle proxy 6.3808 (shipped 4.5019) in 4862 s; 6 conversations skipped on GPU out-of-memory (0.23% of steps)
+DONE best proxy 6.3808

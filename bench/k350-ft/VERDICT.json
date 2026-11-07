@@ -1,0 +1,433 @@
+{
+ "task": "#350 offline fine-tune of the 35B-A3B DFlash2 drafter on self-distilled English coding turns vs the shipped drafter",
+ "mac": "MacBook Pro M5 Pro 48 GB, macOS 26.5.2",
+ "argv": "KAPITSA_HOME=<per arm> build/ni_run <symlinked model dir, dflash2/ = arm> @r<i>.ids <n> 0 --dflash auto --ignore-eos",
+ "history_lane_on_legs": "76/76",
+ "all": {
+  "n_pairs": 38,
+  "outputs_identical": 38,
+  "shipped": {
+   "tok_per_cycle": 4.3258,
+   "decode_tok_s": 198.07
+  },
+  "finetuned": {
+   "tok_per_cycle": 4.6028,
+   "decode_tok_s": 210.79
+  },
+  "delta_tok_per_cycle_pct": 6.4,
+  "delta_tok_s_pct": 6.42,
+  "requests_ft_faster_tok_s": 36
+ },
+ "pass1": {
+  "n_pairs": 19,
+  "outputs_identical": 19,
+  "shipped": {
+   "tok_per_cycle": 4.2611,
+   "decode_tok_s": 196.22
+  },
+  "finetuned": {
+   "tok_per_cycle": 4.5615,
+   "decode_tok_s": 209.55
+  },
+  "delta_tok_per_cycle_pct": 7.05,
+  "delta_tok_s_pct": 6.8,
+  "requests_ft_faster_tok_s": 18
+ },
+ "pass2": {
+  "n_pairs": 19,
+  "outputs_identical": 19,
+  "shipped": {
+   "tok_per_cycle": 4.3926,
+   "decode_tok_s": 199.97
+  },
+  "finetuned": {
+   "tok_per_cycle": 4.6449,
+   "decode_tok_s": 212.05
+  },
+  "delta_tok_per_cycle_pct": 5.74,
+  "delta_tok_s_pct": 6.04,
+  "requests_ft_faster_tok_s": 18
+ },
+ "per_request": [
+  {
+   "pass": 1,
+   "req": 0,
+   "n": 72,
+   "tpc_ship": 2.4,
+   "tpc_ft": 2.769,
+   "tps_ship": 141.2,
+   "tps_ft": 165.9,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 1,
+   "n": 65,
+   "tpc_ship": 2.097,
+   "tpc_ft": 2.241,
+   "tps_ship": 120.1,
+   "tps_ft": 128.7,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 2,
+   "n": 116,
+   "tpc_ship": 3.515,
+   "tpc_ft": 3.625,
+   "tps_ship": 189.5,
+   "tps_ft": 199.3,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 3,
+   "n": 130,
+   "tpc_ship": 4.333,
+   "tpc_ft": 5.0,
+   "tps_ship": 194.3,
+   "tps_ft": 223.8,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 4,
+   "n": 37,
+   "tpc_ship": 3.7,
+   "tpc_ft": 4.111,
+   "tps_ship": 165.2,
+   "tps_ft": 182.3,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 5,
+   "n": 30,
+   "tpc_ship": 5.0,
+   "tpc_ft": 6.0,
+   "tps_ship": 205.5,
+   "tps_ft": 241.9,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 6,
+   "n": 532,
+   "tpc_ship": 4.124,
+   "tpc_ft": 4.586,
+   "tps_ship": 187.3,
+   "tps_ft": 206.8,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 7,
+   "n": 760,
+   "tpc_ship": 5.241,
+   "tpc_ft": 5.39,
+   "tps_ship": 229.2,
+   "tps_ft": 235.8,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 8,
+   "n": 109,
+   "tpc_ship": 4.037,
+   "tpc_ft": 4.739,
+   "tps_ship": 177.5,
+   "tps_ft": 209.6,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 9,
+   "n": 141,
+   "tpc_ship": 5.036,
+   "tpc_ft": 5.64,
+   "tps_ship": 215.6,
+   "tps_ft": 237.4,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 10,
+   "n": 203,
+   "tpc_ship": 4.413,
+   "tpc_ft": 4.833,
+   "tps_ship": 199.2,
+   "tps_ft": 214.8,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 11,
+   "n": 55,
+   "tpc_ship": 4.231,
+   "tpc_ft": 5.0,
+   "tps_ship": 182.7,
+   "tps_ft": 214.0,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 12,
+   "n": 322,
+   "tpc_ship": 4.472,
+   "tpc_ft": 4.806,
+   "tps_ship": 208.5,
+   "tps_ft": 220.2,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 13,
+   "n": 265,
+   "tpc_ship": 4.569,
+   "tpc_ft": 5.0,
+   "tps_ship": 211.8,
+   "tps_ft": 226.9,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 14,
+   "n": 206,
+   "tpc_ship": 6.438,
+   "tpc_ft": 6.867,
+   "tps_ship": 275.4,
+   "tps_ft": 288.5,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 15,
+   "n": 56,
+   "tpc_ship": 3.5,
+   "tpc_ft": 3.733,
+   "tps_ship": 160.9,
+   "tps_ft": 171.3,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 16,
+   "n": 82,
+   "tpc_ship": 4.1,
+   "tpc_ft": 5.467,
+   "tps_ship": 177.9,
+   "tps_ft": 237.0,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 17,
+   "n": 56,
+   "tpc_ship": 4.667,
+   "tpc_ft": 5.091,
+   "tps_ship": 193.8,
+   "tps_ft": 210.5,
+   "identical": true
+  },
+  {
+   "pass": 1,
+   "req": 18,
+   "n": 321,
+   "tpc_ship": 3.309,
+   "tpc_ft": 3.087,
+   "tps_ship": 156.9,
+   "tps_ft": 149.0,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 0,
+   "n": 72,
+   "tpc_ship": 2.88,
+   "tpc_ft": 4.0,
+   "tps_ship": 151.9,
+   "tps_ft": 206.3,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 1,
+   "n": 65,
+   "tpc_ship": 2.826,
+   "tpc_ft": 3.095,
+   "tps_ship": 144.8,
+   "tps_ft": 159.7,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 2,
+   "n": 116,
+   "tpc_ship": 4.462,
+   "tpc_ft": 5.8,
+   "tps_ship": 206.0,
+   "tps_ft": 264.2,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 3,
+   "n": 130,
+   "tpc_ship": 4.194,
+   "tpc_ft": 5.0,
+   "tps_ship": 189.8,
+   "tps_ft": 224.5,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 4,
+   "n": 37,
+   "tpc_ship": 3.7,
+   "tpc_ft": 4.111,
+   "tps_ship": 168.9,
+   "tps_ft": 187.8,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 5,
+   "n": 30,
+   "tpc_ship": 5.0,
+   "tpc_ft": 6.0,
+   "tps_ship": 215.8,
+   "tps_ft": 247.9,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 6,
+   "n": 532,
+   "tpc_ship": 4.156,
+   "tpc_ft": 4.256,
+   "tps_ship": 198.2,
+   "tps_ft": 201.5,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 7,
+   "n": 760,
+   "tpc_ship": 5.39,
+   "tpc_ft": 5.429,
+   "tps_ship": 238.2,
+   "tps_ft": 239.7,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 8,
+   "n": 109,
+   "tpc_ship": 4.192,
+   "tpc_ft": 4.739,
+   "tps_ship": 187.0,
+   "tps_ft": 211.2,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 9,
+   "n": 141,
+   "tpc_ship": 4.7,
+   "tpc_ft": 5.64,
+   "tps_ship": 200.6,
+   "tps_ft": 239.0,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 10,
+   "n": 203,
+   "tpc_ship": 4.319,
+   "tpc_ft": 4.721,
+   "tps_ship": 190.8,
+   "tps_ft": 207.6,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 11,
+   "n": 55,
+   "tpc_ship": 4.231,
+   "tpc_ft": 5.0,
+   "tps_ship": 181.5,
+   "tps_ft": 214.8,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 12,
+   "n": 322,
+   "tpc_ship": 4.6,
+   "tpc_ft": 4.6,
+   "tps_ship": 210.2,
+   "tps_ft": 211.4,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 13,
+   "n": 265,
+   "tpc_ship": 4.569,
+   "tpc_ft": 4.732,
+   "tps_ship": 207.7,
+   "tps_ft": 215.8,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 14,
+   "n": 206,
+   "tpc_ship": 6.242,
+   "tpc_ft": 6.645,
+   "tps_ship": 264.4,
+   "tps_ft": 281.0,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 15,
+   "n": 56,
+   "tpc_ship": 3.5,
+   "tpc_ft": 3.733,
+   "tps_ship": 157.3,
+   "tps_ft": 173.4,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 16,
+   "n": 82,
+   "tpc_ship": 3.905,
+   "tpc_ft": 5.125,
+   "tps_ship": 170.5,
+   "tps_ft": 224.7,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 17,
+   "n": 56,
+   "tpc_ship": 4.667,
+   "tpc_ft": 5.6,
+   "tps_ship": 195.1,
+   "tps_ft": 230.5,
+   "identical": true
+  },
+  {
+   "pass": 2,
+   "req": 18,
+   "n": 321,
+   "tpc_ship": 3.415,
+   "tpc_ft": 3.147,
+   "tps_ship": 158.5,
+   "tps_ft": 151.3,
+   "identical": true
+  }
+ ]
+}

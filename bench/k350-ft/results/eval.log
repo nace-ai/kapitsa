@@ -1,0 +1,381 @@
+j1 ended 08:30:34: k350-ft-j1 not running: finished rc=0 at 11-06 03:58:00 pid=96751 log=/Users/alisheramantay/.agents/jobs/k350-ft-j1.log
+gate clear 08:30:36
+drafter for eval: /tmp/k350d/ckpt/best
+/Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-ft/.ftmodels/ft/qwen3.6-35b-a3b-4bit/dflash2/:
+total 2055704
+drwxr-xr-x@  4 alisheramantay  staff         128 Nov  7 08:30 .
+drwxr-xr-x@ 23 alisheramantay  staff         736 Nov  7 08:30 ..
+-rw-r--r--@  1 alisheramantay  staff        1291 Nov  7 08:30 config.json
+-rw-r--r--@  1 alisheramantay  staff  1052514304 Nov  7 08:31 model.safetensors
+
+/Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-ft/.ftmodels/ship/qwen3.6-35b-a3b-4bit/dflash2/:
+total 0
+drwxr-xr-x@  4 alisheramantay  staff  128 Nov  7 08:30 .
+drwxr-xr-x@ 23 alisheramantay  staff  736 Nov  7 08:30 ..
+lrwxr-xr-x@  1 alisheramantay  staff  106 Nov  7 08:30 config.json -> /Users/alisheramantay/Documents/nace/kapitsa-home/models-internal/qwen3.6-35b-a3b-4bit/dflash2/config.json
+lrwxr-xr-x@  1 alisheramantay  staff  112 Nov  7 08:30 model.safetensors -> /Users/alisheramantay/Documents/nace/kapitsa-home/models-internal/qwen3.6-35b-a3b-4bit/dflash2/model.safetensors
+commit 34cd2d7763c62284c6a2ffdaee54a2c9fbbc2634 dirty: ?? .ftmodels/ 
+d3c6b623291e3a6dde9224364cb306e4ae088d77108613cb118c111a9d823d8e  /Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-ft/build/ni_run
+d1f16c0ff85afbe6166fabfae998af3ec16fa11da87da4391b5e0e0a7c796a4d  /Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-ft/.ftmodels/ship/qwen3.6-35b-a3b-4bit/dflash2/model.safetensors
+3e018d7a1afb23ca4e3d7516e245fedc8e678632aa7f8f43b49707767ce0630a  /Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k350-ft/.ftmodels/ft/qwen3.6-35b-a3b-4bit/dflash2/model.safetensors
+26.5.2
+Now drawing from 'AC Power'
+{ 2.28 1.60 1.41 }
+== p1 r0 ship n=73 08:31:52 'AC Power' load { 2.28 1.60 1.41 }
+rc=0 end AC load { 2.26 1.61 1.42 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 5485 tok in 1734 ms (3163.5 tok/s); dflash decode (verify 7 of 7, greedy): 72 tok in 510 ms (141.3 tok/s), 30 cycles, 2.400 tok/cycle, 16.79 ms GPU/cycle, 16.99 ms wall/cycle (mode 3), hist 8 8 9 4 1 0 0 0; 3.27 proposals verified per cycle; acceptance 
+== p1 r0 ft n=73 08:31:57 'AC Power' load { 2.26 1.61 1.42 }
+rc=0 end AC load { 2.16 1.60 1.41 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 5485 tok in 1737 ms (3158.6 tok/s); dflash decode (verify 7 of 7, greedy): 72 tok in 434 ms (166.0 tok/s), 26 cycles, 2.769 tok/cycle, 16.52 ms GPU/cycle, 16.69 ms wall/cycle (mode 3), hist 5 8 6 1 3 2 1 0; 2.77 proposals verified per cycle; acceptance 
+== p1 r1 ship n=66 08:32:02 'AC Power' load { 2.16 1.60 1.41 }
+rc=0 end AC load { 1.99 1.57 1.41 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8351 tok in 2761 ms (3024.8 tok/s); dflash decode (verify 7 of 7, greedy): 65 tok in 541 ms (120.2 tok/s), 31 cycles, 2.097 tok/cycle, 17.32 ms GPU/cycle, 17.45 ms wall/cycle (mode 3), hist 12 10 4 3 2 0 0 0; 3.39 proposals verified per cycle; acceptanc
+== p1 r1 ft n=66 08:32:07 'AC Power' load { 1.99 1.57 1.41 }
+rc=0 end AC load { 2.47 1.68 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8351 tok in 2762 ms (3023.3 tok/s); dflash decode (verify 7 of 7, greedy): 65 tok in 505 ms (128.6 tok/s), 29 cycles, 2.241 tok/cycle, 17.28 ms GPU/cycle, 17.43 ms wall/cycle (mode 3), hist 9 10 4 5 1 0 0 0; 3.14 proposals verified per cycle; acceptance
+== p1 r2 ship n=117 08:32:13 'AC Power' load { 2.47 1.68 1.44 }
+rc=0 end AC load { 2.39 1.69 1.45 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8510 tok in 2821 ms (3016.3 tok/s); dflash decode (verify 7 of 7, greedy): 116 tok in 612 ms (189.7 tok/s), 33 cycles, 3.515 tok/cycle, 18.39 ms GPU/cycle, 18.53 ms wall/cycle (mode 3), hist 5 9 1 5 8 4 0 1; 3.61 proposals verified per cycle; acceptance
+== p1 r2 ft n=117 08:32:19 'AC Power' load { 2.39 1.69 1.45 }
+rc=0 end AC load { 2.28 1.68 1.45 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8510 tok in 2826 ms (3011.2 tok/s); dflash decode (verify 7 of 7, greedy): 116 tok in 582 ms (199.3 tok/s), 32 cycles, 3.625 tok/cycle, 18.05 ms GPU/cycle, 18.19 ms wall/cycle (mode 3), hist 5 8 3 6 3 3 3 1; 3.50 proposals verified per cycle; acceptance
+== p1 r3 ship n=131 08:32:25 'AC Power' load { 2.28 1.68 1.45 }
+rc=0 end AC load { 2.10 1.65 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 13009 tok in 4523 ms (2876.1 tok/s); dflash decode (verify 7 of 7, greedy): 130 tok in 669 ms (194.5 tok/s), 30 cycles, 4.333 tok/cycle, 22.14 ms GPU/cycle, 22.28 ms wall/cycle (mode 3), hist 4 2 2 3 15 1 1 2; 6.97 proposals verified per cycle; acceptan
+== p1 r3 ft n=131 08:32:32 'AC Power' load { 2.10 1.65 1.44 }
+rc=0 end AC load { 2.29 1.71 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 13009 tok in 4533 ms (2869.8 tok/s); dflash decode (verify 7 of 7, greedy): 130 tok in 581 ms (223.9 tok/s), 26 cycles, 5.000 tok/cycle, 22.15 ms GPU/cycle, 22.33 ms wall/cycle (mode 3), hist 2 3 6 1 3 0 3 8; 6.96 proposals verified per cycle; acceptanc
+== p1 r4 ship n=38 08:32:40 'AC Power' load { 2.29 1.71 1.46 }
+rc=0 end AC load { 1.94 1.65 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17649 tok in 6453 ms (2735.2 tok/s); dflash decode (verify 7 of 7, greedy): 37 tok in 224 ms (165.0 tok/s), 10 cycles, 3.700 tok/cycle, 22.00 ms GPU/cycle, 22.43 ms wall/cycle (mode 3), hist 1 1 2 0 6 0 0 0; 6.90 proposals verified per cycle; acceptance
+== p1 r4 ft n=38 08:32:49 'AC Power' load { 1.94 1.65 1.44 }
+rc=0 end AC load { 1.78 1.62 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17649 tok in 6452 ms (2735.6 tok/s); dflash decode (verify 7 of 7, greedy): 37 tok in 203 ms (182.5 tok/s), 9 cycles, 4.111 tok/cycle, 22.04 ms GPU/cycle, 22.53 ms wall/cycle (mode 3), hist 1 1 2 0 1 3 1 0; 6.89 proposals verified per cycle; acceptance 
+== p1 r5 ship n=31 08:32:58 'AC Power' load { 1.78 1.62 1.44 }
+rc=0 end AC load { 1.74 1.62 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17721 tok in 6509 ms (2722.6 tok/s); dflash decode (verify 7 of 7, greedy): 30 tok in 146 ms (205.0 tok/s), 6 cycles, 5.000 tok/cycle, 23.64 ms GPU/cycle, 24.39 ms wall/cycle (mode 3), hist 0 0 0 0 4 2 0 0; 7.00 proposals verified per cycle; acceptance 
+== p1 r5 ft n=31 08:33:07 'AC Power' load { 1.74 1.62 1.44 }
+rc=0 end AC load { 1.79 1.63 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17721 tok in 6534 ms (2712.3 tok/s); dflash decode (verify 7 of 7, greedy): 30 tok in 124 ms (242.6 tok/s), 5 cycles, 6.000 tok/cycle, 23.85 ms GPU/cycle, 24.74 ms wall/cycle (mode 3), hist 0 1 0 0 0 0 2 2; 7.00 proposals verified per cycle; acceptance 
+== p1 r6 ship n=533 08:33:16 'AC Power' load { 1.79 1.63 1.44 }
+rc=0 end AC load { 1.51 1.58 1.42 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 18523 tok in 6976 ms (2655.2 tok/s); dflash decode (verify 7 of 7, greedy): 532 tok in 2840 ms (187.3 tok/s), 129 cycles, 4.124 tok/cycle, 21.98 ms GPU/cycle, 22.01 ms wall/cycle (mode 3), hist 26 21 16 8 19 6 6 27; 6.50 proposals verified per cycle; ac
+== p1 r6 ft n=533 08:33:28 'AC Power' load { 1.51 1.58 1.42 }
+rc=0 end AC load { 1.53 1.58 1.43 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 18523 tok in 6957 ms (2662.4 tok/s); dflash decode (verify 7 of 7, greedy): 532 tok in 2573 ms (206.8 tok/s), 116 cycles, 4.586 tok/cycle, 22.14 ms GPU/cycle, 22.18 ms wall/cycle (mode 3), hist 12 21 13 11 16 9 6 28; 6.67 proposals verified per cycle; a
+== p1 r7 ship n=761 08:33:40 'AC Power' load { 1.53 1.58 1.43 }
+rc=0 end AC load { 1.59 1.59 1.43 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19081 tok in 7212 ms (2645.8 tok/s); dflash decode (verify 7 of 7, greedy): 760 tok in 3316 ms (229.2 tok/s), 145 cycles, 5.241 tok/cycle, 22.84 ms GPU/cycle, 22.87 ms wall/cycle (mode 3), hist 12 11 19 11 23 16 10 43; 6.34 proposals verified per cycle;
+== p1 r7 ft n=761 08:33:53 'AC Power' load { 1.59 1.59 1.43 }
+rc=0 end AC load { 2.47 1.80 1.51 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19081 tok in 7171 ms (2660.9 tok/s); dflash decode (verify 7 of 7, greedy): 760 tok in 3223 ms (235.8 tok/s), 141 cycles, 5.390 tok/cycle, 22.83 ms GPU/cycle, 22.86 ms wall/cycle (mode 3), hist 11 15 12 8 22 17 9 47; 6.38 proposals verified per cycle; a
+== p1 r8 ship n=110 08:34:06 'AC Power' load { 2.47 1.80 1.51 }
+rc=0 end AC load { 2.09 1.74 1.49 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19868 tok in 7468 ms (2660.3 tok/s); dflash decode (verify 7 of 7, greedy): 109 tok in 614 ms (177.4 tok/s), 27 cycles, 4.037 tok/cycle, 22.59 ms GPU/cycle, 22.75 ms wall/cycle (mode 3), hist 0 7 5 4 5 4 1 1; 6.41 proposals verified per cycle; acceptanc
+== p1 r8 ft n=110 08:34:17 'AC Power' load { 2.09 1.74 1.49 }
+rc=0 end AC load { 1.77 1.69 1.48 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19868 tok in 7461 ms (2663.1 tok/s); dflash decode (verify 7 of 7, greedy): 109 tok in 520 ms (209.6 tok/s), 23 cycles, 4.739 tok/cycle, 22.42 ms GPU/cycle, 22.62 ms wall/cycle (mode 3), hist 1 3 3 2 7 1 2 4; 6.26 proposals verified per cycle; acceptanc
+== p1 r9 ship n=142 08:34:27 'AC Power' load { 1.77 1.69 1.48 }
+rc=0 end AC load { 2.17 1.78 1.51 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20003 tok in 7524 ms (2658.7 tok/s); dflash decode (verify 7 of 7, greedy): 141 tok in 654 ms (215.5 tok/s), 28 cycles, 5.036 tok/cycle, 23.22 ms GPU/cycle, 23.37 ms wall/cycle (mode 3), hist 1 6 2 2 4 4 2 7; 6.64 proposals verified per cycle; acceptanc
+== p1 r9 ft n=142 08:34:38 'AC Power' load { 2.17 1.78 1.51 }
+rc=0 end AC load { 1.83 1.72 1.49 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20003 tok in 7519 ms (2660.2 tok/s); dflash decode (verify 7 of 7, greedy): 141 tok in 594 ms (237.5 tok/s), 25 cycles, 5.640 tok/cycle, 23.58 ms GPU/cycle, 23.75 ms wall/cycle (mode 3), hist 1 0 3 5 2 4 0 10; 6.88 proposals verified per cycle; acceptan
+== p1 r10 ship n=204 08:34:48 'AC Power' load { 1.83 1.72 1.49 }
+rc=0 end AC load { 1.62 1.68 1.48 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20170 tok in 7585 ms (2659.3 tok/s); dflash decode (verify 7 of 7, greedy): 203 tok in 1019 ms (199.2 tok/s), 46 cycles, 4.413 tok/cycle, 22.05 ms GPU/cycle, 22.15 ms wall/cycle (mode 3), hist 4 7 8 7 5 4 4 7; 6.24 proposals verified per cycle; acceptan
+== p1 r10 ft n=204 08:34:59 'AC Power' load { 1.73 1.70 1.49 }
+rc=0 end AC load { 1.47 1.64 1.47 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20170 tok in 7585 ms (2659.1 tok/s); dflash decode (verify 7 of 7, greedy): 203 tok in 945 ms (214.9 tok/s), 42 cycles, 4.833 tok/cycle, 22.39 ms GPU/cycle, 22.50 ms wall/cycle (mode 3), hist 5 4 7 4 3 6 2 11; 6.50 proposals verified per cycle; acceptan
+== p1 r11 ship n=56 08:35:10 'AC Power' load { 1.47 1.64 1.47 }
+rc=0 end AC load { 1.31 1.60 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20399 tok in 7698 ms (2649.8 tok/s); dflash decode (verify 7 of 7, greedy): 55 tok in 301 ms (182.9 tok/s), 13 cycles, 4.231 tok/cycle, 22.79 ms GPU/cycle, 23.13 ms wall/cycle (mode 3), hist 1 1 1 1 9 0 0 0; 6.54 proposals verified per cycle; acceptance
+== p1 r11 ft n=56 08:35:21 'AC Power' load { 1.31 1.60 1.46 }
+rc=0 end AC load { 1.18 1.57 1.45 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20399 tok in 7702 ms (2648.7 tok/s); dflash decode (verify 7 of 7, greedy): 55 tok in 257 ms (213.6 tok/s), 11 cycles, 5.000 tok/cycle, 23.01 ms GPU/cycle, 23.41 ms wall/cycle (mode 3), hist 1 0 1 1 3 2 2 1; 6.82 proposals verified per cycle; acceptance
+== p1 r12 ship n=323 08:35:31 'AC Power' load { 1.18 1.57 1.45 }
+rc=0 end AC load { 1.00 1.52 1.43 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20688 tok in 7908 ms (2616.1 tok/s); dflash decode (verify 7 of 7, greedy): 322 tok in 1544 ms (208.5 tok/s), 72 cycles, 4.472 tok/cycle, 21.39 ms GPU/cycle, 21.45 ms wall/cycle (mode 3), hist 9 10 15 7 3 8 2 18; 5.46 proposals verified per cycle; accep
+== p1 r12 ft n=323 08:35:43 'AC Power' load { 1.00 1.52 1.43 }
+rc=0 end AC load { 1.52 1.61 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20688 tok in 7897 ms (2619.8 tok/s); dflash decode (verify 7 of 7, greedy): 322 tok in 1462 ms (220.3 tok/s), 67 cycles, 4.806 tok/cycle, 21.75 ms GPU/cycle, 21.82 ms wall/cycle (mode 3), hist 9 5 15 6 5 3 1 23; 5.78 proposals verified per cycle; accept
+== p1 r13 ship n=266 08:35:55 'AC Power' load { 1.52 1.61 1.46 }
+rc=0 end AC load { 1.39 1.58 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21036 tok in 8059 ms (2610.1 tok/s); dflash decode (verify 7 of 7, greedy): 265 tok in 1251 ms (211.8 tok/s), 58 cycles, 4.569 tok/cycle, 21.49 ms GPU/cycle, 21.57 ms wall/cycle (mode 3), hist 7 6 10 7 5 7 2 14; 5.60 proposals verified per cycle; accept
+== p1 r13 ft n=266 08:36:06 'AC Power' load { 1.39 1.58 1.46 }
+rc=0 end AC load { 1.18 1.53 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21036 tok in 8048 ms (2614.0 tok/s); dflash decode (verify 7 of 7, greedy): 265 tok in 1168 ms (226.8 tok/s), 53 cycles, 5.000 tok/cycle, 21.96 ms GPU/cycle, 22.05 ms wall/cycle (mode 3), hist 6 5 6 8 5 1 3 19; 6.08 proposals verified per cycle; accepta
+== p1 r14 ship n=207 08:36:18 'AC Power' load { 1.18 1.53 1.44 }
+rc=0 end AC load { 0.99 1.48 1.42 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21327 tok in 8172 ms (2609.8 tok/s); dflash decode (verify 7 of 7, greedy): 206 tok in 748 ms (275.3 tok/s), 32 cycles, 6.438 tok/cycle, 23.25 ms GPU/cycle, 23.38 ms wall/cycle (mode 3), hist 1 1 0 3 5 4 2 16; 6.47 proposals verified per cycle; acceptan
+== p1 r14 ft n=207 08:36:29 'AC Power' load { 0.99 1.48 1.42 }
+rc=0 end AC load { 1.52 1.58 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21327 tok in 8178 ms (2607.9 tok/s); dflash decode (verify 7 of 7, greedy): 206 tok in 714 ms (288.5 tok/s), 30 cycles, 6.867 tok/cycle, 23.66 ms GPU/cycle, 23.81 ms wall/cycle (mode 3), hist 0 1 2 1 1 4 1 20; 6.87 proposals verified per cycle; acceptan
+== p1 r15 ship n=57 08:36:41 'AC Power' load { 1.72 1.62 1.47 }
+rc=0 end AC load { 1.46 1.56 1.45 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21559 tok in 8280 ms (2603.8 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 348 ms (161.0 tok/s), 16 cycles, 3.500 tok/cycle, 21.47 ms GPU/cycle, 21.74 ms wall/cycle (mode 3), hist 1 3 3 3 4 2 0 0; 5.94 proposals verified per cycle; acceptance
+== p1 r15 ft n=57 08:36:52 'AC Power' load { 1.46 1.56 1.45 }
+rc=0 end AC load { 1.54 1.58 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21559 tok in 8287 ms (2601.6 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 327 ms (171.4 tok/s), 15 cycles, 3.733 tok/cycle, 21.49 ms GPU/cycle, 21.78 ms wall/cycle (mode 3), hist 2 2 4 1 3 1 1 1; 5.87 proposals verified per cycle; acceptance
+== p1 r16 ship n=83 08:37:03 'AC Power' load { 1.54 1.58 1.46 }
+rc=0 end AC load { 1.38 1.54 1.45 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22538 tok in 8745 ms (2577.4 tok/s); dflash decode (verify 7 of 7, greedy): 82 tok in 461 ms (177.8 tok/s), 20 cycles, 4.100 tok/cycle, 22.85 ms GPU/cycle, 23.06 ms wall/cycle (mode 3), hist 2 2 5 1 4 5 1 0; 6.55 proposals verified per cycle; acceptance
+== p1 r16 ft n=83 08:37:14 'AC Power' load { 1.38 1.54 1.45 }
+rc=0 end AC load { 1.24 1.51 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22538 tok in 8740 ms (2578.6 tok/s); dflash decode (verify 7 of 7, greedy): 82 tok in 346 ms (237.2 tok/s), 15 cycles, 5.467 tok/cycle, 22.76 ms GPU/cycle, 23.05 ms wall/cycle (mode 3), hist 0 1 1 2 4 1 2 4; 6.40 proposals verified per cycle; acceptance
+== p1 r17 ship n=57 08:37:26 'AC Power' load { 1.30 1.51 1.44 }
+rc=0 end AC load { 1.10 1.46 1.42 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22646 tok in 8934 ms (2534.9 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 289 ms (193.6 tok/s), 12 cycles, 4.667 tok/cycle, 23.75 ms GPU/cycle, 24.10 ms wall/cycle (mode 3), hist 1 0 1 0 6 2 2 0; 6.58 proposals verified per cycle; acceptance
+== p1 r17 ft n=57 08:37:37 'AC Power' load { 1.10 1.46 1.42 }
+rc=0 end AC load { 1.09 1.45 1.42 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22646 tok in 8920 ms (2538.7 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 266 ms (210.4 tok/s), 11 cycles, 5.091 tok/cycle, 23.82 ms GPU/cycle, 24.20 ms wall/cycle (mode 3), hist 1 0 0 1 5 1 1 2; 6.82 proposals verified per cycle; acceptance
+== p1 r18 ship n=322 08:37:49 'AC Power' load { 1.09 1.45 1.42 }
+rc=0 end AC load { 0.98 1.41 1.40 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22779 tok in 8926 ms (2552.1 tok/s); dflash decode (verify 7 of 7, greedy): 321 tok in 2046 ms (156.9 tok/s), 97 cycles, 3.309 tok/cycle, 21.05 ms GPU/cycle, 21.10 ms wall/cycle (mode 3), hist 16 22 18 21 5 7 4 4; 5.37 proposals verified per cycle; acce
+== p1 r18 ft n=322 08:38:02 'AC Power' load { 0.98 1.41 1.40 }
+rc=0 end AC load { 1.68 1.54 1.45 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22779 tok in 8943 ms (2547.1 tok/s); dflash decode (verify 7 of 7, greedy): 321 tok in 2155 ms (149.0 tok/s), 104 cycles, 3.087 tok/cycle, 20.67 ms GPU/cycle, 20.72 ms wall/cycle (mode 3), hist 24 30 11 15 9 7 3 5; 4.78 proposals verified per cycle; acc
+== p2 r0 ft n=73 08:38:16 'AC Power' load { 1.78 1.57 1.46 }
+rc=0 end AC load { 1.78 1.57 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 5485 tok in 1745 ms (3143.1 tok/s); dflash decode (verify 7 of 7, greedy): 72 tok in 349 ms (206.2 tok/s), 18 cycles, 4.000 tok/cycle, 19.17 ms GPU/cycle, 19.40 ms wall/cycle (mode 3), hist 0 2 6 4 1 3 0 2; 5.72 proposals verified per cycle; acceptance 
+== p2 r0 ship n=73 08:38:20 'AC Power' load { 1.78 1.57 1.46 }
+rc=0 end AC load { 1.72 1.56 1.45 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 5485 tok in 1740 ms (3152.2 tok/s); dflash decode (verify 7 of 7, greedy): 72 tok in 474 ms (151.8 tok/s), 25 cycles, 2.880 tok/cycle, 18.80 ms GPU/cycle, 18.98 ms wall/cycle (mode 3), hist 2 5 13 4 1 0 0 0; 5.20 proposals verified per cycle; acceptance
+== p2 r1 ft n=66 08:38:25 'AC Power' load { 1.72 1.56 1.45 }
+rc=0 end AC load { 1.74 1.56 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8351 tok in 2770 ms (3014.3 tok/s); dflash decode (verify 7 of 7, greedy): 65 tok in 407 ms (159.7 tok/s), 21 cycles, 3.095 tok/cycle, 19.17 ms GPU/cycle, 19.38 ms wall/cycle (mode 3), hist 4 5 3 5 3 0 0 1; 5.19 proposals verified per cycle; acceptance 
+== p2 r1 ship n=66 08:38:31 'AC Power' load { 1.74 1.56 1.46 }
+rc=0 end AC load { 2.16 1.65 1.49 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8351 tok in 2765 ms (3020.2 tok/s); dflash decode (verify 7 of 7, greedy): 65 tok in 449 ms (144.7 tok/s), 23 cycles, 2.826 tok/cycle, 19.34 ms GPU/cycle, 19.53 ms wall/cycle (mode 3), hist 5 6 5 3 2 2 0 0; 5.43 proposals verified per cycle; acceptance 
+== p2 r2 ft n=117 08:38:36 'AC Power' load { 2.31 1.69 1.50 }
+rc=0 end AC load { 2.29 1.70 1.51 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8510 tok in 2822 ms (3015.5 tok/s); dflash decode (verify 7 of 7, greedy): 116 tok in 439 ms (264.1 tok/s), 20 cycles, 5.800 tok/cycle, 21.73 ms GPU/cycle, 21.96 ms wall/cycle (mode 3), hist 1 1 3 2 0 2 2 9; 6.85 proposals verified per cycle; acceptance
+== p2 r2 ship n=117 08:38:42 'AC Power' load { 2.29 1.70 1.51 }
+rc=0 end AC load { 2.10 1.67 1.50 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 8510 tok in 2815 ms (3023.1 tok/s); dflash decode (verify 7 of 7, greedy): 116 tok in 563 ms (206.0 tok/s), 26 cycles, 4.462 tok/cycle, 21.49 ms GPU/cycle, 21.66 ms wall/cycle (mode 3), hist 0 3 4 3 11 2 3 0; 6.62 proposals verified per cycle; acceptanc
+== p2 r3 ft n=131 08:38:48 'AC Power' load { 2.10 1.67 1.50 }
+rc=0 end AC load { 1.93 1.64 1.49 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 13009 tok in 4522 ms (2876.7 tok/s); dflash decode (verify 7 of 7, greedy): 130 tok in 579 ms (224.5 tok/s), 26 cycles, 5.000 tok/cycle, 22.10 ms GPU/cycle, 22.27 ms wall/cycle (mode 3), hist 2 4 4 2 3 0 3 8; 6.77 proposals verified per cycle; acceptanc
+== p2 r3 ship n=131 08:38:55 'AC Power' load { 1.93 1.64 1.49 }
+rc=0 end AC load { 1.86 1.64 1.49 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 13009 tok in 4527 ms (2873.7 tok/s); dflash decode (verify 7 of 7, greedy): 130 tok in 685 ms (189.8 tok/s), 31 cycles, 4.194 tok/cycle, 21.96 ms GPU/cycle, 22.10 ms wall/cycle (mode 3), hist 2 3 4 6 13 0 3 0; 6.77 proposals verified per cycle; acceptan
+== p2 r4 ft n=38 08:39:03 'AC Power' load { 1.86 1.64 1.49 }
+rc=0 end AC load { 1.57 1.58 1.47 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17649 tok in 6451 ms (2735.9 tok/s); dflash decode (verify 7 of 7, greedy): 37 tok in 197 ms (188.1 tok/s), 9 cycles, 4.111 tok/cycle, 21.37 ms GPU/cycle, 21.85 ms wall/cycle (mode 3), hist 1 1 2 0 1 3 1 0; 6.22 proposals verified per cycle; acceptance 
+== p2 r4 ship n=38 08:39:12 'AC Power' load { 1.57 1.58 1.47 }
+rc=0 end AC load { 1.93 1.65 1.50 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17649 tok in 6443 ms (2739.1 tok/s); dflash decode (verify 7 of 7, greedy): 37 tok in 219 ms (168.9 tok/s), 10 cycles, 3.700 tok/cycle, 21.47 ms GPU/cycle, 21.90 ms wall/cycle (mode 3), hist 1 1 2 0 6 0 0 0; 6.30 proposals verified per cycle; acceptance
+== p2 r5 ft n=31 08:39:21 'AC Power' load { 1.93 1.65 1.50 }
+rc=0 end AC load { 2.07 1.70 1.51 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17721 tok in 6492 ms (2729.8 tok/s); dflash decode (verify 7 of 7, greedy): 30 tok in 121 ms (248.3 tok/s), 5 cycles, 6.000 tok/cycle, 23.31 ms GPU/cycle, 24.16 ms wall/cycle (mode 3), hist 0 1 0 0 0 0 2 2; 7.00 proposals verified per cycle; acceptance 
+== p2 r5 ship n=31 08:39:30 'AC Power' load { 2.07 1.70 1.51 }
+rc=0 end AC load { 1.97 1.69 1.51 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 17721 tok in 6490 ms (2730.3 tok/s); dflash decode (verify 7 of 7, greedy): 30 tok in 139 ms (215.7 tok/s), 6 cycles, 5.000 tok/cycle, 22.44 ms GPU/cycle, 23.18 ms wall/cycle (mode 3), hist 0 0 0 0 4 2 0 0; 6.33 proposals verified per cycle; acceptance 
+== p2 r6 ft n=533 08:39:39 'AC Power' load { 1.97 1.69 1.51 }
+rc=0 end AC load { 1.67 1.63 1.50 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 18523 tok in 6927 ms (2674.0 tok/s); dflash decode (verify 7 of 7, greedy): 532 tok in 2640 ms (201.5 tok/s), 125 cycles, 4.256 tok/cycle, 21.09 ms GPU/cycle, 21.12 ms wall/cycle (mode 3), hist 18 24 17 14 7 10 11 24; 5.63 proposals verified per cycle; 
+== p2 r6 ship n=533 08:39:51 'AC Power' load { 1.67 1.63 1.50 }
+rc=0 end AC load { 1.72 1.65 1.50 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 18523 tok in 6928 ms (2673.8 tok/s); dflash decode (verify 7 of 7, greedy): 532 tok in 2684 ms (198.2 tok/s), 128 cycles, 4.156 tok/cycle, 20.93 ms GPU/cycle, 20.96 ms wall/cycle (mode 3), hist 17 21 20 19 14 9 6 22; 5.46 proposals verified per cycle; a
+== p2 r7 ft n=761 08:40:03 'AC Power' load { 1.72 1.65 1.50 }
+rc=0 end AC load { 1.45 1.60 1.48 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19081 tok in 7140 ms (2672.6 tok/s); dflash decode (verify 7 of 7, greedy): 760 tok in 3170 ms (239.7 tok/s), 140 cycles, 5.429 tok/cycle, 22.61 ms GPU/cycle, 22.64 ms wall/cycle (mode 3), hist 12 10 15 11 18 16 11 47; 6.17 proposals verified per cycle;
+== p2 r7 ship n=761 08:40:16 'AC Power' load { 1.45 1.60 1.48 }
+rc=0 end AC load { 1.20 1.53 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19081 tok in 7138 ms (2673.3 tok/s); dflash decode (verify 7 of 7, greedy): 760 tok in 3191 ms (238.2 tok/s), 141 cycles, 5.390 tok/cycle, 22.60 ms GPU/cycle, 22.63 ms wall/cycle (mode 3), hist 12 10 12 13 21 18 13 42; 6.22 proposals verified per cycle;
+== p2 r8 ft n=110 08:40:28 'AC Power' load { 1.20 1.53 1.46 }
+rc=0 end AC load { 1.16 1.51 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19868 tok in 7456 ms (2664.8 tok/s); dflash decode (verify 7 of 7, greedy): 109 tok in 516 ms (211.1 tok/s), 23 cycles, 4.739 tok/cycle, 22.27 ms GPU/cycle, 22.45 ms wall/cycle (mode 3), hist 1 3 2 4 5 3 1 4; 6.17 proposals verified per cycle; acceptanc
+== p2 r8 ship n=110 08:40:39 'AC Power' load { 1.16 1.51 1.46 }
+rc=0 end AC load { 0.98 1.46 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 19868 tok in 7455 ms (2665.1 tok/s); dflash decode (verify 7 of 7, greedy): 109 tok in 583 ms (187.1 tok/s), 26 cycles, 4.192 tok/cycle, 22.24 ms GPU/cycle, 22.41 ms wall/cycle (mode 3), hist 0 6 5 4 5 3 1 2; 6.08 proposals verified per cycle; acceptanc
+== p2 r9 ft n=142 08:40:49 'AC Power' load { 0.98 1.46 1.44 }
+rc=0 end AC load { 0.83 1.42 1.42 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20003 tok in 7538 ms (2653.8 tok/s); dflash decode (verify 7 of 7, greedy): 141 tok in 590 ms (238.9 tok/s), 25 cycles, 5.640 tok/cycle, 23.43 ms GPU/cycle, 23.60 ms wall/cycle (mode 3), hist 1 0 3 4 2 5 1 9; 6.84 proposals verified per cycle; acceptanc
+== p2 r9 ship n=142 08:41:00 'AC Power' load { 0.83 1.42 1.42 }
+rc=0 end AC load { 0.94 1.42 1.42 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20003 tok in 7539 ms (2653.3 tok/s); dflash decode (verify 7 of 7, greedy): 141 tok in 703 ms (200.6 tok/s), 30 cycles, 4.700 tok/cycle, 23.28 ms GPU/cycle, 23.43 ms wall/cycle (mode 3), hist 3 5 2 2 6 4 2 6; 6.53 proposals verified per cycle; acceptanc
+== p2 r10 ft n=204 08:41:10 'AC Power' load { 0.94 1.42 1.42 }
+rc=0 end AC load { 1.18 1.45 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20170 tok in 7614 ms (2649.0 tok/s); dflash decode (verify 7 of 7, greedy): 203 tok in 978 ms (207.5 tok/s), 43 cycles, 4.721 tok/cycle, 22.65 ms GPU/cycle, 22.75 ms wall/cycle (mode 3), hist 4 5 7 5 3 6 3 10; 6.53 proposals verified per cycle; acceptan
+== p2 r10 ship n=204 08:41:21 'AC Power' load { 1.18 1.45 1.44 }
+rc=0 end AC load { 1.72 1.56 1.47 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20170 tok in 7636 ms (2641.3 tok/s); dflash decode (verify 7 of 7, greedy): 203 tok in 1064 ms (190.7 tok/s), 47 cycles, 4.319 tok/cycle, 22.55 ms GPU/cycle, 22.65 ms wall/cycle (mode 3), hist 7 6 7 5 7 2 5 8; 6.47 proposals verified per cycle; acceptan
+== p2 r11 ft n=56 08:41:32 'AC Power' load { 1.72 1.56 1.47 }
+rc=0 end AC load { 1.45 1.51 1.46 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20399 tok in 7704 ms (2647.8 tok/s); dflash decode (verify 7 of 7, greedy): 55 tok in 256 ms (215.0 tok/s), 11 cycles, 5.000 tok/cycle, 22.86 ms GPU/cycle, 23.25 ms wall/cycle (mode 3), hist 1 0 2 0 2 3 2 1; 6.55 proposals verified per cycle; acceptance
+== p2 r11 ship n=56 08:41:43 'AC Power' load { 1.45 1.51 1.46 }
+rc=0 end AC load { 1.23 1.46 1.44 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20399 tok in 7690 ms (2652.6 tok/s); dflash decode (verify 7 of 7, greedy): 55 tok in 303 ms (181.3 tok/s), 13 cycles, 4.231 tok/cycle, 23.00 ms GPU/cycle, 23.33 ms wall/cycle (mode 3), hist 1 1 1 1 9 0 0 0; 6.62 proposals verified per cycle; acceptance
+== p2 r12 ft n=323 08:41:53 'AC Power' load { 1.23 1.46 1.44 }
+rc=0 end AC load { 1.12 1.43 1.43 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20688 tok in 7912 ms (2614.6 tok/s); dflash decode (verify 7 of 7, greedy): 322 tok in 1523 ms (211.4 tok/s), 70 cycles, 4.600 tok/cycle, 21.69 ms GPU/cycle, 21.76 ms wall/cycle (mode 3), hist 10 9 11 12 1 3 2 22; 5.83 proposals verified per cycle; acce
+== p2 r12 ship n=323 08:42:05 'AC Power' load { 1.12 1.43 1.43 }
+rc=0 end AC load { 0.95 1.38 1.41 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 20688 tok in 7902 ms (2618.1 tok/s); dflash decode (verify 7 of 7, greedy): 322 tok in 1532 ms (210.1 tok/s), 70 cycles, 4.600 tok/cycle, 21.83 ms GPU/cycle, 21.89 ms wall/cycle (mode 3), hist 8 9 12 9 6 6 1 19; 5.94 proposals verified per cycle; accept
+== p2 r13 ft n=266 08:42:17 'AC Power' load { 0.95 1.38 1.41 }
+rc=0 end AC load { 1.07 1.39 1.41 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21036 tok in 8042 ms (2615.7 tok/s); dflash decode (verify 7 of 7, greedy): 265 tok in 1228 ms (215.8 tok/s), 56 cycles, 4.732 tok/cycle, 21.85 ms GPU/cycle, 21.93 ms wall/cycle (mode 3), hist 7 9 6 5 5 3 4 17; 5.88 proposals verified per cycle; accepta
+== p2 r13 ship n=266 08:42:29 'AC Power' load { 1.07 1.39 1.41 }
+rc=0 end AC load { 0.98 1.36 1.40 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21036 tok in 8050 ms (2613.2 tok/s); dflash decode (verify 7 of 7, greedy): 265 tok in 1276 ms (207.7 tok/s), 58 cycles, 4.569 tok/cycle, 21.92 ms GPU/cycle, 22.00 ms wall/cycle (mode 3), hist 8 6 8 7 8 3 4 14; 6.07 proposals verified per cycle; accepta
+== p2 r14 ft n=207 08:42:40 'AC Power' load { 0.98 1.36 1.40 }
+rc=0 end AC load { 0.83 1.31 1.38 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21327 tok in 8179 ms (2607.6 tok/s); dflash decode (verify 7 of 7, greedy): 206 tok in 733 ms (281.0 tok/s), 31 cycles, 6.645 tok/cycle, 23.51 ms GPU/cycle, 23.65 ms wall/cycle (mode 3), hist 0 1 1 3 1 6 1 18; 6.71 proposals verified per cycle; acceptan
+== p2 r14 ship n=207 08:42:52 'AC Power' load { 0.83 1.31 1.38 }
+rc=0 end AC load { 0.92 1.32 1.39 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21327 tok in 8177 ms (2608.3 tok/s); dflash decode (verify 7 of 7, greedy): 206 tok in 779 ms (264.3 tok/s), 33 cycles, 6.242 tok/cycle, 23.48 ms GPU/cycle, 23.62 ms wall/cycle (mode 3), hist 2 1 0 5 2 4 1 18; 6.64 proposals verified per cycle; acceptan
+== p2 r15 ft n=57 08:43:03 'AC Power' load { 1.01 1.33 1.39 }
+rc=0 end AC load { 0.93 1.30 1.38 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21559 tok in 8278 ms (2604.5 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 323 ms (173.5 tok/s), 15 cycles, 3.733 tok/cycle, 21.24 ms GPU/cycle, 21.52 ms wall/cycle (mode 3), hist 1 5 0 4 2 1 1 1; 5.80 proposals verified per cycle; acceptance
+== p2 r15 ship n=57 08:43:14 'AC Power' load { 0.93 1.30 1.38 }
+rc=0 end AC load { 0.79 1.26 1.36 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 21559 tok in 8290 ms (2600.6 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 356 ms (157.2 tok/s), 16 cycles, 3.500 tok/cycle, 21.99 ms GPU/cycle, 22.26 ms wall/cycle (mode 3), hist 1 3 3 3 4 2 0 0; 6.31 proposals verified per cycle; acceptance
+== p2 r16 ft n=83 08:43:25 'AC Power' load { 0.79 1.26 1.36 }
+rc=0 end AC load { 0.67 1.22 1.35 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22538 tok in 8733 ms (2580.7 tok/s); dflash decode (verify 7 of 7, greedy): 82 tok in 365 ms (224.8 tok/s), 16 cycles, 5.125 tok/cycle, 22.54 ms GPU/cycle, 22.80 ms wall/cycle (mode 3), hist 1 1 2 1 4 1 2 4; 6.19 proposals verified per cycle; acceptance
+== p2 r16 ship n=83 08:43:37 'AC Power' load { 0.67 1.22 1.35 }
+rc=0 end AC load { 1.16 1.31 1.38 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22538 tok in 8740 ms (2578.7 tok/s); dflash decode (verify 7 of 7, greedy): 82 tok in 481 ms (170.4 tok/s), 21 cycles, 3.905 tok/cycle, 22.73 ms GPU/cycle, 22.92 ms wall/cycle (mode 3), hist 2 4 2 2 6 5 0 0; 6.48 proposals verified per cycle; acceptance
+== p2 r17 ft n=57 08:43:48 'AC Power' load { 1.15 1.30 1.37 }
+rc=0 end AC load { 1.05 1.28 1.36 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22646 tok in 8903 ms (2543.7 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 243 ms (230.3 tok/s), 10 cycles, 5.600 tok/cycle, 23.90 ms GPU/cycle, 24.32 ms wall/cycle (mode 3), hist 1 0 0 1 2 1 3 2; 6.80 proposals verified per cycle; acceptance
+== p2 r17 ship n=57 08:44:00 'AC Power' load { 1.05 1.28 1.36 }
+rc=0 end AC load { 1.05 1.27 1.36 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22646 tok in 8913 ms (2540.7 tok/s); dflash decode (verify 7 of 7, greedy): 56 tok in 287 ms (195.0 tok/s), 12 cycles, 4.667 tok/cycle, 23.59 ms GPU/cycle, 23.93 ms wall/cycle (mode 3), hist 1 0 1 0 6 2 2 0; 6.58 proposals verified per cycle; acceptance
+== p2 r18 ft n=322 08:44:11 'AC Power' load { 1.05 1.27 1.36 }
+rc=0 end AC load { 0.88 1.22 1.34 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22779 tok in 8919 ms (2553.8 tok/s); dflash decode (verify 7 of 7, greedy): 321 tok in 2122 ms (151.3 tok/s), 102 cycles, 3.147 tok/cycle, 20.76 ms GPU/cycle, 20.81 ms wall/cycle (mode 3), hist 19 31 16 13 8 6 4 5; 4.83 proposals verified per cycle; acc
+== p2 r18 ship n=322 08:44:25 'AC Power' load { 0.88 1.22 1.34 }
+rc=0 end AC load { 0.82 1.20 1.33 }
+[kapitsa] DFlash2: history lane on (n 3..8, up to 4 tokens; default, NI_DFLASH_HIST=0 turns it off)
+prompt 22779 tok in 8921 ms (2553.4 tok/s); dflash decode (verify 7 of 7, greedy): 321 tok in 2025 ms (158.5 tok/s), 94 cycles, 3.415 tok/cycle, 21.50 ms GPU/cycle, 21.54 ms wall/cycle (mode 3), hist 15 23 16 11 13 9 3 4; 6.10 proposals verified per cycle; acc
+ALLDONE
+{
+ "task": "#350 offline fine-tune of the 35B-A3B DFlash2 drafter on self-distilled English coding turns vs the shipped drafter",
+ "mac": "MacBook Pro M5 Pro 48 GB, macOS 26.5.2",
+ "argv": "KAPITSA_HOME=<per arm> build/ni_run <symlinked model dir, dflash2/ = arm> @r<i>.ids <n> 0 --dflash auto --ignore-eos",
+ "history_lane_on_legs": "76/76",
+ "all": {
+  "n_pairs": 38,
+  "outputs_identical": 38,
+  "shipped": {
+   "tok_per_cycle": 4.3258,
+   "decode_tok_s": 198.07
+  },
+  "finetuned": {
+   "tok_per_cycle": 4.6028,
+   "decode_tok_s": 210.79
+  },
+  "delta_tok_per_cycle_pct": 6.4,
+  "delta_tok_s_pct": 6.42,
+  "requests_ft_faster_tok_s": 36
+ },
+ "pass1": {
+  "n_pairs": 19,
+  "outputs_identical": 19,
+  "shipped": {
+   "tok_per_cycle": 4.2611,
+   "decode_tok_s": 196.22
+  },
+  "finetuned": {
+   "tok_per_cycle": 4.5615,
+   "decode_tok_s": 209.55
+  },
+  "delta_tok_per_cycle_pct": 7.05,
+  "delta_tok_s_pct": 6.8,
+  "requests_ft_faster_tok_s": 18
+ },
+ "pass2": {
+  "n_pairs": 19,
+  "outputs_identical": 19,
+  "shipped": {
+   "tok_per_cycle": 4.3926,
+   "decode_tok_s": 199.97
+  },
+  "finetuned": {
+   "tok_per_cycle": 4.6449,
+   "decode_tok_s": 212.05
+  },
+  "delta_tok_per_cycle_pct": 5.74,
+  "delta_tok_s_pct": 6.04,
+  "requests_ft_faster_tok_s": 18
+ }
+}
+PIPELINE DONE rc=0 08:44:38
+[detach] exit 0
