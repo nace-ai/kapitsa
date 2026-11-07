@@ -75,7 +75,8 @@ struct Snap {
   uint32_t flags = 0;
   int32_t dctx = 0, dvalid = 0;  // the drafter ring's committed positions and its lowest valid one (DFlash2)
   Key state;
-  static constexpr uint32_t kLive = 1, kQuery = 2;  // the slot's live state; a checkpoint at a user query
+  // the slot's live state; a checkpoint at a user query; the shared prefix checkpoint (DFlash2: no drafter ring saved)
+  static constexpr uint32_t kLive = 1, kQuery = 2, kPrefix = 4;
 };
 
 struct Entry {

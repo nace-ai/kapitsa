@@ -445,7 +445,9 @@ restarted) reads that state back and prefills only what follows it. `usage.promp
 - **What is kept.** The state a follow-up resumes from: the KV cache up to it, the recurrent state, the tokens, and the
   draft model's context (the DFlash drafters' context ring; with the MTP head, its KV rows and the draft rows it
   gathered). A slot's state is kept as it is, byte for byte, so a request resumed from the SSD writes what it would
-  from the slot. A conversation's next turns add only their new KV rows and states: the earlier ones are shared.
+  from the slot. A shared system-prefix checkpoint has no DFlash2 ring; after a restore, the ring starts empty, as it
+  does when RAM copies that checkpoint. A conversation's next turns add only their new KV rows and states: the earlier
+  ones are shared.
   Images in a conversation are kept with it by their content: a prompt reuses a stored state only through the same
   images. States nearer the start than 1024 tokens are not kept (quick to prefill again).
 - **When it is written.** After a turn, once the server has been idle for 10 s, in the background (a request that
@@ -456,8 +458,9 @@ restarted) reads that state back and prefills only what follows it. `usage.promp
 - **Where.** `~/.cache/kapitsa/prefix-cache` (`KAPITSA_HOME`), kept out of Time Machine and readable by your user only
   (it holds the conversations' tokens). One folder per model and draft model (a digest of their files and of the state
   formats), so no model reads another's states; one server uses a folder at a time (another waits up to 30 s for it,
-  then runs without the cache). Every file has a CRC-32C and is written to a temporary name, then renamed: a damaged
-  or partial file is a miss, never a wrong state.
+  then runs without the cache). A state-format change creates a new namespace. Kapitsa does not restore data from the
+  old namespace and removes it after 14 days without use. Every file has a CRC-32C and is written to a temporary name,
+  then renamed: a damaged or partial file is a miss, never a wrong state.
 - **How much.** `--disk-cache auto` (the default) takes at most a quarter of what the volume has free beyond 10 GiB
   (5% of a volume smaller than 200 GiB), its own files counted, and at most 32 GiB: on a disk with 28 GiB free, 4.5
   GiB. It follows the free space as the disk fills or empties, giving up the least recently used conversations first.
