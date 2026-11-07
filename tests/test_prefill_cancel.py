@@ -177,8 +177,12 @@ def main():
                         server.cancel(args.port, args.output, "cancel-second", long_request)
                     reply = request(args.port, args.output, leg + "-reply", long_request)
                     results[leg] = {"seed": seed, "short": short, "reply": reply}
+                    if leg == "control":
+                        checks.append(("uninterrupted continuation has a cached prefix", cached(reply) >= 64))
                     if leg == "cancel":
-                        checks.append(("retry keeps the completed prefix", cached(reply) >= cached(short)))
+                        # The short request may continue live rows beyond the checkpoint that this prompt restores.
+                        checks.append(("retry keeps the completed prefix",
+                                       cached(reply) >= cached(results["control"]["reply"])))
                         again = request(args.port, args.output, "cancel-repeat", long_request)
                         checks.append(("completed retry can be reused", cached(again) >= cached(reply)))
                         checks.append(("repeat output matches", (again["text"], again["reasoning"]) ==
