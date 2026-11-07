@@ -38,6 +38,12 @@ inline bool env_on(const char* name) {
   return v && *v && !(v[0] == '0' && v[1] == 0);
 }
 
+// Unset or empty keeps the default. "0" is 0, not the default (unlike env_on).
+inline int env_int(const char* name, int def) {
+  const char* v = getenv(name);
+  return v && *v ? atoi(v) : def;
+}
+
 // KFlash's knobs (#362): `NI_KFLASH_<NAME>`; the earlier `NI_DFLASH_<NAME>` is still read when the new name is unset.
 // (`NI_DFLASH` alone, the upstream drafter's folder, is not a knob of this kind.) Returns getenv's pointer or nullptr.
 inline const char* kenv(const char* name) {
