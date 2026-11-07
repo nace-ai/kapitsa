@@ -1,0 +1,89 @@
+{
+  "identities": {
+    "base": {
+      "head": "7a5d673e9544b538a54cf7b4d7c5cbcef2e49d5c",
+      "version": "kapitsa 0.2.31 (7a5d673)",
+      "binaries": {
+        "kapitsa": "fba3ef7cbe699b8fd8a02e13b811f480693940c86cca387d82df3e443adc7e6b",
+        "ni_run": "2b1af4e5726d302525886d3bd8af3846d78eeac62c293868100666e500f3faf4",
+        "logit_dump": "d6bdd9171bb7cdabddd409da815388c7f515eea08f400ad5cc40594d599bf60d"
+      },
+      "sources": {
+        "src/engine/engine.cpp": "69281aa6254b7c30d027bb35a6188d59dca0adb6ce193ea32180f5653d9d823a",
+        "src/engine/engine_splash.cpp": "771be298d697cd2084d6ff7df0b8e55ff922e60e6f111b1e3758c64085f9537e"
+      }
+    },
+    "candidate": {
+      "head": "cf2f25c7f9f38f9babfc51a0def9d55697544b73",
+      "version": "kapitsa 0.2.31 (cf2f25c)",
+      "binaries": {
+        "kapitsa": "e9a35cd2506ea6e9814e8ad4c7f6196f37683d4f9a8b0e6dd57c8fb3589df4d7",
+        "ni_run": "2b1af4e5726d302525886d3bd8af3846d78eeac62c293868100666e500f3faf4",
+        "logit_dump": "120dd20ccf5f4fc1c6b45b3662850d0a3e7d14c045d81bbfeb9970e2905d2207"
+      },
+      "sources": {
+        "src/engine/engine.cpp": "814794b0ddc139855869f6e5f750031e78380ac1b446c0e48d378440ce795027",
+        "src/engine/engine_splash.cpp": "c01b5d20531c3845edf1c1bbade71e061f00b50e9c2f55652e7421ae80518e4d"
+      }
+    }
+  },
+  "stop_regressions": [
+    {
+      "label": "4b-http-base",
+      "exit": 1,
+      "pass": false,
+      "failures": [
+        {
+          "name": "/v1/chat/completions streamed split stop",
+          "actual": "one",
+          "expected": ""
+        },
+        {
+          "name": "/v1/chat/completions nonstreamed split stop",
+          "actual": "one",
+          "expected": ""
+        },
+        {
+          "name": "/v1/messages streamed split stop",
+          "actual": "one",
+          "expected": ""
+        },
+        {
+          "name": "/v1/messages nonstreamed split stop",
+          "actual": "one",
+          "expected": ""
+        }
+      ]
+    },
+    {
+      "label": "4b-http-candidate",
+      "exit": 0,
+      "pass": true,
+      "failures": []
+    }
+  ],
+  "http": [
+    [
+      {
+        "label": "4b-http-base",
+        "exit": 1,
+        "passes": 47,
+        "failures": [
+          "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1353.2, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+          "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008769035339355469, {'id': 'chatcmpl-179403622721153', 'object': 'chat.completion.chunk', 'created': 1794036227, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.130270004272461], first token at 17.101467847824097"
+        ]
+      },
+      {
+        "label": "4b-http-candidate",
+        "exit": 1,
+        "passes": 47,
+        "failures": [
+          "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2977, 'completion_tokens': 4, 'total_tokens': 2981, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1355.1, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+          "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0013132095336914062, {'id': 'chatcmpl-179403629121153', 'object': 'chat.completion.chunk', 'created': 1794036291, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.133994102478027], first token at 17.312502145767212"
+        ]
+      }
+    ]
+  ],
+  "snapshot_status": "4b-logits-candidate",
+  "note": "Incomplete numerical/native tests are not included as passed."
+}
