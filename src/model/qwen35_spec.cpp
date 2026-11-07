@@ -154,6 +154,12 @@ QLinear Qwen35::quantize_rows4(const QLinear& src, uint32_t r0, uint32_t n) {
 // An already-quantized linear from the MTP file (copied into engine-owned buffers). Group 64; the width comes from the
 // shapes and may be any the kernels read (format_supported: 3, 4, 5, 6, 8), scales and biases in f16 / f32 become bf16.
 QLinear Qwen35::own_qlin(const WeightStore& w, const std::string& name) {
+  const Tensor &weight = w.get(name + ".weight"), &scales = w.get(name + ".scales"), &biases = w.get(name + ".biases");
+  const auto floats = [](DType d) { return d == DType::BF16 || d == DType::F16 || d == DType::F32; };
+  if (weight.dtype != DType::U32 || !floats(scales.dtype) || !floats(biases.dtype) ||
+      !affine_matrix_shape(weight.shape, scales.shape, biases.shape, 64))
+    fatal("%s: invalid affine tensor shapes or dtypes (expected uint32 matrix or stacked experts, "
+          "matching float scales and biases, and positive 32-bit dimensions)", name.c_str());
   QLinear L;
   int lossy = 0;
   bool cast = false;

@@ -1,0 +1,21 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (8e12c3d)",
+  "model": "qwen3.8-27b-4bit",
+  "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+  "path": "verify",
+  "verify": "KFlash tree (a chain of 8 live rows)",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base",
+  "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+  "macos": "26.4.1",
+  "date": "2026-11-07T08:55:16Z",
+  "env": {}
+}
