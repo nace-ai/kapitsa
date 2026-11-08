@@ -9,6 +9,7 @@
 //   iq_layout_test        (no model, no GPU)
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
+#include "gguf_q8_0_test.h"
 
 #include <cmath>
 #include <cstdio>
@@ -170,6 +171,7 @@ void test_type(uint32_t t, const Tables& T, std::mt19937& rng) {
 }  // namespace
 
 int main() {
+  g_fail += q8_test::run();
   Tables T;
   T.iq2xxs = metal_table("constant ulong iq2xxs_gridp[256]", 256);
   T.iq2s = metal_table("constant ulong iq2s_gridp[1024]", 1024);

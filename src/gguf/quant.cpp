@@ -11,6 +11,10 @@
 #include <cmath>
 #include <cstring>
 
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
+
 namespace ni::gguf {
 
 uint16_t to_bf16(float x) {
@@ -114,6 +118,29 @@ void dq_q5_1(const uint8_t* b, float* y) {
 }
 
 void dq_q8_0(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t h;
+  memcpy(&h, b, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 34 : src - dst < 32 * sizeof(float);
+  if ((h & 0x7c00u) != 0x7c00u && !overlap) {
+    // Finite half x int8 fits exactly in fp32. Keep exceptional scales and sequential overlapping writes scalar.
+    const float32x4_t d = vdupq_n_f32(from_f16(h));
+    const int8x16_t a = vld1q_s8(reinterpret_cast<const int8_t*>(b + 2));
+    const int8x16_t z = vld1q_s8(reinterpret_cast<const int8_t*>(b + 18));
+    const int16x8_t a0 = vmovl_s8(vget_low_s8(a)), a1 = vmovl_s8(vget_high_s8(a));
+    const int16x8_t z0 = vmovl_s8(vget_low_s8(z)), z1 = vmovl_s8(vget_high_s8(z));
+    vst1q_f32(y, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_low_s16(a0)))));
+    vst1q_f32(y + 4, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_high_s16(a0)))));
+    vst1q_f32(y + 8, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_low_s16(a1)))));
+    vst1q_f32(y + 12, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_high_s16(a1)))));
+    vst1q_f32(y + 16, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_low_s16(z0)))));
+    vst1q_f32(y + 20, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_high_s16(z0)))));
+    vst1q_f32(y + 24, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_low_s16(z1)))));
+    vst1q_f32(y + 28, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_high_s16(z1)))));
+    return;
+  }
+#endif
   const float d = f16_at(b);
   const int8_t* q = reinterpret_cast<const int8_t*>(b + 2);
   for (int j = 0; j < 32; ++j) y[j] = d * float(q[j]);
