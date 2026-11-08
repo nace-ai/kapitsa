@@ -502,7 +502,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
       [failure = std::move(failure)](const ChatResult& result, httplib::Response& response) {
         auto [status, body] = failure(result);
         response.status = status;
-        if (status == 503 && !result.engine_down) response.set_header("Retry-After", "1");  // a dead engine: no retry helps
+        if (status == 503 && (!result.engine_down || result.engine_restarting)) response.set_header("Retry-After", "1");
         response.set_content(api::dump(body), "application/json");
       }, std::move(after), {[meter] { ui::token(meter); }, [meter](const ChatResult& result) { ui::done(meter, result); }},
       early, telemetry, progress);
@@ -1462,7 +1462,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_err] = api::chat_failure(out);
         res.status = status;
-        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
+        if (status == 503 && (!out.engine_down || out.engine_restarting)) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_err), "application/json");
         return;
       }
@@ -1530,7 +1530,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::messages_failure(out);
         res.status = status;
-        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
+        if (status == 503 && (!out.engine_down || out.engine_restarting)) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }
@@ -1622,7 +1622,7 @@ static int serve(int argc, char** argv, int first) {
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::responses_failure(out);
         res.status = status;
-        if (status == 503 && !out.engine_down) res.set_header("Retry-After", "1");
+        if (status == 503 && (!out.engine_down || out.engine_restarting)) res.set_header("Retry-After", "1");
         res.set_content(api::dump(fail_body), "application/json");
         return;
       }

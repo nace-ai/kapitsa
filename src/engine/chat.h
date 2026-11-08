@@ -94,7 +94,8 @@ struct ChatResult {
   int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
   bool busy = false;          // "error" because the engine has no capacity for it now: a 503 with Retry-After, not a 400
   bool invalid_request = false;  // "error" because of the request's content (an image that cannot be read, a video)
-  bool engine_down = false;   // "error" because the engine process has exited: a 503 without Retry-After (nothing relaunches it)
+  bool engine_down = false;   // "error" because the engine is unavailable: a 503, without Retry-After if permanently dead
+  bool engine_restarting = false;  // a local cancellation deadline is replacing the child: a 503 with Retry-After
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   int reasoning_tokens = 0;   // completion tokens inside the think block
   double prefill_ms = 0, decode_ms = 0;

@@ -38,6 +38,8 @@ and the decode loop. This page records the shape and what the first version does
 - The child dying, closing its output, sending a frame that breaks the protocol, or an engine-level ERROR fails every
   held request with `engine_unhealthy` and leaves the Runtime dead. There is no relaunch: the owner starts a new one.
   A protocol failure kills the child, because its stream cannot be trusted afterwards.
+- An ignored cancel past `cancel_timeout_s` fails every held request once with `cancel_timeout`, kills the child and
+  starts a fresh one. Failed requests are not replayed; new requests can run once the child is ready.
 - Admission follows READY's `max_concurrent_requests`; a full pool throws `PendingLimitExceeded` (the server answers 503). The id and both deadlines
   are stamped at `submit`, as `runtime.py` does.
 - `shutdown()` closes the child's stdin (it drains and exits), then SIGTERM, then SIGKILL, each after `stop_grace_s`.
@@ -47,9 +49,12 @@ and the decode loop. This page records the shape and what the first version does
 Structured-output grammar (needs MASK_REQUEST round trips), image inputs, loop counts, and a prompt longer than the
 engine's context. Each is a 400 `invalid_request_error` before anything is queued, as is a sampling field outside Splash's
 range (the error names the field). A request that finds the engine at its `max_concurrent_requests` gets 503 with
-`Retry-After` (queueing past the pool, as plain Splash's `--queue-size` does, is #756). Once the engine has exited, every
-route (`/v1/chat/completions`, `/v1/messages`, `/v1/responses`) answers 503 `the Splash engine has exited (...); restart
-kapitsa serve`, without `Retry-After`, since nothing relaunches it. On all three routes an omitted temperature, top_p or
+`Retry-After` (queueing past the pool with `--queue-size` is #756). An unexpected child exit leaves every
+route (`/v1/chat/completions`, `/v1/messages`, `/v1/responses`) at 503 `the engine has exited (...); restart kapitsa serve`,
+without `Retry-After`. A cancellation timeout instead fails old work once and starts a fresh child. During recovery,
+requests get 503 `the engine timed out waiting for cancellation; restarting` with `Retry-After: 1`; routes recover after
+the child's READY.
+On all three routes an omitted temperature, top_p or
 top_k is Splash's default (1.0, 0.95, 20), and a seed follows Splash's `frontend.py`: absent or -1 is random, any other
 integer is used as its 64 bits. Kapitsa's own model folders and Splash's resolved model are different artifacts (a safetensors
 `flash-next-q20` against a GGUF Q2_0 target plus an incoai DFlash2 drafter), so the child is pointed at Splash's resolved
@@ -251,10 +256,11 @@ one whose engine asks for masks narrower than the tokenizer fails with an error 
 Text chat otherwise: Splash's native protocol carries text and sampling, so a request with an image or a loop count is
 refused with the error type `invalid_request_error` and the engine's reason as the message. Nothing is moved to Kapitsa's own engine, and the engine is fixed for the server's life: one
 `serve` is one engine, not one per request. Two failures are not refusals: a request that arrives while the engine is
-at its concurrent-request limit is a 503 with `Retry-After` and `the Splash engine is at its concurrent-request
-limit`, and one that arrives after the engine has exited is a 503 without `Retry-After`, since nothing relaunches it:
-`the Splash engine has exited (...); restart kapitsa serve`, on `/v1/chat/completions`, `/v1/messages` and
-`/v1/responses` alike.
+at its concurrent-request limit is a 503 with `Retry-After` and a reason naming that limit. An unexpected child exit
+leaves `/v1/chat/completions`, `/v1/messages` and `/v1/responses` at 503 without `Retry-After`:
+`the engine has exited (...); restart kapitsa serve`. A `cancel_timeout` fails held requests once without replay and
+starts a fresh child. Requests during recovery get 503 `the engine timed out waiting for cancellation; restarting`
+with `Retry-After: 1`; all three routes recover once that child sends READY.
 
 Splash's sampler is its own frontend's: a request that leaves out temperature, top_p or top_k gets Splash's default —
 1.0, 0.95 and 20 — on all three routes, rather than the per-model ones Kapitsa's own engine applies. Sampling fields Kapitsa's own
