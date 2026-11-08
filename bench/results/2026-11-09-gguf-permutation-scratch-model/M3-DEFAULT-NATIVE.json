@@ -1,0 +1,257 @@
+{
+  "format": "Explicitly privacy-filtered derived summary, not raw execution logs.",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "model": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2776033248,
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "leg_order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "source": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+      "rc": 0,
+      "started_at": "2026-11-08T20:22:22.992221+00:00",
+      "finished_at": "2026-11-08T20:23:12.949542+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 254.96,
+          "runs_tps": [
+            230.47,
+            254.96,
+            258.81
+          ],
+          "median_accepted_draft_tps": 164.33,
+          "median_accepted_draft_share": 0.6445
+        },
+        "decode_greedy": {
+          "median_tps": 270.79,
+          "runs_tps": [
+            270.79,
+            267.48,
+            292.96
+          ],
+          "median_accepted_draft_tps": 180.35,
+          "median_accepted_draft_share": 0.666
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 2.0676,
+            "tps": 1999.4,
+            "followup_s": [
+              0.0339,
+              0.0391,
+              0.0366
+            ],
+            "followup_median_s": 0.0366,
+            "followup_suffix_tps": 648.1
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": true
+    },
+    "B1": {
+      "source": "9493a437a823343a2b257767c45eae9a98e7827c",
+      "rc": 0,
+      "started_at": "2026-11-08T20:23:12.968785+00:00",
+      "finished_at": "2026-11-08T20:24:01.260020+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 238.67,
+          "runs_tps": [
+            238.67,
+            238.12,
+            266.5
+          ],
+          "median_accepted_draft_tps": 150.1,
+          "median_accepted_draft_share": 0.6289
+        },
+        "decode_greedy": {
+          "median_tps": 293.06,
+          "runs_tps": [
+            293.06,
+            269.08,
+            293.56
+          ],
+          "median_accepted_draft_tps": 202.62,
+          "median_accepted_draft_share": 0.6914
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 2.0692,
+            "tps": 1997.0,
+            "followup_s": [
+              0.0404,
+              0.0423,
+              0.0421
+            ],
+            "followup_median_s": 0.0421,
+            "followup_suffix_tps": 545.2
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": true
+    },
+    "A2": {
+      "source": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+      "rc": 0,
+      "started_at": "2026-11-08T20:24:01.280107+00:00",
+      "finished_at": "2026-11-08T20:24:49.678422+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 237.42,
+          "runs_tps": [
+            237.42,
+            237.05,
+            253.65
+          ],
+          "median_accepted_draft_tps": 147.23,
+          "median_accepted_draft_share": 0.6211
+        },
+        "decode_greedy": {
+          "median_tps": 272.47,
+          "runs_tps": [
+            270.56,
+            272.47,
+            277.58
+          ],
+          "median_accepted_draft_tps": 182.0,
+          "median_accepted_draft_share": 0.668
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 2.0758,
+            "tps": 1990.1,
+            "followup_s": [
+              0.0392,
+              0.0456,
+              0.0465
+            ],
+            "followup_median_s": 0.0456,
+            "followup_suffix_tps": 561.2
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": true
+    },
+    "B2": {
+      "source": "9493a437a823343a2b257767c45eae9a98e7827c",
+      "rc": 0,
+      "started_at": "2026-11-08T20:24:49.701367+00:00",
+      "finished_at": "2026-11-08T20:25:37.660027+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 260.55,
+          "runs_tps": [
+            253.15,
+            260.55,
+            270.73
+          ],
+          "median_accepted_draft_tps": 169.46,
+          "median_accepted_draft_share": 0.6504
+        },
+        "decode_greedy": {
+          "median_tps": 269.27,
+          "runs_tps": [
+            273.03,
+            269.27,
+            266.91
+          ],
+          "median_accepted_draft_tps": 179.34,
+          "median_accepted_draft_share": 0.666
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 2.0694,
+            "tps": 1997.6,
+            "followup_s": [
+              0.0339,
+              0.042,
+              0.0343
+            ],
+            "followup_median_s": 0.0343,
+            "followup_suffix_tps": 642.1
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": true
+    }
+  },
+  "method": "kapitsa bench --quick native servers, original randomized corpus requests; separate from matched fixed-request experiment.",
+  "limit": "All four original native legs exited 0 with no flags or invalid entries and tool semantic checks passed. This is not a universal API claim."
+}

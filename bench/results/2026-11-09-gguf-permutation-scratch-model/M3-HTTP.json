@@ -1,0 +1,49 @@
+{
+  "format": "Explicitly privacy-filtered derived summary, not raw execution logs.",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "model": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2776033248,
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "arms": {
+    "reference": {
+      "rc": 1,
+      "PASS": 54,
+      "FAIL": 1,
+      "failure": "Queued chat stream keepalive fixture expected two keepalives; one arrived before the first content token.",
+      "first_chunk_s": 0.002758026123046875,
+      "keepalive_s": [
+        15.105794906616211
+      ],
+      "first_content_s": 18.678226947784424,
+      "started_at": "2026-11-08T20:29:09.420682+00:00",
+      "finished_at": "2026-11-08T20:30:16.690420+00:00"
+    },
+    "candidate": {
+      "rc": 1,
+      "PASS": 54,
+      "FAIL": 1,
+      "failure": "Queued chat stream keepalive fixture expected two keepalives; one arrived before the first content token.",
+      "first_chunk_s": 0.002485990524291992,
+      "keepalive_s": [
+        15.131248950958252
+      ],
+      "first_content_s": 18.41632890701294,
+      "started_at": "2026-11-08T20:30:22.976025+00:00",
+      "finished_at": "2026-11-08T20:31:29.110095+00:00"
+    }
+  },
+  "source_test": "tests/test_server.py from each source; default precise servers, context 32768, two slots, disk cache disabled.",
+  "assessment": "Both M3 sources fail the same unchanged test, which requires two keepalives around 15/30 seconds. First content arrived at 18.42-18.68 seconds, after only one keepalive. This observed baseline failure is not evidence of a converter regression; it is retained, not described as an all-pass run."
+}

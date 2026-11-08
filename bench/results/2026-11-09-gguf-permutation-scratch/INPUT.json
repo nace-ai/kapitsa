@@ -1,0 +1,24 @@
+{
+  "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+  "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+  "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+  "full_file_bytes": 2776033248,
+  "public_LFS_sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b",
+  "full_file_downloaded_or_verified": false,
+  "tensor": "blk.4.ssm_out.weight",
+  "tensor_shape": [
+    2560,
+    4096
+  ],
+  "tested_first_rows": 1024,
+  "GGUF_type": "Q4_0",
+  "row_bytes": 2304,
+  "tensor_relative_offset": 859952128,
+  "GGUF_data_offset": 10969056,
+  "tested_payload_bytes": 2359296,
+  "tested_payload_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+  "head_width": 128,
+  "key_heads": 16,
+  "value_heads": 32,
+  "retrieval": "Pinned public GGUF header and tensor byte range only; full-file LFS identity is metadata, not a completed full download."
+}

@@ -1,0 +1,37 @@
+{
+  "format": "Explicitly privacy-filtered derived summary, not raw execution logs.",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "setup": {
+    "chip": "M4 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2776033248,
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "arms": {
+    "reference": {
+      "rc": 0,
+      "PASS": 55,
+      "FAIL": 0,
+      "started_at": "2026-11-08T20:21:12.001402+00:00",
+      "finished_at": "2026-11-08T20:22:18.559467+00:00"
+    },
+    "candidate": {
+      "rc": 0,
+      "PASS": 55,
+      "FAIL": 0,
+      "started_at": "2026-11-08T20:22:20.630851+00:00",
+      "finished_at": "2026-11-08T20:23:27.973128+00:00"
+    }
+  },
+  "source_test": "tests/test_server.py from each source; default precise servers, context 32768, two slots, disk cache disabled.",
+  "assessment": "Both M4 HTTP arms passed all 55 executed checks. This does not override the M3 failure or establish universal API correctness."
+}

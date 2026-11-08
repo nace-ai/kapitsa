@@ -1,0 +1,220 @@
+{
+  "format": "Explicitly privacy-filtered derived summary, not raw execution logs.",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "setup": {
+    "chip": "M4 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2776033248,
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "fresh_reference_import_rc": 0,
+  "fresh_candidate_import_rc": 0,
+  "method": "Independent --no-drafter imports from the pinned GGUF, four import threads; compare all nine complete files literally before deduplicating identical retained model bytes.",
+  "comparison": {
+    "converted_weight_config_tokenizer_bytes_equal": true,
+    "all_files_raw_bytes_equal": true,
+    "manifest_order_only_differences": [],
+    "files_with_complete_literal_byte_comparison": [
+      ".kapitsa/manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "mtp.safetensors",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "inventories": {
+      "reference": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1260,
+          "sha256": "56300aac18eac512eb9c11e4148d94735381b1547eb81cdfb969f9804b02203d"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 5942,
+          "sha256": "f7d4ede403a0e6fd8a391f3789966e927c26ba569e8178dd1951c525e070b563"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3005300088,
+          "sha256": "85b9ad25fd8cdd35b0e9e2a050522205803fa03209b3034858ea93f528f5bdac"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "d83fbd0d77dac11f79dabf34cfb48fbf67c2b6120da5d1b7b4f6d4d855b8594f"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "a0ecbe00db9e0a9adfc1bc8373d2e4fa1ddcf158d7b4a0dab2a80ba4bb972ec6"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ],
+      "candidate": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1260,
+          "sha256": "56300aac18eac512eb9c11e4148d94735381b1547eb81cdfb969f9804b02203d"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 5942,
+          "sha256": "f7d4ede403a0e6fd8a391f3789966e927c26ba569e8178dd1951c525e070b563"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3005300088,
+          "sha256": "85b9ad25fd8cdd35b0e9e2a050522205803fa03209b3034858ea93f528f5bdac"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "d83fbd0d77dac11f79dabf34cfb48fbf67c2b6120da5d1b7b4f6d4d855b8594f"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "a0ecbe00db9e0a9adfc1bc8373d2e4fa1ddcf158d7b4a0dab2a80ba4bb972ec6"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ]
+    },
+    "source_backed_format_checks": {
+      "reference": {
+        "global": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.4.linear_attn.out_proj",
+        "effective_measured_module": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              2560,
+              512
+            ],
+            "payload_bytes": 5242880
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              2560,
+              128
+            ],
+            "payload_bytes": 655360
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              2560,
+              128
+            ],
+            "payload_bytes": 655360
+          }
+        }
+      },
+      "candidate": {
+        "global": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.4.linear_attn.out_proj",
+        "effective_measured_module": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              2560,
+              512
+            ],
+            "payload_bytes": 5242880
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              2560,
+              128
+            ],
+            "payload_bytes": 655360
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              2560,
+              128
+            ],
+            "payload_bytes": 655360
+          }
+        }
+      }
+    },
+    "format_scope": "Global format and measured trunk layer4 linear_attn.out_proj only; other per-module/MTP formats are not asserted to be four-bit."
+  },
+  "original_interrupted_attempts": [
+    "The first reference import exited 1 at an unchanged preflight guard before conversion. It was resumed under a new label after resolving the local validation environment, without changing source or the guard.",
+    "Earlier controller setup failed before model conversion (M3 missing source-hash metadata; M4 missing explicit CMake executable). These original failures remain private and were not counted as passes."
+  ],
+  "not_measured": "End-to-end import latency; other modules and MTP weights are not asserted to have uniform four-bit format."
+}
