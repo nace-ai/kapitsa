@@ -502,10 +502,19 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `GET /v1/models` | Available models (active model first, downloaded models, and catalog models); includes `active`, `downloaded`, `context_fit`, and `slots`. |
 | `GET /v1/models/:model` | Information about a specific model. |
 | `POST /v1/models/switch` | With `--allow-switch`: switches the active model, `{"model": "<name>"}` (403 without the flag). While it loads, other requests get 503 with `Retry-After`. A model that fails to load leaves the previous one serving. |
+| `POST /api/chat` | Ollama chat completions: newline-delimited JSON streaming (`application/x-ndjson`). Handles `messages`, `tools`, `think`, `format`, `options` (temperature, top_p, top_k, seed, num_predict, stop, penalties), and `images`. `num_predict` of -1 or -2 leaves the server default. Reasoning in `message.thinking`. |
+| `POST /api/generate` | Ollama text generation: `prompt`, `system`, `images`, `format`, `options`. Same streaming format. Reasoning in a `thinking` field. |
+| `GET /api/tags` | Ollama model list: loaded and installed models. |
+| `POST /api/show` | Ollama model details. 404 for an unknown model. |
+| `GET /api/ps` | Ollama running model info. |
+| `GET /api/version` | Returns the Kapitsa version. |
+| `POST /api/embed` | Not supported (no embedding models). Returns 400. |
 | `GET /health` | `{"status":"ok"}` |
 | `GET /` | The chat page: one file with dynamic client-side model selection dropdown that talks only to this server and keeps its conversations in the browser. Its requests name the model's context as `max_tokens`, so a reply may use whatever room the conversation has left (the budget is refreshed when the page loads and after a model switch the page itself makes, not after one another client makes); a client that names neither `max_tokens` nor `max_completion_tokens` gets the 16384 cap above instead, which a reasoning model can spend entirely on its thinking. A reply the engine cut off says so ("cut off: the context is full, or the reply hit the server's token limit"). |
 
-Every API streams (server-sent events) or answers in one JSON reply. A prompt longer than the context is a 400 error,
+The Ollama endpoints work best with `--port 11434` (Ollama's default port), so clients that default to `localhost:11434` find the server without configuration. Not supported: `/api/pull`, `/api/push`, `/api/create`, `/api/copy`, `/api/delete` (Kapitsa manages models with `kapitsa pull` and `kapitsa rm`).
+
+Every API streams (server-sent events for the `/v1/` endpoints, newline-delimited JSON for the `/api/` Ollama endpoints) or answers in one JSON reply. A prompt longer than the context is a 400 error,
 streamed or not (Messages: "prompt is too long", which Claude Code answers by compacting; Responses and Chat
 Completions: `context_length_exceeded`). A stream with nothing to send for 15 s (a long prefill; for Chat Completions,
 whose stream starts before the request has a slot, also the wait for one) gets a keepalive, so clients do not drop

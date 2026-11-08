@@ -108,7 +108,7 @@ struct StreamCompletion {
 void server::stream_reply(const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                           BindExecution bind, std::function<void(const ChatResult&, httplib::Response&)> failure,
                           std::function<void(const ChatResult&)> after, StreamMeter meter,
-                          bool early, bool telemetry, bool progress) {
+                          bool early, bool telemetry, bool progress, const char* content_type) {
   auto job = std::make_shared<StreamJob>(w, meter, early);
   auto execution = bind(job);
   auto completion = std::make_shared<StreamCompletion>(execution, meter);
@@ -123,7 +123,7 @@ void server::stream_reply(const ChatRequest& r, std::shared_ptr<api::StreamWrite
     return;
   }
   res.set_header("Cache-Control", "no-cache");
-  res.set_chunked_content_provider("text/event-stream", [completion, job, w, after, live = r.live, telemetry, progress](size_t, httplib::DataSink& sink) {
+  res.set_chunked_content_provider(content_type, [completion, job, w, after, live = r.live, telemetry, progress](size_t, httplib::DataSink& sink) {
     const auto& execution = completion->execution;
     // the client is gone: the engine stops at its next token, or gives the request up before it takes a slot
     auto gone = [&] {

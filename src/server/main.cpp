@@ -1,5 +1,5 @@
-// kapitsa: Kapitsa's command line, and its server: OpenAI chat completions and Responses, Anthropic Messages
-// (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
+// kapitsa: Kapitsa's command line, and its server: OpenAI chat completions and Responses, Anthropic Messages,
+// Ollama chat and generate (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 0.0.0.0] [--port 8000]
 //                 [--private] [--local]
 //                 [--ctx 32768] [--slots N] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
@@ -23,6 +23,7 @@
 #include <cstring>
 #include "api/anthropic.h"
 #include "api/chat_completions.h"
+#include "api/ollama.h"
 #include "api/responses.h"
 #include "cluster/discovery.h"
 #include "cluster/pipe.h"
@@ -413,7 +414,8 @@ static void print_serve_help() {
          "                         more keeps finer detail and takes longer; 0 = the model's own limit)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), POST /v1/draft (read a user's draft ahead),\n"
-         "GET /v1/models, GET /health, GET /cluster (what the server tells the other Macs).\n"
+         "GET /v1/models, GET /health, GET /cluster (what the server tells the other Macs),\n"
+         "POST /api/chat, /api/generate (Ollama), GET /api/tags, /api/ps, /api/version, POST /api/show.\n"
          "Images (every catalog model reads them): OpenAI image_url parts, Anthropic image blocks and Responses\n"
          "input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n", hub::tilde(hub::home_dir()).c_str());
@@ -497,7 +499,8 @@ struct MeterChatEvents final : detail::ChatObserver {
 static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
                          std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter,
-                         bool early = false, bool telemetry = false, bool progress = false) {
+                         bool early = false, bool telemetry = false, bool progress = false,
+                         const char* content_type = "text/event-stream") {
   server::stream_reply(r, std::move(w), res,
       [guard = std::move(guard)](auto observer) {
         return native_execution(guard, std::move(observer), NativeReplyMemory::BeforeTerminal);
@@ -508,7 +511,7 @@ static void stream_reply(std::shared_ptr<RequestGuard> guard, const ChatRequest&
         if (status == 503 && (!result.engine_down || result.engine_restarting)) response.set_header("Retry-After", "1");
         response.set_content(api::dump(body), "application/json");
       }, std::move(after), {[meter] { ui::token(meter); }, [meter](const ChatResult& result) { ui::done(meter, result); }},
-      early, telemetry, progress);
+      early, telemetry, progress, content_type);
 }
 
 // What the server keeps when it ends: the KFlash budgets' measurements (Engine::save_kflash: this Mac's cost per verify
@@ -625,6 +628,7 @@ static void common_routes(httplib::Server& srv, const std::string& api_key, cons
     if (server::refuse_ws_upgrade(req, res)) return httplib::Server::HandlerResponse::Handled;
     // the chat page asks for the key once and sends it with its API calls
     if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
+        req.path == "/api/version" ||
         (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
       return httplib::Server::HandlerResponse::Unhandled;
     // OpenAI clients send "Authorization: Bearer KEY", Anthropic ones "x-api-key: KEY" (Claude Code may send both,
@@ -1690,6 +1694,226 @@ static int serve(int argc, char** argv, int first) {
       return reply(d);
     }
     reply(guard->engine().draft(key, body["after"].get<std::string>(), body["text"].get<std::string>()));
+  });
+
+  // ---- Ollama-compatible API (/api/*) ----
+  // Ollama streams newline-delimited JSON, not SSE: Content-Type application/x-ndjson.
+
+  srv.Get("/api/version", [](const httplib::Request&, httplib::Response& res) {
+    res.set_content(R"({"version":")" KAPITSA_VERSION R"("})", "application/json");
+  });
+
+  srv.Get("/api/tags", [model_mgr, started](const httplib::Request&, httplib::Response& res) {
+    const std::string cur_id = model_mgr->current_model_id();
+    const std::string cur_name = model_mgr->current_name();
+    res.set_content(api::dump(api::ollama_tags_response(cur_id, cur_name, started)), "application/json");
+  });
+
+  srv.Get("/api/ps", [model_mgr, started](const httplib::Request&, httplib::Response& res) {
+    const std::string cur_id = model_mgr->current_model_id();
+    const std::string cur_name = model_mgr->current_name();
+    res.set_content(api::dump(api::ollama_ps_response(cur_id, cur_name, started)), "application/json");
+  });
+
+  srv.Post("/api/show", [model_mgr](const httplib::Request& req, httplib::Response& res) {
+    ojson body;
+    try { body = ojson::parse(req.body); } catch (...) { body = ojson::object(); }
+    if (!body.is_object()) body = ojson::object();
+    const std::string req_model = body.value("model", "");
+    if (req_model.empty()) {
+      // No model named: show the running model
+      const std::string cur_id = model_mgr->current_model_id();
+      if (cur_id.empty()) { res.status = 404; res.set_content(R"({"error":"no model loaded"})", "application/json"); return; }
+      res.set_content(api::dump(api::ollama_show_response(cur_id, cur_id)), "application/json");
+      return;
+    }
+    const std::string resolved = api::ollama_resolve_model(req_model);
+    // Check if the model is known (the running model, or in the catalog, or installed)
+    const std::string cur_id = model_mgr->current_model_id();
+    if (resolved != cur_id && !hub::find_model(resolved)) {
+      // Check installed
+      bool found = false;
+      try { for (const auto& m : hub::installed()) if (m.name == resolved && m.complete) { found = true; break; } } catch (...) {}
+      if (!found) {
+        res.status = 404;
+        res.set_content(api::dump(json{{"error", "model '" + req_model + "' not found"}}), "application/json");
+        return;
+      }
+    }
+    res.set_content(api::dump(api::ollama_show_response(resolved, cur_id)), "application/json");
+  });
+
+  srv.Post("/api/embed", [](const httplib::Request&, httplib::Response& res) {
+    res.status = 400;
+    res.set_content(R"({"error":"embeddings are not supported by Kapitsa"})", "application/json");
+  });
+  srv.Post("/api/embeddings", [](const httplib::Request&, httplib::Response& res) {
+    res.status = 400;
+    res.set_content(R"({"error":"embeddings are not supported by Kapitsa"})", "application/json");
+  });
+
+  // Ollama error: properly escaped JSON (model names with " or newlines stay valid)
+  auto ollama_err = [](const std::string& msg) { return api::dump(json{{"error", msg}}); };
+  auto ollama_fail = [&](const ChatResult& out, httplib::Response& res) {
+    if (out.busy) { res.status = 503; res.set_header("Retry-After", "1"); }
+    else if (out.engine_down) res.status = 503;
+    else if (out.prompt_limit > 0) res.status = 400;
+    else res.status = 400;
+    res.set_content(api::dump(json{{"error", out.error.empty() ? "request failed" : out.error}}), "application/json");
+  };
+
+  srv.Post("/api/chat", [&](const httplib::Request& req, httplib::Response& res) {
+    ojson body;
+    try {
+      body = ojson::parse(req.body);
+    } catch (const std::exception& ex) {
+      res.status = 400;
+      res.set_content(ollama_err(ex.what()), "application/json");
+      return;
+    }
+    if (!body.is_object()) { res.status = 400; res.set_content(ollama_err("request body must be a JSON object"), "application/json"); return; }
+    const std::string req_model = api::ollama_resolve_model(body.value("model", ""));
+    ModelManager::Error err;
+    if (reject_while_switching(*model_mgr, res, ollama_err("the server is switching models; retry shortly"))) return;
+    auto guard = model_mgr->acquire_request(req_model, &err);
+    if (!guard) {
+      const bool busy = err.code == ModelManager::Error::Code::Busy;
+      res.status = busy ? 503 : 400;
+      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
+      res.set_content(ollama_err(err.message), "application/json");
+      return;
+    }
+    // Empty messages: Ollama uses this to load/unload a model
+    if (!body.contains("messages") || (body["messages"].is_array() && body["messages"].empty())) {
+      ojson j{{"model", guard->engine().model_id()},
+              {"created_at", api::ollama_now()},
+              {"message", {{"role", "assistant"}, {"content", ""}}},
+              {"done_reason", "load"},
+              {"done", true}};
+      res.set_content(api::dump(j), "application/json");
+      return;
+    }
+    ChatRequest r;
+    try {
+      r = api::ollama_chat_request(body, guard->engine().request_defaults());
+    } catch (const api::ApiError& e) {
+      res.status = e.status;
+      res.set_content(ollama_err(e.what()), "application/json");
+      return;
+    } catch (const std::exception& ex) {
+      res.status = 400;
+      res.set_content(ollama_err(ex.what()), "application/json");
+      return;
+    }
+    const bool stream = !body.contains("stream") || !body["stream"].is_boolean() || body["stream"].get<bool>();
+    const std::string model = guard->engine().model_id();
+    const auto meter = ui::meter(req, r);
+    r.live = ui::live_of(meter);
+    if (!stream) {
+      auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
+      execution->start(r);
+      const ChatResult& out = execution->wait();
+      ui::done(meter, out);
+      prefill_after(r, out);
+      if (out.finish_reason == "error") { ollama_fail(out, res); return; }
+      ojson msg{{"role", "assistant"}, {"content", out.content}};
+      if (!out.reasoning.empty()) msg["thinking"] = out.reasoning;
+      if (!out.tool_calls.empty()) {
+        ojson tcs = ojson::array();
+        for (const auto& tc : out.tool_calls) {
+          ojson args;
+          try { args = ojson::parse(tc.arguments); } catch (...) { args = ojson::object(); }
+          tcs.push_back(ojson{{"function", {{"name", tc.name}, {"arguments", args}}}});
+        }
+        msg["tool_calls"] = tcs;
+      }
+      ojson j{{"model", model},
+              {"created_at", api::ollama_now()},
+              {"message", msg},
+              {"done_reason", out.finish_reason == "stop" || out.finish_reason == "tool_calls" ? "stop" : out.finish_reason},
+              {"done", true}};
+      api::ollama_eval_stats(j, out);
+      res.set_content(api::dump(j), "application/json");
+      return;
+    }
+    // Streaming: Ollama uses newline-delimited JSON, not SSE. The failure lambda returns a status+body; the
+    // stream_reply wrapper adds Retry-After when status is 503 and the engine is not permanently down.
+    stream_reply(guard, r, std::make_shared<api::OllamaChatStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
+      if (result.busy) return {503, json{{"error", result.error}}};
+      if (result.engine_down) return {503, json{{"error", result.error}}};
+      if (result.prompt_limit > 0) return {400, json{{"error", "prompt too long: " + std::to_string(result.prompt_tokens) + " tokens, limit " + std::to_string(result.prompt_limit)}}};
+      return {400, json{{"error", result.error.empty() ? "request failed" : result.error}}};
+    }, [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, false, false, false, "application/x-ndjson");
+  });
+
+  srv.Post("/api/generate", [&](const httplib::Request& req, httplib::Response& res) {
+    ojson body;
+    try {
+      body = ojson::parse(req.body);
+    } catch (const std::exception& ex) {
+      res.status = 400;
+      res.set_content(ollama_err(ex.what()), "application/json");
+      return;
+    }
+    if (!body.is_object()) { res.status = 400; res.set_content(ollama_err("request body must be a JSON object"), "application/json"); return; }
+    const std::string req_model = api::ollama_resolve_model(body.value("model", ""));
+    ModelManager::Error err;
+    if (reject_while_switching(*model_mgr, res, ollama_err("the server is switching models; retry shortly"))) return;
+    auto guard = model_mgr->acquire_request(req_model, &err);
+    if (!guard) {
+      const bool busy = err.code == ModelManager::Error::Code::Busy;
+      res.status = busy ? 503 : 400;
+      if (busy) res.set_header("Retry-After", std::to_string(err.retry_s));
+      res.set_content(ollama_err(err.message), "application/json");
+      return;
+    }
+    // Empty or absent prompt: load model (prompt may be null, absent, or non-string)
+    const bool has_prompt = body.contains("prompt") && body["prompt"].is_string() && !body["prompt"].get<std::string>().empty();
+    if (!has_prompt && !body.contains("images")) {
+      ojson j{{"model", guard->engine().model_id()},
+              {"created_at", api::ollama_now()},
+              {"response", ""},
+              {"done", true}};
+      res.set_content(api::dump(j), "application/json");
+      return;
+    }
+    ChatRequest r;
+    try {
+      r = api::ollama_generate_request(body, guard->engine().request_defaults());
+    } catch (const api::ApiError& e) {
+      res.status = e.status;
+      res.set_content(ollama_err(e.what()), "application/json");
+      return;
+    } catch (const std::exception& ex) {
+      res.status = 400;
+      res.set_content(ollama_err(ex.what()), "application/json");
+      return;
+    }
+    const bool stream = !body.contains("stream") || !body["stream"].is_boolean() || body["stream"].get<bool>();
+    const std::string model = guard->engine().model_id();
+    const auto meter = ui::meter(req, r);
+    r.live = ui::live_of(meter);
+    if (!stream) {
+      auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
+      execution->start(r);
+      const ChatResult& out = execution->wait();
+      ui::done(meter, out);
+      if (out.finish_reason == "error") { ollama_fail(out, res); return; }
+      ojson j{{"model", model},
+              {"created_at", api::ollama_now()},
+              {"response", out.content},
+              {"done_reason", out.finish_reason == "stop" ? "stop" : out.finish_reason},
+              {"done", true}};
+      if (!out.reasoning.empty()) j["thinking"] = out.reasoning;
+      api::ollama_eval_stats(j, out);
+      res.set_content(api::dump(j), "application/json");
+      return;
+    }
+    stream_reply(guard, r, std::make_shared<api::OllamaGenerateStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
+      if (result.busy) return {503, json{{"error", result.error}}};
+      if (result.engine_down) return {503, json{{"error", result.error}}};
+      return {400, json{{"error", result.error.empty() ? "request failed" : result.error}}};
+    }, [](const ChatResult&) {}, meter, false, false, false, "application/x-ndjson");
   });
 
   if (const std::string why = bind_server(srv, host, port); !why.empty()) return fail(why);
