@@ -103,18 +103,17 @@ python3 tests/test_server.py --cli build/kapitsa
 
 ## 4. Run the benchmark harness
 
+`kapitsa bench` starts its own server, so do not start one separately.
+
 ```bash
-# Start the server with the new model
-kapitsa serve --model <short-name> --port 8000 --ctx 32768 --slots 1 --disk-cache 0
-
-# Run the benchmark
-kapitsa bench --model <short-name> --json
-
 # Full benchmark (all prompt sizes, multiple runs)
 kapitsa bench --model <short-name>
 
 # Quick mode for a first look
 kapitsa bench --model <short-name> --quick
+
+# JSON output for the community results
+kapitsa bench --model <short-name> --json
 ```
 
 Record the numbers: prefill tok/s at 4K and 16K, decode tok/s (median of 5 runs), greedy decode tok/s.
@@ -180,8 +179,8 @@ Include a comparison against other engines if `kapitsa bench compare` data is av
 
 ## Rehearsal notes (2026-11-08)
 
-Rehearsed steps 1, 4 and 5 on `qwen3.5-4b` (already in the catalog), M5 Pro 48 GB:
+Rehearsed steps 1 and 4 on `qwen3.5-4b` (already in the catalog), M5 Pro 48 GB:
 
-- **Import:** model already converted (4.57 GB download, MLX affine 4-bit). A fresh `kapitsa import` from an HF repo takes 1-3 min depending on download speed.
-- **Benchmark:** `kapitsa bench --model 4b --quick` completed in 3 min 40 s. Results: 221 tok/s decode, 237 tok/s greedy, 3,733 tok/s prefill at 4K. Three flags (GPU contention from Edge, two repetition loops in the sampled decode).
+- **Import:** model already converted (4.57 GB download, MLX affine 4-bit). A fresh `kapitsa import` of a GGUF takes under a minute for a 4B model.
+- **Benchmark:** `kapitsa bench --model 4b --quick` (bench starts its own server) completed in 3 min 40 s. Results: 221 tok/s decode, 237 tok/s greedy, 3,733 tok/s prefill at 4K. Three flags (GPU contention from Edge, two repetition loops in the sampled decode).
 - **Total wall time for steps 1+4:** under 5 min for a model already in the catalog. For a new model, add time for the catalog edit, drafter search, and build (~10 min).
