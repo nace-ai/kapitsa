@@ -174,3 +174,11 @@ Include a comparison against other engines if `kapitsa bench compare` data is av
 | 6 | PR merged after review. |
 | 8 | `kapitsa update` picks up the new model. |
 | 24 | r/LocalLLaMA post with final numbers. |
+
+## Rehearsal notes (2026-11-08)
+
+Rehearsed steps 1, 4 and 5 on `qwen3.5-4b` (already in the catalog), M5 Pro 48 GB:
+
+- **Import:** model already converted (4.57 GB download, MLX affine 4-bit). A fresh `kapitsa import` from an HF repo takes 1-3 min depending on download speed.
+- **Benchmark:** `kapitsa bench --model 4b --quick` completed in 3 min 40 s. Results: 221 tok/s decode, 237 tok/s greedy, 3,733 tok/s prefill at 4K. Three flags (GPU contention from Edge, two repetition loops in the sampled decode).
+- **Total wall time for steps 1+4:** under 5 min for a model already in the catalog. For a new model, add time for the catalog edit, drafter search, and build (~10 min).
