@@ -1,0 +1,1561 @@
+{
+  "CPU_only": true,
+  "GPU_or_model_inference_run": false,
+  "command_example_scope": "Relative or placeholder examples derived from recorded methods; not original execution commands/logs.",
+  "configuration": {
+    "chip": "Apple M4 Pro",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": 20,
+    "macos": "15.7.1",
+    "memory_capacity_gib": 48
+  },
+  "derived_command_examples": [
+    "cmake --build \"$BUILD\" -j 4 --target parser_test grammar_test structured_check",
+    "python3 tests/test_structured.py --cli \"$BUILD\" \"$MODEL\"",
+    "\"$BUILD/parser_test\" \"$MODEL\""
+  ],
+  "execution_finished_utc": "2026-11-08T12:07:41.734923+00:00",
+  "execution_phases": [
+    {
+      "finished_at": "2026-11-08T12:06:48.574592+00:00",
+      "label": "reference_build_named_targets",
+      "rc": 0,
+      "started_at": "2026-11-08T12:06:41.406752+00:00"
+    },
+    {
+      "finished_at": "2026-11-08T12:07:09.436775+00:00",
+      "label": "reference_real_tokenizer_structured",
+      "rc": 0,
+      "started_at": "2026-11-08T12:06:48.579019+00:00"
+    },
+    {
+      "finished_at": "2026-11-08T12:07:09.997116+00:00",
+      "label": "reference_real_tokenizer_parser",
+      "rc": 0,
+      "started_at": "2026-11-08T12:07:09.441840+00:00"
+    },
+    {
+      "finished_at": "2026-11-08T12:07:16.593570+00:00",
+      "label": "candidate_build_named_targets",
+      "rc": 0,
+      "started_at": "2026-11-08T12:07:09.998905+00:00"
+    },
+    {
+      "finished_at": "2026-11-08T12:07:36.952741+00:00",
+      "label": "candidate_real_tokenizer_structured",
+      "rc": 0,
+      "started_at": "2026-11-08T12:07:16.597940+00:00"
+    },
+    {
+      "finished_at": "2026-11-08T12:07:37.402717+00:00",
+      "label": "candidate_real_tokenizer_parser",
+      "rc": 0,
+      "started_at": "2026-11-08T12:07:36.954428+00:00"
+    }
+  ],
+  "execution_started_utc": "2026-11-08T12:06:37.155200+00:00",
+  "limitation": "Offline tokenizer/parser/schema/grammar masks on actual independently imported model metadata. No additional inference speed, full-model numerical or GPU class coverage. Other disclosed CPU/native/fixed failures remain unchanged.",
+  "new_binaries_sha256": {
+    "candidate": {
+      "grammar_test": "89768980208feedf63f7b565b718b7acb3782d29fa394ceb5dfac64edfe31a87",
+      "parser_test": "cc13843c2dfb74f7c724fd4c5827ce1d736e55e689087914da6fe02c665c2a92",
+      "structured_check": "ee94f496b4006b757b3cc0dbf1cdbe1463f847e5d0f45f0e2161dbfc1340f2dc"
+    },
+    "reference": {
+      "grammar_test": "89768980208feedf63f7b565b718b7acb3782d29fa394ceb5dfac64edfe31a87",
+      "parser_test": "cc13843c2dfb74f7c724fd4c5827ce1d736e55e689087914da6fe02c665c2a92",
+      "structured_check": "ee94f496b4006b757b3cc0dbf1cdbe1463f847e5d0f45f0e2161dbfc1340f2dc"
+    }
+  },
+  "original_measurement_identities": {
+    "candidate": {
+      "after": {
+        "commit": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+        "model_config_sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf",
+        "original_binaries_sha256": {
+          "kapitsa": "1c7290a317e471200aa07ca493d397399542e967f3ace12942eedf71c3b509cf",
+          "libnaceinfer.a": "5bb5e785ed4f7c940ce03d405d239ebcdc3cdfa0de9f1719677e3a5b296e67bb",
+          "logit_dump": "5581338e06a9e17eab72aee4d6e0d0b61a487696534b5907438ba1b593761665",
+          "ni_run": "b63f62a315e285d8fa7ed092afea5b7b59d2bbb5da30411b089c8389794bd643"
+        },
+        "source_inventory_sha256": "78e539b5136bc3fd1d5b84be040f0068c18128728c4a6b2051a3da502d8431ad",
+        "tokenizer_sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+      },
+      "before": {
+        "commit": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+        "model_config_sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf",
+        "original_binaries_sha256": {
+          "kapitsa": "1c7290a317e471200aa07ca493d397399542e967f3ace12942eedf71c3b509cf",
+          "libnaceinfer.a": "5bb5e785ed4f7c940ce03d405d239ebcdc3cdfa0de9f1719677e3a5b296e67bb",
+          "logit_dump": "5581338e06a9e17eab72aee4d6e0d0b61a487696534b5907438ba1b593761665",
+          "ni_run": "b63f62a315e285d8fa7ed092afea5b7b59d2bbb5da30411b089c8389794bd643"
+        },
+        "source_inventory_sha256": "78e539b5136bc3fd1d5b84be040f0068c18128728c4a6b2051a3da502d8431ad",
+        "tokenizer_sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+      }
+    },
+    "reference": {
+      "after": {
+        "commit": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+        "model_config_sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf",
+        "original_binaries_sha256": {
+          "kapitsa": "60458d0aef81bd337eb6738843373208409e3c82f09d9669cfe471c4720b5966",
+          "libnaceinfer.a": "a86c2ec0caf9c47e56d95252c0ee8613c5422ab9c8b9d72d00b00280ac8c52cd",
+          "logit_dump": "a6ff8ecc3516e71ad32f23a8920794beae7249e03a739a1567e7f902af0c20ee",
+          "ni_run": "8e402db1d0385744e65235de862989dbe966751f744d13851a3f2fb8fd243987"
+        },
+        "source_inventory_sha256": "e9ab6bb48b58ea72f11ecc9dd05cb7a51c5a689c5df761b7e8ea543d2b94d246",
+        "tokenizer_sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+      },
+      "before": {
+        "commit": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+        "model_config_sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf",
+        "original_binaries_sha256": {
+          "kapitsa": "60458d0aef81bd337eb6738843373208409e3c82f09d9669cfe471c4720b5966",
+          "libnaceinfer.a": "a86c2ec0caf9c47e56d95252c0ee8613c5422ab9c8b9d72d00b00280ac8c52cd",
+          "logit_dump": "a6ff8ecc3516e71ad32f23a8920794beae7249e03a739a1567e7f902af0c20ee",
+          "ni_run": "8e402db1d0385744e65235de862989dbe966751f744d13851a3f2fb8fd243987"
+        },
+        "source_inventory_sha256": "e9ab6bb48b58ea72f11ecc9dd05cb7a51c5a689c5df761b7e8ea543d2b94d246",
+        "tokenizer_sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+      }
+    }
+  },
+  "original_measurement_identity_unchanged": true,
+  "production_source": {
+    "candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+    "reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f"
+  },
+  "record_kind": "Explicitly sanitized derived offline tokenizer report; not raw execution logs",
+  "results": {
+    "candidate": {
+      "real_tokenizer_parser": {
+        "ALL_PASSED_marker": true,
+        "FAIL_lines": 0,
+        "PASS_lines": 125,
+        "failures": [],
+        "grammar_oracle_summary": null,
+        "rc": 0,
+        "test_rows": [
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \"\"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \" \"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \"\\t\"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \"\\r\\n\"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \" \\t\\r\\n \"",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: think, answer",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: think, call after </think>",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: think, text and call",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: thinking off: call",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: thinking off: answer",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: unterminated call after </think>",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch off: the call stays reasoning (old behaviour)",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch on: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch on: reasoning without the markup",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch on: no call markup streamed as reasoning",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think + trailing newline: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "two calls at the end of an unclosed think block",
+            "status": "PASS"
+          },
+          {
+            "name": "integer argument typed from the tool schema",
+            "status": "PASS"
+          },
+          {
+            "name": "call then </think> then the end, switch off: no call",
+            "status": "PASS"
+          },
+          {
+            "name": "call then </think> then the end, switch on: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: draft, more reasoning, real call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: draft, </think>, a different real call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: draft, </think>, an answer",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: unknown function at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: unterminated call at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: cut by max_tokens after a call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: <tool_call> mentioned, reasoning goes on",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: non-ASCII reasoning after a draft",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: stray </tool_call> after a call",
+            "status": "PASS"
+          },
+          {
+            "name": "request without tools: unchanged",
+            "status": "PASS"
+          },
+          {
+            "name": "think_ws: the newline before </think> stays in the reasoning",
+            "status": "PASS"
+          },
+          {
+            "name": "deltas add up to the result",
+            "status": "PASS"
+          },
+          {
+            "name": "utf8_valid: U+FFFD per maximal subpart, well-formed text unchanged",
+            "status": "PASS"
+          },
+          {
+            "name": "a reply cut inside a character ends in U+FFFD",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: string, number, boolean, object and array arguments",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: typing: a string as written, a typed value that is no JSON as text, an untyped one as JSON, an unknown one as text",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: two calls",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a call without arguments",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: GLM-4.5's newlines between the elements and the calls",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: spaces around the name and a key; the value as written",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: content, then the call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: reasoning (the model's own <think>), content, then calls",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: reasoning in the prompt's think block, then a call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: non-ASCII values",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a string value with the call's tags in it",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a malformed call, then a good one",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a name with a space",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, no name",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, an empty call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a value left open",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a key without a value",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, text between a key and its value",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, text after a value",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a tag in a key",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, Qwen's markup",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, unterminated at the end of the turn",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: each turn the same a token per byte, cut every 2, 3, 5, 7 bytes, NI_THINK_TOOLCALLS on",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: the default call format reads no GLM call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: unclosed think, switch off: the call stays reasoning",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: unclosed think, switch on: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: unclosed think, switch on: no markup streamed; the same in other tokens",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: same result as before: a draft, more reasoning, a real call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: same result as before: an unknown function at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: same result as before: a malformed call at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a draft stays reasoning, the call after </think> is the call",
+            "status": "PASS"
+          }
+        ]
+      },
+      "real_tokenizer_structured": {
+        "ALL_PASSED_marker": true,
+        "FAIL_lines": 0,
+        "PASS_lines": 48,
+        "failures": [],
+        "grammar_oracle_summary": "PASS grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 7.7 us, median 3.5, p90 15.8, p99 41.8, max 55.8; 308 passed, 0 failed)",
+        "rc": 0,
+        "test_rows": [
+          {
+            "name": "grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 7.7 us, median 3.5, p90 15.8, p99 41.8, max 55.8; 308 passed, 0 failed)",
+            "status": "PASS"
+          },
+          {
+            "name": "structured_check answers every request",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_object: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_schema, strict: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: text: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: no format, tools, auto: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_schema without a schema: any object: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: unknown format type: 400 (response_format.type)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: format not an object: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_schema missing: 400 (response_format.json_schema)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: schema not a schema: 400 (response_format.json_schema.schema)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: strict not a boolean: 400 (response_format.json_schema.strict)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: unknown type in the schema: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: remote $ref: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a schema no value satisfies: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice required: tool calls (get_weather, run_shell)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice named: tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: one call (parallel_tool_calls false): tool calls (get_weather, run_shell; one call)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a named tool the request lacks: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: required without tools: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: unknown tool_choice: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice object without a name: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice none with a format: the format: JSON,",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a strict tool, auto: text or tool calls (get_weather, run_shell free)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a format beside tools: JSON or tool calls",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a strict tool with a schema it cannot hold: 400 (tools)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format json_schema: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format json_object: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format text: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format unknown: 400 (text.format.type)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format bad schema: 400 (text.format)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: tool_choice required: tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: tool_choice a function: tool calls (run_shell)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: allowed_tools required: tool calls (run_shell)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a built-in tool choice: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a strict function: text or tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a function without strict is not strict: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a namespace's strict function: text or tool calls (wx__get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a custom tool named: tool calls (apply_patch)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice any: tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice tool, one call: tool calls (run_shell; one call)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice tool without a name: 400",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: unknown tool_choice: 400",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: output_format: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: output_config.format: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: output_format of another type: 400",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: a strict tool: text or tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice none: no grammar",
+            "status": "PASS"
+          }
+        ]
+      }
+    },
+    "reference": {
+      "real_tokenizer_parser": {
+        "ALL_PASSED_marker": true,
+        "FAIL_lines": 0,
+        "PASS_lines": 125,
+        "failures": [],
+        "grammar_oracle_summary": null,
+        "rc": 0,
+        "test_rows": [
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \"\"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \" \"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\t\" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \"\\t\"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \"\\r\\n\" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \"\\r\\n\"",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=0 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=0 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=1 think_tools=0",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=0 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=1 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call preserved: \" \\t\\r\\n \" cut=5 following=1 think_tools=1",
+            "status": "PASS"
+          },
+          {
+            "name": "nameless Qwen call stays reasoning: \" \\t\\r\\n \"",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: think, answer",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: think, call after </think>",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: think, text and call",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: thinking off: call",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: thinking off: answer",
+            "status": "PASS"
+          },
+          {
+            "name": "unchanged stream: unterminated call after </think>",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch off: the call stays reasoning (old behaviour)",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch on: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch on: reasoning without the markup",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think, switch on: no call markup streamed as reasoning",
+            "status": "PASS"
+          },
+          {
+            "name": "unclosed think + trailing newline: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "two calls at the end of an unclosed think block",
+            "status": "PASS"
+          },
+          {
+            "name": "integer argument typed from the tool schema",
+            "status": "PASS"
+          },
+          {
+            "name": "call then </think> then the end, switch off: no call",
+            "status": "PASS"
+          },
+          {
+            "name": "call then </think> then the end, switch on: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: draft, more reasoning, real call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: draft, </think>, a different real call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: draft, </think>, an answer",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: unknown function at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: unterminated call at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: cut by max_tokens after a call",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: <tool_call> mentioned, reasoning goes on",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: non-ASCII reasoning after a draft",
+            "status": "PASS"
+          },
+          {
+            "name": "same result as before: stray </tool_call> after a call",
+            "status": "PASS"
+          },
+          {
+            "name": "request without tools: unchanged",
+            "status": "PASS"
+          },
+          {
+            "name": "think_ws: the newline before </think> stays in the reasoning",
+            "status": "PASS"
+          },
+          {
+            "name": "deltas add up to the result",
+            "status": "PASS"
+          },
+          {
+            "name": "utf8_valid: U+FFFD per maximal subpart, well-formed text unchanged",
+            "status": "PASS"
+          },
+          {
+            "name": "a reply cut inside a character ends in U+FFFD",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: string, number, boolean, object and array arguments",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: typing: a string as written, a typed value that is no JSON as text, an untyped one as JSON, an unknown one as text",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: two calls",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a call without arguments",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: GLM-4.5's newlines between the elements and the calls",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: spaces around the name and a key; the value as written",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: content, then the call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: reasoning (the model's own <think>), content, then calls",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: reasoning in the prompt's think block, then a call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: non-ASCII values",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a string value with the call's tags in it",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a malformed call, then a good one",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a name with a space",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, no name",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, an empty call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a value left open",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a key without a value",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, text between a key and its value",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, text after a value",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, a tag in a key",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, Qwen's markup",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: malformed, unterminated at the end of the turn",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: each turn the same a token per byte, cut every 2, 3, 5, 7 bytes, NI_THINK_TOOLCALLS on",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: the default call format reads no GLM call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: unclosed think, switch off: the call stays reasoning",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: unclosed think, switch on: returned as a tool call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: unclosed think, switch on: no markup streamed; the same in other tokens",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: same result as before: a draft, more reasoning, a real call",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: same result as before: an unknown function at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: same result as before: a malformed call at the end",
+            "status": "PASS"
+          },
+          {
+            "name": "GLM: a draft stays reasoning, the call after </think> is the call",
+            "status": "PASS"
+          }
+        ]
+      },
+      "real_tokenizer_structured": {
+        "ALL_PASSED_marker": true,
+        "FAIL_lines": 0,
+        "PASS_lines": 48,
+        "failures": [],
+        "grammar_oracle_summary": "PASS grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 7.6 us, median 3.5, p90 16.0, p99 41.8, max 45.8; 308 passed, 0 failed)",
+        "rc": 0,
+        "test_rows": [
+          {
+            "name": "grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 7.6 us, median 3.5, p90 16.0, p99 41.8, max 45.8; 308 passed, 0 failed)",
+            "status": "PASS"
+          },
+          {
+            "name": "structured_check answers every request",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_object: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_schema, strict: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: text: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: no format, tools, auto: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_schema without a schema: any object: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: unknown format type: 400 (response_format.type)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: format not an object: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: json_schema missing: 400 (response_format.json_schema)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: schema not a schema: 400 (response_format.json_schema.schema)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: strict not a boolean: 400 (response_format.json_schema.strict)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: unknown type in the schema: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: remote $ref: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a schema no value satisfies: 400 (response_format)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice required: tool calls (get_weather, run_shell)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice named: tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: one call (parallel_tool_calls false): tool calls (get_weather, run_shell; one call)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a named tool the request lacks: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: required without tools: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: unknown tool_choice: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice object without a name: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: tool_choice none with a format: the format: JSON,",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a strict tool, auto: text or tool calls (get_weather, run_shell free)",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a format beside tools: JSON or tool calls",
+            "status": "PASS"
+          },
+          {
+            "name": "chat: a strict tool with a schema it cannot hold: 400 (tools)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format json_schema: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format json_object: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format text: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format unknown: 400 (text.format.type)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: text.format bad schema: 400 (text.format)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: tool_choice required: tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: tool_choice a function: tool calls (run_shell)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: allowed_tools required: tool calls (run_shell)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a built-in tool choice: 400 (tool_choice)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a strict function: text or tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a function without strict is not strict: no grammar",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a namespace's strict function: text or tool calls (wx__get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "responses: a custom tool named: tool calls (apply_patch)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice any: tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice tool, one call: tool calls (run_shell; one call)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice tool without a name: 400",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: unknown tool_choice: 400",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: output_format: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: output_config.format: JSON",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: output_format of another type: 400",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: a strict tool: text or tool calls (get_weather)",
+            "status": "PASS"
+          },
+          {
+            "name": "messages: tool_choice none: no grammar",
+            "status": "PASS"
+          }
+        ]
+      }
+    }
+  },
+  "setup": "M4"
+}

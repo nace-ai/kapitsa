@@ -1,0 +1,452 @@
+{
+  "arms": {
+    "candidate": {
+      "all_test_rows_pass": false,
+      "counts": {
+        "FAIL": 1,
+        "PASS": 48,
+        "SKIP": 0
+      },
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:18:17.894017+00:00",
+        "execution_started_utc": "2026-11-08T12:17:11.565931+00:00",
+        "rc": 1,
+        "status": "COMPLETED"
+      },
+      "tests": [
+        {
+          "name": "GET / serves the chat page",
+          "status": "PASS"
+        },
+        {
+          "name": "chat page is self-contained (no external requests)",
+          "status": "PASS"
+        },
+        {
+          "name": "chat page carries the server's --timing (ttft, prefill or both; the placeholder is filled in)",
+          "status": "PASS"
+        },
+        {
+          "name": "/v1/models lists the model",
+          "status": "PASS"
+        },
+        {
+          "name": "chat page budgets the reply by the model's context, not the API's 16384 default",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking: reasoning streamed separately",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking: correct answer",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking: finish=stop + usage",
+          "status": "PASS"
+        },
+        {
+          "name": "tool call: finish=tool_calls",
+          "status": "PASS"
+        },
+        {
+          "name": "tool call: read_file or run_shell on /etc/hosts",
+          "status": "PASS"
+        },
+        {
+          "name": "tool call: no markup in content",
+          "status": "PASS"
+        },
+        {
+          "name": "tool result: final answer mentions 3",
+          "status": "PASS"
+        },
+        {
+          "name": "tool result: prefix reused (cached >= first prompt, less the generation prompt's tail)",
+          "status": "PASS"
+        },
+        {
+          "name": "next turn: cached prefix",
+          "status": "PASS"
+        },
+        {
+          "name": "next turn: answer",
+          "status": "PASS"
+        },
+        {
+          "name": "non-stream tool call + int arg",
+          "status": "PASS"
+        },
+        {
+          "name": "int argument is a JSON number",
+          "status": "PASS"
+        },
+        {
+          "name": "main slot survives side request",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking + tools: a call on /etc/hosts returned as a tool call",
+          "status": "PASS"
+        },
+        {
+          "name": "one-offs keep the conversation in progress",
+          "status": "PASS"
+        },
+        {
+          "name": "a side request sent beside a first request does not evict it",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: display omitted: the thinking block has no text and a signature",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: count_tokens counts the prompt",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic stream: message_start, ping, blocks, message_delta, message_stop",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic stream: final answer mentions 3",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: the next question's prompt continues the conversation (every turn's thinking kept)",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: a prompt over the context is 400 \"prompt is too long: N tokens > M maximum\"",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: streamed too, a plain 400 before any event",
+          "status": "PASS"
+        },
+        {
+          "name": "responses stream: created, in_progress, items, completed; sequence numbers in order",
+          "status": "PASS"
+        },
+        {
+          "name": "responses stream: a function_call on /etc/hosts",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: the tool loop's next request is answered (mentions 3)",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: previous_response_id continues a stored response",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: an unknown previous_response_id is a 400",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: a prompt over the context is 400 context_length_exceeded",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: a max_output_tokens cut is status incomplete",
+          "status": "PASS"
+        },
+        {
+          "name": "/v1/models reports the requests that run at once (slots)",
+          "status": "PASS"
+        },
+        {
+          "name": "a request alone gives the same reply every time (greedy)",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: the greedy reply is answered in full",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: the sampled T=0.7 seed 11 reply is answered in full",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: the greedy reply starts as it does alone",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: a 2K-token request sent during a long reply finishes first",
+          "status": "PASS"
+        },
+        {
+          "name": "more requests than slots: every one is answered in full",
+          "status": "PASS"
+        },
+        {
+          "name": "a client gone mid-stream: the request beside it is answered, the next one starts at once",
+          "status": "PASS"
+        },
+        {
+          "name": "chat: a prompt over the context is a 400 context_length_exceeded",
+          "status": "PASS"
+        },
+        {
+          "name": "chat stream: a prompt over the context is a 400 context_length_exceeded",
+          "status": "PASS"
+        },
+        {
+          "failure_detail": "Original failed assertion detail retained privately; id=2dcd2da8b901c6629b0daec49f436e7111ff50ca98641682263e576c4addced4",
+          "name": "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees",
+          "status": "FAIL"
+        }
+      ]
+    },
+    "reference": {
+      "all_test_rows_pass": false,
+      "counts": {
+        "FAIL": 1,
+        "PASS": 48,
+        "SKIP": 0
+      },
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:17:05.104574+00:00",
+        "execution_started_utc": "2026-11-08T12:15:58.188068+00:00",
+        "rc": 1,
+        "status": "COMPLETED"
+      },
+      "tests": [
+        {
+          "name": "GET / serves the chat page",
+          "status": "PASS"
+        },
+        {
+          "name": "chat page is self-contained (no external requests)",
+          "status": "PASS"
+        },
+        {
+          "name": "chat page carries the server's --timing (ttft, prefill or both; the placeholder is filled in)",
+          "status": "PASS"
+        },
+        {
+          "name": "/v1/models lists the model",
+          "status": "PASS"
+        },
+        {
+          "name": "chat page budgets the reply by the model's context, not the API's 16384 default",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking: reasoning streamed separately",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking: correct answer",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking: finish=stop + usage",
+          "status": "PASS"
+        },
+        {
+          "name": "tool call: finish=tool_calls",
+          "status": "PASS"
+        },
+        {
+          "name": "tool call: read_file or run_shell on /etc/hosts",
+          "status": "PASS"
+        },
+        {
+          "name": "tool call: no markup in content",
+          "status": "PASS"
+        },
+        {
+          "name": "tool result: final answer mentions 3",
+          "status": "PASS"
+        },
+        {
+          "name": "tool result: prefix reused (cached >= first prompt, less the generation prompt's tail)",
+          "status": "PASS"
+        },
+        {
+          "name": "next turn: cached prefix",
+          "status": "PASS"
+        },
+        {
+          "name": "next turn: answer",
+          "status": "PASS"
+        },
+        {
+          "name": "non-stream tool call + int arg",
+          "status": "PASS"
+        },
+        {
+          "name": "int argument is a JSON number",
+          "status": "PASS"
+        },
+        {
+          "name": "main slot survives side request",
+          "status": "PASS"
+        },
+        {
+          "name": "thinking + tools: a call on /etc/hosts returned as a tool call",
+          "status": "PASS"
+        },
+        {
+          "name": "one-offs keep the conversation in progress",
+          "status": "PASS"
+        },
+        {
+          "name": "a side request sent beside a first request does not evict it",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: display omitted: the thinking block has no text and a signature",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: count_tokens counts the prompt",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic stream: message_start, ping, blocks, message_delta, message_stop",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic stream: final answer mentions 3",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: the next question's prompt continues the conversation (every turn's thinking kept)",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: a prompt over the context is 400 \"prompt is too long: N tokens > M maximum\"",
+          "status": "PASS"
+        },
+        {
+          "name": "anthropic: streamed too, a plain 400 before any event",
+          "status": "PASS"
+        },
+        {
+          "name": "responses stream: created, in_progress, items, completed; sequence numbers in order",
+          "status": "PASS"
+        },
+        {
+          "name": "responses stream: a function_call on /etc/hosts",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: the tool loop's next request is answered (mentions 3)",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: previous_response_id continues a stored response",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: an unknown previous_response_id is a 400",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: a prompt over the context is 400 context_length_exceeded",
+          "status": "PASS"
+        },
+        {
+          "name": "responses: a max_output_tokens cut is status incomplete",
+          "status": "PASS"
+        },
+        {
+          "name": "/v1/models reports the requests that run at once (slots)",
+          "status": "PASS"
+        },
+        {
+          "name": "a request alone gives the same reply every time (greedy)",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: the greedy reply is answered in full",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: the sampled T=0.7 seed 11 reply is answered in full",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: the greedy reply starts as it does alone",
+          "status": "PASS"
+        },
+        {
+          "name": "in flight together: a 2K-token request sent during a long reply finishes first",
+          "status": "PASS"
+        },
+        {
+          "name": "more requests than slots: every one is answered in full",
+          "status": "PASS"
+        },
+        {
+          "name": "a client gone mid-stream: the request beside it is answered, the next one starts at once",
+          "status": "PASS"
+        },
+        {
+          "name": "chat: a prompt over the context is a 400 context_length_exceeded",
+          "status": "PASS"
+        },
+        {
+          "name": "chat stream: a prompt over the context is a 400 context_length_exceeded",
+          "status": "PASS"
+        },
+        {
+          "failure_detail": "Original failed assertion detail retained privately; id=e2ab99c8c81eebb26e7b3154aaca6fe50ef823e4120a5a1876ea43574a45fee6",
+          "name": "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees",
+          "status": "FAIL"
+        }
+      ]
+    }
+  },
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+    "gpu_cores": 60,
+    "macos": "26.4.1",
+    "memory_capacity_gib": 96
+  },
+  "model": {
+    "expected_vocab": 248320,
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "source_bytes": 2775541728,
+    "source_sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f"
+  },
+  "production_source": {
+    "candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+    "reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f"
+  },
+  "record_kind": "Explicitly sanitized derived evidence; not raw execution logs",
+  "scope": "Every original PASS/FAIL/SKIP test row and arm rc retained. Private assertion details are represented by stable failure IDs, never rewritten as PASS. No causal attribution or universal API success conclusion.",
+  "setup": "M3"
+}
