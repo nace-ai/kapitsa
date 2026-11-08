@@ -12,7 +12,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [Mac Studio (2026) · M5 Max 40-core GPU · 48 GB](#mac-studio-2026--m5-max-40-core-gpu--48-gb) | 2 |
 | [Mac Studio (2026) · M5 Max 40-core GPU · 64 GB](#mac-studio-2026--m5-max-40-core-gpu--64-gb) | 1 |
 | [Mac Studio (2026) · M5 Max 40-core GPU · 128 GB](#mac-studio-2026--m5-max-40-core-gpu--128-gb) | 1 |
-| [Mac Studio (2026) · M5 Ultra 64-core GPU · 96 GB](#mac-studio-2026--m5-ultra-64-core-gpu--96-gb) | 8 |
+| [Mac Studio (2026) · M5 Ultra 64-core GPU · 96 GB](#mac-studio-2026--m5-ultra-64-core-gpu--96-gb) | 9 |
 | [Mac Studio (2026) · M5 Ultra 80-core GPU · 256 GB](#mac-studio-2026--m5-ultra-80-core-gpu--256-gb) | 8 |
 | [Mac mini (2026) · M5 Pro 20-core GPU · 64 GB](#mac-mini-2026--m5-pro-20-core-gpu--64-gb) | 1 |
 | [MacBook Air (13-inch, 2026) · M5 10-core GPU · 24 GB](#macbook-air-13-inch-2026--m5-10-core-gpu--24-gb) | 1 |
@@ -153,6 +153,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-11-06](results/kapitsa-bench-2026-11-06-m5-ultra-nemotron-3.5-bolt-24gb-179533.json) | 184.8 tok/s | 220.0 tok/s | 1,335 tok/s | 1,447 tok/s | 0.11 s | 0.12 s | 23.1 GB + 1.0 mapped | pass | LiLiCorr | 0.2.31 | 27.2 | repetition loop |
+
+### Nemotron 3.5 Super-VL 120B-A12B · nvfp4
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-08](results/kapitsa-bench-2026-11-08-m5-ultra-nemotron-3.5-super-vl-nvfp4-53e7af.json) | 135.9 tok/s | 128.9 tok/s | 1,441 tok/s | 1,577 tok/s | 0.15 s | 0.14 s | 70.5 GB + 1.0 mapped | pass | LiLiCorr | 0.2.31 | 27.2 | – |
 
 ### Qwen3.5 9B · 4-bit
 
