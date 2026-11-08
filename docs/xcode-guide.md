@@ -49,4 +49,4 @@ After starting the server, confirm Kapitsa is reachable:
 curl http://127.0.0.1:8000/v1/models
 ```
 
-This returns the loaded model. If Xcode shows completions, the setup works.
+This returns the loaded model. If Xcode lists the model and answers coding questions through it, the setup works.

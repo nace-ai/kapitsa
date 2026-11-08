@@ -123,12 +123,15 @@ Record the numbers: prefill tok/s at 4K and 16K, decode tok/s (median of 5 runs)
 Update these files with the new numbers:
 
 - `docs/benchmarks.md`: add a section with the model's results
-- `README.md`: add the model to the Models tables if it belongs in the poster
 - `bench/results/`: commit the raw benchmark output
+- The README's Models tables are generated from `tools/readme_images/readme_images.json` by `python3 tools/readme_images/readme_images.py --tables`. Do not hand-edit them (the `bench-readme` CI check fails hand edits). Update the JSON source, then regenerate.
 
 Format: `prefill / decode` in tok/s, with the Mac, macOS version, and commit.
 
 ```bash
+# Regenerate the README tables from the JSON source
+python3 tools/readme_images/readme_images.py --tables
+
 # Generate the community results table
 python3 tools/community_table.py
 ```
@@ -177,9 +180,6 @@ Include a comparison against other engines if `kapitsa bench compare` data is av
 | 8 | `kapitsa update` picks up the new model. |
 | 24 | r/LocalLLaMA post with final numbers. |
 
-## Rehearsal notes (2026-11-08)
+## Rehearsal (2026-11-08)
 
-Rehearsed step 4 on `qwen3.5-4b` (already in the catalog), M5 Pro 48 GB, macOS 26.5, Kapitsa 0.2.25 (7ea4fff):
-
-- **Benchmark:** `kapitsa bench --model 4b --quick` (bench starts its own server) completed in 3 min 40 s. Results: 221 tok/s decode, 237 tok/s greedy, 3,733 tok/s prefill at 4K. Three flags: GPU contention from Edge (12.7% mean), two repetition loops in the sampled decode.
-- **Wall time for the bench step alone:** under 4 min. For a new model, add time for the catalog edit, drafter search, build and import (~10 min before the bench).
+`kapitsa bench --model 4b --quick` on the M5 Pro 48 GB (macOS 26.5, Kapitsa 0.2.25): 221 tok/s decode, 3,733 tok/s prefill at 4K, 3 min 40 s wall time. A new model adds ~10 min for catalog edit, drafter search, build and import.
