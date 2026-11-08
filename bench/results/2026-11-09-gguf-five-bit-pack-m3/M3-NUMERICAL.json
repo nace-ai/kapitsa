@@ -1,0 +1,264 @@
+{
+  "format": "Explicitly privacy-filtered derived summary; not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "rows_each_arm": 584,
+  "vocab": 248320,
+  "float32_each_arm": 145018880,
+  "paths": {
+    "prefill": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "270d58253454d4e17308b83e377626f11868ce16f89c6d00cbbe37c8375e80e0",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": null
+        },
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "270d58253454d4e17308b83e377626f11868ce16f89c6d00cbbe37c8375e80e0",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": null
+        }
+      ]
+    },
+    "step": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "0973d63456a9a44d25a2d4c8171657eb44353e85cca815ac096315dbfe5d4589",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": null
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "0973d63456a9a44d25a2d4c8171657eb44353e85cca815ac096315dbfe5d4589",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": null
+        }
+      ]
+    },
+    "verify": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "ca2df2dea786dc49d9b119cf6471d6504454a9bfc6173ab9b36c8fb41e52d7e1",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": "KFlash tree (a chain of 8 live rows)"
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "ca2df2dea786dc49d9b119cf6471d6504454a9bfc6173ab9b36c8fb41e52d7e1",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": "KFlash tree (a chain of 8 live rows)"
+        }
+      ]
+    },
+    "batch": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "d63e2b25ff693667a8079d0ccbc4d43f70836ea8e577d823bcbac68a9314c6b1",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": null
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "d63e2b25ff693667a8079d0ccbc4d43f70836ea8e577d823bcbac68a9314c6b1",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": null
+        }
+      ]
+    }
+  },
+  "comparison": {
+    "report_only": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      }
+    },
+    "strict_zero": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "source": "flags"
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "top1": 1.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    }
+  },
+  "command_rc": {
+    "reference_output": 0,
+    "candidate_output": 0,
+    "report_only": 0,
+    "strict_zero": 0
+  },
+  "threshold_scope": "Strict-zero thresholds apply to step/verify/batch; prefill independently passes finite and complete literal byte/input checks. No floor changed.",
+  "method": "Teacher-forced trunk, including KFlash tree chain-of-eight verify, not free-generating MTP numerical qualification."
+}

@@ -1,0 +1,193 @@
+{
+  "format": "Explicitly privacy-filtered derived summary; not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "legs": {
+    "A1": {
+      "rc": 0,
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 241.13,
+          "runs_tps": [
+            241.13,
+            232.57,
+            244.9
+          ],
+          "median_accepted_draft_tps": 153.06,
+          "median_accepted_draft_share": 0.6348
+        },
+        "decode_greedy": {
+          "median_tps": 238.24,
+          "runs_tps": [
+            260.82,
+            238.24,
+            235.01
+          ],
+          "median_accepted_draft_tps": 150.29,
+          "median_accepted_draft_share": 0.6309
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 2.0926,
+            "tps": 1975.1,
+            "followup_s": [
+              0.0345,
+              0.0471,
+              0.0377
+            ],
+            "followup_median_s": 0.0377,
+            "followup_suffix_tps": 573.6
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    "B1": {
+      "rc": 0,
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4694)"
+      ],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 236.87,
+          "runs_tps": [
+            225.82,
+            244.3,
+            236.87
+          ],
+          "median_accepted_draft_tps": 148.97,
+          "median_accepted_draft_share": 0.6289
+        },
+        "decode_greedy": {
+          "median_tps": 242.89,
+          "runs_tps": [
+            237.84,
+            262.53,
+            242.89
+          ],
+          "median_accepted_draft_tps": 154.65,
+          "median_accepted_draft_share": 0.6367
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4130,
+            "ttft_s": 2.0911,
+            "tps": 1975.0,
+            "followup_s": [
+              0.0343,
+              0.0457,
+              0.0366
+            ],
+            "followup_median_s": 0.0366,
+            "followup_suffix_tps": 591.3
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    "A2": {
+      "rc": 0,
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4694)"
+      ],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 236.7,
+          "runs_tps": [
+            236.7,
+            249.6,
+            235.64
+          ],
+          "median_accepted_draft_tps": 150.25,
+          "median_accepted_draft_share": 0.6348
+        },
+        "decode_greedy": {
+          "median_tps": 248.61,
+          "runs_tps": [
+            248.61,
+            263.15,
+            243.65
+          ],
+          "median_accepted_draft_tps": 159.26,
+          "median_accepted_draft_share": 0.6406
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 2.0893,
+            "tps": 1978.2,
+            "followup_s": [
+              0.034,
+              0.0458,
+              0.0369
+            ],
+            "followup_median_s": 0.0369,
+            "followup_suffix_tps": 588.9
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    "B2": {
+      "rc": 0,
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4842)"
+      ],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 233.42,
+          "runs_tps": [
+            207.3,
+            233.42,
+            255.79
+          ],
+          "median_accepted_draft_tps": 144.52,
+          "median_accepted_draft_share": 0.6191
+        },
+        "decode_greedy": {
+          "median_tps": 249.57,
+          "runs_tps": [
+            263.07,
+            249.57,
+            234.67
+          ],
+          "median_accepted_draft_tps": 160.37,
+          "median_accepted_draft_share": 0.6426
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 2.0912,
+            "tps": 1975.9,
+            "followup_s": [
+              0.0344,
+              0.047,
+              0.0425
+            ],
+            "followup_median_s": 0.0425,
+            "followup_suffix_tps": 575.1
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    }
+  },
+  "scope": "Original randomized/native runs; not the matched fixed-request experiment."
+}

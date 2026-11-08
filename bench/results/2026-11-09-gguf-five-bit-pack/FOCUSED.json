@@ -1,0 +1,21 @@
+{
+  "format": "Privacy-filtered derived check summary, not raw execution logs.",
+  "source": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "M4_Release": {
+    "cases": 19404,
+    "result": "PASS"
+  },
+  "M3_Release": {
+    "cases": 19404,
+    "result": "PASS"
+  },
+  "M4_ASan_UBSan": {
+    "cases": 19404,
+    "result": "PASS"
+  },
+  "oracle": "Independent bit-by-bit little-endian bytes; all 256 values at every lane, high-bit masking, widths, source offsets, entire overlap buffers, output canaries and protected-page starts/ends.",
+  "broad_CPU": "Complete; see CPU-CHECKS.json, including the candidate/reference page-cache assertion failures.",
+  "model_GPU": "M4 complete; see M4 phase summaries. M3 full model not run.",
+  "mutation_result": "Wrong cross-word shift and bypassed overlap fallback both compiled and were rejected with test rc 1."
+}

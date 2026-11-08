@@ -1,0 +1,44 @@
+{
+  "format": "Explicitly privacy-filtered derived summary; not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "arms": {
+    "reference": {
+      "source": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+      "binaries_sha256": {
+        "kapitsa": "895cf314f70c6f0d838b82c9441ae0398fc0d5de27a82c417dc8d8160441b35c",
+        "logit_dump": "322ecde1ac219b5f960d34bef002d47afc4af4e0f80b096251a15b482d364596",
+        "ni_run": "9fc4550d8887fdda5791024d23d964f50b4d043afd665bc2144e5785cf5a4b50",
+        "libnaceinfer.a": "0e84325dc3385b8bc55f93a06e56eb2b2fe5e512c3c7cec8f157f105cb9d80c5"
+      },
+      "target_optimization": "-O3",
+      "architecture": "arm64",
+      "NDEBUG": false,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "version_rc": 0
+    },
+    "candidate": {
+      "source": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+      "binaries_sha256": {
+        "kapitsa": "f47ee098210bdd9e767d3b5375f9f7f9ad066402d24e64fb917ce4786311ca82",
+        "logit_dump": "ff5c831badca37f7683e0c53b5359adffd71d1501eb14a9a23b0eeb2eaac8e43",
+        "ni_run": "0931af720f976492785116ffccc50eefeef577f32c4384b0b2421b1beed60675",
+        "libnaceinfer.a": "aada1c4b4e6f7a2cbd9a7d6e4263eaf7ba51be13b0521f22b3103228ffea1cf7"
+      },
+      "target_optimization": "-O3",
+      "architecture": "arm64",
+      "NDEBUG": false,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "version_rc": 0
+    }
+  }
+}
