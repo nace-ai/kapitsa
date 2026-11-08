@@ -4,7 +4,7 @@ Xcode 26 can use Kapitsa as a chat model provider for code questions.
 
 ## Setup
 
-Tested on Xcode 26.6 (build 17F113), macOS 26.5. Kapitsa registered as a Locally Hosted chat provider and appeared in the Chat section alongside ChatGPT and Claude.
+Tested on Xcode 26.6 (build 17F113), macOS 26.5. With `kapitsa serve --model 4b` running, Kapitsa registered as a Locally Hosted chat provider, showed up in the conversation menu, and Xcode listed Kapitsa's models there. The prompt box read "Chat with qwen3.5-4b:4bit". Not verified: a sent message and its reply. The prompt box did not take scripted keystrokes, so no request was seen in the server.
 
 1. Start Kapitsa:
 
@@ -19,7 +19,9 @@ kapitsa serve --model 35b
 
 4. Select **Locally Hosted**. Enter port `8000` and a description (e.g. "Kapitsa"). Click **Add**.
 
-Kapitsa appears in the Chat section as "Kapitsa" with a "localhost" label.
+Kapitsa appears in the Chat section as "Kapitsa" with a "localhost" label. The dialog asks for a port only.
+
+5. Open the coding assistant (**Editor → Show Coding Tools**, or the sparkle button in the toolbar). In the conversation menu (the compose button), choose **Chat → Kapitsa** and pick the model you started. The prompt box then reads "Chat with <model>".
 
 ## What the Intelligence settings show
 
@@ -58,4 +60,4 @@ kapitsa opencode --model 35b
 curl http://127.0.0.1:8000/v1/models
 ```
 
-This returns the loaded model. If Xcode lists "Kapitsa" in its Chat section and answers coding questions through it, the setup works.
+This returns the loaded model. If **Chat → Kapitsa** in Xcode's conversation menu lists models, Xcode reached the server.
