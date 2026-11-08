@@ -15,6 +15,7 @@
 #include "api/anthropic.h"
 #include "api/chat_completions.h"
 #include "api/clients.h"
+#include "api/ollama.h"
 #include "api/responses.h"
 #include "engine/output_parser.h"
 #include "engine/stop_filter.h"
@@ -2317,6 +2318,264 @@ void norm_layout_unit() {
   check(!Qwen35::zero_centred_norm(hf.data(), DType::U32, hf.size()), "norm layout: a quantized norm is not decided");
 }
 
+static void ollama_unit() {
+  using namespace ni;
+  using namespace ni::api;
+  using json = nlohmann::ordered_json;
+
+  // ollama_chat_request: basic message parsing
+  {
+    json body{{"model", "qwen3:35b"}, {"messages", json::array({{{"role", "user"}, {"content", "Hi"}}})}};
+    ChatRequest defaults;
+    defaults.temperature = 0.6f;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.messages.size() == 1 && r.messages[0]["role"] == "user" && r.messages[0]["content"] == "Hi",
+          "ollama: chat request parses a user message");
+    check(r.temperature == 0.6f, "ollama: chat request preserves defaults");
+  }
+  // ollama_chat_request: options override defaults
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"temperature", 0.1}, {"top_k", 5}, {"seed", 42}}}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.temperature == 0.1f, "ollama: options.temperature overrides default");
+    check(r.top_k == 5, "ollama: options.top_k overrides default");
+    check(r.seed == 42, "ollama: options.seed overrides default");
+  }
+  // ollama_chat_request: num_predict -1 leaves the server default
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", -1}}}};
+    ChatRequest defaults;
+    defaults.max_tokens = 8192;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == 8192, "ollama: num_predict -1 leaves the server default (8192)");
+  }
+  // ollama_chat_request: num_predict -2 also leaves the server default
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", -2}}}};
+    ChatRequest defaults;
+    defaults.max_tokens = 8192;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == 8192, "ollama: num_predict -2 leaves the server default");
+  }
+  // ollama_chat_request: think field
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})}, {"think", true}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"] == true,
+          "ollama: think:true sets enable_thinking");
+  }
+  // ollama_generate_request: prompt + system, and prompt-only
+  {
+    json b1{{"model", "m"}, {"prompt", "Why blue?"}, {"system", "Be brief"}};
+    auto r1 = ollama_generate_request(b1, ChatRequest{});
+    check(r1.messages.size() == 2 && r1.messages[0]["role"] == "system" && r1.messages[1]["content"] == "Why blue?",
+          "ollama: generate builds system + user from prompt and system");
+    json b2{{"model", "m"}, {"prompt", "Hello"}};
+    auto r2 = ollama_generate_request(b2, ChatRequest{});
+    check(r2.messages.size() == 1 && r2.messages[0]["role"] == "user",
+          "ollama: generate without system has one user message");
+  }
+  // OllamaChatStream: NDJSON format (each line is valid JSON + newline, not SSE)
+  {
+    OllamaChatStream w("test-model");
+    ChatResult prompt;
+    std::string begin = w.begin(prompt);
+    check(!begin.empty() && begin.back() == '\n', "ollama: chat stream begin ends with newline");
+    check(begin.find("data: ") == std::string::npos, "ollama: chat stream begin is not SSE");
+    auto parsed = json::parse(begin);
+    check(parsed["model"] == "test-model" && parsed["done"] == false,
+          "ollama: chat stream begin is valid NDJSON with done:false");
+  }
+  // OllamaChatStream: delta
+  {
+    OllamaChatStream w("m");
+    ChatDelta d;
+    d.content = "Hi";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed["message"]["content"] == "Hi" && parsed["done"] == false,
+          "ollama: chat stream delta carries content in message");
+  }
+  // OllamaChatStream: end has eval stats
+  {
+    OllamaChatStream w("m");
+    ChatResult res;
+    res.finish_reason = "stop";
+    res.prompt_tokens = 10;
+    res.completion_tokens = 20;
+    res.prefill_ms = 5.0;
+    res.decode_ms = 10.0;
+    std::string out = w.end(res);
+    auto parsed = json::parse(out);
+    check(parsed["done"] == true && parsed["done_reason"] == "stop",
+          "ollama: chat stream end has done:true and done_reason");
+    check(parsed.contains("eval_count") && parsed["eval_count"] == 20,
+          "ollama: chat stream end has eval_count");
+    check(parsed.contains("prompt_eval_count") && parsed["prompt_eval_count"] == 10,
+          "ollama: chat stream end has prompt_eval_count");
+  }
+  // OllamaGenerateStream: NDJSON format
+  {
+    OllamaGenerateStream w("gen-model");
+    ChatDelta d;
+    d.content = "The";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed["response"] == "The" && parsed["done"] == false,
+          "ollama: generate stream delta uses response field");
+  }
+  // ollama_now: ISO timestamp
+  {
+    std::string ts = ollama_now();
+    check(ts.size() > 10 && ts.back() == 'Z' && ts[4] == '-',
+          "ollama: ollama_now returns an ISO timestamp ending in Z");
+  }
+  // num_predict: large double clamped (1e20 would overflow int)
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", 1e20}}}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == int(1e9), "ollama: num_predict 1e20 clamped to 1e9");
+  }
+  // num_predict: normal positive value
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", 256}}}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == 256, "ollama: num_predict 256 passed through");
+  }
+  // Error JSON escaping: a model name with " does not break the JSON
+  {
+    std::string err_json = dump(json{{"error", "model \"evil\\name\" not found"}});
+    auto parsed = json::parse(err_json);
+    check(parsed["error"].get<std::string>() == "model \"evil\\name\" not found",
+          "ollama: error JSON properly escapes quotes and backslashes");
+  }
+  // OllamaGenerateStream: reasoning goes in separate "thinking" field, not in "response"
+  {
+    OllamaGenerateStream w("m");
+    ChatDelta d;
+    d.reasoning = "Let me think...";
+    d.content = "";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed.contains("thinking") && parsed["thinking"] == "Let me think...",
+          "ollama: generate stream reasoning goes in thinking field");
+    check(parsed["response"] == "",
+          "ollama: generate stream reasoning does not go in response field");
+  }
+  // OllamaChatStream: reasoning in message.thinking
+  {
+    OllamaChatStream w("m");
+    ChatDelta d;
+    d.reasoning = "hmm";
+    d.content = "";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed["message"].contains("thinking") && parsed["message"]["thinking"] == "hmm",
+          "ollama: chat stream reasoning goes in message.thinking");
+    check(parsed["message"]["content"] == "",
+          "ollama: chat stream reasoning does not go in message.content");
+  }
+  // ollama_generate_request: null and absent prompt treated as empty
+  {
+    auto r1 = ollama_generate_request(json{{"model", "m"}, {"prompt", nullptr}}, ChatRequest{});
+    check(r1.messages.size() == 1 && r1.messages[0]["content"] == "", "ollama: null prompt treated as empty");
+    auto r2 = ollama_generate_request(json{{"model", "m"}}, ChatRequest{});
+    check(r2.messages.size() == 1 && r2.messages[0]["content"] == "", "ollama: absent prompt treated as empty");
+  }
+  // ollama_chat_request: non-object options ignored
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", "invalid"}};
+    ChatRequest defaults;
+    defaults.temperature = 0.6f;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.temperature == 0.6f, "ollama: non-object options ignored, defaults preserved");
+  }
+  // ollama_chat_request: message with null content treated as ""
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", nullptr}}})}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.messages.size() == 1 && r.messages[0]["content"] == "",
+          "ollama: null message content treated as empty string");
+  }
+  // ollama_chat_request: non-object message in messages array skipped
+  {
+    json body{{"model", "m"}, {"messages", json::array({42, {{"role", "user"}, {"content", "x"}}})}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.messages.size() == 1, "ollama: non-object message skipped");
+  }
+  // OllamaChatStream::end with error carries the error field
+  {
+    OllamaChatStream w("m");
+    ChatResult res;
+    res.finish_reason = "error";
+    res.error = "out of memory";
+    std::string out = w.end(res);
+    auto parsed = json::parse(out);
+    check(parsed["done"] == true && parsed["done_reason"] == "error" && parsed["error"] == "out of memory",
+          "ollama: chat stream error end has error field");
+  }
+  // OllamaGenerateStream::end with error
+  {
+    OllamaGenerateStream w("m");
+    ChatResult res;
+    res.finish_reason = "error";
+    res.error = "context full";
+    std::string out = w.end(res);
+    auto parsed = json::parse(out);
+    check(parsed["done"] == true && parsed["error"] == "context full",
+          "ollama: generate stream error end has error field");
+  }
+  // clover is text-only (no vision capability)
+  {
+    auto show = ollama_show_response("clover-35b-a3b", "clover-35b-a3b");
+    bool has_vision = false;
+    for (const auto& c : show["capabilities"]) if (c == "vision") has_vision = true;
+    check(!has_vision, "ollama: clover-35b-a3b has no vision capability");
+    // but it has tools and thinking
+    bool has_tools = false, has_thinking = false;
+    for (const auto& c : show["capabilities"]) {
+      if (c == "tools") has_tools = true;
+      if (c == "thinking") has_thinking = true;
+    }
+    check(has_tools && has_thinking, "ollama: clover-35b-a3b has tools and thinking");
+  }
+  // qwen3.6-35b-a3b has vision
+  {
+    auto show = ollama_show_response("qwen3.6-35b-a3b", "qwen3.6-35b-a3b");
+    bool has_vision = false;
+    for (const auto& c : show["capabilities"]) if (c == "vision") has_vision = true;
+    check(has_vision, "ollama: qwen3.6-35b-a3b has vision capability");
+  }
+  // ollama_eval_stats: durations in nanoseconds
+  {
+    ChatResult res;
+    res.prefill_ms = 5.0;
+    res.decode_ms = 10.0;
+    res.prompt_tokens = 100;
+    res.completion_tokens = 50;
+    json j;
+    ollama_eval_stats(j, res);
+    check(j["prompt_eval_duration"] == 5000000 && j["eval_duration"] == 10000000,
+          "ollama: eval stats durations in nanoseconds");
+    check(j["total_duration"] == 15000000,
+          "ollama: eval stats total_duration = prefill + decode");
+    check(j["prompt_eval_count"] == 100 && j["eval_count"] == 50,
+          "ollama: eval stats token counts correct");
+  }
+}
+
 int main(int argc, char** argv) {
   stop_filter_unit();
   anthropic_mapping();
@@ -2337,6 +2596,7 @@ int main(int argc, char** argv) {
   unsupported_model_unit();
   clover_unit();
   norm_layout_unit();
+  ollama_unit();
   drafter_report_unit();
   draft_conversation_unit();
   std::vector<std::string> dirs;

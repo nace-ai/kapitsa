@@ -72,6 +72,16 @@ def get(path, headers=None):
     except urllib.error.HTTPError as e:
         return e.code, e.headers, e.read()
 
+def post_raw(path, data, stream=False):
+    """(status, headers, body) of a POST to an arbitrary path; HTTP errors are returned, not raised."""
+    req = urllib.request.Request(BASE + path, data=data,
+                                 headers={"Content-Type": "application/json", **auth()})
+    try:
+        r = urllib.request.urlopen(req, timeout=30)
+        return r.status, r.headers, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers, e.read()
+
 def post(body, stream=False):
     req = urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json", **auth()})
@@ -1479,6 +1489,29 @@ check("chat stream: while every slot is busy the stream starts at once, gets an 
       len(ev) > 2 and choice(ev[0][1]).get("delta") == ROLE and ev[0][0] < 1.0 and len(keep) == 2 and
       15 <= keep[0] < 17.5 and 14 <= keep[1] - keep[0] < 17.5 and first is not None and first > keep[1] and
       ev[-1][1] == "[DONE]", f"first chunk {ev[0] if ev else None}, keepalives at {keep}, first token at {first}")
+
+# 12. Ollama API: /api/version, /api/tags, /api/show, /api/embed
+st, _, ver = get("/api/version")
+check("Ollama: GET /api/version", st == 200 and json.loads(ver).get("version"), ver[:100].decode() if ver else "")
+st, _, tags = get("/api/tags")
+check("Ollama: GET /api/tags lists models", st == 200 and "models" in json.loads(tags), tags[:200].decode() if tags else "")
+tag_models = json.loads(tags).get("models", [])
+check("Ollama: /api/tags has at least the running model", len(tag_models) >= 1 and tag_models[0].get("name"),
+      str(len(tag_models)) + " models")
+# /api/show for the running model
+st, _, show = post_raw("/api/show", json.dumps({"model": tag_models[0]["name"]}).encode(), stream=False)
+check("Ollama: POST /api/show for running model", st == 200 and json.loads(show).get("details"),
+      show[:200].decode() if show else "")
+# /api/show for unknown model returns 404
+st, _, show_unk = post_raw("/api/show", b'{"model":"nonexistent-model-xyz"}', stream=False)
+check("Ollama: POST /api/show for unknown model is 404", st == 404, str(st))
+# /api/embed returns 400
+st, _, embed = post_raw("/api/embed", b'{"model":"m","input":"hello"}', stream=False)
+check("Ollama: POST /api/embed not supported", st == 400 and b"not supported" in embed, embed[:100].decode() if embed else "")
+# /api/version does not need an API key
+if API_KEY:
+    st_nokey, _, _ = get("/api/version")
+    check("Ollama: /api/version works without API key", st_nokey == 200)
 
 print("FAILED: %d" % fails if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)

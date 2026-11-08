@@ -23,6 +23,7 @@ void stream_reply(const ChatRequest& request, std::shared_ptr<api::StreamWriter>
                   httplib::Response& response, BindExecution bind,
                   std::function<void(const ChatResult&, httplib::Response&)> failure,
                   std::function<void(const ChatResult&)> after, StreamMeter meter,
-                  bool early = false, bool telemetry = false, bool progress = false);
+                  bool early = false, bool telemetry = false, bool progress = false,
+                  const char* content_type = "text/event-stream");
 
 }  // namespace ni::server
