@@ -1,0 +1,539 @@
+{
+  "format": "Derived privacy-filtered export of actual kapitsa bench results; not raw kapitsa bench JSON",
+  "hardware_configuration": {
+    "chip": "Apple M3 Ultra",
+    "memory_capacity_gib": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+    "gpu_cores": 60
+  },
+  "model": {
+    "repository": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+    "revision": "3fe6dab75665a93884214ad4b1b95cf02717d081",
+    "actual_loader_coverage": "42 layers: 21 Mamba-2, 4 attention, 17 MLP; loader reports 17 FP8 and 4 BF16 Mamba layers, FP8 MLP, BF16 attention and embeddings, Q8_0 output head"
+  },
+  "source_and_binaries": {
+    "reference": {
+      "commit": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "nemotron_h_source_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "kapitsa_sha256": "1cbf7d4eeab30d5b4009ad1332ef7bc7e4dd5a2c99731e4a809a560d2fa75f23",
+      "logit_dump_sha256": "2f51d84c41d609c048daa01872ae18b30ccc72d8fc302fbcb494ea39a75136a2",
+      "cmake_cache_sha256": "93bf519cb6cb08b6a5174232f7a6b7f41e89325d961f1e13cd8db4a9dcf03349",
+      "build_type": "Release",
+      "original_source_archive_sha256": "0301c9b9f7866bee577cbc957747b3273e4023f9a35897f146eaa6caf4e5bcc5",
+      "original_archive_regular_files_verified": 540,
+      "full_source_file_manifest_sha256": "23f58b75fd4afe2299598206ba3be0eec8d7ac9ffa02707af414f65858499f4e",
+      "supplemental_samecommit_assets": [
+        {
+          "path": "bench/harness/corpus/bench_corpus.txt",
+          "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "git_blob": "b47e7d2149932f3ea4bb13647640517f764259eb"
+        },
+        {
+          "path": "bench/community/mac-models.json",
+          "sha256": "f7f5696f02c30128e4216936a5aa482bc7385f64bc022f66f373e63c8da16250",
+          "git_blob": "f793adeb9019b975c308b9fd80ffad0dcc8e8057"
+        }
+      ],
+      "cached_cmake_release_flags": "-O3 -DNDEBUG",
+      "actual_target_flags": {
+        "cli_and_library_entries": [
+          "CXX_DEFINES = -DKAPITSA_GIT=\\\"052104f8f9c99edde129415a7384a1a58dc24ae6\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0",
+          "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0"
+        ],
+        "source": "Generated flags.make for the binaries whose digests are recorded; SDK path replaced by placeholder"
+      }
+    },
+    "candidate": {
+      "commit": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "nemotron_h_source_sha256": "94e9cf4632e4d63783e9701494a325d6176f321a95fa9b25266b2f571dcd5b40",
+      "kapitsa_sha256": "0728e0b9488cd779bb9ff137d5bce5b2c19ed6fbefed92dd4d9168f5bc2592c9",
+      "logit_dump_sha256": "5b9011733c325cc393160cbf009b6d1438e843acdc888c75d268ea81eb5ceb59",
+      "cmake_cache_sha256": "7d0a7ef92b7e7b45402cec9a5b27ef5eeacc97f1ccb55f6ec88b2de545601a5a",
+      "build_type": "Release",
+      "original_source_archive_sha256": "cd96f3407c3dee14f04381410b586c71a6cc9a4ba330023ee1312a589a0a7bf9",
+      "original_archive_regular_files_verified": 540,
+      "full_source_file_manifest_sha256": "9a08b283d1348ce904fb5761bb5bf9df35faba66168930975f579f35f985bcbd",
+      "supplemental_samecommit_assets": [
+        {
+          "path": "bench/harness/corpus/bench_corpus.txt",
+          "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "git_blob": "b47e7d2149932f3ea4bb13647640517f764259eb"
+        },
+        {
+          "path": "bench/community/mac-models.json",
+          "sha256": "f7f5696f02c30128e4216936a5aa482bc7385f64bc022f66f373e63c8da16250",
+          "git_blob": "f793adeb9019b975c308b9fd80ffad0dcc8e8057"
+        }
+      ],
+      "cached_cmake_release_flags": "-O3 -DNDEBUG",
+      "actual_target_flags": {
+        "cli_and_library_entries": [
+          "CXX_DEFINES = -DKAPITSA_GIT=\\\"8f3996fea6f1f44537bee4e789b98cd6a531f347\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0",
+          "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0"
+        ],
+        "source": "Generated flags.make for the binaries whose digests are recorded; SDK path replaced by placeholder"
+      }
+    }
+  },
+  "native_command_example": "\"$BUILD/kapitsa\" bench --model \"$MODEL\" --quick --json --out results/native.json",
+  "native_command_example_is": "Portable example, not original execution log",
+  "cohort_order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "runs": [
+    {
+      "label": "A1",
+      "arm": "reference",
+      "source": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "cli_sha256": "1cbf7d4eeab30d5b4009ad1332ef7bc7e4dd5a2c99731e4a809a560d2fa75f23",
+      "rc": 0,
+      "flags": [],
+      "invalid": [],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 134.85,
+          "runs_tps": [
+            138.41,
+            134.85,
+            130.24
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 130.93,
+          "runs_tps": [
+            127.27,
+            130.93,
+            131.2
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4185,
+            "ttft_s": 1.8729,
+            "tps": 2234.5,
+            "followup_s": [
+              0.0653,
+              0.0741,
+              0.0686
+            ],
+            "followup_median_s": 0.0686,
+            "followup_suffix_tps": 337.1
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": 138.41,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 134.85,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 130.24,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 127.27,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 130.93,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 131.2,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "265f2276b61ea31448c07e71edf4fe5348976aaf69096f8c47305b0051bc7e2b",
+      "raw_log_sha256": "ca9719491e3f79b45d1d5eed695d61d41df8c7b934a1bedaa3bd25aa69b1a0ea"
+    },
+    {
+      "label": "B1",
+      "arm": "candidate",
+      "source": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "cli_sha256": "0728e0b9488cd779bb9ff137d5bce5b2c19ed6fbefed92dd4d9168f5bc2592c9",
+      "rc": 0,
+      "flags": [
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": [],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 134.17,
+          "runs_tps": [
+            129.21,
+            137.62,
+            134.17
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 131.76,
+          "runs_tps": [
+            132.27,
+            130.71,
+            131.76
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4184,
+            "ttft_s": 1.8717,
+            "tps": 2235.4,
+            "followup_s": [
+              0.0728,
+              0.0703,
+              0.0868
+            ],
+            "followup_median_s": 0.0728,
+            "followup_suffix_tps": 315.8
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": 129.21,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 137.62,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 134.17,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 132.27,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 130.71,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 131.76,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "d134e8fd8cf4a6103c08981fbdb8041e6154cbe8ad343935ac115c4d577e9f70",
+      "raw_log_sha256": "27308b5838f76dd2f5a28f4d961c56d76f7afe57ac6e4e203c8dd25e8675ce66"
+    },
+    {
+      "label": "A2",
+      "arm": "reference",
+      "source": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "cli_sha256": "1cbf7d4eeab30d5b4009ad1332ef7bc7e4dd5a2c99731e4a809a560d2fa75f23",
+      "rc": 0,
+      "flags": [
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": [],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 128.45,
+          "runs_tps": [
+            137.16,
+            128.45,
+            128.35
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 131.69,
+          "runs_tps": [
+            131.41,
+            131.69,
+            131.94
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4186,
+            "ttft_s": 1.8762,
+            "tps": 2231.2,
+            "followup_s": [
+              0.0706,
+              0.074,
+              0.0829
+            ],
+            "followup_median_s": 0.074,
+            "followup_suffix_tps": 325.9
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": 137.16,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 128.45,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 128.35,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 131.41,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 131.69,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 131.94,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "9d5c8306ce1821f292286073bc07aeb7fab4358e7666a5e91186e3d38c4bbc0b",
+      "raw_log_sha256": "39eb3984fd277611e2f722b2b5d0b4156280098ec993ff162c24da934124f709"
+    },
+    {
+      "label": "B2",
+      "arm": "candidate",
+      "source": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "cli_sha256": "0728e0b9488cd779bb9ff137d5bce5b2c19ed6fbefed92dd4d9168f5bc2592c9",
+      "rc": 0,
+      "flags": [
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": [],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 129.74,
+          "runs_tps": [
+            130.9,
+            128.6,
+            129.74
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 132.0,
+          "runs_tps": [
+            132.0,
+            132.15,
+            131.87
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4184,
+            "ttft_s": 1.879,
+            "tps": 2226.7,
+            "followup_s": [
+              0.0754,
+              0.0759,
+              0.0694
+            ],
+            "followup_median_s": 0.0754,
+            "followup_suffix_tps": 304.9
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": 130.9,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 128.6,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 129.74,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 132.0,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 132.15,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 131.87,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "4e0b3d0b18e3e0bbfdbfaf5aa32e7897bce59772c02de9395cba006f578f03f9",
+      "raw_log_sha256": "bca6e5d3df00b0259b1c4b8d02a8358be37138c03b4bbeec10e8acc0c3d3fc56"
+    }
+  ],
+  "native_gate": {
+    "all_four_rc0": true,
+    "all_four_flags_empty": false,
+    "all_four_invalid_empty": true,
+    "scope": "Actual native default A/B/A/B. Process exit and empty invalid lists do not qualify failed API/output checks; no inference speedup claim.",
+    "all_four_tool_semantic_checks_passed": false,
+    "all_four_fully_qualified": false
+  },
+  "interpretation": "All four native processes returned rc0 and empty invalid lists, but every leg failed tool-call semantics in all six thinking-on/off stream/nonstream/round-trip cases. B1/A2/B2 also have cached first-turn length warnings. These are not passing API/performance qualification. Default HTTP has differing failures; controlled diagnosis is separate. No inference speedup claim.",
+  "metadata_caveat": "Native unlisted-folder metadata reported precision=bf16/revision=null; pinned FP8 file identities and actual loader coverage establish the model identity. Original metadata retained."
+}

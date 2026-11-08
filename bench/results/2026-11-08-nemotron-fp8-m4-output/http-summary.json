@@ -1,0 +1,71 @@
+{
+  "format": "Derived privacy-filtered public summary, not a raw execution log",
+  "scope": "Actual default HTTP suite on the same pinned FP8 model, each arm using its own source CLI and server",
+  "hardware_configuration": {
+    "chip": "Apple M4 Pro",
+    "memory_capacity_gib": 48,
+    "macos": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": 20
+  },
+  "model": {
+    "repository": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+    "revision": "3fe6dab75665a93884214ad4b1b95cf02717d081"
+  },
+  "source_and_binaries": {
+    "reference": {
+      "commit": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "nemotron_h_source_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "kapitsa_sha256": "a342fde69ae6d3a2eb23cc7cf615ded60431628c6732febbd16bcd8418e45bde",
+      "logit_dump_sha256": "3e29bae013212657f0e7b934c87dc8b9e98ee7a78893104f8612530667961209",
+      "cmake_cache_sha256": "6bd920baa6a0a0acd4db849612f0df70d8f78537e21972f0c34ff634abba7a89",
+      "archive_sha256": "8536b62704ab1e09a491bdd687ef129e4068a06a6bebca114f51d5b82588199c",
+      "build_type": "Release",
+      "cxx_flags": "-O3 -DNDEBUG",
+      "build_provenance": "Same-commit source archive; explicit CMake configure/build"
+    },
+    "candidate": {
+      "commit": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "nemotron_h_source_sha256": "94e9cf4632e4d63783e9701494a325d6176f321a95fa9b25266b2f571dcd5b40",
+      "kapitsa_sha256": "0e25a651538f82255b413af2835f0177c461300200813f245cefe6ddd5d45c80",
+      "logit_dump_sha256": "5bb0a25e144bf953c78baf418545ad56ea7c531241296916374690c9cc00abdf",
+      "cmake_cache_sha256": "01d673303eaa34536f82638c7dc4c5dd5b3e76841b3ad46b64db8a05a91fd6fe",
+      "archive_sha256": "613112eaa1abbc45e582791cf91ac82bb2bea80180e68953c592c300cc6b7b0f",
+      "build_type": "Release",
+      "cxx_flags": "-O3 -DNDEBUG",
+      "build_provenance": "Immutable binary copy of the explicitly configured candidate Release build; recorded digests verified unchanged"
+    }
+  },
+  "method": {
+    "harness": "tests/test_server.py",
+    "server_profile": "precise",
+    "context_tokens": 32768,
+    "slots": 2,
+    "disk_cache_enabled": false,
+    "exclusive_gpu_lock": true,
+    "example_command": "python3 tests/test_server.py \"$SERVER_URL\"",
+    "example_command_is": "Portable example with placeholder; not original execution command"
+  },
+  "results": {
+    "reference": {
+      "source": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "rc": 0,
+      "pass_count": 49,
+      "failure_count": 0,
+      "all_passed_marker": true,
+      "log_sha256": "3032684c396905d2467f0a09d3c9955a8da240ab539f254949e6018e49b42519"
+    },
+    "candidate": {
+      "source": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "rc": 0,
+      "pass_count": 49,
+      "failure_count": 0,
+      "all_passed_marker": true,
+      "log_sha256": "3032684c396905d2467f0a09d3c9955a8da240ab539f254949e6018e49b42519"
+    }
+  },
+  "same_test_outcomes": true,
+  "not_verified_in_this_summary": [
+    "Native inference A/B/A/B is still running and no inference speedup is claimed"
+  ]
+}

@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <arm_neon.h>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -397,15 +398,10 @@ void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_
       case NhFmt::FP8:
         // 16-element groups: byte 4 m + (0, 1, 2, 3) = elements 2 m, 2 m + 1, 2 m + 8, 2 m + 9, so the bytes 0, 2 /
         // 1, 3 of a word are the pairs (i, i + 8) the multi-row kernels' operands take (nh_x_fp8.metal)
-        for (int64_t i = 0; i < K / 16; ++i)
-          for (int m = 0; m < 4; ++m) {
-            const uint8_t* g = b + i * 16;
-            uint8_t* o = qr + i * 16 + 4 * m;
-            o[0] = g[2 * m];
-            o[1] = g[2 * m + 1];
-            o[2] = g[2 * m + 8];
-            o[3] = g[2 * m + 9];
-          }
+        for (int64_t i = 0; i < K / 16; ++i) {
+          const uint8x16_t order = {0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15};
+          vst1q_u8(qr + i * 16, vqtbl1q_u8(vld1q_u8(b + i * 16), order));
+        }
         break;
       case NhFmt::BF16:
       case NhFmt::F32: memcpy(qr, b, qb); break;
