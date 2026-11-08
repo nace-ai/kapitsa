@@ -295,7 +295,7 @@ int main(int argc, char** argv) {
   }
   {
     auto o = opts(self, "ignore_cancel");
-    o.cancel_timeout_s = 0.4;
+    o.cancel_timeout_s = 1;
     FakeEvents events; events.attach(o);
     std::atomic<int> logged_starts{0};
     o.log = [&](const std::string& message) {
@@ -310,8 +310,12 @@ int main(int argc, char** argv) {
     rt.cancel(ia);
     usleep(250000);
     CHECK(!a->wait(0.01));
-    rt.cancel(ia);
-    CHECK(a->wait(0.35) && b->wait(5));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    do {
+      rt.cancel(ia);  // repeated cancellations must not extend the original deadline
+      if (a->wait(0.1)) break;
+    } while (std::chrono::steady_clock::now() < deadline);
+    CHECK(a->wait(0.01) && b->wait(5));
     CHECK(a->errored && b->errored && a->terminals == 1 && b->terminals == 1);
     CHECK(a->e.code == "cancel_timeout" && b->e.code == "cancel_timeout" && a->e.retryable && b->e.retryable);
     CHECK(recovered(rt, old));

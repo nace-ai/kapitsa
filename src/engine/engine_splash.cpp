@@ -295,6 +295,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   } catch (const splash::EngineUnhealthy& ex) {
     res.finish_reason = "error";
     res.engine_down = true;  // a 503 before the stream starts while the engine is unavailable
+    res.engine_restarting = ex.restarting;
     res.error = engine_down_message(ex.what(), ex.restarting);
     return res;
   } catch (const splash::ProtocolError& ex) {
@@ -438,6 +439,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
       res.error = err.code.empty() ? err.message : err.code + ": " + err.message;
       if (err.failure == splash::FailureClass::kEngineUnhealthy) {  // the child died under the request (Runtime::fail_all)
         res.engine_down = true;
+        res.engine_restarting = err.retryable;
         res.error = engine_down_message(res.error, err.retryable);
       }
     }

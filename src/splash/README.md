@@ -52,7 +52,8 @@ range (the error names the field). A request that finds the engine at its `max_c
 `Retry-After` (queueing past the pool with `--queue-size` is #756). An unexpected child exit leaves every
 route (`/v1/chat/completions`, `/v1/messages`, `/v1/responses`) at 503 `the engine has exited (...); restart kapitsa serve`,
 without `Retry-After`. A cancellation timeout instead fails old work once and starts a fresh child. During recovery,
-requests get 503 `the engine timed out waiting for cancellation; restarting`; routes recover after the child's READY.
+requests get 503 `the engine timed out waiting for cancellation; restarting` with `Retry-After: 1`; routes recover after
+the child's READY.
 On all three routes an omitted temperature, top_p or
 top_k is Splash's default (1.0, 0.95, 20), and a seed follows Splash's `frontend.py`: absent or -1 is random, any other
 integer is used as its 64 bits. Kapitsa's own model folders and Splash's resolved model are different artifacts (a safetensors
@@ -258,8 +259,8 @@ refused with the error type `invalid_request_error` and the engine's reason as t
 at its concurrent-request limit is a 503 with `Retry-After` and a reason naming that limit. An unexpected child exit
 leaves `/v1/chat/completions`, `/v1/messages` and `/v1/responses` at 503 without `Retry-After`:
 `the engine has exited (...); restart kapitsa serve`. A `cancel_timeout` fails held requests once without replay and
-starts a fresh child. Requests during recovery get 503 `the engine timed out waiting for cancellation; restarting`;
-all three routes recover once that child sends READY.
+starts a fresh child. Requests during recovery get 503 `the engine timed out waiting for cancellation; restarting`
+with `Retry-After: 1`; all three routes recover once that child sends READY.
 
 Splash's sampler is its own frontend's: a request that leaves out temperature, top_p or top_k gets Splash's default —
 1.0, 0.95 and 20 — on all three routes, rather than the per-model ones Kapitsa's own engine applies. Sampling fields Kapitsa's own

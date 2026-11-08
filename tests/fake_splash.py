@@ -12,6 +12,7 @@ args = sys.argv[1:]
 assert args[0] == "serve-native"
 reply, log, slow, mask_words, mask_log = [], None, 0.0, 0, None
 ignore_first_cancel, first_launch, fatal_code = False, True, None
+replacement_ready_file = None
 i = 4
 while i < len(args):
     if args[i] == "--reply": reply = [int(x) for x in args[i + 1].split(",")]
@@ -20,6 +21,7 @@ while i < len(args):
     elif args[i] == "--mask-words": mask_words = int(args[i + 1])
     elif args[i] == "--mask-log": mask_log = args[i + 1]
     elif args[i] == "--fatal-code": fatal_code = args[i + 1]
+    elif args[i] == "--replacement-ready-file": replacement_ready_file = args[i + 1]
     elif args[i] == "--ignore-first-cancel": ignore_first_cancel = bool(int(args[i + 1]))
     elif args[i] == "--pid-file":
         first_launch = not os.path.exists(args[i + 1])
@@ -42,6 +44,8 @@ def read(n):
 def done(rid, reason, n):
     frame(0x0104, struct.pack("<QBBIIQQQIIIII", rid, reason, 0, 0, n, 1000, 2000, 3000, 0, 0, 0, 0, 0))
 
+if not first_launch and replacement_ready_file:
+    while not os.path.isfile(replacement_ready_file): time.sleep(0.01)
 frame(0x0100, struct.pack("<IIB", 2, 4096, 0))
 cancelled = set()
 pending = []
