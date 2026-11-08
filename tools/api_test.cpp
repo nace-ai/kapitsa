@@ -2574,6 +2574,33 @@ static void ollama_unit() {
     check(j["prompt_eval_count"] == 100 && j["eval_count"] == 50,
           "ollama: eval stats token counts correct");
   }
+  // ollama_chat_request: assistant tool_calls arguments stay as object, not string
+  {
+    json body{{"model", "m"}, {"messages", json::array({
+      {{"role", "user"}, {"content", "Weather in Paris?"}},
+      {{"role", "assistant"}, {"tool_calls", json::array({{{"function", {{"name", "get_weather"}, {"arguments", {{"city", "Paris"}}}}}}})}, {"content", ""}},
+      {{"role", "tool"}, {"content", "18C"}}
+    })}};
+    auto r = ollama_chat_request(body, ChatRequest{});
+    check(r.messages.size() == 3, "ollama: tool_calls round-trip has 3 messages");
+    check(r.messages[1].contains("tool_calls") && r.messages[1]["tool_calls"].is_array(),
+          "ollama: assistant message has tool_calls array");
+    auto& args = r.messages[1]["tool_calls"][0]["function"]["arguments"];
+    check(args.is_object(), "ollama: tool_calls arguments is an object, not a string");
+    check(args.value("city", "") == "Paris", "ollama: tool_calls arguments.city == Paris");
+  }
+  // ollama_chat_request: string arguments parsed into object (client sends stringified JSON)
+  {
+    json body{{"model", "m"}, {"messages", json::array({
+      {{"role", "user"}, {"content", "x"}},
+      {{"role", "assistant"}, {"tool_calls", json::array({{{"function", {{"name", "f"}, {"arguments", "{\"n\":42}"}}}}})}, {"content", ""}},
+      {{"role", "tool"}, {"content", "ok"}}
+    })}};
+    auto r = ollama_chat_request(body, ChatRequest{});
+    auto& args = r.messages[1]["tool_calls"][0]["function"]["arguments"];
+    check(args.is_object(), "ollama: string arguments parsed into object");
+    check(args["n"] == 42, "ollama: parsed string arguments have correct value");
+  }
 }
 
 int main(int argc, char** argv) {

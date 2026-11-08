@@ -2,6 +2,7 @@
 // Streams newline-delimited JSON (each line: one JSON object + '\n'), not SSE.
 #include "api/ollama.h"
 #include "api/chat_completions.h"
+#include "engine/tool_args.h"
 
 #include <climits>
 #include <cmath>
@@ -126,9 +127,24 @@ static ojson normalize_ollama_messages(const ojson& messages) {
       ojson tcs = ojson::array();
       for (const auto& tc : m["tool_calls"]) {
         if (tc.contains("function") && tc["function"].is_object()) {
+          // Ollama's wire format sends arguments as an object.  Keep it as is;
+          // if a client sends a string, parse it (as normalize_messages does).
+          ojson args = ojson::object();
+          std::string raw_text;
+          if (tc["function"].contains("arguments")) {
+            const auto& a = tc["function"]["arguments"];
+            if (a.is_object()) {
+              args = a;
+            } else if (a.is_string()) {
+              raw_text = a.get<std::string>();
+              try { args = ojson::parse(raw_text); } catch (...) {}
+            }
+          }
           ojson call{{"id", new_id("call_")}, {"type", "function"},
                      {"function", {{"name", tc["function"].value("name", "")},
-                                   {"arguments", tc["function"].contains("arguments") ? tc["function"]["arguments"].dump() : "{}"}}}};
+                                   {"arguments", args}}}};
+          if (!raw_text.empty())
+            tool_args::note_raw(call["function"], raw_text);
           tcs.push_back(call);
         }
       }
