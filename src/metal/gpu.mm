@@ -589,6 +589,9 @@ static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, b
   NSMutableDictionary* macros = [NSMutableDictionary new];
   if (wf) macros[@"NI_WF_INST"] = @1;
   if (kv_i8()) macros[@"NI_KV_I8"] = @1;
+  // Shader validation doubles static threadgroup storage; tensor attention shares scratch only in that mode.
+  const char* validation = getenv("MTL_SHADER_VALIDATION");
+  if (metal4 && validation && atoi(validation) != 0) macros[@"NI_QATTN_T_VALIDATION_SCRATCH"] = @1;
   if (macros.count) o.preprocessorMacros = macros;
   NSError* err = nil;
   const double t0 = now_ms();
