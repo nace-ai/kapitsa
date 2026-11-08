@@ -1,52 +1,61 @@
-# Kapitsa as Xcode 26's local model provider
+# Kapitsa as Xcode 26's chat model
 
-Xcode 26 can use a local model for its coding assistant. Kapitsa serves the OpenAI-compatible API that Xcode expects.
+Xcode 26 can use Kapitsa as a chat model provider for code questions.
 
-> **Not tested in Xcode's UI.** The steps below are from Xcode 26.6's framework strings (`IDEIntelligenceChat.framework`). The API endpoint was verified: `kapitsa serve` responds to `/v1/models` and `/v1/chat/completions` with tool-call support. The Xcode Intelligence settings UI has not been walked through on this Mac.
+## Setup
 
-## Requirements
+Tested on Xcode 26.6 (build 17F113), macOS 26.5. Kapitsa registered as a Locally Hosted chat provider and appeared in the Chat section alongside ChatGPT and Claude.
 
-- macOS 15.6 or later (Xcode 26 runs on macOS 15.6+)
-- Xcode 26 beta or later
-- Kapitsa installed: `brew install nace-ai/tap/kapitsa`
-
-## Start the server
+1. Start Kapitsa:
 
 ```bash
+brew install nace-ai/tap/kapitsa
 kapitsa serve --model 35b
 ```
 
-This starts Kapitsa on `http://127.0.0.1:8000` with the Qwen3.6-35B-A3B model. On a 16 GB Mac, use `--model 9b` or `--model 4b`.
+2. Open **Xcode → Settings → Intelligence**. Scroll to the **Chat** section at the bottom.
 
-## Point Xcode at Kapitsa
+3. Click **Add a Chat Provider...**. This opens the "Add a Model Provider" dialog.
 
-1. Open **Xcode → Settings → Intelligence**.
-2. Click **Add a Model Provider**.
-3. Choose **Locally Hosted**.
-4. Enter port `8000` (Kapitsa's default).
-5. Xcode works best with models that support tool calling. Leave that toggle on: Kapitsa's OpenAI API supports tool calls.
-6. Close Settings. Xcode now routes coding assistant requests through Kapitsa.
+4. Select **Locally Hosted**. Enter port `8000` and a description (e.g. "Kapitsa"). Click **Add**.
 
-## Which models work best
+Kapitsa appears in the Chat section as "Kapitsa" with a "localhost" label. Xcode adds `/v1` to the URL itself, so do not include it.
+
+## What the Intelligence settings show
+
+The Intelligence pane has four sections, top to bottom:
+
+- **Coding Intelligence**: header with a privacy link.
+- **Agents**: Claude Agent, Codex, Gemini (built-in, with "Get" buttons). "Add an Agent..." registers a local ACP (Agent Client Protocol) executable.
+- **Model Context Protocol**: toggle for external agents to use Xcode tools via MCP.
+- **Chat**: ChatGPT in Xcode, Claude Sonnet & Opus, and any custom providers added through "Add a Chat Provider...". The dialog has two tabs: "Internet Hosted" (URL, API Key, API Key Header, Description) and "Locally Hosted" (port, Description).
+
+## Which model to serve
 
 | Mac RAM | Model | Command |
 |---------|-------|---------|
 | 16 GB | Qwen3.5-4B | `kapitsa serve --model 4b` |
 | 24 GB | Qwen3.5-9B | `kapitsa serve --model 9b` |
-| 32-48 GB | Qwen3.6-35B-A3B | `kapitsa serve --model 35b` |
-| 48 GB | Qwen3.8-27B | `kapitsa serve --model 27b` |
-| 64+ GB | Flash-Next 180B | `kapitsa serve --model flash-next` |
+| 32-48 GB | Qwen3.6-35B-A3B (quicker) | `kapitsa serve --model 35b` |
+| 48 GB | Qwen3.8-27B (stronger reasoning) | `kapitsa serve --model 27b` |
+| 128+ GB | Flash-Next 180B | `kapitsa serve --model flash-next` |
 
-The 35B-A3B is the best fit for code completion: it is a mixture-of-experts model with fast decode (351 tok/s on an M5 Max) and good code quality. The 27B is denser and better at reasoning but slower to write.
+The 35B-A3B is a mixture-of-experts model with fast decode (351 tok/s on an M5 Max). The 27B is denser and the strongest coder of the three Qwen sizes.
 
-For code completion latency, a faster model with a drafter (the 35B, 9B, 4B) gives quicker suggestions than a dense model without one.
+## Using a coding agent from the terminal
 
-## Verify
+`kapitsa opencode` starts opencode on a local Kapitsa model alongside Xcode through the terminal:
 
-After starting the server, confirm Kapitsa is reachable:
+```bash
+kapitsa opencode --model 35b
+```
+
+`kapitsa claude` and `kapitsa codex` do the same for Claude Code and Codex.
+
+## Verify the server
 
 ```bash
 curl http://127.0.0.1:8000/v1/models
 ```
 
-This returns the loaded model. If Xcode lists the model and answers coding questions through it, the setup works.
+This returns the loaded model. If Xcode lists "Kapitsa" in its Chat section and answers coding questions through it, the setup works.
