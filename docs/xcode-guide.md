@@ -21,7 +21,7 @@ kapitsa serve --model 35b
 
 Kapitsa appears in the Chat section as "Kapitsa" with a "localhost" label. The dialog asks for a port only.
 
-5. Open the coding assistant (**Editor → Show Coding Tools**, or the sparkle button in the toolbar). In the conversation menu (the compose button), choose **Chat → Kapitsa** and pick the model you started. The prompt box then reads "Chat with <model>".
+5. Open the coding assistant (**Editor → Show Coding Tools**, or the sparkle button in the toolbar). In the conversation menu (the compose button), choose **Chat → Kapitsa** and pick the model you started. The prompt box then reads "Chat with `<model>`".
 
 ## What the Intelligence settings show
 
