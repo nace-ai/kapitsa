@@ -219,6 +219,7 @@ void NgramTable::open(const std::vector<Part>& parts, Fmt fmt, int dim, int bits
 }
 
 void NgramTable::open_gguf(const std::string& file, const std::string& name, int dim) {
+  std::string tensor_file;
   uint64_t off = 0, rows = 0;
   {
     std::unique_ptr<gguf::File> g;
@@ -239,12 +240,13 @@ void NgramTable::open_gguf(const std::string& file, const std::string& name, int
     row_bytes_ = size_t(dim / int(be)) * bb;
     off = t->offset;
     rows = t->ne[1];
+    tensor_file = g->parts()[size_t(t->part)];
   }
   fmt_ = Fmt::Gguf;
   dim_ = dim;
   group_row_bytes_ = 0;
-  const auto [base, size] = map_file(file);
-  if (off + rows * row_bytes_ > size) fatal("n-gram table: %s ends before its tensor %s", file.c_str(), name.c_str());
+  const auto [base, size] = map_file(tensor_file);
+  if (off + rows * row_bytes_ > size) fatal("n-gram table: %s ends before its tensor %s", tensor_file.c_str(), name.c_str());
   Map m;
   m.w = base + off;
   m.rows = int64_t(rows);

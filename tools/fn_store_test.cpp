@@ -1351,6 +1351,111 @@ void case_ngram_table(const std::string& dir, std::vector<std::string>& files) {
 }
 
 
+// A split tensor's offset belongs to its containing part, whichever part opened the model.
+void case_ngram_split_gguf(const std::string& dir, std::vector<std::string>& files) {
+  constexpr int dim = 160, rows = 7;
+  const int f0 = g_fail;
+  const std::string name = "per_layer_token_embd.weight";
+  std::mt19937 rng(29);
+  FatalRecovery recover;
+  size_t cases = 0;
+  for (uint32_t type : {gguf::kIQ4_NL, gguf::kQ8_0}) {
+    uint32_t be = 0, bb = 0;
+    gguf::type_block(type, &be, &bb);
+    const size_t rb = dim / be * bb;
+    std::vector<uint8_t> data(rb * rows);
+    for (auto& b : data) b = uint8_t(rng());
+    for (size_t o = 0; o < data.size(); o += bb) {
+      const _Float16 d = _Float16(0.125);
+      memcpy(&data[o], &d, 2);
+    }
+    std::vector<float> oracle(dim);
+    gguf::dequantize(type, data.data(), oracle.data(), dim);
+    CHECK(std::any_of(oracle.begin(), oracle.end(), [](float v) { return v != 0.0f; }),
+          "split GGUF %s: fixture differs from zero-filled other part", gguf::type_name(type).c_str());
+    for (int target_part : {0, 1})
+      for (bool shorter : {false, true}) {
+        std::vector<uint8_t> image[2];
+        std::string paths[2];
+        for (int part = 0; part < 2; ++part) {
+          const bool target = part == target_part;
+          auto& h = image[part];
+          auto put = [&](const void* p, size_t n) {
+            h.insert(h.end(), static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n);
+          };
+          auto u32 = [&](uint32_t v) { put(&v, 4); };
+          auto u64 = [&](uint64_t v) { put(&v, 8); };
+          auto str = [&](const std::string& v) { u64(v.size()), put(v.data(), v.size()); };
+          put("GGUF", 4), u32(3), u64(target ? 2 : 1), u64(5);
+          str("general.architecture"), u32(8), str("qwen4exp");
+          str("general.alignment"), u32(4), u32(target ? 64 : 32);
+          str("split.count"), u32(4), u32(2);
+          str("split.no"), u32(4), u32(uint32_t(part));
+          str("split.tensors.count"), u32(10), u64(3);
+          str("padding." + std::to_string(part)), u32(1), u64(16), u32(gguf::kF32), u64(0);
+          if (target) str(name), u32(2), u64(dim), u64(rows), u32(type), u64(128);
+          const size_t alignment = target ? 64 : 32;
+          h.resize((h.size() + alignment - 1) / alignment * alignment, 0);
+          h.resize(h.size() + (target ? 128 : 64), 0);
+          if (target) h.insert(h.end(), data.begin(), data.end());
+          char suffix[96];
+          snprintf(suffix, sizeof suffix, "/ple_split_%u_%d_%d-%05d-of-00002.gguf", type, target_part,
+                   int(shorter), part + 1);
+          paths[part] = dir + suffix;
+          files.push_back(paths[part]);
+        }
+        // The long other part contains valid but wrong zero blocks at the target's absolute offset.
+        // The short other part is also valid: it ends after its own unrelated tensor.
+        if (!shorter) image[1 - target_part].resize(image[target_part].size(), 0);
+        for (int part = 0; part < 2; ++part) {
+          std::ofstream f(paths[part], std::ios::binary);
+          f.write(reinterpret_cast<const char*>(image[part].data()), image[part].size());
+        }
+        for (int entry_part : {0, 1}) {
+          ++cases;
+          gguf::File g(paths[entry_part]);
+          const gguf::Tensor* tensor = g.find(name);
+          const gguf::Tensor* padding = g.find("padding." + std::to_string(1 - target_part));
+          CHECK(tensor && padding && tensor->part == target_part && tensor->offset != padding->offset &&
+                    (shorter ? image[1 - target_part].size() < tensor->offset + data.size()
+                             : image[1 - target_part].size() == image[target_part].size()),
+                "split GGUF fixture %zu: distinct offsets and %s other part", cases, shorter ? "short" : "same-size");
+          if (!tensor) continue;
+          std::vector<uint8_t> raw(data.size());
+          g.read(*tensor, 0, raw.data(), raw.size());
+          CHECK(raw == data, "split GGUF fixture %zu: part-aware GGUF reader matches raw blocks", cases);
+          NgramTable t;
+          try {
+            t.open_gguf(paths[entry_part], name, dim);
+          } catch (const FatalError& e) {
+            CHECK(false, "split GGUF %s target part %d opened via %d (%s other): %s", gguf::type_name(type).c_str(),
+                  target_part, entry_part, shorter ? "short" : "same-size", e.what());
+            continue;
+          }
+          CHECK(t.rows() == rows && t.dim() == dim && t.file_bytes() == image[target_part].size(),
+                "split GGUF fixture %zu: shape and containing-part mapping size", cases);
+          std::vector<float> got(dim), want(dim), all(size_t(rows + 2) * dim);
+          int bad = 0;
+          for (int r = 0; r < rows; ++r) {
+            t.row(r, got.data());
+            gguf::dequantize(type, data.data() + size_t(r) * rb, want.data(), dim);
+            bad += memcmp(got.data(), want.data(), dim * sizeof(float)) != 0;
+          }
+          const int64_t ids[rows + 2] = {6, 0, 3, 3, 1, 5, 2, 6, 4};
+          t.gather(ids, rows + 2, 1, all.data());
+          for (int i = 0; i < rows + 2; ++i) {
+            gguf::dequantize(type, data.data() + size_t(ids[i]) * rb, want.data(), dim);
+            bad += memcmp(all.data() + size_t(i) * dim, want.data(), dim * sizeof(float)) != 0;
+          }
+          CHECK(!bad, "split GGUF %s target part %d opened via %d (%s other): %d row/gather mismatches",
+                gguf::type_name(type).c_str(), target_part, entry_part, shorter ? "short" : "same-size", bad);
+        }
+      }
+  }
+  printf("n-gram split GGUF: %zu format/part/entry/size cases: %s\n", cases, g_fail > f0 ? "FAILED" : "ok");
+}
+
+
 // A truncated PLE table must fail admission, before a mapped row is accessed.
 void case_ngram_bounds(const std::string& dir, std::vector<std::string>& files) {
   using nlohmann::json;
@@ -2121,6 +2226,7 @@ int main(int argc, char** argv) {
       case_group_plan();
       case_group_pin();
       case_ngram_table(dir, p.files);
+      case_ngram_split_gguf(dir, p.files);
       case_ngram_bounds(dir, p.files);
       case_ngram_affine_rows(dir, p.files);
     }
