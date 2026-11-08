@@ -1,0 +1,259 @@
+{
+  "format": "Explicitly privacy-filtered derived summary, not raw execution logs.",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "setup": {
+    "chip": "M4 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2776033248,
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "leg_order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "source": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+      "rc": 0,
+      "started_at": "2026-11-08T20:13:31.498392+00:00",
+      "finished_at": "2026-11-08T20:14:30.638211+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 130.59,
+          "runs_tps": [
+            128.31,
+            130.59,
+            135.59
+          ],
+          "median_accepted_draft_tps": 82.64,
+          "median_accepted_draft_share": 0.6367
+        },
+        "decode_greedy": {
+          "median_tps": 142.03,
+          "runs_tps": [
+            131.59,
+            153.49,
+            142.03
+          ],
+          "median_accepted_draft_tps": 94.87,
+          "median_accepted_draft_share": 0.668
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 2.2971,
+            "tps": 1798.8,
+            "followup_s": [
+              0.0596,
+              0.0685,
+              0.0557
+            ],
+            "followup_median_s": 0.0596,
+            "followup_suffix_tps": 369.4
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": true
+    },
+    "B1": {
+      "source": "9493a437a823343a2b257767c45eae9a98e7827c",
+      "rc": 0,
+      "started_at": "2026-11-08T20:14:30.643793+00:00",
+      "finished_at": "2026-11-08T20:15:27.190563+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 140.44,
+          "runs_tps": [
+            140.66,
+            140.44,
+            126.36
+          ],
+          "median_accepted_draft_tps": 92.71,
+          "median_accepted_draft_share": 0.6602
+        },
+        "decode_greedy": {
+          "median_tps": 153.54,
+          "runs_tps": [
+            153.69,
+            153.54,
+            140.79
+          ],
+          "median_accepted_draft_tps": 106.16,
+          "median_accepted_draft_share": 0.6914
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4130,
+            "ttft_s": 2.3027,
+            "tps": 1793.5,
+            "followup_s": [
+              0.058,
+              0.0703,
+              0.0569
+            ],
+            "followup_median_s": 0.058,
+            "followup_suffix_tps": 379.3
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": true
+    },
+    "A2": {
+      "source": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+      "rc": 0,
+      "started_at": "2026-11-08T20:15:27.195632+00:00",
+      "finished_at": "2026-11-08T20:16:24.141491+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 128.51,
+          "runs_tps": [
+            143.41,
+            128.51,
+            123.4
+          ],
+          "median_accepted_draft_tps": 82.07,
+          "median_accepted_draft_share": 0.6387
+        },
+        "decode_greedy": {
+          "median_tps": 140.94,
+          "runs_tps": [
+            140.88,
+            140.94,
+            153.43
+          ],
+          "median_accepted_draft_tps": 93.87,
+          "median_accepted_draft_share": 0.666
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 2.2997,
+            "tps": 1797.2,
+            "followup_s": [
+              0.0509,
+              0.0684,
+              0.0584
+            ],
+            "followup_median_s": 0.0584,
+            "followup_suffix_tps": 394.7
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": true
+    },
+    "B2": {
+      "source": "9493a437a823343a2b257767c45eae9a98e7827c",
+      "rc": 0,
+      "started_at": "2026-11-08T20:16:24.148932+00:00",
+      "finished_at": "2026-11-08T20:17:21.227004+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "flags": [
+        "decode_greedy: runtime environment qualification gate failed (private detail omitted)"
+      ],
+      "invalid": [],
+      "results": {
+        "decode": {
+          "median_tps": 127.98,
+          "runs_tps": [
+            127.98,
+            136.7,
+            126.1
+          ],
+          "median_accepted_draft_tps": 81.49,
+          "median_accepted_draft_share": 0.6367
+        },
+        "decode_greedy": {
+          "median_tps": 143.65,
+          "runs_tps": [
+            154.41,
+            143.65,
+            139.58
+          ],
+          "median_accepted_draft_tps": 96.23,
+          "median_accepted_draft_share": 0.6699
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 2.3004,
+            "tps": 1796.6,
+            "followup_s": [
+              0.0645,
+              0.0685,
+              0.0578
+            ],
+            "followup_median_s": 0.0645,
+            "followup_suffix_tps": 345.8
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "greedy_timing_qualified": false
+    }
+  },
+  "method": "kapitsa bench --quick native servers, original randomized corpus requests; separate from matched fixed-request experiment.",
+  "limit": "Original M4 B2 greedy timing is unqualified because an environment gate failed. Its recorded timing and failure are preserved; the private usage detail is omitted. Other native legs have no flags or invalid entries."
+}
