@@ -544,6 +544,23 @@ void decode4(uint32_t t, const uint8_t* src, uint8_t* codes, float* scale, float
 }
 
 void pack_codes(const uint8_t* codes, size_t n, int bits, uint32_t* words) {
+  if (bits == 5 && n % 32 == 0) {
+    const uintptr_t src = reinterpret_cast<uintptr_t>(codes), dst = reinterpret_cast<uintptr_t>(words);
+    const bool overlap = dst >= src ? dst - src < n : src - dst < n / 32 * 20;
+    if (!overlap) {
+      // A complete 160-bit tile writes each output word once, without clearing the row first.
+      for (size_t j = 0; j < n; j += 32, words += 5) {
+        const auto q = [&](size_t k) { return uint32_t(codes[j + k] & 31); };
+        words[0] = q(0) | q(1) << 5 | q(2) << 10 | q(3) << 15 | q(4) << 20 | q(5) << 25 | q(6) << 30;
+        words[1] = q(6) >> 2 | q(7) << 3 | q(8) << 8 | q(9) << 13 | q(10) << 18 | q(11) << 23 | q(12) << 28;
+        words[2] = q(12) >> 4 | q(13) << 1 | q(14) << 6 | q(15) << 11 | q(16) << 16 | q(17) << 21 |
+                   q(18) << 26 | q(19) << 31;
+        words[3] = q(19) >> 1 | q(20) << 4 | q(21) << 9 | q(22) << 14 | q(23) << 19 | q(24) << 24 | q(25) << 29;
+        words[4] = q(25) >> 3 | q(26) << 2 | q(27) << 7 | q(28) << 12 | q(29) << 17 | q(30) << 22 | q(31) << 27;
+      }
+      return;
+    }
+  }
   if (bits == 8) {
     memcpy(words, codes, n);  // byte j of the little-endian stream is code j
     return;
