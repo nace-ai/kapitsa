@@ -1,10 +1,12 @@
 # Kapitsa as Xcode 26's local model provider
 
-Xcode 26 can use a local model for its coding assistant. Kapitsa serves the OpenAI-compatible completions API that Xcode expects.
+Xcode 26 can use a local model for its coding assistant. Kapitsa serves the OpenAI-compatible API that Xcode expects.
+
+> **Not tested in Xcode's UI.** The steps below are from Xcode 26.6's framework strings (`IDEIntelligenceChat.framework`). The API endpoint was verified: `kapitsa serve` responds to `/v1/models` and `/v1/chat/completions` with tool-call support. The Xcode Intelligence settings UI has not been walked through on this Mac.
 
 ## Requirements
 
-- macOS 26 (Tahoe) or later
+- macOS 15.6 or later (Xcode 26 runs on macOS 15.6+)
 - Xcode 26 beta or later
 - Kapitsa installed: `brew install nace-ai/tap/kapitsa`
 
@@ -14,14 +16,14 @@ Xcode 26 can use a local model for its coding assistant. Kapitsa serves the Open
 kapitsa serve --model 35b
 ```
 
-This starts Kapitsa on `http://127.0.0.1:8000/v1` with the Qwen3.6-35B-A3B model. On a 16 GB Mac, use `--model 9b` or `--model 4b`.
+This starts Kapitsa on `http://127.0.0.1:8000` with the Qwen3.6-35B-A3B model. On a 16 GB Mac, use `--model 9b` or `--model 4b`.
 
 ## Point Xcode at Kapitsa
 
 1. Open **Xcode → Settings → Intelligence**.
 2. Click **Add a Model Provider**.
-3. Choose **Local model provider**.
-4. Set the server URL to `http://127.0.0.1:8000/v1`.
+3. Choose **Locally Hosted**.
+4. Enter port `8000` (Kapitsa's default).
 5. Xcode works best with models that support tool calling. Leave that toggle on: Kapitsa's OpenAI API supports tool calls.
 6. Close Settings. Xcode now routes coding assistant requests through Kapitsa.
 
@@ -41,7 +43,7 @@ For code completion latency, a faster model with a drafter (the 35B, 9B, 4B) giv
 
 ## Verify
 
-After starting the server, confirm Kapitsa is reachable from Xcode's perspective:
+After starting the server, confirm Kapitsa is reachable:
 
 ```bash
 curl http://127.0.0.1:8000/v1/models

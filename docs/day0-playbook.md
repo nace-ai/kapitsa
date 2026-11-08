@@ -6,37 +6,39 @@ Internal playbook for adding a new Qwen or Nemotron release to Kapitsa within 24
 
 ### MLX affine (Qwen, standard path)
 
-If the release ships MLX safetensors (most Qwen releases via `mlx-community` or `lmstudio-community`):
+If the release ships an MLX safetensors repo (`mlx-community` or `lmstudio-community`), add it to the catalog directly (step 3). The catalog entry points at the HF repo; `kapitsa pull` downloads it.
+
+For a GGUF (from LM Studio, Ollama or a Hugging Face GGUF repo), convert once:
 
 ```bash
-# Import directly from the HF repo
-kapitsa import <hf-org>/<ModelName>-MLX-4bit --name <short-name>
-
-# Or from a local directory / GGUF
-kapitsa import /path/to/model-dir --name <short-name>
-kapitsa import /path/to/model.gguf --name <short-name>
+kapitsa import /path/to/Model-Q4_K.gguf --name <short-name>
+kapitsa import /path/to/Model-Q4_K.gguf --name <short-name> --mtp /path/to/mtp-head.gguf
+kapitsa import /path/to/Model-Q4_K.gguf --dry-run   # show formats and size without writing
 ```
+
+`kapitsa import` takes a `.gguf` file (not an HF repo). `--name` sets the folder name in `~/.cache/kapitsa/models/`.
 
 ### Flash-Next pack conversion
 
-For a Flash-Next model (hyper-connections, n-gram table, sparse attention):
+For a Flash-Next model (hyper-connections, n-gram table, sparse attention), three stages:
 
 ```bash
-python3 tools/convert_qwen4_exp.py \
-  --input /path/to/bf16-checkpoint \
-  --output /path/to/output-dir \
-  --bits 4 --group 64
+# 1. Stream experts from HF and quantize (the quality eval's --stage writes them)
+python3 bench/quality/eval_qwen4_exp.py stream ... --stage /tmp/stage --dense /tmp/dense
+
+# 2. Build the n-gram table
+python3 tools/convert_qwen4_exp.py table --out /path/to/pack --bits 4 --group 32
+
+# 3. Finalize the pack
+python3 tools/convert_qwen4_exp.py finalize --stage /tmp/stage --dense /tmp/dense \
+  --out /path/to/pack --recipe '4,router=8,indexer=8,embed=8'
 ```
 
 This produces the MLX affine pack with the MTP head in `mtp.safetensors` and the n-gram table in `ple.safetensors`.
 
 ### Nemotron (NVFP4 / FP8)
 
-NVIDIA ships NVFP4 and FP8 checkpoints directly. Import the safetensors:
-
-```bash
-kapitsa import nvidia/<ModelName>-NVFP4 --name <short-name>
-```
+NVIDIA ships NVFP4 and FP8 checkpoints as safetensors repos. Add them to the catalog (step 3) pointing at the HF repo directly; no conversion needed.
 
 ## 2. Attach or train the drafter
 
@@ -49,15 +51,15 @@ Check if `incoai` has a DFlash2 drafter for the new model on Hugging Face:
 curl -s "https://huggingface.co/api/models?search=incoai+DFlash2+<model-name>" | python3 -m json.tool
 ```
 
-If a drafter exists, add it to `src/hub/catalog.cpp` as a `CatalogCompanion` entry:
+If a drafter exists, add it to `src/hub/catalog.cpp` as a `Companion` entry (defined in `src/hub/hub.h`):
 
 ```cpp
-static CatalogCompanion dflash_new() {
+static Companion dflash_new() {
     return {.kind = "dflash2",
             .repo = "incoai/<ModelName>-DFlash2",
             .revision = "<commit-sha>",
             .files = {"config.json", "model.safetensors"},
-            .size = <bytes>};
+            .subdir = "dflash2"};
 }
 ```
 
@@ -170,7 +172,8 @@ Include a comparison against other engines if `kapitsa bench compare` data is av
 | 1 | Pack converted, import tested. |
 | 2 | Catalog entry added, drafter attached (if available). |
 | 3 | Benchmark run on at least one Mac. |
-| 4 | PR opened with catalog + benchmarks. |
+| 4 | Output check: `build/logit_dump` old vs new, `tools/logit_compare.py` gated at 2x the floor. |
+| 5 | PR opened with catalog + benchmarks + logit evidence. |
 | 6 | PR merged after review. |
 | 8 | `kapitsa update` picks up the new model. |
 | 24 | r/LocalLLaMA post with final numbers. |

@@ -99,8 +99,8 @@ a:hover { text-decoration: underline; }
   <select class="ram-select" id="ramPicker" onchange="updatePicker()">
     <option value="8">8 GB</option>
     <option value="16">16 GB</option>
-    <option value="24" selected>24 GB</option>
-    <option value="32">32 GB</option>
+    <option value="24">24 GB</option>
+    <option value="32" selected>32 GB</option>
     <option value="36">36 GB</option>
     <option value="48">48 GB</option>
     <option value="64">64 GB</option>
@@ -125,16 +125,17 @@ a:hover { text-decoration: underline; }
 </div>
 
 <script>
+// From the README's Supported models table: the most precise variant that starts on each Mac size.
 var models = [
-  { ram: 8,   name: "Qwen3.5-4B (4-bit)", about: "Small and quick, fits tight memory", cmd: "kapitsa serve --model 4b", dl: "4.6 GB" },
-  { ram: 16,  name: "Qwen3.6-35B-A3B (2-bit)", about: "35B MoE squeezed into 16 GB with IQ2 quantization", cmd: "kapitsa serve --model 35b:16gb", dl: "10.8 GB" },
-  { ram: 24,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with fast decode and good code quality", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
-  { ram: 32,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with room for full context", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
+  { ram: 8,   name: "Qwen3.5-4B (BF16)", about: "Small model, fits in 8 GB", cmd: "kapitsa serve --model 4b", dl: "10.6 GB" },
+  { ram: 16,  name: "Qwen3.6-35B-A3B (2-bit)", about: "35B MoE with IQ2 quantization, tight fit", cmd: "kapitsa serve --model 35b:16gb", dl: "10.8 GB" },
+  { ram: 24,  name: "Qwen3.6-35B-A3B (2-bit)", about: "35B MoE with IQ2 quantization, or the 27B at 4-bit (tight)", cmd: "kapitsa serve --model 35b:16gb", dl: "10.8 GB" },
+  { ram: 32,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with fast decode and good code quality", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
   { ram: 36,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with room for full context", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
-  { ram: 48,  name: "Qwen3.6-35B-A3B (6-bit)", about: "Higher precision for better quality, or the dense 27B for stronger reasoning", cmd: "kapitsa serve --model 35b:6bit", dl: "30.7 GB" },
-  { ram: 64,  name: "Flash-Next 180B (2-bit EXL3)", about: "180B MoE on 64 GB with Sushi's trellis quantization", cmd: "kapitsa serve --model flash-next:64gb", dl: "69.6 GB" },
-  { ram: 96,  name: "Flash-Next 180B (4-bit)", about: "180B MoE at full 4-bit precision, or Super-VL 120B for vision", cmd: "kapitsa serve --model flash-next", dl: "105.9 GB" },
-  { ram: 128, name: "Flash-Next 180B (4-bit)", about: "180B MoE with full context and room for the disk cache", cmd: "kapitsa serve --model flash-next", dl: "105.9 GB" }
+  { ram: 48,  name: "Qwen3.6-35B-A3B (6-bit)", about: "Higher precision, or the dense 27B at 8-bit for stronger reasoning", cmd: "kapitsa serve --model 35b:6bit", dl: "30.7 GB" },
+  { ram: 64,  name: "Qwen3.6-35B-A3B (8-bit)", about: "35B at high precision, or Flash-Next 180B with 2-bit EXL3 experts", cmd: "kapitsa serve --model 35b:8bit", dl: "39.4 GB" },
+  { ram: 96,  name: "Nemotron Super-VL 120B (NVFP4)", about: "NVIDIA's 120B hybrid MoE with vision, or Flash-Next 180B at 4-bit needs 128 GB", cmd: "kapitsa serve --model super-vl", dl: "76.4 GB" },
+  { ram: 128, name: "Flash-Next 180B (4-bit)", about: "Qwen's 180B MoE at full 4-bit precision with room for the disk cache", cmd: "kapitsa serve --model flash-next", dl: "105.9 GB" }
 ];
 
 function updatePicker() {
