@@ -38,6 +38,8 @@ and the decode loop. This page records the shape and what the first version does
 - The child dying, closing its output, sending a frame that breaks the protocol, or an engine-level ERROR fails every
   held request with `engine_unhealthy` and leaves the Runtime dead. There is no relaunch: the owner starts a new one.
   A protocol failure kills the child, because its stream cannot be trusted afterwards.
+- An ignored cancel past `cancel_timeout_s` fails every held request with `cancel_timeout` and leaves the Runtime dead,
+  with no relaunch.
 - Admission follows READY's `max_concurrent_requests`; a full pool throws `PendingLimitExceeded` (the server answers 503). The id and both deadlines
   are stamped at `submit`, as `runtime.py` does.
 - `shutdown()` closes the child's stdin (it drains and exits), then SIGTERM, then SIGKILL, each after `stop_grace_s`.

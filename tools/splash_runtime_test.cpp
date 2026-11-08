@@ -135,7 +135,12 @@ static int fake(const std::string& mode) {
       send_done(id, 0, 3);
     } else if (type == 0x0002) {
       if (mode == "ignore_cancel") continue;
-      send_done(le(payload.data(), 8), 2, 0);
+      if (mode == "finish_cancel") {
+        send_tokens(le(payload.data(), 8), 0, {10, 11, 12});
+        send_done(le(payload.data(), 8), 0, 3);
+      } else {
+        send_done(le(payload.data(), 8), 2, 0);
+      }
     } else if (type == 0x0004) {
       std::vector<uint8_t> p;
       put(p, le(payload.data(), 8), 8);
@@ -235,6 +240,32 @@ int main(int argc, char** argv) {
     CHECK(a->errored && b->errored && a->terminals == 1 && b->terminals == 1);
     CHECK(a->e.code == "cancel_timeout" && b->e.code == "cancel_timeout");
     CHECK(!rt.alive());
+    rt.shutdown();
+  }
+
+  {  // a normal terminal after cancel removes the deadline without ending the runtime
+    auto o = opts(self, "finish_cancel");
+    o.cancel_timeout_s = 1;
+    Runtime rt(o);
+    rt.start();
+    const pid_t child = rt.pid();
+    auto active = std::make_shared<Collect>();
+    auto id = rt.submit(req(999), active, 30);
+    CHECK(active->wait_started());
+    const auto cancelled_at = std::chrono::steady_clock::now();
+    rt.cancel(id);
+    CHECK(active->wait(0.75));
+    CHECK(since(cancelled_at) < o.cancel_timeout_s);
+    CHECK(active->done && !active->errored && active->d.reason == FinishReason::kStop);
+    std::this_thread::sleep_until(cancelled_at + std::chrono::milliseconds(1400));
+    CHECK(rt.alive() && rt.pid() == child);
+    {
+      std::lock_guard<std::mutex> l(active->m);
+      CHECK(active->terminals == 1 && !active->errored);
+    }
+    auto healthy = std::make_shared<Collect>();
+    rt.submit(req(1), healthy, 30);
+    CHECK(healthy->wait() && healthy->done && !healthy->errored && healthy->terminals == 1);
     rt.shutdown();
   }
 
