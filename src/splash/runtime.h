@@ -1,7 +1,6 @@
-// The Splash engine as a child process: `splash serve-native <model dir> <ctx|auto> <mem|auto> ...` speaking the native
-// protocol of splash/protocol.h over its stdin and stdout. A C++ counterpart of splash-1.4.0/server/runtime.py, without its
-// relaunch: a child that dies fails every request it held with an engine_unhealthy error and the Runtime stays dead, so the
-// owner decides whether to start another (src/splash/README.md).
+// The native engine runs as a child process speaking its protocol over stdin and stdout. A fatal engine error fails
+// every request it held. An ignored cancellation kills that child and starts a fresh one; held requests are never replayed.
+// Other engine failures leave the runtime dead, so the owner decides whether to start another.
 //
 // One reader thread decodes the child's events and calls a request's Sink from that thread, so a Sink returns quickly and
 // never calls back into the Runtime's submit() or shutdown(); cancel() is allowed. Exactly one of on_done / on_error ends
@@ -20,6 +19,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "splash/protocol.h"
@@ -42,7 +42,11 @@ class Sink {
 };
 
 // The engine refused or lost the work, and how: a request_error is the request's own, the others are the engine's.
-struct EngineUnhealthy : std::runtime_error { using std::runtime_error::runtime_error; };
+struct EngineUnhealthy : std::runtime_error {
+  using std::runtime_error::runtime_error;
+  EngineUnhealthy(const std::string& message, bool recovery) : std::runtime_error(message), restarting(recovery) {}
+  bool restarting = false;  // admission failed while a local timeout is replacing the child
+};
 struct PendingLimitExceeded : std::runtime_error { using std::runtime_error::runtime_error; };
 
 struct RuntimeOptions {
@@ -66,7 +70,7 @@ class Runtime {
   // failure, timeout), after the child is reaped.
   void start();
 
-  const Ready& ready() const { return ready_; }  // valid after start()
+  Ready ready() const;  // a snapshot, valid after start()
   bool alive() const;
 
   // Queues the request and returns the id the engine knows it by. The request's id and both deadlines are stamped here:
@@ -103,11 +107,15 @@ class Runtime {
     std::chrono::steady_clock::time_point cancel_started{};
   };
   void read_loop();
-  void fail_all(const std::string& code, const std::string& message);
-  void write_frame(const std::vector<uint8_t>& frame);
+  bool read_child();  // true only when a cancellation timeout calls for a fresh child
+  void spawn_child();
+  void fail_all(const std::string& code, const std::string& message, bool restarting = false);
+  void write_frame(const std::vector<uint8_t>& frame, uint64_t generation);
   void reap(double grace_s);
   void signal_child(int sig);  // to the child's process group, only while it is not reaped
-  void say(const std::string& s) const { if (o_.log) o_.log(s); }
+  void say(const std::string& s) const {
+    try { if (o_.log) o_.log(s); } catch (...) {}  // diagnostics cannot interrupt child cleanup
+  }
 
   RuntimeOptions o_;
   std::atomic<pid_t> pid_{-1};
@@ -118,8 +126,10 @@ class Runtime {
   std::condition_variable cv_;
   enum class State { kIdle, kStarting, kReady, kDead } state_ = State::kIdle;
   std::string dead_reason_;
+  bool restarting_ = false;  // only a local cancellation deadline can set this
   Ready ready_;
   uint64_t next_id_ = 1;
+  uint64_t generation_ = 0;  // each child has its own writer boundary
   std::map<uint64_t, Pending> pending_;
   std::map<uint64_t, std::string> status_replies_;  // correlation id -> reply, for a status() still waiting
   uint64_t next_corr_ = 1;
@@ -127,9 +137,10 @@ class Runtime {
   std::atomic<bool> abandon_{false};   // shutdown() gave up waiting for the child's stdout to close: the reader stops reading
   std::mutex pid_m_;  // pid_ is set and cleared, and signalled through, only under this: a signal never reaches a reaped pid
   std::mutex write_m_;  // one writer at a time on the child's stdin
+  std::mutex shutdown_m_;  // starting the reader and joining it are serialized
   std::mutex cancel_m_;            // cancels_ only, never held across a write
-  std::vector<uint64_t> cancels_;  // cancel frames waiting for the writer
-  void write_locked(const std::vector<uint8_t>& frame);  // write_m_ held
+  std::vector<std::pair<uint64_t, uint64_t>> cancels_;  // generation, request id, waiting for the writer
+  void write_locked(const std::vector<uint8_t>& frame, uint64_t generation);  // write_m_ held
   void flush_cancels();
 };
 

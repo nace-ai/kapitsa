@@ -199,6 +199,19 @@ try:
 finally:
     s.close()
 
+# a fatal child error cannot claim runtime recovery by copying its code or retryable bit
+s = Server("--fatal-code", "cancel_timeout")
+try:
+    old_pid = int(open(s.pid_file).read())
+    for _ in range(2):
+        st, response = post(s.base, {"messages": MSG, "max_tokens": 3})
+        text = json.dumps(response)
+        check(st == 503 and "cancel_timeout" in text and "restart kapitsa serve" in text and "restarting" not in text,
+              "foreign fatal code stays permanent: %s %s" % (st, response))
+    check(int(open(s.pid_file).read()) == old_pid, "foreign fatal code did not start another child")
+finally:
+    s.close()
+
 # the engine dying in the middle of a request: that request is the same 503, not a 200 cut short or a 400
 s = Server("--reply", ",".join(map(str, REPLY[:-1] + [tid("Ġthere")] * 200)), "--slow", "50")  # no end of turn: 200 tokens
 try:
@@ -251,6 +264,42 @@ try:
     time.sleep(0.5)
     st, r = post(s.base, {"messages": MSG, "max_tokens": 3, "temperature": 0}, timeout=30)
     check(st == 200, "served after four abandoned streams: %s %s" % (st, r))
+finally:
+    s.close()
+
+# an ignored cancellation replaces the child without replaying the abandoned request
+s = Server("--reply", ",".join(map(str, REPLY[:-1] + [tid("Ġthere")] * 2000)), "--slow", "20", "--ignore-first-cancel", "1")
+try:
+    old_pid = int(open(s.pid_file).read())
+    req = urllib.request.Request(s.base + "/v1/chat/completions", json.dumps({"messages": MSG, "max_tokens": 2000, "stream": True}).encode(),
+                                 {"Content-Type": "application/json"})
+    stream = urllib.request.urlopen(req, timeout=30)
+    stream.read(200); stream.close()
+    deadline = time.monotonic() + 40  # the production cancellation deadline is 30 seconds
+    replacement = old_pid
+    while time.monotonic() < deadline:
+        try: replacement = int(open(s.pid_file).read())
+        except (OSError, ValueError): pass
+        if replacement != old_pid: break
+        time.sleep(0.1)
+    check(replacement != old_pid, "ignored cancel starts a new child within the default deadline")
+    for path, body in [("/v1/chat/completions", {"messages": MSG, "max_tokens": 3}),
+                       ("/v1/messages", {"messages": MSG, "max_tokens": 3}),
+                       ("/v1/responses", {"input": "hello", "max_output_tokens": 3})]:
+        ready_deadline = time.monotonic() + 5
+        while True:
+            st, response = post(s.base, body, timeout=30, path=path)
+            if st != 503 or "restarting" not in json.dumps(response) or time.monotonic() >= ready_deadline: break
+            time.sleep(0.05)
+        check(st == 200, "%s recovers in the same server: %s %s" % (path, st, response))
+        usage = response.get("usage", {})
+        check(usage.get("completion_tokens", usage.get("output_tokens", 0)) > 0, "%s completed new work: %s" % (path, response))
+    prompts = s.prompts()
+    old_requests = [p for p in prompts if p["pid"] == old_pid]
+    new_requests = [p for p in prompts if p["pid"] == replacement]
+    check(len(old_requests) == 1 and len(new_requests) == 3, "only new work reaches replacement: %r" % [(p["pid"], p["request_id"]) for p in prompts])
+    check(len({p["request_id"] for p in prompts}) == len(prompts), "old request ids are not reused or replayed")
+    check(s.proc.poll() is None, "the same server survived cancellation recovery")
 finally:
     s.close()
 

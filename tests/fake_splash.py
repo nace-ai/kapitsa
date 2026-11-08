@@ -11,6 +11,7 @@ import json, os, select, struct, sys, time
 args = sys.argv[1:]
 assert args[0] == "serve-native"
 reply, log, slow, mask_words, mask_log = [], None, 0.0, 0, None
+ignore_first_cancel, first_launch, fatal_code = False, True, None
 i = 4
 while i < len(args):
     if args[i] == "--reply": reply = [int(x) for x in args[i + 1].split(",")]
@@ -18,7 +19,10 @@ while i < len(args):
     elif args[i] == "--slow": slow = int(args[i + 1]) / 1000
     elif args[i] == "--mask-words": mask_words = int(args[i + 1])
     elif args[i] == "--mask-log": mask_log = args[i + 1]
+    elif args[i] == "--fatal-code": fatal_code = args[i + 1]
+    elif args[i] == "--ignore-first-cancel": ignore_first_cancel = bool(int(args[i + 1]))
     elif args[i] == "--pid-file":
+        first_launch = not os.path.exists(args[i + 1])
         with open(args[i + 1], "w") as f: f.write(str(os.getpid()))
     i += 2
 out, inp = sys.stdout.buffer, sys.stdin.buffer
@@ -81,7 +85,11 @@ while True:
             seed = struct.unpack_from("<Q", p, 66)[0]
             flags = struct.unpack_from("<I", p, 82)[0]
             sampling = dict(temperature=temp, top_p=top_p, top_k=top_k, presence=pres, frequency=freq, repetition=rep, min_p=min_p)
-            with open(log, "a") as f: f.write(json.dumps({"max": logical_max, "prompt": ids, "sampling": sampling, "seed": seed, "flags": flags, "constraint": p[9], "salt": list(salt), "args": args}) + "\n")
+            with open(log, "a") as f: f.write(json.dumps({"pid": os.getpid(), "request_id": rid, "max": logical_max, "prompt": ids, "sampling": sampling, "seed": seed, "flags": flags, "constraint": p[9], "salt": list(salt), "args": args}) + "\n")
+        if fatal_code:
+            code, message = fatal_code.encode(), b"fatal child error"
+            frame(0x0105, struct.pack("<BBIQII", 2, 1, 0, 0, len(code), len(message)) + code + message)
+            continue
         frame(0x0101, struct.pack("<QII", rid, 0, 0))
         sent, off = 0, 0
         for k, t in enumerate(reply[:logical_max]):
@@ -108,7 +116,12 @@ while True:
                 h2 = read(16)
                 _, _, t2, n2 = struct.unpack("<4sHHQ", h2)
                 p2 = read(n2)
-                if t2 == 0x0002 and struct.unpack_from("<Q", p2, 0)[0] == rid: cancelled.add(rid)
+                if t2 == 0x0002 and struct.unpack_from("<Q", p2, 0)[0] == rid:
+                    if ignore_first_cancel and first_launch:
+                        while True:  # consume input but never end the cancelled request
+                            stalled_header = read(16)
+                            read(struct.unpack("<4sHHQ", stalled_header)[3])
+                    cancelled.add(rid)
             if rid in cancelled: break
         if rid in cancelled: done(rid, 2, sent)
         else: done(rid, 1 if sent >= logical_max and sent < len(reply) else 0, sent)

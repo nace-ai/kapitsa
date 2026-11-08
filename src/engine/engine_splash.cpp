@@ -39,9 +39,10 @@ namespace {
 
 // What a request is told when the engine child has exited: one sentence on every route, without the runtime's own
 // "the splash engine is not running" prefix a second time.
-std::string engine_down_message(std::string why) {
+std::string engine_down_message(std::string why, bool restarting = false) {
   for (const std::string lead : {"the engine is not running", ": "})
     if (why.rfind(lead, 0) == 0) why.erase(0, lead.size());
+  if (restarting) return "the engine timed out waiting for cancellation; restarting";
   return "the engine has exited" + (why.empty() ? std::string() : " (" + why + ")") +
          "; restart kapitsa serve";
 }
@@ -293,8 +294,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     return res;
   } catch (const splash::EngineUnhealthy& ex) {
     res.finish_reason = "error";
-    res.engine_down = true;  // a 503 on every route; nothing relaunches the child, so no Retry-After
-    res.error = engine_down_message(ex.what());
+    res.engine_down = true;  // a 503 before the stream starts while the engine is unavailable
+    res.error = engine_down_message(ex.what(), ex.restarting);
     return res;
   } catch (const splash::ProtocolError& ex) {
     return refuse(std::string("the engine refused the request: ") + ex.what());
@@ -437,7 +438,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
       res.error = err.code.empty() ? err.message : err.code + ": " + err.message;
       if (err.failure == splash::FailureClass::kEngineUnhealthy) {  // the child died under the request (Runtime::fail_all)
         res.engine_down = true;
-        res.error = engine_down_message(res.error);
+        res.error = engine_down_message(res.error, err.retryable);
       }
     }
   } else if (finish.empty()) {
