@@ -287,6 +287,8 @@ AgentLaunch aider(const std::string& path, const AgentServer& s, const std::vect
 
 // Goose by Block (https://block.github.io/goose): OpenAI provider with OPENAI_HOST and OPENAI_API_KEY.
 // GOOSE_CONTEXT_LIMIT tells Goose the model's context window so it compacts at the right time.
+// Bare `goose` prints help; `goose session` starts a chat. Insert `session` when the user did not pass a subcommand
+// (the first arg is a known Goose subcommand or starts with `-`).
 AgentLaunch goose(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
   AgentLaunch l;
   l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
@@ -295,6 +297,18 @@ AgentLaunch goose(const std::string& path, const AgentServer& s, const std::vect
            {"GOOSE_MODEL", s.model},
            {"GOOSE_CONTEXT_LIMIT", std::to_string(s.context)}};
   l.argv = {path};
+  // Insert `session` when no subcommand was given, so bare `kapitsa goose` opens a chat.
+  // Known subcommands (goose --help): configure, info, doctor, mcp, acp, serve, session, run, recipe, skills,
+  // plugin, schedule, gateway, update, term. If the first user arg is one of those or starts with `-`, don't insert.
+  static const char* subs[] = {"configure", "info", "doctor", "mcp", "acp", "serve", "session", "run", "recipe",
+                               "skills", "plugin", "schedule", "gateway", "update", "term", "s"};
+  bool has_sub = false;
+  if (!args.empty() && !args[0].empty()) {
+    if (args[0][0] == '-') has_sub = true;  // a flag before any subcommand: goose handles it
+    for (const char* sc : subs)
+      if (args[0] == sc) { has_sub = true; break; }
+  }
+  if (!has_sub) l.argv.push_back("session");
   l.argv.insert(l.argv.end(), args.begin(), args.end());
   return l;
 }

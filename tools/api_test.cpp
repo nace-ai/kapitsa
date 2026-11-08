@@ -900,14 +900,20 @@ void clients() {
   check(std::count(a2.argv.begin(), a2.argv.end(), "--model") == 1,
         "aider: user's --model is not duplicated");
 
-  // goose
-  AgentLaunch g = agent_launch("goose", "/bin/goose", s, {"session"}, {}, -1);
+  // goose: bare `kapitsa goose` inserts `session`; a subcommand like `run` stays as typed
+  AgentLaunch g = agent_launch("goose", "/bin/goose", s, {}, {}, -1);
   check(has(g, "OPENAI_API_KEY", "kapitsa") && has(g, "OPENAI_HOST", "http://127.0.0.1:8000") &&
             has(g, "GOOSE_PROVIDER", "openai") && has(g, "GOOSE_MODEL", "qwen3.6-35b-a3b") &&
             has(g, "GOOSE_CONTEXT_LIMIT", "131072"),
         "goose: OPENAI_HOST, OPENAI_API_KEY, GOOSE_PROVIDER, GOOSE_MODEL, context");
   check(g.argv == std::vector<std::string>{"/bin/goose", "session"},
-        "goose: arguments passed through");
+        "goose: bare kapitsa goose inserts session");
+  AgentLaunch g2 = agent_launch("goose", "/bin/goose", s, {"run", "--text", "hi"}, {}, -1);
+  check(g2.argv == std::vector<std::string>{"/bin/goose", "run", "--text", "hi"},
+        "goose: a subcommand (run) stays as typed, no session inserted");
+  AgentLaunch g3 = agent_launch("goose", "/bin/goose", s, {"session", "--name", "test"}, {}, -1);
+  check(g3.argv == std::vector<std::string>{"/bin/goose", "session", "--name", "test"},
+        "goose: explicit session is not duplicated");
 }
 
 // ---------------------------------------------------------------- round trips through a chat template
