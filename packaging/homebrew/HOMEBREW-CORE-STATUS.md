@@ -59,9 +59,11 @@ will refuse. The formula header notes this.
 
 ## `kapitsa update`
 
-`kapitsa update` (src/update/update.mm) currently runs `brew upgrade nace-ai/tap/kapitsa`.
-When the homebrew-core formula ships, this needs a change to detect which formula is installed
-and run the right `brew upgrade` command. Track in a follow-up issue.
+`kapitsa update` (src/update/update.mm) reads the Cellar's INSTALL_RECEIPT.json for the
+source tap. A homebrew-core install (`"tap": "homebrew/core"`) runs `brew upgrade kapitsa`;
+a tap install or a missing receipt runs `brew upgrade nace-ai/tap/kapitsa` as before.
+The `--HEAD` variant adds `--fetch-HEAD` in both cases. Tests in tools/update_test.cpp
+cover core receipt, core HEAD, tap receipt, and no receipt (404 checks).
 
 ## Differences from the tap formula
 
