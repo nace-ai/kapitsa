@@ -15,7 +15,7 @@
 namespace {
 size_t checked = 0, exceptional = 0, skipped = 0;
 
-// The former scalar routine is used only for its platform-specific exceptional behavior and overlapping buffers.
+// The former scalar routine checks floating flags, exceptional behavior and complete boundary/overlap buffers.
 void legacy(const float* x, int64_t K, uint8_t* q, uint8_t* s) {
   for (int64_t b = 0; b < K / 32; ++b) {
     float amax = 0.0f;

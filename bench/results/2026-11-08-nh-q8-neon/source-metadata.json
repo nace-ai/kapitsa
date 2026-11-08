@@ -1,0 +1,42 @@
+{
+  "record_kind": "source-copy/extraction metadata; no measured result implied",
+  "reference_commit": "95a0a552fab5c359dd91b716e9936918d436d713",
+  "candidate_commit": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+  "candidate_source_dirty": false,
+  "source_repository": "https://github.com/nace-ai/kapitsa",
+  "source_file": "src/model/nemotron_h.cpp",
+  "reference_source_url": "https://github.com/nace-ai/kapitsa/blob/95a0a552fab5c359dd91b716e9936918d436d713/src/model/nemotron_h.cpp",
+  "extraction_transformation": "Rename nh_quant_q8 and add noinline; production function body unchanged; reference and candidate compiled as separate translation units without LTO; public file exports trim trailing blank lines only",
+  "matching_cpu_flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "no_NDEBUG": true,
+  "source_identities": {
+    "reference-q8.cpp": {
+      "source_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "original_function_sha256": "58d3527bfd7244d640b8bd83e6a2266b5cf36577b54ccf0d38c9b2fc80a494aa",
+      "extracted_sha256": "90131edfeaac3425170794fb5d6d688805c97b61bd1c9e1602d65ee7773d077c"
+    },
+    "candidate-q8.cpp": {
+      "source_sha256": "1b35e748a66eb7e52ed54990c948269e5c3faa7c8fbd439bce5a3f936da5132d",
+      "original_function_sha256": "5355e76e0c998c821c109178c5101c6832774d50b4c141ef0ee437cf92d273c3",
+      "extracted_sha256": "188a6d595b5215c0253f5295065b75480fbe31cc1265c067314e8b2b25d0e22a"
+    }
+  },
+  "copied_file_sha256": {
+    "reference-q8.cpp": "a51f198acecff5d4fe9e077cdf4e9c899f88333359f24cbeac4d8c3fe7fe98bc",
+    "candidate-q8.cpp": "d66ab76abf875c04a1bfefa5b4fe26ae3152ce01ea58d7f832e4f5f511ef292f",
+    "cpu-evidence.cpp": "ca1d81308129f5980430a7d1402e7bcc0051fe8174ff1a0e7fe6d64a795fe896",
+    "cpu-per-row-evidence.cpp": "d4219f1e99a855225b94cb244103f4dde4275e4922fb9d18ed7c6d86a03246ef"
+  },
+  "latency_scope": "Warm CPU quantizer only; complete input/code/scale byte gate each measured leg. This is not a model loading or inference-speed measurement.",
+  "license": "Apache-2.0; LICENSE included",
+  "result_status": {
+    "two_setup_CPU_AB": "complete; flattened and per-row methods separately retained",
+    "complete_real_BF16_head_bytes": "PASS both setups",
+    "committed_source_22_CPU_integration": "22/22 PASS; 14/15 supplemental, existing cache-residency failure disclosed",
+    "model_output_and_default_performance": "complete two setups; original API/native limitations retained"
+  },
+  "exported_file_note": "source_identities extracted_sha256 records the executed original extraction; copied_file_sha256 records public files with terminal blank lines removed. Function bodies are unchanged."
+}

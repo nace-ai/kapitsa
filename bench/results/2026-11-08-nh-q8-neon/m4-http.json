@@ -1,0 +1,17 @@
+{
+  "record_kind": "Derived test-name summary; original details retained privately",
+  "results": {
+    "reference": {
+      "rc": 0,
+      "PASS": 49,
+      "FAIL": 0,
+      "failure_test_names": []
+    },
+    "candidate": {
+      "rc": 0,
+      "PASS": 49,
+      "FAIL": 0,
+      "failure_test_names": []
+    }
+  }
+}

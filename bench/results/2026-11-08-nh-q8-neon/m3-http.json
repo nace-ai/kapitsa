@@ -1,0 +1,47 @@
+{
+  "record_kind": "Derived test-name summary; original details retained privately",
+  "results": {
+    "reference": {
+      "rc": 1,
+      "PASS": 39,
+      "FAIL": 10,
+      "failure_test_names": [
+        "thinking: correct answer",
+        "tool call: read_file or run_shell on /etc/hosts",
+        "tool result: final answer mentions 3",
+        "non-stream tool call + int arg",
+        "thinking + tools: a call on /etc/hosts returned as a tool call",
+        "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "anthropic stream: final answer mentions 3",
+        "responses stream: a function_call on /etc/hosts",
+        "responses: the tool loop's next request is answered (mentions 3)",
+        "in flight together: a 2K-token request sent during a long reply finishes first"
+      ]
+    },
+    "candidate": {
+      "rc": 1,
+      "PASS": 36,
+      "FAIL": 12,
+      "failure_test_names": [
+        "thinking: correct answer",
+        "tool call: read_file or run_shell on /etc/hosts",
+        "tool result: final answer mentions 3",
+        "next turn: answer",
+        "non-stream tool call + int arg",
+        "thinking + tools: a call on /etc/hosts returned as a tool call",
+        "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "anthropic stream: final answer mentions 3",
+        "responses stream: a function_call on /etc/hosts",
+        "responses: the tool loop's next request is answered (mentions 3)",
+        "in flight together: a 2K-token request sent during a long reply finishes first",
+        "a client gone mid-stream: the request beside it is answered, the next one starts at once"
+      ],
+      "unexecuted_assertions": [
+        {
+          "test": "int argument is a JSON number",
+          "reason": "Returned tool arguments do not contain max_lines, so the conditional assertion is not executed."
+        }
+      ]
+    }
+  }
+}

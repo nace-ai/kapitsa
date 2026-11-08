@@ -1,0 +1,226 @@
+{
+  "record_kind": "Privacy-filtered derived kapitsa bench --quick JSON; original numeric results and flags retained",
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_gb": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "runs": [
+    {
+      "label": "A1",
+      "arm": "reference",
+      "rc": 0,
+      "source": "95a0a552fab5c359dd91b716e9936918d436d713",
+      "result_sha256": "7cb014377d14498baad1c03356a3706d0e8fffd69435499285c3cebe33d87e78",
+      "flags": [],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:11:20Z",
+      "results": {
+        "decode": {
+          "median_tps": 134.36,
+          "runs_tps": [
+            134.36,
+            131.4,
+            140.31
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 132.07,
+          "runs_tps": [
+            131.2,
+            132.1,
+            132.07
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4182,
+            "ttft_s": 1.8711,
+            "tps": 2235.1,
+            "followup_s": [
+              0.0749,
+              0.0832,
+              0.0818
+            ],
+            "followup_median_s": 0.0818,
+            "followup_suffix_tps": 293.6
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      }
+    },
+    {
+      "label": "B1",
+      "arm": "candidate",
+      "rc": 0,
+      "source": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+      "result_sha256": "3ad239c8d257fd343cfe82434a34c788db35f217257371293b7715a9ff7ee033",
+      "flags": [
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:12:25Z",
+      "results": {
+        "decode": {
+          "median_tps": 136.04,
+          "runs_tps": [
+            132.26,
+            145.2,
+            136.04
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 129.65,
+          "runs_tps": [
+            130.33,
+            128.56,
+            129.65
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4183,
+            "ttft_s": 1.8744,
+            "tps": 2231.6,
+            "followup_s": [
+              0.0744,
+              0.0686,
+              0.7979
+            ],
+            "followup_median_s": 0.0744,
+            "followup_suffix_tps": 350.9
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      }
+    },
+    {
+      "label": "A2",
+      "arm": "reference",
+      "rc": 0,
+      "source": "95a0a552fab5c359dd91b716e9936918d436d713",
+      "result_sha256": "31a983ccb2fdbb661fa3d613f39c9d4a45eb06959f5d33e37c03b14ea51ea27e",
+      "flags": [
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:13:30Z",
+      "results": {
+        "decode": {
+          "median_tps": 129.54,
+          "runs_tps": [
+            127.43,
+            129.82,
+            129.54
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 128.68,
+          "runs_tps": [
+            130.34,
+            128.68,
+            128.34
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4183,
+            "ttft_s": 1.8777,
+            "tps": 2227.7,
+            "followup_s": [
+              0.0954,
+              0.0723,
+              0.0918
+            ],
+            "followup_median_s": 0.0918,
+            "followup_suffix_tps": 241.1
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      }
+    },
+    {
+      "label": "B2",
+      "arm": "candidate",
+      "rc": 0,
+      "source": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+      "result_sha256": "36e6a43810af632d05ab12750761f892e7668260d52a23163007902aeb29380e",
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.1016)"
+      ],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:14:38Z",
+      "results": {
+        "decode": {
+          "median_tps": 132.87,
+          "runs_tps": [
+            132.87,
+            128.74,
+            192.97
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 128.81,
+          "runs_tps": [
+            128.81,
+            130.14,
+            128.52
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4184,
+            "ttft_s": 1.8854,
+            "tps": 2219.2,
+            "followup_s": [
+              0.0739,
+              0.089,
+              0.0864
+            ],
+            "followup_median_s": 0.0864,
+            "followup_suffix_tps": 297.6
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      }
+    }
+  ]
+}
