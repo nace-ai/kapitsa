@@ -1,0 +1,298 @@
+{
+  "evidence_kind": "Privacy-filtered derived summary; no original execution logs or commands are published.",
+  "reference_commit": "dc4b885b2915d3ffccb91ce9f43e707c7d0c8a26",
+  "candidate_source_commit": "315540a26d3d47f198425812acfc24d59e15dc3e",
+  "scope": "CPU owning-file selection for NgramTable::open_gguf. No quantization, dequantization, hash, Metal or profile changes.",
+  "fixture_matrix": {
+    "formats": [
+      "IQ4_NL",
+      "Q8_0"
+    ],
+    "tensor_parts": [
+      0,
+      1
+    ],
+    "entry_parts": [
+      0,
+      1
+    ],
+    "other_part": [
+      "same-size zero payload",
+      "short valid unrelated tensor"
+    ],
+    "cases": 16,
+    "row_width": 160,
+    "rows_each": 7,
+    "gather_rows_each": 9,
+    "gather_ids": [
+      6,
+      0,
+      3,
+      3,
+      1,
+      5,
+      2,
+      6,
+      4
+    ],
+    "checks": [
+      "genuine nonzero fixture blocks",
+      "part-aware raw tensor reads equal payload",
+      "complete row bytes equal direct dequantization",
+      "complete reordered/repeated gathered rows equal direct dequantization",
+      "shape and owning-part mapping size"
+    ]
+  },
+  "M4_focused_before_after": {
+    "reference_rc": 1,
+    "failed_cases": 8,
+    "silent_wrong_file_row_gather_cases": 4,
+    "false_truncated_tensor_cases": 4,
+    "candidate_rc": 0,
+    "candidate_all_cases_passed": true,
+    "driver_source_sha256": "fd9dc36f9fc6a3912a1556f5c25fbb53c28c920fd65a96c1f60bd3f7e3341328",
+    "driver_source_identical": true,
+    "reference_ngram_sha256": "95052d9ccfe5171b5fe6ccd2ac7dee7da7698203571f500615c4bb87865a6e47",
+    "candidate_ngram_sha256": "ebf70e6efbfbce2529a7b335460552a9273a27be3f6df1b972d03e0660240405",
+    "reference_fn_store_test_sha256": "e8390878a627b4931f1946903e4612b1372efc998bf3e74f224bcd90b6c41310",
+    "candidate_fn_store_test_sha256": "306e9df994b73df2afc0c883b417b8b54142bc6602a0773dcac2977441b07cba",
+    "reference_library_sha256": "29c1ca16cc0563de1d8345f0f33ab0f6882862990081ae2a8a6f5736da88c1d6",
+    "candidate_library_sha256": "b145b48586da9109b95c396000b3547659e31713500ed5067df52ef44bdeb91f",
+    "note": "Focused pre/post builds preceded the source commit; exact production/test hashes are recorded. Committed own-source checks below are separate."
+  },
+  "M4_committed_broad_CPU": {
+    "status": "PASS for all executed checks; optional reasoning dataset rebuild skipped",
+    "source": "315540a26d3d47f198425812acfc24d59e15dc3e",
+    "finished_at": "2026-11-08T10:12:40.461859+00:00",
+    "setup": {
+      "chip": "Apple M4 Pro",
+      "GPU_cores": 20,
+      "memory_GiB": 48,
+      "macOS": "15.7.1",
+      "compiler": "Apple clang 17.0.0 (1700.0.13.5)"
+    },
+    "Release_optimization": "-O3",
+    "NDEBUG_defined": false,
+    "commands": [
+      {
+        "label": "configure",
+        "rc": 0
+      },
+      {
+        "label": "build",
+        "rc": 0
+      },
+      {
+        "label": "version",
+        "rc": 0
+      },
+      {
+        "label": "required-checks",
+        "rc": 0
+      },
+      {
+        "label": "vk-cpu",
+        "rc": 0
+      },
+      {
+        "label": "load_error_test",
+        "rc": 0
+      },
+      {
+        "label": "affine_pack_test",
+        "rc": 0
+      },
+      {
+        "label": "json_file_test",
+        "rc": 0
+      },
+      {
+        "label": "qwen4_config_test",
+        "rc": 0
+      },
+      {
+        "label": "device_profile_test",
+        "rc": 0
+      },
+      {
+        "label": "drafter_attach_test",
+        "rc": 0
+      },
+      {
+        "label": "exl3_test",
+        "rc": 0
+      },
+      {
+        "label": "systemone_test",
+        "rc": 0
+      },
+      {
+        "label": "systemone_codes_probe_test",
+        "rc": 0
+      },
+      {
+        "label": "execution_session_test",
+        "rc": 0
+      },
+      {
+        "label": "http_stream_test",
+        "rc": 0
+      },
+      {
+        "label": "splash_protocol_test",
+        "rc": 0
+      },
+      {
+        "label": "splash_runtime_test",
+        "rc": 0
+      },
+      {
+        "label": "splash_discover_test",
+        "rc": 0
+      },
+      {
+        "label": "splash_plan_test",
+        "rc": 0
+      },
+      {
+        "label": "qwen4-exp-pack",
+        "rc": 0
+      },
+      {
+        "label": "profile-gates",
+        "rc": 0
+      },
+      {
+        "label": "comment-gates",
+        "rc": 0
+      },
+      {
+        "label": "logit-dump-harness",
+        "rc": 0
+      },
+      {
+        "label": "drex-max-cpu",
+        "rc": 0
+      },
+      {
+        "label": "systemone-codes-harness",
+        "rc": 0
+      },
+      {
+        "label": "prek",
+        "rc": 0
+      },
+      {
+        "label": "diff-check",
+        "rc": 0
+      },
+      {
+        "label": "vk-cleanup",
+        "rc": 0
+      }
+    ],
+    "vk_CPU_entries": [
+      "api_test",
+      "prefix_cache_test",
+      "fn_store_test",
+      "fn_dflash_test",
+      "tokenizer_test",
+      "iq_layout_test",
+      "remote_test",
+      "cluster_test",
+      "split_place_test",
+      "gemm_slices_test",
+      "ws_upgrade_test",
+      "test_server_cli",
+      "test_sidecar",
+      "test_bench",
+      "test_update",
+      "test_community",
+      "test_reasoning",
+      "test_pr_size",
+      "test_logit_compare",
+      "test_sampled_tokens_harness",
+      "test_structured_cli"
+    ],
+    "vk_passed": 21,
+    "vk_failed": 0,
+    "supplemental_native_passed": 15,
+    "supplemental_native_failed": 0,
+    "supplemental_scripts_passed": 6,
+    "skipped": [
+      "test_reasoning optional check and sets --rebuild dataset case; no dataset fetch/rebuild executed"
+    ],
+    "ngram_sha256": "ebf70e6efbfbce2529a7b335460552a9273a27be3f6df1b972d03e0660240405",
+    "test_sha256": "fd9dc36f9fc6a3912a1556f5c25fbb53c28c920fd65a96c1f60bd3f7e3341328",
+    "library_sha256": "b145b48586da9109b95c396000b3547659e31713500ed5067df52ef44bdeb91f",
+    "fn_store_test_sha256": "306e9df994b73df2afc0c883b417b8b54142bc6602a0773dcac2977441b07cba",
+    "binaries": {
+      "kapitsa": "65be9c891e9131970c767230aaff79e802664fc1b0db11727149e60eb2aee521",
+      "load_error_test": "8ea875884b620b24a9b8264b9f7fa709c237d21e57981f4f688060f3c649d93c",
+      "logit_dump": "f5a906474cf940a47fb39af780e2d845dba8bc58c08eb522846bee12968cde30",
+      "systemone": "4f35fc563a49dc990f3dd25f8afbedccdda8e3f7e84da18a1fdb691cdd3328fb"
+    },
+    "split_cases_passed": 16,
+    "full_fn_store_test_passed": true,
+    "source_unchanged": true,
+    "GPU_model_runs": 0,
+    "load_error_test": {
+      "current_execution_rc": 0,
+      "binary_sha256": "8ea875884b620b24a9b8264b9f7fa709c237d21e57981f4f688060f3c649d93c",
+      "historical_note": "This byte-identical executable failed a cache-residency assertion in earlier recorded work; that result is retained there. The current execution passes. No new reference execution or causal fix to that assertion is claimed."
+    }
+  },
+  "M3_committed_targeted_CPU": {
+    "status": "PASS",
+    "source": "315540a26d3d47f198425812acfc24d59e15dc3e",
+    "finished_at": "2026-11-08T10:00:51.670131+00:00",
+    "setup": {
+      "chip": "Apple M3 Ultra",
+      "GPU_cores": 60,
+      "memory_GiB": 96,
+      "macOS": "26.4.1",
+      "compiler": "Apple clang 17.0.0 (1700.6.4.2)"
+    },
+    "Release_optimization": "-O3",
+    "NDEBUG_defined": false,
+    "commands": [
+      {
+        "label": "configure",
+        "rc": 0
+      },
+      {
+        "label": "build",
+        "rc": 0
+      },
+      {
+        "label": "fn_store_test",
+        "rc": 0
+      }
+    ],
+    "ngram_sha256": "ebf70e6efbfbce2529a7b335460552a9273a27be3f6df1b972d03e0660240405",
+    "test_sha256": "fd9dc36f9fc6a3912a1556f5c25fbb53c28c920fd65a96c1f60bd3f7e3341328",
+    "library_sha256": "9a9a7138816c67be4719c93e2f0b048fa69a309840419b69cd699f95b8e3f24c",
+    "fn_store_test_sha256": "c3e447d362a034cbb7ccf4f38be559b5fef24d47558ccf4a4b892c404b1e3ef7",
+    "split_cases_passed": 16,
+    "full_fn_store_test_passed": true,
+    "source_unchanged": true,
+    "GPU_model_runs": 0,
+    "reference_execution_on_M3": false
+  },
+  "not_verified": [
+    "GPU/model execution",
+    "whole-model output equivalence",
+    "performance",
+    "trained GGUF PLE tables",
+    "automatic split-filename model-folder discovery",
+    "formats or worker schedules outside this fixture matrix",
+    "whole-library sanitizers",
+    "Generic vk tier-2 Qwen3.5 4B and Qwen3.6 35B-A3B model/model-tokenizer/API/logit/decode/interleaved-speed recommendations were not run. Neither model calls this reader; no tier-2-wide validation claim is made."
+  ],
+  "required_check_classification": {
+    "tier": 2,
+    "reason": "kernel or model code every model may reach (generic src/model/* rule)",
+    "GPU_model_speed_checks_executed": false,
+    "scope_decision": "This changes CPU metadata-to-file selection, leaves all decoder/math/default policies unchanged, and is gated by direct complete row/gather byte oracles. No whole-model equivalence or speed claim."
+  }
+}
