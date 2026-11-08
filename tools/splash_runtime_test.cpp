@@ -228,11 +228,31 @@ int main(int argc, char** argv) {
     auto ia = rt.submit(req(999), a, 30), ib = rt.submit(req(999), b, 30);
     CHECK(a->wait_started() && b->wait_started());
     rt.cancel(ia);
+    usleep(250000);
+    CHECK(!a->wait(0.01));
     rt.cancel(ia);
-    CHECK(a->wait(5) && b->wait(5));
+    CHECK(a->wait(0.35) && b->wait(5));
     CHECK(a->errored && b->errored && a->terminals == 1 && b->terminals == 1);
     CHECK(a->e.code == "cancel_timeout" && b->e.code == "cancel_timeout");
     CHECK(!rt.alive());
+    rt.shutdown();
+  }
+
+  {
+    auto o = opts(self, "ignore_cancel");
+    o.cancel_timeout_s = 0.4;
+    Runtime rt(o);
+    rt.start();
+    auto active = std::make_shared<Collect>();
+    auto id = rt.submit(req(999), active, 30);
+    CHECK(active->wait_started());
+    CHECK(!active->wait(0.7));
+    CHECK(rt.alive());
+    auto healthy = std::make_shared<Collect>();
+    rt.submit(req(1), healthy, 30);
+    CHECK(healthy->wait() && healthy->done && healthy->terminals == 1);
+    rt.cancel(id);
+    CHECK(active->wait(5) && active->errored && active->terminals == 1);
     rt.shutdown();
   }
 
