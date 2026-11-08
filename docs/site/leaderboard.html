@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kapitsa community benchmark leaderboard</title>
+<style>
+:root {
+  --bg: #fff; --fg: #111; --muted: #666; --accent: #0057ff;
+  --card-bg: #f6f7f9; --border: #dde; --code-bg: #f0f1f4;
+  --table-head: #e8eaee; --row-hover: #f0f3ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0d0d; --fg: #e8e8e8; --muted: #999; --accent: #5b9aff;
+    --card-bg: #1a1a1a; --border: #2a2a2a; --code-bg: #1e1e1e;
+    --table-head: #1e1e1e; --row-hover: #1a1e2a;
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--fg);
+  line-height: 1.5; max-width: 1100px; margin: 0 auto; padding: 32px 20px;
+}
+h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+.subtitle { color: var(--muted); margin-bottom: 20px; font-size: 0.95rem; }
+.controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.controls select, .controls input {
+  font-size: 0.9rem; padding: 6px 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--card-bg); color: var(--fg);
+}
+.controls input { flex: 1; min-width: 200px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+thead th {
+  background: var(--table-head); text-align: left; padding: 8px 10px;
+  border-bottom: 2px solid var(--border); cursor: pointer; user-select: none;
+  white-space: nowrap; position: relative;
+}
+thead th:hover { color: var(--accent); }
+thead th .arrow { font-size: 0.7rem; margin-left: 4px; }
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--row-hover); }
+td { padding: 6px 10px; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.highlight { font-weight: 600; color: var(--accent); }
+.chip { display: inline-block; background: var(--code-bg); border-radius: 4px; padding: 1px 6px; font-size: 0.8rem; }
+.empty { text-align: center; padding: 40px; color: var(--muted); }
+.back { margin-bottom: 20px; display: inline-block; }
+.count { color: var(--muted); font-size: 0.85rem; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<a class="back" href="index.html">← Kapitsa</a>
+<h1>Community benchmark leaderboard</h1>
+<p class="subtitle">Results from <code>kapitsa bench --submit</code>. <a href="https://github.com/nace-ai/kapitsa/blob/main/bench/community/RESULTS.md">How to submit</a></p>
+
+<div class="controls">
+  <select id="filterChip" onchange="render()"><option value="">All chips</option></select>
+  <select id="filterModel" onchange="render()"><option value="">All models</option></select>
+  <input type="text" id="searchBox" placeholder="Search..." oninput="render()">
+</div>
+<p class="count" id="resultCount"></p>
+
+<table>
+  <thead>
+    <tr>
+      <th onclick="sortBy('chip')">Chip <span class="arrow" id="arrow_chip"></span></th>
+      <th onclick="sortBy('ram')">RAM <span class="arrow" id="arrow_ram"></span></th>
+      <th onclick="sortBy('mac')">Mac <span class="arrow" id="arrow_mac"></span></th>
+      <th onclick="sortBy('model')">Model <span class="arrow" id="arrow_model"></span></th>
+      <th onclick="sortBy('variant')">Variant <span class="arrow" id="arrow_variant"></span></th>
+      <th onclick="sortBy('decoding')">Decoding <span class="arrow" id="arrow_decoding"></span></th>
+      <th onclick="sortBy('decode')">Decode tok/s <span class="arrow" id="arrow_decode"></span></th>
+      <th onclick="sortBy('prefill')">Prefill tok/s <span class="arrow" id="arrow_prefill"></span></th>
+      <th onclick="sortBy('date')">Date <span class="arrow" id="arrow_date"></span></th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+<p class="empty" id="emptyMsg" style="display:none">No results match the filters.</p>
+
+<script src="leaderboard-data.js"></script>
+<script>
+var DATA = [];
+var sortCol = "decode";
+var sortDir = -1; // descending
+
+// The result JSON files are baked in at deploy time by the GitHub Pages workflow,
+// which runs tools/build_leaderboard_data.py to produce leaderboard-data.js.
+// For local preview, we inline any results already committed.
+
+function initData(results) {
+  DATA = results.map(function(r) {
+    var prefillEntry = (r.results && r.results.prefill && r.results.prefill[0]) || {};
+    return {
+      chip: (r.mac && r.mac.chip) || "",
+      ram: (r.mac && r.mac.memory_gb) || 0,
+      mac: (r.mac && r.mac.name) || "",
+      model: (r.model && r.model.title) || "",
+      variant: (r.model && r.model.variant) || "",
+      decoding: (r.model && r.model.decoding) || "plain",
+      decode: (r.results && r.results.decode && r.results.decode.median_tps) || 0,
+      prefill: prefillEntry.tps || 0,
+      date: (r.time_utc || "").slice(0, 10),
+      version: (r.kapitsa && r.kapitsa.version) || ""
+    };
+  });
+
+  // Populate filter dropdowns
+  var chips = Array.from(new Set(DATA.map(function(d) { return d.chip; }))).sort();
+  var models = Array.from(new Set(DATA.map(function(d) { return d.model; }))).sort();
+  var chipSel = document.getElementById("filterChip");
+  chips.forEach(function(c) { var o = document.createElement("option"); o.value = c; o.textContent = c; chipSel.appendChild(o); });
+  var modelSel = document.getElementById("filterModel");
+  models.forEach(function(m) { var o = document.createElement("option"); o.value = m; o.textContent = m; modelSel.appendChild(o); });
+
+  render();
+}
+
+function sortBy(col) {
+  if (sortCol === col) { sortDir *= -1; }
+  else { sortCol = col; sortDir = (col === "decode" || col === "prefill" || col === "ram") ? -1 : 1; }
+  render();
+}
+
+function render() {
+  var chipFilter = document.getElementById("filterChip").value;
+  var modelFilter = document.getElementById("filterModel").value;
+  var search = document.getElementById("searchBox").value.toLowerCase();
+
+  var filtered = DATA.filter(function(d) {
+    if (chipFilter && d.chip !== chipFilter) return false;
+    if (modelFilter && d.model !== modelFilter) return false;
+    if (search) {
+      var hay = (d.chip + " " + d.mac + " " + d.model + " " + d.variant + " " + d.decoding).toLowerCase();
+      if (hay.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+
+  filtered.sort(function(a, b) {
+    var va = a[sortCol], vb = b[sortCol];
+    if (typeof va === "number") return (va - vb) * sortDir;
+    return String(va).localeCompare(String(vb)) * sortDir;
+  });
+
+  // Update arrows
+  ["chip","ram","mac","model","variant","decoding","decode","prefill","date"].forEach(function(c) {
+    var el = document.getElementById("arrow_" + c);
+    if (el) el.textContent = sortCol === c ? (sortDir > 0 ? "▲" : "▼") : "";
+  });
+
+  // Find best decode per model for highlighting
+  var bestDecode = {};
+  filtered.forEach(function(d) {
+    if (!bestDecode[d.model] || d.decode > bestDecode[d.model]) bestDecode[d.model] = d.decode;
+  });
+
+  var tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  filtered.forEach(function(d) {
+    var tr = document.createElement("tr");
+    var isBest = d.decode === bestDecode[d.model] && d.decode > 0;
+    tr.innerHTML =
+      '<td><span class="chip">' + esc(d.chip) + '</span></td>' +
+      '<td class="num">' + d.ram + ' GB</td>' +
+      '<td>' + esc(d.mac) + '</td>' +
+      '<td>' + esc(d.model) + '</td>' +
+      '<td>' + esc(d.variant) + '</td>' +
+      '<td>' + esc(d.decoding) + '</td>' +
+      '<td class="num' + (isBest ? ' highlight' : '') + '">' + fmt(d.decode) + '</td>' +
+      '<td class="num">' + fmt(d.prefill) + '</td>' +
+      '<td>' + esc(d.date) + '</td>';
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("resultCount").textContent = filtered.length + " of " + DATA.length + " results";
+  document.getElementById("emptyMsg").style.display = filtered.length === 0 ? "" : "none";
+}
+
+function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function fmt(n) { return n > 0 ? n.toFixed(1) : "—"; }
+
+// Load the generated data file, or start empty for local preview
+(function() {
+  if (typeof LEADERBOARD_DATA !== "undefined") {
+    initData(LEADERBOARD_DATA);
+  } else {
+    initData([]);
+  }
+})();
+</script>
+</body>
+</html>

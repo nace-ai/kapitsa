@@ -19,10 +19,11 @@ This starts Kapitsa on `http://127.0.0.1:8000/v1` with the Qwen3.6-35B-A3B model
 ## Point Xcode at Kapitsa
 
 1. Open **Xcode → Settings → Intelligence**.
-2. Under **Model Provider**, choose **Custom OpenAI-Compatible**.
-3. Set the **Base URL** to `http://127.0.0.1:8000/v1`.
-4. Leave the **API Key** field empty (Kapitsa does not require one), or enter any string if Xcode insists on a value.
-5. Close Settings. Xcode now routes completions and chat through Kapitsa.
+2. Click **Add a Model Provider**.
+3. Choose **Local model provider**.
+4. Set the server URL to `http://127.0.0.1:8000/v1`.
+5. Xcode works best with models that support tool calling. Leave that toggle on: Kapitsa's OpenAI API supports tool calls.
+6. Close Settings. Xcode now routes coding assistant requests through Kapitsa.
 
 ## Which models work best
 
