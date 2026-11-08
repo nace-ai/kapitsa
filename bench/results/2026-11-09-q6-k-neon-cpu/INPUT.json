@@ -1,0 +1,26 @@
+{
+  "model": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+  "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+  "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+  "model_bytes": 2776033248,
+  "model_sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b",
+  "tensor": "token_embd.weight",
+  "gguf_type": 14,
+  "format": "Q6_K",
+  "shape_ggml_order": [
+    2560,
+    248320
+  ],
+  "sample": "first1024 rows",
+  "absolute_file_offset": 10979296,
+  "sample_bytes": 2150400,
+  "sample_sha256": "02b3932dd3bb21a6990b4daf66a94be1c8c99eb961aea16f31b3190752c3c7d7",
+  "output_bytes_per_pass": 10485760,
+  "output_sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+  "other_source_Q6_K_tensors": [
+    "blk.3.attn_q.weight",
+    "blk.15.attn_q.weight",
+    "blk.27.attn_q.weight",
+    "blk.31.attn_q.weight"
+  ]
+}

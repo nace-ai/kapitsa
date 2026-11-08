@@ -1,0 +1,295 @@
+{
+  "provenance": "Explicitly redacted derived summary of private execution records, not raw logs. Reproduction commands are derived examples.",
+  "candidate_source": "4f4475338a523de2d2c32a9c8e66c1fbdc623b23",
+  "reference_source": "4b9ce88708282f754b76cbd7214e188786680c89",
+  "candidate_quant_cpp_sha256": "fcad7ef4387d68d333b60179ae429e3a2343fe4c56098c0a29f791271decd6f9",
+  "reference_quant_cpp_sha256": "a91b8ed51c55ccbd700d490f9e353ca9b50687e50b1fd6f9851f0f0070afb689",
+  "test_header_sha256": "7cf775ff35ec693efda431aaf4246600558dfcda644d8da8acabc0f65482a604",
+  "standalone_compile_flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "scope": "CPU dequantize(kQ6_K) per2560-value row; not full import or inference timing",
+  "method": {
+    "rows_per_pass": 1024,
+    "warm_passes": 64,
+    "timed_passes_per_leg": 256,
+    "order": "A B A B A B A B",
+    "byte_gate": "Complete10485760-byte output after each timed pass outside timer; finite reference. Final output also literally compared.",
+    "sources": "Same driver and gguf.cpp; only quant.cpp replaced by the reference revision in A"
+  },
+  "setups": {
+    "M3": {
+      "environment": {
+        "chip": "M3 Ultra",
+        "gpu_cores": 60,
+        "memory_GiB": 96,
+        "macOS": "26.4.1",
+        "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+      },
+      "binaries_sha256": {
+        "A": "371c84c526d0935b36d4f4d2afda1a883580d380483d3cf03355e72e34f82f90",
+        "B": "33575e905adcd51d1c961db8ae059f9657162043dd8d110ec4728cce7289dd08"
+      },
+      "legs": [
+        {
+          "label": "A1",
+          "rc": 0,
+          "ns_per_row": 7882.239196777,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B1",
+          "rc": 0,
+          "ns_per_row": 1493.488456726,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "A2",
+          "rc": 0,
+          "ns_per_row": 7789.039550781,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B2",
+          "rc": 0,
+          "ns_per_row": 1497.245002747,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "A3",
+          "rc": 0,
+          "ns_per_row": 7798.075035095,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B3",
+          "rc": 0,
+          "ns_per_row": 1488.031879425,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "A4",
+          "rc": 0,
+          "ns_per_row": 7866.951797485,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B4",
+          "rc": 0,
+          "ns_per_row": 1507.400493622,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        }
+      ],
+      "paired_row_latency_percent": [
+        -81.05248496725805,
+        -80.77754011921954,
+        -80.91795894848207,
+        -80.83882382368348
+      ]
+    },
+    "M4": {
+      "environment": {
+        "chip": "M4 Pro",
+        "gpu_cores": 20,
+        "memory_GiB": 48,
+        "macOS": "15.7.1",
+        "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+      },
+      "binaries_sha256": {
+        "A": "159ef6aef56b6c28754670bd54a6211c8fe4ab6d2924d4e320d7999fb43b782f",
+        "B": "16fe4ae0095c6ac5cf4a7e291578c9bc3fa8ce97225df802db9ef0d346302b57"
+      },
+      "legs": [
+        {
+          "label": "A1",
+          "rc": 0,
+          "ns_per_row": 967.627864838,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B1",
+          "rc": 0,
+          "ns_per_row": 227.396053314,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "A2",
+          "rc": 0,
+          "ns_per_row": 956.192516327,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B2",
+          "rc": 0,
+          "ns_per_row": 231.907211304,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "A3",
+          "rc": 0,
+          "ns_per_row": 972.473011017,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B3",
+          "rc": 0,
+          "ns_per_row": 224.002048492,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "A4",
+          "rc": 0,
+          "ns_per_row": 961.106601715,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        },
+        {
+          "label": "B4",
+          "rc": 0,
+          "ns_per_row": 223.568443298,
+          "bytes": 10485760,
+          "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+          "literal_equal": true
+        }
+      ],
+      "paired_row_latency_percent": [
+        -76.49963776600515,
+        -75.74680753674797,
+        -76.96573108412115,
+        -76.73843433193943
+      ]
+    }
+  },
+  "earlier_M4_pilot": {
+    "binaries_sha256": {
+      "A": "0bb5f0e6e2ded537612b62a5da1f7484afb98a032d02c8a889206c7347351825",
+      "B": "23b90cdfbafb9efb949c04c5862835b4e91fe08b005c7d1c52647b603e84c54a"
+    },
+    "warm_passes": 4,
+    "timed_passes": 16,
+    "byte_gate": "Full final output per leg; no per-pass gate in this earlier driver",
+    "legs": [
+      {
+        "label": "A1",
+        "rc": 0,
+        "ns_per_row": 1538.536071777,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      },
+      {
+        "label": "B1",
+        "rc": 0,
+        "ns_per_row": 460.891723633,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      },
+      {
+        "label": "A2",
+        "rc": 0,
+        "ns_per_row": 1053.431213379,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      },
+      {
+        "label": "B2",
+        "rc": 0,
+        "ns_per_row": 207.936645508,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      },
+      {
+        "label": "A3",
+        "rc": 0,
+        "ns_per_row": 904.144287109,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      },
+      {
+        "label": "B3",
+        "rc": 0,
+        "ns_per_row": 210.594177246,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      },
+      {
+        "label": "A4",
+        "rc": 0,
+        "ns_per_row": 920.758544922,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      },
+      {
+        "label": "B4",
+        "rc": 0,
+        "ns_per_row": 208.646179199,
+        "bytes": 10485760,
+        "sha256": "60d947c235ea8a84f89ea7d34e9f5d6f6e760c5fbe8ccb45b403aa8e34076dcd",
+        "literal_equal": true
+      }
+    ],
+    "limitation": "Startup variation retained separately from the formal measurements."
+  },
+  "checks": {
+    "focused_each_chip": {
+      "oracle_overlap_cases": 942272,
+      "half_mode_cases": 262144,
+      "selected_half_scale_code_mode_cases": 655360,
+      "overlap_alignment_cases": 24768,
+      "guard_pages": "Single/multiple blocks; empty/sub-block/truncated trailing block",
+      "result": "PASS"
+    },
+    "M4_ASan_UBSan": "Same942272 cases plus guarded buffers PASS",
+    "M4_mutants": {
+      "missing_high_bit_mask": "rejected",
+      "wrong_subblock_scale": "rejected"
+    },
+    "M4_own_Release_build": "PASS",
+    "M4_vk_CPU": "22 PASS",
+    "M4_supplemental_native_CPU": "18 PASS",
+    "M4_supplemental_scripts": "6 PASS",
+    "M4_prek": "PASS",
+    "M4_diff_check": "PASS"
+  },
+  "initial_harness_correction": "The first new boundary test expected partial n to throw. The existing API truncates n/256; the test was corrected and passed. Production semantics were unchanged. The initial failed run is preserved privately.",
+  "not_verified": [
+    "Own-source full-model imports/output/default-generation/performance/HTTP validation remains in progress. No full-model result is claimed here.",
+    "Other model families, complete import latency, inference speedup and non-arm64 execution."
+  ]
+}

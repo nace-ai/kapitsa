@@ -1,4 +1,5 @@
 #include "gguf_q8_0_test.h"
+#include "gguf_q6_k_test.h"
 #include "gguf_pack_codes_test.h"
 
 // The GPU layout of llama.cpp's IQ blocks (src/kernels/wfmt_iq.metal, gguf::iq_repack) checked on the CPU: random blocks
@@ -354,6 +355,7 @@ void test_iq4_nl_pages() {
 }  // namespace
 
 int main() {
+  g_fail += q6_test::run();
   g_fail += pack_codes_test::run();
   test_iq4_nl();
   test_iq4_nl_pages();
