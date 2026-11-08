@@ -4,7 +4,7 @@ The `qattn_t_g8d2s8` candidate compiled and ran on an M3 Ultra with Metal API an
 
 Runs: Apple M3 Ultra, 60 GPU cores, 96 GiB, macOS 26.4.1 (25E253); Release `-O3`, arm64, macOS 14 minimum. No model was loaded. Candidate source: `9e85764416be699578fc0cfc0b977d2ed449dbd6`. Reference kernel source: `065c4e36d611d3767acec1ba45b6a7ce965d420a`.
 
-The reference uses the same Release `bench_attn` object and library as the candidate, replacing only the embedded `qattn_t.metal` text with the pre-change version. `reference-build.json` records the compile/link commands, kernel/embed hashes and binary identities. Candidate binary SHA256: `f2a4cc0c909c033814e4022a9eba61ed78e938e26dd128683577e8e91ade3d3c`; reference binary SHA256: `9cfc681885f53a2d0b0e2853a7d39c4958973df90a9748b96b98a63388138c86`.
+The reference uses the same Release `bench_attn` object and library as the candidate, replacing only the embedded `qattn_t.metal` text with the pre-change version. `reference-build.json` records placeholder compile/link examples, kernel/embed hashes and binary identities. Candidate binary SHA256: `f2a4cc0c909c033814e4022a9eba61ed78e938e26dd128683577e8e91ade3d3c`; reference binary SHA256: `9cfc681885f53a2d0b0e2853a7d39c4958973df90a9748b96b98a63388138c86`.
 
 ## Command and results
 
@@ -32,6 +32,10 @@ This probe establishes compilation, guarded execution and pipeline storage on M3
 
 Required target validation remains unavailable: small M5/macOS 26 cases covering partial/live groups and causal/bidirectional GQA variants, complete old/new kernel outputs against FP64, interleaved latency, model output/HTTP checks and applicable second-setup coverage. The existing M4 host runs macOS 15.7.1 and cannot compile this Metal 4 path in that environment.
 
-Raw evidence: `remote-output.log`, `remote-state.json`, `comparison-output.log`, `comparison-state.json`, `reference-build.json`. The probes completed and exited; none was restarted for this supplement. Earlier CPU/build/lint checks remain separate evidence. No production source or previously committed evidence was changed.
+Derived evidence: `remote-output.log`, `remote-state.json`, `comparison-output.log`, `comparison-state.json`, `reference-build.json`. The probes completed and exited; none was restarted for this supplement. Earlier CPU/build/lint checks remain separate evidence. No production source changed; this declared privacy erratum replaces archived environment records without changing measurements.
 
-`evidence.tar.gz` preserves the five original measurement files. `SHA256.json` hashes every archive member; `archive-sha256.txt` hashes the archive. No compiled binaries, models or personal configuration are included.
+`evidence.tar.gz` contains privacy-filtered derived copies of the five measurement files. `SHA256.json` hashes every archive member; `archive-sha256.txt` hashes the archive. No compiled binaries, models or personal configuration are included.
+
+## Privacy export erratum
+
+This archive and its checksum manifest replace the original public export to remove private machine paths, usernames and resource records. The replacement is explicitly a privacy-filtered derived export, not a verbatim raw log. Modified commands contain `$PRIVATE_PATH` or other explicit placeholders and are reproduction examples. Original archive bytes and their SHA256 remain privately preserved for audit. Timing values, output results, pass/fail records and tested source/binary identities are unchanged; no test was rerun for this export. Kernel static allocation measurements remain intact.
