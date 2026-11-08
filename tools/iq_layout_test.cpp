@@ -10,12 +10,17 @@
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 
+#include <array>
+#include <cfenv>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <random>
 #include <string>
 #include <vector>
+
+#include <sys/mman.h>
+#include <unistd.h>
 
 namespace ni {
 extern const char* const kKernelSource;
@@ -167,9 +172,187 @@ void test_type(uint32_t t, const Tables& T, std::mt19937& rng) {
          bad || bad_alt ? "MISMATCH" : "every operand exact");
 }
 
+
+// The scalar format oracle keeps the original read/store order, including overlapping buffers.
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+void iq4_nl_reference(const uint8_t* b, float* y) {
+  static constexpr int8_t levels[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
+  _Float16 h;
+  memcpy(&h, b, 2);
+  const float d = float(h);
+  const uint8_t* q = b + 2;
+  for (int j = 0; j < 16; ++j) {
+    y[j] = d * float(levels[q[j] & 15]);
+    y[j + 16] = d * float(levels[q[j] >> 4]);
+  }
+}
+
+void iq4_nl_block(uint8_t* b, uint16_t h, unsigned pattern) {
+  memcpy(b, &h, 2);
+  for (unsigned j = 0; j < 16; ++j)
+    b[2 + j] = uint8_t(((5 * j + pattern) & 15) | (((9 * j + pattern / 16) & 15) << 4));
+}
+
+void test_iq4_nl() {
+  fenv_t saved;
+  check(std::fegetenv(&saved) == 0, "IQ4_NL save FP environment");
+  size_t cases = 0, bad = 0;
+  const int modes[] = {FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO};
+  auto compare = [&](const uint8_t* src, float* got, float* want, const char* what) {
+    std::feclearexcept(FE_ALL_EXCEPT);
+    iq4_nl_reference(src, want);
+    const int ref_flags = std::fetestexcept(FE_ALL_EXCEPT);
+    std::feclearexcept(FE_ALL_EXCEPT);
+    gg::dequantize(gg::kIQ4_NL, src, got, 32);
+    const int flags = std::fetestexcept(FE_ALL_EXCEPT);
+    ++cases;
+    if (memcmp(got, want, 32 * sizeof(float)) || flags != ref_flags) {
+      if (++bad <= 3) check(false, what, "case " + std::to_string(cases) + " flags " + std::to_string(flags) +
+                                              " vs " + std::to_string(ref_flags));
+    }
+  };
+  for (int mode : modes) {
+    check(std::fesetround(mode) == 0, "IQ4_NL set rounding mode");
+    // Every half bit pattern times every signed table level, in both nibble/output halves.
+    std::array<uint8_t, 18> raw;
+    std::array<float, 34> got, want;
+    for (uint32_t h = 0; h <= 0xffff; ++h) {
+      iq4_nl_block(raw.data(), uint16_t(h), h);
+      got.fill(123.5f);
+      want.fill(123.5f);
+      compare(raw.data(), got.data() + 1, want.data() + 1, "IQ4_NL half bits/nibbles/flags");
+      check(got.front() == 123.5f && got.back() == 123.5f, "IQ4_NL guarded output");
+    }
+    for (size_t position = 0; position < 16; ++position)
+      for (unsigned packed = 0; packed < 256; ++packed) {
+        iq4_nl_block(raw.data(), 0x3555, unsigned(position * 19));
+        raw[2 + position] = uint8_t(packed);
+        compare(raw.data(), got.data() + 1, want.data() + 1, "IQ4_NL packed byte/position");
+      }
+    for (size_t offset = 0; offset < 32; ++offset) {
+      std::array<uint8_t, 18 + 31> bytes;
+      bytes.fill(0xa7);
+      iq4_nl_block(bytes.data() + offset, 0x3555, unsigned(offset * 17));
+      const auto original = bytes;
+      for (size_t out_offset = 0; out_offset < 4; ++out_offset) {
+        std::array<float, 38> result, reference;
+        result.fill(123.5f); reference.fill(123.5f);
+        compare(bytes.data() + offset, result.data() + 1 + out_offset, reference.data() + 1 + out_offset,
+                "IQ4_NL unaligned input/output");
+        check(result == reference && bytes == original, "IQ4_NL unaligned guards and input preserved");
+      }
+    }
+    // All byte source alignments and nearby float-aligned output positions, including touching ranges.
+    for (size_t alignment = 0; alignment < 16; ++alignment)
+      for (size_t out_offset = 32; out_offset <= 356; out_offset += 4)
+        for (uint16_t h : {uint16_t(0), uint16_t(0x8000), uint16_t(0x3c00), uint16_t(0x7bff),
+                           uint16_t(0x7c00), uint16_t(0x7d55), uint16_t(0xfd55)}) {
+          alignas(16) std::array<uint8_t, 512> result, reference;
+          result.fill(0xa7);
+          const size_t src_offset = 160 + alignment;
+          iq4_nl_block(result.data() + src_offset, h, unsigned(out_offset + alignment));
+          reference = result;
+          std::feclearexcept(FE_ALL_EXCEPT);
+          iq4_nl_reference(reference.data() + src_offset, reinterpret_cast<float*>(reference.data() + out_offset));
+          const int ref_flags = std::fetestexcept(FE_ALL_EXCEPT);
+          std::feclearexcept(FE_ALL_EXCEPT);
+          gg::dequantize(gg::kIQ4_NL, result.data() + src_offset, reinterpret_cast<float*>(result.data() + out_offset), 32);
+          const int flags = std::fetestexcept(FE_ALL_EXCEPT);
+          ++cases;
+          if (result != reference || flags != ref_flags) {
+            if (++bad <= 3) check(false, "IQ4_NL overlap bytes/flags", "source " + std::to_string(src_offset) +
+                                                                        " output " + std::to_string(out_offset));
+          }
+        }
+  }
+  // Earlier blocks can overwrite later input headers/codes: compare the complete sequential backing bytes.
+  for (size_t blocks : {size_t(2), size_t(3), size_t(5)})
+    for (size_t alignment = 0; alignment < 16; ++alignment)
+      for (size_t out_offset = 192; out_offset <= 640; out_offset += 4) {
+        alignas(16) std::array<uint8_t, 2048> result, reference;
+        result.fill(0xa7);
+        const size_t src_offset = 512 + alignment;
+        for (size_t i = 0; i < blocks; ++i)
+          iq4_nl_block(result.data() + src_offset + 18 * i, i % 2 ? 0x3555 : 0x3c00, unsigned(i * 37));
+        reference = result;
+        std::feclearexcept(FE_ALL_EXCEPT);
+        for (size_t i = 0; i < blocks; ++i)
+          iq4_nl_reference(reference.data() + src_offset + 18 * i,
+                           reinterpret_cast<float*>(reference.data() + out_offset) + 32 * i);
+        const int ref_flags = std::fetestexcept(FE_ALL_EXCEPT);
+        std::feclearexcept(FE_ALL_EXCEPT);
+        gg::dequantize(gg::kIQ4_NL, result.data() + src_offset,
+                       reinterpret_cast<float*>(result.data() + out_offset), 32 * blocks);
+        const int flags = std::fetestexcept(FE_ALL_EXCEPT);
+        ++cases;
+        if (result != reference || flags != ref_flags) {
+          if (++bad <= 3) check(false, "IQ4_NL sequential overlap", std::to_string(blocks) + " blocks");
+        }
+      }
+  check(bad == 0, "IQ4_NL scalar oracle", std::to_string(bad) + " mismatches in " + std::to_string(cases) + " cases");
+  check(std::fesetenv(&saved) == 0, "IQ4_NL restore FP environment");
+  printf("  IQ4_NL: %zu half/nibble/rounding/unaligned/overlap byte and FP-flag cases\n", cases);
+}
+
+void test_iq4_nl_pages() {
+  const long page_size = sysconf(_SC_PAGESIZE);
+  check(page_size >= 4096, "IQ4_NL page size");
+  if (page_size < 4096) return;
+  const size_t page = size_t(page_size);
+  void* input = mmap(nullptr, 3 * page, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  void* output = mmap(nullptr, 3 * page, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  check(input != MAP_FAILED && output != MAP_FAILED, "IQ4_NL guard page maps");
+  if (input == MAP_FAILED || output == MAP_FAILED) {
+    if (input != MAP_FAILED) munmap(input, 3 * page);
+    if (output != MAP_FAILED) munmap(output, 3 * page);
+    return;
+  }
+  auto* ib = static_cast<uint8_t*>(input) + page;
+  auto* ob = static_cast<uint8_t*>(output) + page;
+  const bool writable = mprotect(ib, page, PROT_READ | PROT_WRITE) == 0 &&
+                        mprotect(ob, page, PROT_READ | PROT_WRITE) == 0;
+  check(writable, "IQ4_NL writable middle pages");
+  if (writable) {
+    for (size_t n : {size_t(0), size_t(1), size_t(31), size_t(32), size_t(33), size_t(63),
+                     size_t(64), size_t(65), size_t(96), size_t(160)}) {
+      const size_t blocks = n / 32;
+      uint8_t* src = ib + page - 18 * blocks;
+      float* dst = reinterpret_cast<float*>(ob + page - n * sizeof(float));
+      memset(ob, 0xa7, page);
+      std::vector<float> reference(n);
+      if (n) memset(reference.data(), 0xa7, n * sizeof(float));
+      for (size_t i = 0; i < blocks; ++i) {
+        iq4_nl_block(src + 18 * i, i % 2 ? 0x8000 : 0x3c00, unsigned(i * 19));
+        iq4_nl_reference(src + 18 * i, reference.data() + 32 * i);
+      }
+      // The generic decoder visits only whole blocks, leaving a partial-block suffix untouched.
+      gg::dequantize(gg::kIQ4_NL, src, dst, n);
+      check(!n || !memcmp(dst, reference.data(), n * sizeof(float)), "IQ4_NL page-end blocks/tail", std::to_string(n));
+      check(ob[page - n * sizeof(float) - 1] == 0xa7, "IQ4_NL output prefix guard");
+    }
+    bool caught = false;
+    try { gg::dequantize(UINT32_MAX, ib + page, reinterpret_cast<float*>(ob + page), 32); }
+    catch (const gg::Error&) { caught = true; }
+    check(caught, "IQ4_NL unsupported type fails before input/output access");
+    std::array<float, 32> reference;
+    iq4_nl_block(ib, 0x3c00, 5);
+    iq4_nl_reference(ib, reference.data());
+    gg::dequantize(gg::kIQ4_NL, ib, reinterpret_cast<float*>(ob), 32);
+    check(!memcmp(ob, reference.data(), sizeof(reference)) && ob[sizeof(reference)] == 0xa7,
+          "IQ4_NL page-start read and recovery after error");
+  }
+  munmap(input, 3 * page);
+  munmap(output, 3 * page);
+  printf("  IQ4_NL: protected-page block bounds, tails and error recovery\n");
+}
+
 }  // namespace
 
 int main() {
+  test_iq4_nl();
+  test_iq4_nl_pages();
   Tables T;
   T.iq2xxs = metal_table("constant ulong iq2xxs_gridp[256]", 256);
   T.iq2s = metal_table("constant ulong iq2s_gridp[1024]", 1024);

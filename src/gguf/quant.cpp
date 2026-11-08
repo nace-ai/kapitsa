@@ -11,6 +11,10 @@
 #include <cmath>
 #include <cstring>
 
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
+
 namespace ni::gguf {
 
 uint16_t to_bf16(float x) {
@@ -225,13 +229,40 @@ void dq_q6_k(const uint8_t* b, float* y) {
   }
 }
 
-void dq_iq4_nl(const uint8_t* b, float* y) {
+void dq_iq4_nl_scalar(const uint8_t* b, float* y) {
   const float d = f16_at(b);
   const uint8_t* q = b + 2;
   for (int j = 0; j < 16; ++j) {
     y[j] = d * float(kIq4Levels[q[j] & 0xF]);
     y[j + 16] = d * float(kIq4Levels[q[j] >> 4]);
   }
+}
+
+
+void dq_iq4_nl(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t h;
+  memcpy(&h, b, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = dst >= src ? dst - src < 18 : src - dst < 32 * sizeof(float);
+  if ((h & 0x7c00) != 0x7c00 && !overlap) {
+    const float d = from_f16(h);
+    const int8x16_t levels = vld1q_s8(kIq4Levels);
+    const uint8x16_t q = vld1q_u8(b + 2);
+    auto store = [&](uint8x16_t indices, float* out) {
+      const int8x16_t v = vqtbl1q_s8(levels, indices);
+      const int16x8_t lo = vmovl_s8(vget_low_s8(v)), hi = vmovl_s8(vget_high_s8(v));
+      vst1q_f32(out, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(lo))), d));
+      vst1q_f32(out + 4, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(lo))), d));
+      vst1q_f32(out + 8, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(hi))), d));
+      vst1q_f32(out + 12, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(hi))), d));
+    };
+    store(vandq_u8(q, vdupq_n_u8(15)), y);
+    store(vshrq_n_u8(q, 4), y + 16);
+    return;
+  }
+#endif
+  dq_iq4_nl_scalar(b, y);
 }
 
 void dq_iq4_xs(const uint8_t* b, float* y) {
