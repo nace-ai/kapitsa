@@ -1,0 +1,60 @@
+{
+  "format": "Privacy-filtered derived evidence; not raw execution logs.",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "differential": {
+    "runs": [
+      {
+        "arm": "reference",
+        "rc": 0,
+        "binary_sha256": "4f194b980b9e17d921aa9596a1c6202ea72d9c2d7976edcafe828f8f80b16738",
+        "result": {
+          "cases": 960,
+          "canaries": true,
+          "input": "deterministic complete byte patterns; exceptional scales included"
+        }
+      },
+      {
+        "arm": "candidate",
+        "rc": 0,
+        "binary_sha256": "7692b60e9359963cbdd33371abfb44296d2822f5af0733e7f8f9fea49ce05d85",
+        "result": {
+          "cases": 960,
+          "canaries": true,
+          "input": "deterministic complete byte patterns; exceptional scales included"
+        }
+      }
+    ],
+    "complete_output_bytes_equal": true,
+    "bytes_each_arm": 7334400,
+    "sha256_each": "99c02682447b0c76096f746183668c534907250f675290337e91bcd80ce84c41",
+    "scope": "Actual import.cpp convert_rows; q4_0/q4_1/q4_k, zero/partial ranges and nonzero source offsets, permuted and unpermuted. Differential baseline plus canaries; real-row independent oracle separate."
+  },
+  "sanitizer_and_mutant": {
+    "results": [
+      {
+        "label": "sanitizer-build",
+        "rc": 0
+      },
+      {
+        "label": "sanitizer-run",
+        "rc": 0
+      },
+      {
+        "label": "mutant-build",
+        "rc": 0
+      },
+      {
+        "label": "mutant-oracle-reject",
+        "rc": 6,
+        "expected": 6
+      }
+    ],
+    "sanitizer_bytes_equal_reference": true,
+    "sanitizer_cases": 960,
+    "mutant_rejected": true,
+    "mutant_definition": "Identity head index instead of required grouped-to-tiled permutation; real-row independent oracle rejects before timing."
+  },
+  "source_contract": "Import metadata validation requires DeltaNet value-head width128 and divisible key/value head counts. Internal output code/scale/bias buffers are separate.",
+  "limitations": "Q4_1/Q4_K checks compare complete baseline/candidate output bytes with canaries. The independent nibble/half/BF16 oracle is on actual Q4_0 rows."
+}
