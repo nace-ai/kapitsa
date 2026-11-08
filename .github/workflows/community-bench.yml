@@ -13,7 +13,7 @@ on:
     paths: ["bench/community/results/**"]
   push:
     branches: [main]
-    paths: ["bench/community/results/**", "tools/community_table.py", "bench/community/RESULTS.md"]
+    paths: ["bench/community/results/**", "tools/community_table.py", "bench/community/RESULTS.md", "tools/build_leaderboard_data.py", "docs/site/leaderboard-data.js"]
 
 permissions:
   contents: read
@@ -64,15 +64,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Write RESULTS.md
-        run: python3 tools/community_table.py
+      - name: Write RESULTS.md and leaderboard data
+        run: |
+          python3 tools/community_table.py
+          python3 tools/build_leaderboard_data.py
 
       # main only takes squash-merged pull requests, so the update goes through one
       - name: Open and merge a pull request if it changed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- bench/community/RESULTS.md; then
+          if git diff --quiet -- bench/community/RESULTS.md && git diff --quiet -- docs/site/leaderboard-data.js; then
             echo "RESULTS.md is up to date"
             # symmetric close: if a drift issue is open, this push is its cure
             stale_title="Community results table is stale on main"
@@ -86,10 +88,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          git commit -m "bench/community/RESULTS.md: the community results, rewritten from bench/community/results" -- bench/community/RESULTS.md
+          git add -f docs/site/leaderboard-data.js
+          git commit -m "bench/community: rewrite RESULTS.md and leaderboard data from bench/community/results" -- bench/community/RESULTS.md docs/site/leaderboard-data.js
           git push origin "$branch"
-          if ! gh pr create --base main --head "$branch" --title "Community results: RESULTS.md rewritten" \
-            --body "Rewritten by tools/community_table.py from bench/community/results after ${GITHUB_SHA::12}."; then
+          if ! gh pr create --base main --head "$branch" --title "Community results: RESULTS.md and leaderboard data rewritten" \
+            --body "Rewritten by tools/community_table.py and tools/build_leaderboard_data.py from bench/community/results after ${GITHUB_SHA::12}."; then
             # the repository's "Allow GitHub Actions to create and approve pull requests" is off: no branch left behind
             git push origin --delete "$branch"
             # The table is stale on main now and nothing else notices, so record it where a person will see it: an open
@@ -105,9 +108,11 @@ jobs:
               "" \
               "To clear it:" \
               '```sh' \
-              "python3 tools/community_table.py   # rewrites bench/community/RESULTS.md from bench/community/results" \
+              "python3 tools/community_table.py" \
+              "python3 tools/build_leaderboard_data.py" \
               "git checkout -b chore/community-results-${GITHUB_SHA::12}" \
-              "git commit -m 'bench/community/RESULTS.md: the community results, rewritten from bench/community/results' -- bench/community/RESULTS.md" \
+              "git add -f docs/site/leaderboard-data.js" \
+              "git commit -m 'bench/community: rewrite RESULTS.md and leaderboard data' -- bench/community/RESULTS.md docs/site/leaderboard-data.js" \
               "git push origin HEAD && gh pr create --fill" \
               '```' \
               "" \
