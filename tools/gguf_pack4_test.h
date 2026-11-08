@@ -102,4 +102,3 @@ inline int run() {
   }
 }
 }  // namespace pack4_test
-
