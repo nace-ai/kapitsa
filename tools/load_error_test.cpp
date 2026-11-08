@@ -3,6 +3,7 @@
 // through the real loader using tiny Metal buffers, without dispatching a kernel.
 #include "util/load_threads.h"
 #include "loader/safetensors.h"
+#include "gguf/gguf.h"
 #include "model/expert_store.h"
 #include "model/qwen35.h"
 #include "bench/bench.h"
@@ -233,6 +234,71 @@ static void unsupported_dtypes(const std::filesystem::path& parent) {
   std::filesystem::remove_all(dir);
   std::cout << "PASS unsupported dtypes rejected, tensor filters and header-only plans preserved\n";
 }
+// Tensor ranges are checked before import or reads, including sums that wrap uint64_t.
+static void gguf_ranges(const std::filesystem::path& parent) {
+  const auto dir = parent / "gguf-ranges";
+  std::filesystem::create_directory(dir);
+  const auto path = dir / "single.gguf";
+  auto write = [&](const std::filesystem::path& dst, uint64_t rel, const std::string& data,
+                   const std::string& name = "x") {
+    std::ofstream f(dst, std::ios::binary);
+    auto put = [&](auto x) { f.write(reinterpret_cast<const char*>(&x), sizeof x); };
+    f.write("GGUF", 4); put(uint32_t(3)); put(uint64_t(1)); put(uint64_t(0));
+    put(uint64_t(name.size())); f << name; put(uint32_t(1)); put(uint64_t(1));
+    put(uint32_t(gguf::kF64)); put(rel);
+    const size_t at = size_t(f.tellp());
+    CHECK(at <= 64); f << std::string(64 - at, '\0') << data;
+    CHECK(f.good());
+  };
+  auto rejected = [&](auto operation, const std::string& text) {
+    bool caught = false;
+    try { operation(); }
+    catch (const gguf::Error& e) { caught = std::string(e.what()).find(text) != std::string::npos; }
+    CHECK(caught);
+  };
+  const int before = descriptors();
+  for (const uint64_t rel : {uint64_t(0), uint64_t(8), UINT64_MAX,
+                             UINT64_MAX - 7 - 64}) {
+    write(path, rel, rel == 8 ? "ABCDEFGH" : "");
+    for (int i = 0; i < 8; ++i) {
+      rejected([&] { gguf::File f(path); }, "tensor x lies beyond the end");
+      rejected([&] { gguf::File f(path); }, path.string());
+    }
+  }
+  CHECK(descriptors() == before);
+  write(path, 0, "ABCDEFGH");
+  {
+    gguf::File f(path);
+    const auto* t = f.find("x"); CHECK(t && t->offset == 64 && t->bytes == 8);
+    char out[10]; memset(out, '?', sizeof out);
+    f.read(*t, 0, out + 1, 8); CHECK(std::string(out, sizeof out) == "?ABCDEFGH?");
+    memset(out, '?', sizeof out);
+    f.read(*t, 3, out + 1, 3); CHECK(std::string(out, 5) == "?DEF?");
+    f.read(*t, 8, nullptr, 0);  // an empty read at the exact end remains valid
+    for (const auto& [off, n] : std::vector<std::pair<uint64_t, size_t>>{
+             {8, 1}, {9, 0}, {UINT64_MAX, 1}, {UINT64_MAX - 7, 8}, {0, SIZE_MAX}}) {
+      memset(out, '?', sizeof out);
+      rejected([&] { f.read(*t, off, out + 1, n); }, "internal: read past the end of tensor x");
+      CHECK(std::string(out, sizeof out) == std::string(sizeof out, '?'));
+    }
+    f.read(*t, 0, out + 1, 8); CHECK(std::string(out, sizeof out) == "?ABCDEFGH?");
+  }
+  CHECK(descriptors() == before);
+  const auto a = dir / "split-00001-of-00002.gguf", b = dir / "split-00002-of-00002.gguf";
+  write(a, 0, "ABCDEFGH"); write(b, UINT64_MAX - 7 - 64, "", "y");
+  rejected([&] { gguf::File f(a); }, "tensor y lies beyond the end");
+  CHECK(descriptors() == before);
+  write(b, 0, "abcdefgh", "y");
+  {
+    gguf::File f(a); const auto* t = f.find("y"); CHECK(t && t->part == 1);
+    char out[10]; memset(out, '?', sizeof out);
+    f.read(*t, 0, out + 1, 8); CHECK(std::string(out, sizeof out) == "?abcdefgh?");
+  }
+  CHECK(descriptors() == before);
+  std::filesystem::remove_all(dir);
+  std::cout << "PASS GGUF file/read bounds, wrapped offsets, split-part FD cleanup and valid reads\n";
+}
+
 static void cpu(const char* self) {
   CHECK(!FatalRecovery::enabled());
   {
@@ -282,6 +348,7 @@ static void cpu(const char* self) {
   child_fails(self, "--bad-file", pattern);
   tensor_entries(dir);
   unsupported_dtypes(dir);
+  gguf_ranges(dir);
   uncached_reads(dir);
   std::filesystem::remove_all(dir);
   std::cout << "PASS scoped errors, thread joining/isolation, loader FD cleanup, CLI exit 1\n";
