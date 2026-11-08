@@ -21,6 +21,7 @@
 #include <cstring>
 #include <vector>
 #include <memory>
+#include <limits>
 
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 using namespace ni;
@@ -299,6 +300,101 @@ static void gguf_ranges(const std::filesystem::path& parent) {
   std::cout << "PASS GGUF file/read bounds, wrapped offsets, split-part FD cleanup and valid reads\n";
 }
 
+// Relative reads must stay in their tensor even when off + n wraps size_t.
+static void safetensors_read_bounds() {
+  char pattern[] = "/tmp/kapitsa-read-bounds-XXXXXX";
+  CHECK(mkdtemp(pattern));
+  const std::filesystem::path dir(pattern), path = dir / "model.safetensors";
+  struct Cleanup {
+    std::filesystem::path dir;
+    ~Cleanup() { std::error_code ec; std::filesystem::remove_all(dir, ec); }
+  } cleanup{dir};
+  using J = nlohmann::json;
+  const std::string payload = "ABCDEFGH";
+  const std::string hdr = J{{"x", {{"dtype", "U8"}, {"shape", {8}}, {"data_offsets", {0, 8}}}},
+                            {"empty", {{"dtype", "U8"}, {"shape", {0}}, {"data_offsets", {8, 8}}}}}.dump();
+  auto write = [&] {
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    const uint64_t n = hdr.size();
+    f.write(reinterpret_cast<const char*>(&n), 8); f << hdr << payload;
+    CHECK(bool(f));
+  };
+  write();
+  const int before = descriptors();
+  FatalRecovery recover;
+  {
+    SafetensorsIndex index(dir);
+    const auto& t = index.get("x");
+    const auto& empty = index.get("empty");
+    CHECK(t.len == payload.size() && empty.len == 0);
+    size_t valid = 0;
+    for (size_t off = 0; off <= t.len; ++off)
+      for (size_t n = 0; n <= t.len - off; ++n) {
+        std::vector<char> out(n + 2, '?');
+        index.read(t, off, out.data() + 1, n);
+        CHECK(out.front() == '?' && out.back() == '?');
+        CHECK(std::string(out.data() + 1, n) == payload.substr(off, n));
+        ++valid;
+      }
+    index.read(t, t.len, nullptr, 0);
+    index.read(empty, 0, nullptr, 0);
+    std::cout << "PASS " << valid << " guarded full/partial/end reads and empty zero reads\n";
+    // Enough space for the whole fixture even if a regression admits an invalid range.
+    const size_t guard_size = 8 + hdr.size() + payload.size() + 2;
+    auto reject = [&](const SafetensorsIndex::Entry& entry, size_t off, size_t n) {
+      std::vector<char> out(guard_size, '?');
+      bool caught = false;
+      try { index.read(entry, off, out.data() + 1, n); }
+      catch (const FatalError& e) { caught = std::string(e.what()).find("read past a tensor's end") != std::string::npos; }
+      if (!caught)
+        std::cout << "Unexpected read acceptance: off=" << off << " n=" << n
+                  << " first byte=" << unsigned(static_cast<unsigned char>(out[1]))
+                  << " outer guards=" << (out.front() == '?' && out.back() == '?') << '\n';
+      CHECK(caught);
+      CHECK(std::string(out.data(), out.size()) == std::string(out.size(), '?'));
+    };
+    const size_t max = std::numeric_limits<size_t>::max();
+    for (const auto& [off, n] : std::vector<std::pair<size_t, size_t>>{
+           {max, 1}, {max - 3, 8}, {1, max}, {max, max}, {t.len, 1}, {t.len + 1, 0},
+           {0, t.len + 1}, {t.len - 1, 2}, {0, max}})
+      reject(t, off, n);
+    reject(empty, 0, 1); reject(empty, 1, 0); reject(empty, max, 1);
+    std::cout << "PASS 12 invalid ranges rejected with unchanged destinations\n";
+    // A physical short read still uses the existing recoverable error and may fill its valid prefix.
+    std::filesystem::resize_file(path, t.off + 3);
+    char short_out[10]; memset(short_out, '?', sizeof short_out);
+    fails([&] { index.read(t, 0, short_out + 1, t.len); }, "reading");
+    CHECK(std::string(short_out, sizeof short_out) == "?ABC??????");
+    memset(short_out, '?', sizeof short_out);
+    index.read(t, 0, short_out + 1, 3);
+    CHECK(std::string(short_out, sizeof short_out) == "?ABC??????");
+    write();
+    index.read(t, 0, short_out + 1, t.len);
+    CHECK(std::string(short_out, sizeof short_out) == "?ABCDEFGH?");
+    std::cout << "PASS short-read error, retained prefix and retry on the same index\n";
+    std::atomic<size_t> completed{0};
+    LoadThreads readers;
+    for (size_t worker = 0; worker < 4; ++worker)
+      readers.emplace_back([&, worker] {
+        for (size_t i = 0; i < 64; ++i) {
+          const size_t off = (i + worker) % t.len;
+          char out[3] = {'?', '?', '?'};
+          index.read(t, off, out + 1, 1);
+          CHECK(out[0] == '?' && out[1] == payload[off] && out[2] == '?');
+          memset(out, '?', sizeof out);
+          fails([&] { index.read(t, max, out + 1, 1); }, "read past a tensor's end");
+          CHECK(std::string(out, sizeof out) == "???");
+          ++completed;
+        }
+      });
+    readers.join();
+    CHECK(completed == 256);
+    std::cout << "PASS 256 concurrent valid/rejected read pairs\n";
+  }
+  CHECK(descriptors() == before);
+  std::cout << "PASS Safetensors relative-read bounds and descriptor cleanup\n";
+}
+
 static void cpu(const char* self) {
   CHECK(!FatalRecovery::enabled());
   {
@@ -346,6 +442,7 @@ static void cpu(const char* self) {
   }
   CHECK(descriptors() == before);
   child_fails(self, "--bad-file", pattern);
+  safetensors_read_bounds();
   tensor_entries(dir);
   unsupported_dtypes(dir);
   gguf_ranges(dir);
@@ -497,7 +594,8 @@ int main(int argc, char** argv) {
   }
   if (argc > 2 && std::string(argv[1]) == "--bad-file") { WeightStore ws; ws.open_dir(argv[2]); }
   try {
-    if (argc > 1 && std::string(argv[1]) == "--mtp-gpu") mtp_gpu();
+    if (argc > 1 && std::string(argv[1]) == "--safetensors-read-bounds") safetensors_read_bounds();
+    else if (argc > 1 && std::string(argv[1]) == "--mtp-gpu") mtp_gpu();
     else if (argc > 1 && std::string(argv[1]) == "--gpu") gpu();
     else cpu(argv[0]);
   } catch (const std::exception& e) { std::cerr << "FAIL " << e.what() << '\n'; return 1; }

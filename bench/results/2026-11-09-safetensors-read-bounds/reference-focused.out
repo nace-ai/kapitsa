@@ -1,0 +1,3 @@
+PASS 45 guarded full/partial/end reads and empty zero reads
+Unexpected read acceptance: off=18446744073709551615 n=1 first byte=125 outer guards=1
+FAIL caught

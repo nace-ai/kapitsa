@@ -1,0 +1,5 @@
+PASS 45 guarded full/partial/end reads and empty zero reads
+PASS 12 invalid ranges rejected with unchanged destinations
+PASS short-read error, retained prefix and retry on the same index
+PASS 256 concurrent valid/rejected read pairs
+PASS Safetensors relative-read bounds and descriptor cleanup

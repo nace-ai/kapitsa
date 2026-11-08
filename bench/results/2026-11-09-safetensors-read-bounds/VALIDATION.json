@@ -1,0 +1,269 @@
+{
+  "kind": "derived technical summary from private original receipts",
+  "checked_at": "2026-11-08T16:00:49.912738+00:00",
+  "environment": {
+    "chip": "M4 Pro",
+    "gpu_cores": 20,
+    "memory_gib": 48,
+    "macos": "15.7.1",
+    "compiler": "Apple clang17 (clang-1700.0.13.5)"
+  },
+  "reference": {
+    "runtime_source": "607073ad6b23d73e4faf3d0553352a803bac0118",
+    "loader_sha256": "feb7310c3f23106d6a652d02542bbbb77e1357856fa13b0f2fe9875d3f993a28",
+    "test_source": "candidate test overlay on canonical runtime source",
+    "test_sha256": "4cd4223a446d0ef1aad2426ebb0d8e0c736b51f701a83b2df11126ccd3605f87",
+    "test_binary_sha256": "a87c05617c9b468884bb9ba0ce75a76ebc97190382837d8723e266843b45175a",
+    "library_sha256": "9aa25717665bcff52582e9bea9b065deae8cfa95e0151c8ecd61efb72937a5ca",
+    "configure_rc": 0,
+    "build_rc": 0,
+    "version_rc": 0,
+    "focused_rc": 1,
+    "result": "45 guarded valid ranges and explicit end/empty zero reads passed; first overflow rejection failed because SIZE_MAX offset plus1 wrapped, header byte125 was read, outer canaries intact; later checks did not execute"
+  },
+  "candidate": {
+    "source": "420eae44d8f9e251af698e9be96b05f988e7de92",
+    "loader_sha256": "eacce03c02f6a7f5ca732b595027289782d5d7c13b4643321537140a746cdaad",
+    "test_sha256": "4cd4223a446d0ef1aad2426ebb0d8e0c736b51f701a83b2df11126ccd3605f87",
+    "test_binary_sha256": "f542cbb75015bc21dce3d4e2b5e424bd45d607ea0590bccf645b45235ddba12b",
+    "library_sha256": "7a921d37293facdc46e43446a62223a4669dc2d5bdc4980ab9087845116355c3",
+    "configure_rc": 0,
+    "build_rc": 0,
+    "version_rc": 0,
+    "focused_rc": 0,
+    "checks": {
+      "guarded_valid_ranges": 45,
+      "explicit_nullptr_end_empty_zero_reads": 2,
+      "invalid_ranges_unchanged_destination": 12,
+      "short_read_prefix_and_same_index_retry": "PASS",
+      "concurrent_valid_rejected_pairs": 256,
+      "descriptor_cleanup": "PASS"
+    }
+  },
+  "method": {
+    "same_test_source": true,
+    "flags": "Release -O3, arm64, deployment target14.0, C++20; no NDEBUG; source-version define differs as expected",
+    "model_loaded": false,
+    "gpu_dispatched": false,
+    "inference_performance_measured": false,
+    "sanitizer_run": false
+  },
+  "scope": "Only relative read range rejection changes; accepted data bytes and physical short-read semantics are checked with a tiny synthetic valid U8 Safetensors fixture. No model output or speed claim.",
+  "M3_supplement": {
+    "environment": {
+      "chip": "M3 Ultra",
+      "gpu_cores": 60,
+      "memory_gib": 96,
+      "macos": "26.4.1",
+      "compiler": "Apple clang17 (clang-1700.6.4.2)"
+    },
+    "method": "Same test object; retained support library and exact changed loader object. Not a full candidate build.",
+    "source_commit": "420eae44d8f9e251af698e9be96b05f988e7de92",
+    "support_library_source_commit": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+    "support_library_sha256": "c840fb4e06df8bd3d194f82deb56a073097e9425e2de549bd6336d45ccfadaed",
+    "binary_sha256": {
+      "reference-driver": "1a9050916d2551b06d8d6029544916a4b8604407ca5d53c90391b68717f977da",
+      "candidate-driver": "1de5a8bf842544000317ec186fec0964c25bb7dd334f4fa23b3198c90600ec04",
+      "common-test.o": "14e5d71c7848468c7d3baa410ad67a7c3017801f4de7549d886913d51eb1b924",
+      "candidate-loader.o": "31776fbbd751bd94a11aca3e4916dadc973f5bb0c5140cd62188e25282d63eb1"
+    },
+    "commands": [
+      {
+        "label": "compiler-version",
+        "rc": 0,
+        "log_sha256": "adc95d20d373270b333581bf14a0277720cbe0e25692bb965465995e8504a2f6"
+      },
+      {
+        "label": "compile-common-test",
+        "rc": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "link-reference",
+        "rc": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "reference-focused",
+        "rc": 1,
+        "log_sha256": "2b3a4182174dcf60ec8e45e5107ac435e51791ddc781ab17b785f349fd83e9f6"
+      },
+      {
+        "label": "compile-candidate-loader",
+        "rc": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "link-candidate",
+        "rc": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "candidate-focused",
+        "rc": 0,
+        "log_sha256": "e18dcfed0e338d61c67890eaa75715d10ee05aaa98b8c6bf12e498bbd76f8e16"
+      }
+    ],
+    "dependency_check": "Fourteen compiler-reported unchanged source dependencies matched; support library unchanged."
+  },
+  "broad_M4": {
+    "source": "420eae44d8f9e251af698e9be96b05f988e7de92",
+    "vk_cpu_checks_passed": 22,
+    "supplementary_native_checks_passed": 18,
+    "commands": [
+      {
+        "label": "dependency-check-retry01",
+        "rc": 0
+      },
+      {
+        "label": "vk-cpu-tests",
+        "rc": 0
+      },
+      {
+        "label": "supplementary-build",
+        "rc": 0
+      },
+      {
+        "label": "supp-execution_session_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-http_stream_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-bench_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-update_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-grammar_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-structured_check",
+        "rc": 0
+      },
+      {
+        "label": "supp-drafter_attach_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-exl3_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-device_profile_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-qwen4_config_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-json_file_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-affine_pack_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-systemone_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-systemone_codes_probe_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_protocol_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_runtime_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_discover_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_plan_test",
+        "rc": 0
+      },
+      {
+        "label": "script-test_profile_gates",
+        "rc": 0
+      },
+      {
+        "label": "script-test_comment_gates",
+        "rc": 0
+      },
+      {
+        "label": "script-test_pr_size",
+        "rc": 0
+      },
+      {
+        "label": "script-test_drex_max",
+        "rc": 0
+      },
+      {
+        "label": "script-test_logit_dump",
+        "rc": 1
+      },
+      {
+        "label": "script-test_systemone_codes_harness",
+        "rc": 0
+      },
+      {
+        "label": "load_error_cpu",
+        "rc": 0
+      },
+      {
+        "label": "prek",
+        "rc": 0
+      },
+      {
+        "label": "diff-check",
+        "rc": 0
+      },
+      {
+        "label": "vk-checks",
+        "rc": 0
+      },
+      {
+        "label": "vk-cleanup",
+        "rc": 0
+      }
+    ],
+    "initial_dependency_preflight": "Failed before tests; recovered existing test runtime before the only vk CPU execution.",
+    "logit_dump_original_failure": "Target absent; no output-directory cases ran.",
+    "logit_dump_recovery": [
+      {
+        "label": "logit-target-build-retry01",
+        "rc": 0,
+        "sha256": "78cf49459dea5d59240ada01ddb8b630e959ab632044c4c75775812970459d03"
+      },
+      {
+        "label": "logit-output-directory-check-retry01",
+        "rc": 0,
+        "sha256": "fec86b7e63e69c80c04811fe5bd5f7c0a5be2d11327905f2465b1dec7c523645"
+      }
+    ],
+    "recovery_build_preflight": "Initial shell could not locate cmake (rc127), before compilation. Restored the recorded build-tool environment; target build and output-directory check then both returned 0."
+  },
+  "original_reference_CPU_control": {
+    "runtime_source": "607073ad6b23d73e4faf3d0553352a803bac0118",
+    "test_source": "Unmodified reference load_error_test; distinct from focused same-new-test overlay",
+    "compile_rc": 0,
+    "run_rc": 1,
+    "failure": "Existing uncached raw-U8 page-cache assertion after <= before + pages / 10",
+    "candidate_full_cpu_rc": 0,
+    "interpretation": "Candidate CPU suite passed; the original reference cache assertion failed. The relative-read guard does not change valid raw-U8 cache policy; no claim that this patch fixes that assertion."
+  },
+  "recovery_note": "Collection of completed 2026-11-08 jobs; no repeated CPU suite. Missing logit_dump target built and its previously unexecuted output-directory cases run separately."
+}
