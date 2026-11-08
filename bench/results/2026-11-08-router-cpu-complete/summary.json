@@ -5,6 +5,7 @@
   "additional_cpu_scripts": 6,
   "failures": 0,
   "cleanup_rc": 0,
-  "archive_sha256": "bb3f4db1066c5efbf7f35641d5da46ab3021bef1ad4ff6f04b3ed2339a0dba73",
-  "raw_files": 46
+  "archive_sha256": "5a41cb7d638ae89b3f5163f37f051ee13f2719a65645bb163a42b5e483a7b4fc",
+  "raw_files": 46,
+  "_privacy_export": "Privacy-filtered derived export. Private environment identifiers and host resource records are omitted; measurements, outcomes and tested source/binary identities are retained. Modified commands are placeholder reproduction examples, not verbatim execution logs. Original bytes remain privately archived."
 }

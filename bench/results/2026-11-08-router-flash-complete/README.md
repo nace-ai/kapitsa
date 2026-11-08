@@ -3,9 +3,9 @@
 Runs: Apple M3 Ultra, 60 GPU cores, 96 GiB, macOS 26.4.1 (25E253), Apple clang 17, CMake Release `-O3`.
 Reference source: `f22effb9bdda7fa17be5e4ce614383a35e1cc62a`.
 Candidate production source: `dc82cf0f39b942157e86b0cd5e518e5caed17e61`.
-Both source trees were explicitly reconfigured and built before these runs. Source identities, binary SHA256s and exact commands are in the raw states. Production files have not changed.
+Both source trees were explicitly reconfigured and built before these runs. Source identities and binary SHA256s remain in the exported states; modified commands are labeled placeholder examples. Production files have not changed.
 
-Model: `beamster/Qwen3.8-Flash-Next-Sushi-2bpw`, complete EXL3 mixed-format weights, loaded as 36.7 GB by Kapitsa; `model-identity.json` records existing file sizes and resolved paths. The complete 32,000,153,976-byte n-gram table matches pinned revision `f37e7ba46f0f2993b6ca373221530c579f258712`, SHA256 `c8ab74bc343408cf3923d7d64b3698fbeb3e78c07ce7f85a650a8278731251d2`. Only that table's whole-file upstream SHA is asserted here. Kapitsa's existing unscaled-Yarn and idle wiring warnings are preserved in both raw load logs.
+Model: `beamster/Qwen3.8-Flash-Next-Sushi-2bpw`, complete EXL3 mixed-format weights; `model-identity.json` records checkpoint file names and sizes; private resolved paths are omitted. The complete 32,000,153,976-byte n-gram table matches pinned revision `f37e7ba46f0f2993b6ca373221530c579f258712`, SHA256 `c8ab74bc343408cf3923d7d64b3698fbeb3e78c07ce7f85a650a8278731251d2`. Only that table's whole-file upstream SHA is asserted here. The existing unscaled-Yarn diagnostic is preserved; private host resource diagnostics are omitted from this export.
 
 ## Outputs
 
@@ -39,7 +39,7 @@ Candidate and reference `tests/test_server.py` logs are byte-identical: 48 PASS 
 
 ## Native A/B/A/B
 
-`kapitsa bench --model MODEL --quick --json --out FILE` started its own server on each arm. The optimization is selected by source, not an environment switch. Each run uses MTP depth 2, three 512-token sampled runs and three 512-token greedy runs, plus 4K prefill. Every JSON has `flags=[]`, `invalid=[]`, `contention=[]`, nominal thermal state, no swapouts and passing tool calls. Raw JSON and server logs retain all individual measurements.
+`kapitsa bench --model MODEL --quick --json --out FILE` started its own server on each arm. The optimization is selected by source, not an environment switch. Each run uses MTP depth 2, three 512-token sampled runs and three 512-token greedy runs, plus 4K prefill. Every JSON has `flags=[]`, `invalid=[]`, passing tool calls. The exported JSON and server logs retain all individual performance measurements.
 
 | Run | Source | Sampled tok/s | Greedy tok/s | 4K prompt tokens | Cold TTFT s | Follow-up s |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -56,4 +56,8 @@ Actual EXL3 model output/HTTP/native A/B/A/B completed on M3. Two-chip small-ker
 
 Not verified: the Q2_0 streamed next-layer prediction model path, a second applicable full-model setup, and generated ISA/register use. Overall performance qualification for the whole class remains unresolved. No inference speedup is claimed. The complete affected-model and two-chip kernel evidence makes the PR available for review; the unrun qualification work is disclosed rather than described as completed.
 
-`evidence.tar.gz` contains raw states, reports, commands/runners, IDs, model identity and original failures. `SHA256.json` hashes every member. Raw float dumps were hashed and removed only after comparison. No previously committed evidence was modified. The completed runner PIDs and GPU-lock check are empty; no jobs were restarted to collect these results.
+`evidence.tar.gz` contains privacy-filtered derived states, reports, placeholder command examples/runners, IDs, model identity and the original failure outcomes. `SHA256.json` hashes every member. Raw float dumps were hashed and removed only after comparison. The measurement data is unchanged; this declared privacy export replaces the archived environment records. No jobs were restarted to collect these results.
+
+## Privacy export erratum
+
+This archive and its checksum manifest replace the original public export to remove private machine paths, usernames and resource records. The replacement is explicitly a privacy-filtered derived export, not a verbatim raw log. Modified commands contain `$PRIVATE_PATH` or other explicit placeholders and are reproduction examples. Original archive bytes and their SHA256 remain privately preserved for audit. Timing values, output results, pass/fail records and tested source/binary identities are unchanged; no test was rerun for this export. Kernel static allocation measurements remain intact.

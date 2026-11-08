@@ -11,7 +11,7 @@ Qwen 3.5 4B 4-bit and Qwen 3.6 35B-A3B 4-bit each pass all 584 finite rows bitwi
 
 ## Balanced-order kernel diagnostic
 
-Three fresh processes use both production kernels from the same Metal 3.1 library and the same output address. Each process alternates AB and BA pairs. Small/debug and broad numerical coverage from the previously published evidence remains unchanged; this helper changes measurement order only. All three runs return 0 without observed foreign GPU contention.
+Three fresh processes use both production kernels from the same Metal 3.1 library and the same output address. Each process alternates AB and BA pairs. Small/debug and broad numerical coverage from the previously published evidence remains unchanged; this helper changes measurement order only. All three runs return 0 with results retained.
 
 Median latency reduction for normalized multi-row routing, percent (negative is slower):
 
@@ -32,4 +32,8 @@ A/A controls still range approximately -4.09% to +3.47%. The earlier 6.62%/9.00%
 
 Full Flash-Next EXL3 and Q2_0 output, continuation, HTTP and native benchmark gates remain pending, as does full-model qualification on a second applicable setup. A complete checkpoint is being prepared; the existing sparse n-gram table is not treated as a complete model. This PR remains a Draft.
 
-`evidence.tar.gz` contains the raw commands/results, source and binary identities, comparison reports and exact balanced-order helper. `SHA256.json` hashes every archive member. Raw float dumps were hashed and deleted after comparison. Previously committed evidence is unchanged.
+`evidence.tar.gz` contains privacy-filtered command examples/results, source and binary identities, comparison reports and the balanced-order helper. `SHA256.json` hashes every archive member. Raw float dumps were hashed and deleted after comparison. Measurements are unchanged; the declared privacy export replaces archived environment records.
+
+## Privacy export erratum
+
+This archive and its checksum manifest replace the original public export to remove private machine paths, usernames and resource records. The replacement is explicitly a privacy-filtered derived export, not a verbatim raw log. Modified commands contain `$PRIVATE_PATH` or other explicit placeholders and are reproduction examples. Original archive bytes and their SHA256 remain privately preserved for audit. Timing values, output results, pass/fail records and tested source/binary identities are unchanged; no test was rerun for this export. Kernel static allocation measurements remain intact.

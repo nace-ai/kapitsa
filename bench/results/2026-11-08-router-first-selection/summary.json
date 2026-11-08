@@ -309,5 +309,6 @@
     ]
   },
   "raw_files": 125,
-  "raw_archive_sha256": "0493519ed0d1ea27aa6a59c00761fd3de75485ed986853ec2820afbedeede25a"
+  "raw_archive_sha256": "03189f7f3cc13d5e086609d58805e3565a53d8bcfcaff0b7fe84ca2953568957",
+  "_privacy_export": "Privacy-filtered derived export. Private environment identifiers and host resource records are omitted; measurements, outcomes and tested source/binary identities are retained. Modified commands are placeholder reproduction examples, not verbatim execution logs. Original bytes remain privately archived."
 }

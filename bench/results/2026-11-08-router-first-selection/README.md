@@ -86,8 +86,6 @@ The following values are medians of all eight legs per arm; positive reduction m
 M4 eligible-cell medians are 3.90% to 7.46% lower, with A/A controls between -0.69% and +1.51%.
 M3 eligible-cell medians are 0.85% to 6.60% lower, but its one-row A/A controls show B 6.62% and
 9.00% slower. That unexplained control drift prevents a stable M3 performance conclusion.
-All reported thermal states are nominal. Contention sampling found no foreign GPU load on M3;
-M4 recorded mean 0.86%, maximum 3.94%, with no busy samples under the monitor's thresholds.
 These are observations from one cohort per chip, not qualified inference speedups.
 
 Earlier attempts are retained in the archive:
@@ -122,8 +120,12 @@ processes, provision the affected Flash-Next model, and compare separate candida
 under the GPU lock. Run the required output/HTTP/native benchmark checks with `NI_EXPERT_STORE=24`
 from an internal disk and repeat on another applicable setup before qualifying the default.
 
-## Raw evidence
+## Exported evidence
 
-`raw-evidence.tar.gz` holds logs, commands, harnesses and snapshot states, not executable binaries.
+`raw-evidence.tar.gz` holds privacy-filtered derived logs, placeholder command examples, harnesses and snapshot states, not executable binaries.
 `manifest.json` is the SHA256 of every uncompressed member. `summary.json` records the archive digest.
 Later results must be added under a new evidence path; this snapshot is frozen.
+
+## Privacy export erratum
+
+This archive and its checksum manifest replace the original public export to remove private machine paths, usernames and resource records. The replacement is explicitly a privacy-filtered derived export, not a verbatim raw log. Modified commands contain `$PRIVATE_PATH` or other explicit placeholders and are reproduction examples. Original archive bytes and their SHA256 remain privately preserved for audit. Timing values, output results, pass/fail records and tested source/binary identities are unchanged; no test was rerun for this export. Kernel static allocation measurements remain intact.
