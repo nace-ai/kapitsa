@@ -28,13 +28,40 @@ Kapitsa meets every homebrew-core requirement except the 30-day repo age guideli
 - `kapitsa-drex-pointer` (pointer head tool)
 - Bench harness in pkgshare
 
+## SHA256
+
+The `sha256` in the formula is the hash of the GitHub archive tarball at
+`https://github.com/nace-ai/kapitsa/archive/refs/tags/v<VERSION>.tar.gz`.
+To recompute it for a new release:
+
+```bash
+curl -sL -o kapitsa-src.tar.gz \
+  "https://github.com/nace-ai/kapitsa/archive/refs/tags/v<VERSION>.tar.gz"
+shasum -a 256 kapitsa-src.tar.gz
+```
+
+This is NOT the same as `gh api repos/nace-ai/kapitsa/tarball/v<VERSION>`, which returns
+a different archive with a different hash.
+
 ## To submit
 
 1. Wait until 2026-11-15 (30-day repo age)
 2. Fork `Homebrew/homebrew-core`
 3. Create branch, copy `kapitsa-core.rb` as `Formula/k/kapitsa.rb`
-4. Update URL and SHA to the latest release
+4. Update URL and SHA to the latest release (see SHA256 section above)
 5. Open PR with the notability evidence (698 stars, 102 forks, 9 models benchmarked on 5 Macs)
+
+## Tap/core name clash
+
+Both the tap (`nace-ai/tap/kapitsa`) and the homebrew-core formula install a `kapitsa` binary.
+Users must `brew uninstall nace-ai/tap/kapitsa` before installing from homebrew-core, or Homebrew
+will refuse. The formula header notes this.
+
+## `kapitsa update`
+
+`kapitsa update` (src/update/update.mm) currently runs `brew upgrade nace-ai/tap/kapitsa`.
+When the homebrew-core formula ships, this needs a change to detect which formula is installed
+and run the right `brew upgrade` command. Track in a follow-up issue.
 
 ## Differences from the tap formula
 
