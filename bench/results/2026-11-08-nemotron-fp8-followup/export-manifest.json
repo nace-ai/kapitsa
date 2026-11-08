@@ -1,0 +1,19 @@
+{
+  "format": "Derived privacy-filtered export manifest",
+  "created_at": "2026-11-08T08:06:10.095010+00:00",
+  "files": {
+    "m4-fixed-request-summary.json": "eff50eb5b68912e3bcdf96275fcfb7d478036c18cafb48ca455d4c2258f29e98",
+    "m3-http-summary.json": "656ae3f96005bc3d8425813f83607aaf61a1776bde9b9b01814532d3c2a70d56",
+    "README.md": "0b1124bf84404080f375228d67dc5234cd7bde86a2906f504be5c1b234861db5",
+    "compile-metadata-clarification.json": "f7d61a03f388983aac1a6222421ca21e5ee58ae628ffba1af56c2cdfbbe71838",
+    "m3-native-summary.json": "36bdc80338f184d5e6808a5cd875f2013133e7d0e45ea685a122be921006e08b",
+    "m3-output-summary.json": "ac0d8d63f122c022801687752a07542fe363bb2d56611acca7671331f3305b4f",
+    "portable-reproduction/run_fixed_seed.py": "6c8030e7b1a08b7fef76b95eae88c2833da130f4dcdd4a39e0b0e6f40b56a3c3",
+    "portable-reproduction/README.md": "cfe90f2385da50cb0d8febf2cbce67d2e459eac8782c991e7ab1c14c5aef3918",
+    "portable-reproduction/portable_fixed_seed.cpp": "e6f4b309a4c8b56b0a64baf5072a9ec9d65d5a9e09b6222920c39b57e42257a0",
+    "portable-reproduction/manifest.json": "fb17202830801c9f397b5ed15258d243771c1b3f1068e728bda070adef132c70"
+  },
+  "source_reference": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+  "source_candidate": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+  "original_records": "Retained privately; this directory contains derived filtered summaries and an explicitly labeled portable source adaptation, not raw execution logs."
+}

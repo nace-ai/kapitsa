@@ -1,0 +1,89 @@
+{
+  "format": "Compile-metadata clarification; no remeasurement",
+  "scope": "Previously published M4 summary cxx_flags fields copied the CMake cache default -O3 -DNDEBUG. That value is cached configuration, not the actual per-target compiler arguments. Actual generated CLI/library/logit_dump target flags use -O3 and have no NDEBUG define. Measurement values, source versions and binary digests are unchanged. Previous result snapshots are retained.",
+  "actual_target_flags": {
+    "M3": {
+      "reference": {
+        "cli_and_library_entries": [
+          "CXX_DEFINES = -DKAPITSA_GIT=\\\"052104f8f9c99edde129415a7384a1a58dc24ae6\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0",
+          "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0"
+        ],
+        "source": "Generated flags.make for the binaries whose digests are recorded; SDK path replaced by placeholder"
+      },
+      "candidate": {
+        "cli_and_library_entries": [
+          "CXX_DEFINES = -DKAPITSA_GIT=\\\"8f3996fea6f1f44537bee4e789b98cd6a531f347\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0",
+          "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0"
+        ],
+        "source": "Generated flags.make for the binaries whose digests are recorded; SDK path replaced by placeholder"
+      }
+    },
+    "M4": {
+      "reference": {
+        "kapitsa": {
+          "sha256": "a0acbc2504760d8c253aaaf162fb17ac54ca4ebfec648fefd5c920b880c72faf",
+          "entries": [
+            "CXX_DEFINES = -DKAPITSA_GIT=\\\"052104f8f9c99edde129415a7384a1a58dc24ae6\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "CXX_FLAGSarm64 = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0"
+          ]
+        },
+        "naceinfer": {
+          "sha256": "9f04110bc510c5a6672393fc2986729c471b0efad48298041aabd530be9fea94",
+          "entries": [
+            "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "CXX_FLAGSarm64 = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "OBJCXX_FLAGSarm64 =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -mmacosx-version-min=14.0",
+            "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -mmacosx-version-min=14.0"
+          ]
+        },
+        "logit_dump": {
+          "sha256": "a0acbc2504760d8c253aaaf162fb17ac54ca4ebfec648fefd5c920b880c72faf",
+          "entries": [
+            "CXX_DEFINES = -DKAPITSA_GIT=\\\"052104f8f9c99edde129415a7384a1a58dc24ae6\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "CXX_FLAGSarm64 = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0"
+          ]
+        }
+      },
+      "candidate": {
+        "kapitsa": {
+          "sha256": "19e23bfc7eda4f03262e35df811a994e5f44d5be172fb1e6659296edd62eeb1c",
+          "entries": [
+            "CXX_DEFINES = -DKAPITSA_GIT=\\\"8f3996fe\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "CXX_FLAGSarm64 = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0"
+          ]
+        },
+        "naceinfer": {
+          "sha256": "89e1869cf45622edf6cba901cf982668a711f7bfd990463c78efd9ac37dcb42d",
+          "entries": [
+            "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "CXX_FLAGSarm64 = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "OBJCXX_FLAGSarm64 =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -mmacosx-version-min=14.0",
+            "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -mmacosx-version-min=14.0"
+          ]
+        },
+        "logit_dump": {
+          "sha256": "19e23bfc7eda4f03262e35df811a994e5f44d5be172fb1e6659296edd62eeb1c",
+          "entries": [
+            "CXX_DEFINES = -DKAPITSA_GIT=\\\"8f3996fe\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+            "CXX_FLAGSarm64 = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0",
+            "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0"
+          ]
+        }
+      }
+    }
+  },
+  "placeholder_note": "$SDK is a portable placeholder, not an original machine path."
+}
