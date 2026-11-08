@@ -230,3 +230,4 @@ if(KAPITSA_BUILD_SDK)
   install(TARGETS kapitsa_sdk LIBRARY DESTINATION lib)
   install(FILES sdk/c/kapitsa.h DESTINATION include)
 endif()
+

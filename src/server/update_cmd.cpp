@@ -507,7 +507,8 @@ void auto_update(int argc, char** argv) {
   if (argc < 2) return;
   const std::string cmd = argv[1];
   bool runs = cmd.size() > 1 && cmd[0] == '-' && cmd != "--help" && cmd != "-h" && cmd != "--version" && cmd != "-v";
-  for (const char* c : {"serve", "pull", "list", "ls", "rm", "import", "doctor", "claude", "codex", "opencode", "pi", "mtp-sidecar"})
+  for (const char* c : {"serve", "pull", "list", "ls", "rm", "import", "doctor", "claude", "codex", "opencode", "pi",
+                        "hermes", "aider", "goose", "mtp-sidecar"})
     runs = runs || cmd == c;
   if (!runs) return;
   for (int i = 2; i < argc; ++i)

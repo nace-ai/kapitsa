@@ -4,7 +4,7 @@
   <img alt="Kapitsa writes 351 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
-Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
+Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex, Pi, Hermes, aider or Goose on a local model, and serves OpenAI and Anthropic APIs.
 
 [Quickstart](#quickstart) · [Benchmarks](#benchmarks) · [Features](#features) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [日本語](README.ja.md)
 
@@ -64,7 +64,7 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
 - **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
 - **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
-- **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode` and `kapitsa pi` start on the local model.
+- **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider` and `kapitsa goose` start on the local model.
 - **One calibrated probability per option.** `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)).
 - **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
 - **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.

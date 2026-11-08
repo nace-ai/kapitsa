@@ -10,7 +10,8 @@ namespace ni::api {
 using ojson = nlohmann::ordered_json;
 
 bool known_agent(const std::string& name) {
-  return name == "claude" || name == "codex" || name == "opencode" || name == "pi";
+  return name == "claude" || name == "codex" || name == "opencode" || name == "pi" || name == "hermes" ||
+         name == "aider" || name == "goose";
 }
 
 std::string agent_install_hint(const std::string& name) {
@@ -26,6 +27,15 @@ std::string agent_install_hint(const std::string& name) {
   if (name == "pi")
     return "Pi is not installed (no `pi` on the PATH). Install it:\n"
            "  npm install -g @earendil-works/pi-coding-agent";
+  if (name == "hermes")
+    return "Hermes is not installed (no `hermes` on the PATH). Install it:\n"
+           "  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash";
+  if (name == "aider")
+    return "aider is not installed (no `aider` on the PATH). Install it:\n"
+           "  pip install aider-chat      (or: brew install aider)";
+  if (name == "goose")
+    return "Goose is not installed (no `goose` on the PATH). Install it:\n"
+           "  See https://block.github.io/goose/docs/getting-started/installation";
   return "";
 }
 
@@ -232,6 +242,75 @@ AgentLaunch pi(const std::string& path, const AgentServer& s, const std::vector<
   return l;
 }
 
+// Hermes Agent by Nous Research: the openai-api provider with --provider and -m on the command line, the server's
+// URL and key through OPENAI_BASE_URL and OPENAI_API_KEY. The CLI flags override any config.yaml, so a first run
+// needs no `hermes model` step.
+AgentLaunch hermes(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
+  AgentLaunch l;
+  l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
+           {"OPENAI_BASE_URL", s.base_url + "/v1"}};
+  // --provider and -m tell Hermes which provider and model to use for this session, overriding config.yaml;
+  // only add them when the user did not pass their own
+  bool has_provider = false, has_model = false;
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--") break;
+    if (args[i] == "--provider" || args[i].rfind("--provider=", 0) == 0) has_provider = true;
+    if (args[i] == "-m" || args[i] == "--model" || args[i].rfind("-m=", 0) == 0) has_model = true;
+  }
+  l.argv = {path};
+  if (!has_provider) l.argv.insert(l.argv.end(), {"--provider", "openai-api"});
+  if (!has_model) l.argv.insert(l.argv.end(), {"-m", s.model});
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  return l;
+}
+
+// aider (https://aider.chat): reads OPENAI_API_BASE and OPENAI_API_KEY, and takes --model openai/<name>.
+AgentLaunch aider(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
+  AgentLaunch l;
+  l.set = {{"OPENAI_API_BASE", s.base_url + "/v1"},
+           {"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key}};
+  // --model openai/<name> tells aider to use the OpenAI-compatible endpoint; only add it when the user did not
+  // pass --model themselves
+  bool has_model = false;
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--") break;
+    if (args[i] == "--model" || args[i].rfind("--model=", 0) == 0) { has_model = true; break; }
+  }
+  l.argv = {path};
+  if (!has_model) l.argv.insert(l.argv.end(), {"--model", "openai/" + s.model});
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  // aider learns the context window from its model metadata, not from an env var or flag; unknown models get a
+  // warning and a conservative default. --model-metadata-file could override it, but a temporary file for one
+  // number is not worth the complexity.
+  return l;
+}
+
+// Goose by Block (https://block.github.io/goose): OpenAI provider with OPENAI_HOST and OPENAI_API_KEY.
+// GOOSE_CONTEXT_LIMIT tells Goose the model's context window so it compacts at the right time.
+// Bare `goose` prints help; `goose session` starts a chat. Insert `session` when the user did not pass a subcommand
+// (the first arg is a known Goose subcommand or starts with `-`).
+AgentLaunch goose(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
+  AgentLaunch l;
+  l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
+           {"OPENAI_HOST", s.base_url},
+           {"GOOSE_PROVIDER", "openai"},
+           {"GOOSE_MODEL", s.model},
+           {"GOOSE_CONTEXT_LIMIT", std::to_string(s.context)}};
+  l.argv = {path};
+  // Insert `session` so bare `kapitsa goose` opens a chat. Without it, bare `goose` prints help.
+  // Insert it when: no args at all, or the first arg is a flag that belongs to `session` (anything starting with
+  // `-` except goose's top-level flags -h/--help/-V/--version). A word that does not start with `-` is a subcommand
+  // (run, configure, doctor, ...) and stays as typed.
+  bool insert_session = args.empty();
+  if (!insert_session && !args.empty() && !args[0].empty() && args[0][0] == '-') {
+    const std::string& f = args[0];
+    insert_session = f != "-h" && f != "--help" && f != "-V" && f != "--version";
+  }
+  if (insert_session) l.argv.push_back("session");
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  return l;
+}
+
 }  // namespace
 
 AgentLaunch agent_launch(const std::string& name, const std::string& path, const AgentServer& s,
@@ -241,6 +320,9 @@ AgentLaunch agent_launch(const std::string& name, const std::string& path, const
   if (name == "codex") return codex(path, s, args);
   if (name == "opencode") return opencode(path, s, args, env, major);
   if (name == "pi") return pi(path, s, args, dir);
+  if (name == "hermes") return hermes(path, s, args);
+  if (name == "aider") return aider(path, s, args);
+  if (name == "goose") return goose(path, s, args);
   throw std::runtime_error("unknown coding agent: " + name);
 }
 
