@@ -230,3 +230,9 @@ if(KAPITSA_BUILD_SDK)
   install(TARGETS kapitsa_sdk LIBRARY DESTINATION lib)
   install(FILES sdk/c/kapitsa.h DESTINATION include)
 endif()
+
+# C API test (include/kapitsa.h, src/lib/kapitsa_lib.cpp): loads a model, streams tokens, cancels.
+# Needs a model directory and the GPU; run with the GPU lock.
+add_executable(kapitsa_c_test EXCLUDE_FROM_ALL tools/kapitsa_c_test.c)
+target_link_libraries(kapitsa_c_test PRIVATE naceinfer)
+set_target_properties(kapitsa_c_test PROPERTIES LINKER_LANGUAGE CXX)  # naceinfer is C++

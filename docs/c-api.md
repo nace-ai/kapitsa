@@ -48,9 +48,10 @@ A higher-level Swift wrapper with `async/await` streaming is a follow-up.
 
 ## Implementation status
 
-The current `src/lib/kapitsa_lib.cpp` is a **stub**: it compiles and links, returns `KAPITSA_OK` from `init`
-and `load`, and returns `KAPITSA_ERROR_INTERNAL` from `generate`. The real implementation, which wraps the
-Engine, is a follow-up (CON-302).
+`src/lib/kapitsa_lib.cpp` wraps the Engine: `kapitsa_load` creates an `Engine` with the model directory,
+`kapitsa_generate` builds a `ChatRequest` and calls `Engine::chat()` with a streaming callback, and
+`kapitsa_cancel` sets an atomic flag the engine's cancellation callback reads. Tested on the 4B model:
+load, stream 8 tokens, cancel mid-stream (tools/kapitsa_c_test.c).
 
 ## Design notes
 
