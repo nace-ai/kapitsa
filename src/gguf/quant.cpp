@@ -229,6 +229,39 @@ void dq_q5_k(const uint8_t* b, float* y) {
 
 // 256 values in 16 sub-blocks of 16; 6-bit codes (4 low + 2 high bits), signed 8-bit scales
 void dq_q6_k(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t h;
+  memcpy(&h, b + 208, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 210 : src - dst < 256 * sizeof(float);
+  if ((h & 0x7c00u) != 0x7c00u && !overlap) {
+    const float d = from_f16(h);
+    const uint8x16_t mask = vdupq_n_u8(15), high_mask = vdupq_n_u8(48);
+    auto store = [](uint8x16_t code, float scale, float* out) {
+      const int8x16_t q = vreinterpretq_s8_u8(vsubq_u8(code, vdupq_n_u8(32)));
+      const int16x8_t lo = vmovl_s8(vget_low_s8(q)), hi = vmovl_s8(vget_high_s8(q));
+      vst1q_f32(out, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(lo))), scale));
+      vst1q_f32(out + 4, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(lo))), scale));
+      vst1q_f32(out + 8, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(hi))), scale));
+      vst1q_f32(out + 12, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(hi))), scale));
+    };
+    // Keep the scalar order: half scale times signed sub-block scale, then the six-bit value.
+    for (int half = 0; half < 2; ++half) {
+      const int8_t* sc = reinterpret_cast<const int8_t*>(b + 192 + 8 * half);
+      for (int s = 0; s < 2; ++s) {
+        const uint8x16_t lo = vld1q_u8(b + 64 * half + 16 * s);
+        const uint8x16_t hi = vld1q_u8(b + 64 * half + 16 * s + 32);
+        const uint8x16_t qh = vld1q_u8(b + 128 + 32 * half + 16 * s);
+        float* out = y + 128 * half + 16 * s;
+        store(vorrq_u8(vandq_u8(lo, mask), vandq_u8(vshlq_n_u8(qh, 4), high_mask)), d * float(sc[s]), out);
+        store(vorrq_u8(vandq_u8(hi, mask), vandq_u8(vshlq_n_u8(qh, 2), high_mask)), d * float(sc[s + 2]), out + 32);
+        store(vorrq_u8(vshrq_n_u8(lo, 4), vandq_u8(qh, high_mask)), d * float(sc[s + 4]), out + 64);
+        store(vorrq_u8(vshrq_n_u8(hi, 4), vandq_u8(vshrq_n_u8(qh, 2), high_mask)), d * float(sc[s + 6]), out + 96);
+      }
+    }
+    return;
+  }
+#endif
   const uint8_t* ql = b;
   const uint8_t* qh = b + 128;
   const int8_t* sc = reinterpret_cast<const int8_t*>(b + 192);
