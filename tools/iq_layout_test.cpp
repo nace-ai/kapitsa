@@ -355,7 +355,6 @@ void test_iq4_nl_pages() {
 }  // namespace
 
 int main() {
-  g_fail += pack4_test::run();
   g_fail += pack_codes_test::run();
   test_iq4_nl();
   test_iq4_nl_pages();
@@ -383,6 +382,7 @@ int main() {
         "takes a type without a layout");
   check(gg::iq_mode_type("affine") == 0 && gg::iq_mode_type("iq2_xs") == 0, "iq_mode_type", "names another mode");
   g_fail += q8_test::run();
+  g_fail += pack4_test::run();
   if (g_fail) {
     printf("%d check(s) FAILED\n", g_fail);
     return 1;
