@@ -19,7 +19,7 @@ kapitsa serve --model 35b
 
 4. Select **Locally Hosted**. Enter port `8000` and a description (e.g. "Kapitsa"). Click **Add**.
 
-Kapitsa appears in the Chat section as "Kapitsa" with a "localhost" label. Xcode adds `/v1` to the URL itself, so do not include it.
+Kapitsa appears in the Chat section as "Kapitsa" with a "localhost" label.
 
 ## What the Intelligence settings show
 
