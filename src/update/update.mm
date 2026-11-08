@@ -29,6 +29,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <fstream>
 #include <mutex>
 #include <sstream>
 #include <thread>
@@ -611,6 +612,14 @@ Install detect(const std::string& path) {
     in.kind = Kind::kHomebrew;
     in.brew = path.substr(0, c) + "/bin/brew";
     in.head = path.compare(c + cellar.size(), 4, "HEAD") == 0;
+    // check INSTALL_RECEIPT.json for the source tap: "homebrew/core" vs "nace-ai/tap"
+    const std::string version_dir = path.substr(0, path.find("/bin/kapitsa", c));
+    const std::string receipt = version_dir + "/INSTALL_RECEIPT.json";
+    if (is_file(receipt)) {
+      std::ifstream f(receipt);
+      std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+      in.core = s.find("\"homebrew/core\"") != std::string::npos;
+    }
     return in;
   }
   // a build folder: CMakeCache.txt beside the binary or in the folder above it
@@ -629,7 +638,7 @@ Install detect(const std::string& path) {
 }
 
 std::string brew_command(const Install& in) {
-  return std::string("brew upgrade ") + (in.head ? "--fetch-HEAD " : "") + "nace-ai/tap/kapitsa";
+  return std::string("brew upgrade ") + (in.head ? "--fetch-HEAD " : "") + (in.core ? "kapitsa" : "nace-ai/tap/kapitsa");
 }
 
 std::string source_command(const Install& in) {

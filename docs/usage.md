@@ -1406,7 +1406,7 @@ row, and flags a result whose catalog drafter did not decode.
 | Installed with | `kapitsa update` | Automatically |
 | --- | --- | --- |
 | `install.sh`, or a copied release binary | Downloads the release and puts it in place (below). | Installed within a day; the next run in a terminal says so. |
-| Homebrew (`/opt/homebrew/Cellar/kapitsa`) | Runs `brew upgrade nace-ai/tap/kapitsa` in a terminal (`--fetch-HEAD` for a `--HEAD` install); elsewhere it prints that command. | A run in a terminal says when a release is out. |
+| Homebrew (`/opt/homebrew/Cellar/kapitsa`) | Runs `brew upgrade kapitsa` (homebrew-core) or `brew upgrade nace-ai/tap/kapitsa` (tap), detected from the Cellar receipt (`--fetch-HEAD` for a `--HEAD` install); elsewhere it prints that command. | A run in a terminal says when a release is out. |
 | A build from source (a `CMakeCache.txt` beside the binary or above it) | Says how: `git -C SRC pull && cmake --build BUILD`. | A run in a terminal says when a release is out. |
 | `./install.sh` in a clone (a binary built from source, copied) | Replaces it with the release build. | A run in a terminal says when a release is out. |
 | An app such as Nace Agent (a binary inside `*.app/Contents/`) | Nothing: the app keeps its own Kapitsa. | Nothing. |
@@ -1438,7 +1438,7 @@ starts a check in the background: a separate process in its own session, at back
 Homebrew install, a build from source, a binary built from source, or one in a folder you can't write, the check only
 runs from a command in a terminal and only records a release that is out. The next run in a terminal prints one line: `Updated Kapitsa to
 0.1.33 (from 0.1.32); restart running servers to use it`, or `Kapitsa 0.1.33 is available: brew upgrade
-nace-ai/tap/kapitsa`, or why a release was not installed. A check that can't reach GitHub stays silent and runs again
+kapitsa` (homebrew-core) / `brew upgrade nace-ai/tap/kapitsa` (tap), or why a release was not installed. A check that can't reach GitHub stays silent and runs again
 the next day. `KAPITSA_NO_AUTO_UPDATE=1`, `kapitsa update --auto off` and `CI` (set, and not `0` or `false`) turn
 automatic updates off; they are also off for root.
 
@@ -1452,7 +1452,7 @@ language, no cookies and nothing about this Mac. There is no telemetry.
 
 Automatic updates start with the release after 0.1.32. Kapitsa 0.1.32 and older update once by hand: run the installer
 again (`curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash`), or
-`brew upgrade nace-ai/tap/kapitsa`, or `git pull && ./install.sh` in a clone.
+`brew upgrade kapitsa` (homebrew-core) or `brew upgrade nace-ai/tap/kapitsa` (tap), or `git pull && ./install.sh` in a clone.
 
 ## Uninstalling
 
