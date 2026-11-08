@@ -48,7 +48,7 @@ const char* kHelp =
     "the binary's folder). A release that carries them also installs kapitsa-systemone (Drex decision models,\n"
     "docs/systemone.md) and kapitsa-drex-pointer beside the binary, the server only when it is signed as Kapitsa's.\n"
     "Running servers keep the old version until they restart.\n"
-    "Installed with Homebrew, kapitsa update runs brew upgrade nace-ai/tap/kapitsa. In an app such as Nace Agent, the\n"
+    "Installed with Homebrew, kapitsa update runs brew upgrade (nace-ai/tap/kapitsa or kapitsa). In an app such as Nace Agent, the\n"
     "app updates it. Built from source, it says how: git pull, then cmake --build build.\n\n"
     "Once a day a kapitsa command checks for a new release in the background, without slowing the command down, and\n"
     "installs it where kapitsa updates itself; for Homebrew and source builds it only tells you, in a terminal. The\n"
@@ -183,7 +183,7 @@ int run_brew(const Install& in) {
                 "your brew:\n  " + update::brew_command(in));
   std::vector<std::string> args = {in.brew, "upgrade"};
   if (in.head) args.push_back("--fetch-HEAD");
-  args.push_back("nace-ai/tap/kapitsa");
+  args.push_back(in.core ? "kapitsa" : "nace-ai/tap/kapitsa");
   info("This kapitsa is Homebrew's: " + bold(update::brew_command(in)), "This kapitsa is Homebrew's: " + update::brew_command(in));
   fflush(stdout);
   std::vector<char*> a;
