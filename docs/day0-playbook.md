@@ -105,6 +105,8 @@ python3 tests/test_server.py --cli build/kapitsa
 
 `kapitsa bench` starts its own server, so do not start one separately.
 
+Run bench, `logit_dump` and `logit_floor.py` one at a time with no `kapitsa serve` open. All three take `/tmp/kapitsa-gpu.lock`. Set `NI_LOCK_HELD=1` only inside your own `lockf`.
+
 ```bash
 # Full benchmark (all prompt sizes, multiple runs)
 kapitsa bench --model <short-name>
@@ -151,7 +153,7 @@ A model's first logit floor ships with its catalog entry because there is no flo
 
 ## 7. Post on r/LocalLLaMA
 
-Within 24 hours of the model release. Template:
+Post once the release carrying the catalog entry is live: the catalog is compiled into the binary, so `brew install` and `kapitsa update` do not have the model until then. Releases are batched (at most one per 3 days). If the scheduled release comes after hour 24, cut one out of schedule or post later. Template:
 
 ```
 Title: Kapitsa runs <Model Name> at <N> tok/s on <Mac> (Apple silicon)
