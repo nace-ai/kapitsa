@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Explicit, not globbed: a new page joins the check on purpose.
 PAGES = [
     "README.md",
+    "README.ja.md",
     "CONTRIBUTING.md",
     "docs/architecture.md",
     "docs/benchmarks-m5-max.md",

@@ -1,7 +1,7 @@
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
-  <img alt="Kapitsa は M5 Max 上の Qwen3.6 35B-A3B で 351 tok/s の速度で生成します。MLX、Ollama、llama.cpp、oMLX、mlx-serve、Splash は 138〜281 tok/s です。" src="docs/assets/header-light.svg">
+  <img alt="M5 Max 上の Qwen3.6 35B-A3B における、Kapitsa と MLX、Ollama、llama.cpp、oMLX、mlx-serve、Splash のデコード速度の比較（数値は英語版 README を参照）" src="docs/assets/header-light.svg">
 </picture>
 
 [English](README.md) · **日本語**
