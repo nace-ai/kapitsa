@@ -45,7 +45,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (16-inch, 2023) · M2 Pro 19-core GPU · 32 GB](#macbook-pro-16-inch-2023--m2-pro-19-core-gpu--32-gb) | 1 |
 | [MacBook Pro (16-inch, Nov 2023) · M3 Max 40-core GPU · 48 GB](#macbook-pro-16-inch-nov-2023--m3-max-40-core-gpu--48-gb) | 3 |
 | [MacBook Pro (16-inch, Nov 2023) · M3 Max 30-core GPU · 96 GB](#macbook-pro-16-inch-nov-2023--m3-max-30-core-gpu--96-gb) | 1 |
-| [MacBook Pro (16-inch, Nov 2023) · M3 Pro 18-core GPU · 36 GB](#macbook-pro-16-inch-nov-2023--m3-pro-18-core-gpu--36-gb) | 16 |
+| [MacBook Pro (16-inch, Nov 2023) · M3 Pro 18-core GPU · 36 GB](#macbook-pro-16-inch-nov-2023--m3-pro-18-core-gpu--36-gb) | 18 |
 | [MacBook Pro (13-inch, M2, 2022) · M2 10-core GPU · 16 GB](#macbook-pro-13-inch-m2-2022--m2-10-core-gpu--16-gb) | 5 |
 | [MacBook Pro (14-inch, 2021) · M1 Max 24-core GPU · 64 GB](#macbook-pro-14-inch-2021--m1-max-24-core-gpu--64-gb) | 1 |
 | [MacBook Pro (14-inch, 2021) · M1 Pro 14-core GPU · 16 GB](#macbook-pro-14-inch-2021--m1-pro-14-core-gpu--16-gb) | 7 |
@@ -645,6 +645,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-08](results/kapitsa-bench-2026-11-09-m3-pro-qwen3.8-27b-4bit-quick-e23d14.json) quick | 38.1 tok/s | 42.2 tok/s | 110 tok/s | – | 0.31 s | – | 19.4 GB | pass | KFlash | 0.2.31 | 27.0.1 | – |
 | [2026-10-22](results/kapitsa-bench-2026-10-22-m3-pro-qwen3.8-27b-4bit-6e2c36.json) | 38.1 tok/s | 41.5 tok/s | 110 tok/s | 106 tok/s | 0.35 s | 0.40 s | 19.1 GB | pass | KFlash | 0.2.9 | 14.1 | – |
 | [2026-10-19](results/kapitsa-bench-2026-10-19-qwen3.8-27b.json) | 37.0 tok/s | 39.5 tok/s | 112 tok/s | 106 tok/s | 0.28 s | 0.35 s | 19.1 GB | pass | DFlash2 | 0.1.37 | 26.6.2 | – |
 
@@ -652,6 +653,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-08](results/kapitsa-bench-2026-11-09-m3-pro-qwen3.6-35b-a3b-4bit-quick-128d79.json) quick | 111.3 tok/s | 116.7 tok/s | 906 tok/s | – | 0.09 s | – | 20.9 GB | pass | KFlash | 0.2.31 | 27.0.1 | – |
 | [2026-10-22](results/kapitsa-bench-2026-10-22-m3-pro-qwen3.6-35b-a3b-4bit-97b0e8.json) | 109.3 tok/s | 113.7 tok/s | 911 tok/s | 771 tok/s | 0.09 s | 0.10 s | 20.9 GB | pass | KFlash | 0.2.9 | 14.1 | – |
 | [2026-10-19](results/kapitsa-bench-2026-10-19-qwen3.6-35b-a3b.json) | 106.0 tok/s | 116.2 tok/s | 907 tok/s | 770 tok/s | 0.07 s | 0.09 s | 20.8 GB | pass | DFlash2 | 0.1.37 | 26.6.2 | – |
 
