@@ -1,0 +1,26 @@
+{
+  "evidence_kind": "Explicitly sanitized derived public reports; original receipts and execution logs retained privately",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "files_sha256": {
+    "FOCUSED-CPU.json": "b8181d28d022c7d7891ce771a70c689995a393880926e0404120c36274927900",
+    "M3-CPU-ROWS.json": "648a28e6c3c4c069e375c7773722e8cef717253582dbe0166cc7207012e3a67e",
+    "M4-CPU-CHECKS.json": "1a268c416df16ffec48ea0102e65775cb639b2dbe33c5289ef365ca80f9527d4",
+    "M4-CPU-ROWS.json": "dee106da565423b67115ba6c4348d7636eaee3e64b049837233d9feaf8e19c88",
+    "M4-FIXED-REQUESTS.json": "a62a09d2ba7dc53ffc0c3623a17bbbcf7cb16dc0f72afd96cd6086ba473a3a50",
+    "M4-HTTP.json": "6a11f81006a00b1a6a637b14f67941fea5941e3903cd8cc3f21ba691b9f74a87",
+    "M4-IMPORT-COMPARISON.json": "02fa8ca942182c51b99e2e5537bbfd7dbe1eeeab143fae94789f0b8028ca57b3",
+    "M4-MODEL-OUTPUT.json": "1d04a0f7d94a60a14d3d71fe46f1b303b3f97353d124d62cb3c1bd6271d09f6b",
+    "M4-NATIVE-DEFAULT.json": "bd3509e91077157d910446947192209dc2e9196c4467e788892ba1b2f9c59f4b",
+    "M4-Q8-ROW-GATHER.json": "e568e8d03ab2607e2cc3debd5e126ef381f6398a4666b26d473187f58af17b70",
+    "MODEL-VALIDATION-STATUS.json": "5f2f367e9103d022da05303f6f4a367903b78046450f8f41d54434d687b5eb98",
+    "README.md": "d236bf8ecc37ab9433d4c392203ac957f27aad7b15dd562711fe8d194773dc24",
+    "fixed_seed_driver.cpp": "6b022a4791ac656f74ca84dc7b2090e7bfd34e5ad0e7a1c6bc1197e8adcd8310",
+    "q8_0_rows.cpp": "2d83cd50a50631b5cc717265b0aeed990b679113d04000615cb1ae399cf5f248",
+    "q8_ngram_row_gather.cpp": "308ffe99d381b84512d6de4eb88e95b3bc84f9487d10583392e5196ebe967fd3"
+  },
+  "copied_source_files": "The three .cpp measurement/composition drivers are exact byte copies of the executed common helper sources. Generic execution-gate instrumentation emits private details; those values are not in these published reports.",
+  "all_original_failures_and_warnings_preserved_qualitatively": true,
+  "portable_examples_are_derived_not_original_commands": true,
+  "all_tests_PASS_claim": false
+}

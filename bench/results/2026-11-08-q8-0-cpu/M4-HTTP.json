@@ -1,0 +1,41 @@
+{
+  "evidence_kind": "Explicitly sanitized derived public report; original commands, receipts and logs remain privately verifiable",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "bytes": 2775541728,
+    "sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f"
+  },
+  "arms": {
+    "reference": {
+      "rc": 0,
+      "PASS": 49,
+      "FAIL": 0,
+      "failures": [],
+      "all_passed_marker": true,
+      "sha256": "3032684c396905d2467f0a09d3c9955a8da240ab539f254949e6018e49b42519"
+    },
+    "candidate": {
+      "rc": 0,
+      "PASS": 49,
+      "FAIL": 0,
+      "failures": [],
+      "all_passed_marker": true,
+      "sha256": "3032684c396905d2467f0a09d3c9955a8da240ab539f254949e6018e49b42519"
+    }
+  },
+  "scope": "The 49 printed HTTP/API checks per arm passed on this imported model and exact tested builds. This does not establish universal API/cache behavior across models or configurations.",
+  "owned_servers_stopped": true,
+  "worker_finished_at": "2026-11-08T15:22:55.933838+00:00",
+  "no_repeated_tests": true
+}

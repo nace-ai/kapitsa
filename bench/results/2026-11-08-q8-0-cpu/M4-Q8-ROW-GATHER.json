@@ -1,0 +1,82 @@
+{
+  "evidence_kind": "Explicitly sanitized derived report; private original commands and logs retained",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "scope": "Real source GGUF Q8_0 bytes in a synthetic per-layer table; NgramTable row/gather CPU composition only. Not a trained PLE model, model-output/GPU check or runtime performance measurement.",
+  "fixture": {
+    "tensor": "blk.32.ffn_up.weight",
+    "format": "Q8_0",
+    "rows": 1024,
+    "cols": 2560,
+    "bytes": 2785280,
+    "sha256": "33ab9892fe21218a58d5e7e56c2353689f48b0d57383ce94cc4ec8483cba7576",
+    "float32_output_bytes": 10485760
+  },
+  "shared_driver_source_sha256": "308ffe99d381b84512d6de4eb88e95b3bc84f9487d10583392e5196ebe967fd3",
+  "checks": {
+    "source_library_headers_pinned": true,
+    "default_prefetch_unset": true,
+    "actual_processes_per_arm": 1,
+    "direct_rows_per_arm": 1024,
+    "gathered_rows_per_arm": 2848,
+    "gather_shapes": [
+      [
+        1,
+        16
+      ],
+      [
+        15,
+        16
+      ],
+      [
+        16,
+        16
+      ],
+      [
+        17,
+        16
+      ],
+      [
+        65,
+        16
+      ],
+      [
+        1024,
+        1
+      ]
+    ],
+    "complete_independent_half_int8_oracle_byte_checks": true,
+    "output_canaries": true,
+    "input_binary_library_digests_unchanged": true,
+    "same_wrapper_bytes_across_arms": true,
+    "prefetch_off_executed": false
+  },
+  "arms": {
+    "reference": {
+      "source_commit": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+      "library_sha256": "b09bc230e28580c29c66f3fa4449eccad62d6b08014bd7f5028246cc90c9837d",
+      "driver_binary_sha256": "686181b926b6e652a9a418d504d07e00a504121f3c168e45d132f2ab4eb6c316",
+      "compile_rc": 0,
+      "execute_rc": 0,
+      "input_sha256": "33ab9892fe21218a58d5e7e56c2353689f48b0d57383ce94cc4ec8483cba7576",
+      "wrapper_sha256": "5b5c67977213612e0b690fcbfeaf0912e745c37f7a318d23ba3e96a69c5139d9"
+    },
+    "candidate": {
+      "source_commit": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+      "library_sha256": "8888ca7e48de3650488d8422140001baf3bcf4cfff1874b0e4d1af268763110f",
+      "driver_binary_sha256": "a053e47cf251078edfbcafe4ef3f2eac273662a91153fbcbafec848a3feede8a",
+      "compile_rc": 0,
+      "execute_rc": 0,
+      "input_sha256": "33ab9892fe21218a58d5e7e56c2353689f48b0d57383ce94cc4ec8483cba7576",
+      "wrapper_sha256": "5b5c67977213612e0b690fcbfeaf0912e745c37f7a318d23ba3e96a69c5139d9"
+    }
+  },
+  "worker_rc": 0
+}
