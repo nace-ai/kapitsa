@@ -242,17 +242,26 @@ AgentLaunch pi(const std::string& path, const AgentServer& s, const std::vector<
   return l;
 }
 
-// Hermes Agent by Nous Research: uses the openai-api provider with OPENAI_BASE_URL and OPENAI_API_KEY.
-// The user picks the openai-api provider with `hermes model` once; after that, every `kapitsa hermes` session
-// points it at the running server through these variables.
+// Hermes Agent by Nous Research: the openai-api provider with --provider and -m on the command line, the server's
+// URL and key through OPENAI_BASE_URL and OPENAI_API_KEY. The CLI flags override any config.yaml, so a first run
+// needs no `hermes model` step.
 AgentLaunch hermes(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
   AgentLaunch l;
   l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
            {"OPENAI_BASE_URL", s.base_url + "/v1"},
            {"HERMES_MAX_CONTEXT", std::to_string(s.context)}};
+  // --provider and -m tell Hermes which provider and model to use for this session, overriding config.yaml;
+  // only add them when the user did not pass their own
+  bool has_provider = false, has_model = false;
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--") break;
+    if (args[i] == "--provider" || args[i].rfind("--provider=", 0) == 0) has_provider = true;
+    if (args[i] == "-m" || args[i] == "--model" || args[i].rfind("-m=", 0) == 0) has_model = true;
+  }
   l.argv = {path};
+  if (!has_provider) l.argv.insert(l.argv.end(), {"--provider", "openai-api"});
+  if (!has_model) l.argv.insert(l.argv.end(), {"-m", s.model});
   l.argv.insert(l.argv.end(), args.begin(), args.end());
-  l.notes = {"Hermes uses its openai-api provider. If this is the first run, choose it: hermes model \xe2\x86\x92 OpenAI API."};
   return l;
 }
 
@@ -270,9 +279,10 @@ AgentLaunch aider(const std::string& path, const AgentServer& s, const std::vect
   }
   l.argv = {path};
   if (!has_model) l.argv.insert(l.argv.end(), {"--model", "openai/" + s.model});
-  // aider does not auto-detect the context window from the server; pass it so it compacts in time
-  l.argv.insert(l.argv.end(), {"--context-window", std::to_string(s.context)});
   l.argv.insert(l.argv.end(), args.begin(), args.end());
+  // aider learns the context window from its model metadata, not from an env var or flag; unknown models get a
+  // warning and a conservative default. --model-metadata-file could override it, but a temporary file for one
+  // number is not worth the complexity.
   return l;
 }
 

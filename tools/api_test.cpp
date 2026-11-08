@@ -881,20 +881,23 @@ void clients() {
   check(has(h, "OPENAI_API_KEY", "kapitsa") && has(h, "OPENAI_BASE_URL", "http://127.0.0.1:8000/v1") &&
             has(h, "HERMES_MAX_CONTEXT", "131072"),
         "hermes: OPENAI_BASE_URL, OPENAI_API_KEY, context");
-  check(h.argv == std::vector<std::string>{"/bin/hermes", "--yolo"},
-        "hermes: arguments passed through");
+  check(h.argv == std::vector<std::string>{"/bin/hermes", "--provider", "openai-api", "-m", "qwen3.6-35b-a3b", "--yolo"},
+        "hermes: --provider and -m before user args");
   AgentLaunch h2 = agent_launch("hermes", "/bin/hermes", {"http://127.0.0.1:9000", "m", 65536, "mykey"}, {}, {}, -1);
   check(has(h2, "OPENAI_API_KEY", "mykey") && has(h2, "OPENAI_BASE_URL", "http://127.0.0.1:9000/v1") &&
             has(h2, "HERMES_MAX_CONTEXT", "65536"),
         "hermes: a server with an API key and another context");
+  AgentLaunch h3 = agent_launch("hermes", "/bin/hermes", s, {"--provider", "custom", "-m", "other"}, {}, -1);
+  check(std::count(h3.argv.begin(), h3.argv.end(), "--provider") == 1 &&
+            std::count(h3.argv.begin(), h3.argv.end(), "-m") == 1,
+        "hermes: user's --provider and -m are not duplicated");
 
   // aider
   AgentLaunch a = agent_launch("aider", "/bin/aider", s, {"--no-git"}, {}, -1);
   check(has(a, "OPENAI_API_BASE", "http://127.0.0.1:8000/v1") && has(a, "OPENAI_API_KEY", "kapitsa"),
         "aider: OPENAI_API_BASE, OPENAI_API_KEY");
-  check(a.argv == std::vector<std::string>{"/bin/aider", "--model", "openai/qwen3.6-35b-a3b",
-                                           "--context-window", "131072", "--no-git"},
-        "aider: --model openai/<name>, --context-window, user args appended");
+  check(a.argv == std::vector<std::string>{"/bin/aider", "--model", "openai/qwen3.6-35b-a3b", "--no-git"},
+        "aider: --model openai/<name>, user args appended");
   AgentLaunch a2 = agent_launch("aider", "/bin/aider", s, {"--model", "openai/other"}, {}, -1);
   check(std::count(a2.argv.begin(), a2.argv.end(), "--model") == 1,
         "aider: user's --model is not duplicated");
