@@ -339,7 +339,7 @@ const SafetensorsIndex::Entry& SafetensorsIndex::get(const std::string& name) co
 }
 
 void SafetensorsIndex::read(const Entry& t, size_t off, void* dst, size_t n) const {
-  if (off + n > t.len) fatal("%s: read past a tensor's end", dir_.c_str());
+  if (off > t.len || n > t.len - off) fatal("%s: read past a tensor's end", dir_.c_str());
   size_t done = 0;
   while (done < n) {
     const ssize_t r = pread(fds_[size_t(t.file)].get(), static_cast<uint8_t*>(dst) + done, n - done, off_t(t.off + off + done));
