@@ -1,3 +1,5 @@
+#include "gguf_q8_0_test.h"
+
 // The GPU layout of llama.cpp's IQ blocks (src/kernels/wfmt_iq.metal, gguf::iq_repack) checked on the CPU: random blocks
 // of every type the IQ MoE kernels read (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S) are repacked in two row ranges (as the
 // loader's threads do), then every value is decoded from the repacked sections as the kernels build their MMA operands
@@ -9,7 +11,6 @@
 //   iq_layout_test        (no model, no GPU)
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
-#include "gguf_q8_0_test.h"
 
 #include <cmath>
 #include <cstdio>
@@ -171,7 +172,6 @@ void test_type(uint32_t t, const Tables& T, std::mt19937& rng) {
 }  // namespace
 
 int main() {
-  g_fail += q8_test::run();
   Tables T;
   T.iq2xxs = metal_table("constant ulong iq2xxs_gridp[256]", 256);
   T.iq2s = metal_table("constant ulong iq2s_gridp[1024]", 1024);
@@ -195,6 +195,7 @@ int main() {
   check(!gg::iq_gpu_type(gg::kIQ2_XS) && !gg::iq_gpu_type(gg::kIQ1_M) && !gg::iq_gpu_type(gg::kQ4_K), "iq_gpu_type",
         "takes a type without a layout");
   check(gg::iq_mode_type("affine") == 0 && gg::iq_mode_type("iq2_xs") == 0, "iq_mode_type", "names another mode");
+  g_fail += q8_test::run();
   if (g_fail) {
     printf("%d check(s) FAILED\n", g_fail);
     return 1;
