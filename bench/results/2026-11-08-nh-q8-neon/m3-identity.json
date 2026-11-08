@@ -1,0 +1,32 @@
+{
+  "record_kind": "Privacy-filtered derived identity export",
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_gb": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "identity": {
+    "reference": {
+      "commit": "95a0a552fab5c359dd91b716e9936918d436d713",
+      "nemotron_h_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "kapitsa_sha256": "3f0159c73efb1b7bd8383554f04298a0d2a855a2c5d5ec23e0639d52da2dbb61",
+      "logit_dump_sha256": "972395497a8676c2a32c51abf1521e2e39f4fb6020ab548f4c4ba679da5dabda",
+      "library_sha256": "9ce7550e622a00948db17b570ad927809d2fec290cd73e437502f376b17cc1aa"
+    },
+    "candidate": {
+      "commit": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+      "nemotron_h_sha256": "1b35e748a66eb7e52ed54990c948269e5c3faa7c8fbd439bce5a3f936da5132d",
+      "kapitsa_sha256": "752faf128fd9e4ed28c97532fd9ec5f3d6ac5149da5a123c55537101677638b6",
+      "logit_dump_sha256": "2eade423f93266cf02547b41193badda0292b7732c0eda2c2474c111bced0af1",
+      "library_sha256": "58df9158d324056d94087f39ce183aae6bc946a8f2b1f0630524b3596937bdb4"
+    },
+    "model": {
+      "repo": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+      "revision": "3fe6dab75665a93884214ad4b1b95cf02717d081"
+    },
+    "actual_release_target_flags": "-O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0 (no NDEBUG)",
+    "CPU_extraction_flags": "-O3 -std=c++20; separate translation units, no LTO"
+  }
+}

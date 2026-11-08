@@ -267,6 +267,11 @@ jobs:
       - name: affine_pack_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/affine_pack_test
+      - name: nh_quant_q8_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target nh_quant_q8_test
+          build/nh_quant_q8_test
       - name: systemone_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/systemone_test

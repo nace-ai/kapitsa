@@ -1,0 +1,142 @@
+{
+  "record_kind": "Actual unchanged timing rows; separate K=3136 function call per row",
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_gb": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "driver_sha256": "d4219f1e99a855225b94cb244103f4dde4275e4922fb9d18ed7c6d86a03246ef",
+  "records": [
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "warmup_passes_per_arm": 2,
+      "input_kind": "preconverted_float32_from_synthetic_BF16_bits",
+      "includes_BF16_conversion": false,
+      "includes_file_IO": false,
+      "includes_model_loading": false,
+      "input_sha256": "82b3f862f8f2aa52495b7fbf20fd1631c620f453c758587e4373a33d768ab3aa",
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef",
+      "complete_byte_gate": true
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 1,
+      "arm": "A",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 21.276591187,
+      "ns_per_row_call": 20777.921081543,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 2,
+      "arm": "B",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 5.487239563,
+      "ns_per_row_call": 5358.632385254,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 3,
+      "arm": "A",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 21.231661438,
+      "ns_per_row_call": 20734.044372559,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 4,
+      "arm": "B",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 5.492666687,
+      "ns_per_row_call": 5363.932312012,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 5,
+      "arm": "A",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 21.2081745,
+      "ns_per_row_call": 20711.107910156,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 6,
+      "arm": "B",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 5.491625,
+      "ns_per_row_call": 5362.915039062,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 7,
+      "arm": "A",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 21.1930365,
+      "ns_per_row_call": 20696.324707031,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "mode": "warm_cpu_per_row_quantizer",
+      "leg": 8,
+      "arm": "B",
+      "K_per_call": 3136,
+      "rows_per_pass": 1024,
+      "passes": 16,
+      "quantizer_calls_per_leg": 16384,
+      "ms_per_rows_pass": 5.485096312,
+      "ns_per_row_call": 5356.539367676,
+      "complete_byte_gate": true,
+      "code_sha256": "440241cf0f58abf59c4ec18376ceb3d473fa748e93aeaf167b1e3fd845f1cdd1",
+      "scale_sha256": "f86a1b6533244dd4f4ede9719e6a865ff911d93410ec6033d053728c70e868ef"
+    },
+    {
+      "consume": 1752
+    }
+  ]
+}
