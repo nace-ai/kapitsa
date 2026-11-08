@@ -1259,26 +1259,25 @@ void convert_rows(const Lin& L, const uint8_t* src, uint64_t s0, uint64_t r0, ui
     const uint8_t* s = src + (sr - s0) * srb;
     uint8_t* wo = w + (row - r0) * L.row_w();
     if (direct) {
-      decode4(type, s, codes.data(), s32.data(), o32.data(), K);
+      decode4(type, s, L.cperm_hs > 0 ? c2.data() : codes.data(), s32.data(), o32.data(), K);
       if (L.cperm_hs > 0) {
         const uint64_t hs = uint64_t(L.cperm_hs), heads = K / hs;
         const uint64_t r = heads / nk;
-        std::vector<float> s2(s32), o2(o32);
-        c2 = codes;
         for (uint64_t h = 0; h < heads; ++h) {
           const uint64_t sh = (h % r) * nk + h / r;
           memcpy(codes.data() + h * hs, c2.data() + sh * hs, hs);
           for (uint64_t g = 0; g < hs / 32; ++g) {
-            s32[h * hs / 32 + g] = s2[sh * hs / 32 + g];
-            o32[h * hs / 32 + g] = o2[sh * hs / 32 + g];
+            sc[(row - r0) * nb + h * hs / 32 + g] = to_bf16(s32[sh * hs / 32 + g]);
+            bi[(row - r0) * nb + h * hs / 32 + g] = to_bf16(o32[sh * hs / 32 + g]);
           }
+        }
+      } else {
+        for (uint64_t g = 0; g < K / 32; ++g) {
+          sc[(row - r0) * nb + g] = to_bf16(s32[g]);
+          bi[(row - r0) * nb + g] = to_bf16(o32[g]);
         }
       }
       pack_codes(codes.data(), K, 4, reinterpret_cast<uint32_t*>(wo));
-      for (uint64_t g = 0; g < K / 32; ++g) {
-        sc[(row - r0) * nb + g] = to_bf16(s32[g]);
-        bi[(row - r0) * nb + g] = to_bf16(o32[g]);
-      }
       continue;
     }
     dequantize(type, s, x.data(), K);
