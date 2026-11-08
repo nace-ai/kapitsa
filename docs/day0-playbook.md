@@ -179,8 +179,7 @@ Include a comparison against other engines if `kapitsa bench compare` data is av
 
 ## Rehearsal notes (2026-11-08)
 
-Rehearsed steps 1 and 4 on `qwen3.5-4b` (already in the catalog), M5 Pro 48 GB:
+Rehearsed step 4 on `qwen3.5-4b` (already in the catalog), M5 Pro 48 GB, macOS 26.5, Kapitsa 0.2.25 (7ea4fff):
 
-- **Import:** model already converted (4.57 GB download, MLX affine 4-bit). A fresh `kapitsa import` of a GGUF takes under a minute for a 4B model.
-- **Benchmark:** `kapitsa bench --model 4b --quick` (bench starts its own server) completed in 3 min 40 s. Results: 221 tok/s decode, 237 tok/s greedy, 3,733 tok/s prefill at 4K. Three flags (GPU contention from Edge, two repetition loops in the sampled decode).
-- **Total wall time for steps 1+4:** under 5 min for a model already in the catalog. For a new model, add time for the catalog edit, drafter search, and build (~10 min).
+- **Benchmark:** `kapitsa bench --model 4b --quick` (bench starts its own server) completed in 3 min 40 s. Results: 221 tok/s decode, 237 tok/s greedy, 3,733 tok/s prefill at 4K. Three flags: GPU contention from Edge (12.7% mean), two repetition loops in the sampled decode.
+- **Wall time for the bench step alone:** under 4 min. For a new model, add time for the catalog edit, drafter search, build and import (~10 min before the bench).

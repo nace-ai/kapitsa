@@ -127,7 +127,7 @@ a:hover { text-decoration: underline; }
 <script>
 // From the README's Supported models table: the most precise variant that starts on each Mac size.
 var models = [
-  { ram: 8,   name: "Qwen3.5-4B (BF16)", about: "Small model, fits in 8 GB", cmd: "kapitsa serve --model 4b", dl: "10.6 GB" },
+  { ram: 8,   name: "Qwen3.5-4B (4-bit)", about: "Small and quick, fits tight memory", cmd: "kapitsa serve --model 4b", dl: "4.6 GB" },
   { ram: 16,  name: "Qwen3.6-35B-A3B (2-bit)", about: "35B MoE with IQ2 quantization, tight fit", cmd: "kapitsa serve --model 35b:16gb", dl: "10.8 GB" },
   { ram: 24,  name: "Qwen3.6-35B-A3B (2-bit)", about: "35B MoE with IQ2 quantization, or the 27B at 4-bit (tight)", cmd: "kapitsa serve --model 35b:16gb", dl: "10.8 GB" },
   { ram: 32,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with fast decode and good code quality", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
