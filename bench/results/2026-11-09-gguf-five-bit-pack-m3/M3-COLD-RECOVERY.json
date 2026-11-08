@@ -1,0 +1,222 @@
+{
+  "format": "Explicitly privacy-filtered derived summary; not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "driver": {
+    "source_sha256": "f80e74dc531d9151a7c21e2fdc741c1d9f5ce1c4c5d5fc962bde8f2ac5e19a12",
+    "binary_sha256": "d7d87ad881c526d147b1103cd46a59e814b06372b4c16dde2843683c38235d3d",
+    "reference_library_sha256": "0e84325dc3385b8bc55f93a06e56eb2b2fe5e512c3c7cec8f157f105cb9d80c5"
+  },
+  "legs": {
+    "A1": {
+      "rc": 0,
+      "quiet_gate": true,
+      "warmup_ok": true,
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [],
+        "flags": [],
+        "prompt_tokens": 4130,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 2.523527292,
+        "prefill_tps": 1636.5981113391501,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 0,
+        "cached": {
+          "samples": [
+            {
+              "ttft_s": 0.035023833,
+              "prompt_tokens": 4186,
+              "cached_tokens": 4164,
+              "uncached_tokens": 22,
+              "suffix_prefill_tps": 628.1,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.045556125,
+              "prompt_tokens": 4220,
+              "cached_tokens": 4193,
+              "uncached_tokens": 27,
+              "suffix_prefill_tps": 592.7,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.037302708,
+              "prompt_tokens": 4250,
+              "cached_tokens": 4230,
+              "uncached_tokens": 20,
+              "suffix_prefill_tps": 536.2,
+              "finish": "length"
+            }
+          ],
+          "invalid": [],
+          "flags": [],
+          "median_ttft_s": 0.0373,
+          "median_suffix_prefill_tps": 592.7
+        },
+        "turn1_finish": "stop"
+      }
+    },
+    "B1": {
+      "rc": 0,
+      "quiet_gate": true,
+      "warmup_ok": true,
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [],
+        "flags": [],
+        "prompt_tokens": 4130,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 2.51258625,
+        "prefill_tps": 1643.7246681581578,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 0,
+        "cached": {
+          "samples": [
+            {
+              "ttft_s": 0.033496208,
+              "prompt_tokens": 4186,
+              "cached_tokens": 4164,
+              "uncached_tokens": 22,
+              "suffix_prefill_tps": 656.8,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.046466792,
+              "prompt_tokens": 4220,
+              "cached_tokens": 4193,
+              "uncached_tokens": 27,
+              "suffix_prefill_tps": 581.1,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.03704825,
+              "prompt_tokens": 4250,
+              "cached_tokens": 4230,
+              "uncached_tokens": 20,
+              "suffix_prefill_tps": 539.8,
+              "finish": "length"
+            }
+          ],
+          "invalid": [],
+          "flags": [],
+          "median_ttft_s": 0.037,
+          "median_suffix_prefill_tps": 581.1
+        },
+        "turn1_finish": "stop"
+      }
+    },
+    "A2": {
+      "rc": 0,
+      "quiet_gate": true,
+      "warmup_ok": true,
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [],
+        "flags": [],
+        "prompt_tokens": 4130,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 2.507483833,
+        "prefill_tps": 1647.0694429398538,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 0,
+        "cached": {
+          "samples": [
+            {
+              "ttft_s": 0.034047833,
+              "prompt_tokens": 4186,
+              "cached_tokens": 4164,
+              "uncached_tokens": 22,
+              "suffix_prefill_tps": 646.1,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.039542083,
+              "prompt_tokens": 4220,
+              "cached_tokens": 4193,
+              "uncached_tokens": 27,
+              "suffix_prefill_tps": 682.8,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.043193167,
+              "prompt_tokens": 4250,
+              "cached_tokens": 4230,
+              "uncached_tokens": 20,
+              "suffix_prefill_tps": 463.0,
+              "finish": "length"
+            }
+          ],
+          "invalid": [],
+          "flags": [],
+          "median_ttft_s": 0.0395,
+          "median_suffix_prefill_tps": 646.1
+        },
+        "turn1_finish": "stop"
+      }
+    },
+    "B2": {
+      "rc": 0,
+      "quiet_gate": true,
+      "warmup_ok": true,
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [],
+        "flags": [],
+        "prompt_tokens": 4130,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 2.506780083,
+        "prefill_tps": 1647.5318389546976,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 0,
+        "cached": {
+          "samples": [
+            {
+              "ttft_s": 0.033119292,
+              "prompt_tokens": 4186,
+              "cached_tokens": 4164,
+              "uncached_tokens": 22,
+              "suffix_prefill_tps": 664.3,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.050376208,
+              "prompt_tokens": 4220,
+              "cached_tokens": 4193,
+              "uncached_tokens": 27,
+              "suffix_prefill_tps": 536.0,
+              "finish": "stop"
+            },
+            {
+              "ttft_s": 0.034790292,
+              "prompt_tokens": 4250,
+              "cached_tokens": 4230,
+              "uncached_tokens": 20,
+              "suffix_prefill_tps": 574.9,
+              "finish": "length"
+            }
+          ],
+          "invalid": [],
+          "flags": [],
+          "median_ttft_s": 0.0348,
+          "median_suffix_prefill_tps": 574.9
+        },
+        "turn1_finish": "stop"
+      }
+    }
+  },
+  "method": "Cold-prefill-only recovery: removed only the six decode calls from the existing fixed driver. Warmup, quiet gate, temperature0 prefill and cached diagnostic, and runtime condition checks are retained. Linked once to the same reference library and used for all four reference/candidate servers. No production code changed.",
+  "original_failure": "Original fixed B1 prefill environment gate failure remains in M3-DEFAULT-FIXED.json; original results were not replaced. Recovery runs use new labels.",
+  "scope": "Cold prefill wall time only; no matched-cache performance or prefill/cache text equality claim. Full-vocabulary numerical evidence is separate."
+}
