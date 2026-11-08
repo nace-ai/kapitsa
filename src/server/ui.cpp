@@ -232,7 +232,8 @@ void home(const std::string& version) {
       const char* cmd;
       const char* name;
     };
-    const A agents[] = {{"claude", "Claude Code"}, {"codex", "Codex"}, {"opencode", "opencode"}, {"pi", "Pi"}};
+    const A agents[] = {{"claude", "Claude Code"}, {"codex", "Codex"}, {"opencode", "opencode"}, {"pi", "Pi"},
+                        {"hermes", "Hermes"}, {"aider", "aider"}, {"goose", "Goose"}};
     int cw = 0, nw2 = 0;
     for (const A& a : agents) cw = std::max(cw, width(a.cmd) + 8), nw2 = std::max(nw2, width(a.name));
     for (const A& a : agents) {

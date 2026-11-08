@@ -29,7 +29,7 @@ std::string agent_install_hint(const std::string& name) {
            "  npm install -g @earendil-works/pi-coding-agent";
   if (name == "hermes")
     return "Hermes is not installed (no `hermes` on the PATH). Install it:\n"
-           "  npm install -g hermes-agent      (or: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash)";
+           "  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash";
   if (name == "aider")
     return "aider is not installed (no `aider` on the PATH). Install it:\n"
            "  pip install aider-chat      (or: brew install aider)";
@@ -248,7 +248,8 @@ AgentLaunch pi(const std::string& path, const AgentServer& s, const std::vector<
 AgentLaunch hermes(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
   AgentLaunch l;
   l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
-           {"OPENAI_BASE_URL", s.base_url + "/v1"}};
+           {"OPENAI_BASE_URL", s.base_url + "/v1"},
+           {"HERMES_MAX_CONTEXT", std::to_string(s.context)}};
   l.argv = {path};
   l.argv.insert(l.argv.end(), args.begin(), args.end());
   l.notes = {"Hermes uses its openai-api provider. If this is the first run, choose it: hermes model \xe2\x86\x92 OpenAI API."};
@@ -269,17 +270,21 @@ AgentLaunch aider(const std::string& path, const AgentServer& s, const std::vect
   }
   l.argv = {path};
   if (!has_model) l.argv.insert(l.argv.end(), {"--model", "openai/" + s.model});
+  // aider does not auto-detect the context window from the server; pass it so it compacts in time
+  l.argv.insert(l.argv.end(), {"--context-window", std::to_string(s.context)});
   l.argv.insert(l.argv.end(), args.begin(), args.end());
   return l;
 }
 
 // Goose by Block (https://block.github.io/goose): OpenAI provider with OPENAI_HOST and OPENAI_API_KEY.
+// GOOSE_CONTEXT_LIMIT tells Goose the model's context window so it compacts at the right time.
 AgentLaunch goose(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
   AgentLaunch l;
   l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
            {"OPENAI_HOST", s.base_url},
            {"GOOSE_PROVIDER", "openai"},
-           {"GOOSE_MODEL", s.model}};
+           {"GOOSE_MODEL", s.model},
+           {"GOOSE_CONTEXT_LIMIT", std::to_string(s.context)}};
   l.argv = {path};
   l.argv.insert(l.argv.end(), args.begin(), args.end());
   return l;

@@ -1,4 +1,0 @@
-module CKapitsa {
-    header "../include/kapitsa.h"
-    export *
-}

@@ -875,6 +875,38 @@ void clients() {
             q.notes.size() == 1 && q.notes[0].find("other downloaded models") != std::string::npos &&
             q.files[0].second.find("KAPITSA_PI_MODELS") != std::string::npos,
         "pi: a server started with --allow-switch: Pi lists every downloaded model, the served one first");
+
+  // hermes
+  AgentLaunch h = agent_launch("hermes", "/bin/hermes", s, {"--yolo"}, {}, -1);
+  check(has(h, "OPENAI_API_KEY", "kapitsa") && has(h, "OPENAI_BASE_URL", "http://127.0.0.1:8000/v1") &&
+            has(h, "HERMES_MAX_CONTEXT", "131072"),
+        "hermes: OPENAI_BASE_URL, OPENAI_API_KEY, context");
+  check(h.argv == std::vector<std::string>{"/bin/hermes", "--yolo"},
+        "hermes: arguments passed through");
+  AgentLaunch h2 = agent_launch("hermes", "/bin/hermes", {"http://127.0.0.1:9000", "m", 65536, "mykey"}, {}, {}, -1);
+  check(has(h2, "OPENAI_API_KEY", "mykey") && has(h2, "OPENAI_BASE_URL", "http://127.0.0.1:9000/v1") &&
+            has(h2, "HERMES_MAX_CONTEXT", "65536"),
+        "hermes: a server with an API key and another context");
+
+  // aider
+  AgentLaunch a = agent_launch("aider", "/bin/aider", s, {"--no-git"}, {}, -1);
+  check(has(a, "OPENAI_API_BASE", "http://127.0.0.1:8000/v1") && has(a, "OPENAI_API_KEY", "kapitsa"),
+        "aider: OPENAI_API_BASE, OPENAI_API_KEY");
+  check(a.argv == std::vector<std::string>{"/bin/aider", "--model", "openai/qwen3.6-35b-a3b",
+                                           "--context-window", "131072", "--no-git"},
+        "aider: --model openai/<name>, --context-window, user args appended");
+  AgentLaunch a2 = agent_launch("aider", "/bin/aider", s, {"--model", "openai/other"}, {}, -1);
+  check(std::count(a2.argv.begin(), a2.argv.end(), "--model") == 1,
+        "aider: user's --model is not duplicated");
+
+  // goose
+  AgentLaunch g = agent_launch("goose", "/bin/goose", s, {"session"}, {}, -1);
+  check(has(g, "OPENAI_API_KEY", "kapitsa") && has(g, "OPENAI_HOST", "http://127.0.0.1:8000") &&
+            has(g, "GOOSE_PROVIDER", "openai") && has(g, "GOOSE_MODEL", "qwen3.6-35b-a3b") &&
+            has(g, "GOOSE_CONTEXT_LIMIT", "131072"),
+        "goose: OPENAI_HOST, OPENAI_API_KEY, GOOSE_PROVIDER, GOOSE_MODEL, context");
+  check(g.argv == std::vector<std::string>{"/bin/goose", "session"},
+        "goose: arguments passed through");
 }
 
 // ---------------------------------------------------------------- round trips through a chat template
