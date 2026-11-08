@@ -297,18 +297,16 @@ AgentLaunch goose(const std::string& path, const AgentServer& s, const std::vect
            {"GOOSE_MODEL", s.model},
            {"GOOSE_CONTEXT_LIMIT", std::to_string(s.context)}};
   l.argv = {path};
-  // Insert `session` when no subcommand was given, so bare `kapitsa goose` opens a chat.
-  // Known subcommands (goose --help): configure, info, doctor, mcp, acp, serve, session, run, recipe, skills,
-  // plugin, schedule, gateway, update, term. If the first user arg is one of those or starts with `-`, don't insert.
-  static const char* subs[] = {"configure", "info", "doctor", "mcp", "acp", "serve", "session", "run", "recipe",
-                               "skills", "plugin", "schedule", "gateway", "update", "term", "s"};
-  bool has_sub = false;
-  if (!args.empty() && !args[0].empty()) {
-    if (args[0][0] == '-') has_sub = true;  // a flag before any subcommand: goose handles it
-    for (const char* sc : subs)
-      if (args[0] == sc) { has_sub = true; break; }
+  // Insert `session` so bare `kapitsa goose` opens a chat. Without it, bare `goose` prints help.
+  // Insert it when: no args at all, or the first arg is a flag that belongs to `session` (anything starting with
+  // `-` except goose's top-level flags -h/--help/-V/--version). A word that does not start with `-` is a subcommand
+  // (run, configure, doctor, ...) and stays as typed.
+  bool insert_session = args.empty();
+  if (!insert_session && !args.empty() && !args[0].empty() && args[0][0] == '-') {
+    const std::string& f = args[0];
+    insert_session = f != "-h" && f != "--help" && f != "-V" && f != "--version";
   }
-  if (!has_sub) l.argv.push_back("session");
+  if (insert_session) l.argv.push_back("session");
   l.argv.insert(l.argv.end(), args.begin(), args.end());
   return l;
 }

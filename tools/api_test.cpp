@@ -900,20 +900,38 @@ void clients() {
   check(std::count(a2.argv.begin(), a2.argv.end(), "--model") == 1,
         "aider: user's --model is not duplicated");
 
-  // goose: bare `kapitsa goose` inserts `session`; a subcommand like `run` stays as typed
+  // goose: bare `kapitsa goose` inserts `session`; a subcommand stays as typed; session flags get session inserted
   AgentLaunch g = agent_launch("goose", "/bin/goose", s, {}, {}, -1);
   check(has(g, "OPENAI_API_KEY", "kapitsa") && has(g, "OPENAI_HOST", "http://127.0.0.1:8000") &&
             has(g, "GOOSE_PROVIDER", "openai") && has(g, "GOOSE_MODEL", "qwen3.6-35b-a3b") &&
             has(g, "GOOSE_CONTEXT_LIMIT", "131072"),
         "goose: OPENAI_HOST, OPENAI_API_KEY, GOOSE_PROVIDER, GOOSE_MODEL, context");
   check(g.argv == std::vector<std::string>{"/bin/goose", "session"},
-        "goose: bare kapitsa goose inserts session");
+        "goose: no args inserts session");
+  // session flags (-n, --resume) get session inserted before them
+  AgentLaunch gn = agent_launch("goose", "/bin/goose", s, {"-n", "test"}, {}, -1);
+  check(gn.argv == std::vector<std::string>{"/bin/goose", "session", "-n", "test"},
+        "goose: -n (session flag) gets session inserted");
+  // subcommands stay as typed
   AgentLaunch g2 = agent_launch("goose", "/bin/goose", s, {"run", "--text", "hi"}, {}, -1);
   check(g2.argv == std::vector<std::string>{"/bin/goose", "run", "--text", "hi"},
-        "goose: a subcommand (run) stays as typed, no session inserted");
-  AgentLaunch g3 = agent_launch("goose", "/bin/goose", s, {"session", "--name", "test"}, {}, -1);
-  check(g3.argv == std::vector<std::string>{"/bin/goose", "session", "--name", "test"},
-        "goose: explicit session is not duplicated");
+        "goose: run stays as typed");
+  AgentLaunch gr = agent_launch("goose", "/bin/goose", s, {"review"}, {}, -1);
+  check(gr.argv == std::vector<std::string>{"/bin/goose", "review"},
+        "goose: review stays as typed");
+  AgentLaunch gl = agent_launch("goose", "/bin/goose", s, {"local-models"}, {}, -1);
+  check(gl.argv == std::vector<std::string>{"/bin/goose", "local-models"},
+        "goose: local-models stays as typed");
+  AgentLaunch gc = agent_launch("goose", "/bin/goose", s, {"completion", "zsh"}, {}, -1);
+  check(gc.argv == std::vector<std::string>{"/bin/goose", "completion", "zsh"},
+        "goose: completion zsh stays as typed");
+  // top-level flags stay as typed (no session inserted)
+  AgentLaunch gh2 = agent_launch("goose", "/bin/goose", s, {"-h"}, {}, -1);
+  check(gh2.argv == std::vector<std::string>{"/bin/goose", "-h"},
+        "goose: -h unchanged (top-level help)");
+  AgentLaunch gv = agent_launch("goose", "/bin/goose", s, {"--version"}, {}, -1);
+  check(gv.argv == std::vector<std::string>{"/bin/goose", "--version"},
+        "goose: --version unchanged");
 }
 
 // ---------------------------------------------------------------- round trips through a chat template
