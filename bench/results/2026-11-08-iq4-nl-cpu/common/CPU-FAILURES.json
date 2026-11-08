@@ -1,0 +1,31 @@
+{
+  "record_kind": "Explicitly sanitized derived failure summary; private raw execution records retained",
+  "source_reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+  "source_candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+  "load_error_test": {
+    "status": "FAIL in both executed arms",
+    "candidate_executions": 1,
+    "reference_executions": 1,
+    "candidate_rc": 1,
+    "reference_rc": 1,
+    "reference_binary_sha256": "8ea875884b620b24a9b8264b9f7fa709c237d21e57981f4f688060f3c649d93c",
+    "candidate_binary_sha256": "c9fb1db408be30b869e4ef749f9e9c47ffd200ccdaef835525c8534271971836",
+    "failed_check": "Uncached raw-U8 loader cache-residency assertion",
+    "source_relation": "Test and loader source bytes are unchanged across arms; this failing fixture does not invoke IQ4_NL dequantization",
+    "interpretation": "Recorded same-case failure supports a disclosed baseline limitation; its general cause is not diagnosed, and it has not been repaired",
+    "sanitization": "Private machine usage counters and paths are omitted; the original failure status is preserved"
+  },
+  "first_M4_gather_attempt": {
+    "status": "COMPILE FAIL",
+    "reason": "Helper initially omitted gguf/gguf.h required for kIQ4_NL",
+    "executions_before_header_correction": 0,
+    "corrected_first_executions": "PASS in both reference and candidate; reported in CPU-CHECKS.json",
+    "timing_replayed": false
+  },
+  "intentional_negative_controls": {
+    "mutants": 2,
+    "status": "Expected failures caught; restored production source explicitly reconfigured and rebuilt before recorded PASS",
+    "scope": "Sensitivity checks, not production-source failures"
+  },
+  "all_checks_passed": false
+}

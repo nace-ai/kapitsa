@@ -1,0 +1,80 @@
+{
+  "record_kind": "Explicitly sanitized derived evidence summary; not raw execution logs",
+  "source_reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+  "source_candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+  "focused_oracle": {
+    "status": "PASS",
+    "byte_and_FP_flag_cases": 321200,
+    "guard_pages_tails_error_recovery": "PASS",
+    "intentional_mutants_caught": 2,
+    "restored_source_reconfigured_rebuilt_and_passed": true
+  },
+  "official_per_row": {
+    "reports": [
+      "m3-cpu-per-row.json",
+      "m4-cpu-per-row.json"
+    ],
+    "setups": [
+      {
+        "chip": "Apple M3 Ultra",
+        "gpu_cores": 60,
+        "memory_capacity_gib": 96,
+        "macos": "26.4.1",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+      },
+      {
+        "chip": "Apple M4 Pro",
+        "gpu_cores": 20,
+        "memory_capacity_gib": 48,
+        "macos": "15.7.1",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+      }
+    ],
+    "timed_passes_per_setup": 128,
+    "complete_output_bytes_per_pass": 10485760,
+    "byte_finite_input_binary_gates": "PASS",
+    "scope": "Warm CPU row dequantization of one real tensor range"
+  },
+  "runtime_gather": {
+    "status": "PASS",
+    "setups": [
+      "Apple M3 Ultra",
+      "Apple M4 Pro"
+    ],
+    "arms": [
+      "reference",
+      "candidate"
+    ],
+    "direct_rows_each_execution": 1024,
+    "gathered_rows_each_execution": 2848,
+    "gather_sizes": [
+      16,
+      240,
+      256,
+      272,
+      1040,
+      1024
+    ],
+    "helper_sha256": "42e3272249a089e3bc7593d044975f2e6917d0dff55c4bef809e026b71f6ad2d",
+    "wrapper_sha256": "fb3c539c5a3550d1a077425b9b5e40dd39274bbf0de547e5dd77c0971c8a3c64",
+    "method": "Actual tensor rows in a synthetic one-tensor wrapper; official libraries, default prefetch, independent scalar oracle and canaries",
+    "limitation": "Does not establish trained PLE, full-model gather, NgramHash, GPU or gather performance results"
+  },
+  "candidate_CPU_validation": {
+    "setup": "Apple M4 Pro",
+    "vk_CPU_pass": 22,
+    "supplemental_scripts_pass": 6,
+    "all_files_prek": "PASS",
+    "diff_check": "PASS",
+    "remaining_failure_report": "CPU-FAILURES.json",
+    "standalone_CPU_programs_pass": 14,
+    "standalone_CPU_programs_total": 15,
+    "standalone_CPU_programs_scope": "Standalone offline CPU test executables, distinct from the GPU native bench model runs."
+  },
+  "limitations": [
+    "No whole import, loading or inference speed claim.",
+    "Absolute cross-chip timing differences have no established cause.",
+    "No full CPU-suite-success claim; original cache test failures are preserved.",
+    "See the setup model reports for complete-model results and their limits."
+  ]
+}

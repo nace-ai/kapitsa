@@ -1,0 +1,10 @@
+{
+  "candidate_quant_source_sha256": "bc56773f295da3541b603b01ae9407a07371276e19095740969087327003b3a8",
+  "change_scope": "Only commit author/committer metadata was sanitized before publication. All other commit headers, parent and message bytes are unchanged; the complete source and test Git trees are identical.",
+  "identical_complete_source_and_test_tree_sha": "639bcfb7c7a04cb932d0b1938f60b34f90fa4fa0",
+  "measured_candidate_commit": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+  "measurement_scope": "Reports retain the original measured candidate commit and original binary versions and digests. Source, tests, included measured driver and measurement payloads are unchanged. This mapping does not assert that a later rebuilt binary is byte-identical to a measured binary.",
+  "published_candidate_production_commit": "315fec8d35af49cbf639a4b095acea229dfc6052",
+  "record_kind": "Published source identity mapping; original measurements unchanged",
+  "reference_production_commit": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f"
+}

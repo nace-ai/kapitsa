@@ -1,0 +1,769 @@
+{
+  "configuration": {
+    "chip": "Apple M4 Pro",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": 20,
+    "macos": "15.7.1",
+    "memory_capacity_gib": 48
+  },
+  "identities": {
+    "candidate": {
+      "actual_target_flag_checks": {
+        "kapitsa": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "logit_dump": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "naceinfer": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "ni_run": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        }
+      },
+      "binaries_sha256": {
+        "kapitsa": "1c7290a317e471200aa07ca493d397399542e967f3ace12942eedf71c3b509cf",
+        "libnaceinfer.a": "5bb5e785ed4f7c940ce03d405d239ebcdc3cdfa0de9f1719677e3a5b296e67bb",
+        "logit_dump": "5581338e06a9e17eab72aee4d6e0d0b61a487696534b5907438ba1b593761665",
+        "ni_run": "b63f62a315e285d8fa7ed092afea5b7b59d2bbb5da30411b089c8389794bd643"
+      },
+      "production_source": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "source_inventory_sha256": "78e539b5136bc3fd1d5b84be040f0068c18128728c4a6b2051a3da502d8431ad",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "cb13b0114fe217f9ca17049af75e400b3113c53563b1ce31050dba3d8e45ad5a",
+        "src/bench/bench.h": "dd385ffed63f7a484da25b3ad8a1a03b6865733547cacc2286becf780b7e1fa9",
+        "src/bench/protocol.cpp": "5df1e8795e4b8c501da2304adcef425cbe617fab3f7c5ceb3b0eb4202792a274",
+        "src/bench/system.mm": "148db0401fd8050cac9409b5eeb07d69ab1452ee1999eaf0cb86a155aa7e4602",
+        "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "bc56773f295da3541b603b01ae9407a07371276e19095740969087327003b3a8",
+        "tools/iq_layout_test.cpp": "d85855b019eae100b267d90ea2207147279e2652b0e405d4984028d0e30c8f07",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      }
+    },
+    "reference": {
+      "actual_target_flag_checks": {
+        "kapitsa": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "logit_dump": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "naceinfer": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "ni_run": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        }
+      },
+      "binaries_sha256": {
+        "kapitsa": "60458d0aef81bd337eb6738843373208409e3c82f09d9669cfe471c4720b5966",
+        "libnaceinfer.a": "a86c2ec0caf9c47e56d95252c0ee8613c5422ab9c8b9d72d00b00280ac8c52cd",
+        "logit_dump": "a6ff8ecc3516e71ad32f23a8920794beae7249e03a739a1567e7f902af0c20ee",
+        "ni_run": "8e402db1d0385744e65235de862989dbe966751f744d13851a3f2fb8fd243987"
+      },
+      "production_source": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "source_inventory_sha256": "e9ab6bb48b58ea72f11ecc9dd05cb7a51c5a689c5df761b7e8ea543d2b94d246",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "cb13b0114fe217f9ca17049af75e400b3113c53563b1ce31050dba3d8e45ad5a",
+        "src/bench/bench.h": "dd385ffed63f7a484da25b3ad8a1a03b6865733547cacc2286becf780b7e1fa9",
+        "src/bench/protocol.cpp": "5df1e8795e4b8c501da2304adcef425cbe617fab3f7c5ceb3b0eb4202792a274",
+        "src/bench/system.mm": "148db0401fd8050cac9409b5eeb07d69ab1452ee1999eaf0cb86a155aa7e4602",
+        "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "d33b66d3f1a4ef2089abbb3f03cb46fbab195afb95a8b73f1eb0e1f98a1e5035",
+        "tools/iq_layout_test.cpp": "ae40b21bd510e8437619485dbac0066cadd90503134cd901aca77dffdb0d5bf7",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      }
+    }
+  },
+  "import": {
+    "all_files_raw_bytes_equal": true,
+    "converted_weight_config_tokenizer_bytes_equal": true,
+    "files_with_complete_literal_byte_comparison": [
+      ".kapitsa/manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "mtp.safetensors",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "format_scope": "Global and measured trunk module only; other per-module/MTP formats are not asserted to be 5-bit.",
+    "inventories": {
+      "candidate": [
+        {
+          "bytes": 1187,
+          "path": ".kapitsa/manifest.json",
+          "sha256": "3a4f7bdeb9ff69219501b7eb7f980eff7718a70bca2a9a253c6dba36563159be"
+        },
+        {
+          "bytes": 7756,
+          "path": "chat_template.jinja",
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "bytes": 7606,
+          "path": "config.json",
+          "sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf"
+        },
+        {
+          "bytes": 51,
+          "path": "generation_config.json",
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "bytes": 3222879600,
+          "path": "model.safetensors",
+          "sha256": "d8a1b1e0a06e4c97f937d0535f53fae412515c311abfaaf7a41e932f6e217ede"
+        },
+        {
+          "bytes": 68845,
+          "path": "model.safetensors.index.json",
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "bytes": 128152856,
+          "path": "mtp.safetensors",
+          "sha256": "8fa3db39cdec6fbc1f946f29b24468f6b457d1c8fa8278ee164587da07c327a4"
+        },
+        {
+          "bytes": 9089350,
+          "path": "tokenizer.json",
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "bytes": 12388,
+          "path": "tokenizer_config.json",
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ],
+      "reference": [
+        {
+          "bytes": 1187,
+          "path": ".kapitsa/manifest.json",
+          "sha256": "3a4f7bdeb9ff69219501b7eb7f980eff7718a70bca2a9a253c6dba36563159be"
+        },
+        {
+          "bytes": 7756,
+          "path": "chat_template.jinja",
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "bytes": 7606,
+          "path": "config.json",
+          "sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf"
+        },
+        {
+          "bytes": 51,
+          "path": "generation_config.json",
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "bytes": 3222879600,
+          "path": "model.safetensors",
+          "sha256": "d8a1b1e0a06e4c97f937d0535f53fae412515c311abfaaf7a41e932f6e217ede"
+        },
+        {
+          "bytes": 68845,
+          "path": "model.safetensors.index.json",
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "bytes": 128152856,
+          "path": "mtp.safetensors",
+          "sha256": "8fa3db39cdec6fbc1f946f29b24468f6b457d1c8fa8278ee164587da07c327a4"
+        },
+        {
+          "bytes": 9089350,
+          "path": "tokenizer.json",
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "bytes": 12388,
+          "path": "tokenizer_config.json",
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ]
+    },
+    "manifest_order_only_differences": [],
+    "source_backed_format_checks": {
+      "candidate": {
+        "effective_measured_module": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "global": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "packed_tensors": {
+          "biases": {
+            "dtype": "BF16",
+            "payload_bytes": 737280,
+            "shape": [
+              9216,
+              40
+            ]
+          },
+          "scales": {
+            "dtype": "BF16",
+            "payload_bytes": 737280,
+            "shape": [
+              9216,
+              40
+            ]
+          },
+          "weight": {
+            "dtype": "U32",
+            "payload_bytes": 14745600,
+            "shape": [
+              9216,
+              400
+            ]
+          }
+        }
+      },
+      "reference": {
+        "effective_measured_module": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "global": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "packed_tensors": {
+          "biases": {
+            "dtype": "BF16",
+            "payload_bytes": 737280,
+            "shape": [
+              9216,
+              40
+            ]
+          },
+          "scales": {
+            "dtype": "BF16",
+            "payload_bytes": 737280,
+            "shape": [
+              9216,
+              40
+            ]
+          },
+          "weight": {
+            "dtype": "U32",
+            "payload_bytes": 14745600,
+            "shape": [
+              9216,
+              400
+            ]
+          }
+        }
+      }
+    }
+  },
+  "literal_numerical": {
+    "float32_elements_each_arm": 145018880,
+    "paths": {
+      "batch": {
+        "all_finite": true,
+        "arms": [
+          {
+            "finite_float32_elements": 47677440,
+            "float32_elements": 47677440,
+            "logits_sha256": "f17e3c8dfcae9fce5f8dcced589a8811b79593acee4ce32777efc2f2f29930c3",
+            "metadata": {
+              "build": "0.2.31 (f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "batch",
+              "prefill_chunk": 2048,
+              "records": 192,
+              "vocab": 248320
+            },
+            "records": 192,
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "finite_float32_elements": 47677440,
+            "float32_elements": 47677440,
+            "logits_sha256": "f17e3c8dfcae9fce5f8dcced589a8811b79593acee4ce32777efc2f2f29930c3",
+            "metadata": {
+              "build": "0.2.31 (b9c67e691a5669545eca880f3e75111f9ce87dd0)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "batch",
+              "prefill_chunk": 2048,
+              "records": 192,
+              "vocab": 248320
+            },
+            "records": 192,
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "prefill": {
+        "all_finite": true,
+        "arms": [
+          {
+            "finite_float32_elements": 1986560,
+            "float32_elements": 1986560,
+            "logits_sha256": "de5685a7a70c78ee12934df8f09a227b2e037527c220d2a5aa17bdc6ba077c67",
+            "metadata": {
+              "build": "0.2.31 (f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "records": 8,
+              "vocab": 248320
+            },
+            "records": 8,
+            "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "finite_float32_elements": 1986560,
+            "float32_elements": 1986560,
+            "logits_sha256": "de5685a7a70c78ee12934df8f09a227b2e037527c220d2a5aa17bdc6ba077c67",
+            "metadata": {
+              "build": "0.2.31 (b9c67e691a5669545eca880f3e75111f9ce87dd0)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "records": 8,
+              "vocab": 248320
+            },
+            "records": 8,
+            "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "step": {
+        "all_finite": true,
+        "arms": [
+          {
+            "finite_float32_elements": 47677440,
+            "float32_elements": 47677440,
+            "logits_sha256": "713e82a635f021d969c9df009b854bd472dd23850b946c16e4ef954a7ecaaa84",
+            "metadata": {
+              "build": "0.2.31 (f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "records": 192,
+              "vocab": 248320
+            },
+            "records": 192,
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "finite_float32_elements": 47677440,
+            "float32_elements": 47677440,
+            "logits_sha256": "713e82a635f021d969c9df009b854bd472dd23850b946c16e4ef954a7ecaaa84",
+            "metadata": {
+              "build": "0.2.31 (b9c67e691a5669545eca880f3e75111f9ce87dd0)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "records": 192,
+              "vocab": 248320
+            },
+            "records": 192,
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "verify": {
+        "all_finite": true,
+        "arms": [
+          {
+            "finite_float32_elements": 47677440,
+            "float32_elements": 47677440,
+            "logits_sha256": "0085136eb1a450055190d8408b13e9f5d29505fa32a3eef03e431f9b272a4852",
+            "metadata": {
+              "build": "0.2.31 (f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "verify",
+              "prefill_chunk": 2048,
+              "records": 192,
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "vocab": 248320
+            },
+            "records": 192,
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "finite_float32_elements": 47677440,
+            "float32_elements": 47677440,
+            "logits_sha256": "0085136eb1a450055190d8408b13e9f5d29505fa32a3eef03e431f9b272a4852",
+            "metadata": {
+              "build": "0.2.31 (b9c67e691a5669545eca880f3e75111f9ce87dd0)",
+              "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]",
+              "engine": "kapitsa",
+              "path": "verify",
+              "prefill_chunk": 2048,
+              "records": 192,
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "vocab": 248320
+            },
+            "records": 192,
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      }
+    },
+    "prefill_independent_literal_gate": true,
+    "rows_each_arm": 584
+  },
+  "model": {
+    "expected_vocab": 248320,
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "source_bytes": 2775541728,
+    "source_sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f"
+  },
+  "phases": {
+    "candidate_build": {
+      "execution_finished_utc": "2026-11-08T11:51:04.255151+00:00",
+      "execution_started_utc": "2026-11-08T11:50:09.969867+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "candidate_configure": {
+      "execution_finished_utc": "2026-11-08T11:50:09.969054+00:00",
+      "execution_started_utc": "2026-11-08T11:50:08.311660+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "candidate_import": {
+      "execution_finished_utc": "2026-11-08T11:51:30.255173+00:00",
+      "execution_started_utc": "2026-11-08T11:51:19.236032+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "candidate_output": {
+      "execution_finished_utc": "2026-11-08T11:52:30.619552+00:00",
+      "execution_started_utc": "2026-11-08T11:52:16.220014+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "candidate_version": {
+      "execution_finished_utc": "2026-11-08T11:51:04.578391+00:00",
+      "execution_started_utc": "2026-11-08T11:51:04.256506+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "reference_build": {
+      "execution_finished_utc": "2026-11-08T11:50:05.605203+00:00",
+      "execution_started_utc": "2026-11-08T11:49:10.583641+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "reference_configure": {
+      "execution_finished_utc": "2026-11-08T11:49:10.582581+00:00",
+      "execution_started_utc": "2026-11-08T11:49:08.639710+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "reference_import": {
+      "execution_finished_utc": "2026-11-08T11:51:19.024279+00:00",
+      "execution_started_utc": "2026-11-08T11:51:08.096590+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "reference_output": {
+      "execution_finished_utc": "2026-11-08T11:52:16.217999+00:00",
+      "execution_started_utc": "2026-11-08T11:51:34.939853+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "reference_version": {
+      "execution_finished_utc": "2026-11-08T11:50:06.205466+00:00",
+      "execution_started_utc": "2026-11-08T11:50:05.608539+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "report_only": {
+      "execution_finished_utc": "2026-11-08T11:53:17.187711+00:00",
+      "execution_started_utc": "2026-11-08T11:52:38.440768+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    },
+    "strict_zero": {
+      "execution_finished_utc": "2026-11-08T11:53:56.039233+00:00",
+      "execution_started_utc": "2026-11-08T11:53:17.189405+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    }
+  },
+  "production_source": {
+    "candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+    "reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f"
+  },
+  "record_kind": "Explicitly sanitized derived evidence; not raw execution logs",
+  "report_only": {
+    "paths": {
+      "batch": {
+        "bitwise": 192,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "source": null
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 192,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      },
+      "prefill": {
+        "bitwise": 8,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "source": null
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 8,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      },
+      "step": {
+        "bitwise": 192,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "source": null
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 192,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      },
+      "verify": {
+        "bitwise": 192,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "source": null
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 192,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      }
+    },
+    "phase": {
+      "execution_finished_utc": "2026-11-08T11:53:17.187711+00:00",
+      "execution_started_utc": "2026-11-08T11:52:38.440768+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    }
+  },
+  "scope": "Tested import and numerical paths only. Read actual verify metadata; supplied-sequence tree/chain verification is teacher-forced, not free-generating MTP. No trained PLE or whole import/loading/inference speed claim.",
+  "setup": "M4",
+  "strict_zero": {
+    "paths": {
+      "batch": {
+        "bitwise": 192,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "max_far_flips": 0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_nll_change": 0.0,
+          "max_p99_kl": 0.0,
+          "min_top1": 1.0,
+          "near_tie": 0.0,
+          "source": "flags"
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 192,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      },
+      "prefill": {
+        "bitwise": 8,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "source": "flags"
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 8,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      },
+      "step": {
+        "bitwise": 192,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "max_far_flips": 0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_nll_change": 0.0,
+          "max_p99_kl": 0.0,
+          "min_top1": 1.0,
+          "near_tie": 0.0,
+          "source": "flags"
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 192,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      },
+      "verify": {
+        "bitwise": 192,
+        "failures": [],
+        "flip_list": [],
+        "flips": 0,
+        "gate": {
+          "max_far_flips": 0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_nll_change": 0.0,
+          "max_p99_kl": 0.0,
+          "min_top1": 1.0,
+          "near_tie": 0.0,
+          "source": "flags"
+        },
+        "kl_max": 0.0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "margin_change_max": 0.0,
+        "max_abs_diff": 0.0,
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "nll_change_mean": 0.0,
+        "non_finite": [],
+        "records": 192,
+        "tie_margin": 0.0,
+        "top1": 1.0
+      }
+    },
+    "phase": {
+      "execution_finished_utc": "2026-11-08T11:53:56.039233+00:00",
+      "execution_started_utc": "2026-11-08T11:53:17.189405+00:00",
+      "rc": 0,
+      "status": "COMPLETED"
+    }
+  }
+}
