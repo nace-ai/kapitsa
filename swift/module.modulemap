@@ -1,0 +1,5 @@
+module CKapitsa {
+    header "../sdk/c/kapitsa.h"
+    link "kapitsa_sdk"
+    export *
+}
