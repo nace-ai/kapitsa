@@ -147,6 +147,8 @@ git add src/hub/catalog.cpp docs/benchmarks.md bench/results/ \
 git commit -m "Add <Model Name> to the catalog (<decode> tok/s on <Mac>)"
 ```
 
+A model's first logit floor ships with its catalog entry because there is no floor to move; an existing floor is never touched in a Day-0 PR.
+
 ## 7. Post on r/LocalLLaMA
 
 Within 24 hours of the model release. Template:
@@ -179,5 +181,5 @@ Include a comparison against other engines if `kapitsa bench compare` data is av
 | 4 | Output check: `build/logit_dump` on the new model, then `tools/logit_floor.py` to establish its floor (new model has no floor yet), or `tools/logit_compare.py` gated at 2x the existing floor (new variant of a known model). |
 | 5 | PR opened with catalog + benchmarks + logit evidence. |
 | 6 | PR merged after review + stamp. |
-| 7 | Tag a release if user-visible (`kapitsa update` picks it up from the release). |
+| 7 | The model ships in the next scheduled release (at most one per 3 days). `kapitsa update` picks it up from there. |
 | 24 | r/LocalLLaMA post with final numbers. |
