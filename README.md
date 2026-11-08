@@ -6,7 +6,7 @@
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
 
-[Quickstart](#quickstart) · [Benchmarks](#benchmarks) · [Features](#features) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [Xcode 26 guide](docs/xcode-guide.md) · [日本語](README.ja.md)
+[Quickstart](#quickstart) · [Benchmarks](#benchmarks) · [Features](#features) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [日本語](README.ja.md)
 
 ## Quickstart
 
