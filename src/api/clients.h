@@ -1,5 +1,5 @@
-// The coding agents `kapitsa claude|codex|opencode|pi` starts against a Kapitsa server: the command line, the
-// environment and the files that point each one at the server, its model and its context window.
+// The coding agents `kapitsa claude|codex|opencode|pi|hermes|aider|goose` starts against a Kapitsa server: the command
+// line, the environment and the files that point each one at the server, its model and its context window.
 #pragma once
 #include <map>
 #include <string>

@@ -10,7 +10,8 @@ namespace ni::api {
 using ojson = nlohmann::ordered_json;
 
 bool known_agent(const std::string& name) {
-  return name == "claude" || name == "codex" || name == "opencode" || name == "pi";
+  return name == "claude" || name == "codex" || name == "opencode" || name == "pi" || name == "hermes" ||
+         name == "aider" || name == "goose";
 }
 
 std::string agent_install_hint(const std::string& name) {
@@ -26,6 +27,15 @@ std::string agent_install_hint(const std::string& name) {
   if (name == "pi")
     return "Pi is not installed (no `pi` on the PATH). Install it:\n"
            "  npm install -g @earendil-works/pi-coding-agent";
+  if (name == "hermes")
+    return "Hermes is not installed (no `hermes` on the PATH). Install it:\n"
+           "  npm install -g hermes-agent      (or: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash)";
+  if (name == "aider")
+    return "aider is not installed (no `aider` on the PATH). Install it:\n"
+           "  pip install aider-chat      (or: brew install aider)";
+  if (name == "goose")
+    return "Goose is not installed (no `goose` on the PATH). Install it:\n"
+           "  See https://block.github.io/goose/docs/getting-started/installation";
   return "";
 }
 
@@ -232,6 +242,49 @@ AgentLaunch pi(const std::string& path, const AgentServer& s, const std::vector<
   return l;
 }
 
+// Hermes Agent by Nous Research: uses the openai-api provider with OPENAI_BASE_URL and OPENAI_API_KEY.
+// The user picks the openai-api provider with `hermes model` once; after that, every `kapitsa hermes` session
+// points it at the running server through these variables.
+AgentLaunch hermes(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
+  AgentLaunch l;
+  l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
+           {"OPENAI_BASE_URL", s.base_url + "/v1"}};
+  l.argv = {path};
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  l.notes = {"Hermes uses its openai-api provider. If this is the first run, choose it: hermes model \xe2\x86\x92 OpenAI API."};
+  return l;
+}
+
+// aider (https://aider.chat): reads OPENAI_API_BASE and OPENAI_API_KEY, and takes --model openai/<name>.
+AgentLaunch aider(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
+  AgentLaunch l;
+  l.set = {{"OPENAI_API_BASE", s.base_url + "/v1"},
+           {"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key}};
+  // --model openai/<name> tells aider to use the OpenAI-compatible endpoint; only add it when the user did not
+  // pass --model themselves
+  bool has_model = false;
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--") break;
+    if (args[i] == "--model" || args[i].rfind("--model=", 0) == 0) { has_model = true; break; }
+  }
+  l.argv = {path};
+  if (!has_model) l.argv.insert(l.argv.end(), {"--model", "openai/" + s.model});
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  return l;
+}
+
+// Goose by Block (https://block.github.io/goose): OpenAI provider with OPENAI_HOST and OPENAI_API_KEY.
+AgentLaunch goose(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
+  AgentLaunch l;
+  l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
+           {"OPENAI_HOST", s.base_url},
+           {"GOOSE_PROVIDER", "openai"},
+           {"GOOSE_MODEL", s.model}};
+  l.argv = {path};
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  return l;
+}
+
 }  // namespace
 
 AgentLaunch agent_launch(const std::string& name, const std::string& path, const AgentServer& s,
@@ -241,6 +294,9 @@ AgentLaunch agent_launch(const std::string& name, const std::string& path, const
   if (name == "codex") return codex(path, s, args);
   if (name == "opencode") return opencode(path, s, args, env, major);
   if (name == "pi") return pi(path, s, args, dir);
+  if (name == "hermes") return hermes(path, s, args);
+  if (name == "aider") return aider(path, s, args);
+  if (name == "goose") return goose(path, s, args);
   throw std::runtime_error("unknown coding agent: " + name);
 }
 
