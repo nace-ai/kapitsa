@@ -248,8 +248,7 @@ AgentLaunch pi(const std::string& path, const AgentServer& s, const std::vector<
 AgentLaunch hermes(const std::string& path, const AgentServer& s, const std::vector<std::string>& args) {
   AgentLaunch l;
   l.set = {{"OPENAI_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
-           {"OPENAI_BASE_URL", s.base_url + "/v1"},
-           {"HERMES_MAX_CONTEXT", std::to_string(s.context)}};
+           {"OPENAI_BASE_URL", s.base_url + "/v1"}};
   // --provider and -m tell Hermes which provider and model to use for this session, overriding config.yaml;
   // only add them when the user did not pass their own
   bool has_provider = false, has_model = false;

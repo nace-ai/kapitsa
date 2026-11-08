@@ -9,7 +9,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | --- | --- |
 | `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`, visible to Kapitsa on the other Macs of the network ([Several Macs](#several-macs)). Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the model picked last if it is downloaded, else the best model for this Mac ([Server options](#server-options)). |
 | `kapitsa cluster [--json] [--watch]` | The Macs on this network that run Kapitsa: the model each serves, how, how fast, and the link to it ([Several Macs](#several-macs)). `kapitsa macs` is the same. |
-| `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
+| `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider`, `kapitsa goose` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
 | `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
 | `kapitsa list [--json]` | The downloaded models: size on disk, complete or not, MTP head and draft model. |
 | `kapitsa rm M...` | Deletes downloaded models and says how much space that gave back. Folders outside the store are left alone. |
@@ -807,6 +807,9 @@ kapitsa claude -p "what does this repo do?"   # other arguments go to the agent
 kapitsa codex exec "fix the failing test"
 kapitsa opencode run "add a --verbose flag"
 kapitsa pi -p "list the TODOs in this repo"
+kapitsa hermes -z "explain this file"         # Hermes by Nous Research
+kapitsa aider --message "fix the test"        # aider
+kapitsa goose run --text "add logging"        # Goose by Block
 ```
 
 Each command checks that the agent is installed (else it says how to install it). If Kapitsa is serving on `127.0.0.1:P`
@@ -843,6 +846,16 @@ tools and MCP servers work as usual:
   downloaded model, each with the context it would run with (as asked with `--context`, else its own default), and
   picking one loads it in place of the model served (the next request waits for the load). A server it found keeps
   its one model. Install it with `npm install -g @earendil-works/pi-coding-agent`.
+- **Hermes** (Nous Research) uses the `openai-api` provider, OpenAI-compatible on `/v1` (Responses transport). The
+  command passes `--provider openai-api -m <model>` on the CLI so a first run needs no `hermes model` step.
+  `OPENAI_BASE_URL` and `OPENAI_API_KEY` point at the server. Install it with
+  `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`.
+- **aider** uses `OPENAI_API_BASE` and `OPENAI_API_KEY`, with `--model openai/<name>`. Aider learns the context window
+  from its model metadata; an unknown model gets a warning and a conservative default. Install it with
+  `pip install aider-chat`.
+- **Goose** (Block) uses the `openai` provider through `OPENAI_HOST`, `OPENAI_API_KEY`, `GOOSE_PROVIDER` and
+  `GOOSE_MODEL`, with `GOOSE_CONTEXT_LIMIT` set to the server's context window. Install it with
+  `brew install block-goose-cli`.
 
 ## Images
 

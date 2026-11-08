@@ -876,16 +876,14 @@ void clients() {
             q.files[0].second.find("KAPITSA_PI_MODELS") != std::string::npos,
         "pi: a server started with --allow-switch: Pi lists every downloaded model, the served one first");
 
-  // hermes
+  // hermes: OPENAI_BASE_URL and OPENAI_API_KEY for the openai-api provider, --provider and -m on the CLI
   AgentLaunch h = agent_launch("hermes", "/bin/hermes", s, {"--yolo"}, {}, -1);
-  check(has(h, "OPENAI_API_KEY", "kapitsa") && has(h, "OPENAI_BASE_URL", "http://127.0.0.1:8000/v1") &&
-            has(h, "HERMES_MAX_CONTEXT", "131072"),
-        "hermes: OPENAI_BASE_URL, OPENAI_API_KEY, context");
+  check(has(h, "OPENAI_API_KEY", "kapitsa") && has(h, "OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"),
+        "hermes: OPENAI_BASE_URL, OPENAI_API_KEY");
   check(h.argv == std::vector<std::string>{"/bin/hermes", "--provider", "openai-api", "-m", "qwen3.6-35b-a3b", "--yolo"},
         "hermes: --provider and -m before user args");
   AgentLaunch h2 = agent_launch("hermes", "/bin/hermes", {"http://127.0.0.1:9000", "m", 65536, "mykey"}, {}, {}, -1);
-  check(has(h2, "OPENAI_API_KEY", "mykey") && has(h2, "OPENAI_BASE_URL", "http://127.0.0.1:9000/v1") &&
-            has(h2, "HERMES_MAX_CONTEXT", "65536"),
+  check(has(h2, "OPENAI_API_KEY", "mykey") && has(h2, "OPENAI_BASE_URL", "http://127.0.0.1:9000/v1"),
         "hermes: a server with an API key and another context");
   AgentLaunch h3 = agent_launch("hermes", "/bin/hermes", s, {"--provider", "custom", "-m", "other"}, {}, -1);
   check(std::count(h3.argv.begin(), h3.argv.end(), "--provider") == 1 &&
