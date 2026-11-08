@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kapitsa: fast inference on Apple silicon</title>
+<meta name="description" content="Kapitsa is a native inference engine for Apple silicon. 351 tok/s on Qwen3.6 35B-A3B on an M5 Max.">
+<style>
+:root {
+  --bg: #fff; --fg: #111; --muted: #555; --accent: #0057ff;
+  --card-bg: #f6f7f9; --border: #dde; --code-bg: #f0f1f4;
+  --table-head: #e8eaee;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0d0d; --fg: #e8e8e8; --muted: #999; --accent: #5b9aff;
+    --card-bg: #1a1a1a; --border: #2a2a2a; --code-bg: #1e1e1e;
+    --table-head: #222;
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--fg);
+  line-height: 1.6; max-width: 720px; margin: 0 auto; padding: 48px 24px;
+}
+h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+.tagline { color: var(--muted); font-size: 1.1rem; margin-bottom: 32px; }
+.install-box {
+  background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 20px; margin-bottom: 32px;
+  font-family: "SF Mono", Menlo, monospace; font-size: 0.95rem;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; position: relative;
+}
+.install-box:hover { border-color: var(--accent); }
+.install-box .copied {
+  position: absolute; right: 20px; font-family: -apple-system, sans-serif;
+  font-size: 0.8rem; color: var(--accent); opacity: 0;
+  transition: opacity 0.2s;
+}
+.install-box .copied.show { opacity: 1; }
+.install-box code { flex: 1; }
+section { margin-bottom: 40px; }
+h2 { font-size: 1.3rem; font-weight: 600; margin-bottom: 12px; }
+p { margin-bottom: 12px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.poster { width: 100%; border-radius: 8px; margin-bottom: 8px; }
+.poster-caption { color: var(--muted); font-size: 0.85rem; }
+
+/* Model picker */
+.picker-label { font-weight: 500; margin-bottom: 8px; display: block; }
+.ram-select {
+  font-size: 1rem; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--card-bg); color: var(--fg);
+  margin-bottom: 16px; width: 100%; max-width: 300px;
+}
+.recommendation {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 20px;
+}
+.rec-model { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; }
+.rec-detail { color: var(--muted); font-size: 0.9rem; margin-bottom: 8px; }
+.rec-cmd {
+  background: var(--code-bg); border-radius: 4px; padding: 8px 12px;
+  font-family: "SF Mono", Menlo, monospace; font-size: 0.9rem;
+}
+.links { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 32px; }
+.links a {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 16px; font-size: 0.95rem;
+}
+.links a:hover { border-color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<h1>Kapitsa</h1>
+<p class="tagline">Fast inference on Apple silicon. 351 tok/s on Qwen3.6 35B-A3B on an M5 Max.</p>
+
+<div class="install-box" onclick="copyInstall(this)">
+  <code>brew install nace-ai/tap/kapitsa</code>
+  <span class="copied" id="copiedMsg">Copied</span>
+</div>
+
+<section>
+  <h2>Benchmarks</h2>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/nace-ai/kapitsa/main/docs/assets/benchmarks-dark.webp">
+    <img class="poster" alt="Benchmark poster: prefill and decode speed for Kapitsa and nine other engines across five Macs" src="https://raw.githubusercontent.com/nace-ai/kapitsa/main/docs/assets/benchmarks-light.webp">
+  </picture>
+  <p class="poster-caption">Prefill / decode in tok/s, 4K prompt, 512-token answer. <a href="https://github.com/nace-ai/kapitsa/blob/main/docs/benchmarks.md">Full results</a></p>
+</section>
+
+<section>
+  <h2>Which model fits my Mac?</h2>
+  <label class="picker-label" for="ramPicker">Select your Mac's RAM:</label>
+  <select class="ram-select" id="ramPicker" onchange="updatePicker()">
+    <option value="8">8 GB</option>
+    <option value="16">16 GB</option>
+    <option value="24" selected>24 GB</option>
+    <option value="32">32 GB</option>
+    <option value="36">36 GB</option>
+    <option value="48">48 GB</option>
+    <option value="64">64 GB</option>
+    <option value="96">96 GB</option>
+    <option value="128">128 GB</option>
+  </select>
+  <div class="recommendation" id="pickerResult"></div>
+</section>
+
+<section>
+  <h2>Start in one command</h2>
+  <p>Kapitsa serves OpenAI and Anthropic APIs locally. Start a coding agent on the local model:</p>
+  <div class="rec-cmd">kapitsa opencode --model 35b</div>
+  <p style="margin-top: 8px; color: var(--muted); font-size: 0.9rem;">Also: <code>kapitsa claude</code>, <code>kapitsa codex</code>, <code>kapitsa pi</code></p>
+</section>
+
+<div class="links">
+  <a href="https://github.com/nace-ai/kapitsa">GitHub</a>
+  <a href="https://github.com/nace-ai/kapitsa/blob/main/docs/usage.md">Docs</a>
+  <a href="https://github.com/nace-ai/kapitsa/blob/main/docs/benchmarks.md">Benchmarks</a>
+  <a href="leaderboard.html">Community leaderboard</a>
+</div>
+
+<script>
+var models = [
+  { ram: 8,   name: "Qwen3.5-4B (4-bit)", about: "Small and quick, fits tight memory", cmd: "kapitsa serve --model 4b", dl: "4.6 GB" },
+  { ram: 16,  name: "Qwen3.6-35B-A3B (2-bit)", about: "35B MoE squeezed into 16 GB with IQ2 quantization", cmd: "kapitsa serve --model 35b:16gb", dl: "10.8 GB" },
+  { ram: 24,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with fast decode and good code quality", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
+  { ram: 32,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with room for full context", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
+  { ram: 36,  name: "Qwen3.6-35B-A3B (4-bit)", about: "MoE with room for full context", cmd: "kapitsa serve --model 35b", dl: "22.1 GB" },
+  { ram: 48,  name: "Qwen3.6-35B-A3B (6-bit)", about: "Higher precision for better quality, or the dense 27B for stronger reasoning", cmd: "kapitsa serve --model 35b:6bit", dl: "30.7 GB" },
+  { ram: 64,  name: "Flash-Next 180B (2-bit EXL3)", about: "180B MoE on 64 GB with Sushi's trellis quantization", cmd: "kapitsa serve --model flash-next:64gb", dl: "69.6 GB" },
+  { ram: 96,  name: "Flash-Next 180B (4-bit)", about: "180B MoE at full 4-bit precision, or Super-VL 120B for vision", cmd: "kapitsa serve --model flash-next", dl: "105.9 GB" },
+  { ram: 128, name: "Flash-Next 180B (4-bit)", about: "180B MoE with full context and room for the disk cache", cmd: "kapitsa serve --model flash-next", dl: "105.9 GB" }
+];
+
+function updatePicker() {
+  var ram = parseInt(document.getElementById("ramPicker").value);
+  var pick = models.find(function(m) { return m.ram === ram; }) || models[2];
+  document.getElementById("pickerResult").innerHTML =
+    '<div class="rec-model">' + pick.name + '</div>' +
+    '<div class="rec-detail">' + pick.about + ' · Download: ' + pick.dl + '</div>' +
+    '<div class="rec-cmd">' + pick.cmd + '</div>';
+}
+
+function copyInstall(el) {
+  navigator.clipboard.writeText("brew install nace-ai/tap/kapitsa");
+  var msg = el.querySelector(".copied");
+  msg.classList.add("show");
+  setTimeout(function() { msg.classList.remove("show"); }, 1500);
+}
+
+updatePicker();
+</script>
+</body>
+</html>
