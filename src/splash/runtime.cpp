@@ -42,7 +42,10 @@ Error unhealthy(uint64_t id, const std::string& code, const std::string& message
 
 }  // namespace
 
-Runtime::Runtime(RuntimeOptions o) : o_(std::move(o)) {}
+Runtime::Runtime(RuntimeOptions o) : o_(std::move(o)) {
+  if (!std::isfinite(o_.cancel_timeout_s) || o_.cancel_timeout_s <= 0)
+    throw std::invalid_argument("cancel timeout must be finite and positive");
+}
 
 Runtime::~Runtime() { shutdown(); }
 
@@ -220,6 +223,7 @@ void Runtime::cancel(uint64_t id) {
     std::lock_guard<std::mutex> l(m_);
     auto it = pending_.find(id);
     if (it == pending_.end()) return;  // done already
+    if (!it->second.cancelled) it->second.cancel_started = Clock::now();
     it->second.cancelled = true;
   }
   { std::lock_guard<std::mutex> c(cancel_m_); cancels_.push_back(id); }
@@ -312,6 +316,20 @@ void Runtime::read_loop() {
   bool fatal = false, eof = false;
   try {
     while (true) {
+      {
+        std::lock_guard<std::mutex> l(m_);
+        for (const auto& [id, request] : pending_) {
+          if (request.cancelled && std::chrono::duration<double>(Clock::now() - request.cancel_started).count() >= o_.cancel_timeout_s) {
+            code = "cancel_timeout";
+            message = "the engine did not end request " + std::to_string(id) + " after cancellation";
+            fatal = true;
+            state_ = State::kDead;
+            dead_reason_ = code + ": " + message;
+            break;
+          }
+        }
+      }
+      if (fatal) break;
       pollfd pf{out_fd_, POLLIN, 0};  // a bounded wait, so shutdown() can end this when a descendant keeps the pipe open
       int pr = poll(&pf, 1, 200);
       if (pr < 0 && errno == EINTR) continue;

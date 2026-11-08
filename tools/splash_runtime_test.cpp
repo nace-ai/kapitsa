@@ -134,6 +134,7 @@ static int fake(const std::string& mode) {
       send_tokens(id, 2, {12});
       send_done(id, 0, 3);
     } else if (type == 0x0002) {
+      if (mode == "ignore_cancel") continue;
       send_done(le(payload.data(), 8), 2, 0);
     } else if (type == 0x0004) {
       std::vector<uint8_t> p;
@@ -210,6 +211,30 @@ int main(int argc, char** argv) {
   if (argc == 3 && !std::strcmp(argv[1], "--fake")) return fake(argv[2]);
   const char* self = argv[0];
   alarm(180);  // a deadlock in the code under test is a failure, not a hung CI job
+
+  {
+    auto o = opts(self, "echo");
+    o.cancel_timeout_s = 0;
+    bool rejected = false;
+    try { Runtime rt(o); } catch (const std::invalid_argument&) { rejected = true; }
+    CHECK(rejected);
+  }
+  {
+    auto o = opts(self, "ignore_cancel");
+    o.cancel_timeout_s = 0.4;
+    Runtime rt(o);
+    rt.start();
+    auto a = std::make_shared<Collect>(), b = std::make_shared<Collect>();
+    auto ia = rt.submit(req(999), a, 30), ib = rt.submit(req(999), b, 30);
+    CHECK(a->wait_started() && b->wait_started());
+    rt.cancel(ia);
+    rt.cancel(ia);
+    CHECK(a->wait(5) && b->wait(5));
+    CHECK(a->errored && b->errored && a->terminals == 1 && b->terminals == 1);
+    CHECK(a->e.code == "cancel_timeout" && b->e.code == "cancel_timeout");
+    CHECK(!rt.alive());
+    rt.shutdown();
+  }
 
   {  // a request streams its tokens and ends with done; status answers; shutdown drains
     Runtime rt(opts(self, "echo"));

@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <chrono>
 #include <functional>
 #include <map>
 #include <memory>
@@ -50,6 +51,7 @@ struct RuntimeOptions {
   double ready_timeout_s = 600;   // a cold start reads and calibrates the whole model
   double stop_grace_s = 10;       // after closing the child's stdin, before SIGTERM; and again before SIGKILL
   double write_timeout_s = 30;    // a frame the child does not take within this long: the child is wedged and is killed
+  double cancel_timeout_s = 30;  // terminal frame deadline after cancellation; healthy uncancelled work has no limit
   std::function<void(const std::string&)> log;
 };
 
@@ -98,6 +100,7 @@ class Runtime {
     bool started = false;
     bool masked = false;     // submitted with Constraint::kTokenMask: the only requests the engine may ask masks of
     bool cancelled = false;  // cancel() was called: its masks go unanswered
+    std::chrono::steady_clock::time_point cancel_started{};
   };
   void read_loop();
   void fail_all(const std::string& code, const std::string& message);
