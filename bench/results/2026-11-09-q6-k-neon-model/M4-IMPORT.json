@@ -1,0 +1,478 @@
+{
+  "export": "Explicitly redacted derived evidence; not an original execution log. Private originals retained. Numeric results and source/binary identities unchanged.",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source_commits": {
+    "reference": "4b9ce88708282f754b76cbd7214e188786680c89",
+    "candidate": "4f4475338a523de2d2c32a9c8e66c1fbdc623b23"
+  },
+  "imports": {
+    "converted_weight_config_tokenizer_bytes_equal": true,
+    "all_files_raw_bytes_equal": true,
+    "manifest_order_only_differences": [],
+    "files_with_complete_literal_byte_comparison": [
+      ".kapitsa/manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "mtp.safetensors",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "inventories": {
+      "reference": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1251,
+          "sha256": "a16cdccbab76754aceacadef0237c5d6d2cf08de345a423f2242def12dded6a8"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 5942,
+          "sha256": "f7d4ede403a0e6fd8a391f3789966e927c26ba569e8178dd1951c525e070b563"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3005300088,
+          "sha256": "85b9ad25fd8cdd35b0e9e2a050522205803fa03209b3034858ea93f528f5bdac"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "d83fbd0d77dac11f79dabf34cfb48fbf67c2b6120da5d1b7b4f6d4d855b8594f"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "a0ecbe00db9e0a9adfc1bc8373d2e4fa1ddcf158d7b4a0dab2a80ba4bb972ec6"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ],
+      "candidate": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1251,
+          "sha256": "a16cdccbab76754aceacadef0237c5d6d2cf08de345a423f2242def12dded6a8"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 5942,
+          "sha256": "f7d4ede403a0e6fd8a391f3789966e927c26ba569e8178dd1951c525e070b563"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3005300088,
+          "sha256": "85b9ad25fd8cdd35b0e9e2a050522205803fa03209b3034858ea93f528f5bdac"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "d83fbd0d77dac11f79dabf34cfb48fbf67c2b6120da5d1b7b4f6d4d855b8594f"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "a0ecbe00db9e0a9adfc1bc8373d2e4fa1ddcf158d7b4a0dab2a80ba4bb972ec6"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ]
+    },
+    "source_backed_format_checks": {
+      "reference": {
+        "global": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "q6_source_modules": {
+          "language_model.model.embed_tokens": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  248320,
+                  640
+                ],
+                "payload_bytes": 635699200
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  248320,
+                  40
+                ],
+                "payload_bytes": 19865600
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  248320,
+                  40
+                ],
+                "payload_bytes": 19865600
+              }
+            }
+          },
+          "language_model.model.layers.3.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          "language_model.model.layers.15.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          "language_model.model.layers.27.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          "language_model.model.layers.31.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "global": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "q6_source_modules": {
+          "language_model.model.embed_tokens": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  248320,
+                  640
+                ],
+                "payload_bytes": 635699200
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  248320,
+                  40
+                ],
+                "payload_bytes": 19865600
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  248320,
+                  40
+                ],
+                "payload_bytes": 19865600
+              }
+            }
+          },
+          "language_model.model.layers.3.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          "language_model.model.layers.15.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          "language_model.model.layers.27.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          "language_model.model.layers.31.self_attn.q_proj": {
+            "effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          }
+        }
+      }
+    },
+    "format_scope": "The five source Q6_K tensors import as affine8/group64; other per-module/MTP formats are retained, not asserted to be eight-bit."
+  },
+  "method": "Fresh reference and candidate conversions each ran with --no-drafter. After full literal comparison of the fresh reference, identical retained bytes were reused; no previous conversion is labeled as this run."
+}
