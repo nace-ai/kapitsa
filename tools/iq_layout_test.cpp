@@ -1,5 +1,6 @@
 #include "gguf_q8_0_test.h"
 #include "gguf_pack_codes_test.h"
+#include "gguf_pack4_test.h"
 
 // The GPU layout of llama.cpp's IQ blocks (src/kernels/wfmt_iq.metal, gguf::iq_repack) checked on the CPU: random blocks
 // of every type the IQ MoE kernels read (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S) are repacked in two row ranges (as the
@@ -354,6 +355,7 @@ void test_iq4_nl_pages() {
 }  // namespace
 
 int main() {
+  g_fail += pack4_test::run();
   g_fail += pack_codes_test::run();
   test_iq4_nl();
   test_iq4_nl_pages();
