@@ -117,6 +117,14 @@ jobs:
             echo "A branch that was updated to the current main after another result landed needs this again before merging."
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
+      - name: Check the leaderboard data file
+        run: |
+          if python3 tools/build_leaderboard_data.py --check; then
+            exit 0
+          fi
+          python3 tools/build_leaderboard_data.py
+          echo "::error title=Leaderboard data is stale::docs/site/leaderboard-data.js does not match bench/community/results. Run: python3 tools/build_leaderboard_data.py && git add -f docs/site/leaderboard-data.js"
+          exit 1
 
   docs-links:
     # The docs' relative links and #anchors resolve. docs/benchmarks.md's old section names survive only as explicit

@@ -86,7 +86,8 @@ Every pull request that adds files under `results/` runs [the check](../../.gith
 
 The pull request is labeled `benchmark`, plus `quick`, `contention`, `flagged` or `invalid` as they apply, and the
 job's summary lists what passed and why anything failed. Results with flags are accepted and shown with them. Once
-results reach `main`, the workflow rewrites RESULTS.md (`python3 tools/community_table.py`).
+results reach `main`, the workflow rewrites RESULTS.md (`python3 tools/community_table.py`) and the
+[community leaderboard](https://kapitsa.vercel.app/leaderboard.html) data (`python3 tools/build_leaderboard_data.py`).
 
 ## Files
 
