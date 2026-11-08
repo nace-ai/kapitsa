@@ -1,0 +1,50 @@
+{
+  "evidence_kind": "Explicitly filtered derived public report; private originals retained",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "model": "bartowski/Qwen_Qwen3.5-4B-GGUF@4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+  "format": "IQ4_NL GGUF containing 20 genuine Q8_0 tensors",
+  "model_sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f",
+  "actual_completed": {
+    "M3": [
+      "Own-source explicit Release configure/build/version",
+      "One exhaustive CPU decoder check",
+      "K4096/K2560: 8 interleaved A/B legs and 16 passes per leg, complete bytes/finite/input/binary gates passed",
+      "One completed reference import"
+    ],
+    "M4": [
+      "Own-source explicit Release configure/build/version",
+      "Exact completed focused test executable reused; no new focused invocation",
+      "K4096/K2560: 8 interleaved A/B legs and 16 passes per leg, complete bytes/finite/input/binary gates passed",
+      "21 new vk CPU passes plus1 exact focused reuse",
+      "14 of15 supplementary native passes; candidate and independently built reference each failed the unchanged U8 cache threshold once",
+      "Six scripts and prek/diff/cleanup passed; optional reasoning corpus checks skipped",
+      "One completed reference import",
+      "One candidate import retry completed; nine independent imported files are literally byte-identical",
+      "584 rows/145018880 float32 per arm: finite, complete literal output and scored-input byte gates passed",
+      "Report-only rc0; strict-zero step/verify/batch rc0; prefill independently finite and byte-identical",
+      "Default precise native A/B/A/B: rc0/invalid[], with original repetition and execution-quality warnings retained",
+      "Fixed-request A/B/A/B: 24x512 tokens; six request and complete content hashes match across four legs, with original repetition/condition warnings retained",
+      "HTTP both49 printed PASS/0FAIL/rc0; all owned servers stopped and GPU lock released"
+    ]
+  },
+  "original_failure_preserved": {
+    "M3_candidate_import_rc": 1,
+    "M4_candidate_import_rc": 1,
+    "cause": "An unchanged importer resource precondition prevented original candidate conversion on both setups. Those failures remain preserved. M4 subsequently completed one separately labelled candidate retry; M3 candidate/model comparison remains unavailable."
+  },
+  "not_verified": [
+    "M3 candidate complete import, full-model outputs and default GPU comparisons",
+    "Total import/loading or inference speedup",
+    "Other model families and ARM64 chip classes",
+    "General no-regression inference performance: noisy native/fixed conditions do not qualify this claim",
+    "Trained Q8_0 PLE model numerical or runtime performance qualification"
+  ],
+  "GPU_model_result": {
+    "M4_import_and_numerical": "PASS; exact methods and limits in separate derived reports",
+    "M4_default": "Completed with warnings preserved; see dedicated reports",
+    "M3_candidate": "not executed"
+  },
+  "Ready_qualification": true,
+  "Ready_scope": "Exact finite/disjoint ARM64 CPU decoder: two-chip independent CPU correctness/performance plus M4 import/model and completed runtime integration. Remaining limits are stated, with no inference claim."
+}
