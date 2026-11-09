@@ -1,0 +1,20 @@
+{
+  "protocol": 1,
+  "instance_id": "background",
+  "run_id": "0c41d9a7e2b85f13",
+  "name": "background",
+  "pid": 51002,
+  "version": "0.24.0",
+  "started_at": "2026-11-09T18:40:00Z",
+  "lifecycle": "keep_running",
+  "state": "loading",
+  "api_url": "http://127.0.0.1:8000",
+  "model": null,
+  "config": {
+    "model": "35b",
+    "mem_budget": 40
+  },
+  "tick_ms": 1000,
+  "last_event_id": "0c41d9a7e2b85f13.3",
+  "requests": []
+}

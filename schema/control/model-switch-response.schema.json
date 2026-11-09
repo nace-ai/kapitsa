@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/model-switch-response.schema.json",
+  "title": "POST /model response (200, after the new model is loaded)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "model", "previous_model"],
+  "properties": {
+    "run_id": {"$ref": "control.schema.json#/$defs/run_id"},
+    "model": {"$ref": "control.schema.json#/$defs/model", "type": "object"},
+    "previous_model": {"$ref": "control.schema.json#/$defs/model"}
+  }
+}

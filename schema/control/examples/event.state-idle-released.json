@@ -1,0 +1,1 @@
+{"id": "7f3a9c2e5b1d4e60.950", "type": "state", "data": {"state": "released", "model": {"id": "qwen3.6-27b", "context_length": 131072, "slots": 2}, "message": "idle for 600 s: released qwen3.6-27b; the next request loads it again"}}
