@@ -80,20 +80,13 @@ const DefaultRow kDefaults[] = {
      "11 sites; capability class: apple_family <= 7, the M1 path", false},
     {"wide_cores", Knob::kNone, ModelClass::kOther, DefaultScope::kWide, nullptr, "class", 0, 0, false,
      "2 sites; capability class: matrix units and 40 cores or more", false},
-    // Name and correctness predicates the call sites still read. Not kName: none of these cites a 10% win the wider
-    // class misses. The id is the predicate. chip_name is the exact name when the predicate has one.
-    // Knob::kNone: not a lookup. A shape guard stays because the wider class is the wrong shape. A correctness
-    // guard stays because the fused path failed on that class.
+    // Capability class: apple_family == 9 (M3, M4; not M2 which is family 8). Fold of m4_10, m4_pro_gpu, m4_pro_20,
+    // m4_ten_core (#393): low-rank 768, GDN 128, tree-fuse, lazy GDN, DFS, packed coeff, VIT prepack, NORM X8,
+    // SHARE X8 widened from narrow M4 gates. m1_max_32 kept as its own guard row.
+    {"simd_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kSimd, nullptr, "class", 0, 0, false,
+     "9 sites; capability class: apple_family == 9 (M3, M4); fold of m4_10, m4_pro_gpu, m4_pro_20, m4_ten_core (#393)", false},
     {"m1_max_32", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M1 Max", "64", 0, 0, false,
-     "4 sites; shape guard: 32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path", false},
-    {"m4_10", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "on", 0, 0, false,
-     "1 site; shape guard: 10 cores and 24 GB; 4B packed-coeff shape only", false},
-    {"m4_pro_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "pack", 0, 0, false,
-     "1 site; shape guard: Qwen 4B and 35B vision-tower shapes; other shapes keep bf16", false},
-    {"m4_pro_20", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4 Pro", "on", 0, 0, false,
-     "2 sites; shape guard: 20 cores and 48 GB for the 4B or 9B packed coeff; 35B X8 share on 5-6-bit affine projections", false},
-    {"m4_ten_core", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M4", "narrow", 0, 0, false,
-     "6 sites; shape guard: 10 cores or fewer; low-rank 768, GDN blocks of 128, attention splits of at least 128 keys, tree-zone fuse, lazy GDN fold, depth-first tree rows", false},
+     "4 sites; shape guard: 32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path (measured on M5 and the 32-core M1 Max)", false},
     {"ultra_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
      "1 site; correctness guard: two dies; fused merges failed past a 32-key tile on the old arrival (#421); the new arrival's fused merges are unverified on an Ultra", false},
     {"pre_m3_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
@@ -115,10 +108,6 @@ bool guard_matches(const char* id, const DeviceProfile& dev) {
   f.cores = dev.cores;
   f.cores_measured = dev.cores_measured;
   if (std::strcmp(id, "m1_max_32") == 0) return m1_max_32(f);
-  if (std::strcmp(id, "m4_10") == 0) return m4_10(f);
-  if (std::strcmp(id, "m4_pro_gpu") == 0) return m4_pro_gpu(f);
-  if (std::strcmp(id, "m4_pro_20") == 0) return m4_pro_20(f);
-  if (std::strcmp(id, "m4_ten_core") == 0) return m4_ten_core(f);
   if (std::strcmp(id, "ultra_gpu") == 0) return ultra_gpu(f);
   if (std::strcmp(id, "pre_m3_gpu") == 0) return pre_m3_gpu(f);
   return false;
@@ -287,20 +276,14 @@ bool matrix_units(const DeviceFacts& f) { return f.apple_family >= 10; }
 
 bool legacy_gpu(const DeviceFacts& f) { return f.apple_family <= 7; }
 
-bool m1_max_32(const DeviceFacts& f) { return f.name == "Apple M1 Max" && f.cores == 32; }
-
 bool wide_cores(const DeviceFacts& f) { return f.apple_family >= 10 && f.cores >= 40; }
 
-bool m4_10(const DeviceFacts& f) { return f.name == "Apple M4" && f.cores == 10; }
-
-bool m4_pro_gpu(const DeviceFacts& f) { return f.name == "Apple M4 Pro"; }
-
-bool m4_pro_20(const DeviceFacts& f) { return f.name == "Apple M4 Pro" && f.cores == 20; }
+bool m1_max_32(const DeviceFacts& f) { return f.name == "Apple M1 Max" && f.cores == 32; }
 
 bool ultra_gpu(const DeviceFacts& f) { return f.name.find("Ultra") != std::string::npos; }
 
 bool pre_m3_gpu(const DeviceFacts& f) { return f.apple_family < 9; }
 
-bool m4_ten_core(const DeviceFacts& f) { return f.name == "Apple M4" && f.cores <= 10; }
+bool simd_gpu(const DeviceFacts& f) { return f.apple_family == 9; }  // M3, M4; not M2 (family 8)
 
 }  // namespace ni

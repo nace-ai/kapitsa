@@ -753,12 +753,12 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
     const Buffer* xin = &x;
     size_t begin = 0;
     bool x8_ready = false;
-    static const bool m4_pro = m4_pro_20();
+    static const bool simd = simd_gpu();
     const bool moe35 = cfg_.moe && cfg_.hidden == 2048 && cfg_.layers == 40 && cfg_.experts == 256 &&
                        cfg_.top_k == 8 && cfg_.moe_I == 512 && cfg_.shared_I == 512;
     // The 35B oQ4e path: fold rows_norm_f32 into the first projection's X8 preparation.
     // Keep its 256-thread scalar reduction and retain xrn_ for the remaining projections.
-    static const bool norm_x8 = env_int("NI_NORM_X8", 1) != 0 && m4_pro;
+    static const bool norm_x8 = env_int("NI_NORM_X8", 1) != 0 && simd;
     const QLinear& first = *segs[0].L;
     if (norm_x8 && !off && norm && R >= 1 && R <= 2 && K == 2048 && moe35 &&
         !(first.q4() || first.q8()) && env_int("NI_V8_PREP", 2) != 1) {
@@ -792,7 +792,7 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
         }
         same_k = same_k && sg.L->K == K;
       }
-      if (same_k && generic > 1 && (share_x8 > 0 || (m4_pro && moe35 && measured_formats))) {
+      if (same_k && generic > 1 && (share_x8 > 0 || (simd && moe35 && measured_formats))) {
         if (!x8_ready) {
           v8_alloc();
           enc_x8(e, *xin, R, int(K), nullptr);

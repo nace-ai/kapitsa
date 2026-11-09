@@ -891,7 +891,7 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   }
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
       p.formats.rfind("4-bit group 64", 0) == 0 &&
-      (m1_max_32() || matrix_units())) {
+      (m1_max_32() || matrix_units())) {  // guard: measured on M1 Max 32
     const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(4096) : 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;

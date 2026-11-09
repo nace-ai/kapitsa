@@ -67,12 +67,11 @@ bool DFlash2::lanes_default(const std::string& model_dir, const Qwen35Config& c)
 
 static int lowrank_request() {
   const char* v = kenv("LOWRANK");
-  return v && *v ? atoi(v) : m4_ten_core() ? 768 : 0;
+  return v && *v ? atoi(v) : simd_gpu() ? 768 : 0;
 }
 
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
-  static const bool m1_max32 = m1_max_32();
-  return hidden >= 2560 || (m1_max32 && hidden == 2048 && moe && head_q4);
+  return hidden >= 2560 || (m1_max_32() && hidden == 2048 && moe && head_q4);  // guard: CORE4 measured on M1 Max 32
 }
 
 // process physical footprint (what Activity Monitor / bench.py report), bytes
@@ -668,8 +667,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // The low-rank shortlist head (SlimSpec, arXiv 2605.10453, without training: build_lowrank): the reduced head's
     // 4-bit GEMM (98,304 rows, 134 MB per drafting pass) becomes a rank-768 one (40 MB) whose chunk top-16s the
     // head's own rows rescore. On the 10-core M4, 4B: drafting pass -0.75 ms, tok/cycle unchanged on 7 prompts (the
-    // shortlist holds the true top 16's probability mass to 0.9999). Default on the 10-core M4, a narrower
-    // gate than the class; NI_KFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
+    // shortlist holds the true top 16's probability mass to 0.9999). Default on kSimd (#393);
+    // NI_KFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
     const int r = lowrank_request();
     if (r > 0 && v8_ && cfg_.v1) build_lowrank(uint32_t(r));
   }
@@ -1398,11 +1397,11 @@ void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t
 }
 
 // The drafter's 4-bit GEMMs on the core before dfl_q8_run4: dfl_q8_run4 (two groups per step, the next step's loads
-// first, subnormal codes) is measured on M5 and the 32-core M1 Max. Other Macs
-// keep the earlier core today; NI_KFLASH_CORE4=1 / 0 forces the new / earlier one.
+// first, subnormal codes) is measured on M5 and the 32-core M1 Max (guard row, #393).
+// NI_KFLASH_CORE4=1 / 0 forces the new / earlier one.
 static bool dfl_old4() {
   static const bool old = kenv("CORE4") ? atoi(kenv("CORE4")) == 0
-      : !(matrix_units() || m1_max_32());
+      : !(matrix_units() || m1_max_32());  // guard: CORE4 measured on M5 and M1 Max 32
   return old;
 }
 
@@ -1975,12 +1974,12 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   if (gpu) {  // the kernels derive the plan from the GPU-side P: [max(P - 2047, valid_lo), P)
     lo = uint32_t(std::max(d.valid_lo, 0));
     // NI_KFLASH_ATTN_MINC: splits of at least this many context keys (the default plan: the most splits of >= 32 keys).
-    // 128 on the 10-core M4, whose few cores the 16 short splits of a short context leave waiting on the reduce: the
-    // 4B's drafting pass 5.86 -> 5.75 ms after an 85-token prompt, server decode 144.9 -> 145.4 tok/s (interleaved, 3 x 3
-    // runs); from 2048 keys on (the window) the plans agree
+    // 128 on kSimd (#393; measured on the 10-core M4, whose few cores the 16 short splits of a short context leave
+    // waiting on the reduce: the 4B's drafting pass 5.86 -> 5.75 ms after an 85-token prompt, server decode
+    // 144.9 -> 145.4 tok/s); from 2048 keys on (the window) the plans agree
     static const uint32_t minc = [] {
       if (const char* v = kenv("ATTN_MINC")) return uint32_t(atoi(v));
-      return m4_ten_core() ? 128u : 0u;
+      return simd_gpu() ? 128u : 0u;
     }();
     chunk = old_attn ? kGpuChunk : minc > 32 ? (0x80000000u | (minc + 31) / 32 * 32) : 0u;  // 0: dfl_attn_geom's plan
     nsplit = old_attn ? (kCtxKeep + kGpuChunk - 1) / kGpuChunk : splits;  // the grid; empty splits exit
@@ -2240,10 +2239,10 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       // the GPU-driven anchor: the builder's P is unknown to the host, so the tokens' base comes from the drafter state
       // (kf_build reads P from its params: the host passes P; a GPU-driven pass passes the sentinel and the kernel reads
       // gst) -- see kf_build_gpu below
-      // NI_KFLASH_DFS (default on for dense targets on the 10-core M4, a narrower gate than the class): a full tree's
+      // NI_KFLASH_DFS (default on for dense targets on kSimd, #393): a full tree's
       // rows in depth-first order (kf_dfs_reorder: about half the Gated DeltaNet replays of jumping rows)
       static const int dfs_env = getenv("NI_KFLASH_DFS") ? atoi(getenv("NI_KFLASH_DFS")) : -1;
-      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe && m4_ten_core() : dfs_env != 0) ? 1u : 0u;
+      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe && simd_gpu() : dfs_env != 0) ? 1u : 0u;
       const kp::KfBuild bp{16u, Pk, 0u, dfs};
       e.use(dpipe(gpu ? "kf_build_gpu" : "kf_build"));
       e.buf(0, kf_clq_); e.buf(1, kf_tok_); e.buf(2, kf_next_);
