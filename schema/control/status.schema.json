@@ -31,9 +31,10 @@
       "$ref": "control.schema.json#/$defs/event_id",
       "description": "the newest event's id; send it as Last-Event-ID to read on from this status with no gap"
     },
-    "requests": {"type": "array", "items": {"$ref": "control.schema.json#/$defs/request_progress"}}
+    "requests": {"type": "array", "items": {"$ref": "control.schema.json#/$defs/request_progress"}},
+    "engine": {"$ref": "control.schema.json#/$defs/engine"}
   },
-  "allOf": [{"$ref": "control.schema.json#/$defs/state_model"}],
+  "allOf": [{"$ref": "control.schema.json#/$defs/state_model"}, {"$ref": "control.schema.json#/$defs/engine_state"}],
   "if": {"properties": {"lifecycle": {"const": "attached"}}},
   "then": {"required": ["parent_pid"]},
   "else": {"not": {"required": ["parent_pid"]}}
