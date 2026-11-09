@@ -1,0 +1,250 @@
+{
+  "provenance": "Redacted derived summary; raw originals retained privately.",
+  "independent_M3_imports": 0,
+  "model_origin": "M5 reference import; nine transferred file hashes verified; M5 reference and candidate imports independently produced literally equal files. M3 import attempt failed preflight; no successful M3 import claimed.",
+  "rows_each_arm": 584,
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 8,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": "flags"
+      }
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      }
+    }
+  },
+  "complete_file_comparisons": {
+    "verify/records.txt": {
+      "bytes": 1296,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "candidate_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "verify/logits.f32": {
+      "bytes": 190709760,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "9c51ef80fa61996c2247cbc4777e592e4c1cd4b95ea5182af38a469d2c28e401",
+      "candidate_sha256": "9c51ef80fa61996c2247cbc4777e592e4c1cd4b95ea5182af38a469d2c28e401",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "verify/sequences.txt": {
+      "bytes": 68379,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "candidate_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "prefill/records.txt": {
+      "bytes": 54,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+      "candidate_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "prefill/logits.f32": {
+      "bytes": 7946240,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "ae48557f97ec3c21fe3bbfe2ea55a645be266eca97d389e99a264c5282aa69cb",
+      "candidate_sha256": "ae48557f97ec3c21fe3bbfe2ea55a645be266eca97d389e99a264c5282aa69cb",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "prefill/sequences.txt": {
+      "bytes": 68379,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "candidate_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "step/records.txt": {
+      "bytes": 1296,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "candidate_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "step/logits.f32": {
+      "bytes": 190709760,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "f44fedf5c1f76e23b3015a47f32f093d2c9762a10fcd65177f9219f51f4bad43",
+      "candidate_sha256": "f44fedf5c1f76e23b3015a47f32f093d2c9762a10fcd65177f9219f51f4bad43",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "step/sequences.txt": {
+      "bytes": 68379,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "candidate_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "batch/records.txt": {
+      "bytes": 1296,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "candidate_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "batch/logits.f32": {
+      "bytes": 190709760,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "4ab942d41c4a68cbc072256dd61a1a98f6f077d4a69858bb7e81c468dbb4b92e",
+      "candidate_sha256": "4ab942d41c4a68cbc072256dd61a1a98f6f077d4a69858bb7e81c468dbb4b92e",
+      "finite": [
+        true,
+        true
+      ]
+    },
+    "batch/sequences.txt": {
+      "bytes": 68379,
+      "candidate_exists": true,
+      "literal_equal": true,
+      "reference_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "candidate_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+      "finite": [
+        true,
+        true
+      ]
+    }
+  },
+  "scope": "Teacher-forced chain of 8; not free-generating MTP. Prefill finite and literal gate is separate."
+}

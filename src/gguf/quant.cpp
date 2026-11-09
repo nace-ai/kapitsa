@@ -424,6 +424,36 @@ void dq_iq2_s(const uint8_t* b, float* y) {
 
 // 3.06 bits: per 32 values 8 one-byte indices of 4-value grid points, then 4 x 7 sign bits and a 4-bit scale
 void dq_iq3_xxs(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t half;
+  memcpy(&half, b, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 98 : src - dst < 256 * sizeof(float);
+  if ((half & 0x7c00u) != 0x7c00u && !overlap) {
+    const float d = from_f16(half);
+    const uint8x8_t sign_bits = {1, 2, 4, 8, 16, 32, 64, 128};
+    for (int group = 0; group < 8; ++group) {
+      uint32_t aux;
+      memcpy(&aux, b + 66 + 4 * group, 4);
+      const float32x4_t scale = vdupq_n_f32(d * (0.5f + float(aux >> 28)) * 0.5f);
+      for (int lane = 0; lane < 4; ++lane) {
+        const uint32_t a = iq::kIq3xxs[b[2 + 8 * group + 2 * lane]];
+        const uint32_t z = iq::kIq3xxs[b[3 + 8 * group + 2 * lane]];
+        const uint8x8_t grid = vreinterpret_u8_u64(vcreate_u64(uint64_t(a) | (uint64_t(z) << 32)));
+        const int16x8_t values = vreinterpretq_s16_u16(vmovl_u8(grid));
+        const uint8x8_t signs = vdup_n_u8(uint8_t(iq_signs((aux >> (7 * lane)) & 127)));
+        const uint8x8_t positive = vceq_u8(vand_u8(signs, sign_bits), vdup_n_u8(0));
+        const uint16x8_t mask = vceqq_u16(vmovl_u8(positive), vdupq_n_u16(255));
+        const int16x8_t signed_values = vbslq_s16(mask, values, vnegq_s16(values));
+        float* out = y + 32 * group + 8 * lane;
+        // Finite half x odd scale x grid magnitude / 4 is exact in fp32, including signed zero.
+        vst1q_f32(out, vmulq_f32(scale, vcvtq_f32_s32(vmovl_s16(vget_low_s16(signed_values)))));
+        vst1q_f32(out + 4, vmulq_f32(scale, vcvtq_f32_s32(vmovl_s16(vget_high_s16(signed_values)))));
+      }
+    }
+    return;
+  }
+#endif
   const float d = f16_at(b);
   const uint8_t* qs = b + 2;
   const uint8_t* sas = b + 66;
