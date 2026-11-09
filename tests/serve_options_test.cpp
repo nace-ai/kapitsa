@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <set>
+#include <iterator>
+#include <unistd.h>
 #include <string>
 #include <vector>
 
@@ -186,6 +188,26 @@ int main(int argc, char** argv) {
   }
   CHECK(!ni::server::flags_to_json({"--port", "1", "--help"}, true), "--help asks for help");
   CHECK(from_flags({"35b"}).model == "35b", "a positional model");
+  CHECK((from_flags({"--split", "a:1", "--split", "b:2,c:3"}).split == std::vector<std::string>{"a:1", "b:2", "c:3"}),
+        "--split given twice adds both flags' stages");
+
+  // --config -: the JSON stays on fd 0 for a server that execs itself again (restart_server)
+  {
+    const std::string text = "{\"port\": 8123, \"api_key\": \"k\"}";
+    const int saved = dup(STDIN_FILENO);
+    ni::server::keep_stdin(text);
+    char tmpl[] = "/tmp/serve_options_test-XXXXXX";
+    const int out = mkstemp(tmpl);
+    const std::string cmd = std::string("/bin/cat > ") + tmpl;  // an exec'd child reads what the restarted server would
+    CHECK(out >= 0 && std::system(cmd.c_str()) == 0, "a child reads the kept stdin");
+    std::ifstream f(tmpl);
+    const std::string got((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    CHECK(got == text, "the kept stdin holds the same JSON, from its start: " + got);
+    if (out >= 0) close(out);
+    unlink(tmpl);
+    dup2(saved, STDIN_FILENO);
+    close(saved);
+  }
   try {
     ni::server::flags_to_json({"35b"}, false);
     CHECK(false, "a positional model where none is taken");

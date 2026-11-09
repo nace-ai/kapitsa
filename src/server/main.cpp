@@ -841,8 +841,10 @@ static int idle_unload_auto_s() {
 // --config's JSON: "-" reads it from stdin. Its contents are never echoed (they may hold the API key).
 static nlohmann::json read_config(const std::string& from) {
   std::ostringstream text;
-  if (from == "-") text << std::cin.rdbuf();
-  else {
+  if (from == "-") {
+    text << std::cin.rdbuf();
+    server::keep_stdin(text.str());
+  } else {
     std::ifstream f(expand_home(from));
     if (!f) throw std::invalid_argument("can't read " + from);
     text << f.rdbuf();

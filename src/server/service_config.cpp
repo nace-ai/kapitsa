@@ -8,7 +8,9 @@
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
+#include <cstring>
 #include <stdexcept>
+#include <unistd.h>
 
 namespace ni::server {
 using nlohmann::json;
@@ -249,14 +251,14 @@ std::optional<json> flags_to_json(const std::vector<std::string>& args, bool pos
       case Kind::list:
         j[key].push_back(v);
         break;
-      case Kind::comma_list: {
-        json parts = json::array();
+      case Kind::comma_list: {  // each flag adds its comma-separated parts: --split a:1 --split b:2 is two stages
+        json& parts = j[key];
+        if (!parts.is_array()) parts = json::array();
         for (size_t at = 0; at <= v.size();) {
           const size_t comma = std::min(v.find(',', at), v.size());
           if (comma > at) parts.push_back(v.substr(at, comma - at));
           at = comma + 1;
         }
-        j[key] = parts;
         break;
       }
       default:
@@ -264,6 +266,24 @@ std::optional<json> flags_to_json(const std::vector<std::string>& args, bool pos
     }
   }
   return j;
+}
+
+void keep_stdin(const std::string& text) {
+  std::string path = (getenv("TMPDIR") && *getenv("TMPDIR") ? std::string(getenv("TMPDIR")) : std::string("/tmp")) +
+                     "/kapitsa-config-XXXXXX";
+  const int fd = mkstemp(path.data());  // 0600
+  if (fd < 0) throw std::invalid_argument("can't keep stdin's JSON for a restart: " + std::string(strerror(errno)));
+  unlink(path.c_str());
+  bool ok = true;
+  for (size_t at = 0; ok && at < text.size();) {
+    const ssize_t n = write(fd, text.data() + at, text.size() - at);
+    if (n > 0) at += size_t(n);
+    else ok = n < 0 && errno == EINTR;
+  }
+  ok = ok && lseek(fd, 0, SEEK_SET) == 0 && dup2(fd, STDIN_FILENO) == STDIN_FILENO;
+  const int err = errno;
+  close(fd);
+  if (!ok) throw std::invalid_argument("can't keep stdin's JSON for a restart: " + std::string(strerror(err)));
 }
 
 }  // namespace ni::server

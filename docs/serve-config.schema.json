@@ -36,10 +36,9 @@
     "api_key": {"type": "string"},
     "allow_switch": {"type": "boolean"},
     "idle_unload": {
-      "oneOf": [
+      "anyOf": [
         {"enum": ["auto", "off", "0", 0]},
-        {"type": "number", "minimum": 0.5, "maximum": 10080},
-        {"type": "string"}
+        {"type": "number", "minimum": 0.5, "maximum": 10080}
       ],
       "description": "auto, 0 or off, or minutes from 0.5 to 10080"
     },

@@ -50,4 +50,9 @@ std::optional<nlohmann::json> flags_to_json(const std::vector<std::string>& args
 // Serves with these options until stopped (main.cpp: everything `kapitsa serve` did after reading its flags)
 int run_service(Options options);
 
+// --config -: puts the JSON read from stdin back on fd 0, as an unlinked 0600 file at its start, so a server that
+// starts itself again (pairing, a split: restart_server() re-execs `serve --config -`) reads the same JSON. The key in
+// it never goes in argv.
+void keep_stdin(const std::string& text);
+
 }  // namespace ni::server
