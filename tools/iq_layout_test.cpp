@@ -1,3 +1,4 @@
+#include "gguf_iq3_xxs_test.h"
 #include "gguf_q8_0_test.h"
 #include "gguf_q6_k_test.h"
 #include "gguf_iq4_xs_test.h"
@@ -359,6 +360,7 @@ void test_iq4_nl_pages() {
 
 int main() {
   g_fail += q6_test::run();
+  g_fail += iq3_xxs_test::run();
   g_fail += iq4_xs_test::run();
   g_fail += pack_codes_test::run();
   test_iq4_nl();
