@@ -81,7 +81,7 @@ build/splash_protocol_test                   # Splash protocol v11 frames agains
 build/splash_runtime_test                    # the Splash engine child: start, requests, cancel, death (src/splash/runtime.h)
 build/splash_discover_test                   # finding Splash's engine and model on a throwaway tree (src/splash/discover.h)
 build/splash_plan_test                       # what Kapitsa adds to `splash serve-native`, and when (src/splash/plan.h)
-python3 tests/test_server.py --cli build/kapitsa
+python3 tests/test_server.py --cli build/kapitsa  # its `kapitsa doctor` cases wait on the GPU: with a model run on it they time out (300 s; 9 Nov 2026, #1113)
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
 python3 tests/test_update.py build
