@@ -1,0 +1,243 @@
+{
+  "notice": "Explicitly redacted derived summary; not a raw execution log. Original records retained privately.",
+  "source_versions": {
+    "reference": "ee8ce8c8f6e3a5a1e4461015bdc2f2653f6d7b11",
+    "candidate": "5229f9c59dbf76d76f335175f4982ba77c0afb77"
+  },
+  "setup": {
+    "chip": "M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "imports": {
+    "converted_weight_config_tokenizer_bytes_equal": true,
+    "all_files_raw_bytes_equal": true,
+    "manifest_order_only_differences": [],
+    "files_with_complete_literal_byte_comparison": [
+      ".kapitsa/manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "mtp.safetensors",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "inventories": {
+      "reference": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1273,
+          "sha256": "b8e2f7a484b2378ddafc3d5aaf972367da128c3170da470916302fd840bac3b3"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 12916,
+          "sha256": "a4afef90d5a4dcefff9a5acf91ae7883c24ef5f28ee660b7ba61da39e491f30c"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3103604104,
+          "sha256": "df482369bf1fe1d824e1674cce2d148fee70b35010dd7f214477a2763b0a36b1"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "415e3d59a71e6a2dd6b0a9d852f3e18a8cd45fde7ea4d540d5a68a09d08a37c8"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "1258fe59416b33a3357efa616e1bf855d22f1dad36eea914819ba64e00560fe2"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ],
+      "candidate": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1273,
+          "sha256": "b8e2f7a484b2378ddafc3d5aaf972367da128c3170da470916302fd840bac3b3"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 12916,
+          "sha256": "a4afef90d5a4dcefff9a5acf91ae7883c24ef5f28ee660b7ba61da39e491f30c"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3103604104,
+          "sha256": "df482369bf1fe1d824e1674cce2d148fee70b35010dd7f214477a2763b0a36b1"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "415e3d59a71e6a2dd6b0a9d852f3e18a8cd45fde7ea4d540d5a68a09d08a37c8"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "1258fe59416b33a3357efa616e1bf855d22f1dad36eea914819ba64e00560fe2"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ]
+    },
+    "source_backed_format_checks": {
+      "reference": {
+        "global": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "effective_measured_module": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              9216,
+              320
+            ],
+            "payload_bytes": 11796480
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              80
+            ],
+            "payload_bytes": 1474560
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              80
+            ],
+            "payload_bytes": 1474560
+          }
+        }
+      },
+      "candidate": {
+        "global": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "effective_measured_module": {
+          "bits": 4,
+          "group_size": 32,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              9216,
+              320
+            ],
+            "payload_bytes": 11796480
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              80
+            ],
+            "payload_bytes": 1474560
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              80
+            ],
+            "payload_bytes": 1474560
+          }
+        }
+      }
+    },
+    "format_scope": "Global format and measured trunk ffn_up only; other per-module/MTP formats are not asserted to be 4-bit."
+  },
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "finite_float32_each_arm": 1986560,
+      "complete_output_bytes_equal": true,
+      "recorded_input_bytes_equal": true,
+      "bitwise_rows": 8
+    },
+    "step": {
+      "records": 192,
+      "finite_float32_each_arm": 47677440,
+      "complete_output_bytes_equal": true,
+      "recorded_input_bytes_equal": true,
+      "bitwise_rows": 192
+    },
+    "verify": {
+      "records": 192,
+      "finite_float32_each_arm": 47677440,
+      "complete_output_bytes_equal": true,
+      "recorded_input_bytes_equal": true,
+      "bitwise_rows": 192
+    },
+    "batch": {
+      "records": 192,
+      "finite_float32_each_arm": 47677440,
+      "complete_output_bytes_equal": true,
+      "recorded_input_bytes_equal": true,
+      "bitwise_rows": 192
+    }
+  },
+  "limitations": [
+    "Teacher-forced trunk output; not free-generating MTP qualification.",
+    "Full model timings do not establish an inference speedup."
+  ],
+  "verify": "KFlash tree (a chain of 8 live rows)",
+  "prefill_gate_note": "Explicit strict thresholds are applied only to step, verify and batch; prefill has the independent literal and finite gate."
+}

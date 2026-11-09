@@ -1,0 +1,235 @@
+{
+  "notice": "Explicitly redacted derived summary; not a raw execution log. Original records retained privately.",
+  "source_versions": {
+    "reference": "ee8ce8c8f6e3a5a1e4461015bdc2f2653f6d7b11",
+    "candidate": "5229f9c59dbf76d76f335175f4982ba77c0afb77"
+  },
+  "setup": {
+    "chip": "M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "legs": {
+    "A1": {
+      "rc": 0,
+      "raw_record_sha256": "499447a9131c535a03aedbb7e428cd9336f4c0aa7dc044d920847df557ec0cde",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decode": {
+        "median_tps": 130.77,
+        "runs_tps": [
+          124.91,
+          130.77,
+          140.81
+        ],
+        "median_accepted_draft_tps": 79.94,
+        "median_accepted_draft_share": 0.6113
+      },
+      "decode_greedy": {
+        "median_tps": 141.57,
+        "runs_tps": [
+          142.87,
+          141.26,
+          141.57
+        ],
+        "median_accepted_draft_tps": 90.41,
+        "median_accepted_draft_share": 0.6387
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4133,
+          "ttft_s": 1.6228,
+          "tps": 2546.8,
+          "followup_s": [
+            0.0526,
+            0.0572,
+            0.0531
+          ],
+          "followup_median_s": 0.0531,
+          "followup_suffix_tps": 418.0
+        }
+      ],
+      "tool_calls": "pass",
+      "invalid": [],
+      "flags": [
+        "Contention reported in prefill_4000/tools; private monitor details removed."
+      ],
+      "flags_redacted": true
+    },
+    "B1": {
+      "rc": 0,
+      "raw_record_sha256": "8193e27d8020a40aa60912c3167f29c77ba0630e000b6b5ba0245a5c2ef581c2",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decode": {
+        "median_tps": 139.8,
+        "runs_tps": [
+          139.8,
+          124.8,
+          140.5
+        ],
+        "median_accepted_draft_tps": 89.01,
+        "median_accepted_draft_share": 0.6367
+      },
+      "decode_greedy": {
+        "median_tps": 142.56,
+        "runs_tps": [
+          142.35,
+          146.61,
+          142.56
+        ],
+        "median_accepted_draft_tps": 91.33,
+        "median_accepted_draft_share": 0.6406
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4132,
+          "ttft_s": 1.6166,
+          "tps": 2556.0,
+          "followup_s": [
+            0.0542,
+            0.0599,
+            0.0524
+          ],
+          "followup_median_s": 0.0542,
+          "followup_suffix_tps": 405.9
+        }
+      ],
+      "tool_calls": "pass",
+      "invalid": [],
+      "flags": [],
+      "flags_redacted": false
+    },
+    "A2": {
+      "rc": 0,
+      "raw_record_sha256": "06515c50cf267dfd783d6f6e394fa2f3db7a6927ca88aa1d26e05f4cf0155429",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decode": {
+        "median_tps": 134.41,
+        "runs_tps": [
+          134.41,
+          130.01,
+          135.05
+        ],
+        "median_accepted_draft_tps": 84.14,
+        "median_accepted_draft_share": 0.623
+      },
+      "decode_greedy": {
+        "median_tps": 134.06,
+        "runs_tps": [
+          135.57,
+          134.06,
+          132.08
+        ],
+        "median_accepted_draft_tps": 85.36,
+        "median_accepted_draft_share": 0.6387
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4133,
+          "ttft_s": 1.6793,
+          "tps": 2461.1,
+          "followup_s": [
+            0.0396,
+            0.0477,
+            0.0409
+          ],
+          "followup_median_s": 0.0409,
+          "followup_suffix_tps": 555.4
+        }
+      ],
+      "tool_calls": "pass",
+      "invalid": [],
+      "flags": [],
+      "flags_redacted": false
+    },
+    "B2": {
+      "rc": 0,
+      "raw_record_sha256": "afef65e7219797a2ee7eb2f15aa1e59e2482838507b0d38497fbb40b4dc5a7c4",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decode": {
+        "median_tps": 133.08,
+        "runs_tps": [
+          131.15,
+          133.08,
+          145.65
+        ],
+        "median_accepted_draft_tps": 83.17,
+        "median_accepted_draft_share": 0.625
+      },
+      "decode_greedy": {
+        "median_tps": 138.85,
+        "runs_tps": [
+          138.12,
+          147.47,
+          138.85
+        ],
+        "median_accepted_draft_tps": 88.68,
+        "median_accepted_draft_share": 0.6387
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4133,
+          "ttft_s": 1.6531,
+          "tps": 2500.1,
+          "followup_s": [
+            0.0449,
+            0.05,
+            0.0426
+          ],
+          "followup_median_s": 0.0449,
+          "followup_suffix_tps": 489.7
+        }
+      ],
+      "tool_calls": "pass",
+      "invalid": [],
+      "flags": [],
+      "flags_redacted": false
+    }
+  },
+  "limitations": [
+    "Native requests/history can differ; timings are not a matched-request performance comparison.",
+    "A1 contention in prefill/tools is preserved with private monitor details removed.",
+    "No overall inference speedup or universal no-regression claim."
+  ]
+}
