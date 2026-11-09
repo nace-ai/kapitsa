@@ -68,11 +68,11 @@ int main() {
   const ni::DefaultRow* hist = row("kflash_hist");
   CHECK(wave && hist);
   CHECK(wave->live && hist->live);
-  CHECK(wave->win_pct == 5 && wave->win_pct_hi == 0 && !wave->exclusive);
+  CHECK(wave->win_pct == 3 && wave->win_pct_hi == 5 && !wave->exclusive);
   CHECK(hist->win_pct == 12 && hist->win_pct_hi == 15 && !hist->exclusive);
   const auto m5pro = ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48));
   const auto m5max = ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30));
-  CHECK(!ni::default_matches(*wave, m5pro));
+  CHECK(ni::default_matches(*wave, m5pro));  // matrix class since #393
   CHECK(ni::default_matches(*wave, m5max));
   CHECK(ni::default_matches(*hist, m5pro));
   CHECK(ni::default_matches(*hist, m5max));  // the matrix class includes the wide chips
@@ -179,7 +179,7 @@ int main() {
   const std::string json = ni::format_profile(m5max, true);
   CHECK(json.find("\"chip_class\":\"wide\"") != std::string::npos);
   CHECK(json.find("\"id\":\"pf_wave\"") != std::string::npos);
-  CHECK(json.find("\"win_pct\":5") != std::string::npos);
+  CHECK(json.find("\"win_pct\":3") != std::string::npos);
   CHECK(json.find("\"exclusive\":false") != std::string::npos);
   CHECK(json.find("measured_on") == std::string::npos);
   ni::DeviceProfile quoted = m5pro;
@@ -209,8 +209,8 @@ int main() {
 
   // The proof the move changes nothing: default_on() must agree, on every (device, model) pair, with the inline
   // expression the call site had before it read the table. These lambdas are those expressions, copied verbatim.
-  const auto old_pf_wave = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {
-    return m.moe && m.hidden == 2048 && m.layers == 40 && d.apple_family >= 10 && d.cores >= 40;
+  const auto old_pf_wave = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {  // matrix class since #393
+    return m.moe && m.hidden == 2048 && m.layers == 40 && d.apple_family >= 10;
   };
   const auto old_hist = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {
     return d.apple_family >= 10 && m.moe && !m.clover && m.hidden == 2048 && m.layers == 40 && m.experts == 256 &&

@@ -880,11 +880,10 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // concurrent slots, other formats/devices, or when the extra buffers do not fit.
   // M5 Pro, ni_run cold prefill, 2112 -> 4224 rows: 4K 2,637 -> 2,808 tok/s, 16K 2,095 -> 2,192 (logits bitwise the
   // same in dumps of at most 3,200 tokens, i.e. one chunk; a 16K prompt split over chunks was not dumped); the plan counts 0.75 GB more buffers, the measured peak footprint grows by 0.58 GB.
-  // With its GPU wavefront (NI_PF_WAVE, on the 40-core M5 Max) the same model takes 8192-row chunks, so each half has
-  // the rows a 4096-row chunk had: ni_run, 16,288 ids 2,777 -> 2,620 ms (Qwen35::gpu_wave_rows).
+  // With its GPU wavefront (NI_PF_WAVE, on the M5 class) the same model takes 8192-row chunks, so each half has the rows
+  // a 4096-row chunk had: ni_run, 16,288 ids, M5 Max 2,777 -> 2,620 ms, M5 Pro 5,874 -> 5,618 (Clover 5,699 -> 5,526).
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 && p.formats.rfind("4-bit group 64", 0) == 0 &&
-      Qwen35::gpu_wave_default(p.hidden, p.layers, true) &&
-      (!Clover::is_model(model_dir) || (getenv("NI_PF_WAVE") && atoi(getenv("NI_PF_WAVE")) == 1))) {
+      Qwen35::gpu_wave_default(p.hidden, p.layers, true)) {
     const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(8192) : 8192);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(8192) : 8192;
