@@ -94,6 +94,26 @@ int main() {
   CHECK(fv.size() == 1 && fv[0].rfind("model_type qwen4_exp_text without a text_config", 0) == 0,
         "a flat qwen4_exp_text config is refused for its type alone (%zu)", fv.size());
 
+  // the table: each row's top-level type or its text_config's picks the layout; an unknown type is none
+  using ni::QwenLayout;
+  CHECK(ni::qwen_layout(fn) == QwenLayout::qwen4exp &&
+            ni::qwen_layout(json{{"model_type", "qwen4_exp"}}) == QwenLayout::qwen4exp,
+        "qwen4_exp is Flash-Next's layout");
+  CHECK(ni::qwen_layout(json{{"text_config", {{"model_type", "qwen4_exp_text"}}}}) == QwenLayout::qwen4exp,
+        "a qwen4_exp_text text_config is Flash-Next's layout");
+  CHECK(ni::qwen_layout(flat) == QwenLayout::none, "a flat qwen4_exp_text is no layout");
+  for (const char* mt : {"qwen3_5", "qwen3_5_moe"})
+    CHECK(ni::qwen_layout(json{{"model_type", mt}}) == QwenLayout::qwen35, "%s is the Qwen3.5 layout", mt);
+  for (const char* tt : {"qwen3_5_text", "qwen3_5_moe_text"}) {
+    CHECK(ni::qwen_layout(json{{"text_config", {{"model_type", tt}}}}) == QwenLayout::qwen35, "%s text_config", tt);
+    CHECK(ni::qwen_layout(json{{"model_type", tt}}) == QwenLayout::qwen35, "a flat %s", tt);
+  }
+  for (const char* mt : {"qwen4", "qwen4_moe", "qwen3", "gemma4", ""})
+    CHECK(ni::qwen_layout(json{{"model_type", mt}}) == QwenLayout::none, "'%s' is no layout", mt);
+  CHECK(ni::qwen_layout(json::array()) == QwenLayout::none, "a non-object is no layout");
+  const json q4 = {{"model_type", "qwen4"}};
+  CHECK(ni::qwen4_family(q4) && !ni::qwen4_unsupported(q4).empty(), "an unlisted qwen4 stays Qwen 4-family and refused");
+
   // not Qwen 4
   CHECK(!ni::qwen4_family(json{{"model_type", "qwen3_5_moe"}, {"text_config", {{"model_type", "qwen3_5_moe_text"}}}}),
         "Qwen3.5 is not Qwen 4-family");

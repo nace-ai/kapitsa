@@ -128,10 +128,7 @@ bool q20_experts_in(const json& root) {
 bool Qwen4Exp::is_model(const std::string& dir) {
   const auto rp = json_file(dir + "/config.json");
   const json& r = *rp;
-  if (!r.is_object()) return false;
-  if (r.value("model_type", std::string()) == "qwen4_exp") return true;
-  return r.contains("text_config") && r["text_config"].is_object() &&
-         r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
+  return qwen_layout(r) == QwenLayout::qwen4exp;
 }
 
 float Qwen4Exp::norm_offset(double m) { return m <= 0.25 ? 1.0f : m >= 0.75 ? 0.0f : -1.0f; }

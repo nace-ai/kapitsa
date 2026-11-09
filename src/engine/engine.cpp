@@ -781,7 +781,7 @@ std::string unsupported_model(const std::string& model_dir) {
     const std::string why = unsupported_quantization(model_dir);
     return why.empty() ? why : model_dir + ": " + why;
   };
-  if (mt == "qwen3_5" || mt == "qwen3_5_moe" || tt == "qwen3_5_text" || tt == "qwen3_5_moe_text") return family();
+  if (qwen_layout(j) == QwenLayout::qwen35) return family();
   if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers"))
     return family();
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "

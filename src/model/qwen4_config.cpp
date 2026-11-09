@@ -36,11 +36,37 @@ std::string fmt(const char* f, long long a) {
   return b;
 }
 
+// Every Qwen model_type Kapitsa runs. A newer Qwen whose config.json was read and found to be one of these layouts
+// under a new name is added here, one row (a diff of its config.json against the two layouts' decides which).
+// Qwen4Exp's rows come first: a text_config of its type decides, as Qwen4Exp::is_model always took it.
+struct QwenType {
+  const char* model_type;
+  const char* text_type;
+  QwenLayout layout;
+};
+constexpr QwenType kQwenTypes[] = {
+    {"qwen4_exp", "qwen4_exp_text", QwenLayout::qwen4exp},
+    {"qwen3_5", "qwen3_5_text", QwenLayout::qwen35},
+    {"qwen3_5_moe", "qwen3_5_moe_text", QwenLayout::qwen35},
+};
+
 }  // namespace
+
+QwenLayout qwen_layout(const json& c) {
+  if (!c.is_object()) return QwenLayout::none;
+  const json& t = text_of(c);
+  // (a text type at the top level is the Qwen3.5 text-only layout's; Flash-Next's loader needs the text_config)
+  const bool nested = &t != &c;
+  const std::string mt = type_of(c), tt = type_of(t);
+  for (const QwenType& r : kQwenTypes)
+    if (mt == r.model_type || (tt == r.text_type && (nested || r.layout == QwenLayout::qwen35))) return r.layout;
+  return QwenLayout::none;
+}
 
 bool qwen4_family(const json& c) {
   if (!c.is_object()) return false;
-  return type_of(c).rfind("qwen4", 0) == 0 || type_of(text_of(c)).rfind("qwen4", 0) == 0;
+  return (type_of(c).rfind("qwen4", 0) == 0 || type_of(text_of(c)).rfind("qwen4", 0) == 0) &&
+         qwen_layout(c) != QwenLayout::qwen35;
 }
 
 std::vector<std::string> qwen4_unsupported(const json& c) {
@@ -48,12 +74,10 @@ std::vector<std::string> qwen4_unsupported(const json& c) {
   if (!c.is_object()) return {"config.json is not a JSON object"};
   const json& t = text_of(c);
   const std::string mt = type_of(c), tt = type_of(t);
-  // Qwen4Exp::is_model's: model_type qwen4_exp, or a text_config of qwen4_exp_text
-  const bool nested = &t != &c;
-  if (mt == "qwen4_exp_text" && !nested)
+  if (mt == "qwen4_exp_text" && &t == &c)
     v.push_back("model_type qwen4_exp_text without a text_config: Kapitsa loads Qwen3.8-Flash-Next's config.json "
                 "(model_type qwen4_exp, or its text settings in a text_config)");
-  else if (mt != "qwen4_exp" && !(nested && tt == "qwen4_exp_text"))
+  else if (qwen_layout(c) != QwenLayout::qwen4exp)
     v.push_back("model_type " + (mt.empty() ? tt : mt) +
                 ": Kapitsa runs Qwen 4's preview architecture, qwen4_exp (Qwen3.8-Flash-Next), and a new one once its "
                 "differences are read");
