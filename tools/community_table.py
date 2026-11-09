@@ -214,6 +214,10 @@ def check_raw(u):
             speeds.append(json.load(open(full, encoding="utf-8"))["results"]["decode"]["median_tps"])
         mean = sum(speeds) / len(speeds)
         assert abs(mean - u[key]) < 0.06, f"{u['name']}: {key} {u[key]} is not the mean {mean:.2f} of {paths}"
+        akey = "accepted_pct" if field == "raw" else "stock_accepted_pct"
+        shares = [json.load(open(os.path.join(REPO, rel), encoding="utf-8"))["results"]["decode"]["median_accepted_draft_share"] for rel in paths]
+        share = 100 * sum(shares) / len(shares)
+        assert abs(share - u.get(akey, -1)) < 0.06, f"{u['name']}: {akey} {u.get(akey)} is not the mean {share:.1f} of {paths}"
         links += [f"[{'model' if field == 'raw' else 'stock'} {i + 1}]({os.path.relpath(os.path.join(REPO, rel), COMMUNITY)})" for i, rel in enumerate(paths)]
     return ", ".join(links)
 
@@ -229,7 +233,7 @@ def uncensored_section():
              "| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- |"]
     for u in data["rows"]:
         stock = "–" if u.get("stock_decode_tps") is None else tps(u["stock_decode_tps"])
-        acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.0f}%"
+        acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.0f}%" + (f" (stock {u['stock_accepted_pct']:.0f}%)" if u.get("stock_accepted_pct") else "")
         kl = "–" if u.get("kl") is None else f"{u['kl']:.3f}" + ("" if u.get("kl_basis") == "measured" else " (claimed)")
         raw = check_raw(u)
         basis = "" if u["refusal_basis"] == "measured" else " (claimed)"

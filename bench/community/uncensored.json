@@ -30,7 +30,8 @@
     "bench/community/uncensored/4b-stock-1/bench.json",
     "bench/community/uncensored/4b-stock-2/bench.json"
    ],
-   "kl_basis": "measured"
+   "kl_basis": "measured",
+   "stock_accepted_pct": 70.2
   },
   {
    "name": "Qwen3.8-27B Heretic (ours, not published)",
@@ -61,7 +62,8 @@
     "bench/community/uncensored/27b-stock-1/bench.json",
     "bench/community/uncensored/27b-stock-2/bench.json"
    ],
-   "kl_basis": "measured"
+   "kl_basis": "measured",
+   "stock_accepted_pct": 83.6
   },
   {
    "name": "Qwen3.8-27B DavidAU Cold Fusion Heretic NEO MTP",
@@ -75,7 +77,7 @@
    "kl": 0.0025,
    "decode_tps": 15.51,
    "stock_decode_tps": 51.42,
-   "accepted_pct": 33,
+   "accepted_pct": 33.6,
    "mac": {
     "name": "MacBook Pro (14-inch, M5 Pro or M5 Max)",
     "chip": "Apple M5 Pro",
@@ -90,7 +92,8 @@
    "stock_raw": [
     "bench/community/uncensored/stock-27b-q4km/bench.json"
    ],
-   "kl_basis": "claimed"
+   "kl_basis": "claimed",
+   "stock_accepted_pct": 80.1
   },
   {
    "name": "Qwen3.6-35B-A3B HauhauCS Aggressive",
