@@ -195,7 +195,29 @@ def render(results, results_dir, out_path):
                 cells.append(", ".join(fl) if fl else "–")
                 lines.append("| " + " | ".join(cells) + " |")
             lines.append("")
+    lines += uncensored_section()
     return "\n".join(lines)
+
+
+def uncensored_section():
+    """The uncensored models (uncensored.json): speed on one Mac with the model's refusals and its KL divergence from the base."""
+    path = os.path.join(COMMUNITY, "uncensored.json")
+    if not os.path.exists(path):
+        return []
+    data = json.load(open(path, encoding="utf-8"))
+    lines = ["## Uncensored models", "", data["note"], "",
+             "| Model | Made by | Refusals | KL vs base | Quant | Writing, T = 0.6 | Same base, stock | Drafter accepts | Mac | Power | Kapitsa | Weights |",
+             "| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- |"]
+    for u in data["rows"]:
+        stock = "–" if u.get("stock_decode_tps") is None else tps(u["stock_decode_tps"])
+        acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.0f}%"
+        kl = "–" if u.get("kl") is None else f"{u['kl']:.3f}"
+        basis = "" if u["refusal_basis"] == "measured" else " (claimed)"
+        ref = f"{u['refusals']}/{u['refusals_of']}"
+        lines.append(f"| {u['name']} | {u['source']} | {ref}{basis} | {kl} | {u['quant']} | {tps(u['decode_tps'])} | {stock} | {acc} | "
+                     f"{u['mac']['name']} · {u['mac']['chip']} · {u['mac']['memory_gb']} GB | {u['power']} | {u['kapitsa_commit']} | {u['weights']} |")
+    lines.append("")
+    return lines
 
 
 def main():

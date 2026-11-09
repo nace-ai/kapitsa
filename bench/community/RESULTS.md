@@ -875,3 +875,14 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-22](results/kapitsa-bench-2026-10-22-m1-qwen3.5-4b-4bit-5b5b8e.json) | 48.9 tok/s | 52.8 tok/s | 230 tok/s | 206 tok/s | 0.20 s | 0.23 s | 4.4 GB | pass | KFlash | 0.2.2 | 26.6.2 | swap |
+
+## Uncensored models
+
+Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts.
+
+| Model | Made by | Refusals | KL vs base | Quant | Writing, T = 0.6 | Same base, stock | Drafter accepts | Mac | Power | Kapitsa | Weights |
+| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- |
+| Qwen3.5-4B Heretic | Kapitsa (our run) | 9/100 | 0.102 | MLX 4-bit | 217.6 tok/s | 216.4 tok/s | 71% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | battery | d132a2cc | private, not published |
+| Qwen3.8-27B Heretic | Kapitsa (our run) | 4/100 | 0.173 | MLX 4-bit | 68.1 tok/s | 76.1 tok/s | 82% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | private, not published |
+| Qwen3.8-27B DavidAU Cold Fusion Heretic NEO MTP | third-party | 11/100 (claimed) | 0.003 | GGUF Q4_K_M | 15.5 tok/s | 51.4 tok/s | 33% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | DavidAU on Hugging Face |
+| Qwen3.6-35B-A3B HauhauCS Aggressive | third-party | 0/465 (claimed) | – | GGUF IQ2_M | 168.8 tok/s | – | 73% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | HauhauCS on Hugging Face |

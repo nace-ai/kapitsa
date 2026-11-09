@@ -133,7 +133,7 @@ jobs:
             exit 0
           fi
           python3 tools/build_leaderboard_data.py
-          echo "::error title=Leaderboard data is stale::docs/site/leaderboard-data.js does not match bench/community/results. Run: python3 tools/build_leaderboard_data.py && git add -f docs/site/leaderboard-data.js"
+          echo "::error title=Leaderboard data is stale::docs/site/leaderboard-data.js does not match bench/community/results and uncensored.json. Run: python3 tools/build_leaderboard_data.py && git add -f docs/site/leaderboard-data.js"
           exit 1
 
   docs-links:
