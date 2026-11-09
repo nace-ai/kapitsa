@@ -226,15 +226,13 @@ static void activity_events() {
         ev.back().second["message"] == "line 299");
 }
 
-// --print: one SSE frame per line as event.schema.json's JSON ({id, type, data}), every kind the server publishes, for
-// tests/test_events_schema.py to validate against the spec
+// --print: every kind of event the server publishes, one SSE frame per line as JSON, for tests/test_events_schema.py
 static int print_frames() {
   Events bus(kRun);
   Resume how;
   auto s = bus.open("", &how);
   const json m = model_json("qwen3.6-35b-a3b", 262144, 4);
   CHECK(model_json("", 1, 1).is_null() && model_json("x", 0, 1).is_null());
-  publish_state("starting", nullptr);  // (no process bus: nothing; the frames below use `bus`)
   for (const char* st : {"starting", "loading"}) bus.publish("state", {{"state", st}, {"model", nullptr}});
   for (const char* st : {"loading", "ready", "switching", "released", "stopping"}) bus.publish("state", {{"state", st}, {"model", m}});
   bus.publish("state", {{"state", "released"}, {"model", m}, {"message", "loading the model again failed: out of memory"}});
@@ -251,15 +249,13 @@ static int print_frames() {
   ChatResult bad;
   bad.finish_reason = "error", bad.error = "the prompt does not fit";
   act.finish(r2, bad);
-  for (int lvl = 0; lvl < 3; ++lvl) act.logs().push(lvl, "a line");
-  act.logs().push(1, "warning: a warning");
+  for (int lvl = 0; lvl < 4; ++lvl) act.logs().push(lvl % 3, lvl == 3 ? "warning: a warning" : "a line");
   act.tick(r->t0 + 1000);
   while (auto e = s->next(0)) std::cout << json{{"id", bus.id(e->seq)}, {"type", e->type}, {"data", json::parse(e->data)}}.dump() << "\n";
   return 0;
 }
 
-// One thread ticking, one starting and finishing requests: for every request the bus must carry started, then any
-// progress, then finished (start, finish and tick publish under Activity's lock). Run it under TSan too.
+// One thread ticks while another starts and finishes requests: each one's events must be started, progress*, finished
 static void request_order() {
   Events bus(kRun);
   Activity act(bus, 100);
@@ -267,30 +263,20 @@ static void request_order() {
   auto s = bus.open("", &how);
   std::atomic<bool> done{false};
   std::map<std::string, int> seen;  // 1 started, 2 finished
-  int bad = 0, progress = 0;
+  int bad = 0;
   std::thread reader([&] {
-    for (;;) {
-      auto e = s->next(20);
-      if (!e) {
-        if (done.load()) break;
-        continue;
-      }
-      const std::string id = json::parse(e->data).value("request_id", "");
-      int& st = seen[id];
-      if (e->type == "request_started") bad += st != 0, st = 1;
-      else if (e->type == "request_progress") bad += st != 1, ++progress;
-      else if (e->type == "request_finished") bad += st != 1, st = 2;
+    for (decltype(s->next(0)) e; (e = s->next(20)) || !done.load();) {
+      if (!e) continue;
+      int& st = seen[json::parse(e->data).value("request_id", "")];
+      bad += e->type == "request_started" ? st != 0 : st != 1;
+      if (e->type != "request_progress") st = e->type == "request_started" ? 1 : 2;
     }
   });
-  std::thread ticker([&] {
-    while (!done.load()) act.tick(steady_ms());
-  });
+  std::thread ticker([&] { while (!done.load()) act.tick(steady_ms()); });
   for (int i = 0; i < 2000; ++i) act.finish(act.start("openai", ""), ChatResult{});
-  done = true;
-  ticker.join();
-  reader.join();
+  done = true, ticker.join(), reader.join();
+  for (const auto& [id, st] : seen) bad += st != 2;
   CHECK(!s->closed() && bad == 0 && seen.size() == 2000);
-  for (const auto& [id, st] : seen) CHECK(st == 2);
 }
 
 int main(int argc, char** argv) {
