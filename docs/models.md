@@ -6,7 +6,7 @@ This page is written by [tools/models_table.py](../tools/models_table.py) from t
 
 ## Default models
 
-What `--model <alias>` downloads where it fits the Mac. Where the default variant does not fit, `pull` and `serve` take the model's smaller variant (`16gb`, `24gb`, `64gb`) listed in the second table.
+What `--model <alias>` downloads where it fits the Mac. Where the default variant does not fit, `pull` and `serve` take the model's smaller variant (`16gb`, `64gb`) listed in the second table.
 
 | `kapitsa serve --model` | Hugging Face repo | Revision | Drafter | MTP head | Download |
 | --- | --- | --- | --- | --- | ---: |
@@ -26,7 +26,7 @@ What `--model <alias>` downloads where it fits the Mac. Where the default varian
 
 ## Other variants
 
-Another precision of the same model, or a smaller pack for a smaller Mac (`16gb`, `24gb`, `64gb`).
+Another precision of the same model, or a smaller pack for a smaller Mac (`16gb`, `64gb`).
 
 | `--model` | Hugging Face repo | Revision | Drafter | MTP head | Download |
 | --- | --- | --- | --- | --- | ---: |

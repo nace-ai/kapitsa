@@ -205,6 +205,10 @@ def render(models):
     head = ("| `kapitsa serve --model` | Hugging Face repo | Revision | Drafter | MTP head | Download |\n"
             "| --- | --- | --- | --- | --- | ---: |\n")
     default_rows, other_rows = [], []
+    packs = []  # the smaller variants a model falls back to on a smaller Mac, as the catalog names them
+    for m in models:
+        packs += [f"`{f}`" for f in m["fallbacks"] if f"`{f}`" not in packs]
+    packs = ", ".join(packs)
     for m in models:
         sa = short_alias(m)
         names = ", ".join(f"`{a}`" for a in [sa] + [a for a in m["aliases"] if a != sa])
@@ -229,14 +233,14 @@ def render(models):
         "",
         "## Default models",
         "",
-        "What `--model <alias>` downloads where it fits the Mac. Where the default variant does not fit, `pull` and "
-        "`serve` take the model's smaller variant (`16gb`, `24gb`, `64gb`) listed in the second table.",
+        f"What `--model <alias>` downloads where it fits the Mac. Where the default variant does not fit, `pull` and "
+        f"`serve` take the model's smaller variant ({packs}) listed in the second table.",
         "",
         head + "\n".join(default_rows),
         "",
         "## Other variants",
         "",
-        "Another precision of the same model, or a smaller pack for a smaller Mac (`16gb`, `24gb`, `64gb`).",
+        f"Another precision of the same model, or a smaller pack for a smaller Mac ({packs}).",
         "",
         head.replace("`kapitsa serve --model`", "`--model`") + "\n".join(other_rows),
         "",
