@@ -89,7 +89,8 @@ inference request then waits while the state reads `loading` and then `ready`. I
 whose previous model could not be loaded back either (below).
 
 `engine` shows what the engine holds, sampled once per tick, so a view can draw memory, slots and drafts. It is
-present only while `state` is `ready` or `switching`, and never in Splash mode, whose engine runs in another process.
+present only while `state` is `ready`, and never in Splash mode, whose engine runs in another process. A switch frees
+the old engine before the new one loads, so there is nothing to sample while `switching`.
 
 | Field | What it holds |
 | --- | --- |
@@ -98,7 +99,7 @@ present only while `state` is `ready` or `switching`, and never in Splash mode, 
 | `memory.weights_bytes` | Of that, the model's weights and the drafter's |
 | `memory.kv_bytes` | Of that, the slots' KV caches as allocated. The rest is buffers and recurrent state |
 | `slots[]` | One item per slot: `index`, `busy`, `tokens` in its live state, and `request_id` while busy |
-| `drafts` | `cycles` that verified a draft and the `tokens` they wrote, counted since the model loaded. Absent when the model decodes without drafts |
+| `drafts` | `cycles` that verified a draft and the `tokens` they wrote, counted since the model loaded. Absent when the model decodes without drafts. A counter that goes down means the model loaded again: start the baseline over |
 
 Each cycle writes one token of its own plus the draft tokens it accepts. A view gets tokens per cycle as
 `tokens / cycles`, and the share of tokens that came from accepted drafts as `(tokens - cycles) / tokens`, both from

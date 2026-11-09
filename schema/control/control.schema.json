@@ -65,7 +65,7 @@
         "phase": {"enum": ["waiting", "prefill", "writing"]},
         "prompt_tokens": {"$ref": "#/$defs/count"},
         "cached_tokens": {"$ref": "#/$defs/count"},
-        "prefilled_tokens": {"$ref": "#/$defs/count", "description": "prompt tokens read so far, the cached ones included: prompt_tokens once the prefill ends"},
+        "prefilled_tokens": {"$ref": "#/$defs/count", "description": "prompt tokens this request has read, the cached ones excluded: prompt_tokens - cached_tokens once the prefill ends"},
         "completion_tokens": {"$ref": "#/$defs/count"},
         "elapsed_ms": {"$ref": "#/$defs/count"},
         "tokens_per_second": {"$ref": "#/$defs/rate", "description": "completion tokens written during the last tick, divided by tick_ms"}
@@ -122,8 +122,8 @@
       }
     },
     "engine_state": {
-      "description": "engine is present only while a model is in memory",
-      "if": {"required": ["state"], "properties": {"state": {"enum": ["ready", "switching"]}}},
+      "description": "engine is present only while state is ready: a switch frees the old engine before the new one loads",
+      "if": {"required": ["state"], "properties": {"state": {"const": "ready"}}},
       "else": {"not": {"required": ["engine"]}}
     },
     "state_model": {"description": "Which states name a model: a ready, switching or released instance always does, a starting one never", "allOf": [{"if": {"required": ["state"], "properties": {"state": {"enum": ["ready", "switching", "released"]}}}, "then": {"properties": {"model": {"type": "object"}}}}, {"if": {"required": ["state"], "properties": {"state": {"const": "starting"}}}, "then": {"properties": {"model": {"type": "null"}}}}]}

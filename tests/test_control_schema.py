@@ -71,6 +71,30 @@ def example(directory, name):
     return doc
 
 
+def progress_items(node):
+    """Every request_progress object in an example (status.requests items, the event's data, a reset's status)."""
+    if isinstance(node, dict):
+        if {"phase", "prompt_tokens", "cached_tokens", "prefilled_tokens"} <= node.keys():
+            yield node
+        for v in node.values():
+            yield from progress_items(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from progress_items(v)
+
+
+def progress_problems(p):
+    """prefilled_tokens counts the prompt tokens this request read itself, the cached ones excluded."""
+    fresh = p["prompt_tokens"] - p["cached_tokens"]
+    if fresh < 0:
+        return [f"cached_tokens {p['cached_tokens']} > prompt_tokens {p['prompt_tokens']}"]
+    if p["prefilled_tokens"] > fresh:
+        return [f"prefilled_tokens {p['prefilled_tokens']} > prompt_tokens - cached_tokens ({fresh})"]
+    if p["phase"] == "writing" and p["prefilled_tokens"] != fresh:
+        return [f"writing, so prefilled_tokens must be prompt_tokens - cached_tokens ({fresh}), not {p['prefilled_tokens']}"]
+    return []
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--serve-config", default=SERVE_CONFIG, help="step 1's docs/serve-config.schema.json")
@@ -134,6 +158,8 @@ def main():
                 continue
             if want_valid:
                 seen.add(message)
+                for item in progress_items(example(directory, name)):
+                    failures += [f"{rel}: {why}" for why in progress_problems(item)]
                 for e in errors:
                     failures.append(f"{rel}: {'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}")
             elif not errors:
