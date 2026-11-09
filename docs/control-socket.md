@@ -32,8 +32,13 @@ it.
 - **Access.** Only the user who started the instance can reach the socket, because the directory is private. The
   server also checks each connection's peer with `getpeereid` and answers `403 forbidden_peer` to any other user
   (root included). There is no token and no TCP port.
-- **Instance id.** 1 to 32 of `A-Z a-z 0-9 _ -`. macOS limits a socket path to 103 bytes. A server whose socket path
-  is longer refuses to start, and its error names the path.
+- **Instance id.** 1 to 32 of `A-Z a-z 0-9 _ -`, `default` when the configuration gives none. macOS limits a socket
+  path to 103 bytes, and 32 keeps a usual home folder's path under it. A server whose socket path is longer anyway
+  refuses to start, and its error names the path.
+- **Configuration fields, pending confirmation from step 1.** `protocol`, `instance_id` and `name` become
+  `kapitsa serve --config -` fields with these meanings. Until step 1's schema has them,
+  [control.schema.json](../schema/control/control.schema.json) defines them. Once it does, those definitions refer
+  to step 1's.
 - **Discovery.** A client lists `run/*.sock` and connects to each one. A socket that accepts the connection is a live
   instance. A refused connection (`ECONNREFUSED`) means the instance is stale: its process is gone.
 - **Stale sockets.** Clients never delete a socket they did not create. A client may remove a stale socket only while
@@ -60,7 +65,8 @@ Any other path answers `404 not_found`, and a wrong method answers `405 method_n
 ### Status
 
 `GET /status` returns the instance's identity, its state (`starting`, `loading`, `ready`, `switching`, `stopping`),
-the loaded model, the active requests, and `config`. `config` is the instance's effective configuration in exactly
+the loaded model, the active requests, and `config`. `name` is the configuration's `name`, or the `instance_id`
+when that is empty, so a client always has something to show. `config` is the instance's effective configuration in exactly
 the keys, types and ranges of `kapitsa serve --config -`, minus `api_key`. `last_event_id` is the newest event's id.
 A client that sends it as `Last-Event-ID` reads every event after this status with no gap and no duplicate.
 

@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+from urllib.parse import urljoin
 
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
@@ -91,11 +92,15 @@ def main():
             failures.append(f"{path}: not a valid 2020-12 schema: {e.message if hasattr(e, 'message') else e}")
         if schema.get("$schema") != "https://json-schema.org/draft/2020-12/schema":
             failures.append(f"{path}: $schema is not 2020-12")
-        if "$id" not in schema:
+        if path.startswith("schema") and "$id" not in schema:
             failures.append(f"{path}: no $id")
 
+    # Step 1's schema is found where the control schema's relative $refs point, whatever $id it declares itself
+    serve = schemas[os.path.join("docs", "serve-config.schema.json")]
+    resources = [(urljoin(ROOT_ID, "../../docs/serve-config.schema.json"), serve)]
+    resources += [(s["$id"], s) for s in schemas.values() if "$id" in s]
     registry = Registry().with_resources(
-        (s["$id"], Resource.from_contents(s, default_specification=DRAFT202012)) for s in schemas.values() if "$id" in s)
+        (uri, Resource.from_contents(s, default_specification=DRAFT202012)) for uri, s in resources)
     for path, schema in schemas.items():
         if not path.startswith("schema"):
             continue
