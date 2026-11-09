@@ -1,0 +1,21 @@
+{
+  "description": "Digests of the public derived files; not raw private archive digests.",
+  "driver_copy_disclosure": {
+    "extract-real.cpp": {
+      "executed_original_sha256": "8fc6d3b64c7eeb6d464bbdef2d1a1f78fdac071938c2d21cbe79ca93e2a0cbdc",
+      "public_copy_sha256": "a21295565d52316dbeb4fc42f3b4d24f3fca8138c64962e8633bc0d9b6df0c02",
+      "change": "Only one terminal blank line removed; original executed source retained privately."
+    },
+    "perrow-driver.cpp": {
+      "executed_original_sha256": "2510351e6094ebc91c263c93b888ba3f3852d01878e8549e6d728256c7a46b9e",
+      "public_copy_sha256": "a5d0a2e6afeb639c27d9e6a023a85091e5907914847a7dd9eafafb29a071d6e5",
+      "change": "Only one terminal blank line removed; original executed source retained privately."
+    }
+  },
+  "files": {
+    "summary.json": "06508a443538f720d8993749d3a9477a1015638f29da014118750663cf76eb2c",
+    "README.md": "382ca8eb6f00486a328e285a4a023f425a98ba340efd17f379f87d8d5026fe89",
+    "extract-real.cpp": "a21295565d52316dbeb4fc42f3b4d24f3fca8138c64962e8633bc0d9b6df0c02",
+    "perrow-driver.cpp": "a5d0a2e6afeb639c27d9e6a023a85091e5907914847a7dd9eafafb29a071d6e5"
+  }
+}

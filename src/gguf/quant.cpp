@@ -599,7 +599,22 @@ void pack_codes(const uint8_t* codes, size_t n, int bits, uint32_t* words) {
     return;
   }
   if (bits == 4) {
-    for (size_t w = 0; w < n / 8; ++w) {
+    size_t start = 0;
+#if defined(__aarch64__)
+    const size_t used = n / 8 * 8;
+    const uintptr_t src = reinterpret_cast<uintptr_t>(codes), dst = reinterpret_cast<uintptr_t>(words);
+    const bool overlap = dst >= src ? dst - src < used : src - dst < used / 2;
+    if (!overlap) {
+      const uint8x16_t mask = vdupq_n_u8(15);
+      for (; used - start >= 32; start += 32) {
+        const uint8x16_t a = vandq_u8(vld1q_u8(codes + start), mask);
+        const uint8x16_t b = vandq_u8(vld1q_u8(codes + start + 16), mask);
+        const uint8x16_t packed = vorrq_u8(vuzp1q_u8(a, b), vshlq_n_u8(vuzp2q_u8(a, b), 4));
+        vst1q_u8(reinterpret_cast<uint8_t*>(words) + start / 2, packed);
+      }
+    }
+#endif
+    for (size_t w = start / 8; w < n / 8; ++w) {
       uint32_t v = 0;
       for (int k = 0; k < 8; ++k) v |= uint32_t(codes[8 * w + k] & 0xF) << (4 * k);
       words[w] = v;

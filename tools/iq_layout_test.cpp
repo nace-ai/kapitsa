@@ -1,6 +1,7 @@
 #include "gguf_q8_0_test.h"
 #include "gguf_q6_k_test.h"
 #include "gguf_pack_codes_test.h"
+#include "gguf_pack4_test.h"
 
 // The GPU layout of llama.cpp's IQ blocks (src/kernels/wfmt_iq.metal, gguf::iq_repack) checked on the CPU: random blocks
 // of every type the IQ MoE kernels read (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S) are repacked in two row ranges (as the
@@ -383,6 +384,7 @@ int main() {
         "takes a type without a layout");
   check(gg::iq_mode_type("affine") == 0 && gg::iq_mode_type("iq2_xs") == 0, "iq_mode_type", "names another mode");
   g_fail += q8_test::run();
+  g_fail += pack4_test::run();
   if (g_fail) {
     printf("%d check(s) FAILED\n", g_fail);
     return 1;

@@ -1,0 +1,468 @@
+{
+  "disclosure": "Redacted, derived evidence. Original execution records remain private. No original log is represented by the command examples.",
+  "source": "7d1b0bbcdcfb36a495036eb0d6d00405fd5955ca",
+  "reference": "4b9ce88708282f754b76cbd7214e188786680c89",
+  "component": "CPU pack_codes(bits=4), 32 codes per NEON iteration; overlap and final whole-word handling retain scalar code",
+  "model_input": {
+    "K": 2560,
+    "all_scales_and_offsets_finite": true,
+    "code_bytes": 2621440,
+    "offset": 532451296,
+    "raw_bytes": 1474560,
+    "rows": 1024,
+    "shape": [
+      2560,
+      4096
+    ],
+    "tensor": "blk.0.attn_gate.weight",
+    "type": 2,
+    "raw_sha256": "597c9b412b92cfacdb979cbe2b43e5b9f7320d030fea787b68d10bdabab8b70c",
+    "codes_sha256": "9f5d488fd5d788a9a0d9a6e2b6c575b9a36339bbcc30d5abd5440d25185072e8",
+    "model_repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "model_revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "model_filename": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "model_size": 2776033248,
+    "model_sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "setups": {
+    "M3": {
+      "environment": {
+        "chip": "M3 Ultra",
+        "gpu_cores": 60,
+        "memory_GiB": 96,
+        "macOS": "26.4.1",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+      },
+      "method": "1024 separate calls per pass, K=2560; 64 warmup and 256 timed passes per leg. Full output bytes and unchanged input checked after every pass outside the timer. Same driver and compiler flags in both arms; only quant.cpp replaced in reference build.",
+      "compiler_flags": [
+        "-std=c++20",
+        "-O3"
+      ],
+      "driver_sha256": "2510351e6094ebc91c263c93b888ba3f3852d01878e8549e6d728256c7a46b9e",
+      "input_sha256": "9f5d488fd5d788a9a0d9a6e2b6c575b9a36339bbcc30d5abd5440d25185072e8",
+      "binary_sha256": {
+        "A": "cc56715c44ef1e0da0ac841f8ff0bc6a5284e4a0c3089d9d93edee643c2b51ac",
+        "B": "984be7ce5766474bbe55b905105e1f35efd1f802255b4149b113cb17e1563371"
+      },
+      "legs": [
+        {
+          "label": "A1",
+          "rc": 0,
+          "ns_per_row": 2426.473480225,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B1",
+          "rc": 0,
+          "ns_per_row": 259.834766388,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "A2",
+          "rc": 0,
+          "ns_per_row": 2437.484580994,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B2",
+          "rc": 0,
+          "ns_per_row": 256.031536102,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "A3",
+          "rc": 0,
+          "ns_per_row": 2425.315338135,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B3",
+          "rc": 0,
+          "ns_per_row": 258.482818604,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "A4",
+          "rc": 0,
+          "ns_per_row": 2429.043605804,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B4",
+          "rc": 0,
+          "ns_per_row": 257.098548889,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        }
+      ],
+      "paired_latency_change_percent": [
+        -89.29167087521985,
+        -89.49607566347801,
+        -89.34230058501316,
+        -89.41564703594929
+      ],
+      "completed_at": "2026-11-08T22:39:54.536083+00:00"
+    },
+    "M4": {
+      "environment": {
+        "chip": "M4 Pro",
+        "gpu_cores": 20,
+        "memory_GiB": 48,
+        "macOS": "15.7.1",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+      },
+      "method": "1024 separate calls per pass, K=2560; 64 warmup and 256 timed passes per leg. Full output bytes and unchanged input checked after every pass outside the timer. Same driver and compiler flags in both arms; only quant.cpp replaced in reference build.",
+      "compiler_flags": [
+        "-std=c++20",
+        "-O3"
+      ],
+      "driver_sha256": "2510351e6094ebc91c263c93b888ba3f3852d01878e8549e6d728256c7a46b9e",
+      "input_sha256": "9f5d488fd5d788a9a0d9a6e2b6c575b9a36339bbcc30d5abd5440d25185072e8",
+      "binary_sha256": {
+        "A": "8daab446e0fea1c2af89bbac8993893b7b9600ddb7eb70020b441e949de84940",
+        "B": "0c1ba11de496dcc4efc88fce8161328e63ab3e774ebb6b5ad2f41bb9f5ca819e"
+      },
+      "legs": [
+        {
+          "label": "A1",
+          "rc": 0,
+          "ns_per_row": 413.407180786,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B1",
+          "rc": 0,
+          "ns_per_row": 44.9075737,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "A2",
+          "rc": 0,
+          "ns_per_row": 398.723934174,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B2",
+          "rc": 0,
+          "ns_per_row": 30.500621796,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "A3",
+          "rc": 0,
+          "ns_per_row": 394.453323364,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B3",
+          "rc": 0,
+          "ns_per_row": 30.568939209,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "A4",
+          "rc": 0,
+          "ns_per_row": 393.418132782,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        },
+        {
+          "label": "B4",
+          "rc": 0,
+          "ns_per_row": 30.380363464,
+          "bytes": 1310720,
+          "sha256": "2a68e706ebf345df7ff73b09196d51b4e8e75455dfc5cd43d8b3e24ceb704cb9",
+          "literal_equal": true,
+          "warmup_passes": 64,
+          "timed_passes": 256,
+          "rows_per_pass": 1024,
+          "K": 2560,
+          "every_pass_byte_and_input_gate": true
+        }
+      ],
+      "paired_latency_change_percent": [
+        -89.13720520901005,
+        -92.350441199577,
+        -92.25030253306015,
+        -92.27784361407808
+      ],
+      "completed_at": "2026-11-08T22:58:31.514552+00:00"
+    }
+  },
+  "full_model_validation": "Not completed in this evidence addition. Imports, GPU outputs and default inference A/B must be reported separately.",
+  "claim_scope": "Warm CPU packing component only; not whole import, loading, prefill or inference speed.",
+  "CPU_checks": {
+    "M3_focused": {
+      "cases": 177086,
+      "result": "PASS"
+    },
+    "M4_focused": {
+      "cases": 177086,
+      "result": "PASS"
+    },
+    "M4_address_and_undefined_sanitizers": {
+      "cases": 177086,
+      "result": "PASS"
+    },
+    "mask_mutant_rc": 1,
+    "lane_order_mutant_rc": 1,
+    "mutant_interpretation": "Both intentionally wrong versions were rejected by the byte oracle.",
+    "M4_vk_tests": [
+      "PASS api_test",
+      "PASS prefix_cache_test",
+      "PASS fn_store_test",
+      "PASS fn_dflash_test",
+      "PASS tokenizer_test",
+      "PASS iq_layout_test",
+      "PASS nh_quant_q8_test",
+      "PASS remote_test",
+      "PASS cluster_test",
+      "PASS split_place_test",
+      "PASS gemm_slices_test",
+      "PASS ws_upgrade_test",
+      "PASS test_server_cli",
+      "PASS test_sidecar",
+      "PASS test_bench",
+      "PASS test_update",
+      "PASS test_community",
+      "PASS test_reasoning",
+      "PASS test_pr_size",
+      "PASS test_logit_compare",
+      "PASS test_sampled_tokens_harness",
+      "PASS test_structured_cli"
+    ],
+    "M4_additional_checks": [
+      {
+        "label": "configure",
+        "rc": 0
+      },
+      {
+        "label": "build",
+        "rc": 0
+      },
+      {
+        "label": "supp-execution_session_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-http_stream_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-bench_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-update_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-grammar_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-structured_check",
+        "rc": 0
+      },
+      {
+        "label": "supp-drafter_attach_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-exl3_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-device_profile_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-qwen4_config_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-json_file_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-affine_pack_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-systemone_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-systemone_codes_probe_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_protocol_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_runtime_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_discover_test",
+        "rc": 0
+      },
+      {
+        "label": "supp-splash_plan_test",
+        "rc": 0
+      },
+      {
+        "label": "test_profile_gates",
+        "rc": 0
+      },
+      {
+        "label": "test_comment_gates",
+        "rc": 0
+      },
+      {
+        "label": "test_pr_size",
+        "rc": 0
+      },
+      {
+        "label": "test_drex_max",
+        "rc": 0
+      },
+      {
+        "label": "test_logit_dump",
+        "rc": 0
+      },
+      {
+        "label": "test_systemone_codes_harness",
+        "rc": 0
+      },
+      {
+        "label": "prek",
+        "rc": 0
+      },
+      {
+        "label": "diff-check",
+        "rc": 2
+      },
+      {
+        "label": "required-checks",
+        "rc": 0
+      },
+      {
+        "label": "cleanup",
+        "rc": 0
+      }
+    ]
+  },
+  "formatting_followup": {
+    "initial_diff_check_rc": 2,
+    "issue": "one blank line at EOF in test header",
+    "fix": "removed one blank line; no test statement or production code change",
+    "rebuilt_test_object_and_binary_byte_identical": true,
+    "final_diff_check_rc": 0
+  },
+  "initial_harness_failure": "The first standalone build omitted the third_party include directory and failed to compile; no test ran. The corrected build and subsequent checks above completed."
+}

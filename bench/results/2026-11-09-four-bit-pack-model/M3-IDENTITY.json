@@ -1,0 +1,294 @@
+{
+  "export": "Explicitly redacted derived evidence; not an original execution log. Private originals retained. Numeric results and source/binary identities unchanged.",
+  "environment": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "source_commits": {
+    "reference": "4b9ce88708282f754b76cbd7214e188786680c89",
+    "candidate": "7d1b0bbcdcfb36a495036eb0d6d00405fd5955ca"
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "source_bytes": 2776033248,
+    "source_sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "sources": {
+    "reference": {
+      "commit": "4b9ce88708282f754b76cbd7214e188786680c89",
+      "bundle_sha256": "f501122300586111a85a92ca554156b4e8e50b83fcc6373af9e4bbb0da0f6889",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "5e26cfa913738fdcd68571fadee07e4eb08a67bb26810bb8e41ebbc7a8d01672",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "a91b8ed51c55ccbd700d490f9e353ca9b50687e50b1fd6f9851f0f0070afb689",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "source_inventory_sha256": "4c675e56c00c06f87f46224ccaafc36355ca4d85da77ad20054f6a07e3fa87f2"
+    },
+    "candidate": {
+      "commit": "7d1b0bbcdcfb36a495036eb0d6d00405fd5955ca",
+      "bundle_sha256": "f0d51f89b63344613e46295cfdda0e59923ed083229a20e2d4b50653467e2193",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "5e26cfa913738fdcd68571fadee07e4eb08a67bb26810bb8e41ebbc7a8d01672",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "e16709399d34cc9cc4922d869e37617d6f54331549ff8b25182b4ccd75b51a73",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "source_inventory_sha256": "e6667630f36b010018f5dfb30b9ec55cc2ad041b0bf7d6ada2dae27eae20bf91"
+    }
+  },
+  "builds": {
+    "reference": {
+      "binaries_sha256": {
+        "kapitsa": "9fe5579ed386399d0ecd13337a9edbd8be639ce405dc3a2c6ba219e17f0b5c6d",
+        "logit_dump": "30b972b2a967c20084016f84ec241a07b9c35f6ef6c43f79f3b95af5c18e2b3a",
+        "ni_run": "38dbf2bece40f4db6e365854973c9a3e5a1b0435c152429b988c11fd62dc3db3",
+        "libnaceinfer.a": "ee6d4bee16c0b1c914cfa22671ab9c71b90f65033586c796bcdf0e0aab59abf1"
+      },
+      "compile_flags": {
+        "kapitsa": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "naceinfer": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "logit_dump": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "ni_run": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        }
+      }
+    },
+    "candidate": {
+      "binaries_sha256": {
+        "kapitsa": "4428eb436449cd8cddcb8a8ce421d119a8fb1410e5a4fa13fafe42d6649fc671",
+        "logit_dump": "a37ce20fe51a3fcd41afb3892205dcd248c68aa53d461e8e13ccc44977c94bb3",
+        "ni_run": "bf6bdbaa7293bf6753b2697e7ef8a2a501964bc4f37a8b64e1d6e0afbd9bffba",
+        "libnaceinfer.a": "851e6a28a0a7da672bb16be3cbdd6c932a074b1d0f253b483d3f545745cdef1b"
+      },
+      "compile_flags": {
+        "kapitsa": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "naceinfer": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "logit_dump": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "ni_run": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        }
+      }
+    }
+  },
+  "fixed_driver": {
+    "source_sha256": "6b022a4791ac656f74ca84dc7b2090e7bfd34e5ad0e7a1c6bc1197e8adcd8310",
+    "binary_sha256": "c58fe87449f16c7587fbc80d00a2d4228b132b415962a41cfaa94019086b870e",
+    "reference_library_sha256": "ee6d4bee16c0b1c914cfa22671ab9c71b90f65033586c796bcdf0e0aab59abf1"
+  },
+  "execution_steps": [
+    {
+      "label": "compiler_version",
+      "started_at": "2026-11-08T22:43:59.468502+00:00",
+      "finished_at": "2026-11-08T22:43:59.571515+00:00",
+      "rc": 0
+    },
+    {
+      "label": "cmake_version",
+      "started_at": "2026-11-08T22:43:59.576875+00:00",
+      "finished_at": "2026-11-08T22:43:59.673908+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_configure",
+      "started_at": "2026-11-08T22:45:17.135614+00:00",
+      "finished_at": "2026-11-08T22:45:25.730160+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_build",
+      "started_at": "2026-11-08T22:45:25.736252+00:00",
+      "finished_at": "2026-11-08T22:55:36.814502+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_version",
+      "started_at": "2026-11-08T22:55:36.822426+00:00",
+      "finished_at": "2026-11-08T22:55:38.701124+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_configure",
+      "started_at": "2026-11-08T22:55:52.838950+00:00",
+      "finished_at": "2026-11-08T22:56:01.068814+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_build",
+      "started_at": "2026-11-08T22:56:01.075400+00:00",
+      "finished_at": "2026-11-08T23:06:04.739741+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_version",
+      "started_at": "2026-11-08T23:06:04.746387+00:00",
+      "finished_at": "2026-11-08T23:06:06.614681+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_import_plan",
+      "started_at": "2026-11-08T23:08:00.159110+00:00",
+      "finished_at": "2026-11-08T23:08:00.905859+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_import_after_capacity",
+      "started_at": "2026-11-08T23:08:00.913122+00:00",
+      "finished_at": "2026-11-08T23:08:01.691521+00:00",
+      "rc": 1,
+      "technical_result": "Import prerequisite guard stopped before conversion; preserved failed attempt. A later labeled attempt completed with unchanged source and binary identities."
+    },
+    {
+      "label": "reference_import_after_placement",
+      "started_at": "2026-11-08T23:14:49.763603+00:00",
+      "finished_at": "2026-11-08T23:14:51.910557+00:00",
+      "rc": 1,
+      "technical_result": "Import prerequisite guard stopped before conversion; preserved failed attempt. A later labeled attempt completed with unchanged source and binary identities."
+    },
+    {
+      "label": "reference_import_after_source_placement",
+      "started_at": "2026-11-08T23:22:11.255056+00:00",
+      "finished_at": "2026-11-08T23:22:28.953209+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_import_plan",
+      "started_at": "2026-11-08T23:23:07.498183+00:00",
+      "finished_at": "2026-11-08T23:23:09.964954+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_import",
+      "started_at": "2026-11-08T23:23:09.973694+00:00",
+      "finished_at": "2026-11-08T23:23:27.017647+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_output",
+      "started_at": "2026-11-08T23:23:48.472185+00:00",
+      "finished_at": "2026-11-08T23:25:27.362282+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_output",
+      "started_at": "2026-11-08T23:25:27.373155+00:00",
+      "finished_at": "2026-11-08T23:27:01.348806+00:00",
+      "rc": 0
+    },
+    {
+      "label": "report_only",
+      "started_at": "2026-11-08T23:28:14.649022+00:00",
+      "finished_at": "2026-11-08T23:31:46.609366+00:00",
+      "rc": 0
+    },
+    {
+      "label": "strict_zero",
+      "started_at": "2026-11-08T23:31:46.620776+00:00",
+      "finished_at": "2026-11-08T23:35:18.674716+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_A1",
+      "started_at": "2026-11-08T23:35:18.702918+00:00",
+      "finished_at": "2026-11-08T23:36:08.620828+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_B1",
+      "started_at": "2026-11-08T23:36:08.642799+00:00",
+      "finished_at": "2026-11-08T23:38:15.652448+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_A2",
+      "started_at": "2026-11-08T23:38:15.678338+00:00",
+      "finished_at": "2026-11-08T23:40:27.882494+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_B2",
+      "started_at": "2026-11-08T23:40:27.906232+00:00",
+      "finished_at": "2026-11-08T23:41:16.585165+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_driver_compile",
+      "started_at": "2026-11-08T23:41:16.676917+00:00",
+      "finished_at": "2026-11-08T23:41:29.225590+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_A1",
+      "started_at": "2026-11-08T23:41:35.595106+00:00",
+      "finished_at": "2026-11-08T23:42:18.329180+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_B1",
+      "started_at": "2026-11-08T23:42:24.676606+00:00",
+      "finished_at": "2026-11-08T23:43:06.170337+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_A2",
+      "started_at": "2026-11-08T23:43:12.515567+00:00",
+      "finished_at": "2026-11-08T23:43:54.047095+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_B2",
+      "started_at": "2026-11-08T23:44:00.396954+00:00",
+      "finished_at": "2026-11-08T23:44:42.008292+00:00",
+      "rc": 0
+    },
+    {
+      "label": "http_reference",
+      "started_at": "2026-11-08T23:44:48.411447+00:00",
+      "finished_at": "2026-11-08T23:45:55.078819+00:00",
+      "rc": 1
+    },
+    {
+      "label": "http_candidate",
+      "started_at": "2026-11-08T23:46:01.370412+00:00",
+      "finished_at": "2026-11-08T23:47:07.488361+00:00",
+      "rc": 1
+    }
+  ]
+}
