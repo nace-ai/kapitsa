@@ -13,12 +13,13 @@
 #include "engine/device_profile.h"
 #include "util/log.h"
 
+#include <sys/sysctl.h>
+
 #include <algorithm>
 #include <set>
 #include <cmath>
 #include <array>
 #include <unordered_map>
-#include <sys/sysctl.h>
 
 namespace ni {
 
@@ -120,13 +121,13 @@ bool Qwen35::v8_packed_coeff_on(const Qwen35Config& c) {
   const bool four_b = c.hidden == 2560 && c.dense_I == 9216;
   const bool nine_b = c.hidden == 4096 && c.dense_I == 12288;
   if (!four_b && !nine_b) return false;
-  const bool m4 = four_b && m4_10();
-  const bool m4_pro = m4_pro_20();
-  if (!m4 && !m4_pro) return false;
   if (flag && *flag) return true;
+  // Folded from m4_10/m4_pro_20 to simd_gpu (M3/M4) with a 24 GiB RAM floor (#393).
+  // The 4B packs add ~2.44 GiB; 8/16 GB Macs should not pay that by default.
   uint64_t ram = 0;
   size_t len = sizeof(ram);
-  return sysctlbyname("hw.memsize", &ram, &len, nullptr, 0) == 0 && ram == (uint64_t(m4_pro ? 48 : 24) << 30);
+  if (sysctlbyname("hw.memsize", &ram, &len, nullptr, 0) != 0 || ram < (uint64_t(24) << 30)) return false;
+  return simd_gpu();
 }
 
 void Qwen35::load_v8_packed_coeff() {
@@ -192,10 +193,10 @@ V8Knobs& v8_knobs() {
     d.pair = env_int("NI_V8_PAIR", d.pair);
     d.kplan = env_int("NI_V8_KPLAN", legacy_gpu() ? 3 : d.kplan);
     d.gusplit = env_int("NI_V8_GUSPLIT", d.gusplit);
-    // the 10-core M4: GDN step blocks of 128 threads (with the fused tree-zone tail below: verify -0.13 ms per cycle,
-    // 6 of 6 interleaved runs of 800 tokens, ids bitwise); other Macs keep 256
-    const bool m4 = m4_ten_core();
-    d.gdnsplit = env_int("NI_V8_GDNSPLIT", m4 ? 128 : d.gdnsplit);
+    // kSimd (#393; measured on the 10-core M4): GDN step blocks of 128 threads (with the fused tree-zone tail below:
+    // verify -0.13 ms per cycle, 6 of 6 interleaved runs of 800 tokens, ids bitwise); other classes keep 256
+    const bool simd = simd_gpu();
+    d.gdnsplit = env_int("NI_V8_GDNSPLIT", simd ? 128 : d.gdnsplit);
     d.prepu = env_int("NI_V8_PREPU", d.prepu);
     d.tw = env_int("NI_V8_TW", tw_supported() ? d.tw : 0);
     d.twm = env_int("NI_V8_TWM", d.twm);
@@ -846,8 +847,8 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   const bool zone = tree && tree_attn >= 2 && !v8w_R_ && !g6t;
   const bool block = tree && tree_attn == 1 && !v8w_R_ && !g6t;
   // NI_V8_TREE_FUSE: the tree zone and the rows' reduction in one kernel (attn8_tree_zone_reduce, bitwise); default on
-  // the 10-core M4 (with GDN blocks of 128 threads: verify -0.13 ms per cycle there)
-  static const bool tree_fuse = env_int("NI_V8_TREE_FUSE", m4_ten_core() ? 1 : 0) != 0;
+  // kSimd (#393; measured on the 10-core M4 with GDN blocks of 128 threads: verify -0.13 ms per cycle)
+  static const bool tree_fuse = env_int("NI_V8_TREE_FUSE", simd_gpu() ? 1 : 0) != 0;
   const bool fused = zone && tree_fuse;
   const uint32_t Lmax = uint32_t(pos + R), gran = mma ? 32 : 16, extra = (block || zone) ? 1u : 0u;
   const uint32_t want = std::max<uint32_t>(1, (uint32_t(tg_target) + cfg_.hkv - 1) / cfg_.hkv);
@@ -1298,11 +1299,11 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   static const bool tree_pin = env_int("NI_V8_TREE_PIN", 1) != 0;
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps,
                    tree ? 1u : 0u, ptree ? 1u : 0u, (tree || ptree) && tree_pin ? 1u : 0u};
-  // Lazy GDN fold (NI_GDN_LAZY, default on the 10-core M4, a narrower gate than the class): a pinned 8-row tree verify
+  // Lazy GDN fold (NI_GDN_LAZY, default on kSimd, #393): a pinned 8-row tree verify
   // defers storing the folded state to the next one (the pending rows join a backlog that verify folds first), so the
   // state is written every other cycle; a verify that stores folds the backlog itself, any other pass folds it first
   // (flush_backlog)
-  static const bool lazy_env = env_int("NI_GDN_LAZY", m4_ten_core() ? 1 : 0) != 0;
+  static const bool lazy_env = env_int("NI_GDN_LAZY", simd_gpu() ? 1 : 0) != 0;
   const bool lazy_path = lazy_env && (tree || ptree) && tree_pin && !wide && R <= 8 && cfg_.lin_dv == 128 &&
                          cfg_.lin_dk == 128;
   if (!lazy_path && s.n_back > 0) flush_backlog(e, s);

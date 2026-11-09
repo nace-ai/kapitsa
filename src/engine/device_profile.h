@@ -110,24 +110,18 @@ bool ane_segmented_default(const DeviceFacts&);   // built-in share, non-matrix 
 bool ane_segmented_default();
 bool matrix_units(const DeviceFacts&);  // apple_family() >= 10
 bool legacy_gpu(const DeviceFacts&);    // apple_family() <= 7: the M1 path
-bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores
 bool wide_cores(const DeviceFacts&);    // matrix units and 40 cores or more
-bool m4_10(const DeviceFacts&);         // name "Apple M4" and exactly 10 cores
-bool m4_pro_gpu(const DeviceFacts&);    // name "Apple M4 Pro" (14 or 20 cores)
-bool m4_pro_20(const DeviceFacts&);     // name "Apple M4 Pro" and exactly 20 cores
 bool ultra_gpu(const DeviceFacts&);     // the name contains "Ultra": two dies
 bool pre_m3_gpu(const DeviceFacts&);    // apple_family() < 9: M1 and M2
-bool m4_ten_core(const DeviceFacts&);   // name "Apple M4" and 10 cores or fewer
+bool simd_gpu(const DeviceFacts&);      // apple_family == 9: M3, M4 (not M2, which is family 8)
+bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores (#393: kept as guard, CORE4 measured)
 
 bool matrix_units();
 bool legacy_gpu();
-bool m1_max_32();
 bool wide_cores();
-bool m4_10();
-bool m4_pro_gpu();
-bool m4_pro_20();
 bool ultra_gpu();
 bool pre_m3_gpu();
-bool m4_ten_core();
+bool simd_gpu();
+bool m1_max_32();
 
 }  // namespace ni

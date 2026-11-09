@@ -211,7 +211,7 @@ static int moe_qmr_k(int hidden, int intermediate) {
     return v;
   }();
   if (override_k) return override_k;
-  return hidden == 2048 && intermediate == 512 && m1_max_32() ? 64 : 32;
+  return hidden == 2048 && intermediate == 512 && m1_max_32() ? 64 : 32;  // guard: measured on M1 Max 32
 }
 
 // NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.

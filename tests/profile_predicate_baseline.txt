@@ -10,7 +10,7 @@ src/model/lilicorr.cpp	1
 src/model/nemotron_h.cpp	15
 src/model/qwen35.cpp	11
 src/model/qwen35_spec.cpp	2
-src/model/qwen35_v8.cpp	8
+src/model/qwen35_v8.cpp	7
 src/model/qwen4_exp.cpp	3
 src/vision/qwen_vit.cpp	1
 tools/dflash_attn_test.cpp	2

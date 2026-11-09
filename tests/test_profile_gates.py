@@ -77,13 +77,9 @@ def read_baseline(path: pathlib.Path = BASELINE) -> dict[str, int]:
 PREDICATES = (
     "matrix_units",
     "legacy_gpu",
-    "m4_ten_core",
-    "m1_max_32",
     "wide_cores",
-    "m4_pro_20",
     "pre_m3_gpu",
-    "m4_10",
-    "m4_pro_gpu",
+    "simd_gpu",
     "ultra_gpu",
 )
 PRED_RE = re.compile(r"\b(" + "|".join(PREDICATES) + r")\s*\(")
@@ -140,8 +136,8 @@ def baseline_rises(got: dict[str, int], want: dict[str, int], what: str) -> list
 
 
 def self_test() -> int:
-    """The reviewer's case: a new file calling wide_cores, m4_pro_20 and matrix_units must fail."""
-    probe = "bool x() { return wide_cores() || m4_pro_20() || matrix_units(); }\n// wide_cores()\n"
+    """The reviewer's case: a new file calling wide_cores, simd_gpu and matrix_units must fail."""
+    probe = "bool x() { return wide_cores() || simd_gpu() || matrix_units(); }\n// wide_cores()\n"
     n = predicate_hits(probe)
     if n != 3:
         print(f"self-test: probe counted {n}, want 3")
@@ -156,7 +152,7 @@ def self_test() -> int:
     if not baseline_rises({"src/model/flint.cpp": 5}, {"src/model/flint.cpp": 4}, "predicate call"):
         print("self-test: a rise did not fail")
         return 1
-    print("profile predicate self-test: ok (zz_probe_gate.cpp with wide_cores/m4_pro_20/matrix_units fails)")
+    print("profile predicate self-test: ok (zz_probe_gate.cpp with wide_cores/simd_gpu/matrix_units fails)")
     return 0
 
 
@@ -175,10 +171,6 @@ CLASS_GATE_IDS = (
 # none of them cites a 10% win the wider class misses.
 GUARD_IDS = (
     "m1_max_32",
-    "m4_10",
-    "m4_pro_gpu",
-    "m4_pro_20",
-    "m4_ten_core",
     "ultra_gpu",
     "pre_m3_gpu",
 )
