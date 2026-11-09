@@ -132,7 +132,7 @@ void Qwen35::init_ane() {
   // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights: the M5 default share on
   // the models that have one (mma_share_measured)
   bool mma = qmt_ready() && mma_share_measured(cfg_);
-  auto g64 = [](const QLinear& q) { return q.bits == 4 && q.gs == 64; };
+  auto g64 = [](const QLinear& q) { return (q.bits == 4 && q.gs == 64) || qmtf_ready(q.bits, q.gs); };
   for (const Layer& L : layers_) mma = mma && g64(L.mg) && g64(L.mu) && g64(L.md);  // as plan()'s ffn_mma
   const uint32_t total = uint32_t(cfg_.dense_I / 512);
   uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, share_wave, mma);

@@ -178,6 +178,7 @@ bool qmt_on();  // declared in qwen35.h: DFlash2's context commit takes the same
 // NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
 // at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
 // qrf_f6g64_m32_n128.
+static bool qmtf_on(int bits, int gs);  // NI_QMTF: the 3-bit, 8-bit and 4-bit g32 tensor_ops tile (by enc_qmm_large)
 bool qmt6_on();  // declared in qwen35.h: Qwen4Exp's NI_HC_FUSE mix fold shares this kill switch
 // NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
 // memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
@@ -492,6 +493,8 @@ void Qwen35::prewarm_pipelines() {
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
   if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
+  if (qmm8_on() && qmtf_on(8, 64))
+    for (const char* n : {"qmtf_f8g64_m128_n64", "qmtfg_f8g64_m128_n64", "qmtf_f8g64_m128_n64_ld"}) names.insert(n);
   if (legacy_gpu())  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
     for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
@@ -565,6 +568,9 @@ void Qwen35::prewarm_pipelines() {
       for (const char* t : {"_m32_n128", "_m16_n64", "_m8_n64"}) names.insert("qrf_" + f + t);
       for (const char* t : {"_m32_n64", "_m16_n64", "_m8_n32"}) names.insert("qrf_gu_" + f + t);
       if (f == "f6g64" && qmt6_on()) names.insert("qmt6_m64_n64");  // enc_qmm_large's 6-bit tensor tile
+      if ((f == "f3g64" && qmtf_on(3, 64)) || (f == "f4g32" && qmtf_on(4, 32)))  // enc_qmm_large, enc_qmm_gu, the split
+        for (const char* t : {"qmtf_", "qmtfg_"}) names.insert(t + f + "_m128_n64");
+      if ((f == "f3g64" && qmtf_on(3, 64)) || (f == "f4g32" && qmtf_on(4, 32))) names.insert("qmtf_" + f + "_m128_n64_ld");
       if (f == "f16") {
         names.insert("qrf_f16_m32_n128_mf");
         names.insert("qrf_gu_f16_m32_n64_mf");
@@ -1416,9 +1422,12 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
       for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
         const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
         auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
-        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: 4 bits = K / 8 words, g64 = K / 64
-        m.ffn_mma = m.ffn_mma && iw != metas.end() && is != metas.end() && iw->second.dtype == "U32" &&
-                    iw->second.shape.back() == K / 8 && is->second.shape.back() == K / 64;
+        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: F bits = K F / 32 words, g64 = K / 64
+        const bool q = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32";
+        const int64_t wpr = q ? iw->second.shape.back() : 0, gpr = q ? is->second.shape.back() : 0;
+        const bool g64 = gpr == K / 64;
+        m.ffn_mma = m.ffn_mma && ((g64 && wpr == K / 8) || (g64 && qmtf_on(3, 64) && wpr == K * 3 / 32) ||
+                                  (g64 && qmtf_on(8, 64) && wpr == K / 4) || (gpr == K / 32 && qmtf_on(4, 32) && wpr == K / 8));
       }
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
@@ -2650,6 +2659,26 @@ bool qmt6_on() {
   return on;
 }
 
+// NI_QMTF (read once; default on where qmt_on() is, 0 = off): the dense prefill GEMMs of 64 rows or more in the MLX
+// affine formats without a tensor_ops tile of their own (3-bit and 8-bit group 64; 4-bit group 32, what kapitsa import
+// makes of a GGUF's Q4_K), plain, the fused gate/up/SwiGLU and the Neural Engine split's GPU share, on
+// tensor_ops/qmtf.metal's 128-row tile (qmt_m128_n64's tile with the format's weight decode) instead of the simdgroup
+// kernels (wfmt.metal's qrf_* / qrf_gu_*; 8-bit: qmm3.metal's qmr8 / qmr8_gu). The tile dequantizes to the bits those
+// kernels feed their MMAs (the same half-domain decode, one half fma each), so the change is the K reduction's
+// association order only.
+static bool qmtf_on(int bits, int gs) {
+  static const bool on = [] {
+    if (env_int("NI_QMTF", 1) == 0) return false;
+    if (!qmt_on()) return false;
+    logi("NI_QMTF: 3-bit / 8-bit g64 and 4-bit g32 dense prefill GEMMs on tensor_ops (qmtf_*_m128_n64), M >= 64");
+    return true;
+  }();
+  return on && (((bits == 3 || bits == 8) && gs == 64) || (bits == 4 && gs == 32));
+}
+static bool qmtf_for(const QLinear& L, int M) {
+  return M >= 64 && qmtf_on(L.bits, L.gs) && L.K % 64 == 0 && (L.bits != 8 || qmm8_for(L));
+}
+
 // Exported for Qwen4Exp's NI_HC_FUSE gate (declared in qwen35.h): enc_qmm_large's tensor-tile branches run only
 // under qmr_sel().on, and the mix fold must engage on exactly that same set of calls.
 bool qmm_on() { return qmr_sel().on; }
@@ -2751,6 +2780,14 @@ std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
 
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
+  if (q.on && qmtf_for(L, M)) {
+    e.use(pipe("qmtf_" + L.fmt() + "_m128_n64"));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 127) / 128, 1, 128);
+    return;
+  }
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
     const bool small = M < 64 || L.N <= 64, mfast = !small && prefill_mfast();
     const char* n = small ? "qmr8_k32_w14_m16_n64" : mfast ? "qmr8_k32_w14_m32_n128_mf" : "qmr8_k32_w14_m32_n128";
@@ -3089,6 +3126,7 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 }
 
 bool Qwen35::qmt_ready() { return qmt_on(); }
+bool Qwen35::qmtf_ready(int bits, int gs) { return qmtf_on(bits, gs); }
 
 // The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) is on today for these shapes only: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
 // 4-bit group-64 dense model (the 9B) keeps the old default share, the whole FFN on the Neural Engine at 20 GPU cores,
@@ -3107,6 +3145,20 @@ bool Qwen35::mma_share_measured(const Qwen35Config& c) {
 bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
   const QLinear &G = L.mg, &U = L.mu, &Dn = L.md;
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  if (qmtf_for(G, T) && qmtf_for(U, T) && qmtf_for(Dn, T) && G.same_format(U) && G.N == U.N && G.K == U.K &&
+      g % 64 == 0) {
+    // the 3-bit / 8-bit g64 FFN: qmtfg over the leading g gate/up rows (enc_qmm_gu's tile), qmtf_ld for the down
+    QLinear Gg = G, Ug = U;
+    Gg.N = Ug.N = g;
+    if (!enc_qmm_gu(e, Gg, Ug, xh_, hhalf_, T)) return false;
+    const uint32_t D = uint32_t(cfg_.hidden), I = G.N;
+    e.use(pipe("qmtf_" + Dn.fmt() + "_m128_n64_ld"));
+    kp::QmmLd pd{{uint32_t(T), D, g, g, D, 1u, uint32_t(Dn.gs), 0, 0}, I * uint32_t(Dn.bits) / 32, I / uint32_t(Dn.gs)};
+    e.buf(0, hhalf_); e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf); e.buf(4, x);
+    e.val(5, pd);
+    e.dispatch((D + 63) / 64, (uint32_t(T) + 127) / 128, 1, 128);
+    return true;
+  }
   if (!qmt_on() || T < 64 || g % 64 || !ok(G) || !ok(U) || !ok(Dn) || G.N != U.N || G.K != U.K) return false;
   const uint32_t D = uint32_t(cfg_.hidden), I = G.N, bm = qmt128_for(T) ? 128 : 64;
   e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
@@ -3160,6 +3212,15 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   auto ok8 = [](const QLinear& q) { return q.bits == 8 && q.gs == 64 && q.K % 64 == 0; };
   const bool b8 = on && qmm8_for(G) && qmm8_for(U) && ok8(G) && ok8(U) && G.N == U.N && G.K == U.K;
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  if (on && G.same_format(U) && G.N == U.N && G.K == U.K && qmtf_for(G, M) && qmtf_for(U, M)) {
+    e.use(pipe("qmtfg_" + G.fmt() + "_m128_n64"));  // qmtg_m128_n64's grid: 32 columns a tile
+    kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+    e.val(5, p);
+    e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+    e.dispatch((G.N + 31) / 32, (uint32_t(M) + 127) / 128, 1, 128);
+    return true;
+  }
   if (on && !G.q4() && !G.q8() && G.same_format(U) && G.N == U.N && G.K == U.K) {
     // wfmt.metal's fused gate/up for the other formats (qrf_gu_*; bf16 large tiles with M along grid x)
     static const bool mf = env_int("NI_QRF16_MF", 1) != 0;

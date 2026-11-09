@@ -668,6 +668,7 @@ class Qwen35 : public Model {
   // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
   bool enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   static bool qmt_ready();  // NI_QMT's tensor_ops GEMMs are on
+  static bool qmtf_ready(int bits, int gs);  // NI_QMTF's tensor_ops GEMMs are on for this format
   // the M5 default share of the split (default_units' gpu_mma) applies to this model (NI_ANE_MMA)
   static bool mma_share_measured(const Qwen35Config& c);
   void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
