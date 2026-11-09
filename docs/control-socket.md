@@ -35,17 +35,20 @@ it.
 - **Instance id.** 1 to 32 of `A-Z a-z 0-9 _ -`, `default` when the configuration gives none. macOS limits a socket
   path to 103 bytes, and 32 keeps a usual home folder's path under it. A server whose socket path is longer anyway
   refuses to start, and its error names the path.
-- **Configuration fields, pending confirmation from step 1.** `protocol`, `instance_id` and `name` become
-  `kapitsa serve --config -` fields with these meanings. Until step 1's schema has them,
-  [control.schema.json](../schema/control/control.schema.json) defines them. Once it does, those definitions refer
-  to step 1's.
+- **Identity fields.** [control.schema.json](../schema/control/control.schema.json) defines `protocol`,
+  `instance_id` and `name`. The control socket's implementation adds them to `kapitsa serve --config -` with these
+  meanings, and the control schema then refers to them there.
 - **Discovery.** A client lists `run/*.sock` and connects to each one. A socket that accepts the connection is a live
-  instance. A refused connection (`ECONNREFUSED`) means the instance is stale: its process is gone.
-- **Stale sockets.** Clients never delete a socket they did not create. A client may remove a stale socket only while
-  it holds that instance's lock, which proves no server owns it. The lock is an exclusive `flock` that a client takes
-  without waiting.
-- **Start race.** A starting server takes the lock with `flock(LOCK_EX | LOCK_NB)` and holds it until it exits. The
-  loser exits with "instance `<id>` is already running". The winner removes any old socket file, then binds.
+  instance. A refused connection (`ECONNREFUSED`) alone proves nothing, because macOS also refuses while a server is
+  between `bind` and `listen` or its backlog is full. The client then tries the instance's lock, an exclusive `flock`
+  on the `.lock` file, without waiting. If it gets the lock, no server owns the socket and the instance is stale. If
+  not, the instance is starting or busy, and the client retries.
+- **Stale sockets.** Clients never delete a socket they did not create, except a stale one, while they hold its lock.
+  They release the lock at once.
+- **Start race.** A starting server takes the lock, waiting at most 1 second so that a client's brief check never makes
+  it fail, and holds it until it exits. A server that does not get it exits with "instance `<id>` is already
+  running". The winner removes any old socket file, emits its first event (`state` `starting`), then binds and
+  listens.
 - **Restarts.** `run_id` is new each time the process starts. It is in `GET /status` and in every event id, so a
   client sees that an instance restarted even though the socket path is unchanged.
 
@@ -74,14 +77,23 @@ A client that sends it as `Last-Event-ID` reads every event after this status wi
 
 `POST /stop` answers `202` and then stops the instance. Requests that are still running end with `finish_reason`
 `cancelled`, and the `state` event `stopping` follows. The process exits with status 0 and removes its socket.
+During a model switch, a stop takes effect as soon as the load can be abandoned, and the pending `POST /model` answers
+`503 stopping`.
 
 ### Model switch
 
 `POST /model` loads another model in the same instance and answers once the new model is ready. The request takes
 `model` (required) and, optionally, `model_id`, `context`, `slots`, `spec`, `dflash`, `prefill_chunk`, `mem_budget`
 and `disk_cache`. These are the serve configuration's own fields, with the same names, types and ranges. A field
-left out keeps the instance's current value. During the switch the `state` events read `switching` and then
-`ready`. The socket needs no `--allow-switch`, because its user already controls the process. `allow_switch` still
+left out keeps the instance's current value. The switch behaves as `POST /v1/models/switch` does today:
+
+- Requests already running finish first. New inference requests get `503` with `Retry-After` until the switch ends.
+- The `state` events read `switching`, then `ready` with the new `model`.
+- A model that fails to load leaves the previous one serving. The request answers `500 load_failed`, and the `state`
+  event `ready` carries the previous `model` and a `message` that says why.
+- A client that disconnects does not stop the switch. It reads the outcome from the `state` events or `GET /status`.
+
+ The socket needs no `--allow-switch`, because its user already controls the process. `allow_switch` still
 governs whether an inference request that names another model may load it. `POST /v1/models/switch` leaves the
 inference port.
 
@@ -121,7 +133,8 @@ counts from 1 for each run. The server sends a `: keepalive` comment every 15 se
 **Cursor.** The server keeps at least the last 1024 events. With no `Last-Event-ID` header, the stream starts at the
 next event. With a header, the server replays every event after it, then continues live. When it cannot replay, it
 sends one `reset` event first, whose `status` is a fresh `GET /status`, and then continues live. The reset's `id` is
-`status.last_event_id`, so the client's cursor stays valid. `reason` is one of:
+`status.last_event_id`, so the client's cursor stays valid. That id always exists, because a server's first event
+comes before it accepts connections. `reason` is one of:
 
 - `expired`: the cursor is older than the oldest event the server still holds.
 - `run_changed`: the cursor's `run_id` is another run's, because the instance restarted.
@@ -130,6 +143,10 @@ sends one `reset` event first, whose `status` is a fresh `GET /status`, and then
 **Rates.** The server samples each active request once per tick (`tick_ms` in status). `tokens_per_second` is the
 completion tokens written in that tick divided by the tick's length. Status and `request_progress` both report the
 last tick's sample, so every observer sees the same rate however often it reads.
+
+**Slow readers.** The bus never waits for a reader. The server holds at most 1 MiB of unsent events per stream and
+closes a stream that falls further behind. Its client reconnects with `Last-Event-ID` and gets the replay or a
+`reset`. At most 16 streams are open at once; a further `GET /events` answers `503 busy`.
 
 **Logs.** The server drops log lines below its level before they reach the bus, so a quiet server builds no events
 for them. The level is `info`, or `debug` when the server runs with `verbose`.
@@ -166,6 +183,7 @@ only the fields listed below.
 | `model_not_found` | 404 | `POST /model` names no catalog model, folder or file | `model` |
 | `method_not_allowed` | 405 | The path exists but not with this method | none |
 | `run_id_mismatch` | 409 | The request's `run_id` is not the running run's | `run_id` (the running one) |
-| `busy` | 503 | A model switch is already running; `Retry-After` is set | `retry_after_s` |
+| `busy` | 503 | A model switch is already running, or 16 event streams are open; `Retry-After` is set | `retry_after_s` |
 | `stopping` | 503 | The instance is stopping | none |
-| `internal` | 500 | Anything else, for example a failed model load | none |
+| `load_failed` | 500 | `POST /model` could not load the model; the previous one still serves | `model` |
+| `internal` | 500 | Anything else | none |

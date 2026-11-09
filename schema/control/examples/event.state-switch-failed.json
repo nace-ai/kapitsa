@@ -1,0 +1,13 @@
+{
+  "id": "7f3a9c2e5b1d4e60.940",
+  "type": "state",
+  "data": {
+    "state": "ready",
+    "model": {
+      "id": "qwen3.6-27b",
+      "context_length": 131072,
+      "slots": 2
+    },
+    "message": "could not load 90b: needs 61 GB, 44 GB free; still serving qwen3.6-27b"
+  }
+}

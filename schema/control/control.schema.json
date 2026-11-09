@@ -73,7 +73,7 @@
     },
     "error_code": {
       "enum": ["bad_request", "unknown_field", "invalid_value", "forbidden_peer", "not_found", "model_not_found",
-        "method_not_allowed", "run_id_mismatch", "busy", "stopping", "internal"]
+        "method_not_allowed", "run_id_mismatch", "busy", "stopping", "load_failed", "internal"]
     }
   }
 }

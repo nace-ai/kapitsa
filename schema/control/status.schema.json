@@ -28,7 +28,7 @@
     },
     "tick_ms": {"type": "integer", "minimum": 100, "maximum": 10000, "description": "the server's fixed rate tick"},
     "last_event_id": {
-      "oneOf": [{"$ref": "control.schema.json#/$defs/event_id"}, {"type": "null"}],
+      "$ref": "control.schema.json#/$defs/event_id",
       "description": "the newest event's id; send it as Last-Event-ID to read on from this status with no gap"
     },
     "requests": {"type": "array", "items": {"$ref": "control.schema.json#/$defs/request_progress"}}

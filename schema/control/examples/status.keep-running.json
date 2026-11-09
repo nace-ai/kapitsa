@@ -15,6 +15,6 @@
     "mem_budget": 40
   },
   "tick_ms": 1000,
-  "last_event_id": null,
+  "last_event_id": "0c41d9a7e2b85f13.3",
   "requests": []
 }

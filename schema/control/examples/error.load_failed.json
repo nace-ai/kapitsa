@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "load_failed",
+    "message": "could not load 90b: needs 61 GB, 44 GB free; still serving qwen3.6-27b",
+    "details": {
+      "model": "90b"
+    }
+  }
+}

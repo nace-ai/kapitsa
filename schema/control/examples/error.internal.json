@@ -1,6 +1,6 @@
 {
   "error": {
     "code": "internal",
-    "message": "model load failed: out of memory"
+    "message": "the event bus stopped: std::bad_alloc"
   }
 }
