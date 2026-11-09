@@ -1,8 +1,14 @@
 #include "server/activity.h"
 
+#include "util/log.h"
+
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <random>
+#include <thread>
 
 namespace ni::server {
 
@@ -109,5 +115,48 @@ void Activity::tick(double now_ms) {
                          {"message", "warning: " + std::to_string(dropped) + " log lines dropped (more than the ring holds in one tick)"}});
   for (const auto& line : lines) bus_.publish("log", log_event(line));
 }
+
+namespace {
+
+std::atomic<Activity*> g_activity{nullptr};
+std::atomic<Events*> g_events{nullptr};
+LogSink g_prev_sink = nullptr;
+
+void bus_sink(int level, const char* msg) {
+  if (Activity* a = g_activity.load(std::memory_order_acquire)) a->logs().push(level, msg);
+  if (g_prev_sink) return g_prev_sink(level, msg);
+  fprintf(stderr, level == 0 ? "[kapitsa] fatal: %s\n" : "[kapitsa] %s\n", msg);
+}
+
+std::string new_run_id() {
+  std::random_device rd;
+  char b[17];
+  snprintf(b, sizeof b, "%08x%08x", rd(), rd());
+  return b;
+}
+
+}  // namespace
+
+Activity& start_activity() {
+  static Activity* a = [] {
+    auto* bus = new Events(new_run_id());
+    auto* act = new Activity(*bus);
+    g_events.store(bus, std::memory_order_release);
+    g_activity.store(act, std::memory_order_release);
+    g_prev_sink = log_sink();
+    log_sink() = bus_sink;
+    std::thread([act] {
+      for (;;) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(act->tick_ms()));
+        act->tick(steady_ms());
+      }
+    }).detach();
+    return act;
+  }();
+  return *a;
+}
+
+Activity* activity() { return g_activity.load(std::memory_order_acquire); }
+Events* events() { return g_events.load(std::memory_order_acquire); }
 
 }  // namespace ni::server

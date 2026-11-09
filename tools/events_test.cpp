@@ -141,7 +141,7 @@ static std::vector<std::pair<std::string, json>> drain(Events::Stream& s) {
   return out;
 }
 
-static void activity() {
+static void activity_events() {
   Events bus(kRun);
   Resume how;
   auto s = bus.open("", &how);
@@ -196,7 +196,7 @@ static void activity() {
 }
 
 int main() {
-  activity();
+  activity_events();
   numbering_and_live();
   replay_and_resets();
   slow_reader_closed();

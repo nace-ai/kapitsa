@@ -56,4 +56,13 @@ class Activity {
 
 double steady_ms();
 
+// `kapitsa serve`'s Activity and its bus, made once for the process (threads that log may outlive run_service, so
+// they are never freed): a fresh run_id, log_sink fanned out to the bus (the sink set before still gets every line,
+// stderr when there was none), and a thread that ticks every tick_ms. Later calls return the same one.
+Activity& start_activity();
+// It, or nullptr before start_activity()
+Activity* activity();
+// The bus start_activity() made, or nullptr
+Events* events();
+
 }  // namespace ni::server

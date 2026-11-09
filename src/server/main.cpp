@@ -42,6 +42,7 @@
 #include "server/pair.h"
 #include "server/route.h"
 #include "server/serve_defaults.h"
+#include "server/activity.h"
 #include "server/service.h"
 #include "splash/discover.h"
 #include "server/ui.h"
@@ -986,6 +987,10 @@ int ni::server::run_service(Options o) {
   const bool visible = !priv && !loopback, may_route = visible && !local;
   const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
   if (tui) ui::serve_begin(verbose);
+  server::start_activity();
+  // the event bus (src/server/activity.h), after the terminal UI's log sink, which it passes every line on to. A
+  // server's first event comes before it takes a connection (docs/control-socket.md, "Events").
+  server::events()->publish("state", {{"state", "starting"}, {"model", nullptr}});
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
@@ -1276,6 +1281,7 @@ int ni::server::run_service(Options o) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
+  server::events()->publish("state", {{"state", "loading"}, {"model", nullptr}});
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
   } catch (const std::exception& e) {
@@ -1942,6 +1948,10 @@ int ni::server::run_service(Options o) {
            model_mgr->current_model_id().c_str(), api_key.empty() ? "" : ", API key required");
   }
   fflush(stdout);
+  server::events()->publish("state", {{"state", "ready"},
+                                      {"model", {{"id", model_mgr->current_model_id()},
+                                                 {"context_length", model_mgr->current_context_length()},
+                                                 {"slots", model_mgr->current_slots()}}}});
   srv.listen_after_bind();
   return 0;
 }
