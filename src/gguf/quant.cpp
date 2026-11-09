@@ -563,12 +563,24 @@ void decode4(uint32_t t, const uint8_t* src, uint8_t* codes, float* scale, float
     return;
   }
   const size_t bb = t == kQ4_0 ? 18 : 20;
+#if defined(__aarch64__)
+  const uintptr_t in = reinterpret_cast<uintptr_t>(src), out = reinterpret_cast<uintptr_t>(codes);
+  const bool overlap = out >= in ? out - in < n / 32 * bb : in - out < n / 32 * 32;
+#endif
   for (size_t i = 0; i < n / 32; ++i) {
     const uint8_t* b = src + bb * i;
     const float d = f16_at(b);
     scale[i] = d;
     offset[i] = t == kQ4_0 ? -8.0f * d : f16_at(b + 2);
     const uint8_t* q = b + (t == kQ4_0 ? 2 : 4);
+#if defined(__aarch64__)
+    if ((t == kQ4_0 || t == kQ4_1) && !overlap) {
+      const uint8x16_t packed = vld1q_u8(q);
+      vst1q_u8(codes + 32 * i, vandq_u8(packed, vdupq_n_u8(15)));
+      vst1q_u8(codes + 32 * i + 16, vshrq_n_u8(packed, 4));
+      continue;
+    }
+#endif
     for (int j = 0; j < 16; ++j) {
       codes[32 * i + j] = q[j] & 0xF;
       codes[32 * i + j + 16] = q[j] >> 4;
