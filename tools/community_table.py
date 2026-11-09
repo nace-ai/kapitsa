@@ -233,7 +233,7 @@ def uncensored_section():
              "| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- |"]
     for u in data["rows"]:
         stock = "–" if u.get("stock_decode_tps") is None else tps(u["stock_decode_tps"])
-        acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.0f}%" + (f" (stock {u['stock_accepted_pct']:.0f}%)" if u.get("stock_accepted_pct") else "")
+        acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.1f}%" + (f" (stock {u['stock_accepted_pct']:.1f}%)" if u.get("stock_accepted_pct") else "")
         kl = "–" if u.get("kl") is None else f"{u['kl']:.3f}" + ("" if u.get("kl_basis") == "measured" else " (claimed)")
         raw = check_raw(u)
         basis = "" if u["refusal_basis"] == "measured" else " (claimed)"
