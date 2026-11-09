@@ -94,7 +94,8 @@ per cycle.
 The drafter's candidates form a lattice: 7 positions, a short list of candidates at each, and for every candidate a
 probability given the candidate before it. On DFlash2 that conditional comes from its path selector. z-lab's DFlash has
 no selector, so its positions are independent. On Nemotron, DSpark's Markov head and LiLiCorr's transition scores play
-the same part. KFlash only reads these tables, so it runs on the drafters as they are published.
+the same part. KFlash only reads these tables, so a drafter needs no change for it: it runs on them as published (the 27B's is our
+retrain with a 16-row block, the same tables).
 
 The builder grows the tree best first. A node's score is the probability that the target accepts its whole path: the
 product, along the path, of each node's drafter probability mapped through a calibration (see
@@ -324,7 +325,9 @@ return to 8-row cycles); those cells re-measure every engine and are a PR of the
 ### The drafters as published
 
 KFlash reads the candidate lists and conditional scores the drafters already produce: z-lab's DFlash on Qwen3.5-4B,
-Inco's DFlash2 on Qwen3.8-27B and Qwen3.6-35B-A3B, NVIDIA's DSpark and LiLiCorr on Nemotron. Nothing is retrained. One
+Inco's DFlash2 on Qwen3.6-35B-A3B and our retrain of it on Qwen3.8-27B (with the 16-row block KFlash drafts with on one
+slot: 5.36 tokens per cycle against Inco's 5.04 on an M5 Pro, #1107), NVIDIA's DSpark and LiLiCorr on Nemotron. KFlash
+needs no retraining. One
 tree builder, one acceptance and one budget serve all four drafters; only the verify kernels differ per backend.
 
 ### What is borrowed, and what is new
@@ -342,7 +345,7 @@ runs on. KFlash's part is making the idea fit Kapitsa:
   state in the same pass;
 - sampled replies identical to plain sampling with the same seed;
 - replies that don't depend on the tree schedule;
-- the drafters people already run, as published.
+- the drafters people already run, as published (the 27B's retrained for a 16-row block).
 
 ## Results
 
