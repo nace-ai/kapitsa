@@ -25,8 +25,8 @@ inline int descriptors() {
 }
 
 inline void run() {
-  char pattern[] = "/tmp/kapitsa-gguf-split-XXXXXX";
-  require(mkdtemp(pattern) != nullptr, "create split fixture directory");
+  std::string pattern = (std::filesystem::temp_directory_path() / "kapitsa-gguf-split-XXXXXX").string();
+  require(mkdtemp(pattern.data()) != nullptr, "create split fixture directory");
   const std::filesystem::path dir(pattern);
   struct Cleanup {
     std::filesystem::path dir;
