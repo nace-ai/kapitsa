@@ -878,11 +878,11 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 
 ## Uncensored models
 
-Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts.
+Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. Every speed links to its raw bench output in the last column; a row with two runs shows their mean. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts.
 
-| Model | Made by | Refusals | KL vs base | Quant | Writing, T = 0.6 | Same base, stock | Drafter accepts | Mac | Power | Kapitsa | Weights |
-| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- |
-| Qwen3.5-4B Heretic | Kapitsa (our run) | 9/100 | 0.102 | MLX 4-bit | 217.6 tok/s | 216.4 tok/s | 71% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | battery | d132a2cc | private, not published |
-| Qwen3.8-27B Heretic | Kapitsa (our run) | 4/100 | 0.173 | MLX 4-bit | 68.1 tok/s | 76.1 tok/s | 82% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | private, not published |
-| Qwen3.8-27B DavidAU Cold Fusion Heretic NEO MTP | third-party | 11/100 (claimed) | 0.003 | GGUF Q4_K_M | 15.5 tok/s | 51.4 tok/s | 33% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | DavidAU on Hugging Face |
-| Qwen3.6-35B-A3B HauhauCS Aggressive | third-party | 0/465 (claimed) | – | GGUF IQ2_M | 168.8 tok/s | – | 73% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | HauhauCS on Hugging Face |
+| Model | Made by | Refusals | KL vs base | Quant | Writing, T = 0.6 | Same base, stock | Drafter accepts | Mac | Power | Kapitsa | Weights | Raw bench output |
+| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- |
+| Qwen3.5-4B Heretic (ours, not published) | Kapitsa (our run) | 9/100 | 0.102 | MLX 4-bit | 217.6 tok/s | 216.4 tok/s | 71% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | battery | d132a2cc | private, not published | [model 1](uncensored/4b-heretic-1/bench.json), [model 2](uncensored/4b-heretic-2/bench.json), [stock 1](uncensored/4b-stock-1/bench.json), [stock 2](uncensored/4b-stock-2/bench.json) |
+| Qwen3.8-27B Heretic (ours, not published) | Kapitsa (our run) | 4/100 | 0.173 | MLX 4-bit | 68.1 tok/s | 76.1 tok/s | 82% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | private, not published | [model 1](uncensored/27b-heretic-1/bench.json), [model 2](uncensored/27b-heretic-2/bench.json), [stock 1](uncensored/27b-stock-1/bench.json), [stock 2](uncensored/27b-stock-2/bench.json) |
+| Qwen3.8-27B DavidAU Cold Fusion Heretic NEO MTP | third-party | 11/100 (claimed) | 0.003 (claimed) | GGUF Q4_K_M | 15.5 tok/s | 51.4 tok/s | 33% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | DavidAU on Hugging Face | [model 1](uncensored/davidau-27b-q4km/bench.json), [stock 1](uncensored/stock-27b-q4km/bench.json) |
+| Qwen3.6-35B-A3B HauhauCS Aggressive | third-party | 0/465 (claimed) | – | GGUF IQ2_M | 168.8 tok/s | – | 73% | MacBook Pro (14-inch, M5 Pro or M5 Max) · Apple M5 Pro · 48 GB | ac | d132a2cc | HauhauCS on Hugging Face | [model 1](uncensored/hauhau-35b-a3b-iq2m/bench.json) |

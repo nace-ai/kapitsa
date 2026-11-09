@@ -1,8 +1,8 @@
 {
- "note": "Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts.",
+ "note": "Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. Every speed links to its raw bench output in the last column; a row with two runs shows their mean. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts.",
  "rows": [
   {
-   "name": "Qwen3.5-4B Heretic",
+   "name": "Qwen3.5-4B Heretic (ours, not published)",
    "source": "Kapitsa (our run)",
    "weights": "private, not published",
    "quant": "MLX 4-bit",
@@ -21,10 +21,19 @@
    },
    "power": "battery",
    "kapitsa_commit": "d132a2cc",
-   "date": "2026-11-09"
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/4b-heretic-1/bench.json",
+    "bench/community/uncensored/4b-heretic-2/bench.json"
+   ],
+   "stock_raw": [
+    "bench/community/uncensored/4b-stock-1/bench.json",
+    "bench/community/uncensored/4b-stock-2/bench.json"
+   ],
+   "kl_basis": "measured"
   },
   {
-   "name": "Qwen3.8-27B Heretic",
+   "name": "Qwen3.8-27B Heretic (ours, not published)",
    "source": "Kapitsa (our run)",
    "weights": "private, not published",
    "quant": "MLX 4-bit",
@@ -43,7 +52,16 @@
    },
    "power": "ac",
    "kapitsa_commit": "d132a2cc",
-   "date": "2026-11-09"
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/27b-heretic-1/bench.json",
+    "bench/community/uncensored/27b-heretic-2/bench.json"
+   ],
+   "stock_raw": [
+    "bench/community/uncensored/27b-stock-1/bench.json",
+    "bench/community/uncensored/27b-stock-2/bench.json"
+   ],
+   "kl_basis": "measured"
   },
   {
    "name": "Qwen3.8-27B DavidAU Cold Fusion Heretic NEO MTP",
@@ -65,7 +83,14 @@
    },
    "power": "ac",
    "kapitsa_commit": "d132a2cc",
-   "date": "2026-11-09"
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/davidau-27b-q4km/bench.json"
+   ],
+   "stock_raw": [
+    "bench/community/uncensored/stock-27b-q4km/bench.json"
+   ],
+   "kl_basis": "claimed"
   },
   {
    "name": "Qwen3.6-35B-A3B HauhauCS Aggressive",
@@ -87,7 +112,12 @@
    },
    "power": "ac",
    "kapitsa_commit": "d132a2cc",
-   "date": "2026-11-09"
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/hauhau-35b-a3b-iq2m/bench.json"
+   ],
+   "stock_raw": [],
+   "kl_basis": "claimed"
   }
  ]
 }

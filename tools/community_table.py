@@ -199,6 +199,25 @@ def render(results, results_dir, out_path):
     return "\n".join(lines)
 
 
+def check_raw(u):
+    """Every speed in a row must be the mean of the bench.json files named in the row (raw, stock_raw); returns the Markdown links."""
+    links = []
+    for field, key in (("raw", "decode_tps"), ("stock_raw", "stock_decode_tps")):
+        paths = u.get(field, [])
+        if u.get(key) is None:
+            assert not paths, f"{u['name']}: {field} given but {key} is empty"
+            continue
+        assert paths, f"{u['name']}: {key} has no {field} bench files"
+        speeds = []
+        for rel in paths:
+            full = os.path.join(REPO, rel)
+            speeds.append(json.load(open(full, encoding="utf-8"))["results"]["decode"]["median_tps"])
+        mean = sum(speeds) / len(speeds)
+        assert abs(mean - u[key]) < 0.06, f"{u['name']}: {key} {u[key]} is not the mean {mean:.2f} of {paths}"
+        links += [f"[{'model' if field == 'raw' else 'stock'} {i + 1}]({os.path.relpath(os.path.join(REPO, rel), COMMUNITY)})" for i, rel in enumerate(paths)]
+    return ", ".join(links)
+
+
 def uncensored_section():
     """The uncensored models (uncensored.json): speed on one Mac with the model's refusals and its KL divergence from the base."""
     path = os.path.join(COMMUNITY, "uncensored.json")
@@ -206,16 +225,17 @@ def uncensored_section():
         return []
     data = json.load(open(path, encoding="utf-8"))
     lines = ["## Uncensored models", "", data["note"], "",
-             "| Model | Made by | Refusals | KL vs base | Quant | Writing, T = 0.6 | Same base, stock | Drafter accepts | Mac | Power | Kapitsa | Weights |",
-             "| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- |"]
+             "| Model | Made by | Refusals | KL vs base | Quant | Writing, T = 0.6 | Same base, stock | Drafter accepts | Mac | Power | Kapitsa | Weights | Raw bench output |",
+             "| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- |"]
     for u in data["rows"]:
         stock = "–" if u.get("stock_decode_tps") is None else tps(u["stock_decode_tps"])
         acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.0f}%"
-        kl = "–" if u.get("kl") is None else f"{u['kl']:.3f}"
+        kl = "–" if u.get("kl") is None else f"{u['kl']:.3f}" + ("" if u.get("kl_basis") == "measured" else " (claimed)")
+        raw = check_raw(u)
         basis = "" if u["refusal_basis"] == "measured" else " (claimed)"
         ref = f"{u['refusals']}/{u['refusals_of']}"
         lines.append(f"| {u['name']} | {u['source']} | {ref}{basis} | {kl} | {u['quant']} | {tps(u['decode_tps'])} | {stock} | {acc} | "
-                     f"{u['mac']['name']} · {u['mac']['chip']} · {u['mac']['memory_gb']} GB | {u['power']} | {u['kapitsa_commit']} | {u['weights']} |")
+                     f"{u['mac']['name']} · {u['mac']['chip']} · {u['mac']['memory_gb']} GB | {u['power']} | {u['kapitsa_commit']} | {u['weights']} | {raw} |")
     lines.append("")
     return lines
 

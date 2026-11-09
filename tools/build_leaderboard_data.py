@@ -44,7 +44,7 @@ def uncensored_entry(u):
         "model": {"title": u["name"], "variant": u["quant"], "decoding": u["decoding"]},
         "results": {"decode": {"median_tps": u["decode_tps"]}, "prefill": [{"tps": u["prefill_tps"]}] if u.get("prefill_tps") else []},
         "uncensored": {"refusals": u["refusals"], "of": u["refusals_of"], "kl": u["kl"],
-                       "source": u["source"], "basis": u["refusal_basis"]},
+                       "source": u["source"], "basis": u["refusal_basis"], "kl_basis": u.get("kl_basis", "claimed")},
     }
 
 

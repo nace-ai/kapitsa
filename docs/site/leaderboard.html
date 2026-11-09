@@ -107,6 +107,7 @@ function initData(results) {
       refusals: r.uncensored ? 100 * r.uncensored.refusals / r.uncensored.of : -1,
       refusalText: r.uncensored ? r.uncensored.refusals + "/" + r.uncensored.of + (r.uncensored.basis === "measured" ? "" : " claimed") : "",
       kl: r.uncensored && r.uncensored.kl != null ? r.uncensored.kl : -1,
+      klText: r.uncensored && r.uncensored.kl != null ? r.uncensored.kl.toFixed(3) + (r.uncensored.kl_basis === "measured" ? "" : " claimed") : "",
       source: r.uncensored ? r.uncensored.source : "",
       date: (r.time_utc || "").slice(0, 10),
       version: (r.kapitsa && r.kapitsa.version) || ""
@@ -179,7 +180,7 @@ function render() {
       '<td>' + esc(d.decoding) + '</td>' +
       '<td class="num' + (isBest ? ' highlight' : '') + '">' + fmt(d.decode) + '</td>' +
       '<td class="num">' + (d.refusals >= 0 ? d.refusalText : "—") + '</td>' +
-      '<td class="num">' + (d.kl >= 0 ? d.kl.toFixed(3) : "—") + '</td>' +
+      '<td class="num">' + (d.kl >= 0 ? d.klText : "—") + '</td>' +
       '<td class="num">' + fmt(d.prefill) + '</td>' +
       '<td>' + esc(d.date) + '</td>';
     tbody.appendChild(tr);
