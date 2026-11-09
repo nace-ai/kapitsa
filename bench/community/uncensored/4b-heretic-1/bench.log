@@ -1,0 +1,126 @@
+kapitsa bench: 4b-heretic-4bit 4-bit on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
+Left out of the server, as the harness does: NI_DFLASH, NI_LOCK_HELD
+Starting the server on 127.0.0.1:56470 (log ~/.kapitsa/logs/bench-56470-ctx32768.log)
+[?2026h  ✓ Loaded 4b-heretic-4bit  ·  4-bit in 1.0s  ·  KFlash speculative decod…
+[?2026lReady after 1.0s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
+Warm-up done in 1.7s
+GPU quiet after 18s
+  decode T=0.6: 242.45 tok/s (512 tok, finish="length")
+  decode T=0.6: 218.25 tok/s (512 tok, finish="length")
+  decode T=0.6: 193.77 tok/s (512 tok, finish="length")
+decode T=0.6: median 218.25 tok/s over 3/3 valid, accepted drafts 154.31 tok/s (70.7% of tokens)
+  decode T=0: 209.31 tok/s (512 tok, finish="length")
+  decode T=0: 238.27 tok/s (512 tok, finish="length")
+  decode T=0: 232.20 tok/s (512 tok, finish="length")
+decode T=0: median 232.20 tok/s over 3/3 valid, accepted drafts 165.53 tok/s (71.3% of tokens)
+prefill 4000: 4135 tok, 4277 tok/s; cached TTFT median 0.05 s (449 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-09T12:24:20Z",
+  "kapitsa": {
+    "version": "0.2.32",
+    "commit": "d132a2cc"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "4b-heretic-4bit",
+    "title": "4b-heretic-4bit",
+    "variant": null,
+    "precision": "4-bit",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 218.25,
+      "runs_tps": [
+        242.45,
+        218.25,
+        193.77
+      ],
+      "median_accepted_draft_tps": 154.31,
+      "median_accepted_draft_share": 0.707
+    },
+    "decode_greedy": {
+      "median_tps": 232.2,
+      "runs_tps": [
+        209.31,
+        238.27,
+        232.2
+      ],
+      "median_accepted_draft_tps": 165.53,
+      "median_accepted_draft_share": 0.7129
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4135,
+        "ttft_s": 0.9667,
+        "tps": 4277.4,
+        "followup_s": [
+          0.0508,
+          0.0546,
+          0.0445
+        ],
+        "followup_median_s": 0.0508,
+        "followup_suffix_tps": 449.3
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 4.45
+  },
+  "conditions": {
+    "power_source": "battery",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.4315)",
+    "decode_greedy: repetition loop (distinct-4-gram 0.4154)",
+    "decode_greedy: repetition loop (distinct-4-gram 0.4157)",
+    "power: on battery (a Mac on battery may run slower)"
+  ],
+  "invalid": []
+}
+flag: decode: repetition loop (distinct-4-gram 0.4315)
+flag: decode_greedy: repetition loop (distinct-4-gram 0.4154)
+flag: decode_greedy: repetition loop (distinct-4-gram 0.4157)
+flag: power: on battery (a Mac on battery may run slower)
+Saved runs/4b-heretic-1/bench.json

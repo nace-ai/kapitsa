@@ -73,6 +73,8 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
       <th onclick="sortBy('variant')">Variant <span class="arrow" id="arrow_variant"></span></th>
       <th onclick="sortBy('decoding')">Decoding <span class="arrow" id="arrow_decoding"></span></th>
       <th onclick="sortBy('decode')">Decode tok/s <span class="arrow" id="arrow_decode"></span></th>
+      <th onclick="sortBy('refusals')" title="Refusals out of the test prompts; uncensored models only. Measured by us, or claimed by the maker where the model is third-party.">Refusals <span class="arrow" id="arrow_refusals"></span></th>
+      <th onclick="sortBy('kl')" title="KL divergence from the base model; lower is closer to it">KL vs base <span class="arrow" id="arrow_kl"></span></th>
       <th onclick="sortBy('prefill')">Prefill tok/s <span class="arrow" id="arrow_prefill"></span></th>
       <th onclick="sortBy('date')">Date <span class="arrow" id="arrow_date"></span></th>
     </tr>
@@ -102,6 +104,11 @@ function initData(results) {
       decoding: (r.model && r.model.decoding) || "plain",
       decode: (r.results && r.results.decode && r.results.decode.median_tps) || 0,
       prefill: prefillEntry.tps || 0,
+      refusals: r.uncensored ? 100 * r.uncensored.refusals / r.uncensored.of : -1,
+      refusalText: r.uncensored ? r.uncensored.refusals + "/" + r.uncensored.of + (r.uncensored.basis === "measured" ? "" : " " + r.uncensored.basis) : "",
+      kl: r.uncensored && r.uncensored.kl != null ? r.uncensored.kl : -1,
+      klText: r.uncensored && r.uncensored.kl != null ? r.uncensored.kl.toFixed(3) + (r.uncensored.kl_basis === "measured" ? "" : " claimed") : "",
+      source: r.uncensored ? r.uncensored.source : "",
       date: (r.time_utc || "").slice(0, 10),
       version: (r.kapitsa && r.kapitsa.version) || ""
     };
@@ -146,7 +153,7 @@ function render() {
   });
 
   // Update arrows
-  ["chip","ram","mac","model","variant","decoding","decode","prefill","date"].forEach(function(c) {
+  ["chip","ram","mac","model","variant","decoding","decode","refusals","kl","prefill","date"].forEach(function(c) {
     var el = document.getElementById("arrow_" + c);
     if (el) el.textContent = sortCol === c ? (sortDir > 0 ? "▲" : "▼") : "";
   });
@@ -168,10 +175,12 @@ function render() {
       '<td><span class="chip">' + esc(d.chip) + '</span></td>' +
       '<td class="num">' + esc(String(d.ram)) + ' GB</td>' +
       '<td>' + esc(d.mac) + '</td>' +
-      '<td>' + esc(d.model) + '</td>' +
+      '<td>' + esc(d.model) + (d.source === "third-party" ? ' <span class="chip" title="Made by someone else; we only measured its speed">third-party</span>' : '') + '</td>' +
       '<td>' + esc(d.variant) + '</td>' +
       '<td>' + esc(d.decoding) + '</td>' +
       '<td class="num' + (isBest ? ' highlight' : '') + '">' + fmt(d.decode) + '</td>' +
+      '<td class="num">' + (d.refusals >= 0 ? d.refusalText : "—") + '</td>' +
+      '<td class="num">' + (d.kl >= 0 ? d.klText : "—") + '</td>' +
       '<td class="num">' + fmt(d.prefill) + '</td>' +
       '<td>' + esc(d.date) + '</td>';
     tbody.appendChild(tr);

@@ -35,6 +35,19 @@ def trim(result):
         },
     }
 
+def uncensored_entry(u):
+    """A leaderboard entry for one row of uncensored.json."""
+    return {
+        "time_utc": u["date"] + "T00:00:00Z",
+        "kapitsa": {"version": u.get("kapitsa_commit", "")},
+        "mac": {"chip": u["mac"]["chip"], "memory_gb": u["mac"]["memory_gb"], "name": u["mac"]["name"]},
+        "model": {"title": u["name"], "variant": u["quant"], "decoding": u["decoding"]},
+        "results": {"decode": {"median_tps": u["decode_tps"]}, "prefill": [{"tps": u["prefill_tps"]}] if u.get("prefill_tps") else []},
+        "uncensored": {"refusals": u["refusals"], "of": u["refusals_of"], "kl": u["kl"],
+                       "source": u["source"], "basis": u["refusal_basis"], "kl_basis": u.get("kl_basis", "claimed")},
+    }
+
+
 def build(repo):
     results_dir = os.path.join(repo, "bench", "community", "results")
     files = sorted(glob.glob(os.path.join(results_dir, "*.json")))
@@ -49,6 +62,14 @@ def build(repo):
                 results.append(trim(json.load(fh)))
         except (json.JSONDecodeError, OSError) as e:
             print(f"warning: skipping {f}: {e}", file=sys.stderr)
+
+    # Uncensored-model rows (bench/community/uncensored.json): not catalog models, so not `kapitsa bench --submit` results;
+    # each carries the Mac and the speed it was measured at, plus its refusals and KL against the base model.
+    unc_path = os.path.join(repo, "bench", "community", "uncensored.json")
+    if os.path.exists(unc_path):
+        with open(unc_path) as fh:
+            for u in json.load(fh)["rows"]:
+                results.append(uncensored_entry(u))
 
     # One result per line so two result PRs don't always conflict on a single 39 KB line.
     lines = [json.dumps(r, separators=(",", ":")) for r in results]

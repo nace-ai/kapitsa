@@ -1,0 +1,117 @@
+kapitsa bench: hauhau-iq2m 2-bit (mixed) on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:53069 (log ~/.kapitsa/logs/bench-53069-ctx32768.log)
+[?2026h  ✓ Loaded hauhau-iq2m  ·  2-bit (mixed) in 15s  ·  KFlash speculative de…
+[?2026lReady after 15s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
+Warm-up done in 3.6s
+GPU quiet after 18s
+  decode T=0.6: 168.85 tok/s (512 tok, finish="length")
+  decode T=0.6: 171.64 tok/s (512 tok, finish="length")
+  decode T=0.6: 165.78 tok/s (512 tok, finish="length")
+decode T=0.6: median 168.85 tok/s over 3/3 valid, accepted drafts 124.00 tok/s (73.4% of tokens)
+  decode T=0: 196.15 tok/s (512 tok, finish="length")
+  decode T=0: 189.64 tok/s (512 tok, finish="length")
+  decode T=0: 203.65 tok/s (512 tok, finish="length")
+decode T=0: median 196.15 tok/s over 3/3 valid, accepted drafts 151.33 tok/s (77.1% of tokens)
+prefill 4000: 4133 tok, 1290 tok/s; cached TTFT median 0.07 s (334 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-09T15:57:52Z",
+  "kapitsa": {
+    "version": "0.2.32",
+    "commit": "d132a2cc"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "hauhau-iq2m",
+    "title": "hauhau-iq2m",
+    "variant": null,
+    "precision": "2-bit (mixed)",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 168.85,
+      "runs_tps": [
+        168.85,
+        171.64,
+        165.78
+      ],
+      "median_accepted_draft_tps": 124.0,
+      "median_accepted_draft_share": 0.7344
+    },
+    "decode_greedy": {
+      "median_tps": 196.15,
+      "runs_tps": [
+        196.15,
+        189.64,
+        203.65
+      ],
+      "median_accepted_draft_tps": 151.33,
+      "median_accepted_draft_share": 0.7715
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 3.2036,
+        "tps": 1290.1,
+        "followup_s": [
+          0.0696,
+          0.0818,
+          0.063
+        ],
+        "followup_median_s": 0.0696,
+        "followup_suffix_tps": 333.6
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 14.33
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.16,
+    "gpu_other_max_pct": 0.97,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
+Saved runs/hauhau-iq2m/bench.json

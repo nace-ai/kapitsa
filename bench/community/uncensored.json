@@ -1,0 +1,126 @@
+{
+ "note": "Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. DavidAU's 11/100 is from his lab tests of the stage before a healing fine-tune, so it is not a number for the released model. Every speed links to its raw bench output in the last column; a row with two runs shows their mean. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts. The 4B runs were on battery. The four 27B MLX runs (Heretic and stock) ran on AC with other Kapitsa processes present: load up to 11-12 at the start and five \"another Kapitsa is running\" warnings in each log. The bench's own record of GPU use by others during the runs is small (mean 0.12-1.45%, peak 9.17% or less), and Heretic and stock ran the same way, so compare Heretic with stock within the row.",
+ "rows": [
+  {
+   "name": "Qwen3.5-4B Heretic (ours, not published)",
+   "source": "Kapitsa (our run)",
+   "weights": "private, not published",
+   "quant": "MLX 4-bit",
+   "decoding": "DFlash2 (stock 4B drafter)",
+   "refusals": 9,
+   "refusals_of": 100,
+   "refusal_basis": "measured",
+   "kl": 0.1017,
+   "decode_tps": 217.6,
+   "stock_decode_tps": 216.4,
+   "accepted_pct": 70.7,
+   "mac": {
+    "name": "MacBook Pro (14-inch, M5 Pro or M5 Max)",
+    "chip": "Apple M5 Pro",
+    "memory_gb": 48
+   },
+   "power": "battery",
+   "kapitsa_commit": "d132a2cc",
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/4b-heretic-1/bench.json",
+    "bench/community/uncensored/4b-heretic-2/bench.json"
+   ],
+   "stock_raw": [
+    "bench/community/uncensored/4b-stock-1/bench.json",
+    "bench/community/uncensored/4b-stock-2/bench.json"
+   ],
+   "kl_basis": "measured",
+   "stock_accepted_pct": 70.2
+  },
+  {
+   "name": "Qwen3.8-27B Heretic (ours, not published)",
+   "source": "Kapitsa (our run)",
+   "weights": "private, not published",
+   "quant": "MLX 4-bit",
+   "decoding": "DFlash2 (stock 27B drafter)",
+   "refusals": 4,
+   "refusals_of": 100,
+   "refusal_basis": "measured",
+   "kl": 0.1732,
+   "decode_tps": 68.1,
+   "stock_decode_tps": 76.1,
+   "accepted_pct": 81.6,
+   "mac": {
+    "name": "MacBook Pro (14-inch, M5 Pro or M5 Max)",
+    "chip": "Apple M5 Pro",
+    "memory_gb": 48
+   },
+   "power": "ac",
+   "kapitsa_commit": "d132a2cc",
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/27b-heretic-1/bench.json",
+    "bench/community/uncensored/27b-heretic-2/bench.json"
+   ],
+   "stock_raw": [
+    "bench/community/uncensored/27b-stock-1/bench.json",
+    "bench/community/uncensored/27b-stock-2/bench.json"
+   ],
+   "kl_basis": "measured",
+   "stock_accepted_pct": 83.6
+  },
+  {
+   "name": "Qwen3.8-27B DavidAU Cold Fusion Heretic NEO MTP",
+   "source": "third-party",
+   "weights": "DavidAU on Hugging Face",
+   "quant": "GGUF Q4_K_M",
+   "decoding": "DFlash2 (stock 27B drafter)",
+   "refusals": 11,
+   "refusals_of": 100,
+   "refusal_basis": "claimed (lab, before a healing fine-tune)",
+   "kl": 0.0025,
+   "decode_tps": 15.51,
+   "stock_decode_tps": 51.42,
+   "accepted_pct": 33.6,
+   "mac": {
+    "name": "MacBook Pro (14-inch, M5 Pro or M5 Max)",
+    "chip": "Apple M5 Pro",
+    "memory_gb": 48
+   },
+   "power": "ac",
+   "kapitsa_commit": "d132a2cc",
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/davidau-27b-q4km/bench.json"
+   ],
+   "stock_raw": [
+    "bench/community/uncensored/stock-27b-q4km/bench.json"
+   ],
+   "kl_basis": "claimed",
+   "stock_accepted_pct": 80.1
+  },
+  {
+   "name": "Qwen3.6-35B-A3B HauhauCS Aggressive",
+   "source": "third-party",
+   "weights": "HauhauCS on Hugging Face",
+   "quant": "GGUF IQ2_M",
+   "decoding": "DFlash2 (stock drafter)",
+   "refusals": 0,
+   "refusals_of": 465,
+   "refusal_basis": "claimed",
+   "kl": null,
+   "decode_tps": 168.85,
+   "stock_decode_tps": null,
+   "accepted_pct": 73.4,
+   "mac": {
+    "name": "MacBook Pro (14-inch, M5 Pro or M5 Max)",
+    "chip": "Apple M5 Pro",
+    "memory_gb": 48
+   },
+   "power": "ac",
+   "kapitsa_commit": "d132a2cc",
+   "date": "2026-11-09",
+   "raw": [
+    "bench/community/uncensored/hauhau-35b-a3b-iq2m/bench.json"
+   ],
+   "stock_raw": [],
+   "kl_basis": "claimed"
+  }
+ ]
+}
