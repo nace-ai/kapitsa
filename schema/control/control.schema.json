@@ -65,7 +65,7 @@
         "phase": {"enum": ["waiting", "prefill", "writing"]},
         "prompt_tokens": {"$ref": "#/$defs/count"},
         "cached_tokens": {"$ref": "#/$defs/count"},
-        "prefilled_tokens": {"$ref": "#/$defs/count"},
+        "prefilled_tokens": {"$ref": "#/$defs/count", "description": "prompt tokens read so far, the cached ones included: prompt_tokens once the prefill ends"},
         "completion_tokens": {"$ref": "#/$defs/count"},
         "elapsed_ms": {"$ref": "#/$defs/count"},
         "tokens_per_second": {"$ref": "#/$defs/rate", "description": "completion tokens written during the last tick, divided by tick_ms"}
