@@ -1,0 +1,281 @@
+{
+  "notice": "Explicitly redacted derived evidence; not raw execution logs. Original commands and artifacts remain private.",
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": 20
+  },
+  "production_source": "32e7aa73868f7f12a92a649fffa324d7d198b5f0",
+  "reference_source": "7c5112243ba73252dd161d49b6b53207a6851940",
+  "method": {
+    "legs": "A1 B1 A2 B2 A3 B3 A4 B4",
+    "rows": 1024,
+    "K": 1024,
+    "warmup_passes": 1,
+    "timed_passes_per_leg": 16,
+    "decoder_calls_per_row": 1,
+    "scope": "CPU row decoding only"
+  },
+  "builds": {
+    "reference": {
+      "commit": "7c5112243ba73252dd161d49b6b53207a6851940",
+      "library_sha256": "2c7a1b8b4284b1b419218ea79321ac1d4314dc04118f42852b46e85909c34ba9",
+      "driver_sha256": "0febd94624ed6fdce7b4ab9c69dd4974d5a02f995a2c2e4c4051d43f38cb9041",
+      "quant_source_sha256": "1c0ac46c672ae9e74e4a4e129cd3a9ea7ce357da26d15ad94c0228ce5f196248"
+    },
+    "candidate": {
+      "commit": "32e7aa73868f7f12a92a649fffa324d7d198b5f0",
+      "library_sha256": "22952b66208d56c8bfc15e11170b6fcd3281c4662eded2ff228e916d4608d0fb",
+      "driver_sha256": "b8d6bc4690780c1f94c400f5125afa159058447f75a469dd1dbe809b4c1b73a8",
+      "quant_source_sha256": "5ba878299b75ae63da414a0761bdea734413dd18f42e2a33a61f3ad3843fe62c"
+    }
+  },
+  "driver_source_sha256": "04f19683b22a07c8e5dad6e76ad3f7eb569b3a9d22dfc9d8597f457487af11eb",
+  "complete_leg_files_literal_equal": true,
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        559.448242,
+        491.250977,
+        482.625977,
+        486.125,
+        482.74707,
+        486.042969,
+        482.788086,
+        435.994141,
+        432.046875,
+        428.996094,
+        429.118164,
+        432.006836,
+        434.651367,
+        423.177734,
+        390.583984,
+        390.625
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 435.32275400000003
+    },
+    "B1": {
+      "ns_per_row": [
+        209.960938,
+        212.036133,
+        194.416992,
+        206.298828,
+        197.021484,
+        183.024414,
+        189.290039,
+        180.053711,
+        174.886719,
+        172.526367,
+        173.176758,
+        176.30957,
+        183.71582,
+        174.194336,
+        154.866211,
+        164.713867
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 181.5390625
+    },
+    "A2": {
+      "ns_per_row": [
+        322.550781,
+        324.829102,
+        322.387695,
+        324.911133,
+        322.428711,
+        305.827148,
+        303.181641,
+        305.826172,
+        303.750977,
+        303.304688,
+        322.428711,
+        322.46875,
+        322.265625,
+        327.839844,
+        303.222656,
+        303.466797
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 322.32666
+    },
+    "B2": {
+      "ns_per_row": [
+        110.514648,
+        116.007812,
+        103.799805,
+        105.021484,
+        110.432617,
+        100.912109,
+        108.032227,
+        125.366211,
+        119.873047,
+        112.304688,
+        118.611328,
+        111.938477,
+        118.326172,
+        113.729492,
+        119.791992,
+        112.75293
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 112.528809
+    },
+    "A3": {
+      "ns_per_row": [
+        245.321289,
+        247.842773,
+        245.97168,
+        252.401367,
+        247.151367,
+        248.332031,
+        258.382812,
+        258.300781,
+        250.895508,
+        248.657227,
+        251.708984,
+        254.43457,
+        251.668945,
+        251.831055,
+        260.294922,
+        250.732422
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 251.2822265
+    },
+    "B3": {
+      "ns_per_row": [
+        101.766602,
+        99.894531,
+        106.567383,
+        105.387695,
+        100.504883,
+        103.922852,
+        107.829102,
+        97.208008,
+        97.085938,
+        102.376953,
+        97.045898,
+        102.009766,
+        111.410156,
+        97.574219,
+        96.883789,
+        104.207031
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 101.888184
+    },
+    "A4": {
+      "ns_per_row": [
+        255.249023,
+        253.702148,
+        252.685547,
+        256.266602,
+        256.875977,
+        256.917969,
+        258.056641,
+        256.917969,
+        256.917969,
+        256.958008,
+        260.864258,
+        257.975586,
+        247.84375,
+        249.755859,
+        251.831055,
+        251.342773
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 256.5712895
+    },
+    "B4": {
+      "ns_per_row": [
+        112.466797,
+        110.188477,
+        108.235352,
+        107.869141,
+        112.915039,
+        112.060547,
+        104.044922,
+        101.806641,
+        108.154297,
+        104.573242,
+        110.147461,
+        109.823242,
+        104.655273,
+        109.212891,
+        109.579102,
+        111.816406
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 109.3959965
+    }
+  },
+  "adjacent_pairs": [
+    {
+      "pair": 1,
+      "reference_ns_per_row": 435.32275400000003,
+      "candidate_ns_per_row": 181.5390625,
+      "latency_change_percent": -58.29782366487556
+    },
+    {
+      "pair": 2,
+      "reference_ns_per_row": 322.32666,
+      "candidate_ns_per_row": 112.528809,
+      "latency_change_percent": -65.08858156504958
+    },
+    {
+      "pair": 3,
+      "reference_ns_per_row": 251.2822265,
+      "candidate_ns_per_row": 101.888184,
+      "latency_change_percent": -59.45268974286171
+    },
+    {
+      "pair": 4,
+      "reference_ns_per_row": 256.5712895,
+      "candidate_ns_per_row": 109.3959965,
+      "latency_change_percent": -57.3623390546977
+    }
+  ]
+}

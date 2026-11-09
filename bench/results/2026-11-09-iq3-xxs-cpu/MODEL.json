@@ -1,0 +1,23 @@
+{
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-0.8B-GGUF",
+    "revision": "f36b1ea49a332ede8fe5f389bbf5b3575ef71f48",
+    "filename": "Qwen_Qwen3.5-0.8B-IQ3_XXS.gguf",
+    "sha256": "6c72d205240d96e9b8cff0126fd3f6394b2bc082b17977851afde08c4bf59b06"
+  },
+  "tensor": {
+    "name": "blk.0.ffn_up.weight",
+    "dims": [
+      1024,
+      3584
+    ],
+    "type": 18
+  },
+  "rows": 1024,
+  "k": 1024,
+  "bytes": 401408,
+  "sha256": "196c6a58a2837683980887483d180b871574721121a008d4df560c84b6cad0c7",
+  "iq3_xxs_tensor_count": 109,
+  "notice": "Explicitly redacted derived model/sample identity; full file downloaded once and SHA256 verified, sample copied from its tensor payload.",
+  "tensor_payload_file_offset": 193726304
+}

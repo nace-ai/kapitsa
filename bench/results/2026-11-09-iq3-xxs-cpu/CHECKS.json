@@ -1,0 +1,114 @@
+{
+  "notice": "Explicitly redacted derived evidence; not raw execution logs. Original commands and artifacts remain private.",
+  "production_source": "32e7aa73868f7f12a92a649fffa324d7d198b5f0",
+  "reference_source": "7c5112243ba73252dd161d49b6b53207a6851940",
+  "source_identity_note": "The local CPU worker began before the production commit was made. Its captured quant.cpp and test digests match the committed source exactly; its initial HEAD was the reference. This is not a claim about the CLI version banner.",
+  "quant_source_sha256": "5ba878299b75ae63da414a0761bdea734413dd18f42e2a33a61f3ad3843fe62c",
+  "test_sha256": "c575ed46430165836fd6f96cab4896401a00b202e7488331d172a317ca2c0dd9",
+  "cpu_tests_passed": [
+    "api_test",
+    "prefix_cache_test",
+    "fn_store_test",
+    "fn_dflash_test",
+    "tokenizer_test",
+    "iq_layout_test",
+    "nh_quant_q8_test",
+    "remote_test",
+    "cluster_test",
+    "split_place_test",
+    "gemm_slices_test",
+    "ws_upgrade_test",
+    "test_server_cli",
+    "test_sidecar",
+    "test_bench",
+    "test_community",
+    "test_reasoning",
+    "test_pr_size",
+    "test_logit_compare",
+    "test_sampled_tokens_harness",
+    "test_structured_cli"
+  ],
+  "cpu_tests_failed": [
+    {
+      "test": "test_update",
+      "assertion": "the binary ran throughout: the old version, then the new one, nothing in between",
+      "observed": "seen {'', '0.2.34', '0.2.33'}, bad ['']",
+      "cause": "unresolved; reference control tracked separately; no all-checks-pass claim"
+    }
+  ],
+  "worker_steps": [
+    {
+      "label": "configure",
+      "rc": 0
+    },
+    {
+      "label": "cpu",
+      "rc": 1
+    },
+    {
+      "label": "prek",
+      "rc": 0
+    },
+    {
+      "label": "diff",
+      "rc": 0
+    },
+    {
+      "label": "checks",
+      "rc": 0
+    },
+    {
+      "label": "cleanup",
+      "rc": 0
+    }
+  ],
+  "focused": [
+    {
+      "label": "candidate-compile",
+      "rc": 0
+    },
+    {
+      "label": "candidate-run",
+      "rc": 0
+    },
+    {
+      "label": "reference-compile",
+      "rc": 0
+    },
+    {
+      "label": "reference-run",
+      "rc": 0
+    },
+    {
+      "label": "ubsan-compile",
+      "rc": 0
+    },
+    {
+      "label": "ubsan-run",
+      "rc": 0
+    }
+  ],
+  "cases_per_focused_run": 450762,
+  "guard_pages": "single/multiple/empty/partial blocks",
+  "ubsan_scope": "Focused harness, quant.cpp and gguf.cpp; not the entire engine",
+  "deliberate_mutations": [
+    {
+      "mutation": "parity",
+      "rc": 1,
+      "rejected": true
+    },
+    {
+      "mutation": "scale",
+      "rc": 1,
+      "rejected": true
+    }
+  ],
+  "not_verified": [
+    "ASan",
+    "non-AArch64 execution",
+    "full independent model imports",
+    "GPU logit/token gates",
+    "native/fixed-request inference A/B",
+    "HTTP model tests"
+  ]
+}
