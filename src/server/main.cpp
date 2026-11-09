@@ -449,8 +449,9 @@ static void print_pull_help() {
          "               another app's models): only exact matches of the pinned checksums, as APFS clones\n"
          "  --dry-run    show what MODEL resolves to, without downloading (--json for programs)\n\n"
          "Files already in the Hugging Face cache (~/.cache/huggingface/hub) are reused the same way.\n\n"
-         "Each name downloads this Hugging Face repo (a variant, e.g. 27b:8bit, another one; revisions, drafters and\n"
-         "sizes: docs/models.md, or --dry-run):\n\n%s",
+         "Each name's default variant is this Hugging Face repo, where it fits this Mac (35b, flint and flash take a\n"
+         "smaller variant where it does not; 27b:8bit names another one). Revisions, drafters, MTP heads and sizes:\n"
+         "docs/models.md, or --dry-run:\n\n%s",
          hub::tilde(hub::models_dir()).c_str(), repos_table().c_str()));
 }
 

@@ -50,6 +50,7 @@ def main():
             "a drafter's revision": drafter,
             "an alias": lambda t: edit(t, r'\.aliases = \{', '.aliases = {"zz-new", '),
             "a download size": lambda t: edit(t, r"\.download_gb = (\d+)", r".download_gb = 9\1"),
+            "an MTP head's revision": lambda t: edit(t, r'(?s)(Companion mtp27\(\).*?\.revision = ")[0-9a-f]{40}', r"\g<1>" + "2" * 40),
             "a weights repo": lambda t: edit(t, r'(\.repo = "lmstudio-community/[^"]+)', r"\1-v2"),
         }
         for what, fn in edits.items():

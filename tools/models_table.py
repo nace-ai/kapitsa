@@ -19,6 +19,7 @@ CATALOG = ROOT / "src" / "hub" / "catalog.cpp"
 OUT = ROOT / "docs" / "models.md"
 
 DRAFTER_KINDS = {"dflash2", "dflash", "lilicorr", "dspark"}  # Companion::drafter() in src/hub/hub.h
+MTP_KINDS = {"mtp", "mtp-sidecar"}
 
 
 # ---- parsing the catalog's C++ initializers ------------------------------------------------------------------------
@@ -186,15 +187,23 @@ def drafter_cell(v):
     return "<br>".join(f"{link(c['repo'])} @ {rev(c['repo'], c['revision'])}" for c in ds) or "none"
 
 
+def mtp_cell(v):
+    cs = [c for c in v["companions"] if c["kind"] in MTP_KINDS]
+    if not cs:  # the 35B's 4bit repo ships its own MTP head
+        return "none"
+    return "<br>".join(f"{link(c['repo'])} @ {rev(c['repo'], c['revision'])}" + (" (its `mtp.*` tensors)" if c["kind"] == "mtp-sidecar" else "")
+                       for c in cs)
+
+
 def row(m, v, first_col):
     gguf = " (GGUF file, converted on download)" if v.get("gguf") else ""
     size = f"{v['download_gb']} GB"
-    return (f"| {first_col} | {link(v['repo'])}{gguf} | {rev(v['repo'], v['revision'])} | {drafter_cell(v)} | {size} |")
+    return (f"| {first_col} | {link(v['repo'])}{gguf} | {rev(v['repo'], v['revision'])} | {drafter_cell(v)} | {mtp_cell(v)} | {size} |")
 
 
 def render(models):
-    head = ("| `kapitsa serve --model` | Hugging Face repo | Revision | Drafter | Download |\n"
-            "| --- | --- | --- | --- | ---: |\n")
+    head = ("| `kapitsa serve --model` | Hugging Face repo | Revision | Drafter | MTP head | Download |\n"
+            "| --- | --- | --- | --- | --- | ---: |\n")
     default_rows, other_rows = [], []
     for m in models:
         sa = short_alias(m)
@@ -220,8 +229,8 @@ def render(models):
         "",
         "## Default models",
         "",
-        "What `--model <alias>` downloads where it fits the Mac. A model's smaller variants for 16 to 24 GB Macs are "
-        "in the second table.",
+        "What `--model <alias>` downloads where it fits the Mac. Where the default variant does not fit, `pull` and "
+        "`serve` take the model's smaller variant (`16gb`, `24gb`, `64gb`) listed in the second table.",
         "",
         head + "\n".join(default_rows),
         "",
@@ -232,8 +241,9 @@ def render(models):
         head.replace("`kapitsa serve --model`", "`--model`") + "\n".join(other_rows),
         "",
         "A download is the weights plus the files that speed decoding up. The drafter column names the draft model "
-        "that is downloaded with the weights; an MTP head, where a model has one, comes from the weights repo or the "
-        "repo named in the catalog and is not listed here. The download size counts the weights and every companion.",
+        "that is downloaded with the weights. The MTP head column names the repo its file comes from, with its pinned "
+        "revision; `none` means the weights repo has no head to fetch (the 35B's 4-bit repo ships its own) or the model "
+        "decodes without one. The download size counts the weights and every companion.",
         "",
     ]
     return "\n".join(out)
