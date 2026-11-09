@@ -1,0 +1,31 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Complete original records and commands retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_capacity_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17 (clang-1700.6.4.2)"
+  },
+  "binaries_sha256": {
+    "reference": {
+      "kapitsa": "2c6927997d0d480eba59197a583cf8b1db9cc17c42f569932ea926ee6244f654",
+      "logit_dump": "274a8062a35e7435d0c5fd11d5dd307a382842ec4d194ea61b3f39adc8081317",
+      "ni_run": "5264d860ffbb50384640dc62e53602b21e3b2d53fdb397f82c1973a49fd1439d",
+      "libnaceinfer.a": "0bfab45ea99a3ad3c081e3e8d5df584e254e044917742585acf7ebe54890d72b"
+    },
+    "candidate": {
+      "kapitsa": "742c4c9cb5e1399a92ebe66cdebed76705bd06e73efd62f3251bfc5f012236cc",
+      "logit_dump": "a578289ab845ac2cddb40094dd24fb71e8b045f52aedf9092850a7bc08c413e1",
+      "ni_run": "0e91962e84123612e8e399bca393e25113ca2d3f8358a1dd167da1843d4d21db",
+      "libnaceinfer.a": "6808f5c0a5bb55afaf50e985ecf3337e78e857e5f4782f682accd63ea13b4b64"
+    }
+  },
+  "build": "Own explicit CMake Release configure/build per source, C++20 -O3 arm64; actual flags contain no NDEBUG.",
+  "integrated_candidate_oracle_cases": 614602,
+  "gpu_lock": "Exclusive lock with caller-held marker during all model phases; worker exited, own servers stopped and lock released."
+}

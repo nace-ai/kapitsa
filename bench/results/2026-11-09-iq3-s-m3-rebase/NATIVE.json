@@ -1,0 +1,199 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Complete original records and commands retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_capacity_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17 (clang-1700.6.4.2)"
+  },
+  "legs": {
+    "A1": {
+      "rc": 0,
+      "source": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+      "raw_sha256": "a30c2b8e3b1b9a8d414fb0f54d039698c209b296432362336e91ad7d106f122a",
+      "invalid": [],
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4772)"
+      ],
+      "results": {
+        "decode": {
+          "median_tps": 227.29,
+          "runs_tps": [
+            214.47,
+            240.62,
+            227.29
+          ],
+          "median_accepted_draft_tps": 143.83,
+          "median_accepted_draft_share": 0.6328
+        },
+        "decode_greedy": {
+          "median_tps": 246.52,
+          "runs_tps": [
+            248.26,
+            245.73,
+            246.52
+          ],
+          "median_accepted_draft_tps": 161.78,
+          "median_accepted_draft_share": 0.6562
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 2.1074,
+            "tps": 1961.7,
+            "followup_s": [
+              0.0343,
+              0.0375,
+              0.0389
+            ],
+            "followup_median_s": 0.0375,
+            "followup_suffix_tps": 640.9
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    "B1": {
+      "rc": 0,
+      "source": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36",
+      "raw_sha256": "cebbbd97562c9642f4f53ea101dd864e548ccc889d6eadd55f3fdf5fe2afdac9",
+      "invalid": [],
+      "flags": [],
+      "results": {
+        "decode": {
+          "median_tps": 209.94,
+          "runs_tps": [
+            209.94,
+            214.86,
+            208.39
+          ],
+          "median_accepted_draft_tps": 125.47,
+          "median_accepted_draft_share": 0.5977
+        },
+        "decode_greedy": {
+          "median_tps": 235.31,
+          "runs_tps": [
+            236.72,
+            235.31,
+            234.75
+          ],
+          "median_accepted_draft_tps": 149.36,
+          "median_accepted_draft_share": 0.6348
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4135,
+            "ttft_s": 2.1096,
+            "tps": 1960.1,
+            "followup_s": [
+              0.0345,
+              0.043,
+              0.0364
+            ],
+            "followup_median_s": 0.0364,
+            "followup_suffix_tps": 628.3
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    "A2": {
+      "rc": 0,
+      "source": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+      "raw_sha256": "b08de6903949f8a94649f5931c2171f9341f17b26ceb6dfe04fb6c0e9ebd9f42",
+      "invalid": [],
+      "flags": [],
+      "results": {
+        "decode": {
+          "median_tps": 220.67,
+          "runs_tps": [
+            238.47,
+            220.67,
+            214.36
+          ],
+          "median_accepted_draft_tps": 136.19,
+          "median_accepted_draft_share": 0.6172
+        },
+        "decode_greedy": {
+          "median_tps": 246.57,
+          "runs_tps": [
+            246.57,
+            248.16,
+            245.16
+          ],
+          "median_accepted_draft_tps": 159.88,
+          "median_accepted_draft_share": 0.6484
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4135,
+            "ttft_s": 2.1106,
+            "tps": 1959.1,
+            "followup_s": [
+              0.0381,
+              0.0444,
+              0.045
+            ],
+            "followup_median_s": 0.0444,
+            "followup_suffix_tps": 576.9
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    "B2": {
+      "rc": 0,
+      "source": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36",
+      "raw_sha256": "0a8142b510c7d53a7946f3fa26835c3642cc78117ddd7a466e1a0a3b55422c11",
+      "invalid": [],
+      "flags": [],
+      "results": {
+        "decode": {
+          "median_tps": 237.33,
+          "runs_tps": [
+            237.33,
+            235.37,
+            246.23
+          ],
+          "median_accepted_draft_tps": 151.12,
+          "median_accepted_draft_share": 0.6387
+        },
+        "decode_greedy": {
+          "median_tps": 239.44,
+          "runs_tps": [
+            239.44,
+            250.29,
+            237.53
+          ],
+          "median_accepted_draft_tps": 153.39,
+          "median_accepted_draft_share": 0.6406
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 2.1042,
+            "tps": 1963.7,
+            "followup_s": [
+              0.0339,
+              0.0438,
+              0.038
+            ],
+            "followup_median_s": 0.038,
+            "followup_suffix_tps": 616.4
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    }
+  },
+  "assessment": "A1 repetition flag and lower candidate rates retained. Native requests are not matched-request performance evidence. No inference speedup or universal no-regression claim."
+}

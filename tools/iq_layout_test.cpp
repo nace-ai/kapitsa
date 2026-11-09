@@ -1,6 +1,7 @@
 #include "gguf_q8_0_test.h"
 #include "gguf_q6_k_test.h"
 #include "gguf_iq4_xs_test.h"
+#include "gguf_iq3_s_test.h"
 #include "gguf_q4_codes_test.h"
 #include "gguf_pack_codes_test.h"
 #include "gguf_pack4_test.h"
@@ -358,6 +359,7 @@ void test_iq4_nl_pages() {
 }  // namespace
 
 int main() {
+  if (iq3_s_test::run()) return 1;
   g_fail += q6_test::run();
   g_fail += iq4_xs_test::run();
   g_fail += pack_codes_test::run();
