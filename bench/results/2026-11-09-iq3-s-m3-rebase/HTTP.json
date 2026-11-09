@@ -1,0 +1,35 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Complete original records and commands retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_capacity_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17 (clang-1700.6.4.2)"
+  },
+  "arms": {
+    "reference": {
+      "rc": 1,
+      "pass": 54,
+      "fail": 1,
+      "failed_assertion": "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees",
+      "first_chunk_s": 0.002459287643432617,
+      "keepalive_s": 15.117838144302368,
+      "first_token_s": 24.360379219055176
+    },
+    "candidate": {
+      "rc": 1,
+      "pass": 54,
+      "fail": 1,
+      "failed_assertion": "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees",
+      "first_chunk_s": 0.002701282501220703,
+      "keepalive_s": 15.099502086639404,
+      "first_token_s": 24.460148096084595
+    }
+  },
+  "assessment": "Same keepalive assertion fails in both arms. Retained as a shared limitation; cause unresolved. Not an all-checks-pass result."
+}

@@ -1,0 +1,63 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Complete original records and commands retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_capacity_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17 (clang-1700.6.4.2)"
+  },
+  "rows_each": 584,
+  "vocab": 248320,
+  "all_finite": true,
+  "full_output_and_scored_input_bytes_literal_equal": true,
+  "paths": {
+    "prefill": {
+      "rows": 8,
+      "bitwise": 8,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "failures": [],
+      "thresholds_applied": false
+    },
+    "batch": {
+      "rows": 192,
+      "bitwise": 192,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "failures": [],
+      "thresholds_applied": true
+    },
+    "step": {
+      "rows": 192,
+      "bitwise": 192,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "failures": [],
+      "thresholds_applied": true
+    },
+    "verify": {
+      "rows": 192,
+      "bitwise": 192,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "failures": [],
+      "thresholds_applied": true
+    }
+  },
+  "report_only_rc": 0,
+  "strict_zero_rc": 0,
+  "floor_changed": false,
+  "prefill": "Separate finite/literal-byte gate already reviewed; strict threshold options do not apply to prefill.",
+  "scope": "Teacher-forced trunk; actual verify KFlash tree with eight live chain rows. No free MTP qualification.",
+  "independent_M3_imports": 0,
+  "import_basis": "Nine verified files shared from the original M5 reference import; no independent M3 import comparison."
+}
