@@ -153,6 +153,8 @@ int main(int argc, char** argv) {
       {{{"loops", 0}}, "loops: 1 to 4"},
       {{{"disk_cache", "lots"}}, "disk_cache takes auto, 0 (off) or a size"},
       {{{"disk_cache", "16Q"}}, "disk_cache takes auto, 0 (off) or a size"},
+      {{{"disk_cache", "16"}}, "a size with its unit such as 16G, not \"16\""},
+      {{{"context", "131072"}}, "context takes tokens (131072), k or m of them (128k, 1m) or max, not \"131072\""},
       {{{"disk_cache", 16}}, "disk_cache must be a string"},
       {{{"context", "12q"}}, "context takes tokens"},
       {{{"context", 0}}, "context takes tokens"},

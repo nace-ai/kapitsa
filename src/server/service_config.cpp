@@ -11,6 +11,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <unistd.h>
@@ -94,6 +95,13 @@ struct Reader {
   }
 };
 
+// disk_cache's forms in JSON (the schema's pattern): auto, off, no, none, 0, or a number with its unit (16G, 512MiB,
+// 1.5T, 4096B): a bare number of bytes ("16") is refused, as the flag's hex, exponents and spaces around it are
+bool json_size(const std::string& s) {
+  static const std::regex form("^(auto|off|no|none|0|[0-9]*[.]?[0-9]+ ?([kmgt](i?b)?|b))$", std::regex::icase);
+  return std::regex_match(s, form);
+}
+
 bool loopback(const std::string& host) { return host == "127.0.0.1" || host == "localhost" || host == "::1"; }
 }  // namespace
 
@@ -138,7 +146,9 @@ Options parse_options(const json& j, Source source) {
     const json& v = j["context"];
     const std::string s = v.is_string() ? v.get<std::string>() : v.dump();
     std::string why;
-    o.context = v.is_string() || v.is_number_integer() ? parse_context(s, &why) : 0;
+    // in JSON a token count is a number: "131072" is refused, "128k" and "max" are strings
+    const bool digits = !s.empty() && s.find_first_not_of("0123456789") == std::string::npos;
+    o.context = v.is_number_integer() || (v.is_string() && !(digits && source == Source::json)) ? parse_context(s, &why) : 0;
     if (!o.context)
       refuse(r.name("context") + " takes tokens (131072), k or m of them (128k, 1m) or max, not \"" + s + "\"");
   }
@@ -176,8 +186,10 @@ Options parse_options(const json& j, Source source) {
   if (o.timing != "ttft" && o.timing != "prefill" && o.timing != "both")
     refuse(r.name("timing") + " takes ttft, prefill or both, not \"" + o.timing + "\"");
   e.disk_cache = r.text("disk_cache");
-  if (uint64_t bytes = 0; r.has("disk_cache") && !pcache::parse_size(e.disk_cache, &bytes))
-    refuse(r.name("disk_cache") + " takes auto, 0 (off) or a size such as 16G, not \"" + e.disk_cache + "\"");
+  if (uint64_t bytes = 0; r.has("disk_cache") && (!pcache::parse_size(e.disk_cache, &bytes) ||
+                                                  (source == Source::json && !json_size(e.disk_cache))))
+    refuse(r.name("disk_cache") + " takes auto, 0 (off) or a size" + (source == Source::json ? " with its unit" : "") +
+           " such as 16G, not \"" + e.disk_cache + "\"");
   if (r.has("loops")) {
     e.loops = int(r.whole("loops", 0));
     if (e.loops < 1 || e.loops > Dory::kMaxLoops) refuse(r.name("loops") + ": 1 to 4");
