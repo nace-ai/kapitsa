@@ -41,21 +41,17 @@ std::shared_ptr<Activity::Request> Activity::start(const std::string& api, const
                  {"tokens_per_second", 0}};
     if (!r->client.empty()) r->sample["client"] = r->client;
     active_.push_back(r);
+    // Published under mu_, as finish() and tick() do: a request's events reach the bus as started, progress...,
+    // finished (Events::publish takes only the bus's own mutex and never calls back here)
+    nlohmann::json data = {{"request_id", r->id}, {"api", r->api}};
+    if (!r->client.empty()) data["client"] = r->client;
+    bus_.publish("request_started", data);
   }
-  nlohmann::json data = {{"request_id", r->id}, {"api", r->api}};
-  if (!r->client.empty()) data["client"] = r->client;
-  bus_.publish("request_started", data);
   return r;
 }
 
 void Activity::finish(const std::shared_ptr<Request>& r, const ChatResult& res) {
   if (!r) return;
-  {
-    std::lock_guard<std::mutex> lk(mu_);
-    auto it = std::find(active_.begin(), active_.end(), r);
-    if (it == active_.end()) return;  // finished already
-    active_.erase(it);
-  }
   static const char* const kReasons[] = {"stop", "length", "tool_calls", "cancelled", "error"};
   std::string reason = res.finish_reason;
   if (std::find(std::begin(kReasons), std::end(kReasons), reason) == std::end(kReasons))
@@ -73,6 +69,10 @@ void Activity::finish(const std::shared_ptr<Request>& r, const ChatResult& res) 
                          {"tokens_per_second", rate(res.completion_tokens - 1, res.decode_ms)},
                          {"prefill_tokens_per_second", rate(uncached, res.prefill_ms)}};
   if (reason == "error") data["error"] = (res.error.empty() ? std::string("error") : res.error).substr(0, 4096);
+  std::lock_guard<std::mutex> lk(mu_);  // (see start())
+  auto it = std::find(active_.begin(), active_.end(), r);
+  if (it == active_.end()) return;  // finished already
+  active_.erase(it);
   bus_.publish("request_finished", data);
 }
 
@@ -84,7 +84,6 @@ nlohmann::json Activity::requests() const {
 }
 
 void Activity::tick(double now_ms) {
-  std::vector<nlohmann::json> samples;
   {
     std::lock_guard<std::mutex> lk(mu_);
     for (auto& r : active_) {
@@ -107,10 +106,9 @@ void Activity::tick(double now_ms) {
       r->tokens_at_tick = tokens;
       r->tick_at = now_ms;
       r->sample = s;
-      samples.push_back(std::move(s));
+      bus_.publish("request_progress", s);  // under mu_ (see start())
     }
   }
-  for (const auto& s : samples) bus_.publish("request_progress", s);
   uint64_t dropped = 0;
   const auto lines = logs_.drain(&dropped);
   if (dropped)  // the oldest went: say so before the lines that are left

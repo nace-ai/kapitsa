@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <iostream>
+#include <map>
 #include <string>
 #include <thread>
 #include <vector>
@@ -257,6 +258,41 @@ static int print_frames() {
   return 0;
 }
 
+// One thread ticking, one starting and finishing requests: for every request the bus must carry started, then any
+// progress, then finished (start, finish and tick publish under Activity's lock). Run it under TSan too.
+static void request_order() {
+  Events bus(kRun);
+  Activity act(bus, 100);
+  Resume how;
+  auto s = bus.open("", &how);
+  std::atomic<bool> done{false};
+  std::map<std::string, int> seen;  // 1 started, 2 finished
+  int bad = 0, progress = 0;
+  std::thread reader([&] {
+    for (;;) {
+      auto e = s->next(20);
+      if (!e) {
+        if (done.load()) break;
+        continue;
+      }
+      const std::string id = json::parse(e->data).value("request_id", "");
+      int& st = seen[id];
+      if (e->type == "request_started") bad += st != 0, st = 1;
+      else if (e->type == "request_progress") bad += st != 1, ++progress;
+      else if (e->type == "request_finished") bad += st != 1, st = 2;
+    }
+  });
+  std::thread ticker([&] {
+    while (!done.load()) act.tick(steady_ms());
+  });
+  for (int i = 0; i < 2000; ++i) act.finish(act.start("openai", ""), ChatResult{});
+  done = true;
+  ticker.join();
+  reader.join();
+  CHECK(!s->closed() && bad == 0 && seen.size() == 2000);
+  for (const auto& [id, st] : seen) CHECK(st == 2);
+}
+
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--print") return print_frames();
   activity_events();
@@ -264,6 +300,7 @@ int main(int argc, char** argv) {
   replay_and_resets();
   slow_reader_closed();
   big_replay_expires();
+  request_order();
   stream_cap_and_close();
   stream_outlives_bus();
   logs();
