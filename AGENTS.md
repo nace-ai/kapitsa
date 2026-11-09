@@ -258,7 +258,8 @@ hardest: a run script that tees `transcripts/<label>.out` overwrites that label'
 re-run, so commit the new run under a new label, or say in the subject that the transcript is replaced.
 
 **Docs follow numbers.** When a measured number, a default, a flag or a catalog entry changes, grep the repo for the old
-value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy.
+value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy. A catalog change also regenerates
+`docs/models.md` (`python3 tools/models_table.py`); CI fails on a stale one.
 
 ## Pull requests
 

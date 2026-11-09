@@ -135,7 +135,7 @@ not ask for abstractions, interfaces or configuration the change does not need.
 
 - A changed default, flag, environment variable, measured number or catalog entry must be updated everywhere it is
   stated (README.md, docs/usage.md, docs/benchmarks.md, docs/architecture.md, tests, `src/hub/catalog.cpp`). Flag a stale
-  copy.
+  copy. A `src/hub/catalog.cpp` change comes with the regenerated `docs/models.md` (`python3 tools/models_table.py`).
 - A test that cannot fail for a user-visible reason (asserts the mock, or nothing) is not coverage; flag it.
 
 ## Size

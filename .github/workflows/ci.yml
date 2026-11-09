@@ -57,6 +57,16 @@ jobs:
       - run: python3 tests/test_comment_gates.py --self-test
       - run: python3 tests/test_comment_gates.py
 
+  models-table:
+    # docs/models.md is written by tools/models_table.py from src/hub/catalog.cpp; a catalog change without the rewritten
+    # table fails here. No build.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_models_table.py
+      - run: python3 tools/models_table.py --check
+
   splash-patches:
     # packaging/splash/: the patches' headers, the kernel generator, and every patch applied to the pinned Splash (clones it).
     runs-on: ubuntu-latest
