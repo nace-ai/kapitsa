@@ -1,0 +1,434 @@
+{
+  "format": "Sanitized derived summary; original logs and commands remain private. Return codes are actual, not inferred from other runs.",
+  "binary_source_commit": "fe0409a96aef4472ff5795cd7f643f7b2ea07db2",
+  "test_header_followup": "ab796a55cc217373f9be8d0fc72e8b43e1050891",
+  "build": "Explicit CMake Release configuration; -O3, arm64, macOS 14 deployment target; NDEBUG absent.",
+  "setup": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "binary_sha256": {
+    "kapitsa": "005e30993d4c4059b96b9de83f2acb98812c43a9f4e64494bef30cf912642339",
+    "load_error_test": "3a507639811307ab676cb1ccf5bee75c48344b67fc333492d66cdb18d9a1b7d4",
+    "update_test": "1429e80f2c8df5fbe4495242d312f8f4680e4d7fbf5aa05f8d1fbdb827d8fa3f"
+  },
+  "vk_cpu_entries": [
+    {
+      "test": "api_test",
+      "result": "PASS"
+    },
+    {
+      "test": "prefix_cache_test",
+      "result": "PASS"
+    },
+    {
+      "test": "fn_store_test",
+      "result": "PASS"
+    },
+    {
+      "test": "fn_dflash_test",
+      "result": "PASS"
+    },
+    {
+      "test": "tokenizer_test",
+      "result": "PASS"
+    },
+    {
+      "test": "iq_layout_test",
+      "result": "PASS"
+    },
+    {
+      "test": "nh_quant_q8_test",
+      "result": "PASS"
+    },
+    {
+      "test": "remote_test",
+      "result": "PASS"
+    },
+    {
+      "test": "cluster_test",
+      "result": "PASS"
+    },
+    {
+      "test": "split_place_test",
+      "result": "PASS"
+    },
+    {
+      "test": "gemm_slices_test",
+      "result": "PASS"
+    },
+    {
+      "test": "ws_upgrade_test",
+      "result": "PASS"
+    },
+    {
+      "test": "test_server_cli",
+      "result": "PASS"
+    },
+    {
+      "test": "test_sidecar",
+      "result": "PASS"
+    },
+    {
+      "test": "test_bench",
+      "result": "PASS"
+    },
+    {
+      "test": "test_update",
+      "result": "FAIL"
+    },
+    {
+      "test": "test_community",
+      "result": "PASS"
+    },
+    {
+      "test": "test_reasoning",
+      "result": "PASS"
+    },
+    {
+      "test": "test_pr_size",
+      "result": "PASS"
+    },
+    {
+      "test": "test_logit_compare",
+      "result": "PASS"
+    },
+    {
+      "test": "test_sampled_tokens_harness",
+      "result": "PASS"
+    },
+    {
+      "test": "test_structured_cli",
+      "result": "PASS"
+    }
+  ],
+  "steps": [
+    {
+      "label": "dependency-preflight",
+      "rc": 0,
+      "started_at": "2026-11-09T03:40:38.113065+00:00",
+      "ended_at": "2026-11-09T03:40:38.182531+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "configure",
+      "rc": 0,
+      "started_at": "2026-11-09T03:40:38.183601+00:00",
+      "ended_at": "2026-11-09T03:40:40.588321+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "build",
+      "rc": 0,
+      "started_at": "2026-11-09T03:40:40.589310+00:00",
+      "ended_at": "2026-11-09T03:42:43.732554+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "version",
+      "rc": 0,
+      "started_at": "2026-11-09T03:42:43.733960+00:00",
+      "ended_at": "2026-11-09T03:42:44.091013+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "focused",
+      "rc": 0,
+      "started_at": "2026-11-09T03:42:44.091995+00:00",
+      "ended_at": "2026-11-09T03:42:44.415610+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "vk-cpu-tests",
+      "rc": 1,
+      "started_at": "2026-11-09T03:42:44.416276+00:00",
+      "ended_at": "2026-11-09T03:57:52.421959+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "load_error_test",
+      "rc": 0,
+      "started_at": "2026-11-09T03:57:52.422945+00:00",
+      "ended_at": "2026-11-09T03:57:53.039241+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "execution_session_test",
+      "rc": 0,
+      "started_at": "2026-11-09T03:57:53.041173+00:00",
+      "ended_at": "2026-11-09T03:57:53.360729+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "http_stream_test",
+      "rc": 0,
+      "started_at": "2026-11-09T03:57:53.362910+00:00",
+      "ended_at": "2026-11-09T03:57:54.770086+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "bench_test",
+      "rc": 0,
+      "started_at": "2026-11-09T03:57:54.771797+00:00",
+      "ended_at": "2026-11-09T03:57:54.788744+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "update_test",
+      "rc": 0,
+      "started_at": "2026-11-09T03:57:54.790566+00:00",
+      "ended_at": "2026-11-09T03:57:54.848951+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "grammar_test",
+      "rc": 0,
+      "started_at": "2026-11-09T03:57:54.849910+00:00",
+      "ended_at": "2026-11-09T04:01:49.797569+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "structured_check",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:49.799188+00:00",
+      "ended_at": "2026-11-09T04:01:49.808018+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "drafter_attach_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:49.809528+00:00",
+      "ended_at": "2026-11-09T04:01:50.110093+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "exl3_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:50.111415+00:00",
+      "ended_at": "2026-11-09T04:01:50.395556+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "device_profile_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:50.397385+00:00",
+      "ended_at": "2026-11-09T04:01:50.664300+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "qwen4_config_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:50.667910+00:00",
+      "ended_at": "2026-11-09T04:01:50.923200+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "json_file_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:50.924749+00:00",
+      "ended_at": "2026-11-09T04:01:52.303675+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "affine_pack_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:52.306477+00:00",
+      "ended_at": "2026-11-09T04:01:52.632148+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "systemone_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:52.634962+00:00",
+      "ended_at": "2026-11-09T04:01:52.989446+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "systemone_codes_probe_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:52.991919+00:00",
+      "ended_at": "2026-11-09T04:01:53.258148+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "splash_protocol_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:53.260568+00:00",
+      "ended_at": "2026-11-09T04:01:53.505084+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "splash_runtime_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:01:53.506791+00:00",
+      "ended_at": "2026-11-09T04:02:04.904915+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "splash_discover_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:04.907933+00:00",
+      "ended_at": "2026-11-09T04:02:05.335278+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "splash_plan_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:05.336491+00:00",
+      "ended_at": "2026-11-09T04:02:05.588174+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "test_profile_gates",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:05.589973+00:00",
+      "ended_at": "2026-11-09T04:02:06.805706+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "test_comment_gates",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:06.808176+00:00",
+      "ended_at": "2026-11-09T04:02:08.058047+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "test_pr_size",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:08.060816+00:00",
+      "ended_at": "2026-11-09T04:02:14.799519+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "test_drex_max",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:14.800762+00:00",
+      "ended_at": "2026-11-09T04:02:15.469724+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "test_logit_dump",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:15.471676+00:00",
+      "ended_at": "2026-11-09T04:02:15.818938+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "test_systemone_codes_harness",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:15.819966+00:00",
+      "ended_at": "2026-11-09T04:02:16.165981+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "qwen4-pack",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:16.167505+00:00",
+      "ended_at": "2026-11-09T04:02:17.492583+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "tests/test_splash_patches.py --apply",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:17.495278+00:00",
+      "ended_at": "2026-11-09T04:02:42.816444+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "prek",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:42.817045+00:00",
+      "ended_at": "2026-11-09T04:02:43.496865+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "diff-check",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:43.497694+00:00",
+      "ended_at": "2026-11-09T04:02:43.520523+00:00",
+      "meaning": "Actual command result"
+    },
+    {
+      "label": "required-checks",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:43.521273+00:00",
+      "ended_at": "2026-11-09T04:02:43.723974+00:00",
+      "meaning": "Classification only; does not establish GPU checks passed"
+    },
+    {
+      "label": "cleanup",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:43.725470+00:00",
+      "ended_at": "2026-11-09T04:02:43.762976+00:00",
+      "meaning": "Actual command result"
+    }
+  ],
+  "candidate_updater_failure": {
+    "test": "test_update.py",
+    "check": "the binary ran throughout: the old version, then the new one, nothing in between",
+    "observed_versions": [
+      "0.2.32",
+      "0.2.33",
+      ""
+    ],
+    "unexpected_observations": [
+      ""
+    ],
+    "root_cause": "Not established. The harness does not retain subprocess status/stderr for this observation.",
+    "scope_review": "The changed GGUF constructor is not invoked by --version or by the updater; their implementation and the test script are unchanged."
+  },
+  "reference_control": {
+    "source": "47dbe3cbd1516af07be108385236d6f40e492b61",
+    "binary_sha256": {
+      "kapitsa": "5ccaa2f90871c5664a6c281a4059e2a3ab3fd4e61cfe81417fd10d7d44a40324",
+      "load_error_test": "45ef4dd8cca8d0d01a944c4246585d4c56b3260c05f97cda63b193182e8279ad",
+      "update_test": "8321a1518690c7bb6cdb75453e75b8d6e04c7c71810637d50915f21f4d6e6f6e"
+    },
+    "steps": [
+      {
+        "label": "configure",
+        "rc": 0,
+        "started_at": "2026-11-09T03:58:57.716245+00:00",
+        "ended_at": "2026-11-09T03:58:58.422842+00:00"
+      },
+      {
+        "label": "build",
+        "rc": 0,
+        "started_at": "2026-11-09T03:58:58.423690+00:00",
+        "ended_at": "2026-11-09T03:59:56.168434+00:00"
+      },
+      {
+        "label": "version",
+        "rc": 0,
+        "started_at": "2026-11-09T03:59:56.169425+00:00",
+        "ended_at": "2026-11-09T03:59:56.665163+00:00"
+      },
+      {
+        "label": "load-error",
+        "rc": 1,
+        "started_at": "2026-11-09T03:59:56.666033+00:00",
+        "ended_at": "2026-11-09T03:59:57.271111+00:00"
+      },
+      {
+        "label": "test-update",
+        "rc": 0,
+        "started_at": "2026-11-09T03:59:57.273600+00:00",
+        "ended_at": "2026-11-09T04:01:09.290651+00:00"
+      }
+    ],
+    "load_error_result": "Exit 1 at the unchanged raw-read page-cache threshold, after existing GGUF range controls passed. Candidate broad load_error_test exited 0; no cache-behavior improvement is claimed.",
+    "updater_result": "Exit 0 for the executed checks; two companion-installation checks were skipped because the reference control did not build the optional helper. This is one actual reference execution, not proof of universal stability."
+  },
+  "GPU_or_model_inference_runs": [],
+  "grammar_CPU_mask_test": {
+    "tokenizer_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    "vocabulary": 248320,
+    "states_compared": 5471,
+    "passed": 308,
+    "failed": 0,
+    "note": "Uses existing tokenizer metadata only, not model weights or GPU inference; no tokenizer repository identity inferred from its directory name."
+  }
+}
