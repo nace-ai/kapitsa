@@ -45,6 +45,7 @@
 #include <mutex>
 #include <set>
 #include <thread>
+#include <utility>
 
 #ifndef KAPITSA_VERSION
 #define KAPITSA_VERSION "0.2.32"
@@ -1142,6 +1143,15 @@ ojson make_config(const Plan& P, const Tok& tok, const File& f) {
 // ---------------------------------------------------------------- conversion
 
 struct OutFile {
+  OutFile() = default;
+  OutFile(const OutFile&) = delete;
+  OutFile& operator=(const OutFile&) = delete;
+  ~OutFile() { if (fd >= 0) ::close(fd); }
+  void close() {
+    const int owned = std::exchange(fd, -1);
+    if (owned >= 0 && ::close(owned) != 0)
+      throw Error("Can't write " + hub::tilde(name) + ": " + strerror(errno) + ".");
+  }
   std::string name;
   int fd = -1;
   uint64_t data0 = 0;  // where the tensor data starts (after the header)
@@ -1870,12 +1880,12 @@ static std::string import_model_files(const ImportOptions& opt) {
         char real[PATH_MAX];
         const std::string src = f.parts()[size_t(xparts[xi])];
         if (clonefile(realpath(src.c_str(), real) ? real : src.c_str(), o.name.c_str(), 0) == 0) {
-          const int fd = open(o.name.c_str(), O_WRONLY);
-          if (fd < 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+          o.fd = open(o.name.c_str(), O_WRONLY);
+          if (o.fd < 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
           const uint64_t hl = xheader[xi].size();
-          pwrite_all(fd, &hl, 8, 0, o.name);
-          pwrite_all(fd, xheader[xi].data(), xheader[xi].size(), 8, o.name);
-          if (close(fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+          pwrite_all(o.fd, &hl, 8, 0, o.name);
+          pwrite_all(o.fd, xheader[xi].data(), xheader[xi].size(), 8, o.name);
+          o.close();
           continue;  // fd stays -1: convert() leaves its tensors alone
         }
         xclone[xi] = false;
@@ -1899,10 +1909,7 @@ static std::string import_model_files(const ImportOptions& opt) {
     Progress prog(src_total, opt.progress, "Converting " + file);
     for (const Lin& L : P.lins) convert(L, outs, threads, prog);
     prog.end();
-    for (auto& o : outs) {
-      if (o.fd >= 0 && close(o.fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
-      o.fd = -1;
-    }
+    for (auto& o : outs) o.close();
     if (shards > 0) {
       json idx{{"metadata", {{"total_size", trunk_bytes}}}, {"weight_map", weight_map}};
       write_text(tmp + "/model.safetensors.index.json", idx.dump(2) + "\n");
