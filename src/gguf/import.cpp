@@ -261,8 +261,10 @@ struct Hp {
   std::vector<int64_t> sections;
   std::vector<bool> recurrent;
   bool flint = false;                // Recursive's Flint (arch "flint")
+  bool lfm3 = false;                 // Liquid's LFM3 (arch "lfm3")
   int64_t window = 0, dense_lead = 0;  // Flint: the sliding window, the leading dense-MLP layers
   std::vector<bool> swa, rope;         // Flint, per layer: sliding-window attention, RoPE
+  double theta_swa = 0, partial = 1;   // LFM3: the sliding layers' RoPE base, the full-attention partial rotation
 };
 
 // an integer key, or the largest of an integer array (per-layer values)
@@ -338,8 +340,7 @@ Hp read_hp(const File& f) {
 }
 
 // The checks Kapitsa's model loader makes (src/model/qwen35.cpp), before a long conversion.
-void check_runs(const Hp& h, const std::string& file) {
-  std::string why;
+void check_runs(const Hp& h, const std::string& file) {  std::string why;
   if (h.dk != 128 || h.dv != 128) why = "DeltaNet head size " + std::to_string(h.dk) + "/" + std::to_string(h.dv) + " (128 needed)";
   else if (h.head_dim != 256) why = "attention head size " + std::to_string(h.head_dim) + " (256 needed)";
   else if (h.hq % h.hkv || h.hq / h.hkv > 8) why = "a grouped-query ratio above 8";
@@ -350,6 +351,75 @@ void check_runs(const Hp& h, const std::string& file) {
   else if (h.moe && (h.H > 4096 || h.hv * h.dv > 4096 || h.hq * h.head_dim > 4096)) why = "a hidden size above 4096 for a MoE model";
   else if (h.H % 64) why = "a hidden size that is not a multiple of 64";
   if (!why.empty()) throw Error(file + " is a Qwen3.5-family model with " + why + ", which Kapitsa does not run.");
+}
+
+// LFM3's shape (the GGUF architecture "lfm3"; LiquidAI's LFM3-1.7B and friends): a tri-hybrid of gated short
+// convolutions (hkv 0 in the per-layer head_count_kv), full attention and sliding attention (model/lfm3.h). The
+// sliding layers' RoPE base and the full-attention partial rotation come from rope.freq_base_swa and the baked
+// rope_freqs.weight (Lfm3Config's zero-tail table: its nonzero prefix is the rotated pairs).
+Hp read_hp_lfm3(const File& f) {
+  Hp h;
+  h.arch = "lfm3", h.lfm3 = true;
+  const std::string a = "lfm3.", file = base_name(f.parts()[0]);
+  h.H = ival(f, a + "embedding_length");
+  h.layers = ival(f, a + "block_count");
+  h.hq = ival(f, a + "attention.head_count");
+  h.head_dim = ival(f, a + "attention.key_length", h.hq ? h.H / h.hq : 0);
+  h.rot = ival(f, a + "rope.dimension_count", h.head_dim);
+  h.ctx = ival(f, a + "context_length", 262144);
+  h.eps = f.real(a + "attention.layer_norm_rms_epsilon", 1e-6);
+  h.theta = f.real(a + "rope.freq_base", 1e6);
+  h.theta_swa = f.real(a + "rope.freq_base_swa", 1e4);
+  h.ffn = ival(f, a + "feed_forward_length");
+  h.window = ival(f, a + "attention.sliding_window");
+  h.conv = ival(f, a + "shortconv.l_cache", 7);
+  const auto per_layer = [&](const char* k) {
+    const json& v = f.meta().value(a + k, json());
+    if (!v.is_array() || int64_t(v.size()) != h.layers)
+      throw Error(file + " has no per-layer lfm3." + k + ".");
+    std::vector<bool> out;
+    for (const auto& x : v) out.push_back(x.is_number_integer() ? x.get<int64_t>() != 0 : x.get<bool>());
+    return out;
+  };
+  const std::vector<bool> attn = per_layer("attention.head_count_kv");
+  for (bool b : attn) h.recurrent.push_back(!b);  // recurrent: a conv layer (hkv 0)
+  h.swa = per_layer("attention.sliding_window_pattern");
+  // the attention layers' key heads (the array carries 0 on a conv layer)
+  int64_t attn_hkv = 0;
+  {
+    const json& v = f.meta()[a + "attention.head_count_kv"];
+    for (const auto& x : v)
+      if (x.is_number_integer() && x.get<int64_t>() > 0) attn_hkv = x.get<int64_t>();
+  }
+  h.hkv = attn_hkv;
+  if (!attn_hkv) throw Error(file + " has no attention layers (a per-layer head_count_kv of zeros).");
+  // the full-attention partial rotation from the baked zero-tail table (Lfm3Config's default 0.5 without it)
+  h.partial = 0.5;
+  if (const Tensor* rf = f.find("rope_freqs.weight"); rf && rf->type == kF32 && rf->ne.size() == 1) {
+    std::vector<float> fr(size_t(rf->elements()));
+    f.read(*rf, 0, fr.data(), fr.size() * 4);
+    int64_t nz = 0;
+    for (float x : fr) nz += x != 0;
+    if (nz && 2 * nz <= h.head_dim) h.partial = double(2 * nz) / double(h.head_dim);
+  }
+  const Tensor* emb = f.find("token_embd.weight");
+  if (!emb || emb->ne.size() != 2 || int64_t(emb->ne[0]) != h.H) throw Error(file + " has no token_embd.weight tensor.");
+  h.vocab = int64_t(emb->ne[1]);
+  h.tied = !f.find("output.weight");
+  return h;
+}
+
+// The shapes Kapitsa's LFM3 path runs (model/lfm3.h), before a conversion
+void check_runs_lfm3(const Hp& h, const std::string& file) {
+  std::string why;
+  if (h.head_dim != 128) why = "an attention head size of " + std::to_string(h.head_dim) + " (128 needed)";
+  else if (h.conv != 7) why = "a short convolution of " + std::to_string(h.conv) + " (7 needed)";
+  else if (h.rot != h.head_dim) why = "a RoPE dimension count of " + std::to_string(h.rot) + " (" +
+                                      std::to_string(h.head_dim) + " needed)";
+  else if (h.hq % h.hkv || h.hq / h.hkv > 16) why = "a grouped-query ratio above 16";
+  else if (h.window <= 0) why = "no sliding window for the sliding_attention layers";
+  else if (h.ffn % 64 || h.H % 64) why = "a width that is not a multiple of 64";
+  if (!why.empty()) throw Error(file + " is an LFM3 model with " + why + ", which Kapitsa does not run.");
 }
 
 // Flint's shape (the GGUF architecture "flint")
@@ -888,6 +958,50 @@ struct Builder {
       lin(b + "ffn_down_shexp.weight", out + "mlp.shared_expert.down_proj", H, S);
     }
   }
+
+  // LFM3 (Liquid): modeling_lfm3.py's names (model/lfm3.h loads them). Every linear keeps its own format (a Q4_1
+  // file's codes as stored); the norms and the depthwise conv taps are parameters in bf16; the tied lm_head is the
+  // embedding itself. rope_freqs.weight (llama.cpp's baked zero-tail table) is not converted: the path computes
+  // RoPE from rope_parameters, which make_config writes from the table's nonzero prefix.
+  void build_lfm3() {
+    const Hp& h = P.hp;
+    const uint64_t H = uint64_t(h.H), QD = uint64_t(h.hq * h.head_dim), KD = uint64_t(h.hkv * h.head_dim),
+                   I = uint64_t(h.ffn);
+    auto lin = [&](const std::string& src, const std::string& out, uint64_t N, uint64_t K) {
+      const Tensor* t = get(F, src);
+      check_ne(t, {int64_t(K), int64_t(N)});
+      linear(F, t, out, N, K, dense_format(t->type));
+    };
+    const Tensor* emb = get(F, "token_embd.weight");
+    linear(F, emb, "model.embed_tokens", uint64_t(h.vocab), H, dense_format(emb->type));
+    param(F, "output_norm.weight", "model.norm.weight", {h.H}, 1, H);
+    for (int64_t i = 0; i < h.layers; ++i) {
+      const std::string b = "blk." + std::to_string(i) + ".", out = "model.layers." + std::to_string(i) + ".";
+      param(F, b + "attn_norm.weight", out + "operator_norm.weight", {h.H}, 1, H);
+      param(F, b + "ffn_norm.weight", out + "ffn_norm.weight", {h.H}, 1, H);
+      param(F, b + "post_attention_norm.weight", out + "post_operator_norm.weight", {h.H}, 1, H);
+      param(F, b + "post_ffw_norm.weight", out + "post_ffn_norm.weight", {h.H}, 1, H);
+      lin(b + "ffn_gate.weight", out + "mlp.w1", I, H);
+      lin(b + "ffn_up.weight", out + "mlp.w3", I, H);
+      lin(b + "ffn_down.weight", out + "mlp.w2", H, I);
+      if (h.recurrent[size_t(i)]) {
+        // the gated short convolution: in_proj 3H -> H split B, C, x; a depthwise conv of h.conv taps
+        const Tensor* cw = get(F, b + "shortconv.conv.weight");
+        check_ne(cw, {h.conv, h.H});
+        param(F, b + "shortconv.conv.weight", out + "conv.conv.weight", {h.H, h.conv}, H, uint64_t(h.conv));
+        lin(b + "shortconv.in_proj.weight", out + "conv.in_proj", 3 * H, H);
+        lin(b + "shortconv.out_proj.weight", out + "conv.out_proj", H, H);
+      } else {
+        lin(b + "attn_q.weight", out + "self_attn.q_proj", QD, H);
+        lin(b + "attn_k.weight", out + "self_attn.k_proj", KD, H);
+        lin(b + "attn_v.weight", out + "self_attn.v_proj", KD, H);
+        lin(b + "attn_output.weight", out + "self_attn.o_proj", H, QD);
+        lin(b + "attn_gate.weight", out + "self_attn.gate_proj", uint64_t(h.hq), H);
+        param(F, b + "attn_q_norm.weight", out + "self_attn.q_norm.weight", {h.head_dim}, 1, uint64_t(h.head_dim));
+        param(F, b + "attn_k_norm.weight", out + "self_attn.k_norm.weight", {h.head_dim}, 1, uint64_t(h.head_dim));
+      }
+    }
+  }
 };
 
 // ---------------------------------------------------------------- tokenizer, config
@@ -906,7 +1020,8 @@ struct Tok {
 
 Tok make_tokenizer(const File& f, const Hp& h) {
   const std::string file = base_name(f.parts()[0]);
-  const std::string model = h.flint ? "Flint" : "Qwen3.5", want = h.flint ? "flint" : "qwen35";
+  const std::string model = h.lfm3 ? "LFM3" : h.flint ? "Flint" : "Qwen3.5",
+                    want = h.lfm3 ? "lfm2" : h.flint ? "flint" : "qwen35";
   if (f.str("tokenizer.ggml.model") != "gpt2")
     throw Error(file + ": tokenizer \"" + f.str("tokenizer.ggml.model") + "\" is not " + model + "'s byte-level BPE.");
   const std::string pre = f.str("tokenizer.ggml.pre");
@@ -956,6 +1071,13 @@ Tok make_tokenizer(const File& f, const Hp& h) {
                     "\"post_processor\":null,\"decoder\":{\"type\":\"ByteLevel\",\"add_prefix_space\":true,"
                     "\"trim_offsets\":true,\"use_regex\":true},\"model\":{\"type\":\"BPE\",\"dropout\":null,"
                     "\"unk_token\":null,\"continuing_subword_prefix\":null,\"end_of_word_suffix\":null,"
+              : h.lfm3 ? "null,\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" +
+                             split(Tokenizer::kLfm2Split) +
+                             "{\"type\":\"ByteLevel\",\"add_prefix_space\":false,\"trim_offsets\":true,"
+                             "\"use_regex\":false}]},\"post_processor\":{\"type\":\"ByteLevel\","
+                             "\"add_prefix_space\":true,\"trim_offsets\":false,\"use_regex\":true},\"decoder\":null,"
+                             "\"model\":{\"type\":\"BPE\",\"dropout\":null,\"unk_token\":null,"
+                             "\"continuing_subword_prefix\":null,\"end_of_word_suffix\":null,"
               : "{\"type\":\"NFC\"},\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" + split(kQwen35Split) +
                     bl + "]},\"post_processor\":" + bl + ",\"decoder\":" + bl +
                     ",\"model\":{\"type\":\"BPE\",\"dropout\":null,\"unk_token\":null,\"continuing_subword_prefix\":\"\","
@@ -973,7 +1095,15 @@ Tok make_tokenizer(const File& f, const Hp& h) {
   if (t.eos < 0 || t.eos >= int(toks.size())) throw Error(file + " names no end-of-sequence token.");
   ojson tc;
   tc["add_bos_token"] = f.flag("tokenizer.ggml.add_bos_token", false);
-  if (h.flint) {  // as RecursiveSI/flint-int4's
+  if (h.lfm3) {
+    tc["add_eos_token"] = f.flag("tokenizer.ggml.add_eos_token", false);
+    tc["bos_token"] = tok_at("tokenizer.ggml.bos_token_id");
+    tc["clean_up_tokenization_spaces"] = false;
+    tc["eos_token"] = toks[size_t(t.eos)];
+    tc["model_max_length"] = h.ctx;
+    tc["pad_token"] = tok_at("tokenizer.ggml.padding_token_id");
+    tc["tokenizer_class"] = "PreTrainedTokenizerFast";
+  } else if (h.flint) {  // as RecursiveSI/flint-int4's
     tc["add_eos_token"] = f.flag("tokenizer.ggml.add_eos_token", false);
     tc["bos_token"] = tok_at("tokenizer.ggml.bos_token_id");
     tc["clean_up_tokenization_spaces"] = false;
@@ -1077,8 +1207,52 @@ ojson make_config_flint(const Plan& P, const Tok& tok, const File& f) {
   return c;
 }
 
+// LFM3's config.json: modeling_lfm3.py's flat shape (no text_config), what model/lfm3_config.h reads
+ojson make_config_lfm3(const Plan& P, const Tok& tok, const File& f) {
+  const Hp& h = P.hp;
+  ojson c;
+  c["architectures"] = json::array({"Lfm3ForCausalLM"});
+  c["bos_token_id"] = f.num("tokenizer.ggml.bos_token_id", -1);
+  c["conv_L_cache"] = h.conv;
+  c["conv_bias"] = false;
+  c["dtype"] = "bfloat16";
+  json eos = json::array({tok.eos});
+  c["eos_token_id"] = eos;
+  c["head_dim"] = h.head_dim;
+  c["hidden_size"] = h.H;
+  c["intermediate_size"] = h.ffn;
+  json lt = json::array();
+  for (int64_t i = 0; i < h.layers; ++i)
+    lt.push_back(h.recurrent[size_t(i)] ? "conv" : h.swa[size_t(i)] ? "sliding_attention" : "full_attention");
+  c["layer_types"] = lt;
+  c["max_position_embeddings"] = h.ctx;
+  c["model_type"] = "lfm3";
+  char eps[32];
+  snprintf(eps, sizeof eps, "%g", float(h.eps));
+  c["norm_eps"] = std::stod(eps);
+  c["num_attention_heads"] = h.hq;
+  c["num_hidden_layers"] = h.layers;
+  c["num_key_value_heads"] = h.hkv;
+  c["pad_token_id"] = f.num("tokenizer.ggml.padding_token_id", tok.eos);
+  c["rope_parameters"] = ojson{
+      {"full_attention",
+       ojson{{"partial_rotary_factor", h.partial}, {"rope_theta", h.theta}, {"rope_type", "default"}}},
+      {"sliding_attention", ojson{{"rope_theta", h.theta_swa}, {"rope_type", "default"}}}};
+  c["sliding_window"] = h.window;
+  c["tie_word_embeddings"] = h.tied;
+  c["use_sandwich_norm"] = true;
+  c["vocab_size"] = h.vocab;
+  if (const ojson q = quant_config(P); !q.is_null()) {
+    c["quantization"] = q;
+    c["quantization_config"] = q;
+  }
+  c["converted_from_gguf"] = source_config(f);
+  return c;
+}
+
 ojson make_config(const Plan& P, const Tok& tok, const File& f) {
   if (P.hp.flint) return make_config_flint(P, tok, f);
+  if (P.hp.lfm3) return make_config_lfm3(P, tok, f);
   const Hp& h = P.hp;
   ojson t;
   t["attention_bias"] = false;
@@ -1550,24 +1724,25 @@ static std::string import_model_files(const ImportOptions& opt) {
   if (arch == "qwen3next")
     throw Error(file + " is Qwen3-Next, the model before Qwen3.5; Kapitsa runs the Qwen3.5 family (Qwen3.5, Qwen3.6, "
                 "Qwen3.8).");
-  if (arch != "qwen35" && arch != "qwen35moe" && arch != "flint")
+  if (arch != "qwen35" && arch != "qwen35moe" && arch != "flint" && arch != "lfm3")
     throw Error(file + " is a \"" + arch + "\" model; Kapitsa runs the Qwen3.5 family (GGUF architectures qwen35 and "
-                "qwen35moe) and Recursive's Flint (flint).");
-  const bool flint = arch == "flint";
+                "qwen35moe), Recursive's Flint (flint) and Liquid's LFM3 (lfm3).");
+  const bool flint = arch == "flint", lfm3 = arch == "lfm3";
   for (auto& [k, v] : f.meta().items())
     if (k.rfind("prism.hadamard.", 0) == 0)
       throw Error(file + " stores its weights rotated (a Hadamard transform its runtime undoes), which Kapitsa does "
                   "not read. Choose another quantization of the model.");
   Plan P;
-  P.hp = flint ? read_hp_flint(f) : read_hp(f);
+  P.hp = flint ? read_hp_flint(f) : lfm3 ? read_hp_lfm3(f) : read_hp(f);
   if (flint) check_runs_flint(P.hp, file);
+  else if (lfm3) check_runs_lfm3(P.hp, file);
   else check_runs(P.hp, file);
-  // the MTP head: the file's own block, else a separate file (Flint has none)
+  // the MTP head: the file's own block, else a separate file (Flint and LFM3 have none)
   std::unique_ptr<File> mf;
   const File* M = nullptr;
   if (P.hp.nextn > 0) {
     M = &f;
-  } else if (!flint) {
+  } else if (!flint && !lfm3) {
     if (s.mtp.empty()) s.mtp = find_mtp_file(f, P.hp);
     if (!s.mtp.empty()) {
       mf = std::make_unique<File>(s.mtp);
@@ -1597,9 +1772,10 @@ static std::string import_model_files(const ImportOptions& opt) {
     throw Error(hub::tilde(dest) + " exists already and is not a conversion of " + file + ". Name this one with "
                 "--name, or replace that folder with --force.");
   }
-  if (!flint) find_majority(P, f);
+  if (!flint && !lfm3) find_majority(P, f);
   Builder B(P, f, M);
   if (flint) B.build_flint();
+  else if (lfm3) B.build_lfm3();
   else B.build();
   if (M && !P.has_mtp) M = nullptr;
   for (const auto& t : f.tensors())  // tensors not read: the vision tower (none in llama.cpp's text GGUFs) is fine
