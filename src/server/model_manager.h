@@ -2,6 +2,7 @@
 #include "engine/engine.h"
 #include "engine/history_gate.h"
 #include "hub/hub.h"
+#include "server/activity.h"
 #include "server/cli.h"
 #include "server/ui.h"
 #include "util/log.h"
@@ -252,6 +253,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     }
 
     logi("switching model from %s to %s", ref_.name.c_str(), new_ref.name.c_str());
+    publish_state("switching");
     if (tui_) ui::note("Switching model to " + term::bold(new_ref.name));
     else printf("Switching model to %s...\n", new_ref.name.c_str());
     fflush(stdout);
@@ -275,6 +277,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         if (error_out) error_out->message += std::string("; reloading the previous model failed too: ") + e2.what();
       }
       unloaded_ = !engine_;  // (a live engine is not "released", whatever the idle watcher did before the switch)
+      publish_state(engine_ ? "ready" : "released", error_out ? error_out->message : std::string());
       if (tui_) ui::loading_end(ref_.name);
       return nullptr;
     }
@@ -286,6 +289,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     remember_info();
     touch();
     logi("switched model to %s (id: %s, context: %d)", ref_.name.c_str(), opt_.model_id.c_str(), opt_.context);
+    publish_state("ready");
     if (request_out) *request_out = acquire_unlocked();
     return engine_;
   }
@@ -308,6 +312,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     std::unique_lock<std::shared_mutex> lk(rw_mu_);
     wait_for_requests(lk);
     stop_prefill();
+    publish_state("loading");
     engine_.reset();
     if (before) before();
     if (tui_) ui::loading_begin(ref_.name);
@@ -324,6 +329,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         if (error_out) *error_out += std::string("; loading it as it was failed too: ") + e2.what();
       }
       unloaded_ = !engine_;
+      publish_state(engine_ ? "ready" : "released", error_out ? *error_out : std::string());
       if (tui_) ui::loading_end(ref_.name);
       return false;
     }
@@ -332,6 +338,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     unloaded_ = false;
     remember_info();
     touch();
+    publish_state("ready");
     return true;
   }
   EngineOptions options() const {
@@ -576,6 +583,11 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
         .count();
   }
   void touch() { last_use_ms_.store(mono_ms()); }
+  // The state event (docs/control-socket.md, "States"), naming the model info_ holds: the one that served before a
+  // switch, the one that comes back after a release (rw_mu_ held exclusively)
+  void publish_state(const char* state, const std::string& message = "") const {
+    server::publish_state(state, server::model_json(info_.model_id, info_.context, info_.slots), message);
+  }
   // what the accessors answer while the engine is released
   void remember_info() {
     if (!engine_) return;
@@ -644,6 +656,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     unloaded_ = true;
     const size_t after = Gpu::get().allocated_bytes();
     logi("released %s: GPU memory %.1f -> %.1f GB", ref_.name.c_str(), before / 1e9, after / 1e9);
+    publish_state("released");
     if (tui_) ui::note(ref_.name + " released while idle; the next request loads it again");
   }
   // The request that finds the engine released loads it again; requests arriving meanwhile wait on the lock.
@@ -670,6 +683,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     if (engine_) unloaded_ = false;  // (never a second engine beside a live one)
     if (!unloaded_.load()) return true;  // (another request or a switch did)
     const int64_t t0 = mono_ms();
+    publish_state("loading");
     if (tui_) ui::loading_begin(ref_.name);
     try {
       // NI_IDLE_UNLOAD_TEST_LOAD_MS: tests/test_idle_unload.py makes the load of a small model last long enough to poll
@@ -680,6 +694,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     } catch (const std::exception& e) {
       if (tui_) ui::loading_end(ref_.name);
       logi("loading %s again failed: %s", ref_.name.c_str(), e.what());
+      publish_state("released", std::string("loading the model again failed: ") + e.what());
       if (error_out) *error_out = {Error::Code::Busy, std::string("loading the model again failed: ") + e.what()};
       return false;
     }
@@ -688,6 +703,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     remember_info();
     touch();
     logi("loaded %s again in %.1f s for a request", ref_.name.c_str(), double(mono_ms() - t0) / 1e3);
+    publish_state("ready");
     return true;
   }
 

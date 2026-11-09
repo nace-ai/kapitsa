@@ -156,6 +156,19 @@ Activity& start_activity() {
   return *a;
 }
 
+nlohmann::json model_json(const std::string& id, int context_length, int slots) {
+  if (id.empty() || context_length < 1 || slots < 1) return nullptr;
+  return {{"id", id}, {"context_length", context_length}, {"slots", slots}};
+}
+
+void publish_state(const char* state, const nlohmann::json& model, const std::string& message) {
+  Events* bus = g_events.load(std::memory_order_acquire);
+  if (!bus) return;
+  nlohmann::json d = {{"state", state}, {"model", model}};
+  if (!message.empty()) d["message"] = message.substr(0, 4096);
+  bus->publish("state", d);
+}
+
 Activity* activity() { return g_activity.load(std::memory_order_acquire); }
 Events* events() { return g_events.load(std::memory_order_acquire); }
 
