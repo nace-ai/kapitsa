@@ -4,30 +4,106 @@
   <img alt="Kapitsa writes 351 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
+<p align="center">
+  <a href="https://github.com/nace-ai/kapitsa/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/nace-ai/kapitsa?label=release&color=2A7A3C&style=flat-square"></a>
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/github/license/nace-ai/kapitsa?color=2A7A3C&style=flat-square"></a>
+  <a href="#quickstart"><img alt="macOS 14 or later, Apple silicon" src="https://img.shields.io/badge/platform-macOS%2014%2B%20%C2%B7%20Apple%20silicon-2A7A3C?style=flat-square"></a>
+  <a href="https://github.com/nace-ai/kapitsa/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/nace-ai/kapitsa?color=2A7A3C&style=flat-square"></a>
+  <a href="https://github.com/nace-ai/homebrew-tap"><img alt="Homebrew tap nace-ai/tap" src="https://img.shields.io/badge/Homebrew-nace--ai%2Ftap-2A7A3C?style=flat-square"></a>
+</p>
+
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex, Pi, Hermes, aider or Goose on a local model, and serves OpenAI and Anthropic APIs.
 
-[Quickstart](#quickstart) · [Benchmarks](#benchmarks) · [Features](#features) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [Xcode 26 guide](docs/xcode-guide.md) · [日本語](README.ja.md)
+<p align="center">
+  <a href="#quickstart">🚀 Quickstart</a> · <a href="#whats-new">🔥 What's new</a> · <a href="#features">✨ Features</a> · <a href="#benchmarks">📊 Benchmarks</a> · <a href="#cli">⌨️ CLI</a> · <a href="#supported-models">🧠 Models</a><br>
+  <a href="docs/kflash.md">⚙️ How KFlash works</a> · <a href="docs/usage.md">📚 Docs</a> · <a href="docs/xcode-guide.md">🛠️ Xcode 26 guide</a> · <a href="README.ja.md">🌐 日本語</a>
+</p>
 
-## Quickstart
+<a id="quickstart"></a>
+## 🚀 Quickstart
 
-**Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
+> [!NOTE]
+> **Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
 
-**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
+**1. Install**
 
 ```bash
 brew install nace-ai/tap/kapitsa
 # or: curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash
 ```
 
+**2. Start a coding agent on a local model**
+
 ```bash
 kapitsa opencode --model 35b    # also: claude, codex, pi
 ```
 
-<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies.</sub>
+> [!TIP]
+> On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies.
 
-## Benchmarks
+**3. Or serve the APIs and the chat page**
 
-Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+```bash
+kapitsa serve                   # chat + OpenAI/Anthropic APIs at http://127.0.0.1:8000
+```
+
+> [!WARNING]
+> **Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
+
+<a id="whats-new"></a>
+## 🔥 What's new
+
+- [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
+- [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
+
+<details>
+<summary>Earlier</summary>
+
+- [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
+- [2026/10] 🏆 **The fastest decode in 32 of the 38 model and Mac pairs** measured against nine engines ([poster](#benchmarks)).
+
+</details>
+
+<a id="features"></a>
+## ✨ Features
+
+<picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/assets/agents-kapitsa-models-narrow-dark.svg">
+  <source media="(max-width: 600px)" srcset="docs/assets/agents-kapitsa-models-narrow.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents-kapitsa-models-dark.svg">
+  <img alt="Your coding agent talks to Kapitsa over the OpenAI and Anthropic APIs, and Kapitsa runs the model on your Mac." src="docs/assets/agents-kapitsa-models-light.svg">
+</picture>
+
+| | Feature |
+|:-:|---|
+| ⚡ | **351 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)). |
+| 🗄️ | **A 180B model on a 48 GB Mac, at 61 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds. |
+| 💾 | **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`). |
+| 🧠 | **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on. |
+| 🔌 | **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`. |
+| 🤖 | **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider` and `kapitsa goose` start on the local model. |
+| 🎯 | **One calibrated probability per option.** `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)). |
+| 🖥️ | **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)). |
+| 🖼️ | **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`. |
+
+<a id="drex-max-v1"></a>
+### 🎯 Drex Max v1
+
+Drex Max v1 runs on Kapitsa v0.2.25 or later, through `kapitsa-systemone` (the Q8_0 GGUF imported to Kapitsa's affine 8-bit layout; an affine Q4 checkpoint is in [its guide](docs/drex-max.md#run-the-affine-q4-checkpoint)):
+
+```bash
+brew install nace-ai/tap/kapitsa
+kapitsa import /path/to/drex-max-v1-Q8_0.gguf --name drex-max-v1
+kapitsa-drex-pointer /path/to/drex-max-v1-Q8_0.gguf ~/.cache/kapitsa/models/drex-max-v1/pointer.bin
+kapitsa-systemone --model ~/.cache/kapitsa/models/drex-max-v1 --port 8000 --context 2048
+```
+
+[Drex Max v1 on Kapitsa](docs/drex-max.md) has the request, the memory a longer context needs and the encoding.
+
+<a id="benchmarks"></a>
+## 📊 Benchmarks
+
+Kapitsa has the fastest decode in **33 of the 38** model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
@@ -36,7 +112,10 @@ Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured agai
 
 <sub>Each cell reads prefill / decode in tokens per second, from a 4K-token prompt and a 512-token answer at T 0.6 (Flint at its card's T 1.0). The M5 Pro's Flash-Next 180B Q2 row is a 256-token answer at T 0 on that run's own 4,074-token prompt, and its Kapitsa column is Kapitsa with KFlash against plain Splash 1.5.0: a tie, the two engines' ranges overlap ([record](bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md)). Footnotes, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
 
-The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md) and the [community leaderboard](https://kapitsa.vercel.app/leaderboard.html). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
+- 🔎 The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models).
+- 📒 Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md).
+- 📤 Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md) and the [community leaderboard](https://kapitsa.vercel.app/leaderboard.html).
+- 🆚 Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
 How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to 512K, every model on the M5 Max (log scale; the [table](docs/benchmarks.md#m5-max)). The decode chart is the poster's 512-token coding answer written after a document of each length: with a document in front of it a drafter guesses fewer tokens right, so a drafted model's 1K point can sit well below its poster cell (the 27B: 82 against 143), while Flint, which drafts nothing, matches its cell:
 
@@ -50,39 +129,9 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
   <img alt="Kapitsa's decode speed in tokens per second on a MacBook Pro M5 Max after 1K tokens of context to each model's context limit (128K to 512K), one line per model: Qwen3.6 35B-A3B 335 at 1K to 136 at 256K; Clover 35B-A3B 294 at 1K to 181 at 128K; Qwen3.8 27B 82 at 1K to 43 at 256K; Flash-Next 180B 97 at 1K to 76 at 256K; Lightning 30B 241 at 1K to 116 at 512K; Super-VL 120B 97 at 1K to 44 at 512K; Bolt 74B 142 at 1K to 91 at 256K; Dory1.0 4B 123 at 1K to 23 at 256K; Flint 40B 258 at 1K to 62 at 256K." src="docs/assets/context-decode-light.webp">
 </picture>
 
-## 🔥 What's new
 
-- [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
-- [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
-- [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
-- [2026/10] 🏆 **The fastest decode in 32 of the 38 model and Mac pairs** measured against nine engines ([poster](#benchmarks)).
-
-## Features
-
-- **351 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
-- **A 180B model on a 48 GB Mac, at 61 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
-- **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
-- **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
-- **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
-- **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider` and `kapitsa goose` start on the local model.
-- **One calibrated probability per option.** `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)).
-- **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
-- **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.
-
-### Drex Max v1
-
-Drex Max v1 runs on Kapitsa v0.2.25 or later, through `kapitsa-systemone` (the Q8_0 GGUF imported to Kapitsa's affine 8-bit layout; an affine Q4 checkpoint is in [its guide](docs/drex-max.md#run-the-affine-q4-checkpoint)):
-
-```bash
-brew install nace-ai/tap/kapitsa
-kapitsa import /path/to/drex-max-v1-Q8_0.gguf --name drex-max-v1
-kapitsa-drex-pointer /path/to/drex-max-v1-Q8_0.gguf ~/.cache/kapitsa/models/drex-max-v1/pointer.bin
-kapitsa-systemone --model ~/.cache/kapitsa/models/drex-max-v1 --port 8000 --context 2048
-```
-
-[Drex Max v1 on Kapitsa](docs/drex-max.md) has the request, the memory a longer context needs and the encoding.
-
-## CLI
+<a id="cli"></a>
+## ⌨️ CLI
 
 ```bash
 kapitsa serve                   # chat + OpenAI/Anthropic APIs at http://127.0.0.1:8000
@@ -103,7 +152,8 @@ A Mac that cannot hold a model whole uses another Mac on the network that runs i
 Flash-Next pair to hold it in memory between them ([Several Macs](docs/usage.md#several-macs)); `--private` keeps a
 server to its own Mac. [Usage guide](docs/usage.md)</sub>
 
-## In-process SDK
+<a id="in-process-sdk"></a>
+## 🧩 In-process SDK
 
 The opt-in [C ABI SDK](sdk/README.md) lets desktop clients reuse a loaded model,
 stream and cancel requests. See its build instructions and host-process lifetime limitations.
@@ -111,7 +161,8 @@ The [Node.js / TypeScript binding](sdk/node/README.md) provides async calls over
 
 **Roadmap** — what is open in the [tracker](https://github.com/nace-ai/kapitsa/issues): KV cache quantization ([#547](https://github.com/nace-ai/kapitsa/issues/547)).
 
-## Supported models
+<a id="supported-models"></a>
+## 🧠 Supported models
 
 The most precise variant of each catalog model that runs on a Mac of each size. Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
 
@@ -134,7 +185,8 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 
 <sub>Cells name the catalog's variant labels — `4bit`, `5bit`, `6bit`, `8bit`, `bf16` and `nvfp4`, with `16gb`, `24gb` and Flash-Next's `64gb` shown as 2-bit — that `kapitsa serve <name>:<variant>` takes, the most precise one that starts on that Mac at the bottom of its working-set range: weights, drafter, activations and 8K tokens of context. † needs the top of the range, about 80% of the RAM against 69% at the bottom; — nothing starts. Flash-Next's 48 GB cell is its Q2_0 pack with the experts the budget does not hold streamed from the SSD, and Drex 2.0's Q4 and Q8 are its release builds, served by `kapitsa-systemone` ([decisions](docs/systemone.md)). The 24, 32 and 64 GB columns are `kapitsa doctor`'s plan, and so is any cell in the 16, 36, 48 and 128 GB ones that differs from the default variant those [Macs](#models) ran, usually 4-bit; `kapitsa doctor` prints the plan for this Mac.</sub>
 
-## Models
+<a id="models"></a>
+## 🍎 Models
 
 The catalog models measured on each Mac, against the engines that run them: one collapsed section per Mac, with a table for each model family. Decode is a 512-token coding answer at T 0.6 (Flint at its card's T 1.0), prefill a 4K-token prompt. Under each model's name are the weights Kapitsa ran; the other engines' weights and how each number was measured are in [docs/benchmarks.md](docs/benchmarks.md#the-readmes-tables). Flint's speed from 1K to 128K tokens of prompt on the M5 Pro, against llama.cpp: [bench/results/2026-10-24-flint-m5pro-context](bench/results/2026-10-24-flint-m5pro-context/README.md).
 
@@ -270,7 +322,8 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 <sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint, Clover and the 35B's `16gb` read images. What runs on a Mac of each size: [Supported models](#supported-models). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
 
-## How it works
+<a id="how-it-works"></a>
+## ⚙️ How it works
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/how-it-works-narrow.svg">
@@ -280,11 +333,13 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 Kapitsa decodes with **KFlash**. A draft model such as DFlash2 guesses the next seven tokens, with a few candidates for each one. Engines that run it as published (Splash, oMLX, mlx-serve) check one chain of guesses and stop at the first wrong one. KFlash checks a best-first tree of the drafter's candidates in the same pass, so where the drafter hesitates, its runner-ups are checked too and more tokens survive each pass. The tree's size comes from what a verify row costs on your Mac, measured there, and it changes no output: the big model checks every token. It runs on z-lab's DFlash, DFlash2, and NVIDIA's DSpark and LiLiCorr as published, and on our retrain of the 27B's DFlash2 with a 16-row block. [How KFlash works](docs/kflash.md)
 
-## Get release notices
+<a id="get-release-notices"></a>
+## 🔔 Get release notices
 
 Watch → Custom → Releases on [nace-ai/kapitsa](https://github.com/nace-ai/kapitsa) puts every new version in your notifications.
 
-## Star history
+<a id="star-history"></a>
+## ⭐ Star history
 
 <a href="https://star-history.com/#nace-ai/kapitsa&Date">
   <picture>

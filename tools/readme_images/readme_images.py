@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -175,7 +176,7 @@ def tables(data):
 def readme_with_tables(readme, block):
     """README text with its Models section's tables replaced: from the legend line (or, the first time, the section's
     first <details>) to the section's last </details>"""
-    start = readme.index("\n## Models\n")
+    start = re.search(r"\n## (?:[^\w\s]+ )?Models\n", readme).start()   # the heading may lead with an emoji
     end = readme.find("\n## ", start + 1)
     end = len(readme) if end < 0 else end
     sec = readme[start:end]
