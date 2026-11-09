@@ -75,6 +75,7 @@ build/systemone_test                         # System One's pointer heads, reado
 build/systemone_codes_probe_test             # controlled option-code regression, built and run explicitly in CI
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
 build/serve_options_test docs/serve-config.schema.json  # kapitsa serve's one validator: flags and --config JSON (src/server/service_config.cpp)
+python3 tests/test_serve_schema.py build/serve_options_test  # needs: jsonschema; the schema and the validator agree, --config - survives a restart
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)

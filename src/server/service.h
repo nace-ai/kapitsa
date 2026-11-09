@@ -55,4 +55,8 @@ int run_service(Options options);
 // it never goes in argv.
 void keep_stdin(const std::string& text);
 
+// --config's JSON: "-" reads stdin (and keeps it, keep_stdin), else the file at that path. Its contents are never
+// echoed (they may hold the API key).
+nlohmann::json read_config(const std::string& from);
+
 }  // namespace ni::server

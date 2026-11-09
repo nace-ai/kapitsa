@@ -9,6 +9,9 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <unistd.h>
 
@@ -151,7 +154,8 @@ Options parse_options(const json& j, Source source) {
     double m = -2;
     if (s == "auto") m = -1;
     else if (s == "0" || s == "off") m = 0;
-    else if (v.is_string() || v.is_number()) {
+    else if (v.is_number() && v.get<double>() == 0) m = 0;
+    else if (v.is_number() || (v.is_string() && source == Source::flags)) {  // JSON: minutes are a number
       char* end = nullptr;
       const double x = strtod(s.c_str(), &end);
       if (end != s.c_str() && !*end && x >= 0.5 && x <= 10080) m = x;  // (NaN is refused too)
@@ -265,6 +269,21 @@ std::optional<json> flags_to_json(const std::vector<std::string>& args, bool pos
         j[key] = v;
     }
   }
+  return j;
+}
+
+json read_config(const std::string& from) {
+  std::ostringstream text;
+  if (from == "-") {
+    text << std::cin.rdbuf();
+    keep_stdin(text.str());
+  } else {
+    std::ifstream f(from);
+    if (!f) throw std::invalid_argument("can't read " + from);
+    text << f.rdbuf();
+  }
+  json j = json::parse(text.str(), nullptr, false);
+  if (j.is_discarded()) throw std::invalid_argument((from == "-" ? std::string("stdin") : from) + " is not JSON");
   return j;
 }
 

@@ -25,9 +25,9 @@
     "context": {
       "oneOf": [
         {"type": "integer", "minimum": 1, "maximum": 2147483647},
-        {"type": "string", "pattern": "^([0-9]+[kKmM]?|[mM][aA][xX])$"}
+        {"type": "string", "pattern": "^(0*[1-9][0-9]*[kKmM]?|[mM][aA][xX])$"}
       ],
-      "description": "tokens, k or m of them (128k, 1m), or max"
+      "description": "tokens, k or m of them (128k, 1m), or max; the server also refuses more than 2147483647 tokens"
     },
     "slots": {"type": "integer", "minimum": 0, "maximum": 2147483647},
     "spec": {"type": "integer", "minimum": 0, "maximum": 2147483647},
@@ -45,7 +45,7 @@
     "mem_budget": {"type": "number", "exclusiveMinimum": 0, "description": "GB"},
     "image_max_pixels": {"type": "integer", "minimum": 0, "maximum": 2147483647},
     "timing": {"enum": ["ttft", "prefill", "both"], "default": "both"},
-    "disk_cache": {"type": "string", "description": "auto, 0 (off) or a size such as 16G"},
+    "disk_cache": {"type": "string", "pattern": "^([aA][uU][tT][oO]|[oO][fF][fF]|[nN][oO]([nN][eE])?|[0-9]*[.]?[0-9]+ ?([kKmMgGtT]([iI]?[bB])?|[bB])?)$", "description": "auto, 0 (off) or a size such as 16G"},
     "loops": {"type": "integer", "minimum": 1, "maximum": 4},
     "loop_kv": {"enum": ["last-loop", "last_loop", "per-loop", "per_loop"]},
     "split": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},

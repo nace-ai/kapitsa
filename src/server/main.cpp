@@ -838,22 +838,6 @@ static int idle_unload_auto_s() {
   return s >= 5 && s <= 600 ? s : 600;
 }
 
-// --config's JSON: "-" reads it from stdin. Its contents are never echoed (they may hold the API key).
-static nlohmann::json read_config(const std::string& from) {
-  std::ostringstream text;
-  if (from == "-") {
-    text << std::cin.rdbuf();
-    server::keep_stdin(text.str());
-  } else {
-    std::ifstream f(expand_home(from));
-    if (!f) throw std::invalid_argument("can't read " + from);
-    text << f.rdbuf();
-  }
-  nlohmann::json j = nlohmann::json::parse(text.str(), nullptr, false);
-  if (j.is_discarded()) throw std::invalid_argument((from == "-" ? std::string("stdin") : from) + " is not JSON");
-  return j;
-}
-
 // kapitsa serve: its flags (or serve.json's, or --config's JSON) through the one validator (src/server/service.h),
 // then the service
 static int serve(int argc, char** argv, int first) {
@@ -870,7 +854,7 @@ static int serve(int argc, char** argv, int first) {
     if (std::find(args.begin(), args.end(), "--config") != args.end()) {
       if (args.size() != 2 || args[0] != "--config")
         usage_error("--config takes - (the JSON on stdin) or a file, and no other option", help);
-      try { options = server::parse_options(read_config(args[1]), server::Source::json); }
+      try { options = server::parse_options(server::read_config(args[1] == "-" ? args[1] : expand_home(args[1])), server::Source::json); }
       catch (const std::invalid_argument& e) { usage_error(std::string("--config: ") + e.what(), help); }
     } else {
       const auto config = server::flags_to_json(args, first == 2);

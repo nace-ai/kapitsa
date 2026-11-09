@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <set>
 #include <iterator>
 #include <unistd.h>
@@ -62,6 +63,29 @@ static std::string flag_refusal(const std::vector<std::string>& args) {
 static bool has(const std::string& s, const std::string& part) { return s.find(part) != std::string::npos; }
 
 int main(int argc, char** argv) {
+  // --check: each stdin line is a config; prints "ok" or the validator's refusal (tests/test_serve_schema.py runs the
+  // schema on the same lines)
+  if (argc > 1 && std::string(argv[1]) == "--check") {
+    for (std::string line; std::getline(std::cin, line);) {
+      try {
+        ni::server::parse_options(json::parse(line), Source::json);
+        std::printf("ok\n");
+      } catch (const std::invalid_argument& e) { std::printf("refused: %s\n", e.what()); }
+    }
+    return 0;
+  }
+  // --reexec N: reads --config - as serve does, then execs itself N more times, as restart_server() does; the last
+  // prints what it read
+  if (argc > 2 && std::string(argv[1]) == "--reexec") {
+    const json j = ni::server::read_config("-");
+    const int n = std::atoi(argv[2]);
+    if (n <= 0) return std::printf("%s\n", j.dump().c_str()) < 0;
+    const std::string left = std::to_string(n - 1);
+    char* av[] = {argv[0], argv[1], const_cast<char*>(left.c_str()), nullptr};
+    execv(argv[0], av);
+    std::perror("execv");
+    return 1;
+  }
   // defaults: nothing given is EngineOptions' defaults and serve's own, by both routes
   {
     const ni::EngineOptions d;

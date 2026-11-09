@@ -298,6 +298,9 @@ jobs:
       - name: serve_options_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/serve_options_test docs/serve-config.schema.json
+      - name: test_serve_schema
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_serve_schema.py build/serve_options_test
       - name: http_stream_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/http_stream_test
