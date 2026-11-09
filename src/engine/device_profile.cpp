@@ -13,8 +13,8 @@ namespace {
 bool qwen35_shape(const ModelFacts& m) { return m.moe && m.hidden == 2048 && m.layers == 40; }
 
 // The 35B-A3B shape the KFlash lanes were run on. Clover has the same numbers and is left out by the caller
-// (config.json model_type), not by a second chip check: no run on Clover shows a loss or a break, so this is a
-// narrower gate than the shape, for #369 to widen.
+// (config.json model_type): with the history lane and the selector update, Clover's sampled decode is slower
+// (M5 Pro, interleaved, 6 of 6 pairs slower at temperature 0.6 (-4%), faster at 0 (+5%; #1094)), so this gate is narrower than the shape on a measured miss.
 bool qwen35_a3b(const ModelFacts& m) {
   return qwen35_shape(m) && !m.clover && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
 }
