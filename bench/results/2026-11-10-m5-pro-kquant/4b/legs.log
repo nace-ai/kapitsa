@@ -1,0 +1,51 @@
+00:53:24 bin=/Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k421-kquant/build/kapitsa sha=a72731c6b97c commit=7c511224 model=/Users/alisheramantay/.cache/kapitsa/models/qwen3.5-4b-4bit order=[A B C C B A] macos=26.5.2
+00:53:25 waiting for load 6.91
+00:53:40 waiting for load 6.48
+00:53:55 waiting for load 6.02
+00:54:11 waiting for load 5.66
+00:54:26 waiting for load 5.50
+00:54:41 waiting for load 5.39
+00:54:56 waiting for load 5.08
+00:55:11 waiting for load 4.82
+00:55:26 waiting for load 5.21
+00:55:41 waiting for load 4.93
+00:55:56 waiting for load 4.65
+00:56:11 waiting for load 4.43
+00:56:26 waiting for load 4.41
+00:56:41 waiting for load 4.37
+00:56:56 waiting for load 4.19
+00:57:11 waiting for load 4.21
+00:57:26 waiting for load 4.26
+00:57:41 waiting for load 4.58
+00:57:56 waiting for load 4.65
+00:58:11 waiting for load 4.44
+00:58:26 waiting for load 4.20
+00:58:41 waiting for load 6.01
+00:58:56 waiting for load 6.85
+00:59:11 waiting for load 7.59
+00:59:26 waiting for load 9.18
+00:59:41 waiting for load 9.35
+00:59:56 waiting for load 8.73
+01:00:11 waiting for load 7.79
+01:00:26 waiting for load 6.79
+01:00:41 waiting for load 6.05
+01:00:56 waiting for load 5.76
+01:01:11 waiting for load 5.27
+01:01:26 waiting for load 4.76
+01:01:41 waiting for load 4.36
+01:01:56 waiting for load 4.19
+01:02:11 waiting for load 4.22
+01:02:26 waiting for load 4.09
+01:03:11 1-A rc=0 load 3.79->3.48 ok power=ac serve_rss_end=3.4G serve_peak=3.38G kflash_lines=43 drafter_lines=29
+01:03:38 2-B rc=0 load 3.48->4.20 ok power=ac serve_rss_end=3.1G serve_peak=3.37G kflash_lines=43 drafter_lines=29
+01:03:39 waiting for load 4.51
+01:03:54 waiting for load 4.60
+01:04:09 waiting for load 4.24
+01:04:24 waiting for load 4.36
+01:04:39 waiting for load 4.51
+01:04:54 waiting for load 4.17
+01:05:50 3-C rc=0 load 3.61->3.55 ok power=ac serve_rss_end=3.6G serve_peak=3.55G kflash_lines=43 drafter_lines=29
+01:06:20 4-C rc=0 load 3.55->3.65 ok power=ac serve_rss_end=3.6G serve_peak=3.56G kflash_lines=43 drafter_lines=29
+01:06:47 5-B rc=0 load 3.65->3.69 ok power=ac serve_rss_end=3.4G serve_peak=3.37G kflash_lines=43 drafter_lines=29
+01:07:17 6-A rc=0 load 3.69->3.10 ok power=ac serve_rss_end=3.4G serve_peak=3.38G kflash_lines=43 drafter_lines=29
+01:07:17 LEGSDONE

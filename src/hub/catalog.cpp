@@ -163,9 +163,12 @@ const std::vector<CatalogModel>& catalog() {
        .fallbacks = {},
        .variants = {
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64",
-            .repo = "lmstudio-community/Qwen3.5-4B-MLX-4bit",
-            .revision = "c43ee1d65576a5d98de1e8405cac93c371a655c1",
+            // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt by
+            // importance-weighted scale search, every other byte the same. KL from bf16 0.048 against 0.070,
+            // GSM8K (1319) 0.923 against 0.914, M5 Pro decode 219 and 237 against 199 and 198 tok/s
+            .quant = "MLX affine 4-bit, group 64 (KQuant)",
+            .repo = "nace-ai/Qwen3.5-4B-MLX-4bit-KQuant",
+            .revision = "c11bbc3b4e981b87e70fa7bb03f0b509bbb9e4e3",
             .companions = {mtp4(), dflash4()},
             .download_gb = 4.57},
            {.name = "6bit",
@@ -196,9 +199,12 @@ const std::vector<CatalogModel>& catalog() {
        .fallbacks = {},
        .variants = {
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64",
-            .repo = "lmstudio-community/Qwen3.5-9B-MLX-4bit",
-            .revision = "b455506b0f574c74616dbcd56879bde38fafcff3",
+            // KQuant (#421): lmstudio-community's pack (b455506) with its quantized weights rebuilt by
+            // importance-weighted scale search, every other byte the same. KL from bf16 0.037 against 0.081,
+            // GSM8K (1319) 0.944 against 0.927, M5 Pro decode 149 and 140 against 131 and 144 tok/s
+            .quant = "MLX affine 4-bit, group 64 (KQuant)",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant",
+            .revision = "867e2c59f1b24464c334cddc656f313f7cbcd432",
             .companions = {mtp9(), dflash9()},
             .download_gb = 9.05},
        }},

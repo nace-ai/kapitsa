@@ -52,6 +52,7 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
 
 ## 🔥 What's new
 
+- [2026/11] 🎯 **KQuant: the Qwen3.5 4B and 9B downloads are closer to the original model, at the same size, and the 4B writes ~15% faster on an M5 Pro** ([numbers](#kquant)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -60,6 +61,7 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
 ## Features
 
 - **351 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
+- **Downloads closer to the original model, at the same size.** The Qwen3.5 4B and 9B packs are KQuant builds: the same MLX 4-bit files, a third less error on the 4B and half on the 9B ([KQuant](#kquant)).
 - **A 180B model on a 48 GB Mac, at 61 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
 - **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
@@ -68,6 +70,19 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
 - **One calibrated probability per option.** `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)).
 - **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
 - **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.
+
+### KQuant
+
+Kapitsa's Qwen3.5-4B and 9B downloads are KQuant packs: the same MLX 4-bit files and size as a standard pack, closer to the original model. `kapitsa serve --model 4b` gets it; there is nothing to set.
+
+| Qwen3.5, 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
+| --- | --- | --- | --- |
+| 4B standard | 0.070 | 0.914 | 199 |
+| 4B KQuant | **0.048** | **0.923** | **228** |
+| 9B standard | 0.081 | 0.927 | 137 |
+| 9B KQuant | **0.037** | **0.944** | **145** |
+
+<sub>Standard: lmstudio-community's packs, which the catalog served before. KL: mean over 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer at T 0.6, the mean of two interleaved runs per pack, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC. How KQuant builds a pack, and every run: [record](bench/results/2026-11-10-m5-pro-kquant/README.md).</sub>
 
 ### Drex Max v1
 
