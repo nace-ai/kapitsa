@@ -143,7 +143,7 @@ add_test(NAME serve_options_test COMMAND serve_options_test ${CMAKE_SOURCE_DIR}/
 set_tests_properties(serve_options_test PROPERTIES TIMEOUT 30)
 
 # Exercise the real HTTP observer and chunked provider without native/UI linkage or sockets.
-add_executable(events_test tools/events_test.cpp src/server/events.cpp)
+add_executable(events_test tools/events_test.cpp src/server/events.cpp src/server/activity.cpp)
 target_include_directories(events_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(events_test PRIVATE Threads::Threads)
 add_test(NAME events_test COMMAND events_test)
@@ -195,7 +195,7 @@ add_custom_command(
   COMMENT "Embedding the chat page")
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
   ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/events.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/events.cpp ${CMAKE_SOURCE_DIR}/src/server/activity.cpp
   ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp

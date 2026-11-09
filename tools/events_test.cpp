@@ -1,5 +1,6 @@
-// The server's event bus (src/server/events.h): numbering, replay and the reset cases of a Last-Event-ID, slow
+// The server's event bus (src/server/events.h) and what feeds it (src/server/activity.h): numbering, replay and the reset cases of a Last-Event-ID, slow
 // readers closed at kMaxUnsent, the stream cap, and log lines through the ring. CPU only.
+#include "server/activity.h"
 #include "server/events.h"
 
 #include <atomic>
@@ -10,6 +11,7 @@
 #include <vector>
 
 using namespace ni::server;
+using ni::ChatResult;
 using nlohmann::json;
 #define CHECK(x) do { if (!(x)) { std::cerr << __LINE__ << ": " #x "\n"; std::abort(); } } while (false)
 
@@ -132,7 +134,69 @@ static void logs() {
   CHECK(kept + lost == 8000);
 }
 
+// Every event the stream has now, as (type, data)
+static std::vector<std::pair<std::string, json>> drain(Events::Stream& s) {
+  std::vector<std::pair<std::string, json>> out;
+  while (auto e = s.next(0)) out.emplace_back(e->type, json::parse(e->data));
+  return out;
+}
+
+static void activity() {
+  Events bus(kRun);
+  Resume how;
+  auto s = bus.open("", &how);
+  Activity act(bus, 500);
+  auto r = act.start("openai", "curl/8.7.1");
+  auto ev = drain(*s);
+  CHECK(ev.size() == 1 && ev[0].first == "request_started" && ev[0].second["request_id"] == "req-1" &&
+        ev[0].second["client"] == "curl/8.7.1");
+  CHECK(act.requests().size() == 1 && act.requests()[0]["phase"] == "waiting");
+  // prefill, then 50 tokens in the first tick and 20 in the second: each tick's rate is its own tokens
+  r->live->phase = 1, r->live->prompt = 3904, r->live->read = 2816;
+  const double t = r->t0;
+  act.tick(t + 500);
+  ev = drain(*s);
+  CHECK(ev.size() == 1 && ev[0].first == "request_progress" && ev[0].second["phase"] == "prefill" &&
+        ev[0].second["prefilled_tokens"] == 2816 && ev[0].second["tokens_per_second"] == 0);
+  r->live->phase = 2, r->live->read = 3904, r->live->tokens = 50;
+  act.tick(t + 1000);
+  CHECK(drain(*s)[0].second["tokens_per_second"] == 100.0);
+  r->live->tokens = 70;
+  act.tick(t + 1500);
+  const json p = drain(*s)[0].second;
+  CHECK(p["tokens_per_second"] == 40.0 && p["completion_tokens"] == 70 && p["elapsed_ms"] == 1500);
+  CHECK(act.requests()[0] == p);  // status reports the last tick's sample, not a fresh read
+  ChatResult res;
+  res.finish_reason = "stop", res.prompt_tokens = 3904, res.cached_tokens = 0, res.completion_tokens = 71;
+  res.prefill_ms = 1952, res.decode_ms = 1400, res.queue_ms = 3.4;
+  act.finish(r, res);
+  act.finish(r, res);  // once only
+  ev = drain(*s);
+  CHECK(ev.size() == 1 && ev[0].first == "request_finished" && ev[0].second["tokens_per_second"] == 50.0 &&
+        ev[0].second["prefill_tokens_per_second"] == 2000.0 && ev[0].second["queue_ms"] == 3 &&
+        !ev[0].second.contains("error"));
+  CHECK(act.requests().empty());
+  act.tick(t + 2000);
+  CHECK(drain(*s).empty());  // nothing active, no log lines: a quiet tick publishes nothing
+  // a failed request carries its error; an unknown reason with an error becomes error
+  auto r2 = act.start("anthropic", "");
+  ChatResult bad;
+  bad.finish_reason = "", bad.error = "the prompt does not fit";
+  act.finish(r2, bad);
+  ev = drain(*s);
+  CHECK(!ev[0].second.contains("client") && ev[1].second["finish_reason"] == "error" &&
+        ev[1].second["error"] == "the prompt does not fit");
+  // log lines reach the bus at the tick, a drop warning first
+  LogRing& logs = act.logs();
+  for (int i = 0; i < 300; ++i) logs.push(1, ("line " + std::to_string(i)).c_str());
+  act.tick(t + 2500);
+  ev = drain(*s);
+  CHECK(ev.size() == 257 && ev[0].second["level"] == "warn" && ev[1].second["message"] == "line 44" &&
+        ev.back().second["message"] == "line 299");
+}
+
 int main() {
+  activity();
   numbering_and_live();
   replay_and_resets();
   slow_reader_closed();
