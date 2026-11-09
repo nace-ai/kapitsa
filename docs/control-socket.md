@@ -48,7 +48,9 @@ it.
 - **Start race.** A starting server takes the lock, waiting at most 1 second so that a client's brief check never makes
   it fail, and holds it until it exits. A server that does not get it exits with "instance `<id>` is already
   running". The winner removes any old socket file, emits its first event (`state` `starting`), then binds and
-  listens.
+  listens. The lock's file descriptor and the listening socket are opened `O_CLOEXEC`. Otherwise a child such as
+  the Splash engine would inherit the lock and keep it after the server is killed, and clients would see the instance
+  as starting or busy forever.
 - **Restarts.** `run_id` is new each time the process starts. It is in `GET /status` and in every event id, so a
   client sees that an instance restarted even though the socket path is unchanged.
 
@@ -67,11 +69,24 @@ Any other path answers `404 not_found`, and a wrong method answers `405 method_n
 
 ### Status
 
-`GET /status` returns the instance's identity, its state (`starting`, `loading`, `ready`, `switching`, `stopping`),
-the loaded model, the active requests, and `config`. `name` is the configuration's `name`, or the `instance_id`
+`GET /status` returns the instance's identity, its state, the model, the active requests, and `config`. `name` is the configuration's `name`, or the `instance_id`
 when that is empty, so a client always has something to show. `config` is the instance's effective configuration in exactly
 the keys, types and ranges of `kapitsa serve --config -`, minus `api_key`. `last_event_id` is the newest event's id.
 A client that sends it as `Last-Event-ID` reads every event after this status with no gap and no duplicate.
+
+| `state` | What it means | `model` |
+| --- | --- | --- |
+| `starting` | The process is up; nothing is loading yet | `null` |
+| `loading` | The model loads: at start, or again after a release | `null` at start, else the model that loads |
+| `ready` | The model is in memory and serves requests | the model |
+| `switching` | `POST /model` or an inference request is loading another model | the model that served before |
+| `released` | No model is in memory; the next inference request loads `model` again | the model that comes back |
+| `stopping` | The instance is shutting down | the last model, or `null` |
+
+`released` has two causes. With `idle_unload`, the server gives the model's memory back after a quiet spell. The next
+inference request then waits while the state reads `loading` and then `ready`. If that load fails, the state returns to
+`released` with a `message`, the request fails, and the next request tries again. The other cause is a failed switch
+whose previous model could not be loaded back either (below).
 
 ### Stop
 
@@ -89,11 +104,15 @@ left out keeps the instance's current value. The switch behaves as `POST /v1/mod
 
 - Requests already running finish first. New inference requests get `503` with `Retry-After` until the switch ends.
 - The `state` events read `switching`, then `ready` with the new `model`.
-- A model that fails to load leaves the previous one serving. The request answers `500 load_failed`, and the `state`
-  event `ready` carries the previous `model` and a `message` that says why.
+- A model that fails to load leaves the previous one serving. The request answers `500 load_failed` with
+  `details.state` `ready`, and the `state` event `ready` carries the previous `model` and a `message` that says why.
+- To load the new model, the server first frees the old one. If the new one fails and the old one then fails to
+  load back too, no model is in memory. The request answers `500 load_failed` with `details.state` `released`, and
+  the `state` event `released` names the previous `model` with a `message` giving both failures. The instance keeps
+  running, and the next inference request tries to load the previous model again.
 - A client that disconnects does not stop the switch. It reads the outcome from the `state` events or `GET /status`.
 
- The socket needs no `--allow-switch`, because its user already controls the process. `allow_switch` still
+The socket needs no `--allow-switch`, because its user already controls the process. `allow_switch` still
 governs whether an inference request that names another model may load it. `POST /v1/models/switch` leaves the
 inference port.
 
@@ -185,5 +204,5 @@ only the fields listed below.
 | `run_id_mismatch` | 409 | The request's `run_id` is not the running run's | `run_id` (the running one) |
 | `busy` | 503 | A model switch is already running, or 16 event streams are open; `Retry-After` is set | `retry_after_s` |
 | `stopping` | 503 | The instance is stopping | none |
-| `load_failed` | 500 | `POST /model` could not load the model; the previous one still serves | `model` |
+| `load_failed` | 500 | `POST /model` could not load the model | `model`, `state` (`ready` or `released`) |
 | `internal` | 500 | Anything else | none |

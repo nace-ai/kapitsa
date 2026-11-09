@@ -1,0 +1,1 @@
+{"base": "event.state-starting.json", "merge_patch": {"data": {"state": "ready"}}}

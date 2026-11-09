@@ -29,7 +29,7 @@
       "pattern": "^[0-9a-f]{16,64}\\.[0-9]{1,19}$",
       "description": "<run_id>.<seq>: the SSE id and the Last-Event-ID cursor; seq starts at 1 for each run"
     },
-    "state": {"enum": ["starting", "loading", "ready", "switching", "stopping"]},
+    "state": {"enum": ["starting", "loading", "ready", "switching", "released", "stopping"]},
     "lifecycle": {
       "enum": ["attached", "keep_running", "foreground"],
       "description": "attached: a child of the app, exits with it; keep_running: a LaunchAgent, launchd owns it; foreground: a terminal's kapitsa serve"
@@ -74,6 +74,7 @@
     "error_code": {
       "enum": ["bad_request", "unknown_field", "invalid_value", "forbidden_peer", "not_found", "model_not_found",
         "method_not_allowed", "run_id_mismatch", "busy", "stopping", "load_failed", "internal"]
-    }
+    },
+    "state_model": {"description": "Which states name a model: a ready, switching or released instance always does, a starting one never", "allOf": [{"if": {"required": ["state"], "properties": {"state": {"enum": ["ready", "switching", "released"]}}}, "then": {"properties": {"model": {"type": "object"}}}}, {"if": {"required": ["state"], "properties": {"state": {"const": "starting"}}}, "then": {"properties": {"model": {"type": "null"}}}}]}
   }
 }

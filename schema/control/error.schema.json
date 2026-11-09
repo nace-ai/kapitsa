@@ -20,7 +20,8 @@
             "field": {"type": "string", "description": "unknown_field, invalid_value: the request field"},
             "run_id": {"$ref": "control.schema.json#/$defs/run_id", "description": "run_id_mismatch: the run that holds the socket"},
             "retry_after_s": {"type": "integer", "minimum": 1, "description": "busy: the Retry-After header's value"},
-            "model": {"type": "string", "description": "model_not_found, load_failed: the name asked for"}
+            "model": {"type": "string", "description": "model_not_found, load_failed: the name asked for"},
+            "state": {"enum": ["ready", "released"], "description": "load_failed: whether the previous model serves again (ready) or no model is in memory (released)"}
           }
         }
       }

@@ -24,6 +24,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["state", "model"],
+      "allOf": [{"$ref": "control.schema.json#/$defs/state_model"}],
       "properties": {
         "state": {"$ref": "control.schema.json#/$defs/state"},
         "model": {"$ref": "control.schema.json#/$defs/model"},

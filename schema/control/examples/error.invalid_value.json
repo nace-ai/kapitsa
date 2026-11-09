@@ -1,9 +1,1 @@
-{
-  "error": {
-    "code": "invalid_value",
-    "message": "slots must be a whole number from 0",
-    "details": {
-      "field": "slots"
-    }
-  }
-}
+{"error": {"code": "invalid_value", "message": "slots must be a whole number from 0", "details": {"field": "slots"}}}

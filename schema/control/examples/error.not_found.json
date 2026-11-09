@@ -1,6 +1,1 @@
-{
-  "error": {
-    "code": "not_found",
-    "message": "no endpoint GET /v1/status"
-  }
-}
+{"error": {"code": "not_found", "message": "no endpoint GET /v1/status"}}

@@ -1,9 +1,1 @@
-{
-  "error": {
-    "code": "unknown_field",
-    "message": "unknown field mem_budget_gb",
-    "details": {
-      "field": "mem_budget_gb"
-    }
-  }
-}
+{"error": {"code": "unknown_field", "message": "unknown field mem_budget_gb", "details": {"field": "mem_budget_gb"}}}

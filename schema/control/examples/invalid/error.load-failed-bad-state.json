@@ -1,0 +1,1 @@
+{"base": "error.load_failed.json", "merge_patch": {"error": {"details": {"state": "stopping"}}}}

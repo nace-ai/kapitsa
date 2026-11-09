@@ -1,6 +1,1 @@
-{
-  "error": {
-    "code": "stopping",
-    "message": "the instance is stopping"
-  }
-}
+{"error": {"code": "stopping", "message": "the instance is stopping"}}

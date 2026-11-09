@@ -1,6 +1,1 @@
-{
-  "error": {
-    "code": "method_not_allowed",
-    "message": "/stop takes POST"
-  }
-}
+{"error": {"code": "method_not_allowed", "message": "/stop takes POST"}}
