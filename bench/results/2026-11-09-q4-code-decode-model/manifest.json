@@ -1,0 +1,55 @@
+{
+  "export": "Explicitly redacted derived evidence; private original execution records are not uploaded. Numeric outcomes and source/binary identities are preserved.",
+  "production": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5",
+  "reference": "87c105238186beadb375805e47a89791a499319a",
+  "files": {
+    "M3-API-NATIVE.json": {
+      "sha256": "337898082bc10f4577977d2cb17e7c4e633a43033ec5be6d6abe119a15e41db5",
+      "bytes": 15988
+    },
+    "M3-FIXED.json": {
+      "sha256": "ec13ca2b435c4b20d3b128bf8dafd946900bb6169907267ad174f503d07b5186",
+      "bytes": 34110
+    },
+    "M3-IDENTITY.json": {
+      "sha256": "82bf67edb52645e8af3866d67950ad59089a2e9e6eacd9910d8dd3b41083f5b2",
+      "bytes": 12269
+    },
+    "M3-IMPORT.json": {
+      "sha256": "63e3b17e07aa230c8836b126692163766c4d04f2162cc43132a4229687f8e68f",
+      "bytes": 8714
+    },
+    "M3-NUMERICAL.json": {
+      "sha256": "ec2196983a546de8b0117f0c8b0f9aea5b8c0974e21be3ffcfbed3bf485ba488",
+      "bytes": 14993
+    },
+    "M4-API-NATIVE.json": {
+      "sha256": "9b068eb41f25fd8ea3ccc58bd02a361600effbf6b9919ef775cd23277ed7d0af",
+      "bytes": 15531
+    },
+    "M4-FIXED-SUPPLEMENT.json": {
+      "sha256": "37702c39adfa02695cd6c971c2c0f1bff5bb83e182b7e2a9a35ede5d2f0ff6bb",
+      "bytes": 35899
+    },
+    "M4-FIXED.json": {
+      "sha256": "9d64d16fb8996c5b66a9364fee3b6d98d63d3841fa51001e67b498b53d6c369f",
+      "bytes": 34372
+    },
+    "M4-IDENTITY.json": {
+      "sha256": "ada2709f1e5a9e0455726fa8a6b1577504ea9feb4350e0f000aa9843f411d048",
+      "bytes": 11178
+    },
+    "M4-IMPORT.json": {
+      "sha256": "c436572adea9f50b4375e8460f40b32e34618810f9e20fdea6a44ad7bb58eef0",
+      "bytes": 8713
+    },
+    "M4-NUMERICAL.json": {
+      "sha256": "f54769701f8a5324b9067aca4ff9b933a24dc44fef12515369edd0395a5abea6",
+      "bytes": 15016
+    },
+    "README.md": {
+      "sha256": "ac0b61761626b12eee90c63ac5b2d425c81dbd4f91bc17add829958f68198604",
+      "bytes": 9458
+    }
+  }
+}
