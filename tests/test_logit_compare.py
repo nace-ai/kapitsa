@@ -60,6 +60,10 @@ def fsrc(kl):
 FAKE_DUMP = r'''#!/usr/bin/env python3
 import array, json, os, random, sys
 a = sys.argv[1:]
+if "--list-paths" in a:  # as logit_dump decides it from config.json (here: Flint has no batch path)
+    print("step,verify" if json.load(open(os.path.join(a[0], "config.json")))["model_type"] == "flint"
+          else "step,verify,batch")
+    sys.exit(0)
 out, paths = a[1], a[a.index("--paths") + 1].split(",")
 rows = int(a[a.index("--rows") + 1]) if "--rows" in a else 24
 env = {k: os.environ.get(k, "") for k in ("NI_QMT", "NI_MATH_SAFE")}

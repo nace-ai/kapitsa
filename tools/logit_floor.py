@@ -7,7 +7,8 @@ runs a request under, and the gate tools/logit_compare.py holds a change to (twi
 
 Dumps (build/logit_dump, its default windows: 192 rows from bench/corpus.txt; each run takes the GPU lock unless
 NI_LOCK_HELD=1) and compares, on the single-stream verify (Dory: plain decoding; Flint and Qwen3.8-Flash-Next: no
-batch path, Flash-Next's verify its MTP cycle's 3 rows):
+batch path, Flash-Next's verify its MTP cycle's 3 rows; the paths are logit_dump --list-paths', so a Qwen under a new
+model_type in src/model/qwen4_config.cpp's table takes its layout's):
   repeat  the same build and command twice, every path: expected bitwise equal
   batch   alone against 4 requests decoding together (Engine::batch_rows' rows; the 4B batches only with NI_BATCH=1)
   step    plain decoding (--spec 0) against the verify: the near-tie differences the engine already accepts
@@ -190,10 +191,11 @@ def main():
         print("->", path)
         return
     work = a.work or os.path.join(HERE, "..", "build", "logit_floor", model)
-    with open(os.path.join(a.model, "config.json")) as f:
-        mtype = json.load(f).get("model_type", "")
-    paths = (["step"] if mtype == "dory" else ["step", "verify"] if mtype in ("flint", "qwen4_exp", "qwen4_exp_text")
-             else ["step", "verify", "batch"])
+    # the paths the model has, as logit_dump decides its class (a Qwen under a new model_type takes its layout's)
+    r = subprocess.run([a.bin, a.model, work, "--list-paths"], capture_output=True, text=True)
+    if r.returncode or not r.stdout.strip():
+        sys.exit(f"logit_dump --list-paths failed ({r.returncode}): {r.stderr.strip()}")
+    paths = r.stdout.strip().split(",")
     ref = "verify" if "verify" in paths else "step"
 
     rows = ["--rows", str(a.rows)] if a.rows else []
