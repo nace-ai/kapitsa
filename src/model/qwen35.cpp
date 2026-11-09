@@ -1,6 +1,7 @@
 #include "ane/input_profile.h"
 #include "util/load_threads.h"
 #include "model/qwen35.h"
+#include "model/canonical_affine.h"
 #include "engine/device_profile.h"
 #include "model/affine_pack.h"
 #include "model/gemm_slices.h"
@@ -253,6 +254,18 @@ static const QmrSel& qmr_sel() {
   return s;
 }
 
+// Experimental interception follows the existing selector; a custom NI_QMM keeps its original route.
+static bool canonical_xp_default_qmm() {
+  static const bool on = [] { const char* v = getenv("NI_QMM"); return !v || !*v || !strcmp(v, "1"); }();
+  return on;
+}
+bool Qwen35::canonical_xp_dense_selected(const QLinear& L, int M) const {
+  if (!canonical_xp_ || !canonical_xp_prefill_context_ || M <= 128 || L.N <= 64 || !L.q4()) return false;
+  const auto& q = qmr_sel();
+  return canonical_xp_default_qmm() && q.on && q.name == "qmr_k32_w14_m32_n128" &&
+         q.bm == 32 && q.bn == 128 && q.threads == 128 && !qmt_on();
+}
+
 // NI_MOE_BUCKET3 (read once; default on, 0 = moe_bucket2): moe_bucket3 (offsets and tiles by parallel
 // prefix sums; identical tiles) instead of moe_bucket2 (thread 0 loops over the experts).
 static const char* moe_bucket_name() {
@@ -393,6 +406,30 @@ static ShortTile short_tile(int M, bool gu, bool seg) {
 // Projections sharing the half input xh (same K): one short-prefill dispatch where the kernels
 // allow it, else one enc_qmm per projection.
 void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M) {
+  bool xp_group = false;
+  if (canonical_xp_ && canonical_xp_prefill_context_) for (const auto& sg : segs)
+    xp_group = xp_group || (canonical_xp_dense_selected(*sg.L, M) &&
+                           canonical_xp_eligible(*sg.L, nullptr, xh, sg.y, M));
+  if (xp_group) {
+    // Consume each ORIGINAL projection completely before the shared arenas are reused.
+    // Ineligible small-N/BK64 segments retain the C1 materialize+original consumer path.
+    for (const auto& sg : segs) enc_qmm(e, *sg.L, xh, sg.y, M, sg.add);
+    e.barrier();
+    return;
+  }
+  if (canonical_affine_) {
+    std::vector<const QLinear*> originals;
+    originals.reserve(segs.size());
+    for (const auto& sg : segs) originals.push_back(sg.L);
+    auto materialized = materialize_affine(e, originals);
+    if (materialized) {
+      std::vector<SegQ> restored = segs;
+      for (auto& sg : restored) sg.L = &materialized.get(*sg.L);
+      enc_proj(e, restored, xh, M);
+      return;
+    }
+  }
+
   bool qmt = M >= qmt_min_rows() && qmt_on();
   for (auto& s : segs) qmt = qmt && sp_qmt_pref(*s.L, M);
   if (!qmt && small_t(M) && sp_gemm() != SpGemm::Qmr && segs.size() <= 4) {
@@ -434,6 +471,19 @@ void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& x
 
 // Short-prefill qmr: one projection on qmr_k64_*, several on the qmrs_k64_* form (short_tile()).
 void Qwen35::enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M) {
+  if (canonical_affine_) {
+    std::vector<const QLinear*> originals;
+    originals.reserve(segs.size());
+    for (const auto& sg : segs) originals.push_back(sg.L);
+    auto materialized = materialize_affine(e, originals);
+    if (materialized) {
+      std::vector<SegQ> restored = segs;
+      for (auto& sg : restored) sg.L = &materialized.get(*sg.L);
+      enc_qmr_short(e, restored, xh, M);
+      return;
+    }
+  }
+
   const bool seg = segs.size() > 1;
   const ShortTile t = short_tile(M, false, seg);
   e.use(pipe(t.name));
@@ -487,7 +537,12 @@ void Qwen35::prewarm_pipelines() {
                                  "qmr_gu_k32_w14_m32_n64", "qmr_gu_k64_w14_m16_n64", "qmr_gu_k64_w12_m8_n32",
                                  "qmm_b8_m32_n32", "qmm_moe_gu_b4_m64_n32", "qmm_moe_dn_b4_m64_n64"};
   if (sample_sg_) names.insert("topk_stage1_rows_sg");
-  if (!v8_packed_coeff_.empty()) names.insert("qmm8pc_b4_nf1");
+  if (!v8_packed_coeff_.empty()) {
+    names.insert(canonical_affine_ ? "qmm8pc_b4_nf2" : "qmm8pc_b4_nf1");
+  }
+  if (canonical_affine_) names.insert("qmm8pc_unpack_affine");
+  if (canonical_xp_) for (const char* n : {"qmr_xpsb_pack_x", "qmr_xpsb_unpack",
+      "qmr_xpsb_k32_w14_m32_n128", "qmr_xpsb_gu_k32_w14_m32_n64"}) names.insert(n);
   if (qmm8_on())
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
@@ -928,10 +983,14 @@ q20::Experts Qwen35::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, ui
 Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(prefill_chunk) {
   double t0 = now_ms();
   load_config(dir);
+  canonical_affine_ = canonical_affine_probe(cfg_);
+  canonical_xp_ = canonical_xp_probe(cfg_);
+  if (canonical_affine_) validate_canonical_affine(dir);
   // Text-only engine for now: skip the vision tower and (until speculative decoding lands) MTP. Under the test
   // transforms (NI_DEQUANT / NI_REQUANT) the linears they select are read only when converted.
   // routed experts in llama.cpp's IQ blocks (GGUF imports) are read by load_iq_experts, into their GPU layout
-  WeightStore::Filter defer = [td = transform_defer()](const std::string& n) {
+  WeightStore::Filter defer = [td = transform_defer(), canonical = canonical_affine_](const std::string& n) {
+    if (canonical && canonical_key(n)) return true;
     if (n.size() > 7 && n.compare(n.size() - 7, 7, ".weight") == 0 && iq_mode(n.substr(0, n.size() - 7), "")) return true;
     return td && td(n);
   };
@@ -1321,7 +1380,10 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   size_t embed = 0;  // tied models read the embedding table as their output layer
   size_t lm_head = 0;
   std::map<std::string, TensorMeta> metas;
-  const bool packed = v8_packed_coeff_on(c);
+  const bool canonical = canonical_affine_probe(c);
+  (void)canonical_xp_probe(c);  // fail before reservation if XP was requested without C1
+  if (canonical && v8_packed_coeff_on(c)) fatal("canonical affine: disable legacy NI_V8_PACKED_COEFF_NF1");
+  const bool packed = !canonical && v8_packed_coeff_on(c);
   // the MTP head: mtp.safetensors, else the one in the checkpoint's own shards (load_mtp reads the same)
   const bool sidecar = std::find(files.begin(), files.end(), "mtp.safetensors") != files.end();
   for (const std::string& f : files) {
@@ -1382,6 +1444,11 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
       }
     }
     add_image(tied ? "embed_tokens" : "lm_head", c.hidden);
+  }
+  if (canonical) {
+    const auto plan = canonical_affine_plan(dir, c);
+    if (m.weights < plan.deferred_bytes) fatal("canonical affine: deferred plan exceeds original tensor storage");
+    m.weights = m.weights - plan.deferred_bytes + plan.image_pages + kCanonicalScratchBytes + plan.xp_bytes;
   }
   // what the weights are, for messages: the default format and how many modules the config sets otherwise
   {
@@ -2117,7 +2184,7 @@ void Qwen35::check_formats() const {
 std::string Qwen35::formats_summary() const {
   std::map<std::string, size_t> bytes;  // format -> weight bytes
   auto add = [&](const QLinear& q) {
-    if (q) bytes[q.name()] += q.w->buf.size + (q.dense() || q.iq ? 0 : q.q20 ? q.s->buf.size : q.s->buf.size + q.b->buf.size);
+    if (q) bytes[q.name()] += q.w->byte_size() + (q.dense() || q.iq ? 0 : q.q20 ? q.s->byte_size() : q.s->byte_size() + q.b->byte_size());
   };
   add(embed_);
   if (lm_head_.w != embed_.w) add(lm_head_);
@@ -2155,6 +2222,14 @@ static constexpr uint32_t kRows = 4, kSg = 2; // qmv: rows per simdgroup, simdgr
 
 void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, const Buffer* resid,
                      const Tensor* norm) {
+  if (canonical_affine_) {
+    auto materialized = materialize_affine(e, {&L});
+    if (materialized) {
+      enc_qmv(e, materialized.get(L), x, y, resid, norm);
+      return;
+    }
+  }
+
   // a folded norm on qmvf (the LM head after the final norm); plain single matrices keep qmv2 / qmv3 (bench_qmvf:
   // as fast or faster without a norm to fold)
   if (norm && !resid && enc_qmvf(e, {{&L, y}}, x, 1, norm)) return;
@@ -2195,6 +2270,19 @@ void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer
 
 void Qwen35::enc_qmv_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm,
                            const Buffer* xn_out) {
+  if (canonical_affine_) {
+    std::vector<const QLinear*> originals;
+    originals.reserve(segs.size());
+    for (const auto& sg : segs) originals.push_back(sg.L);
+    auto materialized = materialize_affine(e, originals);
+    if (materialized) {
+      std::vector<Seg> restored = segs;
+      for (auto& sg : restored) sg.L = &materialized.get(*sg.L);
+      enc_qmv_multi(e, restored, x, norm, xn_out);
+      return;
+    }
+  }
+
   if (enc_qmvf(e, segs, x, 1, norm, xn_out)) return;
   // segments in other formats than 4/8-bit group 64: one generic dispatch per format (the first writes xn_out)
   bool special = true;
@@ -2311,6 +2399,17 @@ bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
     if (!(s.L->q4() || s.L->q8() || g32 || (b6 && s.L->gs == 64 && !s.L->iq)) || s.L->bits != bits || s.L->K != K)
       return false;
   if (K % 64 || (xn_out && !norm)) return false;
+  if (canonical_affine_) {
+    std::vector<const QLinear*> originals;
+    originals.reserve(segs.size());
+    for (const auto& sg : segs) originals.push_back(sg.L);
+    auto materialized = materialize_affine(e, originals);
+    if (materialized) {
+      std::vector<Seg> restored = segs;
+      for (auto& sg : restored) sg.L = &materialized.get(*sg.L);
+      return enc_qmvf(e, restored, x, R, norm, xn_out, add, x_ld, y_ld, gu, b6_ok);
+    }
+  }
   // one threadgroup per token row and 8 weight rows (2 simdgroups x 4 rows: the qmvrc1 layout, its token rows
   // adjacent in the grid so they share each weight block through the cache)
   constexpr int nt = 1, rows = 4, nsg = 2;
@@ -2463,6 +2562,17 @@ void Qwen35::enc_mlp(Encoder& e, const Layer& L) {
   if (enc_qmvf(e, {{&L.mg, mh_}, {&L.mu, mh_}}, x_, 1, L.post_norm, nullptr, {}, 0, 0, true)) {
     enc_qmv(e, L.md, mh_, x_, &x_, nullptr);
     return;
+  }
+  if (canonical_affine_) {
+    // This consumer needs only gate/up together (54 MiB on9B); down is a later consumer.
+    auto materialized = materialize_affine(e, {&L.mg, &L.mu});
+    if (materialized) {
+      Layer restored = L;
+      restored.mg = materialized.get(L.mg);
+      restored.mu = materialized.get(L.mu);
+      enc_mlp(e, restored);
+      return;
+    }
   }
   static Pipeline gu = Gpu::get().pipeline("mlp_gate_up");
   constexpr uint32_t rows = 2, nsg = 8;
@@ -2659,6 +2769,15 @@ void Qwen35::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, cons
 }
 
 void Qwen35::enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
+  if (canonical_xp_dense_selected(L, M) && enc_canonical_xp(e, L, nullptr, xh, y, M, add)) return;
+  if (canonical_affine_) {
+    auto materialized = materialize_affine(e, {&L});
+    if (materialized) {
+      enc_qmm(e, materialized.get(L), xh, y, M, add);
+      return;
+    }
+  }
+
   if (!sp_qmt_pref(L, M) && small_t(M) && sp_gemm() != SpGemm::Qmr && (qmr_ok(L) || qmms_ok(L))) {
     enc_proj(e, {{&L, y, add}}, xh, M);
     return;
@@ -2687,6 +2806,14 @@ static bool qmm8_for(const QLinear& L) { return qmm8_mode() == 2 || (qmm8_mode()
 // tiles along grid x, so the threadgroups running together share the weight tile through the cache.
 // NI_QRF_MF (read once; default on for the M1 (Apple7) only): the other formats' large tiles too (prefill_mfast).
 void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
+  if (canonical_affine_) {
+    auto materialized = materialize_affine(e, {&L});
+    if (materialized) {
+      enc_qrf(e, materialized.get(L), xh, y, M, add);
+      return;
+    }
+  }
+
   static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
   std::string n = "qrf_" + L.fmt();
   uint32_t bm = 32, bn = 128, th = 128;
@@ -2744,6 +2871,14 @@ std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
 }
 
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
+  if (canonical_affine_) {
+    auto materialized = materialize_affine(e, {&L});
+    if (materialized) {
+      enc_qmm_large(e, materialized.get(L), xh, y, M, add);
+      return;
+    }
+  }
+
   const QmrSel& q = qmr_sel();
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
     const bool small = M < 64 || L.N <= 64, mfast = !small && prefill_mfast();
@@ -2876,6 +3011,18 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
     enc_qmms(e, std::vector<SegQ>(segs.begin() + 4, segs.end()), xh, T);
     return;
   }
+  if (canonical_affine_) {
+    std::vector<const QLinear*> originals;
+    originals.reserve(segs.size());
+    for (const auto& sg : segs) originals.push_back(sg.L);
+    auto materialized = materialize_affine(e, originals);
+    if (materialized) {
+      std::vector<SegQ> restored = segs;
+      for (auto& sg : restored) sg.L = &materialized.get(*sg.L);
+      enc_qmms(e, restored, xh, T);
+      return;
+    }
+  }
   const QLinear& L0 = *segs[0].L;
   const uint32_t K = L0.K, gpr = K / 64, nsg = 8;
   static const int ks_env = getenv("NI_QMMS_KS") && *getenv("NI_QMMS_KS") ? atoi(getenv("NI_QMMS_KS")) : 0;
@@ -2913,6 +3060,19 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
 
 // enc_qmms over any T: up to 128 rows in one dispatch (qmms_row_groups splits them over grid.y), slices of 128 beyond
 void Qwen35::enc_qmms_rows(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int T) {
+  if (canonical_affine_ && T > 0 && segs.size() <= 4) {
+    std::vector<const QLinear*> originals;
+    originals.reserve(segs.size());
+    for (const auto& sg : segs) originals.push_back(sg.L);
+    auto materialized = materialize_affine(e, originals);
+    if (materialized) {
+      std::vector<SegQ> restored = segs;
+      for (auto& sg : restored) sg.L = &materialized.get(*sg.L);
+      enc_qmms_rows(e, restored, xh, T);
+      return;
+    }
+  }
+
   for (int r0 = 0; r0 < T; r0 += 128) {
     const int n = std::min(128, T - r0);
     std::vector<SegQ> v = segs;
@@ -2925,6 +3085,10 @@ void Qwen35::enc_qmms_rows(Encoder& e, const std::vector<SegQ>& segs, const Buff
 // H[T, N] = half(silu(X G^T) * (X U^T)) (row stride N) in one pass over both matrices.
 bool Qwen35::enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T) {
   if (!qmms_ok(G) || !qmms_ok(U) || !G.same_format(U) || G.N != U.N || G.K != U.K || T < 1 || T > 128) return false;
+  if (canonical_affine_) {
+    auto materialized = materialize_affine(e, {&G, &U});
+    if (materialized) return enc_qmms_gu(e, materialized.get(G), materialized.get(U), xh, h, T);
+  }
   const uint32_t K = G.K, gpr = K / 64, nsg = 8;
   static const int ks_env = getenv("NI_QMMS_KS") && *getenv("NI_QMMS_KS") ? atoi(getenv("NI_QMMS_KS")) : 0;
   uint32_t ks = ks_env > 0 ? uint32_t(ks_env) : (K >= 4096 ? 8u : 4u);
@@ -3133,6 +3297,10 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
     if (qm && M <= 64 && enc_qmms_gu(e, G, U, xh, h, M)) return true;
   }
   if (!qmt_gu && small_t(M) && sp_gemm() != SpGemm::Qmr && qmr_ok(G) && qmr_ok(U) && G.N == U.N && G.K == U.K) {
+    if (canonical_affine_) {
+      auto materialized = materialize_affine(e, {&G, &U});
+      if (materialized) return enc_qmm_gu(e, materialized.get(G), materialized.get(U), xh, h, M);
+    }
     const ShortTile t = short_tile(M, true, false);
     e.use(pipe(t.name));
     kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
@@ -3155,6 +3323,10 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   const bool b8 = on && qmm8_for(G) && qmm8_for(U) && ok8(G) && ok8(U) && G.N == U.N && G.K == U.K;
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
   if (on && !G.q4() && !G.q8() && G.same_format(U) && G.N == U.N && G.K == U.K) {
+    if (canonical_affine_) {
+      auto materialized = materialize_affine(e, {&G, &U});
+      if (materialized) return enc_qmm_gu(e, materialized.get(G), materialized.get(U), xh, h, M);
+    }
     // wfmt.metal's fused gate/up for the other formats (qrf_gu_*; bf16 large tiles with M along grid x)
     static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
     std::string n = "qrf_gu_" + G.fmt();
@@ -3175,6 +3347,12 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
     return true;
   }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
+  if (canonical_xp_ && canonical_xp_prefill_context_ && !b8 && M > 128 && canonical_xp_default_qmm() && !strcmp(gu, "qmr_gu_k32_w14_m32_n64") &&
+      !qmt_on() && enc_canonical_xp(e, G, &U, xh, h, M, false)) return true;
+  if (canonical_affine_) {
+    auto materialized = materialize_affine(e, {&G, &U});
+    if (materialized) return enc_qmm_gu(e, materialized.get(G), materialized.get(U), xh, h, M);
+  }
   if (!b8 && qmt_on() && M >= qmt_min_rows()) {
     auto run = [&](const Buffer& x, const Buffer& out, int rows) {
       const uint32_t bm = qmt128_for(rows) ? 128 : 64;
@@ -3768,6 +3946,12 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   // NI_ANE_NONCAUSAL: a noncausal pass (one whole prompt) splits slab by slab instead (enc_mlp_prefill_slabs).
   const bool slabs = ane_slabs(T);
   ane_chunk_ = slabs || (cfg_.causal && !snap && ane_splits(T));
+  struct XpPrefillScope {
+    bool& flag; bool previous;
+    XpPrefillScope(bool& f, bool on) : flag(f), previous(f) { flag = on; }
+    ~XpPrefillScope() { flag = previous; }
+  } xp_scope(canonical_xp_prefill_context_, canonical_xp_ && !ane_chunk_ && !v8_nf2_target_context_ &&
+                                               !v8_nf2_prefill_chain_ && v8w_R_ == 0);
   if (ane_chunk_) ane_begin_chunk(slabs ? ane::slab_rows(T, int(ane::FfnSplit::kMaxRows)) : T);
   if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));

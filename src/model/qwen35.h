@@ -473,6 +473,9 @@ class Qwen35 : public Model {
   // The 8-row verify GEMMs, for other 8-row passes (the DFlash2 drafter). Inputs are X8 tables
   // (verify8.metal layout: half operands in fragment order + per-64 group sums), R <= 8 live rows.
   static bool v8_packed_coeff_on(const Qwen35Config& c);
+  // Measurement-only historical NF2 port; separate from the shared target/drafter default predicate.
+  static bool canonical_affine_probe(const Qwen35Config& c);
+  static bool canonical_xp_probe(const Qwen35Config& c);
   static uint32_t v8_packed_ks(uint32_t K);
   static uint32_t v8_packed_rg(uint32_t N);  // block rows interleaved together (divides N / 16)  // the k-slices v8_plan gives a packed GEMM of this K (its record order)
   struct PackedCoeffBuffers {
@@ -711,6 +714,26 @@ class Qwen35 : public Model {
   void enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer, const Buffer* in = nullptr);
   // ---- 8-row verify path (qwen35_v8.cpp) ----
   void load_v8_packed_coeff();
+  void validate_canonical_affine(const std::string& dir) const;
+  void load_canonical_affine();
+  struct CanonicalPlan { size_t deferred_bytes = 0, image_pages = 0, image_bytes = 0, xp_bytes = 0; };
+  static CanonicalPlan canonical_affine_plan(const std::string& dir, const Qwen35Config& c);
+  struct CanonicalViews {
+    CanonicalViews() = default;
+    CanonicalViews(const CanonicalViews&) = delete;
+    CanonicalViews& operator=(const CanonicalViews&) = delete;
+    CanonicalViews(CanonicalViews&&) = default;
+    CanonicalViews& operator=(CanonicalViews&&) = default;
+    std::vector<Tensor> tensors;
+    std::vector<QLinear> linears;
+    std::vector<const Tensor*> originals;
+    const QLinear& get(const QLinear& q) const;
+    explicit operator bool() const { return !linears.empty(); }
+  };
+  CanonicalViews materialize_affine(Encoder& e, const std::vector<const QLinear*>& linears);
+  bool canonical_xp_dense_selected(const QLinear& q, int M) const;
+  bool canonical_xp_eligible(const QLinear& q, const QLinear* up, const Buffer& x, const Buffer& y, int M) const;
+  bool enc_canonical_xp(Encoder& e, const QLinear& q, const QLinear* up, const Buffer& x, const Buffer& y, int M, bool add);
   void v8_alloc();
   void encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
   // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table.
@@ -800,6 +823,17 @@ class Qwen35 : public Model {
   std::vector<Buffer> owned_bufs_;
   // Explicit immutable target objects; never dynamic drafter/selector weights.
   std::unordered_map<const QLinear*, PackedCoeffBuffers> v8_packed_coeff_;
+  bool v8_nf2_target_context_ = false, v8_nf2_prefill_chain_ = false;
+  bool canonical_affine_ = false;
+  Buffer canonical_scratch_;
+  bool canonical_xp_ = false, canonical_xp_prefill_context_ = false;
+  Buffer canonical_xp_scratch_;  // one fixed48MiB slot, owned bycanonical_storage_, no grow/retire ring
+  std::unordered_map<const Tensor*, PackedCoeffBuffers> canonical_by_weight_;
+  std::unordered_map<const Tensor*, const QLinear*> canonical_owners_;
+  struct CanonicalStorage {
+    std::vector<Buffer> buffers;
+    ~CanonicalStorage();
+  } canonical_storage_;
 
   size_t mem_budget_ = 0;
   bool gdn_sigmoid_ = false;  // the gated norm's gate: sigmoid (Qwen3.8-Flash-Next), else silu
