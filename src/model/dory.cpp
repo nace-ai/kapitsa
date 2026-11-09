@@ -1017,7 +1017,9 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
   const uint32_t window = L.kind == 'S' ? uint32_t(c.window) : uint32_t(draft_window_);
   const uint32_t k0 = window && uint32_t(pos0) + 1 > window ? uint32_t(pos0) + 1 - window : 0u;
   const uint32_t Lk = uint32_t(pos0 + R) - k0;
-  uint32_t chunk = std::max<uint32_t>(64, (Lk + gpu_cores() - 1) / gpu_cores());
+  // NI_DORY_ATTN_CHUNK=N (measuring, #296): chunks of at least N keys, up to the 64-chunk cap, instead of one per core
+  static const int env_chunk = getenv("NI_DORY_ATTN_CHUNK") ? std::max(16, atoi(getenv("NI_DORY_ATTN_CHUNK"))) : 0;
+  uint32_t chunk = env_chunk ? uint32_t(env_chunk) : std::max<uint32_t>(64, (Lk + gpu_cores() - 1) / gpu_cores());
   chunk = std::max(chunk, (Lk + uint32_t(attn_max_chunks_) - 1) / uint32_t(attn_max_chunks_));
   chunk = (chunk + 15) / 16 * 16;
   const uint32_t nch = (Lk + chunk - 1) / chunk;
