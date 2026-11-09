@@ -245,7 +245,9 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
 - `--paths` defaults to `step,verify,batch`. Flint, Dory and Flash-Next decode one request at a
   time, and `batch` is fatal on them ("... no batch path"): pass `--paths step,verify` to both builds. Dory's `verify`
   needs `--loop-kv per-loop`; with its default last-loop KV pass `--paths step`. `prefill` is written whatever
-  `--paths` says.
+  `--paths` says. `logit_dump MODEL_DIR OUT --list-paths` prints the paths a model has, from its config.json alone (a
+  Qwen under a new `model_type` in `src/model/qwen4_config.cpp`'s table gets its layout's), and `tools/logit_floor.py`
+  takes its paths from it.
 - Each path feeds a window's scored rows in passes of `k` rows (`verify`: 8, or Qwen's `--verify-rows`, or Flint's
   `NI_FLINT_VERIFY_ROWS`, or Flash-Next's MTP depth + 1; `batch`: `--batch-rows`; `step`: 1), rounded up to whole
   passes. A window whose sequence
