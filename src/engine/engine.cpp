@@ -394,6 +394,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
                                                  flint_ ? "<|end_of_text|>" : "<|im_end|>");
   preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && preserve_thinking_template(src);
+  reasoning_effort_template_ = !flint_ && !nh_ && !dory_ && src.find("reasoning_effort") != std::string::npos;
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -2511,6 +2512,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }
   // the reply starts inside the reasoning (the prompt ends with the think tag)
   const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
+  res.thinking_level = request_thinking_level(r, think);
   // Structured output: the grammar's matcher on this model's vocabulary (the vocabulary's trie is built by the first
   // such request, here, before the GPU turn). The grammar holds the reply from its first token, or after </think>.
   std::unique_ptr<GrammarMatcher> gm;
@@ -4315,12 +4317,14 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
          "(+%.0f ms decode/resize before the request)", mm.spans.size(),
          [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded, img_ms, img_reused,
          int(mm.spans.size()) - img_encoded - img_reused, img_prep_ms);
+  char th[64] = "";
+  if (!res.thinking_level.empty()) snprintf(th, sizeof th, ", thinking: %s", res.thinking_level.c_str());
   char lp[32] = "";
   if (loops > 0) snprintf(lp, sizeof lp, ", %d loop%s", loops, loops > 1 ? "s" : "");
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
-       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s", n, start, res.prefill_ms,
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s%s", n, start, res.prefill_ms,
        tok_ms, t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms,
-       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc, lp);
+       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), th, cyc, conc, lp);
   if (!store_prompt.empty()) logi("expert store: %s; %s", store_prompt.c_str(), store_note(model_.get(), "decode", gen).c_str());
   return res;
 }
@@ -4343,6 +4347,30 @@ int Engine::request_loops(const ChatRequest& r) const {
   }
   if (l <= 0) l = dory_->default_loops();
   return std::clamp(l, 1, Dory::kMaxLoops);
+}
+
+std::string Engine::thinking_level(const ChatRequest& r, bool think, bool reasoning_effort_template,
+                                   bool has_thinking) {
+  if (!has_thinking) return "";
+  if (r.effort == "none" || r.effort == "minimal") return r.effort;
+  if (!think) return "off";
+  if (r.thinking_budget == 0) return "off";
+  if (r.thinking_budget > 0) return "budget " + std::to_string(r.thinking_budget);
+  if (reasoning_effort_template) {
+    std::string eff = r.effort;
+    if (eff.empty() && r.template_kwargs.contains("reasoning_effort") &&
+        r.template_kwargs["reasoning_effort"].is_string()) {
+      eff = r.template_kwargs["reasoning_effort"];
+    }
+    if (eff == "low" || eff == "medium") return eff;
+    if (eff == "high" || eff == "xhigh" || eff == "max" || eff.empty()) return "xhigh";
+    return "on";
+  }
+  return "on";
+}
+
+std::string Engine::request_thinking_level(const ChatRequest& r, bool think) const {
+  return thinking_level(r, think, reasoning_effort_template_, think_open_ >= 0 || text_tags_.think);
 }
 
 void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<PrefillStop()>& cancelled) {

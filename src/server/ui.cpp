@@ -1020,6 +1020,7 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   else if (fin == "length") fin = warn(r.context_full ? "context full" : "length");
   else if (fin == "cancelled") fin = warn("cancelled");
   else if (fin == "error") fin = red("error") + (r.error.empty() ? "" : dim(" " + r.error));
+  if (!r.thinking_level.empty()) fin += dim("  thinking: " + r.thinking_level);
   if (m->images > 0) fin += dim("  " + std::to_string(m->images) + (m->images == 1 ? " image" : " images"));
   const Cols c = cols_now();
   std::string l = "  ";

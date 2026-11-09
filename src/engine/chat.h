@@ -112,6 +112,8 @@ struct ChatResult {
   int yields = 0;
   int batched = 0;  // decode cycles it ran in one pass with other requests' (batched decode)
   int loops = 0;    // looped models: the loop count the request ran (0: not a looped model)
+  // resolved thinking level / effort for logging and results ("low", "medium", "high", "xhigh", "on", "off", "budget N")
+  std::string thinking_level;
   // KFlash around the decode (src/model/kflash_wrap.h): the proposal source ("DFlash2", "MTP", "prompt lookup", "none":
   // plain decoding, 1 row per cycle) and the cycles it ran; empty source: the wrapper is off (NI_KFLASH=0)
   std::string kflash_source;
