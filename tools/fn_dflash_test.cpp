@@ -274,6 +274,19 @@ void run_cpu() {
   const auto inc = DFlash2::config_check(incoai, flash);
   check(inc.empty(), "incoai's Flash-Next DFlash2 config (rope theta 1e4): loads for Flash-Next" +
                          (inc.empty() ? std::string() : " (problems: " + inc[0] + ")"));
+  // the block a drafter was trained with: 8 or 16 load, any other block (or none stated) is refused
+  auto with_block = [&](const std::string& b) {
+    std::string c = draft_config("");
+    const std::string k = "\"block_size\": 8, ";
+    c.replace(c.find(k), k.size(), b);
+    return c;
+  };
+  const auto b16 = DFlash2::config_check(with_block("\"block_size\": 16, "), plain);
+  check(b16.empty(), "a drafter trained with a 16-row block: loads" +
+                         (b16.empty() ? std::string() : " (problems: " + b16[0] + ")"));
+  check(has(DFlash2::config_check(with_block("\"block_size\": 12, "), plain), "block 8 or 16"), "block 12: refused");
+  check(has(DFlash2::config_check(with_block("\"block_size\": 32, "), plain), "block 8 or 16"), "block 32: refused");
+  check(has(DFlash2::config_check(with_block(""), plain), "block 8 or 16"), "no block_size: refused");
 }
 
 // hc_capture_mean against the CPU: R rows of S streams of D, the block output y and its injection weights, into slot
