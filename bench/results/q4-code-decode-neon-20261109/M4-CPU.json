@@ -1,0 +1,170 @@
+{
+  "export": "Explicitly redacted derived results; original commands and logs retained privately.",
+  "source": {
+    "source": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5",
+    "reference": "87c105238186beadb375805e47a89791a499319a",
+    "quant_sha256": "af1f8764882734825250d16cfed412aa325cd12535de6345fd64b045b32da9e6",
+    "test_sha256": "30677c1b34c764833a4b0d1ee878a75fc75cf25b11d14cc4e3da690439de1c25"
+  },
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "input": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b",
+    "tensor": "blk.0.attn_gate.weight",
+    "shape": [
+      2560,
+      4096
+    ],
+    "rows_used": 1024,
+    "format": "Q4_0",
+    "sample_raw_bytes": 1474560,
+    "bytes_per_row": 1440,
+    "raw_row_sha256": "597c9b412b92cfacdb979cbe2b43e5b9f7320d030fea787b68d10bdabab8b70c"
+  },
+  "method": {
+    "flags": [
+      "-std=c++20",
+      "-O3"
+    ],
+    "order": "A1 B1 A2 B2 A3 B3 A4 B4",
+    "K": 2560,
+    "rows_per_pass": 1024,
+    "warmup_passes": 64,
+    "timed_passes": 256,
+    "calls_per_pass": 1024,
+    "checked_bytes_per_pass": 3276800,
+    "timed_scope": "CPU decode4 per-row calls only; code/scale/offset byte and input checks outside timer",
+    "comparison": "Same driver, test header and gguf.cpp; only quant.cpp is replaced by the reference source.",
+    "oracle": "Independent nibble-plane/scalar store-order oracle; half conversion uses the unchanged from_f16 primitive.",
+    "input_reuse": "Unchanged previously extracted pinned GGUF tensor bytes; these are new executions of both sources."
+  },
+  "driver_sha256": "a3173f6859fd1d7d9b3f44093f3abb797326c35d14c7b4652e4dbae25d96ce49",
+  "binary_sha256": {
+    "A": "093b6e61a38514bcc45a35a8dcad867a47be6ce0c2b546473f113d76583c99f9",
+    "B": "c8452f68bd7792327308e14172fa4f63f802b1e01d04d7fea0021ddab306fed7",
+    "oracle": "bd223ea06fd4c7d455fb7799f46c73c9d968b9ca1e807382e820460176821e34"
+  },
+  "oracle_cases": 254194,
+  "oracle_rc": 0,
+  "legs": [
+    {
+      "label": "A1",
+      "rc": 0,
+      "ns_per_row": 359.665714264,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    },
+    {
+      "label": "B1",
+      "rc": 0,
+      "ns_per_row": 80.160774231,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    },
+    {
+      "label": "A2",
+      "rc": 0,
+      "ns_per_row": 359.301277161,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    },
+    {
+      "label": "B2",
+      "rc": 0,
+      "ns_per_row": 110.335330963,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    },
+    {
+      "label": "A3",
+      "rc": 0,
+      "ns_per_row": 360.119197845,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    },
+    {
+      "label": "B3",
+      "rc": 0,
+      "ns_per_row": 104.265972137,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    },
+    {
+      "label": "A4",
+      "rc": 0,
+      "ns_per_row": 354.810241699,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    },
+    {
+      "label": "B4",
+      "rc": 0,
+      "ns_per_row": 104.267925262,
+      "bytes": 3276800,
+      "sha256": "29fde0be16e2997cbbf18a0dd75fddde1e8139e50601354d69f12a866fa878b0",
+      "literal_equal": true,
+      "warmup_passes": 64,
+      "timed_passes": 256,
+      "rows_per_pass": 1024,
+      "K": 2560,
+      "every_pass_code_scale_offset_byte_input_gate": true
+    }
+  ],
+  "paired_latency_change_percent": [
+    -77.7124226602926,
+    -69.29169530517431,
+    -71.04681650938325,
+    -70.61304522588874
+  ],
+  "scope": "Warm CPU component only. Q4_1 real-model timing and full-model checks are not established by these CPU runs."
+}
