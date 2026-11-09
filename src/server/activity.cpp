@@ -90,13 +90,16 @@ void Activity::tick(double now_ms) {
     for (auto& r : active_) {
       const LiveDecode& l = *r->live;
       const int tokens = l.tokens.load(std::memory_order_relaxed);
+      // LiveDecode::read counts the cached tokens too (it starts at `cached`); the spec's prefilled_tokens does not
+      const int cached = std::max(l.cached.load(std::memory_order_relaxed), 0);
+      const int prefilled = std::max(l.read.load(std::memory_order_relaxed) - cached, 0);
       const double since = now_ms - r->tick_at;
       nlohmann::json s = {{"request_id", r->id},
                           {"api", r->api},
                           {"phase", phase_name(l.phase.load(std::memory_order_relaxed))},
                           {"prompt_tokens", std::max(l.prompt.load(std::memory_order_relaxed), 0)},
-                          {"cached_tokens", std::max(l.cached.load(std::memory_order_relaxed), 0)},
-                          {"prefilled_tokens", std::max(l.read.load(std::memory_order_relaxed), 0)},
+                          {"cached_tokens", cached},
+                          {"prefilled_tokens", prefilled},
                           {"completion_tokens", std::max(tokens, 0)},
                           {"elapsed_ms", count(now_ms - r->t0)},
                           {"tokens_per_second", rate(tokens - r->tokens_at_tick, since)}};

@@ -182,6 +182,20 @@ static void activity_events() {
   const json p = drain(*s)[0].second;
   CHECK(p["tokens_per_second"] == 40.0 && p["completion_tokens"] == 70 && p["elapsed_ms"] == 1500);
   CHECK(act.requests()[0] == p);  // status reports the last tick's sample, not a fresh read
+  {  // prefilled_tokens leaves the cached ones out: LiveDecode::read starts at `cached` (engine.cpp, the prefill start)
+    auto c = act.start("openai", "");
+    drain(*s);
+    c->live->phase = 1, c->live->prompt = 2310, c->live->cached = 2048, c->live->read = 2048;
+    act.tick(t + 1600);
+    auto q = drain(*s);
+    CHECK(q.size() == 2 && q[1].second["prefilled_tokens"] == 0 && q[1].second["cached_tokens"] == 2048);
+    c->live->phase = 2, c->live->read = 2310;
+    act.tick(t + 1700);
+    q = drain(*s);
+    CHECK(q.size() == 2 && q[1].second["prefilled_tokens"] == 262 && q[1].second["prompt_tokens"] == 2310);
+    act.finish(c, ChatResult{});
+    drain(*s);
+  }
   ChatResult res;
   res.finish_reason = "stop", res.prompt_tokens = 3904, res.cached_tokens = 0, res.completion_tokens = 71;
   res.prefill_ms = 1952, res.decode_ms = 1400, res.queue_ms = 3.4;
