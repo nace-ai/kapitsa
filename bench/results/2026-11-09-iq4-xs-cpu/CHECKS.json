@@ -1,0 +1,53 @@
+{
+  "provenance": "Redacted derived summary; original outputs/commands retained privately.",
+  "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+  "reference": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+  "M3": {
+    "Release_build": true,
+    "integrated_iq_layout_test": true,
+    "IQ4_XS_oracle_overlap_cases": 327882,
+    "guard_cases": "single/multiple/empty/partial blocks; leading/trailing inaccessible pages",
+    "ASan_UBSan": "not run"
+  },
+  "M4": {
+    "Release_build": true,
+    "vk_CPU_pass": 22,
+    "vk_CPU_total": 22,
+    "supplementary_native_pass": 18,
+    "supplementary_native_total": 19,
+    "IQ4_XS_oracle_overlap_cases": 327882,
+    "standalone_ASan_UBSan_cases": 327882,
+    "sanitizer_scope": "driver, oracle, quant.cpp and gguf.cpp instrumented; not the entire engine",
+    "mutants": {
+      "high_scale_shift": "rejected rc1",
+      "high_nibble_decode": "rejected rc1"
+    },
+    "six_supplementary_python_checks": "PASS",
+    "packing_patch_checks": "PASS",
+    "prek_diff": "PASS"
+  },
+  "load_error_control": {
+    "candidate_rc": 1,
+    "new_reference_executions": 1,
+    "reference_rc": 1,
+    "same_assertion": "after <= before + pages / 10",
+    "failing_path": "uncached_reads: synthetic U8 safetensors raw WeightStore::read_deferred; does not call IQ4_XS decoding",
+    "candidate_binary_sha256": "8523e1ca7d40c122c78821fb442171147c5d45cebf6078a625edd5a26b63118a",
+    "reference_binary_sha256": "f88368a6fcc746158b7a3e0647c504c61f193cc964f9403bbdd2b0e24330824b",
+    "test_source_sha256": "fdaa113410235d92a7c5fb563a05da5312d7e03701484960d27d5ff8eb18340b",
+    "loader_source_sha256": "eacce03c02f6a7f5ca732b595027289782d5d7c13b4643321537140a746cdaad",
+    "note": "Both source files unchanged; binaries differ. The threshold failure remains unexplained and is not a pass or a demonstrated decoder regression."
+  },
+  "initial_attempts": [
+    "Initial standalone compile omitted an include directory and did not execute; corrected build passed.",
+    "An exported reference build lacked tracked metadata and stopped before tests; exact metadata was restored and build continued.",
+    "M4 phase worker was replaced while waiting before any reference measurement.",
+    "Reference-control collector stopped at a nonexistent source path after building, before execution. Corrected collector then ran reference once."
+  ],
+  "not_verified": [
+    "complete trained-model import/output",
+    "GPU/model numerical gate",
+    "default model performance and API checks",
+    "non-AArch64 execution"
+  ]
+}

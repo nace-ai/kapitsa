@@ -1,0 +1,21 @@
+{
+  "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+  "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+  "filename": "Qwen_Qwen3.5-4B-IQ4_XS.gguf",
+  "full_bytes": 2671339488,
+  "full_sha256_from_public_LFS_metadata": "628124c61a806897d3f28dcd416be6daff94f62f731eb900d4381875eac9e412",
+  "sample": {
+    "tensor": "blk.0.ffn_up.weight",
+    "tensor_shape": [
+      2560,
+      9216
+    ],
+    "rows_checked": 1024,
+    "width": 2560,
+    "sample_bytes": 1392640,
+    "sample_sha256": "9a0c2a0baad5f600e2438be8b77262b7591e74eac8c9de1c0c9d3e93d8017221",
+    "absolute_file_offset": 574240736,
+    "GGUF_tensor_type": 23
+  },
+  "scope": "CPU sample only. Full source identity comes from pinned public LFS metadata; full file/model checks pending, not represented by this sample."
+}
