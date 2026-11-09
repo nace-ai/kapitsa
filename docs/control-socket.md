@@ -88,6 +88,22 @@ inference request then waits while the state reads `loading` and then `ready`. I
 `released` with a `message`, the request fails, and the next request tries again. The other cause is a failed switch
 whose previous model could not be loaded back either (below).
 
+`engine` shows what the engine holds, sampled once per tick, so a view can draw memory, slots and drafts. It is
+present only while `state` is `ready` or `switching`, and never in Splash mode, whose engine runs in another process.
+
+| Field | What it holds |
+| --- | --- |
+| `memory.budget_bytes` | The GPU memory the engine may hold (`mem_budget`) |
+| `memory.allocated_bytes` | The GPU memory it holds now |
+| `memory.weights_bytes` | Of that, the model's weights and the drafter's |
+| `memory.kv_bytes` | Of that, the slots' KV caches as allocated. The rest is buffers and recurrent state |
+| `slots[]` | One item per slot: `index`, `busy`, `tokens` in its live state, and `request_id` while busy |
+| `drafts` | `cycles` that verified a draft and the `tokens` they wrote, counted since the model loaded. Absent when the model decodes without drafts |
+
+Each cycle writes one token of its own plus the draft tokens it accepts. A view gets tokens per cycle as
+`tokens / cycles`, and the share of tokens that came from accepted drafts as `(tokens - cycles) / tokens`, both from
+the change between two ticks.
+
 ### Stop
 
 `POST /stop` answers `202` and then stops the instance. Requests that are still running end with `finish_reason`
@@ -146,6 +162,7 @@ counts from 1 for each run. The server sends a `: keepalive` comment every 15 se
 | `request_started` | A request arrives on the inference port | `request_id`, `api`, `client` |
 | `request_progress` | Every tick, once per active request | the same fields as a `requests` item in status |
 | `request_finished` | A request ends | token counts, times, rates, `finish_reason`, and `error` when it failed |
+| `engine` | Every tick while status has `engine` | the same object as status `engine` |
 | `log` | A log line at or above the server's level | `level`, `message` (at most 4096 bytes) |
 | `reset` | The cursor cannot be continued | `reason`, `status` |
 

@@ -75,6 +75,57 @@
       "enum": ["bad_request", "unknown_field", "invalid_value", "forbidden_peer", "not_found", "model_not_found",
         "method_not_allowed", "run_id_mismatch", "busy", "stopping", "load_failed", "internal"]
     },
+    "engine": {
+      "description": "What the engine holds, sampled once per tick. Absent while no model is in memory and in Splash mode.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memory", "slots"],
+      "properties": {
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["budget_bytes", "allocated_bytes", "weights_bytes", "kv_bytes"],
+          "properties": {
+            "budget_bytes": {"type": "integer", "minimum": 1, "description": "GPU memory the engine may hold (mem_budget)"},
+            "allocated_bytes": {"type": "integer", "minimum": 0, "description": "GPU memory the engine holds now"},
+            "weights_bytes": {"type": "integer", "minimum": 0, "description": "of it, the model's weights (and the drafter's)"},
+            "kv_bytes": {"type": "integer", "minimum": 0, "description": "of it, the slots' KV caches as allocated"}
+          }
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["index", "busy", "tokens"],
+            "properties": {
+              "index": {"type": "integer", "minimum": 0},
+              "busy": {"type": "boolean"},
+              "tokens": {"type": "integer", "minimum": 0, "description": "positions in the slot's live state"},
+              "request_id": {"type": "string", "minLength": 1, "maxLength": 128}
+            },
+            "if": {"properties": {"busy": {"const": true}}},
+            "then": {"required": ["request_id"]},
+            "else": {"not": {"required": ["request_id"]}}
+          }
+        },
+        "drafts": {
+          "description": "Speculative decoding counters since the model loaded. Absent when the model decodes without drafts.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cycles", "tokens"],
+          "properties": {
+            "cycles": {"type": "integer", "minimum": 0, "description": "decode cycles that verified a draft"},
+            "tokens": {"type": "integer", "minimum": 0, "description": "tokens those cycles wrote: the accepted draft tokens and each cycle's own token"}
+          }
+        }
+      }
+    },
+    "engine_state": {
+      "description": "engine is present only while a model is in memory",
+      "if": {"required": ["state"], "properties": {"state": {"enum": ["ready", "switching"]}}},
+      "else": {"not": {"required": ["engine"]}}
+    },
     "state_model": {"description": "Which states name a model: a ready, switching or released instance always does, a starting one never", "allOf": [{"if": {"required": ["state"], "properties": {"state": {"enum": ["ready", "switching", "released"]}}}, "then": {"properties": {"model": {"type": "object"}}}}, {"if": {"required": ["state"], "properties": {"state": {"const": "starting"}}}, "then": {"properties": {"model": {"type": "null"}}}}]}
   }
 }

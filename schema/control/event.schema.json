@@ -8,7 +8,7 @@
   "required": ["id", "type", "data"],
   "properties": {
     "id": {"$ref": "control.schema.json#/$defs/event_id"},
-    "type": {"enum": ["state", "request_started", "request_progress", "request_finished", "log", "reset"]},
+    "type": {"enum": ["state", "request_started", "request_progress", "request_finished", "engine", "log", "reset"]},
     "data": {"type": "object"}
   },
   "allOf": [
@@ -16,6 +16,7 @@
     {"if": {"properties": {"type": {"const": "request_started"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/request_started"}}}},
     {"if": {"properties": {"type": {"const": "request_progress"}}}, "then": {"properties": {"data": {"$ref": "control.schema.json#/$defs/request_progress"}}}},
     {"if": {"properties": {"type": {"const": "request_finished"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/request_finished"}}}},
+    {"if": {"properties": {"type": {"const": "engine"}}}, "then": {"properties": {"data": {"$ref": "control.schema.json#/$defs/engine"}}}},
     {"if": {"properties": {"type": {"const": "log"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/log"}}}},
     {"if": {"properties": {"type": {"const": "reset"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/reset"}}}}
   ],
