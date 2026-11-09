@@ -55,9 +55,11 @@ Companion mtp27() {
           .files = {"mtp.safetensors", "mtplx_runtime.json"}};
 }
 Companion dflash27() {
+  // Nace AI's retrain of incoai/Qwen3.8-27B-DFlash2 with a 16-row block, the block KFlash drafts with on one slot
+  // (the same shape and size; 5.36 tokens per cycle against 5.04 on an M5 Pro, #401)
   return {.kind = "dflash2",
-          .repo = "incoai/Qwen3.8-27B-DFlash2",
-          .revision = "015e795645c74b1a0eeef3b570031fb62e769bc5",
+          .repo = "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa",
+          .revision = "4f950469095a4c799ca2297b1f444b349e672b71",
           .files = {"config.json", "model.safetensors"},
           .subdir = "dflash2"};
 }

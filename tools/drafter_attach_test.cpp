@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     const hub::Companion* c = hub::drafter_for_shape(h, l);
     return c ? c->repo : "";
   };
-  check(repo(5120, 64) == "incoai/Qwen3.8-27B-DFlash2", "27B shape (5120, 64 layers): the 27B DFlash2 drafter");
+  check(repo(5120, 64) == "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa", "27B shape (5120, 64 layers): the 27B DFlash2 drafter");
   check(repo(2048, 40) == "incoai/Qwen3.6-35B-A3B-DFlash2", "35B-A3B shape (2048, 40): the 35B DFlash2 drafter");
   check(repo(2560, 32) == "z-lab/Qwen3.5-4B-DFlash", "4B shape (2560, 32): the 4B DFlash drafter");
   check(repo(4096, 32) == "z-lab/Qwen3.5-9B-DFlash", "9B shape (4096, 32): the 9B DFlash drafter");
