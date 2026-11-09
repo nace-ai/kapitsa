@@ -52,6 +52,79 @@ def cell(row, engine):
     return c.get("value"), None if m == NO_SPEC else m, c
 
 
+RESULTS = ROOT / "bench" / "results"
+
+
+def version_label(engine, raw):
+    """the engine version a result file records, as the README shows it: "mlx-lm 0.32.2", "b11669", "0.7.1rc1"; None when
+    the file does not say (unknown, b0): such a cell names its version in `version`, with `version_from` naming the
+    record that states it"""
+    import re
+    r = (raw or "").strip()
+    if not r or r == "unknown":
+        return None
+    if engine == "llama.cpp":
+        m = re.search(r"\((b\d+), (\w+)\)", r)
+        if not m:
+            return None
+        return m.group(1) if m.group(1) not in ("b0", "b1") else (m.group(2) if m.group(2) != "unknown" else None)
+    if engine == "MLX":
+        m = re.match(r"mlx_lm (\S+?)(?:\+\S+)? mlx", r)
+        if m:
+            return "mlx-lm " + m.group(1)
+        m = re.match(r"mlx-vlm (git main \w+)", r) or re.match(r"mlx-vlm (\d[\w.]*)", r)
+        return "mlx-vlm " + m.group(1) if m else None
+    if engine == "oMLX":
+        m = re.match(r"(?:omlx )?(\d[\w.]*)", r)
+        return m.group(1) if m else None
+    if engine == "LM Studio":
+        m = re.search(r"(MLX runtime [\d.]+|llama\.cpp runtime [\d.]+)", r)
+        return m.group(1) if m else None
+    if engine == "MTPLX":
+        m = re.match(r"mtplx (\S+)", r)
+        return m.group(1) if m else None
+    return r
+
+
+RESULT_ENGINE = {"mlx-serve": "mlx-serve", "oMLX": "omlx", "Splash": "splash", "Ollama": "ollama", "MTPLX": "mtplx",
+                 "MLX": "mlx-lm", "llama.cpp": "llama.cpp", "LM Studio": "lmstudio", "rec": "rec"}
+
+
+def result_record(path):
+    return json.loads((RESULTS / path).read_text(encoding="utf-8"))
+
+
+def source_version(engine, src):
+    """the version(s) the result files behind a cell record, joined with " / " when they differ; None if a file doesn't say"""
+    labels = []
+    for p in src:
+        rec = result_record(p)
+        assert rec.get("engine") == RESULT_ENGINE[engine], f"{p} is a {rec.get('engine')} record, not {engine}"
+        lab = version_label(engine, rec.get("version"))
+        if lab is None:
+            return None
+        if lab not in labels:
+            labels.append(lab)
+    return " / ".join(labels)
+
+
+def resolve_versions(data):
+    """a rival cell with `src` (the result files behind its number) shows the version those files record: its `detail`
+    is a template whose {v} the files fill (default "{v}"), never typed. A cell whose files don't say names `version`
+    and `version_from` (a record that states it); `check` verifies it"""
+    for kind in ("poster", "tables"):
+        for mac in data[kind]["macs"]:
+            for row in mac["rows"]:
+                for eng, c in row["cells"].items():
+                    if eng == "Kapitsa" or not isinstance(c, dict) or not ("src" in c or "version" in c):
+                        continue
+                    v = (source_version(eng, c["src"]) if "src" in c else None) or c.get("version")
+                    assert v, f"{mac['name']} / {row['model']} / {eng}: its files name no version and the cell gives none"
+                    tmpl = c.get("detail", "{v}")
+                    assert "{v}" in tmpl, f"{mac['name']} / {row['model']} / {eng}: its detail {tmpl!r} types a version; write {{v}}"
+                    c["detail"] = tmpl.replace("{v}", v)
+
+
 def is_num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
@@ -768,6 +841,7 @@ def main():
     ap.add_argument("--data", type=Path, default=HERE / "readme_images.json")
     a = ap.parse_args()
     data = json.loads(a.data.read_text(encoding="utf-8"))
+    resolve_versions(data)
     check(data)
     if a.tables:
         old = a.readme.read_text(encoding="utf-8")

@@ -44,20 +44,62 @@ for kind in ("prefill", "decode"):
     html, w, h = ri.context_chart(data, "light", kind)
     assert html.count("<polyline") == 2 * len(C["models"]) and w == data["poster"]["size"][0], kind  # line, leader
     assert ri.context_alt(data, kind).startswith(C[kind]["alt"] + ": " + C["models"][0]["model"]), kind
-# column headers name an engine, never a version, so every rival number carries its version in its own cell detail
-# (tables and README), or else the line that names it in docs/benchmarks.md, which the poster footer points at
+# column headers name an engine, never a version; every rival number shows the version of the record behind it:
+# a cell's `src` files (bench/results) give the number and the version, which readme_images.resolve_versions fills into
+# its detail; a cell whose files name no version carries `version` and, unless it says "version not recorded",
+# `version_from`, a record that states it
+import copy
 import re
-docs = open(os.path.join(HERE, "..", "docs", "benchmarks.md"), encoding="utf-8").read().split("\n")
 assert not any(e.get("version") and e["name"] != "MLX" for e in data["engines"]), "a rival column header names a version"
 assert not any(re.search(r"\d", v) for m in data["tables"]["macs"] for v in m.get("versions", {}).values()), "a Mac's header names a version"
-rival_cells = [(m["name"], r["model"], e, c) for m in data["poster"]["macs"] + data["tables"]["macs"] for r in m["rows"]
-               for e, c in r["cells"].items() if e != "Kapitsa" and isinstance(c, (dict, int, float)) and not isinstance(c, bool)]
+rd = copy.deepcopy(data)
+ri.resolve_versions(rd)
+rival_cells = [(m["name"], r["model"], e, c) for m in rd["poster"]["macs"] + rd["tables"]["macs"] for r in m["rows"]
+               for e, c in r["cells"].items() if e != "Kapitsa" and isinstance(c, dict) and ri.is_num(c.get("value"))]
 assert rival_cells
+NOT_RECORDED = "version not recorded"
+VERSION_WORDS = re.compile(r"mlx-lm [\d.]+|mlx-vlm [\d.]+|MLX runtime [\d.]+|llama\.cpp runtime [\d.]+|\bb\d{4,5}\b|\d+\.\d+[\w.]*|\b[0-9a-f]{7,8}\b")
 for mac, model, e, c in rival_cells:
-    detail = c.get("detail", "") if isinstance(c, dict) else ""
-    in_docs = any(e.split()[0] in line and re.search(r"\d+\.\d+|\bb\d{4,5}\b", line) for line in docs)
-    assert re.search(r"\d", detail) or in_docs, f"{mac} / {model} / {e}: no version in its detail or in docs/benchmarks.md"
-for e in {e for _, _, e, _ in rival_cells}:  # the footer's claim: the doc names a version for every rival engine on the poster
-    assert any(e.split()[0] in line and re.search(r"\d+\.\d+|\bb\d{4,5}\b", line) for line in docs), f"docs/benchmarks.md names no version for {e}"
+    who = f"{mac} / {model} / {e}"
+    assert "src" in c or "version" in c, f"{who}: no result file and no stated version behind its number"
+    if "src" in c:  # the files behind the number: right engine, and one of their decodes (or their mean) is the cell's number
+        recs = [ri.result_record(p) for p in c["src"]]
+        assert all(r["engine"] == ri.RESULT_ENGINE[e] for r in recs), who
+        meds = [r["decode_summary"]["median_tps"] for r in recs]
+        vals = [x for r in recs for x in (r["decode_summary"].get("median_tps"), r["decode_summary"].get("median_tps_e2e"),
+                                           r["decode_summary"].get("mean_tps")) if x is not None] + [sum(meds) / len(meds)]
+        assert any(abs(v - c["value"]) <= 0.55 for v in vals), f"{who}: {c['value']} is in none of its files {c['src']}"
+        lab = ri.source_version(e, c["src"])
+        if lab:
+            assert c["detail"].count(lab) == 1, f"{who}: shows {c['detail']!r}, its files record {lab!r}"
+            assert "version" not in c or c["version"] == lab, who
+            assert set(VERSION_WORDS.findall(c["detail"].replace(lab, ""))) <= set(), f"{who}: a second version in {c['detail']!r}"
+    if "version" in c and c["version"] != NOT_RECORDED and not ("src" in c and ri.source_version(e, c["src"])):
+        src_text = open(os.path.join(ri.RESULTS, c["version_from"]), encoding="utf-8").read()
+        assert c["version"] in src_text, f"{who}: {c['version']!r} is not in {c['version_from']}"
+        assert c["version"] in c["detail"], who
+    if c.get("version") == NOT_RECORDED:
+        assert NOT_RECORDED in c["detail"], who
+# a cell whose version differs from its result file fails: a wrong src version, a hand-typed second version, a wrong number
+bad = copy.deepcopy(data)
+cell0 = next(c for m in bad["poster"]["macs"] for r in m["rows"] for e, c in r["cells"].items()
+             if e == "MLX" and isinstance(c, dict) and c.get("src") and "mlx-vlm" in (ri.source_version("MLX", c["src"]) or ""))
+other = next(p for p in ri.RESULTS.glob("**/*mlxlm*.json") if ri.version_label("MLX", json.load(open(p)).get("version", "")) == "mlx-lm 0.32.2")
+cell0["src"] = [str(other.relative_to(ri.RESULTS))]
+assert ri.source_version("MLX", cell0["src"]) == "mlx-lm 0.32.2"
+cell0["detail"] = "mlx-vlm 0.7.12"
+try:
+    ri.resolve_versions(bad)
+    raise SystemExit("a hand-typed version was accepted")
+except AssertionError as err:
+    assert "types a version" in str(err), err
+cell0["detail"] = "{v}"
+bad = copy.deepcopy(data)   # the first resolve above stopped part-way
+cell0 = next(c for m in bad["poster"]["macs"] for r in m["rows"] for e, c in r["cells"].items()
+             if e == "MLX" and isinstance(c, dict) and c.get("src") and "mlx-vlm" in (ri.source_version("MLX", c["src"]) or ""))
+cell0["src"] = [str(other.relative_to(ri.RESULTS))]
+cell0["detail"] = "{v}"
+ri.resolve_versions(bad)
+assert cell0["detail"] == "mlx-lm 0.32.2", "the version shown is the one in the file"
 assert any("docs/benchmarks.md" in x for x in data["poster"]["footer"])
 print(f"test_readme_images: ok ({n} Kapitsa cells)")
