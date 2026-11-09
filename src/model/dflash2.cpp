@@ -168,7 +168,8 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   check(dc.value("conv_group_size", 0) == 16, "conv group 16");
   check(dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
         "selector rank 256 / top-k 16");
-  check(dc.value("block_size", 0) == DFlash2::kB, "block 8");
+  // the block a drafter was trained with: 8 (incoai's), or 16 (the block KFlash drafts with on a one-slot engine)
+  check(dc.value("block_size", 0) == DFlash2::kB || dc.value("block_size", 0) == 16, "block 8 or 16");
   // any theta: the inverse frequencies come from it at load (inv_freq_; incoai's Flash-Next draft has 1e4, the others 1e7)
   check(theta > 0 && rope_type == "default", "default rope");
   check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
