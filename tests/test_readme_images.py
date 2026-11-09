@@ -75,8 +75,13 @@ for mac, model, e, c in rival_cells:
             assert "version" not in c or c["version"] == lab, who
             assert set(VERSION_WORDS.findall(c["detail"].replace(lab, ""))) <= set(), f"{who}: a second version in {c['detail']!r}"
     if "version" in c and c["version"] != NOT_RECORDED and not ("src" in c and ri.source_version(e, c["src"])):
+        # the record names this version on the engine's own line (a table row or sentence about that engine), not
+        # just somewhere in the file: "mlx-vlm 0.7.8" elsewhere in a README says nothing about this engine's build
+        ENGINE_WORDS = {"Splash": ("splash",), "llama.cpp": ("llama.cpp",), "MLX": ("mlx-lm", "mlx-vlm"), "oMLX": ("omlx",),
+                        "mlx-serve": ("mlx-serve",), "Ollama": ("ollama",), "MTPLX": ("mtplx",), "LM Studio": ("lm studio", "lmstudio")}
         src_text = open(os.path.join(ri.RESULTS, c["version_from"]), encoding="utf-8").read()
-        assert c["version"] in src_text, f"{who}: {c['version']!r} is not in {c['version_from']}"
+        lines = [ln for ln in src_text.split("\n") if c["version"] in ln and any(w in ln.lower() for w in ENGINE_WORDS[e])]
+        assert lines, f"{who}: no line of {c['version_from']} names {e} with {c['version']!r}"
         assert c["version"] in c["detail"], who
     if c.get("version") == NOT_RECORDED:
         assert NOT_RECORDED in c["detail"], who
@@ -102,4 +107,11 @@ cell0["detail"] = "{v}"
 ri.resolve_versions(bad)
 assert cell0["detail"] == "mlx-lm 0.32.2", "the version shown is the one in the file"
 assert any("docs/benchmarks.md" in x for x in data["poster"]["footer"])
+
+# the M5 Max Super-VL MLX cell ran mlx-vlm git main 73d366e, unreleased: the 0.7.8 release refuses the model, and the
+# result file's own version field says so (the session README names the build on the mlx-vlm line)
+cell = next(r["cells"]["MLX"] for m in rd["tables"]["macs"] if "M5 Max" in m["name"] for r in m["rows"] if r["model"] == "Super-VL 120B")
+assert cell["detail"] == "mlx-vlm git main 73d366e", cell["detail"]
+assert "0.7.8" not in cell["detail"]
+assert "73d366e" in open(os.path.join(ri.RESULTS, cell["src"][0]), encoding="utf-8").read()
 print(f"test_readme_images: ok ({n} Kapitsa cells)")

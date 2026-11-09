@@ -153,7 +153,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **122**<br><sub>KFlash · 7f4e709</sub> | × | × | × | × | × | 76<br><sub>mlx-lm 0.32.3.dev3</sub> | 9<br><sub>b11551</sub> | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 **287**<br><sub>KFlash · 7f4e709</sub> | 190<br><sub>26.10.2</sub> | 190<br><sub>0.7.1rc1</sub> | × | 153<br><sub>0.40.6</sub> | 131<br><sub>2.12.2</sub> | 139<br><sub>mlx-lm 0.32.2</sub> | 159<br><sub>b11669</sub> | 110<br><sub>llama.cpp runtime 2.60.0</sub> |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 1075 / **154**<br><sub>KFlash · 7f4e709</sub> | × | 903 / 71<br><sub>0.7.3.dev2</sub> | × | × | × | 936 / 66<br><sub>version not recorded</sub> | × | × |
-| **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid MoE, 12B active · NVFP4, 76.4 GB</sub> | 🟩 **87**<br><sub>KFlash · 7f4e709</sub> | × | 52<br><sub>0.7.1rc1</sub> | × | 64<br><sub>0.40.6</sub> | 44<br><sub>2.12.2</sub> | 46<br><sub>mlx-vlm 0.7.8</sub> | 66<br><sub>b11669</sub> | 61<br><sub>llama.cpp runtime 2.60.0</sub> |
+| **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid MoE, 12B active · NVFP4, 76.4 GB</sub> | 🟩 **87**<br><sub>KFlash · 7f4e709</sub> | × | 52<br><sub>0.7.1rc1</sub> | × | 64<br><sub>0.40.6</sub> | 44<br><sub>2.12.2</sub> | 46<br><sub>mlx-vlm git main 73d366e</sub> | 66<br><sub>b11669</sub> | 61<br><sub>llama.cpp runtime 2.60.0</sub> |
 
 **Recursive Flint**
 
