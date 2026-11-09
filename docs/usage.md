@@ -50,7 +50,7 @@ always take the best model.
 
 ## Models and downloads
 
-The Hugging Face repo, pinned revision, draft model and exact download size of every alias and variant: [docs/models.md](models.md) (written from the catalog by `tools/models_table.py`).
+The Hugging Face repo, pinned revision, draft model, MTP head and download size of every alias and variant: [docs/models.md](models.md) (written from the catalog by `tools/models_table.py`).
 
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
