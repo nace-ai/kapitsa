@@ -29,7 +29,7 @@
    "Grey: share of the fastest decode in that row · small type: the decoding method (none: no speculative decoding) · the first number is prefill, the second decode (same size: both matter)",
    "× can't run that model on that Mac · — not measured (before the slash: no prefill run for that engine)",
    "The numbers come from bench/results (llama.cpp b11804 for Flint 4-bit and the M3 Pro, d772569 for 2-bit)",
-  "Versions and settings per cell: see docs/benchmarks.md",
+  "Each rival number carries its engine version in the Models tables below; setups: docs/benchmarks.md",
   "The M5 Pro's Flash-Next 180B Q2 row: Kapitsa with KFlash against Splash 1.5.0, a 256-token answer at T 0, not the 512-token one at T 0.6"
   ],
   "macs": [
