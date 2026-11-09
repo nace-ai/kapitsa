@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/status.schema.json",
+  "title": "GET /status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "instance_id", "run_id", "name", "pid", "version", "started_at", "lifecycle", "state",
+    "api_url", "model", "config", "tick_ms", "last_event_id", "requests"],
+  "properties": {
+    "protocol": {"$ref": "control.schema.json#/$defs/protocol"},
+    "instance_id": {"$ref": "control.schema.json#/$defs/instance_id"},
+    "run_id": {"$ref": "control.schema.json#/$defs/run_id"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "pid": {"type": "integer", "minimum": 1},
+    "version": {"type": "string", "minLength": 1, "description": "kapitsa --version"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "lifecycle": {"$ref": "control.schema.json#/$defs/lifecycle"},
+    "parent_pid": {"type": "integer", "minimum": 1, "description": "attached only: the app whose exit stops this instance"},
+    "state": {"$ref": "control.schema.json#/$defs/state"},
+    "api_url": {"type": "string", "pattern": "^http://", "description": "the inference port: OpenAI, Anthropic and Ollama APIs"},
+    "model": {"$ref": "control.schema.json#/$defs/model"},
+    "config": {
+      "description": "The instance's effective configuration in step 1's `kapitsa serve --config -` JSON, without api_key",
+      "allOf": [
+        {"$ref": "../../docs/serve-config.schema.json"},
+        {"not": {"required": ["api_key"]}}
+      ]
+    },
+    "tick_ms": {"type": "integer", "minimum": 100, "maximum": 10000, "description": "the server's fixed rate tick"},
+    "last_event_id": {
+      "oneOf": [{"$ref": "control.schema.json#/$defs/event_id"}, {"type": "null"}],
+      "description": "the newest event's id; send it as Last-Event-ID to read on from this status with no gap"
+    },
+    "requests": {"type": "array", "items": {"$ref": "control.schema.json#/$defs/request_progress"}}
+  },
+  "if": {"properties": {"lifecycle": {"const": "attached"}}},
+  "then": {"required": ["parent_pid"]},
+  "else": {"not": {"required": ["parent_pid"]}}
+}

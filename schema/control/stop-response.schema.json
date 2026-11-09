@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/stop-response.schema.json",
+  "title": "POST /stop response (202)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "state"],
+  "properties": {
+    "run_id": {"$ref": "control.schema.json#/$defs/run_id"},
+    "state": {"const": "stopping"}
+  }
+}

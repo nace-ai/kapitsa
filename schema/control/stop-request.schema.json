@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/stop-request.schema.json",
+  "title": "POST /stop request body",
+  "description": "An empty object stops whatever run holds the socket; run_id stops only that run (409 run_id_mismatch otherwise).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {"$ref": "control.schema.json#/$defs/run_id"}
+  }
+}

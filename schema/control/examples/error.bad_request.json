@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "bad_request",
+    "message": "the body is not JSON: expected '{' at byte 0"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "protocol": 1,
+  "instance_id": "code",
+  "run_id": "7f3a9c2e5b1d4e60",
+  "name": "Code assistant",
+  "pid": 48211,
+  "version": "0.24.0",
+  "started_at": "2026-11-09T18:02:11Z",
+  "lifecycle": "attached",
+  "parent_pid": 48190,
+  "state": "ready",
+  "api_url": "http://127.0.0.1:8100",
+  "model": {
+    "id": "qwen3.6-27b",
+    "context_length": 131072,
+    "slots": 2
+  },
+  "config": {
+    "model": "27b",
+    "port": 8100,
+    "private": true,
+    "context": "128k",
+    "slots": 2,
+    "disk_cache": "auto"
+  },
+  "tick_ms": 1000,
+  "last_event_id": "7f3a9c2e5b1d4e60.912",
+  "requests": [
+    {
+      "request_id": "req-41",
+      "api": "openai",
+      "client": "Kapitan/0.9",
+      "phase": "writing",
+      "prompt_tokens": 2310,
+      "cached_tokens": 2048,
+      "prefilled_tokens": 262,
+      "completion_tokens": 118,
+      "elapsed_ms": 4210,
+      "tokens_per_second": 41.5
+    }
+  ]
+}

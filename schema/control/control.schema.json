@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/control.schema.json",
+  "title": "Kapitsa control socket, protocol 1",
+  "description": "The shared definitions and one entry per message of the control socket (docs/control-socket.md). Every message file refers back here for the shared types; the instance configuration's fields are step 1's docs/serve-config.schema.json, referred to, never copied.",
+  "$defs": {
+    "messages": {
+      "status": {"$ref": "status.schema.json"},
+      "event": {"$ref": "event.schema.json"},
+      "stop_request": {"$ref": "stop-request.schema.json"},
+      "stop_response": {"$ref": "stop-response.schema.json"},
+      "model_switch_request": {"$ref": "model-switch-request.schema.json"},
+      "model_switch_response": {"$ref": "model-switch-response.schema.json"},
+      "error": {"$ref": "error.schema.json"}
+    },
+    "protocol": {"const": 1, "description": "The control protocol's version. A server speaks exactly one."},
+    "instance_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,32}$",
+      "description": "Names the socket: $KAPITSA_HOME/run/<instance_id>.sock"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16,64}$",
+      "description": "New at every process start; a different run_id means the instance restarted"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16,64}\\.[0-9]{1,19}$",
+      "description": "<run_id>.<seq>: the SSE id and the Last-Event-ID cursor; seq starts at 1 for each run"
+    },
+    "state": {"enum": ["starting", "loading", "ready", "switching", "stopping"]},
+    "lifecycle": {
+      "enum": ["attached", "keep_running", "foreground"],
+      "description": "attached: a child of the app, exits with it; keep_running: a LaunchAgent, launchd owns it; foreground: a terminal's kapitsa serve"
+    },
+    "api": {"enum": ["openai", "anthropic", "ollama"]},
+    "count": {"type": "integer", "minimum": 0},
+    "rate": {"type": "number", "minimum": 0, "description": "tokens per second"},
+    "model": {
+      "description": "The loaded model; null before the first load finishes",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "context_length", "slots"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "context_length": {"type": "integer", "minimum": 1},
+            "slots": {"type": "integer", "minimum": 1}
+          }
+        }
+      ]
+    },
+    "request_progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "api", "phase", "prompt_tokens", "cached_tokens", "prefilled_tokens",
+        "completion_tokens", "elapsed_ms", "tokens_per_second"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "api": {"$ref": "#/$defs/api"},
+        "client": {"type": "string", "maxLength": 128, "description": "the request's User-Agent, cut to 128 bytes"},
+        "phase": {"enum": ["waiting", "prefill", "writing"]},
+        "prompt_tokens": {"$ref": "#/$defs/count"},
+        "cached_tokens": {"$ref": "#/$defs/count"},
+        "prefilled_tokens": {"$ref": "#/$defs/count"},
+        "completion_tokens": {"$ref": "#/$defs/count"},
+        "elapsed_ms": {"$ref": "#/$defs/count"},
+        "tokens_per_second": {"$ref": "#/$defs/rate", "description": "completion tokens written during the last tick, divided by tick_ms"}
+      }
+    },
+    "error_code": {
+      "enum": ["bad_request", "unknown_field", "invalid_value", "forbidden_peer", "not_found", "model_not_found",
+        "method_not_allowed", "run_id_mismatch", "busy", "stopping", "internal"]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "run_id": "7f3a9c2e5b1d4e60",
+  "model": {
+    "id": "qwen3.6-35b-a3b",
+    "context_length": 65536,
+    "slots": 1
+  },
+  "previous_model": {
+    "id": "qwen3.6-27b",
+    "context_length": 131072,
+    "slots": 2
+  }
+}

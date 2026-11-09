@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/event.schema.json",
+  "title": "One event of GET /events",
+  "description": "One SSE frame as JSON: `id` is the frame's `id:` line, `type` its `event:` line, `data` the JSON on its `data:` line.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "data"],
+  "properties": {
+    "id": {"$ref": "control.schema.json#/$defs/event_id"},
+    "type": {"enum": ["state", "request_started", "request_progress", "request_finished", "log", "reset"]},
+    "data": {"type": "object"}
+  },
+  "allOf": [
+    {"if": {"properties": {"type": {"const": "state"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/state"}}}},
+    {"if": {"properties": {"type": {"const": "request_started"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/request_started"}}}},
+    {"if": {"properties": {"type": {"const": "request_progress"}}}, "then": {"properties": {"data": {"$ref": "control.schema.json#/$defs/request_progress"}}}},
+    {"if": {"properties": {"type": {"const": "request_finished"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/request_finished"}}}},
+    {"if": {"properties": {"type": {"const": "log"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/log"}}}},
+    {"if": {"properties": {"type": {"const": "reset"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/reset"}}}}
+  ],
+  "$defs": {
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "model"],
+      "properties": {
+        "state": {"$ref": "control.schema.json#/$defs/state"},
+        "model": {"$ref": "control.schema.json#/$defs/model"},
+        "message": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "request_started": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "api"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "api": {"$ref": "control.schema.json#/$defs/api"},
+        "client": {"type": "string", "maxLength": 128}
+      }
+    },
+    "request_finished": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "finish_reason", "prompt_tokens", "cached_tokens", "completion_tokens", "queue_ms",
+        "prefill_ms", "decode_ms", "tokens_per_second", "prefill_tokens_per_second"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "finish_reason": {"enum": ["stop", "length", "tool_calls", "cancelled", "error"]},
+        "error": {"type": "string", "maxLength": 4096},
+        "prompt_tokens": {"$ref": "control.schema.json#/$defs/count"},
+        "cached_tokens": {"$ref": "control.schema.json#/$defs/count"},
+        "completion_tokens": {"$ref": "control.schema.json#/$defs/count"},
+        "queue_ms": {"$ref": "control.schema.json#/$defs/count"},
+        "prefill_ms": {"$ref": "control.schema.json#/$defs/count"},
+        "decode_ms": {"$ref": "control.schema.json#/$defs/count"},
+        "tokens_per_second": {"$ref": "control.schema.json#/$defs/rate"},
+        "prefill_tokens_per_second": {"$ref": "control.schema.json#/$defs/rate"}
+      },
+      "if": {"properties": {"finish_reason": {"const": "error"}}},
+      "then": {"required": ["error"]},
+      "else": {"not": {"required": ["error"]}}
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "message"],
+      "properties": {
+        "level": {"enum": ["debug", "info", "warn", "error"]},
+        "message": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "reset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "status"],
+      "properties": {
+        "reason": {"enum": ["expired", "run_changed", "invalid_cursor"]},
+        "status": {"$ref": "status.schema.json"}
+      }
+    }
+  }
+}
