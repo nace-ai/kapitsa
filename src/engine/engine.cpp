@@ -3257,6 +3257,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
                       think_tools, (nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_, text_tags_,
                       flint_ ? CallFormat::Glm : CallFormat::QwenXml);
   const auto& eos = stop_ids_;
+  // NI_PROFILE (measuring, #296): the prompt's dispatches reported here, the decode's after it
+  if (Encoder::profiling()) fprintf(stderr, "[profile] prefill\n"), Encoder::profile_report(1);
   double t1 = now_ms();
   int gen = 0;
   StopFilter stop_filter(r.stop);
@@ -4263,6 +4265,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   else if (depth > 0 && spec_cycles_ > 0)
     logd("spec: %.2f accepted/drafted over %ld cycles", double(spec_accepted_) / (spec_cycles_ * depth), spec_cycles_);
   res.decode_ms = now_ms() - t1;
+  if (Encoder::profiling()) fprintf(stderr, "[profile] decode\n"), Encoder::profile_report(std::max(1, gen));
   if (trace_path) {  // one line: the prompt (FNV-1a of its ids), the first token, then each cycle's tokens and margins
     uint64_t h = 1469598103934665603ull;
     for (int t : prompt) h = (h ^ uint64_t(uint32_t(t))) * 1099511628211ull;
