@@ -42,6 +42,7 @@
 #include "server/pair.h"
 #include "server/route.h"
 #include "server/serve_defaults.h"
+#include "server/service.h"
 #include "splash/discover.h"
 #include "server/ui.h"
 #include "server/ws_upgrade.h"
@@ -64,7 +65,10 @@
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iostream>
+#include <sstream>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -353,7 +357,9 @@ static void print_help() {
 static void print_serve_help() {
   std::string h = strf("kapitsa serve [--model MODEL] [options]\n\n"
          "With no arguments, reads a JSON array of argument strings from KAPITSA_HOME/serve.json\n"
-         "(~/.cache/kapitsa/serve.json by default). Any explicit argument bypasses that file.\n\n"
+         "(~/.cache/kapitsa/serve.json by default). Any explicit argument bypasses that file.\n"
+         "--config -|FILE takes every option below as one JSON object from stdin or a file, alone: each field is the\n"
+         "option's name with _ for - (docs/serve-config.schema.json).\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
          "                         once: kapitsa import). Default: asked in a terminal; else the model picked last if\n"
@@ -832,122 +838,72 @@ static int idle_unload_auto_s() {
   return s >= 5 && s <= 600 ? s : 600;
 }
 
+// --config's JSON: "-" reads it from stdin. Its contents are never echoed (they may hold the API key).
+static nlohmann::json read_config(const std::string& from) {
+  std::ostringstream text;
+  if (from == "-") text << std::cin.rdbuf();
+  else {
+    std::ifstream f(expand_home(from));
+    if (!f) throw std::invalid_argument("can't read " + from);
+    text << f.rdbuf();
+  }
+  nlohmann::json j = nlohmann::json::parse(text.str(), nullptr, false);
+  if (j.is_discarded()) throw std::invalid_argument((from == "-" ? std::string("stdin") : from) + " is not JSON");
+  return j;
+}
+
+// kapitsa serve: its flags (or serve.json's, or --config's JSON) through the one validator (src/server/service.h),
+// then the service
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
   keep_args(argc, argv);
   std::vector<std::string> args(argv + first, argv + argc);
+  const char* help = "kapitsa serve --help";
   if (args.empty()) {
     try { args = serve_defaults(hub::home_dir()); }
-    catch (const std::exception& e) { usage_error(e.what(), "kapitsa serve --help"); }
+    catch (const std::exception& e) { usage_error(e.what(), help); }
   }
-  EngineOptions opt;
-  int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
-  std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
-  std::vector<std::string> split;  // --split: the stages' addresses, in the order of their layers
-  int port = 8000;
-  double idle_unload_min = -1;  // --idle-unload: auto (-1: 10 min idle and macOS short of memory), 0 off, else minutes
-  bool verbose = false, yes = false, allow_switch = false, priv = false, local = false, engine_splash = false, check_only = false;
-  std::string splash_kflash = "auto";  // --splash-kflash (splash::pick_engine)
-  std::string splash_found_binary;     // the stock engine given or found, which the next run starts from (splash.json)
-  std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
+  server::Options options;
+  try {
+    if (std::find(args.begin(), args.end(), "--config") != args.end()) {
+      if (args.size() != 2 || args[0] != "--config")
+        usage_error("--config takes - (the JSON on stdin) or a file, and no other option", help);
+      try { options = server::parse_options(read_config(args[1]), server::Source::json); }
+      catch (const std::invalid_argument& e) { usage_error(std::string("--config: ") + e.what(), help); }
+    } else {
+      const auto config = server::flags_to_json(args, first == 2);
+      if (!config) {
+        print_serve_help();
+        return 0;
+      }
+      options = server::parse_options(*config, server::Source::flags);
+    }
+  } catch (const std::invalid_argument& e) { usage_error(e.what(), help); }
+  return server::run_service(std::move(options));
+}
+
+int ni::server::run_service(Options o) {
+  EngineOptions opt = std::move(o.engine);
+  opt.splash_binary = expand_home(opt.splash_binary);
+  opt.splash_model = expand_home(opt.splash_model);
+  int context_req = o.context;  // 0 none (default_context), kContextMax, or tokens
+  std::string host = o.host, api_key = o.api_key, model = o.model;  // host "": every address, 127.0.0.1 with --private
+  const std::vector<std::string> split = o.split;  // the stages' addresses, in the order of their layers
+  const int port = o.port;
+  const double idle_unload_min = o.idle_unload_min;  // -1 auto (10 min idle and macOS short of memory), 0 off, else minutes
+  const bool verbose = o.verbose, yes = o.yes, allow_switch = o.allow_switch, priv = o.priv, engine_splash = o.engine_splash,
+             check_only = o.check_only;
+  bool local = o.local;
+  const std::string splash_kflash = o.splash_kflash;  // splash::pick_engine
+  std::string splash_found_binary;  // the stock engine given or found, which the next run starts from (splash.json)
+  const std::string timing = o.timing;  // what the request log and the chat page show of the time before the first token
+  if (!o.profile.empty()) setenv("KAPITSA_PROFILE", o.profile.c_str(), 1);  // engine/profile.h reads it, as children do
+  for (const std::string& peer : o.peers) cluster::add_peer(peer);  // where Bonjour does not reach
+  ui::set_timing(timing);
   const char* help = "kapitsa serve --help";
-  for (size_t i = 0; i < args.size(); ++i) {
-    std::string a = args[i];
-    auto next = [&]() -> std::string {
-      if (i + 1 >= args.size()) usage_error(a + " needs a value", help);
-      return args[++i];
-    };
-    if (a == "--help" || a == "-h") {
-      print_serve_help();
-      return 0;
-    } else if (a == "--model" || a == "-m") model = next();
-    else if (a == "--model-id") opt.model_id = next();
-    else if (a == "--engine") {
-      const std::string v = next();
-      if (v != "splash" && v != "native") usage_error("--engine takes native or splash, not \"" + v + "\"", help);
-      engine_splash = v == "splash";
-    }
-    else if (a == "--splash-binary") opt.splash_binary = expand_home(next());
-    else if (a == "--splash-model") opt.splash_model = expand_home(next());
-    else if (a == "--splash-arg") opt.splash_args.push_back(next());
-    else if (a == "--splash-persistent-cache") opt.splash_persistent_cache = true;
-    else if (a == "--splash-conversation-salt") opt.splash_conversation_salt = true;
-    else if (a == "--splash-kflash") splash_kflash = next();
-    else if (a == "--check") check_only = true;
-    else if (a == "--host") host = next();
-    else if (a == "--port") port = to_int(a, next(), help);
-    else if (a == "--profile") {  // engine/profile.h reads it from the environment, as tools and children do
-      const std::string v = next();
-      if (v != "fast" && v != "precise") usage_error("--profile takes fast or precise, not \"" + v + "\"", help);
-      setenv("KAPITSA_PROFILE", v.c_str(), 1);
-    }
-    else if (a == "--private") priv = true;  // this Mac only: 127.0.0.1, not advertised, never routed
-    else if (a == "--local") local = true;   // never routed: the model runs here
-    else if (a == "--peer") cluster::add_peer(next());  // another Mac's server, where Bonjour does not reach
-    else if (a == "--context" || a == "--ctx") {
-      std::string why;
-      context_req = parse_context(next(), &why);
-      if (!context_req) usage_error(why, help);
-    }
-    else if (a == "--slots") opt.slots = to_int(a, next(), help);
-    else if (a == "--spec") opt.spec_depth = to_int(a, next(), help);
-    else if (a == "--dflash") opt.dflash = next();
-    else if (a == "--prefill-chunk") opt.prefill_chunk = to_int(a, next(), help);
-    else if (a == "--api-key") api_key = next();
-    else if (a == "--allow-switch") allow_switch = true;
-    else if (a == "--idle-unload") {
-      const std::string v = next();
-      if (v == "auto") idle_unload_min = -1;
-      else if (v == "0" || v == "off") idle_unload_min = 0;
-      else {
-        char* end = nullptr;
-        const double m = strtod(v.c_str(), &end);
-        if (end == v.c_str() || *end || !(m >= 0.5 && m <= 10080))  // (!: NaN is refused too)
-          usage_error("--idle-unload takes auto, 0 (off) or the minutes the server idles first (0.5 or more), not \"" + v + "\"", help);
-        idle_unload_min = m;
-      }
-    }
-    else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
-    else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
-    else if (a == "--timing") {
-      timing = next();
-      if (!ui::set_timing(timing)) usage_error("--timing takes ttft, prefill or both, not \"" + timing + "\"", help);
-    }
-    else if (a == "--disk-cache") {
-      opt.disk_cache = next();
-      uint64_t bytes = 0;
-      if (!pcache::parse_size(opt.disk_cache, &bytes))
-        usage_error("--disk-cache takes auto, 0 (off) or a size such as 16G, not \"" + opt.disk_cache + "\"", help);
-    }
-    else if (a == "--loops") {
-      opt.loops = to_int(a, next(), help);
-      if (opt.loops < 1 || opt.loops > Dory::kMaxLoops) usage_error("--loops: 1 to 4", help);
-    } else if (a == "--loop-kv") {
-      LoopKv kv;
-      opt.loop_kv = next();
-      if (!parse_loop_kv(opt.loop_kv, &kv)) usage_error("--loop-kv: last-loop or per-loop", help);
-    }
-    else if (a == "--split") {
-      const std::string v = next();
-      for (size_t at = 0; at <= v.size();) {
-        const size_t comma = std::min(v.find(',', at), v.size());
-        if (comma > at) split.push_back(v.substr(at, comma - at));
-        at = comma + 1;
-      }
-      if (split.empty()) usage_error("--split takes the stages' host:port, comma-separated", help);
-    }
-    else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
-    else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
-    else if (i == 0 && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
-    else usage_error("unknown option " + a, help);
-  }
-  if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
   // Splash's engine: the model runs in its child, so nothing below plans this Mac's memory for it, picks, downloads or
   // routes a model: the folder given is the model, served here and nowhere else
-  if (check_only && !engine_splash) usage_error("--check needs --engine splash", help);
-  if (engine_splash) {
-    if (!model.empty() || !split.empty() || allow_switch)
-      usage_error("--engine splash serves the --splash-model folder: --model, --split and --allow-switch do not apply", help);
+  if (engine_splash) {  // (parse_options refused --model, --split and --allow-switch with it)
     // not given: where Splash installs them (src/splash/discover.h), else an error that says what is missing
     const char* home = getenv("HOME");
     const std::string last_file = hub::home_dir() + "/splash.json";
@@ -961,8 +917,6 @@ static int serve(int argc, char** argv, int first) {
       printf("\nKFlash engine: %s\n", kf.binary.empty() ? "not built (packaging/splash/README.md)" : kf.binary.c_str());
       return c.ok ? 0 : 1;
     }
-    if (splash_kflash != "auto" && splash_kflash != "on" && splash_kflash != "off")
-      usage_error("--splash-kflash must be auto, on or off", help);
     if (!opt.splash_binary.empty()) {  // the same rule as --check
       splash::Found f = splash::explicit_binary(opt.splash_binary);
       if (!f.ok()) usage_error(f.error, help);
@@ -997,8 +951,6 @@ static int serve(int argc, char** argv, int first) {
     model = opt.splash_model;
     local = true;
     opt.disk_cache = "0";
-  } else if (!opt.splash_binary.empty() || !opt.splash_model.empty() || !opt.splash_args.empty() || opt.splash_persistent_cache || opt.splash_conversation_salt || splash_kflash != "auto") {
-    usage_error("--splash-binary, --splash-model, --splash-arg, --splash-persistent-cache, --splash-conversation-salt and --splash-kflash need --engine splash", help);
   }
   bool disk_asked = !opt.disk_cache.empty();  // --disk-cache or NI_DISK_CACHE given, not the default
   if (opt.disk_cache.empty()) {  // the SSD prefix cache: on by default for the server (NI_DISK_CACHE as the option)
@@ -1022,8 +974,6 @@ static int serve(int argc, char** argv, int first) {
   if (host.empty()) host = priv || switch_here ? "127.0.0.1" : "0.0.0.0";
   const bool loopback = host == "127.0.0.1" || host == "localhost" || host == "::1";
   const bool visible = !priv && !loopback, may_route = visible && !local;
-  if (allow_switch && api_key.empty() && !loopback)
-    usage_error("--allow-switch on a network address needs --api-key (any client could load models)", help);
   const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
   if (tui) ui::serve_begin(verbose);
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
@@ -1486,7 +1436,7 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     // the stream (src/api/chat_completions.cpp) starts as soon as the prompt is known to fit, before the slot
-    stream_reply(guard, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
+    ::stream_reply(guard, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
                  [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true, telemetry, progress);
   });
 
@@ -1545,7 +1495,7 @@ static int serve(int argc, char** argv, int first) {
       prefill_after(q.chat, out);
       return;
     }
-    stream_reply(guard, q.chat, std::make_shared<api::MessagesStream>(id, model, q.show_thinking), res,
+    ::stream_reply(guard, q.chat, std::make_shared<api::MessagesStream>(id, model, q.show_thinking), res,
                  api::messages_failure, [&, r = q.chat](const ChatResult& out) { prefill_after(r, out); }, meter);
   });
   srv.Post("/v1/messages/count_tokens", [&](const httplib::Request& req, httplib::Response& res) {
@@ -1640,7 +1590,7 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     auto w = std::make_shared<api::ResponsesStream>(*q, id, model, created);
-    stream_reply(
+    ::stream_reply(
         guard, q->chat, w, res, api::responses_failure,
         [&, q, w, keep](const ChatResult& out) {
           if (out.finish_reason != "error") keep(w->output());
@@ -1838,7 +1788,7 @@ static int serve(int argc, char** argv, int first) {
     }
     // Streaming: Ollama uses newline-delimited JSON, not SSE. The failure lambda returns a status+body; the
     // stream_reply wrapper adds Retry-After when status is 503 and the engine is not permanently down.
-    stream_reply(guard, r, std::make_shared<api::OllamaChatStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
+    ::stream_reply(guard, r, std::make_shared<api::OllamaChatStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
       if (result.busy) return {503, json{{"error", result.error}}};
       if (result.engine_down) return {503, json{{"error", result.error}}};
       if (result.prompt_limit > 0) return {400, json{{"error", "prompt too long: " + std::to_string(result.prompt_tokens) + " tokens, limit " + std::to_string(result.prompt_limit)}}};
@@ -1909,7 +1859,7 @@ static int serve(int argc, char** argv, int first) {
       res.set_content(api::dump(j), "application/json");
       return;
     }
-    stream_reply(guard, r, std::make_shared<api::OllamaGenerateStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
+    ::stream_reply(guard, r, std::make_shared<api::OllamaGenerateStream>(model), res, [](const ChatResult& result) -> std::pair<int, json> {
       if (result.busy) return {503, json{{"error", result.error}}};
       if (result.engine_down) return {503, json{{"error", result.error}}};
       return {400, json{{"error", result.error.empty() ? "request failed" : result.error}}};
