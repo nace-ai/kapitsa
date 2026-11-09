@@ -195,7 +195,40 @@ static void activity_events() {
         ev.back().second["message"] == "line 299");
 }
 
-int main() {
+// --print: one SSE frame per line as event.schema.json's JSON ({id, type, data}), every kind the server publishes, for
+// tests/test_events_schema.py to validate against the spec
+static int print_frames() {
+  Events bus(kRun);
+  Resume how;
+  auto s = bus.open("", &how);
+  const json m = model_json("qwen3.6-35b-a3b", 262144, 4);
+  CHECK(model_json("", 1, 1).is_null() && model_json("x", 0, 1).is_null());
+  publish_state("starting", nullptr);  // (no process bus: nothing; the frames below use `bus`)
+  for (const char* st : {"starting", "loading"}) bus.publish("state", {{"state", st}, {"model", nullptr}});
+  for (const char* st : {"loading", "ready", "switching", "released", "stopping"}) bus.publish("state", {{"state", st}, {"model", m}});
+  bus.publish("state", {{"state", "released"}, {"model", m}, {"message", "loading the model again failed: out of memory"}});
+  bus.publish("state", {{"state", "stopping"}, {"model", nullptr}});
+  Activity act(bus, 500);
+  auto r = act.start("openai", "curl/8.7.1");
+  auto r2 = act.start("ollama", "");
+  r->live->phase = 2, r->live->prompt = 100, r->live->cached = 40, r->live->read = 100, r->live->tokens = 12;
+  act.tick(r->t0 + 500);
+  ChatResult ok;
+  ok.finish_reason = "length", ok.prompt_tokens = 100, ok.cached_tokens = 40, ok.completion_tokens = 12;
+  ok.prefill_ms = 30, ok.decode_ms = 110;
+  act.finish(r, ok);
+  ChatResult bad;
+  bad.finish_reason = "error", bad.error = "the prompt does not fit";
+  act.finish(r2, bad);
+  for (int lvl = 0; lvl < 3; ++lvl) act.logs().push(lvl, "a line");
+  act.logs().push(1, "warning: a warning");
+  act.tick(r->t0 + 1000);
+  while (auto e = s->next(0)) std::cout << json{{"id", bus.id(e->seq)}, {"type", e->type}, {"data", json::parse(e->data)}}.dump() << "\n";
+  return 0;
+}
+
+int main(int argc, char** argv) {
+  if (argc > 1 && std::string(argv[1]) == "--print") return print_frames();
   activity_events();
   numbering_and_live();
   replay_and_resets();
