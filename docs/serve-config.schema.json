@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/nace-ai/kapitsa/blob/main/docs/serve-config.schema.json",
   "title": "kapitsa serve configuration",
-  "description": "What `kapitsa serve --config -` reads on stdin (or `--config FILE`). Each field is a `kapitsa serve` flag with '_' for '-' (docs/usage.md and `kapitsa serve --help` say what each does); a field left out takes the flag's default. The command line's flags are converted to this JSON and checked by the same validator (src/server/service_config.cpp). Unknown fields are refused.",
+  "description": "What `kapitsa serve --config -` reads on stdin (or `--config FILE`). Each field is a `kapitsa serve` flag with '_' for '-' (docs/usage.md and `kapitsa serve --help` say what each does); a field left out takes the flag's default. The command line's flags are converted to this JSON and checked by the same validator (src/server/service_config.cpp), with two forms only the flags take: a bare token count for context (`--context 131072`) and a size without its unit for disk_cache (`--disk-cache 16`, bytes); in this JSON the first is a number and the second needs its unit. Unknown fields are refused.",
   "type": "object",
   "additionalProperties": false,
   "allOf": [

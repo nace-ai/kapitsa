@@ -24,7 +24,7 @@ CASES = [
     ("idle_unload", 0.5, True), ("idle_unload", 5, True), ("idle_unload", 10080, True),
     ("idle_unload", "soon", False), ("idle_unload", "5", False), ("idle_unload", 0.1, False),
     ("idle_unload", 20000, False), ("idle_unload", -3, False), ("idle_unload", True, False),
-    ("context", 1, True), ("context", 131072, True), ("context", 2147483647, True), ("context", "131072", False),
+    ("context", 1, True), ("context", 131072, True), ("context", 131072.0, True), ("port", 8000.0, True), ("port", 8000.5, False), ("context", 2147483647, True), ("context", "131072", False),
     ("context", "128k", True), ("context", "1M", True), ("context", "max", True), ("context", "MAX", True),
     ("context", 0, False), ("context", -1, False), ("context", 2147483648, False), ("context", "0", False),
     ("context", "0k", False), ("context", "30", False), ("context", "128 k", False), ("context", "1g", False), ("context", "", False),
@@ -43,6 +43,8 @@ SCHEMA_WIDER = [{"context": "9999999k"}, {"context": "4096m"}, {"disk_cache": "9
 # the same probes for every field
 PROBES = ["30", "30.5", "-1", "0", "", "auto", "max", "128k", "16G", "native", "splash", "fast", "both", "per-loop",
           "a:1", "127.0.0.1", "0.0.0.0", 30, 0, 1, 4, 5, 65535, 65536, -1, 0.5, 30.5, 2147483647, 2147483648,
+          # integral floats: JSON Schema counts 8000.0 as an integer, so the validator must too
+          0.0, 1.0, 4.0, 30.0, 8000.0, 65536.0, 131072.0, 2147483648.0, 1e300,
           True, False, None, [], ["a:1"], [""], [1], {}]
 # configs the combination rules read, so each probe also runs where those rules pass and where they refuse
 BASES = [{}, {"engine": "splash"}, {"engine": "native"}, {"allow_switch": True, "host": "0.0.0.0"},

@@ -389,7 +389,7 @@ loaded: the server sends its requests there ([Several Macs](#several-macs)). In 
 | `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
-| `--config -\|FILE` | none | Every option above as one JSON object, read from stdin (`-`) or a file, with no other option beside it: each field is an option's name with `_` for `-` (`{"model": "4b", "port": 8001, "disk_cache": "16G", "peer": ["mac2"]}`). The schema is [serve-config.schema.json](serve-config.schema.json). The options and the JSON go through the same checks, so the same settings start the same server; an unknown field is refused. |
+| `--config -\|FILE` | none | Every option above as one JSON object, read from stdin (`-`) or a file, with no other option beside it: each field is an option's name with `_` for `-` (`{"model": "4b", "port": 8001, "disk_cache": "16G", "peer": ["mac2"]}`). The schema is [serve-config.schema.json](serve-config.schema.json). The options and the JSON go through the same checks, so the same settings start the same server; an unknown field is refused. The JSON is stricter in two places: `context`'s token count is a number (`131072`, not `"131072"`), and `disk_cache` needs its unit (`"16G"`; `--disk-cache 16` still means 16 bytes). |
 
 ### Context
 
