@@ -1,0 +1,38 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Original commands and complete records retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-IQ3_M.gguf",
+    "sha256": "5ad76abae6b7a27d1463d90e6d86886850769e34906a88cfa4347cae72c91502"
+  },
+  "rows_each": 584,
+  "rows_by_path": {
+    "prefill": 8,
+    "step": 192,
+    "verify": 192,
+    "batch": 192
+  },
+  "vocab": 248320,
+  "float32_values_each": 145018880,
+  "all_finite": true,
+  "complete_output_and_scored_input_bytes_equal": true,
+  "report_only_rc": 0,
+  "strict_zero_step_verify_batch_rc": 0,
+  "prefill_separate_finite_literal_check": true,
+  "floor_changed": false,
+  "verify": "KFlash tree, eight live chain rows; teacher-forced trunk, not free MTP",
+  "independent_imports_on_this_source_pair": 0,
+  "import_basis": "Both arms share the original M5 reference import; all nine files verified by digest. Original independent imports at 5229f9c5/ee8ce8c8 were literally equal. This is not a new import comparison."
+}
