@@ -322,6 +322,33 @@ void dq_iq4_nl(const uint8_t* b, float* y) {
 }
 
 void dq_iq4_xs(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t h, high;
+  memcpy(&h, b, 2);
+  memcpy(&high, b + 2, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = dst >= src ? dst - src < 136 : src - dst < 256 * sizeof(float);
+  if ((h & 0x7c00) != 0x7c00 && !overlap) {
+    const float d = from_f16(h);
+    const int8x16_t levels = vld1q_s8(kIq4Levels);
+    auto store = [&](uint8x16_t indices, float scale, float* out) {
+      const int8x16_t v = vqtbl1q_s8(levels, indices);
+      const int16x8_t lo = vmovl_s8(vget_low_s8(v)), hi = vmovl_s8(vget_high_s8(v));
+      vst1q_f32(out, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(lo))), scale));
+      vst1q_f32(out + 4, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(lo))), scale));
+      vst1q_f32(out + 8, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(hi))), scale));
+      vst1q_f32(out + 12, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(hi))), scale));
+    };
+    for (int ib = 0; ib < 8; ++ib) {
+      const int ls = ((b[4 + ib / 2] >> (4 * (ib % 2))) & 15) | (((high >> (2 * ib)) & 3) << 4);
+      const float dl = d * float(ls - 32);
+      const uint8x16_t q = vld1q_u8(b + 8 + 16 * ib);
+      store(vandq_u8(q, vdupq_n_u8(15)), dl, y + 32 * ib);
+      store(vshrq_n_u8(q, 4), dl, y + 32 * ib + 16);
+    }
+    return;
+  }
+#endif
   const float d = f16_at(b);
   uint16_t sh;
   memcpy(&sh, b + 2, 2);

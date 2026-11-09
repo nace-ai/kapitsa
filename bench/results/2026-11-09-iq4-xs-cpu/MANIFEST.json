@@ -1,0 +1,35 @@
+{
+  "provenance": "Public files are reviewed derived exports, except the exact executed driver source. Private originals are not uploaded.",
+  "files": [
+    {
+      "path": "CHECKS.json",
+      "sha256": "7a39de5f5d53d14c9e7013dc2b21441676224ab892779f533648bc043c5bfe22",
+      "bytes": 2544
+    },
+    {
+      "path": "M3-CPU-ROWS.json",
+      "sha256": "9765b3ae14c8cd874d5b42e6d0eddc92c5284e9ecb1e1eceacbcae75a05f802f",
+      "bytes": 38516
+    },
+    {
+      "path": "M4-CPU-ROWS.json",
+      "sha256": "74884327632c90ccc65857b91935d7fff7682c6f5f94c135d183483a111d8964",
+      "bytes": 38229
+    },
+    {
+      "path": "MODEL-SAMPLE.json",
+      "sha256": "2b74687d2e5f4de4315c4e3f8314616d6801171daa16c5e09e69c94766ee95e1",
+      "bytes": 780
+    },
+    {
+      "path": "README.md",
+      "sha256": "9cca85e1fd58aaeaca651c366c8cadf10a64b45d5489c8475b791b0fa9740838",
+      "bytes": 4583
+    },
+    {
+      "path": "iq4_xs_rows.cpp",
+      "sha256": "5eee24c7d93cb420f8526ea3c5c63ffc695f72e0df4d392bb06fdbb61f487384",
+      "bytes": 5762
+    }
+  ]
+}

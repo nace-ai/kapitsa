@@ -1,0 +1,1282 @@
+{
+  "provenance": "Explicitly redacted derivation of privately retained execution logs. Raw reports below contain measurement data; this wrapper is derived, not an original command transcript.",
+  "configuration": {
+    "chip": "Apple M4 Pro",
+    "GPU_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+  "reference": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+  "actual_target_flags": "-O3; arm64; no NDEBUG in actual target flags",
+  "CPU_driver_source_sha256": "5eee24c7d93cb420f8526ea3c5c63ffc695f72e0df4d392bb06fdbb61f487384",
+  "source_and_binary_identity": {
+    "reference": {
+      "source_commit": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+      "quant_sha256": "6d83242c0efc53ffbc743cd9176d6c589beee897089cabee3b7bf0dd8a2bebc0",
+      "library_sha256": "6d80a484b4b9355eaa5dd0089e6458fb185315c697cfc3deb9e451ce3bff33f0",
+      "object_sha256": "2bf99c16a09d3515c3ab2b07115cd26b347c41efa6c6f9cfab7aba4119410d5b",
+      "cpu_row_driver_binary_sha256": "a23e8c11a4603cf8e3b3f5fb6357c62e340277eaaeef82282bc8632631cfe422"
+    },
+    "candidate": {
+      "source_commit": "d5589c4259b35a3bd5d5cc711b20975705118956",
+      "quant_sha256": "1c0ac46c672ae9e74e4a4e129cd3a9ea7ce357da26d15ad94c0228ce5f196248",
+      "library_sha256": "97d9e08b461fd54af8028e9912a81f8fcf049916cb26bcb71f9cf87d612bb042",
+      "object_sha256": "f62a58984eaabe3ef5fc05dcdd0be59eeae3816caae03287c4d710a17916c370",
+      "cpu_row_driver_binary_sha256": "771a33b2b0f328df0961f853640e36094a1a41f0ef2c2a8af954d5fcd7c6e5aa"
+    }
+  },
+  "scope": "Warm CPU row decoding only; excludes file IO, hashing, allocations and output gates. No full import/loading or inference speed claim.",
+  "legs": [
+    {
+      "label": "leg-1-reference",
+      "arm": "reference",
+      "source": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+      "raw_log_sha256": "74f1d7b9403f6e92c16d85a0b46052fe1800dfa1a35458a166e67bb365325a3c",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 754958,
+            "input_unchanged": true,
+            "ns_per_row": 737.263671875,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 764375,
+            "input_unchanged": true,
+            "ns_per_row": 746.4599609375,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 876209,
+            "input_unchanged": true,
+            "ns_per_row": 855.6728515625,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 990667,
+            "input_unchanged": true,
+            "ns_per_row": 967.4482421875,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 754292,
+            "input_unchanged": true,
+            "ns_per_row": 736.61328125,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 767417,
+            "input_unchanged": true,
+            "ns_per_row": 749.4306640625,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 788291,
+            "input_unchanged": true,
+            "ns_per_row": 769.8154296875,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 758041,
+            "input_unchanged": true,
+            "ns_per_row": 740.2744140625,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 756958,
+            "input_unchanged": true,
+            "ns_per_row": 739.216796875,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 775375,
+            "input_unchanged": true,
+            "ns_per_row": 757.2021484375,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 758708,
+            "input_unchanged": true,
+            "ns_per_row": 740.92578125,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 759917,
+            "input_unchanged": true,
+            "ns_per_row": 742.1064453125,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 790750,
+            "input_unchanged": true,
+            "ns_per_row": 772.216796875,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 732042,
+            "input_unchanged": true,
+            "ns_per_row": 714.884765625,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 730292,
+            "input_unchanged": true,
+            "ns_per_row": 713.17578125,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 765292,
+            "input_unchanged": true,
+            "ns_per_row": 747.35546875,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 744.283203125
+    },
+    {
+      "label": "leg-2-candidate",
+      "arm": "candidate",
+      "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+      "raw_log_sha256": "5baec19be00e59eb06d103d34e4aa759ca815bf8cbc486d6b1c1746a18f364ed",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 217750,
+            "input_unchanged": true,
+            "ns_per_row": 212.646484375,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 218542,
+            "input_unchanged": true,
+            "ns_per_row": 213.419921875,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 203334,
+            "input_unchanged": true,
+            "ns_per_row": 198.568359375,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 219375,
+            "input_unchanged": true,
+            "ns_per_row": 214.2333984375,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 205916,
+            "input_unchanged": true,
+            "ns_per_row": 201.08984375,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 204750,
+            "input_unchanged": true,
+            "ns_per_row": 199.951171875,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 213500,
+            "input_unchanged": true,
+            "ns_per_row": 208.49609375,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 235667,
+            "input_unchanged": true,
+            "ns_per_row": 230.1435546875,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 210083,
+            "input_unchanged": true,
+            "ns_per_row": 205.1591796875,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 211083,
+            "input_unchanged": true,
+            "ns_per_row": 206.1357421875,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 269709,
+            "input_unchanged": true,
+            "ns_per_row": 263.3876953125,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 218875,
+            "input_unchanged": true,
+            "ns_per_row": 213.7451171875,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 215250,
+            "input_unchanged": true,
+            "ns_per_row": 210.205078125,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 219000,
+            "input_unchanged": true,
+            "ns_per_row": 213.8671875,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 209042,
+            "input_unchanged": true,
+            "ns_per_row": 204.142578125,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 221375,
+            "input_unchanged": true,
+            "ns_per_row": 216.1865234375,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 211.42578125
+    },
+    {
+      "label": "leg-3-reference",
+      "arm": "reference",
+      "source": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+      "raw_log_sha256": "67c1cb10334af01e9ea7df0182e40c74cdb0a063d2f6dc6c0abd95cf759358a5",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 779875,
+            "input_unchanged": true,
+            "ns_per_row": 761.5966796875,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 760125,
+            "input_unchanged": true,
+            "ns_per_row": 742.3095703125,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 829917,
+            "input_unchanged": true,
+            "ns_per_row": 810.4658203125,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 731375,
+            "input_unchanged": true,
+            "ns_per_row": 714.2333984375,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 756167,
+            "input_unchanged": true,
+            "ns_per_row": 738.4443359375,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 711875,
+            "input_unchanged": true,
+            "ns_per_row": 695.1904296875,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 779333,
+            "input_unchanged": true,
+            "ns_per_row": 761.0673828125,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 703833,
+            "input_unchanged": true,
+            "ns_per_row": 687.3369140625,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 724167,
+            "input_unchanged": true,
+            "ns_per_row": 707.1943359375,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 691125,
+            "input_unchanged": true,
+            "ns_per_row": 674.9267578125,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 691416,
+            "input_unchanged": true,
+            "ns_per_row": 675.2109375,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 818291,
+            "input_unchanged": true,
+            "ns_per_row": 799.1123046875,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 699458,
+            "input_unchanged": true,
+            "ns_per_row": 683.064453125,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 692000,
+            "input_unchanged": true,
+            "ns_per_row": 675.78125,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 683875,
+            "input_unchanged": true,
+            "ns_per_row": 667.8466796875,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 1037625,
+            "input_unchanged": true,
+            "ns_per_row": 1013.3056640625,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 710.7138671875
+    },
+    {
+      "label": "leg-4-candidate",
+      "arm": "candidate",
+      "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+      "raw_log_sha256": "a79bae8c199df79b04985553b56cef78366a668ca8c11bcb31efc16b021687c1",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 244084,
+            "input_unchanged": true,
+            "ns_per_row": 238.36328125,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 262958,
+            "input_unchanged": true,
+            "ns_per_row": 256.794921875,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 213125,
+            "input_unchanged": true,
+            "ns_per_row": 208.1298828125,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 213666,
+            "input_unchanged": true,
+            "ns_per_row": 208.658203125,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 199417,
+            "input_unchanged": true,
+            "ns_per_row": 194.7431640625,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 213083,
+            "input_unchanged": true,
+            "ns_per_row": 208.0888671875,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 209875,
+            "input_unchanged": true,
+            "ns_per_row": 204.9560546875,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 250917,
+            "input_unchanged": true,
+            "ns_per_row": 245.0361328125,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 217834,
+            "input_unchanged": true,
+            "ns_per_row": 212.728515625,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 204875,
+            "input_unchanged": true,
+            "ns_per_row": 200.0732421875,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 212084,
+            "input_unchanged": true,
+            "ns_per_row": 207.11328125,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 200833,
+            "input_unchanged": true,
+            "ns_per_row": 196.1259765625,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 195375,
+            "input_unchanged": true,
+            "ns_per_row": 190.7958984375,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 210042,
+            "input_unchanged": true,
+            "ns_per_row": 205.119140625,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 204333,
+            "input_unchanged": true,
+            "ns_per_row": 199.5439453125,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 210208,
+            "input_unchanged": true,
+            "ns_per_row": 205.28125,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 206.197265625
+    },
+    {
+      "label": "leg-5-reference",
+      "arm": "reference",
+      "source": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+      "raw_log_sha256": "0d21a7b55d35e5684dacbae253cc601653a81baaed17df21934dddd795b51680",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 698041,
+            "input_unchanged": true,
+            "ns_per_row": 681.6806640625,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 691416,
+            "input_unchanged": true,
+            "ns_per_row": 675.2109375,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 691333,
+            "input_unchanged": true,
+            "ns_per_row": 675.1298828125,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 692000,
+            "input_unchanged": true,
+            "ns_per_row": 675.78125,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 697084,
+            "input_unchanged": true,
+            "ns_per_row": 680.74609375,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 714875,
+            "input_unchanged": true,
+            "ns_per_row": 698.1201171875,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 694250,
+            "input_unchanged": true,
+            "ns_per_row": 677.978515625,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 701958,
+            "input_unchanged": true,
+            "ns_per_row": 685.505859375,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 694750,
+            "input_unchanged": true,
+            "ns_per_row": 678.466796875,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 709292,
+            "input_unchanged": true,
+            "ns_per_row": 692.66796875,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 702291,
+            "input_unchanged": true,
+            "ns_per_row": 685.8310546875,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 695959,
+            "input_unchanged": true,
+            "ns_per_row": 679.6474609375,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 695875,
+            "input_unchanged": true,
+            "ns_per_row": 679.5654296875,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 704375,
+            "input_unchanged": true,
+            "ns_per_row": 687.8662109375,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 719791,
+            "input_unchanged": true,
+            "ns_per_row": 702.9208984375,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 633625,
+            "input_unchanged": true,
+            "ns_per_row": 618.7744140625,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 680.19677734375
+    },
+    {
+      "label": "leg-6-candidate",
+      "arm": "candidate",
+      "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+      "raw_log_sha256": "e8e1163c3f254c840b92aa50b1e8879aa86c464959037e72693dba7fd8ef4405",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 187334,
+            "input_unchanged": true,
+            "ns_per_row": 182.943359375,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 181791,
+            "input_unchanged": true,
+            "ns_per_row": 177.5302734375,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 179084,
+            "input_unchanged": true,
+            "ns_per_row": 174.88671875,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 196541,
+            "input_unchanged": true,
+            "ns_per_row": 191.9345703125,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 209291,
+            "input_unchanged": true,
+            "ns_per_row": 204.3857421875,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 244042,
+            "input_unchanged": true,
+            "ns_per_row": 238.322265625,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 203708,
+            "input_unchanged": true,
+            "ns_per_row": 198.93359375,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 189334,
+            "input_unchanged": true,
+            "ns_per_row": 184.896484375,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 207209,
+            "input_unchanged": true,
+            "ns_per_row": 202.3525390625,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 184292,
+            "input_unchanged": true,
+            "ns_per_row": 179.97265625,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 187125,
+            "input_unchanged": true,
+            "ns_per_row": 182.7392578125,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 183542,
+            "input_unchanged": true,
+            "ns_per_row": 179.240234375,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 216750,
+            "input_unchanged": true,
+            "ns_per_row": 211.669921875,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 186250,
+            "input_unchanged": true,
+            "ns_per_row": 181.884765625,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 189875,
+            "input_unchanged": true,
+            "ns_per_row": 185.4248046875,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 186334,
+            "input_unchanged": true,
+            "ns_per_row": 181.966796875,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 183.919921875
+    },
+    {
+      "label": "leg-7-reference",
+      "arm": "reference",
+      "source": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+      "raw_log_sha256": "fe4c24498686d8ba169630a560ffa173e25be43e2dc3ba1e4a7daeb56f9a6120",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 710000,
+            "input_unchanged": true,
+            "ns_per_row": 693.359375,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 684166,
+            "input_unchanged": true,
+            "ns_per_row": 668.130859375,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 689416,
+            "input_unchanged": true,
+            "ns_per_row": 673.2578125,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 684042,
+            "input_unchanged": true,
+            "ns_per_row": 668.009765625,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 680166,
+            "input_unchanged": true,
+            "ns_per_row": 664.224609375,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 684208,
+            "input_unchanged": true,
+            "ns_per_row": 668.171875,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 684041,
+            "input_unchanged": true,
+            "ns_per_row": 668.0087890625,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 684083,
+            "input_unchanged": true,
+            "ns_per_row": 668.0498046875,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 684375,
+            "input_unchanged": true,
+            "ns_per_row": 668.3349609375,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 687000,
+            "input_unchanged": true,
+            "ns_per_row": 670.8984375,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 676083,
+            "input_unchanged": true,
+            "ns_per_row": 660.2373046875,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 700458,
+            "input_unchanged": true,
+            "ns_per_row": 684.041015625,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 689625,
+            "input_unchanged": true,
+            "ns_per_row": 673.4619140625,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 680000,
+            "input_unchanged": true,
+            "ns_per_row": 664.0625,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 778000,
+            "input_unchanged": true,
+            "ns_per_row": 759.765625,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 679667,
+            "input_unchanged": true,
+            "ns_per_row": 663.7373046875,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 668.1513671875
+    },
+    {
+      "label": "leg-8-candidate",
+      "arm": "candidate",
+      "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+      "raw_log_sha256": "56a1cb6865865422f5e73e9146da25eccd9b187a4c1ca90e08e9f1cc826bbe0b",
+      "observed_cpu_report": {
+        "api": "ni::gguf::dequantize(kIQ4_XS), one call per row",
+        "cols": 2560,
+        "input_bytes": 1392640,
+        "mode": "timed-leg",
+        "output_bytes": 10485760,
+        "packed_row_bytes": 1360,
+        "passes": [
+          {
+            "all_finite": true,
+            "elapsed_ns": 191167,
+            "input_unchanged": true,
+            "ns_per_row": 186.6865234375,
+            "output_equal": true,
+            "pass": 1
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 197500,
+            "input_unchanged": true,
+            "ns_per_row": 192.87109375,
+            "output_equal": true,
+            "pass": 2
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 183375,
+            "input_unchanged": true,
+            "ns_per_row": 179.0771484375,
+            "output_equal": true,
+            "pass": 3
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 197333,
+            "input_unchanged": true,
+            "ns_per_row": 192.7080078125,
+            "output_equal": true,
+            "pass": 4
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 187208,
+            "input_unchanged": true,
+            "ns_per_row": 182.8203125,
+            "output_equal": true,
+            "pass": 5
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 183417,
+            "input_unchanged": true,
+            "ns_per_row": 179.1181640625,
+            "output_equal": true,
+            "pass": 6
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 185875,
+            "input_unchanged": true,
+            "ns_per_row": 181.5185546875,
+            "output_equal": true,
+            "pass": 7
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 186375,
+            "input_unchanged": true,
+            "ns_per_row": 182.0068359375,
+            "output_equal": true,
+            "pass": 8
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 186917,
+            "input_unchanged": true,
+            "ns_per_row": 182.5361328125,
+            "output_equal": true,
+            "pass": 9
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 187125,
+            "input_unchanged": true,
+            "ns_per_row": 182.7392578125,
+            "output_equal": true,
+            "pass": 10
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 187083,
+            "input_unchanged": true,
+            "ns_per_row": 182.6982421875,
+            "output_equal": true,
+            "pass": 11
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 185500,
+            "input_unchanged": true,
+            "ns_per_row": 181.15234375,
+            "output_equal": true,
+            "pass": 12
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 189334,
+            "input_unchanged": true,
+            "ns_per_row": 184.896484375,
+            "output_equal": true,
+            "pass": 13
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 187584,
+            "input_unchanged": true,
+            "ns_per_row": 183.1875,
+            "output_equal": true,
+            "pass": 14
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 186000,
+            "input_unchanged": true,
+            "ns_per_row": 181.640625,
+            "output_equal": true,
+            "pass": 15
+          },
+          {
+            "all_finite": true,
+            "elapsed_ns": 192125,
+            "input_unchanged": true,
+            "ns_per_row": 187.6220703125,
+            "output_equal": true,
+            "pass": 16
+          }
+        ],
+        "rows": 1024,
+        "schema": "kapitsa-iq4-xs-official-cpu-v1",
+        "scope": "warm CPU row dequantization only; excludes file IO, hashing, gates and allocations",
+        "warmup": {
+          "all_finite": true,
+          "count": 1,
+          "input_unchanged": true,
+          "output_equal": true
+        },
+        "written": true
+      },
+      "median_ns_per_row": 182.71875
+    }
+  ],
+  "adjacent_pair_latency_change_percent": [
+    -71.59336924946139,
+    -70.98730232449493,
+    -72.96077723372501,
+    -72.65309045626415
+  ],
+  "all_eight_complete_output_files_literal_equal_reference": true,
+  "per_leg_output_bytes": 10485760,
+  "input_sha256": "9a0c2a0baad5f600e2438be8b77262b7591e74eac8c9de1c0c9d3e93d8017221"
+}
