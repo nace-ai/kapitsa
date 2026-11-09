@@ -189,19 +189,19 @@ File::File(const std::string& path) {
     for (size_t i = 0; i < paths_.size(); ++i) parse(int(i), i == 0);
     for (size_t i = 0; i < tensors_.size(); ++i)
       if (!index_.emplace(tensors_[i].name, i).second) throw Error(path + " lists tensor " + tensors_[i].name + " twice.");
+    if (paths_.size() > 1) {
+      const int64_t n = num("split.count", int64_t(paths_.size()));
+      if (n != int64_t(paths_.size())) throw Error(path + ": the split count in its header (" + std::to_string(n) +
+                                                   ") differs from its file name.");
+      const int64_t nt = num("split.tensors.count", int64_t(tensors_.size()));
+      if (nt != int64_t(tensors_.size()))
+        throw Error(path + ": the parts hold " + std::to_string(tensors_.size()) + " tensors, the header announces " +
+                    std::to_string(nt) + ". Is a part incomplete?");
+    }
   } catch (...) {
     for (int f : fds_) close(f);
     fds_.clear();
     throw;
-  }
-  if (paths_.size() > 1) {
-    const int64_t n = num("split.count", int64_t(paths_.size()));
-    if (n != int64_t(paths_.size())) throw Error(path + ": the split count in its header (" + std::to_string(n) +
-                                                 ") differs from its file name.");
-    const int64_t nt = num("split.tensors.count", int64_t(tensors_.size()));
-    if (nt != int64_t(tensors_.size()))
-      throw Error(path + ": the parts hold " + std::to_string(tensors_.size()) + " tensors, the header announces " +
-                  std::to_string(nt) + ". Is a part incomplete?");
   }
 }
 

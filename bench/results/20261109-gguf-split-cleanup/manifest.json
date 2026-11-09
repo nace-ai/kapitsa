@@ -1,0 +1,10 @@
+{
+  "format": "Public derived copies. Raw execution records remain private; focus.cpp alone is the unchanged driver.",
+  "files": {
+    "cpu-results.json": "40d5e223fe135630fa4a613cb5b33ffb591358620c0480fb4b61891b1ba3fc84",
+    "final-build-results.json": "bccf82d5f19a82026dda3eda1b6666857c846aee207f6d943c3c5a3098d94c2e",
+    "README.md": "b4228d65c2bfaaee9874fa9e7eec3271bc2fa99f162da223aaa6fbfef824d040",
+    "focus.cpp": "baa5c16e8a55c287fd8b0b310b9708f0c69bf40040d78dc50952a5b62b2dac76",
+    "focused-results.json": "51a06fc08eb26a8cb69d531bf36277e455403ce1411af802f289e16459f39ed3"
+  }
+}

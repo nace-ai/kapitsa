@@ -1,0 +1,111 @@
+{
+  "format": "Sanitized derived result summary; original execution records retained privately. Commands are documented separately as portable examples.",
+  "production_commit": "fe0409a96aef4472ff5795cd7f643f7b2ea07db2",
+  "test_commit": "ab796a55cc217373f9be8d0fc72e8b43e1050891",
+  "reference_gguf_commit": "47dbe3cbd1516af07be108385236d6f40e492b61",
+  "method": "Same focused driver and candidate test header in both arms. Replace only src/gguf/gguf.cpp with the reference commit for the reference arm. No model or GPU. This is a cleanup regression, not a performance measurement.",
+  "test_header_sha256": "dcaf1654c069289ae6c55ae1d01303d2454a7b2a684b6d5eca7094aa02b4f945",
+  "driver_sha256": "baa5c16e8a55c287fd8b0b310b9708f0c69bf40040d78dc50952a5b62b2dac76",
+  "candidate_gguf_sha256": "1eb33dec649c81dcb71cfd4c937e320953ac61c86528fe2d3593a4c7de51407d",
+  "reference_gguf_sha256": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+  "runs": [
+    {
+      "chip": "M4 Pro",
+      "GPU_cores": 20,
+      "memory_capacity_GiB": 48,
+      "macOS": "15.7.1",
+      "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)",
+      "arm": "reference",
+      "flags": [
+        "-std=c++20",
+        "-O3"
+      ],
+      "compile_rc": 0,
+      "test_rc": 1,
+      "stdout": "split part count: 16 expected rejections, descriptor delta 32\nsplit tensor count: 16 expected rejections, descriptor delta 32\n",
+      "stderr": "FAIL GGUF constructor must close every descriptor after rejection or destruction\n",
+      "binary_sha256": "8c6e9d39cc1e13fed7eff2f01eb562ba1ca85d706cced06e3b5511de3cde72b0",
+      "started_at": "2026-11-09T03:45:32.078204+00:00",
+      "ended_at": "2026-11-09T03:45:35.092803+00:00"
+    },
+    {
+      "chip": "M4 Pro",
+      "GPU_cores": 20,
+      "memory_capacity_GiB": 48,
+      "macOS": "15.7.1",
+      "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)",
+      "arm": "candidate",
+      "flags": [
+        "-std=c++20",
+        "-O3"
+      ],
+      "compile_rc": 0,
+      "test_rc": 0,
+      "stdout": "split part count: 16 expected rejections, descriptor delta 0\nsplit tensor count: 16 expected rejections, descriptor delta 0\nPASS split metadata rejection, early errors, corrected reads and descriptor cleanup\n",
+      "stderr": "",
+      "binary_sha256": "3c898f60c16ee24cb22c0017d82e9a1be40321e3b2938c19795f1b116694fade",
+      "started_at": "2026-11-09T03:45:35.094069+00:00",
+      "ended_at": "2026-11-09T03:45:38.072179+00:00"
+    },
+    {
+      "chip": "M4 Pro",
+      "GPU_cores": 20,
+      "memory_capacity_GiB": 48,
+      "macOS": "15.7.1",
+      "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)",
+      "arm": "sanitizer",
+      "flags": [
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer"
+      ],
+      "compile_rc": 0,
+      "test_rc": 0,
+      "stdout": "split part count: 16 expected rejections, descriptor delta 0\nsplit tensor count: 16 expected rejections, descriptor delta 0\nPASS split metadata rejection, early errors, corrected reads and descriptor cleanup\n",
+      "stderr": "",
+      "binary_sha256": "4ad8d3dfcd01e4e11d7466e5d5c0c5316921bf83c4019d9ee5315314f7dbf517",
+      "started_at": "2026-11-09T03:45:38.073033+00:00",
+      "ended_at": "2026-11-09T03:45:43.694959+00:00"
+    },
+    {
+      "chip": "M3 Ultra",
+      "GPU_cores": 60,
+      "memory_capacity_GiB": 96,
+      "macOS": "26.4.1",
+      "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)",
+      "arm": "reference",
+      "flags": [
+        "-std=c++20",
+        "-O3"
+      ],
+      "compile_rc": 0,
+      "test_rc": 1,
+      "stdout": "split part count: 16 expected rejections, descriptor delta 32\nsplit tensor count: 16 expected rejections, descriptor delta 32\n",
+      "stderr": "FAIL GGUF constructor must close every descriptor after rejection or destruction\n",
+      "binary_sha256": "47ea1c3b53917480001456c507be620bb55c42479def9b36ccc84235d64464a6",
+      "started_at": "2026-11-09T03:45:39.436695+00:00",
+      "ended_at": "2026-11-09T03:45:55.718525+00:00"
+    },
+    {
+      "chip": "M3 Ultra",
+      "GPU_cores": 60,
+      "memory_capacity_GiB": 96,
+      "macOS": "26.4.1",
+      "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)",
+      "arm": "candidate",
+      "flags": [
+        "-std=c++20",
+        "-O3"
+      ],
+      "compile_rc": 0,
+      "test_rc": 0,
+      "stdout": "split part count: 16 expected rejections, descriptor delta 0\nsplit tensor count: 16 expected rejections, descriptor delta 0\nPASS split metadata rejection, early errors, corrected reads and descriptor cleanup\n",
+      "stderr": "",
+      "binary_sha256": "38727d5ef23e4adb9f9d272570076c817e997bfffe2d0351797440c6d3d9318a",
+      "started_at": "2026-11-09T03:45:55.720879+00:00",
+      "ended_at": "2026-11-09T03:46:11.573921+00:00"
+    }
+  ]
+}
