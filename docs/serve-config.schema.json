@@ -2,9 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/nace-ai/kapitsa/blob/main/docs/serve-config.schema.json",
   "title": "kapitsa serve configuration",
-  "description": "What `kapitsa serve --config -` reads on stdin (or `--config FILE`). Each field is a `kapitsa serve` flag with '_' for '-' (docs/usage.md and `kapitsa serve --help` say what each does); a field left out takes the flag's default. The command line's flags are converted to this JSON and checked by the same validator (src/server/service_config.cpp). Unknown fields are refused.",
+  "description": "What `kapitsa serve --config -` reads on stdin (or `--config FILE`). Each field is a `kapitsa serve` flag with '_' for '-' (docs/usage.md and `kapitsa serve --help` say what each does); a field left out takes the flag's default. The command line's flags are converted to this JSON and checked by the same validator (src/server/service_config.cpp), with two forms only the flags take: a bare token count for context (`--context 131072`) and a size without its unit for disk_cache (`--disk-cache 16`, bytes); in this JSON the first is a number and the second needs its unit. Unknown fields are refused.",
   "type": "object",
   "additionalProperties": false,
+  "allOf": [
+    {"$comment": "check needs engine splash",
+     "if": {"required": ["check"], "properties": {"check": {"const": true}}},
+     "then": {"required": ["engine"], "properties": {"engine": {"const": "splash"}}}},
+    {"$comment": "engine splash serves splash_model's folder: no model, split or allow_switch; the splash_ fields need engine splash",
+     "if": {"required": ["engine"], "properties": {"engine": {"const": "splash"}}},
+     "then": {"properties": {"model": {"const": ""}, "split": false, "allow_switch": {"const": false}}},
+     "else": {"properties": {"splash_binary": {"const": ""}, "splash_model": {"const": ""}, "splash_arg": {"maxItems": 0},
+                             "splash_persistent_cache": {"const": false}, "splash_conversation_salt": {"const": false},
+                             "splash_kflash": {"const": "auto"}}}},
+    {"$comment": "allow_switch on a network address needs api_key (any client could load models)",
+     "if": {"required": ["allow_switch", "host"],
+            "properties": {"allow_switch": {"const": true}, "host": {"not": {"enum": ["", "127.0.0.1", "localhost", "::1"]}}}},
+     "then": {"required": ["api_key"], "properties": {"api_key": {"minLength": 1}}}}
+  ],
   "properties": {
     "model": {"type": "string", "description": "a catalog name, org/name[@revision], a model folder or a .gguf file"},
     "model_id": {"type": "string", "description": "the model's name in the API"},
@@ -25,9 +40,9 @@
     "context": {
       "oneOf": [
         {"type": "integer", "minimum": 1, "maximum": 2147483647},
-        {"type": "string", "pattern": "^(0*[1-9][0-9]*[kKmM]?|[mM][aA][xX])$"}
+        {"type": "string", "pattern": "^(0*[1-9][0-9]*[kKmM]|[mM][aA][xX])$"}
       ],
-      "description": "tokens, k or m of them (128k, 1m), or max; the server also refuses more than 2147483647 tokens"
+      "description": "tokens as a number (131072), k or m of them as a string (\"128k\", \"1m\"), or \"max\"; the server also refuses more than 2147483647 tokens"
     },
     "slots": {"type": "integer", "minimum": 0, "maximum": 2147483647},
     "spec": {"type": "integer", "minimum": 0, "maximum": 2147483647},
@@ -45,7 +60,7 @@
     "mem_budget": {"type": "number", "exclusiveMinimum": 0, "description": "GB"},
     "image_max_pixels": {"type": "integer", "minimum": 0, "maximum": 2147483647},
     "timing": {"enum": ["ttft", "prefill", "both"], "default": "both"},
-    "disk_cache": {"type": "string", "pattern": "^([aA][uU][tT][oO]|[oO][fF][fF]|[nN][oO]([nN][eE])?|[0-9]*[.]?[0-9]+ ?([kKmMgGtT]([iI]?[bB])?|[bB])?)$", "description": "auto, 0 (off) or a size such as 16G"},
+    "disk_cache": {"type": "string", "pattern": "^([aA][uU][tT][oO]|[oO][fF][fF]|[nN][oO]([nN][eE])?|0|[0-9]*[.]?[0-9]+ ?([kKmMgGtT]([iI]?[bB])?|[bB]))$", "description": "auto, 0 (off) or a size with its unit such as 16G (a bare number of bytes is refused)"},
     "loops": {"type": "integer", "minimum": 1, "maximum": 4},
     "loop_kv": {"enum": ["last-loop", "last_loop", "per-loop", "per_loop"]},
     "split": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},

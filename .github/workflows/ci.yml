@@ -231,7 +231,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --quiet jsonschema
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet jsonschema==4.23.0  # as community-bench.yml
       - name: C++ tests
         if: steps.changes.outputs.code == 'true'
         run: build/api_test

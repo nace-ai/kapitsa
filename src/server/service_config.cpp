@@ -11,6 +11,8 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <regex>
+#include <cmath>
 #include <sstream>
 #include <stdexcept>
 #include <unistd.h>
@@ -56,6 +58,20 @@ std::string flag_name(const std::string& key) {
 
 [[noreturn]] void refuse(const std::string& why) { throw std::invalid_argument(why); }
 
+// A whole JSON number, as JSON Schema counts one: 8000 and 8000.0 both are, 8000.5 is not
+bool integral(const json& v) {
+  if (v.is_number_integer()) return true;
+  if (!v.is_number_float()) return false;
+  const double d = v.get<double>();
+  return std::isfinite(d) && d == std::floor(d) && std::fabs(d) < 9.2e18;
+}
+
+long long integral_value(const json& v) {
+  if (v.is_number_float()) return (long long)v.get<double>();
+  if (v.is_number_unsigned() && v.get<unsigned long long>() > (unsigned long long)LLONG_MAX) return LLONG_MAX;
+  return v.get<long long>();
+}
+
 // The JSON's fields, read with the names errors give them
 struct Reader {
   const json& j;
@@ -76,10 +92,9 @@ struct Reader {
   long long whole(const char* key, long long fallback, long long hi = INT_MAX) const {
     if (!has(key)) return fallback;
     const json& v = j[key];
-    if (!v.is_number_integer() || (v.is_number_unsigned() && v.get<unsigned long long>() > (unsigned long long)hi) ||
-        v.get<long long>() < 0 || v.get<long long>() > hi)
+    if (!integral(v) || integral_value(v) < 0 || integral_value(v) > hi)
       refuse(name(key) + " needs a whole number from 0 to " + std::to_string(hi) + ", not " + v.dump());
-    return v.get<long long>();
+    return integral_value(v);
   }
   std::vector<std::string> strings(const char* key) const {
     if (!has(key)) return {};
@@ -93,6 +108,13 @@ struct Reader {
     return out;
   }
 };
+
+// disk_cache's forms in JSON (the schema's pattern): auto, off, no, none, 0, or a number with its unit (16G, 512MiB,
+// 1.5T, 4096B): a bare number of bytes ("16") is refused, as the flag's hex, exponents and spaces around it are
+bool json_size(const std::string& s) {
+  static const std::regex form("^(auto|off|no|none|0|[0-9]*[.]?[0-9]+ ?([kmgt](i?b)?|b))$", std::regex::icase);
+  return std::regex_match(s, form);
+}
 
 bool loopback(const std::string& host) { return host == "127.0.0.1" || host == "localhost" || host == "::1"; }
 }  // namespace
@@ -136,9 +158,16 @@ Options parse_options(const json& j, Source source) {
   o.peers = r.strings("peer");
   if (r.has("context")) {  // tokens, k or m of them, or max; JSON may give the tokens as a number
     const json& v = j["context"];
-    const std::string s = v.is_string() ? v.get<std::string>() : v.dump();
+    const std::string s = v.is_string() ? v.get<std::string>()
+                          : integral(v) && integral_value(v) >= 0 ? std::to_string(integral_value(v))
+                                                                   : v.dump();
     std::string why;
-    o.context = v.is_string() || v.is_number_integer() ? parse_context(s, &why) : 0;
+    // in JSON a token count is a number: "131072" is refused, "128k" and "max" are strings
+    const bool digits = !s.empty() && s.find_first_not_of("0123456789") == std::string::npos;
+    if (v.is_string() && digits && source == Source::json)
+      refuse(r.name("context") + " takes the token count as a number (131072), not the string \"" + s +
+             "\"; k and m forms (\"128k\", \"1m\") and \"max\" are strings");
+    o.context = (integral(v) && integral_value(v) >= 0) || v.is_string() ? parse_context(s, &why) : 0;
     if (!o.context)
       refuse(r.name("context") + " takes tokens (131072), k or m of them (128k, 1m) or max, not \"" + s + "\"");
   }
@@ -176,8 +205,10 @@ Options parse_options(const json& j, Source source) {
   if (o.timing != "ttft" && o.timing != "prefill" && o.timing != "both")
     refuse(r.name("timing") + " takes ttft, prefill or both, not \"" + o.timing + "\"");
   e.disk_cache = r.text("disk_cache");
-  if (uint64_t bytes = 0; r.has("disk_cache") && !pcache::parse_size(e.disk_cache, &bytes))
-    refuse(r.name("disk_cache") + " takes auto, 0 (off) or a size such as 16G, not \"" + e.disk_cache + "\"");
+  if (uint64_t bytes = 0; r.has("disk_cache") && (!pcache::parse_size(e.disk_cache, &bytes) ||
+                                                  (source == Source::json && !json_size(e.disk_cache))))
+    refuse(r.name("disk_cache") + " takes auto, 0 (off) or a size" + (source == Source::json ? " with its unit" : "") +
+           " such as 16G, not \"" + e.disk_cache + "\"");
   if (r.has("loops")) {
     e.loops = int(r.whole("loops", 0));
     if (e.loops < 1 || e.loops > Dory::kMaxLoops) refuse(r.name("loops") + ": 1 to 4");
