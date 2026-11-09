@@ -1,0 +1,504 @@
+{
+  "evidence_kind": "Explicitly redacted structured derivation; not raw logs. Original execution records retained privately.",
+  "tested_checkout": "082e46d38a994c2287a87c28cc92c7a04e5a1f56",
+  "production_test_commit": "2f5c7c90a7574ebc4258b70a53edeb3d6e006df2",
+  "base": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+  "scope": "Integration after rebase, not a new reference/candidate differential. Original M3/M4 differential and sanitizer records retain their original commits.",
+  "M3": {
+    "configuration": {
+      "chip": "M3 Ultra",
+      "GPU_cores": 60,
+      "memory_capacity_GiB": 96,
+      "macOS": "26.4.1",
+      "compiler": "Apple clang 17 (clang-1700.6.4.2)",
+      "relevant_compiler_flags": [
+        "-O3",
+        "-std=gnu++20",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0"
+      ]
+    },
+    "commands": [
+      {
+        "label": "configure",
+        "rc": 0,
+        "log_sha256": "da4d93943762f684b9b74f74a15cc478c4623130ad1d3be09153f0991ed1f31d"
+      },
+      {
+        "label": "build",
+        "rc": 0,
+        "log_sha256": "dcce890ffc51838bae9e63872a9f913b431ba08aa5b896e0cb23ce3f925dccc2"
+      },
+      {
+        "label": "version",
+        "rc": 0,
+        "log_sha256": "4178b258a4b02ab6bd32288136d445460f7c2cd7e967bce3994c9c0fd60ceae2"
+      },
+      {
+        "label": "integrated",
+        "rc": 0,
+        "log_sha256": "388ccfb90327fedc3ddfab6da1a64fe1b13195176559bbcf7899bbe19deb56dd"
+      },
+      {
+        "label": "row-worker-integration",
+        "rc": 0,
+        "log_sha256": "b11006540d6f2e6a4cc2fc08ba791864f83e09247f804ce0333d9049baf9490f"
+      }
+    ],
+    "integrated_scenarios": [
+      {
+        "mtp": 0,
+        "case": "none",
+        "injected": 0,
+        "threw": 0,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 0,
+        "case": "truncate",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 0,
+        "case": "header",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 0,
+        "case": "data",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 0,
+        "case": "cancel",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 0,
+        "case": "close",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 0,
+        "case": "none",
+        "injected": 0,
+        "threw": 0,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "none",
+        "injected": 0,
+        "threw": 0,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "truncate",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "header",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "second-truncate",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "second-header",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "data",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "cancel",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "close",
+        "injected": 1,
+        "threw": 1,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      },
+      {
+        "mtp": 1,
+        "case": "none",
+        "injected": 0,
+        "threw": 0,
+        "leaked": 0,
+        "temporary_removed": 1,
+        "reused_fd_open": 1,
+        "files_equal": 1,
+        "diagnostic": 1,
+        "pass": 1
+      }
+    ],
+    "identities": {
+      "source/src/gguf/import.cpp": "62ec2e9b1918d8ca2ef24065601a9ee6f69a4ac1d63f8558326495131b1f0a82",
+      "source/tools/gguf_output_cleanup_test.cpp": "ecbdb80729c78c7fd4d04be5eda6a924b489832446099967ceba7ea06327c975",
+      "source/build/gguf_output_cleanup_test": "e2a8712334e1369b83962f550da5fc96fe2bf59f8c82e6d88f0db112a417d026",
+      "source/build/libnaceinfer.a": "c72eeca6c2fec359e24a2dcd9ba1622cf0d7243eba139ee1c24761a355adf19f",
+      "source/build/kapitsa": "5cb7b183914e5adf28ee66afc140360dffae90653546bb9685381afeedbb6f6a"
+    },
+    "preflight_history": "The first archive validation rejected an internal relative symlink before extraction/configure/build/tests. The same verified archive was used after validating the link stayed inside the source tree."
+  },
+  "M4": {
+    "configuration": {
+      "chip": "M4 Pro",
+      "GPU_cores": 20,
+      "memory_capacity_GiB": 48,
+      "macOS": "15.7.1",
+      "compiler": "Apple clang 17 (clang-1700.0.13.5)",
+      "relevant_compiler_flags": [
+        "-O3",
+        "-std=gnu++20",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0"
+      ]
+    },
+    "initial_commands": [
+      {
+        "label": "dependency-preflight",
+        "rc": 0,
+        "log_sha256": "ed01b1557bd7a1e70f90d8838f38ae0bb6b8367122b3dca7e5935bafa440a45a"
+      },
+      {
+        "label": "configure",
+        "rc": 0,
+        "log_sha256": "f1741b11a15b4a1178de9231d4ec87a4c5fad603a752c379fe884fdc2d268d87"
+      },
+      {
+        "label": "build",
+        "rc": 0,
+        "log_sha256": "0a6eb81878dffad9bc512f179800b16cb793341bbb9a5b45938f4c91eacefb5d"
+      },
+      {
+        "label": "version",
+        "rc": 0,
+        "log_sha256": "4178b258a4b02ab6bd32288136d445460f7c2cd7e967bce3994c9c0fd60ceae2"
+      },
+      {
+        "label": "focused-integrated",
+        "rc": -6,
+        "log_sha256": "2ece7c832492210be5bba10b821768d61c31a307fe3cb504170d413fa5187223"
+      }
+    ],
+    "initial_integrated_scenarios": 0,
+    "initial_integrated_result": "Aborted before scenarios following an importer precondition failure and an attempted directory enumeration. A private diagnostic-only driver confirmed the precondition failure. This is not a passing execution; the unchanged production/test source was subsequently verified on M3.",
+    "loader_scope": {
+      "import_model_symbol_present": false,
+      "OutFile_symbol_present": false,
+      "source_matches_base": {
+        "tools/load_error_test.cpp": true,
+        "src/loader/safetensors.cpp": true,
+        "src/loader/safetensors.h": true
+      },
+      "binary_sha256": "f88368a6fcc746158b7a3e0647c504c61f193cc964f9403bbdd2b0e24330824b",
+      "new_reference_loader_executions": 0
+    },
+    "remaining_CPU_commands": [
+      {
+        "label": "row-worker-integration",
+        "rc": 0,
+        "log_sha256": "b11006540d6f2e6a4cc2fc08ba791864f83e09247f804ce0333d9049baf9490f"
+      },
+      {
+        "label": "vk-cpu-tests",
+        "rc": 0,
+        "log_sha256": "35f19ce5b80b0a754ffb74441a4a61dbb633f5985cfa403b2684ee3628ad3af9"
+      },
+      {
+        "label": "supp-load_error_test",
+        "rc": 0,
+        "log_sha256": "e2cc05d13a5aac1e190305aff7be98bb89a6e2fbbceaaab2ee26433fd07ede5e"
+      },
+      {
+        "label": "supp-execution_session_test",
+        "rc": 0,
+        "log_sha256": "86266c33c5218a1cacb9f5f927d4c8c603c11e5542685f449bf792484279daee"
+      },
+      {
+        "label": "supp-http_stream_test",
+        "rc": 0,
+        "log_sha256": "a88fe805fb01ece1cd8c9fdbe6ea2f520f94f3f136ebc9f3185b100ef182fc83"
+      },
+      {
+        "label": "supp-bench_test",
+        "rc": 0,
+        "log_sha256": "a241c127079ed5592e8541d9785e9e4db2201954072b1df203fa7cd90258bf79"
+      },
+      {
+        "label": "supp-update_test",
+        "rc": 0,
+        "log_sha256": "7a55351684895666ed1e5003a09d0597bcc6158716816344d438ccc656aeff78"
+      },
+      {
+        "label": "supp-grammar_test",
+        "rc": 0,
+        "log_sha256": "5c3cbd54f45f2f67fe61a8db6d693b67f71c4d24965502abaf38be899a6d294b"
+      },
+      {
+        "label": "supp-structured_check",
+        "rc": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "supp-drafter_attach_test",
+        "rc": 0,
+        "log_sha256": "dcdc8d9113bc2b03604b7e987a36f762018cf80b583ec8099614aac50185196a"
+      },
+      {
+        "label": "supp-exl3_test",
+        "rc": 0,
+        "log_sha256": "8401dcf05b63aaca6738e5d8749611a64877db65f7f7388cce880eb4732b4a29"
+      },
+      {
+        "label": "supp-device_profile_test",
+        "rc": 0,
+        "log_sha256": "2650b0ba4978026e3bdff341ab811fdcb413c33d3180e2709b468c6805e462dd"
+      },
+      {
+        "label": "supp-qwen4_config_test",
+        "rc": 0,
+        "log_sha256": "0ce0916c13d746720e554f8a581c903f8a9206e6e8b5c1abbf5ddfdd86f1959b"
+      },
+      {
+        "label": "supp-json_file_test",
+        "rc": 0,
+        "log_sha256": "7667fde9971ac4e4ecee140fe2ef8e58e70166fd02ba93260e7ef6967534a0b4"
+      },
+      {
+        "label": "supp-affine_pack_test",
+        "rc": 0,
+        "log_sha256": "c3cdf19ecd57a29c901c97762e249e1575194554e928d96f6d476e5dcfc32884"
+      },
+      {
+        "label": "supp-systemone_test",
+        "rc": 0,
+        "log_sha256": "8f9b93c44c38a7e5fdbb032f38ba3712d5ed6233999b1edfd1881ea664774129"
+      },
+      {
+        "label": "supp-systemone_codes_probe_test",
+        "rc": 0,
+        "log_sha256": "32d68b2954bbd8968a32c7f4b9191664fe14c93fbd0620fd4330de2111d09ab0"
+      },
+      {
+        "label": "supp-splash_protocol_test",
+        "rc": 0,
+        "log_sha256": "3fa40c24c85a09c241a97cfbf56c57c7edb8cc89f9ef3f854bdbdb3430a11c3e"
+      },
+      {
+        "label": "supp-splash_runtime_test",
+        "rc": 0,
+        "log_sha256": "503279ce79d937e6a3da83a253509e8127331238c1b26764e317944dcacae642"
+      },
+      {
+        "label": "supp-splash_discover_test",
+        "rc": 0,
+        "log_sha256": "b4726c938fb73d394066a91e46e1c80a16900803de428f0bcf971b25edd306f8"
+      },
+      {
+        "label": "supp-splash_plan_test",
+        "rc": 0,
+        "log_sha256": "1d878bf581c25ae57bba793a32ebc1e89233d5b148bca4f510494310d837c4e6"
+      },
+      {
+        "label": "test_profile_gates",
+        "rc": 0,
+        "log_sha256": "9fb6034d779ecca08bc6902b14abd0e5aeaccc73dddac1e36363819a40bc79ad"
+      },
+      {
+        "label": "test_comment_gates",
+        "rc": 0,
+        "log_sha256": "1d57bc3fd634152d2901ce98fc55fa5205e360f1ef6dbe0088b0c51b69075d42"
+      },
+      {
+        "label": "test_pr_size",
+        "rc": 0,
+        "log_sha256": "4e7e9424dda1049899d94ffe56c0aee3f868aa651744de83992a5e942b5a1aff"
+      },
+      {
+        "label": "test_drex_max",
+        "rc": 0,
+        "log_sha256": "09db1becd9a21b423492cb0e988653fb25f6385160faa9f00271a14a5622a9dc"
+      },
+      {
+        "label": "test_logit_dump",
+        "rc": 0,
+        "log_sha256": "fec86b7e63e69c80c04811fe5bd5f7c0a5be2d11327905f2465b1dec7c523645"
+      },
+      {
+        "label": "test_systemone_codes_harness",
+        "rc": 0,
+        "log_sha256": "2977ca47e4eb8b3f491b9f35c388e6df30de31bba356230f9db05768a538d14d"
+      },
+      {
+        "label": "qwen4-pack",
+        "rc": 0,
+        "log_sha256": "8afea1f9e0966dff1ddeead47abb966f27242c4e1f050176bde5a9435aa04dad"
+      },
+      {
+        "label": "tests/test_splash_patches.py --apply",
+        "rc": 0,
+        "log_sha256": "4ddb938f134dd93e800ecd594b02e4ca0d7ef2b57b65241b77da35ed21dcdc2c"
+      },
+      {
+        "label": "prek",
+        "rc": 0,
+        "log_sha256": "9a2ba97865628f9f9ff946ac2be11d54b2357f187116aa3d9abc1e4480a405f5"
+      },
+      {
+        "label": "diff-check",
+        "rc": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "required-checks",
+        "rc": 0,
+        "log_sha256": "23d7ffdf7e68a1fcfbc62c5012432bf6842c2f711fbfeeb5afa9c7ca6e6a237c"
+      },
+      {
+        "label": "cleanup",
+        "rc": 0,
+        "log_sha256": "2c9ae5a13f10b558ec85e65f0f829ddbeb7c02c4df1cfd9b949e8763a82e0a70"
+      }
+    ],
+    "check_labels_note": "Labels are normalized check identifiers in this derivation, not original shell commands.",
+    "CPU_summary": {
+      "vk_entries_passed": 22,
+      "vk_entries_total": 22,
+      "supplementary_native_passed": 19,
+      "supplementary_native_total": 19,
+      "supplementary_python_passed": 6,
+      "row_worker_regression_rc": 0,
+      "load_error_rc": 0
+    },
+    "loader_history": "This rebased execution returned 0. The original published source returned 1 at the raw-read cache threshold; that earlier failure remains recorded and unexplained. No new reference loader execution or fix of that failure is claimed.",
+    "binary_identities": {
+      "build/kapitsa": "f39f3b3981a427a19058e1e82d413d6cb31ec8d250d41529468eb91ac01d8e0c",
+      "build/gguf_output_cleanup_test": "18eae1ddff8ae0003d0b7f115dba380ee61f18e0e8a1993261692577cbb6e44c",
+      "build/load_error_test": "f88368a6fcc746158b7a3e0647c504c61f193cc964f9403bbdd2b0e24330824b",
+      "build/libnaceinfer.a": "569fdb0ded3f046472c899caba7b4a491e622191cc7a5d51b7adedfe93987d87"
+    }
+  },
+  "not_repeated": [
+    "Original two-chip same-driver differential",
+    "Original M4 importer/driver sanitizer run"
+  ],
+  "not_verified": [
+    "APFS-cloned expert branch",
+    "Trained-model import/output",
+    "GPU",
+    "Inference performance",
+    "M3 sanitizer"
+  ],
+  "GPU_model_calls": []
+}
