@@ -36,7 +36,7 @@ using json = nlohmann::json;
 // Default for KFlash's history lane (#944): the Qwen3.6 35B-A3B shape on an M5-class Mac (matrix units), where the interleaved A/B
 // measured it faster on the M5 Pro. NI_KFLASH_HIST turns it off ("0") or sets its knobs on any model and Mac; unset takes this default. Other
 // targets and Macs without matrix units keep it off; the M5 and M5 Max take it by the class and have not run it. Clover-35B-A3B has the
-// same shape and drafter and nothing has been run on it, so the gate still asks for "not Clover": a narrower gate than the shape.
+// same shape and drafter and stays out: with the lane and the selector update its sampled decode is slower (M5 Pro, interleaved, 6 of 6 pairs slower at temperature 0.6 (-4%), faster at 0 (+5%; #1094)).
 // KFlash's online selector update (NI_KFLASH_SELUPD=<lr>) on by default where the lanes shape matches (the 35B-A3B on an
 // M5-class Mac, with the history lane): learning rate 0.003, which the interleaved A/B on top of the history lane (#362) measured
 // faster in 3 of 3 rounds (x1.027, 1.028, 1.024 on the whole 19-turn session's write tok/s, outputs identical); 0.02 was
