@@ -89,7 +89,7 @@ def find() -> list[tuple[str, int, str]]:
 def self_test() -> int:
     bad = [
         "// A model joins this list only after its own interleaved A/B",
-        "// same 35B-A3B shape; not measured, so not kQwen35A3b",
+        "// DiffuSpace's Clover: the 35B-A3B shape; included in kQwen35Shape since #393",
         "Measured on the M5 Max only: other Macs keep it off.",
         "// keeps one tile until a Mac's A/B says a wider count pays",
         " * only after the A/B",

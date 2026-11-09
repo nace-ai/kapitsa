@@ -55,9 +55,9 @@ int main() {
   a3b.top_k = 8;
   a3b.moe_i = 512;
   a3b.shared_i = 512;
-  CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35A3b);
+  CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35Shape);  // was kQwen35A3b; widened #393
   a3b.clover = true;
-  CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35Shape);  // Clover has the wave's shape, not the drafter's
+  CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35Shape);  // Clover included in kQwen35Shape since #393
   ni::ModelFacts shape_only;
   shape_only.moe = true;
   shape_only.hidden = 2048;
@@ -213,8 +213,7 @@ int main() {
     return m.moe && m.hidden == 2048 && m.layers == 40 && d.apple_family >= 10 && d.cores >= 40;
   };
   const auto old_hist = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {
-    return d.apple_family >= 10 && m.moe && !m.clover && m.hidden == 2048 && m.layers == 40 && m.experts == 256 &&
-           m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
+    return d.apple_family >= 10 && m.moe && m.hidden == 2048 && m.layers == 40;  // widened to kQwen35Shape (#393)
   };
   const auto old_matrix = [](const ni::DeviceFacts& d, const ni::ModelFacts&) { return d.apple_family >= 10; };
   const auto old_wide = [](const ni::DeviceFacts& d, const ni::ModelFacts&) {

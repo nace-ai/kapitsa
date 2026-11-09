@@ -16,8 +16,8 @@ namespace ni {
 enum class ChipClass { kLegacy, kSimd, kMatrix, kWide };
 
 // The model half of a row. kOther matches every model. kQwen35Shape is the 35B-A3B's prefill shape (MoE, hidden
-// 2048, 40 layers), which Clover-35B-A3B shares; kQwen35A3b is the full shape with the drafter fields, Clover out.
-enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b };
+// 2048, 40 layers), which Clover-35B-A3B shares. kQwen35A3b removed (#393).
+enum class ModelClass { kOther, kQwen35Shape };
 
 // The knobs the table decides, in the table's order. A call site passes the enum, not the string: a typo is a
 // compile error, not a default that silently reads as off. kNone is a documentation row (a class or a guard the
@@ -49,7 +49,7 @@ struct ModelFacts {
   int top_k = 0;
   int moe_i = 0;
   int shared_i = 0;
-  bool clover = false;  // DiffuSpace's Clover: the 35B-A3B shape; kQwen35A3b leaves it out, nothing has been run on it (#369)
+  bool clover = false;  // DiffuSpace's Clover: the 35B-A3B shape; included in kQwen35Shape since #393
 };
 
 struct DeviceProfile {

@@ -12,12 +12,8 @@ namespace {
 // nothing has been run on it).
 bool qwen35_shape(const ModelFacts& m) { return m.moe && m.hidden == 2048 && m.layers == 40; }
 
-// The 35B-A3B shape the KFlash lanes were run on. Clover has the same numbers and is left out by the caller
-// (config.json model_type), not by a second chip check: no run on Clover shows a loss or a break, so this is a
-// narrower gate than the shape, for #369 to widen.
-bool qwen35_a3b(const ModelFacts& m) {
-  return qwen35_shape(m) && !m.clover && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
-}
+// qwen35_a3b removed (#393): kflash_hist widened from kQwen35A3b (Clover excluded) to kQwen35Shape (Clover
+// included). Clover's output check and A/B are in the #393 PR.
 
 }  // namespace
 
@@ -33,7 +29,6 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
   switch (c) {
     case ModelClass::kOther: return true;
     case ModelClass::kQwen35Shape: return qwen35_shape(m);
-    case ModelClass::kQwen35A3b: return qwen35_a3b(m);
   }
   return false;
 }
@@ -52,8 +47,9 @@ const DefaultRow kDefaults[] = {
     {"pf_wave", Knob::kPfWave, ModelClass::kQwen35Shape, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max",
      true},
     // Matrix class (any M5): +12 to +15% on the M5 Pro, no measured miss on the others, so the class takes it, not the
-    // name. The selector update reads the same row.
-    {"kflash_hist", Knob::kKflashHist, ModelClass::kQwen35A3b, DefaultScope::kMatrix, nullptr, "on", 12, 15, false,
+    // name. The selector update reads the same row. Widened from kQwen35A3b to kQwen35Shape (#393): Clover has the
+    // same shape and drafter.
+    {"kflash_hist", Knob::kKflashHist, ModelClass::kQwen35Shape, DefaultScope::kMatrix, nullptr, "on", 12, 15, false,
      "M5 Pro", true},
     // NI_GEMM_SLICES. Drex Max v1, matrix class. M5 Pro, 16K 33.5-34.0 -> 30.3-30.7 s (-9.6%).
     // The M5 Max was not measured. The shape check that keeps it to Drex Max v1 stays at the call site.
@@ -131,7 +127,6 @@ DeviceProfile resolve_device(const DeviceFacts& f) {
 }
 
 ModelClass resolve_model(const ModelFacts& m) {
-  if (qwen35_a3b(m)) return ModelClass::kQwen35A3b;
   if (qwen35_shape(m)) return ModelClass::kQwen35Shape;
   return ModelClass::kOther;
 }
@@ -148,7 +143,6 @@ const char* chip_class_name(ChipClass c) {
 
 const char* model_class_name(ModelClass m) {
   switch (m) {
-    case ModelClass::kQwen35A3b: return "qwen35-a3b";
     case ModelClass::kQwen35Shape: return "qwen35-shape";
     case ModelClass::kOther: return "other";
   }
