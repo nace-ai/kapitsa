@@ -27,7 +27,8 @@ they decode.
    Qwen models a pass of at most 128 rows (a cached turn's message, the reply prefilled while idle, a draft read
    ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
    into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise (on an
-   M5, a dense model's passes from 64 rows, from 17 for the 27B on the M5 Max: `NI_SP_QMT`, `NI_QMT_MIN`).
+   M5, a dense model's passes from 17 rows, from 64 for the 27B below the M5 Max and for MoE models: `NI_SP_QMT`,
+   `NI_QMT_MIN`).
    Two chunks of work overlap where one engine would idle: the 27B's FFN split hands half a chunk's FFN to the
    Neural Engine while the GPU runs the other half's token mixer, and on the M5 Max the 35B-A3B's chunk runs as two
    halves on the GPU alone, one half's DeltaNet scan or attention beside the other half's expert GEMMs (`NI_PF_WAVE`).

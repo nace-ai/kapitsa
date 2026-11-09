@@ -2575,8 +2575,12 @@ bool qmt_on() {
 // (27B), bench/results/2026-11-04-m5-max-qmt-128. Below 96 rows the 64-row tile stays (M 33, N 512: 39 vs 48 us).
 // NI_QMT_MIN (read once; 1-64): the fewest rows of a dense 4-bit g64 GEMM on the tensor_ops tile (qmt_m64_n64,
 // qmtg_m64_n64, whose rows past M load as zeros and store nothing); a GEMM of fewer rows runs the short-prefill or qmr
-// kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for the Qwen3.8 27B (hidden 5120,
-// FFN 17408, 64 layers) on an Apple10 GPU of 40 cores or more (the M5 Max); 64 elsewhere.
+// kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for every dense model; MoE models
+// keep 64 (not measured). M5 Pro, ni_run, interleaved 3 x 2 (#393): a 40-token prefill on the 4B 47.3 -> 28.8 ms, the 9B
+// 99.5 -> 46.6, the 27B 320.0 -> 144.6; a 4,129-token prefill on the 4B 952.6 -> 932.8 ms and the 9B 2,370 -> 2,316, the
+// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) keeps 64 below the 40-core class: its 4,129-token
+// prefill with its Neural Engine split was 5,577 -> 5,851 ms on the M5 Pro (slower in 3 of 3 pairs, the Neural Engine
+// 20.6 -> 23-24 ms per evaluation), while the M5 Max measurements below are for that shape.
 // bench_qmm on the M5 Max, the 27B's shapes, the 64-row tile against the short-prefill tile the pass takes: gate/up
 // (17408 x 5120) at 17 rows 514 against 638 us, at 33 527 against 1,215; down (5120 x 17408) at 24 rows 334 against
 // 400, at 33 337 against 623; GDN in_proj (16384 x 5120) at 33 288 against 525. At 16 rows and fewer the short tiles
@@ -2586,7 +2590,9 @@ int Qwen35::qmt_min_rows() const {
   static const int env = std::clamp(env_int("NI_QMT_MIN", 0), 0, 64);
   static const bool max = wide_cores();
   if (env) return env;
-  return max && !cfg_.moe && cfg_.hidden == 5120 && cfg_.dense_I == 17408 && cfg_.layers == 64 ? 17 : 64;
+  if (cfg_.moe) return 64;
+  const bool q27 = cfg_.hidden == 5120 && cfg_.dense_I == 17408 && cfg_.layers == 64;
+  return q27 && !max ? 64 : 17;
 }
 
 bool qmt128_for(int M) {
