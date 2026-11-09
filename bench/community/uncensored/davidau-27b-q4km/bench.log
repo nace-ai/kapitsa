@@ -1,7 +1,7 @@
-kapitsa bench: k396-davidau-q4km 4-bit (mixed) on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
+kapitsa bench: davidau-q4km 4-bit (mixed) on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
 Left out of the server, as the harness does: NI_LOCK_HELD
-Starting the server on 127.0.0.1:61765 (log ~/Documents/nace/k396/uncensor/home/logs/bench-61765-ctx32768.log)
-[?2026h  ✓ Loaded k396-davidau-q4km  ·  4-bit (mixed) in 3.8s  ·  KFlash speculative …
+Starting the server on 127.0.0.1:61765 (log ~/.kapitsa/logs/bench-61765-ctx32768.log)
+[?2026h  ✓ Loaded davidau-q4km  ·  4-bit (mixed) in 3.8s  ·  KFlash speculative …
 [?2026lReady after 3.8s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
 Warm-up done in 17s
 GPU still busy after 2m 00s (com.apple.WebKit.GPU 7%): measuring anyway; contention will be flagged
@@ -36,8 +36,8 @@ tools: pass
     "macos_build": "25F84"
   },
   "model": {
-    "name": "k396-davidau-q4km",
-    "title": "k396-davidau-q4km",
+    "name": "davidau-q4km",
+    "title": "davidau-q4km",
     "variant": null,
     "precision": "4-bit (mixed)",
     "catalog": false,
@@ -123,4 +123,4 @@ tools: pass
   "invalid": []
 }
 flag: CONTENTION: sustained foreign GPU load > 5% in ['decode', 'prefill_4000', 'tools'] (mean 5.44%, top ['com.apple.WebKit.GPU'])
-Saved ~/Documents/nace/k396/uncensor/runs/k396-davidau-q4km/bench.json
+Saved runs/davidau-q4km/bench.json

@@ -1,5 +1,5 @@
 {
- "note": "Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. Every speed links to its raw bench output in the last column; a row with two runs shows their mean. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts.",
+ "note": "Speed of uncensored models on one Mac, next to the refusals and the KL divergence from the base model that Heretic reports. Rows marked (claimed) are the maker's own numbers; we measured only the speed. DavidAU's 11/100 is from his lab tests of the stage before a healing fine-tune, so it is not a number for the released model. Every speed links to its raw bench output in the last column; a row with two runs shows their mean. All rows: kapitsa bench --quick (3 runs), one M5 Pro, the same prompts. The 4B runs were on battery. The four 27B MLX runs (Heretic and stock) ran with other Kapitsa jobs on the Mac (load up to 11-12 at the start, five \"another Kapitsa is running\" warnings in each log), both models the same way, so compare Heretic with stock within the row, not against a quiet-machine number.",
  "rows": [
   {
    "name": "Qwen3.5-4B Heretic (ours, not published)",

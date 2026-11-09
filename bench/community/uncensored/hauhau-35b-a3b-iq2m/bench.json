@@ -19,8 +19,8 @@
     "macos_build": "25F84"
   },
   "model": {
-    "name": "k396-hauhau-iq2m",
-    "title": "k396-hauhau-iq2m",
+    "name": "hauhau-iq2m",
+    "title": "hauhau-iq2m",
     "variant": null,
     "precision": "2-bit (mixed)",
     "catalog": false,

@@ -105,7 +105,7 @@ function initData(results) {
       decode: (r.results && r.results.decode && r.results.decode.median_tps) || 0,
       prefill: prefillEntry.tps || 0,
       refusals: r.uncensored ? 100 * r.uncensored.refusals / r.uncensored.of : -1,
-      refusalText: r.uncensored ? r.uncensored.refusals + "/" + r.uncensored.of + (r.uncensored.basis === "measured" ? "" : " claimed") : "",
+      refusalText: r.uncensored ? r.uncensored.refusals + "/" + r.uncensored.of + (r.uncensored.basis === "measured" ? "" : " " + r.uncensored.basis) : "",
       kl: r.uncensored && r.uncensored.kl != null ? r.uncensored.kl : -1,
       klText: r.uncensored && r.uncensored.kl != null ? r.uncensored.kl.toFixed(3) + (r.uncensored.kl_basis === "measured" ? "" : " claimed") : "",
       source: r.uncensored ? r.uncensored.source : "",

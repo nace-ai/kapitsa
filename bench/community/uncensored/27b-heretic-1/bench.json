@@ -19,8 +19,8 @@
     "macos_build": "25F84"
   },
   "model": {
-    "name": "k396-27b-heretic27b-4bit",
-    "title": "k396-27b-heretic27b-4bit",
+    "name": "27b-heretic27b-4bit",
+    "title": "27b-heretic27b-4bit",
     "variant": null,
     "precision": "4-bit",
     "catalog": false,

@@ -1,7 +1,7 @@
-kapitsa bench: k396-hauhau-iq2m 2-bit (mixed) on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
+kapitsa bench: hauhau-iq2m 2-bit (mixed) on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
 Left out of the server, as the harness does: NI_LOCK_HELD
-Starting the server on 127.0.0.1:53069 (log ~/Documents/nace/k396/uncensor/home/logs/bench-53069-ctx32768.log)
-[?2026h  ✓ Loaded k396-hauhau-iq2m  ·  2-bit (mixed) in 15s  ·  KFlash speculative de…
+Starting the server on 127.0.0.1:53069 (log ~/.kapitsa/logs/bench-53069-ctx32768.log)
+[?2026h  ✓ Loaded hauhau-iq2m  ·  2-bit (mixed) in 15s  ·  KFlash speculative de…
 [?2026lReady after 15s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
 Warm-up done in 3.6s
 GPU quiet after 18s
@@ -36,8 +36,8 @@ tools: pass
     "macos_build": "25F84"
   },
   "model": {
-    "name": "k396-hauhau-iq2m",
-    "title": "k396-hauhau-iq2m",
+    "name": "hauhau-iq2m",
+    "title": "hauhau-iq2m",
     "variant": null,
     "precision": "2-bit (mixed)",
     "catalog": false,
@@ -114,4 +114,4 @@ tools: pass
   "flags": [],
   "invalid": []
 }
-Saved ~/Documents/nace/k396/uncensor/runs/k396-hauhau-iq2m/bench.json
+Saved runs/hauhau-iq2m/bench.json

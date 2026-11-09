@@ -19,8 +19,8 @@
     "macos_build": "25F84"
   },
   "model": {
-    "name": "k396-davidau-q4km",
-    "title": "k396-davidau-q4km",
+    "name": "davidau-q4km",
+    "title": "davidau-q4km",
     "variant": null,
     "precision": "4-bit (mixed)",
     "catalog": false,

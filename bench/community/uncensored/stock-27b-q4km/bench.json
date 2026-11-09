@@ -19,8 +19,8 @@
     "macos_build": "25F84"
   },
   "model": {
-    "name": "k396-stock27b-q4km",
-    "title": "k396-stock27b-q4km",
+    "name": "stock27b-q4km",
+    "title": "stock27b-q4km",
     "variant": null,
     "precision": "4-bit (mixed)",
     "catalog": false,

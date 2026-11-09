@@ -1,7 +1,7 @@
-kapitsa bench: k396-stock27b-q4km 4-bit (mixed) on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
+kapitsa bench: stock27b-q4km 4-bit (mixed) on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
 Left out of the server, as the harness does: NI_DFLASH, NI_LOCK_HELD
-Starting the server on 127.0.0.1:49605 (log ~/Documents/nace/k396/uncensor/home/logs/bench-49605-ctx32768.log)
-[?2026h  ✓ Loaded k396-stock27b-q4km  ·  4-bit (mixed) in 18s  ·  KFlash speculative …
+Starting the server on 127.0.0.1:49605 (log ~/.kapitsa/logs/bench-49605-ctx32768.log)
+[?2026h  ✓ Loaded stock27b-q4km  ·  4-bit (mixed) in 18s  ·  KFlash speculative …
 [?2026lReady after 18s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
 Warm-up done in 13s
 GPU quiet after 18s
@@ -36,8 +36,8 @@ tools: pass
     "macos_build": "25F84"
   },
   "model": {
-    "name": "k396-stock27b-q4km",
-    "title": "k396-stock27b-q4km",
+    "name": "stock27b-q4km",
+    "title": "stock27b-q4km",
     "variant": null,
     "precision": "4-bit (mixed)",
     "catalog": false,
@@ -116,4 +116,4 @@ tools: pass
   "flags": [],
   "invalid": []
 }
-Saved ~/Documents/nace/k396/uncensor/runs/k396-stock27b-q4km-drafter-on/bench.json
+Saved runs/stock27b-q4km-drafter-on/bench.json

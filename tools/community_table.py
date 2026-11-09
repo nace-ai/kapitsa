@@ -236,7 +236,7 @@ def uncensored_section():
         acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.1f}%" + (f" (stock {u['stock_accepted_pct']:.1f}%)" if u.get("stock_accepted_pct") else "")
         kl = "–" if u.get("kl") is None else f"{u['kl']:.3f}" + ("" if u.get("kl_basis") == "measured" else " (claimed)")
         raw = check_raw(u)
-        basis = "" if u["refusal_basis"] == "measured" else " (claimed)"
+        basis = "" if u["refusal_basis"] == "measured" else " " + u["refusal_basis"]
         ref = f"{u['refusals']}/{u['refusals_of']}"
         lines.append(f"| {u['name']} | {u['source']} | {ref}{basis} | {kl} | {u['quant']} | {tps(u['decode_tps'])} | {stock} | {acc} | "
                      f"{u['mac']['name']} · {u['mac']['chip']} · {u['mac']['memory_gb']} GB | {u['power']} | {u['kapitsa_commit']} | {u['weights']} | {raw} |")
