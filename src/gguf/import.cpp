@@ -1228,17 +1228,23 @@ void parallel_rows(uint64_t n, int threads, F fn) {
   std::exception_ptr err;
   std::mutex mu;
   const uint64_t per = (n + uint64_t(t) - 1) / uint64_t(t);
-  for (int i = 0; i < t; ++i) {
-    const uint64_t a = uint64_t(i) * per, b = std::min(n, a + per);
-    if (a >= b) break;
-    th.emplace_back([&, a, b] {
-      try {
-        fn(a, b);
-      } catch (...) {
-        std::lock_guard<std::mutex> lk(mu);
-        if (!err) err = std::current_exception();
-      }
-    });
+  try {
+    for (int i = 0; i < t; ++i) {
+      const uint64_t a = uint64_t(i) * per, b = std::min(n, a + per);
+      if (a >= b) break;
+      th.emplace_back([&, a, b] {
+        try {
+          fn(a, b);
+        } catch (...) {
+          std::lock_guard<std::mutex> lk(mu);
+          if (!err) err = std::current_exception();
+        }
+      });
+    }
+  } catch (...) {
+    // A later launch can fail while earlier jobs still use fn, err, mu and the conversion buffers.
+    for (auto& x : th) x.join();
+    throw;
   }
   for (auto& x : th) x.join();
   if (err) std::rethrow_exception(err);
