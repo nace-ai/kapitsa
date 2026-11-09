@@ -44,4 +44,20 @@ for kind in ("prefill", "decode"):
     html, w, h = ri.context_chart(data, "light", kind)
     assert html.count("<polyline") == 2 * len(C["models"]) and w == data["poster"]["size"][0], kind  # line, leader
     assert ri.context_alt(data, kind).startswith(C[kind]["alt"] + ": " + C["models"][0]["model"]), kind
+# column headers name an engine, never a version, so every rival number carries its version in its own cell detail
+# (tables and README), or else the line that names it in docs/benchmarks.md, which the poster footer points at
+import re
+docs = open(os.path.join(HERE, "..", "docs", "benchmarks.md"), encoding="utf-8").read().split("\n")
+assert not any(e.get("version") and e["name"] != "MLX" for e in data["engines"]), "a rival column header names a version"
+assert not any(re.search(r"\d", v) for m in data["tables"]["macs"] for v in m.get("versions", {}).values()), "a Mac's header names a version"
+rival_cells = [(m["name"], r["model"], e, c) for m in data["poster"]["macs"] + data["tables"]["macs"] for r in m["rows"]
+               for e, c in r["cells"].items() if e != "Kapitsa" and isinstance(c, (dict, int, float)) and not isinstance(c, bool)]
+assert rival_cells
+for mac, model, e, c in rival_cells:
+    detail = c.get("detail", "") if isinstance(c, dict) else ""
+    in_docs = any(e.split()[0] in line and re.search(r"\d+\.\d+|\bb\d{4,5}\b", line) for line in docs)
+    assert re.search(r"\d", detail) or in_docs, f"{mac} / {model} / {e}: no version in its detail or in docs/benchmarks.md"
+for e in {e for _, _, e, _ in rival_cells}:  # the footer's claim: the doc names a version for every rival engine on the poster
+    assert any(e.split()[0] in line and re.search(r"\d+\.\d+|\bb\d{4,5}\b", line) for line in docs), f"docs/benchmarks.md names no version for {e}"
+assert any("docs/benchmarks.md" in x for x in data["poster"]["footer"])
 print(f"test_readme_images: ok ({n} Kapitsa cells)")
