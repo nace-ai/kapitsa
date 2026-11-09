@@ -17,7 +17,7 @@ enum class ChipClass { kLegacy, kSimd, kMatrix, kWide };
 
 // The model half of a row. kOther matches every model. kQwen35Shape is the 35B-A3B's prefill shape (MoE, hidden
 // 2048, 40 layers), which Clover-35B-A3B shares; kQwen35A3b is the full shape with the drafter fields, Clover out
-// (its sampled decode is slower with the KFlash lanes, #1094).
+// (its sampled decode is slower with the KFlash lanes on the M5 Pro, #1094).
 enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b };
 
 // The knobs the table decides, in the table's order. A call site passes the enum, not the string: a typo is a
@@ -50,7 +50,7 @@ struct ModelFacts {
   int top_k = 0;
   int moe_i = 0;
   int shared_i = 0;
-  bool clover = false;  // DiffuSpace's Clover: the 35B-A3B shape; kQwen35A3b leaves it out (slower at temperature 0.6, #1094)
+  bool clover = false;  // DiffuSpace's Clover: the 35B-A3B shape; kQwen35A3b leaves it out (slower at temperature 0.6 on the M5 Pro, #1094)
 };
 
 struct DeviceProfile {
