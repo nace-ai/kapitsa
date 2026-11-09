@@ -76,6 +76,7 @@ def read_baseline(path: pathlib.Path = BASELINE) -> dict[str, int]:
 # The named checks in device_profile.h. A new call outside the profile module fails the predicate baseline.
 PREDICATES = (
     "matrix_units",
+    "m1_max_32",
     "legacy_gpu",
     "wide_cores",
     "pre_m3_gpu",
@@ -149,8 +150,12 @@ def self_test() -> int:
     if not any("zz_probe_gate.cpp" in line for line in bad):
         print("self-test: new file did not fail")
         return 1
-    if not baseline_rises({"src/model/flint.cpp": 5}, {"src/model/flint.cpp": 4}, "predicate call"):
-        print("self-test: a rise did not fail")
+    guard = predicate_hits("m1_max_32() || matrix_units(); // m1_max_32()")
+    if guard != 2:
+        print(f"self-test: guard and class predicates counted {guard}, want 2")
+        return 1
+    if not baseline_rises({"src/engine/engine.cpp": guard}, {"src/engine/engine.cpp": 1}, "predicate call"):
+        print("self-test: a class call added beside an existing guard did not fail")
         return 1
     print("profile predicate self-test: ok (zz_probe_gate.cpp with wide_cores/simd_gpu/matrix_units fails)")
     return 0
