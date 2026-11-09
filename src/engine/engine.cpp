@@ -1370,6 +1370,7 @@ void Engine::drop_slot(Slot& slot) {
   slot.img_digests.clear();
   slot.turns = 0;
   slot.done_at = 0;
+  slot.key.clear();
   for (auto& c : slot.ckpts) {
     c.pos = -1;
     c.query = false;
@@ -2337,7 +2338,22 @@ int Engine::count_tokens(const ChatRequest& r_in) const {
   return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
-Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops) {
+int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key) {
+  auto before = [&](const NewConversationSlot& a, const NewConversationSlot& b) {
+    if (a.rank != b.rank) return a.rank < b.rank;
+    const bool ak = !key.empty() && a.key == key, bk = !key.empty() && b.key == key;
+    if (ak != bk) return ak;
+    if (a.prefix != b.prefix) return a.prefix;
+    return a.last_used < b.last_used;
+  };
+  int pick = -1;
+  for (size_t i = 0; i < v.size(); ++i)
+    if (v[i].usable && (pick < 0 || before(v[i], v[size_t(pick)]))) pick = int(i);
+  return pick;
+}
+
+Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops,
+                                const std::string& key) {
   // (a looped model's cached state is only valid for the loop count that computed it)
   auto lcp = [&](const Slot& s) { return dory_ && s.loops != loops ? size_t(0) : common_rows(s, prompt, mm); };
   // What a slot can actually reuse: its live state if the prompt extends it, else its newest
@@ -2384,21 +2400,20 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
     // (opencode does), and that first conversation goes on with the tools' results. A one-off is also a short
     // conversation: one longer than 1024 tokens and four times this prompt is a main conversation's first turn that
     // a short side request (a title, a summary) came after, and is not given up for it.
+    // Within a rank, the slot whose conversation was sent with this request's prompt_cache_key goes first (the request
+    // continues no slot, so that conversation is over), then has_prefix, then the least recently used
+    // (pick_new_conversation_slot).
     const size_t cheap = std::max<size_t>(1024, 4 * prompt.size());
     auto rank = [&](const Slot& s) {
       return s.tokens.empty() ? 0 : s.turns <= 1 && arrival > s.done_at && s.tokens.size() <= cheap ? 1 : 2;
     };
-    Slot* pick = nullptr;
-    for (auto& s : slots_) {
-      if (s.busy || int(prompt.size()) + 64 > s.seq->limit) continue;
-      if (!pick || rank(s) < rank(*pick)) {
-        pick = &s;
-      } else if (rank(s) == rank(*pick)) {
-        const bool hp = has_prefix(s), pp = has_prefix(*pick);
-        if (hp != pp ? hp : s.last_used < pick->last_used) pick = &s;
-      }
+    std::vector<NewConversationSlot> view;
+    for (const Slot& s : slots_) {
+      const bool ok = !s.busy && int(prompt.size()) + 64 <= s.seq->limit;
+      view.push_back({ok, ok ? rank(s) : 0, s.key, ok && has_prefix(s), s.last_used});
     }
-    if (pick) {
+    if (const int i = pick_new_conversation_slot(view, key); i >= 0) {
+      Slot* pick = &slots_[size_t(i)];
       pick->turns = 1;
       return pick;
     }
@@ -2570,7 +2585,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       res.finish_reason = "cancelled";
       return res;
     }
-    if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp, loops);
+    if (slot_queue_.empty() || slot_queue_.front() == arrival)
+      picked = pick_slot(keys, arrival, mmp, loops, r.cache_key);
     if (picked) break;
     if (!queued) {
       slot_queue_.push_back(arrival);
@@ -2610,6 +2626,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
   ++slot.gen;
+  slot.key = r.cache_key;
 
   // ---- prefix reuse ----
   // (a looped model's KV holds the loop count that computed it: another count reads the prompt from the start)
@@ -4536,6 +4553,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       ++slot.gen;
       slot.turns = std::max(slot.turns, 2);
       slot.last_used = ++clock_;  // (the next new conversation must not take the slot just filled first)
+      slot.key = r.cache_key;
     }
     seen_req = requests_.load();
     // (Hold ends here: the rest runs under the turn as before, with no wait for the SSD)

@@ -2040,6 +2040,45 @@ void draft_conversation_unit() {
   (void)other;
 }
 
+// The slot a new conversation takes (pick_new_conversation_slot, Engine::pick_slot): with a prompt_cache_key, the slot
+// whose conversation that key named, within the rank another slot would be taken from. CPU only. (#956: of four chats,
+// one started again on a changed system prompt took the slot of the chat idle longest, and its old conversation kept
+// its own.)
+void new_conversation_slot_unit() {
+  using V = NewConversationSlot;
+  // A to D: continued conversations, B idle longest, A used last (its third turn)
+  const std::vector<V> four = {{true, 2, "a", false, 9}, {true, 2, "b", false, 3}, {true, 2, "c", false, 5},
+                               {true, 2, "d", false, 7}};
+  check(pick_new_conversation_slot(four, "a") == 0, "new conversation: A's key takes A's slot, not B's (idle longest)");
+  check(pick_new_conversation_slot(four, "") == 1, "new conversation: no key, the least recently used (as before)");
+  check(pick_new_conversation_slot(four, "e") == 1, "new conversation: a key no slot holds, the least recently used");
+  std::vector<V> unkeyed = four;
+  for (V& v : unkeyed) v.key.clear();
+  check(pick_new_conversation_slot(unkeyed, "") == 1, "new conversation: \"\" never matches a slot sent without a key");
+  std::vector<V> busy = four;
+  busy[0].usable = false;
+  check(pick_new_conversation_slot(busy, "a") == 1, "new conversation: the key's slot busy: as before");
+  // no more is evicted than without the key: an empty slot, then a one-off, go first
+  std::vector<V> with_empty = four;
+  with_empty.push_back({true, 0, "", false, 1});
+  check(pick_new_conversation_slot(with_empty, "a") == 4, "new conversation: an empty slot before the key's");
+  std::vector<V> with_one_off = four;
+  with_one_off.push_back({true, 1, "x", false, 8});
+  check(pick_new_conversation_slot(with_one_off, "a") == 4,
+        "new conversation: a one-off before the key's conversation (a title request sent with its chat's key)");
+  with_one_off.push_back({true, 1, "a", false, 10});
+  check(pick_new_conversation_slot(with_one_off, "a") == 5, "new conversation: of two one-offs the key's");
+  // the shared prefix: unchanged without the key, and after it with one
+  std::vector<V> prefix = four;
+  prefix[2].prefix = true;
+  check(pick_new_conversation_slot(prefix, "") == 2, "new conversation: no key, the slot with the shared prefix");
+  check(pick_new_conversation_slot(prefix, "a") == 0, "new conversation: the key's slot before a shared prefix");
+  prefix[0].prefix = true;
+  check(pick_new_conversation_slot(prefix, "a") == 0,
+        "new conversation: compacted (the key's slot with the same system prompt) keeps its checkpoint");
+  check(pick_new_conversation_slot({{false, 0, "", false, 1}}, "a") == -1, "new conversation: every slot busy: none");
+}
+
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs
 // parse them from a fake server): <name>.sse (a stream, with keepalives), <name>.json (a response body), <name>.status
 // (an error's)
@@ -2693,6 +2732,7 @@ int main(int argc, char** argv) {
   ollama_unit();
   drafter_report_unit();
   draft_conversation_unit();
+  new_conversation_slot_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);

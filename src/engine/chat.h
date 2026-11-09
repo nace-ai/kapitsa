@@ -48,7 +48,7 @@ struct ChatRequest {
   bool ignore_eos = false;
   ojson cache_salt;  // the body's "cache_salt" (null: none); only the Splash backend uses it, as its cache key
   // The body's "prompt_cache_key" (OpenAI's, a conversation's id: chat completions and responses), "" if none. Keys the
-  // conversation a read ahead (POST /v1/draft) continues.
+  // conversation a read ahead (POST /v1/draft) continues, and the slot a new conversation takes first (pick_slot).
   std::string cache_key;
   std::vector<std::string> stop;
   std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
