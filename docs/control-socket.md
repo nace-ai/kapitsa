@@ -173,7 +173,8 @@ sends one `reset` event first, whose `status` is a fresh `GET /status`, and then
 `status.last_event_id`, so the client's cursor stays valid. That id always exists, because a server's first event
 comes before it accepts connections. `reason` is one of:
 
-- `expired`: the cursor is older than the oldest event the server still holds.
+- `expired`: the cursor is older than the oldest event the server still holds, or the events after it add up to more
+  than 512 KiB, half of what a stream may fall behind (below), so replaying them would close the stream again.
 - `run_changed`: the cursor's `run_id` is another run's, because the instance restarted.
 - `invalid_cursor`: the header cannot be parsed, or names an event that never existed.
 

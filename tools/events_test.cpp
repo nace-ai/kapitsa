@@ -69,6 +69,22 @@ static void slow_reader_closed() {
   CHECK(slow->closed() && !slow->next(0));
 }
 
+// A cursor whose replay would pass kMaxReplay gets `expired`, not a stream closed at once (the client would reconnect
+// with the same cursor and loop); a smaller replay still replays
+static void big_replay_expires() {
+  Events bus(kRun);
+  const std::string line(4 * 1024, 'x');
+  for (int i = 0; i < 300; ++i) bus.publish("log", {{"level", "info"}, {"message", line}});  // ~1.2 MiB kept
+  Resume how;
+  auto s = bus.open(kRun + ".1", &how);
+  CHECK(s && how == Resume::expired && !s->closed() && !s->next(0));
+  auto near = bus.open(kRun + ".250", &how);  // 50 lines, ~200 KiB
+  CHECK(near && how == Resume::replay);
+  int got = 0;
+  while (near->next(0)) ++got;
+  CHECK(got == 50 && !near->closed());
+}
+
 static void stream_cap_and_close() {
   Events bus(kRun);
   bus.publish("state", json::object());
@@ -233,6 +249,7 @@ int main(int argc, char** argv) {
   numbering_and_live();
   replay_and_resets();
   slow_reader_closed();
+  big_replay_expires();
   stream_cap_and_close();
   stream_outlives_bus();
   logs();

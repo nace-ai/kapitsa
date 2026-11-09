@@ -79,6 +79,14 @@ uint64_t Events::last_seq() const {
 
 namespace {
 
+// What replaying every kept event after `after` would put in a stream's unsent bytes
+size_t replay_bytes(const std::deque<std::shared_ptr<const Event>>& ring, uint64_t after) {
+  size_t n = 0;
+  for (const auto& e : ring)
+    if (e->seq > after) n += e->type.size() + e->data.size();
+  return n;
+}
+
 // `<run_id>.<seq>` with run_id hex (16 to 64 digits) and seq a positive decimal: the run and the seq, or false
 bool parse_cursor(const std::string& s, std::string* run, uint64_t* seq) {
   const size_t dot = s.rfind('.');
@@ -113,6 +121,7 @@ std::shared_ptr<Events::Stream> Events::open(const std::string& cursor, Resume* 
     else if (run != run_id_) h = Resume::run_changed;
     else if (after > c.seq) h = Resume::invalid_cursor;
     else if (!c.ring.empty() && after + 1 < c.ring.front()->seq) h = Resume::expired;
+    else if (replay_bytes(c.ring, after) > kMaxReplay) h = Resume::expired;  // (give() would close it at once: a loop)
     else {
       h = Resume::replay;
       start = after;

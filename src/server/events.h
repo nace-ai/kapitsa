@@ -36,6 +36,9 @@ class Events {
  public:
   static constexpr size_t kKeep = 1024;           // events kept for replay
   static constexpr size_t kMaxUnsent = 1u << 20;  // bytes a stream may fall behind before it is closed
+  // A replay larger than this starts with an `expired` reset instead: replaying it would close the stream, or leave
+  // so little room that the next events close it, and the client would reconnect with the same cursor forever
+  static constexpr size_t kMaxReplay = kMaxUnsent / 2;
   static constexpr int kMaxStreams = 16;
 
   explicit Events(std::string run_id, size_t keep = kKeep);
