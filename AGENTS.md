@@ -50,7 +50,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test systemone systemone_test
+exl3_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
@@ -74,13 +74,15 @@ build/affine_pack_test                       # MLX affine pack helpers: bit widt
 build/systemone_test                         # System One's pointer heads, readout (Drex Max v1) and projected (Drex v2.0) (src/systemone/systemone.cpp)
 build/systemone_codes_probe_test             # controlled option-code regression, built and run explicitly in CI
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
+build/serve_options_test docs/serve-config.schema.json  # kapitsa serve's one validator: flags and --config JSON (src/server/service_config.cpp)
+python3 tests/test_serve_schema.py build/serve_options_test  # needs: jsonschema; the schema and the validator agree, --config - survives a restart
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
 build/splash_runtime_test                    # the Splash engine child: start, requests, cancel, death (src/splash/runtime.h)
 build/splash_discover_test                   # finding Splash's engine and model on a throwaway tree (src/splash/discover.h)
 build/splash_plan_test                       # what Kapitsa adds to `splash serve-native`, and when (src/splash/plan.h)
-python3 tests/test_server.py --cli build/kapitsa
+python3 tests/test_server.py --cli build/kapitsa  # its `kapitsa doctor` cases wait on the GPU: with a model run on it they time out (300 s; 9 Nov 2026, #1113)
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
 python3 tests/test_update.py build

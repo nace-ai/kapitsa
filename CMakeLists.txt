@@ -135,6 +135,13 @@ set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)
 set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
 
+# kapitsa serve's one validator (src/server/service_config.cpp): flags and --config's JSON, against the schema in docs/
+add_executable(serve_options_test tests/serve_options_test.cpp src/server/service_config.cpp)
+target_include_directories(serve_options_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(serve_options_test PRIVATE naceinfer)
+add_test(NAME serve_options_test COMMAND serve_options_test ${CMAKE_SOURCE_DIR}/docs/serve-config.schema.json)
+set_tests_properties(serve_options_test PROPERTIES TIMEOUT 30)
+
 # Exercise the real HTTP observer and chunked provider without native/UI linkage or sockets.
 add_executable(http_stream_test tools/http_stream_test.cpp src/server/http_stream.cpp src/engine/execution_session.cpp)
 target_include_directories(http_stream_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
@@ -182,7 +189,7 @@ add_custom_command(
   DEPENDS ${CMAKE_SOURCE_DIR}/src/server/chat.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   COMMENT "Embedding the chat page")
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
   ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp

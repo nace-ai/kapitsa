@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/docs/serve-config.schema.json",
+  "title": "kapitsa serve configuration",
+  "description": "What `kapitsa serve --config -` reads on stdin (or `--config FILE`). Each field is a `kapitsa serve` flag with '_' for '-' (docs/usage.md and `kapitsa serve --help` say what each does); a field left out takes the flag's default. The command line's flags are converted to this JSON and checked by the same validator (src/server/service_config.cpp). Unknown fields are refused.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "model": {"type": "string", "description": "a catalog name, org/name[@revision], a model folder or a .gguf file"},
+    "model_id": {"type": "string", "description": "the model's name in the API"},
+    "engine": {"enum": ["native", "splash"], "default": "native"},
+    "splash_binary": {"type": "string"},
+    "splash_model": {"type": "string"},
+    "splash_arg": {"type": "array", "items": {"type": "string"}},
+    "splash_persistent_cache": {"type": "boolean"},
+    "splash_conversation_salt": {"type": "boolean"},
+    "splash_kflash": {"enum": ["auto", "on", "off"], "default": "auto"},
+    "check": {"type": "boolean", "description": "with engine splash: show what would run, start nothing"},
+    "host": {"type": "string", "description": "listen address; default 0.0.0.0, or 127.0.0.1 with private"},
+    "port": {"type": "integer", "minimum": 1, "maximum": 65535, "default": 8000},
+    "profile": {"enum": ["precise", "fast"]},
+    "private": {"type": "boolean"},
+    "local": {"type": "boolean"},
+    "peer": {"type": "array", "items": {"type": "string"}, "description": "other Macs' servers, HOST[:PORT]"},
+    "context": {
+      "oneOf": [
+        {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        {"type": "string", "pattern": "^(0*[1-9][0-9]*[kKmM]?|[mM][aA][xX])$"}
+      ],
+      "description": "tokens, k or m of them (128k, 1m), or max; the server also refuses more than 2147483647 tokens"
+    },
+    "slots": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "spec": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "dflash": {"type": "string", "description": "auto, none or a drafter folder"},
+    "prefill_chunk": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "api_key": {"type": "string"},
+    "allow_switch": {"type": "boolean"},
+    "idle_unload": {
+      "anyOf": [
+        {"enum": ["auto", "off", "0", 0]},
+        {"type": "number", "minimum": 0.5, "maximum": 10080}
+      ],
+      "description": "auto, 0 or off, or minutes from 0.5 to 10080"
+    },
+    "mem_budget": {"type": "number", "exclusiveMinimum": 0, "description": "GB"},
+    "image_max_pixels": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "timing": {"enum": ["ttft", "prefill", "both"], "default": "both"},
+    "disk_cache": {"type": "string", "pattern": "^([aA][uU][tT][oO]|[oO][fF][fF]|[nN][oO]([nN][eE])?|[0-9]*[.]?[0-9]+ ?([kKmMgGtT]([iI]?[bB])?|[bB])?)$", "description": "auto, 0 (off) or a size such as 16G"},
+    "loops": {"type": "integer", "minimum": 1, "maximum": 4},
+    "loop_kv": {"enum": ["last-loop", "last_loop", "per-loop", "per_loop"]},
+    "split": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "verbose": {"type": "boolean"},
+    "yes": {"type": "boolean"}
+  }
+}
