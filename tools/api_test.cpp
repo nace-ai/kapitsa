@@ -2608,6 +2608,16 @@ static void ollama_unit() {
     }
     check(has_tools && has_thinking, "ollama: clover-35b-a3b has tools and thinking");
   }
+  // any Qwen name has tools and thinking
+  for (const char* n : {"qwen4-32b", "qwen3.6-35b-a3b"}) {
+    bool has_tools = false, has_thinking = false;
+    const auto show = ollama_show_response(n, n);
+    for (const auto& c : show["capabilities"]) {
+      if (c == "tools") has_tools = true;
+      if (c == "thinking") has_thinking = true;
+    }
+    check(has_tools && has_thinking, std::string("ollama: ") + n + " has tools and thinking");
+  }
   // qwen3.6-35b-a3b has vision
   {
     auto show = ollama_show_response("qwen3.6-35b-a3b", "qwen3.6-35b-a3b");

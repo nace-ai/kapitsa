@@ -10,7 +10,14 @@
 
 namespace ni {
 
-// config.json's model_type, or its text_config's, starts with qwen4 (qwen4_exp among them)
+// Which of Kapitsa's two Qwen architectures a config.json is, by its model_type or its text_config's (the table in
+// qwen4_config.cpp): the Qwen3.5 layout (Gated DeltaNet + full attention, model/qwen35.h) or Qwen3.8-Flash-Next's
+// (model/qwen4_exp.h). none: neither.
+enum class QwenLayout { none, qwen35, qwen4exp };
+QwenLayout qwen_layout(const nlohmann::json& config);
+
+// config.json's model_type, or its text_config's, starts with qwen4 (qwen4_exp among them), and its layout is not the
+// Qwen3.5 one (a qwen4* name in the table with that layout runs as the Qwen3.5 family)
 bool qwen4_family(const nlohmann::json& config);
 
 // What in a Qwen 4-family config the qwen4_exp path does not run, one line each; empty: it runs. A model_type other
