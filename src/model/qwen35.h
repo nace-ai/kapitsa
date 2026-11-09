@@ -664,7 +664,6 @@ class Qwen35 : public Model {
   int gpu_wave_rows(int T) const;
   void enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h);
   Buffer xh2_, hh2_;  // the MoE chain's xh_ / hh_ while a mixer uses those (gpu_wave_rows)
-  bool gpu_wave_model_ = true;  // false: the wavefront is off on this model today (Clover), only NI_PF_WAVE=1
   void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
   bool enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);

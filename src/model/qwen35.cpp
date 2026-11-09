@@ -3793,8 +3793,8 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
 // A's next mixer beside half B's MoE, each pair on one grouped encoder (Encoder::play_pair): a DeltaNet scan or an
 // attention pass, which leaves the GPU's cores half busy, overlaps the other half's expert GEMMs. Each half's rows go
 // through the kernels a chunk of that size would, the second half after the first as a next chunk would, so the
-// logits are those of half-size chunks. Default on for the Qwen3.6 35B-A3B (hidden 2048, 40 layers, 4-bit experts) on
-// an Apple10 GPU of 40 cores or more (the M5 Max), with 8,192-row chunks (auto_chunk), so each half's MoE has as many
+// logits are those of half-size chunks. Default on for the Qwen3.6 35B-A3B shape (hidden 2048, 40 layers, 4-bit experts;
+// Clover too) on the M5 class (matrix units), with 8,192-row chunks (auto_chunk), so each half's MoE has as many
 // rows as the 4,096-row chunk it replaces: M5 Max, ni_run, 16,288 ids in 8,192-row chunks 2,767 -> 2,620 ms (-5.3%; in
 // 4,096-row chunks, the default before, 2,777); 4,129 ids in one chunk level (592 -> 590). Halves of 2,048 rows lose
 // what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767): the experts' weights are read once per half.
@@ -3809,7 +3809,7 @@ bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
 int Qwen35::gpu_wave_rows(int T) const {
   static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);
   static const bool forced = env_int("NI_PF_WAVE", 0) == 1;
-  if (!on || (!gpu_wave_model_ && !forced) || !cfg_.moe || !cfg_.causal || T < 1024 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
+  if (!on || !cfg_.moe || !cfg_.causal || T < 1024 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
   for (const Layer& L : layers_)
     if (L.eg.exl3 || L.eg.iq || L.eg.q20 || L.eg.bits != 4) return 0;
   return (T / 2 + 63) / 64 * 64;
