@@ -50,6 +50,8 @@ always take the best model.
 
 ## Models and downloads
 
+The Hugging Face repo, pinned revision, draft model and exact download size of every alias and variant: [docs/models.md](models.md) (written from the catalog by `tools/models_table.py`).
+
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |

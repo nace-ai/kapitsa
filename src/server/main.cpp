@@ -428,6 +428,19 @@ static void print_serve_help() {
   show_help(h);
 }
 
+// What each model name downloads: the alias, then the Hugging Face repo of its default variant (the catalog's, so
+// docs/models.md and this list cannot disagree)
+static std::string repos_table() {
+  std::string s;
+  char line[256];
+  for (const auto& m : hub::catalog())
+    if (const hub::Variant* d = m.variant()) {
+      snprintf(line, sizeof line, "  %-8s %s\n", hub::short_name(m).c_str(), d->repo.c_str());
+      s += line;
+    }
+  return s;
+}
+
 static void print_pull_help() {
   show_help(strf("kapitsa pull MODEL... [--from DIR]...\n\n"
          "Downloads a model with the files that speed it up (MTP head, DFlash2 drafter) into\n"
@@ -435,8 +448,10 @@ static void print_pull_help() {
          "  --from DIR   take files that are already on this Mac from DIR (a folder from `hf download --local-dir`,\n"
          "               another app's models): only exact matches of the pinned checksums, as APFS clones\n"
          "  --dry-run    show what MODEL resolves to, without downloading (--json for programs)\n\n"
-         "Files already in the Hugging Face cache (~/.cache/huggingface/hub) are reused the same way.\n",
-         hub::tilde(hub::models_dir()).c_str()));
+         "Files already in the Hugging Face cache (~/.cache/huggingface/hub) are reused the same way.\n\n"
+         "Each name downloads this Hugging Face repo (a variant, e.g. 27b:8bit, another one; revisions, drafters and\n"
+         "sizes: docs/models.md, or --dry-run):\n\n%s",
+         hub::tilde(hub::models_dir()).c_str(), repos_table().c_str()));
 }
 
 // Why the server could not listen on host:port, or "" (a test bind, as the server binds: SO_REUSEADDR only).

@@ -113,7 +113,7 @@ The [Node.js / TypeScript binding](sdk/node/README.md) provides async calls over
 
 ## Supported models
 
-The most precise variant of each catalog model that runs on a Mac of each size. Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
+The most precise variant of each catalog model that runs on a Mac of each size. Which Hugging Face repo each alias downloads, with its pinned revision, draft model and size: [Models](docs/models.md). Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
 
 | Model | 16 GB | 24 GB | 32 GB | 36 GB | 48 GB | 64 GB | 128 GB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
