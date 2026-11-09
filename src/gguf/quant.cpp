@@ -445,6 +445,35 @@ void dq_iq3_xxs(const uint8_t* b, float* y) {
 // 3.44 bits: 9-bit indices of 4-value grid points (8 low bits + 1 in qh), 8 stored sign bits per 8 values, a 4-bit
 // scale per 32 values (two per byte)
 void dq_iq3_s(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t half;
+  memcpy(&half, b, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 110 : src - dst < 256 * sizeof(float);
+  if ((half & 0x7c00u) != 0x7c00u && !overlap) {
+    const float d = from_f16(half);
+    const uint8x8_t sign_bits = {1, 2, 4, 8, 16, 32, 64, 128};
+    for (int group = 0; group < 8; ++group) {
+      const int nib = (b[106 + group / 2] >> (4 * (group % 2))) & 15;
+      const float32x4_t scale = vdupq_n_f32(d * float(1 + 2 * nib));
+      const unsigned high = b[66 + group];
+      for (int lane = 0; lane < 4; ++lane) {
+        const uint32_t a = iq::kIq3s[b[2 + 8 * group + 2 * lane] | (((high >> (2 * lane)) & 1) << 8)];
+        const uint32_t z = iq::kIq3s[b[3 + 8 * group + 2 * lane] | (((high >> (2 * lane + 1)) & 1) << 8)];
+        const uint8x8_t grid = vreinterpret_u8_u64(vcreate_u64(uint64_t(a) | (uint64_t(z) << 32)));
+        const int16x8_t values = vreinterpretq_s16_u16(vmovl_u8(grid));
+        const uint8x8_t positive = vceq_u8(vand_u8(vdup_n_u8(b[74 + 4 * group + lane]), sign_bits), vdup_n_u8(0));
+        const uint16x8_t mask = vceqq_u16(vmovl_u8(positive), vdupq_n_u16(255));
+        const int16x8_t signed_values = vbslq_s16(mask, values, vnegq_s16(values));
+        float* out = y + 32 * group + 8 * lane;
+        // Finite half x odd scale x grid magnitude is exact in fp32, including signed zero.
+        vst1q_f32(out, vmulq_f32(scale, vcvtq_f32_s32(vmovl_s16(vget_low_s16(signed_values)))));
+        vst1q_f32(out + 4, vmulq_f32(scale, vcvtq_f32_s32(vmovl_s16(vget_high_s16(signed_values)))));
+      }
+    }
+    return;
+  }
+#endif
   const float d = f16_at(b);
   const uint8_t* qs = b + 2;
   const uint8_t* qh = b + 66;
