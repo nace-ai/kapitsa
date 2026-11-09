@@ -435,7 +435,7 @@ static std::string repos_table() {
   char line[256];
   for (const auto& m : hub::catalog())
     if (const hub::Variant* d = m.variant()) {
-      snprintf(line, sizeof line, "  %-8s %s\n", hub::short_name(m).c_str(), d->repo.c_str());
+      snprintf(line, sizeof line, "  %-10s %s\n", hub::short_name(m).c_str(), d->repo.c_str());
       s += line;
     }
   return s;
