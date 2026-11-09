@@ -3808,7 +3808,6 @@ bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
 }
 int Qwen35::gpu_wave_rows(int T) const {
   static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);
-  static const bool forced = env_int("NI_PF_WAVE", 0) == 1;
   if (!on || !cfg_.moe || !cfg_.causal || T < 1024 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
   for (const Layer& L : layers_)
     if (L.eg.exl3 || L.eg.iq || L.eg.q20 || L.eg.bits != 4) return 0;
