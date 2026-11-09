@@ -311,6 +311,21 @@ struct AnsweredReply {
 std::shared_ptr<const AnsweredReply> draft_conversation(const std::deque<std::shared_ptr<const AnsweredReply>>& answered,
                                                         const std::string& key, const std::string& after);
 
+// A slot a new conversation (a prompt no slot can reuse 64 tokens of) may take, as Engine::pick_slot sees it.
+struct NewConversationSlot {
+  bool usable = true;    // not busy, and the prompt fits it
+  int rank = 0;          // 0: empty, 1: a one-off (a title, a summary), 2: a continued conversation
+  std::string key;       // the prompt_cache_key its last request sent ("" if none)
+  bool prefix = false;   // it holds a prefix checkpoint the new prompt shares (the system prompt and tools)
+  uint64_t last_used = 0;
+};
+// The slot a new conversation sent with prompt_cache_key `key` takes (-1: none; CPU only: tools/api_test checks it):
+// the lowest rank; within it the slot whose conversation has that key (the request continues no slot, so the
+// conversation the key named is over: compacted, or started again on a changed system prompt), then one with the
+// shared prefix, then the least recently used. A key never moves a conversation ahead of a slot of a lower rank, so no
+// more is evicted than without it, and "" matches no slot.
+int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key);
+
 // What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).
 struct DraftResult {
   std::string status;  // prefilled unchanged interrupted busy no_conversation unsupported no_room
@@ -462,6 +477,7 @@ class Engine {
     int turns = 0;
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
     int loops = 0;                    // looped models: the loop count its cached state (KV) was computed with
+    std::string key;                  // its last request's prompt_cache_key ("" if none; pick_slot)
     bool busy = false;                // a request runs on it (its state and KV cache are that request's)
     uint64_t arrival = 0;             // that request's number (requests_ when it arrived)
     // that request waits for memory other requests' KV caches hold: before its prefill (nothing of it on the GPU
@@ -479,8 +495,10 @@ class Engine {
     bool live_ok = false;
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
-  // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys
-  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr, int loops = 0);
+  // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys; key: its
+  // prompt_cache_key ("" if none)
+  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr, int loops = 0,
+                  const std::string& key = "");
   // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
   // reusable prefix: the common prefix, cut before any image that is not the same image in both
   static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
