@@ -68,22 +68,23 @@ kapitsa serve                   # chat + OpenAI/Anthropic APIs at http://127.0.0
 ## ✨ Features
 
 <picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/assets/agents-kapitsa-models-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="docs/assets/agents-kapitsa-models-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents-kapitsa-models-dark.svg">
   <img alt="Your coding agent talks to Kapitsa over the OpenAI and Anthropic APIs, and Kapitsa runs the model on your Mac." src="docs/assets/agents-kapitsa-models-light.svg">
 </picture>
 
-| Feature | Details |
-|---|---|
-| ⚡ **351 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** | KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)). |
-| 🗄️ **A 180B model on a 48 GB Mac, at 61 tok/s (M5 Pro).** | Its routed experts stream from the SSD, as many as the budget holds. |
-| 💾 **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** | Conversations stay on the SSD (`--disk-cache`). |
-| 🧠 **Prefill on the GPU and the Neural Engine together.** | Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on. |
-| 🔌 **Your tools, unchanged.** | `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`. |
-| 🤖 **An agent in one command.** | `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider` and `kapitsa goose` start on the local model. |
-| 🎯 **One calibrated probability per option.** | `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)). |
-| 🖥️ **Several Macs, one model.** | A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)). |
-| 🖼️ **Images.** | Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`. |
+| | Feature |
+|:-:|---|
+| ⚡ | **351 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)). |
+| 🗄️ | **A 180B model on a 48 GB Mac, at 61 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds. |
+| 💾 | **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`). |
+| 🧠 | **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on. |
+| 🔌 | **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`. |
+| 🤖 | **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider` and `kapitsa goose` start on the local model. |
+| 🎯 | **One calibrated probability per option.** `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)). |
+| 🖥️ | **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)). |
+| 🖼️ | **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`. |
 
 <a id="drex-max-v1"></a>
 ### 🎯 Drex Max v1
