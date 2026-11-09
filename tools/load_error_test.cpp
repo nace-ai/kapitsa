@@ -4,6 +4,7 @@
 #include "util/load_threads.h"
 #include "loader/safetensors.h"
 #include "gguf/gguf.h"
+#include "gguf_split_cleanup_test.h"
 #include "model/expert_store.h"
 #include "model/qwen35.h"
 #include "bench/bench.h"
@@ -446,6 +447,7 @@ static void cpu(const char* self) {
   tensor_entries(dir);
   unsupported_dtypes(dir);
   gguf_ranges(dir);
+  gguf_split_cleanup_test::run();
   uncached_reads(dir);
   std::filesystem::remove_all(dir);
   std::cout << "PASS scoped errors, thread joining/isolation, loader FD cleanup, CLI exit 1\n";
@@ -594,7 +596,8 @@ int main(int argc, char** argv) {
   }
   if (argc > 2 && std::string(argv[1]) == "--bad-file") { WeightStore ws; ws.open_dir(argv[2]); }
   try {
-    if (argc > 1 && std::string(argv[1]) == "--safetensors-read-bounds") safetensors_read_bounds();
+    if (argc > 1 && std::string(argv[1]) == "--gguf-split-cleanup") gguf_split_cleanup_test::run();
+    else if (argc > 1 && std::string(argv[1]) == "--safetensors-read-bounds") safetensors_read_bounds();
     else if (argc > 1 && std::string(argv[1]) == "--mtp-gpu") mtp_gpu();
     else if (argc > 1 && std::string(argv[1]) == "--gpu") gpu();
     else cpu(argv[0]);
