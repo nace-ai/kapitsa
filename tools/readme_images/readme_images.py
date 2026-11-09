@@ -139,7 +139,7 @@ def family_table(data, rows, tmac=None):
             head.append("<mark>**Kapitsa**</mark>")
             continue
         name = e["name"].replace(" ", "&nbsp;").replace("-", "\u2011")
-        ver = (shared[e["name"]] or (tmac or {}).get("versions", {}).get(e["name"])
+        ver = ((tmac or {}).get("versions", {}).get(e["name"])
                or T.get("versions", {}).get(e["name"], e.get("version", "")).replace("\n", " "))
         head.append(f"<sub>{name}<br>{ver}</sub>" if ver else f"<sub>{name}</sub>")
     out = ["| Model | " + " | ".join(head) + " |", "| --- |" + " ---: |" * len(engines)]
@@ -148,7 +148,7 @@ def family_table(data, rows, tmac=None):
         top = max(cell(r, e["name"])[0] for e in engines if is_num(cell(r, e["name"])[0]))
         alias = f" · `{m['alias']}`" if m.get("alias") else ""   # (none: not in the catalog, e.g. a converted folder)
         out.append(f"| **{m['name']}**{alias}<br><sub>{m['about']}</sub> | "
-                   + " | ".join(table_cell(r, e["name"], top, shared[e["name"]]) for e in engines) + " |")
+                   + " | ".join(table_cell(r, e["name"], top, shared[e["name"]] if e["name"] == "Kapitsa" else None) for e in engines) + " |")
     return out
 
 
