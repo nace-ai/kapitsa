@@ -48,7 +48,7 @@ const DefaultRow kDefaults[] = {
     {"ane_segmented_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kAneBuiltinNonMatrix, nullptr, "fast profile", 61, 0, false,
      "M4 built-in share; M3 prefill bar failure excludes calibration-only chips; matrix GPUs excluded", false},
     // Matrix class (any M5). M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%); M5 Pro (#393), 16,288 ids in 8,192-row
-    // chunks against 4,096: the 35B-A3B 5,874 -> 5,672 ms (-3.4%), Clover 5,699 -> 5,526 (-3.0%), the same text.
+    // chunks against 4,096: the 35B-A3B 5,874 -> 5,618 ms (-4.4%), Clover 5,699 -> 5,526 (-3.0%), the same text.
     // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site.
     {"pf_wave", Knob::kPfWave, ModelClass::kQwen35Shape, DefaultScope::kMatrix, nullptr, "on", 3, 5, false,
      "M5 Max, M5 Pro", true},
