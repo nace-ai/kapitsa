@@ -2576,7 +2576,7 @@ bool qmt_on() {
 // NI_QMT_MIN (read once; 1-64): the fewest rows of a dense 4-bit g64 GEMM on the tensor_ops tile (qmt_m64_n64,
 // qmtg_m64_n64, whose rows past M load as zeros and store nothing); a GEMM of fewer rows runs the short-prefill or qmr
 // kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for every dense model; MoE models
-// keep 64 (not measured). M5 Pro, ni_run, interleaved 3 x 2 (#393): a 40-token prefill on the 4B 47.3 -> 28.8 ms, the 9B
+// keep 64 (the 35B-A3B on the M5 Pro: 40 tokens 55.3 -> 55.8 ms, 4K 1,286 -> 1,322, slower in 3 of 3). M5 Pro, ni_run, interleaved 3 x 2 (#393): a 40-token prefill on the 4B 47.3 -> 28.8 ms, the 9B
 // 99.5 -> 46.6, the 27B 320.0 -> 144.6; a 4,129-token prefill on the 4B 952.6 -> 932.8 ms and the 9B 2,370 -> 2,316, the
 // same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) keeps 64 below the 40-core class: its 4,129-token
 // prefill with its Neural Engine split was 5,577 -> 5,851 ms on the M5 Pro (slower in 3 of 3 pairs, the Neural Engine
