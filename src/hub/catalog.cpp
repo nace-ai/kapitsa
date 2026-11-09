@@ -164,11 +164,11 @@ const std::vector<CatalogModel>& catalog() {
        .variants = {
            {.name = "4bit",
             // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt by
-            // importance-weighted scale search, every other byte the same. KL from bf16 0.048 against 0.070,
-            // GSM8K (1319) 0.923 against 0.914, M5 Pro decode 219 and 237 against 199 and 198 tok/s
+            // importance-weighted scale search, every other file the same content. KL from bf16 0.048 against 0.070,
+            // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two runs each) 227 against 209 tok/s
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.5-4B-MLX-4bit-KQuant",
-            .revision = "c11bbc3b4e981b87e70fa7bb03f0b509bbb9e4e3",
+            .revision = "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
             .companions = {mtp4(), dflash4()},
             .download_gb = 4.57},
            {.name = "6bit",
@@ -200,11 +200,11 @@ const std::vector<CatalogModel>& catalog() {
        .variants = {
            {.name = "4bit",
             // KQuant (#421): lmstudio-community's pack (b455506) with its quantized weights rebuilt by
-            // importance-weighted scale search, every other byte the same. KL from bf16 0.037 against 0.081,
-            // GSM8K (1319) 0.944 against 0.927, M5 Pro decode 149 and 140 against 131 and 144 tok/s
+            // importance-weighted scale search, every other file the same content. KL from bf16 0.037 against 0.081,
+            // GSM8K (1319) 0.944 against 0.927, M5 Pro decode (T 0.6 and greedy, two runs each) 146 against 132 tok/s
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant",
-            .revision = "867e2c59f1b24464c334cddc656f313f7cbcd432",
+            .revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59",
             .companions = {mtp9(), dflash9()},
             .download_gb = 9.05},
        }},

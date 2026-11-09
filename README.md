@@ -52,7 +52,7 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
 
 ## 🔥 What's new
 
-- [2026/11] 🎯 **KQuant: the Qwen3.5 4B and 9B downloads are closer to the original model, at the same size, and the 4B writes ~15% faster on an M5 Pro** ([numbers](#kquant)).
+- [2026/11] 🎯 **KQuant: the Qwen3.5 4B and 9B downloads are closer to the original model, at the same size, and they write ~10% faster on an M5 Pro** ([numbers](#kquant)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -77,12 +77,12 @@ Kapitsa's Qwen3.5-4B and 9B downloads are KQuant packs: the same MLX 4-bit files
 
 | Qwen3.5, 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
 | --- | --- | --- | --- |
-| 4B standard | 0.070 | 0.914 | 199 |
-| 4B KQuant | **0.048** | **0.923** | **228** |
-| 9B standard | 0.081 | 0.927 | 137 |
-| 9B KQuant | **0.037** | **0.944** | **145** |
+| 4B standard | 0.070 | 0.914 | 209 |
+| 4B KQuant | **0.048** | **0.923** | **227** |
+| 9B standard | 0.081 | 0.927 | 132 |
+| 9B KQuant | **0.037** | **0.944** | **146** |
 
-<sub>Standard: lmstudio-community's packs, which the catalog served before. KL: mean over 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer at T 0.6, the mean of two interleaved runs per pack, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC. How KQuant builds a pack, and every run: [record](bench/results/2026-11-10-m5-pro-kquant/README.md).</sub>
+<sub>Standard: lmstudio-community's packs, which the catalog served before. KL: mean over 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC. How KQuant builds a pack, and every run: [record](bench/results/2026-11-10-m5-pro-kquant/README.md).</sub>
 
 ### Drex Max v1
 

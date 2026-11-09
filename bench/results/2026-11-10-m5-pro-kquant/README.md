@@ -1,8 +1,9 @@
 # Results, 2026-11-10: KQuant packs for Qwen3.5-4B and 9B against the packs the catalog served
 
 The catalog's 4-bit Qwen3.5-4B and 9B packs were lmstudio-community's (`c43ee1d`, `b455506`): MLX affine 4-bit, group 64,
-plain round-to-nearest. The KQuant packs keep every file of those packs byte for byte (config, tokenizer, norms, the
-vision tower) and rebuild only the quantized weights, scales and biases, so the file list and the size are the same:
+plain round-to-nearest. The KQuant packs keep the content of every other file of those packs (config, tokenizer, norms, the
+vision tower; `config.json` and the safetensors index are re-serialized, so their bytes differ) and rebuild only the
+quantized weights, scales and biases, so the file list and the size are the same:
 3.034 GB of weights for the 4B, 5.950 GB for the 9B.
 
 ## How a KQuant pack is built
@@ -47,6 +48,16 @@ JSON `INVALID: server` because it did not start the server itself; that is expec
 | 9B lmstudio-community | 130.9, 143.9 | 122.0, 131.1 | 0.729, 0.744 | 1455, 1569 |
 | 9B KQuant 4-bit | **149.4, 140.1** | **148.7, 147.1** | 0.754, 0.744 | 1505, 1502 |
 
+Pooled over both decode modes (four runs per pack), the 4B goes from 208.6 to 227.2 tok/s (9% faster) and the 9B from
+132.0 to 146.3 (11% faster). At T 0.6 alone the 9B's runs overlap (130.9 and 143.9 against 149.4 and 140.1), so the 9B
+is faster only on the pooled figure; the legs inside one arm differ by 5-9%.
+
 Order: 4B `A B C C B A`, 9B `A B B A`; per-leg files in [4b/](4b) and [9b/](9b). The 4B's first attempt was voided by
 the leg guard (Spotlight indexing the new pack swapped 3.3 GB) and rerun whole. The KQuant 4B writes faster because its
 drafts are accepted more often (0.73 against 0.69 of drafted tokens).
+
+What the leg files flag: every JSON carries `CONTENTION` (mean foreign GPU load 84-91%, the only user `kapitsa`); that
+is the leg's own `kapitsa serve`, which bench counts as foreign because it did not start it. Leg `4b/4-C` (the 3-bit
+pack, not shipped) swapped 16,598 pages during its 4K prefill and flags a repetition loop in one T 0.6 answer. Legs
+`9b/3-B` and `9b/4-A`, one per 9B arm, flag repetition loops in T 0.6 answers (one and two). None of these changes the
+comparison.
