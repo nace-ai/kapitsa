@@ -1,0 +1,355 @@
+{
+  "notice": "Explicitly redacted derived evidence; not raw execution logs. Raw artifacts remain private.",
+  "hardware": {
+    "chip": "Apple M3 Ultra",
+    "memory_capacity_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+    "gpu_cores": 60
+  },
+  "production_source": "32e7aa73868f7f12a92a649fffa324d7d198b5f0",
+  "reference_source": "7c5112243ba73252dd161d49b6b53207a6851940",
+  "method": {
+    "legs": "A1 B1 A2 B2 A3 B3 A4 B4",
+    "rows": 1024,
+    "K": 1024,
+    "warmup_passes": 1,
+    "timed_passes_per_leg": 16,
+    "decoder_calls_per_row": 1,
+    "scope": "CPU row decoding only"
+  },
+  "builds": {
+    "reference": {
+      "commit": "7c5112243ba73252dd161d49b6b53207a6851940",
+      "library_sha256": "ea43f66ac62686f874cbb63f60be42c6d4f4404bb2f2a3ea68a1c57ebfab0fcb",
+      "driver_sha256": "6a423c77f788e43694d020bb1b29fea5363a2ba64a4a6152a733823e4a01fd13",
+      "quant_source_sha256": "1c0ac46c672ae9e74e4a4e129cd3a9ea7ce357da26d15ad94c0228ce5f196248",
+      "version": "kapitsa 0.2.33 (7c511224)"
+    },
+    "candidate": {
+      "commit": "32e7aa73868f7f12a92a649fffa324d7d198b5f0",
+      "library_sha256": "dbe7e313785575a00f26de8a8aa6855ddd3c6a781f9e6e4167dcfd55e3c7f4a2",
+      "driver_sha256": "92bad80f00ae27ac715c299a09f8eb6d7116cb13be5657305153223a779edcf3",
+      "quant_source_sha256": "5ba878299b75ae63da414a0761bdea734413dd18f42e2a33a61f3ad3843fe62c",
+      "version": "kapitsa 0.2.33 (32e7aa73)"
+    }
+  },
+  "steps": [
+    {
+      "label": "reference-configure",
+      "rc": 0
+    },
+    {
+      "label": "reference-build",
+      "rc": 0
+    },
+    {
+      "label": "reference-driver",
+      "rc": 0
+    },
+    {
+      "label": "candidate-configure",
+      "rc": 0
+    },
+    {
+      "label": "candidate-build",
+      "rc": 0
+    },
+    {
+      "label": "candidate-integrated-oracle",
+      "rc": 0
+    },
+    {
+      "label": "candidate-driver",
+      "rc": 0
+    },
+    {
+      "label": "trained-A1",
+      "rc": 0
+    },
+    {
+      "label": "trained-B1",
+      "rc": 0
+    },
+    {
+      "label": "trained-A2",
+      "rc": 0
+    },
+    {
+      "label": "trained-B2",
+      "rc": 0
+    },
+    {
+      "label": "trained-A3",
+      "rc": 0
+    },
+    {
+      "label": "trained-B3",
+      "rc": 0
+    },
+    {
+      "label": "trained-A4",
+      "rc": 0
+    },
+    {
+      "label": "trained-B4",
+      "rc": 0
+    }
+  ],
+  "candidate_integrated_oracle_cases": 450762,
+  "guarded_single_multiple_empty_partial_blocks": "PASS",
+  "complete_leg_files_literal_equal": true,
+  "driver_source_sha256": "04f19683b22a07c8e5dad6e76ad3f7eb569b3a9d22dfc9d8597f457487af11eb",
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        2040.080078,
+        2037.597656,
+        2190.266602,
+        2037.19043,
+        2142.90332,
+        2037.231445,
+        2036.662109,
+        2094.767578,
+        2091.186523,
+        2036.295898,
+        2042.317383,
+        2036.90625,
+        2064.290039,
+        2037.19043,
+        2037.516602,
+        2096.232422
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 2038.838867
+    },
+    "B1": {
+      "ns_per_row": [
+        927.897461,
+        925.618164,
+        925.292969,
+        926.432617,
+        925.537109,
+        924.967773,
+        925.089844,
+        925.170898,
+        925.048828,
+        3051.635742,
+        925.292969,
+        925.210938,
+        925.619141,
+        935.587891,
+        1173.461914,
+        925.944336
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 925.5776364999999
+    },
+    "A2": {
+      "ns_per_row": [
+        2050.618164,
+        2064.208984,
+        2036.539062,
+        2066.28418,
+        2042.724609,
+        2036.539062,
+        2784.016602,
+        2036.947266,
+        2070.84082,
+        2053.263672,
+        2036.621094,
+        2051.350586,
+        2055.297852,
+        2049.112305,
+        2127.726562,
+        2036.132812
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 2050.984375
+    },
+    "B2": {
+      "ns_per_row": [
+        926.391602,
+        925.333008,
+        1043.212891,
+        992.228516,
+        925.741211,
+        925.49707,
+        1584.594727,
+        925.944336,
+        925.25293,
+        1108.276367,
+        925.292969,
+        926.066406,
+        1005.493164,
+        927.693359,
+        925.700195,
+        926.675781
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 926.229004
+    },
+    "A3": {
+      "ns_per_row": [
+        2039.306641,
+        2037.150391,
+        2159.057617,
+        2037.231445,
+        2037.19043,
+        2037.556641,
+        2062.133789,
+        2291.381836,
+        2037.475586,
+        2037.150391,
+        2038.085938,
+        2113.566406,
+        2056.030273,
+        2088.907227,
+        2051.147461,
+        2701.945312
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 2045.2270509999998
+    },
+    "B3": {
+      "ns_per_row": [
+        927.734375,
+        1023.356445,
+        943.68457,
+        925.740234,
+        924.967773,
+        927.571289,
+        925.048828,
+        925.008789,
+        989.542969,
+        925.619141,
+        926.595703,
+        925.700195,
+        939.453125,
+        925.375,
+        924.926758,
+        1032.511719
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 926.1679684999999
+    },
+    "A4": {
+      "ns_per_row": [
+        2038.330078,
+        2049.397461,
+        2097.290039,
+        2036.987305,
+        2039.876953,
+        2160.15625,
+        2038.044922,
+        2037.393555,
+        2100.667969,
+        2036.703125,
+        2100.952148,
+        2037.43457,
+        2051.269531,
+        2037.150391,
+        2049.438477,
+        2044.026367
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 2041.95166
+    },
+    "B4": {
+      "ns_per_row": [
+        927.368164,
+        925.211914,
+        925.415039,
+        925.007812,
+        925.211914,
+        933.47168,
+        924.926758,
+        925.129883,
+        925.90332,
+        1336.344727,
+        925.944336,
+        925.333984,
+        925.78125,
+        1124.552734,
+        925.496094,
+        925.170898
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 925.4555665
+    }
+  },
+  "adjacent_pairs": [
+    {
+      "pair": 1,
+      "reference_ns_per_row": 2038.838867,
+      "candidate_ns_per_row": 925.5776364999999,
+      "latency_change_percent": -54.60270787058721
+    },
+    {
+      "pair": 2,
+      "reference_ns_per_row": 2050.984375,
+      "candidate_ns_per_row": 926.229004,
+      "latency_change_percent": -54.839782531254045
+    },
+    {
+      "pair": 3,
+      "reference_ns_per_row": 2045.2270509999998,
+      "candidate_ns_per_row": 926.1679684999999,
+      "latency_change_percent": -54.71564059124113
+    },
+    {
+      "pair": 4,
+      "reference_ns_per_row": 2041.95166,
+      "candidate_ns_per_row": 925.4555665,
+      "latency_change_percent": -54.6778905383098
+    }
+  ],
+  "not_verified": [
+    "GPU execution",
+    "independent full model imports",
+    "model logits/tokens",
+    "native/fixed-request inference A/B",
+    "HTTP model tests",
+    "M3 sanitizer"
+  ]
+}

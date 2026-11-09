@@ -1,0 +1,20 @@
+{
+  "notice": "Explicitly redacted derived evidence; not raw execution logs. The original CHECKS.json failure is unchanged.",
+  "original_suite": "21 PASS / 1 FAIL",
+  "original_failure": "The updater executable-replacement check observed one empty version string among old/new versions.",
+  "subsequent_controls": [
+    {
+      "label": "unchanged reference",
+      "source": "7c5112243ba73252dd161d49b6b53207a6851940",
+      "rc": 0,
+      "failed_assertions": []
+    },
+    {
+      "label": "candidate recheck",
+      "source": "32e7aa73868f7f12a92a649fffa324d7d198b5f0",
+      "rc": 0,
+      "failed_assertions": []
+    }
+  ],
+  "conclusion": "Both separate controls passed. The original failure is retained; its transient cause remains unresolved. This is not a rerun of the whole CPU suite."
+}
