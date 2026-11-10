@@ -4794,6 +4794,14 @@ DraftResult Engine::draft(const std::string& key, const std::string& after, cons
   Seq& s = *slot.seq;
   // another request on the slot since the reply (dropped for memory, another conversation, the next turn)
   if (slot.gen != a->slot_gen || slot.tokens.empty() || s.cap == 0) return done("no_conversation");
+  struct Note {  // (every return from here: the slot's tokens and capacity as the draft left them, for view(); under the turn)
+    Engine& en;
+    const Slot& sl;
+    ~Note() {
+      en.slot_pos_[&sl - en.slots_.data()].store(int(sl.tokens.size()), std::memory_order_relaxed);
+      en.note_kv(sl);
+    }
+  } note{*this, slot};
   if (end + 64 >= s.limit) return done("no_room");
   // The live state when the draft extends it, else the newest turn checkpoint inside the common prefix (the user
   // turn's for an edited draft, the reply's before the history prefill ran; not the prefix one: no drafter context)
