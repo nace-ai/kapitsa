@@ -252,7 +252,7 @@ def main():
         st = a.ready()
         if not st:
             fails.append("the stand-in was not ready in 20 s")
-            return 1
+            return report(fails)
         check("status", "status", st)
         frames = events(port, tok)
         for fid, t, d in frames:
@@ -353,6 +353,10 @@ def main():
         for srv in servers:
             srv.close()
         shutil.rmtree(tmp, ignore_errors=True)
+    return report(fails)
+
+
+def report(fails):
     for f in fails:
         print("FAIL", f)
     print(f"engine view stand-in: {len(fails)} failures")
