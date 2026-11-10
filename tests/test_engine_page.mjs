@@ -61,7 +61,7 @@ function page(base, hash, storage = "ok") {
     history: {replaceState(_s, _t, url) { loc.hash = url.includes("#") ? url.slice(url.indexOf("#")) : ""; }},
     matchMedia: () => ({matches: false, addEventListener() {}}),
     fetches: 0,
-    fetch: (url, opts) => { ctx.fetches++; return fetch(base + url, opts); },
+    fetch: (url, opts) => { ctx.fetches++; ctx.leak ||= hash.length > 3 && url.includes(hash.slice(3)); return fetch(base + url, opts); },
     performance, setTimeout, clearTimeout, setInterval, clearInterval, TextDecoder, AbortController, console,
   };
   // blocked site data: reading either area throws, as in a browser
@@ -91,7 +91,7 @@ let s = await standIn(port);
 // 1. the key from the link: live, the address bar cleaned, and the view follows the server
 const a = page(s.base, "#t=" + s.token);
 await until(() => a.view().link === "live" && a.view().run, 10000, "the page connects with the link's key");
-check(a.loc.hash === "", "the key is taken out of the address bar");
+check(a.loc.hash === "" && !a.ctx.leak, "the key is taken out of the address bar and never put in a URL");
 const st = await get(s, "/engine/status");
 check(a.view().run === st.run_id, "the page shows the server's run");
 await until(async () => {
@@ -155,8 +155,8 @@ const d = page(s.base, "#t=" + s.token);
 await until(() => d.view().link === "live" && d.view().run, 10000, "a fresh view connects");
 await hook(s, "/_standin/stop", {run_id: d.view().run, then: "exit"});
 await until(() => d.view().pill === "stopped", 10000, "a server that stopped reads stopped");
-await sleep(5000);
-check(d.view().pill === "stopped", `after its retries it still reads stopped (${d.view().pill})`);
+const traced = d.view().rates; await sleep(5000);
+check(d.view().pill === "stopped" && d.view().rates <= traced, `still stopped, no new samples (${d.view().pill}, ${traced} -> ${d.view().rates})`);
 console.log("stopped ok");
 
 await s.stop();
