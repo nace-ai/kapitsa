@@ -224,6 +224,29 @@ void q4_k_parts(const uint8_t* b, uint8_t* codes, float* scale, float* offset) {
 }
 
 void dq_q4_k(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  const float d = f16_at(b), dmin = f16_at(b + 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 144 : src - dst < 256 * sizeof(float);
+  if (std::isfinite(d) && std::isfinite(dmin) && !overlap) {
+    for (int group = 0; group < 8; ++group) {
+      uint8_t scale, minimum;
+      scale_min_k4(group, b + 4, &scale, &minimum);
+      const float32x4_t s = vdupq_n_f32(d * float(scale)), o = vdupq_n_f32(-dmin * float(minimum));
+      for (int lane = 0; lane < 32; lane += 16) {
+        const uint8x16_t packed = vld1q_u8(b + 16 + 32 * (group / 2) + lane);
+        const uint8x16_t codes = group & 1 ? vshrq_n_u8(packed, 4) : vandq_u8(packed, vdupq_n_u8(15));
+        const uint16x8_t lo = vmovl_u8(vget_low_u8(codes)), hi = vmovl_u8(vget_high_u8(codes));
+        float* out = y + 32 * group + lane;
+        vst1q_f32(out, vaddq_f32(vmulq_f32(s, vcvtq_f32_u32(vmovl_u16(vget_low_u16(lo)))), o));
+        vst1q_f32(out + 4, vaddq_f32(vmulq_f32(s, vcvtq_f32_u32(vmovl_u16(vget_high_u16(lo)))), o));
+        vst1q_f32(out + 8, vaddq_f32(vmulq_f32(s, vcvtq_f32_u32(vmovl_u16(vget_low_u16(hi)))), o));
+        vst1q_f32(out + 12, vaddq_f32(vmulq_f32(s, vcvtq_f32_u32(vmovl_u16(vget_high_u16(hi)))), o));
+      }
+    }
+    return;
+  }
+#endif
   uint8_t c[256];
   float s[8], o[8];
   q4_k_parts(b, c, s, o);

@@ -8,6 +8,7 @@
 #include "gguf_iq2_s_test.h"
 #include "gguf_iq2_xs_test.h"
 #include "gguf_iq1_s_test.h"
+#include "gguf_q4_k_test.h"
 #include "gguf_q4_codes_test.h"
 #include "gguf_pack_codes_test.h"
 #include "gguf_pack4_test.h"
@@ -367,6 +368,7 @@ void test_iq4_nl_pages() {
 
 int main() {
   if (q3_k_test::run()) return 1;
+  if (q4_k_test::run()) return 1;
   if (iq3_s_test::run()) return 1;
   if (iq2_s_test::run()) return 1;
   if (iq2_xs_test::run()) return 1;
