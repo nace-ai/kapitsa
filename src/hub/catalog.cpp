@@ -257,11 +257,11 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {"16gb"},
        .variants = {
+           // KQuant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
+           // quantized weights rebuilt by importance-weighted scale search, every other file the same content, the
+           // MTP head included in the repo. KL from bf16 0.059 against 0.096, GSM8K (1319) 0.952 against 0.948,
+           // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
            {.name = "4bit",
-            // KQuant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
-            // quantized weights rebuilt by importance-weighted scale search, every other file the same content, the
-            // MTP head included in the repo. KL from bf16 0.059 against 0.096, GSM8K (1319) 0.952 against 0.948,
-            // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant",
             .revision = "37e804f90e368a4de866bc34650b9dde67a78c8e",
