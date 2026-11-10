@@ -1,4 +1,4 @@
-# Results, 2026-11-10: a KQuant pack for Qwen3.8-27B against the catalog's 4-bit pack (speed held)
+# Results, 2026-11-10: a KQuant pack for Qwen3.8-27B against the catalog's 4-bit pack
 
 The catalog's 4-bit Qwen3.8-27B is `lmstudio-community/Qwen3.8-27B-MLX-4bit` at `6067b15c`. The KQuant pack keeps its layout and rebuilds only
 the quantized weights, scales and biases of the language model, so the 15.13 GB of language-model weights are the same size. It is
@@ -11,7 +11,7 @@ The tokenizer files and chat template are those of `Qwen/Qwen3.8-27B` at `375618
 catalog pack's `tokenizer.json` differs from the base's on Devanagari and Thai ids (it lost `\p{M}`); English, code and math ids are identical, so the
 quality and speed numbers below stand for those (every run here used the catalog pack's tokenizer; English, code, math, CJK, emoji and RTL text were compared id by id, Devanagari and Thai were not measured), and nothing here claims Indic or Thai quality. The chat template renders the same text as the catalog's and
 differs only by the `{% generation %}` markers. This record
-carries the quality result. The speed result is held, see below.
+carries the quality and the speed result.
 
 ## Quality
 
@@ -31,43 +31,35 @@ KQuant gets right, 13 only the catalog pack (McNemar z = 0.73, not significant):
 [kq27_4.json](kq27_4.json), [cat27_4.gsm_full.json](cat27_4.gsm_full.json), [kq27_4.gsm_full.json](kq27_4.gsm_full.json). Both packs were scored on
 Modal (H100) from their text weights, not the vision tower the repos also carry.
 
-## Speed: held
+## Speed
 
-No speed claim is made yet. B's speed legs ran the KQuant arm from a pack directory that lacked `mtplx_runtime.json` (the shipped repo has it),
-so the KQuant arm did not run the same way users will. The legs are kept in [legs/](legs) for the record and are not used by the card; the one leg
-run in the shipping shape is below. What the held legs showed, for the record only (Kapitsa 0.2.32 `e728524`, MacBook Pro M5 Pro 48 GB,
-macOS 26.5.2, AC power mode 2; order `B A B A B A`, B KQuant, A catalog; `verdict27.py` recomputes this from the leg files):
+Sampled writing is slower with KQuant, greedy writing is faster, and reading a 4K prompt is about the same. Three KQuant legs against three catalog legs
+(Kapitsa 0.2.32 `e728524`, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, AC power mode 2; B is KQuant, A is the catalog pack; order `B A B A B A` and then one more B leg;
+`verdict27.py` recomputes every figure here from the leg files). Every leg ran the pack directory with the catalog's DFlash2 drafter and the MTP head.
 
 | | KQuant | Catalog | Change |
 | --- | ---: | ---: | ---: |
-| Decode T 0.6, tok/s | 74.4 | 80.0 | 6.9% slower |
-| Decode greedy, tok/s | 91.2 | 82.8 | 10.2% faster |
-| Decode pooled, tok/s | 82.8 | 81.4 | 1.8% faster |
-| Prefill 4K, tok/s | 738.9 | 719.3 | 2.7% faster |
+| Decode T 0.6, tok/s | 72.5 | 80.0 | 9.4% slower |
+| Decode greedy, tok/s | 91.0 | 82.8 | 9.9% faster |
+| Decode pooled, tok/s | 81.7 | 81.4 | 0.4% faster |
+| Prefill 4K, tok/s | 735.0 | 719.3 | 2.2% faster |
 
-That is two valid KQuant legs (1-B, 3-B) against three catalog legs (2-A, 4-A, 6-A); leg 5-B is void (a foreign `Application` process at 51% CPU).
-Leg 6-A is valid but reads high at T 0.6 (83.8) and low at prefill (677 tok/s); without it the catalog means are 78.0 and 740.6 tok/s, and KQuant is 4.6%
-slower at T 0.6 and 0.2% slower at prefill. A top-up KQuant leg ([legs-void-topup/](legs-void-topup)) is void (a `Python` process at 67% CPU that was not
-there at the start). The pooled and prefill differences are inside the spread of the legs, so they do not support a speed claim either way.
+The pooled figure averages the two modes and hides both halves; the card does not use it. Sampled legs vary widely on this Mac: KQuant 76.7, 72.2 and 68.5 tok/s
+(legs 1-B, 3-B and the shipping-shape leg), catalog 77.6, 78.5 and 83.8 (2-A, 4-A, 6-A). Leg 6-A is valid but reads high at T 0.6 (83.8) and low at prefill
+(677 tok/s); without it the catalog means are 78.0 sampled (KQuant 7.2% slower), 82.3 greedy (KQuant 10.6% faster) and 740.6 prefill (KQuant 0.8% slower).
+The sampled slowdown is in both versions.
 
-### The shipping-shape leg
+Two legs are void and in no mean: leg 5-B (a foreign `Application` process at 51% CPU) and a top-up KQuant leg ([legs-void-topup/](legs-void-topup); a `Python` process at 67% CPU
+that was not there at the start).
 
-The six legs above ran the KQuant pack without `mtplx_runtime.json`; the shipped repo has it. One more KQuant leg ran with the pack as it ships (the staged
-repo at `cf91c446`, every file equal by SHA-256, see [legs-shipping-shape/pack-sha256.txt](legs-shipping-shape/pack-sha256.txt)): the server log shows the MTP head loaded with the trunk
-hidden state post-norm and the base chat template loaded, `LOCKPROOF` ok, AC power mode 2, peak 16.53 GB. It is valid and kept out of the means above.
-
-| Shipping-shape KQuant, 1 leg | tok/s |
-| --- | ---: |
-| Decode T 0.6 | 68.5 |
-| Decode greedy | 90.5 |
-| Prefill 4K | 727.3 (time to first token 5,685 ms) |
-
-On this Mac the sampled legs spread widely: KQuant 68.5 (this leg), 72.2 and 76.7 tok/s; catalog 77.6, 78.5 and 83.8. Greedy decode sits with the other KQuant legs (90.4, 92.0); prefill
-is inside the spread. The range set before the leg was 72 to 77 sampled and 90 to 92 greedy; sampled is outside it, so the speed row is withheld and the card carries no speed
-claim. This is one leg, so the record does not say the pack is slower; it says the speed question is not settled. The leg's stderr also carries the bench
-warning "Another Kapitsa is running (pid 39505)" (see [legs-shipping-shape/1-B.err](legs-shipping-shape/1-B.err)); the leg passed the harness's foreign-process check.
+The first two KQuant legs (1-B, 3-B) ran the pack directory without `mtplx_runtime.json`; the shipped repo has it. The third KQuant leg, the shipping-shape leg
+([legs-shipping-shape/](legs-shipping-shape)), ran the pack as it ships (the staged repo at `cf91c446`, every file equal by SHA-256, see
+[pack-sha256.txt](legs-shipping-shape/pack-sha256.txt)): the server log shows the MTP head loaded with the trunk hidden state post-norm and the base chat template loaded,
+`LOCKPROOF` ok, AC power mode 2, peak 16.53 GB. Its numbers: decode T 0.6 68.5, greedy 90.5, prefill 4K 727.3 tok/s (time to first token 5,685 ms). It has the lowest
+sampled figure of the six legs of either pack, and the two earlier KQuant legs are in the means as run, so the record does not say how much of the sampled gap the missing file explains.
+The `.err` file of each leg carries the bench's note "Another Kapitsa is running": it is the leg's own `kapitsa serve`, which `kapitsa bench` measures, not a foreign process.
 
 The harness is [ab_legs_k436.sh](ab_legs_k436.sh), started by [legs_27b_six4.sh](legs_27b_six4.sh); every leg logs a `LOCKPROOF` line (the `lockf` holder is in the harness's process ancestry) in [legs/legs.log](legs/legs.log).
 
-The card draws its numbers from [results.json](results.json) (which also carries `shipping_shape_leg`). Its `speed_held` key keeps the speed row, the speed headline and the Speed section off the
-card, and it stays: the shipping-shape leg did not settle the speed question.
+The card draws its numbers from [results.json](results.json). Its headline, top table and chart carry no speed (`speed_headline` false): this KQuant pack is an opt-in repo, and the
+Speed section says the sampled slowdown and the greedy gain in words.

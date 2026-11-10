@@ -1,8 +1,8 @@
-"""27B verdict: pooled means over valid legs (six4 + top1), with and without 6-A. Valid = 'ok' in legs.log. B = KQuant, A = standard."""
+"""27B verdict: means over valid legs (six4 + the shipping-shape leg), with and without 6-A. Valid = 'ok' in legs.log. B = KQuant, A = standard."""
 import json, re, sys, os
 R = os.path.dirname(os.path.abspath(__file__))  # this record directory
 legs = []  # (dir, tag, arm, status)
-for d in ("legs", "legs-void-topup"):
+for d in ("legs", "legs-void-topup", "legs-shipping-shape"):  # void-topup is void-foreign (in no mean); shipping-shape is the third valid KQuant leg
     p = f"{R}/{d}/legs.log"
     if not os.path.exists(p): continue
     for l in open(p):
@@ -18,7 +18,7 @@ def table(excl):
     for arm in "AB":
         L = [(d, t) for d, t, a, s in legs if a == arm and s == "ok" and not (d, t) in excl]
         V = [get(d, t) for d, t in L]
-        out[arm] = dict(n=len(L), legs=[t for _, t in L], samp=mean([v[0] for v in V]), greedy=mean([v[1] for v in V]),
+        out[arm] = dict(n=len(L), legs=[(t if d == 'legs' else d.replace('legs-', '') + ':' + t) for d, t in L], samp=mean([v[0] for v in V]), greedy=mean([v[1] for v in V]),
                         pooled=mean([x for v in V for x in v[:2]]), pf=mean([v[2] for v in V]), ttft=mean([v[3] for v in V]))
     return out
 for name, excl in (("as run (6-A kept)", set()), ("without 6-A", {("legs", "6-A")})):

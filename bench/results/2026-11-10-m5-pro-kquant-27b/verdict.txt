@@ -1,8 +1,8 @@
-as run (6-A kept): A legs ['2-A', '4-A', '6-A'] B legs ['1-B', '3-B']
-  decode sampled 74.4 vs 80.0 (-6.9%), greedy 91.2 vs 82.8 (+10.2%), pooled 82.8 vs 81.4 (+1.8%)
-  4K prefill 738.9 vs 719.3 tok/s (+2.7%), TTFT 5593 vs 5757 ms
+as run (6-A kept): A legs ['2-A', '4-A', '6-A'] B legs ['1-B', '3-B', 'shipping-shape:1-B']
+  decode sampled 72.5 vs 80.0 (-9.4%), greedy 91.0 vs 82.8 (+9.9%), pooled 81.7 vs 81.4 (+0.4%)
+  4K prefill 735.0 vs 719.3 tok/s (+2.2%), TTFT 5624 vs 5757 ms
   rule: decode pooled >= -2%: PASS; prefill >= -5%: PASS; KL lower (0.0349 vs 0.0544) PASS; GSM8K-100 0.94 vs 0.94 PASS
-without 6-A: A legs ['2-A', '4-A'] B legs ['1-B', '3-B']
-  decode sampled 74.4 vs 78.0 (-4.6%), greedy 91.2 vs 82.3 (+10.9%), pooled 82.8 vs 80.2 (+3.3%)
-  4K prefill 738.9 vs 740.6 tok/s (-0.2%), TTFT 5593 vs 5582 ms
+without 6-A: A legs ['2-A', '4-A'] B legs ['1-B', '3-B', 'shipping-shape:1-B']
+  decode sampled 72.5 vs 78.0 (-7.2%), greedy 91.0 vs 82.3 (+10.6%), pooled 81.7 vs 80.2 (+1.9%)
+  4K prefill 735.0 vs 740.6 tok/s (-0.8%), TTFT 5624 vs 5582 ms
   rule: decode pooled >= -2%: PASS; prefill >= -5%: PASS; KL lower (0.0349 vs 0.0544) PASS; GSM8K-100 0.94 vs 0.94 PASS
