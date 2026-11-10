@@ -35,7 +35,7 @@ Modal (H100) from their text weights, not the vision tower the repos also carry.
 
 Sampled writing is slower with KQuant, greedy writing is faster, and reading a 4K prompt is about the same. Three KQuant legs against three catalog legs
 (Kapitsa 0.2.32 `e728524`, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, AC power mode 2; B is KQuant, A is the catalog pack; order `B A B A B A` and then one more B leg;
-`verdict27.py` recomputes every figure here from the leg files). Every leg ran the pack directory with the catalog's DFlash2 drafter and the MTP head.
+`verdict27.py` recomputes every figure here from the leg files). Every leg ran the pack directory with the DFlash2 drafter `incoai/Qwen3.8-27B-DFlash2` at `015e7956` (the one the 0.2.32 catalog uses, the same files in both arms' directories, SHA-256 of `model.safetensors` starts `67fc76d68dc5`) and the MTP head; it is not the `nace-ai` retrain a later catalog attaches, so absolute speeds will differ on that drafter, and the comparison is between the two packs on the same drafter.
 
 | | KQuant | Catalog | Change |
 | --- | ---: | ---: | ---: |
@@ -57,7 +57,7 @@ The first two KQuant legs (1-B, 3-B) ran the pack directory without `mtplx_runti
 [pack-sha256.txt](legs-shipping-shape/pack-sha256.txt)): the server log shows the MTP head loaded with the trunk hidden state post-norm and the base chat template loaded,
 `LOCKPROOF` ok, AC power mode 2, peak 16.53 GB. Its numbers: decode T 0.6 68.5, greedy 90.5, prefill 4K 727.3 tok/s (time to first token 5,685 ms). It has the lowest
 sampled figure of the six legs of either pack, and the two earlier KQuant legs are in the means as run, so the record does not say how much of the sampled gap the missing file explains.
-The `.err` file of each leg carries the bench's note "Another Kapitsa is running": it is the leg's own `kapitsa serve`, which `kapitsa bench` measures, not a foreign process.
+Every leg's JSON carries a `CONTENTION` flag whose top contributor is `kapitsa`, and the `INVALID: server ... did not start` line for `KAPITSA_BENCH_SERVER`; both are expected, because the harness measures its own `kapitsa serve` (the bench prints "Another Kapitsa is running" in every leg of both arms for the same reason). The shipping-shape leg, and the void top-up leg, also list `com.apple.WebKit.GPU` in `gpu_users`, which none of the six earlier legs does (they list `kapitsa` and apps such as Slack, Edge or Claude). A browser GPU process sharing the GPU is a plausible cause of this leg's low sampled number, so 68.5 is not read as the pack alone.
 
 The harness is [ab_legs_k436.sh](ab_legs_k436.sh), started by [legs_27b_six4.sh](legs_27b_six4.sh); every leg logs a `LOCKPROOF` line (the `lockf` holder is in the harness's process ancestry) in [legs/legs.log](legs/legs.log).
 
