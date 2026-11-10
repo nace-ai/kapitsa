@@ -46,6 +46,8 @@ KAPITSA_API kapitsa_status kapitsa_engine_create(const char* options_json,
 KAPITSA_API void kapitsa_engine_destroy(kapitsa_engine* engine);
 /* Request: messages (required), tools, template_kwargs, max_tokens,
  * temperature, top_p, top_k, seed, stop. Unknown fields are rejected.
+ * Requests may be created concurrently from the same live engine; its request
+ * defaults are immutable after loading.
  * Requests are one-shot. Distinct requests may generate on different threads.
  * Destroy must not race generate or cancel; cancellation does not wait for completion. */
 KAPITSA_API kapitsa_status kapitsa_request_create(kapitsa_engine* engine,
