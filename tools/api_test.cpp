@@ -2077,6 +2077,30 @@ void new_conversation_slot_unit() {
   check(pick_new_conversation_slot(prefix, "a") == 0,
         "new conversation: compacted (the key's slot with the same system prompt) keeps its checkpoint");
   check(pick_new_conversation_slot({{false, 0, "", false, 1}}, "a") == -1, "new conversation: every slot busy: none");
+  // by_key: the key chose the slot, so the SSD's entries of that key go first (Engine::disk_replaced)
+  bool by = true;
+  check(pick_new_conversation_slot(four, "a", &by) == 0 && by, "new conversation: A's key chose A's slot (by_key)");
+  by = false;
+  check(pick_new_conversation_slot(four, "b", &by) == 1 && by,
+        "new conversation: the key's slot is also the least recently used: still by_key");
+  check(pick_new_conversation_slot(four, "", &by) == 1 && !by, "new conversation: no key: not by_key");
+  check(pick_new_conversation_slot(four, "e", &by) == 1 && !by, "new conversation: a key no slot holds: not by_key");
+  check(pick_new_conversation_slot(with_empty, "a", &by) == 4 && !by, "new conversation: an empty slot taken: not by_key");
+  check(pick_new_conversation_slot(with_one_off, "a", &by) == 5 && by,
+        "new conversation: the key's one-off over another one-off: by_key");
+  std::vector<V> one_key = four;
+  for (V& v : one_key) v.key = "k";
+  check(pick_new_conversation_slot(one_key, "k", &by) == 1 && !by,
+        "new conversation: every slot holds the key (one key for everything): not by_key, as without it");
+  one_key[2].usable = false, one_key[2].key = "x";
+  check(pick_new_conversation_slot(one_key, "k", &by) == 1 && !by,
+        "new conversation: only a busy slot holds another key: not by_key");
+  std::vector<V> shared = four;
+  shared[2].key = "a";
+  check(pick_new_conversation_slot(shared, "a", &by) == 2 && by,
+        "new conversation: two slots with the key and others without: the key's least recently used, by_key");
+  check(pick_new_conversation_slot({{true, 2, "a", false, 1}}, "a", &by) == 0 && !by,
+        "new conversation: one slot (nothing to tell it from): not by_key");
 }
 
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs

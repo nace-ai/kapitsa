@@ -323,8 +323,11 @@ struct NewConversationSlot {
 // the lowest rank; within it the slot whose conversation has that key (the request continues no slot, so the
 // conversation the key named is over: compacted, or started again on a changed system prompt), then one with the
 // shared prefix, then the least recently used. A key never moves a conversation ahead of a slot of a lower rank, so no
-// more is evicted than without it, and "" matches no slot.
-int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key);
+// more is evicted than without it, and "" matches no slot. by_key: set when the key chose the slot (it holds the key
+// and another slot of its rank does not), so its conversation, and the SSD's entries of that key, are taken as over;
+// when every slot of the rank holds the key (a client that sends one key for everything), it tells nothing.
+int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key,
+                               bool* by_key = nullptr);
 
 // What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).
 struct DraftResult {
@@ -496,9 +499,10 @@ class Engine {
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
   // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys; key: its
-  // prompt_cache_key ("" if none)
+  // prompt_cache_key ("" if none); by_key: set when a new conversation took the slot because it held that key
+  // (pick_new_conversation_slot)
   Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr, int loops = 0,
-                  const std::string& key = "");
+                  const std::string& key = "", bool* by_key = nullptr);
   // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
   // reusable prefix: the common prefix, cut before any image that is not the same image in both
   static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
@@ -543,8 +547,12 @@ class Engine {
   // A request is about to replace the slot's state from row `start` (another conversation, or memory for another):
   // what it would lose and the SSD lacks is copied now and written in the background. wait_write: the caller replaces
   // the slot next and must know whether it landed (a history prefill taking it): the copy is written before returning,
-  // with the GPU turn given up, and the slot is marked saved only if it did
-  void disk_leaving(Slot& slot, int start, bool wait_write = false);
+  // with the GPU turn given up, and the slot is marked saved only if it did. replaced: a new conversation under the
+  // slot's prompt_cache_key replaces it (disk_replaced): its entry is written as one that goes first
+  void disk_leaving(Slot& slot, int start, bool wait_write = false, bool replaced = false);
+  // A new conversation took slot for the prompt_cache_key it holds (pick_slot's by_key) and resumes nothing from the
+  // SSD: the SSD's entries of that key go first when room is needed (pcache::Store::demote)
+  void disk_replaced(const Slot& slot);
   // After disk_leaving(slot, 0): false when the slot holds a conversation worth saving that the SSD does not have
   bool disk_safe_to_replace(const Slot& slot);
   // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
