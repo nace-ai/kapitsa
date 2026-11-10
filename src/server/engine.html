@@ -115,8 +115,8 @@ applyTheme();
 </main>
 <script>
 "use strict";
-// The engine view: what `kapitsa serve` holds and does, live, from its control API (docs/control-socket.md, "The engine
-// view") at /engine/status and /engine/events. It reads only: stop and switch go through the control socket, never the
+// The engine view: what `kapitsa serve` holds and does, live, from its control API (modelled on docs/control-socket.md)
+// at /engine/status and /engine/events. It reads only: stop and switch go through the control socket, never the
 // inference port. Every request carries this run's key, which kapitsa serve prints in the page's link (#t=...) and keeps in a file only its
 // user can read; the page keeps it for this tab only and takes it out of the address bar.
 const $ = id => document.getElementById(id);
@@ -139,7 +139,7 @@ const key = (() => {
   }
   return store.get("kapitsa.engine.key", "sessionStorage") || "";
 })();
-const auth = () => ({Authorization: "Bearer " + key});
+const auth = () => key ? {Authorization: "Bearer " + key} : {};
 
 function apply(status, why) {  // a full status: at connect, or from a reset
   if (why === "run_changed" || (S.status && S.status.run_id !== status.run_id)) { S.done = []; S.rates = []; }
@@ -202,7 +202,7 @@ async function stream(lastId, on) {
     const j = await r.json().catch(() => ({}));
     throw {status: r.status, error: j.error || {}, retry: Number(r.headers.get("Retry-After")) || 0};
   }
-  S.link = "live";
+  S.link = "live"; $("msg").textContent = "";
   const rd = r.body.getReader(), dec = new TextDecoder();
   let buf = "";
   for (;;) {
@@ -232,7 +232,8 @@ async function connect() {
   for (;;) {
     if (!last) {
       try {
-        const r = await fetch("/engine/status", {headers: auth(), cache: "no-store"});
+        const ac = new AbortController(), t = setTimeout(() => ac.abort(), 10000);
+        const r = await fetch("/engine/status", {headers: auth(), cache: "no-store", signal: ac.signal}).finally(() => clearTimeout(t));
         const j = await r.json();
         if (!r.ok) throw {status: r.status, error: j.error || {}};
         apply(j);
@@ -257,13 +258,12 @@ async function connect() {
 
 function refused(e) {
   if (!e || !e.status) { S.link = "down"; return; }
-  if (e.status === 503) { S.link = "down"; S._retry = e.retry || 5;
-    $("msg").textContent = "too many engine views are open: this one retries"; return; }
+  if (e.status !== 401 && e.status !== 403) { S.link = "down"; S._retry = e.retry || 5;
+    $("msg").textContent = e.status === 503 ? "too many engine views are open: this one retries"
+      : `the server answered ${e.error.message || "HTTP " + e.status}: retrying`; return; }
   S.link = "refused";
-  $("msg").textContent = e.status === 403
-    ? (key ? "this link's key is not this server's (it restarted?): open the link kapitsa serve printed"
-           : "open this page from the link kapitsa serve prints: it carries this run's key")
-    : `the server refused the view: ${e.error.message || "HTTP " + e.status}`;
+  $("msg").textContent = key ? "this link's key is not this server's (it restarted?): open the link kapitsa serve printed"
+    : "open this page from the link kapitsa serve prints: it carries this run's key";
 }
 
 // ---------------------------------------------------------------- drawing, every half second

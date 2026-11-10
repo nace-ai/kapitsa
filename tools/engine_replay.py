@@ -320,7 +320,7 @@ def handler(inst):
             why = self.peer_problem()
             if why:
                 return self.fail(403, "forbidden_peer", why, close=True)
-            # as the real gate (src/server/engine_view.cpp): 404 and 405 before the token, which all but the page need
+            # modelled on the real gate (#1133's src/server/engine_view.cpp): 404 and 405 before the token, which all but the page need
             allowed = ROUTES.get(path)
             if allowed is None:
                 return self.fail(404, "not_found", f"no {path} here", close=method != "GET")
