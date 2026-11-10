@@ -1,0 +1,46 @@
+{
+  "evidence_kind": "redacted derived summary, not raw logs",
+  "source_commit": "cea2b64784d12ad187f3a584e4847178c9d8c805",
+  "build": "Explicit CMake Release configure; vk cpu-tests build list",
+  "cpu_checks": [
+    "PASS api_test",
+    "PASS prefix_cache_test",
+    "PASS fn_store_test",
+    "PASS fn_dflash_test",
+    "PASS tokenizer_test",
+    "PASS iq_layout_test",
+    "PASS nh_quant_q8_test",
+    "PASS remote_test",
+    "PASS cluster_test",
+    "PASS split_place_test",
+    "PASS gemm_slices_test",
+    "PASS ffn_share_test",
+    "PASS ws_upgrade_test",
+    "PASS test_server_cli",
+    "PASS test_sidecar",
+    "PASS test_bench",
+    "PASS test_update",
+    "PASS test_community",
+    "PASS test_reasoning",
+    "PASS test_pr_size",
+    "PASS test_logit_compare",
+    "PASS test_sampled_tokens_harness",
+    "PASS test_structured_cli",
+    "0 failed"
+  ],
+  "steps": [
+    {
+      "label": "configure",
+      "rc": 0
+    },
+    {
+      "label": "vk-cpu",
+      "rc": 0
+    },
+    {
+      "label": "prek",
+      "rc": 0
+    }
+  ],
+  "scope": "The skill CPU test list, not every optional AGENTS.md check. No full-model GPU validation in this record."
+}
