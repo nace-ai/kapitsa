@@ -265,17 +265,23 @@ int main() {
         httplib::Client c("127.0.0.1", port);
         c.set_read_timeout(20, 0);
         c.set_default_headers(run_key);
-        bool streaming = false, counted = false;  // (only a 200's stream counts: a 503's body is not a view)
-        c.Get(
-            "/engine/events",
-            [&](const httplib::Response& head) {
-              streaming = head.status == 200;
-              return true;
-            },
-            [&](const char*, size_t) {
-              if (streaming && !counted) counted = true, ++open;
-              return hold.load();
-            });
+        // A viewer that left a moment ago (the checks above) may still hold its place on the server, so a 503 is
+        // retried, as the page does (#1162). Only a 200's stream counts: a 503's body is not a view.
+        for (int attempt = 0; attempt < 100 && hold.load(); ++attempt) {
+          bool streaming = false, counted = false;
+          c.Get(
+              "/engine/events",
+              [&](const httplib::Response& head) {
+                streaming = head.status == 200;
+                return true;
+              },
+              [&](const char*, size_t) {
+                if (streaming && !counted) counted = true, ++open;
+                return hold.load();
+              });
+          if (counted) break;
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
       });
     bus.publish("log", {{"level", "info"}, {"message", "open"}});
     for (int i = 0; i < 100 && open < kMaxEngineViews; ++i) {
