@@ -37,10 +37,10 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## Features
 
-- 🏆 **Fastest decode in 33 of 38 Mac and model pairs**: 351 tok/s on Qwen3.6 35B (M5 Max) ([how](docs/kflash.md))
+- 🏆 **Fastest decode in 33 of 38 Mac and model pairs**: 351 tok/s on Qwen3.6 35B (M5 Max) ([numbers](docs/benchmarks.md), [how](docs/kflash.md))
 - 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
-- 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s
+- 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
 - 🎯 **Closer to the original**: KQuant 4B and 9B, same size, about 10% faster on an M5 Pro ([numbers](#kquant))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
 - ⚡ **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
