@@ -37,16 +37,13 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## Features
 
-- **351 tok/s on Qwen3.6 35B-A3B (M5 Max), the fastest decode in 33 of 38 model and Mac pairs.** KFlash, tree speculative decoding: one verify pass checks a tree of the drafter's guesses, with a DFlash2, DFlash, MTP, DSpark or LiLiCorr drafter behind every model that ships one ([how it works](docs/kflash.md)).
-- **Downloads closer to the original model, at the same size.** The Qwen3.5 4B and 9B packs are KQuant builds: the same MLX 4-bit files, a third less error on the 4B and half on the 9B ([KQuant](#kquant)).
-- **A 180B model on a 48 GB Mac, at 61 tok/s (M5 Pro).** Its routed experts stream from the SSD, as many as the budget holds.
-- **A 16K follow-up after a restart starts in 0.16 s instead of 17 s.** Conversations stay on the SSD (`--disk-cache`).
-- **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
-- **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
-- **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider` and `kapitsa goose` start on the local model.
-- **One calibrated probability per option.** `kapitsa-systemone` serves the [Drex decision models](https://github.com/nace-ai/drex-decision-models) that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([API](docs/systemone.md), [setup](docs/drex-max.md)).
-- **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
-- **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.
+- 🏆 **Fastest on a Mac**: 351 tok/s on Qwen3.6 35B (M5 Max) ([how](docs/kflash.md))
+- 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`
+- 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
+- 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s
+- 🎯 **Closer to the original**: KQuant 4B and 9B, same size, about 10% faster ([numbers](#kquant))
+- 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
+- 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
 
 ### KQuant
 
