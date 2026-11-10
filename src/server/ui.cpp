@@ -1,5 +1,6 @@
 // The command line's screens in a terminal (ui.h).
 #include "server/ui.h"
+#include "server/activity.h"
 
 #include "api/clients.h"
 #include "metal/gpu.h"
@@ -770,6 +771,8 @@ struct Meter {
   int images = 0;
   std::shared_ptr<LiveDecode> live = std::make_shared<LiveDecode>();
   std::deque<std::array<double, 3>> samples;  // the dashboard thread's: (ms, tokens, cycles), the last 1.5 s
+  std::shared_ptr<server::Activity::Request> act;  // its events on the bus (src/server/activity.h)
+  bool dash = false;                                // on the terminal UI's dashboard and request log
 };
 
 namespace {
@@ -977,8 +980,17 @@ void dash_remove(const std::shared_ptr<Meter>& m) {
 }  // namespace
 
 std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r) {
-  if (!g_serve_ui) return nullptr;
+  server::Activity* act = server::activity();
+  if (!g_serve_ui && !act) return nullptr;
   auto m = std::make_shared<Meter>();
+  if (act) {
+    const std::string& p = req.path;
+    const char* api = p.rfind("/api/", 0) == 0 ? "ollama" : p.rfind("/v1/messages", 0) == 0 ? "anthropic" : "openai";
+    m->act = act->start(api, req.get_header_value("User-Agent"));
+    m->live = m->act->live;
+  }
+  if (!g_serve_ui) return m;
+  m->dash = true;
   m->client = client_of(req.get_header_value("User-Agent"));
   m->images = images_in(r.messages);
   {
@@ -998,6 +1010,8 @@ void token(const std::shared_ptr<Meter>& m) {
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   if (r.completion_tokens > 1 && r.decode_ms > 0) g_rate = (r.completion_tokens - 1) / (r.decode_ms / 1000);
   if (!m) return;
+  if (server::Activity* act = server::activity()) act->finish(m->act, r);
+  if (!m->dash) return;
   dash_remove(m);
   const time_t now = time(nullptr);
   char at[16];
