@@ -566,7 +566,8 @@ static struct sigaction g_stop_prev[3];
 static int g_stop_pipe[2] = {-1, -1};
 static volatile sig_atomic_t g_stopping = 0;
 static server::ControlServer* g_control = nullptr;  // the control socket, once it listens (never freed)
-static std::atomic<bool> g_stop_exit0{false};       // POST /stop on an instance an app or launchd owns: exit 0
+// POST /stop before the stop handlers exist (starting, the first load): run_service ends at its next step, exit 0
+static std::atomic<bool> g_stop_requested{false};
 
 static void pass_signal_on(int sig) {
   for (int i = 0; i < 3; ++i)
@@ -581,23 +582,33 @@ static void on_stop_signal(int sig) {
   if (again || write(g_stop_pipe[1], &c, 1) != 1) pass_signal_on(sig);
 }
 
-static std::atomic<bool> g_stop_handlers{false};  // SaveOnStop's are installed
+static bool g_stop_handlers = false;  // SaveOnStop's are installed (under g_stop_mu)
 
 // The thread that stops the server: a stop signal or POST /stop (a 0 byte, request_stop()) wakes it once. It saves,
 // then takes its course. A signal's: the terminal UI's handler (the status block off the screen,
-// term::guard_signals), else the default (the process ends as killed by the signal). POST /stop's: a terminal's
-// server ends as Ctrl-C ends it, any other exits 0. It runs from before the control socket listens, so a stop while
-// the model loads, or with SIGINT ignored (a script's background job), works the same.
+// term::guard_signals), else the default (the process ends as killed by the signal). POST /stop's: the status block
+// off the screen and exit 0, however SIGINT is set: a client that asked for a stop never sees a death by signal. One
+// before the stop handlers exist (starting, the first load) only marks the stop: run_service sees it at its next step
+// and returns 0 through the normal exit.
 static bool start_stop_thread() {
   static const bool ok = [] {
     if (pipe(g_stop_pipe) != 0) return false;
     for (int fd : g_stop_pipe) fcntl(fd, F_SETFD, FD_CLOEXEC);
     std::thread([] {
       char c = 0;
-      ssize_t r;
-      while ((r = read(g_stop_pipe[0], &c, 1)) < 0 && errno == EINTR) {
+      for (;;) {
+        ssize_t r;
+        while ((r = read(g_stop_pipe[0], &c, 1)) < 0 && errno == EINTR) {
+        }
+        if (r != 1) return;
+        if (c != 0) break;
+        std::lock_guard<std::mutex> lk(g_stop_mu);
+        if (g_stop_handlers) break;
+        if (!g_stop_requested.exchange(true)) {  // (run_service checks it after taking g_stop_mu: none is missed)
+          if (g_control) g_control->mark_stopping();
+          server::publish_state("stopping", nullptr);
+        }
       }
-      if (r != 1) return;
       g_stopping = 1;  // (a further signal ends the process at once)
       if (g_control) g_control->mark_stopping();
       {
@@ -610,15 +621,7 @@ static bool start_stop_thread() {
       save_before_exit();
       if (g_control) g_control->stop();  // (its socket file goes with the process)
       if (c != 0) return pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends it
-      if (g_stop_exit0) _exit(0);
-      if (g_stop_handlers) {  // the handlers SaveOnStop replaced: the one before them, as for Ctrl-C
-        if (g_stop_prev[0].sa_handler != SIG_IGN) pass_signal_on(SIGINT);
-        _exit(0);
-      }
-      // before the stop handlers (the first load): SIGINT as it is now set, the terminal UI's handler (the status block
-      // off the screen, the cursor back) or the default; exit 0 when SIGINT is ignored
-      struct sigaction now {};
-      if (sigaction(SIGINT, nullptr, &now) == 0 && now.sa_handler != SIG_IGN) raise(SIGINT);
+      term::clear_for_exit();
       _exit(0);
     }).detach();
     return true;
@@ -649,10 +652,14 @@ struct SaveOnStop {
       if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &sa, nullptr);
     }
     handlers_ = true;
+    std::lock_guard<std::mutex> lk(g_stop_mu);
     g_stop_handlers = true;
   }
   ~SaveOnStop() {
-    g_stop_handlers = false;
+    {
+      std::lock_guard<std::mutex> lk(g_stop_mu);
+      g_stop_handlers = false;
+    }
     if (handlers_)
       for (int i = 0; i < 3; ++i)
         if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &g_stop_prev[i], nullptr);
@@ -683,7 +690,6 @@ class ServeControl : public server::ControlApi {
     strftime(at, sizeof at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     id_.started_at = at;
   }
-  bool foreground() const { return id_.lifecycle == "foreground"; }
   void attach(const std::shared_ptr<ModelManager>& mgr) { mgr_.attach(mgr); }
 
   nlohmann::json status() override {
@@ -692,10 +698,7 @@ class ServeControl : public server::ControlApi {
   server::ControlReply stop() override {
     return {202, {{"run_id", server::events()->run_id()}, {"state", "stopping"}}};
   }
-  void after_stop() override {
-    g_stop_exit0 = !foreground();  // a terminal's server ends as Ctrl-C would end it
-    request_stop();
-  }
+  void after_stop() override { request_stop(); }
   server::ControlReply model_switch(const nlohmann::json& r) override {
     if (server::ControlReply no = server::switch_refusal(id_.config, r); no.status) return no;
     const std::shared_ptr<ModelManager> mgr = mgr_.get();  // (held for the switch only)
@@ -1135,7 +1138,14 @@ int ni::server::run_service(Options o) {
       fprintf(stderr, "warning: %s: this server has no control socket\n", why.c_str());  // (the unnamed default)
   // NI_CONTROL_TEST_HOLD_MS: tests/test_control_socket.py holds the server in `starting` to stop it there
   if (const char* d = getenv("NI_CONTROL_TEST_HOLD_MS"))
-    std::this_thread::sleep_for(std::chrono::milliseconds(std::clamp(atoi(d), 0, 60000)));
+    for (int left = std::clamp(atoi(d), 0, 60000); left > 0 && !g_stop_requested; left -= 50)
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  // POST /stop while starting: the normal exit (the socket goes at exit, the status 0)
+  const auto stop_asked = [] {
+    term::clear_for_exit();
+    return 0;
+  };
+  if (g_stop_requested) return stop_asked();
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
@@ -1426,6 +1436,7 @@ int ni::server::run_service(Options o) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
+  if (g_stop_requested) return stop_asked();
   server::publish_state("loading", nullptr);
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
@@ -1446,6 +1457,10 @@ int ni::server::run_service(Options o) {
   }
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);
+  if (g_stop_requested) {  // POST /stop during the first load, seen now that it has ended: saved as a stop saves
+    save_before_exit();
+    return stop_asked();
+  }
 
   api::ResponseStore responses;  // recent responses, for previous_response_id
   httplib::Server srv;

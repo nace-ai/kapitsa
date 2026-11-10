@@ -14,11 +14,13 @@ Needs: jsonschema (4.18 or later, for `referencing`).
 
 import json
 import os
+import pty
 import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from urllib.parse import urljoin
 
@@ -51,21 +53,41 @@ def ask(path, method, target, body=b""):
     return int(head.split()[1]), json.loads(rest)
 
 
-def serve(kapitsa, home, hold_ms=0, ignore_sigint=True):
+def serve(kapitsa, home, hold_ms=0, sigint="ignored"):
+    """`kapitsa serve` on a missing model. sigint: "ignored" (a script's background job), "default", or "terminal"
+    (stdout and stderr on a pseudo-terminal: the terminal UI and its signal handlers; its output in p.screen)"""
     env = {k: v for k, v in os.environ.items() if not k.startswith(("KAPITSA_", "NI_"))}
     env["KAPITSA_HOME"] = home
     if hold_ms:
         env["NI_CONTROL_TEST_HOLD_MS"] = str(hold_ms)
     args = [kapitsa, "serve", "--model", "/nonexistent/model", "--port", "18731", "--private"]
-    return subprocess.Popen(args, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True,
-                            preexec_fn=(lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)) if ignore_sigint else None)
+    ignore = (lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)) if sigint == "ignored" else None
+    if sigint != "terminal":
+        return subprocess.Popen(args, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, preexec_fn=ignore)
+    master, slave = pty.openpty()
+    env["TERM"] = "xterm-256color"
+    p = subprocess.Popen(args, env=env, stdin=subprocess.DEVNULL, stdout=slave, stderr=slave)
+    os.close(slave)
+    p.screen = bytearray()
+
+    def drain():  # (a full pty buffer would block the server)
+        try:
+            while chunk := os.read(master, 65536):
+                p.screen += chunk
+        except OSError:
+            pass
+        os.close(master)
+
+    p.drain = threading.Thread(target=drain, daemon=True)
+    p.drain.start()
+    return p
 
 
-def stop_while_starting(kapitsa, check_status, ignore, want):
+def stop_while_starting(kapitsa, check_status, sigint):
     failures = []
     with tempfile.TemporaryDirectory() as home:
-        p = serve(kapitsa, home, hold_ms=30000, ignore_sigint=ignore)
+        p = serve(kapitsa, home, hold_ms=30000, sigint=sigint)
         sock = os.path.join(home, "run", "default.sock")
         for _ in range(200):
             if os.path.exists(sock) or p.poll() is not None:
@@ -83,12 +105,18 @@ def stop_while_starting(kapitsa, check_status, ignore, want):
             if status != 202:
                 failures.append(f"POST /stop while starting: {status} {body}")
             rc = p.wait(timeout=15)
-            if rc != want or os.path.exists(sock):
-                failures.append(f"stop while starting (SIGINT ignored: {ignore}): exit {rc}, want {want}, "
+            if rc != 0 or os.path.exists(sock):
+                failures.append(f"stop while starting (SIGINT {sigint}): exit {rc}, want 0 (a stop is not a crash), "
                                 f"socket left: {os.path.exists(sock)}")
+            if sigint == "terminal":
+                p.drain.join(5)
+                screen = bytes(p.screen)
+                if screen.rfind(b"\033[?25l") > screen.rfind(b"\033[?25h"):
+                    failures.append(f"stop while starting in a terminal left the cursor hidden: {screen[-300:]!r}")
         except (OSError, subprocess.TimeoutExpired) as e:
             p.kill()
-            failures.append(f"stop while starting (SIGINT ignored: {ignore}): {e!r}: {p.communicate()[0]!r}")
+            out = bytes(p.screen) if sigint == "terminal" else p.communicate()[0]
+            failures.append(f"stop while starting (SIGINT {sigint}): {e!r}: {out!r}")
     return failures
 
 
@@ -105,9 +133,9 @@ def serve_checks(kapitsa, check_status):
         out = serve(kapitsa, home).communicate(timeout=60)[0]
         if "longer than macOS allows" not in out or "no control socket" not in out or "No folder at" not in out:
             failures.append(f"a socket path over 103 bytes: the server should warn, go on and fail on the model: {out!r}")
-    # held in `starting`: a server in a terminal ends as Ctrl-C ends it (killed by SIGINT), with SIGINT ignored it exits 0
-    for ignore, want in ((True, 0), (False, -signal.SIGINT)):
-        failures += stop_while_starting(kapitsa, check_status, ignore, want)
+    # held in `starting`: POST /stop ends it with status 0 however SIGINT is set, the cursor back in a terminal
+    for sigint in ("ignored", "default", "terminal"):
+        failures += stop_while_starting(kapitsa, check_status, sigint)
     return failures
 
 

@@ -116,8 +116,9 @@ During a model switch, a stop takes effect as soon as the load can be abandoned,
 
 **Not yet in `kapitsa serve`.** Running requests are cut when the process exits; they do not end with `finish_reason`
 `cancelled`. A stop during a switch drops the pending `POST /model`'s connection instead of answering `503 stopping`.
-A server started in a terminal ends as Ctrl-C ends it; an `attached` or `keep_running` one exits with status 0. A
-second `POST /stop` answers `202` and changes nothing, and `POST /model` after a stop answers `503 stopping`.
+A stop while the instance is `starting` or loading its first model takes effect when that load ends, before the
+instance serves. Every lifecycle exits with status 0, a terminal's after clearing its status block. A second
+`POST /stop` answers `202` and changes nothing, and `POST /model` after a stop answers `503 stopping`.
 
 ### Model switch
 
@@ -154,7 +155,7 @@ difference is what happens around them.
 | --- | --- | --- |
 | `attached` | The app that started it (`parent_pid` names the app) | The instance exits with its parent. `POST /stop` ends it sooner. |
 | `keep_running` | launchd, through a LaunchAgent | It outlives the app. After `POST /stop` it stays stopped until the app or the next login starts it again. A crash restarts it with a new `run_id`. |
-| `foreground` | A terminal's `kapitsa serve` | `POST /stop` ends it as Ctrl-C would. |
+| `foreground` | A terminal's `kapitsa serve` | `POST /stop` clears its status block and ends it with status 0. |
 
 ## Events
 
