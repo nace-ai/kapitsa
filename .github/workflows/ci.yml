@@ -339,6 +339,11 @@ jobs:
       - name: test_control_socket
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_control_socket.py build/control_test build/kapitsa
+      - name: test_engine_view
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          $RUNNER_TEMP/venv/bin/python tests/test_events_schema.py tools/engine_replay.py
+          node tests/test_engine_page.mjs
       - name: http_stream_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/http_stream_test

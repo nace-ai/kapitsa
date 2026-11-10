@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Kapitsa engine</title>
+<style>
+:root{color-scheme:light;--bg:#fff;--fg:#1a1a1a;--muted:#6b6b6b;--line:#e3e3e3;--soft:#f4f4f4;--accent:#1f6feb;--err:#b42318;
+--w:#1f6feb;--kv:#12a37f;--other:#a970ff;--free:#ececec;--ok:#12a37f;--warn:#c27c0e}
+:root[data-theme=dark]{color-scheme:dark;--bg:#111;--fg:#e8e8e8;--muted:#9a9a9a;--line:#2b2b2b;--soft:#1b1b1b;--accent:#58a6ff;--err:#f97066;
+--w:#58a6ff;--kv:#3fd0a4;--other:#c29bff;--free:#262626;--ok:#3fd0a4;--warn:#e3a33b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.num,td.n,.mono{font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+header{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:16px;margin:0;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;background:var(--soft);font-size:12.5px;font-weight:600}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.ready i{background:var(--ok)}.pill.loading i,.pill.switching i,.pill.starting i{background:var(--warn);animation:p 1s infinite alternate}
+.pill.stopping i,.pill.gone i,.pill.disconnected i{background:var(--err)}.pill.released i{background:var(--muted)}
+@keyframes p{to{opacity:.3}}
+.meta{color:var(--muted);font-size:12.5px}
+.sp{flex:1}
+button{font:inherit;font-size:13px;padding:5px 12px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+button:hover{background:var(--soft)}button:disabled{opacity:.5;cursor:default}
+main{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;padding:18px 22px;max-width:1440px}
+section{border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+section h2{margin:0 0 10px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;gap:8px}
+section h2 span{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
+@media (max-width:1000px){.c3,.c4,.c5,.c7,.c8{grid-column:span 12}}
+.big{font-size:26px;font-weight:600;line-height:1.15}.big small{font-size:13px;font-weight:500;color:var(--muted)}
+.row{display:flex;gap:22px;flex-wrap:wrap}
+.bar{display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--free);margin:10px 0 8px}
+.bar b{display:block;height:100%}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.slot{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.slot.busy{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.slot .fill{height:5px;border-radius:3px;background:var(--free);margin-top:6px;overflow:hidden}
+.slot .fill b{display:block;height:100%;background:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:4px 8px;border-bottom:1px solid var(--line)}
+td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.n,th.n{text-align:right}
+tr.done td{color:var(--muted)}
+.phase{font-size:12px;padding:1px 7px;border-radius:5px;background:var(--soft)}
+.phase.writing{color:var(--ok)}.phase.prefill{color:var(--warn)}
+.prog{display:inline-block;width:90px;height:5px;border-radius:3px;background:var(--free);vertical-align:middle;overflow:hidden;margin-right:6px}
+.prog b{display:block;height:100%;background:var(--warn)}
+svg{display:block;width:100%;height:96px}
+#logs{height:190px;overflow:auto;margin:0;white-space:pre-wrap;color:var(--fg)}
+#logs .t{color:var(--muted)}#logs .warn{color:var(--warn)}#logs .error{color:var(--err)}
+.empty{color:var(--muted);font-size:13px;padding:6px 0;grid-column:1/-1}
+.bar:empty{display:none}
+#msg{font-size:12.5px;color:var(--err)}
+#theme{min-width:64px}
+</style>
+<script>
+// Site data may be blocked (a browser setting, a sandboxed frame): then even reading `localStorage` throws, so the
+// area is looked up inside the try; storage reads as empty and writes do nothing
+const store = {
+  get(k, area = "localStorage") { try { return globalThis[area].getItem(k); } catch { return null; } },
+  set(k, v, area = "localStorage") { try { globalThis[area].setItem(k, v); } catch { /* not kept */ } },
+};
+// Theme: auto (the system's), light or dark, kept in this browser; set before the first paint
+const themes = ["auto", "light", "dark"], dark = matchMedia("(prefers-color-scheme: dark)");
+let theme = themes.includes(store.get("kapitsa.engine.theme")) ? store.get("kapitsa.engine.theme") : "auto";
+function applyTheme() {
+  document.documentElement.dataset.theme = theme === "auto" ? (dark.matches ? "dark" : "light") : theme;
+  const b = document.getElementById("theme");
+  if (b) b.textContent = theme[0].toUpperCase() + theme.slice(1);
+}
+dark.addEventListener("change", applyTheme);
+applyTheme();
+</script>
+</head>
+<body>
+<header>
+  <h1 id="name">Kapitsa</h1>
+  <span id="state" class="pill"><i></i><span>connecting</span></span>
+  <span class="meta mono" id="model">—</span>
+  <span class="meta" id="ident"></span>
+  <span class="sp"></span>
+  <span id="msg"></span>
+  <span class="meta" id="acts">Stop or switch the model from Kapitan, or with Ctrl-C where kapitsa serve runs</span>
+  <button id="theme" title="Theme: follow the system, light or dark">Auto</button>
+</header>
+<main>
+  <section class="c5"><h2>Memory <span id="memnote"></span></h2>
+    <div class="row"><div class="big num" id="memused">—</div></div>
+    <div class="bar" id="membar"></div>
+    <div class="legend" id="memlegend"></div>
+  </section>
+  <section class="c4"><h2>Writing speed <span id="ratenote">tokens/s, all requests</span></h2>
+    <div class="big num" id="rate">—</div>
+    <svg id="chart" viewBox="0 0 300 96" preserveAspectRatio="none"></svg>
+  </section>
+  <section class="c3"><h2>Drafts</h2>
+    <div class="big num" id="tpc">—</div>
+    <div class="meta" id="draftnote">tokens per verify cycle</div>
+    <div class="meta num" id="drafttot" style="margin-top:6px"></div>
+  </section>
+  <section class="c12"><h2>Slots <span id="slotnote"></span></h2><div class="slots" id="slots"></div></section>
+  <section class="c12"><h2>Requests <span id="reqnote"></span></h2>
+    <table><thead><tr><th>Request</th><th>Client</th><th>Phase</th><th class="n">Prompt</th><th class="n">Cached</th>
+      <th class="n">Read</th><th class="n">Written</th><th class="n">tok/s</th><th class="n">Time</th></tr></thead>
+      <tbody id="reqs"></tbody></table>
+  </section>
+  <section class="c12"><h2>Log <span id="lognote"></span></h2><pre id="logs" class="mono"></pre></section>
+</main>
+<script>
+"use strict";
+// The engine view: what `kapitsa serve` holds and does, live, from its control API (docs/control-socket.md, "The engine
+// view") at /engine/status and /engine/events. It reads only: stop and switch go through the control socket, never the
+// inference port. Every request carries this run's key, which kapitsa serve prints in the page's link (#t=...) and keeps in a file only its
+// user can read; the page keeps it for this tab only and takes it out of the address bar.
+const $ = id => document.getElementById(id);
+const S = {status: null, reqs: new Map(), done: [], logs: [], rates: [], drafts: [], tpc: null, share: null,
+           link: "connecting", noEngineAt: 0};
+const GB = 1e9, RATE_MS = 60000, DRAFT_MS = 10000, EARLY_MAX = 4096;
+const fmtB = b => b >= 10 * GB ? (b / GB).toFixed(1) + " GB" : b >= GB ? (b / GB).toFixed(2) + " GB" : (b / 1e6).toFixed(0) + " MB";
+const fmtN = n => Number(n).toLocaleString("en-US");
+const fmtCtx = n => n % 1024 === 0 ? n / 1024 + "K" : fmtN(n);  // 131072 -> 128K, as the config writes it
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const fmtMs = ms => ms < 1000 ? ms + " ms" : ms < 60000 ? (ms / 1000).toFixed(1) + " s" : Math.floor(ms / 60000) + "m " + Math.round(ms % 60000 / 1000) + "s";
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const seqOf = id => Number(String(id).split(".").pop());
+
+const key = (() => {
+  const m = /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash);
+  if (m) {
+    store.set("kapitsa.engine.key", m[1], "sessionStorage");
+    history.replaceState(null, "", location.pathname + location.search);
+    return m[1];
+  }
+  return store.get("kapitsa.engine.key", "sessionStorage") || "";
+})();
+const auth = () => ({Authorization: "Bearer " + key});
+
+function apply(status, why) {  // a full status: at connect, or from a reset
+  if (why === "run_changed" || (S.status && S.status.run_id !== status.run_id)) { S.done = []; S.rates = []; }
+  S.status = status;
+  S.reqs = new Map(status.requests.map(r => [r.request_id, r]));
+  S.drafts = []; S.tpc = S.share = null;
+  S.noEngineAt = performance.now();
+  if (status.engine) engine(status.engine);
+}
+
+function engine(e) {
+  if (!S.status) return;
+  S.status.engine = e;
+  // tokens per cycle and the accepted share over the last 10 s; a counter that goes down: the model loaded again
+  const d = e.drafts, w = S.drafts, now = performance.now();
+  if (!d) { S.drafts = []; S.tpc = S.share = null; return; }
+  if (w.length && (d.cycles < w[w.length - 1].cycles || d.tokens < w[w.length - 1].tokens)) w.length = 0;
+  w.push({...d, t: now});
+  while (w.length > 2 && now - w[1].t >= DRAFT_MS) w.shift();
+  const dc = d.cycles - w[0].cycles, dt = d.tokens - w[0].tokens;
+  if (dc > 0 && dt > 0) { S.tpc = dt / dc; S.share = (dt - dc) / dt; } else { S.tpc = S.share = null; }
+}
+
+const handlers = {
+  state(d) {
+    Object.assign(S.status, {state: d.state, model: d.model});
+    if (d.state !== "ready") delete S.status.engine;
+    S.noEngineAt = performance.now();
+    if (d.message) log({level: "warn", message: d.message});
+  },
+  request_started(d) { S.reqs.set(d.request_id, {...d, phase: "waiting", prompt_tokens: 0, cached_tokens: 0,
+    prefilled_tokens: 0, completion_tokens: 0, elapsed_ms: 0, tokens_per_second: 0}); },
+  request_progress(d) { S.reqs.set(d.request_id, d); },
+  request_finished(d) {
+    const r = S.reqs.get(d.request_id) || {};
+    S.reqs.delete(d.request_id);
+    S.done.unshift({...r, ...d, elapsed_ms: d.queue_ms + d.prefill_ms + d.decode_ms});
+    S.done.length = Math.min(S.done.length, 6);
+  },
+  engine,
+  log,
+  reset(d) {
+    apply(d.status, d.reason);
+    log({level: "info", message: d.reason === "run_changed" ? "a new run started" : "the view caught up from a fresh status"});
+  },
+};
+
+function log(d) {
+  S.logs.push({t: new Date().toLocaleTimeString([], {hour12: false}), ...d});
+  if (S.logs.length > 400) S.logs.splice(0, S.logs.length - 400);
+}
+
+// One server-sent event stream read with fetch (EventSource can send no key and gives up on a non-200 answer).
+// Frames go to on(type, id, data); resolves when the stream ends, throws {status, error} on a refusal.
+async function stream(lastId, on, signal) {
+  const headers = {...auth(), Accept: "text/event-stream"};
+  if (lastId) headers["Last-Event-ID"] = lastId;
+  const r = await fetch("/engine/events", {headers, cache: "no-store", signal});
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw {status: r.status, error: j.error || {}, retry: Number(r.headers.get("Retry-After")) || 0};
+  }
+  S.link = "live";
+  const rd = r.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const {value, done} = await rd.read();
+    if (done) return;
+    buf += dec.decode(value, {stream: true}).replace(/\r\n?/g, "\n");
+    let k;
+    while ((k = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, k);
+      buf = buf.slice(k + 2);
+      let type = "message", id = "", data = "";
+      for (const line of frame.split("\n")) {
+        if (line.startsWith(":")) continue;
+        const c = line.indexOf(":"), f = c < 0 ? line : line.slice(0, c), v = c < 0 ? "" : line.slice(c + 1).replace(/^ /, "");
+        if (f === "event") type = v; else if (f === "id") id = v; else if (f === "data") data += (data ? "\n" : "") + v;
+      }
+      if (data && handlers[type]) on(type, id, JSON.parse(data));
+    }
+  }
+}
+
+// Events first, then status: an event the status already counts is skipped. After a drop the stream resumes from the
+// last event seen (the server replays what was missed, or sends a reset), retrying every few seconds.
+async function connect() {
+  let last = null, early = [];
+  const handle = f => {
+    if (f.type !== "reset" && f.id.split(".")[0] === S.status.run_id && seqOf(f.id) <= last) return;
+    handlers[f.type](f.data);
+    last = f.type === "reset" ? seqOf(f.data.status.last_event_id) : seqOf(f.id);
+  };
+  for (;;) {
+    const ctl = new AbortController();
+    const resume = S.status && last !== null ? `${S.status.run_id}.${last}` : "";
+    const on = (type, id, data) => {
+      const f = {type, id, data};
+      if (last !== null) return handle(f);
+      early.push(f);
+      if (early.length > EARLY_MAX) ctl.abort();  // the status never came: start over
+    };
+    const run = stream(resume, on, ctl.signal);
+    run.catch(() => {});  // (awaited below, after the status)
+    if (last === null) {
+      try {
+        const r = await fetch("/engine/status", {headers: auth(), cache: "no-store"});
+        const j = await r.json();
+        if (!r.ok) throw {status: r.status, error: j.error || {}};
+        apply(j);
+        last = seqOf(j.last_event_id);
+        early.splice(0).forEach(handle);
+        $("msg").textContent = "";
+      } catch (e) { ctl.abort(); early = []; refused(e); }
+    }
+    const ended = () => S.link === "gone" || (S.status && S.status.state === "stopping") ? "gone" : "down";
+    try { await run; S.link = ended(); }
+    catch (e) { if (e && e.status) refused(e); else if (S.link !== "refused") S.link = ended(); }
+    if (S.link === "refused" && !(S._retry > 0)) return;  // a missing or old key: nothing to retry with
+    await new Promise(r => setTimeout(r, 1000 * (S._retry || 3)));
+    S._retry = 0;
+  }
+}
+
+function refused(e) {
+  if (!e || !e.status) { S.link = "down"; return; }
+  if (e.status === 503) { S.link = "down"; S._retry = e.retry || 5;
+    $("msg").textContent = "too many engine views are open: this one retries"; return; }
+  S.link = "refused";
+  $("msg").textContent = e.status === 403
+    ? (key ? "this link's key is not this server's (it restarted?): open the link kapitsa serve printed"
+           : "open this page from the link kapitsa serve prints: it carries this run's key")
+    : `the server refused the view: ${e.error.message || "HTTP " + e.status}`;
+}
+
+// ---------------------------------------------------------------- drawing, every half second
+
+function draw() {
+  const st = S.status;
+  const pill = $("state");
+  if (!st) { pill.className = "pill " + (S.link === "live" ? "starting" : "disconnected");
+    pill.lastElementChild.textContent = S.link === "refused" ? "no access" : "connecting"; return; }
+  const live = S.link === "live";
+  const state = S.link === "gone" ? "gone" : live ? st.state : "disconnected";
+  $("name").textContent = st.name;
+  pill.className = "pill " + state;
+  pill.lastElementChild.textContent = {gone: "stopped", disconnected: S.link === "refused" ? "no access" : "disconnected, retrying",
+    stopping: "stopping…", loading: "loading…", switching: "switching…", starting: "starting…"}[state] || state;
+  $("model").textContent = st.model ? `${st.model.id} · ${fmtCtx(st.model.context_length)} context · ${plural(st.model.slots, "slot")}` : "no model loaded";
+  $("ident").textContent = `${st.lifecycle} · v${st.version} · run ${st.run_id.slice(0, 8)} · pid ${st.pid}`;
+
+  const e = live ? st.engine : null;
+  if (e) {
+    const m = e.memory, other = Math.max(0, m.allocated_bytes - m.weights_bytes - m.kv_bytes);
+    const parts = [["Model", m.weights_bytes, "--w"], ["KV caches", m.kv_bytes, "--kv"], ["Buffers and state", other, "--other"]];
+    $("memused").innerHTML = `${fmtB(m.allocated_bytes)} <small>of ${fmtB(m.budget_bytes)} budget</small>`;
+    $("membar").innerHTML = parts.map(([, b, c]) => `<b style="width:${100 * b / m.budget_bytes}%;background:var(${c})"></b>`).join("");
+    $("memlegend").innerHTML = parts.map(([n, b, c]) => `<span><i style="background:var(${c})"></i>${n} ${fmtB(b)}</span>`).join("") +
+      `<span><i style="background:var(--free)"></i>Free ${fmtB(Math.max(0, m.budget_bytes - m.allocated_bytes))}</span>`;
+    $("memnote").textContent = `${Math.round(100 * m.allocated_bytes / m.budget_bytes)}% used`;
+    const ctx = st.model ? st.model.context_length : 1;
+    $("slots").innerHTML = e.slots.map(s => `<div class="slot ${s.busy ? "busy" : ""}"><div><b>Slot ${Number(s.index)}</b>
+      <span class="meta">${s.busy ? esc(s.request_id) : "idle"}</span></div><div class="meta num">${fmtN(s.tokens)} tokens</div>
+      <div class="fill"><b style="width:${Math.min(100, 100 * s.tokens / ctx)}%"></b></div></div>`).join("");
+    $("slotnote").textContent = `${e.slots.filter(s => s.busy).length} of ${e.slots.length} busy`;
+    if (e.drafts) {
+      const span = S.drafts.length > 1 ? Math.round((S.drafts[S.drafts.length - 1].t - S.drafts[0].t) / 1000) : 0;
+      $("tpc").textContent = S.tpc !== null ? S.tpc.toFixed(2) : "—";
+      $("draftnote").textContent = S.tpc !== null ? `tokens per verify cycle, last ${span} s · ${Math.round(100 * S.share)}% of tokens from accepted drafts` : "tokens per verify cycle (none in the last 10 s)";
+      $("drafttot").textContent = `${fmtN(e.drafts.cycles)} cycles, ${fmtN(e.drafts.tokens)} tokens since the model loaded`;
+    } else { $("tpc").textContent = "off"; $("draftnote").textContent = "this model decodes without drafts"; $("drafttot").textContent = ""; }
+  } else {
+    // no engine block: not connected, a state with no engine to sample, the first ticks after a load, or a Splash
+    // engine (only once a few ticks in ready have brought none)
+    const fresh = performance.now() - S.noEngineAt < 3 * st.tick_ms;
+    const why = !live ? "not connected" : state !== "ready" ? `nothing to sample while ${state}`
+      : fresh ? "reading the engine…" : "this engine does not report its memory, slots or drafts";
+    for (const id of ["membar", "memlegend", "slots"]) $(id).innerHTML = "";
+    $("memused").innerHTML = `— <small>${esc(why)}</small>`;
+    $("slots").innerHTML = `<div class="empty">${esc(why)}</div>`;
+    $("tpc").textContent = "—"; $("draftnote").textContent = why; $("drafttot").textContent = "";
+    $("memnote").textContent = $("slotnote").textContent = "";
+  }
+
+  const active = live ? [...S.reqs.values()] : [];
+  const total = active.reduce((a, r) => a + (r.phase === "writing" ? r.tokens_per_second : 0), 0);
+  const now = performance.now();
+  if (live) S.rates.push({t: now, v: total});
+  while (S.rates.length && now - S.rates[0].t > RATE_MS) S.rates.shift();
+  $("rate").innerHTML = live ? `${total.toFixed(1)} <small>${active.length} active</small>` : "—";
+  const max = Math.max(10, ...S.rates.map(r => r.v)) * 1.15, n = S.rates.length;
+  const pts = S.rates.map(r => `${(300 * (1 - (now - r.t) / RATE_MS)).toFixed(1)},${(96 - 96 * r.v / max).toFixed(1)}`);
+  $("chart").innerHTML = n > 1 ? `<polyline points="${pts.join(" ")} ${pts[n - 1].split(",")[0]},96 ${pts[0].split(",")[0]},96" fill="color-mix(in srgb,var(--accent) 14%,transparent)" stroke="none"/>
+    <polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>` : "";
+  $("ratenote").textContent = `tokens/s, last ${n > 1 ? Math.round((now - S.rates[0].t) / 1000) : 0} s`;
+
+  const row = (r, done) => {
+    const need = Math.max(1, r.prompt_tokens - r.cached_tokens);
+    const read = done ? "done" : r.phase === "prefill" ? `<span class="prog"><b style="width:${100 * r.prefilled_tokens / need}%"></b></span>${fmtN(r.prefilled_tokens)}/${fmtN(need)}`
+      : r.phase === "waiting" ? "queued" : fmtN(need);
+    const phase = esc(done ? r.finish_reason : r.phase);
+    return `<tr class="${done ? "done" : ""}"><td class="mono">${esc(r.request_id)}</td><td>${esc(r.client || r.api || "")}</td>
+      <td><span class="phase ${esc(phase)}">${esc(phase)}</span></td><td class="n">${fmtN(r.prompt_tokens)}</td><td class="n">${fmtN(r.cached_tokens)}</td>
+      <td class="n">${read}</td><td class="n">${fmtN(r.completion_tokens)}</td><td class="n">${r.tokens_per_second ? r.tokens_per_second.toFixed(1) : "—"}</td>
+      <td class="n">${fmtMs(r.elapsed_ms || 0)}</td></tr>`;
+  };
+  $("reqs").innerHTML = active.map(r => row(r, false)).join("") + S.done.map(r => row(r, true)).join("") ||
+    `<tr><td colspan="9" class="empty">No requests running</td></tr>`;
+  $("reqnote").textContent = `${active.length} running` + (S.done.length ? ` · last ${S.done.length} finished` : "");
+
+  const box = $("logs"), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+  box.innerHTML = S.logs.length ? S.logs.slice(-200).map(l => `<span class="t">${esc(l.t)}</span> <span class="${esc(l.level)}">${esc(l.message)}</span>`).join("\n")
+    : `<span class="t">Nothing logged since this page opened.</span>`;
+  if (atEnd) box.scrollTop = box.scrollHeight;
+  $("lognote").textContent = plural(S.logs.length, "line");
+}
+
+connect();
+draw();
+setInterval(draw, 500);
+applyTheme();
+$("theme").onclick = () => {
+  theme = themes[(themes.indexOf(theme) + 1) % themes.length];
+  store.set("kapitsa.engine.theme", theme);
+  applyTheme();
+};
+</script>
+</body>
+</html>
