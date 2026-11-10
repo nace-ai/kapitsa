@@ -150,9 +150,17 @@ const c = page(s.base, "#t=" + s.token, "blocked");
 await until(() => c.view().link === "live" && c.view().run, 10000, "blocked site data: the page still connects");
 console.log("no key and blocked storage ok");
 
-// 5. a stop no new run follows (no launchd): the view reads stopped, and stays so while nothing answers
-const d = page(s.base, "#t=" + s.token);
-await until(() => d.view().link === "live" && d.view().run, 10000, "a fresh view connects");
+// 5. a fourth view while three stream (the stand-in's cap, as the server's): told so, and it keeps asking
+const d = page(s.base, "#t=" + s.token), d2 = page(s.base, "#t=" + s.token);
+await until(() => [c, d, d2].every(v => v.view().link === "live"), 10000, "three views stream");
+const e = page(s.base, "#t=" + s.token);
+await until(() => /too many engine views/.test(e.view().msg), 10000, "a fourth view: too many are open");
+const asks = e.view().fetches;
+await sleep(6000);
+check(e.view().fetches > asks && e.view().link !== "refused", "the fourth view keeps asking");
+console.log("too many views ok");
+
+// 6. a stop no new run follows (no launchd): the view reads stopped, and stays so while nothing answers
 await hook(s, "/_standin/stop", {run_id: d.view().run, then: "exit"});
 await until(() => d.view().pill === "stopped", 10000, "a server that stopped reads stopped");
 const traced = d.view().rates; await sleep(5000);

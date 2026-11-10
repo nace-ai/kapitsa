@@ -343,6 +343,7 @@ jobs:
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: |
           $RUNNER_TEMP/venv/bin/python tests/test_events_schema.py tools/engine_replay.py
+          $RUNNER_TEMP/venv/bin/python tests/test_engine_view.py
           node tests/test_engine_page.mjs
       - name: http_stream_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
