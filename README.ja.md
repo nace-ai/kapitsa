@@ -50,7 +50,7 @@ Mac ごと、モデルごとの表は英語版の [Models](README.md#models) に
 - **GPU と Neural Engine で一緒にプリフィル。** プリフィルの一部を Neural Engine に任せ、GPU の待ち時間を減らします。
 - **今のツールがそのまま使えます。** `/v1/chat/completions`、`/v1/messages`、`/v1/responses`（ストリーミング、ツール呼び出し、JSON スキーマ出力に対応）とチャットページを、すべて `http://127.0.0.1:8000` で提供します。
 - **コマンド 1 つでエージェント。** `kapitsa claude`、`kapitsa codex`、`kapitsa opencode`、`kapitsa pi` がローカルモデルで起動します。
-- **選択肢ごとに較正された確率を 1 つ。** `kapitsa-systemone` は Drex 2.0 と Drex Max v1 をこの形で提供します。状態と質問を渡すと、選択肢ごとの確率が返ります（`POST /v1/systemone`）（[意思決定](docs/systemone.md)、[Drex Max v1](docs/drex-max.md)）。Drex Max v1 には Kapitsa v0.2.25 以降が必要です。モデルのインポートとポインターヘッドの抽出手順は [Drex Max v1 ガイド](docs/drex-max.md)を参照してください。
+- **選択肢ごとに較正された確率を 1 つ。** `kapitsa-systemone` は [Drex decision models](https://github.com/nace-ai/drex-decision-models) をこの形で提供します。状態と質問を渡すと、選択肢ごとの確率が返ります（`POST /v1/systemone`）（[API](docs/systemone.md)、[セットアップ](docs/drex-max.md)）。v1 には Kapitsa v0.2.25 以降が必要です。モデルのインポートとポインターヘッドの抽出手順は[ガイド](docs/drex-max.md)を参照してください。
 - **複数の Mac で 1 つのモデル。** モデルを載せきれない Mac は、載せられる Mac にリクエストを送ります。`--split` を使うと、1 つのモデルの層をネットワーク上の複数の Mac に分けて載せます（[複数の Mac](docs/usage.md#several-macs)）。
 - **画像。** チャットページと API でスクリーンショットや写真を扱えます。テキスト専用の 4 種類の Nemotron モデル、Flint、Clover、35B の `16gb` を除く、カタログのすべてのモデルが対象です。
 

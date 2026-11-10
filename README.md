@@ -4,11 +4,11 @@
   <img alt="Kapitsa writes 351 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
-**KQuant.** The Qwen3.5 4B and 9B downloads are closer to the original model, at the same size, and they write about 10% faster on an M5 Pro. [Numbers](#kquant).
+**KQuant.** The Qwen3.5 [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX-4bit-KQuant) and [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant) downloads are closer to the original model at the same size, and write about 10% faster on an M5 Pro ([numbers](#kquant)).
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex, Pi, Hermes, aider or Goose on a local model, and serves OpenAI and Anthropic APIs.
 
-[Quickstart](#quickstart) · [What's new](#whats-new) · [Features](#features) · [Benchmarks](#benchmarks) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [Xcode 26 guide](docs/xcode-guide.md) · [日本語](README.ja.md)
+[Quickstart](#quickstart) · [What's new](#-whats-new) · [Features](#features) · [Benchmarks](#benchmarks) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [Xcode 26 guide](docs/xcode-guide.md) · [日本語](README.ja.md)
 
 ## Quickstart
 
@@ -44,7 +44,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - **Prefill on the GPU and the Neural Engine together.** Prefill hands part of its work to the Neural Engine, which the GPU would otherwise wait on.
 - **Your tools, unchanged.** `/v1/chat/completions`, `/v1/messages` and `/v1/responses` with streaming, tool calls and JSON-schema output, and a chat page, all on `http://127.0.0.1:8000`.
 - **An agent in one command.** `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi`, `kapitsa hermes`, `kapitsa aider` and `kapitsa goose` start on the local model.
-- **One calibrated probability per option.** `kapitsa-systemone` serves Drex 2.0 and Drex Max v1 that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([decisions](docs/systemone.md), [Drex Max v1](docs/drex-max.md)).
+- **One calibrated probability per option.** `kapitsa-systemone` serves the [Drex decision models](https://github.com/nace-ai/drex-decision-models) that way: a state and its questions in, a probability per option out (`POST /v1/systemone`) ([API](docs/systemone.md), [setup](docs/drex-max.md)).
 - **Several Macs, one model.** A Mac that cannot hold a model sends its requests to one that can, and `--split` spreads one model's layers across a network ([several Macs](docs/usage.md#several-macs)).
 - **Images.** Screenshots and photos in the chat page and the APIs, on every catalog model but the four text-only Nemotrons, Flint, Clover and the 35B's `16gb`.
 
@@ -61,9 +61,9 @@ Kapitsa's Qwen3.5-4B and 9B downloads are KQuant packs: the same MLX 4-bit files
 
 <sub>Standard: lmstudio-community's packs, which the catalog served before. KL: mean over 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC. How KQuant builds a pack, and every run: [record](bench/results/2026-11-10-m5-pro-kquant/README.md).</sub>
 
-### Drex Max v1
+### Drex decision models
 
-Drex Max v1 runs on Kapitsa v0.2.25 or later, through `kapitsa-systemone` (the Q8_0 GGUF imported to Kapitsa's affine 8-bit layout; an affine Q4 checkpoint is in [its guide](docs/drex-max.md#run-the-affine-q4-checkpoint)):
+The [Drex decision models](https://github.com/nace-ai/drex-decision-models) run through `kapitsa-systemone`. These commands import the v1 Q8_0 GGUF to Kapitsa's affine 8-bit layout and need Kapitsa v0.2.25 or later (an affine Q4 checkpoint is in [the guide](docs/drex-max.md#run-the-affine-q4-checkpoint)):
 
 ```bash
 brew install nace-ai/tap/kapitsa
@@ -72,7 +72,7 @@ kapitsa-drex-pointer /path/to/drex-max-v1-Q8_0.gguf ~/.cache/kapitsa/models/drex
 kapitsa-systemone --model ~/.cache/kapitsa/models/drex-max-v1 --port 8000 --context 2048
 ```
 
-[Drex Max v1 on Kapitsa](docs/drex-max.md) has the request, the memory a longer context needs and the encoding.
+[The guide](docs/drex-max.md) has the request, the memory a longer context needs and the encoding.
 
 
 ## Benchmarks
