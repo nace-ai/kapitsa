@@ -258,10 +258,13 @@ const std::vector<CatalogModel>& catalog() {
        .fallbacks = {"16gb"},
        .variants = {
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64",
-            // mlx-community/Qwen3.6-35B-A3B-4bit with its MTP head
-            .repo = "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed",
-            .revision = "95460516fbfe34c48f577f67c9ed191f5d61fbaf",
+            // KQuant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
+            // quantized weights rebuilt by importance-weighted scale search, every other file the same content, the
+            // MTP head included in the repo. KL from bf16 0.059 against 0.096, GSM8K (1319) 0.952 against 0.948,
+            // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
+            .quant = "MLX affine 4-bit, group 64 (KQuant)",
+            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant",
+            .revision = "a8c2dd6653360a2c7aac43ec8ade67c0ef4e1af9",
             .companions = {dflash35()},
             .download_gb = 22.07},
            {.name = "5bit",
