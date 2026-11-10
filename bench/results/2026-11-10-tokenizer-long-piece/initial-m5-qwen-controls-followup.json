@@ -1,0 +1,209 @@
+{
+  "binary_and_input_sha256": {
+    "reference": "8e734389714cc01d4cbe2f7b8481aa42d1e54f1078ea07310cfe2305fd264a26",
+    "candidate": "ac3e4c9cf9f5929d9c7aa56a855c526b5ee9ccf05e7bcae6dda112c65aa57a56",
+    "tokenizer": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "cases": "d36fed38930db0b4f1c61214cbc6c489376949a1ae2312ccc9dd7d9c2f4940ae"
+  },
+  "runs": [
+    {
+      "label": "A1",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 2.289292,
+          "iterations": 1000,
+          "name": "corpus-64k",
+          "warm_ms": 0.845122083,
+          "tokens": 15640
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.589458,
+          "iterations": 4000,
+          "name": "source-32k",
+          "warm_ms": 0.14625730225,
+          "tokens": 4858
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.018584,
+          "iterations": 200000,
+          "name": "chat-short",
+          "warm_ms": 0.0007315222900000001,
+          "tokens": 16
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.151583,
+          "iterations": 5000,
+          "name": "repeat-32768",
+          "warm_ms": 0.147749425,
+          "tokens": 4096
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 5.845458,
+          "iterations": 1000,
+          "name": "base64-64k",
+          "warm_ms": 0.7245127499999999,
+          "tokens": 48230
+        }
+      ]
+    },
+    {
+      "label": "B1",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 2.410708,
+          "iterations": 1000,
+          "name": "corpus-64k",
+          "warm_ms": 0.954967916,
+          "tokens": 15640
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.610666,
+          "iterations": 4000,
+          "name": "source-32k",
+          "warm_ms": 0.15338002075,
+          "tokens": 4858
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.020292,
+          "iterations": 200000,
+          "name": "chat-short",
+          "warm_ms": 0.000795892295,
+          "tokens": 16
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.169666,
+          "iterations": 5000,
+          "name": "repeat-32768",
+          "warm_ms": 0.18045985820000002,
+          "tokens": 4096
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 7.3845,
+          "iterations": 1000,
+          "name": "base64-64k",
+          "warm_ms": 0.817945709,
+          "tokens": 48230
+        }
+      ]
+    },
+    {
+      "label": "A2",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 2.392,
+          "iterations": 1000,
+          "name": "corpus-64k",
+          "warm_ms": 0.874884333,
+          "tokens": 15640
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.604,
+          "iterations": 4000,
+          "name": "source-32k",
+          "warm_ms": 0.15101039575,
+          "tokens": 4858
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.049458,
+          "iterations": 200000,
+          "name": "chat-short",
+          "warm_ms": 0.00076714896,
+          "tokens": 16
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.169875,
+          "iterations": 5000,
+          "name": "repeat-32768",
+          "warm_ms": 0.15396985,
+          "tokens": 4096
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 5.337958,
+          "iterations": 1000,
+          "name": "base64-64k",
+          "warm_ms": 0.692121917,
+          "tokens": 48230
+        }
+      ]
+    },
+    {
+      "label": "B2",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 2.374208,
+          "iterations": 1000,
+          "name": "corpus-64k",
+          "warm_ms": 0.886878791,
+          "tokens": 15640
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.608083,
+          "iterations": 4000,
+          "name": "source-32k",
+          "warm_ms": 0.147280823,
+          "tokens": 4858
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.018833,
+          "iterations": 200000,
+          "name": "chat-short",
+          "warm_ms": 0.0007670600000000001,
+          "tokens": 16
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.159083,
+          "iterations": 5000,
+          "name": "repeat-32768",
+          "warm_ms": 0.1534607418,
+          "tokens": 4096
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 5.746,
+          "iterations": 1000,
+          "name": "base64-64k",
+          "warm_ms": 0.745229833,
+          "tokens": 48230
+        }
+      ]
+    }
+  ],
+  "scope": "CPU encode plus complete-array equality check; no inference or GPU measurement",
+  "derivation": "Redacted derived summary; complete raw token arrays retained privately and compared literally.",
+  "device": {
+    "chip": "Apple M5 Pro",
+    "macos": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source": "801527c8cd0c2cf55413c38a5a9a2f7ba6315802",
+  "reference": "a283176326de221e9326e05b9f21e0759be75f99",
+  "flags": [
+    "-std=c++20",
+    "-O3",
+    "-DNDEBUG"
+  ],
+  "reason": "Longer independent control repeat to investigate slower samples; the initial ABAB is retained."
+}

@@ -1,0 +1,656 @@
+{
+  "binary_and_input_sha256": {
+    "reference": "8e734389714cc01d4cbe2f7b8481aa42d1e54f1078ea07310cfe2305fd264a26",
+    "candidate": "ac3e4c9cf9f5929d9c7aa56a855c526b5ee9ccf05e7bcae6dda112c65aa57a56",
+    "tokenizer": "3277c00fe5fb3963b3cb7c07b7f183722d2af4d775a4aea7cfb3684d7cccbc2f",
+    "cases": "44c6f5ba3b13c7837464817db42f461abec5a99dd78fc10f635435fb2f1574c6"
+  },
+  "runs": [
+    {
+      "label": "A1",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 1.833,
+          "iterations": 177,
+          "name": "corpus-64k",
+          "warm_ms": 0.8123524011299434,
+          "tokens": 15884
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.629042,
+          "iterations": 987,
+          "name": "source-32k",
+          "warm_ms": 0.30092561600810536,
+          "tokens": 4710
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.017542,
+          "iterations": 20000,
+          "name": "chat-short",
+          "warm_ms": 0.0052566125,
+          "tokens": 30
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.02475,
+          "iterations": 20000,
+          "name": "letters-64",
+          "warm_ms": 0.0001991042,
+          "tokens": 36
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.001667,
+          "iterations": 20000,
+          "name": "repeat-64",
+          "warm_ms": 0.0001969583,
+          "tokens": 32
+        },
+        {
+          "bytes": 63,
+          "first_ms": 0.027167,
+          "iterations": 20000,
+          "name": "cjk-64",
+          "warm_ms": 0.00027129374999999996,
+          "tokens": 27
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.108458,
+          "iterations": 2950,
+          "name": "letters-256",
+          "warm_ms": 0.05062474576271186,
+          "tokens": 148
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.004541,
+          "iterations": 20000,
+          "name": "repeat-256",
+          "warm_ms": 0.00173442915,
+          "tokens": 128
+        },
+        {
+          "bytes": 255,
+          "first_ms": 0.1195,
+          "iterations": 3904,
+          "name": "cjk-256",
+          "warm_ms": 0.026395747950819674,
+          "tokens": 114
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.72775,
+          "iterations": 237,
+          "name": "letters-1024",
+          "warm_ms": 0.5741216582278481,
+          "tokens": 578
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.010208,
+          "iterations": 20000,
+          "name": "repeat-1024",
+          "warm_ms": 0.007062189600000001,
+          "tokens": 512
+        },
+        {
+          "bytes": 1023,
+          "first_ms": 0.327333,
+          "iterations": 1037,
+          "name": "cjk-1024",
+          "warm_ms": 0.12682614175506268,
+          "tokens": 440
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 17.030208,
+          "iterations": 9,
+          "name": "letters-8192",
+          "warm_ms": 16.190986111111112,
+          "tokens": 4614
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 0.061625,
+          "iterations": 3588,
+          "name": "repeat-8192",
+          "warm_ms": 0.05511083249721293,
+          "tokens": 4096
+        },
+        {
+          "bytes": 8190,
+          "first_ms": 2.93375,
+          "iterations": 68,
+          "name": "cjk-8192",
+          "warm_ms": 1.7468272058823529,
+          "tokens": 3596
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 184.492166,
+          "iterations": 3,
+          "name": "letters-32768",
+          "warm_ms": 178.87631966666666,
+          "tokens": 18388
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.22275,
+          "iterations": 990,
+          "name": "repeat-32768",
+          "warm_ms": 0.23531999191919192,
+          "tokens": 16384
+        },
+        {
+          "bytes": 32766,
+          "first_ms": 11.283375,
+          "iterations": 13,
+          "name": "cjk-32768",
+          "warm_ms": 10.851718000000002,
+          "tokens": 14287
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 6.562209,
+          "iterations": 201,
+          "name": "base64-64k",
+          "warm_ms": 1.396025288557214,
+          "tokens": 50099
+        }
+      ]
+    },
+    {
+      "label": "B1",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 1.924208,
+          "iterations": 177,
+          "name": "corpus-64k",
+          "warm_ms": 0.9010939265536724,
+          "tokens": 15884
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.692125,
+          "iterations": 987,
+          "name": "source-32k",
+          "warm_ms": 0.30694516210739614,
+          "tokens": 4710
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.016458,
+          "iterations": 20000,
+          "name": "chat-short",
+          "warm_ms": 0.00531463125,
+          "tokens": 30
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.029625,
+          "iterations": 20000,
+          "name": "letters-64",
+          "warm_ms": 0.00020358125,
+          "tokens": 36
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.00175,
+          "iterations": 20000,
+          "name": "repeat-64",
+          "warm_ms": 0.0002043,
+          "tokens": 32
+        },
+        {
+          "bytes": 63,
+          "first_ms": 0.031541,
+          "iterations": 20000,
+          "name": "cjk-64",
+          "warm_ms": 0.00028865834999999997,
+          "tokens": 27
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.048042,
+          "iterations": 2950,
+          "name": "letters-256",
+          "warm_ms": 0.010309421016949153,
+          "tokens": 148
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.003167,
+          "iterations": 20000,
+          "name": "repeat-256",
+          "warm_ms": 0.00173954375,
+          "tokens": 128
+        },
+        {
+          "bytes": 255,
+          "first_ms": 0.045584,
+          "iterations": 3904,
+          "name": "cjk-256",
+          "warm_ms": 0.008491846055327868,
+          "tokens": 114
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.183417,
+          "iterations": 237,
+          "name": "letters-1024",
+          "warm_ms": 0.0432331223628692,
+          "tokens": 578
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.010209,
+          "iterations": 20000,
+          "name": "repeat-1024",
+          "warm_ms": 0.006849575,
+          "tokens": 512
+        },
+        {
+          "bytes": 1023,
+          "first_ms": 0.144,
+          "iterations": 1037,
+          "name": "cjk-1024",
+          "warm_ms": 0.03651904532304725,
+          "tokens": 440
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 1.150916,
+          "iterations": 9,
+          "name": "letters-8192",
+          "warm_ms": 0.630574,
+          "tokens": 4614
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 0.05675,
+          "iterations": 3588,
+          "name": "repeat-8192",
+          "warm_ms": 0.05436476923076923,
+          "tokens": 4096
+        },
+        {
+          "bytes": 8190,
+          "first_ms": 1.067084,
+          "iterations": 68,
+          "name": "cjk-8192",
+          "warm_ms": 0.4137322352941176,
+          "tokens": 3596
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 4.636167,
+          "iterations": 3,
+          "name": "letters-32768",
+          "warm_ms": 3.759541666666667,
+          "tokens": 18388
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.235541,
+          "iterations": 990,
+          "name": "repeat-32768",
+          "warm_ms": 0.22162777777777776,
+          "tokens": 16384
+        },
+        {
+          "bytes": 32766,
+          "first_ms": 3.678834,
+          "iterations": 13,
+          "name": "cjk-32768",
+          "warm_ms": 2.749644230769231,
+          "tokens": 14287
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 5.646042,
+          "iterations": 201,
+          "name": "base64-64k",
+          "warm_ms": 1.3933897164179103,
+          "tokens": 50099
+        }
+      ]
+    },
+    {
+      "label": "A2",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 3.188708,
+          "iterations": 177,
+          "name": "corpus-64k",
+          "warm_ms": 0.8358733559322034,
+          "tokens": 15884
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.692292,
+          "iterations": 987,
+          "name": "source-32k",
+          "warm_ms": 0.3081650618034448,
+          "tokens": 4710
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.014375,
+          "iterations": 20000,
+          "name": "chat-short",
+          "warm_ms": 0.00541736875,
+          "tokens": 30
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.036167,
+          "iterations": 20000,
+          "name": "letters-64",
+          "warm_ms": 0.0002025979,
+          "tokens": 36
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.002208,
+          "iterations": 20000,
+          "name": "repeat-64",
+          "warm_ms": 0.00020706875,
+          "tokens": 32
+        },
+        {
+          "bytes": 63,
+          "first_ms": 0.050833,
+          "iterations": 20000,
+          "name": "cjk-64",
+          "warm_ms": 0.00029431045,
+          "tokens": 27
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.160917,
+          "iterations": 2950,
+          "name": "letters-256",
+          "warm_ms": 0.05336775423728814,
+          "tokens": 148
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.003542,
+          "iterations": 20000,
+          "name": "repeat-256",
+          "warm_ms": 0.0017308979,
+          "tokens": 128
+        },
+        {
+          "bytes": 255,
+          "first_ms": 0.110625,
+          "iterations": 3904,
+          "name": "cjk-256",
+          "warm_ms": 0.027094881403688525,
+          "tokens": 114
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.766709,
+          "iterations": 237,
+          "name": "letters-1024",
+          "warm_ms": 0.5656003881856541,
+          "tokens": 578
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.010833,
+          "iterations": 20000,
+          "name": "repeat-1024",
+          "warm_ms": 0.0068326062500000005,
+          "tokens": 512
+        },
+        {
+          "bytes": 1023,
+          "first_ms": 0.34175,
+          "iterations": 1037,
+          "name": "cjk-1024",
+          "warm_ms": 0.12738223240115717,
+          "tokens": 440
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 16.486666,
+          "iterations": 9,
+          "name": "letters-8192",
+          "warm_ms": 15.673648111111113,
+          "tokens": 4614
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 0.055875,
+          "iterations": 3588,
+          "name": "repeat-8192",
+          "warm_ms": 0.05540651700111483,
+          "tokens": 4096
+        },
+        {
+          "bytes": 8190,
+          "first_ms": 2.525333,
+          "iterations": 68,
+          "name": "cjk-8192",
+          "warm_ms": 1.7595741470588235,
+          "tokens": 3596
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 199.293584,
+          "iterations": 3,
+          "name": "letters-32768",
+          "warm_ms": 196.275472,
+          "tokens": 18388
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.260417,
+          "iterations": 990,
+          "name": "repeat-32768",
+          "warm_ms": 0.24509844242424242,
+          "tokens": 16384
+        },
+        {
+          "bytes": 32766,
+          "first_ms": 11.370667,
+          "iterations": 13,
+          "name": "cjk-32768",
+          "warm_ms": 10.485641076923077,
+          "tokens": 14287
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 5.980875,
+          "iterations": 201,
+          "name": "base64-64k",
+          "warm_ms": 1.4429635124378108,
+          "tokens": 50099
+        }
+      ]
+    },
+    {
+      "label": "B2",
+      "all_token_arrays_equal": true,
+      "rows": [
+        {
+          "bytes": 66112,
+          "first_ms": 1.884166,
+          "iterations": 177,
+          "name": "corpus-64k",
+          "warm_ms": 0.8648620508474576,
+          "tokens": 15884
+        },
+        {
+          "bytes": 15244,
+          "first_ms": 0.709583,
+          "iterations": 987,
+          "name": "source-32k",
+          "warm_ms": 0.3452971540020263,
+          "tokens": 4710
+        },
+        {
+          "bytes": 89,
+          "first_ms": 0.020042,
+          "iterations": 20000,
+          "name": "chat-short",
+          "warm_ms": 0.006378154150000001,
+          "tokens": 30
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.032584,
+          "iterations": 20000,
+          "name": "letters-64",
+          "warm_ms": 0.00021374375,
+          "tokens": 36
+        },
+        {
+          "bytes": 64,
+          "first_ms": 0.002375,
+          "iterations": 20000,
+          "name": "repeat-64",
+          "warm_ms": 0.0001959479,
+          "tokens": 32
+        },
+        {
+          "bytes": 63,
+          "first_ms": 0.033667,
+          "iterations": 20000,
+          "name": "cjk-64",
+          "warm_ms": 0.00029053125,
+          "tokens": 27
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.051667,
+          "iterations": 2950,
+          "name": "letters-256",
+          "warm_ms": 0.010554802033898306,
+          "tokens": 148
+        },
+        {
+          "bytes": 256,
+          "first_ms": 0.003667,
+          "iterations": 20000,
+          "name": "repeat-256",
+          "warm_ms": 0.0017604791500000002,
+          "tokens": 128
+        },
+        {
+          "bytes": 255,
+          "first_ms": 0.049667,
+          "iterations": 3904,
+          "name": "cjk-256",
+          "warm_ms": 0.009045914446721311,
+          "tokens": 114
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.19825,
+          "iterations": 237,
+          "name": "letters-1024",
+          "warm_ms": 0.04525967088607595,
+          "tokens": 578
+        },
+        {
+          "bytes": 1024,
+          "first_ms": 0.0105,
+          "iterations": 20000,
+          "name": "repeat-1024",
+          "warm_ms": 0.00695453335,
+          "tokens": 512
+        },
+        {
+          "bytes": 1023,
+          "first_ms": 0.157209,
+          "iterations": 1037,
+          "name": "cjk-1024",
+          "warm_ms": 0.0374619093539055,
+          "tokens": 440
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 1.143375,
+          "iterations": 9,
+          "name": "letters-8192",
+          "warm_ms": 0.7210416666666667,
+          "tokens": 4614
+        },
+        {
+          "bytes": 8192,
+          "first_ms": 0.057625,
+          "iterations": 3588,
+          "name": "repeat-8192",
+          "warm_ms": 0.056716229933110374,
+          "tokens": 4096
+        },
+        {
+          "bytes": 8190,
+          "first_ms": 1.307542,
+          "iterations": 68,
+          "name": "cjk-8192",
+          "warm_ms": 0.5323970588235295,
+          "tokens": 3596
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 5.124959,
+          "iterations": 3,
+          "name": "letters-32768",
+          "warm_ms": 5.0341526666666665,
+          "tokens": 18388
+        },
+        {
+          "bytes": 32768,
+          "first_ms": 0.259625,
+          "iterations": 990,
+          "name": "repeat-32768",
+          "warm_ms": 0.2372425505050505,
+          "tokens": 16384
+        },
+        {
+          "bytes": 32766,
+          "first_ms": 3.524458,
+          "iterations": 13,
+          "name": "cjk-32768",
+          "warm_ms": 2.826762769230769,
+          "tokens": 14287
+        },
+        {
+          "bytes": 65536,
+          "first_ms": 5.845,
+          "iterations": 201,
+          "name": "base64-64k",
+          "warm_ms": 1.4173267014925375,
+          "tokens": 50099
+        }
+      ]
+    }
+  ],
+  "scope": "CPU encode plus complete-array equality check; no inference or GPU measurement",
+  "derivation": "Redacted derived summary; complete raw token arrays retained privately and compared literally.",
+  "device": {
+    "chip": "Apple M5 Pro",
+    "macos": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source": "801527c8cd0c2cf55413c38a5a9a2f7ba6315802",
+  "reference": "a283176326de221e9326e05b9f21e0759be75f99",
+  "flags": [
+    "-std=c++20",
+    "-O3",
+    "-DNDEBUG"
+  ]
+}
