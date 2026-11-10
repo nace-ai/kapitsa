@@ -45,10 +45,23 @@ struct Kern {
   int bm, bn;
   uint32_t threads;
   bool gu;  // fused gate/up/SwiGLU (qmr_gu_*): second weight set in buffers 6-8, half H output
-  int bits; // 8 for qmr8_* / *_b8_* kernels, else 4
+  int bits; // 8 for qmr8_* / *_b8_* kernels, F for a *_f{F}g{GS}_* name (wfmt.metal's qrf_*, tensor/qmtf.metal), else 4
   bool ld;  // *_ld: QmmLdParams, weight / scale rows of 2K columns
 };
-static int bits_for(const std::string& n) { return n.rfind("qmr8", 0) == 0 || n.find("_b8_") != std::string::npos ? 8 : 4; }
+static int bits_for(const std::string& n) {
+  std::smatch m;
+  if (std::regex_search(n, m, std::regex("_f([0-9]+)g([0-9]+)_"))) return std::stoi(m[1]);
+  return n.rfind("qmr8", 0) == 0 || n.find("_b8_") != std::string::npos ? 8 : 4;
+}
+// group size: GS of a *_f{F}g{GS}_* name, else 64
+static uint32_t gs_for(const std::string& n) {
+  std::smatch m;
+  return std::regex_search(n, m, std::regex("_f([0-9]+)g([0-9]+)_")) ? uint32_t(std::stoi(m[2])) : 64u;
+}
+// fused gate/up/SwiGLU: qmr_gu_* / qrf_gu_* / qmtg_* / qmtfg_*; their grid is BN / 2 columns a tile for the qmt forms
+static bool gu_for(const std::string& n) {
+  return n.find("_gu_") != std::string::npos || n.rfind("qmtg", 0) == 0 || n.rfind("qmtfg", 0) == 0;
+}
 
 static uint32_t threads_for(const std::string& name) {
   if (getenv("QMM_THREADS")) return atoi(getenv("QMM_THREADS"));
@@ -69,7 +82,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
       std::string n = argv[i];
       if (!std::regex_match(n, mt, full)) fatal("not a kernel name: %s", n.c_str());
-      kerns.push_back({n, std::stoi(mt[1]), std::stoi(mt[2]), threads_for(n), (n.find("_gu_") != std::string::npos || n.rfind("qmtg", 0) == 0), bits_for(n),
+      kerns.push_back({n, std::stoi(mt[1]), std::stoi(mt[2]), threads_for(n), gu_for(n), bits_for(n),
                        mt[3].matched});
     }
   } else {
@@ -80,7 +93,7 @@ int main(int argc, char** argv) {
     }
     for (auto [bm, bn] : tiles) {
       std::string n = a1 + "_m" + std::to_string(bm) + "_n" + std::to_string(bn);
-      kerns.push_back({n, bm, bn, threads_for(n), (n.find("_gu_") != std::string::npos || n.rfind("qmtg", 0) == 0), bits_for(n), false});
+      kerns.push_back({n, bm, bn, threads_for(n), gu_for(n), bits_for(n), false});
     }
   }
   const int trials = getenv("QMM_TRIALS") ? atoi(getenv("QMM_TRIALS")) : 5;
@@ -104,14 +117,15 @@ int main(int argc, char** argv) {
   for (auto sh : shapes) {
     const uint32_t M = sh.M, N = sh.N, K = sh.K;
     // weights sized for 8 bits (4-bit kernels read the first half), rows of 2K for the *_ld kernels' view
-    Buffer W = g.alloc(size_t(N) * K * 2), S = g.alloc(size_t(N) * K / 64 * 4), B = g.alloc(size_t(N) * K / 64 * 4);
+    // scales / biases sized for group 32 over rows of 2K (bf16: N * 2K / 32 * 2 bytes)
+    Buffer W = g.alloc(size_t(N) * K * 2 + 16), S = g.alloc(size_t(N) * K / 8), B = g.alloc(size_t(N) * K / 8);
     Buffer X = g.alloc(size_t(M) * K * 2), Y = g.alloc(size_t(M) * N * 4);
     Buffer XQ = g.alloc(size_t(M) * K), XS = g.alloc(size_t(M) * K / 64 * 8);  // qmti8_*: qx8_g64's int8 X
-    Buffer W2 = g.alloc(size_t(N) * K * 2), S2 = g.alloc(size_t(N) * K / 64 * 4), B2 = g.alloc(size_t(N) * K / 64 * 4);
+    Buffer W2 = g.alloc(size_t(N) * K * 2 + 16), S2 = g.alloc(size_t(N) * K / 8), B2 = g.alloc(size_t(N) * K / 8);
     std::uniform_real_distribution<float> d(-1, 1);
     for (auto [w, sc, bi] : {std::tuple{&W, &S, &B}, std::tuple{&W2, &S2, &B2}}) {
       for (size_t i = 0; i < size_t(N) * K / 2; ++i) w->as<uint32_t>()[i] = rng();
-      for (size_t i = 0; i < size_t(N) * K / 32; ++i) {
+      for (size_t i = 0; i < size_t(N) * K / 16; ++i) {
         sc->as<uint16_t>()[i] = f32_to_bf16(scale_mul * 0.01f * (1.0f + d(rng)));
         bi->as<uint16_t>()[i] = f32_to_bf16(0.05f * d(rng));
       }
@@ -133,10 +147,11 @@ int main(int argc, char** argv) {
       e->buf(0, X); e->buf(1, XQ); e->buf(2, XS); e->val(3, qxp);
       e->dispatch((M * (K / 64) * 8 + 255) / 256, 1, 1, 256);
     };
-    QmmParams prm{M, N, K, K, N, getenv("QMM_ADD") ? 1u : 0u, 64, 0, 0};  // QMM_ADD=1: Y += (each run adds)
-    struct { QmmParams q; uint32_t w_ld, s_ld; } ldprm{prm, 2 * K / 8, 2 * K / 64};  // 4-bit rows of 2K
     auto run = [&](size_t ki, int n) {
       const Kern& k = kerns[ki];
+      const uint32_t gs = gs_for(k.name);
+      QmmParams prm{M, N, K, K, N, getenv("QMM_ADD") ? 1u : 0u, gs, 0, 0};  // QMM_ADD=1: Y += (each run adds)
+      struct { QmmParams q; uint32_t w_ld, s_ld; } ldprm{prm, 2 * K * uint32_t(k.bits) / 32, 2 * K / gs};  // rows of 2K
       auto e = g.begin();
       const bool i8 = k.name.rfind("qmti8", 0) == 0;
       if (i8 && nopre) quant(e.get());
@@ -147,7 +162,7 @@ int main(int argc, char** argv) {
         if (i8) { QmmParams q8 = prm; q8.x_ld = K; e->val(5, q8); e->buf(6, XS); } e->buf(1, W); e->buf(2, S); e->buf(3, B); e->buf(4, Y);
         if (k.ld) e->val(5, ldprm); else if (!i8) e->val(5, prm);
         if (k.gu) { e->buf(6, W2); e->buf(7, S2); e->buf(8, B2); }
-        const int cb = k.name.rfind("qmtg", 0) == 0 ? k.bn / 2 : k.bn;
+        const int cb = k.name.rfind("qmtg", 0) == 0 || k.name.rfind("qmtfg", 0) == 0 ? k.bn / 2 : k.bn;
         if (k.name.find("rt_m") != std::string::npos)  // rows-fastest grid
           e->dispatch((M + k.bm - 1) / k.bm, (N + cb - 1) / cb, 1, std::min(k.threads, pipes[ki].max_threads));
         else
@@ -183,13 +198,18 @@ int main(int argc, char** argv) {
       for (int t = 0; t < 64; ++t) {
         uint32_t m = t == 0 ? M - 1 : r2() % M, n = t == 0 ? N - 1 : r2() % N;
         const uint32_t wk = kerns[ki].ld ? 2 * K : K;  // weight row length
+        const int F = kerns[ki].bits;
+        const uint32_t gs = gs_for(kerns[ki].name);
         auto dot = [&](const Buffer& w, const Buffer& sc, const Buffer& bi) {
           double r = 0;
           for (uint32_t k = 0; k < K; ++k) {
             const size_t ik = size_t(n) * wk + k;
-            uint32_t q = kerns[ki].bits == 8 ? (w.as<uint32_t>()[ik / 4] >> (8 * (k % 4))) & 255
-                                             : (w.as<uint32_t>()[ik / 8] >> (4 * (k % 8))) & 15;
-            float wv = bf16_to_f32(sc.as<uint16_t>()[ik / 64]) * q + bf16_to_f32(bi.as<uint16_t>()[ik / 64]);
+            // code k of the row: bits [F k, F k + F) of its little-endian word stream (rows are whole words)
+            const size_t bit = size_t(n) * (size_t(wk) * F) + size_t(F) * k;
+            const uint32_t* wp = w.as<uint32_t>();
+            const uint64_t two = wp[bit / 32] | (uint64_t(wp[bit / 32 + 1]) << 32);
+            uint32_t q = uint32_t(two >> (bit % 32)) & ((1u << F) - 1u);
+            float wv = bf16_to_f32(sc.as<uint16_t>()[ik / gs]) * q + bf16_to_f32(bi.as<uint16_t>()[ik / gs]);
             r += double(float(__fp16(wv))) * h2f(X.as<uint16_t>()[size_t(m) * K + k]);
           }
           return r;

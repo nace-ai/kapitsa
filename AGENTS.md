@@ -50,7 +50,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test systemone systemone_test
+exl3_test remote_test cluster_test split_place_test gemm_slices_test ffn_share_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
@@ -71,6 +71,7 @@ build/qwen4_config_test                      # what a Qwen 4 config asks that Fl
 build/nh_quant_q8_test                       # Q8 load quantization: code/half-scale bytes, rounding, fallback and guards (CPU only)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
+build/ffn_share_test                         # the kernels the split's GPU part runs a dense FFN layer on, and its share (src/model/ffn_share.h)
 build/systemone_test                         # System One's pointer heads, readout (Drex Max v1) and projected (Drex v2.0) (src/systemone/systemone.cpp)
 build/systemone_codes_probe_test             # controlled option-code regression, built and run explicitly in CI
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
