@@ -8,7 +8,7 @@
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex, Pi, Hermes, aider or Goose on a local model, and serves OpenAI and Anthropic APIs.
 
-[Quickstart](#quickstart) · [What's new](#-whats-new) · [Features](#features) · [Benchmarks](#benchmarks) · [CLI](#cli) · [Models](#supported-models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [Xcode 26 guide](docs/xcode-guide.md) · [日本語](README.ja.md)
+[Quickstart](#quickstart) · [What's new](#-whats-new) · [Features](#features) · [Benchmarks](#benchmarks) · [CLI](#cli) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md) · [Xcode 26 guide](docs/xcode-guide.md) · [日本語](README.ja.md)
 
 ## Quickstart
 
@@ -86,7 +86,7 @@ Kapitsa has the fastest decode in 33 of the 38 model and Mac pairs measured agai
 
 <sub>Each cell reads prefill / decode in tokens per second, from a 4K-token prompt and a 512-token answer at T 0.6 (Flint at its card's T 1.0). The M5 Pro's Flash-Next 180B Q2 row is a 256-token answer at T 0 on that run's own 4,074-token prompt, and its Kapitsa column is Kapitsa with KFlash against plain Splash 1.5.0: a tie, the two engines' ranges overlap ([record](bench/results/2026-10-30-m5-pro-flash-next-kflash/README.md)). Footnotes, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
 
-The poster's numbers, and the models it leaves out, are in each Mac's table under [Models](#models). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md) and the [community leaderboard](https://kapitsa.vercel.app/leaderboard.html). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
+The poster's numbers, and the models it leaves out, are in each Mac's table under [Speed on each Mac](#speed-on-each-mac). Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md) and the [community leaderboard](https://kapitsa.vercel.app/leaderboard.html). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
 How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to 512K, every model on the M5 Max (log scale; the [table](docs/benchmarks.md#m5-max)). The decode chart is the poster's 512-token coding answer written after a document of each length: with a document in front of it a drafter guesses fewer tokens right, so a drafted model's 1K point can sit well below its poster cell (the 27B: 82 against 143), while Flint, which drafts nothing, matches its cell:
 
@@ -129,9 +129,9 @@ The [Node.js / TypeScript binding](sdk/node/README.md) provides async calls over
 
 **Roadmap** — what is open in the [tracker](https://github.com/nace-ai/kapitsa/issues): KV cache quantization ([#547](https://github.com/nace-ai/kapitsa/issues/547)).
 
-## Supported models
+## Models
 
-The most precise variant of each catalog model that runs on a Mac of each size. Which Hugging Face repo each alias downloads, with its pinned revision, draft model and size: [Models](docs/models.md). Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
+The most precise variant of each catalog model that runs on a Mac of each size. Which Hugging Face repo each alias downloads, with its pinned revision, draft model and size: [docs/models.md](docs/models.md). Sizes, download times and draft models: [Models and downloads](docs/usage.md#models-and-downloads); `kapitsa doctor` prints the same for this Mac.
 
 | Model | 16 GB | 24 GB | 32 GB | 36 GB | 48 GB | 64 GB | 128 GB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -150,9 +150,9 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
 | **Drex 2.0** · `kapitsa-systemone` | — | — | — | Q4† | Q4 | Q8 | Q8 |
 
-<sub>Cells name the catalog's variant labels — `4bit`, `5bit`, `6bit`, `8bit`, `bf16` and `nvfp4`, with `16gb`, `24gb` and Flash-Next's `64gb` shown as 2-bit — that `kapitsa serve <name>:<variant>` takes, the most precise one that starts on that Mac at the bottom of its working-set range: weights, drafter, activations and 8K tokens of context. † needs the top of the range, about 80% of the RAM against 69% at the bottom; — nothing starts. Flash-Next's 48 GB cell is its Q2_0 pack with the experts the budget does not hold streamed from the SSD, and Drex 2.0's Q4 and Q8 are its release builds, served by `kapitsa-systemone` ([decisions](docs/systemone.md)). The 24, 32 and 64 GB columns are `kapitsa doctor`'s plan, and so is any cell in the 16, 36, 48 and 128 GB ones that differs from the default variant those [Macs](#models) ran, usually 4-bit; `kapitsa doctor` prints the plan for this Mac.</sub>
+<sub>Cells name the catalog's variant labels — `4bit`, `5bit`, `6bit`, `8bit`, `bf16` and `nvfp4`, with `16gb`, `24gb` and Flash-Next's `64gb` shown as 2-bit — that `kapitsa serve <name>:<variant>` takes, the most precise one that starts on that Mac at the bottom of its working-set range: weights, drafter, activations and 8K tokens of context. † needs the top of the range, about 80% of the RAM against 69% at the bottom; — nothing starts. Flash-Next's 48 GB cell is its Q2_0 pack with the experts the budget does not hold streamed from the SSD, and Drex 2.0's Q4 and Q8 are its release builds, served by `kapitsa-systemone` ([decisions](docs/systemone.md)). The 24, 32 and 64 GB columns are `kapitsa doctor`'s plan, and so is any cell in the 16, 36, 48 and 128 GB ones that differs from the default variant those [Macs](#speed-on-each-mac) ran, usually 4-bit; `kapitsa doctor` prints the plan for this Mac.</sub>
 
-## Models
+## Speed on each Mac
 
 The catalog models measured on each Mac, against the engines that run them: one collapsed section per Mac, with a table for each model family. Decode is a 512-token coding answer at T 0.6 (Flint at its card's T 1.0), prefill a 4K-token prompt. Under each model's name are the weights Kapitsa ran; the other engines' weights and how each number was measured are in [docs/benchmarks.md](docs/benchmarks.md#the-readmes-tables). Flint's speed from 1K to 128K tokens of prompt on the M5 Pro, against llama.cpp: [bench/results/2026-10-24-flint-m5pro-context](bench/results/2026-10-24-flint-m5pro-context/README.md).
 
@@ -286,7 +286,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 </details>
 
-<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint, Clover and the 35B's `16gb` read images. What runs on a Mac of each size: [Supported models](#supported-models). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
+<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint, Clover and the 35B's `16gb` read images. What runs on a Mac of each size: [Models](#models). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
 
 ## How it works
 
