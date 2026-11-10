@@ -10,7 +10,8 @@
 //   <ns>/kv/<key>   the KV rows of one block of positions (every attention cache), keyed by how they were computed:
 //                   the tokens up to the block's end and the requests that computed them
 //   <ns>/st/<key>   a state at a position: the recurrent state and the drafter's context ring
-//   <ns>/e/<key>    an entry: one conversation's tokens, its KV blocks and the states it can resume from
+//   <ns>/e/<key>    an entry: one conversation's tokens, its KV blocks and the states it can resume from (its
+//                   header data: the digest of the prompt_cache_key it was sent with, or none)
 // A conversation's next turns share the blocks of the turns before (a write adds the new blocks and states only).
 // Every file is a 4 KiB header (magic, kind, namespace, key, sizes, CRC-32C of the payload and of the header) and the
 // payload, written to a temporary file that is then renamed, read and written with F_NOCACHE.
@@ -89,11 +90,20 @@ struct Entry {
   int32_t vocab_scanned = 0;
   uint32_t tag = 0;                                  // what else its states depend on (Dory: the loop count)
   std::string attach;                                // the engine's own record (the images among the tokens)
+  // the conversation's prompt_cache_key (conversation_key(); empty: none). In the file's header data, not its record:
+  // an entry written before keys were kept has none, and the entry's key (its record's digest) does not change
+  Key conv;
+  // not in the file: a new conversation under its key replaced it, so it goes first when room is needed (demote; put
+  // takes it for an entry written as its slot is replaced)
+  bool replaced = false;
   // index only (not in the file)
   double used = 0;      // last write or restore (Unix time), for least-recently-used eviction
   uint64_t bytes = 0;   // the record's file
   int pins = 0;
 };
+
+// An entry's conv: a digest of the prompt_cache_key (the empty key for "", so no key matches another's absence)
+Key conversation_key(const std::string& prompt_cache_key);
 
 // The deepest restore point that matches a prompt
 struct Hit {
@@ -135,6 +145,12 @@ class Store {
   // A copy of the entry's record, pinned: its files stay until unpin (used: it was restored, for the LRU order)
   bool pin(const Key& entry, Entry* out);
   void unpin(const Key& entry, bool used);
+  // A new conversation under prompt_cache_key `conv` replaced its old one: the entries of that key are evicted before
+  // any other, least recently used first among them, until one is restored (unpin with used) or written again. Only
+  // the order changes, in memory: no entry goes before room is needed, and a restart forgets it (the files' times are
+  // the order then). The entries put later decide for themselves (Entry::replaced). The empty key marks none.
+  // Returns how many it marked.
+  int demote(const Key& conv);
   // Reads a piece: its header data (meta) and its payload in chunks to take(off, src, n). False when the piece is
   // missing, damaged (its CRC; it is then deleted with the entries that need it) or take refused a chunk.
   using Take = std::function<bool(uint64_t off, const uint8_t* src, size_t n)>;
@@ -161,7 +177,8 @@ class Store {
   using Give = std::function<bool(uint64_t off, uint8_t* dst, size_t n)>;
   bool write(Job& job, Kind kind, const Key& key, const std::string& meta, uint64_t bytes, const Give& give);
   // Writes the entry's record (its pieces must exist) and indexes it. Entries whose restore points it has all
-  // (by key) are removed. e.key is set from its content when empty.
+  // (by key) are removed. e.key is set from its content when empty; e.conv goes in the file's header data, and
+  // e.replaced (the conversation a new one under its key replaced) puts it first to go, as demote does.
   bool put(Job& job, Entry e);
 
   // ---- space ----
@@ -191,8 +208,8 @@ class Store {
   std::string path_of(Kind kind, const Key& key) const;
   bool write_file(Kind kind, const Key& key, const std::string& meta, uint64_t bytes, const Give& give,
                   uint64_t* file_bytes);
-  // makes room for `bytes` more: orphan pieces first, then the least recently used entries (not pinned) and the
-  // pieces only they needed. Locked.
+  // makes room for `bytes` more: orphan pieces first, then the entries (not pinned) a new conversation under their key
+  // replaced, then the least recently used ones, with the pieces only they needed. Locked.
   bool make_room(uint64_t bytes);
   void fit();  // within the limit (locked)
   void drop_entry(std::map<Key, Entry>::iterator it);  // locked

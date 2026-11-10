@@ -4,7 +4,8 @@
 // the quota (least recently used entries go first, pieces shared by entries stay while one needs them, an entry whose
 // restore points a newer one has goes, a pinned entry stays, a piece larger than the limit is refused); the volume
 // filling up; namespaces (one unused for 14 days removed at open, another counted against the limit and removed before
-// this one's entries, one another process holds left alone, other folders untouched); the namespace's lock.
+// this one's entries, one another process holds left alone, other folders untouched); the namespace's lock; the
+// entries of a prompt_cache_key a new conversation replaced going first (and their key taken back after a restart).
 // Works in a temporary folder it removes.
 //   prefix_cache_test        exit status 1 if any check fails
 #include "engine/prefix_cache.h"
@@ -361,6 +362,79 @@ void quota(const std::string& root) {
   st.clear();
 }
 
+// A new conversation under a prompt_cache_key replaced that key's conversation (Engine::disk_replaced): its entries go
+// before any other when room is needed, until one is restored or written again; the key is in the entry file's header
+// data, so it comes back after a restart (the order does not), and an entry without one (as written before keys were
+// kept) loads as before.
+void replaced_first(const std::string& root) {
+  const std::string ns = ns_name(5);
+  const Key ka = conversation_key("chat-A"), kb = conversation_key("chat-B");
+  check(!conversation_key("") && ka && ka == conversation_key("chat-A") && ka != kb,
+        "conversation_key: none for \"\", the same for the same key, another for another");
+  // conversations of ~0.37 MB (as in quota()): two fit in 1 MiB
+  auto conv = [](uint64_t id, int base, const Key& k) {
+    Conv c = make_conv(id, 64, base, {64}, 60000, 100000);
+    c.e.conv = k;
+    return c;
+  };
+  Conv b = conv(51, 100, kb), a = conv(52, 200, ka), c = conv(53, 300, conversation_key("chat-C"));
+  Conv n = conv(54, 400, ka), old = conv(55, 500, Key());
+  {
+    Store st;
+    std::string why;
+    check(st.open(opts(root, ns, 1 * kMiB), &why), "replaced: a quota of 1 MiB", why);
+    auto in = [&](const Conv& x) { return hit_pos(st, tokens_of(x, 70)) == 64; };
+    auto later = [&](const Conv& x) {  // written after what was written before it (the order of use)
+      usleep(2000);
+      return save_conv(st, x);
+    };
+    check(save_conv(st, b), "replaced: B written");
+    check(later(a), "replaced: A written after it (B is the least recently used)");
+    check(st.demote(Key()) == 0 && st.demote(conversation_key("chat-Z")) == 0,
+          "replaced: the empty key and a key no entry has mark nothing");
+    check(st.demote(ka) == 1 && st.demote(ka) == 0, "replaced: a new conversation under chat-A marks A's entry (once)");
+    check(save_conv(st, c) && in(b) && in(c) && !in(a),
+          "replaced: room for C takes A, the replaced one, not B (least recently used)");
+    // a wrong guess: a marked entry restored is back in the usual order
+    st.clear();
+    check(save_conv(st, b) && later(a) && st.demote(ka) == 1, "replaced: B, A again, A marked");
+    Entry e;
+    usleep(2000);
+    check(st.pin(st.lookup(tokens_of(a, 70).data(), 70, 70).entry, &e) && e.conv == ka,
+          "replaced: the pinned record has its key");
+    st.unpin(e.key, true);
+    check(save_conv(st, c) && !in(b) && in(a) && in(c), "replaced: restored, A is back in the order: B goes, as before");
+    // an entry written as its slot is replaced (put with replaced) goes first, newest as it is
+    st.clear();
+    Conv a2 = a;
+    a2.e.replaced = true;
+    check(save_conv(st, b) && later(a2) && later(c) && in(b) && in(c) && !in(a),
+          "replaced: an entry written as replaced goes first, though newer than B");
+    // the new conversation's own entries under the key are not marked: only those there when it replaced the old one
+    st.clear();
+    check(save_conv(st, a) && st.demote(ka) == 1 && later(b) && later(n) && later(c) && !in(a) && in(n) && in(c) && !in(b),
+          "replaced: A's old entry goes first; the new conversation under chat-A is in the usual order (B goes next)");
+    // the same conversation written again under another key: the same entry (its key is its record's digest)
+    const size_t n0 = st.stats().entries;
+    Conv n2 = n;
+    n2.e.conv = kb;
+    check(save_conv(st, n2) && st.stats().entries == n0, "replaced: the key is not part of the entry's identity");
+    // an entry without a key (as every entry was written before keys were kept: no header data)
+    st.clear();
+    check(save_conv(st, a) && save_conv(st, old) && st.demote(Key()) == 0, "replaced: an entry without a key, beside A's");
+    check(st.demote(ka) == 1, "replaced: A marked before the restart");
+  }
+  {
+    Store st;  // the server restarts
+    std::string why;
+    check(st.open(opts(root, ns, 1 * kMiB), &why) && st.stats().entries == 2, "replaced: both taken back by the next open",
+          why);
+    check(hit_pos(st, tokens_of(old, 70)) == 64, "replaced: the entry without a key loads and is found as before");
+    check(st.demote(ka) == 1, "replaced: A's key came back from its file (the mark did not: it marks again)");
+    st.clear();
+  }
+}
+
 // Threads at once, as the engine's are (its writer thread, requests reading what they pinned, lookups) while the volume's
 // free space moves: no read of a pinned entry fails, and the files and the index agree afterwards and after a reopen.
 void concurrency(const std::string& root) {
@@ -501,6 +575,7 @@ int main() {
   quota(root);
   concurrency(root);
   namespaces(root);
+  replaced_first(root);
   std::error_code ec;
   fs::remove_all(root, ec);
   printf("%d passed, %d failed\n", passes, fails);

@@ -2338,22 +2338,29 @@ int Engine::count_tokens(const ChatRequest& r_in) const {
   return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
-int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key) {
+int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key, bool* by_key) {
+  auto keyed = [&](const NewConversationSlot& a) { return !key.empty() && a.key == key; };
   auto before = [&](const NewConversationSlot& a, const NewConversationSlot& b) {
     if (a.rank != b.rank) return a.rank < b.rank;
-    const bool ak = !key.empty() && a.key == key, bk = !key.empty() && b.key == key;
-    if (ak != bk) return ak;
+    if (keyed(a) != keyed(b)) return keyed(a);
     if (a.prefix != b.prefix) return a.prefix;
     return a.last_used < b.last_used;
   };
   int pick = -1;
   for (size_t i = 0; i < v.size(); ++i)
     if (v[i].usable && (pick < 0 || before(v[i], v[size_t(pick)]))) pick = int(i);
+  if (by_key) {
+    *by_key = false;
+    if (pick >= 0 && keyed(v[size_t(pick)]))
+      for (const NewConversationSlot& o : v)
+        *by_key = *by_key || (o.usable && o.rank == v[size_t(pick)].rank && !keyed(o));
+  }
   return pick;
 }
 
 Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops,
-                                const std::string& key) {
+                                const std::string& key, bool* by_key) {
+  if (by_key) *by_key = false;
   // (a looped model's cached state is only valid for the loop count that computed it)
   auto lcp = [&](const Slot& s) { return dory_ && s.loops != loops ? size_t(0) : common_rows(s, prompt, mm); };
   // What a slot can actually reuse: its live state if the prompt extends it, else its newest
@@ -2412,7 +2419,7 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
       const bool ok = !s.busy && int(prompt.size()) + 64 <= s.seq->limit;
       view.push_back({ok, ok ? rank(s) : 0, s.key, ok && has_prefix(s), s.last_used});
     }
-    if (const int i = pick_new_conversation_slot(view, key); i >= 0) {
+    if (const int i = pick_new_conversation_slot(view, key, by_key); i >= 0) {
       Slot* pick = &slots_[size_t(i)];
       pick->turns = 1;
       return pick;
@@ -2575,7 +2582,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   model_->ane_poll();
   const double t_slot = now_ms();
   Slot* picked = nullptr;
-  bool queued = false;
+  bool queued = false, by_key = false;
   for (;;) {
     if (cancelled && cancelled()) {  // before a slot is picked: a client gone while its request waited takes none
       if (queued) {
@@ -2586,7 +2593,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       return res;
     }
     if (slot_queue_.empty() || slot_queue_.front() == arrival)
-      picked = pick_slot(keys, arrival, mmp, loops, r.cache_key);
+      picked = pick_slot(keys, arrival, mmp, loops, r.cache_key, &by_key);
     if (picked) break;
     if (!queued) {
       slot_queue_.push_back(arrival);
@@ -2626,7 +2633,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
   ++slot.gen;
-  slot.key = r.cache_key;
 
   // ---- prefix reuse ----
   // (a looped model's KV holds the loop count that computed it: another count reads the prompt from the start)
@@ -2636,12 +2642,16 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
          int(&slot - slots_.data()), slot.loops);
   // SSD prefix cache (engine_disk.cpp): a stored state deeper than the slot's own is read into it once its KV cache is
   // reserved (below); the conversation the slot held goes to the SSD first, if the SSD lacks it and this request
-  // leaves it behind (another conversation; with the loop count it was computed with)
+  // leaves it behind (another conversation; with the loop count it was computed with), under the slot's key as it was.
+  // A new conversation that took the slot for its prompt_cache_key and resumes nothing from the SSD either retires that
+  // key's conversation: what the SSD has of the key goes first when room is needed (disk_replaced)
   pcache::Hit disk_hit;
   if (disk_) {
     const int ram = reuse_start(slot, common, n);
     disk_hit = disk_lookup(keys, n, ram, dory_ ? uint32_t(loops) : 0, mmp);
-    disk_leaving(slot, disk_hit ? 0 : ram);
+    const bool replaced = by_key && !disk_hit;
+    if (replaced) disk_replaced(slot);
+    disk_leaving(slot, disk_hit ? 0 : ram, false, replaced);
     if (disk_hit) {  // the slot's own state is not reused
       common = 0;
       slot.tokens.clear();
@@ -2649,6 +2659,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       for (auto& c : slot.ckpts) c.pos = -1;
     }
   }
+  slot.key = r.cache_key;
   ++slot.version;
   if (dory_) slot.loops = s.loops = loops;
 
