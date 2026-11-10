@@ -139,7 +139,10 @@ void Activity::tick_engine() {
   std::lock_guard<std::mutex> lk(mu_);
   EngineSample e;
   if (!sample_engine_ || !sample_engine_(e) || e.budget == 0) {
+    // no engine (unloaded, or switching): the next one's counters start at 0 even when it lands at the same address
     engine_ = nullptr;
+    drafts_engine_ = nullptr;
+    drafts_cycles_ = drafts_tokens_ = 0;
     return;
   }
   if (e.engine != drafts_engine_) drafts_engine_ = e.engine, drafts_cycles_ = drafts_tokens_ = 0;

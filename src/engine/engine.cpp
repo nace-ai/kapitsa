@@ -1369,6 +1369,7 @@ void Engine::wait_split(Encoder& e) {
 void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
   note_kv(slot);
+  slot_pos_[&slot - slots_.data()].store(0, std::memory_order_relaxed);  // (its tokens are cleared below)
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
   slot.img_spans.clear();
@@ -4483,6 +4484,14 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     logd("history: slot %d was used by another request; prefilling into slot %d (%zu tokens there)", res.slot, pick, hp->tokens.size());
   }
   Slot& slot = *hp;
+  struct Note {  // (every return: the slot's tokens and capacity as this left them, for view(); under the turn)
+    Engine& en;
+    const Slot& sl;
+    ~Note() {
+      en.slot_pos_[&sl - en.slots_.data()].store(int(sl.tokens.size()), std::memory_order_relaxed);
+      en.note_kv(sl);
+    }
+  } note{*this, slot};
   const uint64_t want_gen = slot.gen;
   uint64_t seen_req = requests_.load();  // (a request that arrives after this ends the work at a chunk boundary; read again once the SSD read, which gives the turn up, is over)
   const double t0 = now_ms();

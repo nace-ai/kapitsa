@@ -270,6 +270,28 @@ static void engine_block() {
   act.tick(steady_ms());
   count_engine();
   CHECK(act.engine().is_null() && engine_events == 3);
+  // unloaded, then loaded again at the same address (a reload often gets the freed block back): the counters still
+  // start at 0, and a request that finished while nothing was loaded does not count
+  bool loaded = true;
+  act.set_engine([&](Activity::EngineSample& e) {
+    e = {which, 40'000'000'000, 20'000'000'000, 17'000'000'000, 1'500'000'000, {0, 300}, true};
+    return loaded;
+  });
+  act.tick(steady_ms());
+  const auto drafted = [&](int cycles) {
+    auto q = act.start("openai", "");
+    q->live->slot = 0, q->live->phase = 2, q->live->tokens = 2 * cycles + 1, q->live->spec = 2, q->live->cycles = cycles;
+    act.finish(q, ChatResult{});
+  };
+  drafted(3);
+  act.tick(steady_ms());
+  CHECK(act.engine()["drafts"]["cycles"] == 3);
+  loaded = false;
+  act.tick(steady_ms());
+  drafted(4);
+  loaded = true;
+  act.tick(steady_ms());
+  CHECK(act.engine()["drafts"] == json({{"cycles", 0}, {"tokens", 0}}));
 }
 
 // --print: every kind of event the server publishes, one SSE frame per line as JSON, for tests/test_events_schema.py
