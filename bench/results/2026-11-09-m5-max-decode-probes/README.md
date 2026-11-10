@@ -28,8 +28,8 @@ display asleep through `caffeinate -is` and `pmset displaysleepnow`):
 One of the two display-on legs ran 5-10% slow in every phase, and the other did not. Two display-on `ni_run` legs that
 day ran twice as slow in every phase. The morning's display-on baseline (below: 141-144 greedy) sits under all four
 legs on the same code, so the display is not all of that difference: the agent's own activity in the desktop app,
-and the KFlash cache's state, also differed. Every A/B here compares arms under one condition. The PRs' runs after
-19:00 had the display asleep.
+and the KFlash cache's state, also differed. Every A/B here compares arms under one condition: #1130's `ni_run` pairs
+ran with the display on, its cells and #1131's runs with it asleep.
 
 ## Baseline (origin/main 888a5679, display on)
 
