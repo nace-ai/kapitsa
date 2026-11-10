@@ -69,7 +69,8 @@
   "record_url": "https://github.com/nace-ai/kapitsa/blob/main/bench/results/2026-11-10-m5-pro-kquant-35b/README.md",
   "quality_note": "the text weights of both packs (19.51 GB each); the repos also carry the vision tower, which neither run exercised",
   "catalog_pinned": false,
-  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) at `95460516` (MTPLX, apache-2.0), unchanged. Its head comes from [cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit](https://huggingface.co/cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit) (apache-2.0) and its body trunk from [mlx-community/Qwen3.6-35B-A3B-4bit](https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-4bit) (apache-2.0). Thanks to Youssofal and cyankiwi."
+  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) at `95460516` (MTPLX, apache-2.0), unchanged. Its head comes from [cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit](https://huggingface.co/cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit) (apache-2.0) and its body trunk from [mlx-community/Qwen3.6-35B-A3B-4bit](https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-4bit) (apache-2.0). Thanks to Youssofal and cyankiwi. Tokenizer and chat template as in the Youssofal build.",
+  "text_caveat": "Quality and speed were measured on text workloads; the vision tower is included but was not evaluated."
  },
  "model": "Qwen3.6-35B-A3B",
  "base_repo": "Qwen/Qwen3.6-35B-A3B",
@@ -101,7 +102,8 @@
    "reason": "foreign process rg 51% CPU at 17:34 (mine)",
    "decode_t06": 196.98,
    "decode_t0": 226.4,
-   "prefill_tps": 3261.6
+   "prefill_tps": 3261.6,
+   "note": "VOID leg, in no mean: its 196.98 / 226.4 / 3261.6 are shown only for the record"
   }
  ],
  "legs_shape": "B A B A B A, one lock hold, released kapitsa 0.2.32 (e728524), default decoding, MTP head + DFlash2 on both arms; AC power, AC powermode 2, 1-min load 2.6-3.7 at leg start/end; 4K prompt (4134 tokens)",
@@ -199,5 +201,60 @@
     }
    ]
   }
- ]
+ ],
+ "tokenizer_check": {
+  "gate": "release/tok_check.py files, run on Modal in k436/kq/publish35.py before the upload",
+  "files_vs_catalog": "PASS: tokenizer.json, tokenizer_config.json, chat_template.jinja (and vocab.json, merges.txt) are byte-identical to the catalog pack Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed @95460516 (sha256 prefixes tokenizer 87a7830d63, tokenizer_config e98f1901ac, chat_template e84f32a23f, vocab ce99b4cb29, merges a9d356d7bd)",
+  "ids_vs_base": "PASS: token ids on the 15 gate texts (release/tokcheck_texts.json) are identical to Qwen/Qwen3.6-35B-A3B @345d467b",
+  "vs_base_files": "the three files are NOT byte-identical to the base model's (tokenizer.json 5f9e4d4901, tokenizer_config.json a39230de92, chat_template.jinja 1b8361565c); the chat template differs from the base's only by the dropped `{% generation %}` markers",
+  "not_checked": "rendered chat text of the template against the base's on more than the diffed lines; tokenizer.json and tokenizer_config.json differences beyond the ids check were not diffed to the end (the base's tokenizer_config.json is the longer file)",
+  "staged_repo": "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant @a8c2dd66 (private)"
+ },
+ "summary_valid_legs": {
+  "source": "mac/runs/35b-six legs 1-B 2-A 3-B 4-A 5-B (valid); leg 6-A is void and in no mean; Kapitsa 0.2.32 (e728524), M5 Pro 48 GB, macOS 26.5.2, AC powermode 2",
+  "decode_sampled_t06_tok_s": {
+   "kquant_mean": 219.1,
+   "standard_mean": 199.5,
+   "kquant_legs": [
+    213.35,
+    221.75,
+    222.21
+   ],
+   "standard_legs": [
+    192.96,
+    206.06
+   ]
+  },
+  "decode_greedy_t0_tok_s": {
+   "kquant_mean": 234.0,
+   "standard_mean": 223.6,
+   "kquant_legs": [
+    233.31,
+    236.55,
+    232.06
+   ],
+   "standard_legs": [
+    218.97,
+    228.17
+   ]
+  },
+  "decode_pooled_tok_s": {
+   "kquant": 226.5,
+   "standard": 211.5,
+   "how": "mean of all valid-leg medians, sampled and greedy together (same pooling as the 4B and 9B README rows); README table prints these rounded: 227 vs 212"
+  },
+  "prefill_4k_tok_s": {
+   "kquant_mean": 3191.7,
+   "standard_mean": 3234.5,
+   "kquant_legs": [
+    3171,
+    3258,
+    3146
+   ],
+   "standard_legs": [
+    3220,
+    3249
+   ]
+  }
+ }
 }
