@@ -61,4 +61,9 @@ Every JSON carries `CONTENTION` (mean foreign GPU load above 80%, the only user 
 which bench counts as foreign. Order `B A B A B A` (B KQuant, A catalog) in one lock hold; per-leg files and `legs.log` are in [legs/](legs).
 The faster writing comes with more drafts accepted (0.74 to 0.75 against 0.70 to 0.73 of drafted tokens at T 0.6).
 
+Lock: the legs were started under `lockf -k /tmp/kapitsa-gpu.lock`. At 17:31 a `pkill -f` self-test killed the wrapper and its `lockf`; the
+orphaned leg scripts ran on to 17:34:12, so the lock was held only through an inherited file descriptor, if at all. Nobody captured
+`lsof /tmp/kapitsa-gpu.lock` during the legs, so the holder is unproven. The only other GPU job queued behind the lock logged
+"server ready" at 17:34:15, three seconds after the last leg, so its serve did not overlap them.
+
 The card draws its numbers from [results.json](results.json).
