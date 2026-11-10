@@ -92,6 +92,30 @@ void dq_q4_1(const uint8_t* b, float* y) {
 }
 
 void dq_q5_0(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t half;
+  memcpy(&half, b, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 22 : src - dst < 32 * sizeof(float);
+  if ((half & 0x7c00u) != 0x7c00u && !overlap) {
+    const uint8x16_t masks = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
+    const uint8x16_t q = vld1q_u8(b + 6);
+    const float32x4_t d = vdupq_n_f32(from_f16(half));
+    for (int part = 0; part < 2; ++part) {
+      const uint8x16_t high = vcombine_u8(vdup_n_u8(b[2 + 2 * part]), vdup_n_u8(b[3 + 2 * part]));
+      const uint8x16_t low = part ? vshrq_n_u8(q, 4) : vandq_u8(q, vdupq_n_u8(15));
+      const uint8x16_t code = vorrq_u8(low, vandq_u8(vtstq_u8(high, masks), vdupq_n_u8(16)));
+      const int8x16_t signed_code = vreinterpretq_s8_u8(vsubq_u8(code, vdupq_n_u8(16)));
+      const int16x8_t lo = vmovl_s8(vget_low_s8(signed_code)), hi = vmovl_s8(vget_high_s8(signed_code));
+      float* out = y + 16 * part;
+      vst1q_f32(out, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_low_s16(lo)))));
+      vst1q_f32(out + 4, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_high_s16(lo)))));
+      vst1q_f32(out + 8, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_low_s16(hi)))));
+      vst1q_f32(out + 12, vmulq_f32(d, vcvtq_f32_s32(vmovl_s16(vget_high_s16(hi)))));
+    }
+    return;
+  }
+#endif
   const float d = f16_at(b);
   uint32_t qh;
   memcpy(&qh, b + 2, 4);

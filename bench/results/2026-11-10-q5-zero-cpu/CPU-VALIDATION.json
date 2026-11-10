@@ -1,0 +1,591 @@
+{
+  "evidence_kind": "Redacted derived summary; raw records and complete binary outputs retained privately. No path substitutions are presented as raw logs.",
+  "reference_source": "20d9db6cd30d45a8ccff41bca001610a5d7e1e7e",
+  "candidate_source": "d22d5e25c4185ba52ecbe7a49049ae63a2a2a2a929",
+  "build_flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "scope": "CPU Q5_0 row decoding only; no inference-speed claim.",
+  "model_sample": {
+    "repository": "aashish1904/Qwen3.5-0.8B-GGUF",
+    "revision": "22fba4dba21a68af716f5f46768ceb251918f8c6",
+    "filename": "Qwen3.5-0.8B.Q5_0.gguf",
+    "full_file_sha256": "10a33ef84f9ea4a843d50225d389085d72f627da4ad4b41a782df15714543019",
+    "full_file_digest_verified": true,
+    "architecture": "qwen35",
+    "tensor": {
+      "name": "blk.0.attn_gate.weight",
+      "dims": [
+        1024,
+        2048
+      ],
+      "type": 6,
+      "offset": 208592896
+    },
+    "data_start": 10961568,
+    "rows": 1024,
+    "sample_bytes": 720896,
+    "sample_sha256": "4f56105ea1156f6ee9fb47af4cd3d07ecadfd7a087284e025fbcd996b68e6e7b"
+  },
+  "source_sha256": {
+    "candidate_quant": "edbede738a46fa5e674fbb03f4abde9161ff59d164b0fb5fd19960c8bdaf4327",
+    "reference_quant": "5f303d1ed51c101ff026425815add0e3dee123c517269a739e258c6df95925c2",
+    "oracle": "4ab65832e5916aa4dfa2d760b8959eee75c6eb36e642e665f79a368ac031857c",
+    "trained_driver": "b1d2f25c029b2200455100dedd0a3f58d4d722f0525df7074dbe3028fbeb8a18",
+    "synthetic_driver": "4fcde217e454d1cfabc2accec2f29c7db786dcb5bf2a223719a83db0e670b9fa",
+    "stubs": "8da211df43a81fa2d885d4811082022c1b346c187ad0f667306316b314d96dda"
+  },
+  "checks": {
+    "oracle_cases_per_run": 264848,
+    "M5_corrected_harness": {
+      "reference": {
+        "rc": 0,
+        "output": "PASS Q5_0: 264848 oracle/overlap cases and guarded boundaries\n"
+      },
+      "candidate": {
+        "rc": 0,
+        "output": "PASS Q5_0: 264848 oracle/overlap cases and guarded boundaries\n"
+      },
+      "ubsan": {
+        "rc": 0,
+        "output": "PASS Q5_0: 264848 oracle/overlap cases and guarded boundaries\n"
+      }
+    },
+    "M3_reference": "PASS Q5_0: 264848 oracle/overlap cases and guarded boundaries",
+    "M3_candidate": "PASS Q5_0: 264848 oracle/overlap cases and guarded boundaries",
+    "cpu_suite": {
+      "pass": 23,
+      "fail": 0,
+      "scope": "vk cpu-tests list on candidate source, not every optional model/CPU command in AGENTS.md"
+    },
+    "prek": 0,
+    "corrected_harness_mutant": {
+      "mutation": "Low-nibble mask 15 to 7",
+      "rc": 1,
+      "output": "FAIL Q5_0 half/code sweep after 2 cases"
+    }
+  },
+  "setups": {
+    "M5": {
+      "configuration": {
+        "chip": "Apple M5 Pro",
+        "macos": "26.6.2",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+      },
+      "trained": {
+        "legs": {
+          "A1": {
+            "ns_per_row": [
+              263.508789,
+              255.574219,
+              220.825195,
+              224.324219,
+              220.743164,
+              220.663086,
+              220.703125,
+              232.50293,
+              209.920898,
+              202.59668,
+              196.084961,
+              196.044922,
+              196.044922,
+              196.166992,
+              196.003906,
+              196.044922
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 215.291992,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          },
+          "B1": {
+            "ns_per_row": [
+              105.102539,
+              119.140625,
+              105.916016,
+              109.211914,
+              185.709961,
+              186.239258,
+              134.603516,
+              105.712891,
+              105.957031,
+              160.847656,
+              104.410156,
+              92.245117,
+              92.245117,
+              94.807617,
+              188.314453,
+              168.375
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 107.5844725,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          },
+          "A2": {
+            "ns_per_row": [
+              159.260742,
+              158.935547,
+              116.943359,
+              114.135742,
+              158.895508,
+              158.894531,
+              158.894531,
+              158.773438,
+              158.773438,
+              121.664062,
+              114.013672,
+              113.973633,
+              126.057617,
+              158.853516,
+              158.894531,
+              158.813477
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 158.7934575,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          },
+          "B2": {
+            "ns_per_row": [
+              117.024414,
+              95.947266,
+              116.291992,
+              119.34375,
+              116.577148,
+              101.887695,
+              95.825195,
+              102.823242,
+              97.900391,
+              95.90625,
+              113.118164,
+              110.839844,
+              111.24707,
+              111.124023,
+              116.006836,
+              98.144531
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 110.9819335,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          }
+        },
+        "full_files_equal": true,
+        "complete_output_bytes": 4194304,
+        "binary_sha256": {
+          "reference": "3ca4aef1ebf9061a90f8dc4efdcd1cfc967111134de0aea45b2c30662c93b71d",
+          "candidate": "f6515dab64a30dc39c3632968be9f5dacf09ee147f22f87533858e579ec54ca3"
+        }
+      },
+      "synthetic": {
+        "rows": 1024,
+        "width": 2048,
+        "legs": {
+          "A1": {
+            "input_kind": "fixed-seed synthetic Q5_0 blocks",
+            "rows": 1024,
+            "width": 2048,
+            "complete_output_bytes": 8388608,
+            "ns_per_row": [
+              247.247055054,
+              241.49067688,
+              250.348403931,
+              277.824401855,
+              237.653091431,
+              237.335205078,
+              235.779434204,
+              235.879898071,
+              235.58807373,
+              235.295608521,
+              235.516220093,
+              240.123748779,
+              240.255355835,
+              239.330291748,
+              247.163772583,
+              239.249542236
+            ],
+            "complete_output_matches_reference": true,
+            "input_unchanged": true,
+            "finite": true,
+            "guards_intact": true,
+            "median_ns_per_row": 239.289916992,
+            "full_output_sha256": "dafb570146fe81c172afe58ffd1d005c015180fbcddee222ad84dde525d34556"
+          },
+          "B1": {
+            "input_kind": "fixed-seed synthetic Q5_0 blocks",
+            "rows": 1024,
+            "width": 2048,
+            "complete_output_bytes": 8388608,
+            "ns_per_row": [
+              202.325180054,
+              198.125198364,
+              197.825119019,
+              200.797409058,
+              199.995040894,
+              198.550537109,
+              200.122833252,
+              200.494125366,
+              202.800109863,
+              197.13973999,
+              196.36026001,
+              197.481796265,
+              197.61340332,
+              196.951538086,
+              197.9637146,
+              200.006484985
+            ],
+            "complete_output_matches_reference": true,
+            "input_unchanged": true,
+            "finite": true,
+            "guards_intact": true,
+            "median_ns_per_row": 198.33786773650002,
+            "full_output_sha256": "dafb570146fe81c172afe58ffd1d005c015180fbcddee222ad84dde525d34556"
+          },
+          "A2": {
+            "input_kind": "fixed-seed synthetic Q5_0 blocks",
+            "rows": 1024,
+            "width": 2048,
+            "complete_output_bytes": 8388608,
+            "ns_per_row": [
+              234.715148926,
+              235.817596436,
+              236.60723877,
+              248.00491333,
+              236.664459229,
+              239.549636841,
+              239.995956421,
+              239.278793335,
+              238.372802734,
+              239.720031738,
+              239.177703857,
+              237.798690796,
+              237.72303772,
+              238.328933716,
+              236.583709717,
+              236.785247803
+            ],
+            "complete_output_matches_reference": true,
+            "input_unchanged": true,
+            "finite": true,
+            "guards_intact": true,
+            "median_ns_per_row": 238.063812256,
+            "full_output_sha256": "dafb570146fe81c172afe58ffd1d005c015180fbcddee222ad84dde525d34556"
+          },
+          "B2": {
+            "input_kind": "fixed-seed synthetic Q5_0 blocks",
+            "rows": 1024,
+            "width": 2048,
+            "complete_output_bytes": 8388608,
+            "ns_per_row": [
+              199.895858765,
+              200.617462158,
+              197.964355469,
+              196.846008301,
+              204.300552368,
+              197.432830811,
+              196.885437012,
+              198.090881348,
+              205.030441284,
+              197.266265869,
+              197.93637085,
+              197.739929199,
+              198.280334473,
+              197.279602051,
+              211.151123047,
+              198.638916016
+            ],
+            "complete_output_matches_reference": true,
+            "input_unchanged": true,
+            "finite": true,
+            "guards_intact": true,
+            "median_ns_per_row": 198.02761840850002,
+            "full_output_sha256": "dafb570146fe81c172afe58ffd1d005c015180fbcddee222ad84dde525d34556"
+          }
+        },
+        "complete_output_bytes": 8388608,
+        "full_files_equal": true,
+        "binary_sha256": {
+          "reference": "8822b90136c30dbbcd1b3700f75a68b13d43d22379d70afe35bb25da2ea26d15",
+          "candidate": "a4d899f6b49670f310b2c73ca8f1065a6702a7675a421a12b5c46321a3871939"
+        }
+      }
+    },
+    "M3": {
+      "configuration": {
+        "chip": "Apple M3 Ultra",
+        "macos": "26.4.1",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+      },
+      "trained": {
+        "legs": {
+          "A1": {
+            "ns_per_row": [
+              426.147461,
+              357.09668,
+              358.439453,
+              290.405273,
+              290.649414,
+              291.259766,
+              293.579102,
+              289.0625,
+              289.18457,
+              289.306641,
+              289.550781,
+              250.773438,
+              251.220703,
+              251.016602,
+              250.651367,
+              251.017578
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 289.428711,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          },
+          "B1": {
+            "ns_per_row": [
+              525.674805,
+              308.227539,
+              296.75293,
+              309.611328,
+              295.532227,
+              313.395508,
+              301.879883,
+              309.123047,
+              268.595703,
+              250.162109,
+              256.753906,
+              251.179688,
+              249.023438,
+              254.394531,
+              248.657227,
+              247.110352
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 282.063965,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          },
+          "A2": {
+            "ns_per_row": [
+              207.926758,
+              194.824219,
+              194.458008,
+              194.702148,
+              183.308594,
+              183.552734,
+              184.123047,
+              184.367188,
+              183.878906,
+              184.895508,
+              182.821289,
+              174.397461,
+              174.600586,
+              174.967773,
+              175.49707,
+              174.438477
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 183.71582,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          },
+          "B2": {
+            "ns_per_row": [
+              138.021484,
+              136.068359,
+              141.601562,
+              124.185547,
+              126.424805,
+              124.958984,
+              120.077148,
+              123.087891,
+              122.72168,
+              119.913086,
+              120.646484,
+              123.128906,
+              125.407227,
+              122.395508,
+              123.901367,
+              119.750977
+            ],
+            "passes": 16,
+            "complete_bytes_per_pass": 4194304,
+            "finite": true,
+            "input_unchanged": true,
+            "canary": true,
+            "equal_to_reference": true,
+            "median_ns_per_row": 123.5151365,
+            "full_output_sha256": "a77c87608d3c0c63565360d746c1f75c1ee76615340be3c4be26b6c75bff90e3"
+          }
+        },
+        "full_files_equal": true,
+        "complete_output_bytes": 4194304,
+        "binary_sha256": {
+          "check-reference": "8b7be2758345afce260075fbfe11c5a5e0c7222ce18a508f3b6f04fbeb6eb451",
+          "check-candidate": "a6cea13611a395fd92484337117be6300e5e90858046449ca95c81c3bbcf5681",
+          "bench-reference": "bb12ef58ead6a5482a3b71ccc3040aba24cf80c2c3fb5354ca0a9cb307741b91",
+          "bench-candidate": "9e05453100203ffee738defcc2fb29b1b03b55aed7eb3a97883deea1629c29b8"
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Full-model imports, model logits, continuations and server checks are not yet run for this change.",
+    "No free-generating MTP, ASan, non-AArch64 or other-chip qualification.",
+    "Real-weight single-decode timing samples vary substantially across passes and legs; retain every sample and do not extrapolate to inference or whole-model import time."
+  ],
+  "harness_history": [
+    "Initial remote extraction rejected an unsupported archive API argument before compilation; validated member extraction fixed preparation.",
+    "Initial M3 reference harness compilation rejected a mismatched return type in an unused stub. The corrected stub matches the declaration; reference and candidate checks and benchmarks were then compiled and run. Production source was unchanged.",
+    "The preliminary M5 synthetic run used the old unused stub. Its results are retained separately; the primary synthetic qualification below uses rebuilt corrected-harness executables.",
+    "One local corrected-mutant build command named a nonexistent harness source; compilation did not start. Correcting the source argument produced the expected nonzero mutant failure."
+  ],
+  "preliminary_M5_synthetic": {
+    "harness": "Original unused stub signature; superseded for qualification by corrected-harness runs",
+    "legs": {
+      "A1": {
+        "input_kind": "fixed-seed synthetic Q5_0 blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          339.928939819,
+          292.885452271,
+          252.599716187,
+          236.478179932,
+          231.961578369,
+          233.093887329,
+          233.460098267,
+          230.058044434,
+          231.491729736,
+          230.875656128,
+          232.926040649,
+          232.68699646,
+          232.690170288,
+          231.030776978,
+          234.158187866,
+          232.151657104
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true
+      },
+      "B1": {
+        "input_kind": "fixed-seed synthetic Q5_0 blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          353.660583496,
+          270.579666138,
+          234.756469727,
+          217.724487305,
+          206.09727478,
+          194.72567749,
+          196.345016479,
+          194.448471069,
+          196.034744263,
+          193.083450317,
+          193.539306641,
+          192.301437378,
+          193.432479858,
+          192.415863037,
+          192.22895813,
+          191.347763062
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true
+      },
+      "A2": {
+        "input_kind": "fixed-seed synthetic Q5_0 blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          231.48727417,
+          229.819610596,
+          232.587188721,
+          232.1434021,
+          233.959197998,
+          235.288619995,
+          232.821792603,
+          231.38873291,
+          230.049758911,
+          232.681900024,
+          230.598449707,
+          232.107788086,
+          231.011703491,
+          230.391830444,
+          230.883911133,
+          231.753036499
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true
+      },
+      "B2": {
+        "input_kind": "fixed-seed synthetic Q5_0 blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          192.224502563,
+          192.433029175,
+          196.194976807,
+          194.583251953,
+          193.542480469,
+          193.682357788,
+          192.454025269,
+          194.613143921,
+          194.149017334,
+          196.130111694,
+          191.305801392,
+          193.145111084,
+          192.988082886,
+          192.747756958,
+          200.191497803,
+          196.238204956
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true
+      }
+    }
+  }
+}

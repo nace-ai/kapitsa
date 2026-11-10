@@ -11,6 +11,7 @@
 #include "gguf_iq2_xs_test.h"
 #include "gguf_iq1_s_test.h"
 #include "gguf_q4_k_test.h"
+#include "gguf_q5_zero_test.h"
 #include "gguf_q4_codes_test.h"
 #include "gguf_pack_codes_test.h"
 #include "gguf_pack4_test.h"
@@ -376,6 +377,7 @@ int main() {
   if (iq2_xs_test::run()) return 1;
   if (iq1_s_test::run()) return 1;
   if (q5_k_test::run()) return 1;
+  if (q5_zero_test::run()) return 1;
   g_fail += q6_test::run();
   g_fail += iq2_xxs_test::run();
   g_fail += q2_k_test::run();
