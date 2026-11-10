@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -101,6 +102,18 @@ class ControlServer {
 
   // One request's answer, everything but GET /events (tests call it without a socket)
   ControlReply handle(const std::string& method, const std::string& path, const std::string& body);
+
+  // GET /events for another transport (the engine view's HTTP mirror, src/server/main.cpp): the stream, or null with
+  // the 503 to answer when 16 are open. pump_events() then sends its frames, a reset first when the cursor needs one,
+  // and keepalives through `write` until `write` fails, `gone()` says the reader left, the stream falls behind, or the
+  // server stops.
+  struct EventStream {
+    std::shared_ptr<Events::Stream> s;
+    Resume how = Resume::live;
+  };
+  EventStream open_events(const std::string& last_event_id, ControlReply* refused);
+  void pump_events(const EventStream& es, const std::function<bool(const std::string&)>& write,
+                   const std::function<bool()>& gone);
   void set_owner(uid_t uid) { owner_ = uid; }  // whose connections are served (tests); the server's user otherwise
   // A stop began (POST /stop, a signal): POST /model answers 503 stopping, a further POST /stop 202 and nothing more
   void mark_stopping() { stop_asked_ = true; }

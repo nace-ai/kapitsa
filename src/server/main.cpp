@@ -36,6 +36,7 @@
 #include "loader/load_stop.h"
 #include "metal/gpu.h"
 #include "server/control.h"
+#include "server/engine_view.h"
 #include "server/cli.h"
 #include "server/http_stream.h"
 #include "server/model_manager.h"
@@ -87,6 +88,7 @@
 
 namespace ni {
 extern const char* const kChatPage;  // src/server/chat.html, embedded at build time
+extern const char* const kEnginePage;  // src/server/engine.html, embedded at build time
 }
 
 const char* const ni::kVersion = KAPITSA_VERSION;
@@ -808,13 +810,17 @@ static bool reject_while_switching(const ModelManager& mgr, httplib::Response& r
 }
 
 // What every server answers, with a model here or not: the API key's check (the chat page, /health and /cluster need
-// none), GET /health, the chat page, and GET /cluster: what it tells the other Macs (src/cluster/)
+// none), GET /health, the chat page, the engine view, and GET /cluster: what it tells the other Macs (src/cluster/)
 static void common_routes(httplib::Server& srv, const std::string& api_key, const std::string& timing,
                           std::function<cluster::MacInfo()> info) {
   srv.set_pre_routing_handler([api_key](const httplib::Request& req, httplib::Response& res) {
     // a WebSocket upgrade on /v1/responses (Codex Desktop's probe, #772): 426 before the key check, so the client
     // falls back to HTTP at once instead of retrying a 404 with backoff
     if (server::refuse_ws_upgrade(req, res)) return httplib::Server::HandlerResponse::Handled;
+    // the engine view (docs/control-socket.md, "The engine view"): this Mac only, by its peer address and by the Host
+    // it was asked for (a page from elsewhere that rebinds a name to 127.0.0.1 is refused). It reads without the key,
+    // since an EventSource sends no headers; its stop and switch need it, as JSON (a cross-origin form cannot send it).
+    if (const auto gate = server::engine_gate(req, res)) return *gate;
     // the chat page asks for the key once and sends it with its API calls
     if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
         req.path == "/api/version" ||
@@ -851,6 +857,7 @@ static void common_routes(httplib::Server& srv, const std::string& api_key, cons
     res.set_content(page, "text/html; charset=utf-8");
   });
   srv.Get("/favicon.ico", [](const httplib::Request&, httplib::Response& res) { res.status = 204; });
+  server::engine_routes(srv, [] { return g_control; }, kEnginePage);
   srv.Get("/cluster", [info](const httplib::Request&, httplib::Response& res) {
     res.set_content(cluster::to_json(info()).dump(), "application/json");
   });

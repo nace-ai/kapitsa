@@ -205,6 +205,25 @@ closes a stream that falls further behind. Its client reconnects with `Last-Even
 **Logs.** The server drops log lines below its level before they reach the bus, so a quiet server builds no events
 for them. The level is `info`, or `debug` when the server runs with `verbose`.
 
+## The engine view
+
+A browser cannot open the socket, so `kapitsa serve` also serves a page of what the instance holds and does at
+`http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reads the same endpoints over HTTP on the API
+port, under `/engine/`, with the same bodies and errors: `GET /engine/status`, `GET /engine/events`,
+`POST /engine/stop` and `POST /engine/model`.
+
+- **This Mac only.** The server answers `/engine` only to a peer at `127.0.0.1` or `::1`, and only for a `Host` of
+  `127.0.0.1`, `localhost` or `[::1]`. Any other request gets `403 forbidden_peer`, including a page elsewhere that
+  points its own name at `127.0.0.1`.
+- **Reads need no key.** An `EventSource` cannot send headers, so the page and the two `GET` endpoints skip the API
+  key. They show only what the socket shows.
+- **Actions need the key and JSON.** On a server with an API key, a stop or switch needs the key, as an API request
+  does. The body must be `application/json`, which a cross-origin form cannot send.
+- **At most 4 views.** Each open `GET /engine/events` holds one of the API server's threads, so at most 4 are open
+  at once. A fifth gets `503 busy` with `Retry-After: 5`. These count toward the bus's 16 streams.
+- **No socket.** A server without a control socket answers the `/engine/` endpoints with `503 internal`. That
+  happens when another server holds its instance name or `run/` cannot be made.
+
 ## Versioning
 
 `protocol` is an integer, 1 here. Clients send nothing to choose it. They read `protocol` from `GET /status` and
