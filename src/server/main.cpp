@@ -36,6 +36,8 @@
 #include "loader/load_stop.h"
 #include "metal/gpu.h"
 #include "server/control.h"
+#include "server/engine_view.h"
+#include "server/pre_route.h"
 #include "server/cli.h"
 #include "server/http_stream.h"
 #include "server/model_manager.h"
@@ -87,6 +89,7 @@
 
 namespace ni {
 extern const char* const kChatPage;  // src/server/chat.html, embedded at build time
+extern const char* const kEnginePage;  // src/server/engine.html, embedded at build time
 }
 
 const char* const ni::kVersion = KAPITSA_VERSION;
@@ -567,6 +570,13 @@ static struct sigaction g_stop_prev[3];
 static int g_stop_pipe[2] = {-1, -1};
 static volatile sig_atomic_t g_stopping = 0;
 static server::ControlServer* g_control = nullptr;  // the control socket, once it listens (never freed)
+static std::string g_engine_key_path;  // the engine view's key file, while it exists (src/server/engine_view.h)
+// The socket's file and the engine view's key go with the process, however it ends: at exit, and on the stop thread
+// before its _exit or the signal's default (neither runs atexit)
+static void close_control() {
+  if (g_control) g_control->stop();
+  if (!g_engine_key_path.empty()) unlink(g_engine_key_path.c_str());
+}
 // POST /stop before the stop handlers exist (starting, the first load): run_service ends at its next step, exit 0
 static std::atomic<bool> g_stop_requested{false};
 
@@ -586,7 +596,7 @@ static void on_stop_signal(int sig) {
 // POST /stop while the first model's weights are read: from the reader that saw it, exit 0 now rather than after the
 // load (nothing loaded yet to save; the files the load writes are written whole and renamed, so none is left half done)
 [[noreturn]] static void end_first_load_stop() {
-  if (g_control) g_control->stop();
+  close_control();
   term::clear_for_exit();
   _exit(0);
 }
@@ -638,7 +648,7 @@ static bool start_stop_thread() {
                                                      : nullptr);
       }
       save_before_exit();
-      if (g_control) g_control->stop();  // (its socket file goes with the process)
+      close_control();
       if (c != 0) return pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends it
       term::clear_for_exit();
       _exit(0);
@@ -772,9 +782,13 @@ static std::string listen_control(const std::string& run_dir, const std::string&
   auto* srv = new server::ControlServer(*g_serve_control, *server::events());
   if (std::string why = srv->start(run_dir + "/" + instance_id + ".sock"); !why.empty()) return why;
   g_control = srv;
-  std::atexit([] {
-    if (g_control) g_control->stop();
-  });
+  // the engine view's key: only this user reads it, as only they reach the socket
+  const std::string key_path = run_dir + "/" + instance_id + ".token";
+  if (const std::string why = server::write_engine_token(key_path); !why.empty())
+    fprintf(stderr, "warning: %s: the engine view at /engine cannot be opened\n", why.c_str());
+  else
+    g_engine_key_path = key_path;
+  std::atexit(close_control);
   return "";
 }
 
@@ -808,28 +822,11 @@ static bool reject_while_switching(const ModelManager& mgr, httplib::Response& r
 }
 
 // What every server answers, with a model here or not: the API key's check (the chat page, /health and /cluster need
-// none), GET /health, the chat page, and GET /cluster: what it tells the other Macs (src/cluster/)
+// none), GET /health, the chat page, the engine view, and GET /cluster: what it tells the other Macs (src/cluster/)
 static void common_routes(httplib::Server& srv, const std::string& api_key, const std::string& timing,
                           std::function<cluster::MacInfo()> info) {
   srv.set_pre_routing_handler([api_key](const httplib::Request& req, httplib::Response& res) {
-    // a WebSocket upgrade on /v1/responses (Codex Desktop's probe, #772): 426 before the key check, so the client
-    // falls back to HTTP at once instead of retrying a 404 with backoff
-    if (server::refuse_ws_upgrade(req, res)) return httplib::Server::HandlerResponse::Handled;
-    // the chat page asks for the key once and sends it with its API calls
-    if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
-        req.path == "/api/version" ||
-        (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
-      return httplib::Server::HandlerResponse::Unhandled;
-    // OpenAI clients send "Authorization: Bearer KEY", Anthropic ones "x-api-key: KEY" (Claude Code may send both,
-    // with an Anthropic key of its own in x-api-key)
-    if (req.get_header_value("Authorization") == "Bearer " + api_key || req.get_header_value("x-api-key") == api_key)
-      return httplib::Server::HandlerResponse::Unhandled;
-    res.status = 401;
-    if (req.path.rfind("/v1/messages", 0) == 0)
-      res.set_content(api::dump(api::messages_error("authentication_error", "invalid api key")), "application/json");
-    else
-      res.set_content(R"({"error":{"message":"invalid api key","type":"auth_error"}})", "application/json");
-    return httplib::Server::HandlerResponse::Handled;
+    return server::pre_route(req, res, api_key);
   });
   srv.Get("/health", [](const httplib::Request&, httplib::Response& res) {
     res.set_content(R"({"status":"ok"})", "application/json");
@@ -851,6 +848,7 @@ static void common_routes(httplib::Server& srv, const std::string& api_key, cons
     res.set_content(page, "text/html; charset=utf-8");
   });
   srv.Get("/favicon.ico", [](const httplib::Request&, httplib::Response& res) { res.status = 204; });
+  server::engine_routes(srv, [] { return g_control; }, kEnginePage);
   srv.Get("/cluster", [info](const httplib::Request&, httplib::Response& res) {
     res.set_content(cluster::to_json(info()).dump(), "application/json");
   });
@@ -1166,6 +1164,14 @@ int ni::server::run_service(Options o) {
   };
   if (g_stop_requested) return stop_asked();
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
+  if (g_control) {
+    // The engine view's link carries this run's key: said on this terminal only, never in the log (log files and the
+    // event stream), so only whoever started the server or can read run/ has it
+    const std::string page = "http://127.0.0.1:" + std::to_string(o.port) + "/engine";
+    if (tui) notes.push_back("Engine view: " + page + "#t=" + server::engine_token());
+    else if (isatty(STDERR_FILENO)) fprintf(stderr, "engine view: %s#t=%s\n", page.c_str(), server::engine_token().c_str());
+    else fprintf(stderr, "engine view: %s (its key: %s/%s.token)\n", page.c_str(), run_dir.c_str(), instance_id.c_str());
+  }
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
     if (tui) notes.push_back(say);

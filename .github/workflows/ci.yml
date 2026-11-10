@@ -202,7 +202,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa gguf_output_cleanup_test ane_segment_check systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test json_file_test affine_pack_test ffn_share_test systemone_test systemone_codes_probe_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions serve_options_test events_test control_test
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa gguf_output_cleanup_test ane_segment_check systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test json_file_test affine_pack_test ffn_share_test systemone_test systemone_codes_probe_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions serve_options_test events_test control_test engine_view_test
       - name: GGUF row worker lifetime
         if: steps.changes.outputs.code == 'true'
         run: python3 tests/test_gguf_parallel_rows.py
@@ -336,6 +336,9 @@ jobs:
       - name: control_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/control_test
+      - name: engine_view_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/engine_view_test
       - name: test_control_socket
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_control_socket.py build/control_test build/kapitsa

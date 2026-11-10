@@ -105,9 +105,10 @@ def stop_while_starting(kapitsa, check_status, sigint):
             if status != 202:
                 failures.append(f"POST /stop while starting: {status} {body}")
             rc = p.wait(timeout=15)
-            if rc != 0 or os.path.exists(sock):
+            key = os.path.join(home, "run", "default.token")
+            if rc != 0 or os.path.exists(sock) or os.path.exists(key):
                 failures.append(f"stop while starting (SIGINT {sigint}): exit {rc}, want 0 (a stop is not a crash), "
-                                f"socket left: {os.path.exists(sock)}")
+                                f"socket left: {os.path.exists(sock)}, engine view key left: {os.path.exists(key)}")
         except (OSError, subprocess.TimeoutExpired) as e:
             p.kill()
             out = bytes(p.screen) if sigint == "terminal" else p.communicate()[0]

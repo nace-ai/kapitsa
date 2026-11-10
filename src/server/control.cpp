@@ -315,44 +315,55 @@ ControlReply ControlServer::handle(const std::string& method, const std::string&
   return api_.model_switch(req);
 }
 
-void ControlServer::stream_events(int fd, const std::string& last_event_id) {
-  Resume how = Resume::live;
-  auto s = stopping_.load() ? nullptr : bus_.open(last_event_id, &how);
-  if (!s) {
-    ControlReply r = control_error(503, "busy", "16 event streams are open", {{"retry_after_s", 5}});
-    r.retry_after_s = 5;
-    return send_reply(fd, r);
+ControlServer::EventStream ControlServer::open_events(const std::string& last_event_id, ControlReply* refused) {
+  EventStream es;
+  es.s = stopping_.load() ? nullptr : bus_.open(last_event_id, &es.how);
+  if (!es.s) {
+    *refused = control_error(503, "busy", "16 event streams are open", {{"retry_after_s", 5}});
+    refused->retry_after_s = 5;
   }
+  return es;
+}
+
+void ControlServer::pump_events(const EventStream& es, const std::function<bool(const std::string&)>& write,
+                                const std::function<bool()>& gone) {
   const auto frame = [&](const std::string& id, const std::string& type, const std::string& data) {
     return "id: " + id + "\nevent: " + type + "\ndata: " + data + "\n\n";
   };
+  if (const char* reason = reset_reason(es.how); *reason)
+    if (!write(frame(bus_.id(es.s->start()), "reset", json{{"reason", reason}, {"status", api_.status()}}.dump())))
+      return;
+  auto quiet_since = std::chrono::steady_clock::now();
+  while (!stopping_.load() && !gone()) {
+    if (auto e = es.s->next(1000)) {
+      if (!write(frame(bus_.id(e->seq), e->type, e->data))) return;
+      quiet_since = std::chrono::steady_clock::now();
+    } else if (es.s->closed()) {
+      return;  // fell kMaxUnsent behind: the client reconnects with Last-Event-ID
+    } else if (std::chrono::steady_clock::now() - quiet_since >= std::chrono::milliseconds(kKeepaliveMs)) {
+      if (!write(": keepalive\n\n")) return;
+      quiet_since = std::chrono::steady_clock::now();
+    }
+  }
+}
+
+void ControlServer::stream_events(int fd, const std::string& last_event_id) {
+  ControlReply refused;
+  const EventStream es = open_events(last_event_id, &refused);
+  if (!es.s) return send_reply(fd, refused);
   // a reader that stops reading: send() gives up, the stream ends and its slot frees (without this the thread would wait
   // in send() forever, and the bus's kMaxUnsent cut-off would never be seen)
   timeval tv{kSendTimeoutS, 0};
   setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
-  std::string out = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n"
-                    "Connection: close\r\n\r\n";
-  if (const char* reason = reset_reason(how); *reason)
-    out += frame(bus_.id(s->start()), "reset", json{{"reason", reason}, {"status", api_.status()}}.dump());
-  if (!send_all(fd, out)) return;
-  auto quiet_since = std::chrono::steady_clock::now();
+  if (!send_all(fd, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n"
+                    "Connection: close\r\n\r\n"))
+    return;
   // a client that hung up frees its stream within a second, not at the next keepalive's failed write
-  const auto gone = [fd] {
+  pump_events(es, [fd](const std::string& s) { return send_all(fd, s); }, [fd] {
     pollfd p{fd, POLLIN, 0};
     char c;
     return ::poll(&p, 1, 0) > 0 && ::recv(fd, &c, 1, MSG_PEEK | MSG_DONTWAIT) == 0;
-  };
-  while (!stopping_.load() && !gone()) {
-    if (auto e = s->next(1000)) {
-      if (!send_all(fd, frame(bus_.id(e->seq), e->type, e->data))) return;
-      quiet_since = std::chrono::steady_clock::now();
-    } else if (s->closed()) {
-      return;  // fell kMaxUnsent behind: the client reconnects with Last-Event-ID
-    } else if (std::chrono::steady_clock::now() - quiet_since >= std::chrono::milliseconds(kKeepaliveMs)) {
-      if (!send_all(fd, ": keepalive\n\n")) return;
-      quiet_since = std::chrono::steady_clock::now();
-    }
-  }
+  });
 }
 
 }  // namespace ni::server

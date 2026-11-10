@@ -106,7 +106,7 @@ target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|events_test|control_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|events_test|control_test|engine_view_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -154,6 +154,12 @@ target_include_directories(control_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_
 target_link_libraries(control_test PRIVATE Threads::Threads)
 add_test(NAME control_test COMMAND control_test)
 set_tests_properties(control_test PROPERTIES TIMEOUT 60)
+add_executable(engine_view_test tools/engine_view_test.cpp src/server/engine_view.cpp src/server/pre_route.cpp src/server/control.cpp
+  src/server/events.cpp src/server/activity.cpp)
+target_include_directories(engine_view_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
+target_link_libraries(engine_view_test PRIVATE Threads::Threads)
+add_test(NAME engine_view_test COMMAND engine_view_test)
+set_tests_properties(engine_view_test PROPERTIES TIMEOUT 60)
 add_executable(http_stream_test tools/http_stream_test.cpp src/server/http_stream.cpp src/engine/execution_session.cpp)
 target_include_directories(http_stream_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(http_stream_test PRIVATE Threads::Threads)
@@ -199,14 +205,24 @@ add_custom_command(
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   DEPENDS ${CMAKE_SOURCE_DIR}/src/server/chat.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   COMMENT "Embedding the chat page")
+set(KAPITSA_ENGINE_PAGE ${CMAKE_BINARY_DIR}/generated/engine_page.cpp)
+add_custom_command(
+  OUTPUT ${KAPITSA_ENGINE_PAGE}
+  COMMAND ${CMAKE_COMMAND} -DOUT=${KAPITSA_ENGINE_PAGE} -DSRC=${CMAKE_SOURCE_DIR}/src/server/engine.html -DNAME=kEnginePage
+          -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
+  DEPENDS ${CMAKE_SOURCE_DIR}/src/server/engine.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
+  COMMENT "Embedding the engine view")
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
   ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
   ${CMAKE_SOURCE_DIR}/src/server/events.cpp ${CMAKE_SOURCE_DIR}/src/server/activity.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/control.cpp ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/control.cpp ${CMAKE_SOURCE_DIR}/src/server/engine_view.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/pre_route.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp
   ${CMAKE_SOURCE_DIR}/src/server/stage_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/route.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/pair.cpp ${KAPITSA_CHAT})
+  ${CMAKE_SOURCE_DIR}/src/server/cluster_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/pair.cpp ${KAPITSA_CHAT}
+  ${KAPITSA_ENGINE_PAGE})
 target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
 target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
