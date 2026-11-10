@@ -1,0 +1,111 @@
+{
+  "derivation": "Redacted derived summary; original logs retained privately.",
+  "source": "d744df9db4a336530d2d6fadc90b5d2b8dcad72c",
+  "kapitsa_sha256": "5d0a98a43b33188f252ca132c59c6cfb2fafd86c27cc4e19e394bb5535bec919",
+  "commands": [
+    {
+      "command": "api_test",
+      "result": "PASS"
+    },
+    {
+      "command": "prefix_cache_test",
+      "result": "PASS"
+    },
+    {
+      "command": "fn_store_test",
+      "result": "PASS"
+    },
+    {
+      "command": "fn_dflash_test",
+      "result": "PASS"
+    },
+    {
+      "command": "tokenizer_test",
+      "result": "PASS"
+    },
+    {
+      "command": "iq_layout_test",
+      "result": "PASS"
+    },
+    {
+      "command": "nh_quant_q8_test",
+      "result": "PASS"
+    },
+    {
+      "command": "remote_test",
+      "result": "PASS"
+    },
+    {
+      "command": "cluster_test",
+      "result": "PASS"
+    },
+    {
+      "command": "split_place_test",
+      "result": "PASS"
+    },
+    {
+      "command": "gemm_slices_test",
+      "result": "PASS"
+    },
+    {
+      "command": "ffn_share_test",
+      "result": "PASS"
+    },
+    {
+      "command": "ws_upgrade_test",
+      "result": "PASS"
+    },
+    {
+      "command": "test_server_cli",
+      "result": "PASS"
+    },
+    {
+      "command": "test_sidecar",
+      "result": "PASS"
+    },
+    {
+      "command": "test_bench",
+      "result": "PASS"
+    },
+    {
+      "command": "test_update",
+      "result": "PASS"
+    },
+    {
+      "command": "test_community",
+      "result": "PASS"
+    },
+    {
+      "command": "test_reasoning",
+      "result": "PASS"
+    },
+    {
+      "command": "test_pr_size",
+      "result": "PASS"
+    },
+    {
+      "command": "test_logit_compare",
+      "result": "PASS"
+    },
+    {
+      "command": "test_sampled_tokens_harness",
+      "result": "PASS"
+    },
+    {
+      "command": "test_structured_cli",
+      "result": "PASS"
+    }
+  ],
+  "additional_passed": [
+    "Qwen parser",
+    "Qwen structured output",
+    "profile gates",
+    "comment gates",
+    "prek --all-files"
+  ],
+  "skipped": [
+    "optional reasoning dataset rebuild",
+    "Drex companion update cases (systemone executable not built)"
+  ],
+  "initial_source_exceptions": "See initial-cpu-checks.json. First failures and targeted repeats are retained separately; they are not the final-source results."
+}
