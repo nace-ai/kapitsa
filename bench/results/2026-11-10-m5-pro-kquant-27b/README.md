@@ -15,10 +15,14 @@ carries the quality result. The speed result is held, see below.
 
 ## Quality
 
-| Pack | KL from bf16 | KL p99 | Top-1 agreement | GSM8K, 1,319 |
-| --- | ---: | ---: | ---: | ---: |
-| Catalog 4-bit | 0.0544 | 0.678 | 0.912 | 0.9500 |
-| KQuant 4-bit | **0.0349** | **0.471** | **0.929** | 0.9530 |
+| Pack | KL from bf16 | KL p99 | Top-1 agreement | NLL on the same tokens (bf16: 1.6069) | GSM8K, 1,319 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Catalog 4-bit | 0.0544 | 0.678 | 0.912 | **1.6282** | 0.9500 |
+| KQuant 4-bit | **0.0349** | **0.471** | **0.929** | 1.6347 | 0.9530 |
+
+One metric goes the other way: the cross-entropy of the tokens themselves is 0.0278 nats above bf16 for KQuant and 0.0213 for the catalog pack (KQuant has less
+distance to bf16's predictions, the catalog pack slightly lower loss on this text). KL and top-1 are this record's stated metrics; the NLL is shown so the
+table has all three.
 
 KL by source (WikiText-2, GSM8K chats, HumanEval code): 0.0472, 0.0645, 0.0683 for the catalog pack; 0.0296, 0.0410, 0.0468 for KQuant.
 KL and top-1: next-token distributions over 32,704 tokens against `Qwen/Qwen3.8-27B` @ `37561816` in bf16. GSM8K: zero-shot, greedy, thinking
