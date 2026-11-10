@@ -108,11 +108,6 @@ def stop_while_starting(kapitsa, check_status, sigint):
             if rc != 0 or os.path.exists(sock):
                 failures.append(f"stop while starting (SIGINT {sigint}): exit {rc}, want 0 (a stop is not a crash), "
                                 f"socket left: {os.path.exists(sock)}")
-            if sigint == "terminal":
-                p.drain.join(5)
-                screen = bytes(p.screen)
-                if screen.rfind(b"\033[?25l") > screen.rfind(b"\033[?25h"):
-                    failures.append(f"stop while starting in a terminal left the cursor hidden: {screen[-300:]!r}")
         except (OSError, subprocess.TimeoutExpired) as e:
             p.kill()
             out = bytes(p.screen) if sigint == "terminal" else p.communicate()[0]
@@ -133,7 +128,8 @@ def serve_checks(kapitsa, check_status):
         out = serve(kapitsa, home).communicate(timeout=60)[0]
         if "longer than macOS allows" not in out or "no control socket" not in out or "No folder at" not in out:
             failures.append(f"a socket path over 103 bytes: the server should warn, go on and fail on the model: {out!r}")
-    # held in `starting`: POST /stop ends it with status 0 however SIGINT is set, the cursor back in a terminal
+    # held in `starting`: POST /stop ends it with status 0 however SIGINT is set, in a terminal too (the terminal UI's
+    # handlers installed; `starting` draws no status block, so there is no cursor state to check)
     for sigint in ("ignored", "default", "terminal"):
         failures += stop_while_starting(kapitsa, check_status, sigint)
     return failures
