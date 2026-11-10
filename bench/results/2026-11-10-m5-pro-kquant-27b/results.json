@@ -18,7 +18,8 @@
    "kl": 0.0349,
    "top1": 0.929,
    "gsm8k": 0.953,
-   "gsm8k_n": 1319
+   "gsm8k_n": 1319,
+   "revision": "cf91c446"
   },
   "gsm8k_pair": {
    "only_kquant": 17,
@@ -36,7 +37,7 @@
   "text_caveat": "Quality was measured on text workloads; the vision tower is included but was not evaluated.",
   "catalog_pinned": true,
   "min_kapitsa": "This needs Kapitsa 0.2.34 or later (or a build from main until 0.2.34 is out).",
-  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) at `1d5087d2` (MTPLX, apache-2.0), unchanged. Tokenizer and chat template as in the [lmstudio-community pack](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit) the catalog serves. Thanks to Youssofal."
+  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) at `1d5087d2` (MTPLX, apache-2.0), unchanged. Tokenizer and chat template as in [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B). Thanks to Youssofal."
  },
  "model": "Qwen3.8-27B",
  "base_repo": "Qwen/Qwen3.8-27B",
@@ -44,7 +45,7 @@
  "license": "apache-2.0",
  "pipeline_tag": "image-text-to-text",
  "kapitsa_commit": "e728524",
- "source": "k436 kq/res/q38-27b (cat27_4 = /vol/packs/q38-27b/lms-4bit, kq27_4 = kq-4bit-text, both on Modal H100); DRAFT: standard-pack identity (lmstudio-community @6067b15c), staged repo name, credits and scored_with wait for B's confirmation; speed legs (mac/runs/27b-six4) are held and not in this file",
+ "source": "k436 kq/res/q38-27b (cat27_4 = /vol/packs/q38-27b/lms-4bit, kq27_4 = kq-4bit-text, both on Modal H100); repo file list from nace-ai/Qwen3.8-27B-MLX-4bit-KQuant @ cf91c446 (private; shards equal to the test repo k436-test-qwen3.8-27b-mlx-4bit-kquant @566dc4e8, tokenizer and chat template files equal to Qwen/Qwen3.8-27B @37561816, mtp.safetensors and mtplx_runtime.json equal to Youssofal @1d5087d2); scored_with and the text-only quality note are the card writer's reading of the Modal harness, not yet confirmed by B; speed legs (mac/runs/27b-six4) are held and not in this file",
  "variants": [
   {
    "name": "mlx-4bit-kquant",
@@ -53,7 +54,73 @@
    "size_gb": 15.13,
    "repo": "nace-ai/Qwen3.8-27B-MLX-4bit-KQuant",
    "kapitsa_model": "27b",
-   "kquant": true
+   "kquant": true,
+   "files": [
+    {
+     "name": "chat_template.jinja",
+     "bytes": 9004
+    },
+    {
+     "name": "config.json",
+     "bytes": 4156
+    },
+    {
+     "name": "generation_config.json",
+     "bytes": 202
+    },
+    {
+     "name": "merges.txt",
+     "bytes": 3353259
+    },
+    {
+     "name": "model-00001-of-00003.safetensors",
+     "bytes": 5343268960
+    },
+    {
+     "name": "model-00002-of-00003.safetensors",
+     "bytes": 5354185240
+    },
+    {
+     "name": "model-00003-of-00003.safetensors",
+     "bytes": 5357087824
+    },
+    {
+     "name": "model.safetensors.index.json",
+     "bytes": 209549
+    },
+    {
+     "name": "mtp.safetensors",
+     "bytes": 238934249
+    },
+    {
+     "name": "mtplx_runtime.json",
+     "bytes": 6566
+    },
+    {
+     "name": "preprocessor_config.json",
+     "bytes": 390
+    },
+    {
+     "name": "processor_config.json",
+     "bytes": 991
+    },
+    {
+     "name": "tokenizer.json",
+     "bytes": 12809320
+    },
+    {
+     "name": "tokenizer_config.json",
+     "bytes": 9984
+    },
+    {
+     "name": "video_preprocessor_config.json",
+     "bytes": 385
+    },
+    {
+     "name": "vocab.json",
+     "bytes": 6722759
+    }
+   ]
   }
  ]
 }

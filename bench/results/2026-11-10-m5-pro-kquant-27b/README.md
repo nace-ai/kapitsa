@@ -1,8 +1,16 @@
 # Results, 2026-11-10: a KQuant pack for Qwen3.8-27B against the catalog's 4-bit pack (speed held)
 
 The catalog's 4-bit Qwen3.8-27B is `lmstudio-community/Qwen3.8-27B-MLX-4bit` at `6067b15c`. The KQuant pack keeps its layout and rebuilds only
-the quantized weights, scales and biases of the language model, so the 15.13 GB of language-model weights are the same size. It goes to
-the new private repo `nace-ai/Qwen3.8-27B-MLX-4bit-KQuant`; the public `nace-ai/Qwen3.8-27B-MLX-4bit` is not touched. This record
+the quantized weights, scales and biases of the language model, so the 15.13 GB of language-model weights are the same size. It is
+`nace-ai/Qwen3.8-27B-MLX-4bit-KQuant` (private, weights and MTP head as of `cf91c446`; the model card is added in a later commit); the public `nace-ai/Qwen3.8-27B-MLX-4bit` is not touched. Compared on the Hub
+(10 November): its three weight shards have the same SHA-256 as those of the test repo `nace-ai/k436-test-qwen3.8-27b-mlx-4bit-kquant` at `566dc4e8` that
+the Mac legs were built from, and `mtp.safetensors` and `mtplx_runtime.json` are Youssofal's `Qwen3.8-27B-MTPLX-Optimized-Speed` at `1d5087d2`, unchanged.
+The repo is 16.32 GB with the vision tower and the MTP head.
+
+The tokenizer files and chat template are those of `Qwen/Qwen3.8-27B` at `37561816` (`tokenizer.json` SHA-256 starts `0997f410c5`), not the catalog pack's. The
+catalog pack's `tokenizer.json` differs from the base's on Devanagari and Thai ids (it lost `\p{M}`); English, code and math ids are identical, so the
+quality and speed numbers below stand for those, and nothing here claims Indic or Thai quality. The chat template renders the same text as the catalog's and
+differs only by the `{% generation %}` markers. This record
 carries the quality result. The speed result is held, see below.
 
 ## Quality
