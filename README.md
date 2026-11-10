@@ -47,7 +47,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### KQuant
 
-Kapitsa's Qwen3.5-4B and 9B downloads are KQuant packs: the same MLX 4-bit files and size as a standard pack, closer to the original model. `kapitsa serve --model 4b` gets it; there is nothing to set.
+Kapitsa's Qwen3.5 4B and 9B downloads are KQuant packs: the same MLX 4-bit files and size as a standard pack, closer to the original model. `kapitsa serve --model 4b` gets it; there is nothing to set.
 
 | Qwen3.5, 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
 | --- | --- | --- | --- |
