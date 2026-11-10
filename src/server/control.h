@@ -42,10 +42,14 @@ struct Identity {
   int parent_pid = 0;  // attached only
   nlohmann::json config = nlohmann::json::object();
 };
-// GET /status from the identity, the bus (run_id, last_event_id), the activity (tick_ms, requests) and the last state
-// event's {state, model} (last_state())
+// GET /status from the identity, the bus (run_id), the activity (tick_ms, requests) and the last state event's
+// {state, model, seq} (last_state(): seq is the bus's last event when the state was read, so last_event_id never passes
+// a state event the status does not show)
 nlohmann::json instance_status(const Identity& id, const Events& bus, const Activity& act, const nlohmann::json& state);
 constexpr size_t kMaxControlBody = 64 * 1024;
+
+// The inference API's URL for `kapitsa serve --host host --port port`: a wildcard host as 127.0.0.1, IPv6 in brackets
+std::string api_url(const std::string& host, int port);
 
 bool valid_instance_id(const std::string& id);  // 1 to 32 of A-Z a-z 0-9 _ -
 std::string control_dir(const std::string& home);  // <home>/run, made 0700; "" when it cannot be made

@@ -637,8 +637,7 @@ class ServeControl : public server::ControlApi {
     id_.instance_id = instance_id;
     id_.version = kVersion;
     id_.config = config;
-    const bool any = host.empty() || host == "0.0.0.0" || host == "::";
-    id_.api_url = "http://" + std::string(any ? "127.0.0.1" : host) + ":" + std::to_string(port);
+    id_.api_url = server::api_url(host, port);
     const char* p = getenv("KAPITSA_PARENT_PID");
     id_.parent_pid = p && *p ? atoi(p) : 0;
     id_.lifecycle = id_.parent_pid > 1 ? "attached" : getppid() == 1 && !isatty(0) ? "keep_running" : "foreground";
@@ -667,8 +666,8 @@ static bool lock_control(const std::string& run_dir, const std::string& instance
   return !why;
 }
 
-// After the first event: the socket listens. A server whose socket cannot listen refuses to start. (Never freed: the
-// socket's threads may outlive run_service.)
+// After the first event: the socket listens. "" or why it cannot (a path over macOS's limit, a home whose volume takes
+// no sockets). (Never freed: the socket's threads may outlive run_service.)
 static std::string listen_control(const std::string& run_dir, const std::string& instance_id, const server::Options& o,
                                   const std::string& host) {
   auto* srv = new server::ControlServer(*new ServeControl(instance_id, o.given, host, o.port), *server::events());
@@ -1055,7 +1054,8 @@ int ni::server::run_service(Options o) {
   const bool with_socket = lock_control(run_dir, instance_id);
   server::publish_state("starting", nullptr);
   if (with_socket)
-    if (const std::string why = listen_control(run_dir, instance_id, o, host); !why.empty()) return fail(why);
+    if (const std::string why = listen_control(run_dir, instance_id, o, host); !why.empty())
+      fprintf(stderr, "warning: %s: this server has no control socket\n", why.c_str());  // (the unnamed default)
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";

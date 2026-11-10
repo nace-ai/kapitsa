@@ -59,7 +59,8 @@ double steady_ms();
 nlohmann::json model_json(const std::string& id, int context_length, int slots);
 // Publishes a state event on the bus start_activity() made (nothing before it): `message` only when not empty
 void publish_state(const char* state, const nlohmann::json& model, const std::string& message = "");
-// The last state event's {state, model} ({starting, null} before the first): what GET /status reports
+// The last state event's {state, model} ({starting, null} before the first), with `seq`, the bus's last event then: what
+// GET /status reports
 nlohmann::json last_state();
 
 // `kapitsa serve`'s Activity and its bus, made once for the process (threads that log may outlive run_service, so

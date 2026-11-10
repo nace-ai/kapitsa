@@ -116,9 +116,17 @@ json instance_status(const Identity& id, const Events& bus, const Activity& act,
             {"name", id.name.empty() ? id.instance_id : id.name}, {"pid", int(getpid())}, {"version", id.version},
             {"started_at", id.started_at}, {"lifecycle", id.lifecycle}, {"state", state.value("state", "starting")},
             {"api_url", id.api_url}, {"model", state.value("model", json())}, {"config", id.config},
-            {"tick_ms", act.tick_ms()}, {"last_event_id", bus.id(bus.last_seq())}, {"requests", act.requests()}};
+            {"tick_ms", act.tick_ms()},
+            {"last_event_id", bus.id(state.contains("seq") ? state["seq"].get<uint64_t>() : bus.last_seq())},
+            {"requests", act.requests()}};  // (read after the seq: a request started in between is shown, not missed)
   if (id.parent_pid > 1) j["parent_pid"] = id.parent_pid;
   return j;
+}
+
+std::string api_url(const std::string& host, int port) {
+  const bool any = host.empty() || host == "0.0.0.0" || host == "::";
+  const std::string h = any ? "127.0.0.1" : host.find(':') != std::string::npos ? "[" + host + "]" : host;
+  return "http://" + h + ":" + std::to_string(port);
 }
 
 bool valid_instance_id(const std::string& id) {

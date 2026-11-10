@@ -4,7 +4,8 @@
 `control_test --print` drives the control socket (src/server/control.h) over a real Unix socket and prints every
 answer it got as {"schema", "message"}: statuses, each error code it can give, and a reset event. This checks each
 against schema/control/<schema>.schema.json. With build/kapitsa too, it starts `kapitsa serve` on a model folder that
-does not exist in a home where `run/` cannot be a folder: the server goes on without a socket. CPU only, no model.
+does not exist, in a home where `run/` cannot be a folder and in one whose socket path is over macOS's 103 bytes: each
+time the server goes on without a socket. CPU only, no model.
 Needs: jsonschema (4.18 or later, for `referencing`).
 
     python3 tests/test_control_socket.py build/control_test [build/kapitsa]
@@ -47,6 +48,12 @@ def serve_checks(kapitsa):
         out = serve(kapitsa, home).communicate(timeout=60)[0]
         if "no control socket" not in out or "cannot listen" in out or "No folder at" not in out:
             failures.append(f"run/ not a folder: the server should go on without a socket and fail on the model: {out!r}")
+    with tempfile.TemporaryDirectory() as tmp:
+        home = os.path.join(tmp, "h" * max(1, 110 - len(tmp)))  # run/default.sock over 103 bytes
+        os.mkdir(home)
+        out = serve(kapitsa, home).communicate(timeout=60)[0]
+        if "longer than macOS allows" not in out or "no control socket" not in out or "No folder at" not in out:
+            failures.append(f"a socket path over 103 bytes: the server should warn, go on and fail on the model: {out!r}")
     return failures
 
 

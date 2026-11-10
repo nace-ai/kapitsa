@@ -33,8 +33,9 @@ it.
   server also checks each connection's peer with `getpeereid` and answers `403 forbidden_peer` to any other user
   (root included). There is no token and no TCP port.
 - **Instance id.** 1 to 32 of `A-Z a-z 0-9 _ -`, `default` when the configuration gives none. macOS limits a socket
-  path to 103 bytes, and 32 keeps a usual home folder's path under it. A server whose socket path is longer anyway
-  refuses to start, and its error names the path.
+  path to 103 bytes, and 32 keeps a usual home folder's path under it. A server whose socket path is longer anyway,
+  or whose socket cannot listen (a volume that takes no sockets), names the path in a warning and serves without a
+  socket. (Instances the configuration names, a later change, will refuse to start instead.)
 - **Identity fields.** [control.schema.json](../schema/control/control.schema.json) defines `protocol`,
   `instance_id` and `name`. The control socket's implementation adds them to `kapitsa serve --config -` with these
   meanings, and the control schema then refers to them there.

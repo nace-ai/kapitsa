@@ -175,8 +175,10 @@ void publish_state(const char* state, const nlohmann::json& model, const std::st
 }
 
 nlohmann::json last_state() {
-  std::lock_guard<std::mutex> lk(g_state_mu);
-  return g_state;
+  std::lock_guard<std::mutex> lk(g_state_mu);  // (state events publish under it: the seq cannot pass one unseen)
+  nlohmann::json s = g_state;
+  if (Events* bus = g_events.load(std::memory_order_acquire)) s["seq"] = bus->last_seq();
+  return s;
 }
 
 Activity* activity() { return g_activity.load(std::memory_order_acquire); }

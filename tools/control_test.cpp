@@ -142,6 +142,8 @@ int main(int argc, char** argv) {
   CHECK(control_dir(blocked).empty());
   unlink((blocked + "/run").c_str());
   rmdir(blocked.c_str());
+  CHECK(api_url("", 8100) == "http://127.0.0.1:8100" && api_url("::", 1) == "http://127.0.0.1:1" &&
+        api_url("::1", 8100) == "http://[::1]:8100" && api_url("10.0.0.2", 80) == "http://10.0.0.2:80");
   CHECK(valid_instance_id("code") && valid_instance_id("a_B-9") && !valid_instance_id("") &&
         !valid_instance_id(std::string(33, 'a')) && !valid_instance_id("a.b") && !valid_instance_id("a/b"));
 
@@ -174,6 +176,8 @@ int main(int argc, char** argv) {
   CHECK(json::parse(a.body)["requests"].size() == 1 && json::parse(a.body)["last_event_id"] == kRun + ".2");
   keep("status", a);
   act.finish(r, ni::ChatResult{});
+  // last_event_id is the seq read with the state, not the bus's last event when the status is assembled
+  CHECK(instance_status(stub.id, bus, act, {{"state", "loading"}, {"seq", 1}})["last_event_id"] == kRun + ".1");
 
   // paths, methods and bodies
   CHECK(code_of(a = ask(sock, "GET", "/nope")) == "not_found" && a.status == 404);
@@ -239,6 +243,12 @@ int main(int argc, char** argv) {
   // stop() removes the socket file
   srv.stop();
   CHECK(stat(sock.c_str(), &st) != 0 && dial(sock) < 0);
+
+  // the process bus: last_state() reads the state and the bus's last seq under the lock state events publish under
+  start_activity();
+  publish_state("ready", model_json("qwen3.6-27b", 131072, 2));
+  events()->publish("log", {{"level", "info"}, {"message", "after"}});
+  CHECK(last_state()["state"] == "ready" && last_state()["seq"] == events()->last_seq());
 
   close(lock);
   unlink((dir + "/code.lock").c_str());
