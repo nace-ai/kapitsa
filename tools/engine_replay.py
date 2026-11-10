@@ -3,9 +3,10 @@
 
 It serves the page and the control socket's read endpoints (docs/control-socket.md) over HTTP on 127.0.0.1, as
 `kapitsa serve` serves them at /engine for this Mac. GET /engine/status and GET /engine/events (SSE, Last-Event-ID
-replay and resets) answer from the recording. /engine is read-only: POST /_standin/stop and /_standin/drop are this
-stand-in's test hooks (the real server has none; a stop goes through its control socket). A stop ends the run and a
-new one starts (the view sees `run_changed`).
+replay and resets) answer from the recording. /engine is read-only: POST /_standin/stop, /_standin/drop and
+/_standin/model are this stand-in's test hooks (the real server has none; stop and switch go through its control
+socket). A stop ends the run and a new one starts (the view sees `run_changed`); a switch reads `switching`, then
+`ready` with the new model. At most 3 event streams at once, as on the real server: the next gets 503 busy.
 
 Access as on the real server: every request but the page's needs this
 process's random token as `Authorization: Bearer` (the page reads it from the URL's #t=; `--token-file` also writes it,
@@ -40,10 +41,11 @@ PROXY_HEADERS = ("X-Forwarded-For", "Forwarded", "Via")
 CURSOR_RE = re.compile(r"([0-9a-f]{16,64})\.([0-9]{1,19})")
 # /engine/* is read-only, as on the real server: stop and switch go through the control socket there (Kapitan, or
 # Ctrl-C where kapitsa serve runs). /_standin/* are this stand-in's own test hooks, so tests can drive a stop (and with
-# {"then": "exit"} one that no new run follows) and a drop (every event stream ends cleanly, the run goes on); the real
-# server has no such routes over HTTP.
+# {"then": "exit"} one that no new run follows), a drop (every event stream ends cleanly, the run goes on) and a
+# switch; the real server has no such routes over HTTP.
 ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET",
-          "/_standin/stop": "POST", "/_standin/drop": "POST"}
+          "/_standin/stop": "POST", "/_standin/drop": "POST", "/_standin/model": "POST"}
+MAX_VIEWS = 3  # event streams at once (kMaxEngineViews in src/server/engine_view.h)
 PAGE_CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
             "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 GB = 1_000_000_000
@@ -235,7 +237,7 @@ class Instance:
         self.args, self.version, self.cond, self.runs = args, "0.2.33", threading.Condition(), 0
         self.token = secrets.token_urlsafe(24)  # one per process: a restarted run keeps it
         self.run = self.new_run()
-        self.stop_at, self.exit_on_stop, self.drops = None, False, 0
+        self.stop_at, self.exit_on_stop, self.drops, self.views = None, False, 0, 0
 
     def new_run(self):
         self.runs += 1
@@ -267,6 +269,33 @@ class Instance:
                 self.stop_at = time.time() + self.args.stop_seconds / self.args.speed
             self.cond.notify_all()
             return {"run_id": r.run_id, "state": "stopping"}
+
+    def switch(self, mid):
+        with self.cond:
+            r = self.run
+            if not hasattr(r, "load"):
+                return 400, {"error": {"code": "invalid_value", "message": "a recording cannot switch",
+                                       "details": {"field": "model"}}}
+            if mid not in MODELS:
+                return 404, {"error": {"code": "model_not_found", "message": f"no model {mid} here (this "
+                                       f"stand-in has {', '.join(MODELS)})", "details": {"model": mid}}}
+            if r.state == "stopping":
+                return 503, {"error": {"code": "stopping", "message": "the instance is stopping"}}
+            if r.state != "ready":
+                return 503, {"error": {"code": "busy", "message": f"the instance is {r.state}",
+                                       "details": {"retry_after_s": 5}}}
+            prev = r.model()
+            for req in list(r.requests.values()):
+                r.finish(req)
+            r.load(mid, "switching")
+            r.slots = []
+        deadline = time.time() + 30
+        with self.cond:  # answers once the new model is ready, as POST /model does
+            while self.run is r and r.state not in ("ready", "stopping") and time.time() < deadline:
+                self.cond.wait(1)
+            if r.state == "stopping":  # a stop abandons the load
+                return 503, {"error": {"code": "stopping", "message": "the instance is stopping"}}
+            return 200, {"run_id": r.run_id, "model": r.model(), "previous_model": prev}
 
 
 def handler(inst):
@@ -388,8 +417,23 @@ def handler(inst):
                     inst.drops += 1
                     inst.cond.notify_all()
                 self.send_json(202, {})
+            else:
+                self.send_json(*inst.switch(str(body.get("model", ""))))
 
         def events(self):
+            with inst.cond:
+                full = inst.views >= MAX_VIEWS
+                inst.views += not full
+            if full:
+                return self.send_json(503, {"error": {"code": "busy", "message": f"{MAX_VIEWS} engine views are open",
+                                                      "details": {"retry_after_s": 5}}}, extra=[("Retry-After", "5")])
+            try:
+                self.stream()
+            finally:
+                with inst.cond:
+                    inst.views -= 1
+
+        def stream(self):
             # no length: the stream ends when the connection closes, which is how a viewer sees the run end
             self.close_connection = True
             self.head(200, "text/event-stream", extra=[("Connection", "close")])

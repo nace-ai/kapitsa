@@ -288,7 +288,31 @@ def main():
             reset_case(name, last, "invalid_cursor")
         reset_case("another run", "0123456789abcdef.5", "run_changed")
 
-        reset_case("another run", "0123456789abcdef.5", "run_changed")
+        # --- at most 3 event streams: the next gets 503 busy with Retry-After: 5, and a closed one frees its place
+        # (the stand-in notices a closed viewer at its next write, a tick or two later: the opens retry for 5 s)
+        def open_stream():
+            c = socket.create_connection(("127.0.0.1", port), timeout=5)
+            c.sendall(f"GET /engine/events HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {tok}\r\n\r\n".encode())
+            if c.recv(64).startswith(b"HTTP/1.1 200"):
+                return c
+            c.close()
+
+        held = [c for c in (wait_for(open_stream, 5) for _ in range(3)) if c]
+        if len(held) != 3:
+            fails.append(f"{len(held)} of the first 3 event streams opened")
+        time.sleep(2)  # (the earlier checks' streams gone: these 3 are all there are)
+        code, h, raw = a.get("/engine/events", stream=True)
+        if code == 503:
+            code, h, raw = a.get("/engine/events")
+        expect("a fourth event stream", (code, h, raw), 503, "busy")
+        if code == 503 and h.get("Retry-After") != "5":
+            fails.append(f"a fourth event stream: Retry-After {h.get('Retry-After')!r}, want '5'")
+        if held:
+            held.pop().close()
+        if not wait_for(lambda: a.get("/engine/events", stream=True)[0] == 200, 10):
+            fails.append("a closed event stream did not free its place in 10 s")
+        for c in held:
+            c.close()
 
         # --- a switch (polled to ready first, not slept for), then a stop whose window reads `stopping`
         expect("switch to a missing model", a.post("/_standin/model", {"model": "nope", "run_id": run}), 404,
