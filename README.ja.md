@@ -10,7 +10,7 @@ Kapitsa は、Qwen、Nemotron、Recursive の Flint モデルをローカルで�
 
 <sub>この日本語版は英語版 [README.md](README.md) の一部を翻訳したものです。ベンチマークの数値、モデル一覧、更新情報は英語版を参照してください。内容に相違がある場合は、英語版を優先してください。</sub>
 
-[クイックスタート](#クイックスタート) · [ベンチマーク](#ベンチマーク) · [機能](#機能) · [CLI](#cli) · [対応モデル](README.md#supported-models) · [KFlash の仕組み](docs/kflash.md) · [ドキュメント（英語）](docs/usage.md)
+[クイックスタート](#クイックスタート) · [ベンチマーク](#ベンチマーク) · [機能](#機能) · [CLI](#cli) · [対応モデル](README.md#models) · [KFlash の仕組み](docs/kflash.md) · [ドキュメント（英語）](docs/usage.md)
 
 ## クイックスタート
 
@@ -40,7 +40,7 @@ kapitsa opencode --model 35b    # claude、codex、pi も使えます
 
 <sub>各セルはプリフィル / デコードの速度（トークン毎秒）を示します。測定には、4K トークンのプロンプトと、T 0.6 で生成する 512 トークンの回答を使っています（Flint はモデルカードの T 1.0）。一部の行は条件が異なり、その条件は英語版の注記にあります。脚注、測定日、フラグは [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured) にあります。</sub>
 
-Mac ごと、モデルごとの表は英語版の [Models](README.md#models) に、記録したすべての測定は[ベンチマーク表](bench/README.md)にあります。自分の Mac で `kapitsa bench --submit` を実行すると、測定結果が[コミュニティのベンチマーク結果](bench/community/RESULTS.md)に追加されます。手元の Mac で別のエンジンのほうが速い場合は、`kapitsa bench compare` がインストール済みのすべてのエンジンを順位付けし、`--report` で Markdown のレポートを書き出します。
+Mac ごと、モデルごとの表は英語版の [Speed on each Mac](README.md#speed-on-each-mac) に、記録したすべての測定は[ベンチマーク表](bench/README.md)にあります。自分の Mac で `kapitsa bench --submit` を実行すると、測定結果が[コミュニティのベンチマーク結果](bench/community/RESULTS.md)に追加されます。手元の Mac で別のエンジンのほうが速い場合は、`kapitsa bench compare` がインストール済みのすべてのエンジンを順位付けし、`--report` で Markdown のレポートを書き出します。
 
 ## 機能
 
@@ -78,7 +78,7 @@ kapitsa update                  # 今すぐ更新（自動でも更新されま�
 
 ## 対応モデル
 
-Qwen3.5（4B、9B）、Qwen3.6-35B-A3B、Qwen3.8（27B、Flash-Next 180B-A7B）、Nemotron 3.5（Lightning、Bolt、Super-VL）、Nemotron Dory1.0 4B、Nemotron 3 Nano 4B、Nemotron Nano 9B v2、Recursive Flint 40B-A2.5B、Clover-35B-A3B-Preview、Drex 2.0 に対応しています。Mac のメモリ容量ごとにどの精度が動くかは英語版の[対応モデルの表](README.md#supported-models)にあり、`kapitsa doctor` は同じ内容をこの Mac について表示します。
+Qwen3.5（4B、9B）、Qwen3.6-35B-A3B、Qwen3.8（27B、Flash-Next 180B-A7B）、Nemotron 3.5（Lightning、Bolt、Super-VL）、Nemotron Dory1.0 4B、Nemotron 3 Nano 4B、Nemotron Nano 9B v2、Recursive Flint 40B-A2.5B、Clover-35B-A3B-Preview、Drex 2.0 に対応しています。Mac のメモリ容量ごとにどの精度が動くかは英語版の[対応モデルの表](README.md#models)にあり、`kapitsa doctor` は同じ内容をこの Mac について表示します。
 
 ## 仕組み
 

@@ -77,7 +77,7 @@ and the same quantized layers run here).
 The two builds' model folders weigh 36.9 GB for the Q8_0 release (36.85 GB of weights) and 24.1 GB for the 4-bit
 build (24.09 GB of weights); the pointer head and the tokenizer add 13 MB to each. Both sizes are the folders
 as `kapitsa-systemone --model` reads them. On top of the weights come the KV cache for `--context` (16K tokens by
-default) and the state cache, 1 GB by default (`--cache-mb`). The README's supported-models table adds those two to the
+default) and the state cache, 1 GB by default (`--cache-mb`). The README's Models table adds those two to the
 weights when it picks a Mac size for Drex 2.0.
 
 ## Cached states

@@ -246,9 +246,9 @@ def tables(data):
 
 
 def readme_with_tables(readme, block):
-    """README text with its Models section's tables replaced: from the legend line (or, the first time, the section's
+    """README text with its Speed on each Mac section's tables replaced: from the legend line (or, the first time, the section's
     first <details>) to the section's last </details>"""
-    start = readme.index("\n## Models\n")
+    start = readme.index("\n## Speed on each Mac\n")
     end = readme.find("\n## ", start + 1)
     end = len(readme) if end < 0 else end
     sec = readme[start:end]
@@ -835,7 +835,7 @@ def main():
     ap.add_argument("--headers", action="store_true", help="only the header (three SVG files; no Chrome needed)")
     ap.add_argument("--context", action="store_true", help="only the context charts (four WebP files: prefill and decode, light and dark)")
     ap.add_argument("--out", type=Path, default=ROOT / "docs" / "assets", help="output folder (default: docs/assets)")
-    ap.add_argument("--tables", action="store_true", help="only the README's per-Mac tables (rewrites README.md's Models section)")
+    ap.add_argument("--tables", action="store_true", help="only the README's per-Mac tables (rewrites README.md's Speed on each Mac section)")
     ap.add_argument("--check", action="store_true", help="with --tables: fail if README.md's tables are not what the data gives")
     ap.add_argument("--readme", type=Path, default=ROOT / "README.md")
     ap.add_argument("--data", type=Path, default=HERE / "readme_images.json")
@@ -848,9 +848,9 @@ def main():
         new = readme_with_tables(old, tables(data))
         if a.check:
             if new != old:
-                sys.exit(f"{a.readme}: the Models tables differ from readme_images.json; run python3 "
+                sys.exit(f"{a.readme}: the Speed on each Mac tables differ from readme_images.json; run python3 "
                          "tools/readme_images/readme_images.py --tables")
-            print(f"{a.readme}: the Models tables match readme_images.json")
+            print(f"{a.readme}: the Speed on each Mac tables match readme_images.json")
         elif new != old:
             a.readme.write_text(new, encoding="utf-8")
             print("wrote", a.readme)
@@ -904,7 +904,7 @@ def main():
     print("README poster alt text: Poster of prefill / decode speed for Kapitsa and "
           f"{words[others] if others < len(words) else others} other engines on a MacBook Pro "
           + ", ".join(chips[:-1]) + " and " + chips[-1]
-          + "; the numbers are in the poster and in the Models section's tables")
+          + "; the numbers are in the poster and in the Speed on each Mac section's tables")
 
 
 if __name__ == "__main__":
