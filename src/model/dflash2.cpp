@@ -1528,7 +1528,14 @@ void DFlash2::enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffe
   uint32_t Ntot = 0;
   for (auto& sg : segs) Ntot += sg.L->N;
   const uint32_t gpr = K / 64;
-  const int nt = ((Ntot + 15) / 16 > 8192 || gpr > 64) ? 32 : 16;
+  // 32 weight rows a simdgroup for grids past 8192 threadgroups of 16 (the target's rule), and for K > 4096 on narrow
+  // outputs (N <= 4096: the 35B drafter's down projection, 2048 x 6144); 16 otherwise. The 27B drafter's projections
+  // (K 5120 and 17408, N 5120 to 98304) on 16-row simdgroups: its 16-row drafting pass 4.40 -> 3.93 ms, the 8-row one on
+  // these GEMMs (NI_KFLASH_V8=0) 3.14 -> 3.07, M5 Max (ni_run, per-cycle A/B, the same tokens). NI_DFL_NT=0: the previous
+  // rule (32 for every K > 4096)
+  static const bool nt_old = getenv("NI_DFL_NT") && std::string(getenv("NI_DFL_NT")) == "0";
+  const bool fat = (Ntot + 15) / 16 > 8192 || (gpr > 64 && (nt_old || Ntot <= 4096));
+  const int nt = fat ? 32 : 16;
   uint32_t ks = gpr > 32 && gpr <= 64 ? 4 : 8;
   while (ks > 1 && gpr < ks) ks /= 2;
   const bool pf = nt == 32 || gpr > 32;
