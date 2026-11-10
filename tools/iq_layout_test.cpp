@@ -364,9 +364,10 @@ void test_iq4_nl_pages() {
 }  // namespace
 
 int main() {
-  if (iq1_s_test::run() + iq3_s_test::run()) return 1;
+  if (iq3_s_test::run()) return 1;
   if (iq2_s_test::run()) return 1;
   if (iq2_xs_test::run()) return 1;
+  if (iq1_s_test::run()) return 1;
   g_fail += q6_test::run();
   g_fail += iq3_xxs_test::run();
   g_fail += iq4_xs_test::run();
