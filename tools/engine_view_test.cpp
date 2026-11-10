@@ -1,11 +1,16 @@
 // The engine view's HTTP side (src/server/engine_view.h) on a real httplib server on 127.0.0.1, in front of a real
-// control server and bus with a stand-in status: the page, the status mirror, the event stream and its cap, the Host
-// and JSON checks, the API key on POSTs only, and the 503 without a control socket. CPU only.
+// control server and bus with a stand-in status, behind main.cpp's order (the gate, then an API key check): the page,
+// the run's key in place of the API key, read-only (404 and 405 as JSON), the Host, Origin, proxy and peer checks, the
+// key's file, the event stream and its cap, and the 503 without a control socket. CPU only.
 #include "server/activity.h"
 #include "server/engine_view.h"
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -44,7 +49,7 @@ int main() {
   srv.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
     if (const auto gate = engine_gate(req, res)) return *gate;
     if (req.get_header_value("Authorization") == "Bearer k") return httplib::Server::HandlerResponse::Unhandled;
-    res.status = 401;  // (kapitsa serve's key check, as main.cpp runs it after the gate)
+    res.status = 401;  // (kapitsa serve's API key check, as main.cpp runs it after the gate: no /engine path reaches it)
     return httplib::Server::HandlerResponse::Handled;
   });
   engine_routes(srv, [&] { return socket_up ? &control : nullptr; }, "<!doctype html><title>Kapitsa engine</title>");
@@ -55,37 +60,99 @@ int main() {
   httplib::Client cl("127.0.0.1", port);
   cl.set_read_timeout(10, 0);
 
-  // the page and the status, without the key
+  // the page needs no key; status and events need this run's key, and it stands in for the API key ("k" here)
+  const httplib::Headers run_key = {{"Authorization", "Bearer " + engine_token()}};
+  CHECK(engine_token().size() == 32 && engine_token().find_first_not_of(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_") == std::string::npos);
   auto r = cl.Get("/engine");
   CHECK(r && r->status == 200 && r->body.find("Kapitsa engine") != std::string::npos);
-  CHECK(r->get_header_value("Content-Security-Policy").find("connect-src 'self'") != std::string::npos);
-  r = cl.Get("/engine/status");
-  CHECK(r && r->status == 200);
+  CHECK(r->get_header_value("Content-Security-Policy").find("frame-ancestors 'none'") != std::string::npos);
+  CHECK(r->get_header_value("X-Frame-Options") == "DENY" && r->get_header_value("Cache-Control") == "no-store");
+  for (const httplib::Headers& h : {httplib::Headers{}, httplib::Headers{{"Authorization", "Bearer k"}},
+                                    httplib::Headers{{"Authorization", "Bearer " + engine_token() + "x"}}}) {
+    r = cl.Get("/engine/status", h);
+    CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+    r = cl.Get("/engine/events", h);
+    CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+  }
+  r = cl.Get("/engine/status", run_key);
+  CHECK(r && r->status == 200 && r->get_header_value("Cache-Control") == "no-store" &&
+        r->get_header_value("Referrer-Policy") == "no-referrer");
   const json st = json::parse(r->body);
   CHECK(st["state"] == "starting" && st["run_id"] == "7f3a9c2e5b1d4e60");
-  std::cout << "page and status ok\n";
+  cl.set_default_headers(run_key);
+  std::cout << "page, status and the run's key ok\n";
 
-  // a name rebound to 127.0.0.1 by a page elsewhere: refused, and so is a POST that is not JSON
-  r = cl.Get("/engine/status", {{"Host", "evil.example:" + std::to_string(port)}});
-  CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+  // read-only: no stop or switch over HTTP, and every other method or path is a JSON error, never the API key's 401
+  for (const char* path : {"/engine/stop", "/engine/model", "/engine/", "/engine/status/", "/engine/../v1/models"}) {
+    r = cl.Post(path, "{}", "application/json");
+    CHECK(r && r->status == 404 && error_code(r) == "not_found");
+    r = cl.Get(path);
+    CHECK(r && r->status == 404 && error_code(r) == "not_found");
+  }
+  for (const char* path : {"/engine", "/engine/status", "/engine/events"}) {
+    r = cl.Post(path, "{}", "application/json");
+    CHECK(r && r->status == 405 && error_code(r) == "method_not_allowed" && r->get_header_value("Allow") == "GET, HEAD");
+    r = cl.Delete(path);
+    CHECK(r && r->status == 405);
+    r = cl.Options(path);
+    CHECK(r && r->status == 405 && r->get_header_value("Access-Control-Allow-Origin").empty());
+  }
+  r = cl.Head("/engine/status");
+  CHECK(r && r->status == 200);
+  std::cout << "read-only ok\n";
+
+  // this Mac only: a name rebound to 127.0.0.1, another site's page, a proxy, a body; the page itself too
+  const std::string here = "127.0.0.1:" + std::to_string(port);
+  for (const httplib::Headers& h : {
+           httplib::Headers{{"Host", "evil.example:" + std::to_string(port)}},
+           httplib::Headers{{"Host", "127.0.0.1.evil.example"}},
+           httplib::Headers{{"Origin", "http://evil.example"}},
+           httplib::Headers{{"Origin", "null"}},
+           httplib::Headers{{"Origin", "https://" + here}},
+           httplib::Headers{{"X-Forwarded-For", "203.0.113.9"}},
+           httplib::Headers{{"Forwarded", "for=203.0.113.9"}},
+           httplib::Headers{{"Via", "1.1 proxy"}},
+           httplib::Headers{{"Content-Length", "1000000"}}}) {
+    for (const char* path : {"/engine", "/engine/status"}) {
+      httplib::Headers with = h;
+      with.insert(run_key.begin(), run_key.end());
+      r = cl.Get(path, with);
+      CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+    }
+  }
   for (const char* h : {"localhost", "[::1]"}) {
     r = cl.Get("/engine/status", {{"Host", std::string(h) + ":" + std::to_string(port)}});
     CHECK(r && r->status == 200);
   }
-  r = cl.Post("/engine/stop", {{"Authorization", "Bearer k"}}, "{}", "text/plain");
-  CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
-  // a POST needs the key; with it, the control server answers it as over the socket
-  r = cl.Post("/engine/stop", "{}", "application/json");
-  CHECK(r && r->status == 401);
-  r = cl.Post("/engine/stop", {{"Authorization", "Bearer k"}}, "{}", "application/json");
-  CHECK(r && r->status == control.handle("POST", "/stop", "{}").status && !error_code(r).empty());
+  r = cl.Get("/engine/status", {{"Origin", "http://" + here}});
+  CHECK(r && r->status == 200);
   // the peer check, on a request as httplib fills it in
   httplib::Request far;
   far.remote_addr = "192.168.1.20", far.method = "GET", far.headers.emplace("Host", "127.0.0.1:8100");
   CHECK(!engine_refusal(far).empty());
   far.remote_addr = "::1";
   CHECK(engine_refusal(far).empty());
-  std::cout << "host, json, key and peer checks ok\n";
+  std::cout << "host, origin, proxy and peer checks ok\n";
+
+  // the key's file: 0600, the key, and a link left at its path is replaced, not written through
+  {
+    char dir[] = "/tmp/engine_view_test.XXXXXX";
+    CHECK(mkdtemp(dir));
+    const std::string path = std::string(dir) + "/default.token", target = std::string(dir) + "/target";
+    CHECK(symlink(target.c_str(), path.c_str()) == 0);
+    CHECK(write_engine_token(path).empty());
+    struct stat sb;
+    CHECK(lstat(path.c_str(), &sb) == 0 && S_ISREG(sb.st_mode) && (sb.st_mode & 0777) == 0600);
+    CHECK(access(target.c_str(), F_OK) != 0);
+    std::ifstream f(path);
+    std::string got;
+    std::getline(f, got);
+    CHECK(got == engine_token());
+    unlink(path.c_str());
+    rmdir(dir);
+  }
+  std::cout << "key file ok\n";
 
   // events: what the bus publishes after the cursor, as SSE frames
   {
@@ -121,6 +188,7 @@ int main() {
       views.emplace_back([&] {
         httplib::Client c("127.0.0.1", port);
         c.set_read_timeout(20, 0);
+        c.set_default_headers(run_key);
         bool counted = false;
         c.Get("/engine/events", [&](const char*, size_t) {
           if (!counted) counted = true, ++open;

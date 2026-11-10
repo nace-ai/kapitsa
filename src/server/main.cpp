@@ -774,8 +774,15 @@ static std::string listen_control(const std::string& run_dir, const std::string&
   auto* srv = new server::ControlServer(*g_serve_control, *server::events());
   if (std::string why = srv->start(run_dir + "/" + instance_id + ".sock"); !why.empty()) return why;
   g_control = srv;
+  static std::string token_path;  // (the engine view's key: only this user reads it, as only they reach the socket)
+  token_path = run_dir + "/" + instance_id + ".token";
+  if (const std::string why = server::write_engine_token(token_path); !why.empty()) {
+    fprintf(stderr, "warning: %s: the engine view at /engine cannot be opened\n", why.c_str());
+    token_path.clear();
+  }
   std::atexit([] {
     if (g_control) g_control->stop();
+    if (!token_path.empty()) unlink(token_path.c_str());
   });
   return "";
 }
@@ -817,9 +824,8 @@ static void common_routes(httplib::Server& srv, const std::string& api_key, cons
     // a WebSocket upgrade on /v1/responses (Codex Desktop's probe, #772): 426 before the key check, so the client
     // falls back to HTTP at once instead of retrying a 404 with backoff
     if (server::refuse_ws_upgrade(req, res)) return httplib::Server::HandlerResponse::Handled;
-    // the engine view (docs/control-socket.md, "The engine view"): this Mac only, by its peer address and by the Host
-    // it was asked for (a page from elsewhere that rebinds a name to 127.0.0.1 is refused). It reads without the key,
-    // since an EventSource sends no headers; its stop and switch need it, as JSON (a cross-origin form cannot send it).
+    // the engine view (docs/control-socket.md, "The engine view"): read-only, this Mac only, and this run's key in
+    // place of the API key (src/server/engine_view.h)
     if (const auto gate = server::engine_gate(req, res)) return *gate;
     // the chat page asks for the key once and sends it with its API calls
     if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
@@ -1173,6 +1179,14 @@ int ni::server::run_service(Options o) {
   };
   if (g_stop_requested) return stop_asked();
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
+  if (g_control) {
+    // The engine view's link carries this run's key: said on this terminal only, never in the log (log files and the
+    // event stream), so only whoever started the server or can read run/ has it
+    const std::string page = "http://127.0.0.1:" + std::to_string(o.port) + "/engine";
+    if (tui) notes.push_back("Engine view: " + page + "#t=" + server::engine_token());
+    else if (isatty(STDERR_FILENO)) fprintf(stderr, "engine view: %s#t=%s\n", page.c_str(), server::engine_token().c_str());
+    else fprintf(stderr, "engine view: %s (its key: %s/%s.token)\n", page.c_str(), run_dir.c_str(), instance_id.c_str());
+  }
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
     if (tui) notes.push_back(say);

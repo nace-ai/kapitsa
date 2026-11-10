@@ -81,7 +81,7 @@ build/events_test                            # the server's event bus: replay, r
 python3 tests/test_events_schema.py build/events_test  # needs: jsonschema; every event the bus publishes matches schema/control/event.schema.json
 build/control_test                           # the control socket over a real Unix socket: lock, endpoints, errors, peer check, event streams (src/server/control.h)
 python3 tests/test_control_socket.py build/control_test build/kapitsa  # needs: jsonschema; every answer matches schema/control/; serve stops while starting
-build/engine_view_test                       # the engine view's /engine routes: this Mac only, Host and JSON checks, the key on POSTs, the stream cap (src/server/engine_view.h)
+build/engine_view_test                       # the engine view's /engine routes: read-only, this run's key, Host, Origin, proxy and peer checks, the stream cap (src/server/engine_view.h)
 python3 tests/test_events_schema.py tools/engine_replay.py  # the engine view's stand-in server's events, the same check
 python3 tests/test_engine_view.py            # needs: jsonschema; that stand-in's answers: the run's key, read-only, Host/Origin/proxy refusals, resume and resets, 3 streams at most
 node tests/test_engine_page.mjs              # Node 18+: the page's own script (src/server/engine.html) on that stand-in: key, live view, stop, disconnect, no key
