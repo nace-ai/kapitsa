@@ -1,0 +1,59 @@
+{
+ "kquant": {
+  "reference": "Qwen/Qwen3.8-27B @ 37561816 (bf16)",
+  "kl_tokens": 32704,
+  "standard": {
+   "label": "Kapitsa catalog 4-bit (lmstudio-community)",
+   "repo": "lmstudio-community/Qwen3.8-27B-MLX-4bit",
+   "revision": "6067b15",
+   "size_gb": 15.13,
+   "kl": 0.0544,
+   "top1": 0.912,
+   "gsm8k": 0.95,
+   "gsm8k_n": 1319
+  },
+  "kquant": {
+   "repo": "nace-ai/Qwen3.8-27B-MLX-4bit-KQuant",
+   "size_gb": 15.13,
+   "kl": 0.0349,
+   "top1": 0.929,
+   "gsm8k": 0.953,
+   "gsm8k_n": 1319
+  },
+  "gsm8k_pair": {
+   "only_kquant": 17,
+   "only_standard": 13
+  },
+  "sibling": {
+   "model": "Qwen3.5-9B",
+   "repo": "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"
+  },
+  "readme_url": "https://github.com/nace-ai/kapitsa#kquant",
+  "record_url": "https://github.com/nace-ai/kapitsa/blob/main/bench/results/2026-11-10-m5-pro-kquant-27b/README.md",
+  "speed_held": "No speed claim until one more KQuant leg: the KQuant arm's pack dir lacked mtplx_runtime.json during the speed legs (B, 10 Nov 18:49). Delete this key to add the speed row, headline and Speed section; then kapitsa_version, mac and the per-leg decode_t06, decode_t0, prefill_4k lists of both packs are required.",
+  "quality_note": "the text weights of both packs (15.13 GB each); the repos also carry the vision tower, which neither run exercised",
+  "scored_with": "mlx-lm 0.32.2 on a Modal H100 (mlx with CUDA), on the text weights",
+  "text_caveat": "Quality was measured on text workloads; the vision tower is included but was not evaluated.",
+  "catalog_pinned": true,
+  "min_kapitsa": "This needs Kapitsa 0.2.34 or later (or a build from main until 0.2.34 is out).",
+  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) at `1d5087d2` (MTPLX, apache-2.0), unchanged. Tokenizer and chat template as in the [lmstudio-community pack](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit) the catalog serves. Thanks to Youssofal."
+ },
+ "model": "Qwen3.8-27B",
+ "base_repo": "Qwen/Qwen3.8-27B",
+ "date": "2026-11-10",
+ "license": "apache-2.0",
+ "pipeline_tag": "image-text-to-text",
+ "kapitsa_commit": "e728524",
+ "source": "k436 kq/res/q38-27b (cat27_4 = /vol/packs/q38-27b/lms-4bit, kq27_4 = kq-4bit-text, both on Modal H100); DRAFT: standard-pack identity (lmstudio-community @6067b15c), staged repo name, credits and scored_with wait for B's confirmation; speed legs (mac/runs/27b-six4) are held and not in this file",
+ "variants": [
+  {
+   "name": "mlx-4bit-kquant",
+   "format": "mlx",
+   "bits": 4,
+   "size_gb": 15.13,
+   "repo": "nace-ai/Qwen3.8-27B-MLX-4bit-KQuant",
+   "kapitsa_model": "27b",
+   "kquant": true
+  }
+ ]
+}
