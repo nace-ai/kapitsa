@@ -1359,7 +1359,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   std::vector<std::pair<std::string, Target*>> reuse;
   uint64_t need = 0, total = 0, have = 0;
   int n_hf = 0, n_from = 0;
-  // A manifest that is no longer current is replaced only after the files match the new listing. Check existing
+  // A manifest that is no longer current is replaced once the files match the new listing. Check existing
   // files on every incomplete pull: a failed adoption or update can leave .kapitsa/ without a manifest, so neither
   // its presence nor a matching length proves the content. Checks run in parallel (8 files at a time).
   const bool recheck = unlink(manifest_path(ref.dir).c_str()) == 0;
