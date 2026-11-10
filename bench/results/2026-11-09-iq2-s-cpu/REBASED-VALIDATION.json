@@ -1,0 +1,1189 @@
+{
+  "kind": "redacted derived evidence; not raw execution logs",
+  "source": {
+    "candidate": "1a2ccacc068e668d56e4ae32999f5f4e3efb8dbb",
+    "reference": "3dccea3bd77d6ecdcb7c97c878d1c7e051bc8956"
+  },
+  "M5_output": {
+    "prefill": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "records_each_arm": 8
+    },
+    "step": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "records_each_arm": 192
+    },
+    "verify": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "records_each_arm": 192
+    },
+    "batch": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "records_each_arm": 192
+    }
+  },
+  "M5_HTTP": {
+    "reference": {
+      "pass": 38,
+      "fail": 16,
+      "failed_assertions": [
+        "thinking: reasoning streamed separately",
+        "thinking: correct answer",
+        "tool call: finish=tool_calls",
+        "tool call: read_file or run_shell on /etc/hosts",
+        "tool result: final answer mentions 3",
+        "non-stream tool call + int arg",
+        "main slot survives side request",
+        "thinking + tools: a call on /etc/hosts returned as a tool call",
+        "a side request sent beside a first request does not evict it (it called a tool)",
+        "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "anthropic stream: final answer mentions 3",
+        "responses stream: created, in_progress, items, completed; sequence numbers in order",
+        "responses stream: a function_call on /etc/hosts",
+        "responses: the tool loop's next request is answered (mentions 3)",
+        "responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+        "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees"
+      ]
+    },
+    "candidate": {
+      "pass": 38,
+      "fail": 16,
+      "failed_assertions": [
+        "thinking: reasoning streamed separately",
+        "thinking: correct answer",
+        "tool call: finish=tool_calls",
+        "tool call: read_file or run_shell on /etc/hosts",
+        "tool result: final answer mentions 3",
+        "non-stream tool call + int arg",
+        "main slot survives side request",
+        "thinking + tools: a call on /etc/hosts returned as a tool call",
+        "a side request sent beside a first request does not evict it (it called a tool)",
+        "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "anthropic stream: final answer mentions 3",
+        "responses stream: created, in_progress, items, completed; sequence numbers in order",
+        "responses stream: a function_call on /etc/hosts",
+        "responses: the tool loop's next request is answered (mentions 3)",
+        "responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+        "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees"
+      ]
+    }
+  },
+  "limitations": [
+    "HTTP responses not claimed byte identical",
+    "All repetition flags retained",
+    "M3 model import blocked; no M3 model output",
+    "CPU timing warmup trend retained; no whole inference speedup",
+    "Native tool-call failures, repetition and cached length flags are retained. HTTP failures include tool behavior, reasoning/math, cache expectations, response/context handling and keepalive timing. Same failure counts do not imply equal HTTP content."
+  ],
+  "M5_fixed": {
+    "A1": [
+      {
+        "greedy": false,
+        "seed": 1,
+        "request_sha256": "db7cfaa509c230fec870f95026174348185a33faa5cbfd111faadb46658b2605",
+        "content_sha256": "213be00224a6ef8cd44a4f9cc0e4fa017686739ed5f5d9d23867cde95549e52c",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.042803709,
+        "total_s": 0.701428667,
+        "flags": [],
+        "invalid": [],
+        "e2e_tps": 776.7705086012679
+      },
+      {
+        "greedy": false,
+        "seed": 2,
+        "request_sha256": "db7b0a40a7ef6ca8586a9f0cc67e87c9fa3f041ff417074093a61ea663e54c5e",
+        "content_sha256": "0d3e695dee6a4dacbe38e9f239acd9e2219aecd029d8ddf724047151a20e007f",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019147916,
+        "total_s": 0.618131041,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 854.1474896486601
+      },
+      {
+        "greedy": false,
+        "seed": 3,
+        "request_sha256": "cd131d14c10f32aa27b48aaa752ca3bd12d76ba2abb401828ffc08ce6e6f2681",
+        "content_sha256": "2bbe8f9f4d8a50f93f9fea59532b5ce902e031bf791fb551b4701d4da5156be5",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019037708,
+        "total_s": 0.931644917,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 560.3400419706754
+      },
+      {
+        "greedy": true,
+        "seed": 1,
+        "request_sha256": "f99cb5c6ce82c32dda5b98ec61ef2ea0d1fb22f70dd488e60ba9ff22c7fd9c85",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019110417,
+        "total_s": 0.523954458,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1013.5289252428206
+      },
+      {
+        "greedy": true,
+        "seed": 2,
+        "request_sha256": "4f66c94d6e9bdb47f57f9de06892f7fc890bee908ad4d5f5a37873b228adbf99",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019052667,
+        "total_s": 0.523619834,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1014.1276656501977
+      },
+      {
+        "greedy": true,
+        "seed": 3,
+        "request_sha256": "46e12ccf12ef7c01a9667642f15f1b69848ef7638e43acce9b7ee10c37c71eb1",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.018988958,
+        "total_s": 0.524097667,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1012.9901274676005
+      }
+    ],
+    "B1": [
+      {
+        "greedy": false,
+        "seed": 1,
+        "request_sha256": "db7cfaa509c230fec870f95026174348185a33faa5cbfd111faadb46658b2605",
+        "content_sha256": "213be00224a6ef8cd44a4f9cc0e4fa017686739ed5f5d9d23867cde95549e52c",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.04326,
+        "total_s": 0.701836459,
+        "flags": [],
+        "invalid": [],
+        "e2e_tps": 776.8190695381584
+      },
+      {
+        "greedy": false,
+        "seed": 2,
+        "request_sha256": "db7b0a40a7ef6ca8586a9f0cc67e87c9fa3f041ff417074093a61ea663e54c5e",
+        "content_sha256": "0d3e695dee6a4dacbe38e9f239acd9e2219aecd029d8ddf724047151a20e007f",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.01913675,
+        "total_s": 0.617672417,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 854.7999229622861
+      },
+      {
+        "greedy": false,
+        "seed": 3,
+        "request_sha256": "cd131d14c10f32aa27b48aaa752ca3bd12d76ba2abb401828ffc08ce6e6f2681",
+        "content_sha256": "2bbe8f9f4d8a50f93f9fea59532b5ce902e031bf791fb551b4701d4da5156be5",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019020334,
+        "total_s": 0.931699625,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 560.3456236369689
+      },
+      {
+        "greedy": true,
+        "seed": 1,
+        "request_sha256": "f99cb5c6ce82c32dda5b98ec61ef2ea0d1fb22f70dd488e60ba9ff22c7fd9c85",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019057541,
+        "total_s": 0.523252666,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1014.8501271417546
+      },
+      {
+        "greedy": true,
+        "seed": 2,
+        "request_sha256": "4f66c94d6e9bdb47f57f9de06892f7fc890bee908ad4d5f5a37873b228adbf99",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.018942,
+        "total_s": 0.523135917,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1014.9177335491149
+      },
+      {
+        "greedy": true,
+        "seed": 3,
+        "request_sha256": "46e12ccf12ef7c01a9667642f15f1b69848ef7638e43acce9b7ee10c37c71eb1",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019100333,
+        "total_s": 0.523174708,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1015.1091003801799
+      }
+    ],
+    "A2": [
+      {
+        "greedy": false,
+        "seed": 1,
+        "request_sha256": "db7cfaa509c230fec870f95026174348185a33faa5cbfd111faadb46658b2605",
+        "content_sha256": "213be00224a6ef8cd44a4f9cc0e4fa017686739ed5f5d9d23867cde95549e52c",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.0427325,
+        "total_s": 0.702592208,
+        "flags": [],
+        "invalid": [],
+        "e2e_tps": 775.3533234643954
+      },
+      {
+        "greedy": false,
+        "seed": 2,
+        "request_sha256": "db7b0a40a7ef6ca8586a9f0cc67e87c9fa3f041ff417074093a61ea663e54c5e",
+        "content_sha256": "0d3e695dee6a4dacbe38e9f239acd9e2219aecd029d8ddf724047151a20e007f",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019162958,
+        "total_s": 0.619375625,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 852.3991972267835
+      },
+      {
+        "greedy": false,
+        "seed": 3,
+        "request_sha256": "cd131d14c10f32aa27b48aaa752ca3bd12d76ba2abb401828ffc08ce6e6f2681",
+        "content_sha256": "2bbe8f9f4d8a50f93f9fea59532b5ce902e031bf791fb551b4701d4da5156be5",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019103458,
+        "total_s": 0.933612583,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 559.2064373455034
+      },
+      {
+        "greedy": true,
+        "seed": 1,
+        "request_sha256": "f99cb5c6ce82c32dda5b98ec61ef2ea0d1fb22f70dd488e60ba9ff22c7fd9c85",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019116875,
+        "total_s": 0.524482208,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1012.5671773179009
+      },
+      {
+        "greedy": true,
+        "seed": 2,
+        "request_sha256": "4f66c94d6e9bdb47f57f9de06892f7fc890bee908ad4d5f5a37873b228adbf99",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.018927792,
+        "total_s": 0.524640209,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1011.9074035337828
+      },
+      {
+        "greedy": true,
+        "seed": 3,
+        "request_sha256": "46e12ccf12ef7c01a9667642f15f1b69848ef7638e43acce9b7ee10c37c71eb1",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.01907325,
+        "total_s": 0.525060625,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1011.3264605355083
+      }
+    ],
+    "B2": [
+      {
+        "greedy": false,
+        "seed": 1,
+        "request_sha256": "db7cfaa509c230fec870f95026174348185a33faa5cbfd111faadb46658b2605",
+        "content_sha256": "213be00224a6ef8cd44a4f9cc0e4fa017686739ed5f5d9d23867cde95549e52c",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.044547417,
+        "total_s": 0.704910542,
+        "flags": [],
+        "invalid": [],
+        "e2e_tps": 774.6990271538831
+      },
+      {
+        "greedy": false,
+        "seed": 2,
+        "request_sha256": "db7b0a40a7ef6ca8586a9f0cc67e87c9fa3f041ff417074093a61ea663e54c5e",
+        "content_sha256": "0d3e695dee6a4dacbe38e9f239acd9e2219aecd029d8ddf724047151a20e007f",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019137417,
+        "total_s": 0.618791625,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 853.1514473661714
+      },
+      {
+        "greedy": false,
+        "seed": 3,
+        "request_sha256": "cd131d14c10f32aa27b48aaa752ca3bd12d76ba2abb401828ffc08ce6e6f2681",
+        "content_sha256": "2bbe8f9f4d8a50f93f9fea59532b5ce902e031bf791fb551b4701d4da5156be5",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019111792,
+        "total_s": 0.932368708,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 559.979595264063
+      },
+      {
+        "greedy": true,
+        "seed": 1,
+        "request_sha256": "f99cb5c6ce82c32dda5b98ec61ef2ea0d1fb22f70dd488e60ba9ff22c7fd9c85",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019108334,
+        "total_s": 0.524495917,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1012.4985455735789
+      },
+      {
+        "greedy": true,
+        "seed": 2,
+        "request_sha256": "4f66c94d6e9bdb47f57f9de06892f7fc890bee908ad4d5f5a37873b228adbf99",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.019011417,
+        "total_s": 0.524844584,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1011.6291161849962
+      },
+      {
+        "greedy": true,
+        "seed": 3,
+        "request_sha256": "46e12ccf12ef7c01a9667642f15f1b69848ef7638e43acce9b7ee10c37c71eb1",
+        "content_sha256": "e89de6cee23e47ad120cc6b22930ec728429984e0b492586ef0517708db185e1",
+        "completion_tokens": 512,
+        "finish_reason": "length",
+        "ttft_s": 0.018975208,
+        "total_s": 0.524300791,
+        "flags": [
+          "repetition distinct-4 below 0.5"
+        ],
+        "invalid": [],
+        "e2e_tps": 1012.6563053338145
+      }
+    ]
+  },
+  "M5_CPU": {
+    "A1": {
+      "ns_per_row": [
+        515.176758,
+        513.875,
+        501.586914,
+        444.091797,
+        446.859375,
+        444.010742,
+        446.614258,
+        443.969727,
+        439.77832,
+        394.53125,
+        394.612305,
+        394.65332,
+        394.449219,
+        394.450195,
+        394.490234,
+        363.485352
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 441.8740235
+    },
+    "B1": {
+      "ns_per_row": [
+        236.328125,
+        232.951172,
+        232.380859,
+        234.416016,
+        208.129883,
+        208.78125,
+        208.78125,
+        211.547852,
+        208.537109,
+        205.972656,
+        208.374023,
+        206.013672,
+        204.833984,
+        188.354492,
+        184.611328,
+        193.68457
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 208.45556599999998
+    },
+    "A2": {
+      "ns_per_row": [
+        320.922852,
+        296.549805,
+        296.467773,
+        296.711914,
+        296.549805,
+        296.589844,
+        296.671875,
+        296.630859,
+        296.712891,
+        299.072266,
+        296.589844,
+        299.072266,
+        296.75293,
+        300.90332,
+        296.711914,
+        296.589844
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 296.6918945
+    },
+    "B2": {
+      "ns_per_row": [
+        142.985352,
+        139.526367,
+        134.96875,
+        133.341797,
+        133.382812,
+        135.334961,
+        135.009766,
+        135.212891,
+        134.887695,
+        133.422852,
+        133.137695,
+        135.009766,
+        135.375977,
+        137.776367,
+        133.341797,
+        129.231445
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 134.989258
+    },
+    "A3": {
+      "ns_per_row": [
+        248.861328,
+        247.964844,
+        248.005859,
+        248.086914,
+        241.821289,
+        236.328125,
+        236.24707,
+        236.24707,
+        236.450195,
+        236.328125,
+        236.369141,
+        239.176758,
+        236.328125,
+        236.287109,
+        236.288086,
+        236.287109
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 236.348633
+    },
+    "B3": {
+      "ns_per_row": [
+        120.849609,
+        126.790039,
+        120.564453,
+        118.082031,
+        119.344727,
+        125.976562,
+        118.082031,
+        119.546875,
+        118.001953,
+        119.181641,
+        119.344727,
+        128.255859,
+        117.837891,
+        118.041992,
+        119.873047,
+        119.425781
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 119.385254
+    },
+    "A4": {
+      "ns_per_row": [
+        234.008789,
+        225.545898,
+        225.585938,
+        225.625977,
+        225.422852,
+        225.545898,
+        225.626953,
+        225.504883,
+        225.463867,
+        225.422852,
+        225.463867,
+        235.188477,
+        225.463867,
+        225.504883,
+        225.667969,
+        225.503906
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 225.52539050000001
+    },
+    "B4": {
+      "ns_per_row": [
+        118.652344,
+        120.199219,
+        119.669922,
+        119.587891,
+        122.395508,
+        119.709961,
+        119.547852,
+        126.667969,
+        119.344727,
+        119.506836,
+        119.628906,
+        118.164062,
+        117.797852,
+        118.530273,
+        119.995117,
+        117.960938
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 119.5678715
+    }
+  },
+  "M3_CPU": {
+    "A1": {
+      "ns_per_row": [
+        1974.527344,
+        1959.675781,
+        2004.476562,
+        1964.4375,
+        1961.547852,
+        1965.901367,
+        2249.226562,
+        2029.663086,
+        1958.740234,
+        1974.731445,
+        2595.825195,
+        1960.449219,
+        1957.926758,
+        1974.771484,
+        2211.955078,
+        2165.364258
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1974.6293945
+    },
+    "B1": {
+      "ns_per_row": [
+        886.59668,
+        904.826172,
+        883.056641,
+        883.259766,
+        882.446289,
+        927.206055,
+        885.946289,
+        883.300781,
+        883.584961,
+        884.805664,
+        882.446289,
+        882.568359,
+        991.780273,
+        884.236328,
+        883.992188,
+        883.422852
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 883.7885745000001
+    },
+    "A2": {
+      "ns_per_row": [
+        1979.208008,
+        1958.862305,
+        1959.920898,
+        1960.65332,
+        1960.083008,
+        1958.333008,
+        2047.566406,
+        2280.070312,
+        1959.350586,
+        1965.779297,
+        1966.511719,
+        1969.848633,
+        1960.164062,
+        1957.641602,
+        2036.580078,
+        1961.791992
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1961.222656
+    },
+    "B2": {
+      "ns_per_row": [
+        886.3125,
+        883.911133,
+        884.399414,
+        885.294922,
+        883.708008,
+        909.994141,
+        884.358398,
+        883.952148,
+        964.152344,
+        885.131836,
+        882.974609,
+        882.69043,
+        886.027344,
+        884.115234,
+        883.137695,
+        892.456055
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 884.3789059999999
+    },
+    "A3": {
+      "ns_per_row": [
+        1962.890625,
+        2024.984375,
+        1958.740234,
+        1958.618164,
+        1961.303711,
+        2318.969727,
+        2062.133789,
+        1959.594727,
+        1959.716797,
+        1961.710938,
+        2352.091797,
+        2547.810547,
+        1961.262695,
+        1959.635742,
+        1960.81543,
+        1959.147461
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1961.283203
+    },
+    "B3": {
+      "ns_per_row": [
+        887.125977,
+        884.521484,
+        883.707031,
+        1120.646484,
+        884.399414,
+        883.666992,
+        964.84375,
+        884.969727,
+        885.171875,
+        883.544922,
+        882.650391,
+        882.568359,
+        882.365234,
+        892.008789,
+        889.648438,
+        917.96875
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 884.7456055
+    },
+    "A4": {
+      "ns_per_row": [
+        1993.205078,
+        1960.897461,
+        1966.512695,
+        1960.978516,
+        1958.740234,
+        2708.862305,
+        2057.658203,
+        1974.162109,
+        1963.582031,
+        1958.984375,
+        2040.689453,
+        1965.860352,
+        1960.530273,
+        1963.500977,
+        1963.337891,
+        1969.564453
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1964.7211914999998
+    },
+    "B4": {
+      "ns_per_row": [
+        900.06543,
+        885.783203,
+        885.905273,
+        888.998047,
+        883.707031,
+        883.708008,
+        890.420898,
+        1744.05957,
+        884.195312,
+        885.701172,
+        882.040039,
+        883.137695,
+        940.592773,
+        885.579102,
+        884.439453,
+        883.178711
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 885.6401370000001
+    }
+  },
+  "M5_native": {
+    "A1": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "3dccea3b",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 814.5,
+          "runs_tps": [
+            814.5,
+            958.34,
+            683.07
+          ],
+          "median_accepted_draft_tps": 604.51,
+          "median_accepted_draft_share": 0.7422
+        },
+        "decode_greedy": {
+          "median_tps": 1012.22,
+          "runs_tps": [
+            1009.51,
+            1012.22,
+            1022.87
+          ],
+          "median_accepted_draft_tps": 802.66,
+          "median_accepted_draft_share": 0.793
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 0.7047,
+            "tps": 5866.5,
+            "followup_s": [
+              0.0719,
+              0.0717,
+              0.0797
+            ],
+            "followup_median_s": 0.0719,
+            "followup_suffix_tps": 3920.7
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.1078)",
+        "decode: repetition loop (distinct-4-gram 0.1283)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0138)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0206)",
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": []
+    },
+    "B1": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "1a2ccacc",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 788.26,
+          "runs_tps": [
+            788.26,
+            520.89,
+            816.5
+          ],
+          "median_accepted_draft_tps": 583.49,
+          "median_accepted_draft_share": 0.7383
+        },
+        "decode_greedy": {
+          "median_tps": 1019.18,
+          "runs_tps": [
+            1019.18,
+            1008.87,
+            1019.31
+          ],
+          "median_accepted_draft_tps": 810.17,
+          "median_accepted_draft_share": 0.7949
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 0.7044,
+            "tps": 5869.2,
+            "followup_s": [
+              0.0713,
+              0.0712,
+              0.0806
+            ],
+            "followup_median_s": 0.0713,
+            "followup_suffix_tps": 3968.3
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: completion_tokens=34 != 512",
+        "decode: finish_reason=stop (expected length)",
+        "decode: repetition loop (distinct-4-gram 0.0735)",
+        "decode: repetition loop (distinct-4-gram 0.1056)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0138)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0206)",
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": []
+    },
+    "A2": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "3dccea3b",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 719.07,
+          "runs_tps": [
+            632.1,
+            1001.24,
+            719.07
+          ],
+          "median_accepted_draft_tps": 514.03,
+          "median_accepted_draft_share": 0.7148
+        },
+        "decode_greedy": {
+          "median_tps": 1018.32,
+          "runs_tps": [
+            1007.38,
+            1018.32,
+            1019.3
+          ],
+          "median_accepted_draft_tps": 809.49,
+          "median_accepted_draft_share": 0.7949
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 0.7044,
+            "tps": 5865.0,
+            "followup_s": [
+              0.0717,
+              0.0706,
+              0.0786
+            ],
+            "followup_median_s": 0.0717,
+            "followup_suffix_tps": 3933.9
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.0273)",
+        "decode: repetition loop (distinct-4-gram 0.1135)",
+        "decode: repetition loop (distinct-4-gram 0.2326)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0138)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0206)",
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": []
+    },
+    "B2": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "1a2ccacc",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 760.15,
+          "runs_tps": [
+            867.73,
+            760.15,
+            600.82
+          ],
+          "median_accepted_draft_tps": 546.35,
+          "median_accepted_draft_share": 0.7188
+        },
+        "decode_greedy": {
+          "median_tps": 996.82,
+          "runs_tps": [
+            1007.13,
+            996.82,
+            988.59
+          ],
+          "median_accepted_draft_tps": 788.5,
+          "median_accepted_draft_share": 0.791
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 0.7042,
+            "tps": 5867.9,
+            "followup_s": [
+              0.0711,
+              0.0708,
+              0.0787
+            ],
+            "followup_median_s": 0.0711,
+            "followup_suffix_tps": 3968.0
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.0452)",
+        "decode: repetition loop (distinct-4-gram 0.166)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0138)",
+        "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+      ],
+      "invalid": []
+    }
+  },
+  "setups": {
+    "M5": {
+      "chip": "M5 Pro",
+      "gpu_cores": 20,
+      "memory_capacity_GiB": 48,
+      "macOS": "26.6.2",
+      "compiler": "Apple clang 17 clang-1700.0.13.5"
+    },
+    "M3": {
+      "chip": "M3 Ultra",
+      "gpu_cores": 60,
+      "memory_capacity_GiB": 96,
+      "macOS": "26.4.1",
+      "compiler": "Apple clang 17 clang-1700.6.4.2"
+    }
+  },
+  "methods": {
+    "CPU": "Same trained-driver.cpp, linked separately to each own CMake Release libnaceinfer.a. Eight alternating A/B legs, 16 passes each. M5 samples show a strong warmup trend; retain every sample. Decoder-only, not inference timing.",
+    "model": "Two independent M5 imports of pinned GGUF, nine files literally equal. Model output uses exclusive GPU lock and own source binaries; verify is teacher-forced, not free MTP.",
+    "fixed": "Six fixed requests per leg, seeds1/2/3 sampled and greedy,512 tokens each. Request/content SHA equality across ABAB is hash equality, not a claim of comparing full HTTP envelopes."
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-0.8B-GGUF",
+    "revision": "f36b1ea49a332ede8fe5f389bbf5b3575ef71f48",
+    "filename": "Qwen_Qwen3.5-0.8B-IQ2_M.gguf",
+    "sha256": "1319d5a780f2b1aa74a58480549f79022398687721db2536d3f1256b665e80bb",
+    "trained_rows": "first1024 rows blk.0.attn_gate.weight,K1024",
+    "sample_sha256": "2af50e1fb426838bda80e97d15ca0884d0a6efa22350bb68169b32ba1632e8d0"
+  }
+}
