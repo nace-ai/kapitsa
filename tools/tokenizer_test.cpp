@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -146,6 +147,74 @@ std::string ids_str(const std::vector<int>& ids) {
   return s;
 }
 
+// Independent array-based reference: choose a pair, then replace all its
+// nonoverlapping occurrences before consulting the ranks again.
+std::vector<int> reference_bpe(std::string_view text, const json& vocab, const json& merges) {
+  std::unordered_map<uint64_t, std::pair<int, int>> ranks;
+  for (int rank = 0; rank < int(merges.size()); ++rank) {
+    const std::string a = merges[rank][0], b = merges[rank][1];
+    const int ai = vocab[a], bi = vocab[b], id = vocab[a + b];
+    ranks[(uint64_t(uint32_t(ai)) << 32) | uint32_t(bi)] = {rank, id};
+  }
+  std::vector<int> ids;
+  for (char c : text) ids.push_back(vocab[std::string(1, c)]);
+  for (;;) {
+    int best = INT32_MAX, left = -1, right = -1, merged = -1;
+    for (size_t i = 1; i < ids.size(); ++i) {
+      auto it = ranks.find((uint64_t(uint32_t(ids[i - 1])) << 32) | uint32_t(ids[i]));
+      if (it != ranks.end() && it->second.first < best) {
+        best = it->second.first;
+        left = ids[i - 1]; right = ids[i]; merged = it->second.second;
+      }
+    }
+    if (left < 0) return ids;
+    std::vector<int> next;
+    for (size_t i = 0; i < ids.size(); ++i) {
+      if (i + 1 < ids.size() && ids[i] == left && ids[i + 1] == right) {
+        next.push_back(merged);
+        ++i;
+      } else next.push_back(ids[i]);
+    }
+    ids.swap(next);
+  }
+}
+
+void check_bpe_merges() {
+  std::mt19937 rng(72519);
+  json vocab = json::object(), merges = json::array();
+  for (int b = 0; b < 256; ++b) vocab[byte_level(std::string(1, char(b)))] = b;
+  std::vector<std::string> parts = {"a", "b", "c", "d"};
+  for (int tries = 0; merges.size() < 240 && tries < 100000; ++tries) {
+    std::string a = parts[rng() % parts.size()], b = parts[rng() % parts.size()];
+    if (a.size() + b.size() > 12 || vocab.contains(a + b)) continue;
+    vocab[a + b] = int(vocab.size());
+    merges.push_back(json::array({a, b}));
+    parts.push_back(a + b);
+  }
+  // Forward and reversed dependency ranks exercise newly created lower-ranked
+  // edges, stale edges, overlapping pairs, and several equal-ranked occurrences.
+  for (int order = 0; order < 3; ++order) {
+    if (order == 1) std::reverse(merges.begin(), merges.end());
+    if (order == 2)
+      for (size_t i = merges.size(); i > 1; --i) std::swap(merges[i - 1], merges[rng() % i]);
+    json j = {{"added_tokens", json::array()}, {"normalizer", nullptr}, {"pre_tokenizer", nullptr},
+              {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", merges}}}};
+    ni::Tokenizer tok;
+    load(tok, j);
+    for (int n : {0, 1, 63, 64, 65, 127, 128, 256, 1024, 8192}) {
+      for (int pattern = 0; pattern < 4; ++pattern) {
+        std::string text;
+        for (int i = 0; i < n; ++i)
+          text += pattern == 0 ? 'a' : pattern == 1 ? "aab"[i % 3] : "abcd"[rng() % 4];
+        auto want = reference_bpe(text, vocab, merges);
+        const auto name = "BPE order " + std::to_string(order) + " size " + std::to_string(n) +
+                          " pattern " + std::to_string(pattern);
+        check(tok.encode(text) == want && tok.encode(text) == want, name);
+      }
+    }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -184,6 +253,8 @@ int main() {
   load(other, j);
   const Case& digits = kCases[3];  // digits in threes
   check(other.encode(digits.text) != want(digits), "a Sequence other than Flint's keeps the default split");
+
+  check_bpe_merges();
 
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;
