@@ -86,7 +86,8 @@ function page(base, hash, storage = "ok") {
     pill: document.getElementById("state").lastElementChild.textContent, msg: document.getElementById("msg").textContent})`, ctx);
   const tap = id => el(id).onclick();
   const switchTo = m => { el("swto").value = m; return el("sw").onsubmit({preventDefault() {}}); };
-  return {view, loc, ctx, el, tap, switchTo};
+  const drawNow = () => vm.runInContext("draw()", ctx);
+  return {view, loc, ctx, el, tap, switchTo, drawNow};
 }
 
 const get = async (s, path) => (await fetch(s.base + path, {headers: {Authorization: "Bearer " + s.token}})).json();
@@ -116,6 +117,8 @@ await a.switchTo("nope");
 check(/^switch: no model nope/.test(a.view().msg) && a.view().model === model0 && a.el("swto").value === "nope",
       `a missing model: said so, kept in the box, nothing switched (${a.view().msg})`);
 const going = a.switchTo("qwen3.5-4b");
+a.drawNow();  // before any event of the switch: the click alone holds Switch
+check(a.view().state === "ready" && a.el("swgo").disabled, `Switch held from the click, before the server says switching (${a.view().state})`);
 await until(() => a.el("swgo").disabled && a.el("swgo").textContent === "Switching…", 3000, "Switch waits while it switches");
 await going;
 await until(() => a.view().model === "qwen3.5-4b" && a.view().state === "ready" && !a.el("swgo").disabled, 15000,
