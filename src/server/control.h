@@ -103,7 +103,7 @@ class ControlServer {
   // One request's answer, everything but GET /events (tests call it without a socket)
   ControlReply handle(const std::string& method, const std::string& path, const std::string& body);
 
-  // GET /events for another transport (the engine view's HTTP mirror, src/server/main.cpp): the stream, or null with
+  // GET /events for another transport (the engine view's HTTP mirror, src/server/engine_view.h): the stream, or null with
   // the 503 to answer when 16 are open. pump_events() then sends its frames, a reset first when the cursor needs one,
   // and keepalives through `write` until `write` fails, `gone()` says the reader left, the stream falls behind, or the
   // server stops.
@@ -117,6 +117,10 @@ class ControlServer {
   void set_owner(uid_t uid) { owner_ = uid; }  // whose connections are served (tests); the server's user otherwise
   // A stop began (POST /stop, a signal): POST /model answers 503 stopping, a further POST /stop 202 and nothing more
   void mark_stopping() { stop_asked_ = true; }
+  // A 202 POST /stop's answer is sent (on the socket, or the engine view's HTTP mirror): after_stop() the first time
+  void stop_answered() {
+    if (!stop_asked_.exchange(true)) api_.after_stop();
+  }
   int connections() const { return connections_.load(); }  // open connections, event streams included
 
  private:

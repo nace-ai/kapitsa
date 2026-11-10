@@ -1,6 +1,6 @@
 // The page's own scripts (src/server/engine.html) in a Node vm with a stub DOM, on the stand-in (tools/engine_replay.py):
-// the link's key, the live view, a stop and the next run, a clean drop, a server gone and back with another key, no
-// key, blocked site data, a stop with no next run. Node 18+ and python3: node tests/test_engine_page.mjs
+// the link's key, the live view, a switch and a stop from the page's own controls and the next run, a clean drop, a
+// server gone and back with another key, no key, blocked site data, a stop with no next run. Node 18+ and python3: node tests/test_engine_page.mjs
 import {spawn} from "node:child_process";
 import {mkdtempSync, readFileSync} from "node:fs";
 import {tmpdir} from "node:os";
@@ -42,7 +42,7 @@ function page(base, hash, storage = "ok") {
   const els = new Map();
   const el = id => {
     if (!els.has(id)) {
-      const e = {id, textContent: "", innerHTML: "", className: "", disabled: false, onclick: null,
+      const e = {id, textContent: "", innerHTML: "", className: "", disabled: false, onclick: null, onsubmit: null, value: "",
                  scrollTop: 0, clientHeight: 0, scrollHeight: 0, classList: {add() {}, remove() {}}};
       e.lastElementChild = {textContent: ""};
       e.querySelector = () => e;
@@ -61,7 +61,12 @@ function page(base, hash, storage = "ok") {
     history: {replaceState(_s, _t, url) { loc.hash = url.includes("#") ? url.slice(url.indexOf("#")) : ""; }},
     matchMedia: () => ({matches: false, addEventListener() {}}),
     fetches: 0,
-    fetch: (url, opts) => { ctx.fetches++; ctx.leak ||= hash.length > 3 && url.includes(hash.slice(3)); return fetch(base + url, opts); },
+    fetch: (url, opts) => {
+      ctx.fetches++; ctx.leak ||= hash.length > 3 && url.includes(hash.slice(3));
+      if (opts && opts.method === "POST") ctx.posts.push({url, opts});
+      return fetch(base + url, opts);
+    },
+    posts: [],
     performance, setTimeout, clearTimeout, setInterval, clearInterval, TextDecoder, AbortController, console,
   };
   // blocked site data: reading either area throws, as in a browser
@@ -75,10 +80,14 @@ function page(base, hash, storage = "ok") {
   vm.createContext(ctx);
   for (const s of scripts) vm.runInContext(s, ctx);
   const view = () => vm.runInContext(`({link: S.link, run: S.status && S.status.run_id, state: S.status && S.status.state,
+    model: S.status && S.status.model && S.status.model.id,
     reqs: [...S.reqs.keys()].sort().join(","), rates: S.rates.length,
     cancelled: S.done.filter(d => d.finish_reason === "cancelled").length, done: S.done.map(d => d.request_id), fetches,
     pill: document.getElementById("state").lastElementChild.textContent, msg: document.getElementById("msg").textContent})`, ctx);
-  return {view, loc, ctx};
+  const tap = id => el(id).onclick();
+  const switchTo = m => { el("swto").value = m; return el("sw").onsubmit({preventDefault() {}}); };
+  const drawNow = () => vm.runInContext("draw()", ctx);
+  return {view, loc, ctx, el, tap, switchTo, drawNow};
 }
 
 const get = async (s, path) => (await fetch(s.base + path, {headers: {Authorization: "Bearer " + s.token}})).json();
@@ -100,12 +109,43 @@ await until(async () => {
 }, 10000, "the page's state and requests follow the server's");
 console.log("link, key and live view ok");
 
-// 2. a stop while a request runs: it ends cancelled and the view reads stopping; the next run's reset then clears
-// the old run's finished requests and rate trace
+// 2. the page's Switch: a model the server lacks is said so and nothing changes; one it has reads switching, then ready
+// with it, and Switch waits meanwhile; each with this run's key, its run_id and a JSON body
+await until(() => a.view().state === "ready" && !a.el("swgo").disabled, 10000, "Switch is ready");
+const model0 = a.view().model;
+await a.switchTo("nope");
+check(/^switch: no model nope/.test(a.view().msg) && a.view().model === model0 && a.el("swto").value === "nope",
+      `a missing model: said so, kept in the box, nothing switched (${a.view().msg})`);
+const going = a.switchTo("qwen3.5-4b");
+a.drawNow();  // before any event of the switch: the click alone holds Switch
+check(a.view().state === "ready" && a.el("swgo").disabled, `Switch held from the click, before the server says switching (${a.view().state})`);
+await until(() => a.el("swgo").disabled && a.el("swgo").textContent === "Switching…", 3000, "Switch waits while it switches");
+await going;
+await until(() => a.view().model === "qwen3.5-4b" && a.view().state === "ready" && !a.el("swgo").disabled, 15000,
+            "the switch: ready with the new model");
+check(a.view().msg === "" && a.el("swto").value === "", `a switch that took: no message, the box cleared (${a.view().msg})`);
+const sent = a.ctx.posts.at(-1);
+check(sent && sent.url === "/engine/model" && sent.opts.headers.Authorization === "Bearer " + s.token &&
+      sent.opts.headers["Content-Type"] === "application/json" &&
+      JSON.parse(sent.opts.body).run_id === a.view().run && JSON.parse(sent.opts.body).model === "qwen3.5-4b",
+      "a switch carries the key, a JSON body and the run it saw");
+console.log("switch ok");
+
+// 3. the page's Stop while a request runs: one click only asks again, and lapses; two stop it. The request ends
+// cancelled and the view reads stopping; the next run's reset then clears the old run's finished requests and rates
 await until(() => a.view().reqs && a.view().rates > 8, 20000, "a request runs, its rate traced");
-const run1 = a.view().run;
-const r = await hook(s, "/_standin/stop", {run_id: run1});
-check(r.status === 202, `the stand-in takes the stop (${r.status})`);
+const run1 = a.view().run, posted = a.ctx.posts.length;
+a.tap("stop");
+check(a.el("stop").textContent === "Confirm stop" && a.ctx.posts.length === posted, "one click on Stop only asks again");
+await sleep(3300);
+check(a.el("stop").textContent === "Stop" && a.ctx.posts.length === posted && (await get(s, "/engine/status")).state !== "stopping",
+      "an unconfirmed Stop lapses after 3 s and stops nothing");
+a.tap("stop");
+a.tap("stop");
+await until(() => a.ctx.posts.length === posted + 1, 2000, "the confirmed Stop posts");
+const stopSent = a.ctx.posts.at(-1);
+check(stopSent && stopSent.url === "/engine/stop" && JSON.parse(stopSent.opts.body).run_id === run1 &&
+      stopSent.opts.headers.Authorization === "Bearer " + s.token, "the stop carries the key and the run it saw");
 await until(() => a.view().state === "stopping" && a.view().cancelled > 0, 10000, "the stop: stopping, a request cancelled");
 const fresh = await until(async () => {
   for (const end = Date.now() + 20000; Date.now() < end; await sleep(20)) {
@@ -118,7 +158,7 @@ check(fresh && fresh.cancelled === 0 && fresh.rates <= 3,
 await until(() => a.view().link === "live", 10000, "the next run is live");
 console.log("stop and new run ok");
 
-// 3. a stream that ends cleanly while the run goes on: disconnected and retrying, then live again from the last event
+// 4. a stream that ends cleanly while the run goes on: disconnected and retrying, then live again from the last event
 // it read (a finished request neither lost nor replayed twice)
 await until(() => a.view().done.length, 20000, "a request of the new run finishes");
 const before = a.view().done;
@@ -139,7 +179,7 @@ await until(() => a.view().link === "refused" && /key/.test(a.view().msg), 15000
             "a server with another key: no access, and the page says to open the new link");
 console.log("disconnect and a new key ok");
 
-// 4. no key at all; and blocked site data with a key still works
+// 5. no key at all; and blocked site data with a key still works
 const b = page(s.base, "");
 await until(() => b.view().link === "refused" && /link kapitsa serve prints/.test(b.view().msg), 8000,
             "no key: the page asks for the printed link");
@@ -150,7 +190,7 @@ const c = page(s.base, "#t=" + s.token, "blocked");
 await until(() => c.view().link === "live" && c.view().run, 10000, "blocked site data: the page still connects");
 console.log("no key and blocked storage ok");
 
-// 5. a fourth view while three stream (the stand-in's cap, as the server's): told so, and it keeps asking
+// 6. a fourth view while three stream (the stand-in's cap, as the server's): told so, and it keeps asking
 const d = page(s.base, "#t=" + s.token), d2 = page(s.base, "#t=" + s.token);
 await until(() => [c, d, d2].every(v => v.view().link === "live"), 10000, "three views stream");
 const e = page(s.base, "#t=" + s.token);
@@ -160,7 +200,7 @@ await sleep(6000);
 check(e.view().fetches > asks && e.view().link !== "refused", "the fourth view keeps asking");
 console.log("too many views ok");
 
-// 6. a stop no new run follows (no launchd): the view reads stopped, and stays so while nothing answers
+// 7. a stop no new run follows (no launchd): the view reads stopped, and stays so while nothing answers
 await hook(s, "/_standin/stop", {run_id: d.view().run, then: "exit"});
 await until(() => d.view().pill === "stopped", 10000, "a server that stopped reads stopped");
 const traced = d.view().rates; await sleep(5000);

@@ -2,8 +2,9 @@
 
 Each running `kapitsa serve` instance has a control socket. Clients use it to see the instance's state and to stop
 it or switch its model. Clients are the Kapitan app, `kapitsa ps`, `stop` and `logs`, and any other UI. The
-inference port serves the OpenAI, Anthropic and Ollama APIs and a read-only view of this socket ("The engine view"
-below). Everything an administrator does goes through this socket.
+inference port serves the OpenAI, Anthropic and Ollama APIs and a page in front of this socket ("The engine view"
+below). Everything an administrator does goes through this socket, or through that page with the socket's own
+handlers and this run's key.
 
 This page specifies the wire format. The machine-readable form is [schema/control/](../schema/control/), JSON Schema
 2020-12, with one file per message. [schema/control/examples/](../schema/control/examples/) holds a valid example of
@@ -208,15 +209,17 @@ for them. The level is `info`, or `debug` when the server runs with `verbose`.
 ## The engine view
 
 A browser cannot open the socket, so `kapitsa serve` also serves a page of what the instance holds and does at
-`http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reads two of the socket's endpoints over HTTP on
-the API port, with the same bodies: `GET /engine/status` and `GET /engine/events`. It only reads. Stop and switch
-stay on the socket, as everything an administrator does: in Kapitan, or Ctrl-C where `kapitsa serve` runs.
+`http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reaches the socket's four endpoints over HTTP on
+the API port, with the same bodies and answers: `GET /engine/status`, `GET /engine/events`, `POST /engine/stop` and
+`POST /engine/model`. Its Stop button asks once more before it sends; its Switch box takes a model name, folder or GGUF
+file, as `POST /model` does.
 
 - **This run's key.** The socket admits its own user only, and the HTTP side keeps that. At start the server makes a
   key, 24 random bytes, and writes it to `$KAPITSA_HOME/run/<instance_id>.token` (`0600`, in the `0700` `run/`),
-  which it removes on exit. `GET /engine/status` and `GET /engine/events` need `Authorization: Bearer <key>`;
-  without it they answer `403 forbidden_peer`. The key replaces the API key on these two paths: a page holding the
-  key does not need the API key. A new run makes a new key.
+  which it removes on exit. Every path but the page needs `Authorization: Bearer <key>`; without it they answer
+  `403 forbidden_peer`. The key replaces the API key on these paths: a page holding the key does not need the API
+  key, and the API key opens none of them. So whoever can stop or switch over HTTP can read a file only the socket's
+  user can read, as on the socket. A new run makes a new key.
 - **The link.** On a terminal, `kapitsa serve` prints the page's link with the key in its fragment
   (`/engine#t=<key>`); without one it prints the key file's path instead. The key never goes into the log. A browser
   never sends a fragment to a server. The page keeps the key for its tab and takes it out of the address bar. Another
@@ -225,14 +228,20 @@ stay on the socket, as everything an administrator does: in Kapitan, or Ctrl-C w
   a `Host` other than `127.0.0.1`, `localhost` or `[::1]` (a page elsewhere that points its own name at `127.0.0.1`);
   an `Origin` other than `http://` plus that `Host`; a `Forwarded`, `X-Forwarded-For`, `X-Forwarded-Host` or `Via`
   header (a proxy on this Mac would otherwise bring other machines in); a body over 64 KiB.
-- **Read-only.** Another method on these three paths gets `405 method_not_allowed`. Any other path under `/engine/`,
-  `/engine/stop` and `/engine/model` among them, gets `404 not_found`. No CORS header is sent, and every answer
-  carries `Cache-Control: no-store`. The page's `Content-Security-Policy` lets it reach only its own server and
-  forbids framing it.
+- **Methods.** The page, status and events take `GET` and `HEAD`, stop and model take `POST`; another method gets
+  `405 method_not_allowed`, and any other path under `/engine/` gets `404 not_found`. A stop or a switch also needs
+  `Content-Type: application/json`, else `400 bad_request`: a form on another site can send only form or text bodies,
+  and no key. No CORS header is sent, so a fetch from another site with the key gets no further than its preflight.
+  Every answer carries `Cache-Control: no-store`. The page's `Content-Security-Policy` lets it reach only its own
+  server and forbids framing it.
+- **The socket's answers.** A stop or a switch runs the socket's own checks (fields, `run_id`) and handlers, and
+  answers as `POST /stop` and `POST /model` do. The page sends the `run_id` it shows, so a page left open on a run that
+  has since restarted gets `409 run_id_mismatch` instead of stopping the new one. A switch answers once the new model
+  is ready, as on the socket.
 - **At most 3 views.** Each open `GET /engine/events` holds one of the API server's threads, at least 8 in all and
   shared with requests, so at most 3 are open at once. A fourth gets `503 busy` with `Retry-After: 5`. These count
   toward the bus's 16 streams.
-- **No socket.** A server without a control socket answers the two endpoints with `503 internal`. That happens when
+- **No socket.** A server without a control socket answers the four endpoints with `503 internal`. That happens when
   another server holds its instance name or `run/` cannot be made. A server that routes to other Macs has its own
   socket and engine view, which show that server, not the Mac it forwards to.
 

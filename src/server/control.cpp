@@ -272,7 +272,7 @@ void ControlServer::serve(int fd) {
   if (h.path == "/events" && h.method == "GET") return stream_events(fd, h.last_event_id);
   const ControlReply r = handle(h.method, h.path, body);
   send_reply(fd, r);
-  if (r.status == 202 && h.path == "/stop" && !stop_asked_.exchange(true)) api_.after_stop();
+  if (r.status == 202 && h.path == "/stop") stop_answered();
 }
 
 ControlReply ControlServer::handle(const std::string& method, const std::string& path, const std::string& body) {

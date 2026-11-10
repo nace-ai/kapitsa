@@ -81,10 +81,10 @@ build/events_test                            # the server's event bus: replay, r
 python3 tests/test_events_schema.py build/events_test  # needs: jsonschema; every event the bus publishes matches schema/control/event.schema.json
 build/control_test                           # the control socket over a real Unix socket: lock, endpoints, errors, peer check, event streams (src/server/control.h)
 python3 tests/test_control_socket.py build/control_test build/kapitsa  # needs: jsonschema; every answer matches schema/control/; serve stops while starting
-build/engine_view_test                       # the engine view's /engine routes: read-only, this run's key, Host, Origin, proxy and peer checks, the stream cap (src/server/engine_view.h)
+build/engine_view_test                       # the engine view's /engine routes: stop and switch only with this run's key and a JSON body, Host, Origin, proxy and peer checks, the stream cap (src/server/engine_view.h)
 python3 tests/test_events_schema.py tools/engine_replay.py  # the engine view's stand-in server's events, the same check
-python3 tests/test_engine_view.py            # needs: jsonschema; that stand-in's answers: the run's key, read-only, Host/Origin/proxy refusals, resume and resets, 3 streams at most
-node tests/test_engine_page.mjs              # Node 18+: the page's own script (src/server/engine.html) on that stand-in: key, live view, stop, disconnect, no key
+python3 tests/test_engine_view.py            # needs: jsonschema; that stand-in's answers: the run's key, stop and switch, Host/Origin/proxy refusals, resume and resets, 3 streams at most
+node tests/test_engine_page.mjs              # Node 18+: the page's own script (src/server/engine.html) on that stand-in: key, live view, Switch and Stop, disconnect, no key
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
