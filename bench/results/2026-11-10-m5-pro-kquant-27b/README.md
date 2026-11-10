@@ -60,10 +60,10 @@ hidden state post-norm and the base chat template loaded, `LOCKPROOF` ok, AC pow
 | --- | ---: |
 | Decode T 0.6 | 68.5 |
 | Decode greedy | 90.5 |
-| Prefill 4K | 727.3 |
+| Prefill 4K | 727.3 (time to first token 5,685 ms) |
 
-Sampled decode is below both KQuant legs above (76.7, 72.2) and the catalog legs (77.6 to 83.8); greedy sits with the other KQuant legs (90.4, 92.0); prefill
-is inside the spread. The range set before the leg was 72 to 77 sampled and 90 to 92 greedy, so sampled is outside it, and the card carries no speed
+On this Mac the sampled legs spread widely: KQuant 68.5 (this leg), 72.2 and 76.7 tok/s; catalog 77.6, 78.5 and 83.8. Greedy decode sits with the other KQuant legs (90.4, 92.0); prefill
+is inside the spread. The range set before the leg was 72 to 77 sampled and 90 to 92 greedy; sampled is outside it, so the speed row is withheld and the card carries no speed
 claim. This is one leg, so the record does not say the pack is slower; it says the speed question is not settled. The leg's stderr also carries the bench
 warning "Another Kapitsa is running (pid 39505)" (see [legs-shipping-shape/1-B.err](legs-shipping-shape/1-B.err)); the leg passed the harness's foreign-process check.
 
