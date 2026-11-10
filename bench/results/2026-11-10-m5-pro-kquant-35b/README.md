@@ -6,28 +6,25 @@ weights, scales and biases of the language model, so its 19.51 GB of language-mo
 `nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant` at `ead4c792` (private; it moves to `nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant` when published).
 The repo is 20.43 GB: the language model plus the vision tower, with no `mtp.safetensors`.
 
-## Two standards
+## One baseline
 
-| Number | Measured against | Where |
-| --- | --- | --- |
-| KL, top-1, GSM8K | LM Studio's 4-bit build of the model, language-model weights only (19.51 GB), the KQuant pack's text weights (`kq-4bit-text`) | Modal H200, mlx-lm 0.32.2 on mlx with CUDA |
-| Decode, prefill | the catalog pack above, against the KQuant pack with the catalog's MTP head and DFlash2 drafter | MacBook Pro M5 Pro 48 GB, Kapitsa 0.2.32 |
-
-The Hub's `lmstudio-community/Qwen3.6-35B-A3B-MLX-4bit`, `mlx-community/Qwen3.6-35B-A3B-4bit` and the catalog pack list the same
-SHA-256 for all four weight files (checked on the Hub on 10 November). The Modal copy of the LM Studio build was not hashed against
-the Hub's files. The quality runs use the text weights, not the vision tower the repo also carries.
+Quality and speed both use the catalog pack above (`Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed` at `95460516`), fetched once for the
+Modal runs and once for the Mac. The quality runs (Modal H200, mlx-lm 0.32.2 on mlx with CUDA) score the text weights of both packs, 19.51 GB
+each, not the vision tower the repos also carry or the MTP head. The speed runs (MacBook Pro M5 Pro 48 GB, Kapitsa 0.2.32) use each pack
+with the catalog's MTP head and DFlash2 drafter. The four weight files of the catalog pack have the same SHA-256 as those of
+`mlx-community/Qwen3.6-35B-A3B-4bit` and `lmstudio-community/Qwen3.6-35B-A3B-MLX-4bit` on the Hub (checked on 10 November); the baseline is the catalog pack. (The Modal folder that holds it, and the `path` in [cat35_4.json](cat35_4.json), is named `lms-4bit` for historical reasons.)
 
 ## Quality
 
 | Pack | KL from bf16 | KL p99 | Top-1 agreement | GSM8K, 1,319 |
 | --- | ---: | ---: | ---: | ---: |
-| LM Studio 4-bit | 0.0961 | 1.310 | 0.890 | 0.9484 |
+| Catalog 4-bit | 0.0961 | 1.310 | 0.890 | 0.9484 |
 | KQuant 4-bit | **0.0586** | **0.784** | **0.912** | 0.9522 |
 
-KL by source (WikiText-2, GSM8K chats, HumanEval code): 0.0861, 0.1546, 0.0712 for LM Studio; 0.0518, 0.0926, 0.0472 for KQuant.
+KL by source (WikiText-2, GSM8K chats, HumanEval code): 0.0861, 0.1546, 0.0712 for the catalog pack; 0.0518, 0.0926, 0.0472 for KQuant.
 KL and top-1: next-token distributions over 32,704 tokens against `Qwen/Qwen3.6-35B-A3B` @ `345d467b` in bf16. GSM8K: zero-shot, greedy,
 thinking off, the last number in the answer. The two packs disagree on 43 of 1,319 questions: 24 only KQuant gets right, 19 only the
-LM Studio build (McNemar z = 0.76, not significant): no worse. Files: [cat35_4.json](cat35_4.json), [kq35_4.json](kq35_4.json),
+catalog pack (McNemar z = 0.76, not significant): no worse. Files: [cat35_4.json](cat35_4.json), [kq35_4.json](kq35_4.json),
 [rtn8_35.json](rtn8_35.json) (the 8-bit round-to-nearest check of the reference, KL about 0.01).
 
 The bf16 reference and the importance pass run the experts one matmul per expert: `mx.gather_mm` on mlx with CUDA gave wrong outputs
