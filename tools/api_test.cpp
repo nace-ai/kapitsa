@@ -31,6 +31,8 @@
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
 
+#include <optional>
+
 #include <stdlib.h>
 #include <sys/stat.h>
 
@@ -1569,6 +1571,28 @@ void disk_wait_unit() {
   check(!decide(1.5e9, 100, 4e6, 0.5).wait, "disk wait: 1.5 GB for 100 rows (0.2 s of prefill): not written");
 }
 
+void template_content_cache_unit() {
+  ChatRequest r;
+  r.messages = J(R"([{"role":"user","content":[{"type":"text","text":"hello"}]}])");
+  const std::string typed = "{% for m in messages %}{% for p in m.content %}{{p.text}}{% endfor %}{% endfor %}";
+  const std::string plain = "{% for m in messages %}{{m.content}}{% endfor %}";
+  std::optional<minja::chat_template> slot;
+  for (int i = 0; i < 4; ++i) {
+    slot.emplace(i % 2 ? plain : typed, "", "");
+    const std::string text = render_chat(*slot, r, false);
+    check(text == "hello", "template content mode: reconstruct at the same address " + std::to_string(i), text);
+  }
+  for (const char* token : {"bos_token", "eos_token"}) {
+    const std::string source = "{% if " + std::string(token) + " == 'typed' %}" + typed + "{% else %}" + plain + "{% endif %}";
+    for (bool use_typed : {true, false, true}) {
+      const std::string value = use_typed ? "typed" : "plain";
+      slot.emplace(source, std::string(token) == "bos_token" ? value : "", std::string(token) == "eos_token" ? value : "");
+      const std::string text = render_chat(*slot, r, false);
+      check(text == "hello", "template content mode: same source with different " + std::string(token), text);
+    }
+  }
+}
+
 void float_arguments_text() {
   struct Form { const char* name; const char* tail; };  // the end of the real templates' argument line
   const Form forms[] = {{"plain", " else args_value | string %}"},
@@ -2742,6 +2766,7 @@ int main(int argc, char** argv) {
   chat_events();
   clients();
   reasoning_memory_unit();
+  template_content_cache_unit();
   float_arguments_text();
   tool_arguments_spelling();
   preserve_thinking_default_unit();
