@@ -7,6 +7,9 @@
 #include "server/engine_view.h"
 #include "server/pre_route.h"
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -47,6 +50,28 @@ struct Stub : ControlApi {
 
 static std::string error_code(const httplib::Result& r) {
   return r ? json::parse(r->body, nullptr, false).value("error", json::object()).value("code", "") : "";
+}
+
+// One request on its own connection, sent as the bytes given, read to the end of the reply (the request asks for the
+// connection to close). A client library sends the whole body before it reads: for a body the server refuses from the
+// headers, the server answers and closes with that body unread, the close can reset the connection before the client
+// has read the answer, and the test was a race (kapitsa#1161's build-and-test, 10 Nov 2026).
+static std::string raw_exchange(int port, const std::string& request) {
+  const int fd = socket(AF_INET, SOCK_STREAM, 0);
+  CHECK(fd >= 0);
+  timeval tv{10, 0};
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  sockaddr_in a{};
+  a.sin_family = AF_INET;
+  a.sin_port = htons(uint16_t(port));
+  inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+  CHECK(connect(fd, reinterpret_cast<sockaddr*>(&a), sizeof a) == 0);
+  CHECK(send(fd, request.data(), request.size(), 0) == ssize_t(request.size()));
+  std::string reply;
+  char buf[4096];
+  for (ssize_t n; (n = recv(fd, buf, sizeof buf, 0)) > 0;) reply.append(buf, size_t(n));
+  close(fd);
+  return reply;
 }
 
 int main() {
@@ -138,8 +163,12 @@ int main() {
       CHECK(r && r->status == 400 && error_code(r) == "bad_request");
     }
   }
-  r = cl.Post("/engine/model", std::string(70 * 1024, ' '), "application/json");
-  CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");  // (over 64 KiB: refused before it is read)
+  {  // over 64 KiB: refused before it is read, so the request below carries the header and no body at all
+    const std::string reply = raw_exchange(port, "POST /engine/model HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) +
+        "\r\nAuthorization: Bearer " + engine_token() + "\r\nContent-Type: application/json\r\n"
+        "Content-Length: " + std::to_string(70 * 1024) + "\r\nConnection: close\r\n\r\n");
+    CHECK(reply.rfind("HTTP/1.1 403", 0) == 0 && reply.find("\"forbidden_peer\"") != std::string::npos);
+  }
   CHECK(stub.stops == 0 && stub.switches == 0);
   std::cout << "methods, and stop and switch only with the run's key ok\n";
 
