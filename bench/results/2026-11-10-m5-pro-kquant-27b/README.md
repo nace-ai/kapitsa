@@ -61,5 +61,6 @@ The `.err` file of each leg carries the bench's note "Another Kapitsa is running
 
 The harness is [ab_legs_k436.sh](ab_legs_k436.sh), started by [legs_27b_six4.sh](legs_27b_six4.sh); every leg logs a `LOCKPROOF` line (the `lockf` holder is in the harness's process ancestry) in [legs/legs.log](legs/legs.log).
 
-The card draws its numbers from [results.json](results.json). Its headline, top table and chart carry no speed (`speed_headline` false): this KQuant pack is an opt-in repo, and the
-Speed section says the sampled slowdown and the greedy gain in words.
+The card draws its numbers from [results.json](results.json). Its headline, top table and chart carry no speed (`speed_headline` false): this KQuant pack is opt-in, and the
+Speed section says the sampled slowdown and the greedy gain in words. The card's run line, `kapitsa serve --model 27b:kquant`, needs an opt-in catalog variant that is not in the catalog yet
+(`27b` stays the plain pack), so `catalog_pinned` is false here and the published card is generated with true. The speed legs ran the catalog's DFlash2 drafter, which a variant attaches and a bare repo name does not.
