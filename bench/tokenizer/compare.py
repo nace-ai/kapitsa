@@ -21,6 +21,9 @@ def main():
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     identity = {name: digest(getattr(args, name)) for name in ("reference", "candidate", "tokenizer", "cases")}
+    cases = json.loads(args.cases.read_text())
+    if not cases or len({c["name"] for c in cases}) != len(cases):
+        raise ValueError("expected nonempty cases with unique names")
     reference = None
     runs = []
     for label, arm in (("A1", "reference"), ("B1", "candidate"), ("A2", "reference"), ("B2", "candidate")):
@@ -31,6 +34,14 @@ def main():
         if result.returncode:
             raise RuntimeError(f"{label} failed with exit code {result.returncode}")
         rows = [json.loads(line) for line in result.stdout.splitlines()]
+        if len(rows) != len(cases):
+            raise RuntimeError(f"{label}: expected {len(cases)} rows, received {len(rows)}")
+        for row, case in zip(rows, cases):
+            if (row["name"] != case["name"] or row["bytes"] != len(case["text"].encode())
+                    or row["iterations"] != case["iterations"]
+                    or not isinstance(row["ids"], list) or any(type(t) is not int for t in row["ids"])
+                    or (case["text"] and not row["ids"])):
+                raise RuntimeError(f"{label}: invalid result for {case['name']}")
         outputs = [(x["name"], x["ids"]) for x in rows]
         if reference is None:
             reference = outputs

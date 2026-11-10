@@ -521,7 +521,8 @@ void Tokenizer::load(const std::string& path) {
 // Keep positions stable while only the two edges around a merge change. A rank's
 // new edges are queued after its whole batch, preserving left-to-right pair merging
 // even when a tokenizer's merge ranks are not in dependency order.
-static void merge_long_piece(std::vector<int>& sym,
+// Keep the heap stack frame out of short-piece and cache-hit calls.
+__attribute__((noinline)) static void merge_long_piece(std::vector<int>& sym,
                              const std::unordered_map<uint64_t, std::pair<int, int>>& merges) {
   struct Node { int token, prev, next; };
   std::vector<Node> nodes;
