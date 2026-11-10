@@ -26,6 +26,7 @@ struct LiveDecode {
   std::atomic<int> cycles{0};              // decode cycles: a speculative cycle's verify, or a plain step
   std::atomic<int> last{0};                // tokens the last cycle wrote (its accepted drafts + 1)
   std::atomic<int> spec{0};                // 0 plain decoding, 1 MTP, 2 DFlash2, 3 LiLiCorr
+  std::atomic<int> slot{-1};               // the engine slot it runs on, -1 before it has one
 };
 
 struct ChatRequest {

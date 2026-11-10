@@ -1468,6 +1468,17 @@ int ni::server::run_service(Options o) {
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
   if (g_stop_requested) return stop_asked();
+  // status.engine and the engine events (docs/control-socket.md, "Status"): what a native engine holds while ready. The
+  // manager is held weakly (the tick thread outlives run_service) and read without waiting on a load or a release.
+  server::activity()->set_engine([wm = std::weak_ptr<ModelManager>(model_mgr)](server::Activity::EngineSample& out) {
+    const auto m = wm.lock();
+    if (!m || server::last_state().value("state", "") != "ready") return false;
+    const auto eng = m->peek_engine();
+    if (!eng || eng->splash_mode()) return false;
+    const Engine::View v = eng->view();
+    out = {eng.get(), v.budget, v.allocated, v.weights, v.kv, v.slot_tokens, v.drafts};
+    return true;
+  });
   server::publish_state("loading", nullptr);
   set_load_stop_action(end_first_load_stop);
   try {

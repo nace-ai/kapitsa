@@ -429,6 +429,15 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     return engine_;
   }
 
+  // current_engine() without waiting: null also while a load or a release holds the lock (the activity tick reads the
+  // engine every tick and must not stall the server's events behind a load)
+  std::shared_ptr<Engine> peek_engine() {
+    if (switching_.load()) return nullptr;
+    std::shared_lock<std::shared_mutex> lk(rw_mu_, std::try_to_lock);
+    if (!lk.owns_lock() || switching_.load()) return nullptr;
+    return engine_;
+  }
+
   nlohmann::ordered_json list_models_json() const {
     const Shown now = shown();  // (not rw_mu_: a poll of /v1/models must not wait on a load or a release)
     const hub::ModelRef& now_ref = now.ref;

@@ -6,6 +6,7 @@
 #include "engine/chat.h"
 #include "server/events.h"
 
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -45,6 +46,20 @@ class Activity {
   // Where log_sink's lines go before the tick reads them
   LogRing& logs() { return logs_; }
 
+  // What the engine holds (Engine::View, read by the server): `engine` tells one loaded model from the next, so the
+  // draft counters start again at a load
+  struct EngineSample {
+    const void* engine = nullptr;
+    size_t budget = 0, allocated = 0, weights = 0, kv = 0;
+    std::vector<int> slot_tokens;
+    bool drafts = false;
+  };
+  // Asked every tick: true with `out` filled while an engine is there to show (the server: state ready, a native
+  // engine), false otherwise. Each true tick publishes an engine event and is what engine() returns.
+  void set_engine(std::function<bool(EngineSample& out)> sample);
+  // status.engine as of the last tick, null when that tick had none
+  nlohmann::json engine() const;
+
  private:
   Events& bus_;
   const int tick_ms_;
@@ -52,6 +67,13 @@ class Activity {
   mutable std::mutex mu_;
   std::vector<std::shared_ptr<Request>> active_;
   uint64_t next_id_ = 0;
+  // the engine block (under mu_): the sampler, the last tick's block, and the draft counters of the requests that
+  // finished on `drafts_engine_`
+  std::function<bool(EngineSample&)> sample_engine_;
+  nlohmann::json engine_;
+  const void* drafts_engine_ = nullptr;
+  long drafts_cycles_ = 0, drafts_tokens_ = 0;
+  void tick_engine();
 };
 
 double steady_ms();
