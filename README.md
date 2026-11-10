@@ -37,12 +37,13 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## Features
 
-- 🏆 **Fastest on a Mac**: 351 tok/s on Qwen3.6 35B (M5 Max) ([how](docs/kflash.md))
+- 🏆 **Fastest decode in 33 of 38 Mac and model pairs**: 351 tok/s on Qwen3.6 35B (M5 Max) ([how](docs/kflash.md))
 - 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s
-- 🎯 **Closer to the original**: KQuant 4B and 9B, same size, about 10% faster ([numbers](#kquant))
+- 🎯 **Closer to the original**: KQuant 4B and 9B, same size, about 10% faster on an M5 Pro ([numbers](#kquant))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
+- ⚡ **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
 - 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
 
 ### KQuant
@@ -97,6 +98,16 @@ How Kapitsa's speed holds from 1K tokens of context to each model's limit, up to
   <img alt="Kapitsa's decode speed in tokens per second on a MacBook Pro M5 Max after 1K tokens of context to each model's context limit (128K to 512K), one line per model: Qwen3.6 35B-A3B 335 at 1K to 136 at 256K; Clover 35B-A3B 294 at 1K to 181 at 128K; Qwen3.8 27B 82 at 1K to 43 at 256K; Flash-Next 180B 97 at 1K to 76 at 256K; Lightning 30B 241 at 1K to 116 at 512K; Super-VL 120B 97 at 1K to 44 at 512K; Bolt 74B 142 at 1K to 91 at 256K; Dory1.0 4B 123 at 1K to 23 at 256K; Flint 40B 258 at 1K to 62 at 256K." src="docs/assets/context-decode-light.webp">
 </picture>
 
+## How it works
+
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/how-it-works-narrow.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/how-it-works-dark.svg">
+  <img alt="How Kapitsa works: DFlash2 vs KFlash. DFlash2, the drafter's chain, as Splash, oMLX and mlx-serve run it: the drafter guesses the next 7 tokens, the big model checks them in one pass and keeps them up to the first wrong guess (return a, 2 tokens). KFlash, Kapitsa's: in the same one pass the big model checks a best-first tree of the drafter's top candidates in 8 rows; where the drafter is unsure its runner-ups ride along, and the longest branch the big model agrees with is kept (return a + b, 4 tokens). Same output as plain decoding, tree size measured on each Mac, 8-17% more tokens per pass on short prompts. Below: GPU, hand-written Metal code; Neural Engine, helps read long prompts on the 4B, 27B, Bolt and Super-VL; Memory, keeps conversations ready, up to 4 at once." src="docs/assets/how-it-works-light.svg">
+</picture>
+
+Kapitsa decodes with **KFlash**. A draft model such as DFlash2 guesses the next seven tokens, with a few candidates for each one. Engines that run it as published (Splash, oMLX, mlx-serve) check one chain of guesses and stop at the first wrong one. KFlash checks a best-first tree of the drafter's candidates in the same pass, so where the drafter hesitates, its runner-ups are checked too and more tokens survive each pass. The tree's size comes from what a verify row costs on your Mac, measured there, and it changes no output: the big model checks every token. It runs on z-lab's DFlash, DFlash2, and NVIDIA's DSpark and LiLiCorr as published, and on our retrain of the 27B's DFlash2 with a 16-row block. [How KFlash works](docs/kflash.md)
+
 ## CLI
 
 ```bash
@@ -118,7 +129,7 @@ A Mac that cannot hold a model whole uses another Mac on the network that runs i
 Flash-Next pair to hold it in memory between them ([Several Macs](docs/usage.md#several-macs)); `--private` keeps a
 server to its own Mac. [Usage guide](docs/usage.md)</sub>
 
-## In-process SDK
+### In-process SDK
 
 The opt-in [C ABI SDK](sdk/README.md) lets desktop clients reuse a loaded model,
 stream and cancel requests. See its build instructions and host-process lifetime limitations.
@@ -284,16 +295,6 @@ The catalog models measured on each Mac, against the engines that run them: one 
 </details>
 
 <sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint, Clover and the 35B's `16gb` read images. What runs on a Mac of each size: [Models](#models). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
-
-## How it works
-
-<picture>
-  <source media="(max-width: 600px)" srcset="docs/assets/how-it-works-narrow.svg">
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/how-it-works-dark.svg">
-  <img alt="How Kapitsa works: DFlash2 vs KFlash. DFlash2, the drafter's chain, as Splash, oMLX and mlx-serve run it: the drafter guesses the next 7 tokens, the big model checks them in one pass and keeps them up to the first wrong guess (return a, 2 tokens). KFlash, Kapitsa's: in the same one pass the big model checks a best-first tree of the drafter's top candidates in 8 rows; where the drafter is unsure its runner-ups ride along, and the longest branch the big model agrees with is kept (return a + b, 4 tokens). Same output as plain decoding, tree size measured on each Mac, 8-17% more tokens per pass on short prompts. Below: GPU, hand-written Metal code; Neural Engine, helps read long prompts on the 4B, 27B, Bolt and Super-VL; Memory, keeps conversations ready, up to 4 at once." src="docs/assets/how-it-works-light.svg">
-</picture>
-
-Kapitsa decodes with **KFlash**. A draft model such as DFlash2 guesses the next seven tokens, with a few candidates for each one. Engines that run it as published (Splash, oMLX, mlx-serve) check one chain of guesses and stop at the first wrong one. KFlash checks a best-first tree of the drafter's candidates in the same pass, so where the drafter hesitates, its runner-ups are checked too and more tokens survive each pass. The tree's size comes from what a verify row costs on your Mac, measured there, and it changes no output: the big model checks every token. It runs on z-lab's DFlash, DFlash2, and NVIDIA's DSpark and LiLiCorr as published, and on our retrain of the 27B's DFlash2 with a 16-row block. [How KFlash works](docs/kflash.md)
 
 ## Get release notices
 
