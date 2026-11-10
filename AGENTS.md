@@ -50,7 +50,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test gemm_slices_test ffn_share_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test systemone systemone_test
+exl3_test remote_test cluster_test split_place_test gemm_slices_test ffn_share_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test control_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
@@ -79,6 +79,8 @@ build/serve_options_test docs/serve-config.schema.json  # kapitsa serve's one va
 python3 tests/test_serve_schema.py build/serve_options_test  # needs: jsonschema; the schema and the validator agree, --config - survives a restart
 build/events_test                            # the server's event bus: replay, resets, slow readers, the log ring (src/server/events.h, activity.h)
 python3 tests/test_events_schema.py build/events_test  # needs: jsonschema; every event the bus publishes matches schema/control/event.schema.json
+build/control_test                           # the control socket over a real Unix socket: lock, endpoints, errors, peer check, event streams (src/server/control.h)
+python3 tests/test_control_socket.py build/control_test  # needs: jsonschema; every answer the socket gave matches schema/control/
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)

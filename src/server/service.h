@@ -29,6 +29,7 @@ struct Options {
   bool engine_splash = false, check_only = false;
   std::string splash_kflash = "auto";  // auto, on or off
   bool priv = false, local = false, allow_switch = false, verbose = false, yes = false;
+  nlohmann::json given = nlohmann::json::object();  // the validated JSON without api_key: the control socket's `config`
 };
 
 // The JSON fields the validator takes, in the schema's order: each is a serve flag's name with '_' for '-'

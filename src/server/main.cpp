@@ -34,6 +34,7 @@
 #include "gguf/import.h"
 #include "hub/hub.h"
 #include "metal/gpu.h"
+#include "server/control.h"
 #include "server/cli.h"
 #include "server/http_stream.h"
 #include "server/model_manager.h"
@@ -564,6 +565,8 @@ static const int kStopSignals[] = {SIGINT, SIGTERM, SIGHUP};
 static struct sigaction g_stop_prev[3];
 static int g_stop_pipe[2] = {-1, -1};
 static volatile sig_atomic_t g_stopping = 0;
+static server::ControlServer* g_control = nullptr;  // the control socket, once it listens (never freed)
+static std::atomic<bool> g_stop_exit0{false};       // POST /stop on an instance an app or launchd owns: exit 0
 
 static void pass_signal_on(int sig) {
   for (int i = 0; i < 3; ++i)
@@ -601,6 +604,8 @@ struct SaveOnStop {
                                                                g_stop_mgr->current_slots()));
       }
       save_before_exit();
+      if (g_control) g_control->stop();  // (its socket file goes with the process)
+      if (g_stop_exit0) _exit(0);
       pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends the process
     }).detach();
     struct sigaction sa {};
@@ -626,6 +631,108 @@ struct SaveOnStop {
  private:
   bool handlers_ = false;
 };
+
+// The control socket's side of this server (docs/control-socket.md): status from the bus and the model manager,
+// POST /stop through the stop handlers above, POST /model through the manager's switch.
+class ServeControl : public server::ControlApi {
+ public:
+  ServeControl(const std::string& instance_id, const nlohmann::json& config, const std::string& host, int port) {
+    id_.instance_id = instance_id;
+    id_.version = kVersion;
+    id_.config = config;
+    const bool any = host.empty() || host == "0.0.0.0" || host == "::";
+    id_.api_url = "http://" + std::string(any ? "127.0.0.1" : host) + ":" + std::to_string(port);
+    const char* p = getenv("KAPITSA_PARENT_PID");
+    id_.parent_pid = p && *p ? atoi(p) : 0;
+    id_.lifecycle = id_.parent_pid > 1 ? "attached" : getppid() == 1 && !isatty(0) ? "keep_running" : "foreground";
+    const time_t now = std::time(nullptr);
+    char at[32];
+    strftime(at, sizeof at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    id_.started_at = at;
+  }
+  bool foreground() const { return id_.lifecycle == "foreground"; }
+  void attach(std::shared_ptr<ModelManager> mgr) {
+    std::lock_guard<std::mutex> lk(mu_);
+    mgr_ = std::move(mgr);
+  }
+
+  nlohmann::json status() override {
+    return server::instance_status(id_, *server::events(), *server::activity(), server::last_state());
+  }
+  server::ControlReply stop() override {
+    return {202, {{"run_id", server::events()->run_id()}, {"state", "stopping"}}};
+  }
+  void after_stop() override {
+    g_stop_exit0 = !foreground();  // a terminal's server ends as Ctrl-C would end it
+    kill(getpid(), SIGINT);
+  }
+  server::ControlReply model_switch(const nlohmann::json& r) override {
+    for (auto it = r.begin(); it != r.end(); ++it)
+      if (it.key() != "model" && it.key() != "run_id")  // (the serve fields a switch takes: a later commit)
+        return server::control_error(400, "invalid_value", "this server does not take " + it.key() + " on a switch yet",
+                                     {{"field", it.key()}});
+    std::shared_ptr<ModelManager> mgr;
+    {
+      std::lock_guard<std::mutex> lk(mu_);
+      mgr = mgr_;
+    }
+    if (!mgr) {
+      server::ControlReply busy = server::control_error(503, "busy", "the first model is still loading", {{"retry_after_s", 30}});
+      busy.retry_after_s = 30;
+      return busy;
+    }
+    const nlohmann::json prev = server::model_json(mgr->current_model_id(), mgr->current_context_length(), mgr->current_slots());
+    const std::string target = r["model"];
+    ModelManager::Error err;
+    auto eng = mgr->switch_from_control(target, &err);
+    if (eng)
+      return {200, {{"run_id", server::events()->run_id()},
+                    {"model", server::model_json(eng->model_id(), eng->context_length(), eng->slots())},
+                    {"previous_model", prev}}};
+    using Code = ModelManager::Error::Code;
+    if (err.code == Code::Busy) {
+      server::ControlReply busy = server::control_error(503, "busy", err.message, {{"retry_after_s", err.retry_s}});
+      busy.retry_after_s = err.retry_s;
+      return busy;
+    }
+    if (err.code == Code::NotFound) return server::control_error(404, "model_not_found", err.message, {{"model", target}});
+    return server::control_error(500, "load_failed", err.message.empty() ? "the model did not load" : err.message,
+                                 {{"model", target}, {"state", mgr->unloaded() ? "released" : "ready"}});
+  }
+
+ private:
+  server::Identity id_;
+  std::mutex mu_;
+  std::shared_ptr<ModelManager> mgr_;
+};
+static ServeControl* g_serve_control = nullptr;  // (never freed: the socket's threads may outlive run_service)
+
+// The instance's lock, before its first event (docs/control-socket.md, "Start race"). The instance id is `default`
+// until the serve configuration names one. "" when it goes on, else why it cannot start.
+static std::string lock_control(const std::string& instance_id, bool named) {
+  const std::string dir = server::control_dir(hub::home_dir());
+  if (dir.empty()) return named ? "cannot make " + hub::home_dir() + "/run for the control socket" : "";
+  if (server::take_instance_lock(dir + "/" + instance_id + ".lock", 1000) < 0) {
+    if (named) return "instance " + instance_id + " is already running";
+    // (an unnamed second server, as `kapitsa bench` starts beside a running one, serves without a socket)
+    fprintf(stderr, "warning: instance %s is already running: this server has no control socket\n", instance_id.c_str());
+    return "skip";
+  }
+  return "";
+}
+
+// After the first event: the socket listens. A server whose socket cannot listen refuses to start.
+static std::string listen_control(const std::string& instance_id, const server::Options& o, const std::string& host) {
+  g_serve_control = new ServeControl(instance_id, o.given, host, o.port);
+  auto* srv = new server::ControlServer(*g_serve_control, *server::events());
+  if (std::string why = srv->start(server::control_dir(hub::home_dir()) + "/" + instance_id + ".sock"); !why.empty())
+    return why;
+  g_control = srv;
+  std::atexit([] {
+    if (g_control) g_control->stop();
+  });
+  return "";
+}
 
 // Started by `kapitsa claude|codex|opencode` (KAPITSA_PARENT_PID): exits when the launcher does, however it ends (kill -9
 // included), instead of holding the model's memory with nobody left to stop it.
@@ -996,8 +1103,14 @@ int ni::server::run_service(Options o) {
   if (tui) ui::serve_begin(verbose);
   server::start_activity();
   // the event bus (src/server/activity.h), after the terminal UI's log sink, which it passes every line on to. A
-  // server's first event comes before it takes a connection (docs/control-socket.md, "Events").
+  // server's first event comes before it takes a connection (docs/control-socket.md, "Events"): the instance's lock,
+  // then `starting`, then the control socket listens.
+  const std::string instance_id = "default";
+  const std::string locked = lock_control(instance_id, false);
+  if (!locked.empty() && locked != "skip") return fail(locked);
   server::publish_state("starting", nullptr);
+  if (locked.empty())
+    if (const std::string why = listen_control(instance_id, o, host); !why.empty()) return fail(why);
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
@@ -1288,6 +1401,7 @@ int ni::server::run_service(Options o) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
+  if (g_serve_control) g_serve_control->attach(model_mgr);
   server::publish_state("loading", nullptr);
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);

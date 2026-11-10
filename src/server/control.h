@@ -1,0 +1,94 @@
+// The control socket (docs/control-socket.md): HTTP/1.1 over a Unix domain socket in $KAPITSA_HOME/run, answering
+// GET /status, GET /events, POST /stop and POST /model for the user who started the server. It is its own small HTTP
+// server rather than httplib's: the peer check needs each accepted socket (getpeereid), which httplib keeps private.
+// One request per connection (`Connection: close`), so there is no keep-alive state to get wrong.
+#pragma once
+#include "server/events.h"
+
+#include <nlohmann/json.hpp>
+
+#include <atomic>
+#include <mutex>
+#include <string>
+#include <sys/types.h>
+#include <unistd.h>
+
+namespace ni::server {
+
+struct ControlReply {
+  int status = 200;
+  nlohmann::json body;
+  int retry_after_s = 0;  // > 0: a Retry-After header
+};
+
+// The error body every non-2xx answer has (schema/control/error.schema.json)
+ControlReply control_error(int status, const std::string& code, const std::string& message,
+                           const nlohmann::json& details = nullptr);
+
+// What the socket asks of the server. Requests reach it already checked: a known path and method, a JSON object
+// with only the request's fields, and a run_id (when given) that is this run's.
+class ControlApi {
+ public:
+  virtual ~ControlApi() = default;
+  virtual nlohmann::json status() = 0;
+  virtual ControlReply stop() = 0;  // 202 to stop: after_stop() runs once the answer is sent
+  virtual void after_stop() {}
+  virtual ControlReply model_switch(const nlohmann::json& request) = 0;
+};
+
+constexpr int kControlProtocol = 1;
+
+class Activity;
+
+// What GET /status says about the instance itself, fixed for the run
+struct Identity {
+  std::string instance_id, name, version, started_at, lifecycle, api_url;
+  int parent_pid = 0;  // attached only
+  nlohmann::json config = nlohmann::json::object();
+};
+// GET /status from the identity, the bus (run_id, last_event_id), the activity (tick_ms, requests) and the last state
+// event's {state, model} (last_state())
+nlohmann::json instance_status(const Identity& id, const Events& bus, const Activity& act, const nlohmann::json& state);
+constexpr size_t kMaxControlBody = 64 * 1024;
+
+bool valid_instance_id(const std::string& id);  // 1 to 32 of A-Z a-z 0-9 _ -
+std::string control_dir(const std::string& home);  // <home>/run, made 0700; "" when it cannot be made
+
+// The instance's start lock: an exclusive flock on `path`, waiting at most `wait_ms`. The descriptor (O_CLOEXEC, so
+// no child keeps it) is held until the process exits. -1: another server holds it.
+int take_instance_lock(const std::string& path, int wait_ms);
+
+class ControlServer {
+ public:
+  ControlServer(ControlApi& api, Events& bus) : api_(api), bus_(bus) {}
+  ~ControlServer() { stop(); }
+  ControlServer(const ControlServer&) = delete;
+  ControlServer& operator=(const ControlServer&) = delete;
+
+  // Removes an old socket file, binds and listens (0600, O_CLOEXEC). "" or why it cannot.
+  std::string start(const std::string& socket_path);
+  // Stops accepting, ends the event streams, removes the socket file
+  void stop();
+  const std::string& path() const { return path_; }
+
+  // One request's answer, everything but GET /events (tests call it without a socket)
+  ControlReply handle(const std::string& method, const std::string& path, const std::string& body);
+  void set_owner(uid_t uid) { owner_ = uid; }  // whose connections are served (tests); the server's user otherwise
+
+ private:
+  void accept_loop();
+  void serve(int fd);
+  void stream_events(int fd, const std::string& last_event_id);
+
+  ControlApi& api_;
+  Events& bus_;
+  std::string path_;
+  std::atomic<int> listen_fd_{-1};  // -1 once the accept loop has closed it
+  uid_t owner_ = geteuid();
+  std::atomic<bool> stopping_{false};
+  std::atomic<int> connections_{0};
+  std::mutex mu_;  // start/stop
+  bool started_ = false;
+};
+
+}  // namespace ni::server

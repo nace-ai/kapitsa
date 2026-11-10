@@ -106,7 +106,7 @@ target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|events_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|events_test|control_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -148,6 +148,12 @@ target_include_directories(events_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_S
 target_link_libraries(events_test PRIVATE Threads::Threads)
 add_test(NAME events_test COMMAND events_test)
 set_tests_properties(events_test PROPERTIES TIMEOUT 30)
+# The control socket over a real Unix socket in a temporary folder, with a stand-in for the server
+add_executable(control_test tools/control_test.cpp src/server/control.cpp src/server/events.cpp src/server/activity.cpp)
+target_include_directories(control_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
+target_link_libraries(control_test PRIVATE Threads::Threads)
+add_test(NAME control_test COMMAND control_test)
+set_tests_properties(control_test PROPERTIES TIMEOUT 60)
 add_executable(http_stream_test tools/http_stream_test.cpp src/server/http_stream.cpp src/engine/execution_session.cpp)
 target_include_directories(http_stream_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(http_stream_test PRIVATE Threads::Threads)
@@ -196,7 +202,7 @@ add_custom_command(
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/native_execution.cpp
   ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
   ${CMAKE_SOURCE_DIR}/src/server/events.cpp ${CMAKE_SOURCE_DIR}/src/server/activity.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/control.cpp ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp
   ${CMAKE_SOURCE_DIR}/src/server/stage_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/route.cpp
