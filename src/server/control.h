@@ -1,5 +1,5 @@
 // The control socket (docs/control-socket.md): HTTP/1.1 over a Unix domain socket in $KAPITSA_HOME/run, answering
-// GET /status and GET /events for the user who started the server (POST /stop and POST /model: the next change). It is its own small HTTP
+// GET /status, GET /events, POST /stop and POST /model for the user who started the server. It is its own small HTTP
 // server rather than httplib's: the peer check needs each accepted socket (getpeereid), which httplib keeps private.
 // One request per connection (`Connection: close`), so there is no keep-alive state to get wrong.
 #pragma once
@@ -25,11 +25,15 @@ struct ControlReply {
 ControlReply control_error(int status, const std::string& code, const std::string& message,
                            const nlohmann::json& details = nullptr);
 
-// What the socket asks of the server
+// What the socket asks of the server. Requests reach it already checked: a known path and method, a JSON object
+// with only the request's fields, and a run_id (when given) that is this run's.
 class ControlApi {
  public:
   virtual ~ControlApi() = default;
   virtual nlohmann::json status() = 0;
+  virtual ControlReply stop() = 0;  // 202: after_stop() runs once the first one's answer is sent, never again
+  virtual void after_stop() {}
+  virtual ControlReply model_switch(const nlohmann::json& request) = 0;
 };
 
 constexpr int kControlProtocol = 1;
@@ -50,6 +54,10 @@ constexpr size_t kMaxControlBody = 64 * 1024;
 
 // The inference API's URL for `kapitsa serve --host host --port port`: a wildcard host as 127.0.0.1, IPv6 in brackets
 std::string api_url(const std::string& host, int port);
+
+// Why POST /model `request` cannot switch an instance serving `config` (status 0: it can): a Splash engine serves its
+// splash_model folder and nothing else, and this server takes no serve field but `model` on a switch yet
+ControlReply switch_refusal(const nlohmann::json& config, const nlohmann::json& request);
 
 bool valid_instance_id(const std::string& id);  // 1 to 32 of A-Z a-z 0-9 _ -
 std::string control_dir(const std::string& home);  // <home>/run, made 0700; "" when it cannot be made
@@ -74,6 +82,8 @@ class ControlServer {
   // One request's answer, everything but GET /events (tests call it without a socket)
   ControlReply handle(const std::string& method, const std::string& path, const std::string& body);
   void set_owner(uid_t uid) { owner_ = uid; }  // whose connections are served (tests); the server's user otherwise
+  // A stop began (POST /stop, a signal): POST /model answers 503 stopping, a further POST /stop 202 and nothing more
+  void mark_stopping() { stop_asked_ = true; }
   int connections() const { return connections_.load(); }  // open connections, event streams included
 
  private:
@@ -86,7 +96,7 @@ class ControlServer {
   std::string path_;
   std::atomic<int> listen_fd_{-1};  // -1 once the accept loop has closed it
   uid_t owner_ = geteuid();
-  std::atomic<bool> stopping_{false};
+  std::atomic<bool> stopping_{false}, stop_asked_{false};
   std::atomic<int> connections_{0};
   std::mutex mu_;  // start/stop
   bool started_ = false;

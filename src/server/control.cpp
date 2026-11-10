@@ -101,7 +101,9 @@ bool parse_head(const std::string& text, Head* h) {
   return true;
 }
 
-bool known_path(const std::string& p) { return p == "/status" || p == "/events"; }
+bool known_path(const std::string& p) { return p == "/status" || p == "/events" || p == "/stop" || p == "/model"; }
+
+const char* method_of(const std::string& p) { return p == "/status" || p == "/events" ? "GET" : "POST"; }
 
 }  // namespace
 
@@ -127,6 +129,18 @@ std::string api_url(const std::string& host, int port) {
   const bool any = host.empty() || host == "0.0.0.0" || host == "::";
   const std::string h = any ? "127.0.0.1" : host.find(':') != std::string::npos ? "[" + host + "]" : host;
   return "http://" + h + ":" + std::to_string(port);
+}
+
+ControlReply switch_refusal(const json& config, const json& request) {
+  if (config.value("engine", "native") == "splash")
+    return control_error(400, "invalid_value",
+                         "a Splash instance serves its splash_model folder only: start another instance for this model",
+                         {{"field", "model"}});
+  for (auto it = request.begin(); it != request.end(); ++it)
+    if (it.key() != "model" && it.key() != "run_id")
+      return control_error(400, "invalid_value", "this server does not take " + it.key() + " on a switch yet",
+                           {{"field", it.key()}});
+  return {0, nullptr};
 }
 
 bool valid_instance_id(const std::string& id) {
@@ -255,14 +269,50 @@ void ControlServer::serve(int fd) {
   if (h.path == "/events" && h.method == "GET") return stream_events(fd, h.last_event_id);
   const ControlReply r = handle(h.method, h.path, body);
   send_reply(fd, r);
+  if (r.status == 202 && h.path == "/stop" && !stop_asked_.exchange(true)) api_.after_stop();
 }
 
 ControlReply ControlServer::handle(const std::string& method, const std::string& path, const std::string& body) {
   if (!known_path(path)) return control_error(404, "not_found", "no such path: " + path);
-  if (method != "GET") return control_error(405, "method_not_allowed", path + " takes GET");
+  if (method != method_of(path)) return control_error(405, "method_not_allowed", path + " takes " + method_of(path));
+  if (method == "GET") {
+    if (path == "/status") return {200, api_.status()};
+    return control_error(400, "bad_request", "GET /events streams only over the socket");
+  }
   if (body.size() > kMaxControlBody) return control_error(400, "bad_request", "the body is over 64 KiB");
-  if (path == "/status") return {200, api_.status()};
-  return control_error(400, "bad_request", "GET /events streams only over the socket");
+  json req = json::object();
+  if (!body.empty()) {
+    req = json::parse(body, nullptr, false);
+    if (!req.is_object()) return control_error(400, "bad_request", "the body is not a JSON object");
+  }
+  static const char* const kStop[] = {"run_id"};
+  static const char* const kModel[] = {"run_id", "model",         "model_id",   "context",   "slots",
+                                       "spec",   "dflash",        "prefill_chunk", "mem_budget", "disk_cache"};
+  const bool stop = path == "/stop";
+  for (auto it = req.begin(); it != req.end(); ++it) {
+    const auto known = [&](const auto& names) {
+      return std::any_of(std::begin(names), std::end(names), [&](const char* n) { return it.key() == n; });
+    };
+    if (stop ? !known(kStop) : !known(kModel))
+      return control_error(400, "unknown_field", "unknown field " + it.key(), {{"field", it.key()}});
+  }
+  if (req.contains("run_id")) {
+    const json& id = req["run_id"];
+    const bool shaped = id.is_string() && id.get_ref<const std::string&>().size() >= 16 &&
+                        id.get_ref<const std::string&>().size() <= 64 &&
+                        std::all_of(id.get_ref<const std::string&>().begin(), id.get_ref<const std::string&>().end(),
+                                    [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+    if (!shaped) return control_error(400, "invalid_value", "run_id is 16 to 64 lowercase hex digits", {{"field", "run_id"}});
+    if (id != bus_.run_id())
+      return control_error(409, "run_id_mismatch", "the instance restarted: its run is " + bus_.run_id(),
+                           {{"run_id", bus_.run_id()}});
+  }
+  if (stop) return api_.stop();  // (again while it stops: 202, and the stop already under way goes on)
+  if (stopping_.load() || stop_asked_.load()) return control_error(503, "stopping", "the instance is stopping");
+  if (!req.contains("model") || !req["model"].is_string() || req["model"].get_ref<const std::string&>().empty())
+    return control_error(400, "invalid_value", "model is required: a catalog name, a folder or a GGUF file",
+                         {{"field", "model"}});
+  return api_.model_switch(req);
 }
 
 void ControlServer::stream_events(int fd, const std::string& last_event_id) {

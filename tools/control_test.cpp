@@ -1,10 +1,11 @@
 // The control socket (src/server/control.h) over a real Unix socket in a temporary folder, with a stand-in for the
-// server: the start lock, GET /status and /events and their errors, the peer check, the event stream's resets, a
-// stalled reader and the stream cap, and the socket file's removal. --print: one line per message kind, {"schema", "message"}, for
+// server: the start lock, every endpoint's checks and errors, the peer check, the event stream's resets and its cap,
+// and the socket file's removal. --print: one line per message kind, {"schema", "message"}, for
 // tests/test_control_socket.py to check against schema/control/. CPU only.
 #include "server/activity.h"
 #include "server/control.h"
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
@@ -21,10 +22,11 @@ using nlohmann::json;
 
 static const std::string kRun = "7f3a9c2e5b1d4e60";
 
-// A stand-in server: the real status assembly over a real bus and activity
+// A stand-in server: the real status assembly over a real bus and activity, switches that succeed or fail by name
 struct Stub : ControlApi {
   Events& bus;
   Activity& act;
+  std::atomic<int> stops{0};
   Identity id;
   Stub(Events& b, Activity& a) : bus(b), act(a) {
     id.instance_id = "code", id.version = "0.2.33", id.started_at = "2026-11-10T01:00:00Z";
@@ -32,6 +34,18 @@ struct Stub : ControlApi {
     id.config = {{"model", "27b"}, {"port", 8100}, {"private", true}};
   }
   json status() override { return instance_status(id, bus, act, last_state()); }
+  ControlReply stop() override { return {202, {{"run_id", bus.run_id()}, {"state", "stopping"}}}; }
+  void after_stop() override { ++stops; }
+  ControlReply model_switch(const json& r) override {
+    if (ControlReply no = switch_refusal(id.config, r); no.status) return no;
+    const json prev = model_json("qwen3.6-27b", 131072, 2);
+    const std::string m = r["model"];
+    if (m == "nope") return control_error(404, "model_not_found", "no model named nope", {{"model", m}});
+    if (m == "oom")
+      return control_error(500, "load_failed", "Engine initialization failed: out of memory",
+                           {{"model", m}, {"state", "ready"}});
+    return {200, {{"run_id", bus.run_id()}, {"model", model_json(m, 65536, 1)}, {"previous_model", prev}}};
+  }
 };
 
 struct Answer {
@@ -184,11 +198,40 @@ int main(int argc, char** argv) {
   keep("error", a);
   CHECK(code_of(a = ask(sock, "POST", "/status")) == "method_not_allowed" && a.status == 405);
   keep("error", a);
-  CHECK(code_of(ask(sock, "POST", "/stop")) == "not_found");  // (POST /stop and POST /model: the next change)
-  // over 64 KiB: refused on its Content-Length, before the body is read
-  CHECK(code_of(a = raw(sock, "GET /status HTTP/1.1\r\nContent-Length: 70000\r\n\r\n")) == "bad_request");
+  CHECK(code_of(ask(sock, "GET", "/stop")) == "method_not_allowed");
+  CHECK(code_of(a = ask(sock, "POST", "/stop", "{not json")) == "bad_request" && a.status == 400);
   keep("error", a);
-  CHECK(srv.handle("GET", "/status", std::string(65 * 1024, ' ')).body["error"]["code"] == "bad_request");
+  CHECK(code_of(ask(sock, "POST", "/stop", "[1]")) == "bad_request");
+  // over 64 KiB: refused on its Content-Length, before the body is read
+  CHECK(code_of(raw(sock, "POST /model HTTP/1.1\r\nContent-Length: 70000\r\n\r\n")) == "bad_request");
+  CHECK(srv.handle("POST", "/model", std::string(65 * 1024, ' ')).body["error"]["code"] == "bad_request");
+  a = ask(sock, "POST", "/stop", R"({"mem_budget_gb": 40})");
+  CHECK(a.status == 400 && code_of(a) == "unknown_field" && json::parse(a.body)["error"]["details"]["field"] == "mem_budget_gb");
+  keep("error", a);
+  a = ask(sock, "POST", "/stop", R"({"run_id": "XYZ"})");
+  CHECK(a.status == 400 && code_of(a) == "invalid_value");
+  keep("error", a);
+  a = ask(sock, "POST", "/model", R"({"run_id": "0123456789abcdef", "model": "35b"})");
+  CHECK(a.status == 409 && code_of(a) == "run_id_mismatch" && json::parse(a.body)["error"]["details"]["run_id"] == kRun);
+  keep("error", a);
+  CHECK(code_of(ask(sock, "POST", "/model", "{}")) == "invalid_value");
+
+  // a switch: the stand-in's answers come through with their status and body
+  a = ask(sock, "POST", "/model", R"({"model": "qwen3.6-35b-a3b", "run_id": ")" + kRun + R"("})");
+  CHECK(a.status == 200 && json::parse(a.body)["model"]["id"] == "qwen3.6-35b-a3b");
+  keep("model-switch-response", a);
+  CHECK((a = ask(sock, "POST", "/model", R"({"model": "nope"})")).status == 404 && code_of(a) == "model_not_found");
+  keep("error", a);
+  CHECK((a = ask(sock, "POST", "/model", R"({"model": "oom"})")).status == 500 && code_of(a) == "load_failed");
+  keep("error", a);
+  a = ask(sock, "POST", "/model", R"({"model": "35b", "context": "8k"})");
+  CHECK(a.status == 400 && code_of(a) == "invalid_value" && json::parse(a.body)["error"]["details"]["field"] == "context");
+  // a Splash instance serves its splash_model folder: a switch is refused, not a restart of the same engine
+  stub.id.config["engine"] = "splash";
+  a = ask(sock, "POST", "/model", R"({"model": "35b"})");
+  CHECK(a.status == 400 && code_of(a) == "invalid_value" && json::parse(a.body)["error"]["details"]["field"] == "model");
+  keep("error", a);
+  stub.id.config.erase("engine");
 
   // another user's connection gets 403 (the socket's directory keeps them out already; this is the second check)
   srv.set_owner(geteuid() + 1);
@@ -240,7 +283,14 @@ int main(int argc, char** argv) {
   keep("error", a);
   for (int fd : fds) close(fd);
 
-  // stop() removes the socket file
+  // stop: 202, then the server's stop runs once the answer is out; stop() removes the socket file
+  a = ask(sock, "POST", "/stop", R"({"run_id": ")" + kRun + R"("})");
+  CHECK(a.status == 202 && json::parse(a.body)["state"] == "stopping");
+  keep("stop-response", a);
+  CHECK(stub.stops == 1);
+  CHECK(ask(sock, "POST", "/stop", "").status == 202 && stub.stops == 1);  // again (no body: any run): no second stop
+  CHECK((a = ask(sock, "POST", "/model", R"({"model": "35b"})")).status == 503 && code_of(a) == "stopping");
+  keep("error", a);
   srv.stop();
   CHECK(stat(sock.c_str(), &st) != 0 && dial(sock) < 0);
 
