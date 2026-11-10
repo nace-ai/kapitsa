@@ -3,7 +3,6 @@
 #include "model/qwen35.h"
 #include "engine/device_profile.h"
 #include "model/affine_pack.h"
-#include "model/ffn_share.h"
 #include "model/gemm_slices.h"
 #include "ane/ffn_split.h"
 #include "ane/slabs.h"
@@ -1420,8 +1419,8 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
     // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, on
     // a model with an M5 share (mma_share_measured), as init_ane decides it, so the planned and the loaded default share agree
     m.ffn_mma = qmt_on() && mma_share_measured(c);
-    // per layer, as init_ane decides it (ffn_share::layer_mma): gate, up and down in one format, 4-bit g64 or NI_QMTF's
-    const ffn_share::Qmtf qf{qmtf_on(3, 64), qmtf_on(8, 64), qmtf_on(4, 32)};
+    // every layer with a matrix-unit GPU part (ffn_share::gpu_part, as init_ane and enc_mlp_gpu_part_qmt decide it)
+    const ffn_share::Qmtf qf = qmtf_formats();
     for (int i = 0; i < c.layers && m.ffn_mma; ++i) {
       ffn_share::Fmt f[3];
       int j = 0;
@@ -1432,7 +1431,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
         const bool q = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32";
         f[j++] = q ? ffn_share::from_shape(K, iw->second.shape.back(), is->second.shape.back()) : ffn_share::Fmt{};
       }
-      m.ffn_mma = ffn_share::layer_mma(f[0], f[1], f[2], qf);
+      m.ffn_mma = ffn_share::gpu_part(f[0], f[1], f[2], qf) != ffn_share::Path::generic;
     }
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
@@ -3131,7 +3130,16 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 }
 
 bool Qwen35::qmt_ready() { return qmt_on(); }
-bool Qwen35::qmtf_ready(int bits, int gs) { return qmtf_on(bits, gs); }
+ffn_share::Qmtf Qwen35::qmtf_formats() {
+  // 8-bit: enc_qmm_large's qmm8 condition too (qmtf_for), for a dense FFN projection (never a router gate)
+  return {qmtf_on(3, 64), qmtf_on(8, 64) && qmm8_on(), qmtf_on(4, 32)};
+}
+ffn_share::Path Qwen35::ffn_gpu_part(const Layer& L) {
+  auto fmt = [](const QLinear& q) {
+    return q.iq || q.q20 || q.exl3 ? ffn_share::Fmt{} : ffn_share::Fmt{q.bits, q.gs};
+  };
+  return ffn_share::gpu_part(fmt(L.mg), fmt(L.mu), fmt(L.md), qmtf_formats());
+}
 
 // The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) is on today for these shapes only: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
 // 4-bit group-64 dense model (the 9B) keeps the old default share, the whole FFN on the Neural Engine at 20 GPU cores,
@@ -3149,9 +3157,10 @@ bool Qwen35::mma_share_measured(const Qwen35Config& c) {
 // the GPU keeps to 0. The gate/up products are the GPU-alone FFN's (same kernel, tile and K order).
 bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
   const QLinear &G = L.mg, &U = L.mu, &Dn = L.md;
-  auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
-  if (qmtf_for(G, T) && qmtf_for(U, T) && qmtf_for(Dn, T) && G.same_format(U) && G.N == U.N && G.K == U.K &&
-      g % 64 == 0) {
+  const ffn_share::Path path = ffn_gpu_part(L);  // the formats' rule, as plan() and init_ane() chose the share by
+  if (path == ffn_share::Path::generic || T < 64 || g % 64 || G.N != U.N || G.K != U.K || G.K % 64 || Dn.K % 64)
+    return false;
+  if (path == ffn_share::Path::qmtf) {
     // the 3-bit / 8-bit g64 FFN: qmtfg over the leading g gate/up rows (enc_qmm_gu's tile), qmtf_ld for the down
     QLinear Gg = G, Ug = U;
     Gg.N = Ug.N = g;
@@ -3164,7 +3173,7 @@ bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g,
     e.dispatch((D + 63) / 64, (uint32_t(T) + 127) / 128, 1, 128);
     return true;
   }
-  if (!qmt_on() || T < 64 || g % 64 || !ok(G) || !ok(U) || !ok(Dn) || G.N != U.N || G.K != U.K) return false;
+  if (!qmt_on()) return false;  // Path::qmt
   const uint32_t D = uint32_t(cfg_.hidden), I = G.N, bm = qmt128_for(T) ? 128 : 64;
   e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
   kp::Qmm pg{uint32_t(T), g, G.K, G.K, g, 0, uint32_t(G.gs), 0, 0};

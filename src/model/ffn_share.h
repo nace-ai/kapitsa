@@ -1,6 +1,7 @@
-// Which dense FFN layers the Neural Engine split's GPU share runs on the matrix units (enc_mlp_gpu_part_qmt).
-// plan() decides it from the safetensors shapes and init_ane() from the loaded QLinears; both call layer_mma, so the
-// planned and the loaded default share agree with what the GPU part then runs.
+// Which kernels the Neural Engine split's GPU part runs a dense FFN layer on, from its gate, up and down formats. The one
+// rule for three callers: plan() (from the safetensors shapes) and init_ane() pick the matrix-unit default share
+// (ffn_mma) for a model whose every layer has a matrix-unit path, and enc_mlp_gpu_part_qmt dispatches by it, so the
+// planned share, the loaded share and the kernels that run agree.
 #pragma once
 
 #include <cstdint>
@@ -19,7 +20,7 @@ inline Fmt from_shape(int64_t K, int64_t w_cols, int64_t s_cols) {
   return {int(w_cols * 32 / K), int(K / s_cols)};
 }
 
-// NI_QMTF's formats this process runs on the tensor tile (qmtf_on's answers)
+// NI_QMTF's formats this process runs on the tensor tile (Qwen35::qmtf_formats)
 struct Qmtf {
   bool f3g64 = false, f8g64 = false, f4g32 = false;
   bool has(Fmt f) const {
@@ -27,12 +28,18 @@ struct Qmtf {
   }
 };
 
-// One layer's gate, up and down: the matrix-unit GPU part runs it only when all three share one format, and that
-// format is 4-bit group 64 (qmt) or one of NI_QMTF's. A mix (say 3-bit gate/up with a 4-bit g64 down, as mlx-lm's
-// mixed recipes make) runs the generic GPU part, so it keeps the older default share.
-inline bool layer_mma(Fmt gate, Fmt up, Fmt down, Qmtf q) {
-  if (!(gate == up) || !(gate == down)) return false;
-  return gate == Fmt{4, 64} || q.has(gate);
+enum class Path {
+  generic,  // the simdgroup kernels: the layer keeps the older default share
+  qmt,      // gate, up and down all 4-bit group 64: qmtg / qmt_ld (src/kernels/tensor/qmt.metal)
+  qmtf,     // gate and up in one NI_QMTF format, down in any: qmtfg / qmtf_ld (qmtf.metal)
+};
+
+// One layer's GPU part. A GGUF Q4_K_M import is qmtf (Q4_K gate/up -> 4-bit g32, Q6_K down -> 8-bit g64); a mix
+// with a 4-bit g64 or 6-bit projection (mlx-lm's mixed recipes: 3-bit gate/up, 4-bit or 6-bit down) is generic.
+inline Path gpu_part(Fmt gate, Fmt up, Fmt down, Qmtf q) {
+  if (gate == Fmt{4, 64} && up == gate && down == gate) return Path::qmt;
+  if (q.has(gate) && up == gate && q.has(down)) return Path::qmtf;
+  return Path::generic;
 }
 
 }  // namespace ni::ffn_share

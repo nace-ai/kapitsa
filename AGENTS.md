@@ -71,7 +71,7 @@ build/qwen4_config_test                      # what a Qwen 4 config asks that Fl
 build/nh_quant_q8_test                       # Q8 load quantization: code/half-scale bytes, rounding, fallback and guards (CPU only)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
-build/ffn_share_test                         # which dense FFN layers get the Neural Engine split's matrix-unit share (src/model/ffn_share.h)
+build/ffn_share_test                         # the kernels the split's GPU part runs a dense FFN layer on, and its share (src/model/ffn_share.h)
 build/systemone_test                         # System One's pointer heads, readout (Drex Max v1) and projected (Drex v2.0) (src/systemone/systemone.cpp)
 build/systemone_codes_probe_test             # controlled option-code regression, built and run explicitly in CI
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
