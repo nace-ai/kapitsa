@@ -151,6 +151,25 @@ void dq_q2_k(const uint8_t* b, float* y) {
   const uint8_t* sc = b;
   const uint8_t* qs = b + 16;
   const float d = f16_at(b + 80), dmin = f16_at(b + 82);
+#if defined(__aarch64__)
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 84 : src - dst < 256 * sizeof(float);
+  if (std::isfinite(d) && std::isfinite(dmin) && !overlap) {
+    for (int k = 0; k < 16; ++k) {
+      const int half = k / 8, shift = 2 * ((k % 8) / 2), second = k % 2;
+      const uint8x16_t codes = vandq_u8(vshlq_u8(vld1q_u8(qs + 32 * half + 16 * second),
+                                                  vdupq_n_s8(int8_t(-shift))), vdupq_n_u8(3));
+      const uint16x8_t lo = vmovl_u8(vget_low_u8(codes)), hi = vmovl_u8(vget_high_u8(codes));
+      const float32x4_t dl = vdupq_n_f32(d * float(sc[k] & 15)), ml = vdupq_n_f32(dmin * float(sc[k] >> 4));
+      // Each scale/code product is exact; the subtraction keeps the scalar rounding and signed zero.
+      vst1q_f32(y + 16 * k, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_low_u16(lo)))), ml));
+      vst1q_f32(y + 16 * k + 4, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_high_u16(lo)))), ml));
+      vst1q_f32(y + 16 * k + 8, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_low_u16(hi)))), ml));
+      vst1q_f32(y + 16 * k + 12, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_high_u16(hi)))), ml));
+    }
+    return;
+  }
+#endif
   for (int k = 0; k < 16; ++k) {
     const int half = k / 8, shift = 2 * ((k % 8) / 2), second = k % 2;
     const uint8_t* q = qs + 32 * half + 16 * second;
