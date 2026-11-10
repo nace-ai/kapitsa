@@ -569,6 +569,13 @@ static struct sigaction g_stop_prev[3];
 static int g_stop_pipe[2] = {-1, -1};
 static volatile sig_atomic_t g_stopping = 0;
 static server::ControlServer* g_control = nullptr;  // the control socket, once it listens (never freed)
+static std::string g_engine_key_path;  // the engine view's key file, while it exists (src/server/engine_view.h)
+// The socket's file and the engine view's key go with the process, however it ends: at exit, and on the stop thread
+// before its _exit or the signal's default (neither runs atexit)
+static void close_control() {
+  if (g_control) g_control->stop();
+  if (!g_engine_key_path.empty()) unlink(g_engine_key_path.c_str());
+}
 // POST /stop before the stop handlers exist (starting, the first load): run_service ends at its next step, exit 0
 static std::atomic<bool> g_stop_requested{false};
 
@@ -640,7 +647,7 @@ static bool start_stop_thread() {
                                                      : nullptr);
       }
       save_before_exit();
-      if (g_control) g_control->stop();  // (its socket file goes with the process)
+      close_control();
       if (c != 0) return pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends it
       term::clear_for_exit();
       _exit(0);
@@ -774,16 +781,13 @@ static std::string listen_control(const std::string& run_dir, const std::string&
   auto* srv = new server::ControlServer(*g_serve_control, *server::events());
   if (std::string why = srv->start(run_dir + "/" + instance_id + ".sock"); !why.empty()) return why;
   g_control = srv;
-  static std::string token_path;  // (the engine view's key: only this user reads it, as only they reach the socket)
-  token_path = run_dir + "/" + instance_id + ".token";
-  if (const std::string why = server::write_engine_token(token_path); !why.empty()) {
+  // the engine view's key: only this user reads it, as only they reach the socket
+  const std::string key_path = run_dir + "/" + instance_id + ".token";
+  if (const std::string why = server::write_engine_token(key_path); !why.empty())
     fprintf(stderr, "warning: %s: the engine view at /engine cannot be opened\n", why.c_str());
-    token_path.clear();
-  }
-  std::atexit([] {
-    if (g_control) g_control->stop();
-    if (!token_path.empty()) unlink(token_path.c_str());
-  });
+  else
+    g_engine_key_path = key_path;
+  std::atexit(close_control);
   return "";
 }
 
