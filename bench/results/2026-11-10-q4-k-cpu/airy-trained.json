@@ -1,0 +1,168 @@
+{
+  "reference_source": "d91f34efd96a93aeb68e8bc993c091b2d90d4c85",
+  "candidate_source": "54b034f0a4607074a11f60472c42472070efb494",
+  "candidate_quant_cpp_sha256": "19c182b016314a5021ec5ac98aff75133def5e6be3ba57f9b8d4a36eed473ac3",
+  "reference_quant_cpp_sha256": "06165f08d53b51a355b4324fceb80256388f13aa9ccedb69c6a5b8b0ae01262e",
+  "runs": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "scope": "CPU dequantize(kQ4_K); not whole-import or inference throughput",
+  "evidence_kind": "Redacted derived records; raw logs retained privately",
+  "rc": 0,
+  "order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        246.785156,
+        223.347656,
+        391.601562,
+        223.307617,
+        391.601562,
+        391.398438,
+        391.195312,
+        395.507812,
+        300.456055,
+        254.231445,
+        225.830078,
+        233.154297,
+        231.567383,
+        228.433594,
+        343.912109,
+        348.347656
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 277.34375
+    },
+    "B1": {
+      "ns_per_row": [
+        149.983398,
+        148.844727,
+        148.762695,
+        136.392578,
+        134.5625,
+        132.324219,
+        85.693359,
+        123.128906,
+        133.015625,
+        133.789062,
+        132.243164,
+        132.243164,
+        132.52832,
+        132.121094,
+        132.243164,
+        118.367188
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 132.4262695
+    },
+    "A2": {
+      "ns_per_row": [
+        263.142578,
+        262.207031,
+        261.677734,
+        261.3125,
+        264.241211,
+        261.556641,
+        261.677734,
+        262.00293,
+        267.822266,
+        261.59668,
+        261.352539,
+        264.323242,
+        261.433594,
+        267.333984,
+        246.052734,
+        246.133789
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 261.677734
+    },
+    "B2": {
+      "ns_per_row": [
+        86.181641,
+        85.612305,
+        85.693359,
+        85.775391,
+        85.734375,
+        85.856445,
+        85.733398,
+        85.775391,
+        85.652344,
+        85.81543,
+        85.693359,
+        85.611328,
+        85.733398,
+        83.129883,
+        83.129883,
+        83.089844
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 85.7133785
+    }
+  },
+  "binary_sha256": {
+    "reference": "f608d26fdc554c2275dc0a315f9e0e001a9348f0e40b356e977faecf5108c905",
+    "candidate": "791caf09790dec1bcefabee069ff27977d2344a19ecb8098d7371aa27cf6668a"
+  },
+  "complete_outputs_equal": true,
+  "input": {
+    "model": "Acnoryx/Airy",
+    "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+    "model_file": "gguf/Airy-0.8b-Q2_K.gguf",
+    "model_sha256": "aeee3f24905dbff1dac952e1b38ac2377230fc75c82be7ef75808d18a6a9a3fe",
+    "tensor": {
+      "name": "blk.0.attn_qkv.weight",
+      "dims": [
+        1024,
+        6144
+      ],
+      "type": 12,
+      "offset": 209285120
+    },
+    "rows": 1024,
+    "width": 1024,
+    "source_offset": 220240288,
+    "sample_bytes": 589824,
+    "sample_sha256": "73c0ecc53605c3c5a0edbc54806de6a40a6b2b4a3594157b2631391e9db5690e",
+    "type_counts": {
+      "0": 133,
+      "14": 1,
+      "10": 132,
+      "12": 24,
+      "11": 30
+    }
+  }
+}
