@@ -296,7 +296,16 @@ void KfBudget::observe(const int32_t* t, double ms) {
   refit_tick();
 }
 
+bool KfBudget::relax_locked(float& alpha, float& beta) {
+  const float p9 = 1.0f / (1.0f + std::exp(-(alpha + beta * 2.1972246f)));  // logit(0.9)
+  if (p9 >= kLocked) return false;
+  if (alpha < 0.0f) alpha *= 0.5f;
+  if (beta < 1.0f) beta = 1.0f + (beta - 1.0f) * 0.5f;
+  return true;
+}
+
 void KfBudget::add_record(int d, float lq, bool hit) {
+  last_rec_[d] = ticks_;
   const float x = logit_q(lq);
   const uint8_t y = hit ? 1 : 0;
   if (x_[d].size() < size_t(kWin)) {
@@ -310,10 +319,25 @@ void KfBudget::add_record(int d, float lq, bool hit) {
 }
 
 void KfBudget::refit_tick() {
+  ++ticks_;  // a cycle: observe's, or a batched cycle's (records), so both paths age a depth's last record
   if (++since_fit_ >= 16) {
     since_fit_ = 0;
-    for (int d = 1; d < kD; ++d)
+    for (int d = 1; d < kD; ++d) {
       if (x_[d].size() >= 32) fit(x_[d], y_[d], alpha_[d], beta_[d], 4);
+      // no record for kStale ticks under a calibration that gives even a node the drafter is sure of (q 0.9) under
+      // kLocked (it keeps the depth's nodes out of the trees, which then never give it a record): halfway back toward
+      // the identity, and the old records dropped (a refit on them would restore it). A fit that is pessimistic but not
+      // locked (the 35B's deep positions, about (-1.3, 0.7): 0.58 at q 0.9) is left alone. On the M5 Max a cache whose
+      // depth 2 had fit to (-8, 0.1) on a prompt the drafter could not continue kept the 35B's trees at 2 rows on every
+      // later prompt: 1.9 tokens per cycle on code where the identity's trees give 3.6
+      if (ticks_ - last_rec_[d] >= uint64_t(kStale) && relax_locked(alpha_[d], beta_[d])) {
+        x_[d].clear();
+        y_[d].clear();
+        head_[d] = 0;
+        last_rec_[d] = ticks_;
+        ++unlocks_;
+      }
+    }
   }
 }
 
@@ -407,6 +431,7 @@ std::string KfBudget::summary() const {
   for (int n = 1; n <= max_rows_ && o < int(sizeof b) - 16; ++n)
     if ((allowed_ >> (n - 1)) & 1u) o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, cur_cost(n));
   if (wide) o += snprintf(b + o, sizeof b - o, " (8 at capacity 8: %.2f)", cost8n_);
+  if (unlocks_) o += snprintf(b + o, sizeof b - o, "; %d locked calibrations relaxed", unlocks_);
   o += snprintf(b + o, sizeof b - o, "; calibration (alpha, beta) by depth");
   for (int d = 1; d <= std::min(max_rows_, 8) && o < int(sizeof b) - 24; ++d)
     o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);
@@ -617,6 +642,7 @@ void KfBatch::observe(const Member* m, int M, const int* k, const int* a, double
             y_[d][head_[d]] = hit;
             head_[d] = (head_[d] + 1) % size_t(kWin);
           }
+          slast_[d] = sticks_;
           srec = true;
         } else {
           gd[ng] = d;
@@ -645,8 +671,37 @@ void KfBatch::observe(const Member* m, int M, const int* k, const int* a, double
       for (int d = 1; d <= kDrafts; ++d)
         if (x_[d].size() >= 32) KfBudget::fit(x_[d], y_[d], alpha_[d], beta_[d], 4);
     }
+    // the sampled calibration's unlock (KfBudget::relax_locked), on cycles with a sampled member
+    bool sampled = false;
+    for (int g = 0; g < M; ++g) sampled = sampled || (m[g].sampled && !m[g].masked);
+    if (sampled) {
+      ++sticks_;
+      if (++since_unlock_ >= 16) {
+        since_unlock_ = 0;
+        for (int d = 1; d <= kDrafts; ++d)
+          if (sticks_ - slast_[d] >= uint64_t(KfBudget::kStale) && KfBudget::relax_locked(alpha_[d], beta_[d])) {
+            x_[d].clear();
+            y_[d].clear();
+            head_[d] = 0;
+            slast_[d] = sticks_;
+            ++unlocks_;
+          }
+      }
+    }
   }
-  if (greedy && ng) greedy->records(gd, glq, gh, ng);
+  // the greedy budget's records, and its refit tick on every cycle with a greedy member (none recorded: still a cycle
+  // that aged its depths' last records)
+  bool greedy_member = false;
+  for (int g = 0; g < M; ++g) greedy_member = greedy_member || (!m[g].sampled && !m[g].masked);
+  if (greedy && (ng || greedy_member)) greedy->records(gd, glq, gh, ng);
+}
+
+void KfBatch::calibration(float* alpha, float* beta, int n) const {
+  std::lock_guard<std::mutex> lk(mu_);
+  for (int d = 0; d < n && d <= kDrafts; ++d) {
+    alpha[d] = alpha_[d];
+    beta[d] = beta_[d];
+  }
 }
 
 double KfBatch::cost(int M, int N) const {
@@ -672,6 +727,7 @@ std::string KfBatch::summary() const {
     for (int n = M; n <= kRows && o < int(sizeof b) - 16; ++n)
       if (c_[M].ncost[n]) o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, c_[M].at(n));
   }
+  if (unlocks_) o += snprintf(b + o, sizeof b - o, "; %d locked sampled calibrations relaxed", unlocks_);
   o += snprintf(b + o, sizeof b - o, "; sampled calibration (alpha, beta) by depth");
   for (int d = 1; d <= kDrafts && o < int(sizeof b) - 24; ++d)
     o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);
