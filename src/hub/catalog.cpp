@@ -218,8 +218,12 @@ const std::vector<CatalogModel>& catalog() {
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64",
-            .repo = "lmstudio-community/Qwen3.8-27B-MLX-4bit",
-            .revision = "6067b15cf581666a4aecf6af3afaba4bb5efc20c",
+            // the lmstudio-community pack's weights (same shard hashes) with Qwen's own tokenizer files: lmstudio's
+            // tokenizer.json lost \p{M} from the pre-tokenizer regex, so Devanagari and Thai text got other ids in
+            // mlx-lm and LM Studio (#443). Kapitsa's tokenizer splits with \p{M} either way (tools/tokenizer_test.cpp), so
+            // the 5-bit, 6-bit and bf16 packs stay where they are. The repo has no MTP files (mtp27() brings the head)
+            .repo = "nace-ai/Qwen3.8-27B-MLX-4bit",
+            .revision = "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
             .companions = {mtp27(), dflash27()},
             .download_gb = 20.17},
            // Opt-in KQuant (#436): the 4-bit pack above with its quantized weights rebuilt by importance-weighted
@@ -247,8 +251,9 @@ const std::vector<CatalogModel>& catalog() {
             .download_gb = 26.90},
            {.name = "8bit",
             .quant = "MLX affine 8-bit, group 64",
-            .repo = "lmstudio-community/Qwen3.8-27B-MLX-8bit",
-            .revision = "241ebb5f1d60b122fd653da658836a55feb9e2b0",
+            // as the 4-bit pack
+            .repo = "nace-ai/Qwen3.8-27B-MLX-8bit",
+            .revision = "40f543676624c62cee5ada47443947e05da70331",
             .companions = {mtp27(), dflash27()},
             .download_gb = 33.62},
            {.name = "bf16",

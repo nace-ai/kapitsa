@@ -215,6 +215,78 @@ void check_bpe_merges() {
   }
 }
 
+// The pre-tokenizer of lmstudio-community's and mlx-community's Qwen3.8-27B packs lost \p{M} from both letter classes
+// (their tokenizer.json: `[^\r\n\p{L}\p{N}]?\p{L}+`, ` ?[^\s\p{L}\p{N}]+[\r\n]*`). Hugging Face tokenizers split Thai and
+// Devanagari at every combining mark with it, and the original Qwen3.8-27B file does not (#443). Kapitsa gives a
+// Sequence it does not know Qwen's own split, marks included, so loading the lmstudio file must give the original's ids.
+// A vocabulary of the 256 bytes plus, for each piece Qwen's split makes, a chain of merges to the whole piece: one cut
+// in the wrong place leaves two tokens.
+void check_lmstudio_pretokenizer() {
+  struct Text {
+    const char* what;
+    const char* text;
+    std::vector<std::string> pieces;  // as Qwen/Qwen3.8-27B's tokenizer.json splits it
+  };
+  const Text texts[] = {
+      {"Thai: vowel and tone marks stay in the word", "\u0E2A\u0E27\u0E31\u0E2A\u0E14\u0E35\u0E04\u0E23\u0E31\u0E1A \u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22",
+       {"\u0E2A\u0E27\u0E31\u0E2A\u0E14\u0E35\u0E04\u0E23\u0E31\u0E1A", " \u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22"}},
+      {"Devanagari: virama and vowel signs stay in the word", "\u0928\u092E\u0938\u094D\u0924\u0947 \u0926\u0941\u0928\u093F\u092F\u093E",
+       {"\u0928\u092E\u0938\u094D\u0924\u0947", " \u0926\u0941\u0928\u093F\u092F\u093E"}},
+      {"Latin: unchanged", "Hello world, it's 2026.", {"Hello", " world", ",", " it", "'s", " ", "2", "0", "2", "6", "."}},
+  };
+  const json lmstudio_pre = {
+      {"type", "Sequence"},
+      {"pretokenizers",
+       json::array({{{"type", "Split"},
+                     {"pattern", {{"Regex", R"((?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+)"}}},
+                     {"behavior", "Isolated"},
+                     {"invert", false}},
+                    {{"type", "ByteLevel"}, {"add_prefix_space", false}, {"trim_offsets", true}, {"use_regex", false}}})}};
+  json vocab = json::object(), merges = json::array();
+  for (int b = 0; b < 256; ++b) vocab[byte_level(std::string(1, char(b)))] = b;
+  // merge `parts` (strings of raw bytes) one after the other, from the left: (p0 p1), (p0p1 p2), ...
+  auto chain = [&](const std::vector<std::string>& parts) {
+    std::string head = parts[0];
+    for (size_t i = 1; i < parts.size(); ++i) {
+      const std::string left = byte_level(head), right = byte_level(parts[i]);
+      head += parts[i];
+      if (vocab.contains(byte_level(head))) continue;
+      vocab[byte_level(head)] = int(vocab.size());
+      merges.push_back(json::array({left, right}));
+    }
+  };
+  auto characters = [](const std::string& s) {  // UTF-8 characters
+    std::vector<std::string> out;
+    for (size_t i = 0; i < s.size();) {
+      const unsigned char c = s[i];
+      const size_t n = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
+      out.push_back(s.substr(i, n));
+      i += n;
+    }
+    return out;
+  };
+  for (const Text& t : texts)  // every character first (lower ranks), then each piece from its characters
+    for (const std::string& piece : t.pieces)
+      for (const std::string& ch : characters(piece)) {
+        std::vector<std::string> bytes;
+        for (char c : ch) bytes.push_back(std::string(1, c));
+        chain(bytes);
+      }
+  for (const Text& t : texts)
+    for (const std::string& piece : t.pieces) chain(characters(piece));
+  json j = {{"added_tokens", json::array()}, {"normalizer", {{"type", "NFC"}}}, {"pre_tokenizer", lmstudio_pre},
+            {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", merges}}}};
+  ni::Tokenizer tok;
+  load(tok, j);
+  for (const Text& t : texts) {
+    std::vector<int> want;
+    for (const std::string& piece : t.pieces) want.push_back(tok.find(byte_level(piece)));
+    const std::vector<int> got = tok.encode(t.text);
+    check(got == want, std::string("lmstudio's Qwen3.8-27B pre-tokenizer gives the original's ids: ") + t.what,
+          "ids " + ids_str(got) + ", want " + ids_str(want));
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -255,6 +327,7 @@ int main() {
   check(other.encode(digits.text) != want(digits), "a Sequence other than Flint's keeps the default split");
 
   check_bpe_merges();
+  check_lmstudio_pretokenizer();
 
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;
