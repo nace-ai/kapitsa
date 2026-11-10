@@ -34,6 +34,7 @@
 #include "gguf/import.h"
 #include "hub/hub.h"
 #include "metal/gpu.h"
+#include "server/control.h"
 #include "server/cli.h"
 #include "server/http_stream.h"
 #include "server/model_manager.h"
@@ -564,6 +565,7 @@ static const int kStopSignals[] = {SIGINT, SIGTERM, SIGHUP};
 static struct sigaction g_stop_prev[3];
 static int g_stop_pipe[2] = {-1, -1};
 static volatile sig_atomic_t g_stopping = 0;
+static server::ControlServer* g_control = nullptr;  // the control socket, once it listens (never freed)
 
 static void pass_signal_on(int sig) {
   for (int i = 0; i < 3; ++i)
@@ -601,6 +603,7 @@ struct SaveOnStop {
                                                                g_stop_mgr->current_slots()));
       }
       save_before_exit();
+      if (g_control) g_control->stop();  // (its socket file goes with the process)
       pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends the process
     }).detach();
     struct sigaction sa {};
@@ -626,6 +629,55 @@ struct SaveOnStop {
  private:
   bool handlers_ = false;
 };
+
+// The control socket's side of this server (docs/control-socket.md): GET /status from the bus and the activity
+class ServeControl : public server::ControlApi {
+ public:
+  ServeControl(const std::string& instance_id, const nlohmann::json& config, const std::string& host, int port) {
+    id_.instance_id = instance_id;
+    id_.version = kVersion;
+    id_.config = config;
+    id_.api_url = server::api_url(host, port);
+    const char* p = getenv("KAPITSA_PARENT_PID");
+    id_.parent_pid = p && *p ? atoi(p) : 0;
+    id_.lifecycle = id_.parent_pid > 1 ? "attached" : getppid() == 1 && !isatty(0) ? "keep_running" : "foreground";
+    const time_t now = std::time(nullptr);
+    char at[32];
+    strftime(at, sizeof at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    id_.started_at = at;
+  }
+  nlohmann::json status() override {
+    return server::instance_status(id_, *server::events(), *server::activity(), server::last_state());
+  }
+
+ private:
+  server::Identity id_;
+};
+
+// The instance's lock in `run_dir`, before its first event (docs/control-socket.md, "Start race"). The instance id is
+// `default` until the serve configuration names one. Without the folder or the lock (a second unnamed server, as
+// `kapitsa bench` starts beside a running one) the server serves without a socket, and says so.
+static bool lock_control(const std::string& run_dir, const std::string& instance_id) {
+  const char* why = run_dir.empty() ? "cannot make its folder"
+                    : server::take_instance_lock(run_dir + "/" + instance_id + ".lock", 1000) < 0
+                        ? "the instance is already running"
+                        : nullptr;
+  if (why) fprintf(stderr, "warning: %s: this server has no control socket\n", why);
+  return !why;
+}
+
+// After the first event: the socket listens. "" or why it cannot (a path over macOS's limit, a home whose volume takes
+// no sockets). (Never freed: the socket's threads may outlive run_service.)
+static std::string listen_control(const std::string& run_dir, const std::string& instance_id, const server::Options& o,
+                                  const std::string& host) {
+  auto* srv = new server::ControlServer(*new ServeControl(instance_id, o.given, host, o.port), *server::events());
+  if (std::string why = srv->start(run_dir + "/" + instance_id + ".sock"); !why.empty()) return why;
+  g_control = srv;
+  std::atexit([] {
+    if (g_control) g_control->stop();
+  });
+  return "";
+}
 
 // Started by `kapitsa claude|codex|opencode` (KAPITSA_PARENT_PID): exits when the launcher does, however it ends (kill -9
 // included), instead of holding the model's memory with nobody left to stop it.
@@ -996,8 +1048,14 @@ int ni::server::run_service(Options o) {
   if (tui) ui::serve_begin(verbose);
   server::start_activity();
   // the event bus (src/server/activity.h), after the terminal UI's log sink, which it passes every line on to. A
-  // server's first event comes before it takes a connection (docs/control-socket.md, "Events").
+  // server's first event comes before it takes a connection (docs/control-socket.md, "Events"): the instance's lock,
+  // then `starting`, then the control socket listens.
+  const std::string instance_id = "default", run_dir = server::control_dir(hub::home_dir());
+  const bool with_socket = lock_control(run_dir, instance_id);
   server::publish_state("starting", nullptr);
+  if (with_socket)
+    if (const std::string why = listen_control(run_dir, instance_id, o, host); !why.empty())
+      fprintf(stderr, "warning: %s: this server has no control socket\n", why.c_str());  // (the unnamed default)
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";

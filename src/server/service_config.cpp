@@ -240,6 +240,8 @@ Options parse_options(const json& j, Source source) {
   if (o.allow_switch && o.api_key.empty() && !o.host.empty() && !loopback(o.host))
     refuse(r.name("allow_switch") + " on a network address needs " + r.name("api_key") +
            " (any client could load models)");
+  o.given = j;
+  o.given.erase("api_key");
   return o;
 }
 

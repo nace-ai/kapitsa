@@ -33,8 +33,9 @@ it.
   server also checks each connection's peer with `getpeereid` and answers `403 forbidden_peer` to any other user
   (root included). There is no token and no TCP port.
 - **Instance id.** 1 to 32 of `A-Z a-z 0-9 _ -`, `default` when the configuration gives none. macOS limits a socket
-  path to 103 bytes, and 32 keeps a usual home folder's path under it. A server whose socket path is longer anyway
-  refuses to start, and its error names the path.
+  path to 103 bytes, and 32 keeps a usual home folder's path under it. A server whose socket path is longer anyway,
+  or whose socket cannot listen (a volume that takes no sockets), names the path in a warning and serves without a
+  socket. (Instances the configuration names, a later change, will refuse to start instead.)
 - **Identity fields.** [control.schema.json](../schema/control/control.schema.json) defines `protocol`,
   `instance_id` and `name`. The control socket's implementation adds them to `kapitsa serve --config -` with these
   meanings, and the control schema then refers to them there.
@@ -47,7 +48,8 @@ it.
   They release the lock at once.
 - **Start race.** A starting server takes the lock, waiting at most 1 second so that a client's brief check never makes
   it fail, and holds it until it exits. A server that does not get it exits with "instance `<id>` is already
-  running". The winner removes any old socket file, emits its first event (`state` `starting`), then binds and
+  running". Until the configuration names instances, every server is `default`: a second one (as `kapitsa bench`
+  starts beside a running server) serves without a socket and says so, as does a server that cannot make `run/`. The winner removes any old socket file, emits its first event (`state` `starting`), then binds and
   listens. The lock's file descriptor and the listening socket are opened `O_CLOEXEC`. Otherwise a child such as
   the Splash engine would inherit the lock and keep it after the server is killed, and clients would see the instance
   as starting or busy forever.

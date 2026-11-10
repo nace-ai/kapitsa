@@ -122,6 +122,8 @@ namespace {
 std::atomic<Activity*> g_activity{nullptr};
 std::atomic<Events*> g_events{nullptr};
 LogSink g_prev_sink = nullptr;
+std::mutex g_state_mu;
+nlohmann::json g_state = {{"state", "starting"}, {"model", nullptr}};
 
 void bus_sink(int level, const char* msg) {
   if (Activity* a = g_activity.load(std::memory_order_acquire)) a->logs().push(level, msg);
@@ -167,7 +169,16 @@ void publish_state(const char* state, const nlohmann::json& model, const std::st
   if (!bus) return;
   nlohmann::json d = {{"state", state}, {"model", model}};
   if (!message.empty()) d["message"] = message.substr(0, 4096);
+  std::lock_guard<std::mutex> lk(g_state_mu);  // (the last state is the bus's last state event)
   bus->publish("state", d);
+  g_state = {{"state", state}, {"model", model}};
+}
+
+nlohmann::json last_state() {
+  std::lock_guard<std::mutex> lk(g_state_mu);  // (state events publish under it: the seq cannot pass one unseen)
+  nlohmann::json s = g_state;
+  if (Events* bus = g_events.load(std::memory_order_acquire)) s["seq"] = bus->last_seq();
+  return s;
 }
 
 Activity* activity() { return g_activity.load(std::memory_order_acquire); }
