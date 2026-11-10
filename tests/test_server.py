@@ -291,6 +291,8 @@ def agent_checks(run, home):
     srv.server_close()
 
 def cli_checks(kapitsa):
+    from test_hub_download import download_checks
+    download_checks(kapitsa, check)
     home = tempfile.mkdtemp(prefix="kapitsa-test-")
     # a closed port as the Hub: any network access in these checks fails loudly
     env = dict(os.environ, KAPITSA_HOME=home, HF_ENDPOINT="http://127.0.0.1:9", NI_LOG="0")
