@@ -70,17 +70,8 @@ static int lowrank_request() {
   return v && *v ? atoi(v) : simd_gpu() ? 768 : 0;
 }
 
-static bool dfl_tw_supported();
-// own_tensor: the drafter's own qmm8t GEMMs run every projection of its 8-row block (dfl_tw_supported, the tw knob, 4-bit
-// drafter weights and a 4-bit group-64 head); where they do, a drafter of hidden >= 5120 (the 27B's) drafts on them
-// instead of the target's 8-row MMA kernels: its 8-row drafting pass 3.42 -> 3.08 ms on the M5 Max (ni_run, the 27B's
-// code prompt, interleaved runs, the same tokens). The 4B's and 9B's (2560, 4096), not measured there, keep the target's.
-static bool default_v8(size_t hidden, bool moe, bool head_q4, bool own_tensor) {
-  if (hidden >= 5120 && own_tensor) return false;
+static bool default_v8(size_t hidden, bool moe, bool head_q4) {
   return hidden >= 2560 || (m1_max_32() && hidden == 2048 && moe && head_q4);  // guard: CORE4 measured on M1 Max 32
-}
-static bool dfl_own_tensor(int bits, bool head_q4) {
-  return bits == 4 && head_q4 && dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & 32);
 }
 
 // process physical footprint (what Activity Monitor / bench.py report), bytes
@@ -997,8 +988,7 @@ void DFlash2::alloc_buffers() {
     // (H 5120) and the 4B's (H 2560: 4-bit 4B, code / prose, 178.2 -> 179.8 / 142.1 -> 144.2 tok/s); the 35B's
     // (H 2048) keeps dfl_qmm8 except for the 32-core M1 Max 4-bit MoE case
     const char* v = kenv("V8");
-    const bool hq4 = tg_.lm_head().q4() && tg_.lm_head().gs == 64;
-    v8_ = B == 8 && (v && *v ? atoi(v) != 0 : default_v8(H, tg_.config().moe, tg_.lm_head().q4(), dfl_own_tensor(bits_, hq4)));
+    v8_ = B == 8 && (v && *v ? atoi(v) != 0 : default_v8(H, tg_.config().moe, tg_.lm_head().q4()));
   }
   if (v8_) {
     v8t_ = g.alloc(8 * std::max<size_t>({H, 4096, nH}) * 2, "dfl_v8_table");  // (H, the attention output, the fc input)
@@ -1232,8 +1222,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   const char* v8 = kenv("V8");
   // A native 4-bit group-64 head row includes its packed codes, scales and biases.
   const bool head_q4 = head_row_bytes == size_t(target.hidden) / 2 + size_t(target.hidden) / 64 * 4;
-  const int pbits = kenv("BITS") ? atoi(kenv("BITS")) : 4;  // the constructor's default (Engine passes 0)
-  const bool use_v8 = v8 && *v8 ? atoi(v8) != 0 : default_v8(H, target.moe, head_q4, dfl_own_tensor(pbits, head_q4));
+  const bool use_v8 = v8 && *v8 ? atoi(v8) != 0 : default_v8(H, target.moe, head_q4);
   const bool v1 = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
   const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == size_t(target.hidden) &&
                          I == size_t(target.dense_I) && NL == 6 && v1 &&
@@ -1541,8 +1530,9 @@ void DFlash2::enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffe
   const uint32_t gpr = K / 64;
   // 32 weight rows a simdgroup for grids past 8192 threadgroups of 16 (the target's rule), and for K > 4096 on narrow
   // outputs (N <= 4096: the 35B drafter's down projection, 2048 x 6144); 16 otherwise. The 27B drafter's projections
-  // (K 5120 and 17408, N 5120 to 98304) on 16-row simdgroups: its 16-row drafting pass 4.40 -> 3.93 ms, the 8-row one
-  // 3.14 -> 3.07, M5 Max (ni_run, per-cycle A/B, the same tokens). NI_DFL_NT=0: the previous rule (32 for every K > 4096)
+  // (K 5120 and 17408, N 5120 to 98304) on 16-row simdgroups: its 16-row drafting pass 4.40 -> 3.93 ms, the 8-row one on
+  // these GEMMs (NI_KFLASH_V8=0) 3.14 -> 3.07, M5 Max (ni_run, per-cycle A/B, the same tokens). NI_DFL_NT=0: the previous
+  // rule (32 for every K > 4096)
   static const bool nt_old = getenv("NI_DFL_NT") && std::string(getenv("NI_DFL_NT")) == "0";
   const bool fat = (Ntot + 15) / 16 > 8192 || (gpr > 64 && (nt_old || Ntot <= 4096));
   const int nt = fat ? 32 : 16;
