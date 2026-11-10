@@ -1,0 +1,204 @@
+{
+  "evidence_kind": "Redacted derived M3 CPU record; raw logs and command records retained privately",
+  "source": {
+    "candidate_commit": "22e3cf15860d73ff370449817dfc4685fbe70f4e",
+    "reference_commit": "2e308aeac6d6fe95801e7957996034d6bbfa6ac3",
+    "sample_origin": "First 1024 trained Airy Q4_K rows, extracted on M5 and transferred unchanged; no independent M3 import",
+    "files_sha256": {
+      "src/gguf/quant.h": "8776fd64829f58136db82ce1a5877204410fc008e3f9c5bb0f35cee8cccc21de",
+      "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+      "src/gguf/iq_grids.h": "e4c44677def29c2a1e0d596126af812c77c36581335077e5b62e6c9c6bd7d5c6",
+      "third_party/nlohmann/json.hpp": "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6",
+      "tools/gguf_q4_k_test.h": "5d4c7e231207981158de4f35aea40a17cf5f21c94e9f04771050ca9dbdd690d7",
+      "focused.cpp": "05a687f0749a19f39ba66669ebaa1a239d58e6d45d70e7a57ed640220c2e5e23",
+      "stubs.cpp": "67a8430a2086fa7b29427a685442197bc8f756cb877bfce6642d64b0f0755e29",
+      "benchmark-driver.cpp": "a3899e21e7e1e81be2556b9fae7b9dc32490fb11545c879134e9693975296587",
+      "trained-rows.bin": "73c0ecc53605c3c5a0edbc54806de6a40a6b2b4a3594157b2631391e9db5690e",
+      "worker.py": "a20295cb717aca208c80a51f80ff321d4e8caeee3846a585066d7bbb8d6db811",
+      "reference-quant.cpp": "9495780ff4fd663906684aca4839c5309149221c89db0a2dd453e5ff9e7d5f3c",
+      "candidate-quant.cpp": "26cb4bbfad5758328fd197b5fb733a9b689efb94885b999c714ed8a138c5d7cb"
+    }
+  },
+  "hardware": {
+    "chip": "Apple M3 Ultra",
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "checks": {
+    "reference": "Q4_K: 2187466 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "candidate": "Q4_K: 2187466 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS"
+  },
+  "steps": [
+    {
+      "label": "reference-check-build",
+      "rc": 0
+    },
+    {
+      "label": "reference-check",
+      "rc": 0
+    },
+    {
+      "label": "reference-bench-build",
+      "rc": 0
+    },
+    {
+      "label": "candidate-check-build",
+      "rc": 0
+    },
+    {
+      "label": "candidate-check",
+      "rc": 0
+    },
+    {
+      "label": "candidate-bench-build",
+      "rc": 0
+    },
+    {
+      "label": "trained-A1",
+      "rc": 0
+    },
+    {
+      "label": "trained-B1",
+      "rc": 0
+    },
+    {
+      "label": "trained-A2",
+      "rc": 0
+    },
+    {
+      "label": "trained-B2",
+      "rc": 0
+    }
+  ],
+  "order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        663.574219,
+        669.027344,
+        663.330078,
+        650.1875,
+        644.938477,
+        645.385742,
+        695.43457,
+        575.96875,
+        484.701172,
+        482.217773,
+        483.927734,
+        483.845703,
+        483.601562,
+        419.148438,
+        420.573242,
+        419.59668
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 530.334961
+    },
+    "B1": {
+      "ns_per_row": [
+        306.477539,
+        305.623047,
+        256.632812,
+        255.004883,
+        256.388672,
+        254.516602,
+        242.878906,
+        242.268555,
+        243.000977,
+        242.390625,
+        205.322266,
+        205.322266,
+        205.607422,
+        205.647461,
+        205.322266,
+        205.363281
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 242.63476550000001
+    },
+    "A2": {
+      "ns_per_row": [
+        378.947266,
+        349.893555,
+        349.731445,
+        348.713867,
+        349.52832,
+        340.168945,
+        324.870117,
+        325.114258,
+        325.114258,
+        325.317383,
+        325.602539,
+        305.582031,
+        305.582031,
+        305.908203,
+        305.867188,
+        305.867188
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 325.2158205
+    },
+    "B2": {
+      "ns_per_row": [
+        104.533203,
+        104.655273,
+        104.370117,
+        104.451172,
+        104.533203,
+        104.451172,
+        104.614258,
+        104.573242,
+        104.492188,
+        98.144531,
+        98.103516,
+        97.981445,
+        97.819336,
+        98.063477,
+        98.063477,
+        97.859375
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 104.41064449999999
+    }
+  },
+  "complete_files_equal": true,
+  "actual_complete_output_bytes": 4194304,
+  "binaries_sha256": {
+    "check-reference": "3c80e97b65ab9a39b4a8b64f93108d216872128f97f9709a90b088753eb5e444",
+    "check-candidate": "45c9ccd4b1a6903a03f9d102d524fcc3e0f4a2b38eb643f0ec9b3f22e6f05957",
+    "bench-reference": "4380772aaa3253cce9ab49126a3ecb341123a12b305e1cc658f3d56c5a50ecca",
+    "bench-candidate": "60c71b73455edf7ee91bfd47344887415ec624b64d387c0f867d51858dd3af9a"
+  },
+  "worker_completed_and_exited": true,
+  "rc": 0,
+  "scope": "CPU trained Airy Q4_K rows and complete oracle/FP flags only; no independent M3 import or GPU output qualification."
+}
