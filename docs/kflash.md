@@ -477,10 +477,12 @@ allocation of that size. It does not fix the capacity-dependent history partitio
   Lightning and Bolt went from 104.3 to 111.7 and from 64.3 to 68.8 tok/s at T 0.6, and from 115.7 to 113.7 and from
   69.4 to 71.2 greedy, one run per build with contention flags
   ([results](../bench/results/2026-10-21-kflash-trees/README.md)). That is inside the 3-8% spread between runs of one
-  build, so there is no per-cycle A/B for them. `tools/nh_tree_check`'s planted-branch acceptance cases failed from the
-  merge that added chained DSpark drafting until [#1150](https://github.com/nace-ai/kapitsa/issues/1150): the verify
-  after a tree cycle wrote the wrong rows into the Mamba conv ring whenever the accepted path was not the tree's first
-  branch, and Bolt with LiLiCorr went off topic.
+  build, so there is no per-cycle A/B for them. From the merge that added chained DSpark drafting until
+  [#1150](https://github.com/nace-ai/kapitsa/issues/1150), the verify after a tree cycle wrote the wrong rows into the
+  Mamba conv ring whenever the accepted path was not the tree's first branch, which failed `tools/nh_tree_check`'s
+  planted-branch acceptance cases. With that fixed, the sampled case passes; on the M5 Pro the greedy cases (`rows`,
+  greedy acceptance, the greedy loops) still fail with the verify's GEMM rows and pass with `NI_NH_ROWS_GEMM=0`
+  ([docs/kflash-map.md](kflash-map.md), item 3).
 - **Requests decoding together verify chains.** When the 27B, the 35B or Bolt decode several requests in one batched
   pass, each request verifies its chain, and the batch budget ([#207](https://github.com/nace-ai/kapitsa/pull/207))
   picks how many of the 8 rows each gets: with three requests at once on the M4 Pro, the 35B gained 16-20% and the 27B
