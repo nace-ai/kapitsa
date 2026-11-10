@@ -264,7 +264,7 @@ const std::vector<CatalogModel>& catalog() {
             // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant",
-            .revision = "a8c2dd6653360a2c7aac43ec8ade67c0ef4e1af9",
+            .revision = "f99516beb6d9635ecde21e5438ab4b72c51ea3e9",
             .companions = {dflash35()},
             .download_gb = 22.07},
            {.name = "5bit",
