@@ -43,7 +43,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
 - 🎯 **Closer to the original**: KQuant 4B and 9B, same size, about 10% faster on an M5 Pro ([numbers](#kquant))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
-- ⚡ **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
+- 🧠 **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
 - 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
 
 ### KQuant
