@@ -5,7 +5,7 @@ The catalog's 4-bit Qwen3.6-35B-A3B is `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimize
 weights, scales and biases of the language model, so its 19.51 GB of language-model weights are the same size. It is
 `nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant` at `a8c2dd66`: the same four weight files the speed legs ran (they were fetched from the test repo
 `nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant` at `ead4c792`, which became this repo), plus the catalog's `mtp.safetensors` and
-`mtplx_runtime.json`, unchanged. The repo is 21.01 GB: the language model, the vision tower and the MTP head.
+`mtplx_runtime.json`, unchanged. The SHA-256 of the four `model-0000N-of-00004.safetensors` files are equal in the two repos (compared on the Hub, 10 November): `5288196072`, `5368472552`, `5368324032`, `4377211304` bytes. The repo is 21.01 GB: the language model, the vision tower and the MTP head.
 
 ## One baseline
 
@@ -36,7 +36,7 @@ for the bf16 experts (NLL 4.94 against 1.52 for the 4-bit packs; 147 experts saw
 Kapitsa 0.2.32 (`e728524`), `kapitsa serve` started per leg with its default drafting (MTP head and DFlash2 drafter on both arms), then
 `kapitsa bench --quick`: decode a 512-token answer at T 0.6 and at T 0 (median of three answers per leg), prefill a 4K prompt (4,131 to 4,134 tokens).
 MacBook Pro M5 Pro 48 GB, macOS 26.5.2 (25F84), on AC, power mode 2, 1-minute load 2.6 to 3.7 at leg start and end
-([ab_legs.sh](ab_legs.sh), [legs_35b.sh](legs_35b.sh)). Bench marks each JSON `INVALID: server` because it did not start the server itself;
+([legs_35b.sh](legs_35b.sh) runs [ab_legs_k436.sh](ab_legs_k436.sh), the harness that produced these legs). Bench marks each JSON `INVALID: server` because it did not start the server itself;
 that is expected for this setup.
 
 | Leg | Pack | Decode T 0.6, tok/s | Greedy, tok/s | Draft share accepted (T 0.6, T 0) | Prefill 4K, tok/s | Peak RSS |
@@ -56,7 +56,7 @@ Leg 6-A is void: a process that did not exist when the leg started, `rg` at 51% 
 [legs/6-A.json](legs/6-A.json) and are not used). That leaves three KQuant legs and two for the catalog pack. Leg 1-B's RSS sample read
 2.1 GB, cause not found; its speed is in line with the other KQuant legs, so it is used for speed and not for peak memory.
 Every JSON carries `CONTENTION` (mean foreign GPU load above 80%, the only user `kapitsa`): that is the leg's own `kapitsa serve`,
-which bench counts as foreign. Order `B A B A B A` (B KQuant, A catalog) in one lock hold; per-leg files and `legs.log` are in [legs/](legs).
+which bench counts as foreign. Order `B A B A B A` (B KQuant, A catalog) in one script run, under a lock that is unproven (see "Lock" below); per-leg files and `legs.log` are in [legs/](legs).
 The faster writing comes with more drafts accepted (0.74 to 0.75 against 0.70 to 0.73 of drafted tokens at T 0.6).
 
 Lock: the legs were started under `lockf -k /tmp/kapitsa-gpu.lock`. At 17:31 a `pkill -f` self-test killed the wrapper and its `lockf`; the

@@ -33,7 +33,7 @@
    "peak_gb": 20.3
   },
   "kquant": {
-   "repo": "nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant",
+   "repo": "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant",
    "size_gb": 19.51,
    "kl": 0.0586,
    "top1": 0.912,
@@ -54,7 +54,8 @@
     3258,
     3146
    ],
-   "peak_gb": 20.3
+   "peak_gb": 20.3,
+   "revision": "a8c2dd66"
   },
   "gsm8k_pair": {
    "only_kquant": 24,
@@ -104,7 +105,7 @@
   }
  ],
  "legs_shape": "B A B A B A, one lock hold, released kapitsa 0.2.32 (e728524), default decoding, MTP head + DFlash2 on both arms; AC power, AC powermode 2, 1-min load 2.6-3.7 at leg start/end; 4K prompt (4134 tokens)",
- "source": "k436 mac/runs/35b-six; kq/res/q36-35b (cat35_4 = Youssofal MTPLX @95460516, kq35_4); task #436; card inputs from B's results.kquant-qwen3.6-35b-a3b.json, repo file list from the private test repo @ead4c792",
+ "source": "k436 mac/runs/35b-six; kq/res/q36-35b (cat35_4 = Youssofal MTPLX @95460516, kq35_4); task #436; card inputs from B's results.kquant-qwen3.6-35b-a3b.json; repo file list from nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant @ a8c2dd66 (the speed legs fetched the same four weight files from the private test repo nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant @ ead4c792; their SHA-256 are equal, see README)",
  "peak_memory_note": "Peak serve RSS is the maximum over the valid legs (sampled with ps during each leg): 20.3 GB on both arms; leg 1 is not used for it.",
  "notes": [
   "Leg 1-B: RSS sample on the first leg was 2.1 GB (peak 2.30 GB), cause not found; its speed is in line with the other KQuant legs (decode 213.4 tok/s, 4K TTFT 1.30 s).",
