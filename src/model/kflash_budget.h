@@ -4,7 +4,9 @@
 //  - calibration: the path model's probability q of a node is mapped to the probability that the target accepts it,
 //    p = sigmoid(alpha_d + beta_d logit(q)) per depth d, fitted online (logistic regression, Newton steps on the last
 //    records) from the acceptance's records: every verified node whose parent was accepted, and whether it was.
-//    Before any records, alpha 0 and beta 1: p = q.
+//    Before any records, alpha 0 and beta 1: p = q. A depth whose calibration keeps its nodes out of every tree gets no
+//    records to correct it, in this process or (through the cache) the next: so a depth with no record for kStale
+//    cycles moves halfway back toward the identity and drops its old records, until its nodes are verified again.
 //  - cost: a cycle's GPU time with n verify rows, measured on the Mac it runs on: its drafting half's command buffer
 //    and its verify's, in ms, whichever tool runs the cycles (ni_run, the server), so the cache means one thing
 //    whoever wrote it. The first cycles try every allowed n a few times (unless the cache already holds a table for
@@ -117,6 +119,8 @@ class KfBudget {
   std::vector<uint8_t> y_[kD];
   size_t head_[kD] = {};
   float alpha_[kD], beta_[kD];
+  int last_rec_[kD] = {};             // the cycle of each depth's last record (cycles_ then)
+  static constexpr int kStale = 32;   // cycles without a record before a depth's calibration relaxes
   KfCosts c_;  // the cost table (loaded: the cache's costs, base 0 at its save)
   double rtok_ = 0, rms_ = 0;  // the recent cycles' tokens and ms (decaying sums): the rate
   int nrate_ = 0;

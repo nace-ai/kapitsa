@@ -297,6 +297,7 @@ void KfBudget::observe(const int32_t* t, double ms) {
 }
 
 void KfBudget::add_record(int d, float lq, bool hit) {
+  last_rec_[d] = cycles_;
   const float x = logit_q(lq);
   const uint8_t y = hit ? 1 : 0;
   if (x_[d].size() < size_t(kWin)) {
@@ -312,8 +313,22 @@ void KfBudget::add_record(int d, float lq, bool hit) {
 void KfBudget::refit_tick() {
   if (++since_fit_ >= 16) {
     since_fit_ = 0;
-    for (int d = 1; d < kD; ++d)
+    for (int d = 1; d < kD; ++d) {
       if (x_[d].size() >= 32) fit(x_[d], y_[d], alpha_[d], beta_[d], 4);
+      // no record for kStale cycles under a calibration below the identity (alpha < 0 or beta < 1: it can keep the
+      // depth's nodes out of the trees, which then never give it a record): halfway back toward the identity, and the
+      // old records dropped (a refit on them would restore it). On the M5 Max a cache whose depth 2 had fit to (-8, 0.1)
+      // on a prompt the drafter could not continue kept the 35B's trees at 2 rows on every later prompt: 1.9 tokens
+      // per cycle on code where the identity's trees give 3.6
+      if (cycles_ - last_rec_[d] >= kStale && (alpha_[d] < 0.0f || beta_[d] < 1.0f)) {
+        if (alpha_[d] < 0.0f) alpha_[d] *= 0.5f;
+        if (beta_[d] < 1.0f) beta_[d] = 1.0f + (beta_[d] - 1.0f) * 0.5f;
+        x_[d].clear();
+        y_[d].clear();
+        head_[d] = 0;
+        last_rec_[d] = cycles_;
+      }
+    }
   }
 }
 
