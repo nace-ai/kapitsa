@@ -58,7 +58,10 @@ svg{display:block;width:100%;height:96px}
 .empty{color:var(--muted);font-size:13px;padding:6px 0;grid-column:1/-1}
 .bar:empty{display:none}
 #msg{font-size:12.5px;color:var(--err)}
-#theme{min-width:64px;flex:none}.end{display:flex;align-items:center;gap:14px;flex:1 1 auto;justify-content:flex-end;text-align:right}#acts{min-width:0}
+#theme{min-width:64px;flex:none}.end{display:flex;align-items:center;gap:10px;flex:1 1 auto;justify-content:flex-end;text-align:right}
+#sw{display:flex;gap:6px;flex:0 1 auto;min-width:0}#sw input{font:inherit;font-size:13px;padding:5px 9px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:220px;min-width:90px}
+button.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--line));flex:none}button.danger.arm{background:var(--err);color:#fff}
+#msg{min-width:0}
 </style>
 <script>
 // Site data may be blocked (a browser setting, a sandboxed frame): then even reading `localStorage` throws, so the
@@ -87,7 +90,9 @@ applyTheme();
   <span class="meta" id="ident"></span>
   <span class="sp"></span>
   <span class="end"><span id="msg"></span>
-  <span class="meta" id="acts">Stop or switch the model from Kapitan, or with Ctrl-C where kapitsa serve runs</span>
+  <form id="sw"><input id="swto" placeholder="Switch to: a model name, folder or GGUF" autocomplete="off" spellcheck="false"
+    aria-label="Model to switch to"><button id="swgo" disabled>Switch</button></form>
+  <button id="stop" class="danger" disabled title="Stop kapitsa serve (it saves conversations first)">Stop</button>
   <button id="theme" title="Theme: follow the system, light or dark">Auto</button></span>
 </header>
 <main>
@@ -116,9 +121,9 @@ applyTheme();
 <script>
 "use strict";
 // The engine view: what `kapitsa serve` holds and does, live, from its control API (modelled on docs/control-socket.md)
-// at /engine/status and /engine/events. It reads only: stop and switch go through the control socket, never the
-// inference port. Every request carries this run's key, which kapitsa serve prints in the page's link (#t=...) and keeps in a file only its
-// user can read; the page keeps it for this tab only and takes it out of the address bar.
+// at /engine/status and /engine/events, and its two actions, POST /engine/stop and POST /engine/model. Every request
+// carries this run's key, which kapitsa serve prints in the page's link (#t=...) and keeps in a file only its user can
+// read; the page keeps it for this tab only and takes it out of the address bar.
 const $ = id => document.getElementById(id);
 const S = {status: null, reqs: new Map(), done: [], logs: [], rates: [], drafts: [], tpc: null, share: null,
            link: "connecting", noEngineAt: 0};
@@ -271,7 +276,7 @@ function refused(e) {
 function draw() {
   const st = S.status;
   const pill = $("state");
-  if (!st) { pill.className = "pill " + (S.link === "live" ? "starting" : "disconnected");
+  if (!st) { pill.className = "pill " + (S.link === "live" ? "starting" : "disconnected"); $("stop").disabled = $("swgo").disabled = true;
     pill.lastElementChild.textContent = S.link === "refused" ? "no access" : "connecting"; return; }
   const live = S.link === "live";
   const state = S.link === "gone" ? "gone" : live ? st.state : "disconnected";
@@ -281,6 +286,8 @@ function draw() {
     stopping: "stopping…", loading: "loading…", switching: "switching…", starting: "starting…"}[state] || state;
   $("model").textContent = st.model ? `${st.model.id} · ${fmtCtx(st.model.context_length)} context · ${plural(st.model.slots, "slot")}` : "no model loaded";
   $("ident").textContent = `${st.lifecycle} · v${st.version} · run ${st.run_id.slice(0, 8)} · pid ${st.pid}`;
+  $("stop").disabled = !live || state === "stopping";
+  $("swgo").disabled = !live || S.switching || (state !== "ready" && state !== "released");
 
   const e = live ? st.engine : null;
   if (e) {
@@ -347,6 +354,32 @@ function draw() {
   if (atEnd) box.scrollTop = box.scrollHeight;
   $("lognote").textContent = plural(S.logs.length, "line");
 }
+
+// ---------------------------------------------------------------- actions: the socket's own answers, with this run's key
+async function post(path, body) {
+  const r = await fetch(path, {method: "POST", cache: "no-store", headers: {...auth(), "Content-Type": "application/json"},
+                               body: JSON.stringify({...body, run_id: S.status.run_id})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.error && j.error.message) || "HTTP " + r.status);
+  return j;
+}
+let armed = null;  // Stop asks once more for 3 s: a stray click does not end the server
+$("stop").onclick = async () => {
+  const b = $("stop");
+  const disarm = () => { clearTimeout(armed); armed = null; b.classList.remove("arm"); b.textContent = "Stop"; };
+  if (!armed) { b.classList.add("arm"); b.textContent = "Confirm stop"; armed = setTimeout(disarm, 3000); return; }
+  disarm();
+  try { await post("/engine/stop", {}); $("msg").textContent = ""; } catch (e) { $("msg").textContent = "stop: " + e.message; }
+};
+$("sw").onsubmit = async ev => {
+  ev.preventDefault();
+  const to = $("swto").value.trim();
+  if (!to || S.switching) return;
+  S.switching = true; $("swgo").textContent = "Switching…"; $("msg").textContent = "";
+  try { await post("/engine/model", {model: to}); $("swto").value = ""; }
+  catch (e) { $("msg").textContent = "switch: " + e.message; }
+  finally { S.switching = false; $("swgo").textContent = "Switch"; }
+};
 
 connect();
 draw();

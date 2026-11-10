@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """The engine view (src/server/engine.html) against a stand-in server: a recorded session, no model, no GPU.
 
-It serves the page and the control socket's read endpoints (docs/control-socket.md) over HTTP on 127.0.0.1, as
+It serves the page and the control socket's endpoints (docs/control-socket.md) over HTTP on 127.0.0.1, as
 `kapitsa serve` serves them at /engine for this Mac. GET /engine/status and GET /engine/events (SSE, Last-Event-ID
-replay and resets) answer from the recording. /engine is read-only: POST /_standin/stop, /_standin/drop and
-/_standin/model are this stand-in's test hooks (the real server has none; stop and switch go through its control
-socket). A stop ends the run and a new one starts (the view sees `run_changed`); a switch reads `switching`, then
-`ready` with the new model. At most 3 event streams at once, as on the real server: the next gets 503 busy.
+replay and resets) answer from the recording; POST /engine/stop and POST /engine/model act on it. A stop ends the run
+and a new one starts (the view sees `run_changed`); a switch reads `switching`, then `ready` with the new model. POST
+/_standin/stop, /_standin/drop and /_standin/model are this stand-in's test hooks (the real server has none). At most 3
+event streams at once, as on the real server: the next gets 503 busy.
 
 Access as on the real server: every request but the page's needs this
 process's random token as `Authorization: Bearer` (the page reads it from the URL's #t=; `--token-file` also writes it,
@@ -39,12 +39,11 @@ MAX_BODY = 65536
 HOST_RE = re.compile(r"(127\.0\.0\.1|localhost|\[::1\])(:[0-9]{1,5})?", re.I)
 PROXY_HEADERS = ("X-Forwarded-For", "Forwarded", "Via")
 CURSOR_RE = re.compile(r"([0-9a-f]{16,64})\.([0-9]{1,19})")
-# /engine/* is read-only, as on the real server: stop and switch go through the control socket there (Kapitan, or
-# Ctrl-C where kapitsa serve runs). /_standin/* are this stand-in's own test hooks, so tests can drive a stop (and with
+# /engine/* as on the real server. /_standin/* are this stand-in's own test hooks, so tests can drive a stop (and with
 # {"then": "exit"} one that no new run follows), a drop (every event stream ends cleanly, the run goes on) and a
-# switch; the real server has no such routes over HTTP.
-ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET",
-          "/_standin/stop": "POST", "/_standin/drop": "POST", "/_standin/model": "POST"}
+# switch; the real server has no such routes.
+ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET", "/engine/stop": "POST",
+          "/engine/model": "POST", "/_standin/stop": "POST", "/_standin/drop": "POST", "/_standin/model": "POST"}
 MAX_VIEWS = 3  # event streams at once (kMaxEngineViews in src/server/engine_view.h)
 PAGE_CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
             "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -402,14 +401,14 @@ def handler(inst):
             body = self.body()
             if body is None:
                 return
-            # The socket's schemas make run_id optional; these hooks require it, as a browser's click would carry the
+            # The socket's schemas make run_id optional; this stand-in requires it, as the page's click carries the
             # run it saw, and one that names no run must not act on whatever run holds the port.
             if "run_id" not in body:
                 return self.fail(400, "bad_request", "run_id is required")
             if body["run_id"] != inst.run.run_id:
                 return self.send_json(409, {"error": {"code": "run_id_mismatch", "message": "another run",
                                                       "details": {"run_id": inst.run.run_id}}})
-            if path == "/_standin/stop":
+            if path in ("/engine/stop", "/_standin/stop"):
                 inst.exit_on_stop = body.get("then") == "exit"
                 self.send_json(202, inst.stop())
             elif path == "/_standin/drop":
