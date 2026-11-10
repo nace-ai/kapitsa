@@ -581,6 +581,31 @@ void dq_iq3_s(const uint8_t* b, float* y) {
 
 // 1.56 bits: 11-bit indices of 8-value ternary grid points, a 3-bit scale and a +-1/8 shift per 32 values
 void dq_iq1_s(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t half;
+  memcpy(&half, b, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 50 : src - dst < 256 * sizeof(float);
+  if ((half & 0x7c00u) != 0x7c00u && !overlap) {
+    const float d = from_f16(half);
+    for (int group = 0; group < 8; ++group) {
+      uint16_t high;
+      memcpy(&high, b + 34 + 2 * group, 2);
+      const float32x4_t scale = vdupq_n_f32(d * float(2 * ((high >> 12) & 7) + 1));
+      const float32x4_t delta = vdupq_n_f32(high & 0x8000 ? -0.125f : 0.125f);
+      for (int lane = 0; lane < 4; ++lane) {
+        const uint64_t grid = iq::kIq1s[b[2 + 4 * group + lane] | (((high >> (3 * lane)) & 7) << 8)];
+        const int16x8_t values = vmovl_s8(vreinterpret_s8_u64(vcreate_u64(grid)));
+        const float32x4_t lo = vcvtq_f32_s32(vmovl_s16(vget_low_s16(values)));
+        const float32x4_t hi = vcvtq_f32_s32(vmovl_s16(vget_high_s16(values)));
+        float* out = y + 32 * group + 8 * lane;
+        vst1q_f32(out, vmulq_f32(scale, vaddq_f32(lo, delta)));
+        vst1q_f32(out + 4, vmulq_f32(scale, vaddq_f32(hi, delta)));
+      }
+    }
+    return;
+  }
+#endif
   const float d = f16_at(b);
   const uint8_t* qs = b + 2;
   for (int ib = 0; ib < 8; ++ib) {
