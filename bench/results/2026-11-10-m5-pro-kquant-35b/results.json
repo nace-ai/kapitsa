@@ -68,7 +68,8 @@
   "readme_url": "https://github.com/nace-ai/kapitsa#kquant",
   "record_url": "https://github.com/nace-ai/kapitsa/blob/main/bench/results/2026-11-10-m5-pro-kquant-35b/README.md",
   "quality_note": "the text weights of both packs (19.51 GB each); the repos also carry the vision tower, which neither run exercised",
-  "catalog_pinned": true,
+  "catalog_pinned": false,
+  "catalog_pinned_note": "false on main until kapitsa#1149 merges; the published model card is generated with true so it is correct on the day the repo goes public",
   "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) at `95460516` (MTPLX, apache-2.0), unchanged. Its head comes from [cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit](https://huggingface.co/cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit) (apache-2.0) and its body trunk from [mlx-community/Qwen3.6-35B-A3B-4bit](https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-4bit) (apache-2.0). Thanks to Youssofal and cyankiwi. Tokenizer and chat template as in the Youssofal build.",
   "text_caveat": "Quality and speed were measured on text workloads; the vision tower is included but was not evaluated.",
   "headline_split": true,
@@ -108,7 +109,7 @@
    "note": "VOID leg, in no mean: its 196.98 / 226.4 / 3261.6 are shown only for the record"
   }
  ],
- "legs_shape": "B A B A B A, one lock hold, released kapitsa 0.2.32 (e728524), default decoding, MTP head + DFlash2 on both arms; AC power, AC powermode 2, 1-min load 2.6-3.7 at leg start/end; 4K prompt (4134 tokens)",
+ "legs_shape": "B A B A B A, started under lockf; holder unproven, see notes, released kapitsa 0.2.32 (e728524), default decoding, MTP head + DFlash2 on both arms; AC power, AC powermode 2, 1-min load 2.6-3.7 at leg start/end; 4K prompt (4134 tokens)",
  "source": "k436 mac/runs/35b-six; kq/res/q36-35b (cat35_4 = Youssofal MTPLX @95460516, kq35_4); task #436; card inputs from B's results.kquant-qwen3.6-35b-a3b.json; repo file list from nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant @ a8c2dd66 (the speed legs fetched the same four weight files from the private test repo nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant @ ead4c792; their SHA-256 are equal, see README)",
  "peak_memory_note": "Peak serve RSS is the maximum over the valid legs (sampled with ps during each leg): 20.3 GB on both arms; leg 1 is not used for it.",
  "notes": [
