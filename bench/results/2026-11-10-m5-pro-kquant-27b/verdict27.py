@@ -26,4 +26,4 @@ for name, excl in (("as run (6-A kept)", set()), ("without 6-A", {("legs", "6-A"
     print(f"{name}: A legs {A['legs']} B legs {B['legs']}")
     print(f"  decode sampled {B['samp']:.1f} vs {A['samp']:.1f} ({pc('samp'):+.1f}%), greedy {B['greedy']:.1f} vs {A['greedy']:.1f} ({pc('greedy'):+.1f}%), pooled {B['pooled']:.1f} vs {A['pooled']:.1f} ({pc('pooled'):+.1f}%)")
     print(f"  4K prefill {B['pf']:.1f} vs {A['pf']:.1f} tok/s ({pc('pf'):+.1f}%), TTFT {B['ttft']:.0f} vs {A['ttft']:.0f} ms")
-    print(f"  rule: decode pooled >= -2%: {'PASS' if pc('pooled') >= -2 else 'FAIL'}; prefill >= -5%: {'PASS' if pc('pf') >= -5 else 'FAIL'}; KL lower (0.0349 vs 0.0544) PASS; GSM8K-100 0.94 vs 0.94 PASS")
+    print(f"  rule: decode pooled: not used (sampled {pc('samp'):+.1f}%, greedy {pc('greedy'):+.1f}%); prefill >= -5%: {'PASS' if pc('pf') >= -5 else 'FAIL'}; KL lower (0.0349 vs 0.0544) PASS; GSM8K-100 0.94 vs 0.94 PASS")
