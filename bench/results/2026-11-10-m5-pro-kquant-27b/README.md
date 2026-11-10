@@ -34,8 +34,8 @@ Modal (H100) from their text weights, not the vision tower the repos also carry.
 ## Speed: held
 
 No speed claim is made yet. B's speed legs ran the KQuant arm from a pack directory that lacked `mtplx_runtime.json` (the shipped repo has it),
-so the KQuant arm did not run the same way users will. The legs are kept in [legs/](legs) for the record and are not used by the card; one more
-KQuant leg will decide what the card says. What the held legs showed, for the record only (Kapitsa 0.2.32 `e728524`, MacBook Pro M5 Pro 48 GB,
+so the KQuant arm did not run the same way users will. The legs are kept in [legs/](legs) for the record and are not used by the card; the one leg
+run in the shipping shape is below. What the held legs showed, for the record only (Kapitsa 0.2.32 `e728524`, MacBook Pro M5 Pro 48 GB,
 macOS 26.5.2, AC power mode 2; order `B A B A B A`, B KQuant, A catalog; `verdict27.py` recomputes this from the leg files):
 
 | | KQuant | Catalog | Change |
@@ -50,7 +50,24 @@ Leg 6-A is valid but reads high at T 0.6 (83.8) and low at prefill (677 tok/s); 
 slower at T 0.6 and 0.2% slower at prefill. A top-up KQuant leg ([legs-void-topup/](legs-void-topup)) is void (a `Python` process at 67% CPU that was not
 there at the start). The pooled and prefill differences are inside the spread of the legs, so they do not support a speed claim either way.
 
+### The shipping-shape leg
+
+The six legs above ran the KQuant pack without `mtplx_runtime.json`; the shipped repo has it. One more KQuant leg ran with the pack as it ships (the staged
+repo at `cf91c446`, every file equal by SHA-256, see [legs-shipping-shape/pack-sha256.txt](legs-shipping-shape/pack-sha256.txt)): the server log shows the MTP head loaded with the trunk
+hidden state post-norm and the base chat template loaded, `LOCKPROOF` ok, AC power mode 2, peak 16.53 GB. It is valid and kept out of the means above.
+
+| Shipping-shape KQuant, 1 leg | tok/s |
+| --- | ---: |
+| Decode T 0.6 | 68.5 |
+| Decode greedy | 90.5 |
+| Prefill 4K | 727.3 |
+
+Sampled decode is below both KQuant legs above (76.7, 72.2) and the catalog legs (77.6 to 83.8); greedy sits with the other KQuant legs (90.4, 92.0); prefill
+is inside the spread. The range set before the leg was 72 to 77 sampled and 90 to 92 greedy, so sampled is outside it, and the card carries no speed
+claim. This is one leg, so the record does not say the pack is slower; it says the speed question is not settled. The leg's stderr also carries the bench
+warning "Another Kapitsa is running (pid 39505)" (see [legs-shipping-shape/1-B.err](legs-shipping-shape/1-B.err)); the leg passed the harness's foreign-process check.
+
 The harness is [ab_legs_k436.sh](ab_legs_k436.sh), started by [legs_27b_six4.sh](legs_27b_six4.sh); every leg logs a `LOCKPROOF` line (the `lockf` holder is in the harness's process ancestry) in [legs/legs.log](legs/legs.log).
 
-The card draws its numbers from [results.json](results.json). Its `speed_held` key keeps the speed row, the speed headline and the Speed section off the
-card; removing it, with the new legs in the file, brings them back.
+The card draws its numbers from [results.json](results.json) (which also carries `shipping_shape_leg`). Its `speed_held` key keeps the speed row, the speed headline and the Speed section off the
+card, and it stays: the shipping-shape leg did not settle the speed question.

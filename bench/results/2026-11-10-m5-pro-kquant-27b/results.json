@@ -47,7 +47,7 @@
  "license": "apache-2.0",
  "pipeline_tag": "image-text-to-text",
  "kapitsa_commit": "e728524",
- "source": "k436 kq/res/q38-27b (cat27_4 = /vol/packs/q38-27b/lms-4bit, kq27_4 = kq-4bit-text, both on Modal H100); repo file list from nace-ai/Qwen3.8-27B-MLX-4bit-KQuant @ cf91c446 (private; shards equal to the test repo k436-test-qwen3.8-27b-mlx-4bit-kquant @566dc4e8, tokenizer and chat template files equal to Qwen/Qwen3.8-27B @37561816, mtp.safetensors and mtplx_runtime.json equal to Youssofal @1d5087d2); scored_with, the text-only quality note and the baseline identity (speed legs: the Mac plain-leg copy of lmstudio @6067b15c is hash-proven against the Hub; quality: the Modal copy is the same pack by construction, a snapshot_download at that revision, not re-hashed) confirmed by B 10 Nov (k436/res/results.kquant-qwen3.8-27b.json notes); speed legs (mac/runs/27b-six4) are held and not in this file",
+ "source": "k436 kq/res/q38-27b (cat27_4 = /vol/packs/q38-27b/lms-4bit, kq27_4 = kq-4bit-text, both on Modal H100); repo file list from nace-ai/Qwen3.8-27B-MLX-4bit-KQuant @ cf91c446 (private; shards equal to the test repo k436-test-qwen3.8-27b-mlx-4bit-kquant @566dc4e8, tokenizer and chat template files equal to Qwen/Qwen3.8-27B @37561816, mtp.safetensors and mtplx_runtime.json equal to Youssofal @1d5087d2); scored_with, the text-only quality note and the baseline identity (speed legs: the Mac plain-leg copy of lmstudio @6067b15c is hash-proven against the Hub; quality: the Modal copy is the same pack by construction, a snapshot_download at that revision, not re-hashed) confirmed by B 10 Nov (k436/res/results.kquant-qwen3.8-27b.json notes); speed legs (mac/runs/27b-six4 as run, mac/runs/27b-top2 shipping shape; see shipping_shape_leg) are held and not in the card file",
  "variants": [
   {
    "name": "mlx-4bit-kquant",
@@ -124,5 +124,21 @@
     }
    ]
   }
- ]
+ ],
+ "shipping_shape_leg": {
+  "leg": "1-B (27b-top2)",
+  "dir": "legs-shipping-shape",
+  "pack": "the staged repo nace-ai/Qwen3.8-27B-MLX-4bit-KQuant @cf91c446, files equal to it by SHA-256 (pack-sha256.txt)",
+  "decode_t06": 68.53,
+  "decode_t0": 90.47,
+  "prefill_tps": 727.3,
+  "prefill_4k_ms": 5685,
+  "serve_peak_gb": 16.53,
+  "valid": true,
+  "in_means": false,
+  "rule": "sampled 72-77 and greedy 90-92 tok/s, set before the leg",
+  "sampled_in_rule": false,
+  "greedy_in_rule": true,
+  "result": "sampled is outside the range: no speed claim on the card"
+ }
 }

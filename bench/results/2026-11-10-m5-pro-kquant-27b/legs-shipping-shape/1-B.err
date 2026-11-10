@@ -1,0 +1,17 @@
+kapitsa bench: kq-27b-4bit 4-bit on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
+warning: Another Kapitsa is running (pid 39505): its model's memory and any requests it serves skew the numbers.
+Measuring the server on 127.0.0.1:18961 (KAPITSA_BENCH_SERVER)
+Warm-up done in 7.3s
+  decode T=0.6: 66.46 tok/s (512 tok, finish="length")
+  decode T=0.6: 72.50 tok/s (512 tok, finish="length")
+  decode T=0.6: 68.53 tok/s (512 tok, finish="length")
+decode T=0.6: median 68.53 tok/s over 3/3 valid, accepted drafts 56.35 tok/s (82.2% of tokens)
+  decode T=0: 91.24 tok/s (512 tok, finish="length")
+  decode T=0: 73.28 tok/s (512 tok, finish="length")
+  decode T=0: 90.47 tok/s (512 tok, finish="length")
+decode T=0: median 90.47 tok/s over 3/3 valid, accepted drafts 77.93 tok/s (86.1% of tokens)
+prefill 4000: 4135 tok, 727 tok/s; cached TTFT median 0.22 s (104 tok/s on the uncached suffix)
+tools: pass
+flag: CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000', 'tools'] (mean 93.11%, top ['kapitsa'])
+INVALID: server: a server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown
+Saved /Users/alisheramantay/Documents/nace/k436/mac/runs/27b-top2/1-B.json
