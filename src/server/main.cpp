@@ -566,6 +566,8 @@ static struct sigaction g_stop_prev[3];
 static int g_stop_pipe[2] = {-1, -1};
 static volatile sig_atomic_t g_stopping = 0;
 static server::ControlServer* g_control = nullptr;  // the control socket, once it listens (never freed)
+// POST /stop before the stop handlers exist (starting, the first load): run_service ends at its next step, exit 0
+static std::atomic<bool> g_stop_requested{false};
 
 static void pass_signal_on(int sig) {
   for (int i = 0; i < 3; ++i)
@@ -580,6 +582,68 @@ static void on_stop_signal(int sig) {
   if (again || write(g_stop_pipe[1], &c, 1) != 1) pass_signal_on(sig);
 }
 
+static bool g_stop_handlers = false;  // SaveOnStop's are installed (under g_stop_mu)
+static bool g_stop_routed = false;    // serve_routed() serves: no engine, nothing to save (under g_stop_mu)
+
+// Before serve_routed(): from now on POST /stop ends the process at once; true when one already asked to stop
+static bool stop_when_routed() {
+  std::lock_guard<std::mutex> lk(g_stop_mu);
+  g_stop_routed = true;
+  return g_stop_requested;
+}
+
+// The thread that stops the server: a stop signal or POST /stop (a 0 byte, request_stop()) wakes it once. It saves,
+// then takes its course. A signal's: the terminal UI's handler (the status block off the screen,
+// term::guard_signals), else the default (the process ends as killed by the signal). POST /stop's: the status block
+// off the screen and exit 0, however SIGINT is set: a client that asked for a stop never sees a death by signal. One
+// before the stop handlers exist (starting, the first load) only marks the stop: run_service sees it at its next step
+// and returns 0 through the normal exit.
+static bool start_stop_thread() {
+  static const bool ok = [] {
+    if (pipe(g_stop_pipe) != 0) return false;
+    for (int fd : g_stop_pipe) fcntl(fd, F_SETFD, FD_CLOEXEC);
+    std::thread([] {
+      char c = 0;
+      for (;;) {
+        ssize_t r;
+        while ((r = read(g_stop_pipe[0], &c, 1)) < 0 && errno == EINTR) {
+        }
+        if (r != 1) return;
+        if (c != 0) break;
+        std::lock_guard<std::mutex> lk(g_stop_mu);
+        if (g_stop_handlers || g_stop_routed) break;
+        if (!g_stop_requested.exchange(true)) {  // (run_service checks it after taking g_stop_mu: none is missed)
+          if (g_control) g_control->mark_stopping();
+          server::publish_state("stopping", nullptr);
+          hub::stop_downloads();  // a model still downloading stops now, its parts kept
+        }
+      }
+      g_stopping = 1;  // (a further signal ends the process at once)
+      if (g_control) g_control->mark_stopping();
+      {
+        std::lock_guard<std::mutex> lk(g_stop_mu);
+        server::publish_state("stopping", g_stop_mgr ? server::model_json(g_stop_mgr->current_model_id(),
+                                                                          g_stop_mgr->current_context_length(),
+                                                                          g_stop_mgr->current_slots())
+                                                     : nullptr);
+      }
+      save_before_exit();
+      if (g_control) g_control->stop();  // (its socket file goes with the process)
+      if (c != 0) return pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends it
+      term::clear_for_exit();
+      _exit(0);
+    }).detach();
+    return true;
+  }();
+  return ok;
+}
+
+// POST /stop: wakes the stop thread without a signal (async-signal-safe; once is enough, ControlServer sees to it)
+static void request_stop() {
+  const char c = 0;
+  if (write(g_stop_pipe[1], &c, 1) != 1) _exit(0);
+}
+
 // The stop handlers while it lives (serve(), from the engine's start); the previous ones come back after
 struct SaveOnStop {
   explicit SaveOnStop(ModelManager& mgr) {
@@ -587,25 +651,7 @@ struct SaveOnStop {
       std::lock_guard<std::mutex> lk(g_stop_mu);
       g_stop_mgr = &mgr;
     }
-    if (pipe(g_stop_pipe) != 0) return;
-    for (int fd : g_stop_pipe) fcntl(fd, F_SETFD, FD_CLOEXEC);
-    std::thread([] {
-      char c = 0;
-      ssize_t r;
-      while ((r = read(g_stop_pipe[0], &c, 1)) < 0 && errno == EINTR) {
-      }
-      if (r != 1) return;
-      {
-        std::lock_guard<std::mutex> lk(g_stop_mu);
-        if (g_stop_mgr)
-          server::publish_state("stopping", server::model_json(g_stop_mgr->current_model_id(),
-                                                               g_stop_mgr->current_context_length(),
-                                                               g_stop_mgr->current_slots()));
-      }
-      save_before_exit();
-      if (g_control) g_control->stop();  // (its socket file goes with the process)
-      pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends the process
-    }).detach();
+    if (!start_stop_thread()) return;
     struct sigaction sa {};
     sa.sa_handler = on_stop_signal;
     sa.sa_flags = SA_RESTART;
@@ -615,8 +661,14 @@ struct SaveOnStop {
       if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &sa, nullptr);
     }
     handlers_ = true;
+    std::lock_guard<std::mutex> lk(g_stop_mu);
+    g_stop_handlers = true;
   }
   ~SaveOnStop() {
+    {
+      std::lock_guard<std::mutex> lk(g_stop_mu);
+      g_stop_handlers = false;
+    }
     if (handlers_)
       for (int i = 0; i < 3; ++i)
         if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &g_stop_prev[i], nullptr);
@@ -630,7 +682,8 @@ struct SaveOnStop {
   bool handlers_ = false;
 };
 
-// The control socket's side of this server (docs/control-socket.md): GET /status from the bus and the activity
+// The control socket's side of this server (docs/control-socket.md): status from the bus and the model manager,
+// POST /stop through the stop handlers above, POST /model through the manager's switch.
 class ServeControl : public server::ControlApi {
  public:
   ServeControl(const std::string& instance_id, const nlohmann::json& config, const std::string& host, int port) {
@@ -646,13 +699,47 @@ class ServeControl : public server::ControlApi {
     strftime(at, sizeof at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     id_.started_at = at;
   }
+  void attach(const std::shared_ptr<ModelManager>& mgr) { mgr_.attach(mgr); }
+
   nlohmann::json status() override {
     return server::instance_status(id_, *server::events(), *server::activity(), server::last_state());
+  }
+  server::ControlReply stop() override {
+    return {202, {{"run_id", server::events()->run_id()}, {"state", "stopping"}}};
+  }
+  void after_stop() override { request_stop(); }
+  server::ControlReply model_switch(const nlohmann::json& r) override {
+    if (server::ControlReply no = server::switch_refusal(id_.config, r); no.status) return no;
+    const std::shared_ptr<ModelManager> mgr = mgr_.get();  // (held for the switch only)
+    if (!mgr) {
+      server::ControlReply busy = server::control_error(503, "busy", "no model is being served yet", {{"retry_after_s", 30}});
+      busy.retry_after_s = 30;
+      return busy;
+    }
+    const nlohmann::json prev = server::model_json(mgr->current_model_id(), mgr->current_context_length(), mgr->current_slots());
+    const std::string target = r["model"];
+    ModelManager::Error err;
+    auto eng = mgr->switch_from_control(target, &err);
+    if (eng)
+      return {200, {{"run_id", server::events()->run_id()},
+                    {"model", server::model_json(eng->model_id(), eng->context_length(), eng->slots())},
+                    {"previous_model", prev}}};
+    using Code = ModelManager::Error::Code;
+    if (err.code == Code::Busy) {
+      server::ControlReply busy = server::control_error(503, "busy", err.message, {{"retry_after_s", err.retry_s}});
+      busy.retry_after_s = err.retry_s;
+      return busy;
+    }
+    if (err.code == Code::NotFound) return server::control_error(404, "model_not_found", err.message, {{"model", target}});
+    return server::control_error(500, "load_failed", err.message.empty() ? "the model did not load" : err.message,
+                                 {{"model", target}, {"state", mgr->unloaded() ? "released" : "ready"}});
   }
 
  private:
   server::Identity id_;
+  server::Attached<ModelManager> mgr_;  // weak: the socket never keeps the manager, or its engine, past run_service
 };
+static ServeControl* g_serve_control = nullptr;  // (never freed: the socket's threads may outlive run_service)
 
 // The instance's lock in `run_dir`, before its first event (docs/control-socket.md, "Start race"). The instance id is
 // `default` until the serve configuration names one. Without the folder or the lock (a second unnamed server, as
@@ -666,11 +753,13 @@ static bool lock_control(const std::string& run_dir, const std::string& instance
   return !why;
 }
 
-// After the first event: the socket listens. "" or why it cannot (a path over macOS's limit, a home whose volume takes
-// no sockets). (Never freed: the socket's threads may outlive run_service.)
+// After the first event: the socket listens, and the stop thread waits. "" or why it cannot (a path over macOS's
+// limit, a home whose volume takes no sockets). (Never freed: the socket's threads may outlive run_service.)
 static std::string listen_control(const std::string& run_dir, const std::string& instance_id, const server::Options& o,
                                   const std::string& host) {
-  auto* srv = new server::ControlServer(*new ServeControl(instance_id, o.given, host, o.port), *server::events());
+  if (!start_stop_thread()) return std::string("cannot make the stop thread's pipe: ") + strerror(errno);
+  g_serve_control = new ServeControl(instance_id, o.given, host, o.port);
+  auto* srv = new server::ControlServer(*g_serve_control, *server::events());
   if (std::string why = srv->start(run_dir + "/" + instance_id + ".sock"); !why.empty()) return why;
   g_control = srv;
   std::atexit([] {
@@ -1056,6 +1145,16 @@ int ni::server::run_service(Options o) {
   if (with_socket)
     if (const std::string why = listen_control(run_dir, instance_id, o, host); !why.empty())
       fprintf(stderr, "warning: %s: this server has no control socket\n", why.c_str());  // (the unnamed default)
+  // NI_CONTROL_TEST_HOLD_MS: tests/test_control_socket.py holds the server in `starting` to stop it there
+  if (const char* d = getenv("NI_CONTROL_TEST_HOLD_MS"))
+    for (int left = std::clamp(atoi(d), 0, 60000); left > 0 && !g_stop_requested; left -= 50)
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  // POST /stop while starting: the normal exit (the socket goes at exit, the status 0)
+  const auto stop_asked = [] {
+    term::clear_for_exit();
+    return 0;
+  };
+  if (g_stop_requested) return stop_asked();
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (switch_here) {
     const std::string say = "--allow-switch keeps this server on this Mac: give --api-key to share it.";
@@ -1232,17 +1331,21 @@ int ni::server::run_service(Options o) {
     if (!header) ui::serve_header(KAPITSA_VERSION);
     for (const auto& n : notes) ui::note(n);
   }
+  if (route && stop_when_routed()) return stop_asked();
   if (route) return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
   if (pair_head) {  // the stage of its split: the model's files here too, the layers it gives loaded when it does
     try {
       hub::PullOptions po;
       if (ui::can_prompt(yes)) po.make_room = ui::make_room;
+      if (g_stop_requested) return stop_asked();
       opt.model_dir = hub::ensure(ref, po);
     } catch (const hub::Stopped& e) {
+      if (g_stop_requested) return stop_asked();
       return stopped(e);
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
+    if (stop_when_routed()) return stop_asked();
     PairStage st;
     st.model_dir = opt.model_dir, st.head_id = pair_head->id, st.mem = double(budget);
     st.gbs = bandwidth_gbs(Gpu::get().name(), Gpu::get().core_count());
@@ -1255,8 +1358,10 @@ int ni::server::run_service(Options o) {
   try {
     hub::PullOptions po;
     if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
+    if (g_stop_requested) return stop_asked();
     opt.model_dir = hub::ensure(ref, po);
   } catch (const hub::Stopped& e) {
+    if (g_stop_requested) return stop_asked();  // POST /stop during the download: a stop, status 0
     return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
@@ -1346,6 +1451,7 @@ int ni::server::run_service(Options o) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
+  if (g_stop_requested) return stop_asked();
   server::publish_state("loading", nullptr);
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
@@ -1356,6 +1462,9 @@ int ni::server::run_service(Options o) {
   if (!engine_splash && idle_unload_min != 0)
     model_mgr->set_idle_unload(idle_unload_min < 0 ? idle_unload_auto_s() : int(idle_unload_min * 60 + 0.5), idle_unload_min < 0,
                                [] { return split_now(); });
+  // POST /model reaches the manager only now: init() takes neither its lock nor its switch flag, so a switch during the
+  // first load would race it (until here POST /model answers 503 busy)
+  if (g_serve_control) g_serve_control->attach(model_mgr);
   if (engine_splash) {  // (absolute: the next run may start in another folder)
     std::error_code abs_ec;
     const std::filesystem::path bin = std::filesystem::absolute(splash_found_binary, abs_ec);
@@ -1363,6 +1472,10 @@ int ni::server::run_service(Options o) {
   }
   if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
   SaveOnStop save_on_stop(*model_mgr);
+  if (g_stop_requested) {  // POST /stop during the first load, seen now that it has ended: saved as a stop saves
+    save_before_exit();
+    return stop_asked();
+  }
 
   api::ResponseStore responses;  // recent responses, for previous_response_id
   httplib::Server srv;

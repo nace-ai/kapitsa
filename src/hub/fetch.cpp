@@ -64,6 +64,7 @@ constexpr int kWorkers = 8;               // parallel connections (8 measured ~4
 constexpr int kAttempts = 8;              // per range, with backoff up to 15 s, resuming where it stopped
 
 std::atomic<bool> g_stop{false};  // Ctrl+C during a download
+std::atomic<bool> g_stop_asked{false};  // stop_downloads(): this one stays, and every later download stops too
 
 // ---------------------------------------------------------------- small helpers
 
@@ -795,6 +796,7 @@ struct SignalGuard {
   struct sigaction old_int {}, old_term {};
   SignalGuard() {
     g_stop = false;
+    if (g_stop_asked) g_stop = true;  // (stop_downloads() sets g_stop_asked first: a stop during this is not lost)
     struct sigaction sa {};
     sa.sa_handler = [](int) {
       if (g_stop) _exit(130);
@@ -1551,6 +1553,11 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
 }
 
 }  // namespace
+
+void stop_downloads() {
+  g_stop_asked = true;
+  g_stop = true;
+}
 
 std::string ensure(const ModelRef& ref, const PullOptions& opt) {
   if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
