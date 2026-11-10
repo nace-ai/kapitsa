@@ -1,0 +1,263 @@
+{
+ "kquant": {
+  "reference": "Qwen/Qwen3.6-35B-A3B @ 345d467b (bf16)",
+  "kl_tokens": 32704,
+  "mac": {
+   "name": "MacBook Pro",
+   "chip": "M5 Pro",
+   "ram_gb": 48,
+   "macos": "26.5.2"
+  },
+  "kapitsa_version": "0.2.32",
+  "standard": {
+   "label": "Kapitsa catalog 4-bit (MTPLX Optimized-Speed)",
+   "repo": "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed",
+   "revision": "95460516",
+   "size_gb": 19.51,
+   "kl": 0.0961,
+   "top1": 0.89,
+   "gsm8k": 0.9484,
+   "gsm8k_n": 1319,
+   "decode_t06": [
+    192.96,
+    206.06
+   ],
+   "decode_t0": [
+    218.97,
+    228.17
+   ],
+   "prefill_4k": [
+    3220,
+    3249
+   ],
+   "peak_gb": 20.3
+  },
+  "kquant": {
+   "repo": "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant",
+   "size_gb": 19.51,
+   "kl": 0.0586,
+   "top1": 0.912,
+   "gsm8k": 0.9522,
+   "gsm8k_n": 1319,
+   "decode_t06": [
+    213.35,
+    221.75,
+    222.21
+   ],
+   "decode_t0": [
+    233.31,
+    236.55,
+    232.06
+   ],
+   "prefill_4k": [
+    3171,
+    3258,
+    3146
+   ],
+   "peak_gb": 20.3,
+   "revision": "a8c2dd66"
+  },
+  "gsm8k_pair": {
+   "only_kquant": 24,
+   "only_standard": 19
+  },
+  "sibling": {
+   "model": "Qwen3.5-9B",
+   "repo": "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"
+  },
+  "readme_url": "https://github.com/nace-ai/kapitsa#kquant",
+  "record_url": "https://github.com/nace-ai/kapitsa/blob/main/bench/results/2026-11-10-m5-pro-kquant-35b/README.md",
+  "quality_note": "the text weights of both packs (19.51 GB each); the repos also carry the vision tower, which neither run exercised",
+  "catalog_pinned": false,
+  "catalog_pinned_note": "false on main until kapitsa#1149 merges; the published model card is generated with true so it is correct on the day the repo goes public",
+  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) at `95460516` (MTPLX, apache-2.0), unchanged. Its head comes from [cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit](https://huggingface.co/cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit) (apache-2.0) and its body trunk from [mlx-community/Qwen3.6-35B-A3B-4bit](https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-4bit) (apache-2.0). Thanks to Youssofal and cyankiwi. Tokenizer and chat template as in the Youssofal build.",
+  "text_caveat": "Quality and speed were measured on text workloads; the vision tower is included but was not evaluated.",
+  "headline_split": true,
+  "min_kapitsa": "This needs Kapitsa 0.2.34 or later (or a build from main until 0.2.34 is out)."
+ },
+ "model": "Qwen3.6-35B-A3B",
+ "base_repo": "Qwen/Qwen3.6-35B-A3B",
+ "date": "2026-11-10",
+ "legs": [
+  {
+   "leg": "1-B",
+   "status": "ok"
+  },
+  {
+   "leg": "2-A",
+   "status": "ok"
+  },
+  {
+   "leg": "3-B",
+   "status": "ok"
+  },
+  {
+   "leg": "4-A",
+   "status": "ok"
+  },
+  {
+   "leg": "5-B",
+   "status": "ok"
+  },
+  {
+   "leg": "6-A",
+   "status": "void",
+   "reason": "foreign process rg 51% CPU at 17:34 (mine)",
+   "decode_t06": 196.98,
+   "decode_t0": 226.4,
+   "prefill_tps": 3261.6,
+   "note": "VOID leg, in no mean: its 196.98 / 226.4 / 3261.6 are shown only for the record"
+  }
+ ],
+ "legs_shape": "B A B A B A, started under lockf; holder unproven, see notes, released kapitsa 0.2.32 (e728524), default decoding, MTP head + DFlash2 on both arms; AC power, AC powermode 2, 1-min load 2.6-3.7 at leg start/end; 4K prompt (4134 tokens)",
+ "source": "k436 mac/runs/35b-six; kq/res/q36-35b (cat35_4 = Youssofal MTPLX @95460516, kq35_4); task #436; card inputs from B's results.kquant-qwen3.6-35b-a3b.json; repo file list from nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant @ a8c2dd66 (the speed legs fetched the same four weight files from the private test repo nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant @ ead4c792; their SHA-256 are equal, see README)",
+ "peak_memory_note": "Peak serve RSS is the maximum over the valid legs (sampled with ps during each leg): 20.3 GB on both arms; leg 1 is not used for it.",
+ "notes": [
+  "Leg 1-B: RSS sample on the first leg was 2.1 GB (peak 2.30 GB), cause not found; its speed is in line with the other KQuant legs (decode 213.4 tok/s, 4K TTFT 1.30 s).",
+  "Lock note (watchdog flagged the 35B serve as off-lock at 17:33): the 35B legs were started under `lockf -k /tmp/kapitsa-gpu.lock` (log line 'lock held: 35B pair' 17:30:51). At 17:31 my own `pkill -f` self-test killed the wrapper and its lockf (k436-q436d exit 143); the orphaned legs scripts (pids 4390/4393, kapitsa serve child pid 27073 under 4393) kept running to LEGSDONE 17:34:12. The lock was therefore held, if at all, only through the fd inherited from the killed lockf. Evidence is indirect: #411's line (blocked at lockf) logged 'server ready' at 17:34:15, three seconds after LEGSDONE, and its serve did not overlap the legs. I did NOT capture `lsof /tmp/kapitsa-gpu.lock` during the legs, so the holder is unproven."
+ ],
+ "license": "apache-2.0",
+ "pipeline_tag": "image-text-to-text",
+ "kapitsa_commit": "e728524",
+ "variants": [
+  {
+   "name": "mlx-4bit-kquant",
+   "format": "mlx",
+   "bits": 4,
+   "size_gb": 19.51,
+   "repo": "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant",
+   "kapitsa_model": "35b",
+   "kquant": true,
+   "min_mac_ram_gb": 48,
+   "files": [
+    {
+     "name": "chat_template.jinja",
+     "bytes": 7764
+    },
+    {
+     "name": "config.json",
+     "bytes": 141447
+    },
+    {
+     "name": "configuration.json",
+     "bytes": 58
+    },
+    {
+     "name": "generation_config.json",
+     "bytes": 202
+    },
+    {
+     "name": "merges.txt",
+     "bytes": 3353259
+    },
+    {
+     "name": "model-00001-of-00004.safetensors",
+     "bytes": 5288196072
+    },
+    {
+     "name": "model-00002-of-00004.safetensors",
+     "bytes": 5368472552
+    },
+    {
+     "name": "model-00003-of-00004.safetensors",
+     "bytes": 5368324032
+    },
+    {
+     "name": "model-00004-of-00004.safetensors",
+     "bytes": 4377211304
+    },
+    {
+     "name": "model.safetensors.index.json",
+     "bytes": 207383
+    },
+    {
+     "name": "mtp.safetensors",
+     "bytes": 582258561
+    },
+    {
+     "name": "mtplx_runtime.json",
+     "bytes": 4154
+    },
+    {
+     "name": "preprocessor_config.json",
+     "bytes": 390
+    },
+    {
+     "name": "processor_config.json",
+     "bytes": 1312
+    },
+    {
+     "name": "tokenizer.json",
+     "bytes": 19989343
+    },
+    {
+     "name": "tokenizer_config.json",
+     "bytes": 1139
+    },
+    {
+     "name": "video_preprocessor_config.json",
+     "bytes": 385
+    },
+    {
+     "name": "vocab.json",
+     "bytes": 6722759
+    }
+   ]
+  }
+ ],
+ "tokenizer_check": {
+  "gate": "release/tok_check.py files, run on Modal in k436/kq/publish35.py before the upload",
+  "files_vs_catalog": "PASS: tokenizer.json, tokenizer_config.json, chat_template.jinja (and vocab.json, merges.txt) are byte-identical to the catalog pack Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed @95460516 (sha256 prefixes tokenizer 87a7830d63, tokenizer_config e98f1901ac, chat_template e84f32a23f, vocab ce99b4cb29, merges a9d356d7bd)",
+  "ids_vs_base": "PASS: token ids on the 15 gate texts (release/tokcheck_texts.json) are identical to Qwen/Qwen3.6-35B-A3B @345d467b",
+  "vs_base_files": "the three files are NOT byte-identical to the base model's (tokenizer.json 5f9e4d4901, tokenizer_config.json a39230de92, chat_template.jinja 1b8361565c); the chat template differs from the base's only by the dropped `{% generation %}` markers",
+  "not_checked": "rendered chat text of the template against the base's on more than the diffed lines; tokenizer.json and tokenizer_config.json differences beyond the ids check were not diffed to the end (the base's tokenizer_config.json is the longer file)",
+  "staged_repo": "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant @a8c2dd66 (private)"
+ },
+ "summary_valid_legs": {
+  "source": "mac/runs/35b-six legs 1-B 2-A 3-B 4-A 5-B (valid); leg 6-A is void and in no mean; Kapitsa 0.2.32 (e728524), M5 Pro 48 GB, macOS 26.5.2, AC powermode 2",
+  "decode_sampled_t06_tok_s": {
+   "kquant_mean": 219.1,
+   "standard_mean": 199.5,
+   "kquant_legs": [
+    213.35,
+    221.75,
+    222.21
+   ],
+   "standard_legs": [
+    192.96,
+    206.06
+   ]
+  },
+  "decode_greedy_t0_tok_s": {
+   "kquant_mean": 234.0,
+   "standard_mean": 223.6,
+   "kquant_legs": [
+    233.31,
+    236.55,
+    232.06
+   ],
+   "standard_legs": [
+    218.97,
+    228.17
+   ]
+  },
+  "decode_pooled_tok_s": {
+   "kquant": 226.5,
+   "standard": 211.5,
+   "how": "mean of all valid-leg medians, sampled and greedy together (same pooling as the 4B and 9B README rows); README table prints these rounded: 227 vs 212"
+  },
+  "prefill_4k_tok_s": {
+   "kquant_mean": 3191.7,
+   "standard_mean": 3234.5,
+   "kquant_legs": [
+    3171,
+    3258,
+    3146
+   ],
+   "standard_legs": [
+    3220,
+    3249
+   ]
+  }
+ }
+}
