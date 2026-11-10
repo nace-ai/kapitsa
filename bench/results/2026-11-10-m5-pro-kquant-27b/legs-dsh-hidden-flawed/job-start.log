@@ -1,0 +1,5 @@
+19:34:42 gates open (AC, powermode 2, free 58%, swap 5285.25M)
+detach: paused cpu-heavy k411-local-legs2
+user active (0s idle): not hiding DSH
+20:21:14 DSH hidden; lock held: 27B top3 B leg (shipping shape, runtime json in the pack)
+20:21:14 bin=/opt/homebrew/bin/kapitsa sha=5e9ac395181b commit=e728524 model=/Users/alisheramantay/.cache/kapitsa/models/qwen3.8-27b-4bit order=[B] macos=26.5.2
