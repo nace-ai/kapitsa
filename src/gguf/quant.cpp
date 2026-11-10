@@ -391,6 +391,34 @@ void dq_iq2_xxs(const uint8_t* b, float* y) {
 
 // 2.31 bits: 16-bit entries (9-bit grid index, 7 sign bits), two 4-bit scales per 32 values
 void dq_iq2_xs(const uint8_t* b, float* y) {
+#if defined(__aarch64__)
+  uint16_t half;
+  memcpy(&half, b, 2);
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 74 : src - dst < 256 * sizeof(float);
+  if ((half & 0x7c00u) != 0x7c00u && !overlap) {
+    const float d = from_f16(half);
+    const uint8x8_t sign_bits = {1, 2, 4, 8, 16, 32, 64, 128};
+    for (int group = 0; group < 8; ++group) {
+      for (int lane = 0; lane < 4; ++lane) {
+        uint16_t entry;
+        memcpy(&entry, b + 2 + 2 * (4 * group + lane), 2);
+        const unsigned nib = (b[66 + group] >> (4 * (lane / 2))) & 15;
+        const float32x4_t scale = vdupq_n_f32(d * (0.5f + float(nib)) * 0.25f);
+        const uint8x8_t grid = vreinterpret_u8_u64(vcreate_u64(iq::kIq2xs[entry & 511]));
+        const int16x8_t values = vreinterpretq_s16_u16(vmovl_u8(grid));
+        const uint8x8_t signs = vdup_n_u8(uint8_t(iq_signs(entry >> 9)));
+        const uint8x8_t positive = vceq_u8(vand_u8(signs, sign_bits), vdup_n_u8(0));
+        const uint16x8_t mask = vceqq_u16(vmovl_u8(positive), vdupq_n_u16(255));
+        const int16x8_t signed_values = vbslq_s16(mask, values, vnegq_s16(values));
+        float* out = y + 32 * group + 8 * lane;
+        vst1q_f32(out, vmulq_f32(scale, vcvtq_f32_s32(vmovl_s16(vget_low_s16(signed_values)))));
+        vst1q_f32(out + 4, vmulq_f32(scale, vcvtq_f32_s32(vmovl_s16(vget_high_s16(signed_values)))));
+      }
+    }
+    return;
+  }
+#endif
   const float d = f16_at(b);
   const uint8_t* sc = b + 66;
   for (int ib = 0; ib < 8; ++ib) {
