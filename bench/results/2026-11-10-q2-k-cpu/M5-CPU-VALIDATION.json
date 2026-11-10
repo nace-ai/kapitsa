@@ -1,0 +1,341 @@
+{
+  "evidence_kind": "Redacted derived evidence, not a raw log. Original execution records retained privately.",
+  "configuration": {
+    "chip": "Apple M5 Pro",
+    "memory_GiB": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": "20"
+  },
+  "source": {
+    "reference_commit": "4f564ecb87d4ff1375fb72b9d45ae945092cc215",
+    "candidate_commit": "2389fd0459750efbaed1d699bc4c6e62e94de2f6",
+    "source_sha256": {
+      "src/gguf/quant.cpp": "b06eabc34ea77176e1919066c5517ef81ecf614b95f73c9f40bb1557761dbfb7",
+      "tools/gguf_q2_k_test.h": "7ded87cc3fc6704b0781a7687b6352ad36887ef8a63b99208f4602f686c4014c",
+      "tools/iq_layout_test.cpp": "2d42467d87292b16ba0492b07faa7437d717215c9229e4261373f271ce902c0e"
+    },
+    "reference_quant_sha256": "b8ad97f19670bbde965e5cd933d62ab0380b31b4c845943fecd13b5c3ba85877",
+    "note": "Pre-commit measurements use the identical production quant.cpp. The initially missing integrated test call was corrected and the integrated target rebuilt and passed before publication; focused correctness runs already included the tests."
+  },
+  "checks": {
+    "reference": "Q2_K: 958666 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "candidate": "Q2_K: 958666 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "ubsan": "Q2_K: 958666 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "mutation": "The deliberate two-bit mask mutation from3 to1 failed with expected nonzero exit.",
+    "vk_cpu_tests": [
+      "PASS api_test",
+      "PASS prefix_cache_test",
+      "PASS fn_store_test",
+      "PASS fn_dflash_test",
+      "PASS tokenizer_test",
+      "PASS iq_layout_test",
+      "PASS nh_quant_q8_test",
+      "PASS remote_test",
+      "PASS cluster_test",
+      "PASS split_place_test",
+      "PASS gemm_slices_test",
+      "PASS ffn_share_test",
+      "PASS ws_upgrade_test",
+      "PASS test_server_cli",
+      "PASS test_sidecar",
+      "PASS test_bench",
+      "PASS test_update",
+      "PASS test_community",
+      "PASS test_reasoning",
+      "PASS test_pr_size",
+      "PASS test_logit_compare",
+      "PASS test_sampled_tokens_harness",
+      "PASS test_structured_cli"
+    ],
+    "release_build": "PASS",
+    "prek": "PASS",
+    "diff_check": "PASS",
+    "initial_extraction_failure": "The initial shape assertion expected1024x1024 but the tensor is1024x2048. No sample was written; corrected to extract the first1024rows. Original failed attempt retained."
+  },
+  "synthetic": {
+    "method": "Fixed-seed1024x2048,16samples x64decodes, exclusive GPU lock, A/B/A/B. CPU decoder only.",
+    "runs": {
+      "A1": {
+        "input_kind": "fixed-seed synthetic Q2_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          616.628646851,
+          549.264907837,
+          592.280075073,
+          657.737091064,
+          515.522003174,
+          506.911605835,
+          483.738571167,
+          470.85635376,
+          452.857330322,
+          454.504638672,
+          488.606765747,
+          604.766845703,
+          521.870300293,
+          448.408126831,
+          446.920394897,
+          479.990646362
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 497.759185791
+      },
+      "B1": {
+        "input_kind": "fixed-seed synthetic Q2_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          340.562194824,
+          259.33265686,
+          226.383209229,
+          205.439239502,
+          195.098236084,
+          181.009292603,
+          181.32019043,
+          178.092330933,
+          181.365325928,
+          180.618286133,
+          178.915664673,
+          184.443786621,
+          182.264968872,
+          181.420654297,
+          181.199401855,
+          181.238800049
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 181.3929901125
+      },
+      "A2": {
+        "input_kind": "fixed-seed synthetic Q2_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          437.19229126,
+          447.680786133,
+          431.104660034,
+          432.84161377,
+          436.461120605,
+          440.52696228,
+          436.428070068,
+          437.489196777,
+          437.54196167,
+          433.89956665,
+          433.795928955,
+          433.59437561,
+          434.535980225,
+          444.279342651,
+          431.327819824,
+          434.16595459
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 435.4820251465
+      },
+      "B2": {
+        "input_kind": "fixed-seed synthetic Q2_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          179.18460083,
+          179.518386841,
+          185.537338257,
+          186.185195923,
+          181.02645874,
+          179.021835327,
+          179.313659668,
+          179.050445557,
+          184.917449951,
+          179.624557495,
+          181.622177124,
+          180.916473389,
+          197.275161743,
+          184.522003174,
+          181.536987305,
+          181.928634644
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 181.2817230225
+      }
+    },
+    "complete_output_files_literal_equal": true,
+    "complete_bytes_per_file": 8388608,
+    "binary_sha256": {
+      "reference": "eae6651b22d5c01248cf4dcc619cd853ffb481842db26d2a1ee766343f79a88c",
+      "candidate": "d38a2d10d36e580793a5a87c673a3758456b566638093a00caf90fff3b5877cd"
+    }
+  },
+  "trained": {
+    "method": "First1024rows of a1024x2048 tensor; K1024; one untimed decode then16 complete decodes each arm, A/B/A/B under GPU lock. CPU decoder only.",
+    "model": {
+      "repo": "Acnoryx/Airy",
+      "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+      "repository_file": "gguf/Airy-0.8b-Q2_K.gguf",
+      "sha256": "aeee3f24905dbff1dac952e1b38ac2377230fc75c82be7ef75808d18a6a9a3fe"
+    },
+    "sample": {
+      "model_sha256": "aeee3f24905dbff1dac952e1b38ac2377230fc75c82be7ef75808d18a6a9a3fe",
+      "tensor": {
+        "name": "blk.0.attn_gate.weight",
+        "dims": [
+          1024,
+          2048
+        ],
+        "type": 10,
+        "offset": 208592896
+      },
+      "data_offset": 10955168,
+      "sample_sha256": "35ea11480de1cd9bab903c15f3f5c3f67945c105f315449f0fe2badc41087037",
+      "sample_bytes": 344064,
+      "sample_rows": 1024,
+      "sample_width": 1024,
+      "row_start": 0,
+      "type_counts": {
+        "0": 133,
+        "14": 1,
+        "10": 132,
+        "12": 24,
+        "11": 30
+      }
+    },
+    "runs": {
+      "A1": {
+        "ns_per_row": [
+          437.092773,
+          436.076172,
+          426.879883,
+          383.097656,
+          407.714844,
+          393.351562,
+          378.662109,
+          378.947266,
+          381.958008,
+          338.867188,
+          346.516602,
+          339.640625,
+          385.945312,
+          354.532227,
+          403.482422,
+          354.370117
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 382.527832
+      },
+      "B1": {
+        "ns_per_row": [
+          96.069336,
+          86.669922,
+          87.076172,
+          111.654297,
+          86.507812,
+          86.833008,
+          86.22168,
+          87.931641,
+          87.646484,
+          87.768555,
+          89.436523,
+          89.477539,
+          87.768555,
+          86.750977,
+          93.261719,
+          87.56543
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 87.7075195
+      },
+      "A2": {
+        "ns_per_row": [
+          224.487305,
+          229.980469,
+          234.008789,
+          229.939453,
+          233.194336,
+          232.380859,
+          232.748047,
+          229.207031,
+          236.938477,
+          228.43457,
+          228.922852,
+          231.770508,
+          231.039062,
+          228.271484,
+          227.539062,
+          231.242188
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 230.50976550000001
+      },
+      "B2": {
+        "ns_per_row": [
+          94.523438,
+          93.302734,
+          95.581055,
+          95.540039,
+          93.34375,
+          95.662109,
+          95.214844,
+          93.302734,
+          94.482422,
+          96.679688,
+          96.638672,
+          94.685547,
+          95.37793,
+          92.936523,
+          94.522461,
+          95.214844
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 94.9501955
+      }
+    },
+    "complete_output_files_literal_equal": true,
+    "binary_sha256": {
+      "reference": "aeb88020acedc76934a79e363a62cd8a173b732e45e67d88bd3c57d205d121a1",
+      "candidate": "3a632378c23c123ba5eb6b8a152def9270514ee7286cf821655981d1904e41a0"
+    }
+  },
+  "driver_sha256": {
+    "benchmark-driver.cpp": "3061f49a0f7a4554700e935887f2b45cb95f34f9227988e2a9c0f388235cf0bd",
+    "trained-driver.cpp": "a7741ed8f834c1e5b11a6bc8e523b3d7b280ff644d76564c031c830f5982d13c",
+    "stubs.cpp": "edb1229b7e2a367149d113afaab97a7e419175266f66d53bf139c077b3c78049"
+  },
+  "limitations": [
+    "CPU timings are not end-to-end import or inference speedups.",
+    "ASan and non-AArch64 execution not run. GPU/model results separate."
+  ]
+}
