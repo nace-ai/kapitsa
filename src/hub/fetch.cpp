@@ -795,7 +795,8 @@ void download(std::vector<Target*>& todo, Progress& prog) {
 struct SignalGuard {
   struct sigaction old_int {}, old_term {};
   SignalGuard() {
-    g_stop = g_stop_asked.load();  // (a stop_downloads() just before this download is not lost)
+    g_stop = false;
+    if (g_stop_asked) g_stop = true;  // (stop_downloads() sets g_stop_asked first: a stop during this is not lost)
     struct sigaction sa {};
     sa.sa_handler = [](int) {
       if (g_stop) _exit(130);

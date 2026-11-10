@@ -583,6 +583,14 @@ static void on_stop_signal(int sig) {
 }
 
 static bool g_stop_handlers = false;  // SaveOnStop's are installed (under g_stop_mu)
+static bool g_stop_routed = false;    // serve_routed() serves: no engine, nothing to save (under g_stop_mu)
+
+// Before serve_routed(): from now on POST /stop ends the process at once; true when one already asked to stop
+static bool stop_when_routed() {
+  std::lock_guard<std::mutex> lk(g_stop_mu);
+  g_stop_routed = true;
+  return g_stop_requested;
+}
 
 // The thread that stops the server: a stop signal or POST /stop (a 0 byte, request_stop()) wakes it once. It saves,
 // then takes its course. A signal's: the terminal UI's handler (the status block off the screen,
@@ -603,7 +611,7 @@ static bool start_stop_thread() {
         if (r != 1) return;
         if (c != 0) break;
         std::lock_guard<std::mutex> lk(g_stop_mu);
-        if (g_stop_handlers) break;
+        if (g_stop_handlers || g_stop_routed) break;
         if (!g_stop_requested.exchange(true)) {  // (run_service checks it after taking g_stop_mu: none is missed)
           if (g_control) g_control->mark_stopping();
           server::publish_state("stopping", nullptr);
@@ -1323,6 +1331,7 @@ int ni::server::run_service(Options o) {
     if (!header) ui::serve_header(KAPITSA_VERSION);
     for (const auto& n : notes) ui::note(n);
   }
+  if (route && stop_when_routed()) return stop_asked();
   if (route) return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
   if (pair_head) {  // the stage of its split: the model's files here too, the layers it gives loaded when it does
     try {
@@ -1336,6 +1345,7 @@ int ni::server::run_service(Options o) {
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
+    if (stop_when_routed()) return stop_asked();
     PairStage st;
     st.model_dir = opt.model_dir, st.head_id = pair_head->id, st.mem = double(budget);
     st.gbs = bandwidth_gbs(Gpu::get().name(), Gpu::get().core_count());
