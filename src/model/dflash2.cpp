@@ -70,7 +70,12 @@ static int lowrank_request() {
   return v && *v ? atoi(v) : simd_gpu() ? 768 : 0;
 }
 
+static bool dfl_tw_supported();
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
+  // On the M5's matrix units (dfl_tw_supported) a drafter of hidden >= 5120 (the 27B's) drafts on its own qmm8t GEMMs
+  // instead: its 8-row drafting pass 3.40 -> 3.15 ms on the M5 Max (ni_run, the 27B's code prompt, interleaved runs,
+  // the same tokens); the 4B's and 9B's (2560, 4096), not measured there, keep the target's GEMMs
+  if (hidden >= 5120 && dfl_tw_supported()) return false;
   return hidden >= 2560 || (m1_max_32() && hidden == 2048 && moe && head_q4);  // guard: CORE4 measured on M1 Max 32
 }
 
@@ -1528,7 +1533,13 @@ void DFlash2::enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffe
   uint32_t Ntot = 0;
   for (auto& sg : segs) Ntot += sg.L->N;
   const uint32_t gpr = K / 64;
-  const int nt = ((Ntot + 15) / 16 > 8192 || gpr > 64) ? 32 : 16;
+  // 32 weight rows a simdgroup for grids past 8192 threadgroups of 16 (the target's rule), and for K > 4096 on narrow
+  // outputs (N <= 4096: the 35B drafter's down projection, 2048 x 6144); 16 otherwise. The 27B drafter's projections
+  // (K 5120 and 17408, N 5120 to 98304) on 16-row simdgroups: its 16-row drafting pass 4.40 -> 3.93 ms, the 8-row one
+  // 3.14 -> 3.07, M5 Max (ni_run, per-cycle A/B, the same tokens). NI_DFL_NT=0: the previous rule (32 for every K > 4096)
+  static const bool nt_old = getenv("NI_DFL_NT") && std::string(getenv("NI_DFL_NT")) == "0";
+  const bool fat = (Ntot + 15) / 16 > 8192 || (gpr > 64 && (nt_old || Ntot <= 4096));
+  const int nt = fat ? 32 : 16;
   uint32_t ks = gpr > 32 && gpr <= 64 ? 4 : 8;
   while (ks > 1 && gpr < ks) ks /= 2;
   const bool pf = nt == 32 || gpr > 32;
@@ -1960,7 +1971,9 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.buf(3, gst_);
     const uint32_t nthr = B * 64;
     e.val(4, nthr);
-    e.dispatch(1, 1, 1, nthr);
+    // a threadgroup of 64 per block row (each entry its own thread, the same values): one threadgroup of 1024 threads
+    // took 70 us for a 16-row block on the M5 Max (NI_PROFILE), 4 us at 8 rows
+    e.dispatch(B, 1, 1, 64);
   }
   // Draft attention: dfl_attn_qk (q / k norm + RoPE fused in) over at most attn_splits_ context splits of >= 32 keys.
   // The previous dfl_qk_prep + dfl_attn_mma over 256-key splits ran 8 kv heads x 1-3 threadgroups at short contexts,
