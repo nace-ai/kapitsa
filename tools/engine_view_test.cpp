@@ -31,6 +31,10 @@ struct Stub : ControlApi {
     id.config = {{"model", "27b"}, {"port", 8100}, {"private", true}};
   }
   json status() override { return instance_status(id, bus, act, last_state()); }
+  // the control socket stops and switches (#1125); nothing on the inference port may reach either
+  std::atomic<int> admin{0};
+  ControlReply stop() override { ++admin; return {202, {{"run_id", bus.run_id()}, {"state", "stopping"}}}; }
+  ControlReply model_switch(const json&) override { ++admin; return {202, json::object()}; }
 };
 
 static std::string error_code(const httplib::Result& r) {
@@ -243,5 +247,6 @@ int main() {
   srv.stop();
   serving.join();
   control.stop();
+  CHECK(stub.admin == 0);  // no HTTP request stopped or switched the model
   std::cout << "engine_view_test ok\n";
 }
