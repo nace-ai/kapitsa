@@ -6,8 +6,9 @@
 //    records) from the acceptance's records: every verified node whose parent was accepted, and whether it was.
 //    Before any records, alpha 0 and beta 1: p = q. A depth whose calibration keeps its nodes out of every tree gets no
 //    records to correct it, in this process or (through the cache) the next: so a depth with no record for kStale
-//    cycles whose calibration gives even a confident node (q 0.9) under kLocked moves halfway back toward the identity
-//    and drops its old records, until its nodes are verified again.
+//    refit ticks (a cycle each, solo or batched) whose calibration gives even a confident node (q 0.9) under kLocked
+//    moves halfway back toward the identity and drops its old records, until its nodes are verified again (relax_locked;
+//    KfBatch's sampled calibration the same).
 //  - cost: a cycle's GPU time with n verify rows, measured on the Mac it runs on: its drafting half's command buffer
 //    and its verify's, in ms, whichever tool runs the cycles (ni_run, the server), so the cache means one thing
 //    whoever wrote it. The first cycles try every allowed n a few times (unless the cache already holds a table for
@@ -107,6 +108,11 @@ class KfBudget {
   // (tests) the calibration fit on given records
   static void fit(const std::vector<float>& x, const std::vector<uint8_t>& y, float& alpha, float& beta, int iters);
   static float logit_q(float lq);
+  // A locked calibration (a node of q 0.9 calibrated under kLocked: it keeps its depth's nodes out of the trees, so no
+  // record comes to correct it) halfway back toward the identity; true if it was locked
+  static constexpr int kStale = 32;       // refit ticks without a record before a locked depth relaxes
+  static constexpr float kLocked = 0.1f;
+  static bool relax_locked(float& alpha, float& beta);
 
  private:
   void load();
@@ -120,9 +126,8 @@ class KfBudget {
   std::vector<uint8_t> y_[kD];
   size_t head_[kD] = {};
   float alpha_[kD], beta_[kD];
-  int last_rec_[kD] = {};             // the cycle of each depth's last record (cycles_ then)
-  static constexpr int kStale = 32;   // cycles without a record before a locked depth's calibration relaxes
-  static constexpr float kLocked = 0.1f;  // locked: the calibrated p of a node the drafter gives 0.9 is below this
+  uint64_t ticks_ = 0;                // refit ticks (a cycle each: observe, or a batched cycle's records)
+  uint64_t last_rec_[kD] = {};        // the tick of each depth's last record
   int unlocks_ = 0;                   // relaxations this process (the summary)
   KfCosts c_;  // the cost table (loaded: the cache's costs, base 0 at its save)
   double rtok_ = 0, rms_ = 0;  // the recent cycles' tokens and ms (decaying sums): the rate
@@ -202,6 +207,8 @@ class KfBatch {
   // for logs: cycles by members and rows, tokens per cycle expected and got, rates, costs, the sampled calibration
   std::string summary() const;
   int cycles() const { return cycles_; }
+  // the sampled members' calibration of depths 0 .. n - 1 (tests)
+  void calibration(float* alpha, float* beta, int n) const;
   double cost(int M, int N) const;
   // The rule (see above), for M members' survivals surv[g * kDrafts + p] (non-increasing in p) with caps kmax[g], the
   // costs of N rows cost[N] (N = 0 .. kRows; only M .. kRows read), rate (0: the ratio rule), force_n (> 0: exactly that
@@ -227,6 +234,9 @@ class KfBatch {
   size_t head_[kDrafts + 1] = {};
   float alpha_[kDrafts + 1], beta_[kDrafts + 1];
   int cycles_ = 0, saved_ = 0, since_fit_ = 0;
+  // the sampled calibration's unlock (KfBudget::relax_locked): ticks are cycles with a sampled member, every 16 the check
+  uint64_t sticks_ = 0, slast_[kDrafts + 1] = {};
+  int since_unlock_ = 0, unlocks_ = 0;
   long mcyc_[kMembers + 1] = {};             // cycles by M (this process)
   long seen_[kMembers + 1][kRows + 1] = {};  // mcyc_ when N was last measured at M (the refresh's choice)
   long ncyc_[kMembers + 1][kRows + 1] = {};  // the summary: cycles by M and N

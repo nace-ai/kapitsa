@@ -758,6 +758,68 @@ int unlock_check(uint64_t salt) {
     check(std::fabs(a[2] + 0.5f) < 0.35f && std::fabs(be[2] - 0.8f) < 0.3f,
           "depth 2 given records again (drawn at -0.50, 0.80): fit to them", a[2], be[2]);
   }  // (the destructor saves)
+  // the batched path: the greedy budget reached only through records() (KfBatch::observe), never observe()
+  auto poison = [&](const std::string& f, const char* cost_of) {
+    nlohmann::json j;
+    j["cost_of"] = cost_of;
+    j["cost"] = std::vector<double>(kf::kMaxRows + 1, 0.0);
+    std::vector<float> a(kf::kMaxRows + 1, 0.0f), b(kf::kMaxRows + 1, 1.0f);
+    a[2] = -8.0f;
+    b[2] = 0.1f;
+    j["alpha"] = a;
+    j["beta"] = b;
+    std::ofstream(f) << j.dump();
+  };
+  poison(file, "cycle GPU ms");
+  {
+    KfBudget b("u");
+    b.set_rows(0xffu, 8);
+    for (int c = 0; c < 256; ++c) {
+      int dep[4];
+      float lq[4];
+      uint8_t hit[4];
+      for (int i = 0; i < 4; ++i) dep[i] = 1, draw(-0.3f, 0.9f, &lq[i], &hit[i]);
+      b.records(dep, lq, hit, 4);
+    }
+    float a[3], be[3];
+    b.calibration(a, be, 3);
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f,
+          "records() alone (a batched server's greedy budget), 256 calls: depth 2 relaxed as on observe", a[2], be[2]);
+  }
+  poison(file, "cycle GPU ms");
+  {
+    KfBudget b("u");
+    b.set_rows(0xffu, 8);
+    KfBatch kb("");
+    KfBatch::Member m[2];
+    for (int g = 0; g < 2; ++g)
+      for (int p = 0; p < KfBatch::kDrafts; ++p) m[g].lc[p] = -0.5f;
+    const int k[2] = {0, 0}, acc[2] = {0, 0};
+    for (int c = 0; c < 256; ++c) kb.observe(m, 2, k, acc, 10.0, &b);
+    float a[3], be[3];
+    b.calibration(a, be, 3);
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f,
+          "batched cycles of greedy members that verify no draft (no records): still ticks, depth 2 relaxed", a[2], be[2]);
+  }
+  // KfBatch's own calibration (its sampled members), loaded locked at depth 2: cycles of a sampled member that give
+  // depth 1 records alone
+  const std::string bfile = kdir + "/ub.json";
+  poison(bfile, "x");
+  {
+    KfBatch kb("ub");
+    KfBatch::Member m[2];
+    for (int g = 0; g < 2; ++g) {
+      m[g].sampled = true;
+      for (int p = 0; p < KfBatch::kDrafts; ++p) m[g].lc[p] = -0.5f;
+    }
+    const int k[2] = {1, 1}, acc[2] = {1, 0};
+    for (int c = 0; c < 256; ++c) kb.observe(m, 2, k, acc, 10.0, nullptr);
+    float a[3], be[3];
+    kb.calibration(a, be, 3);
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f,
+          "KfBatch's sampled calibration, locked at depth 2, no record there: relaxed the same way", a[2], be[2]);
+  }
+  unlink(bfile.c_str());
   unlink(file.c_str());
   rmdir(kdir.c_str());
   rmdir(dir.c_str());
