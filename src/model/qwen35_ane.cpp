@@ -12,6 +12,7 @@
 #include "ane/ffn_split.h"
 #include "ane/input_profile.h"
 #include "ane/slabs.h"
+#include "model/ffn_share.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
 #include "util/log.h"
@@ -132,12 +133,13 @@ void Qwen35::init_ane() {
   // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights: the M5 default share on
   // the models that have one (mma_share_measured)
   bool mma = qmt_ready() && mma_share_measured(cfg_);
-  // per layer as enc_mlp_gpu_part_qmt runs it (and plan()'s ffn_mma): all three 4-bit g64, or all three in NI_QMTF's
-  // formats with gate and up alike; a mix runs the generic GPU part and keeps the old share
-  auto g64 = [](const QLinear& q) { return q.bits == 4 && q.gs == 64; };
-  auto qf = [](const QLinear& q) { return qmtf_ready(q.bits, q.gs); };
-  for (const Layer& L : layers_)
-    mma = mma && ((g64(L.mg) && g64(L.mu) && g64(L.md)) || (qf(L.mg) && qf(L.mu) && qf(L.md) && L.mg.same_format(L.mu)));
+  // per layer, as plan()'s ffn_mma (ffn_share::layer_mma): gate, up and down in one format, 4-bit g64 or NI_QMTF's; a
+  // mix runs the generic GPU part and keeps the older share
+  const ffn_share::Qmtf qf{qmtf_ready(3, 64), qmtf_ready(8, 64), qmtf_ready(4, 32)};
+  auto fmt = [](const QLinear& q) {
+    return q.iq || q.q20 || q.exl3 ? ffn_share::Fmt{} : ffn_share::Fmt{q.bits, q.gs};
+  };
+  for (const Layer& L : layers_) mma = mma && ffn_share::layer_mma(fmt(L.mg), fmt(L.mu), fmt(L.md), qf);
   const uint32_t total = uint32_t(cfg_.dense_I / 512);
   uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, share_wave, mma);
   uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;

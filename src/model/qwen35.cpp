@@ -3,6 +3,7 @@
 #include "model/qwen35.h"
 #include "engine/device_profile.h"
 #include "model/affine_pack.h"
+#include "model/ffn_share.h"
 #include "model/gemm_slices.h"
 #include "ane/ffn_split.h"
 #include "ane/slabs.h"
@@ -1419,25 +1420,19 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
     // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, on
     // a model with an M5 share (mma_share_measured), as init_ane decides it, so the planned and the loaded default share agree
     m.ffn_mma = qmt_on() && mma_share_measured(c);
-    // a layer qualifies as enc_mlp_gpu_part_qmt runs it: gate, up and down all 4-bit g64 (qmt), or all three in
-    // NI_QMTF's formats with gate and up alike (qmtf); a mix runs the generic GPU part, so it keeps the old share
+    // per layer, as init_ane decides it (ffn_share::layer_mma): gate, up and down in one format, 4-bit g64 or NI_QMTF's
+    const ffn_share::Qmtf qf{qmtf_on(3, 64), qmtf_on(8, 64), qmtf_on(4, 32)};
     for (int i = 0; i < c.layers && m.ffn_mma; ++i) {
-      int f[3] = {0, 0, 0};  // 0 neither, 1 4-bit g64, else bits * 100 + group size (an NI_QMTF format)
+      ffn_share::Fmt f[3];
       int j = 0;
       for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
         const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
         auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
-        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: F bits = K F / 32 words, g64 = K / 64
+        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: F bits = K F / 32 words
         const bool q = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32";
-        const int64_t wpr = q ? iw->second.shape.back() : 0, gpr = q ? is->second.shape.back() : 0;
-        const bool g64 = gpr == K / 64;
-        f[j++] = g64 && wpr == K / 8                        ? 1
-                 : g64 && qmtf_on(3, 64) && wpr == K * 3 / 32 ? 364
-                 : g64 && qmtf_on(8, 64) && wpr == K / 4      ? 864
-                 : gpr == K / 32 && qmtf_on(4, 32) && wpr == K / 8 ? 432
-                                                               : 0;
+        f[j++] = q ? ffn_share::from_shape(K, iw->second.shape.back(), is->second.shape.back()) : ffn_share::Fmt{};
       }
-      m.ffn_mma = (f[0] == 1 && f[1] == 1 && f[2] == 1) || (f[0] > 1 && f[0] == f[1] && f[2] > 1);
+      m.ffn_mma = ffn_share::layer_mma(f[0], f[1], f[2], qf);
     }
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
