@@ -607,6 +607,7 @@ static bool start_stop_thread() {
         if (!g_stop_requested.exchange(true)) {  // (run_service checks it after taking g_stop_mu: none is missed)
           if (g_control) g_control->mark_stopping();
           server::publish_state("stopping", nullptr);
+          hub::stop_downloads();  // a model still downloading stops now, its parts kept
         }
       }
       g_stopping = 1;  // (a further signal ends the process at once)
@@ -1327,8 +1328,10 @@ int ni::server::run_service(Options o) {
     try {
       hub::PullOptions po;
       if (ui::can_prompt(yes)) po.make_room = ui::make_room;
+      if (g_stop_requested) return stop_asked();
       opt.model_dir = hub::ensure(ref, po);
     } catch (const hub::Stopped& e) {
+      if (g_stop_requested) return stop_asked();
       return stopped(e);
     } catch (const hub::Error& e) {
       return fail(e.what());
@@ -1345,8 +1348,10 @@ int ni::server::run_service(Options o) {
   try {
     hub::PullOptions po;
     if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
+    if (g_stop_requested) return stop_asked();
     opt.model_dir = hub::ensure(ref, po);
   } catch (const hub::Stopped& e) {
+    if (g_stop_requested) return stop_asked();  // POST /stop during the download: a stop, status 0
     return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());

@@ -117,7 +117,7 @@ During a model switch, a stop takes effect as soon as the load can be abandoned,
 **Not yet in `kapitsa serve`.** Running requests are cut when the process exits; they do not end with `finish_reason`
 `cancelled`. A stop during a switch drops the pending `POST /model`'s connection instead of answering `503 stopping`.
 A stop while the instance is `starting` or loading its first model takes effect when that load ends, before the
-instance serves. Every lifecycle exits with status 0, a terminal's after clearing its status block. A second
+instance serves. A model still downloading stops at once, its downloaded parts kept for the next start. Every lifecycle exits with status 0, a terminal's after clearing its status block. A second
 `POST /stop` answers `202` and changes nothing, and `POST /model` after a stop answers `503 stopping`.
 
 ### Model switch

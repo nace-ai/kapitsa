@@ -1552,6 +1552,8 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
 
 }  // namespace
 
+void stop_downloads() { g_stop = true; }
+
 std::string ensure(const ModelRef& ref, const PullOptions& opt) {
   if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
   const bool existed = is_dir(ref.dir);

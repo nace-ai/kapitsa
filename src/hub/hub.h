@@ -134,6 +134,8 @@ struct PullOptions {
 // file goes, its blocks stay in the experts' clone; a stopped import starts again from the downloaded file) before the
 // manifest. Throws Error.
 std::string ensure(const ModelRef& ref, const PullOptions& opt);
+// As Ctrl+C does: the download in progress stops (its parts kept) and ensure() throws Stopped. Safe from any thread.
+void stop_downloads();
 // A model folder that was not downloaded from the catalog (a GGUF import): fetches the catalog drafter that matches its
 // shape (drafter_for_shape) into <dir>/dflash2/, unless the folder has one, and lists it in the manifest. Returns what
 // happened in a few words ("" when the folder's shape has no catalog drafter or already has one). Throws Error
