@@ -9,7 +9,7 @@ The repo is 16.32 GB with the vision tower and the MTP head.
 
 The tokenizer files and chat template are those of `Qwen/Qwen3.8-27B` at `37561816` (`tokenizer.json` SHA-256 starts `0997f410c5`), not the catalog pack's. The
 catalog pack's `tokenizer.json` differs from the base's on Devanagari and Thai ids (it lost `\p{M}`); English, code and math ids are identical, so the
-quality and speed numbers below stand for those, and nothing here claims Indic or Thai quality. The chat template renders the same text as the catalog's and
+quality and speed numbers below stand for those (every run here used the catalog pack's tokenizer; English, code, math, CJK, emoji and RTL text were compared id by id, Devanagari and Thai were not measured), and nothing here claims Indic or Thai quality. The chat template renders the same text as the catalog's and
 differs only by the `{% generation %}` markers. This record
 carries the quality result. The speed result is held, see below.
 
