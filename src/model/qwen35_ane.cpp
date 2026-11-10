@@ -132,9 +132,11 @@ void Qwen35::init_ane() {
   // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights: the M5 default share on
   // the models that have one (mma_share_measured)
   bool mma = qmt_ready() && mma_share_measured(cfg_);
-  // every layer with a matrix-unit GPU part (ffn_gpu_part: plan()'s ffn_mma and enc_mlp_gpu_part_qmt's dispatch); a
-  // layer on the generic kernels keeps the older share
-  for (const Layer& L : layers_) mma = mma && ffn_gpu_part(L) != ffn_share::Path::generic;
+  // every layer with a matrix-unit GPU part (ffn_share::matrix_unit_share, as plan()'s ffn_mma; enc_mlp_gpu_part_qmt
+  // dispatches by the same gpu_part); one layer on the generic kernels keeps the older share
+  std::vector<ffn_share::LayerFmt> fmts;
+  for (const Layer& L : layers_) fmts.push_back({ffn_fmt(L.mg), ffn_fmt(L.mu), ffn_fmt(L.md)});
+  mma = mma && ffn_share::matrix_unit_share(fmts, qmtf_formats());
   const uint32_t total = uint32_t(cfg_.dense_I / 512);
   uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, share_wave, mma);
   uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;

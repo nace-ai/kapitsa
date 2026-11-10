@@ -1419,19 +1419,21 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
     // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, on
     // a model with an M5 share (mma_share_measured), as init_ane decides it, so the planned and the loaded default share agree
     m.ffn_mma = qmt_on() && mma_share_measured(c);
-    // every layer with a matrix-unit GPU part (ffn_share::gpu_part, as init_ane and enc_mlp_gpu_part_qmt decide it)
-    const ffn_share::Qmtf qf = qmtf_formats();
-    for (int i = 0; i < c.layers && m.ffn_mma; ++i) {
-      ffn_share::Fmt f[3];
-      int j = 0;
-      for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
-        const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
-        auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
-        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: F bits = K F / 32 words
-        const bool q = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32";
-        f[j++] = q ? ffn_share::from_shape(K, iw->second.shape.back(), is->second.shape.back()) : ffn_share::Fmt{};
+    // and every layer with a matrix-unit GPU part (ffn_share::matrix_unit_share, as init_ane decides it from the loaded
+    // projections and enc_mlp_gpu_part_qmt dispatches by gpu_part), its formats read from the shapes
+    if (m.ffn_mma) {
+      std::vector<ffn_share::LayerFmt> layers(size_t(c.layers));
+      for (int i = 0; i < c.layers; ++i) {
+        auto fmt = [&](const char* t) {
+          const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
+          auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
+          const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: F bits = K F / 32 words
+          const bool q = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32";
+          return q ? ffn_share::from_shape(K, iw->second.shape.back(), is->second.shape.back()) : ffn_share::Fmt{};
+        };
+        layers[size_t(i)] = {fmt("gate_proj"), fmt("up_proj"), fmt("down_proj")};
       }
-      m.ffn_mma = ffn_share::gpu_part(f[0], f[1], f[2], qf) != ffn_share::Path::generic;
+      m.ffn_mma = ffn_share::matrix_unit_share(layers, qmtf_formats());
     }
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
@@ -3134,11 +3136,11 @@ ffn_share::Qmtf Qwen35::qmtf_formats() {
   // 8-bit: enc_qmm_large's qmm8 condition too (qmtf_for), for a dense FFN projection (never a router gate)
   return {qmtf_on(3, 64), qmtf_on(8, 64) && qmm8_on(), qmtf_on(4, 32)};
 }
+ffn_share::Fmt Qwen35::ffn_fmt(const QLinear& q) {
+  return q.iq || q.q20 || q.exl3 ? ffn_share::Fmt{} : ffn_share::Fmt{q.bits, q.gs};
+}
 ffn_share::Path Qwen35::ffn_gpu_part(const Layer& L) {
-  auto fmt = [](const QLinear& q) {
-    return q.iq || q.q20 || q.exl3 ? ffn_share::Fmt{} : ffn_share::Fmt{q.bits, q.gs};
-  };
-  return ffn_share::gpu_part(fmt(L.mg), fmt(L.mu), fmt(L.md), qmtf_formats());
+  return ffn_share::gpu_part(ffn_fmt(L.mg), ffn_fmt(L.mu), ffn_fmt(L.md), qmtf_formats());
 }
 
 // The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) is on today for these shapes only: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another

@@ -673,6 +673,7 @@ class Qwen35 : public Model {
   // the kernels the split's GPU part runs layer L's FFN on (ffn_share::gpu_part: plan(), init_ane() and
   // enc_mlp_gpu_part_qmt decide by it)
   static ffn_share::Path ffn_gpu_part(const Layer& L);
+  static ffn_share::Fmt ffn_fmt(const QLinear& q);  // an affine projection's format ({} for GGUF blocks, Q2_0, EXL3)
   // the M5 default share of the split (default_units' gpu_mma) applies to this model (NI_ANE_MMA)
   static bool mma_share_measured(const Qwen35Config& c);
   void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);

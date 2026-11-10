@@ -5,19 +5,24 @@
 //  - gpu_part through plan()'s path (shapes -> formats): one format throughout takes the matrix units (4-bit g64: qmt;
 //    3-bit, 8-bit, 4-bit g32: qmtf); a GGUF Q4_K_M import's layer (Q4_K gate/up -> 4-bit g32, Q6_K down -> 8-bit g64,
 //    src/gguf/import.h) takes qmtf; 3-bit gate/up with a 4-bit g64 down (mlx-lm's mixed recipes), a 6-bit down, gate
-//    and up in different formats, or a format whose tile is off keep the generic kernels and the older share.
+//    and up in different formats, or a format whose tile is off keep the generic kernels and the older share;
+//  - matrix_unit_share (plan()'s and init_ane()'s ffn_mma) over a whole model's layers: the 27B Q4_K_M's real mix
+//    (33 layers Q4_K/Q4_K/Q6_K, 32 Q4_K throughout, read from its GGUF header) takes it; one odd layer drops it.
 //   ffn_share_test      (no model, no GPU)
 #include "model/ffn_share.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <utility>
+#include <vector>
 
 #define CHECK(condition) do { if (!(condition)) { \
   std::fprintf(stderr, "CHECK failed at %s:%d: %s\n", __FILE__, __LINE__, #condition); std::abort(); \
 } } while (false)
 
 using ni::ffn_share::Fmt;
+using ni::ffn_share::LayerFmt;
+using ni::ffn_share::matrix_unit_share;
 using ni::ffn_share::Path;
 using ni::ffn_share::Qmtf;
 using ni::ffn_share::from_shape;
@@ -76,6 +81,27 @@ int main() {
   }
   // what init_ane passes for a projection that is not an affine pack (GGUF blocks, Q2_0, EXL3)
   CHECK(gpu_part(Fmt{}, Fmt{}, Fmt{}, on) == Path::generic);
+
+  // whole models (plan()'s and init_ane()'s ffn_mma)
+  auto model = [](int n, LayerFmt l) { return std::vector<LayerFmt>(size_t(n), l); };
+  CHECK(matrix_unit_share(model(64, {b4, b4, b4}), off));     // all 4-bit g64
+  CHECK(matrix_unit_share(model(32, {b3, b3, b3}), on));      // all qmtf, gate/up alike
+  CHECK(matrix_unit_share(model(32, {b8, b8, b8}), on));
+  std::vector<LayerFmt> q4km;                                 // the 27B Q4_K_M's GGUF header, layer by layer
+  for (int i = 0; i < 65; ++i) q4km.push_back(i % 2 ? LayerFmt{q4k, q4k, q4k} : LayerFmt{q4k, q4k, b8});
+  CHECK(matrix_unit_share(q4km, on));
+  CHECK(!matrix_unit_share(q4km, Qmtf{true, false, true}));   // 8-bit tile off: its Q6_K downs go generic
+  CHECK(!matrix_unit_share(model(32, {b3, b3, b4}), on));     // 3-bit gate/up + 4-bit g64 down
+  CHECK(!matrix_unit_share(model(32, {q4k, b8, b8}), on));    // gate and up in different qmtf formats
+  CHECK(!matrix_unit_share(model(32, {b3, b8, b3}), on));
+  for (LayerFmt odd : {LayerFmt{b3, b3, b4}, LayerFmt{b6, b6, b6}, LayerFmt{b3, b8, b3}, LayerFmt{}})
+    for (size_t at : {size_t(0), size_t(17), size_t(31)}) {   // one odd layer anywhere drops the whole model's share
+      auto m4 = model(32, {b4, b4, b4}), m3 = model(32, {b3, b3, b3});
+      m4[at] = m3[at] = odd;
+      CHECK(!matrix_unit_share(m4, on));
+      CHECK(!matrix_unit_share(m3, on));
+    }
+  CHECK(!matrix_unit_share({}, on));                          // no dense FFN layers
   std::printf("ffn_share_test: ok\n");
   return 0;
 }

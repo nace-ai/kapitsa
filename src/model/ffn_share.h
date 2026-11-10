@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace ni::ffn_share {
 
@@ -40,6 +41,22 @@ inline Path gpu_part(Fmt gate, Fmt up, Fmt down, Qmtf q) {
   if (gate == Fmt{4, 64} && up == gate && down == gate) return Path::qmt;
   if (q.has(gate) && up == gate && q.has(down)) return Path::qmtf;
   return Path::generic;
+}
+
+// a dense FFN layer's gate, up and down formats
+struct LayerFmt {
+  Fmt gate, up, down;
+};
+
+// The split's default share for the model (plan()'s and init_ane()'s ffn_mma): the matrix-unit share when every layer's
+// GPU part runs on the matrix units. One layer on the generic kernels keeps the older share for the whole model: the
+// share is one row split for every layer, and the generic kernels' layer would take the matrix-unit share's GPU rows
+// at the simdgroup kernels' speed.
+inline bool matrix_unit_share(const std::vector<LayerFmt>& layers, Qmtf q) {
+  if (layers.empty()) return false;
+  for (const LayerFmt& l : layers)
+    if (gpu_part(l.gate, l.up, l.down, q) == Path::generic) return false;
+  return true;
 }
 
 }  // namespace ni::ffn_share
