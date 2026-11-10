@@ -1,5 +1,5 @@
 // The control socket (docs/control-socket.md): HTTP/1.1 over a Unix domain socket in $KAPITSA_HOME/run, answering
-// GET /status, GET /events, POST /stop and POST /model for the user who started the server. It is its own small HTTP
+// GET /status and GET /events for the user who started the server (POST /stop and POST /model: the next change). It is its own small HTTP
 // server rather than httplib's: the peer check needs each accepted socket (getpeereid), which httplib keeps private.
 // One request per connection (`Connection: close`), so there is no keep-alive state to get wrong.
 #pragma once
@@ -25,15 +25,11 @@ struct ControlReply {
 ControlReply control_error(int status, const std::string& code, const std::string& message,
                            const nlohmann::json& details = nullptr);
 
-// What the socket asks of the server. Requests reach it already checked: a known path and method, a JSON object
-// with only the request's fields, and a run_id (when given) that is this run's.
+// What the socket asks of the server
 class ControlApi {
  public:
   virtual ~ControlApi() = default;
   virtual nlohmann::json status() = 0;
-  virtual ControlReply stop() = 0;  // 202 to stop: after_stop() runs once the answer is sent
-  virtual void after_stop() {}
-  virtual ControlReply model_switch(const nlohmann::json& request) = 0;
 };
 
 constexpr int kControlProtocol = 1;
@@ -74,6 +70,7 @@ class ControlServer {
   // One request's answer, everything but GET /events (tests call it without a socket)
   ControlReply handle(const std::string& method, const std::string& path, const std::string& body);
   void set_owner(uid_t uid) { owner_ = uid; }  // whose connections are served (tests); the server's user otherwise
+  int connections() const { return connections_.load(); }  // open connections, event streams included
 
  private:
   void accept_loop();

@@ -47,7 +47,8 @@ it.
   They release the lock at once.
 - **Start race.** A starting server takes the lock, waiting at most 1 second so that a client's brief check never makes
   it fail, and holds it until it exits. A server that does not get it exits with "instance `<id>` is already
-  running". The winner removes any old socket file, emits its first event (`state` `starting`), then binds and
+  running". Until the configuration names instances, every server is `default`: a second one (as `kapitsa bench`
+  starts beside a running server) serves without a socket and says so, as does a server that cannot make `run/`. The winner removes any old socket file, emits its first event (`state` `starting`), then binds and
   listens. The lock's file descriptor and the listening socket are opened `O_CLOEXEC`. Otherwise a child such as
   the Splash engine would inherit the lock and keep it after the server is killed, and clients would see the instance
   as starting or busy forever.
