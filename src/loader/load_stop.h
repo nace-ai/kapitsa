@@ -1,7 +1,8 @@
-// A stop asked while a model's weights are read: kapitsa serve's POST /stop or a stop signal during the first load,
-// which used to wait for the whole load (minutes from an external drive). The server says what a stop does; the
-// readers (src/loader/safetensors.cpp) reach a stop point before each 32 MB piece and each tensor read, and the first
-// one there once a stop was asked does it. Until an action is set nothing stops: ni_run, bench and the SDK read as
+// A stop asked while a model's weights are read: kapitsa serve's POST /stop during the first load, which used to wait
+// for the whole load (minutes from an external drive). A signal does not reach it: the stop handlers are installed after
+// the first load. The server says what a stop does; the readers reach a stop point before each 32 MB piece and each
+// tensor read (src/loader/safetensors.cpp) and before each streamed-expert read (src/model/expert_store.cpp's fill),
+// and the first one there once a stop was asked does it. Until an action is set nothing stops: ni_run, bench and the SDK read as
 // before.
 #pragma once
 
