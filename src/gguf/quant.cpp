@@ -601,6 +601,26 @@ void dq_mxfp4(const uint8_t* b, float* y) {
   }
 }
 
+#if defined(__aarch64__)
+void dq_mxfp4_neon(const uint8_t* b, float* y) {
+  const float d = e8m0_half(b[0]);
+  const uint8x16_t q = vld1q_u8(b + 1);
+  const int8x16_t table = vld1q_s8(kFp4x2);
+  const int8x16_t lo = vqtbl1q_s8(table, vandq_u8(q, vdupq_n_u8(15)));
+  const int8x16_t hi = vqtbl1q_s8(table, vshrq_n_u8(q, 4));
+  const auto store = [d](int8x16_t codes, float* out) {
+    const int16x8_t a = vmovl_s8(vget_low_s8(codes));
+    const int16x8_t b = vmovl_s8(vget_high_s8(codes));
+    vst1q_f32(out, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(a))), d));
+    vst1q_f32(out + 4, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(a))), d));
+    vst1q_f32(out + 8, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(b))), d));
+    vst1q_f32(out + 12, vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_high_s16(b))), d));
+  };
+  store(lo, y);
+  store(hi, y + 16);
+}
+#endif
+
 void dq_nvfp4(const uint8_t* b, float* y) {
   const uint8_t* q = b + 4;
   for (int s = 0; s < 4; ++s) {
@@ -664,6 +684,13 @@ void dequantize(uint32_t t, const uint8_t* src, float* dst, size_t n) {
     case kIQ1_S: f = dq_iq1_s; break;
     case kIQ1_M: f = dq_iq1_m; break;
   }
+#if defined(__aarch64__)
+  if (t == kMXFP4) {
+    const uintptr_t in = reinterpret_cast<uintptr_t>(src), out = reinterpret_cast<uintptr_t>(dst);
+    const bool overlap = out >= in ? out - in < n / be * bb : in - out < n / be * be * sizeof(float);
+    if (!overlap) f = dq_mxfp4_neon;
+  }
+#endif
   for (size_t i = 0; i < n / be; ++i) f(src + i * bb, dst + i * be);
 }
 
