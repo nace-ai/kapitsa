@@ -679,6 +679,39 @@ user message arrives, so the prompt no longer matches what was cached and the co
 sets `preserve_thinking` to true for such templates when the request leaves it out; `"chat_template_kwargs":
 {"preserve_thinking": false}` turns it off. The kept reasoning counts toward the context.
 
+#### Thinking budget
+
+A request can cap its reasoning. At the cap the engine forces `</think>` (after an optional closing text), and the
+model writes its reply in the same turn.
+
+- **Messages:** `"thinking": {"type": "enabled", "budget_tokens": N}`.
+- **Messages, Chat Completions and Responses:** `"thinking_control": {"hard_cap": N, "close_text": "...",
+  "end_on_tool_call": true}`. `hard_cap` takes precedence over `budget_tokens`. `close_text` is forced before
+  `</think>` when the cap leaves room for it. `end_on_tool_call` (on by default when the request has tools) lets a tool
+  call inside the reasoning end it.
+- **The count:** the cap counts every reasoning token, the forced `</think>` included, so the reasoning holds at most N
+  tokens. A cap of 0 turns thinking off; thinking disabled or absent is no cap.
+- **Usage:** `usage.kapitsa.thinking` reports `hard_cap`, `reasoning_tokens` (the capped block's) and `forced` (whether
+  the close was forced).
+- **The first reasoning block:** the cap covers the reply's first reasoning block. When the template leaves `<think>` to
+  the model, whitespace before it keeps the cap waiting; any other text first means the reply started without
+  reasoning, and nothing is capped. A second `<think>` block after the first `</think>` is not capped. The API's own
+  reasoning count includes such later reasoning, and the tokens of a tool call held inside the reasoning; the usage
+  field counts the capped block only. The alternative, capping every block so that the budget bounds the reply's total
+  reasoning, has not been tried.
+- **How it decodes:** the forced token is a mask on the rows a step samples, the one structured output uses, so
+  speculative decoding stays exact. DFlash2 and KFlash cycles and batched requests mask their rows near the cap. MTP,
+  LiLiCorr, prompt lookup, Dory's drafts and plain decoding hand over to masked plain steps before a sample can reach
+  it, and the rest of that reply decodes at plain-step speed. A capped Nemotron-H request decodes outside batches until
+  its reasoning ends, or for the rest of the reply once it has handed over. Without a budget no row is masked.
+  Clover's own decoding modes apply their generation_config controls instead.
+- **Where it applies:** a model whose tokenizer has a `</think>` token, with thinking on. Elsewhere (Nemotron Nano 9B v2,
+  whose think tags are text, or a request with thinking off whose prompt does not open a reasoning block) a positive
+  budget is not enforced and `usage.kapitsa.thinking` is left out. The Ollama routes (`/api/chat`, `/api/generate`) do
+  not read `thinking_control`. On the Splash route Splash forces the close at the same cap, without
+  `usage.kapitsa.thinking`; it refuses a closing text of more than 63 tokens or one holding `</think>` or the tool-call
+  token.
+
 ### Structured output
 
 A request can hold the reply to a JSON Schema, to any JSON object, or to tool calls. Each token is then sampled under a
@@ -749,7 +782,9 @@ chat template and the request say (thinking on by default in Chat Completions an
   (`minimal` and `low` 1 loop, `medium` 2, `high` and `xhigh` 4; `none` only turns the visible thinking off and keeps
   the default), Anthropic's `thinking` (disabled 1 loop, a
   `budget_tokens` under 4096 1, under 16384 2, above 4; adaptive the server's default) and `output_config.effort`.
-  Every reply reports the loops it ran in `usage.kapitsa.loops`, and the server log names them.
+  Every reply reports the loops it ran in `usage.kapitsa.loops`, and the server log names them. `budget_tokens` also
+  caps the reasoning ([Thinking budget](#thinking-budget)); `"loops"` in the body keeps the loop count fixed across
+  budgets.
 - **Cache:** a conversation's cached prompt is only valid for the loop count that computed it; a request with another
   count reads its prompt again (on another slot when one is free, so the conversation in progress keeps its cache).
 - **KV cache (`--loop-kv`):** `last-loop` (the default, NVIDIA's `recurrent_kv_cache_mode: last_loop`) keeps one cache per

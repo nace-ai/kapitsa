@@ -6,6 +6,7 @@
 #include "engine/grammar.h"
 #include "engine/prefix_cache.h"
 #include "engine/reasoning_memory.h"
+#include "engine/think_control.h"
 #include "hub/hub.h"
 #include "model/clover.h"
 #include "model/dflash2.h"
@@ -626,7 +627,12 @@ class Engine {
     const GrammarMatcher* gm = nullptr;
     GrammarState* gst = nullptr;
     const bool* g_on = nullptr;
-    bool masked() const { return gm && *g_on; }
+    // thinking budget: the request's control (its chat()'s, advanced by its handle()); near the cap its rows sample
+    // under the masks it fills (null: no budget). kNear: a member's rows in one cycle (at most 8) and the plain passes
+    // queued before the host reads the tokens of the pass before them.
+    const ThinkControl* tc = nullptr;
+    static constexpr int kNear = 9;
+    bool masked() const { return (gm && *g_on) || (tc && tc->near(kNear)); }
   };
   // Structured output: a verify's masks, Seq::mask rows 0 .. rows - 1, from the grammar's state after the anchor
   // tokens[P]: row r's is the state after row r's path (parent[r]: a tree's, null: a chain's, r - 1; rows from `live` on
@@ -634,6 +640,9 @@ class Engine {
   // sample is not its token): any mask.
   static void verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq& s, int P, int rows, const int* parent,
                            int live);
+  // A batch member's masks for rows P .. P + rows - 1 of a chain: its grammar's while the grammar applies, else its
+  // thinking budget's (the two never mask the same row: the grammar starts after </think>); every token otherwise
+  static void member_masks(const BatchJob& j, int P, int rows);
   // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
   // n requests take turns instead (one pass over their rows does not pay, or the drafter is not one batch_rows batches by default);
   // kBatchBudget: KFlash's batch budget (KfBatch, DFlash2) chooses each member's rows every cycle from the members'
@@ -718,6 +727,8 @@ class Engine {
   bool preserve_thinking_default_ = false;  // the template has a preserve_thinking switch: on unless the request says
   bool reasoning_effort_template_ = false;  // chat_template has reasoning_effort parameter (e.g. Qwen3.8 default xhigh)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
+  // per token id, 1 when its text is whitespace only: a thinking budget waits through these for a generated <think>
+  std::vector<uint8_t> think_space_;
   TextTags text_tags_;        // the tags written as text (no such tokens; Nemotron Nano 9B v2)
   bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
   bool think_ws_ = true;      // the whitespace before </think> stays in the reasoning (Nemotron-H, Dory)

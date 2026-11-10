@@ -4,6 +4,7 @@
 #include "engine/output_parser.h"
 #include "engine/stop_filter.h"
 #include "engine/reasoning_memory.h"
+#include "engine/think_control.h"
 #include "engine/tool_args.h"
 #include "model/qwen4_config.h"
 #include "splash/runtime.h"
@@ -400,6 +401,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  think_space_.assign(size_t(tok_.vocab_size()), 0);
+  for (int id = 0; id < tok_.vocab_size(); ++id) {
+    const std::string& b = tok_.token_bytes(id);
+    think_space_[size_t(id)] =
+        !b.empty() && !tok_.is_special(id) && b.find_first_not_of(" \t\r\n") == std::string::npos;
+  }
   if (nh_) {
     // Nemotron Nano 9B v2: its tokenizer has no <think> or tool-call tokens (the tags are text; its calls
     // <TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>), and its template switches thinking with "/think" /
@@ -1497,6 +1504,14 @@ void Engine::verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq&
   }
 }
 
+void Engine::member_masks(const BatchJob& j, int P, int rows) {
+  Seq& s = *j.slot->seq;
+  if (j.gm && *j.g_on) verify_masks(*j.gm, *j.gst, s, P, rows, nullptr, rows);
+  else if (j.tc && j.tc->armed())
+    j.tc->fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, nullptr, rows);
+  else memset(s.mask.ptr(), 0xff, size_t(rows) * size_t(s.mask_words) * 4);
+}
+
 // ---- batched decode ----
 
 int Engine::batch_rows(int n) const {
@@ -1810,8 +1825,7 @@ void Engine::batch_cycle(int rows) {
   if (pending) {
     if (e1_work && !kfb) e1->wait();  // (under the budget it was waited for before the plan)
     for (size_t i = 0; i < nj; ++i)
-      if (gmask[i])
-        verify_masks(*jobs[i]->gm, *jobs[i]->gst, *jobs[i]->slot->seq, jobs[i]->P, kv[i] + 1, nullptr, kv[i] + 1);
+      if (gmask[i]) member_masks(*jobs[i], jobs[i]->P, kv[i] + 1);
     Gpu::signal_event_cpu(mask_event_, pending);
   }
   e2->wait();
@@ -1908,13 +1922,15 @@ void Engine::batch_plain_run() {
   for (size_t i = 0; i < n; ++i) base[i] = jobs[i]->P;
   // structured output: a pass's masked rows wait for their masks, which the host computes once the pass before it has
   // given each masked member's token (its state after it), one signal per pass
+  // (mk: the members a pass was encoded masked, as masked() said then: a thinking budget may end before its masks)
   uint64_t pv[8] = {};
+  std::vector<uint8_t> mk(8 * n, 0);
   auto masks = [&](int c) {
     if (!pv[c]) return;
     for (size_t i = 0; i < n; ++i) {
-      if (!jobs[i]->masked()) continue;
+      if (!mk[size_t(c) * n + i]) continue;
       Seq& sq = *jobs[i]->slot->seq;
-      if (stop_at[i] < 0) verify_masks(*jobs[i]->gm, *jobs[i]->gst, sq, base[i] + c, 1, nullptr, 1);
+      if (stop_at[i] < 0) member_masks(*jobs[i], base[i] + c, 1);
       else memset(sq.mask.ptr(), 0xff, size_t(sq.mask_words) * 4);  // (a stopped member's row: not used)
     }
     Gpu::signal_event_cpu(mask_event_, pv[c]);
@@ -1922,6 +1938,7 @@ void Engine::batch_plain_run() {
   auto encode = [&](int c) {  // pass c: row base + c of every member, its capture to stage row c
     for (size_t i = 0; i < n; ++i)
       if (jobs[i]->masked()) {
+        mk[size_t(c) * n + i] = 1;
         if (!pv[c]) {
           if (!mask_event_) mask_event_ = g.new_shared_event();
           pv[c] = ++mask_value_;
@@ -2491,6 +2508,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // assistant turns the client sent back without their reasoning get it again (see restore_reasoning)
   ChatRequest r_restored = r_in;
   default_template_kwargs(r_restored);
+  // a thinking budget of 0 is thinking turned off (src/engine/think_control.h): the prompt renders as thinking off, so
+  // the reply carries no empty <think></think> block
+  if (think_cap_of(r_restored.think_cap, r_restored.thinking_budget) == 0)
+    r_restored.template_kwargs["enable_thinking"] = false;
   const int restored = restore_reasoning(r_restored);
   if (restored > 0) logd("chat: reasoning or argument spelling put back into %d assistant turn(s) the client sent without it", restored);
   const ChatRequest& r = r_restored;
@@ -2911,6 +2932,40 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       s.mask_event = nullptr;
     }
   } mask_off{s};
+  // Thinking budget (src/engine/think_control.h): a hard cap on the first reasoning block, forced through the same row
+  // masks as structured output (whose masks begin at </think>, so the two never mask the same row). Clover's own
+  // decoding modes (no drafter) apply their generation_config controls instead.
+  ThinkControl tc;
+  {
+    const int cap = think_cap_of(r.think_cap, r.thinking_budget);
+    // (thinking turned off: no reasoning to cap, and a control waiting for a <think> would keep the request out of
+    // batches for its whole reply. A template that opens the reasoning all the same, thinking off or not, still gets
+    // it capped: for a cap of 0, the close is then its first token.)
+    const ojson& kw = r.template_kwargs;
+    const bool think_off =
+        kw.contains("enable_thinking") && kw["enable_thinking"].is_boolean() && !kw["enable_thinking"].get<bool>();
+    if (cap >= 0 && think_close_ >= 0 && !clover_own && (!think_off || think)) {
+      std::vector<int> forced = r.think_close_text.empty() ? std::vector<int>() : tok_.encode(r.think_close_text);
+      forced.push_back(think_close_);  // (ThinkControl::start shortens it to fit the cap, think_close_for)
+      const bool on_call = r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !r.tools.empty();
+      tc.start(cap, std::move(forced), think_open_, think_close_, on_call ? tc_open_ : -1, think, &think_space_);
+      if (!s.mask) {  // (the grammar's width, TokenTable::words(): a later structured-output request reuses the buffer)
+        s.mask_words = (std::max(model_->vocab(), tok_.vocab_size()) + 31) / 32;
+        s.mask = g.alloc(size_t(kf::kMaxRows) * size_t(s.mask_words) * 4, "grammar_mask");
+      }
+      if (think && tc.near(1)) {  // a cap of 0: the prompt's last chunk samples the first token, </think> (or the text)
+        tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1);
+        s.mask_rows = 1;
+        s.mask_event = nullptr;
+      }
+      res.think_cap = cap;
+    } else if (r.think_cap == 0 && think_off) {  // (a cap of 0, from either field, turned thinking off: reported)
+      res.think_cap = 0;
+    } else if (cap > 0 && clover_own) {
+      logi("chat: the thinking budget (%d tokens) is not enforced in Clover's own decoding (its generation_config "
+           "controls apply)", cap);
+    }
+  }
   double t0 = now_ms();
   const int C = prefill_chunk_for(n - start);
   int p = start;
@@ -3343,6 +3398,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // structured output: </think> ends a speculative loop running the reasoning (g_in_spec), whose drafts and verify
   // know no grammar; the constrained loop below takes the reply from there (g_break)
   bool g_in_spec = false, g_break = false;
+  // thinking budget: a loop that cannot mask its rows (tc_rows: the most tokens it samples unmasked after a handled one)
+  // gives the reply to the constrained loop before a sample can reach the cap (tc_break); the plain loop's step in
+  // flight then has sampled a token not handled yet (tc_unhandled)
+  int tc_rows = 0;
+  bool tc_break = false, tc_unhandled = false;
   // Handles one generated token; returns false when generation must stop (finish is set), or when a speculative loop
   // gives the reply to the constrained loop (g_break).
   auto handle = [&](int t) -> bool {
@@ -3376,6 +3436,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
     }
     if (parser.in_think()) ++res.reasoning_tokens;
+    tc.push(t);
+    if (tc_rows > 0 && tc.near(tc_rows)) tc_break = true;
     ChatDelta d = parser.push(t);
     stop_filter.filter(d.content);
     if (!stop_filter.matched().empty()) {
@@ -3388,7 +3450,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     if (!d.reasoning.empty() || !d.content.empty() || !d.tool_calls.empty())
       if (!on_delta(d)) finish = "cancelled";
     if (finish.empty() && gen >= r.max_tokens) finish = "length";
-    return finish.empty() && !g_break;
+    return finish.empty() && !g_break && !tc_break;
   };
   // KV room for `want` positions between two cycles, with nothing of this request in flight: as reserve_kv, but
   // when other requests' caches hold the memory, park and wait for them to end (park() makes the request's state its
@@ -3452,6 +3514,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     job.cycle_done = &cycle_fn;
     job.trace = trace_path ? &trace_fn : nullptr;
     if (gm) job.gm = gm.get(), job.gst = &gst, job.g_on = &g_on;
+    if (tc.on()) job.tc = &tc;
     const bool done = join_batch(job);
     P = job.P;
     req_cycles += job.cycles;
@@ -3477,6 +3540,20 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const int* t = tree ? dfl_->tree_desc() : nullptr;
     verify_masks(*gm, gst, s, P, rows, t ? t + kf::kPar : nullptr, t ? std::clamp(t[kf::kN], 1, rows) : rows);
   };
+  // ... and its thinking budget's, the same rows: those past the cap force the close
+  auto tc_masks = [&](int P, int rows, bool tree) {
+    const int* t = tree ? dfl_->tree_desc() : nullptr;
+    return tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, t ? t + kf::kPar : nullptr,
+                   t ? std::clamp(t[kf::kN], 1, rows) : rows);
+  };
+  // Thinking budget: DFlash2 cycles (KFlash trees and chains) and the constrained loop mask their rows near the cap.
+  // The other loops (LiLiCorr, Dory, n-gram, MTP, plain steps) hand over to the constrained loop in time: the rest of
+  // the reply is plain steps there, slower but exact.
+  const bool dfl_loop = !clover_own && !g_direct && !lili_ && dfl_;
+  if (tc.on() && !g_direct && !dfl_loop) tc_rows = spec_loop ? kf::kMaxRows + 1 : 2;
+  // (a cap that close: the constrained loop from the first token, as the hand-over could come too late)
+  const bool tc_direct = tc_rows > 0 && tc.near(tc_rows);  // (near: from the first forced position, think_close_for)
+  if (tc_direct) tc_rows = 0;
   int clover_blocks = 0;  // Clover's block diffusion: blocks written (req_cycles: its denoising passes)
   if (clover_own && gm) {
     finish = "error";
@@ -3593,7 +3670,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (contended()) yield_turn(res);
     }
     fed_until = P;  // (the last block, not committed, is not in the live state)
-  } else if (g_direct) {
+  } else if (g_direct || tc_direct) {
     // (the constrained loop below)
   } else if (lili_) {
     // LiLiCorr / DSpark: per cycle the drafter's context commit of the previous cycle's kept rows and the drafting pass
@@ -3667,7 +3744,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       // parks after this verify (no chained drafting half): another request waits for the GPU or the batch wants this
       // one; the next anchor is at most P + 8, whose cycle must fit without growing the KV cache. (KFlash trees: the
       // drafting pass builds the next cycle's tree from the host's accepted path, so they never chain.)
-      const bool join = batch_wanted(), turn = !join && contended();
+      // (Nemotron-H's batched passes take no masks, as for a reply under a grammar: a request whose reasoning is still
+      // capped decodes alone, handing over to plain steps near the cap, until its control ends; then it may join)
+      slot.decoding = !tc.armed();  // (not counted by batch_wanted() while it cannot join, or a batch waits for it)
+      const bool join = !tc.armed() && batch_wanted(), turn = !join && contended();
       if (chain && !kft && !join && !turn && P + 8 + 2 * B + 2 <= s.cap) {
         next = g.begin();
         lili_->encode_draft_chained(*next, s, d, P);
@@ -3799,8 +3879,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         }
         const auto draft = std::move(next_draft);  // this cycle's drafting half (the budget reads its GPU time)
         auto e2 = g.begin();
+        // thinking budget: a cycle whose rows can reach the cap verifies under its masks (the reasoning before it, and
+        // the reply after </think>, as before)
+        const bool tc_cycle = tc.near(mrows);
+        const bool cyc_masked = masked || tc_cycle;
+        if (tc_cycle && !mask_event_) mask_event_ = g.new_shared_event();
         uint64_t pending = 0;  // masked: the value the verify's sampler waits for
-        if (masked) {
+        if (cyc_masked) {
           s.mask_rows = mrows;
           s.mask_event = mask_event_;
           s.mask_value = pending = ++mask_value_;
@@ -3809,10 +3894,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         s.mask_rows = 0;
         s.mask_event = nullptr;
         e2->commit();
-        if (masked) {  // this cycle's masks, from its drafts, while the verify's layers run
+        if (cyc_masked) {  // this cycle's masks, from its drafts, while the verify's layers run
           draft->wait();
           const double tm = now_ms();
-          spec_masks(P, mrows, dfl_->tree());
+          if (masked) spec_masks(P, mrows, dfl_->tree());
+          else tc_masks(P, mrows, dfl_->tree());
           mask_ms += now_ms() - tm;
           mask_n += mrows;
           Gpu::signal_event_cpu(mask_event_, pending);
@@ -3827,7 +3913,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         // another request waits for the GPU, this one for memory (start_cycles waits for it), or it joins the batch:
         // no drafting half behind this verify, park after it
         const bool turn = contended();
-        const bool join = !kv_wait && batch_wanted();  // (a request waiting for memory would leave the batch at once)
+        // (a request waiting for memory would leave the batch at once; a capped one joins: the batch masks its rows
+        // near the cap, BatchJob::tc)
+        const bool join = !kv_wait && batch_wanted();
         const bool park = turn || kv_wait || join;
         const bool room = P + Bk + Bk + Bk + 2 < s.cap;  // the next anchor is at most P + Bk
         park_last = park && room;
@@ -3840,8 +3928,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         // KFlash: the budget reads the cycle's outcome and its GPU time, the drafting half's (done before the verify
         // started) and the verify's, as ni_run measures it. Not a masked cycle's: the grammar rejects drafts the drafter
         // was right to propose, which would teach the calibration (saved, shared) a lower acceptance than free replies
-        // see, and change their trees.
-        if (!masked) dfl_->observe(draft->gpu_ms() + e2->gpu_ms());
+        // see, and change their trees. Nor a thinking budget's (its forced tokens reject every other draft).
+        if (!cyc_masked) dfl_->observe(draft->gpu_ms() + e2->gpu_ms());
         const int a = dfl_->accepted();
         a_last = a;
         const int* tk = s.tokens();
@@ -4202,17 +4290,26 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     if (next) {
       next->wait();
       fed_until = pos + 1;
+      tc_unhandled = tc_break;  // (handed over: that step's sample, tokens[pos + 1], is the constrained loop's to handle)
     }
   }
-  const bool switched = g_break;  // a speculative loop ended at </think>: tokens[fed_until] is it, handled
+  // a speculative loop ended at </think> (structured output) or before the thinking budget's cap: tokens[fed_until] is
+  // the newest token, handled (but for the plain loop's hand-over)
+  const bool switched = g_break || tc_break;
+  // (the hand-over is done: handle() must go on returning true in the constrained loop, which masks its own rows, so
+  // neither flag nor tc_rows may stop it again; tc_handed keeps it for the log)
+  const bool tc_handed = tc_break;
   g_break = g_in_spec = false;
-  if (gm && finish.empty() && (g_direct || switched)) {
+  tc_break = false;
+  tc_rows = 0;
+  if (finish.empty() && ((gm && (g_direct || switched)) || tc_direct || tc_handed)) {
     // ---- structured output: plain steps, each token sampled under the grammar's mask ----
     // A step's layers run while the host computes the mask of its sample (the grammar's state after the token the step
     // feeds) and signals the event its sampler waits on (Seq::mask_event); the next step is queued before the host reads
     // this one's token (its embedding reads it on the GPU), as in the plain loop above, so the GPU waits for the host
     // only when a mask takes longer than a step's layers. Before </think> (reasoning on, no speculative loop) the masks
-    // allow every token. Not batched: other requests' batches do not wait for it (slot.decoding off).
+    // allow every token, but the thinking budget's past its cap. Not batched: other requests' batches do not wait for it
+    // (slot.decoding off).
     slot.decoding = false;
     if (!mask_event_) mask_event_ = g.new_shared_event();
     s.mask_rows = 1;
@@ -4227,8 +4324,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       pending = 0;
     };
     auto encode_at = [&](int q) {  // the step feeding tokens[q]; it samples tokens[q + 1] once its mask is signalled
-      s.mask_value = ++mask_value_;
-      pending = s.mask_value;
+      if (s.mask_rows > 0) {  // (unmasked steps, once a thinking budget's control ended, wait for nothing)
+        s.mask_value = ++mask_value_;
+        pending = s.mask_value;
+      }
       auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
       model_->encode_step(*x, s, q, sp, uint32_t(q), true);
       x->commit();
@@ -4241,7 +4340,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       return need < s.limit && grow_kv(std::min(s.limit, need + 1), [] {}) && need < s.cap;
     };
     std::unique_ptr<Encoder> next;  // the step feeding tokens[pos]
-    bool go = switched || handle(s.tokens()[pos]);
+    bool go = (switched && !tc_unhandled) || handle(s.tokens()[pos]);
     while (go) {
       if (!next) {
         if (!room(pos + 1)) {
@@ -4251,12 +4350,15 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         }
         next = encode_at(pos);
       }
-      const double tm = now_ms();
-      if (g_on) gm->fill_mask(gst, mw);
-      else memset(mw, 0xff, mbytes);
-      mask_ms += now_ms() - tm;
-      ++mask_n;
-      signal();
+      if (pending) {  // the step in flight waits for its mask
+        const double tm = now_ms();
+        if (g_on) gm->fill_mask(gst, mw);
+        else if (tc.armed()) tc.fill(mw, size_t(s.mask_words), s.tokens(), pos, 1, nullptr, 1);
+        else memset(mw, 0xff, mbytes);
+        mask_ms += now_ms() - tm;
+        ++mask_n;
+        signal();
+      }
       if (pos + 2 >= s.cap) {  // the cache grows between steps: the step in flight writes it, so it completes first
         next->wait();
         if (!room(pos + 2)) {
@@ -4269,6 +4371,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         next->wait();
         yield_turn(res);
       }
+      // A thinking budget's hand-over with no grammar: once the control ended (the close handled), the steps need no
+      // masks, so they stop waiting for the host and run as the plain loop's. (The speculative loops are not resumed:
+      // their drafters' state, MTP's hidden rows, DFlash2's target features, LiLiCorr's context, was not kept through
+      // the plain steps, as for structured output's one-way hand-over at </think>.) A request with a grammar keeps its
+      // masks: every token before </think>, the grammar's after it.
+      if (!gm && !tc.armed()) s.mask_rows = 0;
       auto cur = std::move(next);
       next = encode_at(pos + 1);
       cur->wait();
@@ -4289,6 +4397,15 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     logi("chat: structured output (%s), %s: %ld masks (batched passes' not counted), %.1f us each",
          grammar_summary(*r.grammar).c_str(), g_dfl ? "DFlash2 cycles under masks" : "plain steps", mask_n,
          1000 * mask_ms / double(mask_n));
+  if (tc.on()) {
+    res.think_forced = tc.forced();
+    res.think_tokens = tc.count();
+    logi("chat: thinking budget %d: %d reasoning tokens%s%s", tc.cap(), tc.count(), tc.forced() ? ", close forced" : "",
+         tc_direct || tc_handed ? " (plain steps from the hand-over)" : "");
+    if (tc.unmasked() > 0)  // (the mask is sized from the vocabulary, so this is a bug if it happens)
+      logi("warning: thinking budget: %d forced rows could not be masked (token id past the mask width)",
+           tc.unmasked());
+  }
   slot.decoding = false;  // (a batch forming no longer waits for this request)
   if (live) live->phase.store(3, std::memory_order_relaxed);
   res.slot = int(&slot - slots_.data());
