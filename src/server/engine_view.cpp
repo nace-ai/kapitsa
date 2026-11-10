@@ -110,7 +110,7 @@ void engine_routes(httplib::Server& srv, std::function<ControlServer*()> control
   });
   const auto no_socket = [](httplib::Response& res) {
     reply(res, control_error(503, "internal", "this server has no control socket (another server holds its instance "
-                                              "name, run/ cannot be made, or it routes to other Macs)"));
+                                              "name, or run/ cannot be made)"));
   };
   srv.Get("/engine/status", [control, no_socket](const httplib::Request&, httplib::Response& res) {
     ControlServer* c = control();

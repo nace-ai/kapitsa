@@ -154,7 +154,7 @@ target_include_directories(control_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_
 target_link_libraries(control_test PRIVATE Threads::Threads)
 add_test(NAME control_test COMMAND control_test)
 set_tests_properties(control_test PROPERTIES TIMEOUT 60)
-add_executable(engine_view_test tools/engine_view_test.cpp src/server/engine_view.cpp src/server/control.cpp
+add_executable(engine_view_test tools/engine_view_test.cpp src/server/engine_view.cpp src/server/pre_route.cpp src/server/control.cpp
   src/server/events.cpp src/server/activity.cpp)
 target_include_directories(engine_view_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(engine_view_test PRIVATE Threads::Threads)
@@ -216,6 +216,7 @@ add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DI
   ${CMAKE_SOURCE_DIR}/src/server/http_stream.cpp ${CMAKE_SOURCE_DIR}/src/server/service_config.cpp
   ${CMAKE_SOURCE_DIR}/src/server/events.cpp ${CMAKE_SOURCE_DIR}/src/server/activity.cpp
   ${CMAKE_SOURCE_DIR}/src/server/control.cpp ${CMAKE_SOURCE_DIR}/src/server/engine_view.cpp
+  ${CMAKE_SOURCE_DIR}/src/server/pre_route.cpp
   ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
   ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp

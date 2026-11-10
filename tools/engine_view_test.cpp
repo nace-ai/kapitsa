@@ -4,6 +4,7 @@
 // key's file, the event stream and its cap, and the 503 without a control socket. CPU only.
 #include "server/activity.h"
 #include "server/engine_view.h"
+#include "server/pre_route.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -50,12 +51,9 @@ int main() {
   std::atomic<bool> socket_up{true};
 
   httplib::Server srv;
-  srv.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
-    if (const auto gate = engine_gate(req, res)) return *gate;
-    if (req.get_header_value("Authorization") == "Bearer k") return httplib::Server::HandlerResponse::Unhandled;
-    res.status = 401;  // (kapitsa serve's API key check, as main.cpp runs it after the gate: no /engine path reaches it)
-    return httplib::Server::HandlerResponse::Handled;
-  });
+  // kapitsa serve's own pre-routing (src/server/pre_route.h), with --api-key k
+  srv.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) { return pre_route(req, res, "k"); });
+  srv.Get("/v1/models", [](const httplib::Request&, httplib::Response& res) { res.set_content("{}", "application/json"); });
   engine_routes(srv, [&] { return socket_up ? &control : nullptr; }, "<!doctype html><title>Kapitsa engine</title>");
   const int port = srv.bind_to_any_port("127.0.0.1");
   CHECK(port > 0);
@@ -85,6 +83,15 @@ int main() {
   const json st = json::parse(r->body);
   CHECK(st["state"] == "starting" && st["run_id"] == "7f3a9c2e5b1d4e60");
   cl.set_default_headers(run_key);
+  // the API key still guards the rest of the port, and opens no /engine path (above)
+  httplib::Client plain("127.0.0.1", port);  // (cl sends the run's key on every request from here on)
+  r = plain.Get("/v1/models", httplib::Headers{{"Authorization", "Bearer k"}});
+  CHECK(r && r->status == 200);
+  r = plain.Get("/v1/models", run_key);
+  CHECK(r && r->status == 401);
+  r = plain.Post("/v1/messages", "{}", "application/json");
+  CHECK(r && r->status == 401 &&
+        r->body == R"({"type":"error","error":{"type":"authentication_error","message":"invalid api key"}})");
   std::cout << "page, status and the run's key ok\n";
 
   // read-only: no stop or switch over HTTP, and every other method or path is a JSON error, never the API key's 401
@@ -193,11 +200,17 @@ int main() {
         httplib::Client c("127.0.0.1", port);
         c.set_read_timeout(20, 0);
         c.set_default_headers(run_key);
-        bool counted = false;
-        c.Get("/engine/events", [&](const char*, size_t) {
-          if (!counted) counted = true, ++open;
-          return hold.load();
-        });
+        bool streaming = false, counted = false;  // (only a 200's stream counts: a 503's body is not a view)
+        c.Get(
+            "/engine/events",
+            [&](const httplib::Response& head) {
+              streaming = head.status == 200;
+              return true;
+            },
+            [&](const char*, size_t) {
+              if (streaming && !counted) counted = true, ++open;
+              return hold.load();
+            });
       });
     bus.publish("log", {{"level", "info"}, {"message", "open"}});
     for (int i = 0; i < 100 && open < kMaxEngineViews; ++i) {

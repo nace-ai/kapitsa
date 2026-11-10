@@ -37,6 +37,7 @@
 #include "metal/gpu.h"
 #include "server/control.h"
 #include "server/engine_view.h"
+#include "server/pre_route.h"
 #include "server/cli.h"
 #include "server/http_stream.h"
 #include "server/model_manager.h"
@@ -825,27 +826,7 @@ static bool reject_while_switching(const ModelManager& mgr, httplib::Response& r
 static void common_routes(httplib::Server& srv, const std::string& api_key, const std::string& timing,
                           std::function<cluster::MacInfo()> info) {
   srv.set_pre_routing_handler([api_key](const httplib::Request& req, httplib::Response& res) {
-    // a WebSocket upgrade on /v1/responses (Codex Desktop's probe, #772): 426 before the key check, so the client
-    // falls back to HTTP at once instead of retrying a 404 with backoff
-    if (server::refuse_ws_upgrade(req, res)) return httplib::Server::HandlerResponse::Handled;
-    // the engine view (docs/control-socket.md, "The engine view"): read-only, this Mac only, and this run's key in
-    // place of the API key (src/server/engine_view.h)
-    if (const auto gate = server::engine_gate(req, res)) return *gate;
-    // the chat page asks for the key once and sends it with its API calls
-    if (api_key.empty() || req.path == "/health" || req.path == "/cluster" ||
-        req.path == "/api/version" ||
-        (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
-      return httplib::Server::HandlerResponse::Unhandled;
-    // OpenAI clients send "Authorization: Bearer KEY", Anthropic ones "x-api-key: KEY" (Claude Code may send both,
-    // with an Anthropic key of its own in x-api-key)
-    if (req.get_header_value("Authorization") == "Bearer " + api_key || req.get_header_value("x-api-key") == api_key)
-      return httplib::Server::HandlerResponse::Unhandled;
-    res.status = 401;
-    if (req.path.rfind("/v1/messages", 0) == 0)
-      res.set_content(api::dump(api::messages_error("authentication_error", "invalid api key")), "application/json");
-    else
-      res.set_content(R"({"error":{"message":"invalid api key","type":"auth_error"}})", "application/json");
-    return httplib::Server::HandlerResponse::Handled;
+    return server::pre_route(req, res, api_key);
   });
   srv.Get("/health", [](const httplib::Request&, httplib::Response& res) {
     res.set_content(R"({"status":"ok"})", "application/json");
