@@ -1,6 +1,6 @@
 // The page's own scripts (src/server/engine.html) in a Node vm with a stub DOM, on the stand-in (tools/engine_replay.py):
-// the link's key, the live view, a stop and the next run, a server gone and back with another key, no key, blocked
-// site data. Node 18+ and python3: node tests/test_engine_page.mjs
+// the link's key, the live view, a stop and the next run, a clean drop, a server gone and back with another key, no
+// key, blocked site data, a stop with no next run. Node 18+ and python3: node tests/test_engine_page.mjs
 import {spawn} from "node:child_process";
 import {mkdtempSync, readFileSync} from "node:fs";
 import {tmpdir} from "node:os";
@@ -34,7 +34,7 @@ async function standIn(port) {
   await until(() => { try { return readFileSync(tokenFile, "utf8").trim(); } catch { return ""; } }, 15000, "the stand-in starts");
   const token = readFileSync(tokenFile, "utf8").trim();
   return {p, token, base: `http://127.0.0.1:${port}`,
-          stop: () => new Promise(r => { p.once("exit", r); p.kill(); })};
+          stop: () => new Promise(r => { if (p.exitCode !== null) return r(); p.once("exit", r); p.kill(); })};
 }
 
 // The page in a fresh vm: `hash` as its address's fragment; `storage` "ok" or "blocked" (every access throws)
@@ -60,7 +60,8 @@ function page(base, hash, storage = "ok") {
     location: loc,
     history: {replaceState(_s, _t, url) { loc.hash = url.includes("#") ? url.slice(url.indexOf("#")) : ""; }},
     matchMedia: () => ({matches: false, addEventListener() {}}),
-    fetch: (url, opts) => fetch(base + url, opts),
+    fetches: 0,
+    fetch: (url, opts) => { ctx.fetches++; return fetch(base + url, opts); },
     performance, setTimeout, clearTimeout, setInterval, clearInterval, TextDecoder, AbortController, console,
   };
   // blocked site data: reading either area throws, as in a browser
@@ -74,15 +75,15 @@ function page(base, hash, storage = "ok") {
   vm.createContext(ctx);
   for (const s of scripts) vm.runInContext(s, ctx);
   const view = () => vm.runInContext(`({link: S.link, run: S.status && S.status.run_id, state: S.status && S.status.state,
-    reqs: [...S.reqs.keys()].sort().join(","), done: S.done.length,
+    reqs: [...S.reqs.keys()].sort().join(","), rates: S.rates.length,
+    cancelled: S.done.filter(d => d.finish_reason === "cancelled").length, done: S.done.map(d => d.request_id), fetches,
     pill: document.getElementById("state").lastElementChild.textContent, msg: document.getElementById("msg").textContent})`, ctx);
   return {view, loc, ctx};
 }
 
-const get = async (s, path) => {
-  const r = await fetch(s.base + path, {headers: {Authorization: "Bearer " + s.token}});
-  return r.json();
-};
+const get = async (s, path) => (await fetch(s.base + path, {headers: {Authorization: "Bearer " + s.token}})).json();
+const hook = (s, path, body) => fetch(s.base + path, {method: "POST", headers: {Authorization: "Bearer " + s.token,
+  "Content-Type": "application/json"}, body: JSON.stringify(body)});
 
 const port = 18900 + Math.floor(Math.random() * 90);
 let s = await standIn(port);
@@ -99,20 +100,40 @@ await until(async () => {
 }, 10000, "the page's state and requests follow the server's");
 console.log("link, key and live view ok");
 
-// 2. a stop: the view reads stopping, then the next run's reset replaces it
+// 2. a stop while a request runs: it ends cancelled and the view reads stopping; the next run's reset then clears
+// the old run's finished requests and rate trace
+await until(() => a.view().reqs && a.view().rates > 8, 20000, "a request runs, its rate traced");
 const run1 = a.view().run;
-const r = await fetch(s.base + "/_standin/stop", {method: "POST", headers: {Authorization: "Bearer " + s.token,
-  "Content-Type": "application/json"}, body: JSON.stringify({run_id: run1})});
+const r = await hook(s, "/_standin/stop", {run_id: run1});
 check(r.status === 202, `the stand-in takes the stop (${r.status})`);
-await until(() => a.view().state === "stopping" || a.view().run !== run1, 10000, "the page sees the stop");
-await until(() => a.view().run && a.view().run !== run1 && a.view().link === "live", 20000, "the next run's reset replaces the view");
-check(a.view().done === 0 || a.view().run !== run1, "finished requests of the old run are cleared");
+await until(() => a.view().state === "stopping" && a.view().cancelled > 0, 10000, "the stop: stopping, a request cancelled");
+const fresh = await until(async () => {
+  for (const end = Date.now() + 20000; Date.now() < end; await sleep(20)) {
+    const v = a.view();
+    if (v.run && v.run !== run1) return v;  // (read at once: the trace gains a point every half second)
+  }
+}, 0, "the next run's reset replaces the view");
+check(fresh && fresh.cancelled === 0 && fresh.rates <= 3,
+      `the old run's finished requests and rates are cleared (${fresh && fresh.cancelled} cancelled, ${fresh && fresh.rates} points)`);
+await until(() => a.view().link === "live", 10000, "the next run is live");
 console.log("stop and new run ok");
 
-// 3. the server goes away: disconnected and retrying, not a live view; back with another key: no access, said why
+// 3. a stream that ends cleanly while the run goes on: disconnected and retrying, then live again from the last event
+// it read (a finished request neither lost nor replayed twice)
+await until(() => a.view().done.length, 20000, "a request of the new run finishes");
+const before = a.view().done;
+await hook(s, "/_standin/drop", {run_id: a.view().run});
+await until(() => a.view().link !== "live" && a.view().pill === "disconnected, retrying", 5000,
+            "a clean end of the stream reads disconnected, retrying");
+await until(() => a.view().link === "live" && a.view().run === fresh.run, 10000, "the view resumes the same run");
+await sleep(1000);
+check(new Set(a.view().done).size === a.view().done.length && before.every(id => a.view().done.includes(id)),
+      `the resume kept what it had and replayed nothing twice (${before} -> ${a.view().done})`);
+
+// the server goes away: the same; back with another key: no access, said why
 await s.stop();
-await until(() => a.view().link !== "live" && /disconnected|stopped/.test(a.view().pill), 8000,
-            "a server that went away reads disconnected");
+await until(() => a.view().link !== "live" && a.view().pill === "disconnected, retrying", 8000,
+            "a server that went away reads disconnected, retrying");
 s = await standIn(port);
 await until(() => a.view().link === "refused" && /key/.test(a.view().msg), 15000,
             "a server with another key: no access, and the page says to open the new link");
@@ -122,9 +143,21 @@ console.log("disconnect and a new key ok");
 const b = page(s.base, "");
 await until(() => b.view().link === "refused" && /link kapitsa serve prints/.test(b.view().msg), 8000,
             "no key: the page asks for the printed link");
+const asked = b.view().fetches;
+await sleep(4000);
+check(b.view().fetches === asked, `refused: the page stops asking (${b.view().fetches - asked} more requests)`);
 const c = page(s.base, "#t=" + s.token, "blocked");
 await until(() => c.view().link === "live" && c.view().run, 10000, "blocked site data: the page still connects");
 console.log("no key and blocked storage ok");
+
+// 5. a stop no new run follows (no launchd): the view reads stopped, and stays so while nothing answers
+const d = page(s.base, "#t=" + s.token);
+await until(() => d.view().link === "live" && d.view().run, 10000, "a fresh view connects");
+await hook(s, "/_standin/stop", {run_id: d.view().run, then: "exit"});
+await until(() => d.view().pill === "stopped", 10000, "a server that stopped reads stopped");
+await sleep(5000);
+check(d.view().pill === "stopped", `after its retries it still reads stopped (${d.view().pill})`);
+console.log("stopped ok");
 
 await s.stop();
 console.log(`engine page: ${failures} failures`);

@@ -3,18 +3,15 @@
 
 It serves the page and the control socket's read endpoints (docs/control-socket.md) over HTTP on 127.0.0.1, as
 `kapitsa serve` serves them at /engine for this Mac. GET /engine/status and GET /engine/events (SSE, Last-Event-ID
-replay and resets) answer from the recording. /engine is read-only: POST /_standin/stop and POST /_standin/model are
-this stand-in's test hooks (the real server has none; stop and switch go through its control socket). A stop ends the
-run and a new one starts (the view sees `run_changed`); a switch reads `switching`, then `ready` with the new model.
+replay and resets) answer from the recording. /engine is read-only: POST /_standin/stop and /_standin/drop are this
+stand-in's test hooks (the real server has none; a stop goes through its control socket). A stop ends the run and a
+new one starts (the view sees `run_changed`).
 
-Access follows the control socket's guarantee, which is that only the same OS user reaches it: every /engine/*
-request but the page itself (and every hook) needs `Authorization: Bearer <token>`, a random token made at start (the
-page reads it from the URL's #t=, which a browser never sends anywhere). `--token-file PATH` also writes it there,
-mode 0600. A Host that is not this Mac's loopback, a foreign Origin and proxy headers are refused with 403
-forbidden_peer first, so a web page on another site cannot drive this server through the user's browser.
+Access as on the real server: every request but the page's needs this
+process's random token as `Authorization: Bearer` (the page reads it from the URL's #t=; `--token-file` also writes it,
+0600), and a foreign Host, Origin or proxy header gets 403 forbidden_peer first.
 
-The default recording is built here, tick by tick, in the shapes of schema/control/ (a model that loads, two clients'
-requests with prefill, drafts and the SSD prefix cache, log lines). Its numbers are made up, not measured.
+The recording is built here, tick by tick, in the shapes of schema/control/; its numbers are made up, not measured.
 
     python3 tools/engine_replay.py              # prints http://127.0.0.1:8199/engine#t=<token>
     python3 tools/engine_replay.py --print      # the frames, one JSON object per line (tests/test_events_schema.py)
@@ -42,10 +39,11 @@ HOST_RE = re.compile(r"(127\.0\.0\.1|localhost|\[::1\])(:[0-9]{1,5})?", re.I)
 PROXY_HEADERS = ("X-Forwarded-For", "Forwarded", "Via")
 CURSOR_RE = re.compile(r"([0-9a-f]{16,64})\.([0-9]{1,19})")
 # /engine/* is read-only, as on the real server: stop and switch go through the control socket there (Kapitan, or
-# Ctrl-C where kapitsa serve runs). /_standin/* are this stand-in's own test hooks, so tests can drive a stop and a switch;
-# the real server has no such routes over HTTP.
+# Ctrl-C where kapitsa serve runs). /_standin/* are this stand-in's own test hooks, so tests can drive a stop (and with
+# {"then": "exit"} one that no new run follows) and a drop (every event stream ends cleanly, the run goes on); the real
+# server has no such routes over HTTP.
 ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET",
-          "/_standin/stop": "POST", "/_standin/model": "POST"}
+          "/_standin/stop": "POST", "/_standin/drop": "POST"}
 PAGE_CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
             "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 GB = 1_000_000_000
@@ -237,7 +235,7 @@ class Instance:
         self.args, self.version, self.cond, self.runs = args, "0.2.33", threading.Condition(), 0
         self.token = secrets.token_urlsafe(24)  # one per process: a restarted run keeps it
         self.run = self.new_run()
-        self.stop_at = None
+        self.stop_at, self.exit_on_stop, self.drops = None, False, 0
 
     def new_run(self):
         self.runs += 1
@@ -249,6 +247,8 @@ class Instance:
             time.sleep(TICK_MS / 1000 / self.args.speed)
             with self.cond:
                 if self.stop_at is not None:
+                    if time.time() >= self.stop_at and self.exit_on_stop:  # the process ends, nothing restarts it
+                        os._exit(0)
                     if time.time() >= self.stop_at:  # the old run is gone: a new one starts, as launchd would
                         self.run, self.stop_at = self.new_run(), None
                 else:
@@ -267,33 +267,6 @@ class Instance:
                 self.stop_at = time.time() + self.args.stop_seconds / self.args.speed
             self.cond.notify_all()
             return {"run_id": r.run_id, "state": "stopping"}
-
-    def switch(self, mid):
-        with self.cond:
-            r = self.run
-            if not hasattr(r, "load"):
-                return 400, {"error": {"code": "invalid_value", "message": "a recording cannot switch",
-                                       "details": {"field": "model"}}}
-            if mid not in MODELS:
-                return 404, {"error": {"code": "model_not_found", "message": f"no model {mid} here (this "
-                                       f"stand-in has {', '.join(MODELS)})", "details": {"model": mid}}}
-            if r.state == "stopping":
-                return 503, {"error": {"code": "stopping", "message": "the instance is stopping"}}
-            if r.state != "ready":
-                return 503, {"error": {"code": "busy", "message": f"the instance is {r.state}",
-                                       "details": {"retry_after_s": 5}}}
-            prev = r.model()
-            for req in list(r.requests.values()):
-                r.finish(req)
-            r.load(mid, "switching")
-            r.slots = []
-        deadline = time.time() + 30
-        with self.cond:  # answers once the new model is ready, as POST /model does
-            while self.run is r and r.state not in ("ready", "stopping") and time.time() < deadline:
-                self.cond.wait(1)
-            if r.state == "stopping":  # a stop abandons the load
-                return 503, {"error": {"code": "stopping", "message": "the instance is stopping"}}
-            return 200, {"run_id": r.run_id, "model": r.model(), "previous_model": prev}
 
 
 def handler(inst):
@@ -408,9 +381,13 @@ def handler(inst):
                 return self.send_json(409, {"error": {"code": "run_id_mismatch", "message": "another run",
                                                       "details": {"run_id": inst.run.run_id}}})
             if path == "/_standin/stop":
+                inst.exit_on_stop = body.get("then") == "exit"
                 self.send_json(202, inst.stop())
-            else:
-                self.send_json(*inst.switch(str(body.get("model", ""))))
+            elif path == "/_standin/drop":
+                with inst.cond:
+                    inst.drops += 1
+                    inst.cond.notify_all()
+                self.send_json(202, {})
 
         def events(self):
             # no length: the stream ends when the connection closes, which is how a viewer sees the run end
@@ -419,7 +396,7 @@ def handler(inst):
             self.end_headers()
             last = self.headers.get("Last-Event-ID")
             with inst.cond:
-                run = inst.run
+                run, drops = inst.run, inst.drops
                 sent = run.seq  # no cursor: from the next event
                 if last:
                     reason, seq = run.cursor(last)
@@ -431,7 +408,7 @@ def handler(inst):
                         sent = seq
             while True:
                 with inst.cond:
-                    if inst.run is not run:  # the run ended: the process would close the stream
+                    if inst.run is not run or inst.drops != drops:  # the run ended (or a drop): the stream closes
                         return
                     out = run.after(sent)
                     if not out:

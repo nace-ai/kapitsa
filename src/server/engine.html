@@ -122,14 +122,13 @@ applyTheme();
 const $ = id => document.getElementById(id);
 const S = {status: null, reqs: new Map(), done: [], logs: [], rates: [], drafts: [], tpc: null, share: null,
            link: "connecting", noEngineAt: 0};
-const GB = 1e9, RATE_MS = 60000, DRAFT_MS = 10000, EARLY_MAX = 4096;
+const GB = 1e9, RATE_MS = 60000, DRAFT_MS = 10000;
 const fmtB = b => b >= 10 * GB ? (b / GB).toFixed(1) + " GB" : b >= GB ? (b / GB).toFixed(2) + " GB" : (b / 1e6).toFixed(0) + " MB";
 const fmtN = n => Number(n).toLocaleString("en-US");
 const fmtCtx = n => n % 1024 === 0 ? n / 1024 + "K" : fmtN(n);  // 131072 -> 128K, as the config writes it
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const fmtMs = ms => ms < 1000 ? ms + " ms" : ms < 60000 ? (ms / 1000).toFixed(1) + " s" : Math.floor(ms / 60000) + "m " + Math.round(ms % 60000 / 1000) + "s";
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
-const seqOf = id => Number(String(id).split(".").pop());
 
 const key = (() => {
   const m = /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash);
@@ -195,10 +194,10 @@ function log(d) {
 
 // One server-sent event stream read with fetch (EventSource can send no key and gives up on a non-200 answer).
 // Frames go to on(type, id, data); resolves when the stream ends, throws {status, error} on a refusal.
-async function stream(lastId, on, signal) {
+async function stream(lastId, on) {
   const headers = {...auth(), Accept: "text/event-stream"};
   if (lastId) headers["Last-Event-ID"] = lastId;
-  const r = await fetch("/engine/events", {headers, cache: "no-store", signal});
+  const r = await fetch("/engine/events", {headers, cache: "no-store"});
   if (!r.ok) {
     const j = await r.json().catch(() => ({}));
     throw {status: r.status, error: j.error || {}, retry: Number(r.headers.get("Retry-After")) || 0};
@@ -225,40 +224,31 @@ async function stream(lastId, on, signal) {
   }
 }
 
-// Events first, then status: an event the status already counts is skipped. After a drop the stream resumes from the
-// last event seen (the server replays what was missed, or sends a reset), retrying every few seconds.
+// The status first, then the stream from its last_event_id (docs/control-socket.md, "Events"): the server replays
+// every event after it, or sends a reset. After a drop the stream resumes from the last event seen, retrying every few
+// seconds.
 async function connect() {
-  let last = null, early = [];
-  const handle = f => {
-    if (f.type !== "reset" && f.id.split(".")[0] === S.status.run_id && seqOf(f.id) <= last) return;
-    handlers[f.type](f.data);
-    last = f.type === "reset" ? seqOf(f.data.status.last_event_id) : seqOf(f.id);
-  };
+  let last = "";
   for (;;) {
-    const ctl = new AbortController();
-    const resume = S.status && last !== null ? `${S.status.run_id}.${last}` : "";
-    const on = (type, id, data) => {
-      const f = {type, id, data};
-      if (last !== null) return handle(f);
-      early.push(f);
-      if (early.length > EARLY_MAX) ctl.abort();  // the status never came: start over
-    };
-    const run = stream(resume, on, ctl.signal);
-    run.catch(() => {});  // (awaited below, after the status)
-    if (last === null) {
+    if (!last) {
       try {
         const r = await fetch("/engine/status", {headers: auth(), cache: "no-store"});
         const j = await r.json();
         if (!r.ok) throw {status: r.status, error: j.error || {}};
         apply(j);
-        last = seqOf(j.last_event_id);
-        early.splice(0).forEach(handle);
+        last = j.last_event_id;
         $("msg").textContent = "";
-      } catch (e) { ctl.abort(); early = []; refused(e); }
+      } catch (e) { refused(e); }
     }
-    const ended = () => S.link === "gone" || (S.status && S.status.state === "stopping") ? "gone" : "down";
-    try { await run; S.link = ended(); }
-    catch (e) { if (e && e.status) refused(e); else if (S.link !== "refused") S.link = ended(); }
+    if (last) {
+      const on = (type, id, data) => {
+        handlers[type](data);
+        last = type === "reset" ? data.status.last_event_id : id || last;
+      };
+      const ended = () => S.link === "gone" || (S.status && S.status.state === "stopping") ? "gone" : "down";
+      try { await stream(last, on); S.link = ended(); }
+      catch (e) { if (e && e.status) refused(e); else if (S.link !== "refused") S.link = ended(); }
+    }
     if (S.link === "refused" && !(S._retry > 0)) return;  // a missing or old key: nothing to retry with
     await new Promise(r => setTimeout(r, 1000 * (S._retry || 3)));
     S._retry = 0;
