@@ -122,6 +122,9 @@ json instance_status(const Identity& id, const Events& bus, const Activity& act,
             {"last_event_id", bus.id(state.contains("seq") ? state["seq"].get<uint64_t>() : bus.last_seq())},
             {"requests", act.requests()}};  // (read after the seq: a request started in between is shown, not missed)
   if (id.parent_pid > 1) j["parent_pid"] = id.parent_pid;
+  // (only with the state it was read with: a switch frees the engine, so there is none to show outside ready)
+  if (j["state"] == "ready")
+    if (json e = act.engine(); e.is_object()) j["engine"] = std::move(e);
   return j;
 }
 

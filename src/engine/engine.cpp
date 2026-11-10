@@ -556,7 +556,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
     slots_.push_back(std::move(s));
   };
+  weights_bytes_ = Gpu::get().allocated_bytes();
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
+  slot_pos_ = std::make_unique<std::atomic<int>[]>(slots_.size());
+  slot_cap_ = std::make_unique<std::atomic<int>[]>(slots_.size());
+  for (const Slot& s : slots_) note_kv(s);
   Gpu& g = Gpu::get();
   const size_t used = g.allocated_bytes(), per = model_->kv_bytes_per_pos();
   const size_t room = budget_ > used ? budget_ - used : 0;
@@ -1364,6 +1368,7 @@ void Engine::wait_split(Encoder& e) {
 
 void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
+  note_kv(slot);
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
   slot.img_spans.clear();
@@ -1382,6 +1387,11 @@ void Engine::drop_slot(Slot& slot) {
 }
 
 bool Engine::reserve_kv(Slot& slot, int need, bool started) {
+  struct Note {  // (every return: the capacity it left, for view())
+    Engine& en;
+    const Slot& s;
+    ~Note() { en.note_kv(s); }
+  } note{*this, slot};
   Seq& s = *slot.seq;
   if (model_->reserve(s, need)) return true;
   if (vision_ && vision_->release(false) && model_->reserve(s, need)) return true;  // earlier requests' image embeddings
@@ -2432,6 +2442,22 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
 #ifdef NI_PIPELINE_TEST
 void pipeline_test_queued();
 #endif
+Engine::View Engine::view() const {
+  View v;
+  v.budget = budget_;
+  v.allocated = Gpu::get().allocated_bytes();
+  v.weights = std::min(weights_bytes_, v.allocated);
+  const size_t per = model_ ? model_->kv_bytes_per_pos() : 0;
+  if (slot_pos_)
+    for (size_t i = 0; i < slots_.size(); ++i) {
+      v.slot_tokens.push_back(slot_pos_[i].load(std::memory_order_relaxed));
+      v.kv += size_t(std::max(slot_cap_[i].load(std::memory_order_relaxed), 0)) * per;
+    }
+  v.kv = std::min(v.kv, v.allocated - v.weights);
+  v.drafts = spec_ || dfl_ || lili_;
+  return v;
+}
+
 ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const ChatDelta&)>& on_delta,
                         const std::function<void(const ChatResult&)>& on_prompt,
                         const std::function<bool()>& cancelled,
@@ -2619,6 +2645,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     Engine& en;
     Slot& s;
     ~SlotUse() {
+      en.slot_pos_[&s - en.slots_.data()].store(int(s.tokens.size()), std::memory_order_relaxed);
+      en.note_kv(s);
       s.busy = false;
       s.mem_wait = Slot::MemWait::none;
       --en.active_;
@@ -2629,6 +2657,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   slot.arrival = arrival;
   ++active_;
   SlotUse slot_use{*this, slot};
+  if (r.live) r.live->slot.store(int(&slot - slots_.data()), std::memory_order_relaxed);
   const double t_turn = now_ms();
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
@@ -2720,6 +2749,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     drop_slot(slot);
     kv_ok = fit_kv();
   }
+  note_kv(slot);  // (fit_kv reserves directly)
   if (!kv_ok && !reserve_kv_wait(slot, kv_min, cancelled, /*started=*/false)) {
     if (cancelled && cancelled()) {
       res.finish_reason = "cancelled";
@@ -4530,6 +4560,8 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       Engine& en;
       Slot& sl;
       ~Hold() {
+        en.slot_pos_[&sl - en.slots_.data()].store(int(sl.tokens.size()), std::memory_order_relaxed);
+        en.note_kv(sl);
         sl.busy = false;
         --en.active_;
         en.turn_.notify();
@@ -4774,7 +4806,9 @@ DraftResult Engine::draft(const std::string& key, const std::string& after, cons
   }
   for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the request
     if (sp.pos + sp.n > start) return done("unsupported");
-  if (!model_->reserve(s, end + 64)) return done("no_room");  // (the slot's own KV cache; no other slot's is dropped)
+  const bool kv_ok = model_->reserve(s, end + 64);
+  note_kv(slot);
+  if (!kv_ok) return done("no_room");  // (the slot's own KV cache; no other slot's is dropped)
   // The user turn's checkpoint: the conversation as the history prefill leaves it (all but its last token), where a
   // request without drafts starts; a draft that restores it computes the rows of one draft of its text, in its passes
   const int turn_at = user_at - 1;

@@ -88,8 +88,8 @@
           "properties": {
             "budget_bytes": {"type": "integer", "minimum": 1, "description": "GPU memory the engine may hold (mem_budget)"},
             "allocated_bytes": {"type": "integer", "minimum": 0, "description": "GPU memory the engine holds now"},
-            "weights_bytes": {"type": "integer", "minimum": 0, "description": "of it, the model's weights (and the drafter's)"},
-            "kv_bytes": {"type": "integer", "minimum": 0, "description": "of it, the slots' KV caches as allocated"}
+            "weights_bytes": {"type": "integer", "minimum": 0, "description": "of it, what the engine held before its slots: the model's weights, the drafter's and the buffers they run in"},
+            "kv_bytes": {"type": "integer", "minimum": 0, "description": "of it, the slots' KV caches as allocated: each slot's capacity in positions times the bytes per position"}
           }
         },
         "slots": {

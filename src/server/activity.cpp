@@ -24,6 +24,9 @@ double rate(double tokens, double ms) { return tokens > 0 && ms > 0 ? tokens * 1
 // LiveDecode::phase (0 waiting, 1 reading the prompt, 2 writing, 3 done) as request_progress's phase
 const char* phase_name(int p) { return p <= 0 ? "waiting" : p == 1 ? "prefill" : "writing"; }
 
+// The tokens a request's decode cycles wrote: all it wrote but the first, which the prefill samples
+long cycle_tokens(const LiveDecode& l) { return std::max(l.tokens.load(std::memory_order_relaxed) - 1, 0); }
+
 }  // namespace
 
 Activity::Activity(Events& bus, int tick_ms) : bus_(bus), tick_ms_(std::clamp(tick_ms, 100, 10000)) {}
@@ -73,6 +76,8 @@ void Activity::finish(const std::shared_ptr<Request>& r, const ChatResult& res) 
   auto it = std::find(active_.begin(), active_.end(), r);
   if (it == active_.end()) return;  // finished already
   active_.erase(it);
+  if (r->live->spec.load(std::memory_order_relaxed) > 0)  // (its cycles all verified a draft)
+    drafts_cycles_ += r->live->cycles.load(std::memory_order_relaxed), drafts_tokens_ += cycle_tokens(*r->live);
   bus_.publish("request_finished", data);
 }
 
@@ -115,6 +120,49 @@ void Activity::tick(double now_ms) {
     bus_.publish("log", {{"level", "warn"},
                          {"message", "warning: " + std::to_string(dropped) + " log lines dropped (more than the ring holds in one tick)"}});
   for (const auto& line : lines) bus_.publish("log", log_event(line));
+  tick_engine();
+}
+
+void Activity::set_engine(std::function<bool(EngineSample&)> sample) {
+  std::lock_guard<std::mutex> lk(mu_);
+  sample_engine_ = std::move(sample);
+}
+
+nlohmann::json Activity::engine() const {
+  std::lock_guard<std::mutex> lk(mu_);
+  return engine_;
+}
+
+// status.engine (docs/control-socket.md, "Status"): the memory, every slot (a busy one's request and positions from its
+// LiveDecode, an idle one's as its last request left it) and the draft counters since the model loaded
+void Activity::tick_engine() {
+  std::lock_guard<std::mutex> lk(mu_);
+  EngineSample e;
+  if (!sample_engine_ || !sample_engine_(e) || e.budget == 0) {
+    engine_ = nullptr;
+    return;
+  }
+  if (e.engine != drafts_engine_) drafts_engine_ = e.engine, drafts_cycles_ = drafts_tokens_ = 0;
+  nlohmann::json slots = nlohmann::json::array();
+  for (size_t i = 0; i < e.slot_tokens.size(); ++i)
+    slots.push_back({{"index", int(i)}, {"busy", false}, {"tokens", std::max(e.slot_tokens[i], 0)}});
+  long cycles = drafts_cycles_, tokens = drafts_tokens_;
+  for (const auto& r : active_) {
+    const LiveDecode& l = *r->live;
+    const int at = l.slot.load(std::memory_order_relaxed), phase = l.phase.load(std::memory_order_relaxed);
+    if (at >= 0 && size_t(at) < slots.size() && phase > 0 && phase < 3)
+      slots[size_t(at)] = {{"index", at}, {"busy", true},
+                           {"tokens", std::max(l.read.load(std::memory_order_relaxed), 0) +
+                                          std::max(l.tokens.load(std::memory_order_relaxed), 0)},
+                           {"request_id", r->id}};
+    if (l.spec.load(std::memory_order_relaxed) > 0)
+      cycles += l.cycles.load(std::memory_order_relaxed), tokens += cycle_tokens(l);
+  }
+  engine_ = {{"memory", {{"budget_bytes", e.budget}, {"allocated_bytes", e.allocated}, {"weights_bytes", e.weights},
+                         {"kv_bytes", e.kv}}},
+             {"slots", slots}};
+  if (e.drafts) engine_["drafts"] = {{"cycles", cycles}, {"tokens", tokens}};
+  bus_.publish("engine", engine_);  // under mu_ (see start())
 }
 
 namespace {

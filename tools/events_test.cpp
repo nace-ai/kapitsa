@@ -226,6 +226,52 @@ static void activity_events() {
         ev.back().second["message"] == "line 299");
 }
 
+// The engine block: none while the sampler says so, a busy slot from its request's progress, the draft counters
+// summed over finished and running requests and started again when another engine loads
+static void engine_block() {
+  Events bus(kRun);
+  Activity act(bus, 500);
+  Resume how;
+  auto s = bus.open("", &how);
+  int engine_events = 0;
+  const auto count_engine = [&] { while (auto e = s->next(0)) engine_events += e->type == "engine"; };
+  act.tick(steady_ms());
+  CHECK(act.engine().is_null());
+  int a = 0, b = 0;
+  const void* which = &a;
+  size_t budget = 40'000'000'000;
+  act.set_engine([&](Activity::EngineSample& e) {
+    e = {which, budget, 20'000'000'000, 17'000'000'000, 1'500'000'000, {0, 300}, true};
+    return true;
+  });
+  auto r = act.start("openai", "");
+  r->live->slot = 1, r->live->phase = 2, r->live->read = 100, r->live->tokens = 5, r->live->spec = 2, r->live->cycles = 2;
+  count_engine();
+  engine_events = 0;
+  act.tick(steady_ms());
+  json e = act.engine();
+  CHECK(e["memory"]["budget_bytes"] == budget && e["memory"]["kv_bytes"] == 1'500'000'000);
+  CHECK(e["slots"][0] == json({{"index", 0}, {"busy", false}, {"tokens", 0}}));
+  CHECK(e["slots"][1] == json({{"index", 1}, {"busy", true}, {"tokens", 105}, {"request_id", r->id}}));
+  CHECK(e["drafts"] == json({{"cycles", 2}, {"tokens", 4}}));  // (the first token is the prefill's)
+  act.finish(r, ChatResult{});
+  act.tick(steady_ms());
+  e = act.engine();
+  CHECK(e["slots"][1] == json({{"index", 1}, {"busy", false}, {"tokens", 300}}) && e["drafts"]["cycles"] == 2);
+  which = &b;  // another model loaded: its counters start at 0
+  act.tick(steady_ms());
+  CHECK(act.engine()["drafts"] == json({{"cycles", 0}, {"tokens", 0}}));
+  count_engine();
+  CHECK(engine_events == 3);
+  budget = 0;  // nothing to show
+  act.tick(steady_ms());
+  CHECK(act.engine().is_null());
+  act.set_engine([](Activity::EngineSample&) { return false; });
+  act.tick(steady_ms());
+  count_engine();
+  CHECK(act.engine().is_null() && engine_events == 3);
+}
+
 // --print: every kind of event the server publishes, one SSE frame per line as JSON, for tests/test_events_schema.py
 static int print_frames() {
   Events bus(kRun);
@@ -250,6 +296,12 @@ static int print_frames() {
   bad.finish_reason = "error", bad.error = "the prompt does not fit";
   act.finish(r2, bad);
   for (int lvl = 0; lvl < 4; ++lvl) act.logs().push(lvl % 3, lvl == 3 ? "warning: a warning" : "a line");
+  auto r3 = act.start("anthropic", "");
+  r3->live->slot = 1, r3->live->phase = 2, r3->live->read = 80, r3->live->tokens = 9, r3->live->spec = 2, r3->live->cycles = 3;
+  act.set_engine([](Activity::EngineSample& e) {
+    e = {&e, 40'000'000'000, 20'000'000'000, 17'000'000'000, 1'500'000'000, {120, 0}, true};
+    return true;
+  });
   act.tick(r->t0 + 1000);
   while (auto e = s->next(0)) std::cout << json{{"id", bus.id(e->seq)}, {"type", e->type}, {"data", json::parse(e->data)}}.dump() << "\n";
   return 0;
@@ -290,5 +342,6 @@ int main(int argc, char** argv) {
   stream_cap_and_close();
   stream_outlives_bus();
   logs();
+  engine_block();
   std::cout << "events_test: ok\n";
 }

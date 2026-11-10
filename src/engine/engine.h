@@ -373,6 +373,16 @@ class Engine {
   const std::string& model_id() const { return opts_.model_id; }
   int context_length() const { return opts_.context; }
   int slots() const { return splash_ ? splash_slots_ : int(slots_.size()); }  // requests that run at once
+  // What `kapitsa serve`'s status and engine view show (docs/control-socket.md, "Status"), from any thread without
+  // the turn: the memory budget and what the GPU holds; of it, what the engine held before its slots (the model, its
+  // drafter and their buffers) and what it took since (the slots' KV caches as they grow); each slot's positions as
+  // its last request left them; whether it decodes with drafts. Native engines only (Splash: nothing to read).
+  struct View {
+    size_t budget = 0, allocated = 0, weights = 0, kv = 0;
+    std::vector<int> slot_tokens;
+    bool drafts = false;
+  };
+  View view() const;
   // Splash mode (EngineOptions::splash_model): generation runs in the Splash child; chat() refuses (it is the native
   // path), and the caller picks chat_splash(), which has chat()'s signature and results.
   bool splash_mode() const { return splash_ != nullptr; }
@@ -716,6 +726,11 @@ class Engine {
   bool prefix_copy_ = true;   // a slot without the prefix checkpoint copies another's (NI_PREFIX_COPY=0: reads it)
   bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
+  size_t weights_bytes_ = 0;  // allocated before the slots (model, drafter, buffers): view()
+  std::unique_ptr<std::atomic<int>[]> slot_pos_;  // each slot's tokens.size() as its last request left it: view()
+  std::unique_ptr<std::atomic<int>[]> slot_cap_;  // each slot's KV capacity (Seq::cap) as its last reserve or drop left it
+  // Records `s`'s Seq::cap for view(), from the thread that just changed it
+  void note_kv(const Slot& s) { slot_cap_[&s - slots_.data()].store(s.seq->cap, std::memory_order_relaxed); }
   long spec_cycles_ = 0, spec_accepted_ = 0;
   ChatRequest defaults_;
   // Structured output: the vocabulary as grammars read it (built by the first request with a grammar, before its GPU

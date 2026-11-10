@@ -98,8 +98,8 @@ the old engine before the new one loads, so there is nothing to sample while `sw
 | --- | --- |
 | `memory.budget_bytes` | The GPU memory the engine may hold (`mem_budget`) |
 | `memory.allocated_bytes` | The GPU memory it holds now |
-| `memory.weights_bytes` | Of that, the model's weights and the drafter's |
-| `memory.kv_bytes` | Of that, the slots' KV caches as allocated. The rest is buffers and recurrent state |
+| `memory.weights_bytes` | Of that, what the engine held before its slots: the model's weights, the drafter's and the buffers they run in |
+| `memory.kv_bytes` | Of that, the slots' KV caches as allocated (each slot's capacity in positions times the bytes per position). The rest is the slots' recurrent state and buffers allocated later |
 | `slots[]` | One item per slot: `index`, `busy`, `tokens` in its live state, and `request_id` while busy |
 | `drafts` | `cycles` that verified a draft and the `tokens` they wrote, counted since the model loaded. Absent when the model decodes without drafts. A counter that goes down means the model loaded again: start the baseline over |
 
