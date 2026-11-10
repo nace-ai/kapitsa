@@ -86,6 +86,9 @@ def serve_checks(kapitsa, check_status):
             failures += check_status(body)
             if status != 200 or body["state"] != "starting":
                 failures.append(f"status while starting: {status} {body}")
+            busy, answer = ask(sock, "POST", "/model", b'{"model": "qwen3.6-27b"}')
+            if busy != 503 or answer["error"]["code"] != "busy":
+                failures.append(f"POST /model before the first model loaded: {busy} {answer}")
             status, body = ask(sock, "POST", "/stop", b'{"run_id": "%s"}' % body["run_id"].encode())
             if status != 202:
                 failures.append(f"POST /stop while starting: {status} {body}")

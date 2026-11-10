@@ -1427,7 +1427,6 @@ int ni::server::run_service(Options o) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   auto model_mgr = std::make_shared<ModelManager>();
   model_mgr->set_allow_switch(allow_switch);
-  if (g_serve_control) g_serve_control->attach(model_mgr);
   server::publish_state("loading", nullptr);
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
@@ -1438,6 +1437,9 @@ int ni::server::run_service(Options o) {
   if (!engine_splash && idle_unload_min != 0)
     model_mgr->set_idle_unload(idle_unload_min < 0 ? idle_unload_auto_s() : int(idle_unload_min * 60 + 0.5), idle_unload_min < 0,
                                [] { return split_now(); });
+  // POST /model reaches the manager only now: init() takes neither its lock nor its switch flag, so a switch during the
+  // first load would race it (until here POST /model answers 503 busy)
+  if (g_serve_control) g_serve_control->attach(model_mgr);
   if (engine_splash) {  // (absolute: the next run may start in another folder)
     std::error_code abs_ec;
     const std::filesystem::path bin = std::filesystem::absolute(splash_found_binary, abs_ec);

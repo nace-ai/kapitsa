@@ -114,6 +114,11 @@ the change between two ticks.
 During a model switch, a stop takes effect as soon as the load can be abandoned, and the pending `POST /model` answers
 `503 stopping`.
 
+**Not yet in `kapitsa serve`.** Running requests are cut when the process exits; they do not end with `finish_reason`
+`cancelled`. A stop during a switch drops the pending `POST /model`'s connection instead of answering `503 stopping`.
+A server started in a terminal ends as Ctrl-C ends it; an `attached` or `keep_running` one exits with status 0. A
+second `POST /stop` answers `202` and changes nothing, and `POST /model` after a stop answers `503 stopping`.
+
 ### Model switch
 
 `POST /model` loads another model in the same instance and answers once the new model is ready. The request takes
@@ -134,6 +139,11 @@ left out keeps the instance's current value. The switch behaves as `POST /v1/mod
 The socket needs no `--allow-switch`, because its user already controls the process. `allow_switch` still
 governs whether an inference request that names another model may load it. `POST /v1/models/switch` leaves the
 inference port.
+
+**Not yet in `kapitsa serve`.** A switch takes only `model`: any other serve field answers `400 invalid_value` with
+`details.field` naming it. A Splash instance (`engine` `splash`) refuses every switch with `400 invalid_value`,
+because its engine serves its `splash_model` folder only. Before the first model has loaded, `POST /model` answers
+`503 busy` with `Retry-After`.
 
 ## Lifecycles
 
