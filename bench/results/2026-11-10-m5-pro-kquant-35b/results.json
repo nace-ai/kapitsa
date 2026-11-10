@@ -71,7 +71,8 @@
   "catalog_pinned": true,
   "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) at `95460516` (MTPLX, apache-2.0), unchanged. Its head comes from [cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit](https://huggingface.co/cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit) (apache-2.0) and its body trunk from [mlx-community/Qwen3.6-35B-A3B-4bit](https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-4bit) (apache-2.0). Thanks to Youssofal and cyankiwi. Tokenizer and chat template as in the Youssofal build.",
   "text_caveat": "Quality and speed were measured on text workloads; the vision tower is included but was not evaluated.",
-  "headline_split": true
+  "headline_split": true,
+  "min_kapitsa": "This needs Kapitsa 0.2.34 or later (or a build from main until 0.2.34 is out)."
  },
  "model": "Qwen3.6-35B-A3B",
  "base_repo": "Qwen/Qwen3.6-35B-A3B",
