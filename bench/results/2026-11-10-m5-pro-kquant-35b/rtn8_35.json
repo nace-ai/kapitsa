@@ -1,0 +1,37 @@
+{
+ "model": "q36-35b",
+ "name": "rtn8_35",
+ "spec": {
+  "q": "rtn",
+  "bits": 8,
+  "gs": 64,
+  "gpu": "H200",
+  "mem": 229376
+ },
+ "device": "Device(gpu, 0)",
+ "build": {
+  "build_s": 1032.5,
+  "quant_default": {
+   "group_size": 64,
+   "bits": 8,
+   "mode": "affine"
+  },
+  "n_per_module_overrides": 80
+ },
+ "build_s": 1043.8,
+ "lm_bytes": 36827986176,
+ "bpw": 8.50025143470671,
+ "kl_ver": 2,
+ "kl_mean": 0.00929349847137928,
+ "kl_p99": 0.13026723265647888,
+ "kl_median": 0.0019554756581783295,
+ "kl_wiki": 0.008008923381567001,
+ "kl_chat": 0.016970567405223846,
+ "kl_code": 0.005898347590118647,
+ "top1_agree": 0.9692392367906066,
+ "nll": 1.4876958131790161,
+ "nll_ref": 1.4870868921279907,
+ "kl_tokens": 32704,
+ "kl_s": 504.3,
+ "total_s": 1821.6
+}

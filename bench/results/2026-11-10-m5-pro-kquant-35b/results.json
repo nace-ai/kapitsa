@@ -1,0 +1,111 @@
+{
+ "kquant": {
+  "reference": "Qwen/Qwen3.6-35B-A3B @ 345d467b (bf16)",
+  "kl_tokens": 32704,
+  "mac": {
+   "name": "MacBook Pro",
+   "chip": "M5 Pro",
+   "ram_gb": 48,
+   "macos": "26.5.2"
+  },
+  "kapitsa_version": "0.2.32 (e728524)",
+  "standard": {
+   "label": "Kapitsa catalog 4-bit (MTPLX Optimized-Speed)",
+   "repo": "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed",
+   "revision": "95460516",
+   "size_gb": 19.51,
+   "kl": 0.0961,
+   "top1": 0.89,
+   "gsm8k": 0.9484,
+   "gsm8k_n": 1319,
+   "decode_t06": [
+    192.96,
+    206.06
+   ],
+   "decode_t0": [
+    218.97,
+    228.17
+   ],
+   "prefill_4k": [
+    3220,
+    3249
+   ],
+   "peak_gb": 20.3
+  },
+  "kquant": {
+   "repo": "nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant",
+   "size_gb": 19.51,
+   "kl": 0.0586,
+   "top1": 0.912,
+   "gsm8k": 0.9522,
+   "gsm8k_n": 1319,
+   "decode_t06": [
+    213.35,
+    221.75,
+    222.21
+   ],
+   "decode_t0": [
+    233.31,
+    236.55,
+    232.06
+   ],
+   "prefill_4k": [
+    3171,
+    3258,
+    3146
+   ],
+   "peak_gb": 20.3
+  },
+  "gsm8k_pair": {
+   "only_kquant": 24,
+   "only_standard": 19
+  },
+  "sibling": {
+   "model": "Qwen3.5-9B",
+   "repo": "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"
+  },
+  "readme_url": "https://github.com/nace-ai/kapitsa#kquant",
+  "record_url": ""
+ },
+ "model": "Qwen3.6-35B-A3B",
+ "base_repo": "Qwen/Qwen3.6-35B-A3B",
+ "date": "2026-11-10",
+ "quality_standard_note": "One standard for quality and speed: Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed @95460516 (the Kapitsa catalog pack). KL and GSM8K ran on its text tensors on Modal (volume path /vol/packs/q36-35b/lms-4bit, fetched with build.py::fetch --cat-repo Youssofal/... --cat-rev 95460516fbfe..., job k436-fetchcat35; the 'lms-4bit' folder name is only inherited from the 27B layout and does not mean LM Studio). The Mac legs ran the same pack.",
+ "legs": [
+  {
+   "leg": "1-B",
+   "status": "ok"
+  },
+  {
+   "leg": "2-A",
+   "status": "ok"
+  },
+  {
+   "leg": "3-B",
+   "status": "ok"
+  },
+  {
+   "leg": "4-A",
+   "status": "ok"
+  },
+  {
+   "leg": "5-B",
+   "status": "ok"
+  },
+  {
+   "leg": "6-A",
+   "status": "void",
+   "reason": "foreign process rg 51% CPU at 17:34 (mine)",
+   "decode_t06": 196.98,
+   "decode_t0": 226.4,
+   "prefill_tps": 3261.6
+  }
+ ],
+ "legs_shape": "B A B A B A, one lock hold, released kapitsa 0.2.32 (e728524), default decoding, MTP head + DFlash2 on both arms; AC power, AC powermode 2, 1-min load 2.6-3.7 at leg start/end; 4K prompt (4134 tokens)",
+ "source": "k436 mac/runs/35b-six; kq/res/q36-35b (cat35_4 = Youssofal MTPLX @95460516, kq35_4); task #436",
+ "peak_memory_note": "Peak serve RSS is the maximum over the valid legs (sampled with ps during each leg): 20.3 GB on both arms; leg 1 is not used for it.",
+ "notes": [
+  "Leg 1-B: RSS sample on the first leg was 2.1 GB (peak 2.30 GB), cause not found; its speed is in line with the other KQuant legs (decode 213.4 tok/s, 4K TTFT 1.30 s).",
+  "Lock note (watchdog flagged the 35B serve as off-lock at 17:33): the 35B legs were started under `lockf -k /tmp/kapitsa-gpu.lock` (log line 'lock held: 35B pair' 17:30:51). At 17:31 my own `pkill -f` self-test killed the wrapper and its lockf (k436-q436d exit 143); the orphaned legs scripts (pids 4390/4393, kapitsa serve child pid 27073 under 4393) kept running to LEGSDONE 17:34:12. The lock was therefore held, if at all, only through the fd inherited from the killed lockf. Evidence is indirect: #411's line (blocked at lockf) logged 'server ready' at 17:34:15, three seconds after LEGSDONE, and its serve did not overlap the legs. I did NOT capture `lsof /tmp/kapitsa-gpu.lock` during the legs, so the holder is unproven."
+ ]
+}
