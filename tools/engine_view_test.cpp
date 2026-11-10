@@ -297,7 +297,8 @@ int main() {
     CHECK(r && r->status == 400 && error_code(r) == "invalid_value");
     r = cl.Post("/engine/stop", R"({"force":true})", "application/json");
     CHECK(r && r->status == 400 && error_code(r) == "unknown_field");
-    CHECK(stub.switches == 1 && stub.stops == 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    CHECK(stub.switches == 1 && stub.stops == 0 && stub.stopped == 0);  // a refused stop ends nothing
     r = cl.Post("/engine/stop", "{" + run + "}", "application/json");
     CHECK(r && r->status == 202 && json::parse(r->body)["state"] == "stopping" && stub.stops == 1);
     for (int i = 0; i < 100 && stub.stopped == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
