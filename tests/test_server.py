@@ -141,13 +141,13 @@ def check(name, ok, detail=""):
 # The app and the CLI download the same pinned files for the 4-bit variants (src/hub/catalog.cpp), which are the
 # defaults.
 DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
-            "qwen3.8-27b": ("4bit", "lmstudio-community/Qwen3.8-27B-MLX-4bit", "6067b15cf581666a4aecf6af3afaba4bb5efc20c"),
+            "qwen3.8-27b": ("4bit", "nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557"),
             "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-4bit-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
             "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")}
 PINNED = {
     "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
-    "qwen3.8-27b": ("lmstudio-community/Qwen3.8-27B-MLX-4bit", "6067b15cf581666a4aecf6af3afaba4bb5efc20c",
+    "qwen3.8-27b": ("nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
                     [("mtp", "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed", "1d5087d2062c02b279180a53e4016cf9cd7a3d7e", "."),
                      ("dflash2", "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa", "4f950469095a4c799ca2297b1f444b349e672b71", "dflash2")]),
     "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX-4bit-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
@@ -307,8 +307,8 @@ def cli_checks(kapitsa):
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b:4bit", "QWEN3.6-35B-A3B:4bit",
                                                "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant@37e804f90e368a4de866bc34650b9dde67a78c8e"]),
-                          ("qwen3.8-27b", ["27b:4bit", "27B:4BIT", "lmstudio-community/Qwen3.8-27B-MLX-4bit",
-                                           "hf.co/lmstudio-community/Qwen3.8-27B-MLX-4bit"]),
+                          ("qwen3.8-27b", ["27b:4bit", "27B:4BIT", "nace-ai/Qwen3.8-27B-MLX-4bit",
+                                           "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
                                           "nace-ai/Qwen3.5-4B-MLX-4bit-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
                           ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"])]:
