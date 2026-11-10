@@ -79,7 +79,8 @@
   "kapitsa_version": "0.2.32",
   "speed_caveat": "Two of the three KQuant legs ran before `mtplx_runtime.json` was in the pack directory; the third leg has it, as this repo ships it.",
   "catalog_pinned_note": "false on main until the opt-in catalog variant 27b:kquant lands (a separate Kapitsa PR); the published model card is generated with true so its run line is correct on the day the repo goes public",
-  "engine_note": "the DFlash2 drafter [incoai/Qwen3.8-27B-DFlash2](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2) at `015e7956` for both packs; speeds with another drafter will differ"
+  "engine_note": "the DFlash2 drafter [incoai/Qwen3.8-27B-DFlash2](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2) at `015e7956` for both packs; speeds with another drafter will differ",
+  "speed_claim": false
  },
  "model": "Qwen3.8-27B",
  "base_repo": "Qwen/Qwen3.8-27B",
