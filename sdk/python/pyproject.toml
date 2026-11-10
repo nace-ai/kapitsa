@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapitsa-native"
+version = "0.1.0"
+description = "Python bindings for the Kapitsa in-process C ABI"
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["kapitsa"]
