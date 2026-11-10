@@ -116,8 +116,11 @@ During a model switch, a stop takes effect as soon as the load can be abandoned,
 
 **Not yet in `kapitsa serve`.** Running requests are cut when the process exits; they do not end with `finish_reason`
 `cancelled`. A stop during a switch drops the pending `POST /model`'s connection instead of answering `503 stopping`.
-A stop while the instance is `starting` or loading its first model takes effect when that load ends, before the
-instance serves. A model still downloading stops at once, its downloaded parts kept for the next start. Every lifecycle exits with status 0, a terminal's after clearing its status block. A second
+A stop while the instance is `starting` takes effect at once. One while it loads its first model takes effect before
+the next piece of weights its loader reads (at most 32 MB, one tensor, or one streamed expert's read, the fill of
+a model whose experts stream from disk included); the steps that read nothing (compiling
+kernels, the Neural Engine program) finish first.
+A model still downloading stops at once, its downloaded parts kept for the next start. Every lifecycle exits with status 0, a terminal's after clearing its status block. A second
 `POST /stop` answers `202` and changes nothing, and `POST /model` after a stop answers `503 stopping`.
 
 ### Model switch

@@ -1,4 +1,6 @@
 #include "model/expert_store.h"
+
+#include "loader/load_stop.h"
 #ifdef NI_EXPERT_CACHE_TEST
 #include "model/expert_store_test.h"
 #endif
@@ -574,6 +576,9 @@ void ExpertCache::reader_loop(uint8_t* stage) {
     // Recovery is limited to loading, before any GPU uses these bytes. A live
     // streamed read failure still follows the CLI fatal path; it cannot release
     // the GPU's wait and claim that incomplete expert weights are valid.
+    // a stop asked during the first load (src/loader/load_stop.h) ends it here, not after the whole fill; when serving
+    // no action is set and this returns at once
+    load_stop_point();
     FatalRecovery read_scope(FatalRecovery::enabled() && loading_.load());
 #ifdef NI_EXPERT_CACHE_TEST
     ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeRead);

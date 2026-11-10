@@ -33,6 +33,7 @@
 #include "gguf/gguf.h"
 #include "gguf/import.h"
 #include "hub/hub.h"
+#include "loader/load_stop.h"
 #include "metal/gpu.h"
 #include "server/control.h"
 #include "server/cli.h"
@@ -582,6 +583,14 @@ static void on_stop_signal(int sig) {
   if (again || write(g_stop_pipe[1], &c, 1) != 1) pass_signal_on(sig);
 }
 
+// POST /stop while the first model's weights are read: from the reader that saw it, exit 0 now rather than after the
+// load (nothing loaded yet to save; the files the load writes are written whole and renamed, so none is left half done)
+[[noreturn]] static void end_first_load_stop() {
+  if (g_control) g_control->stop();
+  term::clear_for_exit();
+  _exit(0);
+}
+
 static bool g_stop_handlers = false;  // SaveOnStop's are installed (under g_stop_mu)
 static bool g_stop_routed = false;    // serve_routed() serves: no engine, nothing to save (under g_stop_mu)
 
@@ -616,6 +625,7 @@ static bool start_stop_thread() {
           if (g_control) g_control->mark_stopping();
           server::publish_state("stopping", nullptr);
           hub::stop_downloads();  // a model still downloading stops now, its parts kept
+          ask_load_stop();        // one being read stops at its next piece (end_first_load_stop)
         }
       }
       g_stopping = 1;  // (a further signal ends the process at once)
@@ -1453,12 +1463,14 @@ int ni::server::run_service(Options o) {
   model_mgr->set_allow_switch(allow_switch);
   if (g_stop_requested) return stop_asked();
   server::publish_state("loading", nullptr);
+  set_load_stop_action(end_first_load_stop);
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
   } catch (const std::exception& e) {
     if (!engine_splash) throw;
     return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
   }
+  set_load_stop_action(nullptr);  // (a later load, a switch, is the stop thread's: it saves first)
   if (!engine_splash && idle_unload_min != 0)
     model_mgr->set_idle_unload(idle_unload_min < 0 ? idle_unload_auto_s() : int(idle_unload_min * 60 + 0.5), idle_unload_min < 0,
                                [] { return split_now(); });

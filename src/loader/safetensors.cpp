@@ -1,5 +1,6 @@
 #include "util/load_threads.h"
 #include "loader/safetensors.h"
+#include "loader/load_stop.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -228,6 +229,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     th.emplace_back([&] {
       Staging st;
       for (size_t k; (k = next.fetch_add(1)) < jobs.size();) {
+        load_stop_point();  // (a stop during the load: src/loader/load_stop.h)
         const ReadJob& jb = jobs[k];
         if (!read_uncached(jb.fd, jb.dst, jb.len, jb.file_off, st)) {
           failed = true;
@@ -260,6 +262,7 @@ void WeightStore::read_deferred(const std::string& name, void* dst) const {
     th.emplace_back([&] {
       Staging st;
       for (size_t k; (k = next.fetch_add(1)) < n;) {
+        load_stop_point();
         const size_t o = k * kPiece, len = std::min(kPiece, p.len - o);
         if (!read_uncached(fd, static_cast<uint8_t*>(dst) + o, len, p.off + o, st)) {
           failed = true;
@@ -340,6 +343,7 @@ const SafetensorsIndex::Entry& SafetensorsIndex::get(const std::string& name) co
 
 void SafetensorsIndex::read(const Entry& t, size_t off, void* dst, size_t n) const {
   if (off > t.len || n > t.len - off) fatal("%s: read past a tensor's end", dir_.c_str());
+  load_stop_point();
   size_t done = 0;
   while (done < n) {
     const ssize_t r = pread(fds_[size_t(t.file)].get(), static_cast<uint8_t*>(dst) + done, n - done, off_t(t.off + off + done));
