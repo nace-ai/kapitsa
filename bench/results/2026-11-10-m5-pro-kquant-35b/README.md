@@ -3,8 +3,9 @@
 The catalog's 4-bit Qwen3.6-35B-A3B is `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed` at `95460516`: the four weight files of
 `mlx-community/Qwen3.6-35B-A3B-4bit` plus an `mtp.safetensors` head. The KQuant pack keeps the layout and rebuilds only the quantized
 weights, scales and biases of the language model, so its 19.51 GB of language-model weights are the same size. It is
-`nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant` at `ead4c792` (private; it moves to `nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant` when published).
-The repo is 20.43 GB: the language model plus the vision tower, with no `mtp.safetensors`.
+`nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant` at `a8c2dd66`: the same four weight files the speed legs ran (they were fetched from the test repo
+`nace-ai/k436-test-qwen3.6-35b-a3b-mlx-4bit-kquant` at `ead4c792`, which became this repo), plus the catalog's `mtp.safetensors` and
+`mtplx_runtime.json`, unchanged. The repo is 21.01 GB: the language model, the vision tower and the MTP head.
 
 ## One baseline
 

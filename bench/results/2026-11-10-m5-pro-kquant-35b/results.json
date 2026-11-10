@@ -66,7 +66,9 @@
   },
   "readme_url": "https://github.com/nace-ai/kapitsa#kquant",
   "record_url": "https://github.com/nace-ai/kapitsa/blob/main/bench/results/2026-11-10-m5-pro-kquant-35b/README.md",
-  "quality_note": "the text weights of both packs (19.51 GB each); the repos also carry the vision tower, which neither run exercised"
+  "quality_note": "the text weights of both packs (19.51 GB each); the repos also carry the vision tower, which neither run exercised",
+  "catalog_pinned": false,
+  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) at `95460516` (MTPLX, apache-2.0), unchanged. Its head comes from [cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit](https://huggingface.co/cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit) (apache-2.0) and its body trunk from [mlx-community/Qwen3.6-35B-A3B-4bit](https://huggingface.co/mlx-community/Qwen3.6-35B-A3B-4bit) (apache-2.0). Thanks to Youssofal and cyankiwi."
  },
  "model": "Qwen3.6-35B-A3B",
  "base_repo": "Qwen/Qwen3.6-35B-A3B",
@@ -123,10 +125,6 @@
    "min_mac_ram_gb": 48,
    "files": [
     {
-     "name": "MTPLX_PUBLISH_MANIFEST.json",
-     "bytes": 3344
-    },
-    {
      "name": "chat_template.jinja",
      "bytes": 7764
     },
@@ -165,6 +163,10 @@
     {
      "name": "model.safetensors.index.json",
      "bytes": 207383
+    },
+    {
+     "name": "mtp.safetensors",
+     "bytes": 582258561
     },
     {
      "name": "mtplx_runtime.json",
