@@ -596,7 +596,7 @@ static void on_stop_signal(int sig) {
 // POST /stop while the first model's weights are read: from the reader that saw it, exit 0 now rather than after the
 // load (nothing loaded yet to save; the files the load writes are written whole and renamed, so none is left half done)
 [[noreturn]] static void end_first_load_stop() {
-  if (g_control) g_control->stop();
+  close_control();
   term::clear_for_exit();
   _exit(0);
 }
