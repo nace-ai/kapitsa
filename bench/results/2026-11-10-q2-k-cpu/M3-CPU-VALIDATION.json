@@ -1,0 +1,203 @@
+{
+  "evidence_kind": "Redacted derived M3 record; raw commands and logs retained privately",
+  "source": {
+    "candidate_commit": "2389fd0459750efbaed1d699bc4c6e62e94de2f6",
+    "reference_commit": "4f564ecb87d4ff1375fb72b9d45ae945092cc215",
+    "sample_origin": "First1024rows from M5 extraction, same SHA-verified bytes on M3, not independent M3 extraction/import"
+  },
+  "files_sha256": {
+    "src/gguf/quant.h": "8776fd64829f58136db82ce1a5877204410fc008e3f9c5bb0f35cee8cccc21de",
+    "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+    "src/gguf/iq_grids.h": "e4c44677def29c2a1e0d596126af812c77c36581335077e5b62e6c9c6bd7d5c6",
+    "tools/gguf_q2_k_test.h": "7ded87cc3fc6704b0781a7687b6352ad36887ef8a63b99208f4602f686c4014c",
+    "third_party/nlohmann/json.hpp": "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6",
+    "candidate-quant.cpp": "b06eabc34ea77176e1919066c5517ef81ecf614b95f73c9f40bb1557761dbfb7",
+    "reference-quant.cpp": "b8ad97f19670bbde965e5cd933d62ab0380b31b4c845943fecd13b5c3ba85877",
+    "focused.cpp": "b2bbb7ef62d5b66271ddc382ded2d38cb9ee104396daad7377349317d12529d8",
+    "benchmark-driver.cpp": "a7741ed8f834c1e5b11a6bc8e523b3d7b280ff644d76564c031c830f5982d13c",
+    "stubs.cpp": "edb1229b7e2a367149d113afaab97a7e419175266f66d53bf139c077b3c78049",
+    "trained-rows.bin": "35ea11480de1cd9bab903c15f3f5c3f67945c105f315449f0fe2badc41087037",
+    "worker.py": "a20295cb717aca208c80a51f80ff321d4e8caeee3846a585066d7bbb8d6db811"
+  },
+  "hardware": {
+    "chip": "Apple M3 Ultra",
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "reference_check": "Q2_K: 958666 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+  "candidate_check": "Q2_K: 958666 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+  "steps": [
+    {
+      "label": "reference-check-build",
+      "rc": 0
+    },
+    {
+      "label": "reference-check",
+      "rc": 0
+    },
+    {
+      "label": "reference-bench-build",
+      "rc": 0
+    },
+    {
+      "label": "candidate-check-build",
+      "rc": 0
+    },
+    {
+      "label": "candidate-check",
+      "rc": 0
+    },
+    {
+      "label": "candidate-bench-build",
+      "rc": 0
+    },
+    {
+      "label": "trained-A1",
+      "rc": 0
+    },
+    {
+      "label": "trained-B1",
+      "rc": 0
+    },
+    {
+      "label": "trained-A2",
+      "rc": 0
+    },
+    {
+      "label": "trained-B2",
+      "rc": 0
+    }
+  ],
+  "order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        967.935547,
+        912.475586,
+        845.254883,
+        583.292969,
+        587.97168,
+        585.693359,
+        588.21582,
+        580.932617,
+        582.478516,
+        510.620117,
+        504.19043,
+        502.970703,
+        503.499023,
+        508.056641,
+        505.94043,
+        496.826172
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 581.7055665
+    },
+    "B1": {
+      "ns_per_row": [
+        352.702148,
+        296.020508,
+        360.148438,
+        305.012695,
+        311.889648,
+        311.685547,
+        314.697266,
+        310.831055,
+        319.987305,
+        314.575195,
+        314.535156,
+        267.170898,
+        261.59668,
+        267.211914,
+        263.793945,
+        267.782227
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 311.25830099999996
+    },
+    "A2": {
+      "ns_per_row": [
+        419.71875,
+        427.694336,
+        434.529297,
+        395.955078,
+        398.966797,
+        396.80957,
+        398.234375,
+        394.613281,
+        369.506836,
+        365.397461,
+        373.087891,
+        365.641602,
+        347.981445,
+        350.097656,
+        347.290039,
+        347.004883
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 383.850586
+    },
+    "B2": {
+      "ns_per_row": [
+        169.271484,
+        148.641602,
+        149.902344,
+        148.884766,
+        141.438477,
+        142.292969,
+        142.170898,
+        137.166016,
+        137.655273,
+        142.170898,
+        138.345703,
+        142.985352,
+        142.130859,
+        135.986328,
+        141.764648,
+        136.71875
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 142.15087849999998
+    }
+  },
+  "complete_files_equal": true,
+  "actual_complete_output_bytes": 4194304,
+  "binaries_sha256": {
+    "check-reference": "0c0f6bdf84c7292fcefdb741188cc32fead702255f6e177bf8a1af6b4ccba41e",
+    "check-candidate": "22a46481d221995b05906f60fedce9e5e4ce667df27e6ded70469a00b92ea54c",
+    "bench-reference": "af26ef43d980509c5a0cf07aba9866c2aefbcf4b6e232a4c609e830170bf23a3",
+    "bench-candidate": "04e05d564cacee607b0e1a0b99b7ad12f39463813680175d21b839589fc046f7"
+  },
+  "worker_completed_and_exited": true,
+  "rc": 0,
+  "recovery_note": "An earlier attempt was interrupted before results were recovered. These are a fresh completed run of the same verified source and trained input.",
+  "scope": "CPU oracle, FP flags and trained-row decoding only. No independent M3 import or M3 model-output/inference-speed qualification."
+}
