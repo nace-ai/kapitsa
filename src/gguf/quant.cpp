@@ -236,6 +236,32 @@ void dq_q5_k(const uint8_t* b, float* y) {
   const uint8_t* sm = b + 4;
   const uint8_t* qh = b + 16;
   const uint8_t* qs = b + 48;
+#if defined(__aarch64__)
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 176 : src - dst < 256 * sizeof(float);
+  if (std::isfinite(d) && std::isfinite(dmin) && !overlap) {
+    // Half x 6-bit scale x 5-bit code is exact in fp32; preserve the final subtraction.
+    for (int group = 0; group < 8; ++group) {
+      uint8_t sc, m;
+      scale_min_k4(group, sm, &sc, &m);
+      const float32x4_t dl = vdupq_n_f32(d * float(sc)), ml = vdupq_n_f32(dmin * float(m));
+      for (int lane = 0; lane < 32; lane += 16) {
+        const uint8x16_t packed = vld1q_u8(qs + (group / 2) * 32 + lane);
+        const uint8x16_t low = group % 2 ? vshrq_n_u8(packed, 4) : vandq_u8(packed, vdupq_n_u8(15));
+        const uint8x16_t high = vandq_u8(vshlq_u8(vld1q_u8(qh + lane), vdupq_n_s8(int8_t(-group))),
+                                       vdupq_n_u8(1));
+        const uint8x16_t values = vorrq_u8(low, vshlq_n_u8(high, 4));
+        const uint16x8_t a = vmovl_u8(vget_low_u8(values)), z = vmovl_u8(vget_high_u8(values));
+        float* out = y + group * 32 + lane;
+        vst1q_f32(out, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_low_u16(a)))), ml));
+        vst1q_f32(out + 4, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_high_u16(a)))), ml));
+        vst1q_f32(out + 8, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_low_u16(z)))), ml));
+        vst1q_f32(out + 12, vsubq_f32(vmulq_f32(dl, vcvtq_f32_u32(vmovl_u16(vget_high_u16(z)))), ml));
+      }
+    }
+    return;
+  }
+#endif
   for (int p = 0; p < 4; ++p)
     for (int h = 0; h < 2; ++h) {
       uint8_t sc, m;
