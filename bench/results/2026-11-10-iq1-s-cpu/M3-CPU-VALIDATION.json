@@ -1,0 +1,151 @@
+{
+  "kind": "Redacted derived CPU evidence, not raw logs. Every timing sample retained.",
+  "source": {
+    "reference": "2d83bdbe028067c6c643a6527b6f5b63d411e24f",
+    "candidate": "ef11c72c7d16f44ada22d27a27a12f2a49a8d6fa"
+  },
+  "setup": {
+    "chip": "Apple M3 Ultra",
+    "memory_bytes": 103079215104,
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "method": "Same standalone C++20 -O3 decoder/driver/stubs as the M5 preliminary record; actual pinned Airy IQ1_S sample,1024 rows K1024;16 samples per ABAB leg under exclusive GPU lock.",
+  "sample_sha256": "2677a86ec11247d9bf7be8fe1b7a3993c58b3d3a590a2f581e98541cf796ce74",
+  "builds": {
+    "reference": {
+      "quant_sha256": "f09ffcfccefdb98365a8cdfd6e88fe3dc3bcb5436a729790eb663dcc0d117b59",
+      "bench_sha256": "d1e484d81b582254d2fd007e4965b4ce4c4f79d6e514c1a7639f392f68102e52",
+      "oracle_sha256": "10035addbda6053b8bae91144692ec97560fd13e10067eb72918a345f4fd5494"
+    },
+    "candidate": {
+      "quant_sha256": "a4202b49a4bbe87269d64148a8487c8388798a5f05026525aeeca36277d0f797",
+      "bench_sha256": "7d0f4f8b662ee666acc3e91f2a79fc7beeda462bb9e5962c0727ce68ee116bb2",
+      "oracle_sha256": "62124d5a802794b9d1e5b90d842e2db924dbd7d79727676e7d2902ff345693ef"
+    }
+  },
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        1725.790039,
+        2038.452148,
+        2249.348633,
+        2566.610352,
+        1660.400391,
+        1755.859375,
+        2383.137695,
+        1660.237305,
+        2532.511719,
+        1663.818359,
+        2735.513672,
+        1667.114258,
+        1685.139648,
+        1955.241211,
+        1670.329102,
+        1941.162109
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1848.510742
+    },
+    "B1": {
+      "ns_per_row": [
+        814.981445,
+        577.433594,
+        573.69043,
+        574.259766,
+        575.154297,
+        573.852539,
+        574.177734,
+        575.276367,
+        573.649414,
+        574.015625,
+        575.195312,
+        573.283203,
+        574.21875,
+        572.958008,
+        572.957031,
+        573.201172
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 574.0966794999999
+    },
+    "A2": {
+      "ns_per_row": [
+        1660.27832,
+        1660.807617,
+        1727.458008,
+        1658.366211,
+        1728.71875,
+        2246.134766,
+        1657.226562,
+        1720.376953,
+        1661.132812,
+        1682.536133,
+        1831.013672,
+        1659.341797,
+        1656.657227,
+        1685.791016,
+        1657.592773,
+        1734.09082
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1671.8344725000002
+    },
+    "B2": {
+      "ns_per_row": [
+        699.992188,
+        573.974609,
+        574.055664,
+        573.242188,
+        573.079102,
+        573.527344,
+        574.055664,
+        574.584961,
+        573.486328,
+        572.347656,
+        575.601562,
+        573.364258,
+        572.46875,
+        572.265625,
+        593.424805,
+        575.358398
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 573.7509765
+    }
+  },
+  "complete_output_bytes_equal": true,
+  "checks": {
+    "reference_oracle_cases": 1597642,
+    "candidate_oracle_cases": 1597642,
+    "reference_guard_pages": "PASS",
+    "candidate_guard_pages": "PASS"
+  },
+  "prior_failure": "Initial private focused-driver link included duplicate stand-in definitions. That link failed before any check/timing. Recovery removed the duplicate stand-in source from that link only; production and oracle sources are unchanged. Original failure retained.",
+  "not_verified": [
+    "M3 full-model output/runtime checks",
+    "Whole-inference speedup",
+    "ASan",
+    "non-AArch64 execution"
+  ]
+}
