@@ -515,6 +515,7 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `GET /api/version` | Returns the Kapitsa version. |
 | `POST /api/embed` | Not supported (no embedding models). Returns 400. |
 | `GET /health` | `{"status":"ok"}` |
+| `GET /engine` | The engine view (this Mac only): state, memory, slots, drafts, requests and log of this server, read-only. It needs this run's key, which `kapitsa serve` prints in the page's link on its terminal and writes to `run/<instance>.token`; details in [the control socket](control-socket.md#the-engine-view). |
 | `GET /` | The chat page: one file with dynamic client-side model selection dropdown that talks only to this server and keeps its conversations in the browser. Its requests name the model's context as `max_tokens`, so a reply may use whatever room the conversation has left (the budget is refreshed when the page loads and after a model switch the page itself makes, not after one another client makes); a client that names neither `max_tokens` nor `max_completion_tokens` gets the 16384 cap above instead, which a reasoning model can spend entirely on its thinking. A reply the engine cut off says so ("cut off: the context is full, or the reply hit the server's token limit"). |
 
 The Ollama endpoints work best with `--port 11434` (Ollama's default port), so clients that default to `localhost:11434` find the server without configuration. Not supported: `/api/pull`, `/api/push`, `/api/create`, `/api/copy`, `/api/delete` (Kapitsa manages models with `kapitsa pull` and `kapitsa rm`).

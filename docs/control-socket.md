@@ -233,7 +233,8 @@ stay on the socket, as everything an administrator does: in Kapitan, or Ctrl-C w
   shared with requests, so at most 3 are open at once. A fourth gets `503 busy` with `Retry-After: 5`. These count
   toward the bus's 16 streams.
 - **No socket.** A server without a control socket answers the two endpoints with `503 internal`. That happens when
-  another server holds its instance name, `run/` cannot be made, or the server routes to other Macs.
+  another server holds its instance name or `run/` cannot be made. A server that routes to other Macs has no engine
+  view: it forwards only `/v1/`, so `/engine` answers 404.
 
 ## Versioning
 
