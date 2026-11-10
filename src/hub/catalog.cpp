@@ -222,6 +222,17 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "6067b15cf581666a4aecf6af3afaba4bb5efc20c",
             .companions = {mtp27(), dflash27()},
             .download_gb = 20.17},
+           // Opt-in KQuant (#436): the 4-bit pack above with its quantized weights rebuilt by importance-weighted
+           // scale search, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
+           // 0.035 against 0.054, GSM8K (1319) 0.953 against 0.950; M5 Pro decode (3 legs each, Kapitsa 0.2.32 with
+           // incoai's DFlash2 drafter): sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8. `27b` stays the plain
+           // 4-bit pack. Not measured with the nace-ai drafter this entry downloads.
+           {.name = "kquant",
+            .quant = "MLX affine 4-bit, group 64 (KQuant)",
+            .repo = "nace-ai/Qwen3.8-27B-MLX-4bit-KQuant",
+            .revision = "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364",
+            .companions = {dflash27()},
+            .download_gb = 20.17},
            {.name = "5bit",
             .quant = "MLX affine 5-bit, group 64",
             .repo = "lmstudio-community/Qwen3.8-27B-MLX-5bit",
