@@ -51,31 +51,21 @@ def ask(path, method, target, body=b""):
     return int(head.split()[1]), json.loads(rest)
 
 
-def serve(kapitsa, home, hold_ms=0):
+def serve(kapitsa, home, hold_ms=0, ignore_sigint=True):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("KAPITSA_", "NI_"))}
     env["KAPITSA_HOME"] = home
     if hold_ms:
         env["NI_CONTROL_TEST_HOLD_MS"] = str(hold_ms)
     args = [kapitsa, "serve", "--model", "/nonexistent/model", "--port", "18731", "--private"]
     return subprocess.Popen(args, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
+                            text=True,
+                            preexec_fn=(lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)) if ignore_sigint else None)
 
 
-def serve_checks(kapitsa, check_status):
+def stop_while_starting(kapitsa, check_status, ignore, want):
     failures = []
     with tempfile.TemporaryDirectory() as home:
-        open(os.path.join(home, "run"), "w").close()  # run/ cannot be a folder
-        out = serve(kapitsa, home).communicate(timeout=60)[0]
-        if "no control socket" not in out or "cannot listen" in out or "No folder at" not in out:
-            failures.append(f"run/ not a folder: the server should go on without a socket and fail on the model: {out!r}")
-    with tempfile.TemporaryDirectory() as tmp:
-        home = os.path.join(tmp, "h" * max(1, 110 - len(tmp)))  # run/default.sock over 103 bytes
-        os.mkdir(home)
-        out = serve(kapitsa, home).communicate(timeout=60)[0]
-        if "longer than macOS allows" not in out or "no control socket" not in out or "No folder at" not in out:
-            failures.append(f"a socket path over 103 bytes: the server should warn, go on and fail on the model: {out!r}")
-    with tempfile.TemporaryDirectory() as home:
-        p = serve(kapitsa, home, hold_ms=30000)
+        p = serve(kapitsa, home, hold_ms=30000, ignore_sigint=ignore)
         sock = os.path.join(home, "run", "default.sock")
         for _ in range(200):
             if os.path.exists(sock) or p.poll() is not None:
@@ -93,11 +83,31 @@ def serve_checks(kapitsa, check_status):
             if status != 202:
                 failures.append(f"POST /stop while starting: {status} {body}")
             rc = p.wait(timeout=15)
-            if rc != 0 or os.path.exists(sock):
-                failures.append(f"stop while starting, SIGINT ignored: exit {rc}, socket left: {os.path.exists(sock)}")
+            if rc != want or os.path.exists(sock):
+                failures.append(f"stop while starting (SIGINT ignored: {ignore}): exit {rc}, want {want}, "
+                                f"socket left: {os.path.exists(sock)}")
         except (OSError, subprocess.TimeoutExpired) as e:
             p.kill()
-            failures.append(f"stop while starting: {e!r}: {p.communicate()[0]!r}")
+            failures.append(f"stop while starting (SIGINT ignored: {ignore}): {e!r}: {p.communicate()[0]!r}")
+    return failures
+
+
+def serve_checks(kapitsa, check_status):
+    failures = []
+    with tempfile.TemporaryDirectory() as home:
+        open(os.path.join(home, "run"), "w").close()  # run/ cannot be a folder
+        out = serve(kapitsa, home).communicate(timeout=60)[0]
+        if "no control socket" not in out or "cannot listen" in out or "No folder at" not in out:
+            failures.append(f"run/ not a folder: the server should go on without a socket and fail on the model: {out!r}")
+    with tempfile.TemporaryDirectory() as tmp:
+        home = os.path.join(tmp, "h" * max(1, 110 - len(tmp)))  # run/default.sock over 103 bytes
+        os.mkdir(home)
+        out = serve(kapitsa, home).communicate(timeout=60)[0]
+        if "longer than macOS allows" not in out or "no control socket" not in out or "No folder at" not in out:
+            failures.append(f"a socket path over 103 bytes: the server should warn, go on and fail on the model: {out!r}")
+    # held in `starting`: a server in a terminal ends as Ctrl-C ends it (killed by SIGINT), with SIGINT ignored it exits 0
+    for ignore, want in ((True, 0), (False, -signal.SIGINT)):
+        failures += stop_while_starting(kapitsa, check_status, ignore, want)
     return failures
 
 

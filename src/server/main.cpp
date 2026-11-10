@@ -610,8 +610,15 @@ static bool start_stop_thread() {
       save_before_exit();
       if (g_control) g_control->stop();  // (its socket file goes with the process)
       if (c != 0) return pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends it
-      if (g_stop_exit0 || !g_stop_handlers || g_stop_prev[0].sa_handler == SIG_IGN) _exit(0);
-      pass_signal_on(SIGINT);
+      if (g_stop_exit0) _exit(0);
+      if (g_stop_handlers) {  // the handlers SaveOnStop replaced: the one before them, as for Ctrl-C
+        if (g_stop_prev[0].sa_handler != SIG_IGN) pass_signal_on(SIGINT);
+        _exit(0);
+      }
+      // before the stop handlers (the first load): SIGINT as it is now set, the terminal UI's handler (the status block
+      // off the screen, the cursor back) or the default; exit 0 when SIGINT is ignored
+      struct sigaction now {};
+      if (sigaction(SIGINT, nullptr, &now) == 0 && now.sa_handler != SIG_IGN) raise(SIGINT);
       _exit(0);
     }).detach();
     return true;
@@ -677,10 +684,7 @@ class ServeControl : public server::ControlApi {
     id_.started_at = at;
   }
   bool foreground() const { return id_.lifecycle == "foreground"; }
-  void attach(std::shared_ptr<ModelManager> mgr) {
-    std::lock_guard<std::mutex> lk(mu_);
-    mgr_ = std::move(mgr);
-  }
+  void attach(const std::shared_ptr<ModelManager>& mgr) { mgr_.attach(mgr); }
 
   nlohmann::json status() override {
     return server::instance_status(id_, *server::events(), *server::activity(), server::last_state());
@@ -694,13 +698,9 @@ class ServeControl : public server::ControlApi {
   }
   server::ControlReply model_switch(const nlohmann::json& r) override {
     if (server::ControlReply no = server::switch_refusal(id_.config, r); no.status) return no;
-    std::shared_ptr<ModelManager> mgr;
-    {
-      std::lock_guard<std::mutex> lk(mu_);
-      mgr = mgr_;
-    }
+    const std::shared_ptr<ModelManager> mgr = mgr_.get();  // (held for the switch only)
     if (!mgr) {
-      server::ControlReply busy = server::control_error(503, "busy", "the first model is still loading", {{"retry_after_s", 30}});
+      server::ControlReply busy = server::control_error(503, "busy", "no model is being served yet", {{"retry_after_s", 30}});
       busy.retry_after_s = 30;
       return busy;
     }
@@ -725,8 +725,7 @@ class ServeControl : public server::ControlApi {
 
  private:
   server::Identity id_;
-  std::mutex mu_;
-  std::shared_ptr<ModelManager> mgr_;
+  server::Attached<ModelManager> mgr_;  // weak: the socket never keeps the manager, or its engine, past run_service
 };
 static ServeControl* g_serve_control = nullptr;  // (never freed: the socket's threads may outlive run_service)
 

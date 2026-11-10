@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <sys/types.h>
@@ -58,6 +59,25 @@ std::string api_url(const std::string& host, int port);
 // Why POST /model `request` cannot switch an instance serving `config` (status 0: it can): a Splash engine serves its
 // splash_model folder and nothing else, and this server takes no serve field but `model` on a switch yet
 ControlReply switch_refusal(const nlohmann::json& config, const nlohmann::json& request);
+
+// What POST /model switches: the server's manager, held weakly so the socket never keeps it (and its engine, whose
+// destructor saves state) alive after its owner lets it go. get() is null before attach() and after that.
+template <class T>
+class Attached {
+ public:
+  void attach(const std::shared_ptr<T>& p) {
+    std::lock_guard<std::mutex> lk(mu_);
+    p_ = p;
+  }
+  std::shared_ptr<T> get() const {
+    std::lock_guard<std::mutex> lk(mu_);
+    return p_.lock();
+  }
+
+ private:
+  mutable std::mutex mu_;
+  std::weak_ptr<T> p_;
+};
 
 bool valid_instance_id(const std::string& id);  // 1 to 32 of A-Z a-z 0-9 _ -
 std::string control_dir(const std::string& home);  // <home>/run, made 0700; "" when it cannot be made

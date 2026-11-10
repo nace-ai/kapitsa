@@ -156,6 +156,16 @@ int main(int argc, char** argv) {
   CHECK(control_dir(blocked).empty());
   unlink((blocked + "/run").c_str());
   rmdir(blocked.c_str());
+  {  // POST /model's manager: none before attach, the owner's while it lives, none once the owner lets it go
+    Attached<int> slot;
+    CHECK(!slot.get());
+    auto owner = std::make_shared<int>(7);
+    slot.attach(owner);
+    CHECK(slot.get() && *slot.get() == 7);
+    std::weak_ptr<int> seen = owner;
+    owner.reset();
+    CHECK(seen.expired() && !slot.get());
+  }
   CHECK(api_url("", 8100) == "http://127.0.0.1:8100" && api_url("::", 1) == "http://127.0.0.1:1" &&
         api_url("::1", 8100) == "http://[::1]:8100" && api_url("10.0.0.2", 80) == "http://10.0.0.2:80");
   CHECK(valid_instance_id("code") && valid_instance_id("a_B-9") && !valid_instance_id("") &&
