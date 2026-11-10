@@ -1,0 +1,321 @@
+{
+  "evidence_kind": "Redacted derived evidence, not a raw log. Original execution records retained privately.",
+  "configuration": {
+    "chip": "Apple M5 Pro",
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source": {
+    "reference_commit": "7a6067f37038317c26aae1abd1a9327dd21ff9ab",
+    "candidate_commit": "232fc9381782a096a710782b400036ca3d1d4e84",
+    "source_sha256": {
+      "src/gguf/quant.cpp": "a6aeef792a6c4b272eb220271e44f1bd4fb512d250a53815f1db33501896fcee",
+      "tools/gguf_q3_k_test.h": "f799dc8ac105b0b3e69a923c3cf0f2dbd59ca3c5cc2b1ef0da189389365cfa5e",
+      "tools/iq_layout_test.cpp": "ac740967cf16bad8f3f5d416e7d92ad9ef26aea852d4e12309b0e6076c3627e6"
+    },
+    "reference_quant_sha256": "3163f5377fa2242a267300547a41a37cf6b9f7e10192d5c510b75ea390a4a200",
+    "note": "The measured pre-commit source hashes were verified against this production commit."
+  },
+  "checks": {
+    "reference": "Q3_K: 307402 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "candidate": "Q3_K: 307402 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "ubsan": "Q3_K: 307402 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "mutation": "The deliberate low-bit-mask mutation failed with the expected nonzero exit.",
+    "initial_driver_failure": "The initial private stub named the wrong quantization type and failed before Q3 decoding; corrected and rerun in both arms. Original failed attempt retained.",
+    "vk_cpu_tests": [
+      "PASS api_test",
+      "PASS prefix_cache_test",
+      "PASS fn_store_test",
+      "PASS fn_dflash_test",
+      "PASS tokenizer_test",
+      "PASS iq_layout_test",
+      "PASS nh_quant_q8_test",
+      "PASS remote_test",
+      "PASS cluster_test",
+      "PASS split_place_test",
+      "PASS gemm_slices_test",
+      "PASS ffn_share_test",
+      "PASS ws_upgrade_test",
+      "PASS test_server_cli",
+      "PASS test_sidecar",
+      "PASS test_bench",
+      "PASS test_update",
+      "PASS test_community",
+      "PASS test_reasoning",
+      "PASS test_pr_size",
+      "PASS test_logit_compare",
+      "PASS test_sampled_tokens_harness",
+      "PASS test_structured_cli"
+    ],
+    "release_build": "PASS",
+    "prek": "PASS",
+    "diff_check": "PASS"
+  },
+  "synthetic": {
+    "method": "Fixed-seed Q3_K, 1024 rows x 2048; 16 samples with 64 decodes per sample, A/B/A/B under exclusive GPU lock. CPU decoder timing only.",
+    "runs": {
+      "A1": {
+        "input_kind": "fixed-seed synthetic Q3_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          805.496841431,
+          617.335632324,
+          584.012359619,
+          582.875564575,
+          581.82081604,
+          584.385559082,
+          585.414886475,
+          584.3334198,
+          585.554763794,
+          585.135131836,
+          585.545852661,
+          586.875274658,
+          585.729598999,
+          586.560562134,
+          603.245422363,
+          609.704330444
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 585.5503082275
+      },
+      "B1": {
+        "input_kind": "fixed-seed synthetic Q3_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          354.061126709,
+          262.507751465,
+          226.10218811,
+          205.019638062,
+          195.550918579,
+          185.277297974,
+          183.600753784,
+          185.548141479,
+          184.214904785,
+          183.39982605,
+          183.472305298,
+          184.167861938,
+          183.814361572,
+          184.341430664,
+          184.266403198,
+          184.245437622
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 184.303916931
+      },
+      "A2": {
+        "input_kind": "fixed-seed synthetic Q3_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          592.596694946,
+          586.023330688,
+          585.482269287,
+          585.40852356,
+          585.15486145,
+          584.190994263,
+          585.938766479,
+          586.191802979,
+          586.136505127,
+          588.064834595,
+          588.131576538,
+          587.242126465,
+          587.860733032,
+          588.386535645,
+          589.820861816,
+          589.487716675
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 586.7169647220001
+      },
+      "B2": {
+        "input_kind": "fixed-seed synthetic Q3_K blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          188.24005127,
+          184.44442749,
+          183.867141724,
+          185.423538208,
+          186.049789429,
+          185.169219971,
+          184.833526611,
+          185.106277466,
+          184.414550781,
+          184.021621704,
+          183.901473999,
+          184.324264526,
+          184.607192993,
+          183.301925659,
+          183.846786499,
+          184.235900879
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 184.4294891355
+      }
+    },
+    "complete_output_files_literal_equal": true,
+    "binary_sha256": {
+      "reference": "b33550a3c5a4ce057d32e85b4177344c4a3375fc16689d849fc022cfbd863c73",
+      "candidate": "161ed75c9074e7b7822578c8dc2916bb7c3bd0de266a621cbae48140bd35607e"
+    }
+  },
+  "trained": {
+    "method": "Actual 1024 rows x 1024, one untimed decode then 16 full decodes per leg, A/B/A/B under exclusive GPU lock. CPU decoder timing only.",
+    "model": {
+      "repo": "Acnoryx/Airy",
+      "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+      "repository_file": "gguf/Airy-0.8b-Q3_K_M.gguf",
+      "sha256": "e9b4d108ece53ec869768641afea8cc03f3840d97f4c16f7c3f76a8200457085"
+    },
+    "sample": {
+      "K": 1024,
+      "bytes": 450560,
+      "rows": 1024,
+      "tensor": "blk.0.attn_gate.weight"
+    },
+    "sample_sha256": "f9e62cf4b937142fb87ecf36dc5828e52415c58e8c0b1fa8c54889ed4a70f204",
+    "runs": {
+      "A1": {
+        "ns_per_row": [
+          591.87793,
+          560.75,
+          560.708984,
+          564.12793,
+          560.546875,
+          560.383789,
+          498.046875,
+          500.732422,
+          498.087891,
+          497.96582,
+          497.599609,
+          500.814453,
+          497.599609,
+          497.436523,
+          448.608398,
+          446.208008
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 499.41015649999997
+      },
+      "B1": {
+        "ns_per_row": [
+          176.391602,
+          170.410156,
+          172.038086,
+          152.628906,
+          152.383789,
+          152.140625,
+          151.977539,
+          151.285156,
+          152.424805,
+          151.814453,
+          152.140625,
+          152.303711,
+          152.262695,
+          151.448242,
+          152.22168,
+          135.782227
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 152.2421875
+      },
+      "A2": {
+        "ns_per_row": [
+          375.081055,
+          374.633789,
+          377.116211,
+          374.430664,
+          377.441406,
+          374.511719,
+          374.511719,
+          376.708984,
+          374.308594,
+          374.429688,
+          380.859375,
+          354.248047,
+          352.376953,
+          356.486328,
+          353.84082,
+          352.213867
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 374.47119150000003
+      },
+      "B2": {
+        "ns_per_row": [
+          99.080078,
+          98.876953,
+          98.388672,
+          98.022461,
+          95.662109,
+          95.866211,
+          98.347656,
+          95.78418,
+          95.866211,
+          95.744141,
+          95.458984,
+          95.458984,
+          95.744141,
+          96.150391,
+          96.069336,
+          99.243164
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 95.9677735
+      }
+    },
+    "complete_output_files_literal_equal": true,
+    "binary_sha256": {
+      "reference": "e6b2c43e89d7a9104897b539582a2e00c9f0efebe381a18a6e8830e02623f663",
+      "candidate": "d0dfb21ec7cf0f9dae7f2f726debc59e9a06bd33e5c4bbb725cc20b28b4d1c56"
+    }
+  },
+  "driver_sha256": {
+    "benchmark-driver.cpp": "b06021515b9991172896cdb4064712f63da9dd39482dcbcd444db3e456f9ef3c",
+    "trained-driver.cpp": "f29d6991be566cd91da9b9dbf9181f57239b4149ee5bf21421b3a9208a030577",
+    "stubs.cpp": "c554095ba7f534f40003bd1710f38b242c154dc40785a5f19d83ea9628862402"
+  },
+  "limitations": [
+    "CPU decoder timings do not establish an import or inference speedup.",
+    "ASan and non-AArch64 execution not run. GPU/model checks recorded separately."
+  ]
+}

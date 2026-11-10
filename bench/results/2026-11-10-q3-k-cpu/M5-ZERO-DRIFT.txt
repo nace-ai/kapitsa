@@ -1,0 +1,21 @@
+Redacted derived comparison display; original execution records retained privately. Source and binary identities are unchanged.
+
+prefill: 8 records (q3-k-08b)
+  reference: 0.2.33 (fd98ce47), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (232fc938), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+batch: 192 records (q3-k-08b)
+  reference: 0.2.33 (fd98ce47), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (232fc938), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)
+step: 192 records (q3-k-08b)
+  reference: 0.2.33 (fd98ce47), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (232fc938), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)
+verify: 192 records (q3-k-08b)
+  reference: 0.2.33 (fd98ce47), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (232fc938), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)

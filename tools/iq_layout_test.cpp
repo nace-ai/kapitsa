@@ -1,3 +1,4 @@
+#include "gguf_q3_k_test.h"
 #include "gguf_iq3_xxs_test.h"
 #include "gguf_iq2_xxs_test.h"
 #include "gguf_q8_0_test.h"
@@ -364,6 +365,7 @@ void test_iq4_nl_pages() {
 }  // namespace
 
 int main() {
+  if (q3_k_test::run()) return 1;
   if (iq3_s_test::run()) return 1;
   if (iq2_s_test::run()) return 1;
   if (iq2_xs_test::run()) return 1;

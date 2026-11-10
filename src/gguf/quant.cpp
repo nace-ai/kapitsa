@@ -172,6 +172,28 @@ void dq_q3_k(const uint8_t* b, float* y) {
     scale[8 + i] = (s[i] >> 4) | (((s[8 + i] >> 4) & 3) << 4);
     scale[12 + i] = (s[4 + i] >> 4) | (((s[8 + i] >> 6) & 3) << 4);
   }
+#if defined(__aarch64__)
+  const uintptr_t src = reinterpret_cast<uintptr_t>(b), dst = reinterpret_cast<uintptr_t>(y);
+  const bool overlap = src <= dst ? dst - src < 110 : src - dst < 256 * sizeof(float);
+  if (std::isfinite(d) && !overlap) {
+    // A finite half times a signed 6-bit scale and a 3-bit value fits exactly in fp32.
+    for (int k = 0; k < 16; ++k) {
+      const int half = k / 8, j = (k % 8) / 2, second = k % 2;
+      const uint8x16_t low = vandq_u8(vshlq_u8(vld1q_u8(qs + 32 * half + 16 * second),
+                                               vdupq_n_s8(int8_t(-2 * j))), vdupq_n_u8(3));
+      const uint8x16_t high = vandq_u8(vshlq_u8(vld1q_u8(hm + 16 * second),
+                                                vdupq_n_s8(int8_t(-4 * half - j))), vdupq_n_u8(1));
+      const int8x16_t values = vreinterpretq_s8_u8(vsubq_u8(low, vshlq_n_u8(veorq_u8(high, vdupq_n_u8(1)), 2)));
+      const int16x8_t a = vmovl_s8(vget_low_s8(values)), z = vmovl_s8(vget_high_s8(values));
+      const float32x4_t dl = vdupq_n_f32(d * float(scale[k] - 32));
+      vst1q_f32(y + 16 * k, vmulq_f32(dl, vcvtq_f32_s32(vmovl_s16(vget_low_s16(a)))));
+      vst1q_f32(y + 16 * k + 4, vmulq_f32(dl, vcvtq_f32_s32(vmovl_s16(vget_high_s16(a)))));
+      vst1q_f32(y + 16 * k + 8, vmulq_f32(dl, vcvtq_f32_s32(vmovl_s16(vget_low_s16(z)))));
+      vst1q_f32(y + 16 * k + 12, vmulq_f32(dl, vcvtq_f32_s32(vmovl_s16(vget_high_s16(z)))));
+    }
+    return;
+  }
+#endif
   for (int k = 0; k < 16; ++k) {
     const int half = k / 8, j = (k % 8) / 2, second = k % 2;
     const int shift = 2 * j, bit = 4 * half + j;
