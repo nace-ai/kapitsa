@@ -1,0 +1,4 @@
+19:11:28 bin=/opt/homebrew/bin/kapitsa sha=5e9ac395181b commit=e728524 model=/Users/alisheramantay/.cache/kapitsa/models/qwen3.8-27b-4bit order=[B] macos=26.5.2
+19:11:29 LOCKPROOF lockf(3966) holder-in-my-ancestry=3966 (me=38300)
+19:12:46 1-B rc=0 load 2.23->2.52 ok prefill4k_ms=5685 power=ac powermode=2 serve_rss_end=16.5G serve_peak=16.53G kflash_lines=44 drafter_lines=28
+19:12:46 LEGSDONE
