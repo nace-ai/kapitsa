@@ -731,9 +731,12 @@ void finish_nodes(Grammar& g) {
     GNode& n = g.nodes[i];
     if (n.kind == NK::Alt) {
       std::vector<int> keep;
+      std::set<int> seen;
       for (int a : n.alts)
-        if (sat[size_t(a)]) keep.push_back(a);
-      n.alts = keep;
+        // Repeated references accept the same values. Keep their first occurrence
+        // so nested alternatives cannot multiply identical matcher branches.
+        if (sat[size_t(a)] && seen.insert(a).second) keep.push_back(a);
+      n.alts = std::move(keep);
     } else if (n.kind == NK::Obj) {
       for (int& v : n.vals)
         if (!sat[size_t(v)]) v = Grammar::kNever;

@@ -84,6 +84,24 @@ struct Case {
 
 void schema_cases(std::vector<std::pair<std::string, std::shared_ptr<const Grammar>>>* grammars,
                   std::vector<std::pair<std::string, std::string>>* instances) {
+  // A compact schema can describe exponentially many paths to the same value.
+  // Repeated $refs must stay one alternative at each level before matching starts.
+  for (int levels : {0, 4, 12}) {
+    ojson schema{{"$ref", "#/$defs/a0"}, {"$defs", ojson::object()}};
+    for (int level = 0; level < levels; ++level) {
+      ojson alts = ojson::array();
+      for (int branch = 0; branch < 4; ++branch)
+        alts.push_back({{"$ref", "#/$defs/a" + std::to_string(level + 1)}});
+      schema["$defs"]["a" + std::to_string(level)] = {{"anyOf", alts}};
+    }
+    schema["$defs"]["a" + std::to_string(levels)] =
+        {{"anyOf", ojson::array({{{"const", "yes"}}, {{"const", "no"}}})}};
+    GrammarMatcher m(json_grammar(schema), nullptr);
+    check(feed_text(m, "\"yes\"") == Fed::kAccepted, "shared alternatives accept yes " + std::to_string(levels));
+    check(feed_text(m, "\"no\"") == Fed::kAccepted, "shared alternatives accept no " + std::to_string(levels));
+    check(feed_text(m, "\"maybe\"") == Fed::kRejected, "shared alternatives reject others " + std::to_string(levels));
+    check(feed_text(m, "\"y") == Fed::kOpen, "shared alternatives leave a valid prefix " + std::to_string(levels));
+  }
   const std::vector<Case> cases = {
       {"object, required, closed",
        R"({"type":"object","properties":{"name":{"type":"string"},"age":{"type":"integer"}},"required":["name","age"],
