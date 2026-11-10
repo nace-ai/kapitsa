@@ -473,13 +473,14 @@ allocation of that size. It does not fix the capacity-dependent history partitio
 - **A determinism gap past 16K tokens in the server.** The tree zone's chunk size follows the KV cache's capacity, which
   `kapitsa serve` grows as a conversation does. Past 16,256 positions, a row verified near a growth step can get another
   chunk size under another tree schedule. The position-only partition above would close the gap.
-- **Nemotron has one run per build, and a failing check.** Trees are on by default with DSpark and LiLiCorr. On the M4 Pro,
+- **Nemotron has one run per build.** Trees are on by default with DSpark and LiLiCorr. On the M4 Pro,
   Lightning and Bolt went from 104.3 to 111.7 and from 64.3 to 68.8 tok/s at T 0.6, and from 115.7 to 113.7 and from
   69.4 to 71.2 greedy, one run per build with contention flags
   ([results](../bench/results/2026-10-21-kflash-trees/README.md)). That is inside the 3-8% spread between runs of one
-  build, so there is no per-cycle A/B for them. `tools/nh_tree_check`'s planted-branch acceptance cases have failed since
-  the merge that added chained DSpark drafting. Its real loops on a small synthetic model (chain and tree, greedy and
-  sampled) match plain decoding, but the failure needs an explanation before Nemotron trees are trusted.
+  build, so there is no per-cycle A/B for them. `tools/nh_tree_check`'s planted-branch acceptance cases failed from the
+  merge that added chained DSpark drafting until [#1150](https://github.com/nace-ai/kapitsa/issues/1150): the verify
+  after a tree cycle wrote the wrong rows into the Mamba conv ring whenever the accepted path was not the tree's first
+  branch, and Bolt with LiLiCorr went off topic.
 - **Requests decoding together verify chains.** When the 27B, the 35B or Bolt decode several requests in one batched
   pass, each request verifies its chain, and the batch budget ([#207](https://github.com/nace-ai/kapitsa/pull/207))
   picks how many of the 8 rows each gets: with three requests at once on the M4 Pro, the 35B gained 16-20% and the 27B

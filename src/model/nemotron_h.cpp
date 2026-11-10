@@ -2488,11 +2488,14 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
       e.buf(2, gm ? xnh_ : yn_);
       e.val(3, gp);
       if (ring_gn) {
+        // (pending rows that are a tree verify's accepted path are its rows s.pend_path[0 .. n_pend), as for
+        // nh_conv_ring: kapitsa#1150, the tree's first rows went into the ring when a later sibling was accepted)
         const RingP rp{uint32_t(s.n_pend), uint32_t(pos0 - s.n_pend), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner),
-                       uint32_t(cfg_.conv_ch())};
+                       uint32_t(cfg_.conv_ch()), s.pend_tree ? 1u : 0u};
         e.buf(4, zp);
         e.buf(5, s.conv[size_t(i)]);
         e.val(6, rp);
+        e.buf(7, s.pend_path);
       }
       e.dispatch(uint32_t(R * cfg_.n_group), 1, 1, 256);
       if (gm) enc_gemm(e, L.out, xnh_, x_, R, 1);

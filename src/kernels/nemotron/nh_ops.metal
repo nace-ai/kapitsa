@@ -599,16 +599,19 @@ struct NhRingParams {
 // nh_gnorm_half (nemotron/nh_gemm.metal) that also does a verify's nh_conv_ring of the pending rows it committed
 // (zp [[4]], ring [[5]], NhRingParams [[6]]: the scan before it has read the ring), spread over the grid's threads:
 // one pass less per Mamba layer. Each output as the two passes write it. grid: (R * groups) x 256 threads
+// With rp.ptree the pending rows are a KFlash tree verify's accepted path: zp rows ppath[0 .. T), as nh_conv_ring
+// reads them (rows 0 .. T of the tree are its first branch, not the path, whenever a later sibling was accepted).
 [[kernel]] void nh_gnorm_half_ring(const device float* x [[buffer(0)]], const device float* w [[buffer(1)]],
                                    device half* y [[buffer(2)]], constant NhGnormParams& p [[buffer(3)]],
                                    const device float* zp [[buffer(4)]], device float* ring [[buffer(5)]],
-                                   constant NhRingParams& rp [[buffer(6)]], uint tg [[threadgroup_position_in_grid]],
-                                   uint ngrid [[threadgroups_per_grid]], uint tid [[thread_position_in_threadgroup]],
-                                   uint ntg [[threads_per_threadgroup]]) {
+                                   constant NhRingParams& rp [[buffer(6)]], const device int* ppath [[buffer(7)]],
+                                   uint tg [[threadgroup_position_in_grid]], uint ngrid [[threadgroups_per_grid]],
+                                   uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
   const uint nr = min(rp.T, 3u);
   for (uint i = tg * ntg + tid; i < nr * rp.CH; i += ngrid * ntg) {
     const uint t = rp.T - nr + i / rp.CH, c = i % rp.CH;
-    ring[((rp.pos0 + t) & 3u) * rp.CH + c] = zp[size_t(t) * rp.zx_stride + rp.DI + c];
+    const uint row = rp.ptree ? uint(ppath[t]) : t;
+    ring[((rp.pos0 + t) & 3u) * rp.CH + c] = zp[size_t(row) * rp.zx_stride + rp.DI + c];
   }
   threadgroup float scratch[32];
   const uint ng = p.D / p.G, r = tg / ng, g = tg % ng;
