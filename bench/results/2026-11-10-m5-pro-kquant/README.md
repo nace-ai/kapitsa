@@ -6,6 +6,8 @@ vision tower; `config.json` and the safetensors index are re-serialized, so thei
 quantized weights, scales and biases, so the file list and the size are the same:
 3.034 GB of weights for the 4B, 5.950 GB for the 9B.
 
+The Qwen3.6-35B-A3B KQuant pack has its own record: [2026-11-10-m5-pro-kquant-35b](../2026-11-10-m5-pro-kquant-35b/README.md).
+
 ## How a KQuant pack is built
 
 Plain MLX quantization sets each group of 64 weights' scale from the group's min and max and rounds to the nearest
