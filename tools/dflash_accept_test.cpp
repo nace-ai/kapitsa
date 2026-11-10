@@ -671,9 +671,10 @@ int fit_check(uint64_t salt) {
 }
 
 // The calibration's unlock (KfBudget::refit_tick): a cache whose depth 2 reads alpha -8, beta 0.1 (a fit that keeps the
-// depth's nodes out of every tree, so no record comes to correct it) loaded, then cycles that give depth 2 no record:
-// it moves back toward the identity, a step every kStale cycles; records again (drawn at alpha -0.5, beta 0.8) fit it
-// to them; depth 1, given records every cycle, keeps its fit.
+// depth's nodes out of every tree, so no record comes to correct it) and depth 3 alpha -1.5, beta 0.6 (pessimistic, not
+// locked: 0.46 at q 0.9) loaded, then cycles that give neither a record: depth 2 moves back toward the identity, a step
+// every kStale cycles, until a node of q 0.9 has a 10% chance; depth 3 is left alone; records again (drawn at alpha
+// -0.5, beta 0.8) fit depth 2 to them; depth 1, given records every cycle, keeps its fit.
 int unlock_check(uint64_t salt) {
   std::mt19937_64 r(7 + salt);
   std::uniform_real_distribution<float> ul(-4.0f, -0.01f), u01(0.0f, 1.0f);
@@ -706,6 +707,8 @@ int unlock_check(uint64_t salt) {
     std::vector<float> a(kf::kMaxRows + 1, 0.0f), b(kf::kMaxRows + 1, 1.0f);
     a[2] = -8.0f;
     b[2] = 0.1f;
+    a[3] = -1.5f;
+    b[3] = 0.6f;
     j["alpha"] = a;
     j["beta"] = b;
     std::ofstream(file) << j.dump();
@@ -713,8 +716,8 @@ int unlock_check(uint64_t salt) {
   {
     KfBudget b("u");
     b.set_rows(0xffu, 8);
-    float a[3], be[3];
-    b.calibration(a, be, 3);
+    float a[4], be[4];
+    b.calibration(a, be, 4);
     check(a[2] == -8.0f && be[2] == 0.1f, "depth 2 as the cache holds it", a[2], be[2]);
     // 256 cycles whose trees give depth 1 records (drawn at alpha -0.3, beta 0.9) and depth 2 none
     std::vector<int32_t> tree(kf::kWords, 0);
@@ -731,9 +734,11 @@ int unlock_check(uint64_t salt) {
       }
       b.observe(tree.data(), 10.0);
     }
-    b.calibration(a, be, 3);
-    check(a[2] > -0.1f && a[2] < 0.0f && be[2] > 0.99f && be[2] < 1.0f,
-          "depth 2 after 256 cycles without a record: halfway to the identity each 32 cycles", a[2], be[2]);
+    b.calibration(a, be, 4);
+    const float p9 = 1.0f / (1.0f + std::exp(-(a[2] + be[2] * 2.1972246f)));
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f && p9 > 0.1f,
+          "depth 2 after 256 cycles without a record: halved twice, until a node of q 0.9 has 10%", a[2], be[2]);
+    check(a[3] == -1.5f && be[3] == 0.6f, "depth 3 (pessimistic, not locked), no record: left alone", a[3], be[3]);
     check(std::fabs(a[1] + 0.3f) < 0.35f && std::fabs(be[1] - 0.9f) < 0.3f,
           "depth 1, records every cycle (drawn at -0.30, 0.90): its fit kept", a[1], be[1]);
     // depth 2 records again, drawn at alpha -0.5, beta 0.8
@@ -749,7 +754,7 @@ int unlock_check(uint64_t salt) {
       }
       b.observe(tree.data(), 10.0);
     }
-    b.calibration(a, be, 3);
+    b.calibration(a, be, 4);
     check(std::fabs(a[2] + 0.5f) < 0.35f && std::fabs(be[2] - 0.8f) < 0.3f,
           "depth 2 given records again (drawn at -0.50, 0.80): fit to them", a[2], be[2]);
   }  // (the destructor saves)

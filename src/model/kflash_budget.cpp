@@ -315,18 +315,21 @@ void KfBudget::refit_tick() {
     since_fit_ = 0;
     for (int d = 1; d < kD; ++d) {
       if (x_[d].size() >= 32) fit(x_[d], y_[d], alpha_[d], beta_[d], 4);
-      // no record for kStale cycles under a calibration below the identity (alpha < 0 or beta < 1: it can keep the
-      // depth's nodes out of the trees, which then never give it a record): halfway back toward the identity, and the
-      // old records dropped (a refit on them would restore it). On the M5 Max a cache whose depth 2 had fit to (-8, 0.1)
-      // on a prompt the drafter could not continue kept the 35B's trees at 2 rows on every later prompt: 1.9 tokens
-      // per cycle on code where the identity's trees give 3.6
-      if (cycles_ - last_rec_[d] >= kStale && (alpha_[d] < 0.0f || beta_[d] < 1.0f)) {
+      // no record for kStale cycles under a calibration that gives even a node the drafter is sure of (q 0.9) under
+      // kLocked (it keeps the depth's nodes out of the trees, which then never give it a record): halfway back toward
+      // the identity, and the old records dropped (a refit on them would restore it). A fit that is pessimistic but not
+      // locked (the 35B's deep positions, about (-1.3, 0.7): 0.58 at q 0.9) is left alone. On the M5 Max a cache whose
+      // depth 2 had fit to (-8, 0.1) on a prompt the drafter could not continue kept the 35B's trees at 2 rows on every
+      // later prompt: 1.9 tokens per cycle on code where the identity's trees give 3.6
+      const float p9 = 1.0f / (1.0f + std::exp(-(alpha_[d] + beta_[d] * 2.1972246f)));  // logit(0.9)
+      if (cycles_ - last_rec_[d] >= kStale && p9 < kLocked) {
         if (alpha_[d] < 0.0f) alpha_[d] *= 0.5f;
         if (beta_[d] < 1.0f) beta_[d] = 1.0f + (beta_[d] - 1.0f) * 0.5f;
         x_[d].clear();
         y_[d].clear();
         head_[d] = 0;
         last_rec_[d] = cycles_;
+        ++unlocks_;
       }
     }
   }
@@ -422,6 +425,7 @@ std::string KfBudget::summary() const {
   for (int n = 1; n <= max_rows_ && o < int(sizeof b) - 16; ++n)
     if ((allowed_ >> (n - 1)) & 1u) o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, cur_cost(n));
   if (wide) o += snprintf(b + o, sizeof b - o, " (8 at capacity 8: %.2f)", cost8n_);
+  if (unlocks_) o += snprintf(b + o, sizeof b - o, "; %d locked calibrations relaxed", unlocks_);
   o += snprintf(b + o, sizeof b - o, "; calibration (alpha, beta) by depth");
   for (int d = 1; d <= std::min(max_rows_, 8) && o < int(sizeof b) - 24; ++d)
     o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);

@@ -160,7 +160,9 @@ time at position 1 and 38% at position 4 (Figure 4, left). A position's fit can 
 verify, so a fit pessimistic enough to keep a position out of every tree would stay as it is, and the cache would carry
 it into every later run: on the M5 Max one prompt the drafter could not continue left the 35B's position 2 at
 α −8, β 0.1, and every later request decoded with 2-row trees at 223 tok/s instead of 345. A position with no record
-for 32 cycles therefore moves halfway back toward p = q (and forgets its old records) until the trees verify it again.
+for 32 cycles whose calibration gives even a node the drafter is sure of (q = 0.9) less than a 10% chance therefore
+moves halfway back toward p = q (and forgets its old records) until the trees verify it again. A fit that is pessimistic
+but not locked, as the 35B's deep positions are, is left alone.
 
 **Cost.** Each cycle reports its GPU time, the drafting pass plus the verify, and the budget keeps a running table: a
 base that moves with the context's length (a 35B cycle costs about 7 ms more at 21K tokens than at 100), plus an offset
