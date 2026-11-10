@@ -1,0 +1,41 @@
+{
+  "source_function_sha256": "b6486fbfd2d72a5cf22076933913990b84f641fa75cb48481c71290bd3b928e8",
+  "decoder_and_oracle_unchanged": true,
+  "previous_results_unchanged": true,
+  "base": "2e308aeac6d6fe95801e7957996034d6bbfa6ac3",
+  "rebased_head": "22e3cf15860d73ff370449817dfc4685fbe70f4e",
+  "steps": [
+    {
+      "label": "configure",
+      "rc": 0
+    },
+    {
+      "label": "build",
+      "rc": 0
+    },
+    {
+      "label": "iq-layout",
+      "rc": 0
+    },
+    {
+      "label": "api",
+      "rc": 0
+    },
+    {
+      "label": "prefix",
+      "rc": 0
+    },
+    {
+      "label": "prek",
+      "rc": 0
+    }
+  ],
+  "rc": 0,
+  "binary_sha256": {
+    "kapitsa": "0fffe5b9f1c0ff2afc254318a6251f9d2db99687643cd2fc808bbeecfaaccf32",
+    "iq_layout_test": "06e0a1c366a830e98ab5a30e44dc466bd6a7361cfd1deaf597f3a75b4615ae69",
+    "api_test": "7e5f1443843f3d75c9720479b802633fee83226b56142ed2aefb53ff7966fbfc",
+    "prefix_cache_test": "f175f9b6abcc768df9fd91cc0d8646f8bfe9e9a5e2fbb60171fb7f0859194c0f"
+  },
+  "evidence_kind": "Redacted derived rebase verification; original benchmark records unchanged"
+}

@@ -1,0 +1,162 @@
+{
+  "reference_source": "d91f34efd96a93aeb68e8bc993c091b2d90d4c85",
+  "candidate_source": "54b034f0a4607074a11f60472c42472070efb494",
+  "candidate_quant_cpp_sha256": "19c182b016314a5021ec5ac98aff75133def5e6be3ba57f9b8d4a36eed473ac3",
+  "reference_quant_cpp_sha256": "06165f08d53b51a355b4324fceb80256388f13aa9ccedb69c6a5b8b0ae01262e",
+  "runs": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "scope": "CPU dequantize(kQ4_K); not whole-import or inference throughput",
+  "evidence_kind": "Redacted derived records; raw logs retained privately",
+  "rc": 0,
+  "order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        269.572266,
+        273.803711,
+        261.637695,
+        252.645508,
+        246.052734,
+        249.592773,
+        246.255859,
+        246.174805,
+        246.175781,
+        248.942383,
+        254.841797,
+        246.21582,
+        248.942383,
+        251.179688,
+        249.023438,
+        241.088867
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 248.9829105
+    },
+    "B1": {
+      "ns_per_row": [
+        89.72168,
+        89.233398,
+        85.571289,
+        85.612305,
+        85.65332,
+        85.693359,
+        85.571289,
+        85.530273,
+        85.612305,
+        85.693359,
+        85.693359,
+        85.734375,
+        85.571289,
+        85.611328,
+        85.652344,
+        83.047852
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 85.63232450000001
+    },
+    "A2": {
+      "ns_per_row": [
+        222.860352,
+        219.198242,
+        219.238281,
+        218.87207,
+        218.912109,
+        218.709961,
+        219.523438,
+        218.708984,
+        210.367188,
+        208.374023,
+        208.333008,
+        208.496094,
+        209.594727,
+        209.675781,
+        209.757812,
+        209.635742
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 214.538086
+    },
+    "B2": {
+      "ns_per_row": [
+        80.038086,
+        79.671875,
+        79.670898,
+        79.751953,
+        79.630859,
+        79.629883,
+        79.792969,
+        79.75293,
+        79.711914,
+        80.119141,
+        79.751953,
+        79.711914,
+        81.257812,
+        79.670898,
+        79.711914,
+        79.629883
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 79.711914
+    }
+  },
+  "binary_sha256": {
+    "reference": "f608d26fdc554c2275dc0a315f9e0e001a9348f0e40b356e977faecf5108c905",
+    "candidate": "791caf09790dec1bcefabee069ff27977d2344a19ecb8098d7371aa27cf6668a"
+  },
+  "complete_outputs_equal": true,
+  "input": {
+    "repo": "unsloth/flint-GGUF",
+    "revision": "20468edfc38ab43d6914cc88b08cbecb05d0fc62",
+    "filename": "flint-UD-IQ2_XXS.gguf",
+    "expected_full_sha256": "c1fa4a6d5ec67fbeff460c68829984e4aa3eea95dc9d2067691f19e5406deeee",
+    "full_file_obtained": false,
+    "tensor": {
+      "name": "blk.32.ffn_down_shexp.weight",
+      "dims": [
+        1024,
+        2048
+      ],
+      "type": 12,
+      "offset": 8104957056
+    },
+    "rows": 1024,
+    "width": 1024,
+    "range": "bytes 8110427584-8111017407/11855541696",
+    "sample_sha256": "dbd7fe7aa3b00f4ab77c8c1fae5bd1f015de668db53464ec9bdb9ba1f9c5eeaa",
+    "bytes": 589824
+  }
+}
