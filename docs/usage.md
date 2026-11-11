@@ -368,9 +368,13 @@ folder holds its GGUF file until the import replaces the folder with the convers
   as not checked yet.
 - `HF_TOKEN`, or the token `hf auth login` saved, is sent for gated or private repos; `HF_ENDPOINT` points at a mirror.
 
-`kapitsa list` shows the store and the variants not downloaded yet; `kapitsa rm 35b:6bit` deletes a variant
-(`kapitsa rm 35b`: the default one, or the only one downloaded). It says how much space it gave back: a model that is an APFS clone of
+`kapitsa list` shows the store and, for each catalog model, its variants not downloaded yet; `kapitsa rm 35b:6bit`
+deletes a variant (`kapitsa rm 35b`: the default one, or the only one downloaded). It says how much space it gave back: a
+model that is an APFS clone of
 another copy (Nace Agent's, a `--from` folder, the Hugging Face cache) frees nothing.
+
+`kapitsa doctor` counts a model it planned as downloaded once its weights are on disk, not while only their headers are:
+one shard of a split model's weights written is enough.
 
 When a download does not fit the disk (Kapitsa keeps 1 GB spare, 6 GB for `35b:16gb`'s import), `kapitsa serve`,
 `kapitsa pull`, `kapitsa bench` and the coding-agent commands, run in a terminal, list the other downloaded models with
