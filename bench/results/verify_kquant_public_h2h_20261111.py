@@ -49,6 +49,22 @@ def main():
     assert set(groups) == {"q35-9b.k436", "q35-9b.chat", "q35-4b.k436", "q35-4b.chat", "mlx.k436"}
     assert data["gsm8k"]["gguf_data_sha256"] == data["gsm8k"]["mlx_data_sha256"]
     assert sum(map(len, groups.values())) == 28
+    scope = json.loads(DATA.with_name("kquant-public-h2h-20261111-mlx-byte-scope.json").read_text())
+    assert scope["rows"].keys() == groups["mlx.k436"].keys()
+    for name, audit in scope["rows"].items():
+        row = groups["mlx.k436"][name]
+        assert (audit["repo"], audit["revision"]) == (row["repo"], row["repo_sha"])
+        assert audit["legacy_matches"] is True
+        assert audit["frozen_lm_bytes"] == row["lm_bytes"]
+        assert audit["frozen_total_bytes"] == row["total_bytes"] == audit["root_whole_safetensor_bytes"]
+        assert audit["root_base_payload_bytes"] + audit["root_mtp_payload_bytes"] == row["lm_bytes"]
+        assert sum(audit[k] for k in ("root_base_payload_bytes", "root_mtp_payload_bytes",
+                   "root_vision_payload_bytes", "root_file_overhead_bytes")) == row["total_bytes"]
+        assert audit["root_whole_safetensor_bytes"] + audit["nested_whole_safetensor_bytes"] == audit["all_whole_safetensor_bytes"]
+    standard = ("kquant", "AtomicChat", "lmstudio-community", "mlx-community-4bit", "mlx-community-MLX-4bit")
+    assert all(scope["rows"][name]["root_base_payload_bytes"] == 5038041600 for name in standard)
+    assert all(scope["rows"][name]["root_mtp_payload_bytes"] == 0 for name in standard)
+    print("PASS: eight frozen MLX byte counts, component sums and five equal base-LM payload sizes")
     item_count = 0
     all_gold = None
     for group, rows in groups.items():

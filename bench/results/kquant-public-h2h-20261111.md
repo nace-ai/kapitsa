@@ -85,7 +85,7 @@ All files answered the same 100 test problems, with temperature 0, thinking off 
 
 ## MLX side measurement
 
-All eight files use the same MLX CUDA evaluator, BF16 source and token array. LM size counts non-vision, non-MTP tensor payloads; total size is all safetensors files on disk. This distinction matters because some packs omit vision and the mixed-bit packs are much larger. Equal label names do not mean equal bit budgets.
+All eight files use the same MLX CUDA evaluator, BF16 source and token array. The LM and total columns retain the original evaluator's counts for root-level safetensors, not full repositories. KQuant and the four standard packs each have exactly 5,038,041,600 base-LM payload bytes, confirmed from headers at the pinned revisions. Equal label names do not mean equal bit budgets.
 
 | Pack | LM / total GB | Mean KL [95% CI] | GSM8K-100 |
 |---|---:|---:|---:|
@@ -99,6 +99,8 @@ All eight files use the same MLX CUDA evaluator, BF16 source and token array. LM
 | Brooooooklyn-UD-Q4_K_XL | 7.169 / 8.081 | 0.02606 [0.02377, 0.02832] | 95 |
 
 KQuant has 54.5% lower KL than lmstudio-community at equal LM size. Both score 96/100 on GSM8K. The lower-KL OptiQ and UD files carry 40.9% and 42.3% more LM tensor bytes, respectively.
+
+The original LM filter includes 185,115,648 MTP bytes under oQ4e's nested tensor namespace; its base-LM payload is 5,133,558,784 bytes. OptiQ's total excludes a nested MTP safetensor file of 185,118,739 bytes. These scope corrections leave the recorded table values and equal-base-LM verdict unchanged. The [byte-scope audit](<kquant-public-h2h-20261111-mlx-byte-scope.json>) separates base, vision and MTP payloads, and distinguishes root files, nested files and all-safetensors totals.
 
 ### MLX same-top agreement
 
