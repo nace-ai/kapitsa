@@ -187,6 +187,10 @@ check(writes === 0, `a redraw with no new finished request leaves the finished r
 tapRow(okId);
 check(writes === 1 && !rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), "closing a row writes them once");
 tapRow(okId);  // (left open again: the next run's reset closes it)
+vm.runInContext(`handlers.request_finished({request_id: "req-y", finish_reason: "error", prompt_tokens: 12010, cached_tokens: 0, completion_tokens: 0,
+  queue_ms: 0, prefill_ms: 0, decode_ms: 0, tokens_per_second: 0, prefill_tokens_per_second: 0, error: "prompt (12010 tokens) exceeds the context window (8192)"}); draw()`, a.ctx);
+check(rows().includes("12,010-token prompt not read") && !rows().includes("read 12,010 tokens"),
+      "a request refused before its prompt was read says the prompt was not read (the real server's context error)");
 console.log("finished-request detail ok");
 
 // 2. the page's Switch: a model the server lacks is said so and nothing changes; one it has reads switching, then ready
