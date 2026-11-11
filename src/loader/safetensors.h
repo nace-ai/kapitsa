@@ -28,6 +28,7 @@ struct Tensor {
     return n;
   }
   explicit operator bool() const { return bool(buf); }
+  size_t byte_size() const { return buf ? buf.size : size_t(numel()) * dtype_size(dtype); }
 };
 
 class WeightStore {

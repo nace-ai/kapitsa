@@ -399,7 +399,7 @@ void Qwen35::load_mtp(const std::string& dir) {
   // fewer drafts (0.67 vs 0.76 on code). Full vocabulary for dense models whose lm_head is < 10% of a step.
   double trunk_bytes = 0;  // the linears a decode step reads (any format; bf16 has no scales / biases)
   auto lbytes = [](const QLinear& q) {
-    return q ? double(q.w->buf.size) + (q.dense() ? 0.0 : double(q.s->buf.size + q.b->buf.size)) : 0.0;
+    return q ? double(q.w->byte_size()) + (q.dense() ? 0.0 : double(q.s->byte_size() + q.b->byte_size())) : 0.0;
   };
   for (const Layer& L : layers_)
     for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.mg, &L.mu, &L.md, &L.eg, &L.eu,
@@ -618,6 +618,13 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
     enc_qmm8(e, {{&L, y, y_ld ? y_ld : L.N, add}}, R, v8t_, v8s_);
     return;
   }
+  if (canonical_affine_) {
+    auto materialized = materialize_affine(e, {&L});
+    if (materialized) {
+      enc_qmvr(e, materialized.get(L), x, y, R, add, x_ld, y_ld);
+      return;
+    }
+  }
   // Two rows: one small single-row threadgroup per (row, 8-row weight block), rows fastest. The pair
   // shares each weight block through the core's cache, so verifying 2 rows costs ~1 row
   // (bench_qmvr: 17408x5120 208 us for 1 or 2 rows, vs 240 us for the 2-rows-in-registers kernel).
@@ -710,6 +717,18 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
     for (size_t i = 0; i < segs.size(); ++i) s8.push_back({segs[i].L, segs[i].y, 0, i < add.size() && add[i]});
     enc_qmm8(e, s8, R, v8t_, v8s_);
     return;
+  }
+  if (canonical_affine_ && segs.size() <= 4) {
+    std::vector<const QLinear*> originals;
+    originals.reserve(segs.size());
+    for (const auto& sg : segs) originals.push_back(sg.L);
+    auto materialized = materialize_affine(e, originals);
+    if (materialized) {
+      std::vector<Seg> restored = segs;
+      for (auto& sg : restored) sg.L = &materialized.get(*sg.L);
+      enc_qmvr_multi(e, restored, x, norm, R, xn_out, add);
+      return;
+    }
   }
   bool special = true;  // the fused multi-row kernels read 4/8-bit group-64 weights
   for (auto& sg : segs) special = special && (sg.L->q4() || sg.L->q8());

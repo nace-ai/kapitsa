@@ -8,6 +8,7 @@
 #include "model/qwen4_config.h"
 #include "splash/runtime.h"
 #include "util/json_file.h"
+#include "util/canonical_plan_memo.h"
 #include "util/log.h"
 
 #include <minja/chat-template.hpp>
@@ -279,6 +280,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // the switch's error); the callers that start a server let it out, so `kapitsa serve` exits on it as it did on the
   // message before. The same text, thrown, is what model_plan does for the folders it refuses.
   if (const std::string why = unsupported_model(opts_.model_dir); !why.empty()) throw std::runtime_error(why);
+  const char* canonical_flag = getenv("NI_KFLASH_CANONICAL_AFFINE");
+  const bool canonical_memo_enabled = canonical_flag && *canonical_flag && atoi(canonical_flag) != 0 &&
+      Qwen35::canonical_affine_probe(Qwen35::read_config(opts_.model_dir));
+  canonical_plan_memo::Scope canonical_memo(opts_.model_dir, canonical_memo_enabled);
   if (opts_.model_id.empty()) {
     std::string d = opts_.model_dir;
     while (!d.empty() && d.back() == '/') d.pop_back();
@@ -658,6 +663,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                          std::to_string(Dory::kMaxLoops) + "), " + loop_kv_name(dory_->kv_mode()) +
                                          " KV"
                                    : std::string();
+  canonical_memo.finish();  // revalidate and release the load-local counts before exposing a ready engine
+  if (canonical_memo_enabled) {
+    const auto& stats = canonical_memo.stats();
+    logi("KFlash: canonical plan load memo: scans %zu, hits %zu, failures %zu, identity %.1f ms, scan %.1f ms; cleared",
+         stats.misses, stats.hits, stats.failed_builds, stats.identity_ms, stats.compute_ms);
+  }
   logi("engine ready: %s, context %d, %d slots, %s%s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
        mode.c_str(), looped.c_str(), kf_src.empty() ? "" : (", KFlash (" + kf_src + ")").c_str(), vision_ ? ", images on" : "");
   disk_start();  // the SSD prefix cache (engine_disk.cpp): its files open in the background
@@ -804,6 +815,9 @@ std::string unsupported_model(const std::string& model_dir) {
 }
 
 MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
+  // The old full-plan cache assumes immutable headers. Canonical costs require validated file identities;
+  // recompute the cheap chunk-dependent fields and reuse only the exact counts in the current load scope.
+  const bool scoped_canonical = canonical_plan_memo::Scope::current_for(model_dir) != nullptr;
   // kept per process: a model's headers do not change while it is planned, and the largest take most of a second to
   // read (Super-VL's), which the picker, `kapitsa doctor` and default_context would otherwise pay on every plan.
   // The plan is the 8-row one: the key has no slot count, so a 16-row block's rows (a drafter's verify buffers, ~30 MB
@@ -813,7 +827,7 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
   static std::map<std::string, MemPlan> plans;
   const std::string key = model_dir + "\n" + std::to_string(prefill_chunk) + "\n" + std::to_string(Dory::serving_loops()) +
                           loop_kv_name(Dory::serving_kv());  // Dory's plan counts the loops and KV it serves with
-  {
+  if (!scoped_canonical) {
     std::lock_guard<std::mutex> lk(mu);
     if (const auto it = plans.find(key); it != plans.end()) return it->second;
   }
@@ -823,8 +837,10 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
                     : Qwen4Exp::is_model(model_dir) ? Qwen4Exp::plan(model_dir, prefill_chunk)
                     : NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk)
                                                      : Qwen35::plan(model_dir, prefill_chunk);
-  std::lock_guard<std::mutex> lk(mu);
-  plans.emplace(key, p);
+  if (!scoped_canonical) {
+    std::lock_guard<std::mutex> lk(mu);
+    plans.emplace(key, p);
+  }
   return p;
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
@@ -3851,6 +3867,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
             break;
           }
         }
+
         ++spec_cycles_;
         ++req_cycles;
         spec_accepted_ += m;
