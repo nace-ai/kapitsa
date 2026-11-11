@@ -198,15 +198,13 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
-           // KQuant (#421): lmstudio-community's pack (b455506) with its quantized weights rebuilt
-           // as KQuant, every other file the same content. KL from bf16 0.037 against 0.081,
-           // GSM8K (1319) 0.944 against 0.927, M5 Pro decode (T 0.6 and greedy, two runs each) 146 against 132 tok/s
+           // KQuant Q4: mixed 4/5-bit language weights with the packaged vision tower and tokenizer.
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant",
-            .revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59",
+            .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant",
+            .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
-            .download_gb = 9.05},
+            .download_gb = 9.30},
        }},
       {.name = "qwen3.8-27b",
        .aliases = {"27b"},

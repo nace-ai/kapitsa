@@ -143,7 +143,7 @@ def check(name, ok, detail=""):
 DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
             "qwen3.8-27b": ("4bit", "nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557"),
             "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
-            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")}
+            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
 PINNED = {
     "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
@@ -153,7 +153,7 @@ PINNED = {
     "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
                    [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
                     ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
-    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59",
+    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
                    [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
                     ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
@@ -311,7 +311,7 @@ def cli_checks(kapitsa):
                                            "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
                                           "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
-                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"])]:
+                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant"])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
         for a in aliases:
