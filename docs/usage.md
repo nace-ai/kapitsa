@@ -85,6 +85,11 @@ Flash-Next's `kquant` selects the released
 pack: `kapitsa serve --model flash-next:kquant`. It is a complete download with its MTP head and n-gram table,
 105.86 GB including metadata, with no separate companion download. `flash-next` and `flash` keep `4bit` as their
 default and `64gb` as their fallback.
+It remains non-default pending interleaved A/B and output checks on a second setup, since the same-size pack's
+closer-to-bf16 result (KL 0.1275 against 0.1411) and sampled speed parity (61.17 against 61.12 tok/s) were measured
+on one M1 Ultra 128 GB using main-source build
+[`cc94c34`](https://github.com/nace-ai/kapitsa/commit/cc94c34fb9db9e7f85392fb7f69808511e0bb8da),
+12 commits after v0.2.34 and within v0.2.35-rc1, not released v0.2.34.
 
 Flash-Next's `64gb` is [Sushi](https://github.com/beamivalice/sushi)'s 2-bit pack
 ([beamster/Qwen3.8-Flash-Next-Sushi-2bpw](https://huggingface.co/beamster/Qwen3.8-Flash-Next-Sushi-2bpw)): its routed
