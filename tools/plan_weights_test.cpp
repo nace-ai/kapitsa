@@ -163,6 +163,20 @@ int main(int argc, char** argv) {
   for (const std::string& s : shards) sparse_file(full + "/" + s, 3 << 20);
   check(hub::plan_has_model(full), "a plan holding its weights has the model");
 
+  // a model split into shards ("model-00001-of-00002.safetensors") is in its plan when its first shard is, and the
+  // index beside them lists the shards without being one
+  const std::string split = plans + "/kw-split";
+  fs::create_directories(split);
+  write_file(split + "/config.json", config);
+  write_file(split + "/model.safetensors.index.json",
+             "{\"weight_map\": {\"a\": \"model-00001-of-00002.safetensors\", \"b\": \"model-00002-of-00002.safetensors\"}}");
+  write_file(split + "/.complete", "planned");
+  write_file(split + "/model-00001-of-00002.safetensors", "");
+  shrink_to_header(split + "/model-00001-of-00002.safetensors");
+  check(!hub::plan_has_model(split), "a split model whose first shard is a header has no model");
+  sparse_file(split + "/model-00001-of-00002.safetensors", 3 << 20);
+  check(hub::plan_has_model(split), "a split model whose first shard holds the weights has the model");
+
   // not a plan: the store's own folder, and anything else
   check(!hub::is_plan(home + "/models/" + model), "the store is not a plan");
   check(!hub::is_plan(home), "the home is not a plan");
@@ -176,6 +190,8 @@ int main(int argc, char** argv) {
     const std::string report = run_doctor(kapitsa_bin, "--models-dir", plans, home, log);
     check(!report.empty(), "doctor printed a report (" + log + ")");
     if (keep && !report.empty()) std::printf("%s\n", report.c_str());
+    // the plan the split model names is listed: a plan that is only planned keeps a name of its own in the report
+    check(report.find("kw-split") != std::string::npos, "doctor lists a plan of a model split into shards");
     check(says_planned(report, "kw-planned"), "doctor: a plan with only headers says planned from its headers");
     check(report.find("kw-weight") != std::string::npos, "doctor: a plan with its weights is listed at all");
     check(!says_planned(report, "kw-weight"), "doctor: a plan with its weights is not called not downloaded");

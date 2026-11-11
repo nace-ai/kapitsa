@@ -1203,7 +1203,7 @@ bool plan_is_current(const std::string& dir) {
 // The files a plan lists that hold a model: its shards (one, or "N-of-M"), its MTP head, or model.safetensors whole.
 // a name that ends in .safetensors: "model.safetensors" and its shards, and not the model.safetensors.index.json
 // beside them, which lists the shards and is a header's size
-static const std::regex kWeightsFile(R"((^|/)(\d+-of-\d+|mtp|model|weights)\.safetensors$)");
+static const std::regex kWeightsFile(R"((^|/)((model-)?\d+-of-\d+|mtp|model|weights)\.safetensors$)");
 // Bigger than any header in the catalog (a shard's is a few hundred KB, the MTP head's a few KB): the height of a header.
 static constexpr uint64_t kHeaderBytes = 1024 * 1024;
 
