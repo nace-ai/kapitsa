@@ -344,6 +344,10 @@ int run_doctor(int argc, char** argv) {
     } catch (const hub::Error&) {
     }
   }
+  // Every model here is only planned, never fetched: a plan not on this Mac is sized from its headers when the hub
+  // answers (one request each), and offline it is left out, so doctor never starts a multi-GB download for a model
+  // nobody asked for. The visits nest and close below.
+  hub::set_offline(true);
   if (models.empty()) {
     if (roots.empty()) {
       // the catalog's models first (downloaded or not: what fits this Mac before a download), then the store and the
@@ -363,6 +367,25 @@ int run_doctor(int argc, char** argv) {
     for (const std::string& r : roots)
       for (const std::string& m : scan(r))
         if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
+  }
+  // Once each: a plan (a model planned from its headers, then downloaded into the plan) is also in the store under
+  // another folder name, and several --model arguments or stores can name one model. The first of them stands for all.
+  // A plan that is only planned keeps a name of its own and stays listed, since the store does not have it.
+  {
+    std::vector<std::string> once;
+    for (const std::string& d : models) {
+      const std::string name = d.substr(d.find_last_of('/') + 1);
+      const bool seen = std::any_of(once.begin(), once.end(), [&](const std::string& k) {
+        if (k == d) return true;
+        const std::string kn = k.substr(k.find_last_of('/') + 1);
+        if (kn == name) return true;
+        // the same model under another name: a plan and the store copy, or a partial plan and its own folder elsewhere
+        return hub::is_plan(d) ? (hub::plan_has_model(d) && kn.rfind(name, 0) == 0) || name.rfind(kn, 0) == 0
+                               : hub::plan_has_model(k) && kn.rfind(name, 0) == 0;
+      });
+      if (!seen) once.push_back(d);
+    }
+    models = once;
   }
 
   Gpu& g = Gpu::get();
@@ -602,7 +625,9 @@ int run_doctor(int argc, char** argv) {
     }
     if (as_json) continue;
     std::string name = dir.substr(dir.find_last_of('/') + 1);
-    if (dir.rfind(hub::home_dir() + "/plans/", 0) == 0) name += ", not downloaded: planned from its headers";
+    // a plan with its files is the model downloaded (the store's copy under other names, and `kapitsa list` shows it);
+    // one only planned is sized from its headers, and says so
+    if (hub::is_plan(dir) && !hub::plan_has_model(dir)) name += ", not downloaded: planned from its headers";
     printf("  %s (%s, %d layers, hidden %d; weights %s)\n", name.c_str(), m.dense ? "dense" : "MoE", m.layers, m.hidden,
            m.formats.c_str());
     printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d %s state %.2f, KV %.0f KB/token%s%s\n",
@@ -655,7 +680,8 @@ int run_doctor(int argc, char** argv) {
              : dory   ? "loops other than the default"
                       : "MTP / Neural Engine");
   }
-  // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
+  // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs (planned
+  // offline: a variant not on this Mac says so rather than waiting on the hub)
   EngineOptions eo;
   eo.context = ctx, eo.slots = slots_opt, eo.prefill_chunk = chunk, eo.dflash = dflash;
   const int slots = fit_slots(slots_opt);  // a variant fits with the slots asked for, else with two (auto's fewest)
@@ -695,6 +721,7 @@ int run_doctor(int argc, char** argv) {
     }
     if (!as_json && !tty) printf("  %s: %s\n", c.name.c_str(), line.c_str());
   }
+  hub::leave_offline();
   spin.reset();
   if (tty)
     print_tty(J, budget, budget_gb > 0 ? "--mem-budget" : getenv("NI_MEM_BUDGET") ? "NI_MEM_BUDGET" : "",

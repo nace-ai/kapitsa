@@ -1178,6 +1178,47 @@ bool is_complete(const std::string& dir) {
   }
 }
 
+// What a plan's `.complete` holds: the variant's repo at its revision, a GGUF variant's conversion, its companions
+std::string plan_want(const Variant& m) {
+  std::string want = m.repo + "@" + m.revision;
+  // a GGUF variant's plan is the import's: planned again by another Kapitsa, whose conversion may differ
+  if (!m.gguf.path.empty()) want += "\ngguf " + m.gguf.path + " " + m.gguf.sha256 + "\nkapitsa " KAPITSA_VERSION;
+  for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
+  return want;
+}
+
+bool is_plan(const std::string& dir) { return dir.rfind(home_dir(), 0) == 0 && dir.find("/plans/") != std::string::npos; }
+
+bool plan_is_current(const std::string& dir) {
+  if (!is_plan(dir)) return false;
+  try {  // a plan has no manifest: its `.complete` holds what it was planned as
+    const ModelRef r = resolve(dir.substr(dir.find_last_of('/') + 1));
+    if (r.kind == ModelRef::kCatalog) return read_text(dir + "/.complete") == plan_want(*r.variant);
+  } catch (const std::exception&) {  // not a catalog name
+  }
+  return !read_text(dir + "/.complete").empty();  // a plan of a Hugging Face repo, or a folder of its own: complete
+}
+
+// Whether a plan's model is on this Mac: planned, and its folder holding the weights. Planning writes none of them (the
+// files a plan lists are config.json and the safetensors headers), so a plan is only planned from its headers until
+// the model is downloaded into that folder; a GGUF variant's plan is its conversion, written where it is planned.
+bool plan_has_model(const std::string& dir) {
+  try {
+    // the weights the plan is about: its index's files, or model.safetensors whole
+    std::vector<std::string> weights;
+    const json index = json::parse(read_text(dir + "/model.safetensors.index.json"));
+    for (const auto& f : index.at("weight_map")) weights.push_back(f.get<std::string>());
+    if (weights.empty()) weights.push_back("model.safetensors");
+    for (const std::string& f : weights) {
+      uint64_t size = 0;
+      if (!file_size(dir + "/" + f, size) || size < 1024 * 1024) return false;  // a header, not the weights
+    }
+    return true;
+  } catch (const std::exception&) {
+    return false;
+  }
+}
+
 bool is_current(const ModelRef& ref) {
   if (ref.kind == ModelRef::kLocal) return true;
   if (!is_complete(ref.dir)) return false;
@@ -1628,12 +1669,36 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
           double(p.size - p.head.size()) / 1e6, hidden.c_str());
 }
 
-static std::atomic<bool> g_offline{false};
+// Offline visits (hub.h): per thread a nesting count, and how many of them this thread's outermost visit found open
+// elsewhere, so that a thread started inside a visit is in it too and the process-wide count returns to zero exactly.
+// A worker thread of plan_dir starts inside the caller's visit: before this, every caller's plans fetched even with
+// set_offline(true) set (issue #1187).
+static thread_local int tl_visits = 0;
+static thread_local int tl_inherited = 0;
+static std::atomic<int> g_visits{0};
+
+// Whether a fetch from this thread is refused: its own visits, or a visit open on another thread
+static bool no_fetch() { return tl_visits > 0 || g_visits > 0; }
+
 static std::atomic<int> g_offline_misses{0};
 
+bool fetch_refused() { return no_fetch(); }
+
 void set_offline(bool on) {
-  g_offline = on;
-  g_offline_misses = 0;
+  if (on && tl_visits++ == 0) tl_inherited = g_visits++;
+  if (!on && tl_visits > 0 && --tl_visits == 0) {  // its last visit: its own count and what it saw open elsewhere
+    g_visits -= tl_inherited + 1;
+    tl_inherited = 0;
+  }
+  if (g_visits == 0) g_offline_misses = 0;
+}
+
+void leave_offline() {
+  if (tl_visits > 0) {
+    g_visits -= tl_inherited + 1;
+    tl_visits = 0, tl_inherited = 0;
+  }
+  if (g_visits == 0) g_offline_misses = 0;
 }
 
 int offline_misses() { return g_offline_misses; }
@@ -1728,12 +1793,9 @@ std::string plan_dir(const ModelRef& ref) {
   if (ref.kind != ModelRef::kCatalog) return "";
   const Variant& m = *ref.variant;
   const std::string dir = home_dir() + "/plans/" + ref.model->name + "-" + m.name, mark = dir + "/.complete";
-  std::string want = m.repo + "@" + m.revision;
-  // a GGUF variant's plan is the import's: planned again by another Kapitsa, whose conversion may differ
-  if (!m.gguf.path.empty()) want += "\ngguf " + m.gguf.path + " " + m.gguf.sha256 + "\nkapitsa " KAPITSA_VERSION;
-  for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
+  const std::string want = plan_want(m);
   if (read_text(mark) == want) return dir;
-  if (g_offline) {
+  if (no_fetch()) {
     ++g_offline_misses;
     return "";
   }
