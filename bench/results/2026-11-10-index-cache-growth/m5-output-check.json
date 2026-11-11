@@ -1,0 +1,232 @@
+{
+  "evidence_kind": "Redacted derived evidence, not original execution logs",
+  "production_sources": {
+    "A": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+    "B": "cbbf2dcf614761d834e1e4129e6a621ace3a3d6e"
+  },
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "physical_memory_gib": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "identities": {
+    "A": {
+      "head": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+      "files": {
+        "src/model/qwen4_exp.cpp": "84dfceb45896a6aa8ca51435f9ab36124a27c786a8858218de6989e851f6dac4",
+        "tools/index_growth_check.cpp": "92e2082e11b0947861f05f46140f6a383d09c0754c1c7ecfb032939e64f3f240",
+        "build/kapitsa": "885fad4a4b4b8036a2fe7363bc646a179a15594b201b9db34e2be642954b2aeb",
+        "build/logit_dump": "a629f6ffc966a9b62c39523f82b4e99907fbe0ac3a9240a45d0e729f3097a7fa",
+        "build/index_growth_check": "5ad280d437c3a8f4f887ba19145bf160c29de91b441836d161025515f1c0eee0"
+      }
+    },
+    "B": {
+      "head": "cbbf2dcf614761d834e1e4129e6a621ace3a3d6e",
+      "files": {
+        "src/model/qwen4_exp.cpp": "022b9909a8bd852fdfeac8031ee921ad2784ed779aaa3e59ed657f83f4803060",
+        "tools/index_growth_check.cpp": "92e2082e11b0947861f05f46140f6a383d09c0754c1c7ecfb032939e64f3f240",
+        "build/kapitsa": "2ab69af935a2e98f375e49787653cd11bd2abb2f5f3d3e871f892a85075026c3",
+        "build/logit_dump": "551134c409919af4e29d2271d25584591e8d793d13344fa7aca7b9418e540a2f",
+        "build/index_growth_check": "15c4b5cd3721e3e15be1cafb8370933a7753dc0264ab0b22ecf289a752a620e2"
+      }
+    }
+  },
+  "method": "Literal complete-file A/B comparison and independent finite checks of every float32 value in both arms; not hash-only comparison",
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "vocab": 248320,
+      "files": {
+        "logits.f32": {
+          "bytes_each": [
+            7946240,
+            7946240
+          ],
+          "sha256_A": "39b5c03cc7dcfd15b60fac8aa0a8dd733b6c20f1281a66f637c8552e2daa7e89",
+          "sha256_B": "39b5c03cc7dcfd15b60fac8aa0a8dd733b6c20f1281a66f637c8552e2daa7e89",
+          "literal_equal": true
+        },
+        "records.txt": {
+          "bytes_each": [
+            54,
+            54
+          ],
+          "sha256_A": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sha256_B": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "literal_equal": true
+        },
+        "sequences.txt": {
+          "bytes_each": [
+            68379,
+            68379
+          ],
+          "sha256_A": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "sha256_B": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "literal_equal": true
+        }
+      },
+      "finite_each_arm": [
+        true,
+        true
+      ]
+    },
+    "step": {
+      "records": 192,
+      "vocab": 248320,
+      "files": {
+        "logits.f32": {
+          "bytes_each": [
+            190709760,
+            190709760
+          ],
+          "sha256_A": "7b38e6fcf9901146f757d5983ffe4688a14a895491501cb688d79371d16c4705",
+          "sha256_B": "7b38e6fcf9901146f757d5983ffe4688a14a895491501cb688d79371d16c4705",
+          "literal_equal": true
+        },
+        "records.txt": {
+          "bytes_each": [
+            1296,
+            1296
+          ],
+          "sha256_A": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sha256_B": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "literal_equal": true
+        },
+        "sequences.txt": {
+          "bytes_each": [
+            68379,
+            68379
+          ],
+          "sha256_A": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "sha256_B": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "literal_equal": true
+        }
+      },
+      "finite_each_arm": [
+        true,
+        true
+      ]
+    },
+    "verify": {
+      "records": 192,
+      "vocab": 248320,
+      "files": {
+        "logits.f32": {
+          "bytes_each": [
+            190709760,
+            190709760
+          ],
+          "sha256_A": "7b38e6fcf9901146f757d5983ffe4688a14a895491501cb688d79371d16c4705",
+          "sha256_B": "7b38e6fcf9901146f757d5983ffe4688a14a895491501cb688d79371d16c4705",
+          "literal_equal": true
+        },
+        "records.txt": {
+          "bytes_each": [
+            1296,
+            1296
+          ],
+          "sha256_A": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sha256_B": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "literal_equal": true
+        },
+        "sequences.txt": {
+          "bytes_each": [
+            68379,
+            68379
+          ],
+          "sha256_A": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "sha256_B": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "literal_equal": true
+        }
+      },
+      "finite_each_arm": [
+        true,
+        true
+      ]
+    }
+  },
+  "rows_each": 392,
+  "comparison": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 8,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      }
+    }
+  },
+  "limits": [
+    "No floor file exists for this pack: comparator is reports-only. Complete files were independently compared literally and both arms checked for finite values.",
+    "Verify coverage is teacher-forced, not free-running MTP equality.",
+    "Flash-Next has no batch path."
+  ],
+  "provenance": [
+    {
+      "private_record_name": "m5-final-byte-audit.private.json",
+      "sha256": "a4925ff2cbdb06f60062f509dedc132ae15856e5638a8ab03a0ad3c8397f6300"
+    },
+    {
+      "private_record_name": "m5-trained-logit-compare.json",
+      "sha256": "b3b0ca684f2420437499cbc21679c983c6017b4ae451278e1b6de97787aa6c7e"
+    },
+    {
+      "private_record_name": "m5-trained-identities.private.json",
+      "sha256": "e868a576a219164cde9be532363ccce1f71d91a9d9629bc296abea49401ad1cd"
+    }
+  ]
+}

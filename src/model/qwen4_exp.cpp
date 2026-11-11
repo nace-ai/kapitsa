@@ -679,19 +679,26 @@ void Qwen4Exp::grow_kv(Seq& s, int cap) {
     bufs.push_back({&s.mtp_ixk, kb});
     bufs.push_back({&s.mtp_ixb, bb});
   }
-  std::vector<Buffer> olds;
-  std::unique_ptr<Encoder> e;
-  for (auto& [b, n] : bufs) {
-    Buffer nb = g.alloc(n, "index_cache");
-    if (old > 0 && *b) {
-      if (!e) e = g.begin();
-      enc_copy(*e, *b, nb);
-    }
-    olds.push_back(*b);
-    *b = nb;
+  // Match the attention cache's bounded copy batches before releasing the old index rows.
+  for (size_t i = 0; i < bufs.size();) {
+    std::vector<Buffer> olds;
+    std::unique_ptr<Encoder> e;
+    size_t batch = 0;
+    do {
+      auto& [b, n] = bufs[i];
+      Buffer nb = g.alloc(n, "index_cache");
+      if (old > 0 && *b) {
+        if (!e) e = g.begin();
+        enc_copy(*e, *b, nb);
+      }
+      olds.push_back(*b);
+      *b = nb;
+      batch += n;
+      ++i;
+    } while (i < bufs.size() && batch + bufs[i].second <= (size_t(256) << 20));
+    if (e) e->commit_and_wait();
+    for (Buffer& b : olds) g.release(b);
   }
-  if (e) e->commit_and_wait();
-  for (Buffer& b : olds) g.release(b);
 }
 
 void Qwen4Exp::drop_kv(Seq& s) {

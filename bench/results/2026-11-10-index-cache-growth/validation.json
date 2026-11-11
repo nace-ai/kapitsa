@@ -1,0 +1,97 @@
+{
+  "evidence_kind": "Redacted derived evidence, not original execution logs",
+  "production_sources": {
+    "A": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+    "B": "cbbf2dcf614761d834e1e4129e6a621ace3a3d6e"
+  },
+  "cpu_commands_passed": [
+    "api_test",
+    "prefix_cache_test",
+    "fn_store_test",
+    "fn_dflash_test",
+    "tokenizer_test",
+    "iq_layout_test",
+    "nh_quant_q8_test",
+    "remote_test",
+    "cluster_test",
+    "split_place_test",
+    "gemm_slices_test",
+    "ffn_share_test",
+    "ws_upgrade_test",
+    "test_server_cli",
+    "test_sidecar",
+    "test_bench",
+    "test_update",
+    "test_community",
+    "test_reasoning",
+    "test_pr_size",
+    "test_logit_compare",
+    "test_sampled_tokens_harness",
+    "test_structured_cli"
+  ],
+  "build_and_lint": [
+    {
+      "step": "build",
+      "rc": 0
+    },
+    {
+      "step": "cpu",
+      "rc": 0
+    },
+    {
+      "step": "lint",
+      "rc": 0
+    }
+  ],
+  "source_archive_audit": {
+    "base": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+    "matched_compiler_inputs": 292,
+    "different": [],
+    "extra": []
+  },
+  "retained_failed_attempts": [
+    {
+      "attempt": "initial output dump",
+      "result": "Failed before model load: working-directory corpus missing"
+    },
+    {
+      "attempt": "batch output coverage",
+      "result": "Failed: Flash-Next does not implement batch decoding"
+    },
+    {
+      "attempt": "explicit prefill path",
+      "result": "Argument rejected; prefill is always emitted and --paths accepts step,verify,batch"
+    }
+  ],
+  "resolution": "Completed all eight corpus windows with an explicit source working directory and --paths step,verify. Failed records remain private and were not overwritten.",
+  "loader_limitations_observed_in_both_arms": [
+    "The model requests rope_type yarn; the existing loader reports that RoPE runs unscaled. This change does not implement or alter that behavior."
+  ],
+  "pending": [],
+  "not_reproduced": [
+    "Long-context allocation failure"
+  ],
+  "provenance": [
+    {
+      "private_record_name": "cpu-done.json",
+      "sha256": "10705b764f101f79b1d768d121942913cc1c9eea6c25fec66f8f1ce07c5baa57"
+    },
+    {
+      "private_record_name": "cpu-cpu.private.log",
+      "sha256": "d6c717150d592b7ad9fffe420f86f00b6e4a69f80b0ab2dcae6a9a39d5a03899"
+    },
+    {
+      "private_record_name": "cpu-lint.private.log",
+      "sha256": "9a2ba97865628f9f9ff946ac2be11d54b2357f187116aa3d9abc1e4480a405f5"
+    },
+    {
+      "private_record_name": "archive-source-audit.private.json",
+      "sha256": "1940d647900693343c177bbd1cfee4feb44c57a5fae49acdea574d77d579f0af"
+    }
+  ],
+  "pre_ready_cpu_recheck": {
+    "result": "23 commands passed, 0 failed",
+    "private_record_name": "finalize-cpu.private.log",
+    "sha256": "d6c717150d592b7ad9fffe420f86f00b6e4a69f80b0ab2dcae6a9a39d5a03899"
+  }
+}
