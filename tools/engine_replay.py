@@ -2,8 +2,8 @@
 """The engine view (src/server/engine.html) against a stand-in server: a recorded session, no model, no GPU.
 
 It serves the page and the control socket's endpoints (docs/control-socket.md) over HTTP on 127.0.0.1, as
-`kapitsa serve` serves them at /engine for this Mac. GET /engine/status and GET /engine/events (SSE, Last-Event-ID
-replay and resets) answer from the recording; POST /engine/stop and POST /engine/model act on it. A stop ends the run
+`kapitsa serve` serves them at /engine for this Mac. GET /engine/status, GET /engine/models (the downloaded models,
+made up) and GET /engine/events (SSE, Last-Event-ID replay and resets) answer from the recording; POST /engine/stop and POST /engine/model act on it. A stop ends the run
 and a new one starts (the view sees `run_changed`); a switch reads `switching`, then `ready` with the new model. POST
 /_standin/stop, /_standin/drop and /_standin/model are this stand-in's test hooks (the real server has none). At most 3
 event streams at once, as on the real server: the next gets 503 busy.
@@ -42,7 +42,8 @@ CURSOR_RE = re.compile(r"([0-9a-f]{16,64})\.([0-9]{1,19})")
 # /engine/* as on the real server. /_standin/* are this stand-in's own test hooks, so tests can drive a stop (and with
 # {"then": "exit"} one that no new run follows), a drop (every event stream ends cleanly, the run goes on) and a
 # switch; the real server has no such routes.
-ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET", "/engine/stop": "POST",
+ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET", "/engine/models": "GET",
+          "/engine/stop": "POST",
           "/engine/model": "POST", "/_standin/stop": "POST", "/_standin/drop": "POST", "/_standin/model": "POST"}
 MAX_VIEWS = 3  # event streams at once (kMaxEngineViews in src/server/engine_view.h)
 PAGE_CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
@@ -51,7 +52,18 @@ GB = 1_000_000_000
 MODELS = {  # id: (context_length, slots, weights_bytes, kv_bytes per slot, decode tokens per second)
     "qwen3.6-27b": (131072, 2, 17_400_000_000, 5_950_000_000, 41.0),
     "qwen3.5-4b": (65536, 4, 2_900_000_000, 1_100_000_000, 128.0),
+    "qwen3.5-9b": (65536, 3, 5_700_000_000, 1_200_000_000, 74.0),
 }
+# what GET /engine/models lists: (name POST /engine/model takes, title, variant, bytes on disk, includes, fits). The ones
+# in MODELS switch; the others answer model_not_found, as a model that would not load does. `fits` and `current` are
+# the stand-in's own: a made-up budget of 38.6 GB, the current model from the run
+DOWNLOADED = [
+    ("qwen3.5-4b:4bit", "Qwen3.5-4B", "4bit", 4_571_194_744, ["MTP head", "DFlash drafter"], "fits"),
+    ("qwen3.5-9b:4bit", "Qwen3.5-9B", "4bit", 9_047_481_758, ["MTP head", "DFlash drafter"], "fits"),
+    ("qwen3.6-27b:4bit", "Qwen3.6-27B", "4bit", 20_169_260_357, ["MTP head", "DFlash2 drafter"], "fits"),
+    ("clover-35b-a3b:4bit", "Clover-35B-A3B", "4bit", 20_583_323_055, ["DFlash2 drafter"], "no_drafter"),
+    ("/Users/me/.cache/kapitsa/models/drex-v2.0-q8", None, "gguf Q8_0", 36_861_413_976, [], "too_big"),
+]
 CLIENTS = [("openai", "Kapitan/0.9"), ("anthropic", "claude-cli/2.1.4"), ("openai", "opencode/0.15"),
            ("openai", "codex_cli_rs/0.58")]
 LOGS = ["SSD prefix cache: {cached} tokens of the conversation read back from disk",
@@ -290,12 +302,25 @@ class Instance:
             self.cond.notify_all()
             return {"run_id": r.run_id, "state": "stopping"}
 
+    def models(self):
+        with self.cond:
+            now = getattr(self.run, "model_id", "")
+            rows = []
+            for name, title, variant, size, includes, fits in DOWNLOADED:
+                row = {"name": name, "variant": variant, "bytes": size, "includes": includes, "fits": fits,
+                       "current": name.split(":")[0] == now}
+                if title:
+                    row["title"] = title
+                rows.append(row)
+            return {"run_id": self.run.run_id, "memory_budget_bytes": 38_600_000_000, "models": rows}
+
     def switch(self, mid):
         with self.cond:
             r = self.run
             if not hasattr(r, "load"):
                 return 400, {"error": {"code": "invalid_value", "message": "a recording cannot switch",
                                        "details": {"field": "model"}}}
+            mid = mid.split(":")[0] if mid.split(":")[0] in MODELS else mid  # (a name carries its precision)
             if mid not in MODELS:
                 return 404, {"error": {"code": "model_not_found", "message": f"no model {mid} here (this "
                                        f"stand-in has {', '.join(MODELS)})", "details": {"model": mid}}}
@@ -383,6 +408,8 @@ def handler(inst):
             elif path == "/engine/status":
                 with inst.cond:
                     self.send_json(200, inst.run.status(inst))
+            elif path == "/engine/models":
+                self.send_json(200, inst.models())
             elif path == "/engine/events":
                 self.events()
             else:

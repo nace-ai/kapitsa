@@ -36,6 +36,14 @@ struct Stub : ControlApi {
   json status() override { return instance_status(id, bus, act, last_state()); }
   ControlReply stop() override { return {202, {{"run_id", bus.run_id()}, {"state", "stopping"}}}; }
   void after_stop() override { ++stops; }
+  ControlReply models() override {
+    return {200, {{"run_id", bus.run_id()}, {"memory_budget_bytes", 41448628224ULL},
+                  {"models", {{{"name", "qwen3.5-4b:4bit"}, {"title", "Qwen3.5-4B"}, {"variant", "4bit"},
+                               {"bytes", 4571194744ULL}, {"includes", {"MTP head", "DFlash drafter"}}, {"fits", "fits"},
+                               {"current", false}},
+                              {{"name", "/models/big"}, {"bytes", 36861413976ULL}, {"includes", json::array()},
+                               {"fits", "too_big"}, {"current", false}}}}}};
+  }
   ControlReply model_switch(const json& r) override {
     if (ControlReply no = switch_refusal(id.config, r); no.status) return no;
     const json prev = model_json("qwen3.6-27b", 131072, 2);
@@ -202,6 +210,12 @@ int main(int argc, char** argv) {
   act.finish(r, ni::ChatResult{});
   // last_event_id is the seq read with the state, not the bus's last event when the status is assembled
   CHECK(instance_status(stub.id, bus, act, {{"state", "loading"}, {"seq", 1}})["last_event_id"] == kRun + ".1");
+
+  // the downloaded models: a read, like status
+  CHECK((a = ask(sock, "GET", "/models")).status == 200);
+  CHECK(json::parse(a.body)["models"].size() == 2 && json::parse(a.body)["models"][1]["fits"] == "too_big");
+  keep("models", a);
+  CHECK(code_of(a = ask(sock, "POST", "/models")) == "method_not_allowed" && a.status == 405);
 
   // paths, methods and bodies
   CHECK(code_of(a = ask(sock, "GET", "/nope")) == "not_found" && a.status == 404);

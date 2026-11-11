@@ -96,9 +96,10 @@ std::optional<httplib::Server::HandlerResponse> engine_gate(const httplib::Reque
   };
   if (const std::string why = engine_refusal(req); !why.empty()) return refuse(control_error(403, "forbidden_peer", why));
   const bool page = req.path == "/engine", action = req.path == "/engine/stop" || req.path == "/engine/model";
-  if (!page && !action && req.path != "/engine/status" && req.path != "/engine/events")
+  if (!page && !action && req.path != "/engine/status" && req.path != "/engine/events" &&
+      req.path != "/engine/models")
     return refuse(control_error(404, "not_found", "the engine view has /engine, /engine/status, /engine/events, "
-                                                  "/engine/stop and /engine/model"));
+                                                  "/engine/models, /engine/stop and /engine/model"));
   if (action ? req.method != "POST" : req.method != "GET" && req.method != "HEAD") {
     res.set_header("Allow", action ? "POST" : "GET, HEAD");
     return refuse(control_error(405, "method_not_allowed",
@@ -129,6 +130,11 @@ void engine_routes(httplib::Server& srv, std::function<ControlServer*()> control
     ControlServer* c = control();
     if (!c) return no_socket(res);
     reply(res, c->handle("GET", "/status", ""));
+  });
+  srv.Get("/engine/models", [control, no_socket](const httplib::Request&, httplib::Response& res) {
+    ControlServer* c = control();
+    if (!c) return no_socket(res);
+    reply(res, c->handle("GET", "/models", ""));
   });
   // stop and switch: the socket's own checks and answers. A stop's after_stop() runs once its answer is sent, as on
   // the socket: the content provider's releaser runs after the last byte, or when the client has gone.

@@ -1,0 +1,12 @@
+{
+  "run_id": "7f3a9c2e5b1d4e60",
+  "memory_budget_bytes": 41448628224,
+  "models": [
+    {"name": "qwen3.5-4b:4bit", "title": "Qwen3.5-4B", "variant": "4bit", "bytes": 4571194744,
+     "includes": ["MTP head", "DFlash drafter"], "fits": "fits", "current": false},
+    {"name": "qwen3.6-27b:4bit", "title": "Qwen3.6-27B", "variant": "4bit", "bytes": 20169260357,
+     "includes": ["MTP head", "DFlash2 drafter"], "fits": "fits", "current": true},
+    {"name": "/Users/me/.cache/kapitsa/models/drex-v2.0-q8", "variant": "gguf Q8_0", "bytes": 36861413976,
+     "includes": [], "fits": "too_big", "current": false}
+  ]
+}

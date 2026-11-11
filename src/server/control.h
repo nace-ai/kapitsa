@@ -1,5 +1,5 @@
 // The control socket (docs/control-socket.md): HTTP/1.1 over a Unix domain socket in $KAPITSA_HOME/run, answering
-// GET /status, GET /events, POST /stop and POST /model for the user who started the server. It is its own small HTTP
+// GET /status, GET /events, GET /models, POST /stop and POST /model for the user who started the server. It is its own small HTTP
 // server rather than httplib's: the peer check needs each accepted socket (getpeereid), which httplib keeps private.
 // One request per connection (`Connection: close`), so there is no keep-alive state to get wrong.
 #pragma once
@@ -36,6 +36,8 @@ class ControlApi {
   virtual ControlReply stop() = 0;  // 202: after_stop() runs once the first one's answer is sent, never again
   virtual void after_stop() {}
   virtual ControlReply model_switch(const nlohmann::json& request) = 0;
+  // GET /models: the downloaded models this instance could switch to (schema/control/models.schema.json)
+  virtual ControlReply models() = 0;
 };
 
 constexpr int kControlProtocol = 1;

@@ -63,6 +63,7 @@ it.
 | --- | --- | --- |
 | `GET /status` | none | `200` [status](../schema/control/status.schema.json) |
 | `GET /events` | none; optional `Last-Event-ID` header | `200`, an SSE stream of [events](../schema/control/event.schema.json) |
+| `GET /models` | none | `200` [models](../schema/control/models.schema.json) |
 | `POST /stop` | [stop request](../schema/control/stop-request.schema.json) | `202` [stop response](../schema/control/stop-response.schema.json) |
 | `POST /model` | [model switch request](../schema/control/model-switch-request.schema.json) | `200` [model switch response](../schema/control/model-switch-response.schema.json) |
 
@@ -125,6 +126,16 @@ a model whose experts stream from disk included); the steps that read nothing (c
 kernels, the Neural Engine program) finish first.
 A model still downloading stops at once, its downloaded parts kept for the next start. Every lifecycle exits with status 0, a terminal's after clearing its status block. A second
 `POST /stop` answers `202` and changes nothing, and `POST /model` after a stop answers `503 stopping`.
+
+### Models
+
+`GET /models` lists the models downloaded on this Mac (complete ones; a download in progress is not there): `name` is
+what `POST /model` takes for the model (its catalog name, or its folder when no name finds it), with its `title`,
+`variant` (precision or file format), `bytes` on disk, `includes` (MTP head, drafters) and `current`. `fits` is the
+engine's plan of the model's files against `memory_budget_bytes`, offline, for one conversation at the default
+context: `fits` beside its drafter, `no_drafter` (only without it, so slower), `too_big`, or `unknown` when its files
+cannot be planned (also every model before the first has loaded). The plan is kept per folder for the run. Listing never
+loads or downloads anything.
 
 ### Model switch
 
@@ -211,10 +222,13 @@ for them. The level is `info`, or `debug` when the server runs with `verbose`.
 ## The engine view
 
 A browser cannot open the socket, so `kapitsa serve` also serves a page of what the instance holds and does at
-`http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reaches the socket's four endpoints over HTTP on
-the API port, with the same bodies and answers: `GET /engine/status`, `GET /engine/events`, `POST /engine/stop` and
-`POST /engine/model`. Its Stop button asks once more before it sends; its Switch box takes a model name, folder or GGUF
-file, as `POST /model` does. Its Memory card also shows the prefix caches (`engine.cache`): the conversations kept in memory and on the SSD, their size and what they saved.
+`http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reaches the socket's five endpoints over HTTP on
+the API port, with the same bodies and answers: `GET /engine/status`, `GET /engine/events`, `GET /engine/models`,
+`POST /engine/stop` and `POST /engine/model`. Its Stop button asks once more before it sends; its Switch box takes a
+model name, folder or GGUF file, as `POST /model` does, and the "Downloaded" list beside it offers the models from
+`GET /models` (size, precision, whether each fits this Mac): picking one fills the box, and Switch sends it. Its Memory
+card also shows the prefix caches (`engine.cache`): the conversations kept in memory and on the SSD, their size and
+what they saved.
 
 - **This run's key.** The socket admits its own user only, and the HTTP side keeps that. At start the server makes a
   key, 24 random bytes, and writes it to `$KAPITSA_HOME/run/<instance_id>.token` (`0600`, in the `0700` `run/`),
@@ -243,7 +257,7 @@ file, as `POST /model` does. Its Memory card also shows the prefix caches (`engi
 - **At most 3 views.** Each open `GET /engine/events` holds one of the API server's threads, at least 8 in all and
   shared with requests, so at most 3 are open at once. A fourth gets `503 busy` with `Retry-After: 5`. These count
   toward the bus's 16 streams.
-- **No socket.** A server without a control socket answers the four endpoints with `503 internal`. That happens when
+- **No socket.** A server without a control socket answers the five endpoints with `503 internal`. That happens when
   another server holds its instance name or `run/` cannot be made. A server that routes to other Macs has its own
   socket and engine view, which show that server, not the Mac it forwards to.
 

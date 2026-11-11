@@ -7,6 +7,7 @@
     "messages": {
       "status": {"$ref": "status.schema.json"},
       "event": {"$ref": "event.schema.json"},
+      "models": {"$ref": "models.schema.json"},
       "stop_request": {"$ref": "stop-request.schema.json"},
       "stop_response": {"$ref": "stop-response.schema.json"},
       "model_switch_request": {"$ref": "model-switch-request.schema.json"},

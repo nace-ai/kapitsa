@@ -1,6 +1,6 @@
 // The engine view (src/server/engine.html, docs/control-socket.md "The engine view"): a page kapitsa serve serves at
 // /engine, and a mirror of the control socket under /engine/ (a browser cannot open the Unix socket): GET /status,
-// GET /events, POST /stop and POST /model, answered by the socket's own handlers.
+// GET /events, GET /models, POST /stop and POST /model, answered by the socket's own handlers.
 //
 // The socket admits its own user only (getpeereid). The mirror keeps that with a key made for this run and kept in a
 // file only that user can read ($KAPITSA_HOME/run/<instance>.token, 0600 in the 0700 run/); kapitsa serve prints the
@@ -40,7 +40,7 @@ std::string engine_refusal(const httplib::Request& req);
 // key stands in for the API key, which the page does not have. The page itself needs no key: it holds no data.
 std::optional<httplib::Server::HandlerResponse> engine_gate(const httplib::Request& req, httplib::Response& res);
 
-// GET /engine (`page`), GET /engine/status, GET /engine/events, POST /engine/stop and POST /engine/model, answered as
+// GET /engine (`page`), GET /engine/status, GET /engine/events, GET /engine/models, POST /engine/stop and POST /engine/model, answered as
 // the control socket answers them. `control()` is null while the server has no control socket: a 503.
 void engine_routes(httplib::Server& srv, std::function<ControlServer*()> control, const char* page);
 

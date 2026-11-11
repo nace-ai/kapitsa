@@ -1,0 +1,1 @@
+{"base": "models.ready.json", "merge_patch": {"models": [{"name": "x", "bytes": 1, "includes": [], "fits": "maybe", "current": false}]}}

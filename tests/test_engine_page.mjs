@@ -45,6 +45,8 @@ function page(base, hash, storage = "ok") {
       const e = {id, textContent: "", innerHTML: "", className: "", disabled: false, onclick: null, onsubmit: null, value: "",
                  scrollTop: 0, clientHeight: 0, scrollHeight: 0, classList: {add() {}, remove() {}}};
       e.lastElementChild = {textContent: ""};
+      e.hidden = false; e.focus = () => { e.focused = true; }; e.setAttribute = (k, v) => { e[k] = v; };
+      e.contains = () => false;
       e.querySelector = () => e;
       els.set(id, e);
     }
@@ -55,8 +57,9 @@ function page(base, hash, storage = "ok") {
     return {getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v))};
   };
   const loc = {hash, pathname: "/engine", search: ""};
+  const listeners = {};
   const ctx = {
-    document: {getElementById: el, documentElement: {dataset: {}}},
+    document: {getElementById: el, documentElement: {dataset: {}}, addEventListener(type, fn) { (listeners[type] ||= []).push(fn); }},
     location: loc,
     history: {replaceState(_s, _t, url) { loc.hash = url.includes("#") ? url.slice(url.indexOf("#")) : ""; }},
     matchMedia: () => ({matches: false, addEventListener() {}}),
@@ -87,7 +90,8 @@ function page(base, hash, storage = "ok") {
   const tap = id => el(id).onclick();
   const switchTo = m => { el("swto").value = m; return el("sw").onsubmit({preventDefault() {}}); };
   const drawNow = () => vm.runInContext("draw()", ctx);
-  return {view, loc, ctx, el, tap, switchTo, drawNow};
+  const key = k => (listeners.keydown || []).forEach(f => f({key: k}));
+  return {view, loc, ctx, el, tap, switchTo, drawNow, key};
 }
 
 const get = async (s, path) => (await fetch(s.base + path, {headers: {Authorization: "Bearer " + s.token}})).json();
@@ -132,6 +136,36 @@ check(sent && sent.url === "/engine/model" && sent.opts.headers.Authorization ==
       JSON.parse(sent.opts.body).run_id === a.view().run && JSON.parse(sent.opts.body).model === "qwen3.5-4b",
       "a switch carries the key, a JSON body and the run it saw");
 console.log("switch ok");
+
+// 2b. the picker beside it: the downloaded models, the loaded one first and marked, one that is too big for this Mac
+// listed but not pickable; picking fills the box, and Switch sends that name
+a.tap("swpick");
+await until(() => a.el("swlist").innerHTML.includes("Qwen3.5-9B"), 5000, "the picker lists the downloaded models");
+const list = a.el("swlist").innerHTML;
+check(!a.el("swlist").hidden && a.el("swpick")["aria-expanded"] === "true", "the picker opens");
+check(list.indexOf("Qwen3.5-4B") < list.indexOf("Qwen3.5-9B") && list.indexOf("Qwen3.5-9B") < list.indexOf("drex-v2.0-q8") &&
+      /Qwen3\.5-4B[\s\S]*?Loaded now/.test(list) && list.includes("4.57 GB") && list.includes("MTP head") && list.includes("gguf Q8_0"),
+      "the picker: the loaded model first and marked, then by fit, with size, precision and what each holds");
+check(/class="opt" data-i="\d" disabled[^>]*title="\/Users\/me[^"]*drex[^"]*"/.test(list) &&
+      list.includes("Too big for this Mac") && list.includes("Fits without its drafter"),
+      "a model too big for this Mac is listed, marked, and cannot be picked");
+check(/data-i="0" disabled/.test(list), "the loaded model cannot be picked (it is loaded)");
+check(list.includes("fits planned for 38.6 GB"), "the picker says what the fits are planned for");
+a.key("Escape");
+check(a.el("swlist").hidden && a.el("swpick")["aria-expanded"] === "false", "Escape closes the picker");
+a.tap("swpick");
+await until(() => a.el("swlist").innerHTML.includes("Qwen3.5-9B"), 5000, "the picker opens again");
+const i9 = vm.runInContext(`listed.findIndex(m => m.name === "qwen3.5-9b:4bit")`, a.ctx);
+a.el("swlist").onclick({target: {closest: () => ({disabled: false, dataset: {i: String(i9)}})}});
+check(a.el("swto").value === "qwen3.5-9b:4bit" && a.el("swlist").hidden && a.el("swgo").focused, "picking a model fills the box and closes the picker");
+await a.el("sw").onsubmit({preventDefault() {}});
+await until(() => a.view().model === "qwen3.5-9b" && a.view().state === "ready" && !a.el("swgo").disabled, 15000,
+            "the picked model loads");
+check(JSON.parse(a.ctx.posts.at(-1).opts.body).model === "qwen3.5-9b:4bit", "Switch sends the picked name");
+a.tap("swpick");
+await until(() => /Qwen3\.5-9B[\s\S]*?Loaded now/.test(a.el("swlist").innerHTML), 5000, "the list follows the switch");
+a.key("Escape");
+console.log("picker ok");
 
 // 3. the page's Stop while a request runs: one click only asks again, and lapses; two stop it. The request ends
 // cancelled and the view reads stopping; the next run's reset then clears the old run's finished requests and rates

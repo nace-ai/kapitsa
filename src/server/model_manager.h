@@ -357,6 +357,7 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     std::shared_lock<std::shared_mutex> lk(rw_mu_);
     return opt_;
   }
+  size_t budget() const { return budget_; }  // the GPU memory the engine may hold (set at init)
   // Requests in flight now
   int in_flight() const { return in_flight_.load(); }
 

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/models.schema.json",
+  "title": "GET /models",
+  "description": "The models downloaded on this Mac, as the engine view's picker lists them. Every one is complete; a download in progress is not listed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "memory_budget_bytes", "models"],
+  "properties": {
+    "run_id": {"$ref": "control.schema.json#/$defs/run_id"},
+    "memory_budget_bytes": {"type": "integer", "minimum": 0, "description": "the GPU memory the engine may hold, which `fits` is planned against; 0 while no model has been loaded yet (every `fits` is then \"unknown\")"},
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "bytes", "includes", "fits", "current"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "description": "what POST /model takes for it: \"qwen3.5-4b:4bit\", or the model's folder when no name finds it"},
+          "title": {"type": "string", "minLength": 1, "description": "the catalog's name for it, \"Qwen3.5-4B\"; absent for a model Kapitsa does not know"},
+          "variant": {"type": "string", "minLength": 1, "description": "its precision or file format: \"4bit\", \"gguf Q4_K_M\""},
+          "bytes": {"type": "integer", "minimum": 0, "description": "on disk, drafters included"},
+          "includes": {"type": "array", "items": {"type": "string"}, "description": "what the folder holds beside the weights: \"MTP head\", \"DFlash2 drafter\""},
+          "fits": {
+            "enum": ["fits", "no_drafter", "too_big", "unknown"],
+            "description": "one conversation at the default context fits within the budget beside the model and its drafter (fits), only without the drafter, so slower (no_drafter), or not even that (too_big); unknown: its files could not be planned"
+          },
+          "current": {"type": "boolean", "description": "the model this instance serves now"}
+        }
+      }
+    }
+  }
+}

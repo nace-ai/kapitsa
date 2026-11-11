@@ -65,6 +65,18 @@ svg{display:block;width:100%;height:96px}
 #msg{font-size:12.5px;color:var(--err)}
 #theme{min-width:64px;flex:none}.end{display:flex;align-items:center;gap:10px;flex:1 1 auto;justify-content:flex-end;text-align:right}
 #sw{display:flex;gap:6px;flex:0 1 auto;min-width:0}#sw input{font:inherit;font-size:13px;padding:5px 9px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:220px;min-width:90px}
+#sw{position:relative}
+#swlist{position:absolute;top:calc(100% + 8px);right:0;z-index:5;width:min(440px,92vw);max-height:62vh;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.22);padding:6px;text-align:left}
+#swlist[hidden]{display:none}
+#swlist .opt{display:grid;grid-template-columns:1fr auto;gap:1px 14px;width:100%;text-align:left;border:0;border-radius:7px;padding:8px 10px;background:none}
+#swlist .opt:hover:not(:disabled),#swlist .opt:focus-visible{background:var(--soft)}
+#swlist .opt:disabled{opacity:.55;cursor:default}
+.opt .nm{font-weight:600;min-width:0;overflow-wrap:anywhere}.opt .nm small{font-weight:400;color:var(--muted);margin-left:6px;font-size:12.5px}
+.opt .sz{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.opt .ft{grid-column:1/-1;font-size:12.5px;color:var(--muted)}.opt .ft.warn{color:var(--warn)}.opt .ft.bad{color:var(--err)}
+.opt .ft b{color:var(--accent);font-weight:600}
+#swlist .foot{color:var(--muted);font-size:12px;padding:6px 10px 2px;border-top:1px solid var(--line);margin-top:4px}
+#swlist .empty{padding:10px}
 button.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--line));flex:none}button.danger.arm{background:var(--err);color:#fff}
 #msg{min-width:0}
 </style>
@@ -95,8 +107,10 @@ applyTheme();
   <span class="meta" id="ident"></span>
   <span class="sp"></span>
   <span class="end"><span id="msg"></span>
-  <form id="sw"><input id="swto" placeholder="Model, folder or GGUF" title="A model name, folder or GGUF file" autocomplete="off" spellcheck="false"
-    aria-label="Model to switch to"><button id="swgo" disabled>Switch</button></form>
+  <form id="sw"><button type="button" id="swpick" disabled aria-haspopup="true" aria-expanded="false" aria-controls="swlist"
+    title="The models downloaded on this Mac">Downloaded ▾</button><input id="swto" placeholder="Model, folder or GGUF" title="A model name, folder or GGUF file" autocomplete="off" spellcheck="false"
+    aria-label="Model to switch to"><button id="swgo" disabled>Switch</button>
+    <div id="swlist" role="group" aria-label="Downloaded models" hidden></div></form>
   <button id="stop" class="danger" disabled title="Stop kapitsa serve (it saves conversations first)">Stop</button>
   <button id="theme" title="Theme: follow the system, light or dark">Auto</button></span>
 </header>
@@ -309,6 +323,7 @@ function draw() {
   $("model").textContent = st.model ? `${st.model.id} · ${fmtCtx(st.model.context_length)} context · ${plural(st.model.slots, "slot")}` : "no model loaded";
   $("ident").textContent = `${st.lifecycle} · v${st.version} · run ${st.run_id.slice(0, 8)} · pid ${st.pid}`;
   $("stop").disabled = !live || state === "stopping";
+  $("swpick").disabled = !live;
   $("swgo").disabled = !live || S.switching || (state !== "ready" && state !== "released");
 
   const e = live ? st.engine : null;
@@ -394,8 +409,51 @@ $("stop").onclick = async () => {
   disarm();
   try { await post("/engine/stop", {}); $("msg").textContent = ""; } catch (e) { $("msg").textContent = "stop: " + e.message; }
 };
+// The downloaded models (GET /engine/models: the socket's /models): picking one fills the box, and Switch sends it as
+// ever. A model that does not fit this Mac is listed but cannot be picked; a folder or GGUF is still typed.
+const FIT = {fits: ["Fits this Mac", ""], no_drafter: ["Fits without its drafter (slower)", "warn"],
+             too_big: ["Too big for this Mac", "bad"], unknown: ["", ""]};
+const FIT_RANK = {fits: 1, no_drafter: 2, unknown: 3, too_big: 4};
+let listed = [], listSeq = 0;
+const closeList = () => { listSeq++; $("swlist").hidden = true; $("swpick").setAttribute("aria-expanded", "false"); };
+function renderList(j) {
+  listed = [...j.models].sort((a, b) => (b.current - a.current) || (FIT_RANK[a.fits] - FIT_RANK[b.fits]));
+  const budget = j.memory_budget_bytes ? ` · fits planned for ${fmtB(j.memory_budget_bytes)} of GPU memory` : "";
+  $("swlist").innerHTML = (listed.length ? listed.map((m, i) => {
+    const [fit, cls] = FIT[m.fits] || FIT.unknown;
+    const what = [m.title ? m.name : "", ...(m.includes || [])].filter(Boolean).join(" · ");
+    return `<button type="button" class="opt" data-i="${i}" ${m.current || m.fits === "too_big" ? "disabled" : ""} title="${esc(m.name)}">
+      <span class="nm">${esc(m.title || m.name)}${m.variant ? `<small>${esc(m.variant)}</small>` : ""}</span><span class="sz">${fmtB(m.bytes)}</span>
+      <span class="ft ${cls}">${m.current ? "<b>Loaded now</b>" + (fit ? " · " : "") : ""}${esc(fit)}${what ? `${fit || m.current ? " · " : ""}${esc(what)}` : ""}</span></button>`;
+  }).join("") : `<div class="empty">No models downloaded yet.</div>`) +
+    `<div class="foot">${plural(listed.length, "model")} on this Mac${budget}</div>`;
+}
+async function toggleList() {
+  const box = $("swlist");
+  if (!box.hidden) return closeList();
+  const mine = ++listSeq;
+  box.hidden = false; $("swpick").setAttribute("aria-expanded", "true");
+  box.innerHTML = `<div class="empty">Looking…</div>`;
+  try {
+    const r = await fetch("/engine/models", {headers: auth(), cache: "no-store"});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j.error && j.error.message) || "HTTP " + r.status);
+    if (mine === listSeq) renderList(j);
+  } catch (e) { if (mine === listSeq) box.innerHTML = `<div class="empty">Cannot list the models: ${esc(e.message)}</div>`; }
+}
+$("swpick").onclick = toggleList;
+$("swlist").onclick = ev => {
+  const b = ev.target.closest("button.opt");
+  if (!b || b.disabled) return;
+  $("swto").value = listed[Number(b.dataset.i)].name;
+  closeList();
+  ($("swgo").disabled ? $("swto") : $("swgo")).focus();
+};
+document.addEventListener("click", ev => { if (!$("swlist").hidden && !$("sw").contains(ev.target)) closeList(); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !$("swlist").hidden) { closeList(); $("swpick").focus(); } });
 $("sw").onsubmit = async ev => {
   ev.preventDefault();
+  closeList();
   const to = $("swto").value.trim();
   if (!to || S.switching) return;
   S.switching = true; $("swgo").textContent = "Switching…"; $("msg").textContent = "";
