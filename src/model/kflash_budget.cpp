@@ -22,6 +22,27 @@ namespace {
 constexpr const char* kCostOf = "cycle GPU ms";
 constexpr const char* kBatchCostOf = "batched cycle GPU ms";  // KfBatch's: the members' drafting passes and the verify
 
+#ifndef KAPITSA_VERSION
+#define KAPITSA_VERSION "0.2.34"
+#endif
+#ifndef KAPITSA_GIT
+#define KAPITSA_GIT "unknown"
+#endif
+// The build that wrote a cache, saved with it: a cache another build wrote is not loaded. What the budget learned is
+// what that build's drafter and verify accepted, and a build that changes either (kapitsa#1150: a verify that broke
+// the target's state after some trees) leaves a calibration that keeps the next build's trees shaped by the broken
+// one's cycles, across restarts. A fresh budget relearns its table and calibration within a request or two.
+constexpr const char* kBuild = KAPITSA_VERSION " (" KAPITSA_GIT ")";
+
+// A cache file's JSON when this build wrote it, else nothing (another build's, or one without a build: older than this check)
+bool same_build(const nlohmann::json& j, const std::string& key) {
+  const std::string b = j.value("build", "");
+  if (b == kBuild) return true;
+  logi("KFlash: not loading the budget cache %s (written by %s; this is %s)", key.c_str(),
+       b.empty() ? "an earlier build" : b.c_str(), kBuild);
+  return false;
+}
+
 // A cache file written whole beside its place, then renamed over it: a process ended mid-write (kill -9 after a stop
 // signal), or another tool saving the same key at once, leaves one whole file
 bool write_whole(const std::string& path, const nlohmann::json& j) {
@@ -105,6 +126,8 @@ KfBudget::KfBudget(std::string key) : key_(std::move(key)) {
 }
 
 KfBudget::~KfBudget() { save(); }
+
+const char* KfBudget::build() { return kBuild; }
 
 void KfBudget::set_wide(bool on) {
   std::lock_guard<std::mutex> lk(mu_);
@@ -444,6 +467,7 @@ void KfBudget::load() {
   if (!f) return;
   try {
     const nlohmann::json j = nlohmann::json::parse(f);
+    if (!same_build(j, key_)) return;
     const auto& c = j.at("cost");
     const auto& a = j.at("alpha");
     const auto& bb = j.at("beta");
@@ -472,6 +496,7 @@ void KfBudget::save(int fresh) {
   mkdir(dir.c_str(), 0755);
   nlohmann::json j;
   j["cost_of"] = kCostOf;
+  j["build"] = kBuild;
   const bool wide = wide_ && max_rows_ > 8;
   if (wide) {
     std::vector<double> cost(kD, 0.0);  // the costs now
@@ -740,6 +765,7 @@ void KfBatch::load() {
   if (!f) return;
   try {
     const nlohmann::json j = nlohmann::json::parse(f);
+    if (!same_build(j, key_)) return;
     if (j.value("cost_of", "") == kBatchCostOf) {
       const auto& c = j.at("cost");
       for (int M = 2; M <= kMembers && M < int(c.size()); ++M) c_[M].load(c[size_t(M)].get<std::vector<double>>(), kExplore);
@@ -762,6 +788,7 @@ void KfBatch::save(int fresh) {
   mkdir(dir.c_str(), 0755);
   nlohmann::json j;
   j["cost_of"] = kBatchCostOf;
+  j["build"] = kBuild;
   std::vector<std::vector<double>> cost(kMembers + 1);  // by members (2 .. kMembers), each by rows
   for (int M = 2; M <= kMembers; ++M) cost[size_t(M)] = c_[M].table();
   j["cost"] = cost;

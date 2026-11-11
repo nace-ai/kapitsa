@@ -200,4 +200,8 @@ build/ni_run <model> @bench/prompts/code_27b.txt 512 0 --dflash auto --ignore-eo
 ```
 
 The KfBudget cache is at `~/.cache/kapitsa/kflash/<model>-<drafter>-b<bits>-<chip>.json`. Delete it to make the
-budget re-measure.
+budget re-measure. The file names the build that wrote it (`"build": "<version> (<commit>)"`), and a build loads only
+its own: after an update the budget starts fresh and the first save overwrites the old file. A calibration learned on
+a broken verify (#1150) kept a fixed build's trees shaped by it across restarts before this check. In a source build
+the commit in that tag is the one CMake configured at: after a `git pull`, re-run `cmake -S . -B build` (or delete
+`kflash/`) before building, or the new binary keeps loading the old build's file.

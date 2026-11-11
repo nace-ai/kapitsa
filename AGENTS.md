@@ -49,13 +49,14 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
-update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
+update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
 exl3_test remote_test cluster_test split_place_test gemm_slices_test ffn_share_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test control_test engine_view_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
 build/api_test
 build/prefix_cache_test
+build/kflash_cache_test                      # the KFlash budget cache loads only into the build that wrote it (src/model/kflash_budget.cpp)
 build/fn_store_test                          # the streamed-expert cache (src/model/expert_store.h)
 build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
 build/drafter_attach_test                    # kapitsa import's drafter attach: which shape gets which drafter (offline; --net also fetches the 4B one)

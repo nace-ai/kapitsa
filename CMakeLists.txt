@@ -103,6 +103,8 @@ target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation
   "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics" "-framework Security"
   "-framework SystemConfiguration" "-framework Accelerate")  # src/cluster: this Mac's computer name, the kind of each network link
 target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}")
+# the KFlash budget's cache names the build that wrote it (src/model/kflash_budget.cpp), as `kapitsa --version` does
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/model/kflash_budget.cpp PROPERTIES COMPILE_DEFINITIONS "KAPITSA_GIT=\"${KAPITSA_GIT}\"")
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command

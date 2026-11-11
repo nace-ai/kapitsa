@@ -701,6 +701,7 @@ int unlock_check(uint64_t salt) {
   {
     nlohmann::json j;
     j["cost_of"] = "cycle GPU ms";
+    j["build"] = KfBudget::build();  // (a cache another build wrote is not loaded)
     std::vector<double> cost(kf::kMaxRows + 1, 0.0);
     for (int n = 1; n <= 8; ++n) cost[size_t(n)] = 7.0 + n;
     j["cost"] = cost;
@@ -762,6 +763,7 @@ int unlock_check(uint64_t salt) {
   auto poison = [&](const std::string& f, const char* cost_of) {
     nlohmann::json j;
     j["cost_of"] = cost_of;
+    j["build"] = KfBudget::build();
     j["cost"] = std::vector<double>(kf::kMaxRows + 1, 0.0);
     std::vector<float> a(kf::kMaxRows + 1, 0.0f), b(kf::kMaxRows + 1, 1.0f);
     a[2] = -8.0f;
