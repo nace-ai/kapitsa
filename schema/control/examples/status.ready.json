@@ -59,6 +59,23 @@
         "tokens": 12923
       }
     ],
+    "cache": {
+      "ram": {
+        "entries": 2,
+        "bytes": 12400000000,
+        "hits": 37,
+        "hit_tokens": 181200
+      },
+      "ssd": {
+        "entries": 14,
+        "bytes": 9100000000,
+        "limit_bytes": 32000000000,
+        "read_bytes": 2800000000,
+        "written_bytes": 6300000000,
+        "hits": 5,
+        "hit_tokens": 96400
+      }
+    },
     "drafts": {
       "cycles": 1520,
       "tokens": 3952

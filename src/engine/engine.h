@@ -381,6 +381,21 @@ class Engine {
     size_t budget = 0, allocated = 0, weights = 0, kv = 0;
     std::vector<int> slot_tokens;
     bool drafts = false;
+    // The prefix caches. ram: the conversations the slots keep for follow-ups (their KV rows and recurrent-state
+    // checkpoints, in the GPU memory counted above): `entries` slots that hold one, its `bytes` (KV capacity of those
+    // slots plus their checkpoints' buffers), and the requests since the load that continued from a slot's state or
+    // a checkpoint (`hits`, `hit_tokens` positions they did not read again). ssd: --disk-cache's store, off (null
+    // `ssd`) when the option is 0 or the model has none; its counters `hits`: requests that resumed from a stored
+    // state.
+    struct Ram {
+      size_t entries = 0;
+      uint64_t bytes = 0, hits = 0, hit_tokens = 0;
+    } ram;
+    struct Ssd {
+      bool on = false;
+      size_t entries = 0;
+      uint64_t bytes = 0, limit = 0, read_bytes = 0, written_bytes = 0, hits = 0, hit_tokens = 0;
+    } ssd;
   };
   View view() const;
   // Splash mode (EngineOptions::splash_model): generation runs in the Splash child; chat() refuses (it is the native
@@ -727,6 +742,11 @@ class Engine {
   bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
   size_t weights_bytes_ = 0;  // allocated before the slots (model, drafter, buffers): view()
+  size_t ckpt_bytes_ = 0;     // one slot's recurrent-state checkpoints' buffers: view()
+  // requests that continued from the slot's own state or a checkpoint / resumed from a stored SSD state, and the
+  // positions they did not read again: view()
+  std::atomic<uint64_t> ram_hits_{0}, ram_hit_tokens_{0}, ssd_hits_{0}, ssd_hit_tokens_{0};
+  void disk_view(View& v) const;  // engine_disk.cpp: View::ssd
   std::unique_ptr<std::atomic<int>[]> slot_pos_;  // each slot's tokens.size() as its last request left it: view()
   std::unique_ptr<std::atomic<int>[]> slot_cap_;  // each slot's KV capacity (Seq::cap) as its last reserve or drop left it
   // Records `s`'s Seq::cap for view(), from the thread that just changed it

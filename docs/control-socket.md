@@ -102,6 +102,8 @@ the old engine before the new one loads, so there is nothing to sample while `sw
 | `memory.weights_bytes` | Of that, what the engine held before its slots: the model's weights, the drafter's and the buffers they run in |
 | `memory.kv_bytes` | Of that, the slots' KV caches as allocated (each slot's capacity in positions times the bytes per position). The rest is the slots' recurrent state and buffers allocated later |
 | `slots[]` | One item per slot: `index`, `busy`, `tokens` in its live state, and `request_id` while busy |
+| `cache.ram` | The conversations the slots keep in memory for follow-ups: `entries` (slots that hold one), `bytes` (their KV capacity and their recurrent-state checkpoints, part of the GPU memory above), and since the load `hits` (requests that continued from a slot's state or a checkpoint) and `hit_tokens` (the prompt positions those did not read again) |
+| `cache.ssd` | The SSD prefix cache (`--disk-cache`): `entries` stored, `bytes` held and `limit_bytes` it may hold, `read_bytes` and `written_bytes` since it opened, and since the load `hits` (requests that resumed from a stored state) and `hit_tokens`. Absent, not zero, when the cache is off, the model has none, or its files are not open yet |
 | `drafts` | `cycles` that verified a draft and the `tokens` they wrote, counted since the model loaded. Absent when the model decodes without drafts. A counter that goes down means the model loaded again: start the baseline over |
 
 Each cycle writes one token of its own plus the draft tokens it accepts. A view gets tokens per cycle as
@@ -212,7 +214,7 @@ A browser cannot open the socket, so `kapitsa serve` also serves a page of what 
 `http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reaches the socket's four endpoints over HTTP on
 the API port, with the same bodies and answers: `GET /engine/status`, `GET /engine/events`, `POST /engine/stop` and
 `POST /engine/model`. Its Stop button asks once more before it sends; its Switch box takes a model name, folder or GGUF
-file, as `POST /model` does.
+file, as `POST /model` does. Its Memory card also shows the prefix caches (`engine.cache`): the conversations kept in memory and on the SSD, their size and what they saved.
 
 - **This run's key.** The socket admits its own user only, and the HTTP side keeps that. At start the server makes a
   key, 24 random bytes, and writes it to `$KAPITSA_HOME/run/<instance_id>.token` (`0600`, in the `0700` `run/`),

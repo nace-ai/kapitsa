@@ -79,7 +79,7 @@
       "description": "What the engine holds, sampled once per tick. Absent while no model is in memory and in Splash mode.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["memory", "slots"],
+      "required": ["memory", "slots", "cache"],
       "properties": {
         "memory": {
           "type": "object",
@@ -107,6 +107,41 @@
             "if": {"properties": {"busy": {"const": true}}},
             "then": {"required": ["request_id"]},
             "else": {"not": {"required": ["request_id"]}}
+          }
+        },
+        "cache": {
+          "description": "The prefix caches: what a follow-up request can continue from instead of reading its prompt again.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ram"],
+          "properties": {
+            "ram": {
+              "description": "The conversations the slots keep in memory, their KV rows and recurrent-state checkpoints. Counters since the model loaded.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["entries", "bytes", "hits", "hit_tokens"],
+              "properties": {
+                "entries": {"type": "integer", "minimum": 0, "description": "slots that hold a conversation"},
+                "bytes": {"type": "integer", "minimum": 0, "description": "GPU memory those slots hold for it: their KV capacity and their checkpoints' buffers"},
+                "hits": {"type": "integer", "minimum": 0, "description": "requests that continued from a slot's state or a checkpoint"},
+                "hit_tokens": {"type": "integer", "minimum": 0, "description": "prompt positions those requests did not read again"}
+              }
+            },
+            "ssd": {
+              "description": "The SSD prefix cache (--disk-cache). Absent when it is off, when the model has none and until its files are open. Counters since the model loaded, except entries, bytes and limit_bytes, which describe the cache.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["entries", "bytes", "limit_bytes", "read_bytes", "written_bytes", "hits", "hit_tokens"],
+              "properties": {
+                "entries": {"type": "integer", "minimum": 0, "description": "conversations stored"},
+                "bytes": {"type": "integer", "minimum": 0, "description": "disk space this model's cache holds"},
+                "limit_bytes": {"type": "integer", "minimum": 0, "description": "most the cache may hold now (--disk-cache, and a quarter of the volume's free space beyond 10 GiB for auto)"},
+                "read_bytes": {"type": "integer", "minimum": 0, "description": "read from the cache since it opened"},
+                "written_bytes": {"type": "integer", "minimum": 0, "description": "written to the cache since it opened"},
+                "hits": {"type": "integer", "minimum": 0, "description": "requests that resumed from a stored state"},
+                "hit_tokens": {"type": "integer", "minimum": 0, "description": "prompt positions those requests did not read again"}
+              }
+            }
           }
         },
         "drafts": {

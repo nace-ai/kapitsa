@@ -107,6 +107,8 @@ await until(async () => {
   const v = a.view(), now = await get(s, "/engine/status");
   return v.state === now.state && v.reqs === now.requests.map(r => r.request_id).sort().join(",");
 }, 10000, "the page's state and requests follow the server's");
+await until(() => /Prefix cache[\s\S]*In memory[\s\S]*On the SSD[\s\S]*of [\d.]+ GB it may hold/.test(a.el("cache").innerHTML), 10000,
+            "the Memory card shows the RAM and SSD prefix caches");
 console.log("link, key and live view ok");
 
 // 2. the page's Switch: a model the server lacks is said so and nothing changes; one it has reads switching, then ready
