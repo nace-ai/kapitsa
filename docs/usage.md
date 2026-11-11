@@ -52,6 +52,13 @@ always take the best model.
 
 The Hugging Face repo, pinned revision, draft model, MTP head and download size of every alias and variant: [docs/models.md](models.md) (written from the catalog by `tools/models_table.py`).
 
+The 4B, 27B, 35B and Flash-Next KQuant catalog entries use `-MLX-Q4-KQuant` repository names.
+Their former `-MLX-4bit-KQuant` IDs intentionally no longer select catalog entries. An old ID is treated
+as a generic Hugging Face repository, without catalog companions or reuse of the catalog download folder.
+Use the current repository ID or `4b:4bit`, `27b:kquant`, `35b:4bit` or `flash-next:kquant` to keep catalog
+resolution. These short names and their pinned revisions are unchanged. This rename does not affect the
+legacy 9B default.
+
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
