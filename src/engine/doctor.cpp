@@ -380,7 +380,8 @@ int run_doctor(int argc, char** argv) {
         // the same model under another name: a plan holding its weights and the store copy, or a partial plan and its
         // own folder elsewhere. A plan that is only planned stays listed beside the catalogue plan of a model whose
         // name starts the same way: which variants hold the same weights is not this loop's call
-        return hub::is_plan(d) ? (hub::models_dir().rfind(k, 0) == 0 && hub::plan_has_model(d) && kn.rfind(name, 0) == 0) ||
+        const bool store = hub::models_dir().rfind(k, 0) == 0;  // k is the store's copy, not a plan
+        return hub::is_plan(d) ? (store && hub::plan_has_model(d) && kn.rfind(name, 0) == 0) ||
                                      (hub::is_plan(k) && name.rfind(kn, 0) == 0)
                                : hub::is_plan(k) && hub::plan_has_model(k) && kn.rfind(name, 0) == 0;
       });

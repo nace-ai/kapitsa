@@ -108,10 +108,8 @@ int main(int argc, char** argv) {
   uint32_t size = sizeof exe;
   _NSGetExecutablePath(exe, &size);
   const std::string kapitsa_bin = (fs::path(fs::weakly_canonical(exe)).parent_path() / "kapitsa").string();
-  // doctor plans every catalog variant this Mac lacks, and a plan it has never made goes to the hub for the headers;
-  // that is minutes of network, and a hub that hangs is no failure of this test. The offline visit is the report's own
-  // (doctor.cpp), and it leaves the model report this test checks unaffected.
-  setenv("NI_DOCTOR_TEST", "1", 1);
+  // doctor's catalog section is planned offline by its own visit (doctor.cpp), so a run here makes no network request
+  // for a variant this Mac lacks; --models-dir makes the report the folders below, not this Mac's models.
 
   // a model a real install already holds: its own config.json and shard names, as `kapitsa doctor` reads them. Read
   // before KAPITSA_HOME points this test at its own folder, and only test fixtures come out of it (sizes, not weights).
