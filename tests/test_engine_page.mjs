@@ -191,6 +191,10 @@ vm.runInContext(`handlers.request_finished({request_id: "req-y", finish_reason: 
   queue_ms: 0, prefill_ms: 0, decode_ms: 0, tokens_per_second: 0, prefill_tokens_per_second: 0, error: "prompt (12010 tokens) exceeds the context window (8192)"}); draw()`, a.ctx);
 check(rows().includes("12,010-token prompt not read") && !rows().includes("read 12,010 tokens"),
       "a request refused before its prompt was read says the prompt was not read (the real server's context error)");
+vm.runInContext(`handlers.request_finished({request_id: "req-z", finish_reason: "error", prompt_tokens: 7777, cached_tokens: 0, completion_tokens: 200,
+  queue_ms: 0, prefill_ms: 0, decode_ms: 900, tokens_per_second: 0, prefill_tokens_per_second: 0, error: "the engine child died"}); draw()`, a.ctx);
+check(rows().includes("read 7,777 tokens") && !rows().includes("7,777-token prompt not read"),
+      "an error that came after tokens were written still says the prompt was read (the Splash path leaves prefill_ms 0)");
 console.log("finished-request detail ok");
 
 // 2. the page's Switch: a model the server lacks is said so and nothing changes; one it has reads switching, then ready
