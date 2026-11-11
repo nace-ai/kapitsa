@@ -157,6 +157,28 @@ check(thin.view().state && !vm.runInContext("S.logs.some(l => /caught up/.test(l
 await small.stop();
 console.log("thin bus ok");
 
+// 1d. a finished request's row: a failed request shows its error and its numbers at once, any other opens on a click and
+// closes on the next; the text is escaped
+await until(() => a.view().done.includes("req-4"), 40000, "the stand-in's failing request (req-4) finishes");
+a.drawNow();
+const rows = () => a.el("reqs").innerHTML;
+check(rows().includes("a made-up error: the prompt and 4,096 tokens do not fit") && rows().includes("waited 140 ms") &&
+      /read [\d,]+ tokens in [\d.]+ (ms|s)/.test(rows()) && /wrote in/.test(rows()),
+      "a failed request shows its error text and its waited, read and wrote times without a click");
+const okId = vm.runInContext("S.done.find(d => !d.error).request_id", a.ctx), tapRow = id => a.el("reqs").onclick({target: {closest: () => ({dataset: {id}})}});
+check(!rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), `a request that finished well shows no detail until it is clicked (${okId})`);
+tapRow(okId);
+check(rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), "a click on a finished request opens its times");
+tapRow(okId);
+check(!rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), "a second click closes them");
+tapRow(okId);  // (left open: the next run's reset closes it)
+a.el("reqs").onclick({target: {closest: () => null}});  // (a click outside a finished row does nothing)
+vm.runInContext(`handlers.request_finished({request_id: "req-x", finish_reason: "error", prompt_tokens: 10, cached_tokens: 10, completion_tokens: 0,
+  queue_ms: 1, prefill_ms: 0, decode_ms: 0, tokens_per_second: 0, prefill_tokens_per_second: 0, error: "<b>bold</b> & <img src=x onerror=alert(1)>"}); draw()`, a.ctx);
+check(rows().includes("&lt;b&gt;bold&lt;/b&gt;") && !rows().includes("<b>bold") && !rows().includes("<img") && rows().includes("prompt read from the cache"),
+      "an error text is escaped, and a prompt served from the cache says so");
+console.log("finished-request detail ok");
+
 // 2. the page's Switch: a model the server lacks is said so and nothing changes; one it has reads switching, then ready
 // with it, and Switch waits meanwhile; each with this run's key, its run_id and a JSON body
 await until(() => a.view().state === "ready" && !a.el("swgo").disabled, 10000, "Switch is ready");
@@ -235,6 +257,7 @@ const fresh = await until(async () => {
 }, 0, "the next run's reset replaces the view");
 check(fresh && fresh.cancelled === 0 && fresh.rates <= 3,
       `the old run's finished requests and rates are cleared (${fresh && fresh.cancelled} cancelled, ${fresh && fresh.rates} points)`);
+check(vm.runInContext("S.open.size", a.ctx) === 0, "a row left open in the old run is closed in the next (its ids come back)");
 await until(() => a.view().link === "live", 10000, "the next run is live");
 console.log("stop and new run ok");
 

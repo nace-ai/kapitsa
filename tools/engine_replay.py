@@ -218,7 +218,7 @@ class Run(Bus):
     def busy(self):
         return sum(s["busy"] for s in self.slots) or 1
 
-    def finish(self, r, reason="stop"):
+    def finish(self, r, reason="stop", error=None):
         slot = self.slots[r["_slot"]]
         slot.update(busy=False)
         slot.pop("request_id", None)
@@ -226,10 +226,11 @@ class Run(Bus):
         prefill_ms = max(1, r["_prefill_ms"])
         self.publish("request_finished", {
             "request_id": r["request_id"], "finish_reason": reason, "prompt_tokens": r["prompt_tokens"],
-            "cached_tokens": r["cached_tokens"], "completion_tokens": r["completion_tokens"], "queue_ms": 0,
-            "prefill_ms": prefill_ms, "decode_ms": decode_ms,
+            "cached_tokens": r["cached_tokens"], "completion_tokens": r["completion_tokens"],
+            "queue_ms": 35 * int(r["request_id"][4:]), "prefill_ms": prefill_ms, "decode_ms": decode_ms,
             "tokens_per_second": round(r["completion_tokens"] * 1000 / decode_ms, 1),
-            "prefill_tokens_per_second": round(r["prefilled_tokens"] * 1000 / prefill_ms, 1)})
+            "prefill_tokens_per_second": round(r["prefilled_tokens"] * 1000 / prefill_ms, 1),
+            **({"error": error} if error else {})})
         del self.requests[r["request_id"]]
 
     def tick(self):
@@ -246,7 +247,9 @@ class Run(Bus):
                 self.arrive()
                 self.next_arrival = self.t + self.rng.uniform(3, 11)
             for r in list(self.requests.values()):
-                if self.step_request(r, dt):
+                if r["request_id"] == "req-4" and r["completion_tokens"] >= 40:  # (made up: one request fails)
+                    self.finish(r, "error", "a made-up error: the prompt and 4,096 tokens do not fit in the 128K context")
+                elif self.step_request(r, dt):
                     self.finish(r)
             for r in self.requests.values():
                 self.publish("request_progress", {k: v for k, v in r.items() if not k.startswith("_")})

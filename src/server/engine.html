@@ -48,6 +48,8 @@ th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:4px
 td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 td.n,th.n{text-align:right}
 tr.done td{color:var(--muted)}
+tr.fin{cursor:pointer}tr.fin:hover td{background:var(--soft)}
+tr.detail td{padding-top:0;font-size:12.5px;color:var(--muted)}tr.detail .err{color:var(--err);white-space:pre-wrap;word-break:break-word}
 .phase{font-size:12px;padding:1px 7px;border-radius:5px;background:var(--soft)}
 .phase.writing{color:var(--ok)}.phase.prefill{color:var(--warn)}
 .prog{display:inline-block;width:90px;height:5px;border-radius:3px;background:var(--free);vertical-align:middle;overflow:hidden;margin-right:6px}
@@ -147,7 +149,7 @@ applyTheme();
 // read; the page keeps it for this tab only and takes it out of the address bar.
 const $ = id => document.getElementById(id);
 const S = {status: null, reqs: new Map(), done: [], logs: [], rates: [], drafts: [], tpc: null, share: null,
-           link: "connecting", noEngineAt: 0, replay: 0, warnOnly: store.get("kapitsa.engine.logs") === "warn"};
+           link: "connecting", noEngineAt: 0, replay: 0, warnOnly: store.get("kapitsa.engine.logs") === "warn", open: new Set()};
 const GB = 1e9, RATE_MS = 60000, DRAFT_MS = 10000;
 const fmtB = b => b >= 10 * GB ? (b / GB).toFixed(1) + " GB" : b >= GB ? (b / GB).toFixed(2) + " GB" : (b / 1e6).toFixed(0) + " MB";
 const fmtN = n => Number(n).toLocaleString("en-US");
@@ -168,7 +170,7 @@ const key = (() => {
 const auth = () => key ? {Authorization: "Bearer " + key} : {};
 
 function apply(status, why) {  // a full status: at connect, or from a reset
-  if (why === "run_changed" || (S.status && S.status.run_id !== status.run_id)) { S.done = []; S.rates = []; }
+  if (why === "run_changed" || (S.status && S.status.run_id !== status.run_id)) { S.done = []; S.rates = []; S.open.clear(); }
   S.status = status;
   S.reqs = new Map(status.requests.map(r => [r.request_id, r]));
   S.drafts = []; S.tpc = S.share = null;
@@ -390,10 +392,16 @@ function draw() {
     const read = done ? "done" : r.phase === "prefill" ? `<span class="prog"><b style="width:${100 * r.prefilled_tokens / need}%"></b></span>${fmtN(r.prefilled_tokens)}/${fmtN(need)}`
       : r.phase === "waiting" ? "queued" : fmtN(need);
     const phase = esc(done ? r.finish_reason : r.phase);
-    return `<tr class="${done ? "done" : ""}"><td class="mono">${esc(r.request_id)}</td><td>${esc(r.client || r.api || "")}</td>
+    return `<tr class="${done ? "done fin" : ""}" data-id="${esc(r.request_id)}"${done ? ` title="Click for the times and the error"` : ""}><td class="mono">${esc(r.request_id)}</td><td>${esc(r.client || r.api || "")}</td>
       <td><span class="phase ${esc(phase)}">${esc(phase)}</span></td><td class="n">${fmtN(r.prompt_tokens)}</td><td class="n">${fmtN(r.cached_tokens)}</td>
       <td class="n">${read}</td><td class="n">${fmtN(r.completion_tokens)}</td><td class="n">${r.tokens_per_second ? r.tokens_per_second.toFixed(1) : "—"}</td>
-      <td class="n">${fmtMs(r.elapsed_ms || 0)}</td></tr>`;
+      <td class="n">${fmtMs(r.elapsed_ms || 0)}</td></tr>${done && (S.open.has(r.request_id) || r.error) ? detail(r) : ""}`;
+  };
+  // A finished request's own numbers (request_finished): the waits, the prompt's rate, and what went wrong
+  const detail = r => {
+    const uncached = Math.max(r.prompt_tokens - r.cached_tokens, 0);
+    const read = !uncached ? "prompt read from the cache" : r.prefill_ms ? `read ${fmtN(uncached)} tokens in ${fmtMs(r.prefill_ms)}${r.prefill_tokens_per_second ? " (" + fmtN(Math.round(r.prefill_tokens_per_second)) + " tok/s)" : ""}` : `read ${fmtN(uncached)} tokens`;
+    return `<tr class="detail"><td></td><td colspan="8">waited ${fmtMs(r.queue_ms || 0)} · ${read} · wrote in ${fmtMs(r.decode_ms || 0)}${r.error ? `<div class="err">${esc(r.error)}</div>` : ""}</td></tr>`;
   };
   $("reqs").innerHTML = active.map(r => row(r, false)).join("") + S.done.map(r => row(r, true)).join("") ||
     `<tr><td colspan="9" class="empty">No requests running</td></tr>`;
@@ -478,6 +486,13 @@ $("sw").onsubmit = async ev => {
 };
 
 $("logf").onclick = () => { S.warnOnly = !S.warnOnly; store.set("kapitsa.engine.logs", S.warnOnly ? "warn" : "all"); draw(); };
+$("reqs").onclick = ev => {  // a finished request's row opens and closes its detail
+  const tr = ev.target && ev.target.closest && ev.target.closest("tr.fin");
+  if (!tr) return;
+  const id = tr.dataset.id;
+  if (S.open.has(id)) S.open.delete(id); else S.open.add(id);
+  draw();
+};
 connect();
 draw();
 setInterval(draw, 500);
