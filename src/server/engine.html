@@ -256,7 +256,10 @@ async function connect() {
     if (last) {
       const on = (type, id, data) => {
         if (S.replay && type === "reset") { apply(data.status, data.reason); S.replay = 0; last = data.status.last_event_id; return; }  // (the bus kept too little: the status is all there is)
-        if (S.replay && id && seq(id) <= S.replay) { if (type === "log") log(data, true); last = id; return; }
+        if (S.replay && id && seq(id) <= S.replay) {  // (a state event's message, a failed switch's text, is a warning as it is live)
+          if (type === "log") log(data, true); else if (type === "state" && data.message) log({level: "warn", message: data.message}, true);
+          last = id; return;
+        }
         S.replay = 0;
         handlers[type](data);
         last = type === "reset" ? data.status.last_event_id : id || last;

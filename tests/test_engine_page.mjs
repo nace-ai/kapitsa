@@ -118,6 +118,8 @@ await until(() => late.view().link === "live" && late.view().run, 10000, "a late
 const logs = () => vm.runInContext("S.logs.map(l => ({t: l.t, level: l.level, message: l.message}))", late.ctx);
 await until(() => logs().some(l => /^loading qwen/.test(l.message)), 10000, "the late page has the loading lines the server logged before it opened");
 const bk = logs(), firstLive = bk.findIndex(l => l.t !== "earlier"), lastEarlier = bk.map(l => l.t).lastIndexOf("earlier");
+check(bk.some(l => l.level === "warn" && l.t === "earlier" && /a made-up state message/.test(l.message)),
+      `a replayed state event's message is a warning, as it is live (${JSON.stringify(bk.slice(0, 3))})`);
 check(bk.filter(l => l.t === "earlier").length >= 4 && bk.some(l => l.level === "warn" && l.t === "earlier") &&
       bk.some(l => l.level === "debug" && l.t === "earlier") && (firstLive < 0 || lastEarlier < firstLive),
       `the replayed lines come first, flagged earlier, each level kept (${JSON.stringify(bk.slice(0, 4))})`);
@@ -128,6 +130,7 @@ late.drawNow();
 check(/loading qwen/.test(late.el("logs").innerHTML) && /earlier/.test(late.el("logs").innerHTML), "the replayed lines are drawn");
 late.tap("logf");
 late.drawNow();
+check(late.el("logs").innerHTML.includes("a made-up state message"), "the filter keeps a replayed state message");
 check(late.el("logs").innerHTML.includes("a made-up warning") && late.el("logs").innerHTML.includes("a made-up error") &&
       !late.el("logs").innerHTML.includes("loading qwen") &&
       /^\d+ of \d+ lines$/.test(late.el("lognote").textContent) && late.el("logf").textContent === "Warnings and errors",
