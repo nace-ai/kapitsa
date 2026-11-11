@@ -57,6 +57,11 @@ svg{display:block;width:100%;height:96px}
 #logs .t{color:var(--muted)}#logs .warn{color:var(--warn)}#logs .error{color:var(--err)}
 .empty{color:var(--muted);font-size:13px;padding:6px 0;grid-column:1/-1}
 .bar:empty{display:none}
+.cache{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);display:grid;gap:8px}.cache:empty{display:none}
+.cache .ch{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.cache .cr{display:grid;grid-template-columns:92px 1fr;gap:2px 10px;align-items:baseline}
+.cache .cr b{font-weight:600}.cache .cr .sub{grid-column:2}.cache .cr .fill{grid-column:2;height:5px;border-radius:3px;background:var(--free);overflow:hidden}
+.cache .cr .fill b{display:block;height:100%;background:var(--kv)}
 #msg{font-size:12.5px;color:var(--err)}
 #theme{min-width:64px;flex:none}.end{display:flex;align-items:center;gap:10px;flex:1 1 auto;justify-content:flex-end;text-align:right}
 #sw{display:flex;gap:6px;flex:0 1 auto;min-width:0}#sw input{font:inherit;font-size:13px;padding:5px 9px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:220px;min-width:90px}
@@ -100,6 +105,7 @@ applyTheme();
     <div class="row"><div class="big num" id="memused">—</div></div>
     <div class="bar" id="membar"></div>
     <div class="legend" id="memlegend"></div>
+    <div class="cache" id="cache"></div>
   </section>
   <section class="c4"><h2>Writing speed <span id="ratenote">tokens/s, all requests</span></h2>
     <div class="big num" id="rate">—</div>
@@ -273,6 +279,22 @@ function refused(e) {
 
 // ---------------------------------------------------------------- drawing, every half second
 
+// The Memory card's prefix caches (status.engine.cache). The RAM one's bytes are part of the memory above; the SSD one is
+// absent from an engine that has none (off, a model without it): it shows "off", not zeros. A server that sends no
+// cache block at all (an older one) shows nothing.
+function cacheHtml(c) {
+  if (!c) return "";
+  const hits = (n, t) => n > 0 ? `${plural(n, "hit")}, ${fmtN(t)} tokens not read again` : "no hits yet";
+  const r = c.ram, d = c.ssd;
+  let h = `<div class="ch">Prefix cache</div><div class="cr"><span class="meta">In memory</span><span><b>${plural(r.entries, "conversation")}</b>
+    · ${fmtB(r.bytes)} <span class="meta">(of the memory above)</span></span><span class="meta num sub">${hits(r.hits, r.hit_tokens)}</span></div>`;
+  h += d ? `<div class="cr"><span class="meta">On the SSD</span><span><b>${plural(d.entries, "conversation")}</b> · ${fmtB(d.bytes)}
+    <span class="meta">of ${fmtB(d.limit_bytes)} it may hold</span></span><span class="fill"><b style="width:${d.limit_bytes ? Math.min(100, 100 * d.bytes / d.limit_bytes) : 0}%"></b></span>
+    <span class="meta num sub">${hits(d.hits, d.hit_tokens)} · ${fmtB(d.read_bytes)} read, ${fmtB(d.written_bytes)} written</span></div>`
+    : `<div class="cr"><span class="meta">On the SSD</span><span class="meta">off for this model or setting</span></div>`;
+  return h;
+}
+
 function draw() {
   const st = S.status;
   const pill = $("state");
@@ -298,6 +320,7 @@ function draw() {
     $("memlegend").innerHTML = parts.map(([n, b, c]) => `<span><i style="background:var(${c})"></i>${n} ${fmtB(b)}</span>`).join("") +
       `<span><i style="background:var(--free)"></i>Free ${fmtB(Math.max(0, m.budget_bytes - m.allocated_bytes))}</span>`;
     $("memnote").textContent = `${Math.round(100 * m.allocated_bytes / m.budget_bytes)}% used`;
+    $("cache").innerHTML = cacheHtml(e.cache);
     const ctx = st.model ? st.model.context_length : 1;
     $("slots").innerHTML = e.slots.map(s => `<div class="slot ${s.busy ? "busy" : ""}"><div><b>Slot ${Number(s.index)}</b>
       <span class="meta">${s.busy ? esc(s.request_id) : "idle"}</span></div><div class="meta num">${fmtN(s.tokens)} tokens</div>
@@ -319,7 +342,7 @@ function draw() {
     $("memused").innerHTML = `— <small>${esc(why)}</small>`;
     $("slots").innerHTML = `<div class="empty">${esc(why)}</div>`;
     $("tpc").textContent = "—"; $("draftnote").textContent = why; $("drafttot").textContent = "";
-    $("memnote").textContent = $("slotnote").textContent = "";
+    $("memnote").textContent = $("slotnote").textContent = $("cache").innerHTML = "";
   }
 
   const active = live ? [...S.reqs.values()] : [];

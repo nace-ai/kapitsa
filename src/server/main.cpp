@@ -1476,7 +1476,9 @@ int ni::server::run_service(Options o) {
     const auto eng = m->peek_engine();
     if (!eng || eng->splash_mode()) return false;
     const Engine::View v = eng->view();
-    out = {eng.get(), v.budget, v.allocated, v.weights, v.kv, v.slot_tokens, v.drafts};
+    out = {eng.get(), v.budget, v.allocated, v.weights, v.kv, v.slot_tokens, v.drafts, v.ram.entries, v.ram.bytes,
+           v.ram.hits, v.ram.hit_tokens, v.ssd.on, v.ssd.entries, v.ssd.bytes, v.ssd.limit, v.ssd.read_bytes,
+           v.ssd.written_bytes, v.ssd.hits, v.ssd.hit_tokens};
     return true;
   });
   server::publish_state("loading", nullptr);

@@ -123,6 +123,9 @@ class Run(Bus):
         self.model_id, self.state = self.target, "ready"
         self.slots = [{"index": i, "busy": False, "tokens": 0} for i in range(MODELS[self.model_id][1])]
         self.drafts = {"cycles": 0, "tokens": 0}  # counted since the model loaded
+        self.slots_seen = set()  # requests since the load: the stand-in's SSD entries grow with them
+        self.cache = {"ram_hits": 0, "ram_hit_tokens": 0, "ssd_hits": 0, "ssd_hit_tokens": 0, "ssd_read": 0,
+                      "ssd_written": 0}  # counted since the model loaded
         self.publish("state", {"state": "ready", "model": self.model()})
         self.publish("log", {"level": "info", "message": f"{self.model_id} ready: {self.model()['context_length']} "
                                                         f"tokens of context, {len(self.slots)} slots"})
@@ -132,7 +135,18 @@ class Run(Bus):
         kv = sum(min(kv_slot, kv_slot * max(s["tokens"], 4096) // ctx * 4) for s in self.slots)
         return {"memory": {"budget_bytes": 40 * GB, "allocated_bytes": weights + kv + 1_350_000_000,
                            "weights_bytes": weights, "kv_bytes": kv},
-                "slots": [dict(s) for s in self.slots], "drafts": dict(self.drafts)}
+                "slots": [dict(s) for s in self.slots], "cache": self.cache_block(kv_slot, ctx),
+                "drafts": dict(self.drafts)}
+
+    def cache_block(self, kv_slot, ctx):
+        c = self.cache
+        kept = [s for s in self.slots if s["tokens"] > 0]
+        ssd_bytes = 3 * GB + 600_000_000 * len(self.slots_seen)
+        return {"ram": {"entries": len(kept), "bytes": sum(kv_slot * s["tokens"] // ctx + 90_000_000 for s in kept),
+                        "hits": c["ram_hits"], "hit_tokens": c["ram_hit_tokens"]},
+                "ssd": {"entries": 3 + len(self.slots_seen), "bytes": ssd_bytes, "limit_bytes": 32 * GB,
+                        "read_bytes": c["ssd_read"], "written_bytes": c["ssd_written"] + ssd_bytes,
+                        "hits": c["ssd_hits"], "hit_tokens": c["ssd_hit_tokens"]}}
 
     def arrive(self):
         free = [s for s in self.slots if not s["busy"]]
@@ -145,6 +159,13 @@ class Run(Bus):
         cached = self.rng.choice([0, 0, 8192, 16384, 24576])
         prompt = cached + self.rng.randint(300, 9000)
         slot.update(busy=True, request_id=rid, tokens=cached)
+        if cached:  # (one in three comes back from the SSD)
+            ssd = self.next_req % 3 == 0
+            self.cache["ssd_hits" if ssd else "ram_hits"] += 1
+            self.cache["ssd_hit_tokens" if ssd else "ram_hit_tokens"] += cached
+            if ssd:
+                self.cache["ssd_read"] += cached * 24_000
+        self.slots_seen.add(rid)
         self.requests[rid] = {"request_id": rid, "api": api, "client": client, "phase": "prefill",
                               "prompt_tokens": prompt, "cached_tokens": cached, "prefilled_tokens": 0,
                               "completion_tokens": 0, "elapsed_ms": 0, "tokens_per_second": 0.0,

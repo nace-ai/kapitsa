@@ -324,6 +324,15 @@ struct Engine::Disk {
 
 void Engine::DiskFree::operator()(Disk* d) const { delete d; }
 
+// View::ssd: from any thread, without the turn (the store's own mutex covers its counters). Absent until the cache's
+// files are open, and for a model or option that has none
+void Engine::disk_view(View& v) const {
+  if (!disk_ || !disk_->ready.load(std::memory_order_acquire)) return;
+  const pcache::Store::Stats st = disk_->store.stats();
+  v.ssd = {true, st.entries, st.held, st.limit, st.read, st.written, ssd_hits_.load(std::memory_order_relaxed),
+           ssd_hit_tokens_.load(std::memory_order_relaxed)};
+}
+
 int Engine::reuse_start(const Slot& slot, size_t common, int n) {
   if (common == slot.tokens.size() && int(common) < n) return int(common);
   int best = 0;

@@ -53,6 +53,12 @@ class Activity {
     size_t budget = 0, allocated = 0, weights = 0, kv = 0;
     std::vector<int> slot_tokens;
     bool drafts = false;
+    // the prefix caches (Engine::View): the RAM one's entries, bytes, hits and the positions the hits did not read
+    // again; the SSD one's the same and its size, limit and traffic, `ssd` false when there is none
+    uint64_t ram_entries = 0, ram_bytes = 0, ram_hits = 0, ram_hit_tokens = 0;
+    bool ssd = false;
+    uint64_t ssd_entries = 0, ssd_bytes = 0, ssd_limit = 0, ssd_read_bytes = 0, ssd_written_bytes = 0, ssd_hits = 0,
+             ssd_hit_tokens = 0;
   };
   // Asked every tick: true with `out` filled while an engine is there to show (the server: state ready, a native
   // engine), false otherwise. Each true tick publishes an engine event and is what engine() returns.
