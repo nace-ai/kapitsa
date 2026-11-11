@@ -137,7 +137,7 @@ applyTheme();
   <section class="c12"><h2>Requests <span id="reqnote"></span></h2>
     <table><thead><tr><th>Request</th><th>Client</th><th>Phase</th><th class="n">Prompt</th><th class="n">Cached</th>
       <th class="n">Read</th><th class="n">Written</th><th class="n">tok/s</th><th class="n">Time</th></tr></thead>
-      <tbody id="reqs"></tbody></table>
+      <tbody id="reqs"></tbody><tbody id="done"></tbody></table>
   </section>
   <section class="c12"><h2>Log <button id="logf" class="mini" title="Show every line, or only warnings and errors"></button> <span id="lognote"></span></h2><pre id="logs" class="mono"></pre></section>
 </main>
@@ -149,7 +149,7 @@ applyTheme();
 // read; the page keeps it for this tab only and takes it out of the address bar.
 const $ = id => document.getElementById(id);
 const S = {status: null, reqs: new Map(), done: [], logs: [], rates: [], drafts: [], tpc: null, share: null,
-           link: "connecting", noEngineAt: 0, replay: 0, warnOnly: store.get("kapitsa.engine.logs") === "warn", open: new Set()};
+           link: "connecting", noEngineAt: 0, replay: 0, warnOnly: store.get("kapitsa.engine.logs") === "warn", open: new Set(), doneHtml: ""};
 const GB = 1e9, RATE_MS = 60000, DRAFT_MS = 10000;
 const fmtB = b => b >= 10 * GB ? (b / GB).toFixed(1) + " GB" : b >= GB ? (b / GB).toFixed(2) + " GB" : (b / 1e6).toFixed(0) + " MB";
 const fmtN = n => Number(n).toLocaleString("en-US");
@@ -403,8 +403,12 @@ function draw() {
     const read = !uncached ? "prompt read from the cache" : r.prefill_ms ? `read ${fmtN(uncached)} tokens in ${fmtMs(r.prefill_ms)}${r.prefill_tokens_per_second ? " (" + fmtN(Math.round(r.prefill_tokens_per_second)) + " tok/s)" : ""}` : `read ${fmtN(uncached)} tokens`;
     return `<tr class="detail"><td></td><td colspan="8">waited ${fmtMs(r.queue_ms || 0)} · ${read} · wrote in ${fmtMs(r.decode_ms || 0)}${r.error ? `<div class="err">${esc(r.error)}</div>` : ""}</td></tr>`;
   };
-  $("reqs").innerHTML = active.map(r => row(r, false)).join("") + S.done.map(r => row(r, true)).join("") ||
-    `<tr><td colspan="9" class="empty">No requests running</td></tr>`;
+  $("reqs").innerHTML = active.map(r => row(r, false)).join("") || (S.done.length ? "" :
+    `<tr><td colspan="9" class="empty">No requests running</td></tr>`);
+  // The finished rows have their own body, written only when they change: a redraw every 500 ms would drop a click
+  // between press and release and clear a selection of the error text
+  const finished = S.done.map(r => row(r, true)).join("");
+  if (finished !== S.doneHtml) $("done").innerHTML = S.doneHtml = finished;
   $("reqnote").textContent = `${active.length} running` + (S.done.length ? ` · last ${S.done.length} finished` : "");
 
   const box = $("logs"), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
@@ -486,7 +490,7 @@ $("sw").onsubmit = async ev => {
 };
 
 $("logf").onclick = () => { S.warnOnly = !S.warnOnly; store.set("kapitsa.engine.logs", S.warnOnly ? "warn" : "all"); draw(); };
-$("reqs").onclick = ev => {  // a finished request's row opens and closes its detail
+$("done").onclick = ev => {  // a finished request's row opens and closes its detail
   const tr = ev.target && ev.target.closest && ev.target.closest("tr.fin");
   if (!tr) return;
   const id = tr.dataset.id;

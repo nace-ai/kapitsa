@@ -161,22 +161,32 @@ console.log("thin bus ok");
 // closes on the next; the text is escaped
 await until(() => a.view().done.includes("req-4"), 40000, "the stand-in's failing request (req-4) finishes");
 a.drawNow();
-const rows = () => a.el("reqs").innerHTML;
+const rows = () => a.el("reqs").innerHTML + a.el("done").innerHTML;
 check(rows().includes("a made-up error: the prompt and 4,096 tokens do not fit") && rows().includes("waited 140 ms") &&
       /read [\d,]+ tokens in [\d.]+ (ms|s)/.test(rows()) && /wrote in/.test(rows()),
       "a failed request shows its error text and its waited, read and wrote times without a click");
-const okId = vm.runInContext("S.done.find(d => !d.error).request_id", a.ctx), tapRow = id => a.el("reqs").onclick({target: {closest: () => ({dataset: {id}})}});
+const okId = vm.runInContext("S.done.find(d => !d.error).request_id", a.ctx), tapRow = id => a.el("done").onclick({target: {closest: () => ({dataset: {id}})}});
 check(!rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), `a request that finished well shows no detail until it is clicked (${okId})`);
 tapRow(okId);
 check(rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), "a click on a finished request opens its times");
 tapRow(okId);
 check(!rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), "a second click closes them");
 tapRow(okId);  // (left open: the next run's reset closes it)
-a.el("reqs").onclick({target: {closest: () => null}});  // (a click outside a finished row does nothing)
+a.el("done").onclick({target: {closest: () => null}});  // (a click outside a finished row does nothing)
 vm.runInContext(`handlers.request_finished({request_id: "req-x", finish_reason: "error", prompt_tokens: 10, cached_tokens: 10, completion_tokens: 0,
   queue_ms: 1, prefill_ms: 0, decode_ms: 0, tokens_per_second: 0, prefill_tokens_per_second: 0, error: "<b>bold</b> & <img src=x onerror=alert(1)>"}); draw()`, a.ctx);
 check(rows().includes("&lt;b&gt;bold&lt;/b&gt;") && !rows().includes("<b>bold") && !rows().includes("<img") && rows().includes("prompt read from the cache"),
       "an error text is escaped, and a prompt served from the cache says so");
+// the finished rows are written only when they change: a redraw every 500 ms would lose a click between press and
+// release and clear a selection of the error text
+a.drawNow();
+let writes = 0, body = a.el("done").innerHTML;
+Object.defineProperty(a.el("done"), "innerHTML", {get: () => body, set: v => { writes++; body = v; }});
+a.drawNow(); a.drawNow();
+check(writes === 0, `a redraw with no new finished request leaves the finished rows alone (${writes} writes)`);
+tapRow(okId);
+check(writes === 1 && !rows().includes(`waited ${35 * Number(okId.slice(4))} ms`), "closing a row writes them once");
+tapRow(okId);  // (left open again: the next run's reset closes it)
 console.log("finished-request detail ok");
 
 // 2. the page's Switch: a model the server lacks is said so and nothing changes; one it has reads switching, then ready
