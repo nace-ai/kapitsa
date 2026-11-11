@@ -4,7 +4,7 @@
   <img alt="Kapitsa writes 351 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
-**KQuant.** The Qwen3.5 [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX-4bit-KQuant) and [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant) and the Qwen3.6 [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant) downloads are closer to the original model than the packs they replace, at the same size, and write faster on an M5 Pro ([numbers](#kquant)).
+**KQuant.** The Qwen3.5 [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX-Q4-KQuant) and [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant) and the Qwen3.6 [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant) downloads are closer to the original model than the packs they replace, at the same size, and write faster on an M5 Pro ([numbers](#kquant)).
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex, Pi, Hermes, aider or Goose on a local model, and serves OpenAI and Anthropic APIs.
 
