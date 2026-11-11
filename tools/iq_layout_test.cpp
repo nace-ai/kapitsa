@@ -58,6 +58,33 @@ void check(bool ok, const char* what, const std::string& detail = "") {
   }
 }
 
+void test_float_comparison() {
+  fenv_t saved;
+  if (fegetenv(&saved) != 0) {
+    check(false, "float comparison: save exception flags");
+    return;
+  }
+  const uint32_t a[] = {0x7fc00000, 0xff800001, 0x00000000, 0x80000000,
+                        0x7f800000, 0xff800000, 0x00000001, 0x3f800000};
+  const uint32_t b[] = {0xffc00000, 0x7fffffff, 0x00000000, 0x80000000,
+                        0x7f800000, 0xff800000, 0x00000001, 0x3f800000};
+  feclearexcept(FE_ALL_EXCEPT);
+  feraiseexcept(FE_DIVBYZERO);
+  const int flags = fetestexcept(FE_ALL_EXCEPT);
+  check(gguf_test::same_f32_or_nan(a, b, 8), "float comparison: NaN signs and payloads may differ");
+  const uint32_t different[] = {0x7f800000, 0x3f800000, 0x80000000, 0x00000000,
+                                0xff800000, 0x7f800000, 0x00000002, 0x3f800001};
+  for (size_t i = 0; i < 8; ++i) {
+    uint32_t changed[8];
+    memcpy(changed, b, sizeof(b));
+    changed[i] = different[i];
+    check(!gguf_test::same_f32_or_nan(a, changed, 8) && !gguf_test::same_f32_or_nan(changed, a, 8),
+          "float comparison: reject NaN/non-NaN, signed zero, infinity and finite mismatches");
+  }
+  check(fetestexcept(FE_ALL_EXCEPT) == flags, "float comparison: preserve exception flags");
+  check(fesetenv(&saved) == 0, "float comparison: restore exception flags");
+}
+
 // a `constant <type> name[n] = { ... };` table of the Metal source
 std::vector<uint64_t> metal_table(const char* decl, size_t n) {
   const std::string src = ni::kKernelSource;
@@ -370,6 +397,7 @@ void test_iq4_nl_pages() {
 }  // namespace
 
 int main() {
+  test_float_comparison();
   if (q3_k_test::run()) return 1;
   if (q4_k_test::run()) return 1;
   if (iq3_s_test::run()) return 1;
