@@ -5,7 +5,7 @@
 <rect width="1200" height="1100" fill="white"/>
 <text x="36" y="41" font-size="28" font-weight="bold">KQuant vs public Q4-class packs</text>
 <text x="36" y="73" font-size="16">Lower KL is closer to BF16. Points = means; lines = whole-window bootstrap 95% CIs.</text>
-<text x="36" y="98" class="small">GGUF: public wins at our size. MLX: KQuant wins at equal LM size, not against larger mixed-bit packs.</text>
+<text x="36" y="98" class="small">GGUF: smaller unsloth Q4_K_M wins; UD/bartowski win at larger sizes. MLX: KQuant wins at equal LM size, not larger mixes.</text>
 <text x="36" y="145" class="heading">Qwen3.5 9B GGUF | original text</text>
 <path d="M279.0 163 V335" class="grid"/><text x="279.0" y="355" text-anchor="middle" class="small">0.000</text>
 <path d="M353.25 163 V335" class="grid"/><text x="353.25" y="355" text-anchor="middle" class="small">0.015</text>

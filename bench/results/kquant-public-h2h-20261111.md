@@ -58,7 +58,7 @@ KL is KL(reference || candidate), in nats per scored token. Lower is closer. Sam
 
 ### Paired KL differences
 
-Difference = public file minus KQuant, on the same positions. Negative favors the public file. These are paired intervals, not a comparison of overlapping marginal CIs.
+Difference = public file minus KQuant, on the same positions. Negative favors the public file. These are paired intervals, not a comparison of overlapping marginal CIs. Only unsloth Q4_K_M is smaller than KQuant, by 1.7% on 9B and 1.5% on 4B. UD-Q4_K_XL and bartowski Q4_K_M have lower KL at larger sizes: respectively 3.2% and 6.7% larger on 9B, 4.6% and 8.3% on 4B.
 
 | Comparison | Original text, difference [95% CI] | Chat/tool, difference [95% CI] |
 |---|---:|---:|
@@ -128,6 +128,8 @@ The two mlx-community standard packs have identical metric arrays, and AtomicCha
 - **Accuracy:** zero-shot GSM8K-100, final-number match with absolute tolerance below 1e-6. Full per-item IDs, gold answers, predictions and correctness are in the JSON. Prompt formatting and generation code are fixed within each engine, not across engines.
 
 ## Limits
+
+Qwen3.5 27B and Qwen3.6 35B-A3B were not measured. Candidates ran on L40S GPUs and the chat BF16 reference was prepared on an H100. The original-text BF16 reference was reused from #436; its GPU identity was not recorded here. Shared references largely cancel in paired differences, but absolute KL includes any cross-GPU numerical differences. No cross-GPU BF16 floor was measured.
 
 No Mac speed, memory-residency or Kapitsa-output test ran. The tool corpus measures next-token closeness, not tool-execution success. GSM8K supplies the independent task-accuracy check, not a tool-calling score. There is no BF16 GSM8K accuracy row in this run. The public label Q4_K_M does not fix tensor mixes, auxiliary tensors or total bytes, so the size column is part of the comparison.
 
