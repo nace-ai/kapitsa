@@ -930,7 +930,7 @@ void Qwen4Exp::init_store(const std::string& dir) {
     if (sa.waited_ms)
       logi("expert store: the system's available memory %.1f GB at first, %.1f GB after %.2f s", double(sa.first) / 1e9,
            double(sa.avail) / 1e9, sa.waited_ms / 1e3);
-    in.cap = q20::auto_store_cap(q20::auto_store_unconstrained(in.ram, matrix_units(), Gpu::get().core_count()));
+    in.cap = q20::auto_store_cap(unconstrained_store(in.ram));
     // The layer-major groups' store-world choice (q20::group_world - the one function every side asks;
     // ni::planned_group_world predicts it before a load): the store is sized WITHOUT the slot bytes first -
     // alloc4_group has not allocated them, so `used` above does not carry them - and only a store that stays

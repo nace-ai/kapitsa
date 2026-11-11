@@ -279,11 +279,6 @@ inline std::string auto_store_short(const AutoStore& st, const AutoStoreIn& in) 
   }
   return b;
 }
-// Whether the store's RAM-share cap is unconstrained: matrix units (M5), or Macs with >= 120 GB RAM or >= 60 GPU cores.
-inline bool auto_store_unconstrained(size_t ram, bool matrix, int core_count) {
-  return matrix || core_count >= 60 || ram >= (120ULL << 30);
-}
-
 // The RAM-share cap of a store short of all the experts: 40% of the RAM before Apple10 (M5) and non-Ultra chips,
 // none on unconstrained devices; NI_EXPERT_CAP=<share of the RAM, 0..1> sets it on any chip (0 = none; anything else is logged and ignored)
 double auto_store_cap(bool unconstrained);

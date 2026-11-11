@@ -76,7 +76,7 @@ const DefaultRow kDefaults[] = {
     // Capability classes the call sites still read. Not a name gate: the predicate is the class. The site count is
     // calls outside this module; tests/test_profile_gates.py checks the where string against that count.
     {"matrix_units", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "class", 0, 0, false,
-     "46 sites; capability class: apple_family >= 10, the matrix half of ChipClass", false},
+     "44 sites; capability class: apple_family >= 10, the matrix half of ChipClass", false},
     {"legacy_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kLegacy, nullptr, "class", 0, 0, false,
      "11 sites; capability class: apple_family <= 7, the M1 path", false},
     {"wide_cores", Knob::kNone, ModelClass::kOther, DefaultScope::kWide, nullptr, "class", 0, 0, false,
@@ -92,6 +92,8 @@ const DefaultRow kDefaults[] = {
      "1 site; correctness guard: two dies; fused merges failed past a 32-key tile on the old arrival (#421); the new arrival's fused merges are unverified on an Ultra", false},
     {"pre_m3_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
      "1 site; correctness guard: apple_family under 9; fused merges produced garbage on an M1 Max on 0.2.15, old arrival (#478); the new arrival is unverified on M1 and M2", false},
+    {"unconstrained_store", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, false,
+     "2 sites; memory guard: matrix units, 60+ cores, or >= 120 GB RAM; 180B 4-bit resident without swap on 128 GB M1 Ultra", false},
     // Fast profile only (docs/profiles.md): Flash-Next's sparse prefill attention on the matrix units, Q and P as hi + lo
     // halves (#818). Matrix class, not the name: the kernel needs matrix units and nothing was measured slower on them.
     // M5 Pro, 32K and 64K prompts at 2048-row chunks: prefill +8 to +10%, decode the same per draft cycle; 4 top-1
@@ -110,6 +112,7 @@ bool guard_matches(const char* id, const DeviceProfile& dev) {
   f.cores_measured = dev.cores_measured;
   if (std::strcmp(id, "m1_max_32") == 0) return m1_max_32(f);
   if (std::strcmp(id, "ultra_gpu") == 0) return ultra_gpu(f);
+  if (std::strcmp(id, "unconstrained_store") == 0) return unconstrained_store(f);
   if (std::strcmp(id, "pre_m3_gpu") == 0) return pre_m3_gpu(f);
   return false;
 }
@@ -280,6 +283,10 @@ bool legacy_gpu(const DeviceFacts& f) { return f.apple_family <= 7; }
 bool wide_cores(const DeviceFacts& f) { return f.apple_family >= 10 && f.cores >= 40; }
 
 bool m1_max_32(const DeviceFacts& f) { return f.name == "Apple M1 Max" && f.cores == 32; }
+
+bool unconstrained_store(const DeviceFacts& f) {
+  return f.apple_family >= 10 || f.cores >= 60 || f.ram_bytes >= (120L << 30);
+}
 
 bool ultra_gpu(const DeviceFacts& f) { return f.name.find("Ultra") != std::string::npos; }
 
