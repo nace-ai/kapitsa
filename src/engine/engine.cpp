@@ -29,6 +29,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 
 namespace ni {
 
@@ -2222,9 +2223,12 @@ std::string flint_template(std::string src) {
 // must show the text and nothing of the part's markup. Cached per template.
 static bool string_content_template(const minja::chat_template& tmpl) {
   static std::mutex mu;
-  static std::map<const void*, bool> known;
+  using Key = std::tuple<std::string, std::string, std::string>;
+  static std::map<Key, bool> known;
+  const Key key{tmpl.source(), tmpl.bos_token(), tmpl.eos_token()};
   std::lock_guard<std::mutex> lk(mu);
-  if (auto it = known.find(&tmpl); it != known.end()) return it->second;
+  // A replacement template can occupy the same address after a model is unloaded.
+  if (auto it = known.find(key); it != known.end()) return it->second;
   static const std::string needle = "\x01kapitsa-typed-content\x01";
   bool str_only = false;
   try {
@@ -2239,7 +2243,7 @@ static bool string_content_template(const minja::chat_template& tmpl) {
   } catch (...) {
     str_only = true;  // (a template that cannot render a content array at all)
   }
-  known[&tmpl] = str_only;
+  known[key] = str_only;
   return str_only;
 }
 
