@@ -675,26 +675,40 @@ bool Flint::reserve(Seq& s, int need) {
   if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
   if (!fits(target)) return false;
   const int old = s.cap;
+  const size_t nb = row * size_t(target);
+  std::vector<Buffer> olds;
+  std::unique_ptr<Encoder> e;
+  size_t batch = 0;
+  auto flush = [&] {
+    if (e) e->commit_and_wait();
+    e.reset();
+    for (auto& b : olds) g.release(b);
+    olds.clear();
+    batch = 0;
+  };
+  // Wait for each copy batch, then release its old buffers before allocating the next batch.
   for (int l = 0; l < cfg_.layers; ++l) {
     if (cfg_.kind[size_t(l)] != 'F') continue;
     for (Buffer* b : {&s.kc[size_t(l)], &s.vc[size_t(l)]}) {
-      Buffer nbuf = g.alloc(row * size_t(target), "flint_kv");
+      if (batch && batch + nb > (size_t(256) << 20)) flush();
+      Buffer nbuf = g.alloc(nb, "flint_kv");
       memset(nbuf.ptr(), 0, nbuf.size);  // (as the rings: flint_attn_dec reads past the last position)
       if (old > 0 && *b) {
         const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.hd) / 16);
         const uint32_t p[4] = {uint32_t(old) * n16, uint32_t(target) * n16, uint32_t(cfg_.hkv), 0};
-        auto e = g.begin();
+        if (!e) e = g.begin();
         e->use(pipe("kv_regrow"));
         e->buf(0, *b);
         e->buf(1, nbuf);
         e->bytes(2, p, sizeof p);
         e->dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
-        e->commit_and_wait();
       }
-      if (*b) g.release(*b);
+      if (*b) olds.push_back(*b);
       *b = nbuf;
+      batch += nb;
     }
   }
+  flush();
   s.cap = target;
   return ensure_rings(s);
 }

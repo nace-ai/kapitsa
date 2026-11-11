@@ -1,0 +1,764 @@
+{
+  "evidence_kind": "Redacted derived copy of private execution records; not original logs",
+  "scope": "Flint::reserve cache growth, not inference speed or model-output equality",
+  "base_source": "4a8265d1aa656e8e523c10c23d5dd4cd0b82c532",
+  "candidate_source": "Pre-commit production change and identical driver; exact measured source and binary SHA256 below. Published source includes a comment clarification after these runs.",
+  "model": "unsloth/flint-GGUF, flint-UD-IQ2_XXS import; one existing import shared by both arms, no new import",
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "method": {
+    "command_example": "$BUILD/flint_kv_growth_check $MODEL --rounds 5",
+    "command_example_note": "Placeholder example, not a literal original command",
+    "order": [
+      "A1",
+      "B1",
+      "A2",
+      "B2"
+    ],
+    "A": "reference",
+    "B": "candidate",
+    "exclusive_gpu_lock": true,
+    "each_run_checks": "every retained byte, every newly zeroed byte, sliding-ring identity and bytes, initial zeroing, no-op, context-limit refusal, budget refusal",
+    "small_validation": "Both arms: MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1, --small --rounds 1",
+    "timing": "host wall time of production reserve call, excluding pattern setup and byte comparisons; every sample retained including first pipeline use"
+  },
+  "identities": {
+    "reference": {
+      "head": "4a8265d1aa656e8e523c10c23d5dd4cd0b82c532",
+      "flint_cpp_sha256": "7838d290383347db82ca5c5f1589fdd79f89072555a0437d3f18b8a1d9fd5823",
+      "driver_sha256": "6bc7cc0117b0a75f59420fa4de98a7dac77f2d0ef3b225308ddd185cec454e1d",
+      "binary_sha256": "5969a95eb05b6ec7d586409a349be09b58cd7e889e7126cb855fcf948e0aab04",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "candidate": {
+      "head": "4a8265d1aa656e8e523c10c23d5dd4cd0b82c532",
+      "flint_cpp_sha256": "281731c6d8480b7c87061c4c3144c38cfa26e7562a528835233100dea9aa9b25",
+      "driver_sha256": "6bc7cc0117b0a75f59420fa4de98a7dac77f2d0ef3b225308ddd185cec454e1d",
+      "binary_sha256": "9e87c0170c5d72788dac531f8dd9f288b8b694578678c36579acf802708d1cab",
+      "diff_sha256": "b5209a38f3caf304c9f6fb23c1a25bc93eee103b15ac3dd817acbbb98f2f141b"
+    }
+  },
+  "raw_log_sha256": {
+    "debug-A.stdout": "e96ec815bb4df2ed2fbcaaec90ed99f3c54497b25368be89272be8c60c510512",
+    "debug-A.stderr": "a5f0ad7f9d391a22700e8c46147a0758f566cd737e5822f6d2616007548b6e27",
+    "debug-B.stdout": "6143b59c6b7fb029009541efb6b4ab05f23d92c646f65bebd9c75802bf940941",
+    "debug-B.stderr": "1a6ff2c669b51acce847da5062f975ecdbe2fa3d0804936df17345e9f80cae79",
+    "A1.stdout": "4aef025d64146f178930f1296fbdd65df4b364839491b7684251e574e2841633",
+    "A1.stderr": "ece67da154947392830e4ac6f56e72d4b7bee991d6630b350ca681daa1928d0c",
+    "B1.stdout": "e21ed4161253bd01e8f576d1876daddee9c9cc788700f30410b5ad9d916cf647",
+    "B1.stderr": "22ad4179ae731b009c25d8c5209fbc9550e0accfbdf98159805de285e9adf039",
+    "A2.stdout": "0ac65184dd942ee9770e79f80316e1c4d8f1b5dd897fd42b496e10d09cc3e56f",
+    "A2.stderr": "1981d4702c110bf917a2c62d108a5bd2f86c51aa20ebce851f791a80f7934509",
+    "B2.stdout": "695ddf52b94c241583d2e91fe36149c123fe3bea2d1760bd1aecacec9ce26bd2",
+    "B2.stderr": "a2bd379f4e7590ab48eb70ce7a8378b940a1904fb481772a2f744629288f1cb4"
+  },
+  "runs": {
+    "debug-A": [
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 0,
+        "ms": 34.101708,
+        "bytes_match": true,
+        "rings_unchanged": true
+      }
+    ],
+    "debug-B": [
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 0,
+        "ms": 10.732375,
+        "bytes_match": true,
+        "rings_unchanged": true
+      }
+    ],
+    "A1": [
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 0,
+        "ms": 25.520209,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 1,
+        "ms": 9.23125,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 2,
+        "ms": 9.235292,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 3,
+        "ms": 9.603417,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 4,
+        "ms": 9.404916,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 0,
+        "ms": 15.063792,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 1,
+        "ms": 14.709,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 2,
+        "ms": 15.168083,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 3,
+        "ms": 15.319167,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 4,
+        "ms": 14.751833,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 0,
+        "ms": 42.385917,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 1,
+        "ms": 44.274084,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 2,
+        "ms": 42.509625,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 3,
+        "ms": 42.172667,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 4,
+        "ms": 44.03775,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 0,
+        "ms": 86.045125,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 1,
+        "ms": 78.725666,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 2,
+        "ms": 85.470042,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 3,
+        "ms": 82.4055,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 4,
+        "ms": 97.236,
+        "bytes_match": true,
+        "rings_unchanged": true
+      }
+    ],
+    "B1": [
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 0,
+        "ms": 8.6855,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 1,
+        "ms": 4.441458,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 2,
+        "ms": 4.375,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 3,
+        "ms": 4.248125,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 4,
+        "ms": 4.070166,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 0,
+        "ms": 8.498959,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 1,
+        "ms": 10.393875,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 2,
+        "ms": 10.082167,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 3,
+        "ms": 9.90925,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 4,
+        "ms": 9.592792,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 0,
+        "ms": 34.868292,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 1,
+        "ms": 34.562667,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 2,
+        "ms": 34.569375,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 3,
+        "ms": 34.590166,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 4,
+        "ms": 34.45675,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 0,
+        "ms": 65.918958,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 1,
+        "ms": 67.578792,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 2,
+        "ms": 70.100584,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 3,
+        "ms": 72.303083,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 4,
+        "ms": 67.389208,
+        "bytes_match": true,
+        "rings_unchanged": true
+      }
+    ],
+    "A2": [
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 0,
+        "ms": 14.44425,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 1,
+        "ms": 9.3765,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 2,
+        "ms": 10.102583,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 3,
+        "ms": 10.281875,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 4,
+        "ms": 9.884208,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 0,
+        "ms": 14.783958,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 1,
+        "ms": 14.903583,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 2,
+        "ms": 19.585666,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 3,
+        "ms": 16.857125,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 4,
+        "ms": 19.344625,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 0,
+        "ms": 37.663708,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 1,
+        "ms": 37.90825,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 2,
+        "ms": 44.545625,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 3,
+        "ms": 46.925292,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 4,
+        "ms": 44.221583,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 0,
+        "ms": 77.555875,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 1,
+        "ms": 73.571292,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 2,
+        "ms": 84.550875,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 3,
+        "ms": 83.097084,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 4,
+        "ms": 80.009667,
+        "bytes_match": true,
+        "rings_unchanged": true
+      }
+    ],
+    "B2": [
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 0,
+        "ms": 8.971166,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 1,
+        "ms": 4.412459,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 2,
+        "ms": 4.503375,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 3,
+        "ms": 4.552958,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 1024,
+        "capacity": 2048,
+        "run": 4,
+        "ms": 4.409792,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 0,
+        "ms": 9.309583,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 1,
+        "ms": 8.92,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 2,
+        "ms": 10.055959,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 3,
+        "ms": 9.5715,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 4096,
+        "capacity": 5120,
+        "run": 4,
+        "ms": 9.277,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 0,
+        "ms": 34.777167,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 1,
+        "ms": 35.562625,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 2,
+        "ms": 34.247459,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 3,
+        "ms": 35.064875,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 16384,
+        "capacity": 20480,
+        "run": 4,
+        "ms": 35.826875,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 0,
+        "ms": 64.757792,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 1,
+        "ms": 70.509167,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 2,
+        "ms": 66.268375,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 3,
+        "ms": 65.416084,
+        "bytes_match": true,
+        "rings_unchanged": true
+      },
+      {
+        "old": 32768,
+        "capacity": 40960,
+        "run": 4,
+        "ms": 67.639292,
+        "bytes_match": true,
+        "rings_unchanged": true
+      }
+    ]
+  },
+  "medians_ms": {
+    "A1": {
+      "1024": 9.404916,
+      "4096": 15.063792,
+      "16384": 42.509625,
+      "32768": 85.470042
+    },
+    "B1": {
+      "1024": 4.375,
+      "4096": 9.90925,
+      "16384": 34.569375,
+      "32768": 67.578792
+    },
+    "A2": {
+      "1024": 10.102583,
+      "4096": 16.857125,
+      "16384": 44.221583,
+      "32768": 80.009667
+    },
+    "B2": {
+      "1024": 4.503375,
+      "4096": 9.309583,
+      "16384": 35.064875,
+      "32768": 66.268375
+    }
+  },
+  "not_verified": [
+    "Full-model logits and generated outputs for this change",
+    "End-to-end inference performance for this change",
+    "Another chip",
+    "A single cache buffer larger than 256 MiB",
+    "Allocation-failure recovery"
+  ],
+  "comment_clarification_binary_identity": true
+}
