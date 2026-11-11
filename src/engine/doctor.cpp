@@ -87,6 +87,10 @@ bool is_model_dir(const std::string& d) {
   }
 }
 
+// A plan's folder. hub::is_plan() answers for plans under this run's KAPITSA_HOME; --models-dir covers folders of
+// another home too, and a plan anywhere says it is only planned.
+bool is_a_plan(const std::string& dir) { return hub::is_plan(dir) || dir.find("/plans/") != std::string::npos; }
+
 std::vector<std::string> scan(const std::string& root) {
   std::vector<std::string> out;
   if (DIR* d = opendir(root.c_str())) {
@@ -366,26 +370,46 @@ int run_doctor(int argc, char** argv) {
       for (const std::string& m : scan(r))
         if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
   }
-  // Once each: a plan (a model planned from its headers, then downloaded into the plan) is also in the store under
-  // another folder name, and several --model arguments or stores can name one model. The first of them stands for all.
-  // A plan that is only planned keeps a name of its own and stays listed, since the store does not have it.
+  // Once each, with the copy that holds the model standing for its name: a model planned from its headers and then
+  // downloaded into its plan is beside the store's folder, the catalogue's plan of a model is named after it without
+  // the variant (`qwen3.5-4b-4bit` for qwen3.5-4b-8bit), and a --model or a second store can name one model again.
+  // Two folders holding one model would split its lines, and an empty plan listed first would label the copy this Mac
+  // has as not downloaded. A plan that is only planned stays listed beside a model whose name starts the same way:
+  // which variants hold the same weights is not this loop's call.
   {
-    std::vector<std::string> once;
+    std::stable_sort(models.begin(), models.end(), [](const std::string& a, const std::string& b) {
+      return hub::plan_has_model(a) && !hub::plan_has_model(b);  // a folder with the model before one without it
+    });
+    std::vector<std::string> kept;
     for (const std::string& d : models) {
       const std::string name = d.substr(d.find_last_of('/') + 1);
-      const bool seen = std::any_of(once.begin(), once.end(), [&](const std::string& k) {
+      // the catalogue's plan of a model is named after it: every catalogue variant name ends in a suffix of 4 or more
+      // characters after a dash ("-4bit", "-24gb", "-nvfp4")
+      std::string base = name;
+      if (const size_t dash = name.rfind('-'); dash != std::string::npos && name.size() - dash - 1 >= 4)
+        base = name.substr(0, dash);
+      const bool seen = std::any_of(kept.begin(), kept.end(), [&](const std::string& k) {
         if (k == d) return true;
         const std::string kn = k.substr(k.find_last_of('/') + 1);
         if (kn == name) return true;
-        // the same model under another name: a plan holding its weights and the store copy, or a partial plan and its
-        // own folder elsewhere. A plan that is only planned stays listed beside the catalogue plan of a model whose
-        // name starts the same way: which variants hold the same weights is not this loop's call
-        const bool store = hub::models_dir().rfind(k, 0) == 0;  // k is the store's copy, not a plan
-        return hub::is_plan(d) ? (store && hub::plan_has_model(d) && kn.rfind(name, 0) == 0) ||
-                                     (hub::is_plan(k) && name.rfind(kn, 0) == 0)
-                               : hub::is_plan(k) && hub::plan_has_model(k) && kn.rfind(name, 0) == 0;
+        if (!hub::plan_has_model(d)) return false;  // an empty plan stands only for its own name
+        if (is_a_plan(k) && !hub::plan_has_model(k)) return false;
+        // the same model under another name: a plan holding its weights and the store's copy, a partial plan and the
+        // store's, or the catalogue's plan of another variant of the store's model
+        return kn.rfind(name, 0) == 0 || (kn.size() > base.size() && kn.rfind(base, 0) == 0);
       });
-      if (!seen) once.push_back(d);
+      if (!seen) kept.push_back(d);
+    }
+    // two folders that both hold one model: the store's own folder stands for it, so every name a user copies out of
+    // the report resolves to the copy the engine loads
+    std::vector<std::string> once;
+    std::map<std::string, std::string> store_of;  // the store's folder for a model's name
+    for (const std::string& d : kept)
+      if (!is_a_plan(d)) store_of[d.substr(d.find_last_of('/') + 1)] = d;
+    for (const std::string& d : kept) {
+      const std::string name = d.substr(d.find_last_of('/') + 1);
+      const auto it = is_a_plan(d) && hub::plan_has_model(d) ? store_of.find(name) : store_of.end();
+      if (it == store_of.end() || it->second == d) once.push_back(d);
     }
     models = once;
   }
@@ -609,7 +633,7 @@ int run_doctor(int argc, char** argv) {
     if (tty) {
       Row r;
       r.name = dir.substr(dir.find_last_of('/') + 1);
-      r.planned = dir.rfind(hub::home_dir() + "/plans/", 0) == 0;
+      r.planned = is_a_plan(dir) && !hub::plan_has_model(dir);
       if (!r.planned && dir.rfind(hub::models_dir() + "/", 0) != 0) r.where = hub::tilde(dir.substr(0, dir.find_last_of('/')));
       r.dense = m.dense, r.layers = m.layers, r.formats = m.formats, r.slots = slots;
       r.starts = start_need <= budget, r.all_fit = full_need <= budget;
@@ -629,7 +653,7 @@ int run_doctor(int argc, char** argv) {
     std::string name = dir.substr(dir.find_last_of('/') + 1);
     // a plan with its files is the model downloaded (the store's copy under other names, and `kapitsa list` shows it);
     // one only planned is sized from its headers, and says so
-    if (hub::is_plan(dir) && !hub::plan_has_model(dir)) name += ", not downloaded: planned from its headers";
+    if (is_a_plan(dir) && !hub::plan_has_model(dir)) name += ", not downloaded: planned from its headers";
     printf("  %s (%s, %d layers, hidden %d; weights %s)\n", name.c_str(), m.dense ? "dense" : "MoE", m.layers, m.hidden,
            m.formats.c_str());
     printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d %s state %.2f, KV %.0f KB/token%s%s\n",

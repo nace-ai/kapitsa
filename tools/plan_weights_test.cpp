@@ -191,8 +191,10 @@ int main(int argc, char** argv) {
     // the plan the split model names is listed: a plan that is only planned keeps a name of its own in the report
     check(report.find("kw-split") != std::string::npos, "doctor lists a plan of a model split into shards");
     check(says_planned(report, "kw-planned"), "doctor: a plan with only headers says planned from its headers");
-    check(report.find("kw-weight") != std::string::npos, "doctor: a plan with its weights is listed at all");
-    check(!says_planned(report, "kw-weight"), "doctor: a plan with its weights is not called not downloaded");
+    // a plan holding the model the store also holds is the store's copy in the report, listed once under that name
+    check(report.find("kw-weight") == std::string::npos, "doctor: the plan of a model the store holds is not a second row");
+    check(!says_planned(report, "kw-planned") || report.find("kw-planned") != std::string::npos,
+          "doctor: the plan that is only planned keeps its row");
   }
 
   if (keep) std::printf("kept %s\n", root.c_str());
