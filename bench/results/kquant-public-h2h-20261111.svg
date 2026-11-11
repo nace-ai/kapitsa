@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1100" viewBox="0 0 1200 1100" role="img" aria-labelledby="title desc">
+<title id="title">KQuant and public Q4-class pack KL comparisons</title>
+<desc id="desc">Lower KL is closer to BF16. Public GGUF packs beat KQuant on both corpora for 9B and 4B. KQuant MLX beats equal-size public packs; larger mixed-bit packs have lower KL. Points show means and lines show whole-window 95 percent bootstrap intervals.</desc>
+<style>text{font-family:Arial,sans-serif;fill:#172334} .label{font-size:13px} .small{font-size:13px;fill:#475569} .heading{font-size:18px;font-weight:bold} .grid{stroke:#d6dde5;stroke-width:1}</style>
+<rect width="1200" height="1100" fill="white"/>
+<text x="36" y="41" font-size="28" font-weight="bold">KQuant vs public Q4-class packs</text>
+<text x="36" y="73" font-size="16">Lower KL is closer to BF16. Points = means; lines = whole-window bootstrap 95% CIs.</text>
+<text x="36" y="98" class="small">GGUF: smaller unsloth Q4_K_M wins; UD/bartowski win at larger sizes. MLX: KQuant wins at equal LM size, not larger mixes.</text>
+<text x="36" y="145" class="heading">Qwen3.5 9B GGUF | original text</text>
+<path d="M279.0 163 V335" class="grid"/><text x="279.0" y="355" text-anchor="middle" class="small">0.000</text>
+<path d="M353.25 163 V335" class="grid"/><text x="353.25" y="355" text-anchor="middle" class="small">0.015</text>
+<path d="M427.5 163 V335" class="grid"/><text x="427.5" y="355" text-anchor="middle" class="small">0.030</text>
+<path d="M501.75 163 V335" class="grid"/><text x="501.75" y="355" text-anchor="middle" class="small">0.045</text>
+<path d="M576.0 163 V335" class="grid"/><text x="576.0" y="355" text-anchor="middle" class="small">0.060</text>
+<text x="36" y="187" class="label" font-weight="bold">KQuant Q4_K_M  5.780 GB</text>
+<path d="M372.33559368549015 183 H420.6354508318586 M372.33559368549015 179 V187 M420.6354508318586 179 V187" fill="none" stroke="#1761a0" stroke-width="2"/>
+<path d="M393.9769683942353 177 l6 6 -6 6 -6 -6 Z" fill="#1761a0"/>
+<text x="36" y="218" class="label" font-weight="normal">Our plain Q4_K_M  5.780 GB</text>
+<path d="M469.95891659880334 214 H534.2548677046575 M469.95891659880334 210 V218 M534.2548677046575 210 V218" fill="none" stroke="#677789" stroke-width="2"/>
+<circle cx="500.44569304509105" cy="214" r="4" fill="#677789"/>
+<text x="36" y="249" class="label" font-weight="normal">unsloth Q4_K_M  5.681 GB</text>
+<path d="M362.415839826268 245 H396.4153655388749 M362.415839826268 241 V249 M396.4153655388749 241 V249" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="377.8658598461669" cy="245" r="4" fill="#273646"/>
+<text x="36" y="280" class="label" font-weight="normal">unsloth UD-Q4_K_XL  5.966 GB</text>
+<path d="M353.40374591622225 276 H393.30633033653874 M353.40374591622225 272 V280 M393.30633033653874 272 V280" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="371.3651419538168" cy="276" r="4" fill="#273646"/>
+<text x="36" y="311" class="label" font-weight="normal">bartowski Q4_K_M  6.169 GB</text>
+<path d="M359.1806626204236 307 H395.5745168938875 M359.1806626204236 303 V311 M395.5745168938875 303 V311" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="375.7942494377197" cy="307" r="4" fill="#273646"/>
+<text x="427.5" y="377" text-anchor="middle" class="small">Mean KL, nats/token</text>
+<text x="630" y="145" class="heading">Qwen3.5 9B GGUF | fresh chat/tool</text>
+<path d="M873.0 163 V335" class="grid"/><text x="873.0" y="355" text-anchor="middle" class="small">0.000</text>
+<path d="M945.75 163 V335" class="grid"/><text x="945.75" y="355" text-anchor="middle" class="small">0.070</text>
+<path d="M1018.5 163 V335" class="grid"/><text x="1018.5" y="355" text-anchor="middle" class="small">0.140</text>
+<path d="M1091.25 163 V335" class="grid"/><text x="1091.25" y="355" text-anchor="middle" class="small">0.210</text>
+<path d="M1164.0 163 V335" class="grid"/><text x="1164.0" y="355" text-anchor="middle" class="small">0.280</text>
+<text x="630" y="187" class="label" font-weight="bold">KQuant Q4_K_M  5.780 GB</text>
+<path d="M932.720730509998 183 H1022.7657477333292 M932.720730509998 179 V187 M1022.7657477333292 179 V187" fill="none" stroke="#1761a0" stroke-width="2"/>
+<path d="M973.667697267064 177 l6 6 -6 6 -6 -6 Z" fill="#1761a0"/>
+<text x="630" y="218" class="label" font-weight="normal">Our plain Q4_K_M  5.780 GB</text>
+<path d="M986.7570924771513 214 H1147.400558157281 M986.7570924771513 210 V218 M1147.400558157281 210 V218" fill="none" stroke="#677789" stroke-width="2"/>
+<circle cx="1058.9438875913904" cy="214" r="4" fill="#677789"/>
+<text x="630" y="249" class="label" font-weight="normal">unsloth Q4_K_M  5.681 GB</text>
+<path d="M926.5160154077231 245 H1006.038572877633 M926.5160154077231 241 V249 M1006.038572877633 241 V249" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="962.8061185226456" cy="245" r="4" fill="#273646"/>
+<text x="630" y="280" class="label" font-weight="normal">unsloth UD-Q4_K_XL  5.966 GB</text>
+<path d="M921.7218227504458 276 H993.6858680589146 M921.7218227504458 272 V280 M993.6858680589146 272 V280" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="954.3431286492959" cy="276" r="4" fill="#273646"/>
+<text x="630" y="311" class="label" font-weight="normal">bartowski Q4_K_M  6.169 GB</text>
+<path d="M923.0322252982518 307 H992.1510896037549 M923.0322252982518 303 V311 M992.1510896037549 303 V311" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="954.9113860514553" cy="307" r="4" fill="#273646"/>
+<text x="1018.5" y="377" text-anchor="middle" class="small">Mean KL, nats/token</text>
+<text x="36" y="415" class="heading">Qwen3.5 4B GGUF | original text</text>
+<path d="M279.0 433 V605" class="grid"/><text x="279.0" y="625" text-anchor="middle" class="small">0.000</text>
+<path d="M353.25 433 V605" class="grid"/><text x="353.25" y="625" text-anchor="middle" class="small">0.015</text>
+<path d="M427.5 433 V605" class="grid"/><text x="427.5" y="625" text-anchor="middle" class="small">0.030</text>
+<path d="M501.75 433 V605" class="grid"/><text x="501.75" y="625" text-anchor="middle" class="small">0.045</text>
+<path d="M576.0 433 V605" class="grid"/><text x="576.0" y="625" text-anchor="middle" class="small">0.060</text>
+<text x="36" y="457" class="label" font-weight="bold">KQuant Q4_K_M  2.783 GB</text>
+<path d="M360.59059045580597 453 H379.48570325784857 M360.59059045580597 449 V457 M379.48570325784857 449 V457" fill="none" stroke="#1761a0" stroke-width="2"/>
+<path d="M370.1302745282046 447 l6 6 -6 6 -6 -6 Z" fill="#1761a0"/>
+<text x="36" y="488" class="label" font-weight="normal">Our plain Q4_K_M  2.783 GB</text>
+<path d="M416.4320558125114 484 H452.4662551322939 M416.4320558125114 480 V488 M452.4662551322939 480 V488" fill="none" stroke="#677789" stroke-width="2"/>
+<circle cx="434.10641506178524" cy="484" r="4" fill="#677789"/>
+<text x="36" y="519" class="label" font-weight="normal">unsloth Q4_K_M  2.741 GB</text>
+<path d="M351.1014611067885 515 H368.1661204157117 M351.1014611067885 511 V519 M368.1661204157117 511 V519" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="359.6525603741021" cy="515" r="4" fill="#273646"/>
+<text x="36" y="550" class="label" font-weight="normal">unsloth UD-Q4_K_XL  2.912 GB</text>
+<path d="M335.7921171914953 546 H350.19526819013385 M335.7921171914953 542 V550 M350.19526819013385 542 V550" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="343.04115505245585" cy="546" r="4" fill="#273646"/>
+<text x="36" y="581" class="label" font-weight="normal">bartowski Q4_K_M  3.013 GB</text>
+<path d="M345.70803949260875 577 H361.3306006358264 M345.70803949260875 573 V581 M361.3306006358264 573 V581" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="353.65296472414445" cy="577" r="4" fill="#273646"/>
+<text x="427.5" y="647" text-anchor="middle" class="small">Mean KL, nats/token</text>
+<text x="630" y="415" class="heading">Qwen3.5 4B GGUF | fresh chat/tool</text>
+<path d="M873.0 433 V605" class="grid"/><text x="873.0" y="625" text-anchor="middle" class="small">0.000</text>
+<path d="M945.75 433 V605" class="grid"/><text x="945.75" y="625" text-anchor="middle" class="small">0.070</text>
+<path d="M1018.5 433 V605" class="grid"/><text x="1018.5" y="625" text-anchor="middle" class="small">0.140</text>
+<path d="M1091.25 433 V605" class="grid"/><text x="1091.25" y="625" text-anchor="middle" class="small">0.210</text>
+<path d="M1164.0 433 V605" class="grid"/><text x="1164.0" y="625" text-anchor="middle" class="small">0.280</text>
+<text x="630" y="457" class="label" font-weight="bold">KQuant Q4_K_M  2.783 GB</text>
+<path d="M960.6046651871143 453 H1060.938153607802 M960.6046651871143 449 V457 M1060.938153607802 449 V457" fill="none" stroke="#1761a0" stroke-width="2"/>
+<path d="M1007.9301872767943 447 l6 6 -6 6 -6 -6 Z" fill="#1761a0"/>
+<text x="630" y="488" class="label" font-weight="normal">Our plain Q4_K_M  2.783 GB</text>
+<path d="M1004.282293934168 484 H1153.7415209648825 M1004.282293934168 480 V488 M1153.7415209648825 480 V488" fill="none" stroke="#677789" stroke-width="2"/>
+<circle cx="1074.7586099569419" cy="484" r="4" fill="#677789"/>
+<text x="630" y="519" class="label" font-weight="normal">unsloth Q4_K_M  2.741 GB</text>
+<path d="M948.4680851554284 515 H1037.9712956876879 M948.4680851554284 511 V519 M1037.9712956876879 511 V519" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="990.2327891438563" cy="515" r="4" fill="#273646"/>
+<text x="630" y="550" class="label" font-weight="normal">unsloth UD-Q4_K_XL  2.912 GB</text>
+<path d="M934.9114127428218 546 H1013.7649048032902 M934.9114127428218 542 V550 M1013.7649048032902 542 V550" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="972.0132717126949" cy="546" r="4" fill="#273646"/>
+<text x="630" y="581" class="label" font-weight="normal">bartowski Q4_K_M  3.013 GB</text>
+<path d="M945.7635524423312 577 H1029.9420642000973 M945.7635524423312 573 V581 M1029.9420642000973 573 V581" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="985.7576659964817" cy="577" r="4" fill="#273646"/>
+<text x="1018.5" y="647" text-anchor="middle" class="small">Mean KL, nats/token</text>
+<text x="36" y="710" class="heading">Qwen3.5 9B MLX | original mixed text, sizes below are LM tensor bytes</text>
+<path d="M466.0 728 V969" class="grid"/><text x="466.0" y="989" text-anchor="middle" class="small">0.000</text>
+<path d="M640.5 728 V969" class="grid"/><text x="640.5" y="989" text-anchor="middle" class="small">0.026</text>
+<path d="M815.0 728 V969" class="grid"/><text x="815.0" y="989" text-anchor="middle" class="small">0.052</text>
+<path d="M989.5 728 V969" class="grid"/><text x="989.5" y="989" text-anchor="middle" class="small">0.079</text>
+<path d="M1164.0 728 V969" class="grid"/><text x="1164.0" y="989" text-anchor="middle" class="small">0.105</text>
+<text x="36" y="752" class="label" font-weight="bold">KQuant 4-bit  5.038 GB</text>
+<path d="M687.1440555760175 748 H733.3771202895023 M687.1440555760175 744 V752 M733.3771202895023 744 V752" fill="none" stroke="#1761a0" stroke-width="2"/>
+<path d="M709.427573175317 742 l6 6 -6 6 -6 -6 Z" fill="#1761a0"/>
+<text x="36" y="780" class="label" font-weight="normal">lmstudio-community  5.038 GB</text>
+<path d="M956.3582138278416 776 H1047.3797567731544 M956.3582138278416 772 V780 M1047.3797567731544 772 V780" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="1001.497906646051" cy="776" r="4" fill="#273646"/>
+<text x="36" y="808" class="label" font-weight="normal">mlx-community-MLX-4bit  5.038 GB</text>
+<path d="M960.1392026703993 804 H1055.4175459048993 M960.1392026703993 800 V808 M1055.4175459048993 800 V808" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="1007.174672389077" cy="804" r="4" fill="#273646"/>
+<text x="36" y="836" class="label" font-weight="normal">mlx-community-4bit  5.038 GB</text>
+<path d="M960.1392026703993 832 H1055.4175459048993 M960.1392026703993 828 V836 M1055.4175459048993 828 V836" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="1007.174672389077" cy="832" r="4" fill="#273646"/>
+<text x="36" y="864" class="label" font-weight="normal">AtomicChat  5.038 GB</text>
+<path d="M956.3582138278416 860 H1047.3797567731544 M956.3582138278416 856 V864 M1047.3797567731544 856 V864" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="1001.497906646051" cy="860" r="4" fill="#273646"/>
+<text x="36" y="892" class="label" font-weight="normal">mlx-works-oQ4e-mtp  5.319 GB</text>
+<path d="M725.1121874144943 888 H775.3300266600731 M725.1121874144943 884 V892 M775.3300266600731 884 V892" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="749.6789490716624" cy="888" r="4" fill="#273646"/>
+<text x="36" y="920" class="label" font-weight="normal">mlx-community-OptiQ-4bit  7.101 GB</text>
+<path d="M641.3426567898711 916 H680.6923392678352 M641.3426567898711 912 V920 M680.6923392678352 912 V920" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="660.2428790903056" cy="916" r="4" fill="#273646"/>
+<text x="36" y="948" class="label" font-weight="normal">Brooooooklyn-UD-Q4_K_XL  7.169 GB</text>
+<path d="M624.0004419701204 944 H654.2430175797407 M624.0004419701204 940 V948 M654.2430175797407 940 V948" fill="none" stroke="#273646" stroke-width="2"/>
+<circle cx="639.2594022513597" cy="944" r="4" fill="#273646"/>
+<text x="815.0" y="1011" text-anchor="middle" class="small">Mean KL, nats/token</text>
+<text x="36" y="1051" class="small">Windows: GGUF original 65, fresh chat/tool 64; MLX 64. Bootstrap: 4,000 draws. No windows excluded.</text>
+<text x="36" y="1075" class="small">Measured on NVIDIA GPUs, 11 Nov 2026. No Mac speed claim. Source data and paired-difference CIs are in the adjacent JSON.</text>
+</svg>
