@@ -1,5 +1,7 @@
 #include "engine/think_control.h"
 
+#include "kernels/kflash.h"
+
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -98,5 +100,12 @@ int ThinkControl::fill(uint32_t* mask, size_t W, const int* tokens, int P, int r
   }
   return n;
 }
+
+int ThinkControl::fill_cycle(uint32_t* mask, size_t W, const int* tokens, int P, int rows, const int* tree) const {
+  return fill(mask, W, tokens, P, rows, tree ? tree + kf::kPar : nullptr,
+              tree ? std::clamp(tree[kf::kN], 1, rows) : rows);
+}
+
+int think_handover_rows(bool spec_loop) { return spec_loop ? kf::kMaxRows + 1 : 2; }
 
 }  // namespace ni
