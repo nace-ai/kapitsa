@@ -1,6 +1,7 @@
 // KFlash budget cache (src/model/kflash_budget.cpp): a cache file loads only into the build that wrote it. A file an
 // earlier build wrote, or one without a build, starts the budget fresh (kapitsa#1150: a calibration learned on a
-// broken verify kept a fixed build's trees shaped by it across restarts). CPU only: KAPITSA_HOME is a temporary folder.
+// broken verify kept a fixed build's trees shaped by it across restarts). KfBudget's and KfBatch's saves write the
+// build and load back. CPU only: KAPITSA_HOME is a temporary folder.
 #include "model/kflash_budget.h"
 
 #include <nlohmann/json.hpp>
@@ -11,7 +12,9 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <vector>
 
+using ni::KfBatch;
 using ni::KfBudget;
 
 static int fails = 0;
@@ -66,6 +69,55 @@ int main() {
   {
     std::ifstream f(dir + "/kflash/" + key + ".json");
     check(bool(f), "the earlier build's file stays until this build saves over it");
+  }
+  auto file_build = [&](const std::string& k) {
+    try {
+      return nlohmann::json::parse(std::ifstream(dir + "/kflash/" + k + ".json")).value("build", "");
+    } catch (...) {
+      return std::string();
+    }
+  };
+  // KfBudget::save, then a new budget of the same key: the file names this build and loads back
+  {
+    double c8 = 0;
+    {
+      KfBudget b(key);
+      b.set_rows(1u << 7, 8);
+      std::vector<int32_t> tree(ni::kf::kWords, 0);
+      tree[ni::kf::kN] = 8;
+      for (int i = 0; i < 40; ++i) b.observe(tree.data(), 30.0);
+      c8 = b.cost(8);
+      b.save();
+    }
+    check(file_build(key) == KfBudget::build(), "KfBudget::save writes this build into the file");
+    KfBudget b(key);
+    check(c8 > 0 && b.cost(8) == c8, "KfBudget::save, then load: the cost table comes back");
+  }
+  // KfBatch::save, then a new batch budget of the same key; then the same file from another build
+  {
+    const std::string bkey = "model-Drafter-Chip-batch";
+    KfBatch::Member m[2];
+    for (auto& g : m)
+      for (float& lc : g.lc) lc = -0.5f;
+    const int k[2] = {0, 0}, acc[2] = {0, 0};
+    double c2 = 0;
+    {
+      KfBatch kb(bkey);
+      for (int i = 0; i < 40; ++i) kb.observe(m, 2, k, acc, 20.0, nullptr);
+      c2 = kb.cost(2, 2);
+      kb.save();
+    }
+    check(file_build(bkey) == KfBudget::build(), "KfBatch::save writes this build into the file");
+    {
+      KfBatch kb(bkey);
+      check(c2 > 0 && kb.cost(2, 2) == c2, "KfBatch::save, then load: the cost table comes back");
+    }
+    const std::string bf = dir + "/kflash/" + bkey + ".json";
+    nlohmann::json j = nlohmann::json::parse(std::ifstream(bf));
+    j["build"] = "0.2.33 (f55b55b5)";
+    std::ofstream(bf) << j.dump() << "\n";
+    KfBatch kb(bkey);
+    check(kb.cost(2, 2) != c2 && kb.cycles() == 0, "a KfBatch file another build wrote is not loaded");
   }
   std::string rm = "rm -rf '" + dir + "'";
   if (system(rm.c_str()) != 0) fprintf(stderr, "could not remove %s\n", dir.c_str());
