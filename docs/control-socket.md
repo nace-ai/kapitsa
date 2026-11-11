@@ -234,6 +234,11 @@ file, as `POST /model` does.
   and no key. No CORS header is sent, so a fetch from another site with the key gets no further than its preflight.
   Every answer carries `Cache-Control: no-store`. The page's `Content-Security-Policy` lets it reach only its own
   server and forbids framing it.
+- **The log.** A page opened after the server started resumes the stream from the run's second event, so the bus
+  replays the log lines it still keeps (the last 1024 events, `kKeep`) and the page shows them, marked `earlier`:
+  events carry no time. Once more than 1024 events have passed since the run's second, the bus answers with the
+  `expired` reset instead, and the page shows only what the server logs from then on. A button above the log hides every
+  line below a warning.
 - **The socket's answers.** A stop or a switch runs the socket's own checks (fields, `run_id`) and handlers, and
   answers as `POST /stop` and `POST /model` do. The page sends the `run_id` it shows, so a page left open on a run that
   has since restarted gets `409 run_id_mismatch` instead of stopping the new one. A switch answers once the new model

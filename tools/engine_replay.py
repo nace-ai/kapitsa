@@ -118,6 +118,10 @@ class Run(Bus):
         # loading at start: no model yet; switching: the model that served before (docs/control-socket.md, Status)
         self.target, self.state, self.load_left = mid, state, 6
         self.publish("state", {"state": state, "model": self.model()})
+        self.publish("log", {"level": "info", "message": f"loading {mid}: {MODELS[mid][2] / GB:.1f} GB of weights"})
+        self.publish("log", {"level": "debug", "message": f"memory plan: {MODELS[mid][1]} slots of {MODELS[mid][0] // 1024}K context"})
+        self.publish("log", {"level": "warn", "message": "warning: a made-up warning, so the page's log filter has one to keep"})
+        self.publish("log", {"level": "error", "message": "a made-up error line, so the page's log filter keeps this level too"})
 
     def ready(self):
         self.model_id, self.state = self.target, "ready"
