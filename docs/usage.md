@@ -953,7 +953,8 @@ the parts in use in the page cache and can drop them under pressure. When memory
 `kapitsa doctor` shows this Mac (chip, GPU cores, RAM, macOS, the working set, Kapitsa's budget, the Neural Engine) and,
 per model, its memory part by part, whether it starts, the tokens of KV cache that fit, its decoding (draft model, MTP
 or plain), the image encoder's size and a rough speed estimate; then each catalog variant, whether it fits and which one
-`--model NAME` takes. It assumes `--context 64k` and, per model, the slots the server would start with (the catalog
+`--model NAME` takes (a variant not on this Mac reads `not planned (offline)`, and `--model <name>` plans that one and
+sizes it). It assumes `--context 64k` and, per model, the slots the server would start with (the catalog
 check: 2, or 1 where 2 would not start; `--context`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change
 that), and shows the context `kapitsa serve` takes there by default; `--model M`, repeatable, checks other models,
 downloaded or not; `--models-dir DIR`, repeatable, lists the models under DIR (an external drive) in place of the
