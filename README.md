@@ -48,23 +48,23 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### KQuant
 
-**The same download, closer to the original model.** KQuant is our quantization framework for MLX packs and GGUF files. The 4-bit MLX packs are the same size as a standard 4-bit MLX pack and load in anything that reads MLX. On every size we measured they sit closer to the original bf16 model, score at least as high on GSM8K, and on the 4B, 9B and 35B-A3B they write faster on an M5 Pro. `kapitsa serve --model 4b` gets one; there is nothing to set.
+**The same download, closer to the original model than the pack it replaces.** KQuant is our quantization framework for MLX packs and GGUF files. The 4-bit MLX packs are the same size as the 4-bit MLX packs Kapitsa served before (lmstudio-community's, MTPLX's for the 35B-A3B) and load in anything that reads MLX. On every size we measured they sit closer to the original bf16 model than those packs, score at least as high on GSM8K, and on the 4B, 9B and 35B-A3B they write faster on an M5 Pro. `kapitsa serve --model 4b` gets one; there is nothing to set.
 
 | 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
 | --- | --- | --- | --- |
-| 4B standard | 0.070 | 0.914 | 209 |
+| 4B lmstudio-community | 0.070 | 0.914 | 209 |
 | 4B KQuant | **0.048** | **0.923** | **227** |
-| 9B standard | 0.081 | 0.927 | 132 |
+| 9B lmstudio-community | 0.081 | 0.927 | 132 |
 | 9B KQuant | **0.037** | **0.944** | **146** |
-| 35B-A3B standard | 0.096 | 0.948 | 212 |
+| 35B-A3B MTPLX | 0.096 | 0.948 | 212 |
 | 35B-A3B KQuant | **0.059** | **0.952** | **227** |
 
-The 9B pack is less than half as far from the original as the standard one (KL 0.037 against 0.081). The calibrated GGUF files are closer too, at the same size and about the same writing speed (KL against the bf16 GGUF through llama.cpp, the 27B on CUDA, so not comparable with the MLX rows above: 0.018 against 0.031 on the [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-GGUF-KQuant), 0.023 against 0.045 on the [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-GGUF-KQuant), 0.021 against 0.030 on the [27B](https://huggingface.co/nace-ai/Qwen3.8-27B-GGUF-KQuant), 0.031 against 0.048 on the [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF-KQuant); the Q4_K_M files against the plain ones, each card has the table and how it was measured). The Qwen3.8 27B MLX pack (`27b:kquant`, opt-in) is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. Its decode is mixed on this Mac (sampled slower, greedy faster), so it stays opt-in and we claim no speed for it.
+The 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). The calibrated GGUF files are closer than a plain Q4_K_M of the same size, at about the same writing speed (KL against the bf16 GGUF through llama.cpp, the 27B on CUDA, so not comparable with the MLX rows above: 0.018 against 0.031 on the [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-GGUF-KQuant), 0.023 against 0.045 on the [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-GGUF-KQuant), 0.021 against 0.030 on the [27B](https://huggingface.co/nace-ai/Qwen3.8-27B-GGUF-KQuant), 0.031 against 0.048 on the [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF-KQuant); the Q4_K_M files against the plain ones, each card has the table and how it was measured). The Qwen3.8 27B MLX pack (`27b:kquant`, opt-in) is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. Its decode is mixed on this Mac (sampled slower, greedy faster), so it stays opt-in and we claim no speed for it.
 
 **How we checked.**
 
 - **Token by token against the original.** Every pack's next-token predictions are compared with the bf16 model's over about 32,700 tokens of prose, math chats and code, and top-1 agreement rises on every size (4B 0.881 to 0.899, 9B 0.885 to 0.924, 35B-A3B 0.890 to 0.912, 27B 0.912 to 0.929).
-- **All 1,319 GSM8K questions**, not a 100-question sample. Each pack is also compared with the standard pack question by question, and the records say which differences are within noise.
+- **All 1,319 GSM8K questions**, not a 100-question sample. Each pack is also compared with the pack it replaces question by question, and the records say which differences are within noise.
 - **Timed on a real M5 Pro 48 GB**, packs interleaved leg by leg, on AC power. A leg is thrown out if a process that was not there at the start used the machine during it, and the records list every leg we threw out.
 
 **Why it is closer.**
@@ -73,7 +73,7 @@ The 9B pack is less than half as far from the original as the standard one (KL 0
 - **A search per group of weights.** Every group gets its own best fit, instead of being rounded the same way as every other.
 - **The same formats.** Same files, same size, nothing new to install: any MLX reader loads the packs, and llama.cpp loads the GGUF files.
 
-<sub>Standard: lmstudio-community's packs for the 4B and 9B, MTPLX's pack (Youssofal, `9546051`) for the 35B-A3B, which the catalog served before. KL: mean over 32,704 to 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC; the 35B-A3B row: Kapitsa 0.2.32 (`e728524`), three KQuant and two standard valid legs per setting (T 0.6: 219 against 200 tok/s, T 0: 234 against 224; the table pools both). Quality and speed were measured on text workloads; the 35B-A3B pack includes the vision tower, which was not evaluated. Every run, including the voided legs: the [4B and 9B record](bench/results/2026-11-10-m5-pro-kquant/README.md) and the [35B-A3B record](bench/results/2026-11-10-m5-pro-kquant-35b/README.md).</sub>
+<sub>Baselines: lmstudio-community's packs for the 4B and 9B, MTPLX's pack (Youssofal, `9546051`) for the 35B-A3B, which the catalog served before. KL: mean over 32,704 to 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC; the 35B-A3B row: Kapitsa 0.2.32 (`e728524`), three KQuant and two standard valid legs per setting (T 0.6: 219 against 200 tok/s, T 0: 234 against 224; the table pools both). Quality and speed were measured on text workloads; the 35B-A3B pack includes the vision tower, which was not evaluated. Every run, including the voided legs: the [4B and 9B record](bench/results/2026-11-10-m5-pro-kquant/README.md) and the [35B-A3B record](bench/results/2026-11-10-m5-pro-kquant-35b/README.md).</sub>
 
 ### Drex decision models
 
