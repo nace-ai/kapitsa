@@ -71,7 +71,7 @@ static std::vector<std::string> index_shards(const std::string& index) {
   return out;
 }
 
-// `kapitsa doctor <flag> <arg>`, its stdout (the report comes either way and the exit is not what this checks)
+// `kapitsa doctor <flag> <arg>`, its stdout
 static std::string run_doctor(const std::string& program, const std::string& flag, const std::string& arg,
                               const std::string& home, const std::string& log) {
   posix_spawn_file_actions_t fa;
@@ -189,6 +189,16 @@ int main(int argc, char** argv) {
   write_file(store_copy + "/model.safetensors", "");
   sparse_file(store_copy + "/model.safetensors", 3 << 20);
 
+  // a store folder a download has only just started, beside a --models-dir folder of its name. The by-name lookup keeps
+  // scan()'s filter (is_model_dir) so the store's folder is not read; the row the name gets is the plan's either way,
+  // which is why the check below is on what the report read, not on which folder the row came by.
+  const std::string starting = plans + "/halfway-4bit";
+  fs::create_directories(starting);
+  write_file(starting + "/model.safetensors.part", "");
+  fs::create_directories(home + "/models/halfway-4bit");
+  write_file(home + "/models/halfway-4bit/model.safetensors.part", "");
+  const std::string store_has = home + "/models/halfway-4bit/model.safetensors.part";
+
   // the doctor line, end to end
   if (!fs::exists(kapitsa_bin)) {
     std::printf("SKIP: the doctor line (%s is not built)\n", kapitsa_bin.c_str());
@@ -210,6 +220,10 @@ int main(int argc, char** argv) {
     check(rows == 1, "doctor: the store's copy and its plan are one row");
     check(report.find("  " + model + " (") != std::string::npos,
           "doctor: the store's copy of the model is listed as downloaded");
+    // a starting download in the store is not a model: the report never reads the store's empty folder, so nothing in
+    // it is reported as a failure to read
+    check(report.find(store_has) == std::string::npos, "doctor: a plan's folder is read, not the store's empty one");
+    check(report.find("cannot read") == std::string::npos, "doctor: no folder under --models-dir is read that holds no model");
   }
 
   if (keep) std::printf("kept %s\n", root.c_str());

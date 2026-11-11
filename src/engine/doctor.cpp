@@ -373,14 +373,15 @@ int run_doctor(int argc, char** argv) {
       for (const std::string& m : scan(r))
         if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
     // the store's copy of every folder the report covers comes with it, by name: a --models-dir folder holds a plan's
-    // files and the copy the engine loads of that model sits in the store under the same name, and the store's folder is
-    // read by name here (is_model_dir reads a config.json, and a plan is sized from its headers)
+    // files and the copy the engine loads of that model sits in the store under the same name. Read by name, so it keeps
+    // scan()'s filter (is_model_dir): a folder the store has not finished downloading is not a model, and listing it
+    // would fail to read it.
     for (const std::string& r : roots) {
       if (DIR* dh = opendir(r.c_str())) {
         while (dirent* e = readdir(dh)) {
           if (e->d_name[0] == '.') continue;
           const std::string store = hub::models_dir() + "/" + e->d_name;
-          if (std::filesystem::is_directory(store) &&
+          if (std::filesystem::is_directory(store) && is_model_dir(store) &&
               std::find(models.begin(), models.end(), store) == models.end())
             models.push_back(store);
         }
