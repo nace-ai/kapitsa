@@ -14,7 +14,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "bytes", "includes", "fits", "current"],
+        "required": ["name", "bytes", "includes", "fits", "current", "up_to_date"],
         "properties": {
           "name": {"type": "string", "minLength": 1, "description": "what POST /model takes for it: \"qwen3.5-4b:4bit\", or the model's folder when no name finds it"},
           "title": {"type": "string", "minLength": 1, "description": "the catalog's name for it, \"Qwen3.5-4B\"; absent for a model Kapitsa does not know"},
@@ -25,7 +25,8 @@
             "enum": ["fits", "no_drafter", "too_big", "unknown"],
             "description": "one conversation at the default context fits within the budget beside the model and its drafter (fits), only without the drafter, so slower (no_drafter), or not even that (too_big); unknown: its files could not be planned"
           },
-          "current": {"type": "boolean", "description": "the model this instance serves now"}
+          "current": {"type": "boolean", "description": "the model this instance serves now"},
+          "up_to_date": {"type": "boolean", "description": "false: a catalog model whose files are older than the revisions this Kapitsa pins: a switch downloads the rest first, which can take minutes. True for any other model."}
         }
       }
     }

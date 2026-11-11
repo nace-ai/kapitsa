@@ -40,9 +40,9 @@ struct Stub : ControlApi {
     return {200, {{"run_id", bus.run_id()}, {"memory_budget_bytes", 41448628224ULL},
                   {"models", {{{"name", "qwen3.5-4b:4bit"}, {"title", "Qwen3.5-4B"}, {"variant", "4bit"},
                                {"bytes", 4571194744ULL}, {"includes", {"MTP head", "DFlash drafter"}}, {"fits", "fits"},
-                               {"current", false}},
+                               {"current", false}, {"up_to_date", true}},
                               {{"name", "/models/big"}, {"bytes", 36861413976ULL}, {"includes", json::array()},
-                               {"fits", "too_big"}, {"current", false}}}}}};
+                               {"fits", "too_big"}, {"current", false}, {"up_to_date", false}}}}}};
   }
   ControlReply model_switch(const json& r) override {
     if (ControlReply no = switch_refusal(id.config, r); no.status) return no;

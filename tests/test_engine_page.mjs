@@ -151,6 +151,8 @@ check(/class="opt" data-i="\d" disabled[^>]*title="\/Users\/me[^"]*drex[^"]*"/.t
       "a model too big for this Mac is listed, marked, and cannot be picked");
 check(/data-i="0" disabled/.test(list), "the loaded model cannot be picked (it is loaded)");
 check(list.includes("fits planned for 38.6 GB"), "the picker says what the fits are planned for");
+check(/Qwen3\.5-9B[\s\S]*?Downloads an update first/.test(list) && !/Qwen3\.5-4B[\s\S]{0,400}Downloads an update first[\s\S]*Qwen3\.5-9B/.test(list),
+      "a model whose files are out of date says a switch downloads first");
 a.key("Escape");
 check(a.el("swlist").hidden && a.el("swpick")["aria-expanded"] === "false", "Escape closes the picker");
 a.tap("swpick");

@@ -56,7 +56,8 @@ MODELS = {  # id: (context_length, slots, weights_bytes, kv_bytes per slot, deco
 }
 # what GET /engine/models lists: (name POST /engine/model takes, title, variant, bytes on disk, includes, fits). The ones
 # in MODELS switch; the others answer model_not_found, as a model that would not load does. `fits` and `current` are
-# the stand-in's own: a made-up budget of 38.6 GB, the current model from the run
+# the stand-in's own: a made-up budget of 38.6 GB, the current model from the run; the 9B is out of date (a switch would
+# download first)
 DOWNLOADED = [
     ("qwen3.5-4b:4bit", "Qwen3.5-4B", "4bit", 4_571_194_744, ["MTP head", "DFlash drafter"], "fits"),
     ("qwen3.5-9b:4bit", "Qwen3.5-9B", "4bit", 9_047_481_758, ["MTP head", "DFlash drafter"], "fits"),
@@ -308,7 +309,7 @@ class Instance:
             rows = []
             for name, title, variant, size, includes, fits in DOWNLOADED:
                 row = {"name": name, "variant": variant, "bytes": size, "includes": includes, "fits": fits,
-                       "current": name.split(":")[0] == now}
+                       "current": name.split(":")[0] == now, "up_to_date": not name.startswith("qwen3.5-9b")}
                 if title:
                     row["title"] = title
                 rows.append(row)

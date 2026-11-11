@@ -720,7 +720,12 @@ class ServeControl : public server::ControlApi {
     strftime(at, sizeof at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     id_.started_at = at;
   }
-  void attach(const std::shared_ptr<ModelManager>& mgr) { mgr_.attach(mgr); }
+  // The manager is there: the fits of the downloaded models are planned now, in the background (the first listing
+  // would otherwise wait for the largest models' files: 5 s on the M5 Pro with six downloaded)
+  void attach(const std::shared_ptr<ModelManager>& mgr) {
+    mgr_.attach(mgr);
+    std::thread([this] { models(); }).detach();
+  }
 
   nlohmann::json status() override {
     return server::instance_status(id_, *server::events(), *server::activity(), server::last_state());
@@ -746,8 +751,9 @@ class ServeControl : public server::ControlApi {
       for (const auto& m : hub::installed()) {
         if (!m.complete) continue;
         nlohmann::json j{{"name", switch_name(m)}, {"bytes", m.bytes}, {"includes", m.extras},
-                         {"fits", mgr ? fit_of(m, opt, budget) : "unknown"}, {"current", !current.empty() && m.dir == current}};
-        if (const hub::CatalogModel* c = hub::find_model(m.name)) j["title"] = c->title;
+                         {"fits", mgr ? fit_of(m, opt, budget) : "unknown"}, {"current", !current.empty() && m.dir == current},
+                         {"up_to_date", up_to_date(m)}};
+        if (const hub::CatalogModel* c = hub::find_model(m.name.substr(0, m.name.find(':')))) j["title"] = c->title;
         if (!m.variant.empty()) j["variant"] = m.variant;
         out.push_back(j);
       }
@@ -791,6 +797,16 @@ class ServeControl : public server::ControlApi {
     } catch (const std::exception&) {
     }
     return m.dir;
+  }
+  // A catalog model downloaded at older revisions than this Kapitsa pins downloads the difference before it loads: the
+  // switch waits for that. Any other model loads as it is.
+  static bool up_to_date(const hub::Installed& m) {
+    try {
+      const hub::ModelRef ref = hub::resolve(switch_name(m));
+      return ref.kind != hub::ModelRef::kCatalog || hub::is_current(ref);
+    } catch (const std::exception&) {
+      return true;
+    }
   }
   // "fits": one conversation at the default context fits beside the model and its drafter; "no_drafter": only without
   // the drafter (slower); "too_big": not even that; "unknown": its files could not be planned

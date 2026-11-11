@@ -74,7 +74,7 @@ svg{display:block;width:100%;height:96px}
 .opt .nm{font-weight:600;min-width:0;overflow-wrap:anywhere}.opt .nm small{font-weight:400;color:var(--muted);margin-left:6px;font-size:12.5px}
 .opt .sz{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
 .opt .ft{grid-column:1/-1;font-size:12.5px;color:var(--muted)}.opt .ft.warn{color:var(--warn)}.opt .ft.bad{color:var(--err)}
-.opt .ft b{color:var(--accent);font-weight:600}
+.opt .ft b{color:var(--accent);font-weight:600}.opt .ft .upd{color:var(--warn)}
 #swlist .foot{color:var(--muted);font-size:12px;padding:6px 10px 2px;border-top:1px solid var(--line);margin-top:4px}
 #swlist .empty{padding:10px}
 button.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--line));flex:none}button.danger.arm{background:var(--err);color:#fff}
@@ -421,10 +421,10 @@ function renderList(j) {
   const budget = j.memory_budget_bytes ? ` · fits planned for ${fmtB(j.memory_budget_bytes)} of GPU memory` : "";
   $("swlist").innerHTML = (listed.length ? listed.map((m, i) => {
     const [fit, cls] = FIT[m.fits] || FIT.unknown;
-    const what = [m.title ? m.name : "", ...(m.includes || [])].filter(Boolean).join(" · ");
+    const what = (m.includes || []).join(" · ");
     return `<button type="button" class="opt" data-i="${i}" ${m.current || m.fits === "too_big" ? "disabled" : ""} title="${esc(m.name)}">
       <span class="nm">${esc(m.title || m.name)}${m.variant ? `<small>${esc(m.variant)}</small>` : ""}</span><span class="sz">${fmtB(m.bytes)}</span>
-      <span class="ft ${cls}">${m.current ? "<b>Loaded now</b>" + (fit ? " · " : "") : ""}${esc(fit)}${what ? `${fit || m.current ? " · " : ""}${esc(what)}` : ""}</span></button>`;
+      <span class="ft ${cls}">${m.current ? "<b>Loaded now</b>" + (fit ? " · " : "") : ""}${esc(fit)}${what ? `${fit || m.current ? " · " : ""}${esc(what)}` : ""}${m.up_to_date ? "" : ` · <span class="upd">Downloads an update first</span>`}</span></button>`;
   }).join("") : `<div class="empty">No models downloaded yet.</div>`) +
     `<div class="foot">${plural(listed.length, "model")} on this Mac${budget}</div>`;
 }

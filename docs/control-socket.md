@@ -131,7 +131,9 @@ A model still downloading stops at once, its downloaded parts kept for the next 
 
 `GET /models` lists the models downloaded on this Mac (complete ones; a download in progress is not there): `name` is
 what `POST /model` takes for the model (its catalog name, or its folder when no name finds it), with its `title`,
-`variant` (precision or file format), `bytes` on disk, `includes` (MTP head, drafters) and `current`. `fits` is the
+`variant` (precision or file format), `bytes` on disk, `includes` (MTP head, drafters) and `current`. `up_to_date` is
+false for a catalog model whose files are older than the revisions this Kapitsa pins: a switch to it downloads the
+difference first, which can take minutes. `fits` is the
 engine's plan of the model's files against `memory_budget_bytes`, offline, for one conversation at the default
 context: `fits` beside its drafter, `no_drafter` (only without it, so slower), `too_big`, or `unknown` when its files
 cannot be planned (also every model before the first has loaded). The plan is kept per folder for the run. Listing never
