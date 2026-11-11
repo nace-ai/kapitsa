@@ -40,6 +40,7 @@
 #include <ctime>
 #include <deque>
 #include <filesystem>
+#include <regex>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -1199,24 +1200,30 @@ bool plan_is_current(const std::string& dir) {
   return !read_text(dir + "/.complete").empty();  // a plan of a Hugging Face repo, or a folder of its own: complete
 }
 
+// The files a plan lists that hold a model: its shards (one, or "N-of-M"), its MTP head, or model.safetensors whole.
+// a name that ends in .safetensors: "model.safetensors" and its shards, and not the model.safetensors.index.json
+// beside them, which lists the shards and is a header's size
+static const std::regex kWeightsFile(R"((^|/)(\d+-of-\d+|mtp|model|weights)\.safetensors$)");
+// Bigger than any header in the catalog (a shard's is a few hundred KB, the MTP head's a few KB): the height of a header.
+static constexpr uint64_t kHeaderBytes = 1024 * 1024;
+
 // Whether a plan's model is on this Mac: planned, and its folder holding the weights. Planning writes none of them (the
 // files a plan lists are config.json and the safetensors headers), so a plan is only planned from its headers until
 // the model is downloaded into that folder; a GGUF variant's plan is its conversion, written where it is planned.
 bool plan_has_model(const std::string& dir) {
-  try {
-    // the weights the plan is about: its index's files, or model.safetensors whole
-    std::vector<std::string> weights;
-    const json index = json::parse(read_text(dir + "/model.safetensors.index.json"));
-    for (const auto& f : index.at("weight_map")) weights.push_back(f.get<std::string>());
-    if (weights.empty()) weights.push_back("model.safetensors");
-    for (const std::string& f : weights) {
-      uint64_t size = 0;
-      if (!file_size(dir + "/" + f, size) || size < 1024 * 1024) return false;  // a header, not the weights
-    }
-    return true;
-  } catch (const std::exception&) {
-    return false;
+  // planning writes the files the plan lists as their headers, a few hundred KB each (a few KB for the MTP head's): a
+  // file that small is a header, so the model is not here, and a bigger one is weights. A shard of a split file counts
+  // as weights as soon as it is bigger than its header, which its first shard is once the download has written it.
+  bool listed = false;
+  for (std::error_code ec; const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+    const std::string f = e.path().filename().string();
+    if (!e.is_regular_file() || !std::regex_search(f, kWeightsFile)) continue;
+    listed = true;
+    uint64_t size = 0;
+    if (!file_size(dir + "/" + f, size) || size < kHeaderBytes) return false;
+    if (f.find("-of-") != std::string::npos) return true;
   }
+  return listed;
 }
 
 bool is_current(const ModelRef& ref) {

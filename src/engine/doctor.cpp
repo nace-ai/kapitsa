@@ -344,10 +344,8 @@ int run_doctor(int argc, char** argv) {
     } catch (const hub::Error&) {
     }
   }
-  // Every model here is only planned, never fetched: a plan not on this Mac is sized from its headers when the hub
-  // answers (one request each), and offline it is left out, so doctor never starts a multi-GB download for a model
-  // nobody asked for. The visits nest and close below.
-  hub::set_offline(true);
+  // no --model given: the folders --models-dir names (when given), else the catalog, the store and the folders other
+  // tools keep models in
   if (models.empty()) {
     if (roots.empty()) {
       // the catalog's models first (downloaded or not: what fits this Mac before a download), then the store and the
@@ -379,9 +377,12 @@ int run_doctor(int argc, char** argv) {
         if (k == d) return true;
         const std::string kn = k.substr(k.find_last_of('/') + 1);
         if (kn == name) return true;
-        // the same model under another name: a plan and the store copy, or a partial plan and its own folder elsewhere
-        return hub::is_plan(d) ? (hub::plan_has_model(d) && kn.rfind(name, 0) == 0) || name.rfind(kn, 0) == 0
-                               : hub::plan_has_model(k) && kn.rfind(name, 0) == 0;
+        // the same model under another name: a plan holding its weights and the store copy, or a partial plan and its
+        // own folder elsewhere. A plan that is only planned stays listed beside the catalogue plan of a model whose
+        // name starts the same way: which variants hold the same weights is not this loop's call
+        return hub::is_plan(d) ? (hub::models_dir().rfind(k, 0) == 0 && hub::plan_has_model(d) && kn.rfind(name, 0) == 0) ||
+                                     (hub::is_plan(k) && name.rfind(kn, 0) == 0)
+                               : hub::is_plan(k) && hub::plan_has_model(k) && kn.rfind(name, 0) == 0;
       });
       if (!seen) once.push_back(d);
     }
@@ -686,6 +687,10 @@ int run_doctor(int argc, char** argv) {
   eo.context = ctx, eo.slots = slots_opt, eo.prefill_chunk = chunk, eo.dflash = dflash;
   const int slots = fit_slots(slots_opt);  // a variant fits with the slots asked for, else with two (auto's fewest)
   nlohmann::ordered_json cv = nlohmann::ordered_json::array();
+  // A variant is left out of this report, never planned to be in it: a plan of one this Mac lacks would cost a trip to
+  // the hub for its headers (and, on the way, could start its download). A variant not planned says so, and `kapitsa
+  // doctor --model <name>` plans the one a person asks for. The visit nests inside the report's own and closes below.
+  hub::set_offline(true);
   if (!as_json && !tty) printf("\nCatalog variants on this Mac (--context %s, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", term::context(ctx).c_str(), slots);
   for (const auto& c : hub::catalog()) {
     bool fits = false;
