@@ -742,7 +742,7 @@ class ServeControl : public server::ControlApi {
     size_t budget = 0;
     std::string current;
     if (mgr) {
-      opt = mgr->options();
+      opt = mgr->base_options();  // (options() waits for a load in progress, and follows the model the last switch loaded)
       budget = mgr->budget();
       current = mgr->current_ref().dir;
     }
@@ -831,7 +831,7 @@ class ServeControl : public server::ControlApi {
 
   server::Identity id_;
   std::mutex fits_mu_;
-  std::map<std::string, std::string> fits_;  // folder -> fit; fixed for this run (its budget and options do not change)
+  std::map<std::string, std::string> fits_;  // folder -> fit; from the start's options and budget, which never change
   server::Attached<ModelManager> mgr_;  // weak: the socket never keeps the manager, or its engine, past run_service
 };
 static ServeControl* g_serve_control = nullptr;  // (never freed: the socket's threads may outlive run_service)

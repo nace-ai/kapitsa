@@ -358,6 +358,9 @@ class ModelManager : public std::enable_shared_from_this<ModelManager> {
     return opt_;
   }
   size_t budget() const { return budget_; }  // the GPU memory the engine may hold (set at init)
+  // The options the server started with: written once in init() and never again, so it answers while a switch or a
+  // release holds rw_mu_ for the whole load (options() would wait for it)
+  const EngineOptions& base_options() const { return base_opt_; }
   // Requests in flight now
   int in_flight() const { return in_flight_.load(); }
 
