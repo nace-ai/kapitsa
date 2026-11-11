@@ -162,7 +162,7 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | Model | 16 GB | 24 GB | 32 GB | 36 GB | 48 GB | 64 GB | 128 GB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Qwen3.5-4B** · `4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
-| **Qwen3.5-9B** · `9b` | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit |
+| **Qwen3.5-9B** · `9b` | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant |
 | **Qwen3.8-27B** · `27b` | — | 4-bit† | 5-bit | 5-bit | 8-bit | 8-bit | BF16 |
 | **Qwen3.6-35B-A3B** · `35b` | 2-bit† | 2-bit | 4-bit | 4-bit | 6-bit | 8-bit | BF16 |
 | **Qwen3.8-Flash-Next 180B-A7B** · `flash-next` | — | — | — | — | 2-bit + SSD | 2-bit | 4-bit |
@@ -271,7 +271,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | Model | <mark>**Kapitsa**</mark> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>MLX<br>(mlx-lm / mlx-vlm)</sub> | <sub>llama.cpp</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 703 / **120**<br><sub>KFlash</sub> | 600 / 67<br><sub>MTP · 0.40.8</sub> | 612 / 64<br><sub>MTP · 2.12.2</sub> | 642 / 56<br><sub>MTP · mlx-vlm 0.7.8</sub> | 512 / 50<br><sub>MTP · b11804</sub> |
-| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 381 / **77**<br><sub>KFlash</sub> | — | — | 353 / 27<br><sub>mlx-lm 0.32.2</sub> | 307 / 23<br><sub>b11804</sub> |
+| **Qwen3.5-9B** · `9b`<br><sub>dense · legacy 4-bit pack, 9.0 GB</sub> | 🟩 381 / **77**<br><sub>KFlash</sub> | — | — | 353 / 27<br><sub>mlx-lm 0.32.2</sub> | 307 / 23<br><sub>b11804</sub> |
 | **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 110 / **40**<br><sub>KFlash</sub> | 99 / 23<br><sub>MTP · 0.40.8</sub> | 99 / 22<br><sub>MTP · 2.12.2</sub> | 102 / 18<br><sub>MTP · mlx-vlm 0.7.8</sub> | 86 / 16<br><sub>MTP · b11804</sub> |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 855 / **106**<br><sub>KFlash</sub> | 681 / 58<br><sub>MTP · 0.40.8</sub> | 671 / 53<br><sub>MTP · 2.12.2</sub> | 695 / 53<br><sub>DFlash2 · mlx-vlm 0.7.8</sub> | 578 / 53<br><sub>MTP · b11804</sub> |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 450 / **36**<br><sub>KFlash</sub> | × | × | 344 / 30<br><sub>mlx-lm 0.32.2.dev0</sub> | — |
@@ -298,7 +298,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve</sub> | <sub>oMLX</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>MLX<br>(mlx-lm / mlx-vlm)</sub> | <sub>llama.cpp</sub> | <sub>LM&nbsp;Studio</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 401 / **97**<br><sub>KFlash</sub> | 286 / 62<br><sub>MTP · 26.10.2</sub> | 281 / 55<br><sub>MTP · 0.7.1rc1</sub> | 298 / 55<br><sub>MTP · 0.40.6</sub> | 305 / 42<br><sub>MTP · 2.12.2</sub> | 308 / 46<br><sub>mlx-lm 0.32.2</sub> | 315 / 38<br><sub>MTP · b11669</sub> | 308 / 47<br><sub>MLX runtime 1.13.1</sub> |
-| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 217 / **57**<br><sub>KFlash</sub> | 159 / 37<br><sub>MTP · 26.10.2</sub> | — | — | — | 170 / 30<br><sub>mlx-lm 0.32.2</sub> | — | — |
+| **Qwen3.5-9B** · `9b`<br><sub>dense · legacy 4-bit pack, 9.0 GB</sub> | 🟩 217 / **57**<br><sub>KFlash</sub> | 159 / 37<br><sub>MTP · 26.10.2</sub> | — | — | — | 170 / 30<br><sub>mlx-lm 0.32.2</sub> | — | — |
 | **Qwen3.6-35B-A3B** · `35b:16gb`<br><sub>MoE, 3B active · 2-bit experts (unsloth's GGUF), 10.8 GB</sub> | 🟩 462 / **52**<br><sub>KFlash</sub> | × | × | — | × | × | 38<br><sub>b11669</sub> | — |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **39**<br><sub>KFlash</sub> | × | × | × | × | 30<br><sub>mlx-lm 0.32.3.dev3</sub> | 4<br><sub>b11551</sub> | × |
 | **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 🟩 **37**<br><sub>KFlash</sub> | — | — | — | — | 21<br><sub>BF16, version not recorded</sub> | 28<br><sub>Q4_K_M, b11669</sub> | — |

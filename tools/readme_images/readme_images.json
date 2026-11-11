@@ -97,7 +97,7 @@
   ],
   "models": {
    "Qwen3.5 4B": {"name": "Qwen3.5-4B", "alias": "4b", "about": "dense · 4-bit, 4.6 GB"},
-   "Qwen3.5 9B": {"name": "Qwen3.5-9B", "alias": "9b", "about": "dense · 4-bit, 9.0 GB"},
+   "Qwen3.5 9B": {"name": "Qwen3.5-9B", "alias": "9b", "about": "dense · legacy 4-bit pack, 9.0 GB"},
    "Qwen3.8 27B": {"name": "Qwen3.8-27B", "alias": "27b", "about": "dense · 4-bit, 20.2 GB"},
    "Qwen3.6 35B-A3B": {"name": "Qwen3.6-35B-A3B", "alias": "35b", "about": "MoE, 3B active · 4-bit, 22.1 GB"},
    "Qwen3.6 35B-A3B 2-bit": {"name": "Qwen3.6-35B-A3B", "alias": "35b:16gb", "about": "MoE, 3B active · 2-bit experts (unsloth's GGUF), 10.8 GB"},
