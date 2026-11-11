@@ -6,6 +6,7 @@
 
 #include <unistd.h>
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -57,6 +58,34 @@ int main() {
   hub::set_offline(true);
   hub::leave_offline();  // every visit on this thread ends at once
   check(!hub::fetch_refused(), "leave_offline ends a nested visit and the outer one with it");
+
+  // two threads with a visit open at once (serve's UI and picker open one on whichever thread calls them): neither's end
+  // may remove the other's, and the count is back to zero once both have ended
+  {
+    std::atomic<int> stage{0};
+    bool worker_while_both = false, still_refused = false, worker_after = false;
+    std::thread u([&] {
+      hub::set_offline(true);
+      stage = 2;  // both threads are inside a visit now
+      while (stage.load() != 3) std::this_thread::yield();  // wait for P's checks, then end first
+      hub::set_offline(false);
+      stage = 4;
+    });
+    hub::set_offline(true);
+    while (stage.load() != 2) std::this_thread::yield();
+    worker_while_both = worker_refused();  // a fresh worker, with both threads' visits open
+    stage = 3;
+    while (stage.load() != 4) std::this_thread::yield();  // U's visit has ended, this thread's is still open
+    still_refused = hub::fetch_refused();
+    worker_after = worker_refused();  // while this thread's visit is still open
+    hub::set_offline(false);
+    u.join();
+    check(worker_while_both, "two threads' visits both cover a fresh worker thread");
+    check(still_refused, "one thread's end leaves the other thread's visit open");
+    check(worker_after, "with one thread's visit still open, a fresh worker is refused");
+    check(!hub::fetch_refused(), "after both threads' visits end, a fetch goes ahead");
+    check(!worker_refused(), "after both threads' visits end, a fresh worker goes ahead");
+  }
 
   // a catalog model that is not on this Mac: refused, and counted, rather than fetched
   hub::set_offline(true);

@@ -1676,36 +1676,45 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
           double(p.size - p.head.size()) / 1e6, hidden.c_str());
 }
 
-// Offline visits (hub.h): per thread a nesting count, and how many of them this thread's outermost visit found open
-// elsewhere, so that a thread started inside a visit is in it too and the process-wide count returns to zero exactly.
-// A worker thread of plan_dir starts inside the caller's visit: before this, every caller's plans fetched even with
-// set_offline(true) set (issue #1187).
+// Offline visits (hub.h): per thread a nesting count, and the number of threads with a visit open, which is what a
+// thread that was started inside a visit reads: a worker thread of plan_dir starts inside the caller's visit, and before
+// this every caller's plans fetched even with set_offline(true) set (issue #1187). Two threads count separately and
+// neither's end removes the other's count, so the count is the number of threads with a visit open, never negative.
 static thread_local int tl_visits = 0;
-static thread_local int tl_inherited = 0;
+
+// One locked step: every change of a thread's nesting count changes the count of threads with a visit open with it, so
+// two threads with a visit open count 2, one thread's end leaves 1, and the count is never negative.
+static std::mutex g_visits_mu;
 static std::atomic<int> g_visits{0};
 
 // Whether a fetch from this thread is refused: its own visits, or a visit open on another thread
-static bool no_fetch() { return tl_visits > 0 || g_visits > 0; }
+static bool no_fetch() { return tl_visits > 0 || g_visits.load() > 0; }
 
 static std::atomic<int> g_offline_misses{0};
 
 bool fetch_refused() { return no_fetch(); }
 
 void set_offline(bool on) {
-  if (on && tl_visits++ == 0) tl_inherited = g_visits++;
-  if (!on && tl_visits > 0 && --tl_visits == 0) {  // its last visit: its own count and what it saw open elsewhere
-    g_visits -= tl_inherited + 1;
-    tl_inherited = 0;
+  {
+    const std::lock_guard<std::mutex> lock(g_visits_mu);
+    if (on) {
+      if (tl_visits++ == 0) ++g_visits;  // this thread's outermost visit: one more thread inside
+    } else if (tl_visits > 0 && --tl_visits == 0) {
+      --g_visits;  // its outermost visit's end: one thread fewer inside
+    }
   }
-  if (g_visits == 0) g_offline_misses = 0;
+  if (g_visits.load() == 0) g_offline_misses = 0;
 }
 
 void leave_offline() {
-  if (tl_visits > 0) {
-    g_visits -= tl_inherited + 1;
-    tl_visits = 0, tl_inherited = 0;
+  {
+    const std::lock_guard<std::mutex> lock(g_visits_mu);
+    if (tl_visits > 0) {
+      tl_visits = 0;
+      --g_visits;  // every visit on this thread ends at once, and this thread is inside once, not tl_visits times
+    }
   }
-  if (g_visits == 0) g_offline_misses = 0;
+  if (g_visits.load() == 0) g_offline_misses = 0;
 }
 
 int offline_misses() { return g_offline_misses; }
