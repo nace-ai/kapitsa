@@ -111,7 +111,7 @@ console.log("link, key and live view ok");
 
 // 1b. a page opened later reads the log lines the bus kept: the loading lines come first, flagged as earlier (they have
 // no time), and none of the replayed events change the view; the filter keeps the warnings and brings the rest back
-// (the stand-in logs its loading lines at its first tick, events 3 to 5: open the late page only after them, or it gets them live)
+// (the stand-in logs its loading lines at its first tick, events 3 to 5: open the late page once they are logged, or it gets them live)
 await until(async () => Number((await get(s, "/engine/status")).last_event_id.split(".").pop()) >= 5, 10000, "the stand-in has logged its loading lines");
 const late = page(s.base, "#t=" + s.token);
 await until(() => late.view().link === "live" && late.view().run, 10000, "a late page connects");
