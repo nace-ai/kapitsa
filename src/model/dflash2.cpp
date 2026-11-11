@@ -71,7 +71,8 @@ static int lowrank_request() {
 }
 
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
-  return hidden >= 2560 || (m1_max_32() && hidden == 2048 && moe && head_q4);  // guard: CORE4 measured on M1 Max 32
+  const bool wide_chip = m1_max_32() || high_cores();
+  return hidden >= 2560 || (wide_chip && hidden == 2048 && moe && head_q4);  // guard: CORE4 measured on M1 Max 32 and 60+ core GPUs
 }
 
 // process physical footprint (what Activity Monitor / bench.py report), bytes

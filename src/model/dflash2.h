@@ -4,6 +4,7 @@
 // encodes one drafting pass (anchor + 7 mask rows -> 7 proposals) into a command buffer.
 // Opt-in: nothing here is constructed unless a drafter directory is given.
 #pragma once
+#include "engine/device_profile.h"
 #include "model/kflash_budget.h"
 #include "util/log.h"
 #include "model/qwen35.h"
@@ -467,7 +468,8 @@ class DFlash2 {
   Buffer pcap_, xph_, yph_, cph_, kvph_;
   int max_splits_ = 32;  // partial buffers (attention splits)
   // context splits of the draft attention (NI_KFLASH_ATTN_SPLITS, <= max_splits_)
-  int attn_splits_ = std::clamp(kenv("ATTN_SPLITS") ? atoi(kenv("ATTN_SPLITS")) : 16, 1, 32);
+  int attn_splits_ = std::clamp(
+      kenv("ATTN_SPLITS") ? atoi(kenv("ATTN_SPLITS")) : (high_cores() ? 32 : 16), 1, 32);
   bool h0_set_ = false, debug_ = false;
   int attn_variant_ = 0, pf8_ = -1;
   std::map<std::string, Buffer> dbg_;

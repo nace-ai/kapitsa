@@ -2,7 +2,8 @@
 src/engine/doctor.cpp	2
 src/engine/engine.cpp	5
 src/metal/gpu.mm	1
-src/model/dflash2.cpp	8
+src/model/dflash2.cpp	9
+src/model/dflash2.h	1
 src/model/dory.cpp	4
 src/model/dspark.cpp	2
 src/model/flint.cpp	4
