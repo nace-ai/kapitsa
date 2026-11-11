@@ -161,6 +161,25 @@ int main(int argc, char** argv) {
   for (const std::string& s : shards) sparse_file(full + "/" + s, 3 << 20);
   check(hub::plan_has_model(full), "a plan holding its weights has the model");
 
+  // the MTP head's file is header-sized even in a plan that was downloaded, so it does not stand for the model and it
+  // does not take the weights away either: the answer is the same whichever of the two files readdir lists first
+  const std::string mtp = plan("kw-mtp");
+  for (const std::string& s : shards) sparse_file(mtp + "/" + s, 3 << 20);
+  write_file(mtp + "/mtp.safetensors", "");
+  shrink_to_header(mtp + "/mtp.safetensors");
+  check(hub::plan_has_model(mtp), "a header-sized mtp.safetensors beside the weights leaves the model in the plan");
+
+  // the same for a split file whose later shard is still a header: one shard with the weights is the model
+  const std::string halfsplit = plans + "/kw-halfsplit";
+  fs::create_directories(halfsplit);
+  write_file(halfsplit + "/config.json", config);
+  write_file(halfsplit + "/.complete", "planned");
+  write_file(halfsplit + "/model-00001-of-00002.safetensors", "");
+  write_file(halfsplit + "/model-00002-of-00002.safetensors", "");
+  shrink_to_header(halfsplit + "/model-00001-of-00002.safetensors");
+  sparse_file(halfsplit + "/model-00002-of-00002.safetensors", 3 << 20);
+  check(hub::plan_has_model(halfsplit), "a split model with one shard of weights has the model");
+
   // a model split into shards ("model-00001-of-00002.safetensors") is in its plan when its first shard is, and the
   // index beside them lists the shards without being one
   const std::string split = plans + "/kw-split";

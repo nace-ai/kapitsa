@@ -1203,7 +1203,7 @@ bool plan_is_current(const std::string& dir) {
 // The files a plan lists that hold a model: its shards (one, or "N-of-M"), its MTP head, or model.safetensors whole.
 // a name that ends in .safetensors: "model.safetensors" and its shards, and not the model.safetensors.index.json
 // beside them, which lists the shards and is a header's size
-static const std::regex kWeightsFile(R"((^|/)((model-)?\d+-of-\d+|mtp|model|weights)\.safetensors$)");
+static const std::regex kWeightsFile(R"((^|/)((model-)?\d+-of-\d+|model|weights)\.safetensors$)");
 // Bigger than any header in the catalog (a shard's is a few hundred KB, the MTP head's a few KB): the height of a header.
 static constexpr uint64_t kHeaderBytes = 1024 * 1024;
 
@@ -1211,19 +1211,18 @@ static constexpr uint64_t kHeaderBytes = 1024 * 1024;
 // files a plan lists are config.json and the safetensors headers), so a plan is only planned from its headers until
 // the model is downloaded into that folder; a GGUF variant's plan is its conversion, written where it is planned.
 bool plan_has_model(const std::string& dir) {
-  // planning writes the files the plan lists as their headers, a few hundred KB each (a few KB for the MTP head's): a
-  // file that small is a header, so the model is not here, and a bigger one is weights. A shard of a split file counts
-  // as weights as soon as it is bigger than its header, which its first shard is once the download has written it.
-  bool listed = false;
+  // planning writes the files the plan lists as their headers, a few hundred KB each: one file that is a weights file
+  // and is bigger than a header is the model, and it is here whether or not another file of the plan is still a header.
+  // So the first such file answers true, and the order the files come in does not decide the answer: a downloaded
+  // model.safetensors stays the model beside a header-sized file of another name, and one written shard of a split
+  // file is the model while the rest are still headers.
   for (std::error_code ec; const auto& e : std::filesystem::directory_iterator(dir, ec)) {
     const std::string f = e.path().filename().string();
     if (!e.is_regular_file() || !std::regex_search(f, kWeightsFile)) continue;
-    listed = true;
     uint64_t size = 0;
-    if (!file_size(dir + "/" + f, size) || size < kHeaderBytes) return false;
-    if (f.find("-of-") != std::string::npos) return true;
+    if (file_size(dir + "/" + f, size) && size >= kHeaderBytes) return true;
   }
-  return listed;
+  return false;
 }
 
 bool is_current(const ModelRef& ref) {
