@@ -416,7 +416,10 @@ int run_doctor(int argc, char** argv) {
         if (!hub::plan_has_model(d)) return false;  // an empty plan stands only for its own name
         if (is_a_plan(k) && !hub::plan_has_model(k)) return false;
         // the same model under another name: a plan holding its weights and the store's copy, a partial plan and the
-        // store's, or the catalogue's plan of another variant of the store's model
+        // store's, or the catalogue's plan of another variant of the store's model. A name prefix only says two folders
+        // hold one model when one of them is a plan: the store's own `foo` and `foo-8bit` both with weights are two
+        // models, and folding one into the other would drop it from the report in whatever order they came in.
+        if (!is_a_plan(d) && !is_a_plan(k)) return false;
         return kn.rfind(name, 0) == 0 || (kn.size() > base.size() && kn.rfind(base, 0) == 0);
       });
       if (!seen) kept.push_back(d);
