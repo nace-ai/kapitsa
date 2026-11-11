@@ -53,6 +53,7 @@ tr.done td{color:var(--muted)}
 .prog{display:inline-block;width:90px;height:5px;border-radius:3px;background:var(--free);vertical-align:middle;overflow:hidden;margin-right:6px}
 .prog b{display:block;height:100%;background:var(--warn)}
 svg{display:block;width:100%;height:96px}
+button.mini{font-size:12px;padding:1px 8px;margin-left:10px;text-transform:none;letter-spacing:0;font-weight:500}
 #logs{height:190px;overflow:auto;margin:0;white-space:pre-wrap;color:var(--fg)}
 #logs .t{color:var(--muted)}#logs .warn{color:var(--warn)}#logs .error{color:var(--err)}
 .empty{color:var(--muted);font-size:13px;padding:6px 0;grid-column:1/-1}
@@ -136,7 +137,7 @@ applyTheme();
       <th class="n">Read</th><th class="n">Written</th><th class="n">tok/s</th><th class="n">Time</th></tr></thead>
       <tbody id="reqs"></tbody></table>
   </section>
-  <section class="c12"><h2>Log <span id="lognote"></span></h2><pre id="logs" class="mono"></pre></section>
+  <section class="c12"><h2>Log <button id="logf" class="mini" title="Show every line, or only warnings and errors"></button> <span id="lognote"></span></h2><pre id="logs" class="mono"></pre></section>
 </main>
 <script>
 "use strict";
@@ -146,7 +147,7 @@ applyTheme();
 // read; the page keeps it for this tab only and takes it out of the address bar.
 const $ = id => document.getElementById(id);
 const S = {status: null, reqs: new Map(), done: [], logs: [], rates: [], drafts: [], tpc: null, share: null,
-           link: "connecting", noEngineAt: 0};
+           link: "connecting", noEngineAt: 0, replay: 0, warnOnly: store.get("kapitsa.engine.logs") === "warn"};
 const GB = 1e9, RATE_MS = 60000, DRAFT_MS = 10000;
 const fmtB = b => b >= 10 * GB ? (b / GB).toFixed(1) + " GB" : b >= GB ? (b / GB).toFixed(2) + " GB" : (b / 1e6).toFixed(0) + " MB";
 const fmtN = n => Number(n).toLocaleString("en-US");
@@ -212,8 +213,8 @@ const handlers = {
   },
 };
 
-function log(d) {
-  S.logs.push({t: new Date().toLocaleTimeString([], {hour12: false}), ...d});
+function log(d, earlier) {  // a replayed line has no time: the bus does not stamp them
+  S.logs.push({t: earlier ? "earlier" : new Date().toLocaleTimeString([], {hour12: false}), ...d});
   if (S.logs.length > 400) S.logs.splice(0, S.logs.length - 400);
 }
 
@@ -249,6 +250,8 @@ async function stream(lastId, on) {
   }
 }
 
+const seq = id => Number(id.slice(id.lastIndexOf(".") + 1));
+
 // The status first, then the stream from its last_event_id (docs/control-socket.md, "Events"): the server replays
 // every event after it, or sends a reset. After a drop the stream resumes from the last event seen, retrying every few
 // seconds.
@@ -263,11 +266,21 @@ async function connect() {
         if (!r.ok) throw {status: r.status, error: j.error || {}};
         apply(j);
         last = j.last_event_id;
+        // the stream starts at the run's second event, so the bus replays the log lines it still keeps (the page then
+        // knows what the server said before it opened); events up to the status's are read for their log lines only
+        const until = seq(last);
+        if (until > 1) { S.replay = until; last = j.run_id + ".1"; }
         $("msg").textContent = "";
       } catch (e) { refused(e); }
     }
     if (last) {
       const on = (type, id, data) => {
+        if (S.replay && type === "reset") { apply(data.status, data.reason); S.replay = 0; last = data.status.last_event_id; return; }  // (the bus kept too little: the status is all there is)
+        if (S.replay && id && seq(id) <= S.replay) {  // (a state event's message, a failed switch's text, is a warning as it is live)
+          if (type === "log") log(data, true); else if (type === "state" && data.message) log({level: "warn", message: data.message}, true);
+          last = id; return;
+        }
+        S.replay = 0;
         handlers[type](data);
         last = type === "reset" ? data.status.last_event_id : id || last;
       };
@@ -387,10 +400,12 @@ function draw() {
   $("reqnote").textContent = `${active.length} running` + (S.done.length ? ` · last ${S.done.length} finished` : "");
 
   const box = $("logs"), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
-  box.innerHTML = S.logs.length ? S.logs.slice(-200).map(l => `<span class="t">${esc(l.t)}</span> <span class="${esc(l.level)}">${esc(l.message)}</span>`).join("\n")
-    : `<span class="t">Nothing logged since this page opened.</span>`;
+  const shown = S.warnOnly ? S.logs.filter(l => l.level === "warn" || l.level === "error") : S.logs;
+  $("logf").textContent = S.warnOnly ? "Warnings and errors" : "All lines";
+  box.innerHTML = shown.length ? shown.slice(-200).map(l => `<span class="t">${esc(l.t)}</span> <span class="${esc(l.level)}">${esc(l.message)}</span>`).join("\n")
+    : `<span class="t">${S.logs.length ? "No warnings or errors." : "Nothing logged yet."}</span>`;
   if (atEnd) box.scrollTop = box.scrollHeight;
-  $("lognote").textContent = plural(S.logs.length, "line");
+  $("lognote").textContent = S.warnOnly ? `${shown.length} of ${plural(S.logs.length, "line")}` : plural(S.logs.length, "line");
 }
 
 // ---------------------------------------------------------------- actions: the socket's own answers, with this run's key
@@ -462,6 +477,7 @@ $("sw").onsubmit = async ev => {
   finally { S.switching = false; $("swgo").textContent = "Switch"; }
 };
 
+$("logf").onclick = () => { S.warnOnly = !S.warnOnly; store.set("kapitsa.engine.logs", S.warnOnly ? "warn" : "all"); draw(); };
 connect();
 draw();
 setInterval(draw, 500);

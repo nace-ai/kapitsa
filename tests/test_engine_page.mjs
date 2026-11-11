@@ -27,10 +27,10 @@ async function until(f, ms, what) {
 }
 
 // One stand-in on `port`, with its key read back from --token-file
-async function standIn(port) {
+async function standIn(port, extra = []) {
   const dir = mkdtempSync(join(tmpdir(), "engine-page-")), tokenFile = join(dir, "token");
   const p = spawn("python3", [join(root, "tools/engine_replay.py"), "--port", String(port), "--speed", "4",
-                              "--token-file", tokenFile], {stdio: ["ignore", "pipe", "inherit"]});
+                              "--token-file", tokenFile, ...extra], {stdio: ["ignore", "pipe", "inherit"]});
   await until(() => { try { return readFileSync(tokenFile, "utf8").trim(); } catch { return ""; } }, 15000, "the stand-in starts");
   const token = readFileSync(tokenFile, "utf8").trim();
   return {p, token, base: `http://127.0.0.1:${port}`,
@@ -114,6 +114,48 @@ await until(async () => {
 await until(() => /Prefix cache[\s\S]*In memory[\s\S]*On the SSD[\s\S]*of [\d.]+ GB it may hold/.test(a.el("cache").innerHTML), 10000,
             "the Memory card shows the RAM and SSD prefix caches");
 console.log("link, key and live view ok");
+
+// 1b. a page opened later reads the log lines the bus kept: the loading lines come first, flagged as earlier (they have
+// no time), and none of the replayed events change the view; the filter keeps the warnings and brings the rest back
+// (the stand-in logs its loading lines at its first tick, events 3 to 5: open the late page once they are logged, or it gets them live)
+await until(async () => Number((await get(s, "/engine/status")).last_event_id.split(".").pop()) >= 5, 10000, "the stand-in has logged its loading lines");
+const late = page(s.base, "#t=" + s.token);
+await until(() => late.view().link === "live" && late.view().run, 10000, "a late page connects");
+const logs = () => vm.runInContext("S.logs.map(l => ({t: l.t, level: l.level, message: l.message}))", late.ctx);
+await until(() => logs().some(l => /^loading qwen/.test(l.message)), 10000, "the late page has the loading lines the server logged before it opened");
+const bk = logs(), firstLive = bk.findIndex(l => l.t !== "earlier"), lastEarlier = bk.map(l => l.t).lastIndexOf("earlier");
+check(bk.some(l => l.level === "warn" && l.t === "earlier" && /a made-up state message/.test(l.message)),
+      `a replayed state event's message is a warning, as it is live (${JSON.stringify(bk.slice(0, 3))})`);
+check(bk.filter(l => l.t === "earlier").length >= 4 && bk.some(l => l.level === "warn" && l.t === "earlier") &&
+      bk.some(l => l.level === "debug" && l.t === "earlier") && (firstLive < 0 || lastEarlier < firstLive),
+      `the replayed lines come first, flagged earlier, each level kept (${JSON.stringify(bk.slice(0, 4))})`);
+await until(async () => late.view().state === (await get(s, "/engine/status")).state &&
+                        late.view().reqs === (await get(s, "/engine/status")).requests.map(r => r.request_id).sort().join(","),
+            10000, "the late page's state and requests are the server's, not the replayed events'");
+late.drawNow();
+check(/loading qwen/.test(late.el("logs").innerHTML) && /earlier/.test(late.el("logs").innerHTML), "the replayed lines are drawn");
+late.tap("logf");
+late.drawNow();
+check(late.el("logs").innerHTML.includes("a made-up state message"), "the filter keeps a replayed state message");
+check(late.el("logs").innerHTML.includes("a made-up warning") && late.el("logs").innerHTML.includes("a made-up error") &&
+      !late.el("logs").innerHTML.includes("loading qwen") &&
+      /^\d+ of \d+ lines$/.test(late.el("lognote").textContent) && late.el("logf").textContent === "Warnings and errors",
+      `the filter keeps only warnings and errors and says how many (${late.el("lognote").textContent})`);
+late.tap("logf");
+late.drawNow();
+check(late.el("logs").innerHTML.includes("loading qwen") && late.el("logf").textContent === "All lines", "the filter turns off");
+console.log("log replay and filter ok");
+
+// 1c. a bus that kept too little (8 events): the status is all the page gets, and it is live with no "caught up" line
+const small = await standIn(port + 100, ["--buffer", "8"]);
+await sleep(4000);  // (more than 8 events in)
+const thin = page(small.base, "#t=" + small.token);
+await until(() => thin.view().link === "live" && thin.view().run, 10000, "a page on a thin bus connects");
+await sleep(1500);
+check(thin.view().state && !vm.runInContext("S.logs.some(l => /caught up/.test(l.message))", thin.ctx) &&
+      vm.runInContext("S.replay", thin.ctx) === 0, "a page on a bus that kept too little is live, with no reset line");
+await small.stop();
+console.log("thin bus ok");
 
 // 2. the page's Switch: a model the server lacks is said so and nothing changes; one it has reads switching, then ready
 // with it, and Switch waits meanwhile; each with this run's key, its run_id and a JSON body
