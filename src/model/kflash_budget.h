@@ -96,6 +96,8 @@ class KfBudget {
   // n rows' cost now (ms; 0: not measured)
   double cost(int n) const { return n >= 1 && n <= kf::kMaxRows ? cur_cost(n) : 0.0; }
   static constexpr int kExplore = 3;  // cycles per allowed count before the rule decides (wide verifies: 2)
+  // the build a cache file names (its "build"): a file another build wrote is not loaded (KfBatch's too)
+  static const char* build();
   double cost_narrow() const { return cost8n_; }  // an 8-row cycle at capacity 8 (wide verifies)
   float alpha(int d) const { return alpha_[d]; }
   float beta(int d) const { return beta_[d]; }
