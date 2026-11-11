@@ -163,14 +163,17 @@ def match(ref, cand):
         return [(i, i) for i in range(ref.rows)]
     if ref.seqs == cand.seqs and ref.keys == cand.keys:  # the same files (logit_dump --from, or the same windows)
         return [(i, i) for i in range(ref.rows)]
-    index = {cand.token_key(j): j for j in range(cand.rows)}
+    # Match repeated observations in dump order, consuming each candidate row once.
+    index = {}
+    for j in reversed(range(cand.rows)):
+        index.setdefault(cand.token_key(j), []).append(j)
     pairs, missing = [], 0
     for i in range(ref.rows):
-        j = index.get(ref.token_key(i))
-        if j is None:
+        rows = index.get(ref.token_key(i))
+        if not rows:
             missing += 1
         else:
-            pairs.append((i, j))
+            pairs.append((i, rows.pop()))
     if missing:
         raise ValueError(f"the candidate lacks {missing} of the reference's {ref.rows} prefixes")
     return pairs

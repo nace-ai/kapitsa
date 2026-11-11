@@ -125,6 +125,18 @@ t2 = max((i for i in range(V) if i != t1), key=ref[NEAR].__getitem__)
 ref[NEAR][t2] = f32(ref[NEAR][t1] - 0.002)
 
 with tempfile.TemporaryDirectory() as tmp:
+    # Two observations at the same prefix still carry two independently scored rows.
+    sequences = [[1, 2], [1, 3], [2, 1]]
+    records = [(0, 1), (1, 1), (2, 1)]
+    same, flipped = [0., 1., 2., 3.], [3., 2., 1., 0.]
+    repeated = write_dump(os.path.join(tmp, "repeated"), sequences, records, [same] * 3)
+    changed = write_dump(os.path.join(tmp, "changed"), sequences,
+                         [records[2], records[0], records[1]], [same, flipped, same])
+    rc, out = run(repeated, changed, "--min-top1", "1")
+    check(rc == 1 and "1 flip" in out, "a changed duplicate prefix row reaches the gate", out)
+    short = write_dump(os.path.join(tmp, "short"), sequences, records[1:], [same] * 2)
+    rc, out = run(repeated, short, "--min-top1", "1")
+    check(rc == 2, "a missing occurrence of a prefix cannot be scored twice", out)
     meta = {"model": "test-model-without-floor", "build": "test", "path": "verify"}
     R = write_dump(os.path.join(tmp, "ref"), seqs, recs, ref, meta)
 
