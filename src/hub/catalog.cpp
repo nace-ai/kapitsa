@@ -167,7 +167,7 @@ const std::vector<CatalogModel>& catalog() {
            // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two runs each) 227 against 209 tok/s
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.5-4B-MLX-4bit-KQuant",
+            .repo = "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant",
             .revision = "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
             .companions = {mtp4(), dflash4()},
             .download_gb = 4.57},
@@ -233,7 +233,7 @@ const std::vector<CatalogModel>& catalog() {
            // 4-bit pack. Not measured with the nace-ai drafter this entry downloads.
            {.name = "kquant",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.8-27B-MLX-4bit-KQuant",
+            .repo = "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant",
             .revision = "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364",
             .companions = {dflash27()},
             .download_gb = 20.17},
@@ -279,7 +279,7 @@ const std::vector<CatalogModel>& catalog() {
            // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant",
+            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant",
             .revision = "37e804f90e368a4de866bc34650b9dde67a78c8e",
             .companions = {dflash35()},
             .download_gb = 22.07},
@@ -344,7 +344,7 @@ const std::vector<CatalogModel>& catalog() {
            {.name = "kquant",
             .quant = "MLX affine KQuant 4-bit mix",
             .label = "4-bit KQuant",
-            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-4bit-KQuant",
+            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant",
             .revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd",
             .companions = {},
             .download_gb = 105.86},
