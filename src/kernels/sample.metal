@@ -83,29 +83,67 @@ NI_INLINE void sample_stage2_impl(const device float* cv, const device uint* ci,
                                   device float* out_probs, constant SampleParams& p, uint step, uint tid, uint ntg,
                                   threadgroup float* sv, threadgroup uint* si, threadgroup float* topv,
                                   threadgroup uint* topi) {
-  constexpr int PER = 4;
-  float v[PER];
-  uint id[PER];
-  for (int j = 0; j < PER; ++j) {
-    uint k = tid * PER + j;
-    v[j] = k < p.n ? cv[k] : -INFINITY;
-    id[j] = k < p.n ? ci[k] : 0xffffffff;
-  }
   uint K = max(1u, min(p.K, 64u));
   if (p.temp <= 0.0f) K = 1;
-  for (uint r = 0; r < K; ++r) {
-    float bv = -INFINITY;
-    uint bi = 0xffffffff;
-    int bj = -1;
-    for (int j = 0; j < PER; ++j)
-      if (v[j] > bv || (v[j] == bv && id[j] < bi)) { bv = v[j]; bi = id[j]; bj = j; }
-    float wv = bv;
-    uint wi = bi;
-    tg_argmax(wv, wi, sv, si, tid, ntg);
-    if (bj >= 0 && bi == wi && bv == wv) v[bj] = -INFINITY;
-    if (tid == 0) { topv[r] = wv; topi[r] = wi; }
+  if (p.temp > 0.0f && p.K >= 8 && p.K <= 32 && p.n % p.K == 0 && p.n / p.K <= 128) {
+    // Stage 1 already sorted each list. A lane holds four list heads and advances
+    // the winning list, avoiding a threadgroup reduction at every rank.
+    if (tid >= 32) return;
+    const uint lists = p.n / p.K;
+    float v[4];
+    uint id[4], pos[4];
+    for (uint j = 0; j < 4; ++j) {
+      const uint list = tid + j * 32;
+      pos[j] = 0;
+      v[j] = list < lists ? cv[list * p.K] : -INFINITY;
+      id[j] = list < lists ? ci[list * p.K] : 0xffffffffu;
+    }
+    uint first_id = 0xffffffffu;
+    for (uint rank = 0; rank < K; ++rank) {
+      float bv = -INFINITY;
+      uint bi = 0xffffffffu;
+      int bj = -1;
+      for (uint j = 0; j < 4; ++j)
+        if (v[j] > bv || (v[j] == bv && id[j] < bi)) { bv = v[j]; bi = id[j]; bj = int(j); }
+      float wv = bv;
+      uint wi = bi;
+      sample_simd_argmax(wv, wi);
+      // The original selector retains IDs when it removes values. Once every
+      // candidate value is exhausted, its -infinity padding repeats the lowest ID.
+      first_id = min(first_id, wi);
+      if (wv == -INFINITY) wi = first_id;
+      if (tid == 0) { topv[rank] = wv; topi[rank] = wi; }
+      if (bj >= 0 && bi == wi && bv == wv) {
+        const uint list = tid + uint(bj) * 32;
+        const bool has_next = ++pos[bj] < p.K;
+        v[bj] = has_next ? cv[list * p.K + pos[bj]] : -INFINITY;
+        id[bj] = has_next ? ci[list * p.K + pos[bj]] : 0xffffffffu;
+      }
+    }
+    simdgroup_barrier(mem_flags::mem_threadgroup);
+  } else {
+    constexpr int PER = 4;
+    float v[PER];
+    uint id[PER];
+    for (int j = 0; j < PER; ++j) {
+      uint k = tid * PER + j;
+      v[j] = k < p.n ? cv[k] : -INFINITY;
+      id[j] = k < p.n ? ci[k] : 0xffffffff;
+    }
+    for (uint r = 0; r < K; ++r) {
+      float bv = -INFINITY;
+      uint bi = 0xffffffff;
+      int bj = -1;
+      for (int j = 0; j < PER; ++j)
+        if (v[j] > bv || (v[j] == bv && id[j] < bi)) { bv = v[j]; bi = id[j]; bj = j; }
+      float wv = bv;
+      uint wi = bi;
+      tg_argmax(wv, wi, sv, si, tid, ntg);
+      if (bj >= 0 && bi == wi && bv == wv) v[bj] = -INFINITY;
+      if (tid == 0) { topv[r] = wv; topi[r] = wi; }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
   if (tid == 0) {
     uint chosen = topi[0];
     if (p.temp > 0.0f && K > 1) {

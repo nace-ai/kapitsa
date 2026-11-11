@@ -1,0 +1,68 @@
+{
+  "evidence_kind": "redacted derived evidence, not an original execution log",
+  "source_records": [
+    {
+      "record": "production-build-identity.json",
+      "sha256": "63453021e8bef9f0dc669630e2f20d981f4be9ba8414f1669c06306254d29a61"
+    },
+    {
+      "record": "qwen-inputs.json",
+      "sha256": "c1fb4b7f29fa4b1b9244027fb6bca8c910f201c01d0c01e6fd41fd345e33abce"
+    },
+    {
+      "record": "bolt-inputs.json",
+      "sha256": "f715ebab29dc5465f16ca4353b50144222c5c8e6f21e6fb132d28d5f35312f63"
+    }
+  ],
+  "data": {
+    "configuration": {
+      "chip": "Apple M5 Pro",
+      "gpu_cores": 20,
+      "physical_memory_GiB": 48,
+      "macos": "26.6.2",
+      "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)",
+      "native_build": "CMake Release"
+    },
+    "production": {
+      "A": {
+        "head": "0f1db29877966fec6f9208cd57d2e415f13f16f4",
+        "kernel_sha256": "0b310576e606a4a58b882018d86166d2f2ba4c72c7f3a55d440e47e18818fa82",
+        "binaries": {
+          "kapitsa": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b",
+          "ni_run": "91bbef32e9aae38aa044ca5f898034beb9a491a7b49c612a1324fc2089a18850",
+          "logit_dump": "c12fbc495da4e30807dbd1ced273bd55f50c42de1febefffb0e92143157e938f",
+          "sample_reduce_test": "34200081cd59ce4ff68e68a1219e7f88db06f5973570faff509fec2e517309a2"
+        }
+      },
+      "B": {
+        "head": "24f9182b3c9791f71f4478464d1dfb662859a1c3",
+        "kernel_sha256": "3a3ce4770be82698c43137abdbf1f23ed49e3919b59061db669fdfda118144ce",
+        "binaries": {
+          "kapitsa": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919",
+          "ni_run": "371ffc65398f4f8c11f64d9d6ba41f1cfd1e61b383d1c2eff79fcf54aca5f73e",
+          "logit_dump": "3b0b3c03af5c639e121f1142fc1c277d54feac28aeed92bcf743a21e06968737",
+          "sample_reduce_test": "630cd7b83b18a9548bd049b3964b6edd9a2f221a17f17794e37e1a11e26ac7d6"
+        }
+      }
+    },
+    "operator_harness": {
+      "source_sha256": "6796f0c0ed93338a771e74c77c02046103165ac3b3cc4d1129358586606c4958",
+      "binary_sha256": "d8b097f685547ebd5643f1691edfc55d2c2fea1fca6c89a655aa528797368c5e",
+      "reference_kernel_sha256": "0b310576e606a4a58b882018d86166d2f2ba4c72c7f3a55d440e47e18818fa82"
+    },
+    "model_metadata": {
+      "qwen": {
+        "config.json": "f3efc81b2ea8d96a45301037d3ccccbcccdef44a961845c87f286aaddbc6eaaa",
+        "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+      },
+      "bolt": {
+        "config.json": "cf4e46f4d6d241e67a91ed949681531d3f378ca0a7e04e3f8af66324098d9587",
+        "tokenizer.json": "d0432ad8b1c2984a2e2dca82e1933e3fd5628df6e95c51fba4c3ee9950dce299"
+      }
+    },
+    "models": {
+      "qwen": "qwen3.5-4b-4bit",
+      "bolt": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB"
+    }
+  }
+}
