@@ -180,6 +180,15 @@ int main(int argc, char** argv) {
   check(!hub::is_plan(home), "the home is not a plan");
   check(!hub::plan_has_model(home + "/models/" + model), "an empty store folder has no model");
 
+  // the catalogue's plan of a model, and the store's copy of it under the same name: the copy with the model stands
+  // for the name, whatever order the folders come in, and it is not called not downloaded
+  const std::string store_copy = home + "/models/" + model;
+  fs::create_directories(store_copy);
+  write_file(store_copy + "/config.json", config);
+  write_file(store_copy + "/model.safetensors.index.json", index);
+  write_file(store_copy + "/model.safetensors", "");
+  sparse_file(store_copy + "/model.safetensors", 3 << 20);
+
   // the doctor line, end to end
   if (!fs::exists(kapitsa_bin)) {
     std::printf("SKIP: the doctor line (%s is not built)\n", kapitsa_bin.c_str());
@@ -191,10 +200,16 @@ int main(int argc, char** argv) {
     // the plan the split model names is listed: a plan that is only planned keeps a name of its own in the report
     check(report.find("kw-split") != std::string::npos, "doctor lists a plan of a model split into shards");
     check(says_planned(report, "kw-planned"), "doctor: a plan with only headers says planned from its headers");
-    // a plan holding the model the store also holds is the store's copy in the report, listed once under that name
-    check(report.find("kw-weight") == std::string::npos, "doctor: the plan of a model the store holds is not a second row");
-    check(!says_planned(report, "kw-planned") || report.find("kw-planned") != std::string::npos,
-          "doctor: the plan that is only planned keeps its row");
+    // a plan holding its own weights is a copy of a model on this Mac: it is listed, and not called not downloaded
+    check(report.find("kw-weight") != std::string::npos, "doctor: a plan with its weights is listed at all");
+    check(!says_planned(report, "kw-weight"), "doctor: a plan with its weights is not called not downloaded");
+    // the store's copy of a model the catalogue plans from its headers: one row, the store's, and it is not called
+    // not downloaded, whatever order the folders are listed in
+    int rows = 0;
+    for (size_t at = report.find("  " + model); at != std::string::npos; at = report.find("  " + model, at + 1)) ++rows;
+    check(rows == 1, "doctor: the store's copy and its plan are one row");
+    check(report.find("  " + model + " (") != std::string::npos,
+          "doctor: the store's copy of the model is listed as downloaded");
   }
 
   if (keep) std::printf("kept %s\n", root.c_str());

@@ -366,9 +366,27 @@ int run_doctor(int argc, char** argv) {
       roots = {hub::models_dir(), home + "/.cache/nace-infer-models", home + "/.cache/nace-agent-models",
                home + "/.nace/models"};
     }
+    // the store is read beside the folders --models-dir names: a plan whose model is in the store is that copy, and the
+    // report names the copy the engine loads
+    if (std::find(roots.begin(), roots.end(), hub::models_dir()) == roots.end()) roots.push_back(hub::models_dir());
     for (const std::string& r : roots)
       for (const std::string& m : scan(r))
         if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
+    // the store's copy of every folder the report covers comes with it, by name: a --models-dir folder holds a plan's
+    // files and the copy the engine loads of that model sits in the store under the same name, and the store's folder is
+    // read by name here (is_model_dir reads a config.json, and a plan is sized from its headers)
+    for (const std::string& r : roots) {
+      if (DIR* dh = opendir(r.c_str())) {
+        while (dirent* e = readdir(dh)) {
+          if (e->d_name[0] == '.') continue;
+          const std::string store = hub::models_dir() + "/" + e->d_name;
+          if (std::filesystem::is_directory(store) &&
+              std::find(models.begin(), models.end(), store) == models.end())
+            models.push_back(store);
+        }
+        closedir(dh);
+      }
+    }
   }
   // Once each, with the copy that holds the model standing for its name: a model planned from its headers and then
   // downloaded into its plan is beside the store's folder, the catalogue's plan of a model is named after it without
@@ -385,9 +403,11 @@ int run_doctor(int argc, char** argv) {
       const std::string name = d.substr(d.find_last_of('/') + 1);
       // the catalogue's plan of a model is named after it: every catalogue variant name ends in a suffix of 4 or more
       // characters after a dash ("-4bit", "-24gb", "-nvfp4")
+      // (a plan holding its weights keeps a name of its own: only a plan that is only planned is named after a model)
       std::string base = name;
-      if (const size_t dash = name.rfind('-'); dash != std::string::npos && name.size() - dash - 1 >= 4)
-        base = name.substr(0, dash);
+      if (!hub::plan_has_model(d))
+        if (const size_t dash = name.rfind('-'); dash != std::string::npos && name.size() - dash - 1 >= 4)
+          base = name.substr(0, dash);
       const bool seen = std::any_of(kept.begin(), kept.end(), [&](const std::string& k) {
         if (k == d) return true;
         const std::string kn = k.substr(k.find_last_of('/') + 1);
@@ -402,10 +422,14 @@ int run_doctor(int argc, char** argv) {
     }
     // two folders that both hold one model: the store's own folder stands for it, so every name a user copies out of
     // the report resolves to the copy the engine loads
+    // "the store's own folder" is a folder that is not a plan: is_a_plan() also knows the plans a --models-dir names,
+    // and a --models-dir under the home holds a store copy whose path starts like the plans folder's
+    const std::string store_root = hub::models_dir() + "/";
+    const auto in_store = [&](const std::string& d) { return d.rfind(store_root, 0) == 0 && !is_a_plan(d); };
     std::vector<std::string> once;
     std::map<std::string, std::string> store_of;  // the store's folder for a model's name
     for (const std::string& d : kept)
-      if (!is_a_plan(d)) store_of[d.substr(d.find_last_of('/') + 1)] = d;
+      if (in_store(d)) store_of[d.substr(d.find_last_of('/') + 1)] = d;
     for (const std::string& d : kept) {
       const std::string name = d.substr(d.find_last_of('/') + 1);
       const auto it = is_a_plan(d) && hub::plan_has_model(d) ? store_of.find(name) : store_of.end();
