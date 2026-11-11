@@ -41,6 +41,14 @@ struct Stub : ControlApi {
   std::string switched_to;
   ControlReply stop() override { ++stops; return {202, {{"run_id", bus.run_id()}, {"state", "stopping"}}}; }
   void after_stop() override { ++stopped; }
+  ControlReply models() override {
+    return {200, {{"run_id", bus.run_id()}, {"memory_budget_bytes", 41448628224ULL},
+                  {"models", {{{"name", "qwen3.5-4b:4bit"}, {"title", "Qwen3.5-4B"}, {"variant", "4bit"},
+                               {"bytes", 4571194744ULL}, {"includes", {"MTP head", "DFlash drafter"}}, {"fits", "fits"},
+                               {"current", false}, {"up_to_date", true}},
+                              {{"name", "/models/big"}, {"bytes", 36861413976ULL}, {"includes", json::array()},
+                               {"fits", "too_big"}, {"current", false}, {"up_to_date", false}}}}}};
+  }
   ControlReply model_switch(const json& r) override {
     switched_to = r["model"];
     ++switches;
@@ -108,6 +116,8 @@ int main() {
     CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
     r = cl.Get("/engine/events", h);
     CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+    r = cl.Get("/engine/models", h);
+    CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
   }
   r = cl.Get("/engine/status", run_key);
   CHECK(r && r->status == 200 && r->get_header_value("Cache-Control") == "no-store" &&
@@ -115,6 +125,9 @@ int main() {
   const json st = json::parse(r->body);
   CHECK(st["state"] == "starting" && st["run_id"] == "7f3a9c2e5b1d4e60");
   cl.set_default_headers(run_key);
+  r = cl.Get("/engine/models");  // the socket's own answer: the downloaded models, behind the same key
+  CHECK(r && r->status == 200 && r->get_header_value("Cache-Control") == "no-store");
+  CHECK(json::parse(r->body)["models"][0]["name"] == "qwen3.5-4b:4bit" && json::parse(r->body)["run_id"] == st["run_id"]);
   // the API key still guards the rest of the port, and opens no /engine path (above)
   httplib::Client plain("127.0.0.1", port);  // (cl sends the run's key on every request from here on)
   r = plain.Get("/v1/models", httplib::Headers{{"Authorization", "Bearer k"}});
@@ -133,7 +146,7 @@ int main() {
     r = cl.Get(path);
     CHECK(r && r->status == 404 && error_code(r) == "not_found");
   }
-  for (const char* path : {"/engine", "/engine/status", "/engine/events"}) {
+  for (const char* path : {"/engine", "/engine/status", "/engine/events", "/engine/models"}) {
     r = cl.Post(path, "{}", "application/json");
     CHECK(r && r->status == 405 && error_code(r) == "method_not_allowed" && r->get_header_value("Allow") == "GET, HEAD");
     r = cl.Delete(path);

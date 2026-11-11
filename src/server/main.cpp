@@ -74,6 +74,7 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
+#include <map>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -719,7 +720,12 @@ class ServeControl : public server::ControlApi {
     strftime(at, sizeof at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     id_.started_at = at;
   }
-  void attach(const std::shared_ptr<ModelManager>& mgr) { mgr_.attach(mgr); }
+  // The manager is there: the fits of the downloaded models are planned now, in the background (the first listing
+  // would otherwise wait for the largest models' files: 5 s on the M5 Pro with six downloaded)
+  void attach(const std::shared_ptr<ModelManager>& mgr) {
+    mgr_.attach(mgr);
+    std::thread([this] { models(); }).detach();
+  }
 
   nlohmann::json status() override {
     return server::instance_status(id_, *server::events(), *server::activity(), server::last_state());
@@ -728,6 +734,34 @@ class ServeControl : public server::ControlApi {
     return {202, {{"run_id", server::events()->run_id()}, {"state", "stopping"}}};
   }
   void after_stop() override { request_stop(); }
+  // GET /models: what is downloaded, each with the name POST /model takes for it, its size and precision, and whether it
+  // fits this Mac (the engine's plan of its files, as the picker's marks: offline, one answer kept per folder)
+  server::ControlReply models() override {
+    const std::shared_ptr<ModelManager> mgr = mgr_.get();
+    EngineOptions opt;
+    size_t budget = 0;
+    std::string current;
+    if (mgr) {
+      opt = mgr->base_options();  // (options() waits for a load in progress, and follows the model the last switch loaded)
+      budget = mgr->budget();
+      current = mgr->current_ref().dir;
+    }
+    nlohmann::json out = nlohmann::json::array();
+    try {
+      for (const auto& m : hub::installed()) {
+        if (!m.complete) continue;
+        nlohmann::json j{{"name", switch_name(m)}, {"bytes", m.bytes}, {"includes", m.extras},
+                         {"fits", mgr ? fit_of(m, opt, budget) : "unknown"}, {"current", !current.empty() && m.dir == current},
+                         {"up_to_date", up_to_date(m)}};
+        if (const hub::CatalogModel* c = hub::find_model(m.name.substr(0, m.name.find(':')))) j["title"] = c->title;
+        if (!m.variant.empty()) j["variant"] = m.variant;
+        out.push_back(j);
+      }
+    } catch (const std::exception& e) {
+      return server::control_error(500, "internal", std::string("cannot list the downloaded models: ") + e.what());
+    }
+    return {200, {{"run_id", server::events()->run_id()}, {"memory_budget_bytes", budget}, {"models", out}}};
+  }
   server::ControlReply model_switch(const nlohmann::json& r) override {
     if (server::ControlReply no = server::switch_refusal(id_.config, r); no.status) return no;
     const std::shared_ptr<ModelManager> mgr = mgr_.get();  // (held for the switch only)
@@ -756,7 +790,48 @@ class ServeControl : public server::ControlApi {
   }
 
  private:
+  // What POST /model takes for a downloaded model: its name when that names this very folder, else the folder
+  static std::string switch_name(const hub::Installed& m) {
+    try {
+      if (hub::resolve(m.name).dir == m.dir) return m.name;
+    } catch (const std::exception&) {
+    }
+    return m.dir;
+  }
+  // A catalog model downloaded at older revisions than this Kapitsa pins downloads the difference before it loads: the
+  // switch waits for that. Any other model loads as it is.
+  static bool up_to_date(const hub::Installed& m) {
+    try {
+      const hub::ModelRef ref = hub::resolve(switch_name(m));
+      return ref.kind != hub::ModelRef::kCatalog || hub::is_current(ref);
+    } catch (const std::exception&) {
+      return true;
+    }
+  }
+  // "fits": one conversation at the default context fits beside the model and its drafter; "no_drafter": only without
+  // the drafter (slower); "too_big": not even that; "unknown": its files could not be planned
+  std::string fit_of(const hub::Installed& m, EngineOptions opt, size_t budget) {
+    std::lock_guard<std::mutex> lk(fits_mu_);
+    if (auto it = fits_.find(m.dir); it != fits_.end()) return it->second;
+    std::string fit = "unknown";
+    try {
+      const hub::ModelRef ref = hub::resolve(switch_name(m));
+      opt.context = default_context(ref.dir, opt, budget);
+      const bool whole = ref.kind == hub::ModelRef::kCatalog ? variant_fits(ref, opt, budget) == 1
+                                                             : conversation_fits(ref.dir, opt.context, opt.slots, budget);
+      fit = whole ? "fits"
+            : conversation_fits(ref.dir, opt.context, opt.slots, budget) || small_start_fits(ref.dir, opt.context, opt.slots, budget)
+                ? "no_drafter"
+                : "too_big";
+    } catch (const std::exception&) {
+    }
+    if (fit != "unknown") fits_[m.dir] = fit;
+    return fit;
+  }
+
   server::Identity id_;
+  std::mutex fits_mu_;
+  std::map<std::string, std::string> fits_;  // folder -> fit; from the start's options and budget, which never change
   server::Attached<ModelManager> mgr_;  // weak: the socket never keeps the manager, or its engine, past run_service
 };
 static ServeControl* g_serve_control = nullptr;  // (never freed: the socket's threads may outlive run_service)

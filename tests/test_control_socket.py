@@ -31,7 +31,7 @@ from referencing.jsonschema import DRAFT202012
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_DIR = os.path.join(ROOT, "schema", "control")
 ROOT_ID = "https://github.com/nace-ai/kapitsa/blob/main/schema/control/control.schema.json"
-EXPECTED = {"status", "stop-response", "model-switch-response", "error", "event"}
+EXPECTED = {"status", "stop-response", "model-switch-response", "error", "event", "models"}
 
 
 def load(path):
