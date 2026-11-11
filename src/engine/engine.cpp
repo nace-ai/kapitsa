@@ -898,11 +898,10 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(8192) : 8192;
   }
-  const int cores = Gpu::get().core_count();
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
       p.formats.rfind("4-bit group 64", 0) == 0 &&
       !Clover::is_model(model_dir) &&
-      (m1_max_32() || matrix_units() || cores >= 60)) {  // guard: measured on M1 Max 32 and 60+ core GPUs
+      (m1_max_32() || matrix_units() || high_cores())) {  // guard: measured on M1 Max 32 and 60+ core GPUs
     const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(4096) : 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;

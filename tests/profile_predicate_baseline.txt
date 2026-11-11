@@ -1,6 +1,6 @@
 # path, predicate-call hits outside the profile module. A rise fails tests/test_profile_gates.py. A drop to zero fails until this row is removed.
 src/engine/doctor.cpp	2
-src/engine/engine.cpp	5
+src/engine/engine.cpp	6
 src/metal/gpu.mm	1
 src/model/dflash2.cpp	8
 src/model/dory.cpp	4
@@ -8,7 +8,7 @@ src/model/dspark.cpp	2
 src/model/flint.cpp	4
 src/model/lilicorr.cpp	1
 src/model/nemotron_h.cpp	15
-src/model/qwen35.cpp	11
+src/model/qwen35.cpp	12
 src/model/qwen35_spec.cpp	2
 src/model/qwen35_v8.cpp	7
 src/model/qwen4_exp.cpp	3

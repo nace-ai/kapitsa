@@ -212,8 +212,7 @@ static int moe_qmr_k(int hidden, int intermediate) {
     return v;
   }();
   if (override_k) return override_k;
-  const int cores = Gpu::get().core_count();
-  return hidden == 2048 && intermediate == 512 && (m1_max_32() || cores >= 60) ? 64 : 32;  // guard: measured on M1 Max 32 and 60+ core GPUs
+  return hidden == 2048 && intermediate == 512 && (m1_max_32() || high_cores()) ? 64 : 32;  // guard: measured on M1 Max 32 and 60+ core GPUs
 }
 
 // NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.
