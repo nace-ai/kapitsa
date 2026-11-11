@@ -4,7 +4,7 @@
   <img alt="Kapitsa writes 351 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
-**KQuant.** The Qwen3.5 [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX-4bit-KQuant) and [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant) and the Qwen3.6 [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant) downloads are closer to the original model at the same size, and write faster on an M5 Pro ([numbers](#kquant)).
+**KQuant.** The Qwen3.5 [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX-4bit-KQuant) and [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant) and the Qwen3.6 [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-4bit-KQuant) downloads are closer to the original model than the packs they replace, at the same size, and write faster on an M5 Pro ([numbers](#kquant)).
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex, Pi, Hermes, aider or Goose on a local model, and serves OpenAI and Anthropic APIs.
 
@@ -29,7 +29,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## 🔥 What's new
 
-- [2026/11] 🎯 **KQuant: the Qwen3.5 4B and 9B and the Qwen3.6 35B-A3B downloads are closer to the original model, at the same size, and they write 7-11% faster on an M5 Pro** ([numbers](#kquant)).
+- [2026/11] 🎯 **KQuant: the Qwen3.5 4B and 9B and the Qwen3.6 35B-A3B downloads are closer to the original model than the packs they replace, at the same size, and they write 7-11% faster on an M5 Pro** ([numbers](#kquant)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -41,7 +41,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
-- 🎯 **Closer to the original**: KQuant 4B, 9B and 35B, same size, 7-11% faster on an M5 Pro ([numbers](#kquant))
+- 🎯 **Closer to the original**: KQuant 4B, 9B and 35B, closer than the packs they replace at the same size, 7-11% faster on an M5 Pro ([numbers](#kquant))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
 - 🧠 **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
 - 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
@@ -53,11 +53,11 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 | 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
 | --- | --- | --- | --- |
 | 4B lmstudio-community | 0.070 | 0.914 | 209 |
-| 4B KQuant | **0.048** | **0.923** | **227** |
+| 4B KQuant | **0.048** | 0.923 | **227** |
 | 9B lmstudio-community | 0.081 | 0.927 | 132 |
 | 9B KQuant | **0.037** | **0.944** | **146** |
 | 35B-A3B MTPLX | 0.096 | 0.948 | 212 |
-| 35B-A3B KQuant | **0.059** | **0.952** | **227** |
+| 35B-A3B KQuant | **0.059** | 0.952 | **227** |
 
 The 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). The calibrated GGUF files are closer than a plain Q4_K_M of the same size, at about the same writing speed (KL against the bf16 GGUF through llama.cpp, the 27B on CUDA, so not comparable with the MLX rows above: 0.018 against 0.031 on the [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-GGUF-KQuant), 0.023 against 0.045 on the [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-GGUF-KQuant), 0.021 against 0.030 on the [27B](https://huggingface.co/nace-ai/Qwen3.8-27B-GGUF-KQuant), 0.031 against 0.048 on the [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF-KQuant); the Q4_K_M files against the plain ones, each card has the table and how it was measured). The Qwen3.8 27B MLX pack (`27b:kquant`, opt-in) is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. Its decode is mixed on this Mac (sampled slower, greedy faster), so it stays opt-in and we claim no speed for it.
 
