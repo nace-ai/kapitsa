@@ -8,13 +8,12 @@ quantized weights, scales and biases, so the file list and the size are the same
 
 The Qwen3.6-35B-A3B KQuant pack has its own record: [2026-11-10-m5-pro-kquant-35b](../2026-11-10-m5-pro-kquant-35b/README.md).
 
-## How a KQuant pack is built
+## How a KQuant pack is checked
 
-Plain MLX quantization sets each group of 64 weights' scale from the group's min and max and rounds to the nearest
-step. KQuant (importance-weighted scale search, #409) first runs mlx-lm's 128 default calibration texts through the bf16
-model and records how strongly each input channel of every linear layer fires. Then, per group, it tries 11 clip ranges,
-refits the scale and offset by least squares weighted by those channel strengths, and keeps the candidate with the
-smallest weighted error. The format is unchanged, so any MLX affine reader loads it.
+Every pack below is scored against the original bf16 model on 32,768 tokens of prose, math chats and code (KL and top-1
+agreement), on all 1,319 GSM8K questions, and timed on an M5 Pro in interleaved legs (see Quality and Speed). A standard
+pack sets each group of 64 weights by plain rounding; a KQuant pack is searched per group on real text. The format is
+unchanged, so any MLX affine reader loads it.
 
 ## Quality
 

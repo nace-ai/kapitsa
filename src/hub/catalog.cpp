@@ -162,8 +162,8 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
-           // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt by
-           // importance-weighted scale search, every other file the same content. KL from bf16 0.048 against 0.070,
+           // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt
+           // as KQuant, every other file the same content. KL from bf16 0.048 against 0.070,
            // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two runs each) 227 against 209 tok/s
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
@@ -198,8 +198,8 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
-           // KQuant (#421): lmstudio-community's pack (b455506) with its quantized weights rebuilt by
-           // importance-weighted scale search, every other file the same content. KL from bf16 0.037 against 0.081,
+           // KQuant (#421): lmstudio-community's pack (b455506) with its quantized weights rebuilt
+           // as KQuant, every other file the same content. KL from bf16 0.037 against 0.081,
            // GSM8K (1319) 0.944 against 0.927, M5 Pro decode (T 0.6 and greedy, two runs each) 146 against 132 tok/s
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
@@ -226,8 +226,8 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
             .companions = {mtp27(), dflash27()},
             .download_gb = 20.17},
-           // Opt-in KQuant (#436): the 4-bit pack above with its quantized weights rebuilt by importance-weighted
-           // scale search, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
+           // Opt-in KQuant (#436): the 4-bit pack above with its quantized weights rebuilt
+           // as KQuant, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
            // 0.035 against 0.054, GSM8K (1319) 0.953 against 0.950; M5 Pro decode (3 legs each, Kapitsa 0.2.32 with
            // incoai's DFlash2 drafter): sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8. `27b` stays the plain
            // 4-bit pack. Not measured with the nace-ai drafter this entry downloads.
@@ -274,7 +274,7 @@ const std::vector<CatalogModel>& catalog() {
        .fallbacks = {"16gb"},
        .variants = {
            // KQuant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
-           // quantized weights rebuilt by importance-weighted scale search, every other file the same content, the
+           // quantized weights rebuilt as KQuant, every other file the same content, the
            // MTP head included in the repo. KL from bf16 0.059 against 0.096, GSM8K (1319) 0.952 against 0.948,
            // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
            {.name = "4bit",
