@@ -48,7 +48,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### KQuant
 
-Kapitsa's Qwen3.5 4B and 9B and Qwen3.6 35B-A3B downloads are KQuant packs: the same MLX 4-bit files and size as a standard pack, closer to the original model. `kapitsa serve --model 4b` gets it; there is nothing to set.
+**The same 4-bit download, closer to the original model.** KQuant packs are the same size as a standard 4-bit MLX pack and load in anything that reads MLX. On every size we measured they sit closer to the original bf16 model, score at least as high on GSM8K, and on the 4B, 9B and 35B-A3B they write faster on an M5 Pro. `kapitsa serve --model 4b` gets one; there is nothing to set.
 
 | 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
 | --- | --- | --- | --- |
@@ -59,7 +59,21 @@ Kapitsa's Qwen3.5 4B and 9B and Qwen3.6 35B-A3B downloads are KQuant packs: the 
 | 35B-A3B standard | 0.096 | 0.948 | 212 |
 | 35B-A3B KQuant | **0.059** | **0.952** | **227** |
 
-<sub>Standard: lmstudio-community's packs for the 4B and 9B, MTPLX's pack (Youssofal, `9546051`) for the 35B-A3B, which the catalog served before. KL: mean over 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC; the 35B-A3B row: Kapitsa 0.2.32 (`e728524`), three KQuant and two standard valid legs per setting (T 0.6: 219 against 200 tok/s, T 0: 234 against 224; the table pools both). Quality and speed were measured on text workloads; the 35B-A3B pack includes the vision tower, which was not evaluated. How KQuant builds a pack, and every run: the [4B and 9B record](bench/results/2026-11-10-m5-pro-kquant/README.md) and the [35B-A3B record](bench/results/2026-11-10-m5-pro-kquant-35b/README.md).</sub>
+The 9B pack is less than half as far from the original as the standard one (KL 0.037 against 0.081). The Qwen3.8 27B pack (`27b:kquant`, opt-in) is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. Its decode is mixed on this Mac (sampled slower, greedy faster), so it stays opt-in and we claim no speed for it.
+
+**How we checked.**
+
+- **Token by token against the original.** Every pack's next-token predictions are compared with the bf16 model's over 32,768 tokens of prose, math chats and code, and top-1 agreement rises on every size (4B 0.881 to 0.899, 9B 0.885 to 0.924, 35B-A3B 0.890 to 0.912, 27B 0.912 to 0.929).
+- **All 1,319 GSM8K questions**, not a 100-question sample. Each pack is also compared with the standard pack question by question, and the records say which differences are within noise.
+- **Timed on a real M5 Pro 48 GB**, packs interleaved leg by leg, on AC power. A leg is thrown out if anything else touched the GPU, and the records list every leg we threw out.
+
+**Why it is closer.**
+
+- **Calibrated on real text.** Each pack is tuned to how the model behaves on real text, not only to the numbers in its weights.
+- **A search per group of weights.** Every group gets its own best fit, instead of being rounded the same way as every other.
+- **The same MLX format.** Same files, same size, nothing new to install: any MLX reader loads it.
+
+<sub>Standard: lmstudio-community's packs for the 4B and 9B, MTPLX's pack (Youssofal, `9546051`) for the 35B-A3B, which the catalog served before. KL: mean over 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC; the 35B-A3B row: Kapitsa 0.2.32 (`e728524`), three KQuant and two standard valid legs per setting (T 0.6: 219 against 200 tok/s, T 0: 234 against 224; the table pools both). Quality and speed were measured on text workloads; the 35B-A3B pack includes the vision tower, which was not evaluated. Every run, including the voided legs: the [4B and 9B record](bench/results/2026-11-10-m5-pro-kquant/README.md) and the [35B-A3B record](bench/results/2026-11-10-m5-pro-kquant-35b/README.md).</sub>
 
 ### Drex decision models
 

@@ -28,7 +28,7 @@ thinking off, the last number in the answer. The two packs disagree on 43 of 1,3
 catalog pack (McNemar z = 0.76, not significant): no worse. Files: [cat35_4.json](cat35_4.json), [kq35_4.json](kq35_4.json),
 [rtn8_35.json](rtn8_35.json) (the 8-bit round-to-nearest check of the reference, KL about 0.01).
 
-The bf16 reference and the importance pass run the experts one matmul per expert: `mx.gather_mm` on mlx with CUDA gave wrong outputs
+The bf16 reference runs the experts one matmul per expert: `mx.gather_mm` on mlx with CUDA gave wrong outputs
 for the bf16 experts (NLL 4.94 against 1.52 for the 4-bit packs; 147 experts saw no tokens). The reference NLL used here is 1.487.
 
 ## Speed
