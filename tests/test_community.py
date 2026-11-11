@@ -54,7 +54,7 @@ check(sum(len(m["variants"]) for m in cat.values()) == _src.count(".quant ="), "
 check(cat["nemotron-3.5-bolt"]["variants"] == {"24gb": "NVIDIA 24 GB"} and cat["qwen3.5-4b"]["title"] == "Qwen3.5-4B",
       "Bolt's precision and the 4B's title")
 check(macs["Mac16,7"]["name"] == "MacBook Pro (16-inch, 2024)" and len(macs) >= 58, "the Mac table")
-check(cat["qwen3.8-flash-next"]["variants"] == {"4bit": "4-bit", "64gb": "2-bit experts"},
+check(cat["qwen3.8-flash-next"]["variants"] == {"4bit": "4-bit", "kquant": "4-bit KQuant", "64gb": "2-bit experts"},
       "a variant whose .quant string spans several lines is still read", str(cat["qwen3.8-flash-next"]["variants"]))
 check(versions, "a known version from CMakeLists.txt", str(versions))
 
