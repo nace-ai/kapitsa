@@ -400,7 +400,7 @@ function draw() {
   // A finished request's own numbers (request_finished): the waits, the prompt's rate, and what went wrong
   const detail = r => {
     const uncached = Math.max(r.prompt_tokens - r.cached_tokens, 0);
-    const read = !uncached ? "prompt read from the cache" : r.prefill_ms ? `read ${fmtN(uncached)} tokens in ${fmtMs(r.prefill_ms)}${r.prefill_tokens_per_second ? " (" + fmtN(Math.round(r.prefill_tokens_per_second)) + " tok/s)" : ""}` : `read ${fmtN(uncached)} tokens`;
+    const read = !uncached ? "prompt read from the cache" : !r.prefill_ms && r.error && !r.completion_tokens ? `${fmtN(uncached)}-token prompt not read` : r.prefill_ms ? `read ${fmtN(uncached)} tokens in ${fmtMs(r.prefill_ms)}${r.prefill_tokens_per_second ? " (" + fmtN(Math.round(r.prefill_tokens_per_second)) + " tok/s)" : ""}` : `read ${fmtN(uncached)} tokens`;
     return `<tr class="detail"><td></td><td colspan="8">waited ${fmtMs(r.queue_ms || 0)} · ${read} · wrote in ${fmtMs(r.decode_ms || 0)}${r.error ? `<div class="err">${esc(r.error)}</div>` : ""}</td></tr>`;
   };
   $("reqs").innerHTML = active.map(r => row(r, false)).join("") || (S.done.length ? "" :
