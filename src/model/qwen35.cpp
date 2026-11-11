@@ -484,6 +484,7 @@ void Qwen35::prewarm_pipelines() {
                                  "gdn_prep_par", "gdn_step_par_l16", "gdn_step_parr4_l16", "gdn_gnorm", "topk_stage1",
                                  "sample_stage2",
                                  "qmr_k32_w14_m32_n128", "qmr_k64_w14_m16_n64", "qmr_k64_w12_m8_n64",
+                                 "qmr_pc_k32_w14_m32_n128", "qmr_pack_coeff", "qmr_gu_pc_k32_w14_m32_n64",
                                  "qmr_gu_k32_w14_m32_n64", "qmr_gu_k64_w14_m16_n64", "qmr_gu_k64_w12_m8_n32",
                                  "qmm_b8_m32_n32", "qmm_moe_gu_b4_m64_n32", "qmm_moe_dn_b4_m64_n64"};
   if (sample_sg_) names.insert("topk_stage1_rows_sg");
@@ -1090,6 +1091,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   pass_rows_ = vpf_pass_rows(cfg_);
   if (pass_rows_ > tree_rows_) set_tree_rows(pass_rows_);
   prewarm_pipelines();
+  load_qmr_coeff_cache();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
   // Dense ANE FFN: legacy 2560-channel inputs keep their defaults; new 2048-channel inputs
@@ -1119,8 +1121,8 @@ Qwen35::~Qwen35() {
   // The background compile only touches its own copies (no Metal objects), so this cannot race the model's own teardown;
   // it is here so the thread cannot outlive the process's model, as an unjoined std::thread would
   if (ane_thread_.joinable()) ane_thread_.join();
-  // NI_QMT_I8's scratch (qmt_i8_scratch): released once the queue has finished everything committed before
-  bool any = !qmt_i8_retired_.empty();
+  // Prefill scratch: release after the queue has finished all previously committed work.
+  bool any = !qmt_i8_retired_.empty() || bool(qmr_coeff_) || !qmr_coeff_cache_.empty();
   for (const QmtI8Slot& sl : qmt_i8_ring_) any = any || bool(sl.q);
   if (any) {
     Gpu& g = Gpu::get();
@@ -1130,6 +1132,9 @@ Qwen35::~Qwen35() {
       g.release(sl.s);
     }
     for (Buffer& b : qmt_i8_retired_) g.release(b);
+    g.release(qmr_coeff_);
+    for (Buffer& b : qmr_coeff_retired_) g.release(b);
+    for (auto& [q, b] : qmr_coeff_cache_) g.release(b);
   }
 }
 
@@ -2749,6 +2754,54 @@ std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
   return {sl.q, sl.s};
 }
 
+void Qwen35::load_qmr_coeff_cache() {
+  const QmrSel& q = qmr_sel();
+  if (!q.on || qmt_on() || qmt_i8_on() ||
+      (q.name != "qmr_k32_w14_m32_n128" && q.name != "qmr_pc_k32_w14_m32_n128")) return;
+  // Only actual trunk objects, after all load-time transforms. Temporary/sliced QLinear objects and
+  // NoLoad-derived models keep the per-call conversion. Nothing is published from a request encoder:
+  // cancellation before commit must never leave a cache that has not been initialized.
+  std::vector<const QLinear*> projections;
+  size_t total = 0;
+  constexpr size_t limit = size_t(512) << 20;
+  for (const Layer& l : layers_)
+    for (const QLinear* p : {&l.qkv, &l.z, &l.out, &l.q, &l.k, &l.v, &l.o,
+                            &l.sg, &l.su, &l.sd, &l.mg, &l.mu, &l.md}) {
+      if (!*p || !p->q4() || p->q20 || p->exl3 || p->N <= 64 || !p->K || p->K % 64) continue;
+      const size_t groups = size_t(p->N) * (p->K / 64), bytes = groups * 4;
+      if (groups > UINT32_MAX || bytes > limit - total) return;
+      projections.push_back(p);
+      total += bytes;
+    }
+  if (projections.empty()) return;
+  const double start = now_ms();
+  Gpu& g = Gpu::get();
+  auto e = g.begin();
+  for (const QLinear* p : projections) {
+    const uint32_t groups = p->N * (p->K / 64);
+    Buffer b = g.alloc(size_t(groups) * 4, "qmr_static_coeff");
+    qmr_coeff_cache_.emplace(p, b);
+    e->use(pipe("qmr_pack_coeff"));
+    e->buf(0, p->s->buf); e->buf(1, p->b->buf); e->buf(2, b); e->val(3, groups);
+    e->dispatch((groups + 255) / 256, 1, 1, 256);
+  }
+  e->commit_and_wait();  // Constructor has not published the model yet; every cache is now initialized.
+  qmr_coeff_bytes_ += total;  // Shared cap includes later fallback scratch and all retired allocations.
+  logi("QMR coefficient cache: %zu static projections, %.3f MiB; setup %.3f ms, GPU %.3f ms",
+       projections.size(), double(total) / (1024 * 1024), now_ms() - start, e->gpu_ms());
+}
+
+Buffer Qwen35::qmr_coeff_scratch(size_t groups) {
+  const size_t bytes = groups * 4, limit = size_t(512) << 20;
+  if (qmr_coeff_.size >= bytes) return qmr_coeff_;
+  if (bytes > limit - qmr_coeff_bytes_) return {};
+  // Prior command buffers use unretained references; release replaced buffers only at teardown.
+  if (qmr_coeff_) qmr_coeff_retired_.push_back(qmr_coeff_);
+  qmr_coeff_ = Gpu::get().alloc(bytes, "qmr_coeff");
+  qmr_coeff_bytes_ += bytes;
+  return qmr_coeff_;
+}
+
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
@@ -2812,9 +2865,30 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     static const std::string small = "qmr_k64_w14_m16_n64", tiny = "qmr_k64_w12_m8_n64";
     if (M <= 8) n = &tiny, bm = 8, bn = 64, th = 64;
     else if (M < 64 || L.N <= 64) n = &small, bm = 16, bn = 64, th = 128;
+    const size_t groups = size_t(L.N) * (L.K / 64);
+    static const std::string original = "qmr_k32_w14_m32_n128", packed = "qmr_pc_k32_w14_m32_n128";
+    Buffer coeff;
+    bool cached = false;
+    if ((*n == original || *n == packed) && groups <= UINT32_MAX) {
+      const auto it = qmr_coeff_cache_.find(&L);
+      cached = it != qmr_coeff_cache_.end();
+      coeff = cached ? it->second : qmr_coeff_scratch(groups);
+    }
+    if (coeff && !cached) {
+      // Even within an independent-projection group, this shared scratch has a write/read dependency.
+      e.barrier();
+      e.use(pipe("qmr_pack_coeff"));
+      e.buf(0, L.s->buf); e.buf(1, L.b->buf); e.buf(2, coeff); e.val(3, uint32_t(groups));
+      e.dispatch(uint32_t((groups + 255) / 256), 1, 1, 256);
+      e.barrier();
+    }
+    if (coeff) n = &packed;
+    else if (*n == packed) {
+      n = &original;
+    }
     e.use(pipe(*n));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
-    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, coeff ? coeff : L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
     e.val(5, p);
     e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
     return;
@@ -3207,11 +3281,32 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   if (b8) n = M < 64 ? "qmr8_gu_k32_w14_m16_n64" : "qmr8_gu_k32_w14_m32_n64", bm = M < 64 ? 16 : 32;
   else if (M <= 8) n = "qmr_gu_k64_w12_m8_n32", bm = 8, bn = 32, th = 64;
   else if (M < 64) n = "qmr_gu_k64_w14_m16_n64", bm = 16, bn = 64, th = 128;
+  Buffer cg, cu;
+  const size_t groups = size_t(G.N) * (G.K / 64);
+  if (!strcmp(n, "qmr_gu_k32_w14_m32_n64") && groups <= UINT32_MAX) {
+    const auto ig = qmr_coeff_cache_.find(&G), iu = qmr_coeff_cache_.find(&U);
+    if (ig != qmr_coeff_cache_.end() && iu != qmr_coeff_cache_.end()) {
+      cg = ig->second;
+      cu = iu->second;
+    } else if (Buffer coeff = qmr_coeff_scratch(2 * groups)) {
+      cg = coeff.view(0, groups * 4);
+      cu = coeff.view(groups * 4, groups * 4);
+      e.barrier();
+      e.use(pipe("qmr_pack_coeff"));
+      e.buf(0, G.s->buf); e.buf(1, G.b->buf); e.buf(2, cg); e.val(3, uint32_t(groups));
+      e.dispatch(uint32_t((groups + 255) / 256), 1, 1, 256);
+      e.use(pipe("qmr_pack_coeff"));
+      e.buf(0, U.s->buf); e.buf(1, U.b->buf); e.buf(2, cu); e.val(3, uint32_t(groups));
+      e.dispatch(uint32_t((groups + 255) / 256), 1, 1, 256);
+      e.barrier();
+    }
+    if (cg && cu) n = "qmr_gu_pc_k32_w14_m32_n64";
+  }
   e.use(pipe(n));
   kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
-  e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+  e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, cg ? cg : G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
   e.val(5, p);
-  e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+  e.buf(6, U.w->buf); e.buf(7, cu ? cu : U.s->buf); e.buf(8, U.b->buf);
   e.dispatch((G.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
   return true;
 }
