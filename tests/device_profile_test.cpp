@@ -83,7 +83,7 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 16);  // +1 from m1_max_32 guard row kept (#393)
+  CHECK(ni::default_count() == 17);  // +1 from m1_max_32, +1 from unconstrained_store (#393)
   const auto* segmented = row("ane_segmented_fast");
   CHECK(segmented && segmented->scope == ni::DefaultScope::kAneBuiltinNonMatrix && !segmented->exclusive);
   for (const auto& facts : {mac(7, 8, "Apple M1", g48), mac(8, 10, "Apple M2", g48),
@@ -171,6 +171,10 @@ int main() {
   // m1_max_32: kept as guard (#393)
   CHECK(ni::m1_max_32(m1));  // m1 is an M1 Max 32-core
   CHECK(!ni::m1_max_32(m4) && !ni::m1_max_32(m5pro_f) && !ni::m1_max_32(mac(7, 16, "Apple M1 Pro", 32L << 30)));
+  // unconstrained_store: matrix units, 60+ cores, or 120+ GB RAM
+  CHECK(ni::unconstrained_store(mac(7, 64, "Apple M1 Ultra", 128L << 30)));
+  CHECK(ni::unconstrained_store(mac(9, 40, "Apple M4 Max", 128L << 30)));
+  CHECK(!ni::unconstrained_store(m4pro));
 
   const std::string text = ni::format_profile(m5pro, false);
   CHECK(text.find("chip class: matrix") != std::string::npos);

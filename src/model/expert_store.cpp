@@ -64,8 +64,8 @@ size_t available_memory() {
   return size_t(pages * vm_kernel_page_size);
 }
 
-double auto_store_cap(bool apple10) {
-  double cap = apple10 ? 0.0 : 0.40;
+double auto_store_cap(bool unconstrained) {
+  double cap = unconstrained ? 0.0 : 0.40;
   const char* cv = getenv("NI_EXPERT_CAP");
   if (cv && *cv) {
     char* end = nullptr;

@@ -116,6 +116,7 @@ bool ultra_gpu(const DeviceFacts&);     // the name contains "Ultra": two dies
 bool pre_m3_gpu(const DeviceFacts&);    // apple_family() < 9: M1 and M2
 bool simd_gpu(const DeviceFacts&);      // apple_family == 9: M3, M4 (not M2, which is family 8)
 bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores (#393: kept as guard, CORE4 measured)
+bool unconstrained_store(const DeviceFacts&);  // matrix units, 60+ cores, or 120+ GB RAM
 
 bool matrix_units();
 bool legacy_gpu();
@@ -124,5 +125,6 @@ bool ultra_gpu();
 bool pre_m3_gpu();
 bool simd_gpu();
 bool m1_max_32();
+bool unconstrained_store(size_t ram);
 
 }  // namespace ni

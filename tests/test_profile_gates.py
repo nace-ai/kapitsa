@@ -82,6 +82,7 @@ PREDICATES = (
     "pre_m3_gpu",
     "simd_gpu",
     "ultra_gpu",
+    "unconstrained_store",
 )
 PRED_RE = re.compile(r"\b(" + "|".join(PREDICATES) + r")\s*\(")
 
@@ -178,6 +179,7 @@ GUARD_IDS = (
     "m1_max_32",
     "ultra_gpu",
     "pre_m3_gpu",
+    "unconstrained_store",
 )
 
 
