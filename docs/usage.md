@@ -58,7 +58,7 @@ The Hugging Face repo, pinned revision, draft model, MTP head and download size 
 | `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.0 GB | `4bit` (default) |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `kquant` (opt-in) |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `16gb` (where `4bit` does not fit: 2-bit experts, 10.8 GB; [GGUF files](#gguf-files)) |
-| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs, 64 GB with `64gb` | 105.9 GB | `4bit` (default), `64gb` (where `4bit` does not fit: Sushi's EXL3 2-bit experts, 69.6 GB) |
+| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs, 64 GB with `64gb` | 105.9 GB | `4bit` (default), `kquant`, `64gb` (where `4bit` does not fit: Sushi's EXL3 2-bit experts, 69.6 GB) |
 | `nemotron-labs-dory1.0-4b` | `dory`, `dory-4b`, `dory1.0-4b` | NVIDIA Nemotron Dory1.0 4B: a looped model, its shared block run 1-4 times per token ([thinking depth](#dory-thinking-depth)); text only | 3.2 GB | `nvfp4` (default), `bf16` |
 | `nemotron-3-nano-4b` | `nano-4b`, `nemotron-nano-4b` | NVIDIA Nemotron 3 Nano 4B: hybrid Mamba-2, dense, FP8; text only | 5.3 GB | `fp8` (default), `bf16` |
 | `nemotron-nano-9b-v2` | `nano-9b`, `nemotron-nano-9b` | NVIDIA Nemotron Nano 9B v2: hybrid Mamba-2, dense, NVFP4; reasoning switched with `/think`; text only | 7.9 GB | `nvfp4` |
@@ -79,6 +79,18 @@ Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
 tensor chosen by KL against bf16; Qwen publishes no 4-bit). Its recipe keeps the hyper-connections and attention at 6
 bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB read per token); its 32 GB n-gram table
 (`ple.safetensors`) stays on disk and is read through the page cache.
+
+Flash-Next's `kquant` selects the released
+[nace-ai/Qwen3.8-Flash-Next-MLX-4bit-KQuant](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit-KQuant)
+pack: `kapitsa serve --model flash-next:kquant`. It is a complete download with its MTP head and n-gram table,
+105.86 GB including metadata, with no separate companion download. `flash-next` and `flash` keep `4bit` as their
+default and `64gb` as their fallback.
+It remains non-default pending interleaved A/B and output checks on a second setup.
+It is closer to bf16 than the same-size nace-ai plain 4-bit pack, the default `4bit` (KL 0.1275 against 0.1411),
+at sampled speed parity (61.17 against 61.12 tok/s).
+These measurements used one M1 Ultra 128 GB with main-source build
+[`cc94c34`](https://github.com/nace-ai/kapitsa/commit/cc94c34fb9db9e7f85392fb7f69808511e0bb8da),
+12 commits after v0.2.34 and within v0.2.35-rc1, not released v0.2.34.
 
 Flash-Next's `64gb` is [Sushi](https://github.com/beamivalice/sushi)'s 2-bit pack
 ([beamster/Qwen3.8-Flash-Next-Sushi-2bpw](https://huggingface.co/beamster/Qwen3.8-Flash-Next-Sushi-2bpw)): its routed

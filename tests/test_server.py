@@ -991,12 +991,22 @@ def cli_checks(kapitsa):
     s.close()
     rc, _, err = run("serve", "--model", "nonsense")
     check("cli: serve with an unknown model", rc == 2 and "Unknown model" in err, err)
-    for a in ["flash-next:4bit", "flash:4bit", "nace-ai/Qwen3.8-Flash-Next-MLX-4bit"]:
+    for a in ["flash-next", "flash", "qwen3.8-flash-next", "flash-next:4bit", "flash:4bit",
+              "nace-ai/Qwen3.8-Flash-Next-MLX-4bit"]:
         j = plan(a)
         check(f"cli: {a} -> qwen3.8-flash-next:4bit at the app's pinned revision",
               j.get("model") == "qwen3.8-flash-next:4bit" and j.get("kind") == "catalog" and
               j.get("repo") == "nace-ai/Qwen3.8-Flash-Next-MLX-4bit" and
               j.get("revision") == "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae" and j.get("downloaded") is False, json.dumps(j))
+    kquant_repo = "nace-ai/Qwen3.8-Flash-Next-MLX-4bit-KQuant"
+    kquant_revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd"
+    for a in ["flash-next:kquant", "flash:kquant", "qwen3.8-flash-next:kquant", kquant_repo,
+              kquant_repo + "@" + kquant_revision]:
+        j = plan(a)
+        check(f"cli: {a} -> opt-in qwen3.8-flash-next:kquant at its pinned revision",
+              j.get("model") == "qwen3.8-flash-next:kquant" and j.get("kind") == "catalog" and
+              j.get("repo") == kquant_repo and j.get("revision") == kquant_revision and
+              j.get("downloaded") is False, json.dumps(j))
     rc, _, err = run("serve", "--port", str(busy))
     check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)
     agent_checks(run, home)
