@@ -932,6 +932,16 @@ for value in ("none", "auto"):
     bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", value, "--submit"], env=xenv)
     check(bad.returncode != 0 and "cannot be submitted" in bad.stderr,
           f"--dflash {value} refused with --submit", bad.stderr[-200:])
+# a `~` in the drafter folder is expanded once, where the flag is parsed: `kapitsa serve` does not expand a `~` in
+# --dflash, so a path left unexpanded here would pass this folder check and then fail to load in the server it starts
+tilde_dir = os.path.join(xhome, "user", "drafters", "ornith")
+os.makedirs(tilde_dir, exist_ok=True)
+bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", "~/drafters/ornith"], env=xenv)
+check("drafter folder" not in bad.stderr,
+      "a ~ drafter folder is found, not refused as missing", bad.stderr[-200:])
+bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", "~/drafters/no-such"], env=xenv)
+check(bad.returncode != 0 and "--dflash takes auto, none or a drafter folder" in bad.stderr,
+      "a ~ drafter folder that does not exist is still refused", bad.stderr[-200:])
 # and --dflash configures only the server bench starts: against a KAPITSA_BENCH_SERVER one it would be dropped
 ext = dict(xenv, KAPITSA_BENCH_SERVER="9")
 bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", "none"], env=ext)

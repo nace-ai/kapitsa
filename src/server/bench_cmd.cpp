@@ -1511,11 +1511,13 @@ int run_bench(int argc, char** argv, int first) {
     }
     else if (a == "--dflash") {
       // serve's own three spellings (src/engine/engine.cpp): auto, none, or the drafter's folder
-      o.dflash = next();
+      // Expanded here, once: the folder check and the server's argv both read this, and `kapitsa serve` does not
+      // expand a `~` in --dflash, so an unexpanded path here would pass the check and then fail to load.
+      o.dflash = expand_home(next());
       if (o.dflash.empty()) usage_error("--dflash needs auto, none or a drafter folder", help);
-      if (o.dflash != "auto" && o.dflash != "none" && !gguf::is_gguf_file(expand_home(o.dflash))) {
+      if (o.dflash != "auto" && o.dflash != "none" && !gguf::is_gguf_file(o.dflash)) {
         struct stat st;
-        if (stat(expand_home(o.dflash).c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+        if (stat(o.dflash.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
           usage_error("--dflash takes auto, none or a drafter folder; " + o.dflash + " is none of them", help);
       }
     }
