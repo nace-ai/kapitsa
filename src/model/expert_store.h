@@ -279,9 +279,9 @@ inline std::string auto_store_short(const AutoStore& st, const AutoStoreIn& in) 
   }
   return b;
 }
-// The RAM-share cap of a store short of all the experts: 40% of the RAM before Apple10 (M5), none on it; NI_EXPERT_CAP=
-// <share of the RAM, 0..1> sets it on any chip (0 = none; anything else is logged and ignored)
-double auto_store_cap(bool apple10);
+// The RAM-share cap of a store short of all the experts: 40% of the RAM before M5 or chips with < 60 GPU cores and < 120 GB RAM,
+// none on unconstrained devices (M5, >= 60 GPU cores, or >= 120 GB RAM); NI_EXPERT_CAP=<share of the RAM, 0..1> sets it on any chip (0 = none; anything else is logged and ignored)
+double auto_store_cap(bool unconstrained);
 // The KV window the budget's keep assumes: flash_next_model_budget keeps one conversation's KV for min(context,
 // kAutoKvCtxCap) tokens, and the avail guard reserves the same per-slot window for every conversation of the plan
 inline constexpr int kAutoKvCtxCap = 32768;

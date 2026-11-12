@@ -42,4 +42,8 @@ bool simd_gpu() { return Gpu::get().apple_family() == 9; }  // M3, M4
 
 bool m1_max_32() { return Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32; }
 
+bool unconstrained_store(size_t ram) {
+  return matrix_units() || Gpu::get().core_count() >= 60 || ram >= (120ULL << 30);
+}
+
 }  // namespace ni

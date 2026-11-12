@@ -961,7 +961,7 @@ experts of any other GGUF type, such as the IQ2_S, IQ2_XXS and IQ1_M ones among 
 IQ2_XS packing, which this path does not read) does not need them all in memory: it keeps as many as the budget
 leaves after its other weights, its buffers, the slots'
 state and one conversation's KV cache of up to 32K tokens, with the process's GPU memory within 40% of the RAM before the
-M5 (no such cap on it) and no more than the system's available memory less max(4 GB, RAM/12), and reads the others from
+M5 and chips with < 60 GPU cores and < 120 GB RAM (no such cap on M5, or on Macs with >= 120 GB RAM or >= 60 GPU cores) and no more than the system's available memory less max(4 GB, RAM/12), and reads the others from
 the SSD when a token routes them (`src/model/expert_store.h`). Why 40% before the M5: such a store waits on
 the CPU at every layer, and on a 48 GB M4 Pro every command buffer took 0.5-3.5 s longer once the process's GPU memory
 passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full speed.
