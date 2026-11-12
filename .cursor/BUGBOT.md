@@ -47,8 +47,9 @@ not ask for abstractions, interfaces or configuration the change does not need.
   do not waive the output check for a new change or authorize another default. Do not report an unchanged default
   as a defect introduced by the PR; flag a new 35B comparison that uses the stale M4 Pro floor without saying so.
 - A default that only switches which published pack a catalog name downloads (the plain 4-bit pack to its KQuant pack)
-  changes weights, not a code path, and the floors cover code paths on one pack: `tools/logit_compare.py` between two
-  packs can only report "moved". It gates on KL to BF16 for both packs on the same token set (corpus and tool named),
+  changes which weights a catalog name loads, not the loader or the kernels (a pack whose tensors need a different
+  kernel path, such as 6-bit group-64 dense weights on `NI_QMT6`, goes back to the floor gate). The floors cover code
+  paths on one pack: `tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the same token set (corpus and tool named),
   a task score and the interleaved A/B, and passes only when the new pack's mean KL is at most the old pack's, its
   task score is not below the old pack's by more than that score's run-to-run spread, and it is no slower beyond noise
   (3%). Flag such a PR that lacks any of those numbers, whose two KL figures come from different token sets, or that

@@ -214,9 +214,10 @@ Here a feature means a kernel path, a decode, drafting or verify strategy, a cac
 flag or environment variable. Three things are not features, so this rule does not apply to them: a kill switch for an
 existing default (`NI_X=0`), a debug or profiling switch, and a measuring tool. The output check still gates every
 default change, with one exception: a default that only switches which published pack a catalog name downloads (`27b`
-from the plain 4-bit pack to its KQuant pack). That changes weights, not a code path, and the floors in
-`tools/logit_floors/` cover code paths on one pack, so `tools/logit_compare.py` between two packs can only report
-"moved". It gates on KL to BF16 for both packs on the same token set (name the corpus and the tool), a task score
+from the plain 4-bit pack to its KQuant pack). That changes which weights a catalog name loads, not the loader or the
+kernels. A pack whose tensors need a different kernel path (for example 6-bit group-64 dense weights on `NI_QMT6`) goes
+back to the floor gate. The floors in `tools/logit_floors/` cover code paths on one pack, so
+`tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the same token set (name the corpus and the tool), a task score
 (GSM8K or the like) and the interleaved A/B on the setups above. The switch passes when the new pack's mean KL to BF16
 on those tokens is at most the old pack's, its task score is not below the old pack's by more than that score's
 run-to-run spread, and the interleaved speed A/B shows it no slower than the old pack beyond noise (3%). Otherwise it
@@ -224,7 +225,7 @@ does not switch (precedent: #1228).
 
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
-interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"): `build/logit_dump` of the old and the new
+interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"; a pack-only switch has its own rule above): `build/logit_dump` of the old and the new
 build, `tools/logit_compare.py` between them, gated at twice the model's noise floor on this Mac
 (`tools/logit_floors/<model>.json`). Put its output in the PR. "The same outputs to the bit" is a claim with evidence
 ("every row bitwise identical") or it is not made; a change that fails the gate on purpose says it moves outputs.
