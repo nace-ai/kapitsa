@@ -98,7 +98,12 @@ int main() {
     CHECK(ni::default_matches(*segmented, with_ane) == expected);
     with_ane.ane = false;
     CHECK(!ni::default_matches(*segmented, with_ane));
+    // M1 and M2 get default_units()'s own share; it stays apart from the built-in share and the segmented default
+    CHECK(ni::ane_pre_m3_share(facts.name) == (facts.apple_family < 9 ? facts.apple_family - 6 : 0));
   }
+  CHECK(ni::ane_pre_m3_share("Apple M1 Ultra") == 1 && ni::ane_pre_m3_share("Apple M2 Pro") == 2);
+  CHECK(ni::ane_pre_m3_share("Apple M2 Max") == 2 && ni::ane_pre_m3_share("Apple M3 Max") == 0);
+  CHECK(ni::ane_pre_m3_share("Apple M10") == 0 && ni::ane_pre_m3_share("Apple M20 Pro") == 0);
   // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
   const ni::DefaultRow* tattn = row("tattn_fast");
   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);
