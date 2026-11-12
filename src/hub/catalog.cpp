@@ -165,7 +165,8 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
        .variants = {
            // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt
            // as KQuant, every other file the same content. KL from bf16 0.048 against 0.070,
-           // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two runs each) 227 against 209 tok/s
+           // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two legs each, Kapitsa 0.2.35,
+           // both packs with the drafter and MTP head `4b` ships) 223 against 218 tok/s, inside the 3% tie band
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant",
