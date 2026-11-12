@@ -247,7 +247,8 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            // KQuant (#436), the default since #495: the 4-bit pack above with its quantized weights rebuilt
            // as KQuant, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
            // 0.035 against 0.054, GSM8K (1319) 0.953 against 0.950; M5 Pro decode (Kapitsa 0.2.35, both packs with
-           // the nace-ai drafter and the same MTP head, T 0.6 and T 0): pooled 87.9 against 84.5 tok/s, +4.0%
+           // the nace-ai drafter and the same MTP head, T 0.6 and T 0): pooled 87.9 against 84.5 tok/s, +4.0%;
+           // M4 Pro 67.2 against 66.8, +0.6% (bench/results/2026-11-12-kquant-27b-0.2.35)
            {.name = "kquant",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant",

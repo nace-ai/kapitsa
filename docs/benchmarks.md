@@ -606,7 +606,7 @@ The 9B results in this section use the [legacy pack at `867adaa`](https://huggin
 | 35B-A3B MTPLX | 0.096 | 0.948 | 212 |
 | 35B-A3B KQuant | **0.059** | 0.952 | 227 |
 
-The legacy 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). `27b` downloads the Qwen3.8 27B KQuant pack, which is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. On one M5 Pro 48 GB it writes no slower than the plain pack: Kapitsa 0.2.35 (`30b18f9`), bench starting its own server, the same drafter and MTP head on both packs, valid legs in the order A B B A plus one A top-up, 87.9 against 84.5 tok/s pooled (T 0.6: 82.9 against 80.6, T 0: 93.0 against 88.4); the plain pack's own T 0.6 legs span 75.6 to 85.7, so the gap is within its spread.
+The legacy 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). `27b` downloads the Qwen3.8 27B KQuant pack, which is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. On an M5 Pro and an M4 Pro (both 48 GB) it writes no slower than the plain pack: Kapitsa 0.2.35 (`30b18f9`), bench starting its own server, the same drafter and MTP head on both packs, legs in the order A B B A. M5 Pro (one A top-up after a voided leg): 87.9 against 84.5 tok/s pooled, +4.0% (T 0.6: 82.9 against 80.6, T 0: 93.0 against 88.4); the plain pack's own T 0.6 legs span 75.6 to 85.7, so the gap is within its spread. M4 Pro (EC2 Mac mini, macOS 26.7.2): 67.2 against 66.8, +0.6% (T 0.6: 65.4 against 63.5, T 0: 68.9 against 70.0) ([record](../bench/results/2026-11-12-kquant-27b-0.2.35/README.md)).
 
 **How we checked.**
 
