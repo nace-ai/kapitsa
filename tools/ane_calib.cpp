@@ -17,7 +17,7 @@
 #include "util/log.h"
 
 #include <cstdio>
-#include <cstring>
+#include <algorithm>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -40,7 +40,8 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::string dir = argv[1];
-  std::vector<uint32_t> units = {21, 23, 25, 27, 29};
+  std::vector<uint32_t> units;
+  bool explicit_units = false;
   int l0 = 8, n = 8, reps = 2;
   bool write = false, nostage = false, wave = false;
   for (int i = 2; i < argc; ++i) {
@@ -49,7 +50,10 @@ int main(int argc, char** argv) {
       if (i + 1 >= argc) fatal("%s needs a value", k.c_str());
       return argv[++i];
     };
-    if (k == "--units") units = parse(next());
+    if (k == "--units") {
+      units = parse(next());
+      explicit_units = true;
+    }
     else if (k == "--l0") l0 = std::stoi(next());
     else if (k == "--layers") n = std::stoi(next());
     else if (k == "--reps") reps = std::stoi(next());
@@ -63,10 +67,16 @@ int main(int argc, char** argv) {
   setenv("NI_NO_MTP", "1", 0);
   Qwen35 m(dir, 2048);
   const std::string chip = Gpu::get().name();
+  const uint32_t total = m.config().dense_I / 512;
+  if (!explicit_units && total > 0) {
+    // Preserve the original sweep fractions from the 34-unit FFN.
+    for (uint32_t share : wave ? std::initializer_list<uint32_t>{29, 31, 33, 34} :
+                                 std::initializer_list<uint32_t>{21, 23, 25, 27, 29}) {
+      const auto u = std::max(1u, (share * total + 17) / 34);
+      if (units.empty() || units.back() != u) units.push_back(u);
+    }
+  }
   if (wave) {
-    bool given = false;
-    for (int i = 2; i < argc; ++i) given |= !strcmp(argv[i], "--units");
-    if (!given) units = {29, 31, 33, 34};
     printf("ane_calib --wave: %s, macOS %s, 2048-row prefill chunks, %d reps (median)\n", chip.c_str(),
            ane::os_build().c_str(), reps);
     const double gpu = m.ane_bench_chunk(2048, reps, false);
@@ -142,7 +152,7 @@ int main(int argc, char** argv) {
   double a_unit = 0, g_unit = 0;
   for (const Row& r : rows) {
     a_unit += r.t2048.ane / r.u;
-    g_unit += r.u < 34 ? r.t2048.gpu_part / (34 - r.u) : 0;
+    g_unit += r.u < total ? r.t2048.gpu_part / (total - r.u) : 0;
   }
   a_unit /= rows.size();
   g_unit /= rows.size();

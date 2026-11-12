@@ -4,7 +4,7 @@
   <img alt="Kapitsa writes 351 tok/s on Qwen3.6 35B-A3B on an M5 Max, against 138-281 for MLX, Ollama, llama.cpp, oMLX, mlx-serve and Splash." src="docs/assets/header-light.svg">
 </picture>
 
-**KQuant.** The Qwen3.5 [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX-Q4-KQuant) and [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant) and the Qwen3.6 [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant) downloads are closer to the original model than the packs they replace, at the same size, and write faster on an M5 Pro ([numbers](#kquant)).
+**KQuant.** The Qwen3.5 [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX-Q4-KQuant) and Qwen3.6 [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant) downloads are closer to the original model than the packs they replace, at the same size, and write faster on an M5 Pro ([numbers](#kquant)). The [9B Q4 pack](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q4-KQuant) includes the vision tower.
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex, Pi, Hermes, aider or Goose on a local model, and serves OpenAI and Anthropic APIs.
 
@@ -29,7 +29,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## 🔥 What's new
 
-- [2026/11] 🎯 **KQuant: the Qwen3.5 4B and 9B and the Qwen3.6 35B-A3B downloads are closer to the original model than the packs they replace, at the same size, and they write 7-11% faster on an M5 Pro** ([numbers](#kquant)).
+- [2026/11] 🎯 **KQuant: the Qwen3.5 4B and Qwen3.6 35B-A3B downloads are closer to the original model than the packs they replace, at the same size, and write faster on an M5 Pro** ([numbers](#kquant)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -41,25 +41,27 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
-- 🎯 **Closer to the original**: KQuant 4B, 9B and 35B, closer than the packs they replace at the same size, 7-11% faster on an M5 Pro ([numbers](#kquant))
+- 🎯 **Closer to the original**: KQuant 4B and 35B, closer than the packs they replace at the same size, faster on an M5 Pro ([numbers](#kquant))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
 - 🧠 **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
 - 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
 
 ### KQuant
 
-**The same download, closer to the original model than the pack it replaces.** KQuant is our quantization framework for MLX packs. The 4-bit MLX packs are the same size as the 4-bit MLX packs Kapitsa served before (lmstudio-community's, MTPLX's for the 35B-A3B) and load in anything that reads MLX. On every size we measured they sit closer to the original bf16 model than those packs, score at least as high on GSM8K, and on the 4B, 9B and 35B-A3B they write faster on an M5 Pro. `kapitsa serve --model 4b` gets one; there is nothing to set.
+KQuant is our quantization framework for MLX packs. The measurements below compare the original KQuant releases with the packs Kapitsa served before: lmstudio-community's for the 4B and 9B, MTPLX's for the 35B-A3B. They sit closer to bf16 at the same weight size, score at least as high on GSM8K, and write faster on an M5 Pro. `kapitsa serve --model 4b` gets one; there is nothing to set.
+
+The 9B results in this section use the [legacy pack at `867adaa`](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant/tree/867adaa1c6d84d1fd9b4f37f43836019c877ba59). Macs with matrix units (M5 and newer) default to Q4-KQuant at `ff7b61b8`; other Macs, including M3 and M4, keep the legacy pack. These GSM8K and decode results do not describe Q4-KQuant. The older 9B rows in the speed tables below also keep their measured pack and 9.0 GB download size.
 
 | 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
 | --- | --- | --- | --- |
 | 4B lmstudio-community | 0.070 | 0.914 | 209 |
 | 4B KQuant | **0.048** | 0.923 | **227** |
 | 9B lmstudio-community | 0.081 | 0.927 | 132 |
-| 9B KQuant | **0.037** | **0.944** | **146** |
+| 9B KQuant, legacy `867adaa` | **0.037** | **0.944** | **146** |
 | 35B-A3B MTPLX | 0.096 | 0.948 | 212 |
 | 35B-A3B KQuant | **0.059** | 0.952 | **227** |
 
-The 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). The Qwen3.8 27B MLX pack (`27b:kquant`, opt-in) is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. Its decode is mixed on this Mac (sampled slower, greedy faster), so it stays opt-in and we claim no speed for it.
+The legacy 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). The Qwen3.8 27B MLX pack (`27b:kquant`, opt-in) is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. Its decode is mixed on this Mac (sampled slower, greedy faster), so it stays opt-in and we claim no speed for it.
 
 **How we checked.**
 
@@ -174,6 +176,8 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
 | **Drex 2.0** · `kapitsa-systemone` | — | — | — | Q4† | Q4 | Q8 | Q8 |
 
+The `9b` pack is mixed 4/5-bit Q4 KQuant on Macs with matrix units (M5 and newer), and legacy 4-bit KQuant on other Macs, including M3 and M4.
+
 <sub>Cells name the catalog's variant labels — `4bit`, `5bit`, `6bit`, `8bit`, `bf16` and `nvfp4`, with `16gb`, `24gb` and Flash-Next's `64gb` shown as 2-bit — that `kapitsa serve <name>:<variant>` takes, the most precise one that starts on that Mac at the bottom of its working-set range: weights, drafter, activations and 8K tokens of context. † needs the top of the range, about 80% of the RAM against 69% at the bottom; — nothing starts. Flash-Next's 48 GB cell is its Q2_0 pack with the experts the budget does not hold streamed from the SSD, and Drex 2.0's Q4 and Q8 are its release builds, served by `kapitsa-systemone` ([decisions](docs/systemone.md)). The 24, 32 and 64 GB columns are `kapitsa doctor`'s plan, and so is any cell in the 16, 36, 48 and 128 GB ones that differs from the default variant those [Macs](#speed-on-each-mac) ran, usually 4-bit; `kapitsa doctor` prints the plan for this Mac.</sub>
 
 ## Speed on each Mac
@@ -269,7 +273,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | Model | <mark>**Kapitsa**</mark> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>MLX<br>(mlx-lm / mlx-vlm)</sub> | <sub>llama.cpp</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 703 / **120**<br><sub>KFlash</sub> | 600 / 67<br><sub>MTP · 0.40.8</sub> | 612 / 64<br><sub>MTP · 2.12.2</sub> | 642 / 56<br><sub>MTP · mlx-vlm 0.7.8</sub> | 512 / 50<br><sub>MTP · b11804</sub> |
-| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 381 / **77**<br><sub>KFlash</sub> | — | — | 353 / 27<br><sub>mlx-lm 0.32.2</sub> | 307 / 23<br><sub>b11804</sub> |
+| **Qwen3.5-9B** · `9b`<br><sub>dense · legacy 4-bit pack, 9.0 GB</sub> | 🟩 381 / **77**<br><sub>KFlash</sub> | — | — | 353 / 27<br><sub>mlx-lm 0.32.2</sub> | 307 / 23<br><sub>b11804</sub> |
 | **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 110 / **40**<br><sub>KFlash</sub> | 99 / 23<br><sub>MTP · 0.40.8</sub> | 99 / 22<br><sub>MTP · 2.12.2</sub> | 102 / 18<br><sub>MTP · mlx-vlm 0.7.8</sub> | 86 / 16<br><sub>MTP · b11804</sub> |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 855 / **106**<br><sub>KFlash</sub> | 681 / 58<br><sub>MTP · 0.40.8</sub> | 671 / 53<br><sub>MTP · 2.12.2</sub> | 695 / 53<br><sub>DFlash2 · mlx-vlm 0.7.8</sub> | 578 / 53<br><sub>MTP · b11804</sub> |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 450 / **36**<br><sub>KFlash</sub> | × | × | 344 / 30<br><sub>mlx-lm 0.32.2.dev0</sub> | — |
@@ -296,7 +300,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve</sub> | <sub>oMLX</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>MLX<br>(mlx-lm / mlx-vlm)</sub> | <sub>llama.cpp</sub> | <sub>LM&nbsp;Studio</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 401 / **97**<br><sub>KFlash</sub> | 286 / 62<br><sub>MTP · 26.10.2</sub> | 281 / 55<br><sub>MTP · 0.7.1rc1</sub> | 298 / 55<br><sub>MTP · 0.40.6</sub> | 305 / 42<br><sub>MTP · 2.12.2</sub> | 308 / 46<br><sub>mlx-lm 0.32.2</sub> | 315 / 38<br><sub>MTP · b11669</sub> | 308 / 47<br><sub>MLX runtime 1.13.1</sub> |
-| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 217 / **57**<br><sub>KFlash</sub> | 159 / 37<br><sub>MTP · 26.10.2</sub> | — | — | — | 170 / 30<br><sub>mlx-lm 0.32.2</sub> | — | — |
+| **Qwen3.5-9B** · `9b`<br><sub>dense · legacy 4-bit pack, 9.0 GB</sub> | 🟩 217 / **57**<br><sub>KFlash</sub> | 159 / 37<br><sub>MTP · 26.10.2</sub> | — | — | — | 170 / 30<br><sub>mlx-lm 0.32.2</sub> | — | — |
 | **Qwen3.6-35B-A3B** · `35b:16gb`<br><sub>MoE, 3B active · 2-bit experts (unsloth's GGUF), 10.8 GB</sub> | 🟩 462 / **52**<br><sub>KFlash</sub> | × | × | — | × | × | 38<br><sub>b11669</sub> | — |
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **39**<br><sub>KFlash</sub> | × | × | × | × | 30<br><sub>mlx-lm 0.32.3.dev3</sub> | 4<br><sub>b11551</sub> | × |
 | **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 🟩 **37**<br><sub>KFlash</sub> | — | — | — | — | 21<br><sub>BF16, version not recorded</sub> | 28<br><sub>Q4_K_M, b11669</sub> | — |

@@ -53,6 +53,9 @@ def main():
             "an MTP head's revision": lambda t: edit(t, r'(?s)(Companion mtp27\(\).*?\.revision = ")[0-9a-f]{40}', r"\g<1>" + "2" * 40),
             "a weights repo": lambda t: edit(t, r'(\.repo = "lmstudio-community/[^"]+)', r"\1-v2"),
             "a KQuant tier slug": lambda t: edit(t, r'(\.repo = "nace-ai/[^"]+-MLX-Q)4(-KQuant")', r"\g<1>5\2"),
+            "the non-matrix 9B repo": lambda t: edit(t, r'(v\.repo = "[^"]+)', r"\1-v2"),
+            "the non-matrix 9B revision": lambda t: edit(t, r'(v\.revision = ")[0-9a-f]{40}', r"\g<1>" + "3" * 40),
+            "the non-matrix 9B size": lambda t: edit(t, r"(v\.download_gb = )(\d+)", r"\g<1>9\2"),
         }
         for what, fn in edits.items():
             alt = os.path.join(d, "catalog.cpp")
@@ -70,6 +73,9 @@ def main():
         open(alt, "w").write(re.sub(r'(\.revision = ")[0-9a-f]{40}', r"\g<1>c43ee1d", cat, count=1))
         r = run("--check", "--catalog", alt, "--out", out)
         check(r.returncode != 0 and "pinned revision" in (r.stderr + r.stdout), "a variant without a full revision fails the run")
+        open(alt, "w").write(edit(cat, r'(v\.revision = ")[0-9a-f]{40}', r"\g<1>c43ee1d"))
+        r = run("--check", "--catalog", alt, "--out", out)
+        check(r.returncode != 0 and "pinned non-matrix 9B" in (r.stderr + r.stdout), "a non-matrix override without a full revision fails the run")
     print("FAILED: " + ", ".join(FAILED) if FAILED else "all passed")
     return 1 if FAILED else 0
 

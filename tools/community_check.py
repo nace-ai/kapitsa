@@ -47,7 +47,7 @@ FORMER_TITLES = {"nemotron-labs-dory1.0-4b": ("Nemotron-Labs Dory1.0 4B",)}  # u
 def catalog(repo=REPO):
     """{name: {"title", "variants": {variant: precision}}} from src/hub/catalog.cpp"""
     src = open(os.path.join(repo, "src", "hub", "catalog.cpp"), encoding="utf-8").read()
-    body = src[src.index("const std::vector<CatalogModel>& catalog()"):]
+    body = src[src.index("static const std::vector<CatalogModel> c = {"):]
     starts = [m for m in re.finditer(r'\{\.name = "([^"]+)",\s*\.aliases = \{[^}]*\},\s*\.title = "([^"]+)"', body)]
     out = {}
     for i, m in enumerate(starts):

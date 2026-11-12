@@ -178,7 +178,7 @@ bool qmt_on();  // declared in qwen35.h: DFlash2's context commit takes the same
 // NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
 // at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
 // qrf_f6g64_m32_n128.
-static bool qmtf_on(int bits, int gs);  // NI_QMTF: the 3-bit, 8-bit and 4-bit g32 tensor_ops tile (by enc_qmm_large)
+static bool qmtf_on(int bits, int gs);  // NI_QMTF: the 3-bit, 5-bit, 8-bit and 4-bit g32 tensor_ops tile (by enc_qmm_large)
 bool qmt6_on();  // declared in qwen35.h: Qwen4Exp's NI_HC_FUSE mix fold shares this kill switch
 // NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
 // memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
@@ -365,12 +365,15 @@ static bool exact_qmms(double bytes, bool multi, uint32_t K) {
 // qmt_on, 4-bit group 64, K a multiple of 64) is faster there than in the short-prefill families, which are sized for the
 // chunks under 64 rows (NI_SHORTPF's own comment). qmr_sel().on is checked too: the qmt tile is only reached behind it,
 // so NI_QMM=0 keeps the short-prefill path the chunk had. Measured on the M5 Pro, 27B, 16K cached prefix, one chunk of new
-// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. 8-bit and unaligned
-// projections, and every MoE expert GEMM, keep the short path they have.
+// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. 5-bit group 64 from 64 rows
+// takes NI_QMTF's tile the same way (enc_qmm_large, enc_qmm_gu): on the 9B KQuant pack, an 85-row chunk ran its 5-bit
+// down and z projections on qmmsf_f5g64_t6 at 1.11 ms a call, against 0.23 ms for the 4-bit pack's qmt_m64_n64.
+// 3-bit, 8-bit and unaligned projections, and every MoE expert GEMM, keep the short path they have.
 bool Qwen35::sp_qmt_pref(const QLinear& L, int M) const {
   static const bool on = env_int("NI_SP_QMT", 1) != 0;  // 0 restores the pre-change short-prefill preference
   if (!on || cfg_.moe) return false;  // a MoE model's chunk keeps the short-prefill / qmtm split it had
-  return M >= qmt_min_rows() && qmt_on() && qmr_sel().on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0;
+  if (M < qmt_min_rows() || !qmt_on() || !qmr_sel().on || L.gs != 64 || L.K % 64 != 0) return false;
+  return L.bits == 4 || (L.bits == 5 && M >= 64 && qmtf_on(5, 64));
 }
 
 // Short-prefill qmr tile for M <= 128 rows: R row tiles (1 up to 48 rows, 2 above; fused gate/up
@@ -568,7 +571,7 @@ void Qwen35::prewarm_pipelines() {
       for (const char* t : {"_m32_n128", "_m16_n64", "_m8_n64"}) names.insert("qrf_" + f + t);
       for (const char* t : {"_m32_n64", "_m16_n64", "_m8_n32"}) names.insert("qrf_gu_" + f + t);
       if (f == "f6g64" && qmt6_on()) names.insert("qmt6_m64_n64");  // enc_qmm_large's 6-bit tensor tile
-      if (!cfg_.moe && ((f == "f3g64" && qmtf_on(3, 64)) || (f == "f4g32" && qmtf_on(4, 32)))) {  // enc_qmm_large, enc_qmm_gu, the split
+      if (!cfg_.moe && ((f == "f3g64" && qmtf_on(3, 64)) || (f == "f5g64" && qmtf_on(5, 64)) || (f == "f4g32" && qmtf_on(4, 32)))) {  // enc_qmm_large, enc_qmm_gu, the split
         for (const char* t : {"qmtf_", "qmtfg_"}) names.insert(t + f + "_m128_n64");
         names.insert("qmtf_" + f + "_m128_n64_ld");
       }
@@ -2666,7 +2669,7 @@ bool qmt6_on() {
 }
 
 // NI_QMTF (read once; default on where qmt_on() is, 0 = off): the dense prefill GEMMs of 64 rows or more in the MLX
-// affine formats without a tensor_ops tile of their own (3-bit and 8-bit group 64; 4-bit group 32, what kapitsa import
+// affine formats without a tensor_ops tile of their own (3-bit, 5-bit and 8-bit group 64; 4-bit group 32, what kapitsa import
 // makes of a GGUF's Q4_K), plain, the fused gate/up/SwiGLU and the Neural Engine split's GPU share, on
 // tensor_ops/qmtf.metal's 128-row tile (qmt_m128_n64's tile with the format's weight decode) instead of the simdgroup
 // kernels (wfmt.metal's qrf_* / qrf_gu_*; 8-bit: qmm3.metal's qmr8 / qmr8_gu). The tile dequantizes to the bits those
@@ -2676,10 +2679,10 @@ static bool qmtf_on(int bits, int gs) {
   static const bool on = [] {
     if (env_int("NI_QMTF", 1) == 0) return false;
     if (!qmt_on()) return false;
-    logi("NI_QMTF: 3-bit / 8-bit g64 and 4-bit g32 dense prefill GEMMs on tensor_ops (qmtf_*_m128_n64), M >= 64");
+    logi("NI_QMTF: 3-bit / 5-bit / 8-bit g64 and 4-bit g32 dense prefill GEMMs on tensor_ops (qmtf_*_m128_n64), M >= 64");
     return true;
   }();
-  return on && (((bits == 3 || bits == 8) && gs == 64) || (bits == 4 && gs == 32));
+  return on && (((bits == 3 || bits == 5 || bits == 8) && gs == 64) || (bits == 4 && gs == 32));
 }
 static bool qmtf_for(const QLinear& L, int M) {
   return M >= 64 && qmtf_on(L.bits, L.gs) && L.K % 64 == 0 && (L.bits != 8 || qmm8_for(L));
@@ -3134,7 +3137,7 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 bool Qwen35::qmt_ready() { return qmt_on(); }
 ffn_share::Qmtf Qwen35::qmtf_formats() {
   // 8-bit: enc_qmm_large's qmm8 condition too (qmtf_for), for a dense FFN projection (never a router gate)
-  return {qmtf_on(3, 64), qmtf_on(8, 64) && qmm8_on(), qmtf_on(4, 32)};
+  return {qmtf_on(3, 64), qmtf_on(8, 64) && qmm8_on(), qmtf_on(4, 32), qmtf_on(5, 64)};
 }
 ffn_share::Fmt Qwen35::ffn_fmt(const QLinear& q) {
   return q.iq || q.q20 || q.exl3 ? ffn_share::Fmt{} : ffn_share::Fmt{q.bits, q.gs};

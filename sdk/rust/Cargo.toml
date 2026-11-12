@@ -1,0 +1,15 @@
+[package]
+name = "kapitsa"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Rust bindings for Kapitsa's in-process C ABI"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# Contract tests link the existing CPU ABI double instead of the native engine.
+fixture = []

@@ -9,7 +9,7 @@ them and refuse each kind of implausible one; the labels must follow; the table 
 precision, with units and the contention marks; and the pull request check must work end to end against a stand-in
 GitHub API: the files read as data at the head commit, the labels set, the report in the job summary.
 """
-import copy, http.server, json, os, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
+import copy, http.server, json, os, re, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -17,6 +17,7 @@ BUILD = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO,
 sys.path.insert(0, os.path.join(REPO, "tools"))
 import community_check as cc  # noqa: E402
 import community_table as ct  # noqa: E402
+import models_table as mt  # noqa: E402
 
 FAILS = []
 
@@ -44,13 +45,18 @@ check(list(cat) == ["qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b"
                    "clover-35b-a3b"], "the catalog's models, in order",
       str(list(cat)))
 check(cat["qwen3.6-35b-a3b"]["variants"] == {"4bit": "4-bit", "5bit": "5-bit", "6bit": "6-bit", "8bit": "8-bit", "bf16": "bf16",
-                                                   "16gb": "2-bit experts"},
+                                                   "16gb": "2-bit experts", "kquant5": "KQuant Q5"},
       "the 35B's precisions", str(cat["qwen3.6-35b-a3b"]["variants"]))
 # every variant in catalog.cpp is found by the checker: a comment between a variant's `{.name` and its `.quant` hid the 4B's and the 9B's 4-bit
 # (and the 35B's) from it, and a result for them was refused (kapitsa#1149, 10 Nov 2026)
 _src = open(os.path.join(REPO, "src", "hub", "catalog.cpp")).read()
-check(sum(len(m["variants"]) for m in cat.values()) == _src.count(".quant ="), "the checker finds every variant of catalog.cpp",
-      f"{sum(len(m['variants']) for m in cat.values())} found, {_src.count('.quant =')} `.quant =` in the source")
+_n_variants = len(re.findall(r"^\s*\.quant\s*=", _src, re.M))
+check(sum(len(m["variants"]) for m in cat.values()) == _n_variants, "the checker finds every variant of catalog.cpp",
+      f"{sum(len(m['variants']) for m in cat.values())} found, {_n_variants} `.quant =` initializer fields in the source")
+_model9 = next(m for m in mt.parse_catalog(_src) if m["name"] == "qwen3.5-9b")
+check(cat["qwen3.5-9b"] == {"title": _model9["title"], "variants": {"4bit": "4-bit", "kquant": "KQuant Q4", "kquant5": "KQuant Q5"}}
+      and [v["name"] for v in _model9["variants"]] == ["4bit", "kquant", "kquant5"],
+      "the community checker and models table read the same 9B row through catalog overloads")
 check(cat["nemotron-3.5-bolt"]["variants"] == {"24gb": "NVIDIA 24 GB"} and cat["qwen3.5-4b"]["title"] == "Qwen3.5-4B",
       "Bolt's precision and the 4B's title")
 check(macs["Mac16,7"]["name"] == "MacBook Pro (16-inch, 2024)" and len(macs) >= 58, "the Mac table")
@@ -106,6 +112,18 @@ for name, r in (("KFlash decoding with its drafter", kflash), ("prompt-lookup de
     e = cc.check_result(r, cat, macs, versions)[0]
     check(not errs and not any("decoding" in x or "drafter" in x for x in e), f"{name} passes", str(errs + e)[:300])
 refused(lambda r: r["model"].update(decoding="KFlash", drafter=None), "KFlash decoding without its drafter", "drafter")
+# The engine writes this shape for Flint self-speculation, and at its own defaults (engine.h: 4096, 180000) it runs to 145-158
+# characters; the schema's 120 cap refused every such result, including kapitsa#1203's M5 Pro Flint result. The cap is 200, and
+# the string below is that result's own, so this case would fail at 120 and passes at 200.
+selfspec = copy.deepcopy(full)
+_detail = ("plain decoding, self-speculative from 180000-token prompts (2 drafts per cycle, their full attention over the last "
+           "4096 positions), KFlash (none)")
+selfspec["model"].update(decoding="plain", decoding_detail=_detail, drafter=None)
+check(len(_detail) > 120, "the Flint self-speculative detail is longer than the old 120 cap", str(len(_detail)))
+errs = [x.message for x in jsonschema.Draft202012Validator(schema).iter_errors(selfspec)]
+e = cc.check_result(selfspec, cat, macs, versions)[0]
+check(not errs and not any("decoding" in x or "drafter" in x for x in e),
+      "a Flint result whose detail is 145 characters passes (kapitsa#1203)", str(errs + e)[:300])
 refused(lambda r: r["model"].update(decoding="KFlash (DFlash2)"), "a decoding name outside the schema's", "", schema_only=True)
 for detail, want in (("KFlash speculative decoding (DFlash2 lattice, tree verify)", "KFlash"),
                      ("KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)", "KFlash"),

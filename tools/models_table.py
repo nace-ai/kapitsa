@@ -201,7 +201,12 @@ def row(m, v, first_col):
     return (f"| {first_col} | {link(v['repo'])}{gguf} | {rev(v['repo'], v['revision'])} | {drafter_cell(v)} | {mtp_cell(v)} | {size} |")
 
 
-def render(models):
+def render(models, src):
+    # The non-matrix 9B override is assigned after the main table; read its pinned fields too.
+    legacy = dict(re.findall(r'v\.(repo|revision) = "([^"]+)";', src))
+    legacy_size = re.search(r'v\.download_gb = ([0-9.]+);', src)
+    if set(legacy) != {"repo", "revision"} or not legacy_size or not re.fullmatch(r"[0-9a-f]{40}", legacy["revision"]):
+        raise SystemExit("catalog.cpp: the pinned non-matrix 9B override was not found")
     head = ("| `kapitsa serve --model` | Hugging Face repo | Revision | Drafter | MTP head | Download |\n"
             "| --- | --- | --- | --- | --- | ---: |\n")
     default_rows, other_rows = [], []
@@ -238,6 +243,11 @@ def render(models):
         "",
         head + "\n".join(default_rows),
         "",
+        "The 9B row applies to Macs with matrix units (M5 and newer). Other Macs, including M3 and M4, keep "
+        f"the legacy 4-bit KQuant pack at `{legacy['revision']}` from {link(legacy['repo'])}, "
+        f"a {legacy_size.group(1)} GB download with the same companions. "
+        "The device profile selects the pack; the alias stays `9b`.",
+        "",
         "## Other variants",
         "",
         f"Another precision of the same model, or a smaller pack for a smaller Mac ({packs}).",
@@ -259,7 +269,8 @@ def main():
     ap.add_argument("--catalog", default=str(CATALOG), help=argparse.SUPPRESS)
     ap.add_argument("--out", default=str(OUT), help=argparse.SUPPRESS)
     a = ap.parse_args()
-    text = render(parse_catalog(Path(a.catalog).read_text()))
+    src = Path(a.catalog).read_text()
+    text = render(parse_catalog(src), src)
     out = Path(a.out)
     if a.check:
         have = out.read_text() if out.exists() else ""

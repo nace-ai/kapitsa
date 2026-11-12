@@ -143,7 +143,7 @@ def check(name, ok, detail=""):
 DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
             "qwen3.8-27b": ("4bit", "nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557"),
             "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
-            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")}
+            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
 PINNED = {
     "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
@@ -153,7 +153,7 @@ PINNED = {
     "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
                    [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
                     ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
-    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59",
+    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
                    [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
                     ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
@@ -302,6 +302,16 @@ def cli_checks(kapitsa):
     def plan(name):
         rc, out, err = run("pull", "--dry-run", "--json", name)
         return json.loads(out) if rc == 0 else {"rc": rc, "err": err}
+    # The profile owns device-dependent checkpoint defaults; this command scans no models.
+    rc, out, err = run("doctor", "--print-profile", "--json")
+    check("cli: device profile available before model scan", rc == 0, err)
+    profile = json.loads(out)
+    if profile["chip_class"] in ("matrix", "wide"):
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
+    else:
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")
+    DEFAULTS["qwen3.5-9b"] = ("4bit", *q9)
+    PINNED["qwen3.5-9b"] = (*q9, PINNED["qwen3.5-9b"][2])
     models = os.path.join(home, "models")
     rc, out, _ = run("list", "--json")
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
@@ -311,7 +321,7 @@ def cli_checks(kapitsa):
                                            "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
                                           "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
-                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"])]:
+                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", q9[0], q9[0] + "@" + q9[1]])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
         for a in aliases:
@@ -332,6 +342,26 @@ def cli_checks(kapitsa):
               j.get("variant") == "kquant" and j.get("repo") == KQ27[0] and j.get("revision") == KQ27[1] and
               j.get("dir") == os.path.join(models, "qwen3.8-27b-kquant") and got == [PINNED["qwen3.8-27b"][2][1]] and
               j.get("downloaded") is False, json.dumps(j))
+    # the released KQuant packs without a drafter of their own (#495): by name or by repo id each gets its base's
+    # drafter, and the MTP head when the repo has none where the loader looks; the defaults stay as they are
+    D9, D27, D35 = PINNED["qwen3.5-9b"][2], PINNED["qwen3.8-27b"][2], PINNED["qwen3.6-35b-a3b"][2]
+    MTP35 = ("mtp", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf", ".")
+    for name, var, repo, rev, comps in [
+            ("qwen3.5-9b", "kquant", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", D9),
+            ("qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", "bbddf39f41d3e0f682f2293351c67a9616d5941d", D9),
+            ("qwen3.8-27b", "kquant5", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant", "9f3187857e1940bf32fe7f23b4df0fb65631a874", D27),
+            ("qwen3.6-35b-a3b", "kquant5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant", "50b3b1c57e2c096e007de22997ff6824224fccde",
+             [MTP35] + D35)]:
+        for a in [name + ":" + var, repo, "hf.co/" + repo, repo + "@" + rev]:
+            j = plan(a)
+            got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+            # a Mac with matrix units has the 9B's Q4 pack as `4bit`, listed before `kquant`: its repo id finds `4bit`
+            v = "4bit" if (name, var) == ("qwen3.5-9b", "kquant") and a != name + ":" + var and q9[0] == repo else var
+            check(f"cli: {a} -> {name}:{v} with its base's drafter",
+                  j.get("model") == name + ":" + v and j.get("kind") == "catalog" and j.get("variant") == v and
+                  j.get("repo") == repo and j.get("revision") == rev and
+                  j.get("dir") == os.path.join(models, name + "-" + v) and got == comps and
+                  j.get("downloaded") is False, json.dumps(j))
     # a name without a variant: the default (offline nothing can be planned, so no fallback for a smaller Mac)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b"]),
                           ("qwen3.5-4b", ["4b", "qwen3.5-4b"]), ("qwen3.5-9b", ["9b", "qwen3.5-9b"])]:
@@ -1007,6 +1037,14 @@ def cli_checks(kapitsa):
               j.get("model") == "qwen3.8-flash-next:kquant" and j.get("kind") == "catalog" and
               j.get("repo") == kquant_repo and j.get("revision") == kquant_revision and
               j.get("downloaded") is False, json.dumps(j))
+    # the combined KQuant repos' folders name the catalog entry of the same pack, companions included (#1210)
+    j = plan("nace-ai/Qwen3.5-9B-MLX-KQuant/Q5")
+    check("cli: nace-ai/Qwen3.5-9B-MLX-KQuant/Q5 -> 9b:kquant5 with its drafter and MTP head",
+          j.get("model") == "qwen3.5-9b:kquant5" and j.get("kind") == "catalog" and
+          j.get("repo") == "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant" and
+          {c.get("kind") for c in j.get("companions", [])} == {"mtp-sidecar", "dflash"}, json.dumps(j))
+    rc, _, err = run("pull", "--dry-run", "--json", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant/Q4")
+    check("cli: Flash-Next's combined Q4/ folder (a later checkpoint) is refused", rc != 0 and "Q4" in err, err)
     rc, _, err = run("serve", "--port", str(busy))
     check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)
     agent_checks(run, home)
