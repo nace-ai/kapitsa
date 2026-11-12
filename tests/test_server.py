@@ -140,20 +140,20 @@ def check(name, ok, detail=""):
 
 # The app and the CLI download the same pinned files for the 4-bit variants (PINNED) and the defaults (DEFAULTS:
 # the 4-bit variants, except the 27B's KQuant pack, #495) of src/hub/catalog.cpp.
-DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
-            "qwen3.8-27b": ("kquant", "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364"),
-            "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
-            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
+DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
+            "qwen3.8-27b": ("kquant", "nace-ai/Qwen3.8-27B-MLX-KQuant", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364"),
+            "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
+            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
 PINNED = {
-    "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e",
+    "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
     "qwen3.8-27b": ("nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
                     [("mtp", "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed", "1d5087d2062c02b279180a53e4016cf9cd7a3d7e", "."),
                      ("dflash2", "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa", "4f950469095a4c799ca2297b1f444b349e672b71", "dflash2")]),
-    "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
+    "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
                    [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
                     ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
-    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
+    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
                    [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
                     ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
@@ -307,7 +307,7 @@ def cli_checks(kapitsa):
     check("cli: device profile available before model scan", rc == 0, err)
     profile = json.loads(out)
     if profile["chip_class"] in ("matrix", "wide"):
-        q9 = ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
     else:
         q9 = ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")
     DEFAULTS["qwen3.5-9b"] = ("4bit", *q9)
@@ -316,11 +316,11 @@ def cli_checks(kapitsa):
     rc, out, _ = run("list", "--json")
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b:4bit", "QWEN3.6-35B-A3B:4bit",
-                                               "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant@37e804f90e368a4de866bc34650b9dde67a78c8e"]),
+                                               "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant@37e804f90e368a4de866bc34650b9dde67a78c8e"]),
                           ("qwen3.8-27b", ["27b:4bit", "27B:4BIT", "nace-ai/Qwen3.8-27B-MLX-4bit",
                                            "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
-                                          "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
+                                          "nace-ai/Qwen3.5-4B-MLX-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
                           ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", q9[0], q9[0] + "@" + q9[1]])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
@@ -349,7 +349,7 @@ def cli_checks(kapitsa):
     D9, D27, D35 = PINNED["qwen3.5-9b"][2], PINNED["qwen3.8-27b"][2], PINNED["qwen3.6-35b-a3b"][2]
     MTP35 = ("mtp", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf", ".")
     for name, var, repo, rev, comps in [
-            ("qwen3.5-9b", "kquant", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", D9),
+            ("qwen3.5-9b", "kquant", "nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", D9),
             ("qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", "bbddf39f41d3e0f682f2293351c67a9616d5941d", D9),
             ("qwen3.8-27b", "kquant5", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant", "9f3187857e1940bf32fe7f23b4df0fb65631a874", D27),
             ("qwen3.6-35b-a3b", "kquant5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant", "50b3b1c57e2c096e007de22997ff6824224fccde",
@@ -1030,7 +1030,7 @@ def cli_checks(kapitsa):
               j.get("model") == "qwen3.8-flash-next:4bit" and j.get("kind") == "catalog" and
               j.get("repo") == "nace-ai/Qwen3.8-Flash-Next-MLX-4bit" and
               j.get("revision") == "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae" and j.get("downloaded") is False, json.dumps(j))
-    kquant_repo = "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant"
+    kquant_repo = "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant"
     kquant_revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd"
     for a in ["flash-next:kquant", "flash:kquant", "qwen3.8-flash-next:kquant", kquant_repo,
               kquant_repo + "@" + kquant_revision]:

@@ -174,10 +174,11 @@ static const Variant* combined_variant(std::string s, const CatalogModel** model
   if (!hit)
     throw Error(path.substr(0, second) + " has no pack in folder \"" + folder + "\" that Kapitsa pins. Use a catalog name (" +
                 choices() + ").");
-  if (!rev.empty() && rev != hit->revision)
-    throw Error(s + ": Kapitsa pins this pack at " + hit->revision + ". Use the repo without a revision, or a catalog name.");
   const Variant* v = find_variant_by_repo(hit->pinned_repo, "", model);
   if (!v) throw Error("internal: no catalog variant pins " + hit->pinned_repo);
+  // the revision the variant downloads is the repo's own too, when the variant's repo is this one
+  if (!rev.empty() && rev != hit->revision && !(lower(v->repo) == repo && rev == v->revision))
+    throw Error(s + ": Kapitsa pins this pack at " + hit->revision + ". Use the repo without a revision, or a catalog name.");
   return v;
 }
 

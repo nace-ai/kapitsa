@@ -24,37 +24,53 @@ static void combined_ids(bool mixed) {
   const std::string q27 = "nace-ai/Qwen3.8-27B-MLX-KQuant", r27 = "105530e56743ac3515a34b274b3865965dc83bc6";
   const std::string q35 = "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", r35 = "f82ecb7f83f578e2d599e36e27177cc97d02c1f1";
   const std::string fn = "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", rfn = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd";
+  // the revisions the catalog pins in those repos' roots (the standalone repos' own, kept through the rename)
+  const std::string p4b = "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89", p9 = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
+                    p27 = "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364", p35 = "37e804f90e368a4de866bc34650b9dde67a78c8e";
   const char* nine_q4 = mixed ? "4bit" : "kquant";
   const char *d4 = "z-lab/Qwen3.5-4B-DFlash", *d9 = "z-lab/Qwen3.5-9B-DFlash", *d27 = "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa",
              *d35 = "incoai/Qwen3.6-35B-A3B-DFlash2";
   const std::vector<Form> forms = {
-      {q4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", d4, true},
-      {q4b + "/Q4", "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", d4, true},
-      {q4b + "@" + r4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", d4, true},
-      {q4b + "/Q4@" + r4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", d4, true},
-      {"https://huggingface.co/" + q4b + "/Q4", "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", d4, true},
-      {q9, "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", d9, true},
-      {q9 + "/Q4", "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", d9, true},
-      {q9 + "@" + r9, "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", d9, true},
-      {q9 + "/Q4@" + r9, "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", d9, true},
+      {q4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},
+      {q4b + "/Q4", "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},
+      {q4b + "@" + r4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},
+      {q4b + "/Q4@" + r4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},
+      {"https://huggingface.co/" + q4b + "/Q4", "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},
+      {q9, "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-KQuant", d9, true},
+      {q9 + "/Q4", "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-KQuant", d9, true},
+      {q9 + "@" + r9, "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-KQuant", d9, true},
+      {q9 + "/Q4@" + r9, "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-KQuant", d9, true},
       {q9 + "/Q5", "qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", d9, true},
       {q9 + "/Q5@" + r9, "qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", d9, true},
       {"hf.co/" + q9 + "/Q5/", "qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", d9, true},
-      {q27, "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", d27, false},
-      {q27 + "/Q4", "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", d27, false},
-      {q27 + "/Q4@" + r27, "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", d27, false},
+      {q27, "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-KQuant", d27, false},
+      {q27 + "/Q4", "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-KQuant", d27, false},
+      {q27 + "/Q4@" + r27, "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-KQuant", d27, false},
       {q27 + "/Q5", "qwen3.8-27b", "kquant5", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant", d27, true},
       {q27 + "/Q5@" + r27, "qwen3.8-27b", "kquant5", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant", d27, true},
-      {q35, "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", d35, false},
-      {q35 + "/Q4", "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", d35, false},
-      {q35 + "/Q4@" + r35, "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", d35, false},
+      {q35, "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", d35, false},
+      {q35 + "/Q4", "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", d35, false},
+      {q35 + "/Q4@" + r35, "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", d35, false},
       {q35 + "/Q5", "qwen3.6-35b-a3b", "kquant5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant", d35, true},
       {q35 + "/Q5@" + r35, "qwen3.6-35b-a3b", "kquant5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant", d35, true},
-      {fn, "qwen3.8-flash-next", "kquant", "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant", nullptr, false},
-      {fn + "@" + rfn, "qwen3.8-flash-next", "kquant", "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant", nullptr, false},
-      // the standalone ids still name their variants, as on main
+      {fn, "qwen3.8-flash-next", "kquant", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", nullptr, false},
+      {fn + "@" + rfn, "qwen3.8-flash-next", "kquant", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", nullptr, false},
+      // the revision a variant downloads is one of its repo's own: accepted beside the combined revision (#513)
+      {q4b + "@" + p4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},
+      {q9 + "@" + p9, "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-KQuant", d9, true},
+      {q27 + "@" + p27, "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-KQuant", d27, false},
+      {q35 + "@" + p35, "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", d35, false},
+      // the standalone ids still name their variants: the Q5 repos exist, and the Hub redirects the old Q4 ones to the
+      // combined repos, so those downloads now name the combined repo (#513)
       {"nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", "qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", d9, true},
-      {"nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", d4, true},
+      {"nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},  // redirected old id
+      {"nace-ai/Qwen3.5-4B-MLX-Q4-KQuant@" + p4b, "qwen3.5-4b", "4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", d4, true},  // redirected old id
+      {"nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "qwen3.5-9b", nine_q4, "nace-ai/Qwen3.5-9B-MLX-KQuant", d9, true},  // redirected old id
+      {"nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", "qwen3.8-27b", "kquant", "nace-ai/Qwen3.8-27B-MLX-KQuant", d27, false},  // redirected old id
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant@" + p35, "qwen3.6-35b-a3b", "4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", d35,  // redirected old id
+       false},
+      {"nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant", "qwen3.8-flash-next", "kquant", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", nullptr,  // redirected old id
+       false},
   };
   for (const auto& f : forms) {
     const auto r = resolve(f.id);
@@ -109,7 +125,7 @@ int main() {
       CHECK(nine && nine == find_model("qwen3.5-9b"));
       const auto* v = nine->variant();
       CHECK(v && v == nine->variant("4bit"));
-      CHECK(v->repo == (mixed ? "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant" : "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"));
+      CHECK(v->repo == (mixed ? "nace-ai/Qwen3.5-9B-MLX-KQuant" : "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"));
       CHECK(v->revision == (mixed ? "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4" : "867adaa1c6d84d1fd9b4f37f43836019c877ba59"));
       CHECK(v->download_gb == (mixed ? 9.30 : 9.05));
       CHECK(v->quant == (mixed ? "MLX affine mixed 4/5-bit (KQuant Q4)" : "MLX affine 4-bit, group 64 (KQuant)"));
@@ -126,7 +142,9 @@ int main() {
   // a combined repo's folder or revision that no catalog entry pins is refused, never a plain download (#1210)
   for (const char* id : {"nace-ai/Qwen3.8-Flash-Next-MLX-KQuant/Q4", "nace-ai/Qwen3.5-4B-MLX-KQuant/Q5",
                          "nace-ai/Qwen3.5-9B-MLX-KQuant/Q6", "nace-ai/Qwen3.5-9B-MLX-KQuant@main",
-                         "nace-ai/Qwen3.5-9B-MLX-KQuant/Q5@0123456789abcdef0123456789abcdef01234567"}) {
+                         "nace-ai/Qwen3.5-9B-MLX-KQuant/Q5@0123456789abcdef0123456789abcdef01234567",
+                         // the Q5 variant's own revision is not one of the combined repo's
+                         "nace-ai/Qwen3.5-9B-MLX-KQuant/Q5@bbddf39f41d3e0f682f2293351c67a9616d5941d"}) {
     bool refused = false;
     try {
       resolve(id);

@@ -182,7 +182,7 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            // both packs with the drafter and MTP head `4b` ships) 223 against 218 tok/s, inside the 3% tie band
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant",
+            .repo = "nace-ai/Qwen3.5-4B-MLX-KQuant",
             .revision = "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
             .companions = {mtp4(), dflash4()},
             .download_gb = 4.57},
@@ -216,7 +216,7 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            // KQuant Q4: mixed 4/5-bit language weights with the packaged vision tower and tokenizer.
            {.name = "4bit",
             .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-KQuant",
             .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
             .download_gb = 9.30},
@@ -226,7 +226,7 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            {.name = "kquant",
             .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
             .label = "KQuant Q4",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-KQuant",
             .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
             .download_gb = 9.30},
@@ -264,7 +264,7 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            // M4 Pro 67.2 against 66.8, +0.6% (bench/results/2026-11-12-kquant-27b-0.2.35)
            {.name = "kquant",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant",
+            .repo = "nace-ai/Qwen3.8-27B-MLX-KQuant",
             .revision = "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364",
             .companions = {dflash27()},
             .download_gb = 20.17},
@@ -320,7 +320,7 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            // against 213 tok/s (bench/results/2026-11-12-m5-pro-kquant-35b-0.2.35); text only
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant",
+            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant",
             .revision = "37e804f90e368a4de866bc34650b9dde67a78c8e",
             .companions = {dflash35()},
             .download_gb = 22.07},
@@ -393,7 +393,7 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            {.name = "kquant",
             .quant = "MLX affine KQuant 4-bit mix",
             .label = "4-bit KQuant",
-            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant",
+            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant",
             .revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd",
             .companions = {},
             .download_gb = 105.86},
@@ -612,19 +612,26 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
 
 const std::vector<CatalogModel>& catalog() { return catalog(ni::catalog_device()); }
 
-// The pinned standalone packs in the combined repos (12 Nov 2026: every folder's safetensors have the LFS sha256 of the
-// pinned standalone revision's). Flash-Next's row is the combined repo's root at the revision `kquant` pins; its Q4/
-// folder is a later checkpoint that no catalog entry names.
+// The pinned packs in the combined repos (12 Nov 2026: every folder's safetensors have the LFS sha256 of the pinned
+// standalone revision's). The Q4 standalone repos were renamed into the combined ones (#500), so the catalog pins those
+// Q4 packs at the combined repo's root, at the revision the standalone repo had; the Q5 packs still have their own
+// repos. Flash-Next's row is the combined repo's root at the revision `kquant` pins; its Q4/ folder is a later
+// checkpoint that no catalog entry names. The last rows are the old Q4 ids, which the Hub redirects: still accepted.
 const std::vector<CombinedPack>& combined_packs() {
   static const std::vector<CombinedPack> packs = {
-      {"nace-ai/Qwen3.5-4B-MLX-KQuant", "Q4", "84168d4d60c807a3c8372ee60f9d2034d5166964", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant"},
-      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q4", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.5-4B-MLX-KQuant", "Q4", "84168d4d60c807a3c8372ee60f9d2034d5166964", "nace-ai/Qwen3.5-4B-MLX-KQuant"},
+      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q4", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-KQuant"},
       {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q5", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant"},
-      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q4", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q4", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-KQuant"},
       {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q5", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant"},
-      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q4", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q4", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant"},
       {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q5", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant"},
-      {"nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant"},
+      {"nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89", "nace-ai/Qwen3.5-4B-MLX-KQuant"},  // redirected old id
+      {"nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", "nace-ai/Qwen3.5-9B-MLX-KQuant"},  // redirected old id
+      {"nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", "", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364", "nace-ai/Qwen3.8-27B-MLX-KQuant"},  // redirected old id
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "", "37e804f90e368a4de866bc34650b9dde67a78c8e", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant"},  // redirected old id
+      {"nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant"},  // redirected old id
   };
   return packs;
 }

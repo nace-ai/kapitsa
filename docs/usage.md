@@ -104,7 +104,7 @@ bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB r
 (`ple.safetensors`) stays on disk and is read through the page cache.
 
 Flash-Next's `kquant` selects the released
-[nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant)
+[nace-ai/Qwen3.8-Flash-Next-MLX-KQuant](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-KQuant)
 pack: `kapitsa serve --model flash-next:kquant`. It is a complete download with its MTP head and n-gram table,
 105.86 GB including metadata, with no separate companion download. `flash-next` and `flash` keep `4bit` as their
 default and `64gb` as their fallback.
