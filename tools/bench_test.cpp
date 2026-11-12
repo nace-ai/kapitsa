@@ -12,6 +12,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
+#include <csignal>
 #ifndef KAPITSA_VERSION
 #define KAPITSA_VERSION "0.0.0"
 #endif
@@ -189,19 +191,41 @@ int self_test() {
   const std::string r = nn.run(), h64 = nn.hex(64), h48 = nn.hex(48);
   check(r.size() == 8 && r.rfind("0.", 0) == 0, "decode nonce like 0.123456", r);
   check(h64.size() == 16 && h48.size() == 12 && h64.find_first_not_of("0123456789abcdef") == std::string::npos, "hex nonces", h64);
-  // KAPITSA_BENCH_SERVER's process: the one listening on the port, here this one on an ephemeral port
+  // KAPITSA_BENCH_SERVER's process: the one listening on the port, here a child listening on an ephemeral port
   {
-    const int fd = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in a{};
-    a.sin_family = AF_INET;
-    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    socklen_t len = sizeof a;
-    const bool up = fd >= 0 && bind(fd, (sockaddr*)&a, sizeof a) == 0 && listen(fd, 1) == 0 && getsockname(fd, (sockaddr*)&a, &len) == 0;
-    const int port = ntohs(a.sin_port);
-    check(up && port > 0, "a listening socket on an ephemeral port", strerror(errno));
-    check(listening_pid(port) == getpid(), "listening_pid finds the process listening on the port", std::to_string(listening_pid(port)));
-    if (fd >= 0) close(fd);
-    check(listening_pid(port) == 0, "listening_pid finds none once the socket is closed", std::to_string(listening_pid(port)));
+    int pfd[2] = {-1, -1};
+    check(pipe(pfd) == 0, "a pipe for the listening child", strerror(errno));
+    fflush(stdout);
+    const pid_t child = pfd[0] >= 0 ? fork() : -1;
+    if (child == 0) {
+      close(pfd[0]);
+      const int fd = socket(AF_INET, SOCK_STREAM, 0);
+      sockaddr_in a{};
+      a.sin_family = AF_INET;
+      a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+      socklen_t len = sizeof a;
+      int port = 0;
+      if (fd >= 0 && bind(fd, (sockaddr*)&a, sizeof a) == 0 && listen(fd, 1) == 0 && getsockname(fd, (sockaddr*)&a, &len) == 0)
+        port = ntohs(a.sin_port);
+      (void)!::write(pfd[1], &port, sizeof port);
+      close(pfd[1]);
+      pause();  // until the parent kills it
+      _exit(0);
+    }
+    if (pfd[1] >= 0) close(pfd[1]);
+    int port = 0;
+    const bool got = child > 0 && ::read(pfd[0], &port, sizeof port) == ssize_t(sizeof port);
+    if (pfd[0] >= 0) close(pfd[0]);
+    check(got && port > 0, "a child listening on an ephemeral loopback port", std::to_string(port));
+    const int found = port > 0 ? listening_pid(port) : -1;
+    check(found == child, "listening_pid finds the child listening on the port, not this process",
+          std::to_string(found) + ", child " + std::to_string(child) + ", self " + std::to_string(getpid()));
+    if (child > 0) {
+      kill(child, SIGKILL);
+      waitpid(child, nullptr, 0);
+    }
+    const int after = port > 0 ? listening_pid(port) : -1;
+    check(after == 0, "listening_pid finds none once the child is gone", std::to_string(after));
   }
   printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
   return fails ? 1 : 0;

@@ -905,7 +905,8 @@ int run(const Options& o) {
       mi.decoding = "unknown";
       mi.decoding_detail = "a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)";
       mi.drafter_kind = "unknown";
-      say("Measuring the server on 127.0.0.1:" + std::to_string(external) + " (KAPITSA_BENCH_SERVER)");
+      say("Measuring the server on 127.0.0.1:" + std::to_string(external) + " (KAPITSA_BENCH_SERVER, " +
+          (ext_pid > 0 ? "pid " + std::to_string(ext_pid) : std::string("no process found listening")) + ")");
     } else {
       const auto t0 = std::chrono::steady_clock::now();
       auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
